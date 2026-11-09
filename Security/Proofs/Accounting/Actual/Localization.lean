@@ -1,9 +1,17 @@
-import Definitions.Accounting.Guarantees.Localization
-import Proofs.Accounting.Defs.Localization
-import Definitions.Accounting.Physical
-import Proofs.Accounting.Actual.Split
+module
+
+public import Definitions.Accounting.Guarantees.Localization
+public import Proofs.Accounting.Defs.Localization
+public import Definitions.Accounting.Physical
+public import Mathlib.Tactic.FinCases
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
 import Proofs.Accounting.Actual.Confidence
-import Mathlib.Tactic.FinCases
+import Proofs.Accounting.Actual.Split
 
 /-!
 # Localization, proved
@@ -26,6 +34,8 @@ one not in `C` reads a gate downstream of `C`, so it is computed (`downstream_pr
 carries a gate downstream of `C`, a gate of `A[Y, W]` downstream of `C` reads one, which is then in `A[Y, W]` and
 earlier (the gates are in topological order), so none is.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

@@ -24,7 +24,7 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
 - ``L3b``, one state row. A key block's running state (max, lane sums, O) is three rows, each hashed and re-leafed by its
   reader; as one row it is one.
 - ``W`` and ``R``, ports by reference: a reader's wired or registered port is the writer's or the pinned weight's leaves
-  (a drawn member's port tree is derived at the audit), so no input row is re-leafed.
+  (a sampled member's port tree is derived at the audit), so no input row is re-leafed.
 - ``P``, shared output rows (`commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
   fresh row's fixed cost is paid a KiB, not a unit's few bytes (its readers re-leaf as many rows as before, and a unit reads
   its segment for a few thousand ANDs, which this doesn't price).
@@ -54,8 +54,8 @@ from pathlib import Path
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import WindowClass
 
-from verity.core.protocols.pous import wipe_monitoring
-from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
+from verity.core.protocols import reporting
+from verity.core.protocols.spot.optimize import SHA512_ANDS
 from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
@@ -83,8 +83,8 @@ ROOT_JSON_BYTES = 360
 RATES = {"3.1 G/s": 3.1e9, "4.79 G/s": 4.79e9}
 #: the reference datacenter (`benchmarks/census/deployments.json`, dc-12500-machines-600s)
 GPUS = 12_500 * 8
-#: core's monitoring periods (`wipe_monitoring`), seconds by name
-PERIODS = dict(wipe_monitoring.PERIODS)
+#: core's monitoring periods (`reporting`), seconds by name
+PERIODS = dict(reporting.PERIODS)
 
 
 @dataclass(frozen=True)

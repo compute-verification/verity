@@ -63,9 +63,9 @@ from typing import Any
 
 from verity.core.protocols.pouw.audit import Workload, rows_domain
 from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
-from verity.core.protocols.pouw.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
+from verity.ml.protocols.pouw.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
 from verity.core.protocols.pouw.serving import (
     SERIAL,
     Schedule,
@@ -112,9 +112,6 @@ from verity_vllm.protocols.pouw.pearl_c.kernel import (
     source_digest,  # noqa: F401 - kept importable here, as callers read it
 )
 from verity_vllm.protocols.pouw.pearl_c.manifest import (  # noqa: F401 - the manifest's readers, kept importable here, as callers read them
-    MANIFEST_SCHEMA,
-    MANIFEST_SCHEMA_RECORDED,
-    MANIFEST_SCHEMAS,
     manifest_epoch,
     manifest_schema,
     session_head,
@@ -130,7 +127,7 @@ from verity_vllm.protocols.pouw.pearl_c.screen import (
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
 #: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it); ``h100`` (G = 4,
 #: GLM-5.3's FP8 form on the H200) is pearl_c_sm90's.  The format is -h3, SHA-512 throughout (its seeds, lines,
-#: tile leaves and HM96 trees: the one hash), each row's E_A line from its own seed (the work law capping each
+#: tile leaves and HM96 trees: the one hash), each row's E_A line from its own seed (the work sampling design capping each
 #: credited row too); its tree hash comes from `verity.core.protocols.pouw.serving.HASH_FORMATS` through the scheme.
 SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED, H100))
 #: each record's kernels' (k, n) grain past its domain: pearl_c_sm120's (1,024, 128); pearl_c_sm90's (256, 64), 1 KiB row segments, 64-wide tiles
@@ -159,7 +156,7 @@ HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", 
 
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
     """The scheme `name` names (`SCHEMES`); `instance` (``k_min``, ``tile``) makes a test instance."""
-    from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+    from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
     if name not in SCHEMES:
         raise KeyError(f"{name!r}: this device path runs {', '.join(SCHEMES)}")
     sid = SchemeId.parse(name)

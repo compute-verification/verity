@@ -1,4 +1,10 @@
-import Proofs.Pous.Chain.FamilyRounds
+module
+
+public import Proofs.Pous.Chain.FamilyRounds
+public import Definitions.Pous.Guarantees
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Chain.Family
 import Proofs.Pous.Continuous.TimeAverage
 
 /-!
@@ -17,6 +23,8 @@ unconditional `chainExPostFactoG_v6` (`band_seg_timedINC`), for every `D ≤ d` 
 `(0, 89)`, `(1, 93)`, `(2, 97)`, `(5, 111)`, the parameter points of `BandMultiMeetsFamilyD0`, `D1`, `D2` and
 `BandMultiMeetsFamily`.
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 

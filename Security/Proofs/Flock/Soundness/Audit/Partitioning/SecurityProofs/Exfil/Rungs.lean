@@ -1,4 +1,7 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Model
+import Proofs.Flock.Soundness.Audit.Law
 
 /-!
 # Exfiltration: what a certified leak forces
@@ -6,12 +9,14 @@ import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
 With every unit `b` bits wide, the bound `CertifiesLeak` certifies is `H + locBits n K` for a harm bound `H` and a count
 `K` with `miss (K + 1) < δ`. Call `b·J + locBits n J` the `J`-th rung.
 
-* `miss_le_of_certifies`: a law certifying `ℓ` below the `J`-th rung has `miss J ≤ δ`. A set of at least `J` units
+* `miss_le_of_certifies`: a sampling design certifying `ℓ` below the `J`-th rung has `miss J ≤ δ`. A set of at least `J` units
   escaping with probability above `δ` forces `H ≥ b·J` and `K ≥ J`, so the certified bound is at least the rung.
 * `locBits_succ_le`, `locBits_succ_ge`: the rung's location term on `n` and on `r·n` units, the counting that
   `RefinementRule` compares. `Σ_{j ≤ K+1} C(n, j) ≤ (K + 2)·C(n, K + 1)` when `2(K + 1) ≤ n`, and
   `C(r·n, K + 1) ≥ r^(K+1)·C(n, K + 1)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil
 

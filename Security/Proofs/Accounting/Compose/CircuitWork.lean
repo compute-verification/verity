@@ -1,6 +1,11 @@
-import Proofs.Accounting.Compose.ServiceBudget
-import Proofs.Accounting.Compose.ServiceCovers
-import Proofs.Accounting.Headline.Luck
+module
+
+public import Proofs.Accounting.Compose.ServiceBudget
+public import Proofs.Accounting.Compose.ServiceCovers
+public import Proofs.Accounting.Headline.Luck
+public import Proofs.Accounting.Lemmas.TS.Receipt
+public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # `CircuitWork`: the circuit's work under live coins
@@ -11,7 +16,7 @@ import Proofs.Accounting.Headline.Luck
   whole tile's at its guess bound; a tile of no credited kind is held to `1`.
 * **Two events**: `ServiceBudget` at `shareCone` and `budget_tail` at `t = ln(1/δ_s)` bound the accepted runs with
   `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s` (`S_F`, `S_0` the folded and whole shares at `shareCone`), and
-  `DrawnRightOff` gives one event of probability `δ_bind + δ_ks` off which every accepted drawn tile is right, so `Of`
+  `SampledRightOff` gives one event of probability `δ_bind + δ_ks` off which every accepted sampled tile is right, so `Of`
   gives the play's ideal game's pass, which is the share game's.
 * **The words** (`work_of_bounds`): off both, `UnitFixed` and `ServiceCovers` give the good tiles' words at least
   `(1 − (c_F + c₀))·N_w`, `c_F`, `c₀` the folded and whole shares at `tileCone`, and the words not skipped whole at
@@ -20,6 +25,8 @@ import Proofs.Accounting.Headline.Luck
   `S_F + S_0` plus the cones `Z_F + Z_0 ≤ D₀` of tiles of no words, which `WorkAt` takes in the cheaper share
   (`workAt_of`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose.WorkProof
 
@@ -305,12 +312,12 @@ theorem writerReads : (Cd.layer hr hK pr).WriterReads := by
 
 end Layer
 
-/-- `CircuitWork`: off `DrawnRightOff`'s event and the budget's tail, `work_of_bounds`. -/
+/-- `CircuitWork`: off `SampledRightOff`'s event and the budget's tail, `work_of_bounds`. -/
 theorem circuitWork : Accounting.Guarantees.Compose.CircuitWork := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd Np Kd hN hr hK W Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS hρ
     hρN hwmax hlk ha hb hΛ hSR hG hOf hMoved hJS hPins hMu hRB hGs hUF
   obtain ⟨hwf, -, hδs, hLP, hlc⟩ := hS
-  obtain ⟨E, hE, hEoff⟩ := Accounting.SecurityProofs.TS.DrawnRightOff C (Equiv.Perm (Fin Np) × Ξ) 1 Cd.rounds Kd
+  obtain ⟨E, hE, hEoff⟩ := Accounting.SecurityProofs.TS.SampledRightOff C (Equiv.Perm (Fin Np) × Ξ) 1 Cd.rounds Kd
     (Cd.layer hr hK pr) δbind δks hMoved hJS hPins
   have hBud : RoundGame.BudgetAt Λ (serviceGame (Ξ := Ξ) (tileStage Cd Np) W (shareCone Sc Cd Np) a b Kd) :=
     Budget.serviceBudget (tileStage Cd Np) W (shareCone Sc Cd Np) (tileLuck Sc Cd Np) (tileLuck0 Sc Cd Np) Kd ρ p

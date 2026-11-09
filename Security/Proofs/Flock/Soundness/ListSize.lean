@@ -1,5 +1,9 @@
+module
+
+public import ArkLib.Data.CodingTheory.JohnsonBound.Family
+public import ArkLib.Data.CodingTheory.ReedSolomon.Interleaved
+public import Definitions.Flock.Defs
 import Proofs.Flock.Soundness.Defs
-import ArkLib.Data.CodingTheory.JohnsonBound.Family
 
 /-!
 # The list size: at most `L₀` codewords near any level-0 table
@@ -18,6 +22,8 @@ codewords). The bridge:
 * encoding is injective (a nonzero polynomial of degree below `2^cols ≤ 2^d` cannot vanish on `2^d`
   distinct points), so distinct close messages are distinct close codewords.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

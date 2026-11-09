@@ -55,17 +55,36 @@ def _instance_sequence(program) -> list[dict]:
     return list(_instance_rows(program))
 
 
+def check_rows(body, n: int) -> list[list[int]]:
+    """The row and output leaf `[i, lo, lo + 1]` of each of `body`'s last `n` returned leaves, in order: where the Program's checks
+    output (`program.predict.common.with_checks`, the returned tuple's last member) is computed."""
+    from verity.ml.circuits.refs import runs
+    leaves: list[tuple[str, int, int]] = []
+    for space, i, lo, hi in reversed(runs(body.ret)):
+        take = min(hi - lo, n - len(leaves))
+        leaves += [(space, i, k) for k in range(hi - 1, hi - 1 - take, -1)]
+        if len(leaves) == n:
+            break
+    if len(leaves) != n or any(s != "n" for s, _i, _k in leaves):
+        raise ValueError(f"the Program's last {n} returned leaves are not {n} checks computed by its rows: {leaves[::-1][:4]}")
+    return [[i, k, k + 1] for _s, i, k in reversed(leaves)]
+
+
 def write_instances(out: str, program, digest: str, corr_digest: str | None, supplied: dict, *, names: dict[int, str | None] | None = None,
-                    params: list[list[str]] | None = None) -> None:
+                    params: list[list[str]] | None = None, checks: dict | None = None) -> None:
     """A derive dir's `instances.json.gz`: the Program's instance sequence (`_instance_rows`) under its digests.  `names` (by Call)
     and `params` stand in for the Program's own Call names and parameters, which no digest covers (`predict.aot.emit`: as its
-    trace named them).  A Boolean Program's rows are row dicts (`_word_rows`), which `RowTexts` doesn't write."""
+    trace named them).  `checks` (`BuildResult.checks`) is written with the row and leaf of each check (`check_rows`) under ``at``,
+    never ``rows``, which ends the header for a reader of it alone (`program_view._read_instance_header`); the replay evaluates
+    each and requires it to be `accept` (`check.replay.checks`).  A Boolean Program's rows are row dicts (`_word_rows`),
+    which `RowTexts` doesn't write."""
     word = getattr(program, "word", None)
     body = (word or program).fn.body
     if params is None and hasattr(body, "params"):
         params = [[n, str(t)] for n, t in body.params]
     head = {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest, "params": params,
-            **({"ir": "boolean"} if word is not None else {}), **supplied}
+            **({"ir": "boolean"} if word is not None else {}), **supplied,
+            **({"checks": {**checks, "at": check_rows(body, len(checks["of"]))}} if checks else {})}
     path = os.path.join(out, "instances.json.gz")
     if word is None:
         write_program_instances(path, head, program, names=names)

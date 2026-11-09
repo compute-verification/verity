@@ -1,5 +1,38 @@
-import Definitions.Accounting.Compose
-import Definitions.Accounting.Assumptions.TS
+module
+
+public import Definitions.Accounting.Assumptions.TS
+public import Definitions.Accounting.Compose
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The compiled circuit's named assumptions (trusted)
@@ -54,6 +87,8 @@ The physical layer's (`CreditOfWork`):
   falsifies.
 -/
 
+@[expose] public section
+
 namespace Accounting.Assumptions.Compose
 
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
@@ -72,15 +107,15 @@ def GuessLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame �
 /-- `random-oracle` (the random-oracle ruling: PoUW only, each use a named premise; this one at the window's
 seeds). **The seed each round's accepted proofs derive is the
 oracle's answer at a committed input**: on the window's oracle answers `a` (round `r`'s `T_q` seed queries' answers its
-`r`-th coin, `Fin T_q → B`, all uniform and independent), `sq a r` is the query of round `r` whose answer its drawn
-units derive their seed from in-circuit, at the input `SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B))`
+`r`-th coin, `Fin T_q → B`, all uniform and independent), `sq a r` is the query of round `r` whose answer its sampled
+proof blocks derive their seed from in-circuit, at the input `SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B))`
 that names the roots the round committed, and it exists for every round except on one event `Off` of probability at
 most `ε_id(T, |J|)`.
 
 The seeded statements are stated as Fiat–Shamir in the random-oracle model (`fiat-shamir`): the window's seeds are
 uniform answers to the prover's queries naming its operands' roots (the coin type `Paths (Fin T_q → B) rounds`), and
 this premise is where that model is named; SHA-512 is no random oracle. The probability is over the window's seed
-answers only: the hashes of the commitments' trees, the live draw and the proofs' coins are not in this space. So `ε_id`
+answers only: the hashes of the commitments' trees, the live sample and the proofs' coins are not in this space. So `ε_id`
 is per prover: `Off` is an event of the play's own answers, taken for the prover at hand at its own `T_q` queries a
 round, and the collision part of its number is a SHA-512 collision in that prover's query log, priced by `ecr/sha-512`
 (`Claims.ExpectedCR`) on a finder that runs the play and reads its log, as `δ_b` is. A prover whose queries hold a
@@ -90,7 +125,7 @@ bound.
 Alone it says only that `sq` names a query of every round off `Off` (`sq := fun _ _ => some 0` meets it): what ties
 `sq` to the proofs' seeds is `SeedLuckAt`'s last conjunct, which reads the same `sq`.
 
-Its content is gap (4)'s straight-line extraction, with no rewinding: each drawn unit's knowledge soundness extracts
+Its content is gap (4)'s straight-line extraction, with no rewinding: each sampled proof block's knowledge soundness extracts
 the roots and position its seed is derived from, and the extractor reads the query off the cheater's query log. The
 oracle stands for SHA-512 domain-separated for the commitments' trees as well as the seeds, one oracle, so the
 witnessed input differs from every query's only if the queries hold a collision or open a node no query answered.
@@ -100,7 +135,7 @@ witnessed input differs from every query's only if the queries hold a collision 
   of the round's units at those roots, so one query is `units_r` SHA-512 calls;
 * `T` counts the cheater's SHA-512 calls in the window under the one oracle: its `T_q` tries a round times the round's
   units' position seeds, plus every call of the commitments' trees, so `T ≥ Σ_r T_q·units_r`, not `rounds·T_q`;
-* `|J|` counts the seed inputs the proofs name, one a drawn unit's seed, at most `Σ_r units_r`, not `rounds`.
+* `|J|` counts the seed inputs the proofs name, one a sampled proof block's seed, at most `Σ_r units_r`, not `rounds`.
 The random-oracle instance of `ε_id` is `(T² + T·|J|)/2^512` (`2^-256` at `T = 2^128`), and it is kept apart from
 the reading of SHA-512 outside the model: the collision part read through `ecr/sha-512` on a finder that runs the play
 (`E[cost]/2^256`, about `T/2^256`, `2^-128` at `T = 2^128`) prices collisions of SHA-512 itself, which the model has
@@ -126,7 +161,7 @@ It has no stage order: a cheater may choose round `r`'s operands and skips after
 round's seed (look-ahead: try several of round `r`'s skip patterns, query round `r + 1`'s seed for each, keep the
 best), or re-roll round `r`'s values after its seed. Each try is a query of its own, and GRIND's per-query union over
 the `T_q` queries is what pays for it, so the premium's number is the staged one's. The binding the seeded statements
-check is at the draw (`Declared.atDraw`), after every seed, where Fiat–Shamir has fixed the roots each seed's
+check is at the sample (`Declared.atSample`), after every seed, where Fiat–Shamir has fixed the roots each seed's
 preimage names and every round's receipts.
 
 `δ_b` is per prover, as `δ_bind` is: `ecr/sha-512` (`Claims.ExpectedCR`, the record PoUW's binding reads) on that
@@ -179,7 +214,7 @@ that for every `S ⊆ Wh q a` at most a share `e^{−Σ_{v∈S} h v}` of `q`'s a
 event `Break` of probability at most `δ_b`, off which, where the proofs' seed answers `q` (`sq a r = some q`), round
 `r`'s whole tiles are `Wh q a` and a whole tile whose checked values are honest (`same`) is in `Lk q a`.
 
-What a whole-skipped H1 + fx1 tile must reproduce (`verity/core/protocols/pouw/circuit/h1tile.py`): its served `z`,
+What a whole-skipped H1 + fx1 tile must reproduce (`verity/ml/protocols/pouw/circuit/h1tile.py`): its served `z`,
 each cell's exact product, which reads no salt, and the CP-W receipt, `2·(K/32 + m)` 32-bit words (`256` served at
 `K = 4096`, then `O′` and `D`), each set's pair the XOR over the tile's 32 lanes and 8 duo chains of `PouwXinFinal`
 of the fx1 state, which starts from the lane's 512 seed-derived key bits (16,384 a tile). The fold state itself is

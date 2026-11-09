@@ -1,7 +1,17 @@
-import Proofs.Pouw.PearlC.RowStats
+module
+
+public import Proofs.Core.Fp32.Round
+public import Proofs.Core.Prims.Round
+public import Proofs.Core.Round
+public import Proofs.Pouw.PearlC.Block4Sem
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 import Proofs.Pouw.PearlC.FreezePPure
-import Proofs.Core.Fp32.Round
-import Proofs.Core.Prims.Round
+import Proofs.Pouw.PearlC.RowStats
+import Proofs.Pouw.PearlC.TileCircuit
 
 /-!
 # Core's primitives at `pc8`'s and `pc4`'s rows (proofs)
@@ -26,6 +36,8 @@ The rest is core's rounding and E4M3 cast against the protocol's: `roundRn` of a
 the value (`roundEven_eq`). With the first, the multiply, divide and FMA rows follow, the FMA's `roundSum` and its
 signed zeros included (`roundSum_eq`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.CoreOps
 

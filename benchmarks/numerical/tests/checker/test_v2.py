@@ -17,7 +17,7 @@ from conftest import (
     structured_cases,
 )
 from verity.ml.circuits.silicon.cast import f32_to_bf16_word
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot, tc_dot_chain
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16, tc_dot, tc_dot_chain
 from verity_numerical.checker import REAL, Reject
 from verity_numerical.checker.ctx import IntCtx
 from verity_numerical.checker.step import step_output as step_output_v1

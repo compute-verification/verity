@@ -216,7 +216,7 @@ def mufu_ex2_ftz(x: np.ndarray, table: np.ndarray | None = None) -> np.ndarray:
     unb = e - 127
     sh_l = np.clip(unb, 0, 63)
     # K = floor(|x| 2^23): mant < 2^24, so every right shift of 24 or more is 0 and |x| < 2^-23 reads T[0] = 1.0
-    # at n = 0 for either sign.  The exhaustive sm_89 verification (attention-model.md §3.1, all 2^32 inputs,
+    # at n = 0 for either sign.  The exhaustive sm_89 verification (all 2^32 inputs,
     # 0 mismatches) ran the model on the device, where the shift clamps; a host C shift by >= 64 wraps mod 64
     sh_r = np.clip(-unb, 0, 24)
     K = np.where(unb >= 0, mant << sh_l, mant >> sh_r)
@@ -372,7 +372,7 @@ def _bitlen(m: np.ndarray) -> np.ndarray:
 
 def _tc_dot16_pipeline(acc: np.ndarray, a: np.ndarray, b: np.ndarray, *, groups: tuple[int, ...], width: int,
                        floor: int) -> tuple[np.ndarray, np.ndarray]:
-    """One bf16 k16 tensor-core step under a `veritor.core.silicon.Pipeline`'s parameters, vectorised: acc (...,) f32 words,
+    """One bf16 k16 tensor-core step under a `verity.ml.circuits.silicon.models.GroupSum`'s parameters, vectorised: acc (...,) f32 words,
     a/b (..., 16) bf16 words -> (f32 words, nonfinite mask).  `groups` lists, in k order, how many products each grouped sum
     takes (the incoming accumulator joins the first group and each group's result joins the next); `width` is the adder's
     significand width and `floor` its exponent floor -- exactly `silicon.group_sum` / `silicon.tc_dot`, gate for gate.

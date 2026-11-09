@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
-import Proofs.Flock.Soundness.Discharge.Hidden.LayoutP
-import Proofs.Flock.Soundness.Discharge.Layout.InCover
-import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
+public import Proofs.Flock.Soundness.Discharge.Hidden.LayoutP
+public import Proofs.Flock.Soundness.Discharge.Layout.InCover
+public import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 
 /-!
 # `Layout.Aliased` at a hidden-output statement with public inputs
@@ -18,6 +20,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 * `aliased_of_keyP`: an instance that puts inputs on one gate only when they have one key with public inputs
   (`Aliased.srcKeyP`) is aliased.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -63,7 +67,7 @@ theorem flat_unitFactsP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf c
     exact Hidden.unitFacts_tmpl (st := Hidden.flatTwin st) hT rfl
 
 /-- **An untyped hidden statement at public inputs reads its flat twin's rows at every unit slot's row it keeps**, at
-unsegmented output rows (`unitRowsFlat`, with `Hidden.deltaEntry_kept`). -/
+unsegmented or row-seg output rows (`unitRowsFlat`, with `Hidden.deltaEntry_kept`). -/
 theorem unitRowsFlatP (ht : tags.typed = false) (s : Hidden.SpecP tags cf pf coins tables draw own pi st)
     (hrows : Hidden.Any.OutRowsS st.c) : UnitRowsFlatP st pi := by
   have L := flat_layoutP ht s
@@ -278,7 +282,7 @@ carry (`copyPos_blockHP`, `Aliased.copyPos_of_key`). -/
 theorem aliased_of_keyP (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (hR : UnitRowsFlatP st pi)
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {ri : Array Region} (hRi : HmIn.regions st.c pi st.pub = .ok ri) (hri : ∀ r ∈ ri.toList, r ∈ st.regions.toList)
-    {Cc : Audit.Circuit} {n : ℕ} {P : Audit.Partition Cc n} {u : Fin n}
+    {Cc : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition Cc n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g)
     (hk : ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_built).stack st.c.upv).nIn →
       c'.val < ((unitRows st L.unit_built).stack st.c.upv).nIn → srcKeyP st.c pi c.val = srcKeyP st.c pi c'.val)

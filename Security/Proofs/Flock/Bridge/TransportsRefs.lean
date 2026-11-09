@@ -1,7 +1,48 @@
-import Proofs.Flock.Bridge.LeafMap
-import Proofs.Flock.Bridge.Transports
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+module
+
+public import Proofs.Flock.Bridge.LeafMap
+public import Proofs.Flock.Bridge.Transports
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Tactic.BVDecide.Normalize.BitVec
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -68,7 +109,7 @@ end Data
 
 section Layout
 
-variable {C : FlockSoundness.Audit.Circuit} {rows : Fin C.N → Option RowAt}
+variable {C : Verity.Boolean.Circuit} {rows : Fin C.N → Option RowAt}
 
 theorem rootsOfL_length (c : Flock.Circuit) (L : LeafMap) : (rootsOfL c L).length = c.ports.size := by
   simp [rootsOfL]
@@ -128,7 +169,7 @@ position `i` whose registered row `r` sits at port `r.port`, of the port's bits 
 `r.leaf < L.cnt r.port`, under roots no earlier port shares, a value `v` `RowShaped` of the row's width under a salt of
 `saltLen` bytes, whose hm96 leaf at its port's bytes (`encPortH`, the port's own format) is the registered leaf of
 `L.dig r.port r.leaf`, opens `commitDepL` under `rootsOfL` at `i` to its bit `r.place`. -/
-theorem opens_commitDepL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem opens_commitDepL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (L : LeafMap) {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r)
     (hq : r.port < c.ports.size) (hu : r.leaf < L.cnt r.port) (hd : Flock.log2ceil (L.cnt r.port) ≤ L.d)
     (hb : r.width = c.ports[r.port]!.bits) (h16 : r.width % 16 = 0) (hpl : r.place < r.width)
@@ -226,6 +267,7 @@ theorem sharedRows_spec {tags : Flock.Tags} {c : Flock.Circuit} {header : Lean.J
        subst h0
        exact ‹¬ _ = true› (Array.contains_eq_true_of_mem hx))
 
+-- `walk_step` down `Flock.HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A shared-row file's tables are one per port, none empty** (`HmRow.loadPublic`, `sharedRows_spec`). -/
 theorem loadPublic_counts {tags : Flock.Tags} {c : Flock.Circuit} {file : ByteArray} {pop : Flock.Public}
@@ -301,7 +343,7 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.
   (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Discharge.Layout.scopeOkH c = true)
   (hU : Built c.unit) {pub : Flock.Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
-/-- **The game's value binding at a C-Flock session, with or without shared rows** (`TransportsLiveCR`'s `vb`). -/
+/-- **The game's value binding at a Flock session, with or without shared rows** (`TransportsLiveCR`'s `vb`). -/
 noncomputable abbrev vbS := (rsZHJS (Reg := Reg) dj y₀ ht hc hscope hU hpub).bindingZ
   (rsZHJS_computes dj y₀ ht hc hscope hU hpub)
 
@@ -385,7 +427,7 @@ noncomputable def rowsOfL (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (L :
     ⟨r.2.1.val, L.ref r.2.1.val r.1.val, Discharge.Layout.portRowW c r.2.1, r.2.2.val⟩
 
 /-- **A shaped registered opening opens the deployed commitment at the public file's leaf map** (`transports_shaped`
-with or without shared rows): at a file whose ports are rows the verifier of record reads (`RowsOk`), each row in its
+with or without shared rows): at a file whose ports are rows the verifier reads (`RowsOk`), each row in its
 port's format, at roots no two ports share and refs below their ports' counts. -/
 theorem transports_shapedS (R : Reg) (hrows : RowsOk c)
     (hfirst : ∀ q q' : ℕ, q' < q → q < c.ports.size →

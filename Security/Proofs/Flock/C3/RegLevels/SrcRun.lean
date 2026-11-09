@@ -1,4 +1,21 @@
-import Proofs.Flock.C3.RegLevels.SrcTie
+module
+
+public import Proofs.Flock.C3.RegLevels.SrcTie
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.VBridge.Runs.Lg
 
 /-!
@@ -14,6 +31,8 @@ one (`schedOf_holoAt`), so `levelTie_of_run` gives `LevelTie` from R's opening's
 the source hold: the openings (`Opened`), ring switching's output (`OpenRel`), the cap's digests, the proof's fields,
 and the source's Ligerito steps.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 
@@ -84,7 +103,7 @@ theorem ligRun_of_lig {m : ℕ} {sch : Flock.Schedule} {M : Flock.RecAlgebra.Mes
     ∃ (rs : Array Flock.Round) (P' : ByteArray), RoundsWF rs ∧
       Flock.ligerito (Flock.MerkleScheme.sha512 msId) sch tIn cap p (Flock.basis sws) ⟨rs, k₂, ByteArray.empty⟩ =
         .ok ((), ⟨rs, c.size, P'⟩) ∧
-      consumed rs k₂ c.size = (List.range' k₂ (c.size - k₂)).map (fun i => c[i]!) := by
+      consumed rs k₂ c.size = (List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!) := by
   obtain ⟨ext, stV, hrun, hd, hmsg, hood, -, hlc, hfin, -⟩ := Flock.RecAlgebra.ligerito_checks hlg hz
   have : Fact (Flock.RecAlgebra.NoEmpty c) := ⟨hne⟩
   have hk₃ : k₃ = c.size := by
@@ -107,7 +126,7 @@ theorem ligRun_of_lig {m : ℕ} {sch : Flock.Schedule} {M : Flock.RecAlgebra.Mes
   obtain ⟨rs, hrs⟩ : ∃ rs : Array Flock.Round, rs = c.mapIdx fun j cj =>
       ({ n := cj.size, sha := ByteArray.empty, coins := cj, bytes := some (F j) } : Flock.Round) := ⟨_, rfl⟩
   have hsz : rs.size = c.size := by rw [hrs, Array.size_mapIdx]
-  have hget : ∀ j < c.size, (rs[j]!).n = (c[j]!).size ∧ (rs[j]!).coins = c[j]! ∧ (rs[j]!).bytes = some (F j) :=
+  have hget : ∀ j < c.size, (rs[j]!).n = ((c)[j]!).size ∧ (rs[j]!).coins = (c)[j]! ∧ (rs[j]!).bytes = some (F j) :=
     fun j hj => by
       rw [getElem!_pos rs j (by omega), getElem!_pos c j hj]
       subst hrs
@@ -116,7 +135,7 @@ theorem ligRun_of_lig {m : ℕ} {sch : Flock.Schedule} {M : Flock.RecAlgebra.Mes
   have hfit := FlockVBridge.Runs.fits_of (c := c) (F := F) (rs := rs) (k₀ := k₂)
     (fun j hj => (hget j (by omega)).2.1.symm) hwf (fun j _ hj => (hget j (by omega)).2.2)
   rw [hsz] at hfit
-  have hcons : consumed rs k₂ c.size = (List.range' k₂ (c.size - k₂)).map (fun i => c[i]!) := by
+  have hcons : consumed rs k₂ c.size = (List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!) := by
     unfold consumed
     refine List.map_congr_left fun j hj => ?_
     obtain ⟨hj1, hj2⟩ := List.mem_range'_1.mp hj
@@ -141,7 +160,7 @@ theorem levelTie_of_lig {cap₀ : Cap Dig} {e : ExecHolo} {u : C3Run e} {m : ℕ
     {nc : ℕ} (hop : OpenRel sch.m nc tIn sws u.opened)
     (hk : u.lg.map kindOf <+: ligShape GF128 GF256 Dig e.rsch.sch)
     (hl : u.lg.filterMap Sum.getLeft? = ligMsgs p capDig sch)
-    (hr : u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))
+    (hr : u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf))
     (ho : ∀ ℓ j, u.os.1 2 ℓ j = openRow p sch ℓ j) :
     LevelTie cap₀ e u := by
   obtain ⟨rs, P', hwf, hlig, hcons⟩ := ligRun_of_lig hf hlg hz hne hpm hpo hyr hic hqn hcn hcbn hopen
@@ -166,9 +185,9 @@ theorem lgSteps_of_lig {e : ExecHolo} {u : C3Run e} {m : ℕ} {sch : Flock.Sched
     (hcbn : p.claimNonces.size = M.ood.size + sch.levels.size)
     (hopen : ∀ cs ∈ lg.conss.toList, Flock.RecAlgebra.Opened (Flock.MerkleScheme.sha512 msId) sch cap p M cs)
     (hu : u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig e.rsch.sch) (ligMsgs p capDig sch)
-      (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))) :
+      (((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf))) :
     u.lg.map kindOf <+: ligShape GF128 GF256 Dig e.rsch.sch ∧ u.lg.filterMap Sum.getLeft? = ligMsgs p capDig sch ∧
-      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf) := by
+      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf) := by
   obtain ⟨rs, P', hwf, hlig, hcons⟩ := ligRun_of_lig hf hlg hz hne hpm hpo hyr hic hqn hcn hcbn hopen
   have hdim := (FlockSoundness.Refine.fast100_dims m sch hf).1
   have hlv : ∀ i < sch.levels.size, FlockSoundness.Refine.LevelSeam (sch.levels.getD i default) := fun i hi => by
@@ -189,7 +208,7 @@ theorem lgSteps_of_lig {e : ExecHolo} {u : C3Run e} {m : ℕ} {sch : Flock.Sched
     (FlockSoundness.Discharge.Exec.ligeritoC_spine (D := Dig) FlockSoundness.execArith 2 _ _ _)
   rw [hsch] at hk
   have h2' : ts.filterMap Sum.getRight? =
-      ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf) :=
+      ((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf) :=
     h2.trans (congrArg (List.map (coinArr fOf)) hcons)
   have he : u.lg = ts := by
     rw [hu, ← h1, ← h2']
@@ -221,7 +240,7 @@ theorem levelTie_of_run {st : Flock.Stmt} {hp : HoloParams} {cap₀ : Cap Dig} {
       Flock.RecAlgebra.ligerito sh.sched M rs.T rs.sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((lgr, lg), k₁) →
       (∀ cs ∈ lg.conss.toList, Flock.RecAlgebra.Opened (Flock.MerkleScheme.sha512 msId) sh.sched cap p M cs) ∧
       (∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened) ∧
-      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))
+      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf))
     (hk : u.lg.map kindOf <+: ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
     (hl : u.lg.filterMap Sum.getLeft? = ligMsgs p capDig sh.sched)
     (ho : ∀ ℓ j, u.os.1 2 ℓ j = openRow p sh.sched ℓ j) :

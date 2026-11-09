@@ -1,16 +1,61 @@
+module
+
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Array.Basic
+public import Proofs.Flock.Claims.Complete.Json.Decode
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Hex
+import Proofs.Flock.Claims.Complete.Json.RoundTrip
 import Proofs.Flock.Claims.Complete.Json.Session
-import Proofs.Flock.Soundness.Discharge.Exec.Event
+import Proofs.Flock.Claims.Complete.Json.Spec
 import Proofs.Flock.Claims.JsonNorm
+import Std.Data.String.ToNat
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The honest record's live session and draw
+# The honest record's live session and sample
 
-Under the JSON library's specification (`JsonSpec`), at one table:
+With no premise on the JSON library, at one table:
 
 * `live_recordObj`: `liveOf` reads the printed honest record back as its `root_B`, no public words, its points and each
   rep stream's rounds with no digest (`liveRound`).
-* `recordDraw_recordObj`: the record's draw is the statement's, up to key order (`none` when the statement has none).
+* `recordDraw_recordObj`: the record's sample is the statement's, up to key order (`none` when the statement has none).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -51,13 +96,13 @@ theorem live_stream {spec : SessionSpec} {h : ByteArray → ByteArray} {rootB : 
 
 /-- **`liveOf` reads the printed honest record** at one table: its `root_B`, no public words, its points and each rep
 stream's rounds without digests. -/
-theorem live_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec}
+theorem live_recordObj {h : ByteArray → ByteArray} {spec : SessionSpec}
     {t : String} (ht : spec.tables = #[t]) (hd : Good (spec.unitDraw.getD Json.null)) {rb : ByteArray}
     {points : Array (Array F128)} {streams : Array (Array Round)} (hss : streams.size = spec.repStreams.size)
     (proofs : Array ByteArray) :
     liveOf spec (printJ (recordObj spec h #[rb] points streams proofs)) =
       .ok ⟨#[rb], spec.tables.map fun _ => ByteArray.empty, points, streams.map (·.map liveRound)⟩ := by
-  obtain ⟨j, hp, hs⟩ := S.parse_print _ (good_recordObj ht h rb points streams proofs hd)
+  obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ (good_recordObj ht h rb points streams proofs hd)
   have gR : ∀ {k v}, (k, v) ∈ recordList spec h #[rb] points streams proofs →
       (recordObj spec h #[rb] points streams proofs).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (recordList_distinct ..) hm
@@ -135,8 +180,8 @@ theorem live_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray �
   simp only [ok_bind, List.map_toArray, List.map_cons, List.map_nil]
   rfl
 
-/-- **The record's draw is the statement's**, up to key order (`JsonEquiv`). -/
-theorem recordDraw_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec}
+/-- **The record's sample is the statement's**, up to key order (`JsonEquiv`). -/
+theorem recordDraw_recordObj {h : ByteArray → ByteArray} {spec : SessionSpec}
     {t : String} (ht : spec.tables = #[t]) (hdraw : DrawOk spec) (rb : ByteArray) (points : Array (Array F128))
     (streams : Array (Array Round)) (proofs : Array ByteArray) :
     match spec.unitDraw with
@@ -149,7 +194,7 @@ theorem recordDraw_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteA
     cases spec.unitDraw with
     | none => exact fun _ => .null
     | some d => exact fun hd => hd.2.1
-  obtain ⟨j, hp, hs⟩ := S.parse_print _ (good_recordObj ht h rb points streams proofs hgood)
+  obtain ⟨j, hp, hs⟩ := FlockComplete.JsonRT.parse_print _ (good_recordObj ht h rb points streams proofs hgood)
   obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (getObjVal?_mkObj (recordList_distinct ..)
     (k := "unit_draw") (v := spec.unitDraw.getD Json.null) (by simp [recordList]))
   unfold FlockSoundness.Discharge.Exec.recordDraw

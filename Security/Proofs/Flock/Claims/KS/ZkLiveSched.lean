@@ -1,6 +1,43 @@
-import Proofs.Flock.Claims.KS.BatchSim
-import Proofs.Flock.Claims.KS.PlainLive
+module
+
+public import Proofs.Flock.Claims.KS.BatchSim
+public import Proofs.Flock.Claims.KS.PlainLive
+public import Proofs.Flock.Claims.KS.ZkSim
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.ZkLock
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
 /-!
 # The masked simulator's live strategy submits its rounds stream by stream
@@ -17,6 +54,8 @@ bytes prover on the rounds' explicit game (`roundsK`), follows `SchedLJ` at `zkS
 * `zkStreams_eq`, `zkStreams_length`, `zkStreams_split`: the streams are `fromS` at `repRounds`, as many as the
   deployed rounds, split at table `j` as `front_simRJ` reads them.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

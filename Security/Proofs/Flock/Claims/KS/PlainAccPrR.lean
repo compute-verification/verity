@@ -1,7 +1,46 @@
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
-import Proofs.Flock.Claims.KS.PlainRdRunK
-import Proofs.Flock.Claims.KS.PlainRConflict
-import Proofs.Flock.Claims.KS.PlainKSLinR
+module
+
+public import Proofs.Flock.Claims.KS.PlainKSLinR
+public import Proofs.Flock.Claims.KS.PlainOff
+public import Proofs.Flock.Claims.KS.PlainR
+public import Proofs.Flock.Claims.KS.PlainRConflict
+public import Proofs.Flock.Claims.KS.SimLead
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Claims.KS.PlainOffLive
+import Proofs.Flock.Claims.KS.PlainRawL
+import Proofs.Flock.Claims.KS.Range
+import Proofs.Flock.Claims.KS.SessionRaw
 
 /-!
 # The acceptance bound at `VR rd` against the reader's read sets
@@ -19,6 +58,8 @@ import Proofs.Flock.Claims.KS.PlainKSLinR
 * `plain_accPr_le_rdAllR_of rd hno hIn : PlainAccPrRdR rd x`, from what the simulation and the decoders still owe
   (`PlainRdInR rd x`), and `rdAllAt_R`: `PlainKSLinR`'s `RdAllAt` at `deployPlainR Readable.relation rd`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -107,9 +148,9 @@ def PlainAccPrRdR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
             Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧
               u ≠ C p
 
-/-! ## The draw -/
+/-! ## The sample -/
 
-/-- **`checksAtJ` refuses a session without a draw** (`drawLaw false tags none`). -/
+/-- **`checksAtJ` refuses a session without a sample** (`drawLaw false tags none`). -/
 theorem checksAtJ_drawSome {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json}
     (h : checksAtJ s spec x link c₁ mids f v = .ok ()) : ∃ d, s.read.draw = some d := by
@@ -123,7 +164,7 @@ theorem checksAtJ_drawSome {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link
   | none => simp [hd, ProvedScope.drawLaw] at h
   | some d => exact ⟨d, rfl⟩
 
-/-- **An accepting step of `VR rd` at SHA-512 is at a statement that sets up at a draw** (`decideR_sha512`,
+/-- **An accepting step of `VR rd` at SHA-512 is at a statement that sets up at a sample** (`decideR_sha512`,
 `checksAtJ_drawSome`). -/
 theorem nextR_acc_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((nextR rd x as cs).eval sha512).1 = .acc) :
@@ -136,7 +177,7 @@ theorem nextR_acc_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as 
     obtain ⟨d, hd⟩ := checksAtJ_drawSome hc
     exact ⟨s, spec, sts, d, actR_setupOf ha, hd⟩
 
-/-- **A statement some run of `VR rd` accepts at SHA-512 sets up at a draw** (`accK_draw` at `VR rd`). -/
+/-- **A statement some run of `VR rd` accepts at SHA-512 sets up at a sample** (`accK_draw` at `VR rd`). -/
 theorem accR_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
     (hacc : ¬ Claims.Flock.NoAcc sha512 (VR rd) x) :
     ∃ ins spec sts d, setupOf false x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
@@ -246,7 +287,7 @@ def PlainSimR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover
         #[]
 
 open Classical in
-/-- **The plain mixture's first bound at the statement's draw, from a simulation, at `VR rd`**
+/-- **The plain mixture's first bound at the statement's sample, from a simulation, at `VR rd`**
 (`plain_first_of_simDK`'s proof, at `plainVerdictAtJK id` by `plainVerdictAtJK_of_runR`, with `colsRV rd` the run's
 columns by `PlainRConflict`'s `colsRV_run`). -/
 theorem plain_first_of_simDR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
@@ -597,7 +638,7 @@ theorem plain_accPr_le_rdLR (rd : Claims.Msg → Option FinalP)
 
 open Classical in
 /-- **What the bound at `VR rd` still reads off the simulation and the decoders**, at every plain statement in scope
-that sets up at a draw, its one table's `fast100` schedule and layout: a leaf, openings and decoders of the table
+that sets up at a sample, its one table's `fast100` schedule and layout: a leaf, openings and decoders of the table
 (`hdec`, at `plainVerdictAtJK id`), and at each prover `P` and tape `ω` a simulator `P'` of `P` (`PlainSimR`) whose
 self-clashes are `VR rd`'s collisions (`PlainClashRunR`) and whose later-level openings are rows an accepting run of
 `VR rd` opens (`plainRawLevelColsRV`, `plainRel_ofK`'s conclusion). -/

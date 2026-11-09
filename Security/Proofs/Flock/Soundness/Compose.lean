@@ -1,5 +1,11 @@
-import Proofs.Flock.Soundness.Types.Flat
-import Proofs.Flock.Soundness.Lowering
+module
+
+public import Proofs.Flock.Soundness.Types.Flat
+public import Definitions.Flock.Lowering
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
+import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # A unit's rows in logical order (verified-lowering phase 1, 1d step 1)
@@ -22,6 +28,8 @@ binds it):
 - `Rows.compose_eval`: satisfied composed rows, with `one` at 1, carry the type's outputs (`Types.eval`) on the output
   columns. This is `Types.compose_sound` read through the logical order.
 -/
+
+@[expose] public section
 
 open Flock Flock.Derive
 
@@ -286,12 +294,12 @@ theorem physical_not_mem (z : Fin (Rows.compose L h).w → Bool) {c : ℕ} (hc :
 
 /-- A row's logical reads, on the composed values, are its physical reads on the physical values. -/
 theorem xorSum_physical (z : Fin (Rows.compose L h).w → Bool) (M : List (Fin (Rows.compose L h).w)) (cs : List ℕ)
-    (hM : M.map Fin.val = cs.map (lidx L)) (hcs : ∀ c ∈ cs, c ∈ L.order) : xorSum M z = xorSum cs (physical z) := by
+    (hM : M.map Fin.val = cs.map (lidx L)) (hcs : ∀ c ∈ cs, c ∈ L.order) : Verity.Boolean.xorSum M z = Verity.Boolean.xorSum cs (physical z) := by
   let zN : ℕ → Bool := fun ℓ => if hℓ : ℓ < (Rows.compose L h).w then z ⟨ℓ, hℓ⟩ else false
-  have h1 : xorSum M z = xorSum (M.map Fin.val) zN := by
-    rw [xorSum_map]; exact xorSum_congr fun x _ => by simp only [Function.comp, zN]; rw [dite_eq_left x.isLt]
+  have h1 : Verity.Boolean.xorSum M z = Verity.Boolean.xorSum (M.map Fin.val) zN := by
+    rw [xorSum_map]; exact Verity.Boolean.xorSum_congr fun x _ => by simp only [Function.comp, zN]; rw [dite_eq_left x.isLt]
   rw [h1, hM, xorSum_map]
-  refine xorSum_congr fun c hc => ?_
+  refine Verity.Boolean.xorSum_congr fun c hc => ?_
   have hlt : lidx L c < L.order.length := List.idxOf_lt_length_iff.2 (hcs c hc)
   have hw : lidx L c < (Rows.compose L h).w := by rw [Rows.compose_w]; omega
   simp only [Function.comp, zN, physical, hlt, hw, dite_true]
@@ -502,8 +510,8 @@ theorem sat_physical (hd : derive t inSplit outSplit = .ok d) {h : Ordered (ofDe
     simp only [List.getD_eq_getElem?_getD]
     rw [Types.rows_get hr]
     rfl
-  have hself : ∀ r, physical z r = (xorSum [r] (physical z) && xorSum [r] (physical z)) := by
-    intro r; simp [xorSum]
+  have hself : ∀ r, physical z r = (Verity.Boolean.xorSum [r] (physical z) && Verity.Boolean.xorSum [r] (physical z)) := by
+    intro r; simp [Verity.Boolean.xorSum]
   intro r p hp
   have hpr : p = d.rows.getD r ([], []) := by rw [List.getD_eq_getElem?_getD, hp, Option.getD_some]
   by_cases hm : r ∈ d.order
@@ -559,7 +567,7 @@ theorem Rows.compose_eval (hd : derive t inSplit outSplit = .ok d) {h : Ordered 
     have hlr : lrow (ofDerived d) 0 = ([d.order.length], [d.order.length]) :=
       lrow_none (ofDerived_row_const (by rw [Nat.add_zero]; exact order_getD_const d))
     have hone : ∀ M : List (Fin (Rows.compose (ofDerived d) h).w), M.map Fin.val = [d.order.length] →
-        xorSum M z = true := by
+        Verity.Boolean.xorSum M z = true := by
       intro M hM
       cases M with
       | nil => cases hM
@@ -568,7 +576,7 @@ theorem Rows.compose_eval (hd : derive t inSplit outSplit = .ok d) {h : Ordered 
         | nil =>
           simp only [List.map_cons, List.map_nil, List.cons.injEq, and_true] at hM
           have : x = (Rows.compose (ofDerived d) h).one := Fin.ext (by rw [Rows.compose_one]; exact hM)
-          simp [xorSum, this, h1]
+          simp [Verity.Boolean.xorSum, this, h1]
         | cons y M'' => simp at hM
     rw [hone _ (by rw [Rows.compose_a, hlr]), hone _ (by rw [Rows.compose_b, hlr])] at hz0
     rw [← order_getD_const d, physical_getD hn z (by simp; omega)]

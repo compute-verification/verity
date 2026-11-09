@@ -1,6 +1,23 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigModel
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigFinal
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigFinal
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigModel
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.LigeritoRun
 
 /-!
 # The hiding Ligerito's run, with its values
@@ -12,6 +29,8 @@ and the blinded claim `T'` carry over (`lane_vals`); level 0's enforced sum is `
 the extra lanes' terms it is the model's padded column (`consPad_eq`). Levels ≥ 1 are the non-ZK session's
 (`LigeritoRun.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

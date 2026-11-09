@@ -1,6 +1,40 @@
-import Proofs.Flock.Claims.ZK.FinishSwSv
-import Proofs.Flock.Level3.ArithFacts
-import Proofs.Flock.Claims.ZK.PiopSrcVals
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwSrc
+public import Proofs.Flock.Claims.ZK.FinishSwSv
+public import Proofs.Flock.Claims.ZK.PiopSrcVals
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 
 /-!
 # The switched source's masked values
@@ -8,17 +42,19 @@ import Proofs.Flock.Claims.ZK.PiopSrcVals
 `FinishSrc`'s `repCut_fw` asks of its source the masked values `vals + h` below `zp 64` (`hmk`), and level 0's opening's
 from `zp 64` to `h_ab` (`hlig`). At the switched prover's
 source (`swSrcE`), where table `i`'s rows hold at its base, rep `r`'s masked value `n` is the worker's clear value there
-plus the base's pad, each as the firewall's words (`GF128.val`).
+plus the base's pad, each as the ZK server's words (`GF128.val`).
 
 * **`Masked.swSrcE_masked_of_rowsAt`**: that reading, from the switched cut's masked values being the worker's view's
   (`swCutE_masked_of_rowsAt`), whose masked values are `v + h` (`Table.view`, at `Table.onVals`'s values).
 * `Masked.swSrcE_masked`, **`Masked.swSrcE_masked_pad`**: the pad there is the tape's, and below `h_ab` it is the
   session's pad array's entry (`padsOf`), as `srcE_masked` and `srcE_masked_pad` have the honest source's: the switched
   source's masked values are `vals + pads.h` at the worker's values and the session's pads.
-* `Masked.valsFw`, **`Masked.swSrcE_hmk`**, **`Masked.swSrcE_l0`**: at the firewall's clear values by pad index, the
+* `Masked.valsFw`, **`Masked.swSrcE_hmk`**, **`Masked.swSrcE_l0`**: at the ZK server's clear values by pad index, the
   passed values below `zp 64` and level 0's opening from there on: below `zp 64`, `repCut_fw`'s `hmk` with the passed
   values as `vals` and the session's pads as `pads`; from `zp 64` to `h_ab`, the opening's values plus those pads.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK
@@ -28,18 +64,18 @@ open CoinLayer
 namespace Masked
 
 /-- **Where table `i`'s rows hold at its base, the switched source's masked values are the worker's values plus the
-base's pads**, as the firewall's words. -/
+base's pads**, as the ZK server's words. -/
 theorem swSrcE_masked_of_rowsAt (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (i : ℕ) (hi : i < jOf x) (r : ℕ)
     (hr : r < 2)
     (hrows : ((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).tab.onVals.RowsAt (wtOf PE x w ⟨i, hi⟩, v ⟨i, hi⟩)
       (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).1
-      (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).2.1.2.1)
+      (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).2.1)
     (n : ℕ) (hn : n < ((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).tab.nE) :
     ((swSrcE x c w v τ i).rep r).masked n =
       FlockLevel3.GF128.val (v ⟨i, hi⟩ ⟨r, hr⟩ (wtOf PE x w ⟨i, hi⟩)
           (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).1
-          (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).2.1.2.1 ⟨n, hn⟩) +
+          (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).2.1 ⟨n, hn⟩) +
         FlockLevel3.GF128.val
           (((((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).randOf ((UE.tape x τ).1 ⟨i, hi⟩) 0).2.2.1
             ⟨r, hr⟩).1 ⟨n, hn⟩) := by
@@ -55,12 +91,12 @@ theorem swSrcE_masked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Cla
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     {k : ℕ} (hk : k < (tabC PE x j).z.nE) :
     ((swSrcE x c w v τ j.val).rep r.val).masked k =
       FlockLevel3.GF128.val (v j r (wtOf PE x w j)
           (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 ⟨k, hk⟩) +
+          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 ⟨k, hk⟩) +
         (UE.tapeZk τ).h j.val r.val k := by
   obtain ⟨t, rfl⟩ : ∃ t' : Fin Claims.Flock.zkTableCap → ExeCell, t' = τ := ⟨τ, rfl⟩
   have hc : j.val < Claims.Flock.zkTableCap := lt_of_lt_of_le j.isLt (jOf_le_cap x)
@@ -81,7 +117,7 @@ theorem swSrcE_masked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Cla
   rw [dite_eq_left (show k < ((tabC PE x j).T (czExe PE x c j)).tab.nE from hk), swCutE_masked_of_rowsAt x c w v t j hrows]
   show FlockLevel3.GF128.val (v j r (wtOf PE x w j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x t).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x t).1 j) 0).2.1.2.1 ⟨k, hk⟩ +
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x t).1 j) 0).2.1 ⟨k, hk⟩ +
     (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inl ⟨k, hk⟩))) = _
   rw [FlockLevel3.val_add]
   congr 1
@@ -100,12 +136,12 @@ theorem swSrcE_masked_pad (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w :
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     {k : ℕ} (hkE : k < (tabC PE x j).z.nE) :
     ((swSrcE x c w v τ j.val).rep r.val).masked k =
       FlockLevel3.GF128.val (v j r (wtOf PE x w j)
           (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 ⟨k, hkE⟩) +
+          (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 ⟨k, hkE⟩) +
         (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h[k]! := by
   have hk : k < (layE x j).hab := by rw [← nE_eq_hab x j]; exact hkE
   have hlen : (layE x j).len = (layE x j).tw + 1 := rfl
@@ -113,9 +149,9 @@ theorem swSrcE_masked_pad (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w :
   rw [swSrcE_masked x c w v τ j r hrows hkE,
     FlockComplete.padsOf_get (UE.tapeZk τ) j.val r.val (layE x j) k (by omega) (by omega) (by omega)]
 
-/-- **The firewall's clear values by pad index**: table `j`'s rep `r` clear value `k` is, below `zp 64`, word `k` of
-`A j r`, as the firewall reads a rep's passed values (`Finish.RepIn.vals`, `zp 64` words), and from `zp 64` on `B j r k`,
-level 0's opening, which the firewall computes itself; at every witness, mask slot and extra lanes. -/
+/-- **The ZK server's clear values by pad index**: table `j`'s rep `r` clear value `k` is, below `zp 64`, word `k` of
+`A j r`, as the ZK server reads a rep's passed values (`Finish.RepIn.vals`, `zp 64` words), and from `zp 64` on `B j r k`,
+level 0's opening, which the ZK server computes itself; at every witness, mask slot and level 0's hiding. -/
 noncomputable def valsFw (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128) :
     ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals :=
@@ -126,14 +162,14 @@ theorem zp64_lt_hab (x : Msg) (j : Fin (jOf x)) : (layE x j).zp 64 < (layE x j).
   simp only [_root_.Flock.Zk.PadLayout.hab]
   omega
 
-/-- **`repCut_fw`'s `hmk` at the switched source**: at the firewall's clear values (`valsFw`), where table `j`'s rows
+/-- **`repCut_fw`'s `hmk` at the switched source**: at the ZK server's clear values (`valsFw`), where table `j`'s rows
 hold at its base, rep `r`'s masked values below `zp 64` are `A j r` plus the session's pads (`padsOf`). -/
 theorem swSrcE_hmk (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128)
     (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     ∀ k < (layE x j).zp 64, ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).masked k =
       (A j r)[k]! + (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h[k]! := by
   intro k hk
@@ -142,14 +178,14 @@ theorem swSrcE_hmk (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims
   show (if k < (layE x j).zp 64 then (A j r)[k]! else B j r k) + _ = _
   rw [ite_eq_left hk]
 
-/-- **Level 0's opening at the switched source**: at the firewall's clear values (`valsFw`), where table `j`'s rows hold
+/-- **Level 0's opening at the switched source**: at the ZK server's clear values (`valsFw`), where table `j`'s rows hold
 at its base, rep `r`'s masked values from `zp 64` to `h_ab` are `B j r` plus the session's pads (`padsOf`). -/
 theorem swSrcE_l0 (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128)
     (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     ∀ k, (layE x j).zp 64 ≤ k → k < (layE x j).hab → ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).masked k =
       B j r k + (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)).h[k]! := by
   intro k hk0 hk

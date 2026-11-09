@@ -1,5 +1,42 @@
-import Proofs.Flock.Claims.Recursion.CallsBridgeE
-import Proofs.Flock.Claims.Recursion.CallsAgree
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsBridgeE
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Claims.KS.Width
 
 /-!
 # The calls half where the proof files agree, at the element-level verifier
@@ -12,6 +49,8 @@ only up to erasure (`Flock.With.verifyRepWith_erase`, at the logging oracle). Wi
 `RecDeploy.PlainCallsOfProofsE` holds at SHA-512, and so does `RecDeploy.PlainCallsBindOrSlackE`.
 -/
 
+@[expose] public section
+
 namespace FlockDeploy.KS
 
 open Flock FlockSoundness.Refine
@@ -20,8 +59,8 @@ open Flock FlockSoundness.Refine
 
 /-- `decode_pubs` at `Record.decodeWithK keep`, whatever the hashes. -/
 theorem decodeWithK_pubs (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
-    ∃ j l pubs, Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
+    {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
+    ∃ j l pubs, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (PubField pubs) spec.tables.toList sess.publics.toList := by
   unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h
@@ -59,7 +98,7 @@ theorem decodeWithK_pubs (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Se
 
 /-- `decode_publics` at `Record.decodeWithK keep`. -/
 theorem decodeWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} {lv : Live} (hd : Record.decodeWithK keep hs spec text = .ok sess)
+    {sess : RunRecord} {lv : Live} (hd : Record.decodeWithK keep hs spec text = .ok sess)
     (hl : liveOf spec text = .ok lv) : sess.publics = lv.publics := by
   obtain ⟨j, l, pubs, hp, hl1, hp1, hf⟩ := decodeWithK_pubs keep hs hd
   obtain ⟨j', l', pubs', hp', hl1', hp1', hf'⟩ := liveOf_pubs hl
@@ -90,7 +129,7 @@ theorem streamLog_erase {spec : SessionSpec} {s s' : StreamRec}
 /-- `verdict_calls` at `verifyLoggedE`. -/
 theorem verdictE_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} {L : Array ByteArray} (hv : verifyLoggedE h spec tabs record proofs = (.ok (), L)) :
-    ∃ (sess : Session) (schs : Array Schedule) (ds : List (List ByteArray)),
+    ∃ (sess : RunRecord) (schs : Array Schedule) (ds : List (List ByteArray)),
       Record.decodeWithK (M := Flock.V) (fun _ => true) (Hashes.ofSha512 h) spec record = .ok sess ∧
       List.Forall₂ (fun st sch => fast100 st.m = some sch) tabs.toList schs.toList ∧
       tabs.size = spec.tables.size ∧
@@ -116,7 +155,7 @@ theorem verdictE_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs 
 
 /-- `verdict_calls_sub` at `verifyLoggedE`, with the rep streams' rounds compared after `Round.erase`. -/
 theorem verdictE_calls_sub {spec : SessionSpec} {tabs : Array Setup} {record record' : String}
-    {proofs : Array ByteArray} {L L' : Array ByteArray} {sess sess' : Session}
+    {proofs : Array ByteArray} {L L' : Array ByteArray} {sess sess' : RunRecord}
     (hv : verifyLoggedE Sha512.hash spec tabs record proofs = (.ok (), L))
     (hv' : verifyLoggedE Sha512.hash spec tabs record' proofs = (.ok (), L'))
     (hd : Record.decodeWithK (M := Flock.V) (fun _ => true) (Hashes.ofSha512 Sha512.hash) spec record = .ok sess)

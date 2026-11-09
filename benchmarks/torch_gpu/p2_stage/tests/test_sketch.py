@@ -1,4 +1,4 @@
-"""The bandwidth audit's receipts beside the staging decode (`sketch.py`) on the CPU's host twins against serve.py's
+"""The bandwidth audit's receipts beside the store's load (`sketch.py`) on the CPU's host twins against serve.py's
 fixture: each block's π, σ however the decode's chunks fall, y and the chained roots; a pass refuses a unit it didn't
 read and rows that don't hold whole units; `full.py --receipts` over the toy's encoded store gives the fixture's root,
 and `bw_ref.py` passes the kept pass and refuses one changed."""
@@ -18,11 +18,12 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "pous"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import test_p2_stage as T  # noqa: E402
+from p2_v1 import serve  # noqa: E402
+
 import layout as L  # noqa: E402
 import sketch as K  # noqa: E402
 import stage as S  # noqa: E402
-import test_p2_stage as T  # noqa: E402
-from p2_v1 import serve  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -40,7 +41,7 @@ def salts_of(p: dict) -> bytes:
     return b"".join(bytes.fromhex(s) for s in p["leaf_salts"])
 
 
-def test_bw_check_holds_the_host_twins_to_the_fixture(tmp_path):
+def test_bw_check_holds_the_host_twins_to_the_fixture(tmp_path: Path) -> None:
     import bw_check
 
     assert bw_check.main(["--out", str(tmp_path), "--device", "cpu", "--random", "300", "--sample", "40"]) == 0
@@ -53,7 +54,7 @@ def test_bw_check_holds_the_host_twins_to_the_fixture(tmp_path):
     assert res["random"]["ok"] and res["random"]["sigma_sampled"] == 42
 
 
-def test_a_pass_covers_the_units_the_tensors_lie_in():
+def test_a_pass_covers_the_units_the_tensors_lie_in() -> None:
     def t(a: int, b: int) -> SimpleNamespace:
         return SimpleNamespace(first_block=a, block_range=range(a, b))
 
@@ -62,7 +63,7 @@ def test_a_pass_covers_the_units_the_tensors_lie_in():
         K.plan_units([t(0, 8), t(12, 13)])
 
 
-def test_a_pass_refuses_what_it_did_not_read_and_moves_with_one_byte(fx):
+def test_a_pass_refuses_what_it_did_not_read_and_moves_with_one_byte(fx: dict) -> None:
     rows, units, p = toy_rows(), fx["store"]["units"], fx["passes"][0]
     seed = bytes.fromhex(p["seed"])
     tree = K.Tree(units, "cpu")
@@ -87,7 +88,7 @@ def test_a_pass_refuses_what_it_did_not_read_and_moves_with_one_byte(fx):
     assert other.finish(tree, salts) != P.root
 
 
-def test_the_decode_sketches_each_chunk_before_decoding_it(fx, monkeypatch):
+def test_the_decode_sketches_each_chunk_before_decoding_it(fx: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     """A store with a pass attached sketches the units of every chunk `decode_rows` reads, in chunks that split
     units, before the decode; the toy's layers read units 0 .. 7."""
     monkeypatch.setattr(S.gpu, "Kernels", T.RefKernels)
@@ -95,7 +96,7 @@ def test_the_decode_sketches_each_chunk_before_decoding_it(fx, monkeypatch):
     lay = L.store_layout(doc, L.registered_prefix(bytes.fromhex(doc["salt"])))
     p = fx["passes"][1]
     P = K.Pass(bytes.fromhex(p["seed"]), fx["store"]["units"], "cpu")
-    st = S.Store(lay, toy_rows(), 0, "unused", chunk=3)
+    st = S.EncodedRows(lay, toy_rows(), 0, "unused", chunk=3)
     st.sketch = P
     for layer, _, size, _ in doc["staging"]:
         S.decode_layer(st, layer, torch.empty(size, dtype=torch.uint8))
@@ -103,7 +104,9 @@ def test_the_decode_sketches_each_chunk_before_decoding_it(fx, monkeypatch):
     assert [bytes(r.numpy().astype("<i4").tobytes()).hex() for r in P.sigma] == p["sigmas"]
 
 
-def test_full_receipts_on_the_toy_store_give_the_fixture_root_and_bw_ref_checks_them(tmp_path, monkeypatch, fx):
+def test_full_receipts_on_the_toy_store_give_the_fixture_root_and_bw_ref_checks_them(tmp_path: Path,
+                                                                                     monkeypatch: pytest.MonkeyPatch,
+                                                                                     fx: dict) -> None:
     """full.py --receipts over layer 1 alone, of the toy's store with a segment of padding past the head: layer 0's
     units are read from their segments and sketched alone, the padding is in no receipt, so the pass covers the
     tensors' 8 units of the store's 11 and its root is the fixture's; bw_ref.py on the kept pass passes, and refuses a

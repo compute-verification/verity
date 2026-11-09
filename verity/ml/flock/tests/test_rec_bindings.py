@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import elementwise
@@ -57,6 +57,17 @@ def test_a_part_relabelled_under_another_template_is_refused_against_v_stars():
         RB.bindings(cap, cdesc, RB.vstar_definition("rec-open-stacked/l16-h1"))
 
 
+def test_the_link_tables_part_is_held_to_its_own_widths():
+    """The link table's part staged under its own `RecLink_v1{UB, PB}` has V*'s bindings, digest that Definition's; checked
+    as another table's part, at another `PB`, it is refused by the template."""
+    defn = RB.vstar_definition("rec-link/u2-p2")
+    link, ldesc = _staged(defn)
+    assert RB.bindings(link, ldesc, defn)["program_digests"] == {"RecLink_v1{UB=2,PB=2}": program_digest(Program(defn))}
+    with pytest.raises(ValueError, match="^the partition's template 'RecLink_v1\\{UB=2,PB=2\\}' is not V\\*'s template of "
+                                         "the statement 'RecLink_v1\\{UB=2,PB=1\\}'$"):
+        RB.bindings(link, ldesc, RB.vstar_definition("rec-link/u2-p1"))
+
+
 def test_v_stars_definition_of_each_unit():
     """Each of V*'s unit names gives its family at the statics the name and the inner session's holo flag give."""
     assert descriptor_id(RB.vstar_definition("rec-open/l16-h1")) == "RecOpen_v4{LANES=16,H=1}"
@@ -64,7 +75,8 @@ def test_v_stars_definition_of_each_unit():
     assert descriptor_id(RB.vstar_definition("rec-sparse/n4-e6-s2-t1")) == "RecSparse_v1{NU=4,ELL=6,S_LOG=2,T_LOG=1}"
     assert descriptor_id(RB.vstar_definition("rec-cap/n128")) == "RecCap_v1"
     assert descriptor_id(RB.vstar_definition("rec-opening/m22-c2-p0")).startswith('InnerRepCheck_v2{S={"dict":{"gf"')
-    for bad in ("rec-open/l16", "rec-residuals/m22-k10-c2-p9", "I32Add_v1"):
+    assert descriptor_id(RB.vstar_definition("rec-link/u2-p2")) == "RecLink_v1{UB=2,PB=2}"
+    for bad in ("rec-open/l16", "rec-residuals/m22-k10-c2-p9", "rec-link/u2", "I32Add_v1"):
         with pytest.raises(ValueError):
             RB.vstar_definition(bad)
 

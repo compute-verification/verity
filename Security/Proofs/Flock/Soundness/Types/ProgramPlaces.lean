@@ -1,23 +1,29 @@
-import Proofs.Flock.Soundness.Types.Program
+module
+
+public import Proofs.Flock.Soundness.Lowering
+public import Proofs.Flock.Soundness.Types.Program
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
-# Each drawn unit's place, for a program of units (verified-lowering phase 1, S4d)
+# Each sampled proof block's place, for a program of units (verified-lowering phase 1, S4d)
 
-`E2E.lean`'s `DerivedPlaces` asks, for every draw and every drawn unit, the unit's place in its table: its rows, its
+`E2E.lean`'s `DerivedPlaces` asks, for every sample and every sampled proof block, the unit's place in its table: its rows, its
 instance in the committed circuit, a block and the columns there at which the table's statement holds the rows. For a
 program of units (`Types.Program`) the rows and the instance are the program's own:
 - `UProg.spec u` is unit `u`'s spec, `UProg.rowsOf u` its composed rows and `UProg.instOf u` their instance in `p.P`;
-- `UProg.derivedPlaces` is `DerivedPlaces` from a block and columns per drawn unit at which its table holds its rows
+- `UProg.derivedPlaces` is `DerivedPlaces` from a block and columns per sampled proof block at which its table holds its rows
   (`RowsAt`), and carries one value on the unit's inputs that share a gate (`RowsAt.Aliased`).
 
-`TableClass` is what a table's accepted statement gives (1d and 1e): the verifier's derivation of its unit class, the
+`TableClass` is what a table's accepted statement gives (1d and 1e): the verifier's derivation of its size class, the
 class's rows placed at each slot, each slot input's copy position and the forced-zero rows.
-`UProg.derivedPlaces_of_classes` places each drawn unit at a slot of its table's class:
+`UProg.derivedPlaces_of_classes` places each sampled proof block at a slot of its table's class:
 - when the unit reads the class's derivation inputs (`Reads`), it has the class's rows, since `deriveChecked` is a function;
 - when the slot's inputs that read one of the unit's sources (`UProg.srcOf`) copy one position, or forced-zero rows
   (`TableClass.Copies`), the place is aliased (`aliased_of_copies`). A unit's instance wires each input to its source's
   gate (`instOf_wire`), and inputs on one gate read one source (`srcGate_inj`).
 -/
+
+@[expose] public section
 
 open Flock Flock.DeriveAll
 
@@ -47,7 +53,7 @@ def RowsAt.Aliased {St : Statement} {R : Rows} {N : ℕ} (a : RowsAt St R) (wire
   ∀ c c', wire c = wire c' → c.val < R.nIn → c'.val < R.nIn → ∀ z : Witness St.m, St.Satisfies z →
     St.block z a.o (a.col c) = St.block z a.o (a.col c')
 
-/-- **A table's unit class, placed at each slot**: the verifier's run of `deriveChecked` on the class's layouts, and
+/-- **A table's size class, placed at each slot**: the verifier's run of `deriveChecked` on the class's layouts, and
 statement `St`'s level-0 matrices holding the class's composed rows at each slot's columns. Every block of a satisfying
 witness carries, at each slot input, what it carries at the input's copy position (`copyPos`, from Δ), and 0 at each
 forced-zero row (`zeros`, whose `A₀` and `B₀` rows are 0). -/
@@ -110,12 +116,12 @@ theorem UnitSpec.R_eq_of_reads {St : Statement} {s : UnitSpec} {c : TableClass S
   exact compose_congr (by rw [hw, hdn, hu]) _ _
 
 /-- A unit pair's spec. -/
-def UnitPair.toSpec {C CB : Audit.Circuit} {n : ℕ} {P : Partition C n} {PB : Partition CB n} {m : Fin CB.N → Fin C.N}
+def UnitPair.toSpec {C CB : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {PB : Partition CB n} {m : Fin CB.N → Fin C.N}
     {u : Fin n} (U : UnitPair P PB m u) : UnitSpec :=
   ⟨U.types, U.ls, U.info, U.words, U.idx, U.done, U.hd, U.t, U.ht, U.loOf, U.F, U.hF⟩
 
 /-- A unit pair's rows instance wires input column `c` to gate `f c`. -/
-def UnitPair.WireOn {C CB : Audit.Circuit} {n : ℕ} {P : Partition C n} {PB : Partition CB n} {m : Fin CB.N → Fin C.N}
+def UnitPair.WireOn {C CB : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {PB : Partition CB n} {m : Fin CB.N → Fin C.N}
     {u : Fin n} (U : UnitPair P PB m u) (f : ℕ → ℕ) : Prop :=
   ∀ c : Fin (Rows.compose (ofBlock U.words U.done (U.done.getD U.idx default)) U.ord).w, c.val < U.t.inBits →
     (U.rows.wire c).val = f c.val
@@ -224,7 +230,7 @@ theorem instOf_wire (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (u :
 
 variable {Reg : Type} {mPts : ℕ}
 
-/-- **Each drawn unit's place, from its rows' place in its table**, which carries one value on the unit's inputs that
+/-- **Each sampled proof block's place, from its rows' place in its table**, which carries one value on the unit's inputs that
 share a gate. -/
 noncomputable def derivedPlaces (hk : one < k) {outs : List ℕ} (p : UProg k one outs)
     (plan : Finset (Fin p.n) → Reg → List (TabSpec mPts))
@@ -257,7 +263,7 @@ theorem aliased_of_copies (hk : one < k) {outs : List ℕ} (p : UProg k one outs
   · rw [he]
   · rw [cl.zero _ hz1 z hz o, cl.zero _ hz2 z hz o]
 
-/-- **Each drawn unit's place, from its table's class**: unit `u`, drawn in `S` under `R`, at slot `slot` of block `o`
+/-- **Each sampled proof block's place, from its table's class**: unit `u`, sampled in `S` under `R`, at slot `slot` of block `o`
 of its table's class `cls`, whose derivation inputs it reads, where the slot's inputs that read one of `u`'s sources
 copy one position, or forced-zero rows. -/
 noncomputable def derivedPlaces_of_classes (hk : one < k) {outs : List ℕ} (p : UProg k one outs)

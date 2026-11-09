@@ -36,6 +36,9 @@ from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, Sy
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
+#: the changes of a certified record that leave its window without a verdict (`V2.EXPECT`)
+UNDECIDED = tuple(m for m, v in V2.EXPECT.items() if v == "no-verdict")
+
 
 @pytest.fixture(scope="module")
 def lean():
@@ -80,7 +83,9 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
     prefix of its own and, when no record is certified, with no key and no ingress parameters (`active_replay.py`'s
     calls); and a `ValueError` where the Lean check refuses the evidence (a frame of other than B bytes). With `grid`
     False, the same on units whose egress records are all certified, with no egress `mismatch` (an ingress one stays),
-    and a `ValueError` from both where a raw or committed record names an egress link."""
+    and a `ValueError` from both where a raw or committed record names an egress link. Then 20 certified units under the
+    changes that leave a window undecided, checked over every window (about a minute more): the only cases that give a
+    grid-free `no-verdict` whatever else the suite imports, which no cheaper test of the adapter compares."""
     kinds, no_grid = {}, {}
 
     @settings(derandomize=True, database=None, deadline=None, max_examples=600)
@@ -113,6 +118,25 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
             no_grid[v.violation or "accept"] = no_grid.get(v.violation or "accept", 0) + 1
 
     same()
+
+    # Hypothesis mixes the literals of every imported local module into what it draws, so the 600 cases above move with
+    # unrelated code; a grid-free no-verdict is among them only a few times, and certified units under the changes that
+    # leave a window undecided, checked over every window, carry it whatever else is imported.
+    @settings(derandomize=True, database=None, deadline=None, max_examples=20)
+    @given(R.record_cases(("certified",), UNDECIDED))
+    def undecided(case):
+        d = _decoded(case)
+        if d is None:
+            return
+        u, recs, e = d
+        if (len(e) != len(u.egress) or any(len(s) != u.windows for _, s in e)
+                or any(len(f.payload) != u.grid.frame_bytes for frames, _ in e for f in frames)):
+            return
+        prefixes = [u.windows] * len(u.egress)
+        for v in _same(lean, u, recs, e, prefixes, grid=False)[:sum(prefixes)]:
+            no_grid[v.violation or "accept"] = no_grid.get(v.violation or "accept", 0) + 1
+
+    undecided()
     print(kinds, no_grid)
     assert {"accept", "no-verdict", "duplicate", "signature", "advice", "mismatch"} <= set(kinds), kinds
     assert any(k.startswith("status:") for k in kinds), kinds
@@ -427,7 +451,7 @@ def test_the_clients_certificate_refusals_are_the_references(lean):
 
 
 def test_on_generated_answers_the_lean_is_the_reference(lean):
-    """On answers drawn from the served certificates in any order and number, with any of their digests seen: the Lean's
+    """On answers sampled from the served certificates in any order and number, with any of their digests seen: the Lean's
     refusals are the reference's, every refusal among them."""
     _, c = _served()
     pool = sorted(c.values(), key=lambda x: (x.link, x.direction.code, x.window, x.digest, x.signature))
@@ -547,7 +571,7 @@ def test_the_signed_syncs_are_the_references(lean):
 
 
 def test_on_generated_openings_the_lean_is_the_reference(lean):
-    """On openings drawn from those of `_openings` in any order and number, in `SESSION` or another: the Lean's syncs
+    """On openings sampled from those of `_openings` in any order and number, in `SESSION` or another: the Lean's syncs
     are `certificate.SignedClocks`', and so are each opening's refusal and the link-windows with two signed syncs,
     every refusal among them."""
     _, honest, bad, beside = _openings()

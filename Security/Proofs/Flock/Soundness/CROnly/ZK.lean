@@ -1,6 +1,31 @@
-import Proofs.Flock.Soundness.CROnly.Hm96Sha512
-import Proofs.Flock.Soundness.ZK.Session
-import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+module
+
+public import Definitions.Core.Game
+public import Definitions.Flock.ZK.Cut
+public import Definitions.Flock.ZK.RealView
+public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+public import Proofs.Flock.Soundness.CROnly.Hm96Sha512
+public import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+public import Proofs.Flock.Soundness.ZK.Session
+import Mathlib.Algebra.BigOperators.Field
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.CROnly.Hankel
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Rewinding
+import Proofs.Flock.Soundness.ZK.Blocks
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.RealLeaves
+import Proofs.Flock.Soundness.ZK.Refusal
+import Proofs.Flock.Soundness.ZK.SHVZK
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # The ZK theorems with hm96 hiding discharged
@@ -16,6 +41,8 @@ These are zero-knowledge statements, about what the prover's messages reveal (at
 `V*` for Lemma C), over any tables `T`. None is a soundness statement, so the `--zk` verifier's place for `final_c'`
 is outside them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

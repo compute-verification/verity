@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # The whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B prefill mix, one arm a run, measured
 # on the GPU by Nsight Systems' GPU metrics (Tensor Active, 10 kHz) over the engine's steady state; `served_util.py` reads
-# the profile and the server's step trace.  cwd: the source tree's root; the node holds the venv, the B4 row's Build and the
-# taps under UTIL_ROOT.
+# the profile and the server's step trace.  cwd: the source tree's root; the node holds the venv, the B4 row's traced Build
+# (ROW, which names the row, ROW_ID) and the taps under UTIL_ROOT. Every arm but graphs and async serves under the row's Build
+# of record (`serve_row.row_refusal`), which `verity-vllm predict row` writes into PRED (the run's scratch) on the CPU
+# before the lease.
 #
 # The mix: N requests of exactly 1,024 prompt ids, max_tokens 1, greedy, all queued at once (`serve_load.py --varied N
 # --prompt-range 1024:1024 --max-tokens 1 --rate 1000`), served at T tokens a step with T/1024 requests a step and a window
@@ -13,7 +15,7 @@
 #           window's close, so none of its blocks can be proved later
 #   seal    the Commit with --seal: each closed window sealed to UTIL_ROOT's scratch (deleted after the run)
 #   h1      the Commit (sealed iff H1_SEAL=1) and PoUW H1 at T and S 1 with the epoch's in-process coins (no challenger
-#           gate: it credits nothing; the gate's own costs are not in this run). H1's verifier of record is the Lean
+#           gate: it credits nothing; the gate's own costs are not in this run). H1's verifier is the Lean
 #           `pouw-check-difftest`, built here with lake (elan under $HOME), so run this arm with `--cwd clone`
 #   graphs  stock with the engine's options overridden by UTIL_ENGINE_JSON (default: enforce_eager off, so torch.compile
 #           with CUDA graphs captured at every power of two up to T, and async scheduling on), without the bench row. Not
@@ -38,10 +40,10 @@
 # commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
 # RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), SEAL_HOLD_GB (--seal-hold-gb, 32: the committed bytes of the windows
 # queued or sealing; a window at T 8,192 is 13.6 GB, so 32 seals two at once and 48, with RETAIN_DEVICE_GB 48, three), STANDIN_DRAWS (protocols of RELEASE_AFTER no drawer serves yet: the
-# harness draws each window for each once its windows.jsonl line is out, reading only the step-input port's ids and
+# harness samples each window for each once its windows.jsonl line is out, reading only the step-input port's ids and
 # positions at each of its steps, 16T bytes a step, which the seal's positions check reads and the release keeps only when a
-# draw names them; standin_draws.txt counts them), STANDIN_POLL_S (0.2, how often the stand-in drawer reads windows.jsonl;
-# serve-openai scans its draws every VERITY_DRAWS_POLL_S, also 0.2: with the seal's store slim, a window's release waits on both).
+# sample names them; standin_draws.txt counts them), STANDIN_POLL_S (0.2, how often the stand-in drawer reads windows.jsonl;
+# serve-openai scans its samples every VERITY_DRAWS_POLL_S, also 0.2: with the seal's store slim, a window's release waits on both).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
 # Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
@@ -56,13 +58,13 @@ LABEL=$ARM; [ "${ASYNC:-0}" = 1 ] && LABEL=$ARM-async
 ROOT=${UTIL_ROOT:-/workspace/research/vllm-util80}
 VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
-ROW=${ROW:-$(dirname "$(find "$ROOT" -maxdepth 3 -path '*__b4__i256__*' -name manifest.json | sort | tail -1)")}
+ROW=${ROW:-$(dirname "$(find "$ROOT" -maxdepth 3 -path '*__b4__i256__*' -name manifest.json | sort | tail -1)")} ROW_ID=${ROW_ID:-${ROW##*/}}
 HIDDEN_SO=${HIDDEN_SO:-$ROOT/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NORM_TAP_SO=${NORM_TAP_SO:-$ROOT/norm_tap/build/verity_norm_tap.so}
 NSYS=${NSYS:-/usr/local/cuda-13.0/bin/nsys}
-SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve
+SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve; PRED=${PRED:-$SCR/predicted}
 PORT=${PORT:-18190}
-export TREE ARM LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW HIDDEN_SO NORM_TAP_SO NSYS SCR D PORT OUT
+export TREE ARM LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW ROW_ID HIDDEN_SO NORM_TAP_SO NSYS SCR D PRED PORT OUT
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 
 if [ "${1:-}" != leased ]; then
@@ -75,6 +77,15 @@ if [ "${1:-}" != leased ]; then
     say "no taps: $HIDDEN_SO, $NORM_TAP_SO"; exit 3
   fi
   mkdir -p "$D"
+  if [ "$ARM" != graphs ] && [ "$ARM" != async ]; then
+    (cd "$TREE/integrations/vllm" && HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
+      PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src \
+      "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
+    prc=$?
+    [ "$prc" = 0 ] && [ -f "$PRED/predicted.json" ] \
+      || { say "PREDICT-ROW $ROW_ID refused (exit $prc): $(grep -v '^\[predict\]' "$OUT/predict_row.err" | tail -2 | cut -c1-600)"; exit 3; }
+    say "PREDICT-ROW $ROW_ID into $PRED: $(cut -c1-300 "$OUT/predict_row.json")"
+  fi
   if [ "$ARM" = h1 ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
@@ -120,10 +131,10 @@ nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.gra
 args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision verity_int8 --run-id "${RESEARCH_RUN_ID:-local}"
       --admit arrival --window-requests "$SEQS" --max-num-seqs "$SEQS"
       --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1 --no-prefix-caching)
-[ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--required-manifest "$ROW/manifest.json")
+[ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--required-manifest "$PRED/manifest.json")
 [ -n "${PROTOCOLS_CONFIG:-}" ] && args+=(--protocols-config "$PROTOCOLS_CONFIG")
 [ -n "${RELEASE_AFTER:-}" ] && args+=(--retain device --retain-device-gb "${RETAIN_DEVICE_GB:-32}" --release-after "$RELEASE_AFTER")
-commit=(--scheme rows-sha512 --gpu-tree --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
+commit=(--scheme rows-sha512 --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
         --window-gb 32 --seal-hold-gb "${SEAL_HOLD_GB:-32}" --seal-warm-gb 0 --disk-floor-gb "${DISK_FLOOR_GB:-20}")
 serve=("$PY" -m verity_vllm.pipeline.cli serve-openai)
 case $ARM in

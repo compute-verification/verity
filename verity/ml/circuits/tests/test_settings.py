@@ -1,7 +1,8 @@
 """`verity.settings`, the settings machinery (`Registry`) and the distribution's own registry: every variable declared once (a
 type, a role, a doc), read at the read, an undeclared ``VERITY_ML_*`` variable refused by name, a ``debug`` setting refused on
-a run of record, and the run's record of the value settings.  And the circuits area, on the soundness path, reads the
-environment through it alone: its direct reads are held at today's count, none."""
+a run of record, a program's startup check (`Registry.check`), the run's record of the value settings, and `direct_uses`,
+which a suite's ratchet counts with.  And the circuits area, on the soundness path, reads the environment through it alone:
+its direct reads are held at today's count, none."""
 from __future__ import annotations
 
 import ast
@@ -102,6 +103,27 @@ def test_a_debug_setting_is_refused_on_a_run_of_record(monkeypatch: pytest.Monke
     with pytest.raises(S.DebugOnRecord, match="VERITY_ML_TEST_DUMP: debug setting, refused on a run of record"):
         S.REGISTRY.of_record(env)
     S.REGISTRY.of_record({**env, "VERITY_ML_TEST_DUMP": ""})
+
+
+def test_check_refuses_an_unknown_name_a_value_that_doesnt_parse_and_a_debug_setting_on_a_run_of_record() -> None:
+    r = S.Registry("x.py", ("X_",), S.Setting("X_TRACE", str, None, S.DEBUG, "a trace file"),
+                   S.Setting("X_N", int, 3, S.VALUE, "a number"), schema=S.RECORD_SCHEMA)
+    r.check({"X_TRACE": "/t"}, of_record=False)
+    r.check({"X_TRACE": ""}, of_record=True)
+    with pytest.raises(S.DebugOnRecord, match="X_TRACE: debug setting, refused on a run of record"):
+        r.check({"X_TRACE": "/t"}, of_record=True)
+    with pytest.raises(ValueError, match="X_N='x'"):
+        r.check({"X_N": "x"}, of_record=False)
+    with pytest.raises(S.UnknownSetting, match="unknown setting X_NN: nothing in the tree reads it"):
+        r.check({"X_NN": "1"}, of_record=False)
+
+
+def test_direct_uses_sees_each_form() -> None:
+    src = ("import os\nimport os as o\nfrom os import environ, getenv as g\n"
+           "a = os.environ.get('A')\nb = o.environ['B']\nc = environ.get('C')\nd = g('D')\nos.environ['E'] = '1'\n"
+           "e = {**os.environ}\nf = os.getpid()\nx.os.environ\n")
+    assert S.direct_uses(src) == [(4, "os.environ"), (5, "os.environ"), (6, "os.environ"), (7, "os.getenv"),
+                                  (8, "os.environ"), (9, "os.environ")]
 
 
 def test_the_record_carries_the_value_settings_in_force_and_names_a_credential(monkeypatch: pytest.MonkeyPatch) -> None:

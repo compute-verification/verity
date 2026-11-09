@@ -1,4 +1,17 @@
-import Proofs.Flock.Soundness.ZK.Hiding
+module
+
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Pi
+public import Proofs.Flock.Soundness.ZK.Hiding
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Rewinding
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # Zero knowledge: T1 over adaptive leaves
@@ -15,6 +28,8 @@ route of `Session.adaptive_prefinal_hm96`:
    a time: `U_i = V_i − x_i(…)`, where the leaves before `i` are already the ideal leaves `H(V_j, c(y_j))`. So the adaptive
    leaves on `(U, y)` are distributed as the ideal leaves `H(V_i, c(y_i))`, exactly.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

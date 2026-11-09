@@ -2,9 +2,10 @@
 `[tool.verity.tests]`: `worker_gb`, one xdist worker's peak, and `timeout_s`, the bound `--timeouts` puts on its run.
 
 The run's memory is its test processes at the largest worker_gb, one per CPU (suites.py's `--jobs` is the CPUs it may use) or
-its `--jobs`. Its time, for named suites, is their timeouts one after another (an undeclared one's SUITE_TIMEOUT_S) plus SYNC_S
+its `--jobs`; a run of many suites at no less than TEST_PROCESS_GB each, twice over, since suites.py holds half of it for the
+suites it runs serially. Its time, for named suites, is their timeouts one after another (an undeclared one's SUITE_TIMEOUT_S) plus SYNC_S
 for the environment's `uv sync`. A run of many suites, `--changed REV` (the suites the change touches, as suites.py's `--list`
-names them) or none named (all of them; a change that deletes a pyproject.toml reruns every suite, INF-98), runs them side by side
+names them) or none named (all of them; a change that deletes a pyproject.toml reruns every suite), runs them side by side
 on its jobs: its time is the list-scheduling bound, their times summed over the jobs plus the longest, with an undeclared suite at
 UNDECLARED_S, since at SUITE_TIMEOUT_S each the tree's 79 would ask for a day. Neither drops below the kind's own (AUTO_*). Only
 what a suite declares is used, so named suites that declare neither keep the kind's size, as does a name that matches none or
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import math
 import re
+import shlex
 import subprocess
 import sys
 import tomllib
@@ -26,15 +28,34 @@ VALUED = {"--changed", "--skip", "--jobs", "-j", "--mem-gb", "--logs", "--json",
 #: suites.py's SUITE_TIMEOUT_S: an undeclared suite's bound
 SUITE_TIMEOUT_S = 3600
 SYNC_S = 600
-#: an undeclared suite's time in a run of many: vy-nebius-cpu-1's suites.py durations.json (8 Oct), 32 suites run whole, had a
-#: median of 45 s and a mean of 181 s; the slow ones (circuit-check's 63 min) declare their timeout_s
+#: an undeclared suite's time in a run of many: a node's suites.py durations.json, 32 suites run whole, had a median of 45 s
+#: and a mean of 181 s; the slow ones (circuit-check's 63 min) declare their timeout_s
 UNDECLARED_S = 300
+#: suites.py's TEST_PROCESS_GB: what a test process of a suite that declares no worker_gb may reach
+TEST_PROCESS_GB = 9
 #: kind agent-test's shape (infra/cluster/src/cluster/kinds.py, phase cpu-test, and kinds/infra.toml's max_wall_min)
 AUTO_CPUS, AUTO_MEM_GB, AUTO_MAX_S = 4, 16, 3600
 
 
+def _words(command: list[str]) -> list[str]:
+    """``command``'s words, a shell string that runs suites.py split into its own (`bash -lc "uv sync && uv run
+    tools/verity/check/suites.py --changed REV"`, the lane run `research queue` names), so that run is sized as well."""
+    out: list[str] = []
+    for a in command:
+        if SUITES_PY in a and a != SUITES_PY and not a.endswith("/" + SUITES_PY):
+            try:
+                out += [w for w in shlex.split(a) if w not in ("&&", "||", ";")]
+                continue
+            except ValueError as e:
+                print(f"suite_size: {a[:120]!r} doesn't split as a shell string ({e}); it is sized by its words as given",
+                      file=sys.stderr)
+        out.append(a)
+    return out
+
+
 def selection(command: list[str]) -> tuple[list[str], int | None, str | None] | None:
     """The suites a suites.py command names, its `--jobs` and its `--changed` REV, or None when it isn't one."""
+    command = _words(command)
     at = next((i for i, a in enumerate(command) if a == SUITES_PY or a.endswith("/" + SUITES_PY)), None)
     if at is None:
         return None
@@ -118,9 +139,13 @@ def size(source: Path, command: list[str], cpus: int | None) -> dict | None:
         return None
     out: dict = {"suites": [s["name"] for s in chosen]}
     workers = jobs or cpus or AUTO_CPUS
-    if gb := max(s["worker_gb"] for s in chosen):
+    many = rev is not None or not names
+    if many:
+        # side by side, suites.py holds half the slot for its serial suites at TEST_PROCESS_GB each
+        out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(2 * workers * max(TEST_PROCESS_GB, *(s["worker_gb"] for s in chosen))))
+    elif gb := max(s["worker_gb"] for s in chosen):
         out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(workers * gb))
-    if rev is not None or not names:
+    if many:
         ts = [s["timeout_s"] or UNDECLARED_S for s in chosen]
         if (t := math.ceil(sum(ts) / workers + max(ts)) + SYNC_S) > AUTO_MAX_S:
             out["max_s"] = t

@@ -1,12 +1,46 @@
-import Proofs.Flock.Claims.KS.ForkSlack
-import Proofs.Flock.Claims.KS.FnFork
-import Proofs.Flock.Claims.KS.LiveMix
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.ForkSlack
+public import Proofs.Flock.Claims.KS.FnFork
+public import Proofs.Flock.Claims.KS.LiveMix
+public import Proofs.Flock.Claims.DeployVK
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.ConflictTied
 
 /-!
 # The fork's coin coupling at a simulator of uniform functions
 
-`ForkSlack` asks for the coupling of the fork's coin law (`ForkCoinCoupling`) at a simulator's coins; `FnFork` proves
+`ForkSlack` asks for the coupling of the fork's coin distribution (`ForkCoinCoupling`) at a simulator's coins; `FnFork` proves
 it at `fnAt`, a tape of uniform functions of the live coins' history read through a prefix key
 (`FnFork.fnAt_coupling`). Here the two meet, in `ForkSlack`'s closure:
 
@@ -19,6 +53,8 @@ it at `fnAt`, a tape of uniform functions of the live coins' history read throug
 * `forkCoinCoupling_plain`: the coupling at the deployed plain verifier `V false`, at `Claims.Bridge.Live.fnAt` with
   the live coins `LCoin 65536` (`live_fnAt_eq`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

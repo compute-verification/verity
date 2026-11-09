@@ -1,7 +1,48 @@
-import Proofs.Flock.Claims.DeployRoundsZk
-import Proofs.Flock.Claims.DeployCode
+module
+
+public import Flock.With.VerifyE
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.DeployRoundsZk
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployRounds
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
-import Flock.With.VerifyE
+import Proofs.Flock.Soundness.Refine.Seam
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # `Deploy.V`'s round count is the rounds the shipped verifier reads
@@ -11,13 +52,15 @@ through `keep`) wherever their proofs read none of those digests, so they hold a
 (`keep := fun _ => true`) too. The shipped verdict's (`verifyWithM`, `keep := id`) follow by `rfl`.
 -/
 
+@[expose] public section
+
 namespace FlockDeploy
 
 open Flock Transcript FlockSoundness.Refine FlockSoundness.Discharge.Exec
 
 /-! ## `fast100`'s schedules -/
 
-/-- Every `fast100` schedule is for `22 ≤ m`, draws a nonempty first point, has at least two levels, and queries each. -/
+/-- Every `fast100` schedule is for `22 ≤ m`, samples a nonempty first point, has at least two levels, and queries each. -/
 theorem fast100_rounds_ok {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) :
     22 ≤ m ∧ sch.n ≠ 0 ∧ 2 ≤ sch.levels.size ∧ ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0 := by
   have hm : m < 40 := by
@@ -39,7 +82,7 @@ the table's `fast100` schedule, its stream has `(3 + (m − 6)) + (3 + (kLog −
 rounds (zerocheck, lincheck, the ring switch over `claims = 2 + |extras|`, Ligerito over `R + 1` levels), whatever the
 hashes `hs` are. Level 0's query coins are the round after zerocheck, lincheck, the ring switch and Ligerito's first
 `k0 + 6`: that round issued level 0's `q` coins, and level 0's Merkle check passes at their positions. -/
-theorem verifyRepWith_rounds (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {sess : Session}
+theorem verifyRepWith_rounds (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {sess : RunRecord}
     {i r : ℕ} {bytes c : ByteArray} (hk : st.fold.kLog = st.kLog) (hf : fast100 st.m = some sch)
     (h : verifyRepWith hs spec st sch sess i r bytes = .ok c) :
     ∃ (stream : StreamRec) (extras : Array Claim) (p : Proof),
@@ -101,7 +144,7 @@ theorem verifyRepWith_rounds (hs : Hashes Flock.V) {spec : SessionSpec} {st : Se
 checks accept on the proof files `proofs[2i]` and `proofs[2i+1]`. -/
 theorem verifyWithMK_tables (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     {record : String} {proofs : Array ByteArray} (h : verifyWithMK keep hs spec tabs record proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array Schedule), Record.decodeWithK keep hs spec record = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array Schedule), Record.decodeWithK keep hs spec record = .ok sess ∧
       tabs.size = spec.tables.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs' : i < schs.size) (c₀ c₁ : ByteArray),
         fast100 tabs[i].m = some schs[i] ∧
@@ -151,7 +194,7 @@ theorem verifyWithMK_tables (keep : Bool → Bool) (hs : Hashes Flock.V) {spec :
 /-- **The shipped plain verdict accepts each table's reps** (`verifyWithMK_tables` at `keep := id`). -/
 theorem verifyWithM_tables (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} (h : verifyWithM hs spec tabs record proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array Schedule), Record.decodeWith hs spec record = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array Schedule), Record.decodeWith hs spec record = .ok sess ∧
       tabs.size = spec.tables.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs' : i < schs.size) (c₀ c₁ : ByteArray),
         fast100 tabs[i].m = some schs[i] ∧
@@ -164,7 +207,7 @@ record decodes, there is one setup per table, and each table `i` has its `--zk` 
 the proof files `proofs[2i]` and `proofs[2i+1]`. -/
 theorem zkVerifyWithM_tables (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array (Schedule × ℕ)), Record.decodeWith hs spec record = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array (Schedule × ℕ)), Record.decodeWith hs spec record = .ok sess ∧
       tabs.size = spec.tables.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs' : i < schs.size) (c₀ c₁ : ByteArray),
         Zk.schedule tabs[i].m = .ok schs[i] ∧
@@ -307,9 +350,9 @@ def StreamR (s : Lean.Json) (x : StreamRec) : Prop :=
 /-- **What the verifier's decoder reads of the record**, whatever the hashes and `keep`: the JSON, the link's points
 (S9: the configured number of them) and the streams, each with its name and its rounds' coin counts and coins. -/
 theorem decodeWithK_parts (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json) (SF : Lean.Json → Flock.V StreamRec),
-      Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
+      Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
       ps.mapM (fun p => (match p.getArr? with
         | .ok a => Record.f128s a
         | .error _ => .error "record: a link point is not a list" : Flock.V (Array F128))) = .ok sess.points ∧
@@ -348,10 +391,10 @@ theorem decodeWithK_parts (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
       exact ⟨hn, by rw [show Record.arr r "coins" = .ok cs from hcs]; exact hcoins⟩
 
 /-- **What the shipped decoder reads of the record** (`decodeWithK_parts` at `keep := id`). -/
-theorem decodeWith_parts (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
+theorem decodeWith_parts (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json) (SF : Lean.Json → Flock.V StreamRec),
-      Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
+      Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
       ps.mapM (fun p => (match p.getArr? with
         | .ok a => Record.f128s a
         | .error _ => .error "record: a link point is not a list" : Flock.V (Array F128))) = .ok sess.points ∧
@@ -363,7 +406,7 @@ theorem decodeWith_parts (hs : Hashes Flock.V) {spec : SessionSpec} {text : Stri
 order, the first stream record of its name and that record's rounds' coin counts and coins. -/
 theorem liveOf_parts {spec : SessionSpec} {text : String} {lv : Live} (h : liveOf spec text = .ok lv) :
     ∃ (j l : Lean.Json) (ps recs : Array Lean.Json),
-      Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
+      Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr l "points" = .ok ps ∧
       ps.mapM (fun p => (match p.getArr? with
         | .ok a => Record.f128s a
         | .error _ => .error "record: a link point is not a list" : Flock.V (Array F128))) = .ok lv.points ∧
@@ -411,7 +454,7 @@ theorem liveOf_parts {spec : SessionSpec} {text : String} {lv : Live} (h : liveO
 record, they read the same link points, the configured number of them, and for each rep stream in `spec.repStreams`
 order the verifier's stream of that name has the rounds `liveOf` read, with the same coin counts and coins. -/
 theorem liveOf_decodeWithK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {lv : Live} {sess : Session} (hl : liveOf spec text = .ok lv)
+    {lv : Live} {sess : RunRecord} (hl : liveOf spec text = .ok lv)
     (hd : Record.decodeWithK keep hs spec text = .ok sess) :
     lv.points = sess.points ∧ sess.points.size = spec.points ∧ lv.streams.size = spec.repStreams.size ∧
       ∀ (k : ℕ) (hk : k < spec.repStreams.size) (hk' : k < lv.streams.size), ∃ stream : StreamRec,
@@ -438,7 +481,7 @@ theorem liveOf_decodeWithK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : 
   · exact Except.ok.inj (ha.2.symm.trans hb.2)
 
 /-- **`liveOf` and the shipped decoder agree** (`liveOf_decodeWithK` at `keep := id`). -/
-theorem liveOf_decodeWith (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {lv : Live} {sess : Session}
+theorem liveOf_decodeWith (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {lv : Live} {sess : RunRecord}
     (hl : liveOf spec text = .ok lv) (hd : Record.decodeWith hs spec text = .ok sess) :
     lv.points = sess.points ∧ sess.points.size = spec.points ∧ lv.streams.size = spec.repStreams.size ∧
       ∀ (k : ℕ) (hk : k < spec.repStreams.size) (hk' : k < lv.streams.size), ∃ stream : StreamRec,
@@ -613,7 +656,7 @@ theorem rep_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionS
     {record : String} {proofs : Array ByteArray} {lv : Live}
     (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv) :
     lv.streams.size = 2 * sts.size ∧ ∀ (k : ℕ) (hk : k < lv.streams.size),
-      ∃ (sess : Session) (sch : Schedule) (stream : StreamRec) (c : ByteArray),
+      ∃ (sess : RunRecord) (sch : Schedule) (stream : StreamRec) (c : ByteArray),
         sess.points = lv.points ∧ sess.points.size = spec.points ∧ fast100 sts[k / 2]!.m = some sch ∧
         verifyRepWith hs spec (Setup.ofCircuit sts[k / 2]!) sch sess (k / 2) (k % 2) proofs[k]! = .ok c ∧
         sess.streams.find? (fun x => x.name == s!"{spec.tables[k / 2]!}/rep{k % 2}") = some stream ∧
@@ -646,7 +689,7 @@ theorem rep_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} 
     {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
     lv.streams.size = 2 * sts.size ∧ ∀ (k : ℕ) (hk : k < lv.streams.size),
-      ∃ (sess : Session) (sch : Schedule) (stream : StreamRec) (c : ByteArray),
+      ∃ (sess : RunRecord) (sch : Schedule) (stream : StreamRec) (c : ByteArray),
         sess.points = lv.points ∧ sess.points.size = spec.points ∧ fast100 sts[k / 2]!.m = some sch ∧
         verifyRepWith hs spec (Setup.ofCircuit sts[k / 2]!) sch sess (k / 2) (k % 2) proofs[k]! = .ok c ∧
         sess.streams.find? (fun x => x.name == s!"{spec.tables[k / 2]!}/rep{k % 2}") = some stream ∧
@@ -866,7 +909,7 @@ theorem rep_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {re
     {proofs : Array ByteArray} {lv : Live} (hv : Zk.verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
     lv.streams.size = 2 * sts.size ∧ ∀ (k : ℕ) (hk : k < lv.streams.size),
-      ∃ (sess : Session) (sch : Schedule) (tPad : ℕ) (stream : StreamRec) (c : ByteArray),
+      ∃ (sess : RunRecord) (sch : Schedule) (tPad : ℕ) (stream : StreamRec) (c : ByteArray),
         sess.points = lv.points ∧ sess.points.size = spec.points ∧ Zk.schedule sts[k / 2]!.m = .ok (sch, tPad) ∧
         Zk.verifyRepWith hs spec (Setup.ofCircuit sts[k / 2]!) sch tPad sess (k / 2) (k % 2) proofs[k]! = .ok c ∧
         sess.streams.find? (fun x => x.name == s!"{spec.tables[k / 2]!}/rep{k % 2}") = some stream ∧

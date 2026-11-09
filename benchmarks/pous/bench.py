@@ -37,7 +37,7 @@ Implementations (`IMPLS`), each adding one class:
   counter-mode SHA-512 keys, its 24-byte salt and leaves) and `p2-16448/v2` (ChaCha8 keys).
 * `p2-v3-gpu`: the same kernels and steps, under the registered P2's framing (`p2-16448/v4`: its commitment, salt, key prefix and leaves,
   `p2_v1/harness.py`'s `V3`), so the device serves its blocks, and its audits go through `protocol.TimedAudit` with its
-  certificate (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
+  certificate (`verity/core/devices/memory_challenger/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
 * `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory challenger (`memory_challenger/live.py`, `p2_v1/harness.py`'s `MC`) at
   `Δ + RTT_ALLOWANCE_CAP_NS`, with a tampered-block and a bad-signature control beside the others.  Its sessions are signed
   with S1's LMS key in `--mc-lms-key DIR`, every session's id in the session log `--mc-session-log FILE` (a file of its
@@ -259,7 +259,7 @@ class VllmGpu:
         impl_out = out / "impl"
         impl_out.mkdir(parents=True, exist_ok=True)
         paths = [tree / "integrations" / "vllm", tree, tree / "verity" / "core" / "protocols" / "pous",
-                 tree / "verity" / "core" / "protocols" / "sampled_proofs", tree / "tools" / "research" / "src"]
+                 tree / "verity" / "core" / "protocols" / "spot", tree / "tools" / "research" / "src"]
         env = {**os.environ, "PYTHONPATH": ":".join(map(str, paths)), "VLLM_ENABLE_V1_MULTIPROCESSING": "0"}
         cmd = [a.python, "-m", "verity_vllm.pipeline.cli", "pous-dense-bench", "--codec", a.scheme, "--out", str(impl_out),
                "--shapes", str(tree / "integrations/vllm/workloads/dense_decode_shapes.json"), "--build-dir", a.build_dir,
@@ -353,7 +353,8 @@ class P2V1Gpu:
 
 class P2V3Gpu(P2V1Gpu):
     """The same kernels under the registered P2's framing (`schemes.p2.P2`, `p2-16448/v4`), audited by `protocol.TimedAudit`
-    (`p2_v1/harness.py`'s `V3`)."""
+    (`p2_v1/harness.py`'s `V3`). Its gate is the spec's vectors too: the reference's keys are the registered scheme's
+    expander, given the spec's prefix, so the two framings differ only in their prefix."""
 
     name = "p2-v3-gpu"
 
@@ -362,28 +363,6 @@ class P2V3Gpu(P2V1Gpu):
         from verity.core.protocols.pous.schemes import p2
 
         return p2.P2().name
-
-    def conformance_gate(self) -> dict[str, Any]:
-        """The spec's vectors (the kernels' map and its SHA-512 streams), and the registered scheme's expander given the
-        spec's prefix: its `sha512_keys` gives every vector's `K` and `t`, so the two framings differ only in their prefix."""
-        sys.path.insert(0, str(HERE))
-        from p2_v1 import reference
-
-        from verity.core.protocols.pous.schemes import p2
-
-        got = reference.conformance()
-        doc = json.loads(reference.VECTORS.read_bytes())
-        for v in doc["vectors"]:
-            w, c0 = int(v["w"]), int(v["c0"])
-            ref = reference.Params(w, c0, w // 8 - 2)
-            params = p2.P2Params(w, c0, 1 << 16)
-            model = bytes.fromhex(v["model_commitment"])
-            prefix = reference.expand_prefix(bytes.fromhex(v["setup_salt"]), ref, model)
-            k, t = p2.sha512_keys(params, prefix, int(v["segment"]), int(v["block"]))
-            n = params.block_bytes
-            got["checks"][f"expander/{v['id']}"] = k.to_bytes(n, "big").hex() == v["K"] and t.to_bytes(n, "big").hex() == v["t"]
-        got["passed"] = all(got["checks"].values())
-        return got
 
     def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path, **kw: Any) -> dict[str, Any]:
         sys.path.insert(0, str(HERE))

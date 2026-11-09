@@ -1,5 +1,49 @@
-import Proofs.Flock.Claims.Recursion.Inner
-import Proofs.Flock.Claims.Recursion.Abort
+module
+
+public import Proofs.Flock.Claims.Recursion.Abort
+public import Proofs.Flock.Claims.Recursion.Inner
+public import Proofs.Flock.Claims.Recursion.OuterKS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Monotonicity.Lemmas
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Presheaf
+import Proofs.Flock.Claims.Aggregate
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The inner stage's KS from the inner protocol's KS against provers that may abort
@@ -9,14 +53,16 @@ deployment, `Inner.KSAbort` and code facts (`KS_of_flockKS`).
 
 The inner prover `P_I` has the compiled prover's tape. At inner round `j`, on the inner coins so far (which the inner
 verifier's answers show, `PublicCoin`), it sends the plurality of the inner view's message `j` over `E_O`'s extractions
-at the draws with that coin prefix (`opAt`). Each inner run aborts unless `E_O` succeeds at the draw and every inner
-message of its view is `P_I`'s (`keepD`); the abort coins are the rest of the draw, which the inner verifier doesn't
+at the samples with that coin prefix (`opAt`). Each inner run aborts unless `E_O` succeeds at the sample and every inner
+message of its view is `P_I`'s (`keepD`); the abort coins are the rest of the sample, which the inner verifier doesn't
 read. Where every rerun of the inner `E^rep` agrees, `E*` sees what `E^rep` sees against `P_I`'s aborting runs
 (`RP.eval_congr`, `servedRun_seen_eq`), so `E*`'s inner stage fails at most as `Inner.KSAbort` bounds, plus where some
-rerun disagrees. That is at most `N_I` times one draw's disagreement (`Pr_exists_rerun_le`), at most
+rerun disagrees. That is at most `N_I` times one sample's disagreement (`Pr_exists_rerun_le`), at most
 `Σ_j √(Pr[two extractions open inner round j differently])` (`Pr_plur_fork`), so `√(k_I·k(x)·Pr[Be])`
 (`sum_opensDiffer_le`). `B` at `P_I`'s aborting runs finds collisions `B_I` finds (`PrBAbort_le_PrBI`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -24,7 +70,7 @@ open Claims
 
 /-! ## Reruns that look alike, runs that agree -/
 
-/-- **Runs that look alike give one result**: a program against two runs that show the same at every draw it reruns at
+/-- **Runs that look alike give one result**: a program against two runs that show the same at every sample it reruns at
 returns the same. -/
 theorem RP.eval_congr {R α : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace) (p : RP R α)
     (h : ∀ r ∈ p.rerunsAt H run₁, (run₁ r).seen = (run₂ r).seen) : (p.eval H run₁).1 = (p.eval H run₂).1 := by
@@ -66,7 +112,7 @@ noncomputable def plur {U : Type} [Fintype U] (g : U → Prop) (f : U → Msg) :
 
 theorem Pr_eq_card {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] :
     Pr p = ((Finset.univ.filter p).card : ℝ) / Fintype.card α := by
-  unfold Pr
+  unfold Pr Claims.prUniform
   congr
 
 /-- **The plurality is a value `f` takes where `g` holds, and no value is taken more often**, when `g` ever holds. -/
@@ -93,8 +139,8 @@ theorem Pr_split {U : Type} [Fintype U] (g : U → Prop) (f : U → Msg) (w : Ms
   refine congrArg Ex (funext fun u => ?_)
   by_cases hg : g u <;> by_cases hf : f u = w <;> simp [hg, hf]
 
-/-- **Off the plurality, squared, is at most two disagreeing draws**: `Pr[g ∧ f ≠ plur]² ≤ Pr[g ∧ g' ∧ f ≠ f']` over
-two independent draws, since each draw where `g` holds disagrees with a fresh one at least as often as the plurality
+/-- **Off the plurality, squared, is at most two disagreeing samples**: `Pr[g ∧ f ≠ plur]² ≤ Pr[g ∧ g' ∧ f ≠ f']` over
+two independent samples, since each sample where `g` holds disagrees with a fresh one at least as often as the plurality
 is missed. -/
 theorem Pr_plur_sq_le {U : Type} [Fintype U] (g : U → Prop) (f : U → Msg) :
     Pr (fun u => g u ∧ f u ≠ plur g f) ^ 2 ≤ Pr (fun p : U × U => g p.1 ∧ g p.2 ∧ f p.1 ≠ f p.2) := by
@@ -135,8 +181,8 @@ theorem Pr_plur_sq_le {U : Type} [Fintype U] (g : U → Prop) (f : U → Msg) :
     rw [h0]
     simpa using Pr_nonneg (fun p : U × U => g p.1 ∧ g p.2 ∧ f p.1 ≠ f p.2)
 
-/-- **Off the plurality at each coin prefix, at most the root of two disagreeing forks**: over a tape and a draw, the
-draw's `f` misses the plurality over the draws with its first `j` coins (`plur` at the fork at `j`) with probability at
+/-- **Off the plurality at each coin prefix, at most the root of two disagreeing forks**: over a tape and a sample, the
+sample's `f` misses the plurality over the samples with its first `j` coins (`plur` at the fork at `j`) with probability at
 most `√(Pr[two draws forked at j, where g holds at both, disagree])`: `Pr_plur_sq_le` at each prefix, and Jensen. -/
 theorem Pr_plur_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] {Ω C : Type} [Fintype Ω] [Fintype C] [Nonempty C]
     {N : ℕ} (j : ℕ) (g : Ω → (Fin N → Coin) × C → Prop) (f : Ω → (Fin N → Coin) × C → Msg) :
@@ -211,7 +257,7 @@ theorem fork_preCoins {Coin : Type} [Inhabited Coin] {N : ℕ} (j : ℕ) (r u : 
 def extend {Coin : Type} [Inhabited Coin] {n N : ℕ} (ρ : Fin n → Coin) (r : Fin N → Coin) : Fin N → Coin :=
   fork n (fun i => coinSeq ρ i.val) r
 
-/-- An inner run's coins with its abort coins, as a draw of the compiled verifier's coins and `E_O`'s. -/
+/-- An inner run's coins with its abort coins, as a sample of the compiled verifier's coins and `E_O`'s. -/
 def extendDraw {Coin C : Type} [Inhabited Coin] {n N : ℕ} (t : (Fin n → Coin) × (Fin N → Coin) × C) :
     (Fin N → Coin) × C :=
   (extend t.1 t.2.1, t.2.2)
@@ -273,20 +319,20 @@ section Coupling
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- `E_O`'s output at a draw: the run's coins and `E_O`'s. -/
+/-- `E_O`'s output at a sample: the run's coins and `E_O`'s. -/
 noncomputable def eoOut (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Option (List Flock.Wit) :=
   ((EO D I DO decO).eval H P x ω d.1 d.2).1
 
-/-- The inner view's message `j` at a draw, as the inner stage sees it. -/
+/-- The inner view's message `j` at a sample, as the inner stage sees it. -/
 noncomputable def eoMsg (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) (j : ℕ) : Msg :=
   ((dec H D x d.1 (eoOut H D I DO decO P x ω d)).msgs.map Prod.fst).getD j []
 
 /-- **The inner prover's message at inner round `j`**, on the inner coins `l` so far: the inner view's message `j`
-that extractions most often open over the draws with those coins first, where `E_O` gives witnesses (`plur`). -/
+that extractions most often open over the samples with those coins first, where `E_O` gives witnesses (`plur`). -/
 noncomputable def opAt (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (j : ℕ) (l : List Coin) : Msg :=
   plur (fun u : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
@@ -299,26 +345,26 @@ noncomputable def innerP (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (decC : Msg → Msg → Coin) : Prover Ω :=
   ⟨fun _ hist ω => .ret (opAt H D I DO decO P x ω hist.length (hist.map fun h => decC (xI D x) h.2))⟩
 
-/-- The draw's inner view agrees with `P_I` at every inner round. -/
+/-- The sample's inner view agrees with `P_I` at every inner round. -/
 def Agrees (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Prop :=
   ∀ j < I.V.k (xI D x), eoMsg H D I DO decO P x ω d j = opAt H D I DO decO P x ω j ((List.range j).map (coinSeq d.1))
 
-/-- **A draw that `P_I`'s runs don't show**: `E_O` gives witnesses there, and the inner view disagrees with `P_I`. -/
+/-- **A sample that `P_I`'s runs don't show**: `E_O` gives witnesses there, and the inner view disagrees with `P_I`. -/
 def Bad (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Prop :=
   (eoOut H D I DO decO P x ω d).isSome = true ∧ ¬ Agrees H D I DO decO P x ω d
 
 open Classical in
-/-- `P_I`'s run at a draw is kept where `E_O` gives witnesses and the inner view agrees with `P_I`. -/
+/-- `P_I`'s run at a sample is kept where `E_O` gives witnesses and the inner view agrees with `P_I`. -/
 noncomputable def keepD (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Bool :=
   decide ((eoOut H D I DO decO P x ω d).isSome = true ∧ Agrees H D I DO decO P x ω d)
 
-/-- **`P_I`'s run at a draw, as it aborts**: at the draw's first `k_I` coins, unless `keepD` refuses it. -/
+/-- **`P_I`'s run at a sample, as it aborts**: at the sample's first `k_I` coins, unless `keepD` refuses it. -/
 noncomputable def innerF (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (decC : Msg → Msg → Coin) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Trace :=
@@ -326,7 +372,7 @@ noncomputable def innerF (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
   else abortTrace
 
 /-- **`P_I`'s aborts**: an inner run at the inner coins `ρ` and the abort coins `a` (the compiled verifier's other
-coins and `E_O`'s) is kept as `keepD` keeps the draw they extend to. -/
+coins and `E_O`'s) is kept as `keepD` keeps the sample they extend to. -/
 noncomputable def keepA (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (ρ : Fin (I.V.k (xI D x)) → Coin) (a : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Bool :=
@@ -400,7 +446,7 @@ theorem innerF_eq_innerRun {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     exact ⟨by simp only [List.length_append, List.length_singleton]; omega,
       by simp only [List.length_append, List.length_singleton, hG.2.1], step hist as _ m hG.2.1 hG.2.2 hv⟩
 
-/-- **Where a draw isn't bad, the inner stage sees there what it sees of `P_I`'s aborting run**: a rejected run where
+/-- **Where a sample isn't bad, the inner stage sees there what it sees of `P_I`'s aborting run**: a rejected run where
 `E_O` gives up, and the inner view's run, which is `P_I`'s, where the inner view agrees with `P_I`. -/
 theorem servedRun_seen_eq {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} {decC : Msg → Msg → Coin}
@@ -452,7 +498,7 @@ theorem innerF_vLog_sub {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {
     exact hL decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws)
   · exact Or.inl fun e he => by simp [innerF, hk, abortTrace] at he
 
-/-- The calls `Be` reads at a draw are true evaluations: `E_O`'s witnesses' where it gives them (`CallsTrue`), none's
+/-- The calls `Be` reads at a sample are true evaluations: `E_O`'s witnesses' where it gives them (`CallsTrue`), none's
 where it gives up (`CallsNil`). -/
 theorem calls_true {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} (hT : CallsTrue H D I DO)
@@ -464,11 +510,11 @@ theorem calls_true {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : 
 
 /-! ## The inner stage's failure -/
 
-/-- **The inner stage fails where `E^rep` fails against `P_I`'s aborting runs, or at a bad draw it reruns at**: where no
-draw it reruns at is bad, it sees what `E^rep` sees of `P_I`'s aborting runs (`RP.eval_congr`); the judged draw is
-`P_I`'s accepted run, since `E_O` succeeds there and the inner view accepts. A bad rerun costs `N_I` times one draw's
+/-- **The inner stage fails where `E^rep` fails against `P_I`'s aborting runs, or at a bad sample it reruns at**: where no
+sample it reruns at is bad, it sees what `E^rep` sees of `P_I`'s aborting runs (`RP.eval_congr`); the judged sample is
+`P_I`'s accepted run, since `E_O` succeeds there and the inner view accepts. A bad rerun costs `N_I` times one sample's
 (`Pr_exists_rerun_le`), and `E^rep` at `P_I`'s aborting runs over their own coins is `Inner.PrBadAbort`'s (the inner
-coins and the abort coins extend to uniform draws, `unifMap_extendDraw`). -/
+coins and the abort coins extend to uniform samples, `unifMap_extendDraw`). -/
 theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decC : Msg → Msg → Coin} (hV : InnerViewRun H D I DO) (hAcc : InnerAccepts H D I DO)
     (hpc : PublicCoin H I decC) (hR : InnerRounds D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type}
@@ -562,7 +608,7 @@ theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
       (Bad H D I DO decO P x)
   linarith
 
-/-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[OpensDiffer j])`**: it misses `P_I` at some inner round `j`, at
+/-- **A sample is bad at most as `√(k_I·Σ_{j<k_I} Pr[OpensDiffer j])`**: it misses `P_I` at some inner round `j`, at
 most `√(Pr[two extractions forked at j open round j differently])` (`Pr_plur_fork`), and the rounds' roots sum under
 one (Cauchy–Schwarz). Each `Pr_bad_le` form bounds the sum. -/
 theorem Pr_bad_le_opens (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
@@ -604,7 +650,7 @@ theorem Pr_bad_le_opens (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (
     _ = Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j)) :=
         (Real.sqrt_mul (Nat.cast_nonneg _) _).symm
 
-/-- **A draw is bad at most as `√(k_I·k(x)·Pr[Be])`**: it misses `P_I` at some inner round `j`, at most
+/-- **A sample is bad at most as `√(k_I·k(x)·Pr[Be])`**: it misses `P_I` at some inner round `j`, at most
 `√(Pr[two extractions forked at j open round j differently])` (`Pr_plur_fork`), which is a collision `Be` finds; the
 rounds' roots sum under one (Cauchy–Schwarz) to at most `√(k_I·Σ_j Pr[…])`, and `Σ_j ≤ k(x)·Pr[Be]`
 (`sum_opensDiffer_le`, from the played rounds' openings). -/
@@ -619,7 +665,7 @@ theorem Pr_bad_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : F
     (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (sum_opensDiffer_le hV hO hT hR decO x P) (Nat.cast_nonneg _)))
 
 /-- **`B` at `P_I`'s aborting runs finds only collisions `B_I` finds**: each kept run's calls are recorded by `E_O`'s
-witnesses at the draw it extends to, or those recorded calls collide (`CallsLogColl`), which `B_I` finds as well; an
+witnesses at the sample it extends to, or those recorded calls collide (`CallsLogColl`), which `B_I` finds as well; an
 aborted run makes none, and `B`'s fork of the inner coins extends to `B_I`'s fork of the compiled verifier's
 (`extend_forkCoins`, `unifMap_bAbort`). -/
 theorem PrBAbort_le_PrBI {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}

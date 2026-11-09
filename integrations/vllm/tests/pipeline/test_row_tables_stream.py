@@ -2,7 +2,7 @@
 one table per engine step and linear) end to end through the proof system: its Spec declares every port's Value, the
 window's `row-table` port a tree over the step roots (`service.ROOTS`) over its tables' hiding leaves
 (`over=row_table.SCHEMA`), and one `Stream` over the window's template registers the window's record at the
-challenger's counts, draws from the auditor's challenger's coins, and runs each outcome by the Lean verifier of record,
+challenger's counts, samples from the auditor's challenger's coins, and runs each outcome by the Lean verifier,
 while the window's tables hold against the members' strings and the step roots serving recorded
 (`tables.check_row_tables`)."""
 
@@ -15,13 +15,13 @@ import pytest
 
 from verity.ml.circuits.program import Program
 from verity.ml.commitments import row_table as RT
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import partition as P, registration as R
 from verity.ml.windows import rows as CS, tables as TB
 
 from .test_row_tables import DEFN, UNITS, committed
 
-_SERVICE_TESTS = Path(__file__).resolve().parents[4] / "verity/core/protocols/sampled_proofs/tests"
+_SERVICE_TESTS = Path(__file__).resolve().parents[4] / "verity/core/protocols/spot/tests"
 if str(_SERVICE_TESTS) not in sys.path:
     sys.path.insert(0, str(_SERVICE_TESTS))
 
@@ -49,7 +49,7 @@ def _spec(mine: CS.Binding, table: bool = True) -> S.Spec:
 @pytest.mark.slow
 def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp_path, signer, monkeypatch):
     """The window's record, at row 101 + i for case i, registers on a stream whose Spec declares the `row-table` root
-    as a tree over roots of row-seg leaves; sampled from the served challenger's coins after its digest, the honest draw's
+    as a tree over roots of row-seg leaves; sampled from the served challenger's coins after its digest, the honest sample's
     outcome is accepted by the Lean run and each of `coin_outcomes`' negatives is refused at its select (`coins`). Every
     case's tables hold against the members' strings and the live step roots. A Spec without the `row-table` Value
     refuses the record (`roots`): the tree over the step roots is one of the window's salted roots. About 70 s, the coins'
@@ -63,8 +63,9 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     spec = _spec(mine)
     held = []
 
-    def stream(spec: S.Spec, coins) -> S.Stream:
-        return S.Stream(spec, [DEFN], budget=1, delta=DELTA, challenger="challenger-test", coins=coins, clock=Clock())
+    def stream(spec: S.Spec, coins=None, sampler=None) -> S.Stream:
+        return S.Stream(spec, [DEFN], budget=1, delta=DELTA, challenger="challenger-test", coins=coins, clock=Clock(),
+                        sampler=sampler)
 
     def register(coins, i, window_root):
         rec = CS.registration(c, {"row": 101 + i}, registrar=R)
@@ -80,7 +81,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     units = audit["draw"]["units"]
     assert out.accepted and honest._entries[0].read and (audit["draw"]["population"], len(units)) == (UNITS, 2)
     assert all(m.links for m in mine.members for u in units if m.base <= u < m.base + m.n)
-    bare = stream(_spec(mine, table=False), lambda n: b"\x07" * n)
+    bare = stream(_spec(mine, table=False), sampler=lambda law, n: [0, 1])
     rec = CS.registration(c, {"row": 100}, registrar=R)
     assert "roots" in _refused(lambda: bare.register(rec, ports, leaf_layer=layer, counts={TEMPLATE: UNITS}))
     with pytest.raises(ValueError, match="over"):

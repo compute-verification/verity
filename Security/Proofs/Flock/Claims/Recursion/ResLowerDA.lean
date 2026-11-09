@@ -1,9 +1,43 @@
-import Proofs.Flock.Claims.Recursion.ResLowerD
-import Proofs.Flock.Claims.Recursion.DecodeAt
-import Proofs.Flock.Claims.Recursion.RestVerdictBases
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.DeployedBrings
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.ResAccOff
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.Reps.AtList
+import Proofs.Flock.Claims.Recursion.DecodeAt
+import Proofs.Flock.Claims.Recursion.VerdictLoop
+import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+import Proofs.Flock.Claims.Recursion.VerdictRowG
 
 /-!
 # The pieces of `resLowered_D`
@@ -26,6 +60,8 @@ facts at part `s`'s decision (`resSite_of_dec`), `ReadsAt` and the base checks (
   (`resZero_off`, at `structureOf_accLow`).
 -/
 
+@[expose] public section
+
 namespace RecDeploy.DecompBR
 
 open Flock
@@ -33,8 +69,8 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP setupOf)
 
 /-- **V\*'s parts are named for their groups**: a statement `.inner j nm _` of the verifier's list is named
-`rec-residuals/m<m>-k<k>-c<c>-p<j>` at the inner shape (V\*'s levels, then its parts so named, then candidate 3's and
-the caps, none of them `.inner`). -/
+`rec-residuals/m<m>-k<k>-c<c>-p<j>` at the inner shape (V\*'s levels, then its parts so named, then candidate 3's, the
+caps and the link table's part, none of them `.inner`). -/
 theorem inner_named {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) {s j : ℕ}
     {nm : String} {pt : VStar.Part} (hs : ss[s]? = some (.inner j nm pt)) :
     nm = RecResiduals.unitName i.m i.kLog i.claims j := by
@@ -49,8 +85,7 @@ theorem inner_named {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.s
   · rcases Array.mem_append.1 (Array.mem_of_getElem? hs) with hm | hm
     · rcases FlockC3.Reps.candidate3_kinds hC _ hm with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
         ⟨_, _, _, _, _, _, he⟩ <;> cases he
-    · obtain ⟨_, _, he⟩ := hKs _ hm
-      cases he
+    · rcases hKs _ hm with ⟨_, _, he⟩ | ⟨_, _, _, he⟩ <;> cases he
 
 /-- **A piece's owner is its group's part**: where `ownRD` gives `s`, V\*'s statement `s` is `.inner q.key.1 …`. -/
 theorem ownRD_some {x : Msg} {q : ResPiece} {s : ℕ} (ho : ownRD x q = some s) :

@@ -8,7 +8,11 @@ proof that any column values satisfying those rows, with the constant at 1, carr
 `FlockSoundness.Types.Dag.SatAt` reads, so the typed path's `layout_sound` gives `DefComputes` with `spec` its
 `evalT` (`FlockSoundness.TmplValue.defComputes_of_layout`). Nothing on a verifier path reads this file.
 -/
-import Flock.TmplValue
+module
+
+public import Flock.TmplValue
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

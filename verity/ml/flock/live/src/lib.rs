@@ -8,7 +8,7 @@
 //!   flips coins from the OS, pins the session parameters (profile, reps, flavour, statement), refuses a rep-1 coin
 //!   unless rep 1 committed rep 0's root, and refuses every coin until the link context (root_F, points, y) arrived.
 //!   With a [`LinkSpec`] the link context is a real exchange (flock-link L1): `Commit` carries root_F, every table's
-//!   root_B and its public words; the server checks the public words against its statement, then draws the link
+//!   root_B and its public words; the server checks the public words against its statement, then samples the link
 //!   points from the OS as its own coin slot; `Link` carries y; only then are Flock's coins issued, and each rep's
 //!   first round must bind exactly the committed root_B. The replay hands the recorded points and y to the statement
 //!   verifier, which opens them in every rep (L2).
@@ -35,12 +35,14 @@ pub mod lookup;
 pub mod circuit;
 pub mod firewall;
 pub mod glue;
+pub mod huge_pages;
 pub mod proved_scope;
 pub mod pure_block;
 pub mod record_text;
 pub mod run_record;
 #[cfg(feature = "glue")]
 pub mod tables;
+pub mod tree_from;
 pub mod typed;
 pub mod vllm_block;
 pub mod zk_hooks;
@@ -103,6 +105,34 @@ pub fn spawn<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> std::
 pub fn spawn_scoped<'s, 'e, T: Send + 's>(sc: &'s std::thread::Scope<'s, 'e>, f: impl FnOnce() -> T + Send + 's)
                                           -> std::thread::ScopedJoinHandle<'s, T> {
     flock_core::spawn_scoped(sc, f)
+}
+
+/// `parts` back to back, copied in parallel a chunk at a time (many short parts or a few long ones)
+pub fn concat<P: AsRef<[F128]>>(parts: &[P]) -> Vec<F128> {
+    let n = parts.iter().map(|p| p.as_ref().len()).sum();
+    let mut out: Vec<F128> = Vec::with_capacity(n);
+    concat_into(parts, &mut out.spare_capacity_mut()[..n]);
+    // SAFETY: concat_into wrote all n words
+    unsafe { out.set_len(n) };
+    out
+}
+
+/// [`concat`] into `out`, which is exactly as long as the parts: every word of it written
+pub fn concat_into<P: AsRef<[F128]>>(parts: &[P], out: &mut [std::mem::MaybeUninit<F128>]) {
+    use rayon::prelude::*;
+    assert_eq!(out.len(), parts.iter().map(|p| p.as_ref().len()).sum::<usize>(), "concat_into: a destination as long as the parts");
+    let mut rest = out;
+    let mut pairs = Vec::new();
+    for s in parts.iter().flat_map(|p| p.as_ref().chunks(1 << 15)) {
+        let (a, b) = std::mem::take(&mut rest).split_at_mut(s.len());
+        pairs.push((a, s));
+        rest = b;
+    }
+    pairs.into_par_iter().for_each(|(d, s)| {
+        for (d, &x) in d.iter_mut().zip(s) {
+            d.write(x);
+        }
+    });
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -199,17 +229,17 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
     Sha256::digest(b).into()
 }
 
-/// The unit sample (the Lean verifier's PROTOCOL.md §7.3): the verifier samples the units to prove in the clear from its OS
+/// The unit sample (the Lean verifier's `Flock.Draw`): the verifier samples the units to prove in the clear from its OS
 /// randomness, after registration and before the statement is fixed, with `verity.ml.randomness`'s exact samplers read straight
 /// from OS bytes (no derivation). The sample is the object `{"law": "subset", "population": N, "k": K, "units": [...]}`,
 /// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}` or `{"law": "stratified", "population": N, "k": K,
-/// "strata": [{"template", "units": [[lo, hi], ...], "k"}, ...], "units": [...]}`, units ascending. A stratified law is the
+/// "strata": [{"template", "units": [[lo, hi], ...], "k"}, ...], "units": [...]}`, units ascending. A stratified sampling design is the
 /// verifier's own expansion of `stratified:K` over its program and query (core's `one_stage.draw.derive`, Lean
-/// `HmRow.stratifiedLaw`): this module checks its form (Lean `Flock.Draw.strataProblem`) and draws by it, never derives it.
+/// `HmRow.stratifiedLaw`): this module checks its form (Lean `Flock.Draw.strataProblem`) and samples by it, never derives it.
 pub mod unit_draw {
     use serde_json::{Value, json};
 
-    /// A stratum of the stratified law: a template's units as ascending, disjoint, non-adjacent half-open ranges, and its sample.
+    /// A stratum of the stratified sampling design: a template's units as ascending, disjoint, non-adjacent half-open ranges, and its sample.
     #[derive(Clone, Debug, PartialEq)]
     pub struct Stratum {
         pub template: String,
@@ -274,7 +304,7 @@ pub mod unit_draw {
         ((2 * k as u128 * size as u128 + population as u128) / (2 * population as u128)).max(1) as u64
     }
 
-    /// Why a stratified law isn't well formed over `population` units (Lean `Flock.Draw.strataProblem`), or `None`:
+    /// Why a stratified sampling design isn't well formed over `population` units (Lean `Flock.Draw.strataProblem`), or `None`:
     /// `1 <= k <= population`, distinct templates, each stratum's `k` the rule's, the ranges tiling `[0, population)` exactly.
     pub fn strata_problem(k: u64, strata: &[Stratum], population: u64) -> Option<String> {
         if strata.is_empty() || k < 1 || k > population {
@@ -322,7 +352,7 @@ pub mod unit_draw {
             }
         }
 
-        /// A law object: `{"law": "stratified", "k": K, "strata": [...]}` (the verifier's own expansion, `draw.derive`'s),
+        /// A sampling design object: `{"law": "stratified", "k": K, "strata": [...]}` (the verifier's own expansion, `draw.derive`'s),
         /// `{"law": "subset", "k": K}` or `{"law": "bernoulli", "p": "num/den"}`.
         pub fn of_json(v: &Value) -> Result<Law, String> {
             let keys: Vec<&str> = v.as_object().ok_or("a draw law is an object")?.keys().map(|k| k.as_str()).collect();
@@ -423,7 +453,7 @@ pub mod unit_draw {
         Ok(v)
     }
 
-    /// U2: exactly the law's keys; units ascending, distinct and in `[0, N)`; a subset has K <= N units; a Bernoulli p is
+    /// U2: exactly the sampling design's keys; units ascending, distinct and in `[0, N)`; a subset has K <= N units; a Bernoulli p is
     /// `num/den` with `0 <= num <= den`, `den > 0`, no unit at p = 0 and every unit at p = 1; a stratified sample's strata are
     /// well formed and tile the population (`strata_problem`), and exactly `k_s` of its units fall in each. Returns the units.
     pub fn check(v: &Value) -> Result<Vec<usize>, String> {
@@ -1143,7 +1173,7 @@ impl Challenger for LiveChallenger {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Verifier side: coin server
+// Verifier side: live-coin part
 // ---------------------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Debug)]
@@ -1189,9 +1219,9 @@ pub struct SessionConfig {
     /// The prime prover's coins are served in this session (`Prime` rounds); `Commit` needs at least one before it.
     pub prime_live: bool,
     /// Step 0 (`coin_seed::SCHEME`): the verifier commits to a seed in answer to `Hello`, derives every coin from it and reveals
-    /// it in its verdict (lane flock-circuit). Off for every statement that does not ask for it.
+    /// it in its verdict. Off for every statement that does not ask for it.
     pub coin_seed: bool,
-    /// The coin server keeps every round's bytes and the replay compares the proof's messages with them byte for byte (the
+    /// The challenger's live-coin part keeps every round's bytes and the replay compares the proof's messages with them byte for byte (the
     /// round digests stay, as framing); the record carries them. Off for every statement that does not ask for it.
     pub retain_rounds: bool,
     /// The hash of every digest the record binds (root_F, root_B, publics, link, rounds, proofs, stream roots): SHA-256, or
@@ -1199,7 +1229,7 @@ pub struct SessionConfig {
     pub sha512_digests: bool,
     /// The sample this statement proves (its public header's `unit_draw`, under Σ); the record keeps it (U1).
     pub unit_draw: Option<Value>,
-    /// Draw units live: after registration (`Register`) the server draws them under this law over the population.
+    /// Sample units live: after registration (`Register`) the server samples them under this sampling design over the population.
     pub draw_law: Option<(unit_draw::Law, u64)>,
     /// M2 (`coin_tree::SCHEME`): at `Hello` the verifier commits to every coin of the session (one HM96 leaf per stream and
     /// round under one SHA-512 root) and opens each round's coins with its answer; the prover checks every opening first.
@@ -1385,9 +1415,11 @@ pub struct Server {
     on_draw: Option<DrawHook>,
     /// a test harness's step-0 seed and nonce (feature `seed-injection` only), used at `Hello` instead of the OS's
     seed_inject: Option<([u8; 32], [u8; 32])>,
-    /// M2: the committed coin schedule (sampled at `Hello`), and a test harness's random tape for it (the verifier's coins as a
-    /// function of the tape: the simulator's rewinding model)
-    coin_tree: Option<coin_tree::CoinTree>,
+    /// M2: the committed coin schedule (sampled at `Hello`, here or by the challenger), and a test harness's random tape for
+    /// it (the verifier's coins as a function of the tape: the simulator's rewinding model)
+    coin_tree: Option<coin_tree::Held>,
+    /// where the committed coin schedule is sampled: the challenger (`--tree-from`), or this host
+    tree_from: Option<tree_from::Shared>,
     /// the prover's nonce from its `Hello` (the keyed coin tree's prefix; in the record)
     coin_nonce: Option<[u8; coin_tree::NONCE_BYTES]>,
     coin_tape: Option<[u8; 32]>,
@@ -1415,9 +1447,15 @@ impl Server {
         Self::try_new(cfg, verifier).unwrap_or_else(|e| panic!("{e}"))
     }
 
-    /// A server that samples units at `Register` (its configuration's `draw_law`) and takes the drawn statement from `hook`.
+    /// A server that samples units at `Register` (its configuration's `draw_law`) and takes the sampled statement from `hook`.
     pub fn with_draw(mut self, hook: DrawHook) -> Self {
         self.on_draw = Some(hook);
+        self
+    }
+
+    /// A server whose committed coin schedule the challenger samples and opens ([`tree_from`]), not this host.
+    pub fn with_tree_from(mut self, c: tree_from::Shared) -> Self {
+        self.tree_from = Some(c);
         self
     }
 
@@ -1447,6 +1485,7 @@ impl Server {
             on_draw: None,
             seed_inject: None,
             coin_tree: None,
+            tree_from: None,
             coin_nonce: None,
             coin_tape: None,
             coin_edit: None,
@@ -1484,10 +1523,10 @@ impl Server {
     }
 
     /// M2: `n` coins of `stream`'s round `round` from the committed schedule, and the answer's words (coins, then opening).
-    fn committed_coins(&mut self, stream: &str, round: usize, n: usize) -> Result<(Vec<F128>, Vec<F128>), String> {
+    fn committed_coins(&mut self, stream: &str, round: usize, n: usize, after: &[u8; 64]) -> Result<(Vec<F128>, Vec<F128>), String> {
         let t = self.coin_tree.as_ref().ok_or("no committed coin schedule")?;
         let si = t.spec.stream_index(stream).ok_or(format!("{stream} is outside the committed coin schedule"))?;
-        t.open(si, round, n)
+        t.open(si, round, n, after)
     }
 
     /// The live prime rounds, and how many preceded `Commit`.
@@ -1657,7 +1696,24 @@ impl Server {
                 if h != want {
                     return self.refuse(format!("R7: session parameters {h} differ from the verifier's {want}"));
                 }
-                // a live server draws the session's key and coins from the OS: without a source it refuses, rather than answer
+                if let (Some(spec), Some(nonce), Some(c)) = (self.cfg.coin_tree.clone(), nonce, self.tree_from.clone())
+                    && !self.replaying
+                {
+                    // the challenger opens each round after its message's SHA-512, which the audit reads as its msg_sha512
+                    if !self.cfg.sha512_digests {
+                        return self.refuse("coin tree: the challenger's rounds follow their messages' SHA-512, which a SHA-256 record doesn't show".into());
+                    }
+                    let tree = match coin_tree::Held::challenger(spec, &nonce, c) {
+                        Ok(t) => t,
+                        Err(e) => return self.refuse(format!("coin tree: {e}")),
+                    };
+                    let w = tree.answer_words();
+                    self.coin_tree = Some(tree);
+                    self.coin_nonce = Some(nonce);
+                    self.hello = Some(h);
+                    return Resp::Coins(w);
+                }
+                // a live server samples the session's key and coins from the OS: without a source it refuses, rather than answer
                 // Ok and leave the prover to fail on a missing commitment
                 if self.cfg.coin_tree.is_some() && self.urandom.is_none() && !self.replaying {
                     return self.refuse("coin tree: no OS random source to draw the session's key and coins".into());
@@ -1679,7 +1735,7 @@ impl Server {
                     };
                     // the session key leaves the verifier here, with the root, and not before
                     let w = tree.answer_words();
-                    self.coin_tree = Some(tree);
+                    self.coin_tree = Some(coin_tree::Held::here(tree));
                     self.coin_nonce = Some(nonce);
                     self.hello = Some(h);
                     return Resp::Coins(w);
@@ -1761,7 +1817,8 @@ impl Server {
                 self.commit = Some(CommitRec { root_f, roots, publics, publics_digest: pd });
                 self.prime_before_commit = Some(self.prime.len());
                 if self.coin_tree.is_some() {
-                    let (c, w) = match self.committed_coins(coin_tree::SESSION, 0, spec.points * spec.m) {
+                    let after = self.commit.as_ref().map(|c| tree_from::link_after(&c.root_f, c.roots.values())).expect("committed");
+                    let (c, w) = match self.committed_coins(coin_tree::SESSION, 0, spec.points * spec.m, &after) {
                         Ok(x) => x,
                         Err(e) => return self.refuse(e),
                     };
@@ -1853,7 +1910,7 @@ impl Server {
                 }
                 let at = self.streams[&stream].rounds.len();
                 let (coins, answer) = if self.coin_tree.is_some() {
-                    match self.committed_coins(&stream, at, n as usize) {
+                    match self.committed_coins(&stream, at, n as usize, &Sha512::digest(&content).into()) {
                         Ok(x) => x,
                         Err(e) => return self.refuse(e),
                     }
@@ -2293,7 +2350,7 @@ impl Server {
 
 struct ReplayState {
     record: Arc<BTreeMap<String, StreamRec>>,
-    /// the rounds' bytes where the coin server retained them (`SessionConfig::retain_rounds`): compared byte for byte
+    /// the rounds' bytes where the challenger's live-coin part retained them (`SessionConfig::retain_rounds`): compared byte for byte
     msgs: Arc<BTreeMap<(String, usize), Vec<u8>>>,
     used: BTreeMap<String, usize>,
     failures: Vec<String>,
@@ -2571,6 +2628,81 @@ mod coin_server_tests {
         s.urandom = None;
         assert!(matches!(s.handle(Req::Hello(hello)), Resp::Refused(ref e) if e.contains("no OS random source")));
     }
+
+    fn linked() -> SessionConfig {
+        let mut c = cfg();
+        c.link = Some(LinkSpec { sigma: vec![1; 32], m: 1, points: 2 });
+        c.sha512_digests = true;
+        c
+    }
+
+    /// Hello, the Commit of `root_f` and `root_b` (the link points), y, and rep 0's binding round.
+    fn session(root_f: &[u8], root_b: &[u8]) -> Vec<Req> {
+        let mut binding = frame_domain(&[]);
+        for (op, b) in [(OP_LABEL, LABEL_R1CS), (OP_BYTES, &[0u8; 32][..]), (OP_BYTES, root_b)] {
+            push_header(&mut binding, op, 0, b.len() as u64);
+            push_padded(&mut binding, b);
+        }
+        vec![Req::Hello(linked().hello_with_nonce(&[7; coin_tree::NONCE_BYTES])),
+             Req::Open { stream: rep_stream("t", 0), parent: String::new(), label: vec![], at: 0 },
+             Req::Commit { root_f: root_f.to_vec(), roots: vec![("t".into(), root_b.to_vec())], publics: vec![] },
+             Req::Link(vec![0; 32]),
+             Req::Round { stream: rep_stream("t", 0), content: binding, n: 3 }]
+    }
+
+    /// A session whose coin tree the challenger samples answers the prover word for word as one sampled here on the same tape,
+    /// and records the same coins; the challenger opened its link points after its record's link roots and its round after
+    /// the round's msg_sha512, as the audit of its release log holds the record to.
+    #[test]
+    fn a_session_on_the_challengers_tree_is_the_session_its_tape_draws_here() {
+        let (address, served) = tree_from::fake::challenger([3; 32], tree_from::fake::How::Honest);
+        let c = Arc::new(Mutex::new(tree_from::Challenger::connect(&address, None).unwrap()));
+        let mut there = Server::try_new(linked(), Box::new(NoProofs)).unwrap().with_tree_from(c.clone());
+        let mut here = Server::try_new(linked(), Box::new(NoProofs)).unwrap();
+        here.coin_tape = Some([3; 32]);
+        for (a, b) in session(&[5; 64], &[9; 64]).into_iter().zip(session(&[5; 64], &[9; 64])) {
+            let (x, y) = (there.handle(a), here.handle(b));
+            assert!(matches!(x, Resp::Coins(_) | Resp::Ok), "{x:?}");
+            assert_eq!(format!("{x:?}"), format!("{y:?}"));
+        }
+        c.lock().unwrap().close().unwrap();
+        let (rec, want) = (there.record_json(), here.record_json());
+        for k in ["coin_tree", "link", "streams"] {
+            assert_eq!(rec[k], want[k], "{k}");
+        }
+        let opens: Vec<Value> = served.join().unwrap().into_iter().filter(|h| h["type"] == "tree-open").collect();
+        let unhex = |v: &Value| (0..v.as_str().unwrap().len() / 2).map(|i| u8::from_str_radix(&v.as_str().unwrap()[2 * i..2 * i + 2], 16).unwrap()).collect::<Vec<u8>>();
+        let root_b: BTreeMap<String, Vec<u8>> = rec["link"]["root_b"].as_object().unwrap().iter().map(|(t, r)| (t.clone(), unhex(r))).collect();
+        assert_eq!(opens[0], json!({"type": "tree-open", "after": hex(&tree_from::link_after(&unhex(&rec["link"]["root_f"]), root_b.values())),
+                                    "n": 2, "round": 0, "stream": coin_tree::SESSION, "tree": rec["coin_tree"]["root"]}));
+        let r = &rec["streams"][0]["rounds"][0];
+        assert_eq!(opens[1], json!({"type": "tree-open", "after": r["msg_sha512"], "n": 3, "round": 0, "stream": rep_stream("t", 0),
+                                    "tree": rec["coin_tree"]["root"]}));
+        assert_eq!(opens.len(), 2);
+    }
+
+    /// The challenger's live-coin part refuses a session whose tree the challenger samples under another nonce, or whose round doesn't open
+    /// its tree, at that request; and a server whose record would show only rounds' SHA-256 takes no tree from it.
+    #[test]
+    fn a_challengers_tree_under_another_nonce_a_bad_round_or_a_sha256_record_is_refused() {
+        use tree_from::fake::How;
+        for (how, at, why) in [(How::OtherNonce, 0, "under the nonce asked for"), (How::Tampered, 2, "the challenger's coin tree round")] {
+            let (address, _served) = tree_from::fake::challenger([3; 32], how);
+            let c = Arc::new(Mutex::new(tree_from::Challenger::connect(&address, None).unwrap()));
+            let mut s = Server::try_new(linked(), Box::new(NoProofs)).unwrap().with_tree_from(c);
+            for (i, req) in session(&[5; 64], &[9; 64]).into_iter().enumerate().take(at + 1) {
+                let r = s.handle(req);
+                assert_eq!(matches!(&r, Resp::Refused(e) if e.contains(why)), i == at, "{i}: {r:?}");
+            }
+        }
+        let (address, _served) = tree_from::fake::challenger([3; 32], How::Honest);
+        let c = Arc::new(Mutex::new(tree_from::Challenger::connect(&address, None).unwrap()));
+        let mut c256 = linked();
+        c256.sha512_digests = false;
+        let mut s = Server::try_new(c256.clone(), Box::new(NoProofs)).unwrap().with_tree_from(c);
+        let r = s.handle(Req::Hello(c256.hello_with_nonce(&[7; coin_tree::NONCE_BYTES])));
+        assert!(matches!(&r, Resp::Refused(e) if e.contains("a SHA-256 record")), "{r:?}");
+    }
 }
 
 #[cfg(test)]
@@ -2610,5 +2742,30 @@ mod thread_stack_tests {
         let states = pool.install(|| flock_core::run_hetero_chunks_stateful(64, || 0usize, |s, _| *s += chunk(&helped)));
         assert_eq!(states.iter().sum::<usize>(), 64 * (16 << 10));
         assert_eq!(flock_core::all_core_pool().install(|| deep(16 << 10)), 16 << 10);
+    }
+}
+
+#[cfg(test)]
+mod concat_tests {
+    use super::*;
+
+    #[test]
+    fn concat_is_the_parts_in_order() {
+        let mut parts: Vec<Vec<F128>> = (0..300u64).map(|k| (0..k % 7).map(|i| F128::new(k, i)).collect()).collect();
+        parts.push((0..100_000u64).map(|i| F128::new(i, !i)).collect());
+        let slices: Vec<&[F128]> = parts.iter().map(Vec::as_slice).collect();
+        assert!(concat(&slices) == parts.concat());
+        assert!(concat(&parts) == parts.concat());
+        assert!(concat::<Vec<F128>>(&[]).is_empty());
+        let mut out = vec![std::mem::MaybeUninit::new(F128::new(7, 7)); parts.iter().map(Vec::len).sum()];
+        concat_into(&parts, &mut out);
+        assert!(out.iter().map(|x| unsafe { x.assume_init_read() }).collect::<Vec<_>>() == parts.concat());
+    }
+
+    #[test]
+    #[should_panic(expected = "a destination as long as the parts")]
+    fn concat_into_takes_only_its_length() {
+        let mut out = vec![std::mem::MaybeUninit::<F128>::uninit(); 3];
+        concat_into(&[vec![F128::new(1, 2); 2]], &mut out);
     }
 }

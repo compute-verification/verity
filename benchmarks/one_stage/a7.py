@@ -24,7 +24,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   commitments' stand-in) and each written block's payload. Each unit's witness rows are those rows under those salts, so their
   ``b || c`` in the statement's public file are the canonical ones; the verifier holds each at the position the public
   requirement names (`bindings`).
-* **Statements and draw.** One circuit per template, staged by Flock's `UnitStager` bound to the partition
+* **Statements and sample.** One circuit per template, staged by Flock's `UnitStager` bound to the partition
   (`Q_template_instances` over `TemplatePopulations`, one unit per step each), sampled by the verifier's Lean
   (`flock-verify draw --stratified K`, K every unit by default, so no unit is uncertified), each member's sample served
   `--zk` and held by Lean `verify --zk --partition --program`. For every sampled proof block the prover opens its public row (the
@@ -47,14 +47,14 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   pass row, whose words are the passes' steps v0's wire carries, until the record commits to them. The ledger then
   credits each pass the bits its step reads from complete blocks, less a block for each planned block it credits no
   receipt of (`audit.linked_bits` on `RequirementLink`, `UnitsLink`), the session 1 − ε of their sum, ε the share of
-  it the wrong units the sample allows can carry (`uncertified`), its δ added to the ledger's error.
+  it the incorrect proof blocks the sample allows can carry (`uncertified`), its δ added to the ledger's error.
 * **Check 3.** The session samples ``--samples`` receipts a window, and nothing is opened: each sample goes through the
   remote audit's opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`, §8's checks 1-3
   and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
-  at the drawn position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
+  at the sampled position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
   registration's payload root for a registered block) and to the canonical payload commitment at the row the memory-map
   unit binds the block's payload row to, and the block's sketch receipt the leaf's entry. The units are proved as a
-  second statement (`check3_audit`: every unit drawn, --zk, Lean). The verifier sees the units' roots, its own public
+  second statement (`check3_audit`: every unit sampled, --zk, Lean). The verifier sees the units' roots, its own public
   rows (the codec seed, the block, the coin, the pass's prefix and signs, the roots with their domains, ranks and depths)
   and each unit's verdict, and holds the one other row, the plan row, to the canonical plan row by ``b || c``. The
   negatives' sessions decide check 3 by the unit's reference (`opening.reference`).
@@ -83,7 +83,7 @@ import r2_population as R2  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
 from verity.core.protocols.remote_bandwidth import schedule as SC  # noqa: E402
 from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.ml.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
@@ -199,7 +199,8 @@ def lay_out(req: RQ.Requirement, positions, seed: int):
         payload[j] = payload.get(j, 0) | req.values[v] << offset[v]
     for j in set(block.values()):
         freed.setdefault(max(req.last[v] for v, k in block.items() if k == j), set()).add(j)
-    return RQ.Layout(block, offset), RQ.Store(NR, written, {s: frozenset(b) for s, b in freed.items()}, payload)
+    return (RQ.Store.Packing(block, offset),
+            RQ.Store(NR, written, {s: frozenset(b) for s, b in freed.items()}, payload))
 
 
 # --- the canonical commitments ----------------------------------------------------------------------------------------------
@@ -450,12 +451,12 @@ class UnitsLink:
     of the steps below its own (`heads`, `units_heads`), and the map units' public lifetime cap (`life`) the record's.
     The stale bound, which no public input carries, is then what each re-key's old block is held below in the unit, which
     computes it from its committed pass row and that cap. `read_bits` is the step's reads from complete blocks
-    (`RQ.credited_reads`, `creditedReadBits`). `epsilon` and `delta` are what the units' draw established
-    (`uncertified`): the most share of the linked credit the wrong units it allows can carry, at the audit's delta; until
+    (`RQ.credited_reads`, `creditedReadBits`). `epsilon` and `delta` are what the units' sample established
+    (`uncertified`): the most share of the linked credit the incorrect proof blocks it allows can carry, at the audit's delta; until
     they are set, the link credits nothing."""
     holds: bool
     req: RQ.Requirement
-    layout: RQ.Layout
+    layout: RQ.Store.Packing
     appends: bytes | None = None
     proved: bool = False
     epsilon: float = 1.0
@@ -610,7 +611,7 @@ def bindings(m: dict, canons: dict, pub_args: list[dict], S) -> dict:
 
 
 def openings(m: dict, drawn: list[int], pub_args: list[dict], rows) -> dict:
-    """Each drawn instance's public row opened to the verifier's own copy of its public data and its ok row to 1, under the
+    """Each sampled instance's public row opened to the verifier's own copy of its public data and its ok row to 1, under the
     salts the prover reveals for those two rows alone."""
     bcs = public_bcs(m["dir"] / f"pub-{m['n']}.bin", m["ports"])
     port = {p.name: p for p in m["ports"]}
@@ -677,7 +678,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     n_all, ranges = P.units(program, query), P.ranges(program, query)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
-    law = D.parse_law(f"stratified:{n_all}")
+    law = D.parse_design(f"stratified:{n_all}")
     bound = {"partition": P.digest(part), "program": part["program"]}
     members = []
     for s, (tid, base, cnt) in zip(specs, ranges, strict=True):
@@ -919,7 +920,7 @@ def main() -> int:
         (out / f"canon-{c['kind']}.bc").write_bytes(b"".join(c["bc"]))
     salts = {j: canons["payload"]["salts"][u] for u, j in enumerate(written)}
 
-    # the program, its partition and the law
+    # the program, its partition and the sampling design
     program = P.mixed_population_program([(plan_def, a.steps), (map_def, a.steps)])
     query = P.template_instances_query([plan_def, map_def])
     part = P.partition(program, query)
@@ -930,7 +931,7 @@ def main() -> int:
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     a.k = n_all if a.k is None else a.k
     summary["k"] = a.k
-    law = D.parse_law(f"stratified:{a.k}")
+    law = D.parse_design(f"stratified:{a.k}")
     bound = {"partition": pd, "program": part["program"]}
 
     # serving commits: each template's one member, bound to the partition
@@ -984,9 +985,10 @@ def main() -> int:
         print("A7 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str)[:4000])
         return 1
 
-    # the verifier's stratified sample, by its own Lean; each member serves its stratum, --zk
-    p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                "--stratified", str(a.k)], out / "draw.log")
+    # the verifier's stratified sample, by its own Lean on a development challenger's coins; each member serves its
+    # stratum, --zk
+    p = a0.challenger_draw(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+                                    "--stratified", str(a.k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, n_inst, verdicts, statement, sessions, counts, session_roots, opened = [], [], 0, {}, {}, [], {}, {}, {}
@@ -1114,7 +1116,7 @@ def main() -> int:
 
 def bridge(rs, plan_m: dict, map_m: dict, steps: int, passes: dict, sm) -> dict:
     """The bridge from the session to the units, on public data and the pass row: each pass's plan is as long as its
-    step's plan unit's public count, and check 3's unit holds each drawn entry to the step's certified plan row; each
+    step's plan unit's public count, and check 3's unit holds each sampled entry to the step's certified plan row; each
     pass's seed binds the chain over the map units' appends of the steps before it (`units_heads`), so each append
     follows its step's pass and precedes the next; the registered blocks the session releases after each step are those
     that step's map unit frees (its public ``rfree``); and the prover opens the canonical pass row (``passes``, its salt)
@@ -1141,7 +1143,7 @@ def bridge(rs, plan_m: dict, map_m: dict, steps: int, passes: dict, sm) -> dict:
 
 
 def uncertified(result: dict, rrec, view: dict, store, req, link, common, members) -> dict:
-    """What the sample leaves uncertified, for memory accounting's ledger: the profile's bound on wrong units of each
+    """What the sample leaves uncertified, for memory accounting's ledger: the profile's bound on incorrect proof blocks of each
     template at delta, and the most credit those could carry (the passes whose plan unit is wrong, and those holding a block
     a wrong map unit wrote), as a fraction of the session's capacity; over the credit, it is the link's ε."""
     wrong = result.get("wrong_units")
@@ -1479,11 +1481,11 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
         neg["public-file-altered-after-the-proof (Lean roots)"] = {**a0.altered_public(
             a.lean, last, last["n"], sdir, out / "neg-altered-public", dict(rec, leaf_layer=leaf_layer), check, zk=True),
             "member": last["name"], "row": f"instance {last['n'] - 1}, port {last['ports'][-1].name}"}
-    # the sampled-proofs registration and draw, as A6 checks them
+    # the sampled-proofs registration and sample, as A6 checks them
     fewer = R2.program([(plan_m["defn"], plan_m["n"]), (map_m["defn"], map_m["n"])], mixed=True)
     v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, D.parse_law(f"stratified:{a.k // 2 if a.k > 1 else a.k + 1}"), a0.SCHEME, want,
+    v = V.check(rec, program, query, D.parse_design(f"stratified:{a.k // 2 if a.k > 1 else a.k + 1}"), a0.SCHEME, want,
                 leaf_layer=leaf_layer)
     neg["registration-law-another-k (R1)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, law, a0.SCHEME, {k_: w for k_, w in want.items() if not k_.startswith("canon/")}, leaf_layer=leaf_layer)

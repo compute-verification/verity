@@ -1,13 +1,30 @@
-import Proofs.Flock.Recursive.AuditC3
+module
+
+public import Proofs.Flock.Recursive.AuditC3
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.VStarList.Range
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.Loads
+import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.RegExtract
-import Proofs.Flock.C3.VStarList.Range
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The recursive audit at candidate 3: its proof
 
-`Flock.SecurityProofs.RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3`, `PublicAudit`'s proof at candidate 3's
+`Flock.SecurityProofs.RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo`, `PublicAudit`'s proof at candidate 3's
 table, and `RecursiveFirewallPrivate`.
 
 In (i), as in `PublicAudit`'s:
@@ -26,7 +43,7 @@ In (i), as in `PublicAudit`'s:
   typing `_hbr`'s existential carries is it: gap 2 runs at `holoAtτ st hp hp.τ` (`zk_sessions_recursive_fork_regVτ`),
   whose class, regions and schedules are `holoAt st hp`'s own terms, and the event's "no hidden types" conjunct
   (`HoloSatSome`) refutes `holds` at `hp.τ` (`holoSatSome_of_holds`);
-* the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each draw
+* the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each sample
   (`regStmt`), and the raw event is bounded by the typed sessions' at the transported prover (`prob_recT_le`,
   `verifies_zsOf`), where the event's checks at candidate 3 (`ChecksVR`) keep every session's own list at the whole
   histories `recGame` plays (`acceptsV_checked`), at the transcripts the sessions write (`leaves_sessions`);
@@ -42,6 +59,8 @@ gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_in
 (ii) is `RecursiveFirewallPrivate`.
 -/
 
+@[expose] public section
+
 namespace Flock.SecurityProofs
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
@@ -50,7 +69,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 open Classical in
 /-- **A kept session's own list is its own** where a written, accepted transcript passes `P`. -/
@@ -286,15 +305,15 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
   exact recursiveAuditC3AtNoA3 CT im obj prog st ish reg wr coins cap salt bcs' hstk zr hCust hRC tbl bc hIC htbl bind
     rows hob hF dg N σ wmsg Sk cmt msg hk hRw hM hρ hr hbr
 
-/-- **The recursive audit at candidate 3, as the verifier of record runs it, with no A3.** -/
-theorem RecursiveAuditC3NoA3 : Flock.Guarantees.RecursiveAuditC3NoA3 := by
+/-- **The recursive audit at candidate 3, as the verifier runs it, with no A3.** -/
+theorem RecursiveAuditHoloNoA3 : Flock.Guarantees.RecursiveAuditHoloNoA3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
   exact recursiveAuditC3AtNoA3 Flock.Guarantees.holoCTs Flock.Guarantees.holoMap
 
-/-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
-theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by
+/-- **The recursive audit at candidate 3, as the verifier runs it.** -/
+theorem RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate

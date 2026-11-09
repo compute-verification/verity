@@ -1,4 +1,13 @@
-import Proofs.Flock.VBridge.Algebra.Build
+module
+
+public import Proofs.Flock.VBridge.Algebra.Build
+public import Mathlib.Algebra.Group.Nat.Defs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import VCVio.Prelude.Core
 
 /-!
 # What V*'s residuals compute
@@ -10,6 +19,8 @@ differ by the consistency sums weighted by `kappa`.
 * `build_eval`: the residuals of a built S are the symbolic residuals evaluated (`Lin.eval`), each consistency sum
   read through the running sums.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

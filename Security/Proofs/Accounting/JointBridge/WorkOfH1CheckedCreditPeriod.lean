@@ -1,6 +1,40 @@
-import Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+module
+
+public import Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.JointBridge.WorkOfCreditedWords
 import Proofs.Pouw.Period
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Proof of the joint period's PoUW guarantee from H1's checked credit
@@ -12,6 +46,8 @@ acceptance with `n` times its fixed words below the check's credit, which is the
 `receiptWordMacs R C` multiply-adds a word and `receiptUnitMacs K R C` a unit.
 -/
 
+@[expose] public section
+
 namespace Accounting.SecurityProofs.Bridge
 
 open Properties.Pouw.Period
@@ -20,7 +56,7 @@ open Properties.Pouw.Period
 theorem pr_le_prob_of_equiv {A X : Type} [Fintype A] [Fintype X] (e : A ≃ X) {E : A → Prop} {F : X → Prop}
     (h : ∀ a, E a → F (e a)) : Pouw.pr E ≤ Pouw.RelativeSecurity.prob F := by
   classical
-  unfold Pouw.pr Pouw.RelativeSecurity.prob
+  unfold Pouw.pr Pouw.RelativeSecurity.prob Claims.Pr Claims.prUniform
   rw [Fintype.card_congr e]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hmap : ((Finset.univ.filter E).map e.toEmbedding) ⊆ Finset.univ.filter F := by

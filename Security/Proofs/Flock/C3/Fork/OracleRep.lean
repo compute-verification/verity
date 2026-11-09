@@ -1,5 +1,24 @@
-import Proofs.Flock.C3.Fork.OracleFold
-import Proofs.Flock.C3.Fork.OracleGame
+module
+
+public import Proofs.Flock.C3.Fork.OracleFold
+public import Proofs.Flock.C3.Fork.OracleGame
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Accounting.Numbers
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.RepSound
 
 /-!
@@ -13,6 +32,8 @@ simulates `lincheck` and `rep_sound`'s phases bound the rep (`holoRep_honest_le`
 followed by its sparse phase hands on a claim true on `R` with probability at most `repError + sparseError`
 (`holoRep_stage_le`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

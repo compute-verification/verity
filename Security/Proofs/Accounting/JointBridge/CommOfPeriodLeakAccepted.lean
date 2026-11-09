@@ -1,6 +1,41 @@
-import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
-import Proofs.NetworkCertifier.Period
+module
+
+public import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
+public import Definitions.NetworkCertifier.Guarantees.Period
+public import Proofs.NetworkCertifier.Period
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.PouwWork
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The network certifier's per-period guarantee from its period of sampled audits (proof)
@@ -10,7 +45,7 @@ import Proofs.Accounting.PouwWork
 audits (`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`), the network audit's `PeriodRun.Sound` holds at
 `n · (δ + ε_ks + ε_bind + ε_tap)`. The network certifier accepting with the claim failing means some window fails
 `WindowGood` (`comm_iff`); the union bound over the windows sums each window's failure, which is at most the sampled
-verifier's `PrBad` at `RLeakTap` (`window_le`), which `PeriodLeakAccepted`'s per-window conjunct bounds by
+verifier's `PrBad` at `RLeakCertifier` (`window_le`), which `PeriodLeakAccepted`'s per-window conjunct bounds by
 `κ + √(γ·Pr[B]) + Pr[B_ext] + Pr[B_tap]`, at most `δ + ε_ks + ε_bind + ε_tap` at each window's prover.
 
 The per-window conjunct of `PeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
@@ -20,6 +55,8 @@ so it is read off at the period of no windows (`ksLin_of_periodLeak`). Its count
 `PeriodLeakAccepted` at the deployed period and `trusted` is the follow-up.
 -/
 
+@[expose] public section
+
 namespace Accounting.SecurityProofs.Bridge
 
 open Claims Claims.Sampling NetTiming Accounting.JointBridge Finset
@@ -27,7 +64,7 @@ open Claims Claims.Sampling NetTiming Accounting.JointBridge Finset
 theorem pr_exists_le {β : Type} [Fintype β] {n : ℕ} (P : Fin n → β → Prop) :
     Pouw.pr (fun x => ∃ i, P i x) ≤ ∑ i, Pouw.pr (P i) := by
   classical
-  unfold Pouw.pr
+  unfold Pouw.pr Claims.Pr Claims.prUniform
   rw [← Finset.sum_div]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hsub : (univ.filter fun x => ∃ i, P i x) ⊆ univ.biUnion (fun i => univ.filter (P i)) := fun x hx => by
@@ -47,15 +84,15 @@ theorem ksLin_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {Coin Col T :
     (tops : AuditStatement → List (Opening Bool)) (hb : D.commit.Binds H) :
     ∀ m, ScopeAcc D lay k m → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
       PrBad H D.V
-          (RLeakTap H D.commit D.parse D.partition L Kₒ S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
+          (RLeakCertifier H D.commit D.parse D.partition L Kₒ S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
           (E D decode) m P ≤
         Claims.Sampling.κ D δ m + Real.sqrt (Claims.Sampling.γ D m * PrB H D.V P m) +
           (Bext H D.V (E D decode) Ω P m).Pr H + (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H := by
-  let f : TapRecord Empty Unit (Fin 0 → List (Obs L Kₒ S)) :=
+  let f : RecordFormat Empty Unit (Fin 0 → List (Obs L Kₒ S)) :=
     ⟨fun _ _ _ => Fin.elim0, fun _ _ c => c.elim, fun _ => True, fun _ _ _ => funext fun c => c.elim⟩
   exact (hsrc (n := 0) (Conn := Empty) (Cell := Unit) (Srv := Unit) (Dev := Unit) (Z := Unit) H D hks L Kₒ S lay k δ
     decode hδ hdec reg Dj Fin.elim0 Fin.elim0 (fun i => i.elim0) Fin.elim0 Fin.elim0 Fin.elim0 (fun i => i.elim0)
-    (fun _ c => c.elim) f () (fun _ p => tapCode f p.1 (fun c => c.elim)) (fun _ => rfl) (fun c => c.elim) ∅
+    (fun _ c => c.elim) f () (fun _ p => recordingCode f p.1 (fun c => c.elim)) (fun _ => rfl) (fun c => c.elim) ∅
     (fun _ h => h.elim) (fun _ h => h.elim) ∅ (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ())
     (fun _ h => h.elim) (fun _ => ()) (fun _ h => h.elim) (fun _ => Fin.elim0) (fun _ => Fin.elim0) tops hb).1
 

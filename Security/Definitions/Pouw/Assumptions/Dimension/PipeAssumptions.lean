@@ -1,4 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.PipeModel
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.PipeModel
+public import Definitions.Pouw.Dimension.Lift
 
 /-!
 # The closed pipe's and the lifting's named assumptions
@@ -9,6 +12,8 @@ at `c = 2`, `γ = 0`: `a1CostQuadHolds`), `A1_nonquad`, `LiftMinRank` and `LiftM
 `Prop`s with parameters, and each has a satisfiability witness (`A1CostWitness`, `LiftMinRankWitness`,
 `LiftMinRankL5eWitness`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 
@@ -47,7 +52,7 @@ def LiftMinRank (ρ : ℕ) (ε : ℤ → ℝ) (k : ℕ) (R : Mat) : Prop :=
 
 /-- **`Lift_MinRank` in L5e's form** (named; proved on paper, not in Lean): for `1 ≤ G ≤ ρ` and
 `1 ≤ Λ ≤ ρ − G + 1`, under checkpoint independence and MinRank ≥ ρ, `LiftMinRank`'s count is at most
-`epsL5e ρ G Λ k (N·m) n (3k/16 − 1) (D − p)` times the grid's size. -/
+`deltaL5e ρ G Λ k (N·m) n (3k/16 − 1) (D − p)` times the grid's size. -/
 def LiftMinRankL5e (ρ G Λ k : ℕ) (R : Mat) : Prop :=
   1 ≤ G → G ≤ ρ → 1 ≤ Λ → Λ + G ≤ ρ + 1 → CheckpointIndependent k 16 R → MinRankGe k R ρ →
   ∀ (m n N : ℕ) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
@@ -55,7 +60,7 @@ def LiftMinRankL5e (ρ G Λ k : ℕ) (R : Mat) : Prop :=
     U ⊆ range N → (∀ f ∈ L, f ∈ V0 N m n k) →
     (Nat.card {ω : Noise N m n k // ∀ u ∈ U, ∀ p < nonFinal k m n,
         (slots P L).getD (σ u p) 0 ω = word k m n N R A B u p ω} : ℝ) ≤
-      epsL5e ρ G Λ k (N * m) n (3 * k / 16 - 1)
+      deltaL5e ρ G Λ k (N * m) n (3 * k / 16 - 1)
         ((U.card * (m * n) * (3 * k / 16 - 1) : ℕ) - (nPriced P : ℤ)) * Nat.card (Noise N m n k)
 
 end Pouw.Dimension

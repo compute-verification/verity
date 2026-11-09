@@ -1,16 +1,17 @@
-import Proofs.Accounting.Actual.Split
-import Proofs.Accounting.Actual.Physical
-import Proofs.Accounting.Actual.Windows
-import Proofs.Accounting.Actual.Runtime
-import Proofs.Accounting.Actual.Threaded
-import Proofs.Accounting.Actual.Dampener
-import Proofs.Accounting.Actual.Localization
-import Proofs.Accounting.Actual.Device
-import Proofs.Accounting.Actual.Confidence
-import Proofs.Accounting.Actual.Bridges
-import Proofs.Accounting.Actual.Transducer
-import Proofs.Accounting.Defs.Actual.Source
-import Proofs.Accounting.Actual.Sampler
+module
+
+public import Proofs.Accounting.Actual.Split
+public import Proofs.Accounting.Actual.Physical
+public import Proofs.Accounting.Actual.Windows
+public import Proofs.Accounting.Actual.Threaded
+public import Proofs.Accounting.Actual.Dampener
+public import Proofs.Accounting.Actual.Localization
+public import Proofs.Accounting.Actual.Device
+public import Proofs.Accounting.Actual.Confidence
+public import Proofs.Accounting.Actual.Bridges
+public import Proofs.Accounting.Actual.Transducer
+public import Proofs.Accounting.Defs.Actual.Source
+public import Proofs.Accounting.Actual.Sampler
 
 /-!
 # The actual circuit's guarantees
@@ -26,14 +27,13 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   the developer's region into isolation blocks of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at
   most the state's part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and
   `G = univ`, isolation blocks of at most `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
-* `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
 * `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
   contains a threaded reference circuit, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start
   plus its ingress, from `WindowsAt` pulled back through the containment and NCI's `ThreadedReads` per window;
   `ThreadedRate`, at the window `ω = R/r` in the quadratic regime, at most `reuse · n R r / (d b_w b_a)` counted
   multiplications a tick; `ThreadedRuntimeDark`, the cap through a partial containment, with every counted
   multiplication the declaration doesn't compute a dark gate.
-* `Actual/Dampener.lean`: `DampenerWindowsCap`, the compute dampener's windows hypothesis
+* `Actual/Dampener.lean`: `SlowdownWindowsCap`, the compute dampener's windows hypothesis
   (`Nci.Guarantees.DampenerWindows`) from `ThreadedRuntime` at a whole-tick window, when one threading counts the
   residual and the declared computation together.
 * `Actual/Localization.lean`: `Localization`, over strategies causal from every tick: with what the rest can tell at
@@ -61,8 +61,10 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   (`acts_encard_le_links`; the `+ 1` is the content's length).
 * `Actual/Sampler.lean`: the deployed uniform sampler on one word (`Accounting.Actual.wordIndex`) accepts
   `2^w − (2^w mod N)` words and gives each index at most `⌊2^w / N⌋` of them (`card_accepted`, `card_fiber_le`), with
-  the probability facts the remote audit's opening draw is proved with.
+  the probability facts the remote audit's opening sample is proved with.
 
 The wipe is PoUS's streamed-label wipe (`Pous.StreamedWipe`, its guarantees `Pous.Guarantees.StreamedWipeMeetsFamily`
 and `StreamedWipeMeetsReads`), read through core's `Verity.Wipe.SurvivorBound`.
 -/
+
+@[expose] public section

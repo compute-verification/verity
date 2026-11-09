@@ -1,15 +1,58 @@
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.C3.PubRows.Shape
-import Proofs.Flock.C3.Compose.RsFacts
-import Proofs.Flock.C3.Reps.RoundLinks
+module
+
+public import Proofs.Flock.C3.Reps.RoundLinks
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.Claims.Recursion.RecRecord
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.VStarList.Accepts
+import Proofs.Flock.Claims.Recursion.DeployHonest
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.VBridge.Pinned
 import Proofs.Flock.VBridge.Sparse.Unit
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
-# RecCap's part holds round 0 as the coin server recorded it
+# RecCap's part holds round 0 as the challenger's live-coin part recorded it
 
 At `layoutBTops`, RecCap's part holds round 0 whole: port `top`'s hm96 slot at each of its `N` instances, in order
-(`capHold`). `PartOpensB` at `cmtTr recRead` asks those bytes to be the record's round 0, the coin server's `root_B`
+(`capHold`). `PartOpensB` at `cmtTr recRead` asks those bytes to be the record's round 0, the challenger's live-coin part's `root_B`
 (`Record.msgs`, `link.roots`). This is that half (`cap_cmt`).
 
 * The setup runs `RecCoins.check` at RecCap, which refuses a `rec-cap/…` unit not named as `VStar.capName l N` gives
@@ -22,6 +65,8 @@ At `layoutBTops`, RecCap's part holds round 0 whole: port `top`'s hm96 slot at e
 * So instance `n`'s slot at `top` reads `topRow lk l n` (`capRow_bytes`), node `n` of `root_B` at level 0, and the `N`
   slots in order are `root_B`'s nodes, the record's round 0 (`staged_reads_link`, `FlockC3.VStarList.checkReads_ok`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -222,7 +267,7 @@ theorem checkCap_ok {c : Circuit} {pub : Public} {own : Array Registered.Port} {
     simpa using hi
   · exact absurd h (Registered.throw_ne_ok _ _)
 
-/-- At level 0, `checkLink` holds the coin server's `root_B` to RecCap's `N` nodes. -/
+/-- At level 0, `checkLink` holds the challenger's live-coin part's `root_B` to RecCap's `N` nodes. -/
 theorem root_of_checkLink {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
     {lk : RecVStar.InnerLink} (h : RecCoins.checkLink st own f (some lk) = .ok ()) {N : ℕ}
     (hc : VStar.capParams st.c.unit.name = some (0, N)) : lk.root.size = N := by
@@ -317,7 +362,7 @@ theorem topRow_zero {lk : RecVStar.InnerLink} {n : ℕ} {wh : String} {c : ByteA
     rw [Array.getD_eq_getD_getElem?, hc', Option.getD_some]
   · cases h
 
-/-! ## RecCap's slots are the coin server's tops -/
+/-! ## RecCap's slots are the challenger's live-coin part's tops -/
 
 theorem findIdx_of_find_range {α : Type} [Inhabited α] {a : Array α} {f : α → Bool} {p : ℕ}
     (hp : (List.range a.size).find? (fun j => f a[j]!) = some p) : a.findIdx? f = some p := by
@@ -332,7 +377,7 @@ theorem findIdx_of_find_range {α : Type} [Inhabited α] {a : Array α} {f : α 
 
 /-- **RecCap's slot at instance `n` is row `n` of its level's tops**: at a staged RecCap part `.cap l N` the witness
 checks against, port `top`'s hm96 slot at instance `n < N`, read off the witness (`hmCommit`), is `topRow lk l n`, the
-coin server's node `n` of `root_B` at level 0 (where `root_B` has the cap's `N` nodes) or of the reps' level-`l` tops.
+challenger's live-coin part's node `n` of `root_B` at level 0 (where `root_B` has the cap's `N` nodes) or of the reps' level-`l` tops.
 The slot is its instance's public row (`slotPub_table`); `RecCoins.check` ran `checkCap` at the unit's `(l, N)`
 (`capParams_of_check`), so `top` reads `rec-top-L<l>` at node `n` in instance `n`, whose label is `n` (`checkCap_ok`),
 and `checkTopRows` pins that row to `topRow lk l n` (`checkTopRows_rows`). -/
@@ -434,7 +479,7 @@ theorem capRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
 
 theorem link_of_input {wr : RecRaw} {src : Option RecCoins.Source} {t : ByteArray} {tt record : String} {tr : Json}
     {lk : RecVStar.InnerLink} {o : Option RecVStar.InnerLink} (ht : wr.transcript = some t)
-    (hrec : src.map (·.record) = some record) (htx : String.fromUTF8? t = some tt) (hp : Json.parse tt = .ok tr)
+    (hrec : src.map (·.record) = some record) (htx : String.fromUTF8? t = some tt) (hp : Flock.JsonParse.parse tt = .ok tr)
     (hlk : RecVStar.innerLink tr record = .ok lk) (h : linkInputOf wr src = .ok o) : o = some lk := by
   have htt : textOf "rec inner transcript" t = .ok tt := by rw [textOf, htx]
   have e : linkInputOf wr src = .ok (some lk) := by
@@ -500,9 +545,9 @@ theorem msgs_zero (rc : RecRecord.Record) (t : List UInt8) (nodes : List (List U
     (h : rc.roots = [(t, nodes)]) : (rc.msgs.map Prod.fst).getD 0 [] = nodes.flatten := by
   simp [RecRecord.Record.msgs, h]
 
-/-- **RecCap's part holds round 0 as the coin server recorded it**: at a staged part the witness checks against, what
+/-- **RecCap's part holds round 0 as the challenger's live-coin part recorded it**: at a staged part the witness checks against, what
 part `s` holds whole at round 0 at `layoutBTops` is RecCap's `N` slots at port `top` in order (`capHold`), each node `n`
-of the coin server's `root_B` (`capRow_bytes`), which has `N` nodes, so the record's round 0 (`Record.msgs`,
+of the challenger's live-coin part's `root_B` (`capRow_bytes`), which has `N` nodes, so the record's round 0 (`Record.msgs`,
 `FlockC3.VStarList.checkReads_ok`), which is round 0 as `cmtTr recRead` reads it (`staged_reads_link`). -/
 theorem cap_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st : Stage} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)

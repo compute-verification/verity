@@ -4,6 +4,7 @@ defaultTargets = ["Lms", "lms-difftest", "lms-sign-difftest"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"

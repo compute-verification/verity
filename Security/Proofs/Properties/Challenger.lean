@@ -1,4 +1,9 @@
-import Properties.Challenger
+module
+
+public import Properties.Challenger
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
 
 /-!
 # Proofs of `Properties.Challenger`
@@ -7,8 +12,11 @@ import Properties.Challenger
 the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the reader's property `DrawnByDevice`.
 `drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement.
 `oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
-proved about `check` (`acceptMeans_iff`) hold of what it accepts.
+proved about `check` (`acceptMeans_iff`) hold of what it accepts. `oneStageZk_source`: v2's coins read only under a
+challenger and a window its parameters name, so `oneStageZk_drawn`, `coinsFromLog` for v2, is never vacuous.
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger
 
@@ -75,19 +83,77 @@ theorem drawnByDevice_nontrivial : ¬ DrawnByDeviceAt (fun _ _ _ _ _ => .ok Byte
     cases hw
 
 /-- What one-stage's protocol accepts, its coin-free `check` accepts: `checkAt` only adds the coins' refusals. -/
-theorem oneStage_check_of_accept {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : SampledProofs.OneStage.Evidence} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
-    (h : SampledProofs.OneStage.protocol.check p c e = .accept pub prof) :
-    SampledProofs.OneStage.check p c e = .accept pub prof := by
-  change Core.atCoins (SampledProofs.OneStage.coinsOf p c e)
-    (fun ξ => SampledProofs.OneStage.checkAt p c ξ e) = _ at h
-  cases hξ : SampledProofs.OneStage.coinsOf p c e with
+theorem oneStage_check_of_accept {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
+    {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
+    (h : Spot.OneStage.protocol.check p c e = .accept pub prof) :
+    Spot.OneStage.check p c e = .accept pub prof := by
+  change Core.atCoins (Spot.OneStage.coinsOf p c e)
+    (fun ξ => Spot.OneStage.checkAt p c ξ e) = _ at h
+  cases hξ : Spot.OneStage.coinsOf p c e with
   | error r => rw [hξ] at h; simp [Core.atCoins] at h
   | ok ξ =>
     rw [hξ] at h
-    simp only [Core.atCoins, SampledProofs.OneStage.checkAt] at h
-    cases hw : ξ.bind (SampledProofs.OneStage.coinsWhy p c e) with
+    simp only [Core.atCoins, Spot.OneStage.checkAt] at h
+    cases hw : ξ.bind (Spot.OneStage.coinsWhy p c e) with
     | some why => rw [hw] at h; simp at h
     | none => rw [hw] at h; exact h
+
+/-- v2's coins read only under the challenger and the window its parameters name (`oneStageZkSource`). -/
+theorem oneStageZk_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
+    {e : Spot.OneStageZk.Evidence} {ξ : ByteArray} (hξ : Spot.OneStageZk.coinsOf p c e = .ok ξ) :
+    ∃ d, oneStageZkSource p c = some d := by
+  unfold Spot.OneStageZk.coinsOf at hξ
+  unfold oneStageZkSource oneStageSource
+  cases h1 : Spot.OneStage.coinsOf p.base c e.base with
+  | error r => simp [h1, bind, Except.bind] at hξ
+  | ok o =>
+    cases o with
+    | none => simp [h1, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hξ
+    | some ξ' =>
+      -- `simp` can't take `OneStage.coinsOf`'s match apart here: its equations, realized in `Properties.Challenger`,
+      -- aren't retrievable from this module. Each arm reduces by `cases` on the discriminants instead.
+      have hpure : ∀ (b : Bool) (s : String),
+          (if b = true then pure none else throw s : Except String (Option ByteArray)) ≠ .ok (some ξ') := by
+        intro b s h
+        cases b <;> simp [pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+      have hthrow : ∀ s : String, (throw s : Except String (Option ByteArray)) ≠ .ok (some ξ') := by
+        intro s h
+        simp [throw, throwThe, MonadExceptOf.throw] at h
+      unfold Spot.OneStage.coinsOf at h1
+      revert h1
+      generalize p.base.challenger = ch
+      generalize p.base.verifier.windowRoot = w
+      intro h1
+      cases ch with
+      | none => exact absurd h1 (hpure _ _)
+      | some kl =>
+        obtain ⟨key, label⟩ := kl
+        cases w with
+        | none => exact absurd h1 (hthrow _)
+        | some w => exact ⟨_, rfl⟩
+
+/-- **What v2 accepts on the blobs `bs`, it accepts at coins its challenger device drew, or the run carries a break**
+(`CoinsFromLog` for v2): its answer's byte strings decode, and it accepts at the coins `ξ` its evidence's record shows,
+read under the challenger and window its parameters name (`d`); `ξ` is what a run of the device under that key released
+of the family after the registration's digest, a run the device's own ledger opens on the window, or the fixed finder
+outputs a break from the record and the device. -/
+theorem oneStageZk_drawn (hd : DrawnByDevice) (bs : Array ByteArray) (dev : History) (a b e : ByteArray)
+    (h : ((Spot.OneStageZk.protocol.on bs).answer a b e).verdict = .accept) :
+    ∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment)
+      (ev : Spot.OneStageZk.Evidence) (ξ : ByteArray) (d : Draws),
+      (Core.canonicalJson a >>= Spot.OneStageZk.paramsOfJson) = .ok p ∧
+      Spot.OneStageZk.protocol.commitment b = .ok c ∧ Spot.OneStageZk.protocol.evidence e = .ok ev ∧
+      ((Spot.OneStageZk.protocol.on bs).answerAt (Spot.OneStageZk.live bs) a b ξ e).verdict =
+        .accept ∧
+      oneStageZkSource p c = some d ∧
+      ((∃ s ∈ dev.runs d.key.pub, OpensOn dev d.key.pub d.window s.id ∧ s.released d.label d.after = ξ) ∨
+        Break dev d.key d.label ev.base.coins) := by
+  obtain ⟨p, c, ev, ξ, hp, hc, hev, hξ, hacc⟩ := liveAnswer _ (Spot.OneStageZk.live bs) a b e h
+  obtain ⟨d, hd'⟩ := oneStageZk_source (p := p) (c := c) (e := ev) hξ
+  obtain ⟨raw, hraw, hdec⟩ := oneStageZk_reads p c d hd' ev ξ hξ
+  refine ⟨p, c, ev, ξ, d, hp, hc, hev, hacc, hd', ?_⟩
+  rcases hd dev d.key d.window d.label d.after ev.base.coins raw hraw with ⟨s, hs, hopen, hrel⟩ | hb
+  · exact .inl ⟨s, hs, hopen, by rw [← hrel]; exact hdec⟩
+  · exact .inr hb
 
 end Properties.Challenger

@@ -1,4 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # A hidden-output statement's Δ (`HiddenDelta`)
@@ -8,6 +24,8 @@ bit `t < 16`, the pairs `outPairs` lists, then the pinned outputs' (`HmOut.pinPa
 pinned (`hidden_delta_unpinned`). Its loops are `forIn_range_append`'s, but for the port loop, which also carries
 the template instance's first output word of port `j`, `outAt c j` (`forIn_range_at`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

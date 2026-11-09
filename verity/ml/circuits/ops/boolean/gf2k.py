@@ -1,4 +1,4 @@
-"""GF(2^128) and GF(2^256) as Flock's verifier has them (its PROTOCOL.md §2.1, §2.4), their products as Boolean Definitions,
+"""GF(2^128) and GF(2^256) as Flock's verifier has them (its `Flock.Field`), their products as Boolean Definitions,
 and the sums of products that a verifier's algebra over them reduces to once its coins are values.
 
 F = GF(2)[x]/(x^128 + x^7 + x^2 + x + 1). An element is an int below 2^128 whose bit i is the coefficient of x^i: the Lean
@@ -16,11 +16,10 @@ as the Lean verifier's `F256.mul` computes it. `mul`, `kmul` and `inv` are the r
 
 Bit i of a port's 128-bit element is the coefficient of x^i, and a K port is (c0, c1).
 
-**Gf128Mul** is Karatsuba down to single bits (`karatsuba`): ``kara(a, b)`` on 2^n coefficients is one AND for n = 0, else,
-split at h = 2^(n-1) into (lo, hi), p0 = kara(lo_a, lo_b), then p2 = kara(hi_a, hi_b), then p1 = kara(lo_a + hi_a,
-lo_b + hi_b), and the product p0 + X^h (p1 + p0 + p2) + X^2h p2; then the reduction (`reduce_forms`): from coefficient 254
-down to 128, coefficient i is added into i - 128, i - 127, i - 126 and i - 121 and dropped. XORs only, so 3^7 = 2,187 ANDs,
-one per base product, in that order. **Gf256Mul** is three of them and the product by the constant x^-1 (linear), 6,561 ANDs.
+**Gf128Mul** is `verity.ml.circuits.boolean.gf128`'s product, Karatsuba down to single bits and the reduction, 2,187 ANDs
+(F's arithmetic is there, below this unit, so that every unit that may import `verity.ml.circuits` reaches it; `clmul`,
+`reduce`, `mul`, `karatsuba`, `reduce_forms` and `mul_forms` are its). **Gf256Mul** is three of them and the product by the
+constant x^-1 (linear), 6,561 ANDs.
 **GfScale{L}** multiplies one element into each of L (L Gf128Mul circuits).
 
 **GfResiduals{S}** evaluates residuals, each a sum of products of sums of input elements. ``S`` is a dict:
@@ -42,6 +41,7 @@ import struct
 from typing import Sequence
 
 from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.boolean.gf128 import MASK, clmul, karatsuba, mul, mul_forms, reduce, reduce_forms
 from verity.ml.circuits.defs import CompositeDefinition
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
@@ -57,41 +57,12 @@ BIT = BL.BIT
 F = Array(128, BIT)
 #: one K element: (c0, c1)
 K = Array(2, F)
-MASK = (1 << 128) - 1
 #: x^-1 in F: `F256.xinv` = ⟨0x43, 0x8000000000000000⟩
 XINV = 0x80000000000000000000000000000043
 
 
-def clmul(a: int, b: int) -> int:
-    """The carry-less product of two polynomials over GF(2), four bits of ``b`` at a time."""
-    a2 = a << 1
-    a4 = a << 2
-    a8 = a << 3
-    t = [0, a, a2, a2 ^ a, a4, a4 ^ a, a4 ^ a2, a4 ^ a2 ^ a]
-    t += [a8 ^ x for x in t]
-    r = 0
-    s = 0
-    while b:
-        r ^= t[b & 15] << s
-        b >>= 4
-        s += 4
-    return r
-
-
-def reduce(r: int) -> int:
-    """``r`` (degree below 255) modulo x^128 + x^7 + x^2 + x + 1."""
-    for _ in range(2):
-        h = r >> 128
-        r = (r & MASK) ^ h ^ (h << 1) ^ (h << 2) ^ (h << 7)
-    return r
-
-
-def mul(a: int, b: int) -> int:
-    return reduce(clmul(a, b))
-
-
 def inv(a: int) -> int:
-    """``a^(2^128 - 2)``: the inverse, with ``inv(0) = 0`` (§2.1)."""
+    """``a^(2^128 - 2)``: the inverse, with ``inv(0) = 0`` (``Flock.Field``)."""
     acc = 1
     for _ in range(127):
         acc = mul(mul(acc, acc), a)
@@ -128,7 +99,7 @@ def from_bytes(b: bytes) -> int:
     return lo | hi << 64
 
 
-#: `φ8`'s generator g, a root of X^8 + X^4 + X^3 + X + 1 in F (§2.2)
+#: `φ8`'s generator g, a root of X^8 + X^4 + X^3 + X + 1 in F (``Flock.Field``)
 PHI8_GEN = (0x0dcb364640a222fe << 64) | 0x6b8330483c2e9849
 
 
@@ -155,36 +126,6 @@ def phi8(v: int) -> int:
 
 
 # --- circuits ----------------------------------------------------------------------------------------------------------------
-
-def karatsuba(C, a: list, b: list) -> list:
-    """The carry-less product of two forms vectors of equal power-of-two length n, LSB first: 2n - 1 forms, 3^log2(n) ANDs."""
-    n = len(a)
-    if n == 1:
-        return [C.AND(a[0], b[0])]
-    h = n // 2
-    p0 = karatsuba(C, a[:h], b[:h])
-    p2 = karatsuba(C, a[h:], b[h:])
-    pm = karatsuba(C, [x ^ y for x, y in zip(a[:h], a[h:])], [x ^ y for x, y in zip(b[:h], b[h:])])
-    out = p0 + [None] + p2
-    for i in range(2 * h - 1):
-        mid = pm[i] ^ p0[i] ^ p2[i]
-        j = i + h
-        out[j] = mid if out[j] is None else out[j] ^ mid
-    return out
-
-
-def reduce_forms(r: list) -> list:
-    """The 255 product coefficients modulo the GHASH polynomial: x^k for k >= 128 is x^(k-128)·(x^7 + x^2 + x + 1)."""
-    r = list(r)
-    for k in range(len(r) - 1, 127, -1):
-        for t in (0, 1, 2, 7):
-            r[k - 128 + t] = r[k - 128 + t] ^ r[k]
-    return r[:128]
-
-
-def mul_forms(C, a: list, b: list) -> list:
-    return reduce_forms(karatsuba(C, a, b))
-
 
 def mul_const_forms(a: list, c: int) -> list:
     """``a · c`` for a constant ``c``: bit l is the XOR of the bits a[i] for which bit l of ``c·x^i`` is set."""

@@ -6,7 +6,31 @@ filters); the constant bits read the pin (`pin_bitT`) and the root's first slot'
 because `HmRow.checkTyped` refuses a root that fills its slot). The rows are `sha512/row/v1`'s because `HmRow.rowPorts`
 refuses a typed statement's bit rows (`ParseFactsT.v1`).
 -/
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Delta
+public import Proofs.Flock.Soundness.Discharge.Hm.Place
+public import Proofs.Flock.Soundness.Discharge.Hm.Port
+public import Proofs.Flock.Soundness.ExecTemplateSetup
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Hm.Copy
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
+
+@[expose] public section
 
 open Flock FlockLevel3
 

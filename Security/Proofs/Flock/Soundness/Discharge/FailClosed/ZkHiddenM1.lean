@@ -1,14 +1,16 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
-import Proofs.Flock.Soundness.Discharge.ZkLink.M1
-import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
-import Proofs.Flock.Soundness.Discharge.ZkLink.Link
-import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
-import Proofs.Flock.Soundness.Instance
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
+public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
+public import Proofs.Flock.Soundness.Instance
 
 /-!
-# The hidden-output `--zk` tables are at C-Flock ZK's parameters, and `ε_ks` in closed form
+# The hidden-output `--zk` tables are at Flock ZK's parameters, and `ε_ks` in closed form
 
-`ZkLink/M1.lean` for the hidden-output plan of `J` tables (`ZkHidden.planZHJ`): every table it builds is at C-Flock
+`ZkLink/M1.lean` for the hidden-output plan of `J` tables (`ZkHidden.planZHJ`): every table it builds is at Flock
 ZK's parameters, from what `verify --zk` checks at setup, so the knowledge term `ε_ks = ksAvgStrictZ` at that plan is at
 most `ksAvgStrictZm1`, and at most one number that reads no table.
 
@@ -32,12 +34,14 @@ A refused hidden-output table carries the reference setup's regions and `contra`
   `ksAvgStrictZ_planZHJ_le_m1` and `ksAvgStrictZ_planZHJ_le_closed` read the bounds at that plan (its rate cap is
   `ZkHidden.hr_planZHJ_23`).
 * `qs_le_io`, `qs_le_mul`: `Q_s = Σ_c |Ω_c|/|Ω|`, the factor of `δ_link` (`linkBoundZC`), is at most the largest
-  `Σ_{u ∈ S} |io u|` over draws `S`, `io` the committed wires each unit reads or writes in the circuit's partition, so
-  at most `k_d·r` at draws of `k_d` units with `|io u| ≤ r`.
+  `Σ_{u ∈ S} |io u|` over samples `S`, `io` the committed wires each unit reads or writes in the circuit's partition, so
+  at most `k_d·r` at samples of `k_d` units with `|io u| ≤ r`.
 
 The file sits under `FailClosed/` because it reads `Stmt.InRangeWide` and `piopNumMaxWide` (`FailClosed/Numeric.lean`),
 which import the `ZkHidden` headlines.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 
@@ -125,7 +129,7 @@ theorem m1_check_wide (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) :
   · exact m1_check_wide_le_33 m h1 h
   · exact m1_check_wide_34_35 m (by omega) h2
 
-/-- **The padded table error at C-Flock ZK's parameters over 1026 regions**: at most `3/2^206` per table, for every
+/-- **The padded table error at Flock ZK's parameters over 1026 regions**: at most `3/2^206` per table, for every
 statement shape in `Stmt.InRangeWide`. -/
 theorem padTableError_le_m1_wide : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : Stmt, st.InRangeWide →
     padTableError (m1Schedule m) st (m1Pad m) 2 ≤ (3 : ℝ) / 2 ^ 206 := by
@@ -167,7 +171,7 @@ theorem m1Ks_all : ∀ m, 25 ≤ m → m ≤ 35 →
 theorem sqrt_cast_le_of_le_mul {n r : ℕ} (h : n ≤ r * r) : Real.sqrt n ≤ r :=
   Real.sqrt_le_iff.2 ⟨Nat.cast_nonneg _, by rw [sq]; exact_mod_cast h⟩
 
-/-- **The hash sum at C-Flock ZK's schedules**: `Σ_{1 ≤ ℓ ≤ L} √(2^{log N_ℓ}·Q_ℓ·x) ≤ 25638·√x`. -/
+/-- **The hash sum at Flock ZK's schedules**: `Σ_{1 ≤ ℓ ≤ L} √(2^{log N_ℓ}·Q_ℓ·x) ≤ 25638·√x`. -/
 theorem hashSum_le_m1 (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) (x : ℝ) :
     ∑ ℓ ∈ Finset.Icc 1 (m1Schedule m).levels.length,
         Real.sqrt (2 ^ (lvOf (m1Schedule m) ℓ).logLen * (lvOf (m1Schedule m) ℓ).queries * x) ≤
@@ -200,15 +204,11 @@ open scoped ENNReal NNReal
 
 variable {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ}
 
-/-- **A `--zk` table at C-Flock ZK's parameters over the plan's shapes**: `TabZK.M1` with the statement in
+/-- **A `--zk` table at Flock ZK's parameters over the plan's shapes**: `TabZK.M1` with the statement in
 `Stmt.InRangeWide` (up to 1026 regions, a refused table's), not `Stmt.InRange`. -/
 def TabZK.M1W (T : TabZK F mPts) : Prop :=
   ∃ m, 25 ≤ m ∧ m ≤ 35 ∧ T.sch = m1Schedule m ∧ T.t = m1Pad m ∧ T.e = 2 ∧ (T.S.shape mPts).InRangeWide ∧
     T.N ≤ 2 ^ 13 ∧ T.q = 168 ∧ 7 / 16 ≤ T.δ
-
-theorem TabZK.M1.toW {T : TabZK F mPts} (hT : T.M1) : T.M1W := by
-  obtain ⟨m, h1, h2, hsch, ht, he, ⟨hk, hR, hp⟩, hN, hq, hδ⟩ := hT
-  exact ⟨m, h1, h2, hsch, ht, he, ⟨hk, by omega, hp⟩, hN, hq, hδ⟩
 
 /-- **A `--zk` table's bound at `M1W`** is at most `2^-203` (`TabZK.bound_le_m1` at 1026 regions, from
 `padTableError_le_m1_wide`'s `3/2^206`). -/
@@ -290,13 +290,13 @@ theorem ksAvgStrictZ_le_m1w (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Typ
   · exact ENNReal.ofReal_le_ofReal
       (div_le_div_of_nonneg_right (ksStrictZ_le_m1w hF _ j (hW _ R j) k qF qS) h0.le)
 
-/-- **A `--zk` table's knowledge bound at C-Flock ZK's parameters, as one number**: `ksStrictZm1` with the hash sum
+/-- **A `--zk` table's knowledge bound at Flock ZK's parameters, as one number**: `ksStrictZm1` with the hash sum
 at its largest coefficient (`hashSum_le_m1`) and the inner code's length at `2^13`. -/
 noncomputable def ksClosedM1 (k : ℕ) (qF qS : ℝ) : ℝ :=
   2 ^ (-(203 : ℝ)) + (2 * 25638 + 2 ^ 14 + 2) * Real.sqrt (qF ^ 2 / 2 ^ (513 : ℝ)) + qS ^ 2 / 2 ^ (513 : ℝ) +
     Real.sqrt (k * (qF ^ 2 / 2 ^ (513 : ℝ)))
 
-/-- The level-0 rate cap at C-Flock ZK's parameters: `2^23/(ek)`, level 0's codeword at most `2^23` long. -/
+/-- The level-0 rate cap at Flock ZK's parameters: `2^23/(ek)`, level 0's codeword at most `2^23` long. -/
 noncomputable def rateM1 (k : ℕ) : ℝ := 2 ^ 23 / (Real.exp 1 * k)
 
 theorem ksClosedM1_nonneg (k : ℕ) (qF qS : ℝ) : 0 ≤ ksClosedM1 k qF qS := by
@@ -339,7 +339,7 @@ theorem rateZ_le_m1w (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT : (ts.ge
   rw [hsch]
   exact div_le_div_of_nonneg_right (pow_le_pow_right₀ (by norm_num) hc) (by positivity)
 
-/-- **The compiled `--zk` knowledge term at C-Flock ZK's parameters, as one number**: with every table of the plan at
+/-- **The compiled `--zk` knowledge term at Flock ZK's parameters, as one number**: with every table of the plan at
 `M1W` and `2^23 < ek`, `ksAvgStrictZ ≤ ksClosedM1/(1 − 2^23/(ek))`. -/
 theorem ksAvgStrictZ_le_closed (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : Type}
     (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
@@ -358,20 +358,20 @@ theorem ksAvgStrictZ_le_closed (hF : Fintype.card F = 2 ^ 128) {n : ℕ} {Reg : 
       exact div_le_div_of_nonneg_left (ksClosedM1_nonneg k qF qS) (by linarith) (by linarith)
   exact (avg_mono hc).trans (avg_const _).le
 
-/-! ## `Q_s`, the expected number of commit strings the drawn units read -/
+/-! ## `Q_s`, the expected number of commit strings the sampled proof blocks read -/
 
 section Qs
 
-variable {K : Type} [Field K] (A : Arith F K) {C : Audit.Circuit} {n : ℕ}
+variable {K : Type} [Field K] (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ}
   (P : Audit.Partition C n) {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc)
 
 /-- **`Q_s` from the partition**: `Q_s = Σ_c |Ω_c|/|Ω|`, `linkBoundZC`'s factor, is at most any bound `B` on the
-committed wires the drawn units read or write, `Σ_{u ∈ S} |io u|`, at every draw `S`. A draw reads commit string `c`
-only through a wire of a drawn unit's `io` that `c` holds (`ReadsZ`), so it reads at most that many strings, and
-`Σ_c |Ω_c|/|Ω|` averages that count over the draws. -/
+committed wires the sampled proof blocks read or write, `Σ_{u ∈ S} |io u|`, at every sample `S`. A sample reads commit string `c`
+only through a wire of a sampled proof block's `io` that `c` holds (`ReadsZ`), so it reads at most that many strings, and
+`Σ_c |Ω_c|/|Ω|` averages that count over the samples. -/
 theorem qs_le_io (L : Law n) (B : ℕ) (hB : ∀ ω, ∑ u ∈ L.draw ω, (P.io u).card ≤ B) :
     ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω ≤ B := by
   classical
@@ -396,7 +396,7 @@ theorem qs_le_io (L : Law n) (B : ℕ) (hB : ∀ ω, ∑ u ∈ L.draw ω, (P.io 
   push_cast at this
   linarith [mul_comm (B : ℝ) (Fintype.card L.Ω : ℝ)]
 
-/-- **`Q_s ≤ k_d·r`**: at draws of at most `k_d` units, each with at most `r` committed wires in its `io`. -/
+/-- **`Q_s ≤ k_d·r`**: at samples of at most `k_d` units, each with at most `r` committed wires in its `io`. -/
 theorem qs_le_mul (L : Law n) (kd r : ℕ) (hd : ∀ ω, (L.draw ω).card ≤ kd) (hr : ∀ u, (P.io u).card ≤ r) :
     ∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω ≤ kd * r := by
   have h := qs_le_io A P planZ tab vb L (kd * r) fun ω =>
@@ -427,7 +427,7 @@ theorem inRange : y.x.st.c.kLog ≤ 27 ∧ y.x.st.regions.size ≤ 1024 ∧ mPts
   have h2 := y.x.hmPts
   exact ⟨hk, hr, by omega⟩
 
-/-- **A hidden-output `--zk` table of a draw `verify --zk` sets up is at C-Flock ZK's parameters**, at any regions of
+/-- **A hidden-output `--zk` table of a sample `verify --zk` sets up is at Flock ZK's parameters**, at any regions of
 at most 1026 (`DrawSetupZK.tabAt_M1`'s twin). -/
 theorem tabAt_M1W (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) (hR : regs.length ≤ 1026) :
@@ -451,14 +451,14 @@ theorem tabAt_M1W (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x.st.c.
   rw [hb]
   exact Nat.pow_le_pow_right (by norm_num) hb13
 
-/-- **The table's hidden-output `--zk` table is at C-Flock ZK's parameters**: setupHidden's regions, at most 1024. -/
+/-- **The table's hidden-output `--zk` table is at Flock ZK's parameters**: setupHidden's regions, at most 1024. -/
 theorem table_M1W : y.table.M1W :=
   y.tabAt_M1W _ _ (by
     have := y.inRange.2.1
     rw [FlockVBridge.Family.length_regionsOf]
     omega)
 
-/-- **A refused hidden-output `--zk` table is at C-Flock ZK's parameters**: setupHidden's regions and `contra`'s two,
+/-- **A refused hidden-output `--zk` table is at Flock ZK's parameters**: setupHidden's regions and `contra`'s two,
 at most 1026. -/
 theorem refused_M1W : y.refused.M1W :=
   y.tabAt_M1W _ _ (by
@@ -473,7 +473,7 @@ end DrawSetupZHJ
 variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
   (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {Reg : Type}
 
-/-- **Every table `tableZHJ` builds is at C-Flock ZK's parameters**: table `j`'s own, or the reference setup's refused
+/-- **Every table `tableZHJ` builds is at Flock ZK's parameters**: table `j`'s own, or the reference setup's refused
 one. -/
 theorem tableZHJ_M1W (S : Finset (Fin n)) (j : Fin (nTab I)) : (tableZHJ dj y₀ S j).M1W := by
   unfold tableZHJ
@@ -481,7 +481,7 @@ theorem tableZHJ_M1W (S : Finset (Fin n)) (j : Fin (nTab I)) : (tableZHJ dj y₀
   · exact DrawSetupZHJ.table_M1W _
   · exact y₀.refused_M1W
 
-/-- **Every table of the hidden-output plan of `J` tables is at C-Flock ZK's parameters** (`tableZHJ_M1W`). -/
+/-- **Every table of the hidden-output plan of `J` tables is at Flock ZK's parameters** (`tableZHJ_M1W`). -/
 theorem planZHJ_M1W :
     ∀ S (R : Reg) (j : Fin (planZHJ (Reg := Reg) dj y₀ S R).length), ((planZHJ dj y₀ S R).get j).M1W := by
   intro S R j

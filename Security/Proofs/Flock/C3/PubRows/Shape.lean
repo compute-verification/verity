@@ -1,6 +1,24 @@
-import Proofs.Flock.C3.PubRows.Honest
-import Proofs.Flock.C3.VStarList.Shape
-import Proofs.Flock.VBridge.Sparse.Unit
+module
+
+public import Proofs.Flock.C3.PubRows.Honest
+public import Proofs.Flock.C3.VStarList.Shape
+public import Proofs.Flock.VBridge.Sparse.Unit
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.VBridge.Family.Structure
 import Proofs.Flock.VBridge.Pinned
 
 /-!
@@ -25,6 +43,8 @@ injective, and candidate 3's statements after RecSparse are R's levels and openi
   of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second and third loops (`checkOwn_ok`,
   `ownIn_of_checkStmt`); `ownIn_checked` is it at the checked family.
 -/
+
+@[expose] public section
 
 namespace FlockC3.PubRows
 
@@ -69,6 +89,15 @@ theorem sparse_ne_names (sh : RecSparse.Shape) :
       List.append_assoc, FlockVBridge.toString_str] at h <;>
     rw [take_five (by decide), take_five (by decide)] at h <;>
     exact absurd h (by decide)
+
+/-- **The link table's part is no RecSparse unit**: it is named `rec-l…`. -/
+theorem sparse_ne_linkName (sh : RecSparse.Shape) (UB PB : ℕ) : RecSparse.unitName sh ≠ VStar.linkName UB PB := by
+  intro h
+  have h := congrArg (fun s : String => s.toList.take 5) h
+  simp only [RecSparse.unitName, VStar.linkName, String.toList_append, List.append_assoc,
+    FlockVBridge.toString_str] at h
+  rw [take_five (by decide), take_five (by decide)] at h
+  exact absurd h (by decide)
 
 theorem forIn_all {α : Type} (P : VStar.Stmt → Prop)
     {f : α → Array VStar.Stmt → Except String (ForInStep (Array VStar.Stmt))}
@@ -151,11 +180,12 @@ theorem sparse_of_name {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSta
     {s : VStar.Stmt} (hs : s ∈ ss) {sh : RecSparse.Shape} (hn : RecSparse.unitName sh = s.name) :
     i.sparse = some sh := by
   obtain ⟨n1, n2, n3, n4, n5⟩ := sparse_ne_names sh
-  obtain ⟨vsh, A, C, K, N, hA, hC, hK, -, -, rfl, -⟩ := FlockC3.VStarList.statements_ok h
+  obtain ⟨vsh, A, C, K, L, N, hA, hC, hK, -, hL, -, rfl, -⟩ := FlockC3.VStarList.statements_ok h
   rcases Array.mem_append.1 hs with hs | hs
   rotate_left
-  · obtain ⟨_, _, rfl⟩ := FlockC3.VStarList.caps_cap hK N _ hs
-    exact absurd hn (n5 _ _)
+  · rcases FlockC3.VStarList.tail_cases hK hL N _ hs with ⟨_, _, rfl⟩ | ⟨_, _, _, rfl⟩
+    · exact absurd hn (n5 _ _)
+    · exact absurd hn (sparse_ne_linkName _ _ _)
   rcases Array.mem_append.1 hs with hs | hs
   · obtain ⟨_, _, _, -, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
     simp only [Array.mem_append, List.mem_toArray, List.mem_map, List.mem_range] at hs
@@ -288,8 +318,8 @@ def StmtsChecked (i : RecVStar.Inner) (j : ℕ) (f : VStar.Bindings) (rows : Opt
     sts.forM (RecVStar.checkStmt (some i) I.tags I.tables · I.circuitFile I.partition I.program (some own) (some j)
       (some f) rows) = .ok ()
 
-/-- **A checked session's statement of its circuit**: where the session accepts and its record draws, the statement
-setting up a drawn unit's part has the session's circuit and passes `checkStmt`. -/
+/-- **A checked session's statement of its circuit**: where the session accepts and its record samples, the statement
+setting up a sampled proof block's part has the session's circuit and passes `checkStmt`. -/
 theorem stmt_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
     {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr) {i : RecVStar.Inner} {j : ℕ} {f : VStar.Bindings}
@@ -524,7 +554,7 @@ local notation "𝓗" => C3Family.honest (xR := xR) ish hss bind hob zs own sel 
 
 /-- **(n1) The public rows at the honest family, from the verifier's checks**: `hPubRows_of_check'` with the
 rec-sparse shape read at a transcript the session writes and accepts whose public rows and statements the verifier
-checks (`ChecksReached`), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`) and every unit is drawn
+checks (`ChecksReached`), where `SparseAtShapeChecked` holds (`sparseAtShapeChecked`) and every unit is sampled
 (`rowsHeld`). The port the check finds by name is the session's: the statement check refuses a circuit naming a port
 twice (`names_of_checkStmt`), so `PortsNamed` holds at every accepted session. -/
 theorem hPubRows_of_checked {rows : Option (Array Flock.Registered.Port)} (hchk : ChecksReached 𝓗 rows wr reg)

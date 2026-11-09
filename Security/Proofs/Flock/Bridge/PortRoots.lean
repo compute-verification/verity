@@ -1,5 +1,40 @@
-import Proofs.Flock.Bridge.Deployed
-import Proofs.Flock.Recursive.TopRoot
+module
+
+public import Proofs.Flock.Bridge.Deployed
+public import Proofs.Flock.Recursive.TopRoot
+import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
@@ -25,6 +60,8 @@ domains give two different inputs with one SHA-512 digest (`rootsOf_collides`).
   probability bounded at every file with `RootFixesDomain` is bounded at every file with that term added
   (`le_add_ecrBound`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge.PortRoots
 
@@ -286,12 +323,12 @@ theorem rootsColl_none_iff {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} :
 theorem finderPr_one {H : Msg → Msg} {F : Claims.Finder}
     (h : ∀ s, ∃ u v, F.out s = some (u, v) ∧ Claims.Collision H u v) : F.Pr H = 1 := by
   have hc : (Fintype.card F.S : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr Fintype.card_ne_zero
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   simp [h, hc]
 
 theorem finderPr_zero {H : Msg → Msg} {F : Claims.Finder}
     (h : ∀ s, ¬ ∃ u v, F.out s = some (u, v) ∧ Claims.Collision H u v) : F.Pr H = 0 := by
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   simp [h]
 
 theorem ex_cost (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) :

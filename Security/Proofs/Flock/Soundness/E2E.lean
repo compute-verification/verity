@@ -1,4 +1,8 @@
-import Proofs.Flock.Soundness.Audit.FlockPublic
+module
+
+public import Proofs.Flock.Soundness.Audit.FlockPublic
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The end-to-end theorem: a skeleton, every gap a named hypothesis
@@ -10,10 +14,10 @@ circuit and values, 1 on the constants and 0 on the zero, which are public:
 
 "Wrong" is measured on the audit's circuit `C`, at the committed values: the circuit the statement's rows make, each unit
 its template's rows (`Prog.circuit`: the circuit is chosen on the untrusted side, and the lowering does
-no optimizing). `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` state it there, with each drawn unit's place from its
-table's statement (`ProgPlaces`). What a correct unit computes is the certificate's: rows that are `GateRows.rows` of a
-gate circuit `G` compute `G`, so a correct unit's committed values compute `G` (`IsRowsUnit.computes_of_cert`,
-`Certificate.lean`). The only cryptographic assumption is `SHA512CRExpected`, for the link finders built from the prover
+no optimizing). `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` state it there, with each sampled proof block's place from its
+table's statement (`ProgPlaces`). Rows that are `GateRows.rows` of a gate circuit `G`, satisfied with the constant 1,
+carry `G`'s outputs (`GateRows.rows_sound`); no theorem carries that to a correct unit's committed values
+(`ASSUMPTIONS.md`). The only cryptographic assumption is `SHA512CRExpected`, for the link finders built from the prover
 the theorem bounds (`hCR : LinkCR … (reg σ) (cont σ) …`), not from every prover at once. `ε_ks(σ)` is the prover's
 collision advantages; under `SHA512CRStrict` it is at most `StrictCR.ksAvgStrict` (`StrictCR.ksAvgBE_le_strict`), which
 the `_hm96` forms state (`Binding/E2E.lean`).
@@ -29,10 +33,10 @@ the `_hm96` forms state (`Binding/E2E.lean`).
 audit, the link theorem and knowledge soundness. Each piece not yet proved is a named hypothesis (`ASSUMPTIONS.md`,
 The headline, gives each one's kind):
 * `hExec`: the executable verifier's acceptance implies the model's, which the verifier's refinement theorem gives;
-* `dp : DerivedPlaces`: each drawn unit's place in its table, for the rows the verifier derives. For the program's
+* `dp : DerivedPlaces`: each sampled proof block's place in its table, for the rows the verifier derives. For the program's
   circuit it is `ProgPlaces`: `placed`, the table's statement holds the unit's rows (`placement_of_setupH` for the rows
   `Rows.ofNet` reads off setupH's net, and W6, that those are the program's), and `aliased` (`Layout.Aliased`);
-* `hConst : ConstCols`: at each drawn unit's place, only the constant's column sits on a gate of `ones`. No unit's input
+* `hConst : ConstCols`: at each sampled proof block's place, only the constant's column sits on a gate of `ones`. No unit's input
   column reads a constant, a fact of the circuit's wiring. With it the committed values carry 1 on `ones`: the
   committed transcript is public there (`Xpub`, `FlockPublic.lean`), since every satisfying message decodes the constant
   to 1;
@@ -41,6 +45,8 @@ The headline, gives each one's kind):
   committed transcript is 0 there, so the profile is about the zero padding at 0. This is the zero's binding;
 * `vb : ValueBinding`: the binding of wires to registered commit strings, already named on `main`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -52,13 +58,13 @@ local notation "𝔽" => FlockLevel3.GF128
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : Law n}
 
-/-- **Each drawn unit's place in its table, for the rows the verifier derives** (named: 1d, 1e, S4). `unitRows u` is
+/-- **Each sampled proof block's place in its table, for the rows the verifier derives** (named: 1d, 1e, S4). `unitRows u` is
 unit `u`'s rows as the verifier derives them: `Rows.compose` of `derive` on its types (1d). -/
 structure DerivedPlaces (unitRows : Fin n → FlockSoundness.Rows) where
   place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u
@@ -69,7 +75,7 @@ constants read, every unit wrong on the program's Boolean circuit `CB` (partitio
 rows, the audit's circuit. `proj` reads the Boolean circuit's wires off the rows' columns. The end-to-end theorems don't
 take it: they are about the rows' circuit. `UProg.rowsL1` proves it for every program of units over circuit types, which
 carries `UProg.flock_e2e_count` and `UProg.flock_e2e_drawn` to the Boolean circuit. -/
-def RowsL1 {CB : Circuit} (PB : Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (ones : Finset (Fin C.N)) :
+def RowsL1 {CB : Verity.Boolean.Circuit} (PB : Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (ones : Finset (Fin C.N)) :
     Prop :=
   ∀ vals, (∀ g ∈ ones, vals g = true) → PB.wrong (proj vals) ⊆ P.wrong vals
 
@@ -97,7 +103,7 @@ theorem flock_e2e_count
       (P.loweringSoundB_of_place plan tab dp.place) hk hRw hM hρ hr ht K σ hCR)
 
 /-- **The end-to-end drawn-unit bound (skeleton).** If `execAccept` holds (an event that implies the model's
-acceptance), the probability that a drawn unit of the committed circuit is wrong at the committed values (`Xpub`, as in
+acceptance), the probability that a sampled proof block of the committed circuit is wrong at the committed values (`Xpub`, as in
 `flock_e2e_count`) is at most `ε_ks(σ) + δ_link`. -/
 theorem flock_e2e_drawn
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
@@ -127,8 +133,8 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- **Each drawn unit's place in its table, for the program's circuit** (named). Unit `u` is an instance of its rows
-`p.rows u` (`inst`; `Prog.isRowsUnit` gives one), and the statement of the table it is drawn into holds those rows in
+/-- **Each sampled proof block's place in its table, for the program's circuit** (named). Unit `u` is an instance of its rows
+`p.rows u` (`inst`; `Prog.isRowsUnit` gives one), and the statement of the table it is sampled into holds those rows in
 block `o` at the columns `col`:
 * `placed`: the statement's level-0 matrices hold `p.rows u` there, up to other matrices every satisfying witness
   satisfies (`PlacedSat`, as at a pinned output's row). From the executable's accept step,
@@ -157,7 +163,7 @@ def ProgPlaces.derived (pp : ProgPlaces p outs plan tab) : (p.partition outs).De
 variable (p outs plan tab) {D : Type} [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {L : Law n}
 
 /-- **The end-to-end count curve on the circuit of the statement's rows.** `flock_e2e_count` at `C = p.circuit outs`,
-each unit its template's rows, with each drawn unit's place from `ProgPlaces`: if `execAccept` holds, the probability
+each unit its template's rows, with each sampled proof block's place from `ProgPlaces`: if `execAccept` holds, the probability
 that at least `K` units of the program are wrong at the committed values is at most `miss_L(K) + ε_ks(σ) + δ_link`. -/
 theorem _root_.FlockSoundness.Prog.flock_e2e_count
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)

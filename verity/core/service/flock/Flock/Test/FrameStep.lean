@@ -3,7 +3,12 @@
 coins passes against itself and owes them; a second round, coins for no round, coins of another count and an earlier
 rep's coins after the first round are refused; and `run` ends at the first answer that ends the rep.
 -/
-import Flock.Firewall.Frame
+module
+
+public import Flock.Firewall.Frame
+meta import Flock.Firewall.Frame
+
+@[expose] public section
 
 namespace Flock.Test.FrameStep
 

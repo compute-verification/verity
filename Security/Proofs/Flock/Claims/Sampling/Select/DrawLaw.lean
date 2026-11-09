@@ -1,26 +1,68 @@
-import Proofs.Flock.Claims.Sampling.KS
-import Proofs.Flock.Claims.Sampling.Session
-import Proofs.Flock.Claims.Sampling.Select.Misses
+module
+
+public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.Claims.Sampling.Select.Misses
+public import Proofs.Flock.Claims.Sampling.Session
+public import Properties.Spot.Draw
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.Prob
+import VCVio.Prelude.Core
 
 /-!
-# The draw law from the deployed draw (`Claims.Sampling.DrawLaw`)
+# The sampling design from the deployed sample (`Claims.Sampling.DrawLaw`)
 
 * `Design.Pa_empty`: a well-formed design has `P_a(∅) = 1`.
-* `allSlots`, `drawChecked`: every slot of a layout, and the deployed draw's checked slots, `Slots.select`'s or, where
+* `allSlots`, `drawChecked`: every slot of a layout, and the deployed sample's checked slots, `Slots.select`'s or, where
   it is refused (the run rejects), every slot.
 * `Partition.shape`: each class's strata sizes, in proof blocks; `P_a`, the slots and the design's well-formedness read
   only it (`Design.Pa_of_shape`, `Partition.blocks_length_of_shape`, `Design.wellFormed_of_shape`).
-* `DrawSlots`: the deployed draw is `Slots.select`'s on a layout of the statement's partition's shape and on its design,
+* `DrawSlots`: the deployed sample is `Slots.select`'s on a layout of the statement's partition's shape and on its design,
   from uniform bytes of the coins.
 * `drawLaw_of_slots`: `DrawLaw` there, from `drawMisses`.
 -/
 
-open SampledProofs
+@[expose] public section
+
+open Spot
 open Lean (Json)
 
 namespace Claims.Sampling
 
-open Claims Finset Properties.SampledProofs Properties.SampledProofs.SecurityProofs
+open Claims Finset Properties.Spot Properties.Spot.SecurityProofs
 
 /-! ## `P_a(∅)` on a well-formed design -/
 
@@ -69,7 +111,7 @@ theorem Design.Pa_empty (d : Design) (P : Partition) (h : d.WellFormed P) : d.Pa
 
 /-! ## A partition's shape -/
 
-/-- **A partition's shape**: each class's strata sizes, in proof blocks (`strataSizes`). The design and the draw read a
+/-- **A partition's shape**: each class's strata sizes, in proof blocks (`strataSizes`). The design and the sample read a
 partition only through it: its slots, `P_a` and the design's well-formedness. -/
 def Partition.shape (P : Partition) : List (List ℕ) := P.classes.map strataSizes
 
@@ -120,7 +162,7 @@ theorem Design.wellFormed_of_shape (d : Design) {P Q : Partition} (h : P.shape =
   unfold Design.WellFormed
   rw [hl, forall_zip_of_shape _ _ _ h]
 
-/-! ## The deployed draw's checked slots -/
+/-! ## The deployed sample's checked slots -/
 
 /-- Every slot of a layout, in order. -/
 def allSlots (l : Slots.Layout) : Array ℕ := Array.range l.blocks.size
@@ -140,7 +182,7 @@ theorem size_checked_le (l : Slots.Layout) (proved : Array ℕ) :
   simp only [Slots.checked, Array.toList_map, Array.toList_filter, List.length_map]
   exact List.filter_sublist.length_le.trans (by simp)
 
-/-- **The slots the deployed draw checks** on the bytes `src`: `Slots.select`'s, and every slot of the layout `l` where
+/-- **The slots the deployed sample checks** on the bytes `src`: `Slots.select`'s, and every slot of the layout `l` where
 it is refused, where the run rejects. -/
 def drawChecked (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (src : ByteArray) : Array ℕ :=
@@ -157,11 +199,11 @@ theorem index_of_mem {c : Array ℕ} {n : ℕ} (hc : c.size ≤ n) {u : ℕ} (hu
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
 
-/-- **The deployed draw is `Slots.select`'s**: on a statement that parses and whose query evaluates, the verifier's own
+/-- **The deployed sample is `Slots.select`'s**: on a statement that parses and whose query evaluates, the verifier's own
 program `d` (its parse of the statement's descriptor), query, selection rule, work table and closure map, whose layout
 `l` has the statement's partition's shape
 (`Partition.shape`: its strata's sizes in proof blocks, in their classes; the blocks' gates are the partition's) and
-whose design is the statement's; `L` bytes of the coins, uniform when the coins are; and the checked slots the draw's
+whose design is the statement's; `L` bytes of the coins, uniform when the coins are; and the checked slots the sample's
 on them (`drawChecked`). -/
 def DrawSlots (D : Deploy Coin Col T) : Prop :=
   ∀ x s Pt, D.parse x = some s → D.partition s = some Pt →
@@ -172,8 +214,8 @@ def DrawSlots (D : Deploy Coin Col T) : Prop :=
       (∀ E : (Fin L → Fin 256) → Prop, Pr (fun c => E (bytes c)) = Pr E) ∧
       ∀ c, D.checked x c = (drawChecked rule d query table cm l (bytesOf (bytes c))).toList
 
-/-- **The draw law from the deployed draw**: where the draw is `Slots.select`'s on uniform bytes (`DrawSlots`), its
-miss probability at fixed first-stage coins averages at most `P_a(B)` (`drawMisses`); a refused draw checks every slot,
+/-- **The sampling design from the deployed sample**: where the sample is `Slots.select`'s on uniform bytes (`DrawSlots`), its
+miss probability at fixed first-stage coins averages at most `P_a(B)` (`drawMisses`); a refused sample checks every slot,
 so it misses no nonempty `B`, and a well-formed design has `P_a(∅) = 1`. The partition is read through its shape. -/
 theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D := by
   intro x s Pt hx hP hin B hB

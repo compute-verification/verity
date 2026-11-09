@@ -1,4 +1,8 @@
-import Proofs.Flock.Recursive.Target
+module
+
+public import Proofs.Flock.Recursive.Target
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 
@@ -19,6 +23,8 @@ openings with their salts (`tableTape`).
 * `flockInnerCL_rejects_short`: `flockInnerCL` accepts no transcript of at most `r` rounds, the rounds `Inner.game`
   plays: each of them ends with a coin, and the table ends with the openings' message.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.InnerAccepts
 
@@ -96,7 +102,7 @@ end game
 /-! ## A rep's tape -/
 
 /-- A compiled rep starts with the zerocheck's first coin, so it never returns at once. -/
-theorem repC_ne_ret (r : ℕ) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
+theorem repC_ne_ret (r : ℕ) (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim 𝔽 S.m)) (p : PendL 𝔽 Dig) : repC (D := Dig) execArith r S sch hm extra ≠ .ret p := by
   unfold repC
   exact exact_bind_ne_ret (zerocheck_exact execArith S.m) (by simp [zcShape]) _ _
@@ -112,7 +118,7 @@ def RepTape (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (n : ℕ) 
 
 /-- **A rep's run on its messages and coins is a run on one tape** that takes steps of its spine's kinds, with those
 messages and coin steps: `repShape` places the coins among the messages. -/
-theorem playsT_of_tape (r : ℕ) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
+theorem playsT_of_tape (r : ℕ) (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim 𝔽 S.m)) {ms : List Game.Msg} {cs : List (Array F128)} {pend : PendL 𝔽 Dig}
     {ts : List Game.Step} (h : Plays fOf (repC execArith r S sch hm extra) ms cs pend)
     (hk : ts.map kindOf <+: repShape 𝔽 𝕂 Dig S.m S.kLog extra.length sch)
@@ -161,7 +167,7 @@ theorem inner_accepts_of_reps (cls : HClass) (regs : List (Region cls.kLog (cls.
     (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hS : M.toStatement regs = S)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (pts : Fin 2 → Fin cls.mPts → 𝔽)
-    (sess : Session)
+    (sess : RunRecord)
     (hext : ExtraRealizes st S sess.points (extraClaims S cls.ptLocal cls.mPts pts))
     (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)
@@ -233,7 +239,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 omit [Fintype K] in
 /-- Every run of `tableAfterL` ends with the openings' message. -/
 theorem tableAfterL_last (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : Model.Statement) (sch : FlockSoundness.Accounting.Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) {ts : List Game.Step} {out : OutCL F D Sl}
     (h : PlaysT (tableAfterL A H E Lf S sch hm ptLocal mPts cap₀ pts) ts out) :
     ∃ l os, ts = l ++ [.inl ⟨Opens F D × Salts Sl, os⟩] := by
@@ -249,7 +255,7 @@ theorem tableAfterL_last (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
 omit [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)] in
-/-- On a nonempty transcript of rounds `j, …` that all draw coins, the schedule's last step is a coin. -/
+/-- On a nonempty transcript of rounds `j, …` that all sampling coins, the schedule's last step is a coin. -/
 theorem schedSteps_last : ∀ (j : ℕ) (t : List (List (SMsg T) × ((k : Fin r) → CT k))), t ≠ [] →
     j + t.length ≤ r → ∃ l x, schedSteps T CT j t = l ++ [.inr x]
   | _, [], h, _ => absurd rfl h
@@ -267,7 +273,7 @@ theorem schedSteps_last : ∀ (j : ℕ) (t : List (List (SMsg T) × ((k : Fin r)
 coin, and every run of the table after the link points ends with the openings' message. -/
 theorem flockInnerCL_rejects_short (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
-    (sch : Accounting.Schedule) (M : Hidden cls) (t : List (List (SMsg T) × ((k : Fin r) → CT k)))
+    (sch : FlockSoundness.Accounting.Schedule) (M : Hidden cls) (t : List (List (SMsg T) × ((k : Fin r) → CT k)))
     (ht : t.length ≤ r) : ¬ (flockInnerCL T CT A H E Lf cls regs sch).accepts M t := by
   rw [flockInnerCL_accepts]
   rintro ⟨cap₀, pts, ts, out, hs, hp, -⟩

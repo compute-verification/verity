@@ -184,7 +184,7 @@ def _apart(d: Path, w: int, adv=None) -> str:
     salts = [(hashlib.sha512(b"apart %d %d" % (w, i)).digest() * 4)[:k] for i in range(len(rows))]
     binding = hashlib.sha512(chain.canonical_json({"scheme": reg["scheme"],
                                                    "compiler": reg["binding"]["compiler"]})).digest()
-    root = chain.AC.register(rows, reg["row_bits"], binding, salts).root.hex()
+    root = chain.AC.commit(rows, reg["row_bits"], binding, salts).root.hex()
     reg["binding"]["advice"]["root"] = root
     (d / "private").mkdir(parents=True)
     (d / "registration.json").write_text(json.dumps(reg))
@@ -490,7 +490,7 @@ def _reregister(d: Path, data: bytes) -> None:
     salts = [(hashlib.sha512(b"lied %d" % i).digest() * 4)[:k] for i in range(len(rows))]
     binding = hashlib.sha512(chain.canonical_json({"scheme": reg["scheme"],
                                                    "compiler": reg["binding"]["compiler"]})).digest()
-    reg["binding"]["advice"]["root"] = chain.AC.register(rows, reg["row_bits"], binding, salts).root.hex()
+    reg["binding"]["advice"]["root"] = chain.AC.commit(rows, reg["row_bits"], binding, salts).root.hex()
     (d / "registration.json").write_text(json.dumps(reg))
     (d / "private" / "opening.json").write_text(json.dumps(opening | {"advice": data.hex(),
                                                                       "salts": [s.hex() for s in salts]}))
@@ -696,7 +696,7 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
             f"({tie_why})") in md
     assert any(x.startswith("N2 on the advice profile") for x in r["stubbed"])
     at = e2e.where({"honest": {"dir": runs / "honest", "gate": None}}, "vy-nebius-1:18080")
-    assert at["where"].startswith("off the prover's node: better than the loopback, though not yet the auditor host")
+    assert at["where"].startswith("off the developer's node: better than the loopback, though not yet the auditor host")
     assert any(x.startswith("Auditor host: the certifier ran on another node") for x in chain.stubs(at, True))
     (tmp_path / "peers").write_text("# machine: ssh\nvy-nebius-2 -i k research@10.0.0.2\n")
     with pytest.raises(SystemExit, match="no vy-nebius-1 in"):

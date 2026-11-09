@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# One-stage audit, run A7, on a CPU machine: the requirement's plan and memory-map units under the stratified law, wired to
-# the remote bandwidth audit's ledger (a7.py), whose check 3 on each drawn receipt is proved by the check-3 units
+# One-stage audit, run A7, on a CPU machine: the requirement's plan and memory-map units under the stratified sampling design, wired to
+# the remote bandwidth audit's ledger (a7.py), whose check 3 on each sampled receipt is proved by the check-3 units
 # (`remote_bandwidth.opening`), on hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean
-# flock-verify, cached under $A7_CACHE). From a clone, since the verifier of record builds the sampled-proofs Lean in the
+# flock-verify, cached under $A7_CACHE). From a clone, since the verifier builds the sampled-proofs Lean in the
 # tree:
 #   A7_MEM_GB=96 bash benchmarks/one_stage/a7.sh
 #   (a job run from a clone of the tree)
@@ -18,7 +18,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 log "a7: k ${A7_K:-default}, steps ${A7_STEPS:-default}, samples ${A7_SAMPLES:-default}"
 "$PY" benchmarks/one_stage/a7.py --bin "$BIN" --lean "$LEAN" --out "$W/a7" ${A7_K:+--k "$A7_K"} ${A7_STEPS:+--steps "$A7_STEPS"} \

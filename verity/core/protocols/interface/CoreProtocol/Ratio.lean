@@ -3,7 +3,13 @@ Exact non-negative rationals, for probabilities and δ. Canonical JSON carries n
 refuses one), so a ratio is written as a string in Python's `str(Fraction)` form: `"n/d"` in lowest terms, or `"n"` when
 the denominator is 1.
 -/
-import Flock.Bytes
+module
+
+public import Flock.Bytes
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 

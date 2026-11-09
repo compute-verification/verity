@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "extra == 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
@@ -38,6 +38,7 @@ members = [
     "verity-difftest",
     "verity-exact-kit",
     "verity-flock",
+    "verity-graph",
     "verity-lean-audit",
     "verity-machine-model",
     "verity-native-peak",
@@ -2223,6 +2224,12 @@ requires-dist = [
 name = "verity-cli"
 version = "0.0.0"
 source = { editable = "tools/verity/cli" }
+dependencies = [
+    { name = "verity-graph" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
 
 [[package]]
 name = "verity-commit-slots"
@@ -2309,7 +2316,7 @@ requires-dist = [
 [[package]]
 name = "verity-core-sampled-proofs"
 version = "0.0.0"
-source = { virtual = "verity/core/service/sampled_proofs" }
+source = { virtual = "verity/core/service/spot" }
 dependencies = [
     { name = "hypothesis" },
 ]
@@ -2353,8 +2360,12 @@ dependencies = [
     { name = "blake3" },
     { name = "numpy" },
     { name = "verity" },
-    { name = "verity-numerical" },
     { name = "verity-vllm" },
+]
+
+[package.optional-dependencies]
+bench = [
+    { name = "verity-numerical" },
 ]
 
 [package.metadata]
@@ -2362,9 +2373,15 @@ requires-dist = [
     { name = "blake3", specifier = ">=1.0" },
     { name = "numpy" },
     { name = "verity", editable = "." },
-    { name = "verity-numerical", editable = "benchmarks/numerical" },
+    { name = "verity-numerical", marker = "extra == 'bench'", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+provides-extras = ["bench"]
+
+[[package]]
+name = "verity-graph"
+version = "0.0.0"
+source = { editable = "tools/verity/graph" }
 
 [[package]]
 name = "verity-lean-audit"
@@ -2615,12 +2632,14 @@ version = "0.1.0"
 source = { editable = "integrations/vllm" }
 dependencies = [
     { name = "numpy" },
-    { name = "research" },
     { name = "verity" },
     { name = "verity-config" },
 ]
 
 [package.optional-dependencies]
+research = [
+    { name = "research" },
+]
 torch = [
     { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" } },
 ]
@@ -2628,12 +2647,12 @@ torch = [
 [package.metadata]
 requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
-    { name = "research", editable = "tools/research" },
+    { name = "research", marker = "extra == 'research'", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
     { name = "verity-config", editable = "tools/config" },
 ]
-provides-extras = ["torch"]
+provides-extras = ["torch", "research"]
 
 [[package]]
 name = "z3-solver"

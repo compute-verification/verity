@@ -1,6 +1,42 @@
+module
+
+public import Batteries.Data.ByteArray
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Soundness.Audit.Periods
+public import Properties.Pous.Period
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Game
 import Proofs.Pous.Period
-import Proofs.Flock.Soundness.Audit.Periods
-import Proofs.Flock.Claims.Sampling.Draws
 
 /-!
 # PoUS pooled over `U` windows: how many windows can be accepted short
@@ -8,7 +44,7 @@ import Proofs.Flock.Claims.Sampling.Draws
 `PeriodHeld` bounds one window: at every value of the other audits' coins, the verifier accepts the window's PoUS audit
 with no break in its data while the capacity account held fewer than `S · len` bit-ticks (`ShortAccepted`) with
 probability at most `p = δ + ε_max` (`1% + 2^-128`) over the window's capacity coins. Over `U` windows whose capacity
-coins are drawn independently, window after window, the monitoring-period step (`FlockSoundness.Audit.Periods`) pools
+coins are flipped independently, window after window, the monitoring-period step (`FlockSoundness.Audit.Periods`) pools
 it, given that each window is fixed before its own capacity coins (`FixedBefore`): window `u`'s joint run, its audit
 and the other audits' coins are functions of the earlier windows' capacity coins, so `PeriodHeld` applies to window `u`,
 at its strategy under the device model and the instantiation (`DeviceModel`, `Instantiates`), whatever the earlier
@@ -25,6 +61,8 @@ window's capacity coins, where it is accepted, and full on the rest meets `Perio
 every window and is short in a binomial `(U, p)` number of them. So at least `M` short accepted windows out of `U` is
 unlikely only for `M` above `p · U`, and `p^M` bounds only the windows short whatever their capacity coins.
 -/
+
+@[expose] public section
 
 namespace Pous.Period.SecurityProofs
 

@@ -1,5 +1,38 @@
-import NetworkCheck.Period
-import Definitions.NetworkCertifier.SampledAudit
+module
+
+public import NetworkCheck.Period
+public import Definitions.NetworkCertifier.SampledAudit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope
@@ -28,6 +61,8 @@ an input node, reading exactly the gates its operands name, returning the gates 
   a statement the scope check takes, whose descriptor is the accepted scan's canonical bytes, is in the sampled audit's
   scope at `layOf` and `T` (`ScopeAcc`). `Proofs.Properties.NetworkScan` derives it from `ScanFits`.
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkScan
 
@@ -71,7 +106,7 @@ def Flattens (P : Flock.Program.Prog) (C : Claims.Sampling.Prog) : Prop :=
       Flock.Program.resolve P P.rootScope ((P.defs[P.root]!).body.ret.get j) = .ok g
 
 /-- **The deployment's statements are their descriptors flattened**: every statement `D` parses has a descriptor
-C-Flock decodes (`Flock.Program.decode`, as the sampled verifier's `SampledProofs.Program.parse` does), and its gates
+Flock decodes (`Flock.Program.decode`, as the sampled verifier's `Spot.Program.parse` does), and its gates
 are that Program's (`Flattens`). -/
 def StmtFlattens {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) : Prop :=
   ∀ x s, D.parse x = some s → ∃ P, Flock.Program.decode ⟨s.desc.toArray⟩ = .ok P ∧ Flattens P s.prog

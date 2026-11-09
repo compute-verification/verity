@@ -1,5 +1,11 @@
+module
+
+public import Definitions.Pouw.Receipt.Duo
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.NormNum.Ineq
+import Mathlib.Tactic.NormNum.Pow
+import Mathlib.Tactic.SetLike
 import Proofs.Pouw.Receipt.Duo
-import Mathlib.Data.Fin.Tuple.Basic
 
 /-!
 # duo's step is a bijection of the state, and a run binds each word at every state
@@ -10,6 +16,8 @@ One step `s ↦ duoWord k a r s d` is injective for every key (`duoWord_state_in
 one word `i` of a run by `x`: the words before `i` reach one state, the step at `i` is injective in `x`, and the words
 after it are a bijection, so the final state determines `x` (`duoRun_update_injective`).
 -/
+
+@[expose] public section
 
 namespace Pouw.ReceiptProofs
 

@@ -1,15 +1,48 @@
-import Proofs.Flock.Claims.Bridge.Custody
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
+module
+
+public import Proofs.Flock.Claims.Bridge.Custody
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # `Deploy.V false`'s custody checks, as the old theorems' `RecordsLiveJ`
 
 `Custody` without `--zk`. The old plain theorems bound flock-verify's acceptance of the transcript a writer `wr` makes
 of the live session's outcome, under `RecordsLiveJ I dj Jf wr` (`DecodeZLJ`): the record `verify` accepts carries the
-draw, the outcome's proof files, link points, roots and rounds. `Deploy.V false` takes the record in its last message
+sample, the outcome's proof files, link points, roots and rounds. `Deploy.V false` takes the record in its last message
 and checks its custody with the same checks as `--zk` (`checks`, `custody`).
 
-* `setupOf_plainInputs`: `verify`'s setup of a record whose draw is the statement's is `Deploy.V`'s, where the statement
+* `setupOf_plainInputs`: `verify`'s setup of a record whose sample is the statement's is `Deploy.V`'s, where the statement
   carries no `--public-inputs`.
 * `RecordsLiveAtP`, `recordsLiveAtP_of_checks`: `RecordsLiveJ` at one outcome, and where the checks pass, the last
   message's record and proof files record the run's live outcome (`viewOf`).
@@ -18,13 +51,15 @@ and checks its custody with the same checks as `--zk` (`checks`, `custody`).
   `verify` accepts what it writes for the run's outcome (`Accepts`), the event the old theorems bound.
 -/
 
+@[expose] public section
+
 namespace Claims.Bridge.CustodyPlain
 
 open _root_.Flock FlockDeploy FlockSoundness FlockSoundness.Discharge Claims.Bridge.Custody
 open FlockSoundness.Refine (ebind_ok ptsOf)
 open Lean (Json)
 
-/-- **`verify`'s setup of a record whose draw is the statement's** is `Deploy.V`'s, where the statement is plain and
+/-- **`verify`'s setup of a record whose sample is the statement's** is `Deploy.V`'s, where the statement is plain and
 carries no `--public-inputs` (`Exec.setupOf` reads none). -/
 theorem setupOf_plainInputs {r : Readable.Read} {spec : SessionSpec} {sts : Array Stmt} {record : String}
     (hs : r.setup = .ok (spec, sts)) (hzk : r.zk = false) (hpi : r.publicInputs = none)
@@ -57,7 +92,7 @@ theorem verify_nil_plain (spec : SessionSpec) (tabs : Array Setup) (record : Str
   obtain ⟨_, h', _⟩ := ebind_ok h
   cases h'
 
-/-- **`RecordsLiveJ` at one outcome**: where `verify` accepts the transcript `t`, its record carries the draw `d`, its
+/-- **`RecordsLiveJ` at one outcome**: where `verify` accepts the transcript `t`, its record carries the sample `d`, its
 proof files are the outcome `o`'s, and the session it decodes to has `o`'s link points and, at each of `o`'s tables,
 `o`'s `root_B` and rep streams' rounds. -/
 def RecordsLiveAtP (I : Exec.Inputs) (d : Json) {J mPts : ℕ} (o : Tables.LiveOutJ J mPts) (t : Exec.Transcript) :
@@ -77,7 +112,7 @@ theorem recordsLiveJ_iff {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Fin
     DecodeZLJ.RecordsLiveJ (mPts := mPts) I dj Jf wr ↔ ∀ S R o, RecordsLiveAtP I (dj S) o (wr S R o) := Iff.rfl
 
 /-- **Custody gives `RecordsLiveAtP`**: where `Deploy.V false`'s checks pass on a plain statement that sets up at its
-draw `d` with no `--public-inputs`, and the record's draw is the statement's, the last message's record and proof
+sample `d` with no `--public-inputs`, and the record's sample is the statement's, the last message's record and proof
 files are a record of the run's live outcome (`viewOf`), at any `J` of the session's tables. -/
 theorem recordsLiveAtP_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
@@ -114,8 +149,8 @@ theorem recordsLiveAtP_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stm
     simp [withSha, hsha _ rfl]
 
 /-- **An accepting decision of `Deploy.V false` at SHA-512 is an accepting `verify` on a record of its live outcome**:
-on a statement with no `--public-inputs` of draw `d`, the last message's record and proof files are accepted by `verify`
-(`Accepts`) at the statement's inputs, and record the run's live outcome `viewOf` (`RecordsLiveAtP`): the record's draw
+on a statement with no `--public-inputs` of sample `d`, the last message's record and proof files are accepted by `verify`
+(`Accepts`) at the statement's inputs, and record the run's live outcome `viewOf` (`RecordsLiveAtP`): the record's sample
 is the statement's as a value (`recordDraw_of_decide`). -/
 theorem accepts_of_decide_plain {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
@@ -136,7 +171,7 @@ theorem accepts_of_decide_plain {x : Claims.Msg} {as : List Claims.Msg} {cs : Li
 /-! ## The writer that reads the record out of the last message -/
 
 open Classical in
-/-- **The record writer of `Deploy.V false`'s runs**: at the live outcome `o` of draw `S`, a transcript `verify` accepts
+/-- **The record writer of `Deploy.V false`'s runs**: at the live outcome `o` of sample `S`, a transcript `verify` accepts
 that records `o` (`RecordsLiveAtP`), where one exists, else a session without proof files, which `verify` refuses
 (`verify_nil_plain`). A decided run whose last message's record and proof files `verify` accepts is such a transcript
 for its outcome (`accepts_wrP`). -/
@@ -160,7 +195,7 @@ theorem recordsLiveJ_wrP {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Fin
   · exact fun h => absurd h (not_accepts_nil _ _)
 
 /-- **The old event holds on `Deploy.V false`'s accepting runs**: where its decision accepts at SHA-512, on a statement
-with no `--public-inputs` of draw `dj S`, `verify` accepts what `wrP` writes for the run's live outcome at `Jf S R ≤`
+with no `--public-inputs` of sample `dj S`, `verify` accepts what `wrP` writes for the run's live outcome at `Jf S R ≤`
 the session's tables. -/
 theorem accepts_wrP {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ)
     {S : Finset (Fin n)} {R : Reg} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}

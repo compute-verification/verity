@@ -1,6 +1,26 @@
-import Proofs.Flock.Soundness.TmplValueUnit
-import Proofs.Flock.Soundness.ExecCircuit
-import Flock.HmRow
+module
+
+public import Flock.TmplComputes
+public import Proofs.Flock.Soundness.ExecCircuit
+public import Proofs.Flock.Soundness.TmplValue
+public import Proofs.Flock.Soundness.TmplValueUnit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.TmplUnrollAt
+import VCVio.Prelude.Core
 
 /-!
 # A templated file's unit, at its committed net
@@ -15,6 +35,8 @@ and are zero off `posMap`'s image (`TmplUnit.rowsSat`). With the constant at 1, 
 under one of the root's calls past the input rows, they carry its spec on its bound inputs (`TmplUnit.computes`, the
 committed net's `unit_computes`). No verifier path reads this file.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockSoundness.Audit
 
@@ -31,7 +53,8 @@ theorem parseTmpl_cases' {tags : Flock.Tags} {bytes : ByteArray} {tables : List 
   unfold HmOut.parseTmpl at h
   dsimp only at h
   obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
-  obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
+  split at h
+  · cases h
   obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
   obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
   split at h

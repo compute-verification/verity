@@ -1,13 +1,17 @@
-import Definitions.Core.Scalar
+module
+
+public import Definitions.Core.Scalar
 
 /-!
-# Vectors: the scalar primitives of `verity.ml.scalar`
+# Vectors: the scalar primitives of `verity.ml.circuits.ops.scalar`
 
-Each theorem is one input of a primitive of `verity.ml.scalar` and the word its Python returns, checked by the kernel
-against `Verity.Scalar`. `packages/verity/tests/ml/test_lean_scalar_vectors.py` checks the same vectors against
+Each theorem is one input of a primitive of `verity.ml.circuits.ops.scalar` and the word its Python returns, checked by
+the kernel against `Verity.Scalar`. `verity/ml/circuits/ops/tests/test_lean_scalar_vectors.py` checks the same vectors against
 the Python, so a change on either side fails a build: the transcription cannot drift silently. Every operand is a word of
 its parameter's width.
 -/
+
+@[expose] public section
 
 namespace Verity.Scalar.Vectors
 

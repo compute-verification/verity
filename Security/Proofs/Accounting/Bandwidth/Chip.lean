@@ -1,5 +1,45 @@
-import Mathlib
-import Definitions.Accounting.Bandwidth
+module
+
+public import Definitions.Accounting.Bandwidth.Game
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # Chip programs: congruence, replay from a trace, and counting
@@ -8,6 +48,8 @@ import Definitions.Accounting.Bandwidth
 `replay_trace`: given the oracle, the run's queries are a function of the chip program and its trace, the bits device
 memory, side sources and regeneration answered with. The counting lemmas turn per-fiber bounds into bounds on `pr`.
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 
@@ -162,7 +204,7 @@ theorem card_line_le {X Y : Type} [Fintype X] [DecidableEq X] [Fintype Y] (x₀ 
 theorem pr_le_of_card {Ω : Type} [Fintype Ω] (P : Ω → Prop) [DecidablePred P] (d m : ℕ) (hd : d ≠ 0)
     (h : (Finset.univ.filter P).card * d ≤ m * Fintype.card Ω) : pr P ≤ (m : ℝ≥0∞) / d := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [Finset.filter_congr_decidable]
   refine ENNReal.div_le_of_le_mul ?_
   have hd' : (d : ℝ≥0∞) ≠ 0 := by simp [hd]
@@ -173,13 +215,13 @@ theorem pr_le_of_card {Ω : Type} [Fintype Ω] (P : Ω → Prop) [DecidablePred 
 
 theorem pr_mono {Ω : Type} [Fintype Ω] {P Q : Ω → Prop} (h : ∀ x, P x → Q x) : pr P ≤ pr Q := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   gcongr
   exact h _
 
 theorem pr_or_le {Ω : Type} [Fintype Ω] (P Q : Ω → Prop) : pr (fun x => P x ∨ Q x) ≤ pr P + pr Q := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [Finset.filter_congr_decidable, ← ENNReal.add_div]
   gcongr
   calc (((Finset.univ.filter (fun x => P x ∨ Q x)).card : ℕ) : ℝ≥0∞)
@@ -191,7 +233,7 @@ theorem pr_or_le {Ω : Type} [Fintype Ω] (P Q : Ω → Prop) : pr (fun x => P x
 theorem pr_exists_le {Ω ι : Type} [Fintype Ω] [Fintype ι] (P : ι → Ω → Prop) :
     pr (fun x => ∃ i, P i x) ≤ ∑ i, pr (P i) := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [Finset.filter_congr_decidable, ← ENNReal.sum_div]
   gcongr
   calc (((Finset.univ.filter (fun x => ∃ i, P i x)).card : ℕ) : ℝ≥0∞)

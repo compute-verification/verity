@@ -2,7 +2,8 @@
  "roots": ["PouwCheck", "PouwCheck.DifftestMain"],
  "exempt": {
   "PouwCheck.Main": "the pouw-check executable's entry point, one line; its command is Core.Protocol.main over PouwCheck.protocol, audited under PouwCheck",
-  "PouwCheck.LeafOwnMain": "the pouw-leaf-own-window executable's entry point, one line; its command is PouwCheck.LeafOwn.leafOwnCmd, audited under PouwCheck"
+  "PouwCheck.LeafOwnMain": "the pouw-leaf-own-window executable's entry point, one line; its command is PouwCheck.LeafOwn.leafOwnCmd, audited under PouwCheck",
+  "PouwCheck.PeriodMain": "the pouw-period executable's entry point, one line; its command is Core.Protocol.main over PouwCheck.Period.protocol, audited under PouwCheck"
  },
  "layers": {
   "PouwCheck.Json": {
@@ -63,8 +64,8 @@
     "PouwCommit.Draws",
     "PouwWindow.Rounds",
     "PouwCheck.Inputs",
-    "SampledProofs.ChallengerRecord",
-    "SampledProofs.ChallengerSession",
+    "Spot.ChallengerRecord",
+    "Spot.ChallengerSession",
     "Identity.Domains"
    ],
    "except": [],
@@ -78,7 +79,8 @@
   "PouwCheck.Credit": {
    "imports": [
     "Std.Data.HashMap",
-    "Flock.Keccak",
+    "Flock.Bytes",
+    "Flock.Hash",
     "Flock.Program",
     "Flock.RegKnown",
     "PouwCommit.Frame",
@@ -89,9 +91,10 @@
     "PouwCheck.Rounds",
     "PouwWindow.Draw",
     "PouwWindow.Rounds",
-    "SampledProofs.ChallengerSession",
-    "SampledProofs.PyJson",
-    "SampledProofs.Registered",
+    "Spot.ChallengerCoins",
+    "Spot.ChallengerSession",
+    "Spot.PyJson",
+    "Spot.Registered",
     "Identity.Domains"
    ],
    "except": [],
@@ -99,6 +102,11 @@
   },
   "PouwCheck.LeafOwn": {
    "imports": ["PouwCheck.Credit", "PouwWindow.RegFile"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwCheck.Period": {
+   "imports": ["CoreProtocol.Cli", "PouwCheck.Credit"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }

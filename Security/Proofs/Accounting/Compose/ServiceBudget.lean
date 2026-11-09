@@ -1,5 +1,8 @@
-import Definitions.Accounting.Guarantees.Compose
-import Proofs.Accounting.TS.Stages
+module
+
+public import Definitions.Accounting.Guarantees.Compose
+public import Proofs.Accounting.TS.Stages
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The service's window budget: proof
@@ -17,6 +20,10 @@ import Proofs.Accounting.TS.Stages
   by `1 + ν(L_F − p·W_F) + ν₀(L_0 − p0·W_0)`, and `SplitStages.LuckAt` with `lk ≤ p`, `lk0 ≤ p0` on every tile of
   positive weight gives `E[L_F] ≤ p·E[W_F]` and `E[L_0] ≤ p0·E[W_0]`, so its mean is at most `1`.
 -/
+
+@[expose] public section
+
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.Compose.Budget
 
@@ -76,7 +83,7 @@ theorem miss_le : ∀ (K N : ℕ) (B : Finset (Fin N)),
       by_cases hp : p ∈ B
       · rw [ite_eq_left hp, mul_zero]
         refine (prob_mono (q := fun _ : Equiv.Perm (Fin n) => False) fun e he => ?_).trans
-          (le_of_eq (by unfold prob; simp))
+          (le_of_eq (by unfold prob Claims.prUniform; simp))
         have := (forall_mem_subsetDraw _ _).mp he 0 (Nat.succ_pos K)
         rw [Equiv.Perm.decomposeFin_symm_apply_zero] at this
         exact this hp

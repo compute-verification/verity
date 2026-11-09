@@ -13,14 +13,14 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
     after    on the device: step s's A tables (`commit.s8_table`'s format, labels a/<s>/<w>), admit tables (the T / 16 words of
              the slots < m, s/<s>/<w>), z tables (each slot row's N int32 LE, z/<s>/<w>, domain 'z-table'), the a-step,
              admit-step and z-step trees and the round over the three ('round'); step s - 1's receipt trees (r/<s-1>/<w>); the
-             round root read back, recorded through `sampled_proofs.challenger.LiveRecord` before its coin opens
-             (the window's coins), the salt `h1tile.live_salt`, step s's seeds (`h1r_launch` version 0) into the buffer
+             round root read back, recorded through `spot.challenger.LiveRecord` before its coin opens
+             (the execution phase's coins), the salt `h1tile.live_salt`, step s's seeds (`h1r_launch` version 0) into the buffer
              step s + 1's launches read
 
-The window's coins are served_h1's (`coins.open_coins`, a live window of `ROUNDS` rounds at epoch 1): with
-``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the session the
-challenger's gate opened, and its secret: `coins.session`) the challenger off the node, one session a window, opened at
-the window's build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
+The execution phase's coins are served_h1's (`coins.open_coins`, a live execution phase of `ROUNDS` rounds at `epoch` 1): with
+``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the challenge phase the
+challenger's gate opened, and its secret: `coins.session`) the challenger off the node, one challenge phase per execution phase, opened at
+the execution phase's build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
 HOST:PORT (unchecked)`` or ``in-process (not certified)``).  Only the round's coin changes source: the salt, the seeds
 and what they read are the same either way.
 
@@ -29,7 +29,7 @@ With ``rc="side"`` (`patch`) no `h1f` launch computes receipts: after step s's c
 s - 1's (they read the slots step s + 1 overwrites).  What is committed, before which coin, and every receipt are the same.
 
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows (SERVE-H1 admits
-from its queue); the window's registration, queue commit and close are not run (once a window, not a step); a window is
+from its queue); the execution phase's registration, queue commit and close are not run (once an execution phase, not a step); an execution phase is
 the engine's life up to `ROUNDS` steps.  The z table and the third round leaf are this harness's rendering of the
 credit's form (a z table in the row-table format, a root per step before the coin); the credit fixes the kind, fields
 and labels.  Its stats, checks and verdict say form=beside (`forms.form_of`): not `forms.FORM_A`.
@@ -41,6 +41,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
@@ -54,10 +55,17 @@ for p in (ROOT / "benchmarks" / "pouw" / "served_h1", HERE):
 import coins as CO  # noqa: E402
 import commit as CM  # noqa: E402
 import credit as CR  # noqa: E402
-import forms as F  # noqa: E402
 import serve as SV  # noqa: E402
+
+import forms as F  # noqa: E402
 from h1c import H1C, Dom, Tab, unwords, words  # noqa: E402
 from h1r import H1R, Call  # noqa: E402
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from vllm import LLM
+    from vllm.v1.core.sched.output import SchedulerOutput
 
 SITES = ("self_attn.qkv_proj", "self_attn.o_proj", "mlp.gate_up_proj", "mlp.down_proj")
 MODEL = {"repo": "verity-int8/Llama-3.1-8B-INT8"}
@@ -83,11 +91,12 @@ class _F(C.Structure):
 
 
 class DitherState:
-    """A window's device state: per linear two parities of A, scale and z slots; the h1c sets (B tables once; per parity
+    """An execution phase's device state: per linear two parities of A, scale and z slots; the h1c sets (B tables once; per parity
     the A, admit and z tables, the step trees and the round); the receipts' call tables (one per parity, sharing one seeds
     and one receipts buffer) and the receipt trees; the `h1f` table and step struct; the live coins."""
 
-    def __init__(self, t: int, key: bytes, h1c_path: str, h1f_path: str, gate: bool, dev, rc: str = "fused"):
+    def __init__(self, t: int, key: bytes, h1c_path: str, h1f_path: str, gate: bool, dev: torch.device,
+                 rc: str = "fused") -> None:
         if rc not in RC_MODES:
             raise ValueError(f"receipts mode {rc!r}, not one of {RC_MODES}")
         self.t, self.key, self.dev, self.rc_mode = t, key, dev, rc
@@ -185,16 +194,16 @@ class DitherState:
         """Capture `names` in turn, each at the next step of m tokens once the one before has its receipts: its parity's
         A, scale and z slots and the y dump poisoned with 0xA5 before its forward, the receipts and seeds before they are
         written; "control" also with the no-write flags (`F_NW_TILES` on its step, `F_NW_UNITS` on the next), so the
-        transcript buffers keep the poison and `check` must refuse it."""
+        trace buffers keep the poison and `check` must refuse it."""
         self.arms, self.arm_m = list(names), m
         self.caps = {n: {} for n in names}
 
-    def _poison(self, ts) -> None:
+    def _poison(self, ts: Iterable[torch.Tensor]) -> None:
         for x in ts:
             x.view(torch.uint8).fill_(POISON)
 
     def _coins(self) -> None:
-        from verity.core.protocols.pouw.circuit import h1tile as HT
+        from verity.ml.protocols.pouw.circuit import h1tile as HT
         self.HT = HT
         self.coins = CO.open_coins(CO.session(), 1, ROUNDS)
         self.rounds = self.coins.rounds
@@ -239,7 +248,7 @@ class DitherState:
 
     def before(self, m: int) -> None:
         if m > self.t:
-            raise RuntimeError(f"a step of {m} tokens in a window of T = {self.t} slots")
+            raise RuntimeError(f"a step of {m} tokens in an execution phase of T = {self.t} slots")
         self.m = m
         self.flags = 0
         self.cap_step = self.cap_rc = None
@@ -339,9 +348,9 @@ class DitherState:
         self.s += 1
         self.steps += 1
         if self.s == ROUNDS:
-            raise RuntimeError(f"the window's {ROUNDS} rounds are spent")
+            raise RuntimeError(f"the execution phase's {ROUNDS} rounds are spent")
 
-    def _side_receipts(self, main, s: int, p: int, salt: bytes) -> None:
+    def _side_receipts(self, main: torch.cuda.Stream, s: int, p: int, salt: bytes) -> None:
         """Step s's seeds, units (`h1r_launch` version 2) and receipt trees on the side stream, after its coin, while the
         engine runs step s + 1.  The main stream first waits for step s - 1's: forward s + 1 overwrites the slots they
         read, and they share the seeds and receipts buffers; salt, base and step are per parity for the same reason."""
@@ -384,7 +393,7 @@ class DitherState:
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
 
-def _window(dev) -> DitherState:
+def _window(dev: torch.device) -> DitherState:
     global WIN
     if WIN is None:
         WIN = DitherState(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1f"], CFG["gate"], dev, CFG["rc"])
@@ -400,7 +409,7 @@ def fused_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Te
 
 
 @fused_mm.register_fake
-def _fused_mm_fake(xq, s_a, w, s_w, idx):
+def _fused_mm_fake(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, idx: int) -> torch.Tensor:
     return xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16)
 
 
@@ -413,12 +422,13 @@ def patch(t: int, h1c: str, h1f: str, key: bytes | None = None, gate: bool = Fal
     IV.register()
     orig_pw = IV.Int8PlainLinearMethod.process_weights_after_loading
 
-    def process_weights_after_loading(self, layer):
+    def process_weights_after_loading(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module) -> None:
         orig_pw(self, layer)
         self.dither_idx = index_of(self.prefix)
         REG[self.dither_idx] = (self.prefix, layer)
 
-    def apply(self, layer, x, bias=None):
+    def apply(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module, x: torch.Tensor,
+              bias: torch.Tensor | None = None) -> torch.Tensor:
         if bias is not None or x.dtype != torch.bfloat16:
             raise ValueError(f"{self.prefix}: the fused arm takes bf16 activations and no bias")
         lead, k = x.shape[:-1], x.shape[-1]
@@ -433,14 +443,14 @@ def patch(t: int, h1c: str, h1f: str, key: bytes | None = None, gate: bool = Fal
     IV.Int8PlainLinearMethod.apply = apply
 
 
-def hook(llm) -> DitherState:
-    """The step hook around the engine's runner (`execute_model`), and the window (built at the engine's first forward)."""
+def hook(llm: LLM) -> DitherState:
+    """The step hook around the engine's runner (`execute_model`), and the execution phase (built at the engine's first forward)."""
     from verity_vllm.engine import handle
     runner = handle.model_runner(llm)
     win = WIN if WIN is not None else _window(torch.device("cuda"))
     orig = runner.execute_model
 
-    def execute_model(so, *args, **kw):
+    def execute_model(so: SchedulerOutput, *args, **kw) -> Any:
         m = int(getattr(so, "total_num_scheduled_tokens", 0) or 0)
         if m:
             with torch.inference_mode():
@@ -518,7 +528,7 @@ def check(win: DitherState, lib_h1r: str, which: str = "gate", n_ref_units: int 
     doc["receipts_vs_h1r_bad"] = rc_bad
     doc["live_units"] = int(sum((min(m, t) + 31) // 32 * (n // 32) for n, _ in win.nk))
     # h1tile.reference on a few live units: z and receipt
-    import receipts as RC
+    from verity_vllm.protocols.pouw.h1 import receipts as RC
     refs = []
     rng = np.random.default_rng(s)
     for w in [0, 3, 2][:n_ref_units]:

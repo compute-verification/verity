@@ -1,14 +1,14 @@
-"""A8's cost points as observations of the one cost model (`verity.core.protocols.sampled_proofs.costfit`, fitted in
+"""A8's cost points as observations of the one cost model (`verity.core.protocols.spot.costfit`, fitted in
 benchmarks/sampling_plan, whose `inputs.py` holds these), and the times each session measured.
 
     python benchmarks/one_stage/a8_cost.py RUN [RUN ...] [--json]
 
 RUN is an A8 run's directory: its records in ``out/a8`` (`a8.py --points`, each session's ``cost/<arm>-k<k>-r<rep>``), and
 ``gpu-lease-usage.jsonl`` where `a8_gpu.sh` ran each prover process under a GPU lease. Per session it prints, in seconds
-and per drawn opening: the device phase (each proof rep's ``t.total``, what the prover's device, the GPU under ``--gpu``,
+and per sampled opening: the device phase (each proof rep's ``t.total``, what the prover's device, the GPU under ``--gpu``,
 spends on the proof), the prover's e2e less its wait on the verifier, e2e, the process's wall, the seconds it held its
 lease (the wall less the lease's wait, matched by the session's verifier port), and the process's CPU seconds. Then, of
-each leased run's design arm (``fw``), the `costfit.Observation`s: per (staged, drawn) units, prove the mean seconds its
+each leased run's design arm (``fw``), the `costfit.Observation`s: per (staged, sampled) units, prove the mean seconds its
 cold prover processes held the device, and stage the statement's staging. They carry no verify: a8.py times Lean's by
 wall, and the model's verify is CPU time.
 """
@@ -20,7 +20,7 @@ from dataclasses import asdict
 from pathlib import Path
 from statistics import mean
 
-from verity.core.protocols.sampled_proofs.costfit import Observation
+from verity.core.protocols.spot.costfit import Observation
 
 PARAMS = ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "P", "DR", "DP", "DV")
 

@@ -1,6 +1,7 @@
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.D1
-import Mathlib.Data.Fintype.Sum
+module
+
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.D1
 
 /-!
 # `D1.m1`: the named milestone instance (trusted; §3.2's derivation, tt-attacks §4, working decisions W4 and W6)
@@ -20,6 +21,8 @@ import Mathlib.Data.Fintype.Sum
 * **`W_ref`** is a parameter of `m1`. `m1Wref` is the explicit `H_ref` schedule of llm-shapes §3, with the
   per-(epoch, weight) and per-(epoch, weight, group) products apportioned to units by rows.
 -/
+
+@[expose] public section
 
 namespace Pouw.D1
 
@@ -85,12 +88,12 @@ def M1Shape (sh : Shape) : Prop := 2 ^ 12 ≤ sh.m ∧ sh.m ≤ 2 ^ 17 ∧ 16 �
 
 /-- The rows of `u`'s group `⌊u/16⌋` on its weight: `∑_{u' : ⌊u'/16⌋ = ⌊u/16⌋, w(u') = w(u)} m_{u'}`. -/
 def m1GroupRows (L : Layout) (u : ℕ) : ℕ :=
-  ∑ u' ∈ (range L.N).filter (fun u' => u' / 16 = u / 16 ∧ L.wid u' = L.wid u), (L.shape u').m
+  ∑ u' ∈ (range L.N).filter (fun u' => u' / 16 = u / 16 ∧ L.fixedId u' = L.fixedId u), (L.shape u').m
 
 /-- The milestone domain: milestone shapes, 64-bit weight ids, and at least `2^16` rows in each unit's group on its
 weight (hence on its weight). -/
 def m1Domain (L : Layout) : Prop :=
-  ∀ u < L.N, M1Shape (L.shape u) ∧ L.wid u < 2 ^ 64 ∧ 2 ^ 16 ≤ m1GroupRows L u
+  ∀ u < L.N, M1Shape (L.shape u) ∧ L.fixedId u < 2 ^ 64 ∧ 2 ^ 16 ≤ m1GroupRows L u
 
 /-- A unit's share, by rows and rounded up, of `work` spread over `rows` rows: `⌈work·m_u/rows⌉` (`0` if `rows = 0`). -/
 def rowShare (work mu rows : ℕ) : ℕ := (work * mu + rows - 1) / rows
@@ -114,7 +117,7 @@ def m1Wref (L : Layout) (u : ℕ) : ℕ :=
   let k := (L.shape u).k
   let n := (L.shape u).n
   m * k * n + 16 * m * k + 12 * m * k + 4 * m * k + 4 * m * k + 16 * m * k + 6 * 16 * m * n + 32 * m * n +
-    rowShare (16 * k * n) m (m1GroupRows L u) + rowShare ((16 + 20) * k * n) m (L.rowsOf (L.wid u)) +
+    rowShare (16 * k * n) m (m1GroupRows L u) + rowShare ((16 + 20) * k * n) m (L.rowsOf (L.fixedId u)) +
     576 * m + rowShare (576 * n) m (m1GroupRows L u)
 
 /-- The schedule's overhead bound on the domain, `1 + 233/2^16`. -/

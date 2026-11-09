@@ -1,8 +1,21 @@
-import Properties.Pous.EndToEndAt
+module
+
+public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.KeyedDraw
+public import Properties.Pous.EndToEndAt
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game
 import Proofs.Pous.EndToEnd
-import Proofs.Pous.P2.Rounds
-import Proofs.Flock.Soundness.KeyedDraw
 import Proofs.Pous.Obligation
+import Proofs.Pous.P2.Rounds
+import Proofs.Pous.Thm1.Theorem1iTimed
+import VCVio.Prelude.Core
 
 /-!
 # PoUS's ring game at any block count, proved
@@ -20,6 +33,8 @@ import Proofs.Pous.Obligation
   reads the per-round floor only at that `N`) from `P2RingRoundSecureWide`, and at Demo B's `N` with its state bound
   (`Pous.SecurityProofs.stateBound_p2ring_demo`).
 -/
+
+@[expose] public section
 
 namespace Pous.EndToEnd.SecurityProofs
 
@@ -89,8 +104,8 @@ theorem card_draws_le (N : ℕ) (hN : 0 < N) (I : Fin 105 → Fin N) :
   rw [hfil, Fintype.card_piFinset, h1, h2, ← Finset.prod_mul_distrib]
   exact Finset.prod_le_prod₀ (fun _ _ => Nat.zero_le _) fun j _ => card_draw_le N hN (I j).val
 
-/-- **A union bound over the draw**: if each value `i` is drawn (`d t i`) on at most a `1/|I|` share of `T`, any event
-`F` of the drawn value is at most as likely as under a uniform `i`. -/
+/-- **A union bound over the sample**: if each value `i` is sampled (`d t i`) on at most a `1/|I|` share of `T`, any event
+`F` of the sampled value is at most as likely as under a uniform `i`. -/
 theorem pr_draw_le {A T I : Type} [Fintype A] [Fintype T] [Fintype I] [Nonempty A] [Nonempty T] [Nonempty I]
     (d : T → I → Prop) [∀ t i, Decidable (d t i)]
     (hfib : ∀ i, (Finset.univ.filter fun t => d t i).card * Fintype.card I ≤ Fintype.card T)
@@ -165,7 +180,7 @@ def EvAt (N : ℕ) [NeZero N] {S D Q L : ℕ} (session binding : ByteArray) (W :
         (A.pre W ((schAt N).enc W ω ()).1 ((schAt N).enc W ω ()).2 ω) =
       List.ofFn fun j => ((schAt N).enc W ω ()).2 (I j)
 
-/-- The streams' draw is at most the uniform indices' (`ε_rs = 0` in the upper bound). -/
+/-- The streams' sample is at most the uniform indices' (`ε_rs = 0` in the upper bound). -/
 theorem pr_passesAt_le (N : ℕ) [NeZero N] {S D Q L : ℕ} (session binding : ByteArray) (W : Bits (schAt N).n)
     (A : ServerAt N S D Q L) :
     pr (PassesAt N session binding W A) ≤

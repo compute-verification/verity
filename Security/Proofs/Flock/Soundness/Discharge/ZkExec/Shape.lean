@@ -1,10 +1,30 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
+public import Proofs.Flock.Soundness.Discharge.ZkLink
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Refine.Ligerito
+import Proofs.Flock.Soundness.Refine.Opening
 
 /-!
 # The static shape of a compiled `--zk` rep
 
-The coin half of R11b (`Exec.Spine`, and `Discharge/PlaysCoin`'s `decodesOfRunsAt`) needs to know where a rep's coins
+The coin half of the decoder premise (`Exec.Spine`, and `Discharge/PlaysCoin`'s `decodesOfRunsAt`) needs to know where a rep's coins
 fall
 among its messages. Without `--zk` every run of a rep follows one spine (`Exec.repC_spine`), because a rep returns at a
 reject. The compiled `--zk` rep (`ZkLink.repZCAt`) does not: at an opening reject (an extra claim's ring-switch sum
@@ -19,9 +39,11 @@ steps after the opening are the inner proof's, not level 0's. That run ends in a
   `lcShape`, `opShape`), level 0 masked with Ligerito's levels compiled (`ligPadShape`), `final_c'`, and the inner proof
   (`innerShape`).
 * `repZCAt_kinds`: every run of rep `r` whose result's Ligerito part is not `PendL.reject` takes exactly the steps of
-  `repShapeZ`. `repZCAt_spineAt` is its prefix form at a result (plays-coin's `SpineAt`, unfolded), and
+  `repShapeZ`. `repZCAt_spineAt` is its prefix form at a result (`Discharge/PlaysCoin`'s `SpineAt`, unfolded), and
   `ne_reject_of_verdict` gives the hypothesis from a Ligerito verdict that holds.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

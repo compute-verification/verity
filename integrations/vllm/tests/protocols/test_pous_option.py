@@ -20,7 +20,8 @@ from concurrent import futures
 import pytest
 import torch
 
-from verity.core.protocols.pous import challenger_party as CP
+from verity.core.devices.memory_challenger import challenger_party as CP
+from verity.core.protocols.pous import challenger_session as CS
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period, setup
 from verity.core.protocols.pous.schemes.p2 import P2Params
@@ -208,9 +209,9 @@ def test_an_int8_linear_with_its_scales_is_served_not_refused(toy):
 
 
 def _in_process_party(signer, log):
-    """`challenger_party.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
+    """`challenger_session.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
     test signer, a counter clock, its own coins each session) and the prover's over a socket pair
-    (`challenger_party.answer`)."""
+    (`challenger_session.answer`)."""
     calls = []
 
     def session(party, request, respond):
@@ -225,11 +226,11 @@ def _in_process_party(signer, log):
             served = pool.submit(challenger)
             try:
                 with a, a.makefile("rwb") as f:
-                    rounds = CP.answer(f, request["block_bytes"], respond)
+                    rounds = CS.answer(f, request["block_bytes"], respond)
             finally:
                 sid, served_session = served.result()
         calls.append((party, request))
-        return CP.report(sid, served_session, signer.public_key) | {"host": party.host, "rounds": rounds - CP.WARMUPS}
+        return CP.report(sid, served_session, signer.public_key) | {"host": party.host, "rounds": rounds - CS.WARMUPS}
     return session, calls
 
 
@@ -237,7 +238,7 @@ def _period_dir(tmp_path, n: int):
     d = tmp_path / "periods" / f"p{n}"
     d.mkdir(parents=True)
     (d / "period.json").write_text(json.dumps({"challenger_host": AUDITOR, "challenger": {"pous": {
-        "command": ["ssh", AUDITOR, "uv", "run", "python", "-m", CP.MODULE, "--device", "pous-challenger",
+        "command": ["ssh", AUDITOR, "uv", "run", "python", "-m", CS.MODULE, "--device", "pous-challenger",
                     "--listen", "0.0.0.0:7710"], "address": f"{AUDITOR}:7710"}}}))
     return d
 
@@ -246,7 +247,7 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
     """`PousOption.leg`: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
     the setup case and its check; an accepted period says plainly that this point certifies 0 bits."""
     session, calls = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
-    monkeypatch.setattr(CP, "session", session)
+    monkeypatch.setattr(CS, "session", session)
     with PO.install(toy, _ctx(ENTRY)) as comp:
         opt = comp.get("pous")
         for n in (0, 1):
@@ -256,11 +257,11 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
             assert got["profile"]["placement"]["trusted-host"].startswith(f"holds: the memory challenger ran on {AUDITOR}")
             doc = json.loads((out / "pous.json").read_text())
-            assert doc["s_bits"] == 0 and doc["rounds_answered"] == period.K + CP.WARMUPS and doc["setup"]["fresh"] == (n == 0)
+            assert doc["s_bits"] == 0 and doc["rounds_answered"] == period.K + CS.WARMUPS and doc["setup"]["fresh"] == (n == 0)
             assert (out / "pous.case.json").exists() and (out / "pous-setup.case.json").exists() == (n == 0)
         party, request = calls[0]
         assert party.host == AUDITOR and party.address == (AUDITOR, 7710)
-        assert request == CP.request_of(NODE, opt.store.point, opt.store.root) and opt.periods == 2
+        assert request == CS.request_of(NODE, opt.store.point, opt.store.root) and opt.periods == 2
 
 
 def test_a_dropped_block_rejects(toy, tmp_path):
@@ -278,7 +279,7 @@ def test_a_dropped_block_rejects(toy, tmp_path):
         def lost(blocks):
             return lambda i: asked.append(i) or (bytes(q.block_bytes) if i == dropped else opt.answer(i))
         got = opt.audit(NODE, COINS, log=ts.session_log(tmp_path), prover=lost, **run)
-        assert dropped in asked and got.verdict == "reject" and got.answer["reason"] and got.s_bits == 0
+        assert dropped in asked and got.verdict == "reject" and got.answer["reason"] and got.public("s_bits") == 0
 
         held = opt.store.held()
         short = [list(seg) for seg in period.setup_inputs(held.setup_case)[2]]

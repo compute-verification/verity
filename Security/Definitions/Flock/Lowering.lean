@@ -1,10 +1,14 @@
-import Definitions.Flock.Circuit
-import Definitions.Flock.Statement
+module
+
+public import Definitions.Flock.Circuit
+public import Definitions.Flock.Statement
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The compiled lowering: templates' rows, their placement in a statement, and programs of units
 
-**The audit's circuit is the rows the verifier parses** (PROTOCOL.md §16.5, `Flock/Net.lean`). A
+**The audit's circuit is the rows the verifier parses** (`Flock.Circuit`, `Flock/Net.lean`). A
 template's unit is `nIn` input columns, `nComp` computed rows and the constant, its last column
 (`Rows`). Computed row `i` is column `nIn + i`:
 
@@ -16,7 +20,7 @@ reading earlier columns and the constant. In the circuit it is one gate, `Op.row
   gates are those rows, read through a wiring of the unit's columns to the circuit's gates, with its `decode`.
 * `Placement`: unit `u`'s rows placed in block `o` of a statement (the block matrices' rows at the unit's computed
   columns read exactly its rows' columns, and its constant's rows read the pin); `PlacedSat`, placed up to the
-  matrices, in a statement every witness of the table satisfies. `UnitPlace` bundles a drawn unit's place in a table:
+  matrices, in a statement every witness of the table satisfies. `UnitPlace` bundles a sampled proof block's place in a table:
   its rows, its instance, its block and its columns.
 * `Prog`: a program of units, each a template's rows appended after the gates it reads, with its circuit
   (`Prog.circuit`), partition and rows, and `Prog.RowsWire`, the wiring that makes each unit an `IsRowsUnit`
@@ -26,6 +30,8 @@ reading earlier columns and the constant. In the circuit it is one gate, `Op.row
 The theorem, for every template, is `lowering_sound` in `Proofs/Flock/Soundness/Lowering.lean`: a satisfied table
 makes every placed unit correct.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
@@ -56,13 +62,13 @@ def one : Fin R.w := ⟨R.nIn + R.nComp, by show _ < R.nIn + R.nComp + 1; omega�
 
 /-- **The rows are satisfied** by column values `z`. -/
 def Sat (z : Fin R.w → Bool) : Prop :=
-  ∀ i, z (R.comp i) = (xorSum (R.a i) z && xorSum (R.b i) z)
+  ∀ i, z (R.comp i) = (Verity.Boolean.xorSum (R.a i) z && Verity.Boolean.xorSum (R.b i) z)
 
 end Rows
 
 namespace Audit.Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 /-- **Unit `u` is an instance of the rows `R`.** Computed row `i` is the unit's gate
 `wire (R.comp i)`, the row gate of its columns' wires. The unit's gates are exactly these, and its
@@ -100,7 +106,7 @@ def bit (x : ZMod 2) : Bool := decide (x = 1)
 
 /-- **A unit's rows placed in a statement**, at the block columns `col`: the block matrices' rows at
 the unit's computed columns read exactly the placed columns of its rows, and the rows at its constant
-read the pin (every slot's constant is wired to the pin, PROTOCOL.md §16.1). -/
+read the pin (every slot's constant is wired to the pin, `Flock.Statement`). -/
 structure Placement (S : Statement) (R : Rows) (col : Fin R.w → Fin (2 ^ S.kLog)) : Prop where
   hA : ∀ i j, S.A₀ (col (R.comp i)) j = (((R.a i).map col).count j : ZMod 2)
   hB : ∀ i j, S.B₀ (col (R.comp i)) j = (((R.b i).map col).count j : ZMod 2)
@@ -115,11 +121,11 @@ def PlacedSat (S : Statement) (R : Rows) (col : Fin R.w → Fin (2 ^ S.kLog)) : 
     Placement { S with A₀ := A, B₀ := B } R col ∧
       ∀ z : Witness S.m, S.Satisfies z → ({ S with A₀ := A, B₀ := B } : Statement).Satisfies z
 
-/-- **A drawn unit's place in a table**: its template's rows, its instance in the circuit, and the
+/-- **A sampled proof block's place in a table**: its template's rows, its instance in the circuit, and the
 block and columns where the table's statement holds its rows. The unit's input columns on one gate
 carry one value in every witness satisfying the statement (`aliased`): they copy one source's
 position, or forced-zero rows. -/
-structure UnitPlace {C : Circuit} {n : ℕ} (P : Audit.Partition C n) (S : Statement) (u : Fin n) where
+structure UnitPlace {C : Verity.Boolean.Circuit} {n : ℕ} (P : Audit.Partition C n) (S : Statement) (u : Fin n) where
   R : Rows
   inst : P.IsRowsUnit u R
   o : Fin (2 ^ S.nbl)
@@ -130,7 +136,7 @@ structure UnitPlace {C : Circuit} {n : ℕ} (P : Audit.Partition C n) (S : State
 
 namespace UnitPlace
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {S : Statement} {u : Fin n}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {S : Statement} {u : Fin n}
 
 /-- The transcript a witness gives for a placed unit, read from its block. -/
 noncomputable def decode (pl : UnitPlace P S u) (z : Witness S.m) : Fin C.N → Bool :=
@@ -140,7 +146,9 @@ end UnitPlace
 
 /-! ## The circuit of a program: its units' rows -/
 
-namespace Audit.Op
+end FlockSoundness
+
+namespace Verity.Boolean.Op
 
 variable {N M : ℕ}
 
@@ -158,7 +166,11 @@ theorem args_lift (f : Fin N → Fin M) (o : Op N) : (o.lift f).args = o.args.ma
 theorem isInput_lift (f : Fin N → Fin M) (o : Op N) : (o.lift f).isInput = o.isInput := by
   cases o <;> rfl
 
-end Audit.Op
+end Verity.Boolean.Op
+
+namespace FlockSoundness
+
+open Audit Model
 
 /-- **A program of template units**, unit by unit: `k` input gates, then each unit's computed rows.
 A unit's input columns are wired to earlier gates, several possibly to one, and its constant to an
@@ -196,7 +208,7 @@ theorem colWire_lt_of_not_comp {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) 
   · simp only [Fin.val_castAdd]; exact one.isLt
 
 /-- The gates' operations. -/
-def op : {N n : ℕ} → Prog N n → Fin N → Audit.Op N
+def op : {N n : ℕ} → Prog N n → Fin N → Verity.Boolean.Op N
   | _, _, .inputs _, _ => .input
   | _, _, @snoc N₀ _ p R ins one _, g =>
       if h : g.val < N₀ then (p.op ⟨g.val, h⟩).lift (Fin.castAdd R.nComp)
@@ -204,15 +216,15 @@ def op : {N n : ℕ} → Prog N n → Fin N → Audit.Op N
         ((R.b ⟨g.val - N₀, by have := g.isLt; omega⟩).map (colWire R ins one))
 
 theorem topo : ∀ {N n : ℕ} (p : Prog N n) (g : Fin N), ∀ a ∈ (p.op g).args, a < g
-  | _, _, .inputs _, _, _, ha => by simp [op, Audit.Op.args] at ha
+  | _, _, .inputs _, _, _, ha => by simp [op, Verity.Boolean.Op.args] at ha
   | _, _, @snoc N₀ _ p R ins one _, g, a, ha => by
       by_cases h : g.val < N₀
-      · simp only [op, h, dif_pos, Audit.Op.args_lift] at ha
+      · simp only [op, h, dif_pos, Verity.Boolean.Op.args_lift] at ha
         obtain ⟨a', ha', rfl⟩ := List.mem_map.1 ha
         have := topo p ⟨g.val, h⟩ a' ha'
         rw [Fin.lt_def] at this ⊢
         simpa using this
-      · simp only [op, h, dif_neg, not_false_eq_true, Audit.Op.args, List.mem_append,
+      · simp only [op, h, dif_neg, not_false_eq_true, Verity.Boolean.Op.args, List.mem_append,
           List.mem_map] at ha
         set i : Fin R.nComp := ⟨g.val - N₀, by have := g.isLt; omega⟩ with hi
         have key : ∀ c ∈ R.a i ++ R.b i, colWire R ins one c < g := by
@@ -239,15 +251,15 @@ def unit : {N n : ℕ} → Prog N n → Fin N → Option (Fin n)
 
 theorem input_iff : ∀ {N n : ℕ} (p : Prog N n) (g : Fin N),
     p.unit g = none ↔ (p.op g).isInput = true
-  | _, _, .inputs _, _ => by simp [unit, op, Audit.Op.isInput]
+  | _, _, .inputs _, _ => by simp [unit, op, Verity.Boolean.Op.isInput]
   | _, _, @snoc N₀ _ p _ _ _ _, g => by
       by_cases h : g.val < N₀
-      · simp only [unit, op, h, dif_pos, Option.map_eq_none_iff, Audit.Op.isInput_lift]
+      · simp only [unit, op, h, dif_pos, Option.map_eq_none_iff, Verity.Boolean.Op.isInput_lift]
         exact input_iff p _
-      · simp [unit, op, h, Audit.Op.isInput]
+      · simp [unit, op, h, Verity.Boolean.Op.isInput]
 
 /-- **The program's circuit**: its gates are its units' rows. -/
-def circuit {N n : ℕ} (p : Prog N n) (outs : Finset (Fin N)) : Audit.Circuit :=
+def circuit {N n : ℕ} (p : Prog N n) (outs : Finset (Fin N)) : Verity.Boolean.Circuit :=
   ⟨N, p.op, p.topo, outs⟩
 
 /-- The program's partition into its units. -/
@@ -336,7 +348,7 @@ def rowsWire_snoc {v : Fin n₀} {R' : Rows} (W : p.RowsWire v R') :
   mem := fun i => by rw [unit_castAdd, W.mem i]; rfl
   op := fun i => by
     rw [op_castAdd, W.op i]
-    simp only [Audit.Op.lift, List.map_map]
+    simp only [Verity.Boolean.Op.lift, List.map_map]
     rfl
   outside := fun c hc => by
     rw [unit_castAdd]

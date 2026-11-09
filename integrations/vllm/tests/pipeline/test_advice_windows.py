@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.certifier import advice as A
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.spot.one_stage import registration as R
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -353,15 +353,15 @@ class _Coins:
 
 
 def _draw(rec: dict, law: dict) -> dict:
-    from verity.core.protocols.sampled_proofs import service as S
+    from verity.core.protocols.spot import service as S
 
     return S.select_draw(S.Law(f"work:{law['k']}"), law, rec["population"], _Coins())
 
 
 def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):
-    """The window's work law proves every RoPE head (work 0, its floor all 32: an All stratum) and draws 2 of the 8 SiluMul rows, as
+    """The window's work sampling design proves every RoPE head (work 0, its floor all 32: an All stratum) and samples 2 of the 8 SiluMul rows, as
     the registration's law states and the verifier's own window derives; a sample by it holds every transfer-gate unit."""
-    from verity.core.protocols.sampled_proofs.one_stage import draw as D
+    from verity.core.protocols.spot.one_stage import draw as D
 
     c = gated_tp
     mine, held = _gated_mine(c)
@@ -380,9 +380,9 @@ def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest
 
 
 def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
-    """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a sample trading one for an undrawn SiluMul
-    row (`check_draw`, the stratum's count), and a registration whose law draws the RoPE heads as the rest is (R1)."""
-    from verity.core.protocols.sampled_proofs.one_stage import draw as D
+    """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a sample trading one for an unsampled SiluMul
+    row (`check_draw`, the stratum's count), and a registration whose sampling design samples the RoPE heads as the rest is (R1)."""
+    from verity.core.protocols.spot.one_stage import draw as D
 
     c = gated_tp
     mine, _held = _gated_mine(c)
@@ -400,7 +400,7 @@ def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
 
 
 def test_a_window_under_the_compiler_listing_no_transfer_gates_is_refused(gated_tp):
-    """The prover's window committed under the same Programs by a compiler that lists no transfer gates draws 2 of the RoPE heads and
+    """The prover's window committed under the same Programs by a compiler that lists no transfer gates samples 2 of the RoPE heads and
     1 SiluMul row: the verifier, holding the registered compiler that lists them, refuses it on the compiler's digest, on the advice's
     root (its tree's domain binds the compiler, `commitment_binding`) and on R1."""
     c = gated_tp

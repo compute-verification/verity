@@ -1,4 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The `--zk` schedule's dimensions
@@ -6,6 +23,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
 `zk_schedule_seams`: `Zk.schedule m` gives fast100's dimensions with level 0 restratified at `q_0` queries. The kernel
 checks every `m < 40`; above 35 `Zk.queries0` refuses.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

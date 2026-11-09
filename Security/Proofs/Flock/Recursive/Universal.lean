@@ -1,7 +1,22 @@
-import Proofs.Flock.Recursive.Premises
-import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.Refine.Seam
+module
+
+public import Proofs.Flock.Recursive.Premises
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # Recursion: the compile premise at a class (gap 4, its first part)
@@ -22,6 +37,8 @@ fixes the class at `UniversalUnit_v1{G, N_IN, N_OUT}`'s, and there the premise i
   `Refine.stmtOf_linkLayout`'s at every hidden template. What is left are the executable's own checks of the statement:
   `StmtWF` and `RegionsWF` (what setupH's or setupHidden's acceptance gives) and `Zk.schedule st.m` accepting.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

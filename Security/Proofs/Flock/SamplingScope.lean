@@ -1,10 +1,50 @@
-import Definitions.Claims.Sampling
+module
+
+public import Definitions.Claims.Sampling
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The sampling scope: what it excludes, and that `KS` keeps content in it
 
 `KS`, `KSCount` and `Bits` hold on the statements in scope (`Claims.Sampling.Scope`), which excludes every design whose
-`P_a` is not its draw's miss probability. On a program of two input gates, partitioned into two units:
+`P_a` is not its sample's miss probability. On a program of two input gates, partitioned into two units:
 
 * `subset 3` is the hole: `P_a = 0` at every set (`Pa_hole`), so at every `δ ≥ 0` no witness is in the relation
   (`not_relS_hole`), and `KS` there would be vacuous. It is out of scope (`not_inScope_hole`).
@@ -15,6 +55,8 @@ import Definitions.Claims.Sampling
   `Pr[acc ∧ faulty ∉ M_{1/4}]` below `1` (`ks_lt_one`). `toyD` is such a deployment, with a decoder its Flock spec
   admits (`listWithin_toyD`).
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.ScopeWitness
 
@@ -31,10 +73,10 @@ def toyQuery : Query := ⟨"", 0, []⟩
 /-- One class of one stratum of two proof blocks, `{0}` and `{1}`. -/
 def toyPart : Partition := ⟨[[[[0], [1]]]]⟩
 
-/-- The program, drawn `subset 1`: in scope. -/
+/-- The program, sampled `subset 1`: in scope. -/
 def toyStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[.subset 1]⟩, []⟩
 
-/-- The program, drawn `subset 3` from two units: out of scope. -/
+/-- The program, sampled `subset 3` from two units: out of scope. -/
 def holeStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[.subset 3]⟩, []⟩
 
 /-- A `K`-subset of fewer than `K` members misses every set with probability `0`. -/
@@ -56,7 +98,7 @@ theorem not_relS_hole (H : Msg → Msg) (Cm : CommitmentScheme Bool) {δ : ℝ} 
   rw [Pa_hole] at h'
   linarith
 
-/-- **The hole is out of scope**: its rule draws more units than its class has. -/
+/-- **The hole is out of scope**: its rule samples more units than its class has. -/
 theorem not_inScope_hole : ¬ InScope toyPart holeStmt := by
   rintro ⟨_, _, _, hw⟩
   have := hw (.subset 3, [[[0], [1]]]) (by simp [holeStmt, toyPart])
@@ -117,7 +159,7 @@ structure ToyNumbers (D : Deploy Coin Col T) (x : Msg) : Prop where
 theorem scope_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : Scope D x :=
   ⟨toyStmt, toyPart, h.parse, h.partition, inScope_toy⟩
 
-theorem k_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : D.k x = 2 ^ 40 * 5 := by
+theorem k_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : D.k x = 2 ^ 10 * 5 := by
   have hp : D.part toyStmt = toyPart := by
     simp only [Deploy.part]
     rw [h.partition]
@@ -171,8 +213,9 @@ theorem κF_le {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : κF D x 
 
 /-- The waits' slack factor is at most `3/2`. -/
 theorem slack_le : slack ≤ 3 / 2 := by
-  have hp1 : (2 : ℝ) ^ (-40 : ℝ) ≤ 1 / 2 := by
-    calc (2 : ℝ) ^ (-40 : ℝ) ≤ (2 : ℝ) ^ (-1 : ℝ) := Real.rpow_le_rpow_of_exponent_le (by norm_num) (by norm_num)
+  have hp1 : (2 : ℝ) ^ (-(slackExp : ℝ)) ≤ 1 / 2 := by
+    calc (2 : ℝ) ^ (-(slackExp : ℝ)) ≤ (2 : ℝ) ^ (-1 : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le (by norm_num) (by norm_num [slackExp])
       _ = 1 / 2 := by rw [Real.rpow_neg_one]; norm_num
   have h : ∀ t : ℝ, 0 ≤ t → t ≤ 1 / 2 → (2 : ℝ) ^ t ≤ 3 / 2 := by
     intro t h0 h1
@@ -187,10 +230,10 @@ theorem κ_lt_one {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : κ D 
   have hs := slack_le
   have hF := κF_le h
   have hk := k_of_toyNumbers h
-  have hkr : (D.k x : ℝ) = 2 ^ 40 * 5 := by rw [hk]; push_cast; ring
-  have hcapr : (D.cap x : ℝ) = 2 ^ 128 * (2 ^ 40 * 5) := by rw [Deploy.cap, hk]; push_cast; ring
+  have hkr : (D.k x : ℝ) = 2 ^ 10 * 5 := by rw [hk]; push_cast; ring
+  have hcapr : (D.cap x : ℝ) = 2 ^ 128 * (2 ^ 10 * 5) := by rw [Deploy.cap, hk]; push_cast; ring
   have hout : 2 * (D.k x : ℝ) / D.cap x ≤ 1 / 1000 := by rw [hkr, hcapr]; norm_num
-  have hexp : Real.exp (-(D.k x : ℝ) / 8) ≤ 1 / 1000 := by
+  have hexp : Real.exp (-(D.k x : ℝ) / 8) ≤ 1 / 100 := by
     refine (exp_neg_div_eight_le (by positivity)).trans ?_
     rw [hkr]
     norm_num
@@ -198,16 +241,16 @@ theorem κ_lt_one {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : κ D 
     mul_le_mul_of_nonneg_left (by linarith) (by positivity)
   have h1' : slack ^ 2 * (1 / 4 + 1 / 100) ≤ (3 / 2) ^ 2 * (1 / 4 + 1 / 100) :=
     mul_le_mul_of_nonneg_right (pow_le_pow_left₀ hs0 hs 2) (by norm_num)
-  have h2 : (1 + slack) * (2 * D.k x / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) ≤ (1 + slack) * (1 / 1000 + 1 / 1000) :=
+  have h2 : (1 + slack) * (2 * D.k x / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) ≤ (1 + slack) * (1 / 1000 + 1 / 100) :=
     mul_le_mul_of_nonneg_left (by linarith) (by linarith)
-  have h2' : (1 + slack) * (1 / 1000 + 1 / 1000) ≤ (1 + 3 / 2) * (1 / 1000 + 1 / 1000) :=
+  have h2' : (1 + slack) * (1 / 1000 + 1 / 100) ≤ (1 + 3 / 2) * (1 / 1000 + 1 / 100) :=
     mul_le_mul_of_nonneg_right (by linarith) (by norm_num)
   unfold κ
   linarith
 
 /-- No finder finds a collision of the injective hash `id`. -/
 theorem finder_pr_id (F : Finder) : F.Pr id = 0 := by
-  simp [Finder.Pr, Claims.Pr, Collision, Hash.Collision]
+  simp [Finder.Pr, Claims.Pr, Claims.prUniform, Collision, Hash.Collision]
 
 theorem prB_id [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Ω : Type} [Fintype Ω] [Nonempty Ω] (V : Verifier Coin)
     (P : Prover Ω) (x : Msg) : PrB id V P x = 0 := by

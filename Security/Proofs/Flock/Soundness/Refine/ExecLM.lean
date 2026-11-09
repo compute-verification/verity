@@ -1,17 +1,23 @@
-import Proofs.Flock.Soundness.Refine.Exec
+module
+
+public import Proofs.Flock.Soundness.Refine.Exec
 -- `simp` over the range loops below needs `Std.Legacy.Range.mk.congr_simp`; LookupRows declares it, and the kernel
 -- replay rejects a second declaration.
-import Proofs.Flock.Level3.LookupRows
+public import Flock.Ligerito
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Runs of the executable's Ligerito programs
 
-The executable's Ligerito verifier (PROTOCOL.md §13) runs in `LM = StateT LState TM`: the running claim `s`, the round
+The executable's Ligerito verifier (`Flock.Ligerito`) runs in `LM = StateT LState TM`: the running claim `s`, the round
 polynomial `q`, the cursors into the proof's lists, and the out-of-domain and consistency contexts, over the replay
 transcript. A run that succeeds, `x st t = .ok ((a, st'), t')`, is taken apart one step at a time, as `Exec` does for
 `TM`: `lbind_ok` peels a `bind`, and `lift_bind`, `lget_bind`, `lset_bind`, `lmodify_bind` peel the steps that read or
 write one of the two states.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
@@ -196,11 +202,11 @@ theorem oodIntro_bind {p : LigeritoProof} {dim split : ℕ} (hdim : dim ≠ 0) {
 
 theorem range_size (n : ℕ) : [:n].size = n := by simp [Std.Legacy.Range.size]
 
-/-- The consistency value `e = Σ_j eq(α)[j]·Σ_l eq_K(fold)[l]·row_j[l]` (§13.3 step 10), as the executable folds it. -/
+/-- The consistency value `e = Σ_j eq(α)[j]·Σ_l eq_K(fold)[l]·row_j[l]` (`Flock.Ligerito` step 10), as the executable folds it. -/
 def consE (rows : Array (Array F128)) (q : ℕ) (alpha : Array F128) (fold : Array F256) : F256 :=
   (List.range q).foldl (fun e j =>
     e + F256.smul ((List.range rows[j]!.size).foldl
-      (fun acc l => acc + F256.smul (eqTableK fold)[l]! rows[j]![l]!) 0) (eqTable alpha)[j]!) 0
+      (fun acc l => acc + F256.smul (eqTableK fold)[l]! (rows[j]!)[l]!) 0) (eqTable alpha)[j]!) 0
 
 /-- `queryLevel`: the query coins (round `t.k`, `q` coins) give the positions, the consistency coins (round `t.k + 1`)
 the batching vector; the Merkle check passes, and the consistency value is `consE`. -/

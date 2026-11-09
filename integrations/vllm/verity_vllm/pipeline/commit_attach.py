@@ -1,7 +1,7 @@
 """The Commit of record's acquisition on a built committer: its required classes (`classes_of_record`) and every source, tap and
 hook set its required-value manifest asks for (`attach_of_record`). `pipeline.commit.main` builds every committer of a Commit
 through these, and serve-openai's rows-sha512 Commit (`pipeline.serve_seal.committer`) builds its own through them too, over
-the bench row's manifest of record."""
+the manifest of the row's Build of record (predict's, `serve_row.row_refusal`)."""
 from __future__ import annotations
 
 import json
@@ -30,7 +30,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
     the manifest names), the KV-slots source under ``args.memory_map``, the MoE block source, the promoted members' consumer
     inputs, the X-03 attention plane classes from the Build's record, and the committer's hook sets from the acquisition plan
     (written into ``out``; refused, exit 3, as the Commit refuses). `main` builds every committer of a Commit here, and
-    serve-openai's rows-sha512 Commit (`serve_seal.committer`) builds its own here too, over the bench row's manifest of record.
+    serve-openai's rows-sha512 Commit (`serve_seal.committer`) builds its own here too, over its row's manifest of record.
     Returns the required classes, whether the MoE source attached and whether the manifest requires the hidden class."""
     moe_attached = False
     _hidden_required = hidden_classes_required(required_manifest)
@@ -64,7 +64,9 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
                   f"telemetry {_hsrc.telemetry_path}", flush=True)
     required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root), call_boundary_plan=cb_plan)
     if args.memory_map:
+        from verity_vllm import protocols
         from verity_vllm.acquire.sources import kv_slots_source
+        protocols.driver("remote-bandwidth", "commit_map")
         kv_slots_source.attach(com)
     # the MoE block source stages six planes per MoE layer
     # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest

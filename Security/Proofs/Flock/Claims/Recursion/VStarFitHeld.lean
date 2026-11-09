@@ -1,8 +1,49 @@
-import Proofs.Flock.Claims.Recursion.VStarHh
-import Proofs.Flock.Claims.Recursion.VStarCap0
-import Proofs.Flock.Claims.Recursion.VStarPortsM
-import Proofs.Flock.Claims.Recursion.OpensReads
+module
+
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.RestRead
+public import Proofs.Flock.Claims.Recursion.VStarPin
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.Reps.RoundLinks
+import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Recursion.VStarCap0
+import Proofs.Flock.Claims.Recursion.VStarHh
+import Proofs.Flock.Claims.Recursion.VStarPortsM
 
 /-!
 # The slots a part holds are fitted to their rounds' rows (`hfit_A0`)
@@ -22,6 +63,8 @@ the last that part `s`'s message reads at `layoutBTops` (`msgAt`) is as many hm9
 Part `s`'s stager accepts (`hok`) and its circuit is the staged one (`hS`, for `checkParsed` and the slots' input
 columns, `rowHidden_staged`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 
@@ -80,6 +123,7 @@ theorem ownPort_ne_top {sv : _root_.VStar.Stmt} {q : String × String × Array (
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- A round's rows read off a longer history are the same. -/
 theorem roundRows_take (I : InnerRec) (w : Claims.Flock.Wit) (ρ : I.Tape) (hist : List (Msg × Msg)) {K i : ℕ}
@@ -358,6 +402,7 @@ theorem fit_stream (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
   | sparse _ _ =>
     first | cases hpin | simp [_root_.VStar.In.partIn, throw, throwThe, MonadExceptOf.throw] at hpin
   | opening _ _ _ _ _ _ =>

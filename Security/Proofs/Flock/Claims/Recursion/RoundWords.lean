@@ -1,7 +1,45 @@
+module
+
+public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.Reps.RoundLinks
+import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Claims.Recursion.PartsVStar
 import Proofs.Flock.Claims.Recursion.RowsCover
-import Proofs.Flock.C3.Reps.RoundLinks
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The holders of one round's row agree on its words
@@ -20,6 +58,8 @@ word count. The verifier checks it on V\*'s list (`RecVStar.checkRoundWords`, in
 * `heldRows_words`: wherever `readX` reads `x`, two held rows of one round sit at ports of one word count, the hypothesis
   `hW` of `VStarBuild.fit_stream`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -196,6 +236,7 @@ theorem ownWords_rows {s : VStar.Stmt} {u : VStar.UnitC} (hu : s.unit = .ok u)
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- **The holders of one round's row agree on its words**: wherever `readX` reads `x`, two rows the parts hold
 (`heldRows`) at one round of the rep streams sit at ports of one word count. The rows are under one `rec-c<k>`

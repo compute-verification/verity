@@ -51,9 +51,9 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   2^b rows (at most `CHUNK_BYTES`; a value smaller than a chunk is one, its pads included) go to ``workers`` processes as
   their bytes arrive. Each returns its chunk's subtree root, and the main process folds them as `tree_levels` does. A P2
   chunk takes the blocks its bytes fall in, so a block two chunks share is decoded twice.
-* **The salts** are the operating system's, 192 bytes a row, drawn by the worker that commits the row (`os_salts`):
+* **The salts** are the operating system's, 192 bytes a row, sampled by the worker that commits the row (`os_salts`):
   every hm96 salt is the operating system's (A3 in
-  ``Security/Proofs/Flock/Soundness/Assumptions.lean``), so nothing rests on a stream generator. ``--witness`` is
+  ``Security/Definitions/Assumptions/Flock.lean``), so nothing rests on a stream generator. ``--witness`` is
   where they go, every value's in manifest order, its rows in order (each value's `Transfer.witness`): the prover's
   alone, 4.85 GB at H200 (25,284,864 rows). `keyed_salts` is interface 1's prover-side derivation (Flock's
   ``hm96_salt``), here only to hold this commit to interface 1's fixture roots.
@@ -100,7 +100,7 @@ from verity.ml.crypto import chacha20  # noqa: E402
 from verity.core.protocols.certifier import transfer_rows as TR  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer  # noqa: E402
 from verity.core.protocols.pous.schemes import p2 as P2  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
 
 FORMAT = "verity-network-certifier/load/v1"
 LINK, KIND, WINDOW = "s0/uplink", "load", 0

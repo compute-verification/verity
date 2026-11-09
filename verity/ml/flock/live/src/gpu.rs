@@ -7,7 +7,7 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     ptr::{null, null_mut},
     slice::from_raw_parts,
-    sync::OnceLock,
+    sync::{Mutex, OnceLock},
 };
 
 use flock_field::F128;
@@ -26,7 +26,7 @@ use flock_prover::{
     zerocheck::{K_SKIP, ZerocheckProof},
 };
 
-use crate::{LiveChallenger, chunk::*};
+use crate::{LiveChallenger, chunk::*, ir_block::RowRead};
 
 // The static CUDA library travels with this crate; naming it keeps it in the link.
 extern crate flock_cuda_ffi;
@@ -242,26 +242,42 @@ pub(crate) unsafe extern "C" fn link_cb(ctx: *mut c_void, cap: *const u8, cap_le
 }
 
 pub(crate) fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
-    let nnz: u64 = m.rows.iter().map(|r| r.len() as u64).sum();
+    csc_of(&m.rows[..], m.num_cols)
+}
+
+/// The CSC of `rows` over `num_cols` columns: the same as of them followed by any number of empty rows.
+pub(crate) fn csc_of<R: RowRead + ?Sized>(rows: &R, num_cols: usize) -> (Vec<u32>, Vec<u32>) {
+    let nnz = rows.nnz() as u64;
     assert!(nnz <= crate::circuit::GPU_NNZ_MAX, "{nnz} nonzeros: past the device prover's 32-bit offsets");
-    let mut col_ptr = vec![0u32; m.num_cols + 1];
-    for row in m.rows.iter() {
-        for &c in row {
+    let mut col_ptr = vec![0u32; num_cols + 1];
+    for r in 0..rows.n_rows() {
+        for c in rows.row_cols(r) {
             col_ptr[c + 1] += 1;
         }
     }
-    for c in 0..m.num_cols {
+    for c in 0..num_cols {
         col_ptr[c + 1] += col_ptr[c];
     }
     let mut next = col_ptr.clone();
     let mut rows_flat = vec![0u32; *col_ptr.last().unwrap() as usize];
-    for (r, row) in m.rows.iter().enumerate() {
-        for &c in row {
+    for r in 0..rows.n_rows() {
+        for c in rows.row_cols(r) {
             rows_flat[next[c] as usize] = r as u32;
             next[c] += 1;
         }
     }
     (col_ptr, rows_flat)
+}
+
+/// `rows` as CSR: each row's offset into the concatenated columns, then the columns.
+pub(crate) fn csr<R: RowRead + ?Sized>(rows: &R) -> (Vec<u32>, Vec<u32>) {
+    let mut off = vec![0u32];
+    let mut col = Vec::new();
+    for r in 0..rows.n_rows() {
+        col.extend(rows.row_cols(r).map(|c| c as u32));
+        off.push(col.len() as u32);
+    }
+    (off, col)
 }
 
 pub(crate) struct Static {
@@ -277,15 +293,22 @@ fn statics(st: &ChunkStmt) -> &'static Static {
     statics_with(&st.circuit.da, &st.circuit.db)
 }
 
-/// One statement per process: the first caller's Δ is the process's.
 fn statics_with(da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
     statics_for(comp(), da, db)
 }
 
-/// [`statics_with`] with another compression circuit (the CSC the lincheck folds per slot).
+/// [`statics_with`] with another compression circuit (the CSC the lincheck folds per slot). Built once per (compression circuit,
+/// Δ) and kept for the process: a long-lived prover proves statements of many circuits, and the device keys its copies of the
+/// CSC by its addresses (`FcUploads`, prove_circuit.cuh), so it is never freed.
 pub(crate) fn statics_for(c: &flock_prover::r1cs::BlockR1cs, da: &[(u32, u32)], db: &[(u32, u32)]) -> &'static Static {
-    static S: OnceLock<Static> = OnceLock::new();
-    S.get_or_init(|| {
+    type Held = (usize, Vec<(u32, u32)>, Vec<(u32, u32)>, &'static Static);
+    static S: Mutex<Vec<Held>> = Mutex::new(Vec::new());
+    let key = c as *const flock_prover::r1cs::BlockR1cs as usize;
+    let mut held = S.lock().unwrap();
+    if let Some(h) = held.iter().find(|h| h.0 == key && h.1[..] == *da && h.2[..] == *db) {
+        return h.3;
+    }
+    let s: &'static Static = Box::leak(Box::new({
         let ntt_s = AdditiveNttGf8::new(K_SKIP, F8::ZERO);
         let ntt_l = AdditiveNttGf8::new(K_SKIP, F8(1u8 << K_SKIP));
         let mut mcol = vec![0u8; 64 * 64];
@@ -306,7 +329,9 @@ pub(crate) fn statics_for(c: &flock_prover::r1cs::BlockR1cs, da: &[(u32, u32)], 
         }
         let flat = |d: &[(u32, u32)]| d.iter().flat_map(|&(i, c)| [i, c]).collect();
         Static { a: csc_from_rows(&c.a_0), b: csc_from_rows(&c.b_0), mcol, f8mul, da: flat(da), db: flat(db) }
-    })
+    }));
+    held.push((key, da.to_vec(), db.to_vec(), s));
+    s
 }
 
 struct Reader<'a> {
@@ -596,23 +621,9 @@ pub fn prove_pure(
     static U: OnceLock<(Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>)> = OnceLock::new();
     let u = U.get_or_init(|| {
         let k = 1usize << st.ul;
-        let pad = |rows: &Vec<Vec<usize>>| {
-            let mut r = rows.clone();
-            r.resize(k, Vec::new());
-            SparseBinaryMatrix { num_rows: k, num_cols: k, rows: r.into() }
-        };
-        let (ca, cb) = (csc_from_rows(&pad(&st.net.a)), csc_from_rows(&pad(&st.net.b)));
-        let csr = |rows: &Vec<Vec<usize>>| {
-            let mut off = vec![0u32];
-            let mut col = Vec::new();
-            for r in rows {
-                col.extend(r.iter().map(|&c| c as u32));
-                off.push(col.len() as u32);
-            }
-            (off, col)
-        };
-        let (ao, ac) = csr(&st.net.a);
-        let (bo, bc) = csr(&st.net.b);
+        assert!(st.net.a.len() <= k && st.net.b.len() <= k, "a unit net of more rows than its 2^unit_log slot");
+        let (ca, cb) = (csc_of(&st.net.a, k), csc_of(&st.net.b, k));
+        let ((ao, ac), (bo, bc)) = (csr(&st.net.a), csr(&st.net.b));
         (ca.0, ca.1, cb.0, cb.1, ao, ac, bo, bc)
     });
     let blocks = st.blocks();
@@ -780,23 +791,9 @@ pub fn prove_vllm(
     static U: OnceLock<U8> = OnceLock::new();
     let u = U.get_or_init(|| {
         let k = 1usize << pb::UNIT_LOG;
-        let pad = |rows: &Vec<Vec<usize>>| {
-            let mut r = rows.clone();
-            r.resize(k, Vec::new());
-            SparseBinaryMatrix { num_rows: k, num_cols: k, rows: r.into() }
-        };
-        let (ca, cb) = (csc_from_rows(&pad(&st.net.a)), csc_from_rows(&pad(&st.net.b)));
-        let csr = |rows: &Vec<Vec<usize>>| {
-            let mut off = vec![0u32];
-            let mut col = Vec::new();
-            for r in rows {
-                col.extend(r.iter().map(|&c| c as u32));
-                off.push(col.len() as u32);
-            }
-            (off, col)
-        };
-        let (ao, ac) = csr(&st.net.a);
-        let (bo, bc) = csr(&st.net.b);
+        assert!(st.net.a.len() <= k && st.net.b.len() <= k, "a unit net of more rows than its 2^unit_log slot");
+        let (ca, cb) = (csc_of(&st.net.a, k), csc_of(&st.net.b, k));
+        let ((ao, ac), (bo, bc)) = (csr(&st.net.a), csr(&st.net.b));
         (ca.0, ca.1, cb.0, cb.1, ao, ac, bo, bc)
     });
     let n_claims = 2 + 2 * st.regions.len();
@@ -972,8 +969,8 @@ pub(crate) fn decode_with(bytes: &[u8], pcs: &PcsParams, zk: bool, salted: bool)
     (proof, Commitment { cap, params: pcs.clone() })
 }
 
-/// A block of compression slots and unit slots as Flock-CUDA's host-witness mode 1 takes it (lane flock-ir-lowering's
-/// `crate::ir_block` and `crate::ir_frame`): the BLAKE3 compression circuit at 2^14-bit slots `0 .. comp_slots`, the unit
+/// A block of compression slots and unit slots as Flock-CUDA's host-witness mode 1 takes it
+/// (`crate::ir_block` and `crate::ir_frame`): the BLAKE3 compression circuit at 2^14-bit slots `0 .. comp_slots`, the unit
 /// circuit at 2^unit_log slots `unit_pos0 ..`, Δ, and the region claims (points from `hook`) in the sparse ring switch.
 pub struct SlotStmt<'a> {
     pub digest: [u8; 32],
@@ -1026,23 +1023,9 @@ pub fn prove_slots(
     static U: OnceLock<U8> = OnceLock::new();
     let u = U.get_or_init(|| {
         let k = 1usize << st.unit_log;
-        let pad = |rows: &Vec<Vec<usize>>| {
-            let mut r = rows.clone();
-            r.resize(k, Vec::new());
-            SparseBinaryMatrix { num_rows: k, num_cols: k, rows: r.into() }
-        };
-        let (ca, cb) = (csc_from_rows(&pad(&st.net.a)), csc_from_rows(&pad(&st.net.b)));
-        let csr = |rows: &Vec<Vec<usize>>| {
-            let mut off = vec![0u32];
-            let mut col = Vec::new();
-            for r in rows {
-                col.extend(r.iter().map(|&c| c as u32));
-                off.push(col.len() as u32);
-            }
-            (off, col)
-        };
-        let (ao, ac) = csr(&st.net.a);
-        let (bo, bc) = csr(&st.net.b);
+        assert!(st.net.a.len() <= k && st.net.b.len() <= k, "a unit net of more rows than its 2^unit_log slot");
+        let (ca, cb) = (csc_of(&st.net.a, k), csc_of(&st.net.b, k));
+        let ((ao, ac), (bo, bc)) = (csr(&st.net.a), csr(&st.net.b));
         (ca.0, ca.1, cb.0, cb.1, ao, ac, bo, bc)
     });
     let n_claims = 2 + 2 * st.regions;

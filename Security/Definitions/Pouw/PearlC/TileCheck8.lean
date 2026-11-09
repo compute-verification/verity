@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.WholeCircuit
-import Definitions.Pouw.PearlC.TileCheck
-import Definitions.Pouw.PearlC.RowSem
-import Definitions.Pouw.PearlC.PeelExactP
+module
+
+public import Definitions.Pouw.PearlC.WholeCircuit
+public import Definitions.Pouw.PearlC.TileCheck
+public import Definitions.Pouw.PearlC.RowSem
+public import Definitions.Pouw.PearlC.PeelExactP
 
 /-!
 # `pc8`'s tile check (definitions only)
@@ -25,6 +27,8 @@ The Program needs whole tiles (`pc8.Shape.check`: `TM ∣ m`, `TN ∣ n`), so a 
 the others (`m = 80`: a 64-row tile and a 16-row one) is outside it. There the table is still defined, and L3 is
 stated on shapes whose tile divides them.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 
@@ -114,7 +118,7 @@ def tileCheck8 (ops : RowOps) (p : Pipeline)
   anchorsOK H s U u act := Noise8OK (noise H s U u act)
   rowsOf U u c := fun g => BitVec.ofNat _
     (rows8 p (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k (tileSide (U.layout.shape u).m)
-      (tileSide (U.layout.shape u).n) c.act (U.weight (U.layout.wid u)) c.ticket c.useful g.val)
+      (tileSide (U.layout.shape u).n) c.act (U.fixed (U.layout.fixedId u)) c.ticket c.useful g.val)
   Collides _ _ _ _ _ _ := False
 
 end Pouw.PearlC.WholeCircuit

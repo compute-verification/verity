@@ -8,12 +8,12 @@ import random
 import pytest
 
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import h1zy as Z
-from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.pouw.circuit import segment as SG
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import segment as SG
+from verity.core.protocols.spot.one_stage import produced as PR
+from verity.core.protocols.spot.one_stage import registered as G
 
 SALT, POSITION, ROOTS = bytes(range(64)), 11, (b"\x01" * 64, b"\x02" * 64)
 
@@ -198,8 +198,7 @@ def test_a_known_port_opens_only_its_content():
     assert not opens([7, 3], bytes(192)), "the verifier's content under another salt"
     f = LL.registered_file({}, {}, {}, known_ports={LL.PUB: port})
     assert f["ports"] == {LL.PUB: port} and port["reads"] == [0]
-    assert f[LL.COMPLETE] is True, "the verifier holds the circuit's every port to the file's (Registered.checkComplete)"
-    assert LL.COMPLETE not in LL.registered_file({}, {}, {}, known_ports={LL.PUB: port}, complete=False)
+    assert set(f) == {"format", "ports"}, "the verifier holds the circuit's every port to the file's, with no switch"
     with pytest.raises(ValueError, match="both reads and known"):
         LL.registered_file({LL.PUB: ("x", 0)}, {"x": port}, {"x": port["root"]}, known_ports={LL.PUB: port})
 
@@ -240,7 +239,7 @@ def test_the_verifiers_entries_are_the_registrations_and_the_produced_records():
     """Each registered value's entry and root are the registration's first of its value; the partials' are the
     verifier's own entry under the registration's digest at the produced record's root, over any registered entry of
     that name (Lean's `PouwWindow.Lanes.roots?`)."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    from verity.core.protocols.spot.one_stage import registration as R
 
     e = {v: {"value": v, "root": f"{i:02x}" * 64, "leaves": 4, "words": 2, "domain": f"{i + 8:02x}" * 64}
          for i, v in enumerate((LL.A, LL.B, LL.PARTIALS))}
@@ -265,7 +264,7 @@ def test_a_j10r_leafs_statements_and_every_port_are_its_v2_definitions(k):
     """A J10-R leaf's statements are `h1zy.lane_statements` lane by lane, then the combine, and each one's registered
     ports (`own`) are exactly its Definition's Flock ports (`h1zy.statement_ports`), ``o0`` among them; statement i's
     ``o0`` reads row i of ``oks`` and the combine's ``ok<i>`` the same row."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
 
     t, n = HW.h1_tile(k, (32, 32), H.PouwH1Tile5), LL.n_chunks(k)
     sts = LL.statements(32, 32, j10r=k)
@@ -318,7 +317,7 @@ def test_a_j10r_chunks_rows_carries_and_partials():
 def test_a_j10r_lanes_pub_row_is_v1s_then_its_call_and_blocks_then_its_index():
     """A J10-R lane's ``pub`` row is v1's 100 words, then its call's and its two blocks' leaves as the unit reads them
     (`seeds.position_leaves`), 12 words, then the index, at the fields `h1zy.statement_ports` states."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
 
     call, blocks = 0x0123456789ABCDEF, (5, 1 << 40)
     w = LL.pub_words(SALT, POSITION, ROOTS, 9, call=call, blocks=blocks)
@@ -366,7 +365,7 @@ def test_a_j10r_leafs_known_rows_and_registered_files():
 def test_the_verifiers_entries_of_a_j10r_leafs_produced_values():
     """With ``values`` (`produced_values`) every after-draw value's entry is the verifier's own under the registration's
     digest at the produced record's root, and a value the record lacks is refused by name."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    from verity.core.protocols.spot.one_stage import registration as R
 
     rec = {"format": "verity/registration/v2", "program": "12" * 64, "registered": []}
     vals = LL.produced_values(32, 32, 8192, j10r=True)

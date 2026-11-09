@@ -1,90 +1,41 @@
-"""Kernels' producer of vllm's `Served.receipts` (BRIDGE2) on the H1 served path
-(`integrations/vllm/verity_vllm/protocols/pouw/h1/served.py`): each call's receipts, one a unit of the call in the
-window Program's tile order, computed by h1u.cu's units kernel (`Units`: `kh_seeds` and `kh_unit` of an -hbc build,
-`benchmarks/hash/dither/sbench.sh`'s h1u_kc.so) or, with no kernel, by receipts.py's torch chain (the reference the units
-kernels are gated against).
+"""h1u.cu's units kernel for the served H1 receipt producer (`verity_vllm.protocols.pouw.h1.receipts.Receipts`, the served
+path's `Served.receipts`), and `check`, which holds the receipts it kept to `h1tile.reference`.
 
-Call c of the window (`pouw_h1.Call`) at contraction K, as the Program's units read it (`h1window.program`):
+`Units` wraps `kh_seeds`, `kh_unit` and `kh_units_multi` of an -hbc build (`benchmarks/hash/dither/sbench.sh`'s
+h1u_kc.so). `Receipts(served, units=Units(so), device="cuda")` computes each call's receipts with it, word for word the
+torch chain's (`pouw_h1_receipts`, the reference the units kernels are gated against): a call at a time, or a step's
+calls of one K in a few `kh_units_multi` launches (`Receipts.prepare`), each launch's codes copied to the device and its
+receipts back on streams of their own, beside the launches before and after. The kernel needs 512 | K (`kh_unit`); its
+``live`` mask is a v4 window's dead tiles (`Receipts`' ``skip_dead``).
 
-* A is the call's M slot rows (`Served.m`, the Program's slot: its served codes, then zero rows) and B its linear's N
-  weight rows; unit u of the call is row block u // (N / 32) and column block u % (N / 32), at position u0 + u, u0 the
-  call's first unit of the window Program (`h1window.call_units`), the position its statement's public row carries;
-* its seeds (`seeds.seed`, `seeds.receipt_seed`) take the window Program's salt (`H1Run.salt`) and the call's roots
-  (`Receipts.roots`): root(A) its step's A table ``a/<K>@<s>``'s and root(B) ``b/<K>``'s, the Registered row/v2 roots
-  `Served` committed (rows under `audit.hm96_salt`, domains `registered.domain`), not served_h1's AROW roots
-  (`commit.py`). `Served` asks for a step's receipts of K at its last call of K, once both are registered. Salt,
-  position and roots are unit u0 + t's public row, row t of the call's ``pub@<c>`` that the verifier builds itself
-  (`credit.public_table`, `Receipts.public`), and `check` seeds its reference from those rows (`public_fields`);
-* the unit is v1's (`h1tile.PouwH1Tile`, `h1window.tile_unit`'s): no admit gating, so a row block past the served rows
-  has the receipt its zero codes and its noise give it, not v4's zero receipt.
-
-With ``skip_dead`` (``H1_SKIP_DEAD=1``; off by default) the units of a row block wholly past the call's served rows are
-skipped: such a tile's admit bits are all 0, and its row is `h1tile.PouwH1Tile_v4`'s dead-tile receipt, zero words with no
-noise derived (`kh_unit`'s ``live`` mask, receipts.py's `gated_receipts`). A row block holding a served row is computed in
-full, and the receipts keep one row a unit in tile order. It stays off while the window Program's unit is v1, whose dead
-tile has its noise's receipt, not zero.
-
-`Served` hands a step's calls of one K to `Receipts.prepare` before it asks each of them. With the units kernel, the
-producer computes all of their units in a few `kh_units_multi` launches (``launches``), with one copy of a launch's codes
-to the device and one of its receipts back, each on a stream of its own and beside the launches before and after, so a
-call's ask returns its rows with no launch of its own once its launch's copy is done. A call asked without `prepare` is
-computed on its own, to the same words.
-
-It returns (units, 2 (KS + m)) uint32 (KS = K / 32, m = `segment.n_digits(KS)`: 260 words at K = 4096, 902 at 14336), the
-input of `pouw_h1_served.receipt_words`, which `Served` refuses at any other shape. It takes no coin: the noise is the
-salt's and the unit's position's. The kernel needs 512 | K (`kh_unit`); the torch chain any 32 | K, K >= 64.
+`check` seeds its reference from each unit's public row, row t of the call's ``pub@<c>`` as the verifier builds it
+(`credit.public_table`, `Receipts.public`): its salt, position and roots (`public_fields`).
 
 **J10-R.** A window Program over J10-R's unit (`h1window.is_j10r`: `h1tile.PouwH1Tile_v5`, ungated) takes J10-R's
 receipts: the call's one seed seed_c (`seeds.call_seed` at the call's first unit u0, its ``call``) and one stream at call
 scale, from which each unit gathers its rows and columns (`h1tile.j10r_noise`), its fold keys σ_R's at u0 + u. The units
-kernel computes them with `kh_seeds_j10r` and `kh_units_multi_j10r` (h1u.cu's), the torch chain with receipts.py's
-``j10r`` (each call's stream from `noise.cu`'s `h1_noise_calls` when ``cubin`` is given, else hashlib). Unit u0 + t's
-public row then holds its call u0 and its ``blocks`` too (`h1window.call_blocks`), and `check` seeds
-`h1tile.j10r_reference` from them. ``skip_dead`` is refused there: v5 has no dead tile.
+kernel computes them with `kh_seeds_j10r` and `kh_units_multi_j10r` (h1u.cu's), each call's row blocks hashed once into a
+workspace of the build's size (dither's `j10r_ws.py`). Unit u0 + t's public row then holds its call u0 and its ``blocks``
+too (`h1window.call_blocks`, `j10r_fields`), and `check` seeds `h1tile.j10r_reference` from them.
 """
 from __future__ import annotations
 
 import ctypes as C
 import importlib.util
-import sys
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
-import receipts as RC  # noqa: E402
+from verity.core.protocols.pouw import core_check as CC
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity_vllm.protocols.pouw.h1 import receipts as RC
 
+HERE = Path(__file__).resolve().parent
 _ws_spec = importlib.util.spec_from_file_location("dither_j10r_ws", HERE.parents[1] / "hash" / "dither" / "j10r_ws.py")
 WS = importlib.util.module_from_spec(_ws_spec)
 _ws_spec.loader.exec_module(WS)
-
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
-from verity_config.settings import of  # noqa: E402
-
-settings = of(__file__)
-
-
-def _be(b: bytes) -> np.ndarray:
-    return np.frombuffer(b, dtype=">u8").astype(np.uint64)
-
-
-def seed_record(salt: bytes, root_a: bytes, root_b: bytes, j10r: bool = False) -> np.ndarray:
-    """`kh_seeds`' data, 30 int64: SEED_TAG and RECEIPT_TAG (3 big-endian u64 words each), then the salt, root(A) and
-    root(B) (8 each); with `j10r`, `kh_seeds_j10r`'s, CALL_SEED_TAG in SEED_TAG's place. ValueError unless each of the
-    three is 64 bytes."""
-    for name, v in (("salt", salt), ("root(A)", root_a), ("root(B)", root_b)):
-        if len(v) != 64:
-            raise ValueError(f"a unit's seeds take a 64-byte {name}, not {len(v)} bytes")
-    tag = SD.CALL_SEED_TAG if j10r else SD.SEED_TAG
-    return np.concatenate([_be(tag), _be(SD.RECEIPT_TAG), _be(salt), _be(root_a), _be(root_b)]).view(np.int64)
 
 
 #: a public row's salt bytes: the row's bytes before its position and two roots
@@ -170,8 +121,9 @@ class Units:
     def seeds(self, record: torch.Tensor, base: int, units: int, out: torch.Tensor | None = None,
               call: int | None = None) -> torch.Tensor:
         """(units, 16) int64 on ``record``'s device (into ``out``, if given): unit u's seed_j then σ_R, big-endian words, at
-        position base + u, from ``record`` (`seed_record`, (30,) int64). With ``call`` (J10-R, `kh_seeds_j10r`, from
-        `seed_record`'s ``j10r`` record): unit u's seed_c, its call's at the call's first position ``call``, then σ_R."""
+        position base + u, from ``record`` (`pouw_h1_receipts.seed_record`, (30,) int64). With ``call`` (J10-R,
+        `kh_seeds_j10r`, from `seed_record`'s ``j10r`` record): unit u's seed_c, its call's at the call's first position
+        ``call``, then σ_R."""
         if tuple(record.shape) != (30,) or record.dtype != torch.int64 or not record.is_cuda:
             raise ValueError(f"kh_seeds: a (30,) int64 record on the device, not {record.dtype} {tuple(record.shape)}")
         if out is None:
@@ -275,220 +227,6 @@ class Units:
         return out
 
 
-class Receipts:
-    """`Served.receipts` for the window ``served`` (`pouw_h1_served.Served`) of the run ``run`` (`pouw_h1.H1Run`, its
-    salt; `bind` when the run is made after the producer): ``(call, codes, s_a, weight codes, s_w)`` -> the call's
-    receipts (units, 2 (KS + m)) uint32 (the module docstring). With ``units`` (`Units`) on ``device`` (CUDA), else
-    receipts.py's torch chain on ``device`` (the CPU by default).
-
-    ``weight(call)``: the call's B [N, K] s8 on ``device`` (the serving engine's own int8 weight, so the GPU holds no second
-    copy); by default the weight codes `Served` hands over, copied to ``device`` once a linear. ``roots(call)``: the call's
-    (root(A), root(B)), by default `Receipts.roots`. ``keep(call)``: keep that call's operands, roots and receipts in
-    ``kept`` (by call index) for a check against `h1tile.reference` (`check`). ``skip_dead``: skip the units of row blocks
-    wholly past the served rows (the module docstring), by default ``H1_SKIP_DEAD=1`` in the environment.
-    ``launches``: `prepare` splits a batch into that many launches of whole calls, about equal in units, each one's codes
-    staged and copied to the device while the one before computes, and its receipts copied back while the one after does.
-    ``cubin``: the torch chain's noise from `noise.cu` (`receipts.Cubin`) on ``device``, else hashlib's. ``j10r``: J10-R's
-    receipts (the module docstring), by default the window Program's form (`h1window.is_j10r`)."""
-
-    def __init__(self, served: Any, run: Any = None, units: Units | None = None, device: Any = None,
-                 weight: Callable[[Any], torch.Tensor] | None = None,
-                 roots: Callable[[Any], tuple[bytes, bytes]] | None = None, keep: Callable[[Any], bool] | None = None,
-                 skip_dead: bool | None = None, launches: int = 4, cubin: Any = None, j10r: bool | None = None):
-        if launches < 1:
-            raise ValueError(f"a batch takes at least one launch, not {launches}")
-        self.served, self.run, self.units, self.launches, self.cubin = served, run, units, launches, cubin
-        self._j10r = j10r
-        self.skip_dead = settings.H1_SKIP_DEAD if skip_dead is None else bool(skip_dead)
-        d = torch.device(device if device is not None else ("cuda" if units is not None or cubin is not None else "cpu"))
-        self.device = torch.device("cuda", torch.cuda.current_device()) if d.type == "cuda" and d.index is None else d
-        self._weight, self._roots, self._keep = weight, roots, keep
-        self._b: dict[int, tuple[Any, torch.Tensor]] = {}
-        self._starts: tuple[Any, list[tuple[int, int]]] | None = None
-        self._records: dict[tuple[bytes, bytes, bytes, bool], torch.Tensor] = {}
-        self._ready: dict[int, tuple[Any, np.ndarray, Any]] = {}
-        self._copy: Any = None
-        self._up: Any = None
-        self.kept: dict[int, dict[str, Any]] = {}
-
-    def bind(self, run: Any) -> "Receipts":
-        self.run = run
-        return self
-
-    def roots(self, call: Any) -> tuple[bytes, bytes]:
-        """Call ``call``'s (root(A), root(B)): its step's A table ``a/<K>@<s>``'s and the weights' ``b/<K>``'s registered
-        roots (`Served.registered`), the Registered row/v2 roots its tables were committed under. ValueError while
-        either isn't registered."""
-        if self._roots is not None:
-            return self._roots(call)
-        s = self.served
-        names = (s.a_table(call.index), s.program.fn.bindings["PREFIX"] + f"b/{call.k}")
-        if missing := [v for v in names if v not in s.registered]:
-            raise ValueError(f"call {call.index}'s seeds take the roots of {names[0]} and {names[1]}, and {missing} isn't "
-                             "registered yet: a step's receipts of K are asked for at its last call of K")
-        return s.registered[names[0]].root, s.registered[names[1]].root
-
-    @property
-    def j10r(self) -> bool:
-        """Whether the producer computes J10-R's receipts: ``j10r`` if given, else the window Program's form."""
-        return HW.is_j10r(self.served.program) if self._j10r is None else bool(self._j10r)
-
-    def public(self, call: Any) -> list[list[int]]:
-        """Call ``call``'s public rows as the verifier builds them (`credit.public_table`, the statement's ``pub`` port):
-        row t unit u0 + t's, the window Program's salt, u0 + t and the call's roots (`roots`), and under J10-R u0 and the
-        unit's blocks (`h1window.call_blocks`)."""
-        s, (u0, n), (ra, rb) = self.served, self.start(call), self.roots(call)
-        blocks = HW.call_blocks(s.program, call.index) if self.j10r else None
-        rows, _salts, _reg = CR.public_table(s.program_digest, HW.table(s.program, HW.PUBS, call.index), self.run.salt.hex(),
-                                             s.root, u0, n, (ra.hex(), rb.hex()), blocks)
-        return rows
-
-    def start(self, call: Any) -> tuple[int, int]:
-        """Call ``call``'s first unit of the window Program and its units (`h1window.call_units`): its units' positions are
-        u0 .. u0 + n - 1."""
-        prog = self.served.program
-        if self._starts is None or self._starts[0] is not prog:
-            self._starts = (prog, HW.call_units(prog))
-        return self._starts[1][call.index]
-
-    def weight_of(self, call: Any, w: Any) -> torch.Tensor:
-        """Call ``call``'s B [N, K] s8 on the device (``weight``, else ``w`` copied there once a linear)."""
-        if self._weight is not None:
-            b = self._weight(call)
-        else:
-            held = self._b.get(call.layer)
-            if held is None or held[0] is not w:
-                if w is None:
-                    raise ValueError(f"call {call.index}: no weight of linear {call.layer} was handed over")
-                held = self._b[call.layer] = (w, torch.from_numpy(np.ascontiguousarray(w, np.int8)).to(self.device))
-            b = held[1]
-        if b.dtype != torch.int8 or tuple(b.shape) != (call.n, call.k) or b.device != self.device or not b.is_contiguous():
-            raise ValueError(f"call {call.index}: its weight is {b.dtype} {tuple(b.shape)} on {b.device}, not its {call.n} × "
-                             f"{call.k} contiguous int8 codes on {self.device}")
-        return b
-
-    def operands(self, call: Any, codes: Any, w: Any) -> tuple[torch.Tensor, torch.Tensor]:
-        """Call ``call``'s A [M, K] (its served ``codes`` [m, K], then zero rows to the Program's slot M) and B [N, K], s8
-        on the device."""
-        m, k = int(self.served.m), int(call.k)
-        x = np.asarray(codes)
-        if x.dtype != np.int8 or x.ndim != 2 or x.shape[1] != k or len(x) > m:
-            raise ValueError(f"call {call.index}: its codes are {x.dtype} {x.shape}, not at most {m} rows of {k} int8 codes")
-        a = torch.zeros(m, k, dtype=torch.int8, device=self.device)
-        if len(x):
-            a[:len(x)] = torch.from_numpy(np.ascontiguousarray(x)).to(self.device)
-        return a, self.weight_of(call, w)
-
-    def _record(self, salt: bytes, ra: bytes, rb: bytes) -> torch.Tensor:
-        key = (salt, ra, rb, self.j10r)
-        if key not in self._records:
-            self._records = {key: torch.from_numpy(seed_record(salt, ra, rb, self.j10r)).to(self.device)}
-        return self._records[key]
-
-    def _live(self, m: int) -> torch.Tensor | None:
-        if not self.skip_dead:
-            return None
-        if self.j10r:
-            raise ValueError("skip_dead under J10-R: its unit (PouwH1Tile_v5) is ungated, a dead tile has its noise's "
-                             "receipt; unset H1_SKIP_DEAD")
-        return (torch.arange(int(self.served.m) // RC.R, device=self.device) * RC.R < m).to(torch.uint8)
-
-    def prepare(self, batch: list[tuple[Any, Any, Any, Any, Any]]) -> None:
-        """`Served`'s hook before it asks a step's calls of one K, ``batch`` their ``(call, codes, s_a, weight codes, s_w)``
-        in the order it asks them: with the units kernel, every unit of them in `launches` launches (`Units.multi`) and
-        their receipts copied to the host on a stream of their own, so each call's ask returns its rows (the same words)
-        with no launch of its own, once its launch's copy is done. A launch's codes are staged in pinned memory and go to
-        the device in one copy on a stream of their own. Nothing with the torch chain, or unless every call of the batch
-        serves the same rows at one K: each is then asked on its own."""
-        self._ready = {}
-        if self.units is None or self.run is None or len(batch) < 2:
-            return
-        m, k, slot = len(batch[0][1]), int(batch[0][0].k), int(self.served.m)
-        if any(len(codes) != m or int(call.k) != k for call, codes, *_rest in batch):
-            return
-        xs = [np.asarray(codes) for _call, codes, *_rest in batch]
-        if any(x.dtype != np.int8 or x.shape != (m, k) for x in xs) or m > slot:
-            raise ValueError(f"calls {[c.index for c, *_r in batch]}: their codes are not {m} rows of {k} int8 codes each, "
-                             f"at most {slot}")
-        bs = [self.weight_of(call, w) for call, _codes, _s_a, w, _s_w in batch]
-        spans = [self.start(call) for call, *_rest in batch]
-        for (call, *_rest), b, (_u0, n) in zip(batch, bs, spans):
-            if (slot // RC.R) * (b.shape[0] // RC.C_) != n:
-                raise ValueError(f"call {call.index}: {n} units in the window Program, not its {slot} × {b.shape[0]} tiles")
-        offs = [int(x) for x in np.cumsum([0] + [n for _u0, n in spans])]
-        n = min(self.launches, len(batch))
-        cuts = sorted({0, len(batch)} | {int(np.searchsorted(offs, offs[-1] * j / n)) for j in range(1, n)})
-        recs = [self._record(self.run.salt, *self.roots(call)) for call, *_rest in batch]
-        main = torch.cuda.current_stream(self.device)
-        if self._copy is None:
-            self._copy, self._up = torch.cuda.Stream(device=self.device), torch.cuda.Stream(device=self.device)
-        a = (torch.empty if m == slot else torch.zeros)(len(batch), slot, k, dtype=torch.int8, device=self.device)
-        self._up.wait_stream(main)
-        a.record_stream(self._up)
-        host = torch.empty(len(batch), m, k, dtype=torch.int8, pin_memory=True) if m else None
-        seeds = torch.empty(offs[-1], 16, dtype=torch.int64, device=self.device)
-        got = torch.empty(offs[-1], self.units.words(k), dtype=torch.int32, pin_memory=True)
-        words, live, ready, j10r = got.numpy().view(np.uint32), self._live(m), {}, self.j10r
-        for lo, hi in zip(cuts[:-1], cuts[1:]):
-            if host is not None:
-                hn = host.numpy()
-                for i in range(lo, hi):
-                    hn[i] = xs[i]
-                with torch.cuda.stream(self._up):
-                    a[lo:hi, :m].copy_(host[lo:hi], non_blocking=True)
-                main.wait_stream(self._up)
-            i = lo
-            while i < hi:
-                j = i + 1
-                while not j10r and j < hi and recs[j] is recs[i] and spans[j][0] == spans[j - 1][0] + spans[j - 1][1]:
-                    j += 1
-                self.units.seeds(recs[i], spans[i][0], offs[j] - offs[i], out=seeds[offs[i]:offs[j]],
-                                 call=spans[i][0] if j10r else None)
-                i = j
-            out = self.units.multi([(a[i], bs[i], seeds[offs[i]:offs[i + 1]]) for i in range(lo, hi)], live, j10r)
-            self._copy.wait_stream(main)
-            with torch.cuda.stream(self._copy):
-                got[offs[lo]:offs[hi]].copy_(out, non_blocking=True)
-            out.record_stream(self._copy)
-            copied = torch.cuda.Event()
-            copied.record(self._copy)
-            for i in range(lo, hi):
-                ready[batch[i][0].index] = (batch[i][1], words[offs[i]:offs[i + 1]], copied)
-        self._ready = ready
-
-    def __call__(self, call: Any, codes: Any, s_a: Any, w: Any, s_w: Any) -> np.ndarray:
-        if self.run is None:
-            raise ValueError("the receipt producer is bound to no run: its units' seeds take the run's salt (`bind`)")
-        salt, j10r = self.run.salt, self.j10r
-        u0, n = self.start(call)
-        ra, rb = self.roots(call)
-        m = len(codes)
-        live = self._live(m)
-        ready = self._ready.pop(call.index, None)
-        if ready is not None and ready[0] is codes:
-            ready[2].synchronize()
-            out, a, b = ready[1], None, None
-        else:
-            a, b = self.operands(call, codes, w)
-            if (a.shape[0] // RC.R) * (b.shape[0] // RC.C_) != n:
-                raise ValueError(f"call {call.index}: {n} units in the window Program, not its {a.shape[0]} × "
-                                 f"{b.shape[0]} tiles")
-            if self.units is not None:
-                seeds = self.units.seeds(self._record(salt, ra, rb), u0, n, call=u0 if j10r else None)
-                out = self.units.receipts(a, b, seeds, live, j10r).cpu().numpy().view(np.uint32)
-            elif self.skip_dead:
-                out = RC.gated_receipts(RC.Call(a, b), np.arange(a.shape[0]) < m, salt, u0, ra, rb, self.cubin)[0]
-            else:
-                out = RC.call_receipts(RC.Call(a, b), salt, u0, ra, rb, self.cubin, j10r=j10r)
-        if self._keep is not None and self._keep(call):
-            if a is None:
-                a, b = self.operands(call, codes, w)
-            self.kept[call.index] = {"a": a.cpu(), "b": b.cpu(), "salt": salt, "base": u0, "roots": (ra, rb),
-                                     "receipts": out.copy(), "m": m, "pub": self.public(call), "skip": self.skip_dead,
-                                     "j10r": j10r}
-        return out
-
-
 def check(kept: dict[str, Any], units: list[int]) -> dict[str, Any]:
     """A kept call's (`Receipts.kept`) receipts of ``units`` against `h1tile.reference` on the same operands, seeded from
     each unit's public row as the verifier builds it (``pub``, `public_fields`), word for word, v4's under the served rows'
@@ -519,4 +257,4 @@ def check(kept: dict[str, Any], units: list[int]) -> dict[str, Any]:
     return out
 
 
-__all__ = ["Receipts", "Units", "check", "j10r_fields", "public_fields", "seed_record"]
+__all__ = ["Units", "check", "j10r_fields", "public_fields"]

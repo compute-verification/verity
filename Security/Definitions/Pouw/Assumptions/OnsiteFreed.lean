@@ -1,4 +1,6 @@
-import Definitions.Pouw.OnsiteFreed
+module
+
+public import Definitions.Pouw.OnsiteFreed
 
 /-!
 # The onsite PoUW protocol's freed compute: its named premises (trusted)
@@ -10,15 +12,17 @@ P1, P2) and the period's dual price:
   devices, and whose period the work check accepts, spent at least `F` of priced timed work on them, but with
   probability `κ`;
 * `OutsourceWithinEgressPeriod`: an exchanged bit replaces at most `β` of priced timed work, over the period's
-  programs together, the one premise that prices outside machines;
-* `CertifiedImport`: the network certifier's count. Its check accepts a period that exchanged more than `K` bits but
-  with probability `δ` (`Definitions.Pouw.Assumptions.Dither.ImportWithinCertifier` at `δ = 0`).
+  programs together, the one premise that prices outside machines.
 
-**Non-vacuity rests on the fixed model.** 𝓜 as `Definitions.Core.Accel` writes it makes `SAKMatmul` and
-`SAKResidual` false (free register reductions run the four Russians' method below the public best's cost), so
-`RemoteWorkFloor`, which rests on them, is false there at any useful `F`. A guarantee that takes it says something only
-on a model that charges those reductions.
+The network certifier's count is `Definitions.Pouw.Assumptions.Dither.CertifierSeesImports`, the headline's.
+
+**Non-vacuity is open.** `RemoteWorkFloor` rests on `SAKMatmul` and `SAKResidual`. 𝓜 as `Definitions.Core.Accel`
+writes it prices register reductions, so the four Russians' method pays at least an `alu` lane a MAC, but `SAKMatmul`
+as written still fails at a dual price that leaves those pipes cheap, and `SAKResidual` is not adopted. Whether
+`RemoteWorkFloor` holds on 𝓜 at a useful `F` is open.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 
@@ -79,23 +83,5 @@ def OutsourceWithinEgressPeriod (G : Accel) (P : RoundProto) (k : ℕ) (μ : G.R
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ A : Prover G P k, ∃ A' : Prover G P k, A'.ExchangeFree ∧ ∀ o x,
     A'.transcript o x = A.transcript o x ∧
       ∑ r, μ r * A'.timedUse o x r ≤ ∑ r, μ r * A.timedUse o x r + β * A.ext o x
-
-/-- `pouw-certified-import` (proposed; the network certifier's count). **The certifier's check accepts a period
-that exchanged more than `K` bits but with probability `δ`**: for every prover, the probability over the oracle and
-the verifier's coins that the certifier's check `verdict` accepts its transcript and the devices' readings `dev` while
-its programs exchanged more than `K` bits with machines outside the registered devices (`Prover.ext`) is at most `δ`.
-
-`Definitions.Pouw.Assumptions.Dither.ImportWithinCertifier` is its `δ = 0` case
-(`Pouw.SecurityProofs.certifiedImport_of_within`). A certifier's guarantee bounds the count but with an error (the
-period's `n (δ + ε_ks + ε_bind + ε_tap)` in `NetTiming.Guarantees.PeriodLeakAccepted`), so this is the form it can
-give. That guarantee bounds the information an accepted period carries out (at most `2^K` values) in Accounting's
-device vocabulary; the step from it to this count of `Prover.ext` is open.
-
-It is falsified by a strategy whose periods the certifier's check accepts, with probability more than `δ`, after its
-programs exchanged more than `K` bits. -/
-def CertifiedImport (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
-    (dev : Readings G P k Obs) (K δ : ℝ) : Prop :=
-  ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
-    A.Passes verdict dev ox.1 ox.2 ∧ K < A.ext ox.1 ox.2) ≤ δ
 
 end Pouw.Assumptions

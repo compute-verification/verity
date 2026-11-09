@@ -1,16 +1,54 @@
-import Mathlib
-import Definitions.Accounting.Actual.Sampler
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Definitions.Accounting.Actual.Sampler
+public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The deployed uniform sampler on one word: its counts
 
 The sampler (`Accounting.Actual.wordIndex`) accepts `2^w − (2^w mod N)` words (`card_accepted`), and gives each index
 at most `⌊2^w / N⌋` of them (`card_fiber_le`), a uniform share. Beside them, the probability facts the remote audit's
-opening draw is proved with: a count bounds a probability and back (`pr_le_ofReal`, `ofReal_le_pr`), a probability is
+opening sample is proved with: a count bounds a probability and back (`pr_le_ofReal`, `ofReal_le_pr`), a probability is
 the same over the coins in another order (`pr_comp_equiv`), and the real game is the ideal one plus the PRF's advantage
 (`pr_le_add_prfAdvantage`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Actual
 
@@ -69,7 +107,7 @@ theorem card_fiber_le {N w : ℕ} (i : Fin N) :
 open Classical in
 theorem pr_le_ofReal {α : Type} [Fintype α] (P : α → Prop) {β : ℝ} (hβ : 0 ≤ β)
     (h : ((univ.filter P).card : ℝ) ≤ β * Fintype.card α) : Pous.pr P ≤ ENNReal.ofReal β := by
-  unfold Pous.pr
+  simp only [Pous.pr_eq_card]
   apply ENNReal.div_le_of_le_mul
   rw [← ENNReal.ofReal_natCast, ← ENNReal.ofReal_natCast, ← ENNReal.ofReal_mul hβ]
   exact ENNReal.ofReal_le_ofReal h
@@ -77,7 +115,7 @@ theorem pr_le_ofReal {α : Type} [Fintype α] (P : α → Prop) {β : ℝ} (hβ 
 open Classical in
 theorem ofReal_le_pr {α : Type} [Fintype α] (P : α → Prop) :
     ENNReal.ofReal (((univ.filter P).card : ℝ) / Fintype.card α) ≤ Pous.pr P := by
-  unfold Pous.pr
+  simp only [Pous.pr_eq_card]
   rcases Nat.eq_zero_or_pos (Fintype.card α) with h | h
   · simp [h]
   · rw [ENNReal.ofReal_div_of_pos (by exact_mod_cast h), ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]
@@ -86,7 +124,7 @@ open Classical in
 /-- A probability is the same over the coins in another order. -/
 theorem pr_comp_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (P : β → Prop) :
     Pous.pr (fun x => P (e x)) = Pous.pr P := by
-  unfold Pous.pr
+  simp only [Pous.pr_eq_card]
   rw [Fintype.card_congr e, card_equiv e (t := univ.filter P) fun x => by simp]
 
 /-- **The real game is the ideal one plus the PRF's advantage** against the distinguisher, for any bound on the ideal

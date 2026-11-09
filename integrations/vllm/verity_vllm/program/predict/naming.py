@@ -15,7 +15,8 @@ its node's output unless said otherwise: the embedding; layer 0's input norm (`t
 `<node>/query[r]` and `<node>/key[r]`), the attention (named `<node>[t=p0+r]`), the o linear, the post-attention norm, the
 gate/up linear, `silu_and_mul` and the down linear; the final norm; then the sampled row's logits (`triton_launch`, row 0 of
 [1, V]) and its select (`argmax`, or `gumbel_topp_token_select` with its constants `top_p`, `pos`, `temperature` and, at a
-constant split count, `splits`, named `<node>/<member>`, before its row 0), under the root module. A linear is one
+constant split count, `splits`, named `<node>/<member>`, before its row 0), under the root module. A request under a length
+rule (`frontend.stop_rule`) ends with its Call, `stop_rule`, which no fx node lowers: no occurrence. A linear is one
 `triton_launch` GEMM, or under the exact-int8 linears `row_quant` then `scaled_mm`. An fx node is named by its op, counted over
 the request (`embedding`, `embedding_1`, ...). Every node of the emitted body is held to the kind its place names
 (`build._Specs`), so a body these names don't fit is refused, never misnamed; the dead units' Calls are named, then dropped with
@@ -34,7 +35,7 @@ import gzip
 import json
 import os
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 from verity.ml.circuits.types import RecordType
@@ -62,7 +63,8 @@ class Named:
     instances head lists them), the runtime correspondence document, the cached prefix's layout (None without one), the
     request's shape (`shape`: wrapper, LP, T, C and sampling, as a Build's `result.json` states them), the declared target
     (`target`, `TargetProfile.to_json`) and each attention layer by vLLM's layer name with its statics (`attention`, the
-    fields of a trace's `attention_impls_observed` the audit reads)."""
+    fields of a trace's `attention_impls_observed` the audit reads), and its checks as `derive`'s provenance states them
+    (`BuildResult.checks`, None without any), which its instances header carries for the replay."""
 
     names: dict[int, str]
     params: list[list[str]]
@@ -71,6 +73,7 @@ class Named:
     shape: dict
     target: dict
     attention: dict
+    checks: dict | None = None
 
 
 def _view(shape: tuple[int, ...], dtype: str) -> dict:
@@ -107,6 +110,17 @@ class _Walk:
             got = self.nodes[k].fn.id if k < len(self.nodes) else "past the body's end"
             raise Unexpressible(f"naming: node {k} is {got}, not the {what} the trace names {name}")
         self.calls.append({"occ": occ, "member": member, "row": row, "hint": hint, "returns": returns, "args": []})
+        self.names[k] = name
+        self.k += 1
+
+    def bare(self, ok: Callable[[Any], bool], what: str, name: str) -> None:
+        """The next node of the body as Call `name`, which no fx node lowers (the length rule, `frontend.stop_rule`): no
+        occurrence, as the trace's correspondence records such a Call."""
+        k = self.k
+        if k >= len(self.nodes) or not ok(self.nodes[k].fn):
+            got = self.nodes[k].fn.id if k < len(self.nodes) else "past the body's end"
+            raise Unexpressible(f"naming: node {k} is {got}, not the {what} the trace names {name}")
+        self.calls.append({"occ": None, "member": None, "row": None, "hint": name, "returns": [], "args": []})
         self.names[k] = name
         self.k += 1
 
@@ -212,17 +226,22 @@ def _sample(w: _Walk, S: Any, C: Any, sampling: dict) -> None:
     w.call(lambda f: _family(f) == select, "token select", occ, f"{node}[0]", w.slots([_view((1,), "int32")], 0, False), row=0)
 
 
-def name_request(raw: Any, net: Any, params: tuple, *, LP: int, T: int, C: int, sampling: dict) -> tuple[Any, Named]:
+def name_request(raw: Any, net: Any, params: tuple, *, LP: int, T: int, C: int, sampling: dict,
+                 stop: dict | None = None) -> tuple[Any, Named]:
     """The request Program's body `raw` (`build_program`'s, before `prune.dead_free`) of `net` (a `build._Decoder` that `refuse`
     passes) over `params` (its user inputs, then the weights record), prefill LP rows after a cached prefix of C, then T decodes,
-    sampled under `sampling` -> (its body in the registered compiler's form, its names), or `Unexpressible` (module docstring)."""
+    sampled under `sampling`, then its length rule where `stop` gives one -> (its body in the registered compiler's form, its
+    names), or `Unexpressible` (module docstring)."""
     from verity_vllm.correspondence.runtime import SCHEMA
+    from verity_vllm.program.frontend.stop_rule import NAME as STOP
     from verity_vllm.program.prune import kept_records
     S, Cm = net.specs, net.C
     w = _Walk(list(raw.nodes))
     for M, p0 in [(LP - C, C)] + [(1, LP + s) for s in range(T)]:
         _forward(w, S, Cm, M, p0)
         _sample(w, S, Cm, sampling)
+    if stop is not None:
+        w.bare(lambda f: f.name == "StopCheck", "length rule", STOP)
     if w.k != len(w.nodes):
         raise Unexpressible(f"naming: the body has {len(w.nodes)} nodes and the trace names {w.k}, node {w.k} "
                             f"({w.nodes[w.k].fn.id}) first unnamed")
@@ -234,19 +253,21 @@ def name_request(raw: Any, net: Any, params: tuple, *, LP: int, T: int, C: int, 
     names_of = [n for n, _ in params]
     prefix = {"input": names_of.index("prefix"), "C": C, "row_leaves": Cm.KVH * Cm.D,
               "layers": [f"model.layers.{L}.self_attn.attn" for L in range(Cm.NL)]} if C else None
-    shape = {"wrapper": "request", "LP": LP, "T": T, "C": C, "sampling": dict(sampling)}
+    shape = {"wrapper": "request", "LP": LP, "T": T, "C": C, "sampling": dict(sampling), **({"stop": dict(stop)} if stop else {})}
     attention = {f"model.layers.{L}.self_attn.attn": {"num_heads": Cm.NH, "num_kv_heads": Cm.KVH, "head_size": Cm.D, "sliding_window": None}
                  for L in range(Cm.NL)}
     return body, Named(names, [[n, str(t)] for n, t in user] + [[wname, str(weights)]], doc, prefix, shape, S.tp.to_json(), attention)
 
 
-def named_program(phi: Phi, LP: int, T: int, C: int = 0) -> BuildResult:
-    """φ's request Program at (LP, T) after a cached prefix of C rows, in the registered compiler's form (`build.build_program`,
-    ``dead_free``), with its names (`BuildResult.named`), or `Unexpressible` where `refuse` refuses its decoder, before any build."""
+def named_program(phi: Phi, LP: int, T: int, C: int = 0, stop: dict | None = None) -> BuildResult:
+    """φ's request Program at (LP, T) after a cached prefix of C rows, under the length rule `stop` where it has one, in the
+    registered compiler's form (`build.build_program`, ``dead_free``), with its names and checks (`BuildResult.named`), or
+    `Unexpressible` where `refuse` refuses its decoder, before any build."""
     refuse(decoder(phi, 1, int(LP) + int(T)))
     sampling = dict(phi.sampling or {"kind": "greedy"})
-    return build_program(phi, "request", LP=LP, T=T, C=C, dead_free=True, finish=lambda raw, net, params: name_request(
-        raw, net, params, LP=int(LP), T=int(T), C=int(C), sampling=sampling))
+    r = build_program(phi, "request", LP=LP, T=T, C=C, dead_free=True, stop=stop, finish=lambda raw, net, params: name_request(
+        raw, net, params, LP=int(LP), T=int(T), C=int(C), sampling=sampling, stop=stop))
+    return replace(r, named=replace(r.named, checks=r.checks))
 
 
 def write_build(out: str, program: Any, named: Named) -> str:
@@ -265,7 +286,7 @@ def write_build(out: str, program: Any, named: Named) -> str:
     os.makedirs(out, exist_ok=True)
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
         f.write(json.dumps(desc, sort_keys=True).encode())
-    write_instances(out, program, digest, cd, {}, names=named.names, params=named.params)
+    write_instances(out, program, digest, cd, {}, names=named.names, params=named.params, checks=named.checks)
     if named.prefix is not None:
         with open(os.path.join(out, "prefix_cache.json"), "w") as f:
             json.dump(named.prefix, f, indent=1)

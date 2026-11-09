@@ -1,4 +1,19 @@
-import Proofs.Flock.Soundness.LigeritoPadLevel0
+module
+
+public import Proofs.Flock.Soundness.LigeritoPadLevel0
+import ArkLib.Data.CodingTheory.JohnsonBound.Family
+import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Accounting.Numbers
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.LigeritoWeights
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.NovelBasis
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.Rounds
 
 /-!
 # Decoding the padded level-0 column
@@ -12,6 +27,8 @@ event, and rep `r`'s padded column agrees with the encoding of `G` on a set `T` 
 * the family's combined encoding and the target agree on `T`, and `|T| ≥ 2^cols + t`, so their
   coefficients agree: at `x < 2^cols` that is `G`, at `2^cols + j` it is `ybar`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

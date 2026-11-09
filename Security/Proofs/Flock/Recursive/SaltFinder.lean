@@ -1,4 +1,21 @@
-import Proofs.Flock.Recursive.TopFinder
+module
+
+public import Flock.RecCoins
+public import Proofs.Flock.Recursive.Flock
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The held salts' finder: a registrant's read of R's level-0 top against the salts its nodes were committed under
@@ -18,6 +35,8 @@ computable only with `salt i` in hand.
   `qS²/2^513`; its union with `regFinder`, `topFinder` and `valueFinder` is `prob_regTopValueSalt_le`
   (`Recursive/ValueFinder.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 
@@ -46,7 +65,7 @@ namespace FlockSoundness.Registered
 
 open Game Refine Binding Audit
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}

@@ -1,5 +1,27 @@
-import Proofs.Properties.Nci.BodiesOk.Nonneg
-import Proofs.Properties.Nci.BodiesOk.Node
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Nonneg
+public import Proofs.Properties.Nci.BodiesOk.Node
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Properties.Nci.BodiesOk.Basic
+import Std.Data.HashMap.Lemmas
 
 /-!
 # The decoder's invariant
@@ -9,6 +31,8 @@ Every Definition it appends is `DefOk`: a primitive one gate with an empty body;
 earlier Definition as `NodeOk` says (`buildNode_spec`), and every reference of its body names a leaf of a parameter or
 of a node's declared output (`Walk.parsePartsIn_valid`). `decode_spec` proves it by induction on the fuel.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Merkle
 
 /-!
 # Where a bad compiled `--zk` run goes wrong
@@ -17,6 +21,8 @@ something else. Each committed kind has its openings by position:
 Every clash, and every pair of runs opening one position of one cap, root or commitment two ways, is a collision of `H`
 (`SelfClashZ.collision`, `opOfW_conflict_collision`, `opPadsAtZ_conflict_collision`, `opTauZ_conflict_collision`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 
@@ -213,7 +219,7 @@ theorem rowPads_padsTab (N : ℕ) (v : Fin N → F × F) : rowPads N (padsTab N 
   funext p
   simp [rowPads, padsTab, p.isLt]
 
-/-- **A pads clash**: within one run, two of a rep's pads openings, both drawn at one position (rep `r`'s
+/-- **A pads clash**: within one run, two of a rep's pads openings, both sampled at one position (rep `r`'s
 `PendZ.qpos`), verify there to one root with different pairs, under any salts. -/
 def PadsClashAtZ (Hs : Hashes F D Sl) (N q : ℕ) (out : OutZC F D Sl) : Prop :=
   ∃ r < 2, ∃ root : D, ∃ jj < q, ∃ jj' < q, ∃ p : Fin N,

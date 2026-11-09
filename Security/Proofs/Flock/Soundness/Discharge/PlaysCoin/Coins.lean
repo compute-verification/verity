@@ -1,4 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # A run's coin steps
@@ -8,6 +11,8 @@ exactly its coin arrays as `coinArr` reads them, by the induction of `Plays.toT`
 round whose coin count is its array's size, `coinMsg true` is `coinArr`. So `coinsOfRounds` (`CoinsOfRounds`): a run on
 well-formed rounds' coins has the coin steps `coinMsg true` of the rounds.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlaysCoin
 
@@ -24,11 +29,11 @@ theorem toT_exact : ToTExact := by
   | coinVec c hc hn _ ih =>
       obtain ⟨ts, hp, h1, h2⟩ := ih
       subst hc
-      refine ⟨.inr ⟨_, fun i => ι c[i.val]!⟩ :: ts, .coin _ hp, by rw [List.filterMap_cons, Sum.getLeft?_inr, h1], ?_⟩
+      refine ⟨.inr ⟨_, fun i => ι (c)[i.val]!⟩ :: ts, .coin _ hp, by rw [List.filterMap_cons, Sum.getLeft?_inr, h1], ?_⟩
       simp only [List.filterMap_cons, Sum.getRight?_inr, List.map_cons, h2, coinArr, hn, ite_false]
   | coinOne c hc _ ih =>
       obtain ⟨ts, hp, h1, h2⟩ := ih
-      refine ⟨.inr ⟨F, ι c[0]!⟩ :: ts, .coin _ hp, by rw [List.filterMap_cons, Sum.getLeft?_inr, h1], ?_⟩
+      refine ⟨.inr ⟨F, ι (c)[0]!⟩ :: ts, .coin _ hp, by rw [List.filterMap_cons, Sum.getLeft?_inr, h1], ?_⟩
       simp only [List.filterMap_cons, Sum.getRight?_inr, List.map_cons, h2, coinArr, hc, ite_true]
 
 /-- On a round whose coin count is its coin array's size, `coinMsg true` is the array's coin step. -/

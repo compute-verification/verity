@@ -1,5 +1,12 @@
+module
+
+public import Definitions.Pouw.Receipt.Duo
+public import Mathlib.SetTheory.Cardinal.Finite
+import Mathlib.Data.BitVec
+import Mathlib.Tactic.NormNum.Ineq
+import Mathlib.Tactic.NormNum.Pow
+import Proofs.Pouw.Receipt.Duo
 import Proofs.Pouw.Receipt.Run
-import Mathlib.SetTheory.Cardinal.Finite
 
 /-!
 # duo runs: four words bound anywhere in a run, checkpoints every four words, and the kernel of long runs
@@ -13,6 +20,8 @@ block's start on, whose state the earlier blocks map onto every state (`duoCheck
 No run of more than `2·4ⁿ` words is injective into the final-state maps: `2^(nL)` runs against `(4ⁿ)^(4ⁿ)` maps
 (`duoRun_kernel`).
 -/
+
+@[expose] public section
 
 namespace Pouw.ReceiptProofs
 

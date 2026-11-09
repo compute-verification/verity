@@ -1,4 +1,35 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictReplay
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictReplay
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Refine.Opening
+import Proofs.Flock.Soundness.Refine.Plays
+import Proofs.Flock.Soundness.Refine.Zerocheck
 
 /-!
 # A `--zk` rep's inner check holds on its inner openings
@@ -13,8 +44,10 @@ values are the claim checks, `openingZK_plays'`) and level 0's two lane rows (`l
   inner openings.
 * `zk_inner_of_rep`: at `ZkRepAccepts`'s hypotheses, every result of the compiled rep does (`plays_det`).
 * `zk_inner_qpos`, `zk_qpos_of_rep`: the position a result of the compiled rep records for inner query `jj` is the
-  table's `pos` at the rounds' last coin `jj`, the query word `Zk.verifyInner` draws.
+  table's `pos` at the rounds' last coin `jj`, the query word `Zk.verifyInner` samples.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -241,6 +274,8 @@ theorem zk_inner_qpos {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128} 
   dsimp only
   rw [ZkLink.qposOf, dite_eq_left hjj, hc₃]
 
+-- one proof of over a hundred lines down the rep's masked and rest programs (`repProg`), `rw` and `omega` on the rows'
+-- indices
 set_option maxHeartbeats 1000000 in
 /-- **`repProg`'s run has an inner check that holds** (`zk_rep_plays` with its inner check): the run of the compiled
 rep that `zk_rep_plays` builds, at a table whose pads and inner code are the executable's and whose statement's fold

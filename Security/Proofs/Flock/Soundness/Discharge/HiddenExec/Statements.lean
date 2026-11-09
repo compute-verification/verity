@@ -1,21 +1,42 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The statements: flock-verify's acceptance under either tag, hidden outputs included
 
-e2e-exec's acceptance lemmas (`Discharge/Exec`) take `hh : I.tags.hiddenOutputs = false`: they are about `Stmt.setupH`'s
+`Discharge/Exec`'s acceptance lemmas take `hh : I.tags.hiddenOutputs = false`: they are about `Stmt.setupH`'s
 statements, and under hidden outputs `Stmt.setupTables` calls `Stmt.setupHidden`. Each statement here is one of them
 without `hh`, so it covers the sessions main's prover writes (`verity/flock-circuit`, the default
 `--statement`). Where the original names `setupH`, this one names `setupOne`, the setup `setupTables` calls for the
 tag; where it doesn't, the conclusion is the original's.
 
-* `SetupTablesOkAny`, `AcceptsSetupOne`, `AcceptsOneAny`: e2e-exec's `setupTables_ok`, `accepts_setupH`, `accepts_one`.
+* `SetupTablesOkAny`, `AcceptsSetupOne`, `AcceptsOneAny`: `Exec.setupTables_ok`, `Exec.accepts_setupH`, `Exec.accepts_one`.
 * `AcceptsRetainedAny`, `AcceptsAllRetainedAny`, `AcceptsRepRoundsAny`: `accepts_retained`, `accepts_allRetained`,
   `accepts_rep_rounds`.
 * `AcceptsTablesHm96Any`, `AcceptsTablesHm96OfLeafAny`, `AcceptsVerdictHm96Any`: `accepts_tables_hm96`,
   `accepts_tables_hm96_of_leaf`, `accepts_verdict_hm96`.
 * `TableAtHOfAccepts`: Integrate's `tableAt_of_accepts` for the hidden tables (`tableAtH`, `Tables.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenExec
 
@@ -26,8 +47,8 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **`setupTables` sets up each table with `setupOne`**, under any tag (`Exec.setupTables_ok` without `hh`): for one
-table, at the inputs and the session's draw, and the session's spec is the table's; for `count > 1`, `count` tables,
-table `j` under `Tags.tableIdentity count j` at a subset draw of its part. -/
+table, at the inputs and the session's sample, and the session's spec is the table's; for `count > 1`, `count` tables,
+table `j` under `Tags.tableIdentity count j` at a subset sample of its part. -/
 def SetupTablesOkAny : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
@@ -71,7 +92,7 @@ def AcceptsAllRetainedAny : Prop :=
 /-- **flock-verify's acceptance, round by round** (`Exec.accepts_rep_rounds` without `hh`). -/
 def AcceptsRepRoundsAny : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.tags.retainRounds = true → Accepts I t →
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         RepRounds spec (Setup.ofCircuit sts[j]) sch sess j 0 t.proofs[2 * j]! ∧
@@ -81,7 +102,7 @@ def AcceptsRepRoundsAny : Prop :=
 without `hh`, with `setupOne` for `setupH`). -/
 def AcceptsTablesHm96Any : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, Accepts I t →
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧ 0 < sts.size ∧
       ∀ (j : ℕ) (hj : j < sts.size),
         (∃ d, setupOne (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables d I.partition
@@ -105,7 +126,7 @@ def AcceptsTablesHm96Any : Prop :=
 (`Exec.accepts_tables_hm96_of_leaf` without `hh`, with `setupOne` for `setupH`). -/
 def AcceptsTablesHm96OfLeafAny : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.tags.merkleLeaf = "hm96-sha512/v1" → Accepts I t →
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧ 0 < sts.size ∧
       ∀ (j : ℕ) (hj : j < sts.size),
         (∃ d, setupOne (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables d I.partition
@@ -129,7 +150,7 @@ def AcceptsTablesHm96OfLeafAny : Prop :=
 `hh`). -/
 def AcceptsVerdictHm96Any : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.tags.merkleLeaf = "hm96-sha512/v1" → Accepts I t →
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m),
@@ -157,10 +178,10 @@ def AcceptsVerdictHm96Any : Prop :=
               sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!])).accepted =
             true
 
-/-- **At a draw flock-verify accepts under hidden outputs, the headline's table is `stmtOf` of the statement it
+/-- **At a sample flock-verify accepts under hidden outputs, the headline's table is `stmtOf` of the statement it
 accepted** (Integrate's `tableAt_of_accepts` for `tableAtH`): for a one-table session under a tag with hidden outputs
 whose circuit file parses (untyped) to a circuit whose unit returns the outputs, when the session's record carries the
-challenger's draw `dj S`, that draw proves `S`, and setupHidden's statement at it has link points `mPts`. -/
+challenger's sample `dj S`, that sample proves `S`, and setupHidden's statement at it has link points `mPts`. -/
 def TableAtHOfAccepts : Prop :=
   ∀ {I : Exec.Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}, I.tags.typed = false →
     HmOut.parse I.tags I.circuitFile I.tables = .ok c → c.outNet = c.unitNet →

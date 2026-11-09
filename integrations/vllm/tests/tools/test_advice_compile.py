@@ -1,6 +1,7 @@
 """`tools/advice_compile.py --window K`'s inputs: the certified bodies are window K's own requests', so a user the run served
 again in a later window keeps the prompt it had in K; K's carry is the close of the last window before it that ran steps; and the
-default seed is the public one (`engine.served_seed`), whatever the run's server says it filled in."""
+default seed is the public one (`engine.served_seed`), whatever the run's server says it filled in. The registration's φ states
+the checkpoint dtype its pinned config's `quantization_config` names, so an FP8 GLM-5.3 reaches `predict.dsa`'s decoder."""
 from __future__ import annotations
 
 import importlib.util
@@ -55,6 +56,63 @@ def test_the_registered_default_seed_is_the_public_one_and_a_run_that_used_anoth
         AC.registered_seed({})
 
 
+def test_the_registration_takes_the_engines_world_at_the_rank_and_the_engine_args_class_g_states():
+    kw = {"tensor_parallel_size": 8, "max_model_len": 2048, "max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256,
+          "max_num_seqs": 256, "enable_prefix_caching": False, "gpu_memory_utilization": 0.9, "seed": 0}
+    assert AC.engine_of({"engine_record": {"engine_kwargs": kw}}, 3) == (
+        {"world": 8, "rank": 3}, {"max_model_len": 2048, "max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256,
+                                  "max_num_seqs": 256, "enable_prefix_caching": False})
+    assert AC.engine_of({}, 0) == ({"world": 1, "rank": 0}, {})
+    with pytest.raises(ValueError, match="rank 8: the run's engine has tensor-parallel world 8"):
+        AC.engine_of({"engine_record": {"engine_kwargs": kw}}, 8)
+
+
+def test_the_registration_states_the_dsa_top_k_environment_the_engines_build_set():
+    """A run whose engine record has the environment its build set states the DSA top-k's, set or not, and nothing else of it:
+    `predict.dsa` compiles a row past INDEX_TOPK only under the canonical row, and refuses it for an engine built without."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+    from verity_vllm.program.predict import build
+
+    kw = {"tensor_parallel_size": 8, "max_model_len": 131072}
+    flags = {"VLLM_USE_V2_MODEL_RUNNER": "1", "VERITY_DSA_TOPK": "canonical"}
+    assert AC.engine_of({"engine_record": {"engine_kwargs": kw, "env_flags": flags}}, 0)[1] == {
+        "max_model_len": 131072, "env": {"VERITY_DSA_TOPK": "canonical"}}
+    hf = json.loads(pinned_hf_config(*GLM53).read_text())
+
+    def decoder(env_flags: dict):
+        meta = {"model": GLM53[0], "revision": GLM53[1], "target": H200, "execution": "eager",
+                "engine_record": {"engine_kwargs": kw, "env_flags": env_flags}}
+        return build.decoder(AC.phi_of(meta, hf, 0))
+
+    assert decoder(flags).long_rows is None
+    assert AC.engine_of({"engine_record": {"engine_kwargs": kw, "env_flags": {"VLLM_USE_V2_MODEL_RUNNER": "1"}}}, 0)[1] == {
+        "max_model_len": 131072, "env": {}}
+    assert "VERITY_DSA_TOPK=None, not {'VERITY_DSA_TOPK': 'canonical'}" in decoder({"VLLM_USE_V2_MODEL_RUNNER": "1"}).long_rows
+
+
+GLM53 = ("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42")
+H200 = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "device_name": "NVIDIA H200", "moe_backend": "triton"}
+
+
+def test_an_fp8_checkpoint_reaches_predict_dsa_as_float8_e4m3fn_and_a_config_stating_none_is_refused_as_before():
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+    from verity_vllm.program.predict import build, dsa
+    from verity_vllm.program.predict.build import Unexpressible
+
+    hf = json.loads(pinned_hf_config(*GLM53).read_text())
+    assert hf["quantization_config"]["quant_method"] == "fp8" and hf["quantization_config"]["fmt"] == "e4m3"
+    meta = {"model": GLM53[0], "revision": GLM53[1], "target": H200, "execution": "eager",
+            "engine_record": {"engine_kwargs": {"tensor_parallel_size": 8, "max_model_len": 2048}}}
+    phi = AC.phi_of(meta, hf, 3)
+    assert phi.model["dtype"] == "float8_e4m3fn" and phi.tp == {"world": 8, "rank": 3} and phi.engine == {"max_model_len": 2048}
+    assert isinstance(build.decoder(phi), dsa.Net)
+    bare = AC.phi_of(meta, {k: v for k, v in hf.items() if k != "quantization_config"}, 3)
+    assert "dtype" not in bare.model
+    with pytest.raises(Unexpressible, match=re.escape("vocabulary cannot express: checkpoint dtype None (float8_e4m3fn only)")):
+        build.decoder(bare)
+    assert AC.checkpoint_dtype({"quantization_config": {"quant_method": "fp8", "fmt": "e5m2"}}) is None
+
+
 def test_a_user_with_two_requests_in_one_window_is_refused(tmp_path):
     run = _run(tmp_path, [_q("u", [3], [1], 8), _q("u", [3], [2], 8)])
     with pytest.raises(ValueError, match="user 'u' has two requests in window 3"):
@@ -77,7 +135,8 @@ def test_a_window_carries_in_what_the_last_window_that_ran_steps_left(tmp_path):
 
 def test_a_carry_the_last_window_didnt_leave_is_refused(tmp_path):
     run = _windows(tmp_path, [0, 1], [], {0: W2})
-    with pytest.raises(ValueError, match=r"window 1 doesn't open where window 0 closed: carried request 0 \('a'\) .* not as the last"):
+    with pytest.raises(ValueError, match=r"window 1 doesn't open where window 0 closed: computed: carried request 0 \('a'\) .* not as "
+                                         r"the last"):
         AC.carry_of(run, 1, WA.encode(W2))
 
 

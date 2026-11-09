@@ -112,7 +112,7 @@ def test_a_kept_store_is_audited_again(tmp_path):
     got = [period.audit("n0", again, hashlib.sha512(b"coins %d" % i).digest(), signer=signer, log=log, schemes=SCHEMES,
                         protocol=TEST_ID, clock=Clock(10 ** 9)) for i in range(2)]
     assert [p.verdict for p in got] == ["accept", "accept"] and got[0].case["params"] != got[1].case["params"]
-    assert {p.s_bits for p in got} == {0}
+    assert {p.public("s_bits") for p in got} == {0}
 
 
 def _certified_store() -> period.Store:
@@ -134,7 +134,7 @@ def _run_of(case: dict) -> tuple:
     ev, p = json.loads(bytes.fromhex(case["evidence"])), case["params"]
     return (period.point_of(p["point"]), SCHEMES, [bytes.fromhex(t) for t in p["trusted"]],
             R.Setup.from_json(json.loads(bytes.fromhex(case["commitment"]))), bytes.fromhex(ev["digests"]),
-            R.Session.from_json(ev["session"]), bytes.fromhex(p["session_id"]))
+            R.ChallengePhaseRecord.from_json(ev["session"]), bytes.fromhex(p["session_id"]))
 
 
 def test_an_audit_at_the_certified_point_checks_its_run():
@@ -152,7 +152,7 @@ def test_an_audit_at_the_certified_point_checks_its_run():
     assert prof["gaps"] == [] and prof["certificate"]["theorem"] == "Pous.SecurityProofs.P2SlackFamilyUncond"
     zeros = period.audit("n0", held, hashlib.sha512(b"coins 2").digest(),
                          prover=lambda blocks: lambda i: bytes(len(blocks[i])) if i % 2 else blocks[i], **kw)
-    assert zeros.verdict == "reject" and (zeros.s_bits, zeros.eps) == (0, 0)
+    assert zeros.verdict == "reject" and (zeros.public("s_bits"), zeros.eps) == (0, 0)
     with pytest.raises(R.Refused):
         R.check_at(*_run_of(zeros.case))
 
@@ -161,7 +161,7 @@ LANE, OTHER = "compute-accounting", "memory-accounting"
 
 
 def _line(lines: list[str], kind: str, session: str | None, body: dict, sig_bytes: int) -> str:
-    """The auditor's next ledger line in its form (`sampled_proofs.challenger.ledger_line`), under a stand-in signature of
+    """The auditor's next ledger line in its form (`spot.challenger.ledger_line`), under a stand-in signature of
     `sig_bytes` bytes at leaf `seq`: `cite` reads the form, never the signature."""
     e = {"body": body, "kind": kind, "prev": hashlib.sha512(lines[-1].encode()).hexdigest() if lines else "0" * 128,
          "schema": period.LEDGER_SCHEMAS[1], "seq": len(lines), "session": session}

@@ -1,5 +1,7 @@
-import Definitions.Flock.ZK.Table
-import Mathlib.Tactic.FieldSimp
+module
+
+public import Definitions.Flock.ZK.Table
+public import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # Zero knowledge of one masked table: the view as a function of four masked components
@@ -19,6 +21,8 @@ The lemmas about them (the identity (★), the masks' surjectivity, `table_shvzk
 are `Proofs/Flock/Soundness/ZK/SHVZK.lean`'s.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.ZK
 
 open Finset
@@ -26,7 +30,7 @@ open Finset
 -- The randomness and the view's components are products of up to fifteen factors, and their `Fintype`, `DecidableEq`
 -- and group instances exceed instance search's default size.
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- the time instance search takes on those products
 
 namespace Table
 
@@ -137,7 +141,7 @@ its own block. -/
 noncomputable def realCore (w : W) (ω : T.Rand) : T.Core :=
   (T.nu w + T.maskHom ω.1,
     (fun q l => ∑ c, T.lanes w ω.1 l c * T.E q c, fun r => T.y1 w ω.1 r, 0) + T.mask1 ω.2.1,
-    (fun r => (T.vals r w ω.1 ω.2.1.2.1, 0, 0)) + T.mask2 ω.2.2.1,
+    (fun r => (T.vals r w ω.1 (T.visOf ω), 0, 0)) + T.mask2 ω.2.2.1,
     (fun r k => ∑ i, T.Ch r k i * T.hFull (ω.2.2.1 r) i, 0, fun r => T.hFull (ω.2.2.1 r), 0) + T.mask3 ω.2.2.2)
 
 /-- `S_shvzk`'s last block: its fresh `C_h`, `Y₂`, `Y₁`, and the dummy run's salts and seeds. -/

@@ -3,7 +3,7 @@
 - **y**: every unit's receipt from the pass's σ (`p2.Sketcher.receipt`, as serve.py's `unit_receipts` takes it), against
   the GPU's;
 - **root**: `receipts.tree(seed, Plan.whole(units), those receipts, the pass's salts)`'s root, against the GPU's;
-- **σ**: sampled units' σ from C*'s bytes (`p2.Sketcher.block` on each of the unit's four blocks, from the encoded
+- **σ**: sampled proof blocks' σ from C*'s bytes (`p2.Sketcher.block` on each of the unit's four blocks, from the encoded
   store's segment files, read only), against the GPU's: every unit a tensor's first or last block lies in, each
   segment's first and last unit, and `--sample` more sampled by `--seed`, in a process pool.
 
@@ -28,7 +28,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import layout as L
-
 from verity.core.protocols.remote_bandwidth import p2
 from verity.core.protocols.remote_bandwidth import receipts as R
 
@@ -51,7 +50,7 @@ def _sigmas(units: list[int]) -> list[tuple[int, bytes]]:
 
 def sample_units(lay: L.StoreLayout, units: int, sample: int, seed: int) -> list[int]:
     """The units bw_ref recomputes σ for, sorted: each tensor's first and last block's, each segment's first and last,
-    and `sample` drawn."""
+    and `sample` sampled."""
     bps = lay.params.blocks_per_segment
     picks = {t.first_block // PER for t in lay.tensors} | {(t.block_range.stop - 1) // PER for t in lay.tensors}
     for s in range(lay.params.segments):
@@ -61,7 +60,7 @@ def sample_units(lay: L.StoreLayout, units: int, sample: int, seed: int) -> list
     return sorted(picks | set(rest[:sample]))
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--keep", type=Path, required=True, help="full.py --keep's directory")
     ap.add_argument("--layout", type=Path, required=True)

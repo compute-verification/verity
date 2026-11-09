@@ -1,4 +1,7 @@
-import Properties.Pous.Period
+module
+
+public import Properties.Pous.Period
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS over one period at the deployed ring budget
@@ -40,6 +43,8 @@ the instantiation in reduction form (`Instantiates`, `pous-ring-instantiation` a
 strategy. Both are stated for every prover strategy, and the ring game's server is the fixed extractor's
 (`Pous.Period.extract`), never a witness the prover picks.
 -/
+
+@[expose] public section
 
 namespace Pous.Period
 
@@ -133,12 +138,11 @@ def HONEST_S : ℕ := 63000000
 `honestRun` on `honestDevice`, with one tick a round, and the honest strategy (`honestStrategy`), for every audit `P`
 whose designated session id has 32 bytes, as the memory challenger's ids do: the device model (`DeviceModel`) holds at
 the deployed budget (each answer is a lookup, no query, and the state is `C`'s `FULL` bits, which the account holds at
-every tick), and the instantiation (`Instantiates`) holds (the code's draw never fails, and a lookup returns the
+every tick), and the instantiation (`Instantiates`) holds (the code's sample never fails, and a lookup returns the
 challenged block of `C`); the certificate `HONEST_S` is positive and fits `S₀` beside the device's on-chip state and its
-side channel's capacity over a round; and the budget is the deadline's at the measured floor (art:23a323f3,
-r20260929-060834-0ec4): `DEADLINE_ROUNDS ≤ RING_D`, with `RING_D + 1` rounds taking at least 1.995 × `LIMIT_NS` at
-`ROUND_NS`. `CoinCommitHides` and `P2RingAuditSecure` are a named assumption and an open conjecture, not facts of the
-instance. -/
+side channel's capacity over a round; and the budget is the deadline's at the measured floor:
+`DEADLINE_ROUNDS ≤ RING_D`, with `RING_D + 1` rounds taking at least 1.995 × `LIMIT_NS` at `ROUND_NS`. `CoinCommitHides`
+and `P2RingAuditSecure` are a named assumption and an open conjecture, not facts of the instance. -/
 def PeriodHeldHonest : Prop :=
   (∀ P : Audits Unit Unit, P.sid.size = 32 →
       DeviceModel honestRun P honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates P honestStrategy) ∧

@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`) over the
+`Flock.HmRow`: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`) over the
 verifier's own copy of the program, decoded from its descriptor bytes (`verity-ir/descriptor/v1`) as far as they need:
 the callees, each definition's form and nodes (form, callee, members), and the root body.
 
@@ -7,10 +7,13 @@ the callees, each definition's form and nodes (form, callee, members), and the r
 be a `call` or `batch` of a listed template (matched by the descriptor id written in the program's bytes); each call is one unit
 and each batch member one unit, in node then member order; every listed template has at least one unit; no width rule.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
-import Flock.Program
+module
+
+public import Flock.Program
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.TemplateQuery
 
@@ -45,7 +48,7 @@ def isInput (id : String) : Bool := Program.isInputId id
 def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
     (bytes : ByteArray) : M Desc := do
   let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
-  let j ← match Json.parse text with
+  let j ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"program: not JSON: {e}"
   if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v1" then
@@ -143,6 +146,31 @@ def gates (d : Desc) (rs : Array TRange) (i : Nat) : Option (Nat × Nat) := do
   let off := (root.nodes.extract 0 k).foldl (fun acc x => acc + x.members * d.gates (d.callees.getD x.fn "")) 0
   let g := d.gates t
   return (off + m * g, off + m * g + g)
+
+/-- Every unit's `gates`, unit by unit, or the first unit that has none. The reference `unitGates` is held to: each unit
+here walks its template and every earlier root node's (`Desc.gates`), so it costs the population times the description. -/
+def unitGatesRef (d : Desc) (rs : Array TRange) : Except Nat (Array (Nat × Nat)) :=
+  (Array.range (population rs)).mapM fun u => match gates d rs u with
+    | some g => .ok g
+    | none => .error u
+
+/-- Whether `rs` are contiguous from unit 0 in order, as `evaluate` gives them: each range starts where the last ended. -/
+def contiguous (rs : Array TRange) : Bool :=
+  (rs.foldl (fun (ok, at_) r => (ok && r.first == at_, at_ + r.count)) (true, 0)).1
+
+/-- `unitGatesRef`, a range at a time: the root body's node offsets and each range's instance gates once, then
+`off + m·g` per member, so it costs the root body and the ranges' templates once plus a constant a unit. Ranges that
+aren't `contiguous`, or a root that isn't a definition, take `unitGatesRef`. -/
+def unitGates (d : Desc) (rs : Array TRange) : Except Nat (Array (Nat × Nat)) :=
+  match d.def? d.root with
+  | some root =>
+    if !contiguous rs then unitGatesRef d rs else
+    let offs := root.nodes.foldl (fun (a : Array Nat) x => a.push (a.back! + x.members * d.gates (d.callees.getD x.fn ""))) #[0]
+    .ok <| rs.foldl (init := #[]) fun acc r =>
+      let off := offs[min r.node root.nodes.size]!
+      let g := d.gates r.template
+      (List.range r.count).foldl (fun acc m => acc.push (off + m * g, off + m * g + g)) acc
+  | none => unitGatesRef d rs
 
 /-- The templates a template query names, when `(name, version)` is one: its parameters checked as core's `validate` does. -/
 def templatesOf (name : String) (version : Nat) (params : Json) : Option (V (Array String)) :=

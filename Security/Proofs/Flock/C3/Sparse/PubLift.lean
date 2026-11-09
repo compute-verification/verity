@@ -1,6 +1,21 @@
+module
+
+public import Proofs.Flock.C3.Sparse.SrcSessions
+public import Proofs.Flock.C3.Reps.StepsTie
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.Sparse.PubTie
-import Proofs.Flock.C3.Sparse.SrcSessions
-import Proofs.Flock.C3.Reps.StepsTie
 
 /-!
 # `SparseRepTie`'s pub conjunct at the tied source
@@ -14,6 +29,8 @@ the slots' units the unit range's (`UnitsOf`, `units_holoAt`); `srcSparsePub_rep
 are built from the reps' parts at the record's rounds (`repUnitOfAlg_of_parts`). `rep_tiedSrc_sparseOf`: the tied reps
 of `sparseOf stp w c` are `tiedSrc stp`'s, which `srcSparseTie_sparseOf` reads.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

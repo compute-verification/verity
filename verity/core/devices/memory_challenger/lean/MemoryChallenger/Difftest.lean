@@ -1,8 +1,9 @@
-import Difftest
-import Lms.Sign
-import Attest.Period
-import MemoryChallenger.Protocol
-import MemoryChallenger.WipeJudge
+module
+
+public import Difftest
+public import Lms.Sign
+public import Attest.Period
+public import MemoryChallenger.WipeJudge
 
 /-!
 # The difftest's Lean half
@@ -15,6 +16,10 @@ signed message and egress count, and a device's HSS role digests and checks (`Lm
 `memory-challenger-difftest` serves them (`Difftest.serve`). Each verdict's own difftest drives the executable its callers
 run, `memory-challenger-verdict` and `streamed-wipe-verdict`.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger.Difftest
 

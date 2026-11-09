@@ -1,24 +1,26 @@
-import Proofs.Flock.Soundness.Discharge.Exec.E2EL
-import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
-import Proofs.Flock.Soundness.Binding.E2E
-import Proofs.Flock.Soundness.Binding.RowsX
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.E2EL
+public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
+public import Proofs.Flock.Soundness.Binding.E2E
+public import Proofs.Flock.Soundness.Binding.RowsX
 
 /-!
 # The end-to-end theorem with the value binding of `hm96-sha512/row/v1` rows
 
-`flock_e2e_countL` and `flock_e2e_drawnL` (`E2E.lean`), and their forms at the executable's draw law
+`flock_e2e_countL` and `flock_e2e_drawnL` (`E2E.lean`), and their forms at the executable's sampling design
 (`ExecStratified.lean`), with `vb : ValueBinding` built from the serving rows (`HmRows.binding`). The binding's hash is
 SHA-512 (`Refine.H512`), so `SHA512CRExpected` (`hCR`) is about SHA-512 itself, and what `vb` carried becomes:
-* `HmRowComputes` (`hHm`), the circuit's row hashing (phase 2i), the one gap of the binding;
+* `HmRowComputes` (`hHm`), the circuit's row hashing, the one gap of the binding;
 * the layout's facts, in `lay : Layout` (`decode_row`: the decoder reads the rows the witness holds) and `rs : HmRows`
   (`bc_registered`: the `b ‖ c` the witness holds hashes to the registered leaf; `other_registered`: the returned
   outputs' leaves).
 
 `collide_spec` is proved (`ExplicitLeaf.hm96`): the link finder's collisions are explicit SHA-512 collisions. It is asked
 of the finders built from the prover bounded (`hCR : LinkCRL … (reg σ) (cont σ) …`). The other hypotheses (`dp`, `hConst`,
-`hZero`) are the skeleton's, unchanged (`assumption-notes/e2e-checklist.md`).
+`hZero`) are the skeleton's, unchanged.
 
-**The two forms of SHA-512's collision resistance.** The link term `δ_link` is under `SHA512CRExpected` (`ecr/sha-512`,
+**The two forms of SHA-512's collision resistance.** The binding error `δ_link` is under `SHA512CRExpected` (`ecr/sha-512`,
 through `hCR`), of SHA-512 itself, since the rows' binding hashes with it. The knowledge term and `δ_tree` are under
 `SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`), of the session's hash `H`, which `Prog.flock_headline` takes to
 be SHA-512; each at its finders' budgets:
@@ -30,15 +32,17 @@ be SHA-512; each at its finders' budgets:
 **`δ_tree`.** "Accept" is `execAccept`, read from the registered roots, and the bound counts it with the Lean
 protocol's acceptance at the registered leaves (`Layout.regLeaf`). Where they differ is `δ_tree`: `tr` covers the event
 that the executable accepts and the Lean protocol rejects by runs that open a serving root off its plurality
-(`TreeRewind.covers`). That cover is the link from the executable's openings to the Lean protocol's (R11), still open,
-so `tr` is a named hypothesis. The skeleton's `hExec` (every accept is the Lean protocol's) gives a cover with no
-positions, at `δ_tree = 0` (`TreeRewind.ofNever`).
+(`TreeRewind.covers`). That cover is the link from the executable's openings to the Lean protocol's (the refinement
+`ExecRefines`), still open, so `tr` is a named hypothesis. The skeleton's `hExec` (every accept is the Lean protocol's)
+gives a cover with no positions, at `δ_tree = 0` (`TreeRewind.ofNever`).
 
-**A3.** None of these forms takes A3 (`uniform/io-getrandombytes`). The generic forms hold at every law `L`, the live
-draw `Law.execOS` included, and read it only through their terms. The `_exec` forms are at `Law.execStratified`, whose
+**A3.** None of these forms takes A3 (`uniform/io-getrandombytes`). The generic forms hold at every sampling design `L`, the live
+sample `Law.execOS` included, and read it only through their terms. The `_exec` forms are at `Law.execStratified`, whose
 outcomes are the byte tapes themselves, uniform by construction. The live verifier's bytes enter through `Law.execOS`, and
 A3 compares its count curve with `Law.stratified`'s (`Law.execOS_miss_le`): `Prog.flock_headline` composes the two.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 
@@ -48,7 +52,7 @@ open scoped ENNReal
 /-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} [Inhabited D] [Inhabited Sl]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} [Inhabited D] [Inhabited Sl]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
@@ -59,7 +63,7 @@ If `execAccept` holds, the probability that at least `K` units of the committed 
 is at most `miss_L(K) + ε_ks + δ_link + δ_tree`: `ε_ks` and `δ_tree` under `SHA512CRStrict` of `H` (`cr/sha-512`,
 through `hKS` and `hT`), `δ_link` under `SHA512CRExpected` of SHA-512 (`ecr/sha-512`, through `hCR`). Beyond the
 skeleton's `dp`, `hConst` and `hZero`, it takes the rows' layout (`lay`, `rs`), `HmRowComputes` (`hHm`) and the serving
-roots' rewinding (`tr`). It takes no A3: `miss_L` is the law's own, and `Prog.flock_headline` bounds the live draw's by
+roots' rewinding (`tr`). It takes no A3: `miss_L` is the sampling design's own, and `Prog.flock_headline` bounds the live sample's by
 `Law.stratified`'s under A3. -/
 theorem flock_e2e_count_hm96L
     {execAccept : Bool × Finset (Fin n) → Prop}
@@ -114,8 +118,8 @@ theorem flock_e2e_count_hm96LX
 
 /-- **The end-to-end drawn-unit bound, with the rows' value binding**: `flock_e2e_drawnL` at
 `vb := HmRows.binding rs hHm`, at most `ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96L` (`cr/sha-512` through `hKS`
-and `hT`, `ecr/sha-512` through `hCR`). It reads the law only through `ε_ks` and `δ_link`, both at `L`, so it holds as
-stated at the live draw (`L := Law.execOS …`), with no A3. -/
+and `hT`, `ecr/sha-512` through `hCR`). It reads the sampling design only through `ε_ks` and `δ_link`, both at `L`, so it holds as
+stated at the live sample (`L := Law.execOS …`), with no A3. -/
 theorem flock_e2e_drawn_hm96L
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)

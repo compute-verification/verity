@@ -1,6 +1,12 @@
-import Definitions.Core.Circuit
-import Definitions.Accounting.Device
-import Definitions.Core.Game
+module
+
+public import Definitions.Core.Circuit
+public import Definitions.Accounting.Device
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Server-time blocks and the wipes between them (trusted)
@@ -37,7 +43,7 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
   adversary's moves, so it can carry the labels' PRF advantage.
 * **A run at the wipe's boundary** (`Wipe.OfRun`): a view of a run's outcome as the wipe's game's, the foreign content
   the device holds, the seed and the spot reads, with the run's moves there. On a run whose view is distributed as the
-  wipe's game draws it (`Wipe.OfRun.Preserves`), the survivor bound bounds the run's event that the wipe accepts while
+  wipe's game samples it (`Wipe.OfRun.Preserves`), the survivor bound bounds the run's event that the wipe accepts while
   foreign content past the survivor threshold survives (`Wipe.OfRun.Kept`).
 
 **One GPU, one store**: the device is one GPU, and its one store is the GPU's HBM
@@ -47,6 +53,8 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
 partition's they are private: a statement over a schedule reads `Blocks` as the prover's value, never as a public
 parameter. Its properties (the number of blocks, the carried state's size) may be public.
 -/
+
+@[expose] public section
 
 namespace Verity
 
@@ -111,7 +119,7 @@ structure Blocks.State {C : Circuit} {B : ℕ} (s : Blocks C B) (d : Accounting.
   /-- the device's state: its on-chip state and its store -/
   device : Device.State d
 
-/-- **The wipe at boundary `b`** of the schedule `s` on the device `d`, the streamed-label wipe, with the seed drawn
+/-- **The wipe at boundary `b`** of the schedule `s` on the device `d`, the streamed-label wipe, with the seed sampled
 from `Ω` and the spot reads from `Ch`, each uniform once the device's state at the boundary is fixed: the device fills
 `fill` bits of its store with labels derived from the seed, then the memory challenger reveals the spot reads one at a
 time and reads the labels back under a deadline.
@@ -167,14 +175,14 @@ for every `S_φ` of at least `foreignBits` bits plus the state the fill leaves o
 store the fill doesn't reach), every way `hold` that the device's state at the boundary holds foreign content `z` of
 `S_φ` bits, and every way `keep` of reading it back from the device's state when the fill ends, the egress and the spot
 reads, the probability over a uniform `z`, a uniform seed and uniform spot reads that the memory challenger accepts and
-`keep` gives back `z` is at most `ε S_φ hold keep`. The probability is the value of a draw with no prover move
+`keep` gives back `z` is at most `ε S_φ hold keep`. The probability is the value of a sample with no prover move
 (`Game.value` on `Game.draw`). At `foreignBits ≤ f · fill + 2λ` it bounds, with what the block keeps read as the bits
 it gives back, the wipe's acceptance while more than `f · fill + 2λ` bits plus the unfilled state survive
 (`Accounting.SecurityProofs.Live.survives_of_survivorBound`).
 
 `z` is foreign content as in PoUS's games: uniform, and independent of the wipe's coins. `keep` reads all that the state
 block `b` starts from is a function of, besides the carried value, which, once bound to the committed trace, is
-fixed before `z` is drawn. The on-chip state is counted, not assumed wiped: chip bits may survive any wipe.
+fixed before `z` is sampled. The on-chip state is counted, not assumed wiped: chip bits may survive any wipe.
 
 **The pair is the protocol's.** `foreignBits` and `ε` are what the wipe's protocol publishes with an accepted verdict
 (the streamed wipe's verdict publishes `foreign_bits = ⌈fill/19⌉ + E`, `E` the egress), not constants of this
@@ -200,7 +208,7 @@ game's, the foreign content of `S_φ` bits the device holds at the boundary, the
 of the run's strategy there: `hold`, the device's state at the boundary from the foreign content it holds, and `keep`,
 how block `b` reads that content back from the device's state when the fill ends, the egress and the spot reads. On the
 run, the wipe's verdict is `OfRun.accepts` and the event its survivor bound bounds is `OfRun.Kept`: each is the
-preimage, under the view, of the wipe's game's. That the view is distributed as the wipe's game draws it is
+preimage, under the view, of the wipe's game's. That the view is distributed as the wipe's game samples it is
 `OfRun.Preserves`, which a statement over a run takes as a premise. -/
 structure OfRun {O : Type} (G : Game O) where
   /-- the bits of foreign content the device holds at the boundary (S_φ) -/
@@ -231,7 +239,7 @@ def Kept (foreignBits : ℕ) (o : O) : Prop :=
       (R.view o).2.2 = (R.view o).1
 
 /-- **The run's coins at the boundary are the wipe's** at the strategy `t`: on the run, the foreign content the device
-holds at the boundary, the seed and the spot reads are uniform and independent, as the wipe's game draws them, so each
+holds at the boundary, the seed and the spot reads are uniform and independent, as the wipe's game samples them, so each
 event of them has the same probability on the run as in the wipe's game. A run whose foreign content is the prover's
 choice, a function of what came before the boundary rather than uniform, doesn't meet it. -/
 def Preserves [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (t : Game.Strategy G) : Prop :=

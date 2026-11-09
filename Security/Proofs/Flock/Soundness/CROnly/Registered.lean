@@ -1,4 +1,11 @@
-import Proofs.Flock.Soundness.Registered.E2E
+module
+
+public import Proofs.Flock.Soundness.CROnly.Defs
+public import Proofs.Flock.Soundness.E2E
+public import Proofs.Flock.Soundness.Registered.Defs
+public import Proofs.Flock.Soundness.Registered.E2E
+public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.CROnly.Link
 
 /-!
@@ -10,6 +17,8 @@ for `hCR : LinkCR …`, as `CROnly.E2E` restates the forms they extend: the boun
 `δ_tree` and `δ_reg` are all under `SHA512CRStrict` (`hKS`, `hCRs`, `hT`, `hR`).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.CROnly
 
 open Game Model Accounting Extract LinkFinder Refine Audit Audit.Partition Binding Registered
@@ -18,7 +27,7 @@ open scoped ENNReal
 /-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)

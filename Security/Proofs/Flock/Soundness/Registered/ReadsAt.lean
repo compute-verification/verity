@@ -1,4 +1,9 @@
-import Proofs.Flock.Soundness.Registered.ReadsX
+module
+
+public import Proofs.Flock.Soundness.Registered.ReadsX
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # The registered reads' term at the outcome's registration
@@ -8,12 +13,14 @@ registration is the outcome's first component, so `ReadsX.prob_off_le_at` takes 
 same finder: one play of the game, and the extractor's pair at the off read.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Registered
 
 open Game Refine Binding Audit
 open scoped ENNReal
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}

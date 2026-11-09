@@ -1,11 +1,52 @@
-import Proofs.Flock.Claims.Witnesses.Flock
-import Proofs.Flock.Claims.ZK.SamplingNonVacuous
+module
+
+public import Proofs.Flock.Claims.Witnesses.Flock
+public import Proofs.Flock.Claims.ZK.SamplingNonVacuous
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Refutation witnesses: the sampling compiler's claims
 
 Each of the sampling compiler's claims (`Definitions.Claims.Sampling`) fails at a toy deployment. The statement is
-`toyStmt`: one input gate, returned, drawn `all`, its partition `toyPart` one proof unit `{0}`, in scope
+`toyStmt`: one input gate, returned, sampled `all`, its partition `toyPart` one proof block `{0}`, in scope
 (`inScope_toy`), so the witnesses hold whether or not `KS`, `KSCount` and `Bits` are read on the scope only.
 
 * `sksD`: the verifier accepts after one round, and no opening passes (`rejCm`), so every unit is faulty and no
@@ -28,6 +69,8 @@ scoped `KSLinOn` are refuted through `Bits_fails`, `KS_fails` and `KSCount_fails
 (`Sampling.Deploy.P`), so it is not met at every masked deployment (`ZK_vacuous_refuted`, at `zkSD`, `compSD` with a
 masked inner Flock).
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.Sampling
 
@@ -81,7 +124,7 @@ def rejCm : CommitmentScheme Bool := ⟨fun _ _ => .ret false, fun _ _ _ => []�
 /-- One input gate, returned. -/
 def toyProg : Prog := ⟨[.input], [0]⟩
 
-/-- The program, drawn `all`. -/
+/-- The program, sampled `all`. -/
 def toyStmt : AuditStatement := ⟨[], toyProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
 /-- One class of one stratum of one proof block, `{0}`. -/
@@ -256,7 +299,7 @@ theorem sksD_scope (x : Msg) : Scope (sksD Coin) x := ⟨toyStmt, toyPart, rfl, 
 
 theorem sksD_nPU (x : Msg) : nPU (sksD Coin) x = 1 := rfl
 
-theorem sksD_k (x : Msg) : (sksD Coin).k x = 2 ^ 40 * 3 := rfl
+theorem sksD_k (x : Msg) : (sksD Coin).k x = 2 ^ 10 * 3 := rfl
 
 theorem sksD_innerK (x : Msg) : (sksD Coin).innerK x = 256 := by
   have h : 4 * (64 * Real.exp 1) / Real.exp 1 = ((256 : ℕ) : ℝ) := by
@@ -267,8 +310,9 @@ theorem slack_pos : 0 < slack := by unfold slack; positivity
 
 theorem slack_le_two : slack ≤ 2 := by
   unfold slack
-  calc (2 : ℝ) ^ ((2 : ℝ) ^ (-40 : ℝ)) ≤ 2 ^ (1 : ℝ) :=
-        Real.rpow_le_rpow_of_exponent_le (by norm_num) (Real.rpow_le_one_of_one_le_of_nonpos (by norm_num) (by norm_num))
+  calc (2 : ℝ) ^ ((2 : ℝ) ^ (-(slackExp : ℝ))) ≤ 2 ^ (1 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le (by norm_num)
+          (Real.rpow_le_one_of_one_le_of_nonpos (by norm_num) (neg_nonpos.2 (Nat.cast_nonneg _)))
     _ = 2 := Real.rpow_one 2
 
 theorem exp_neg_le_inv {y : ℝ} (hy : 0 ≤ y) : Real.exp (-y) ≤ (y + 1)⁻¹ := by
@@ -294,14 +338,14 @@ theorem sksD_κF_nonneg (x : Msg) : 0 ≤ κF (sksD Coin) x := by
 
 theorem sksD_outer (x : Msg) :
     2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) ≤ 1 / 50 := by
-  have hk : ((sksD Coin).k x : ℝ) = 2 ^ 40 * 3 := by rw [sksD_k]; push_cast; ring
-  have hc : ((sksD Coin).cap x : ℝ) = 2 ^ 128 * (2 ^ 40 * 3) := by
+  have hk : ((sksD Coin).k x : ℝ) = 2 ^ 10 * 3 := by rw [sksD_k]; push_cast; ring
+  have hc : ((sksD Coin).cap x : ℝ) = 2 ^ 128 * (2 ^ 10 * 3) := by
     simp only [Deploy.cap, sksD_k]; push_cast; ring
   rw [hk, hc, neg_div]
-  have he := exp_neg_le_inv (show (0 : ℝ) ≤ 2 ^ 40 * 3 / 8 by positivity)
-  have h1 : (2 ^ 40 * 3 / 8 + 1 : ℝ)⁻¹ ≤ 1 / 100 := by
+  have he := exp_neg_le_inv (show (0 : ℝ) ≤ 2 ^ 10 * 3 / 8 by positivity)
+  have h1 : (2 ^ 10 * 3 / 8 + 1 : ℝ)⁻¹ ≤ 1 / 100 := by
     rw [inv_le_comm₀ (by positivity) (by norm_num)]; norm_num
-  have h2 : 2 * (2 ^ 40 * 3 : ℝ) / (2 ^ 128 * (2 ^ 40 * 3)) ≤ 1 / 100 := by
+  have h2 : 2 * (2 ^ 10 * 3 : ℝ) / (2 ^ 128 * (2 ^ 10 * 3)) ≤ 1 / 100 := by
     rw [div_le_iff₀ (by positivity)]; norm_num
   linarith
 

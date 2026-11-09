@@ -1,12 +1,13 @@
 """A circuit's blocks (`verity.ml.windows.interface.Blocks`, ``verity/blocks/v1``) and output-row reads: the inference entries
 tile each template's units into (slot, step) exactly once at the class's S and T, the proof block is the record's partition,
-network accounting's keys are carried as given and its servers' unit ranges cut the members, and an output-row `Read` names
+network certification's keys are carried as given and its servers' unit ranges cut the members, and an output-row `Read` names
 the leaves a unit's output row is of a value without filling an input row. Pinned on `test_interface`'s two-request chain
 and on a class circuit (`cmp92`: S = 4 slots, NP = 8 prompt bytes, O = 24 outputs, T = 31 steps) on one server, and on its
 split across two (layer 0 | layer 1 and the head)."""
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import replace
 
 import pytest
@@ -103,10 +104,10 @@ def test_the_inference_entries_tile_each_templates_units_exactly_once_at_the_cla
 
 
 def test_members_are_cut_where_a_servers_units_begin_or_end():
-    """Network accounting's keys are carried as given; the members read only the servers' unit ranges, cutting a template's
+    """Network certification's keys are carried as given; the members read only the servers' unit ranges, cutting a template's
     units where one begins or ends as at a wire's ends, so every statement's units sit on one server. A range outside its
     template's units, or servers without units, are refused; that the servers partition the units, and run each inference
-    block on one, is network accounting's check."""
+    block on one, is network certification's check."""
     net = {"server": [{"name": "a", "uplink": "l0", "units": [[GID, 0, 3]]}, {"name": "b", "uplink": "l1", "units": [[GID, 3, 5]]}],
            "server_time": [{"server": s, "steps": [0, TI.STEPS]} for s in "ab"], "transfers": []}
     plain, split = I.Window(TI.chain(), RUN, TI.LAW, 8), I.Window(blocked(chain_blocks(network=net)), RUN, TI.LAW, 8)
@@ -175,8 +176,9 @@ def cmp92(servers: int) -> I.Circuit:
     response's leaf j·O + k. With two servers, the rows crossing between them are wire transfers: layer 0's coordinates into
     layer 1 an output-row read on the writer and a read on the reader (``x1``), and the token back into the embedding a read
     of the response's leaves on the reader, the head's output row being read once, as the response; each server loads its
-    own weights. That split puts every inference block (slot, step) on both servers, the form network accounting forbids: it is the
-    negative of network accounting's check (`test_cmp92s_split_across_two_servers_is_refused`)."""
+    own weights. That split puts every inference block (slot, step) on both servers, the form network certification forbids: it is the
+    negative of network certification's check (`test_cmp92s_split_across_two_servers_is_refused`). Its templates read one
+    another, so it states an order, a range each inference entry's step (`ordered`)."""
     two = servers == 2
     w0, w1 = ("weights0", "weights1") if two else ("weights", "weights")
     pos, layer = T * H, 8 * H * H
@@ -226,10 +228,15 @@ def cmp92(servers: int) -> I.Circuit:
                       transfer("s1", "out", "wire", "response", "tok"), transfer("s0", "in", "wire", "response", "tok")]
     network = {"server": [{"name": s, "uplink": f"link-{s}", "units": SPLIT[s] if two else "all"} for s in names],
                "server_time": [{"server": s, "steps": [0, T]} for s in names], "transfers": transfers}
-    return I.Circuit(f"cmp92-{servers}", ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER),
-                                          (OUT, LAYERS * H * T * S), (HEAD, O * S)),
-                     external=(f"{EID}/a", f"{HID}/o0"), wires=tuple(wires), cuts={QID: {"x": H}, OID: {"x": 2}, HID: {"x": H}},
-                     registered=I.Registered(params, (), tuple(reads)), blocks=I.Blocks(S, T, inference, network))
+    templates = ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER), (OUT, LAYERS * H * T * S), (HEAD, O * S))
+    starts: dict[str, list[int]] = {}
+    for e in inference:
+        run = math.prod(e.radix[e.axes.index("step") + 1:]) if "step" in e.axes else e.units
+        starts.setdefault(e.template, []).extend(range(e.at, e.at + e.units, run))
+    return I.Circuit(f"cmp92-{servers}", templates, external=(f"{EID}/a", f"{HID}/o0"), wires=tuple(wires),
+                     cuts={QID: {"x": H}, OID: {"x": 2}, HID: {"x": H}}, registered=I.Registered(params, (), tuple(reads)),
+                     blocks=I.Blocks(S, T, inference, network),
+                     order=I.ordered({descriptor_id(fn): n for fn, n in templates}, wires, starts))
 
 
 @pytest.fixture(scope="module")
@@ -255,7 +262,7 @@ def test_cmp92s_two_server_split_cuts_every_template_at_the_server_boundary(circ
     cut where s0's units end, so no statement's units span both servers, and the verifier derives the same members from the
     descriptor record. The window's blocks are byte-identical under any run. The members are the circuits' without their
     registered reads: `members` fills tables for uncut reads of whole registered rows over whole members only, and the class
-    circuit's weight reads start mid-row and its two-server ``x1`` read is cut. The cut is the interface's alone: network accounting
+    circuit's weight reads start mid-row and its two-server ``x1`` read is cut. The cut is the interface's alone: network certification
     refuses this split (`test_cmp92s_split_across_two_servers_is_refused`)."""
     cap = 1 << 20
     with pytest.raises(ValueError, match="whole registered rows"):

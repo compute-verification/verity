@@ -1,7 +1,40 @@
-import Proofs.Flock.Claims.Complete.Run
+module
+
+public import Proofs.Flock.Claims.NumbersDeploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.NumbersDeploy
-import Proofs.Flock.Level3.ArithFacts
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # δc: where the honest prover can fail
@@ -20,6 +53,8 @@ zerocheck outer coin is `1` (`Bad`), at most `2^-128` per coin element (`pr_slot
   and `190` coins at the masked verifier's one table (`Claims.Flock.Complete_meets_zk`).
 -/
 
+@[expose] public section
+
 namespace FlockComplete
 
 open Flock FlockDeploy
@@ -29,7 +64,7 @@ open Flock FlockDeploy
 theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) :
     Claims.Pr (fun a => p a ∨ q a) ≤ Claims.Pr p + Claims.Pr q := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   rw [← add_div]
   refine div_le_div_of_nonneg_right ?_ (by positivity)
   norm_cast
@@ -58,7 +93,7 @@ theorem Pr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (p : �
 
 theorem Pr_eq_const {α : Type} [Fintype α] (c : α) : Claims.Pr (fun a : α => a = c) = 1 / Fintype.card α := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   congr 1
   rw [Finset.filter_eq' Finset.univ c]
   simp

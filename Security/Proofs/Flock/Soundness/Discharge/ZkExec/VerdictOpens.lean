@@ -1,6 +1,32 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Refine.Opening
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # A `--zk` rep's requested rows verify
@@ -15,6 +41,8 @@ executable passed (`ReqOKZ`): level 0's on the `2^k₀ + 4`-lane rows against th
 later level's as the non-ZK session's `ReqOK`. `zk_rep_reqs` carries that to the rep, and a run has one result
 (`plays_det`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -71,7 +99,7 @@ theorem reqOKZ_succ {ms : MerkleScheme} {sch : Flock.Schedule} {cap : Array Byte
       (Flock.positions (sch.levels.getD ℓ default) cw).toList from Refine.positions_eq _ hl cw, Array.toArray_toList]
   exact hmc
 
-/-- **The proof's openings pass `OpensOKZ`** (§14): for `hm96-sha512/v1`, a rep whose requests passed the executable's
+/-- **The proof's openings pass `OpensOKZ`** (`Flock.Merkle`): for `hm96-sha512/v1`, a rep whose requests passed the executable's
 Merkle checks (`ReqOKZ`) and whose caps are the proof's verifies every requested row, level 0's `2^lanes + EXTRA_LANES`
 wide, at openings and salts that are the proof's rows, siblings and salts. -/
 theorem opensOKZ_of (sch : Flock.Schedule) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -135,14 +163,14 @@ theorem foldRoundsC_len (p : LigeritoProof) :
   | k + 1, a, sM, qM, c :: cs, hl, hs => by
       rw [Model.foldRoundsC, show kMsgs p a (k + 1) = kMsg p.messages[a]! :: kMsgs p (a + 1) k by
         simp [kMsgs, List.range'_succ]]
-      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
         unfold Model.drawK
         exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c (hs c (by simp)) (by omega)) (Plays.pure _)
           (by simp) (by simp)
       obtain ⟨⟨rs, s'', q'⟩, hrest, hlen⟩ := foldRoundsC_len p k (a + 1)
-        (fun o => (qM o).eval (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)))
+        (fun o => (qM o).eval (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)))
         (fun o => Model.fromMsg (gOf p.messages[a]!.1, gOf p.messages[a]!.2)
-          ((qM o).eval (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)))) cs (by simpa using hl)
+          ((qM o).eval (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)))) cs (by simpa using hl)
         fun c' h => hs c' (by simp [h])
       refine ⟨_, Plays.bind' hk (Plays.bind' (Plays.recv _ (gOf p.messages[a]!.1, gOf p.messages[a]!.2))
         (Plays.bind' hrest (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm) rfl rfl) (by simp [kMsg])
@@ -875,7 +903,7 @@ theorem zk_rep_reqs {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
 
 /-! ## `ZkRepAccepts`'s openings -/
 
-/-- **A `--zk` rep's requested rows verify** (PROTOCOL.md §14; `ZkRepAccepts`'s third conclusion). At the `--zk`
+/-- **A `--zk` rep's requested rows verify** (`Flock.Merkle`; `ZkRepAccepts`'s third conclusion). At the `--zk`
 schedule under `hm96-sha512/v1`, at a compiled table at the executable's dimensions whose extra claims are the
 executable's, when a run of rep `r`'s transcript program consumes every round, every result of the compiled rep, played
 with the rep's messages and the rounds' coins, verifies every row it requested (`OpensOKZ`, level 0's rows `width₀ T`

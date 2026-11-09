@@ -1,15 +1,57 @@
+module
+
+public import Proofs.Flock.Claims.ERep
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# One wait, truncated: from `k` accepted runs to `E^rep`'s `K` draws
+# One wait, truncated: from `k` accepted runs to `E^rep`'s `K` samples
 
-`E^rep`'s wait stops at `k` accepted reruns among `K` fresh draws (`waitAcc`). A per-tape knowledge bound speaks of `k`
+`E^rep`'s wait stops at `k` accepted reruns among `K` fresh samples (`waitAcc`). A per-tape knowledge bound speaks of `k`
 independent accepted runs: at a tape with acceptance `ε`, `ε · Q/ε^k ≤ a + rate·ε`, where `Q` is the probability that
 `k` independent runs all accept and their openings fail (`accFail`), so `Q/ε^k` is the failure probability under the
-law of `k` accepted runs (the old soundness's `expectAcc`).
+sampling design of `k` accepted runs (the old soundness's `expectAcc`).
 
-* **Coupling** (`wait_couple`): the first `k` accepted runs among the draws have the law of `k` independent accepted
-  runs, so `ε^k · Pr[the wait collects k runs and fails] ≤ Q`, by induction on the draws.
+* **Coupling** (`wait_couple`): the first `k` accepted runs among the samples have the sampling design of `k` independent accepted
+  runs, so `ε^k · Pr[the wait collects k runs and fails] ≤ Q`, by induction on the samples.
 * **Chernoff** (`wait_short_le`, `short_le_exp`): the wait collects fewer than `k` with probability at most
   `2^k·(1 − ε/2)^K` (Markov on `2^{−#accepted}`), at most `2^k·e^{−k}` once `εK ≥ 2k`.
 * **Truncation** (`ERep_trunc`): `Pr[acc ∧ ¬R(x, E^rep)] ≤ 4·𝔼[a] + 2^{−m} + 2k/K + e^{−k/8}` once `rate ≤ 1/4`,
@@ -18,12 +60,14 @@ law of `k` accepted runs (the old soundness's `expectAcc`).
   most `2^{−m} + e^{−k/8}`.
 -/
 
+@[expose] public section
+
 namespace Claims
 
 /-! ## Probability lemmas -/
 
 theorem Pr_const_of {α : Type} [Fintype α] [Nonempty α] {p : Prop} (hp : p) : Pr (fun _ : α => p) = 1 := by
-  unfold Pr
+  unfold Pr Claims.prUniform
   have : (0 : ℝ) < Fintype.card α := by exact_mod_cast Fintype.card_pos
   rw [div_eq_one_iff_eq this.ne']
   norm_cast
@@ -37,7 +81,7 @@ theorem Pr_const_of_not {α : Type} [Fintype α] {p : Prop} (hp : ¬ p) : Pr (fu
 
 theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) : Pr (fun a => p a ∨ q a) ≤ Pr p + Pr q := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [← add_div]
   refine div_le_div_of_nonneg_right ?_ (by positivity)
   norm_cast
@@ -79,7 +123,7 @@ theorem Ex_pi_prod {D : Type} [Fintype D] [Nonempty D] (f : D → ℝ) :
 
 /-! ## What a wait collects -/
 
-/-- What one wait collects over the coin draws `rs`, from `acc` so far: `waitAcc`'s result. -/
+/-- What one wait collects over the coin samples `rs`, from `acc` so far: `waitAcc`'s result. -/
 def waitRes {R : Type} (run : R → Trace) (k : ℕ) : List R → List Seen → List Seen
   | [], acc => acc
   | r :: rs, acc =>
@@ -197,7 +241,7 @@ theorem wait_couple {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k :
             ring
         _ = RHS := by ring
 
-/-- A wait that collects fewer than `k` accepted runs saw fewer than `k` accepting draws:
+/-- A wait that collects fewer than `k` accepted runs saw fewer than `k` accepting samples:
 `(1/2)^k ≤ (1/2)^{#collected} · ∏_r (1/2 if r accepts, else 1)`. -/
 theorem waitRes_short {R : Type} (run : R → Trace) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen), acc.length ≤ k → (waitRes run k rs acc).length < k →
@@ -221,7 +265,7 @@ theorem waitRes_short {R : Type} (run : R → Trace) (k : ℕ) :
       simp only [List.map_cons, List.prod_cons, hr, ↓reduceIte, one_mul]
       exact ih
 
-/-- **Chernoff, by Markov on `2^{−#accepted}`**: a wait over `K` draws collects fewer than `k` accepted runs with
+/-- **Chernoff, by Markov on `2^{−#accepted}`**: a wait over `K` samples collects fewer than `k` accepted runs with
 probability at most `2^k·(1 − ε/2)^K`. -/
 theorem wait_short_le {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k K : ℕ) :
     Pr (fun ρ : Fin K → D => (waitRes run k ((List.finRange K).map ρ) []).length < k) ≤

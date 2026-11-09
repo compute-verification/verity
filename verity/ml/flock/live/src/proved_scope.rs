@@ -1,7 +1,10 @@
-//! The statement forms the soundness proof covers (verifier PROTOCOL.md §16.15): the Lean verifier's `Flock.ProvedScope.check`,
+//! The statement forms the soundness proof covers (`Flock.ProvedScope`): the Lean verifier's `Flock.ProvedScope.check`,
 //! its rules in its order and its refusals word for word. The Lean verifier refuses every session of a statement outside
 //! them, so a form no theorem covers is never accepted; the live server does the same ([`crate::StatementVerifier::refusal`]),
-//! so its verdicts are the Lean verifier's.
+//! so its verdicts are the Lean verifier's. The Lean verifier also refuses, last, a session at a statement other than
+//! `verity/flock-circuit` and `verity/flock-circuit+plain-leaves`, and a plain session on seed coins
+//! (`ProvedScope.servedForm`): a selftest build's sessions ([`lean_name`]'s `+seed-injection`) and a seeded build's meet
+//! that refusal there once every check has passed, and not here.
 //!
 //! The live build writes only hm96-sha512 row statements with retained rounds and `hm96-sha512/v1` leaves, or, ZK off, plain
 //! SHA-512 leaves (a circuit whose META names [`crate::circuit::leaf_scheme_plain`]; `ProvedScope.leafOk`), so the Lean
@@ -11,7 +14,7 @@
 //! `ORDER` line is the template's position map, one column per root column.
 
 use crate::circuit::{port_cols, seg_shape, Composite, Instances, Port, STATEMENT, TMPL_STATEMENT};
-use crate::ir_block::IrUnitNet;
+use crate::ir_block::{IrUnitNet, RowRead};
 
 const WORD: usize = 128;
 
@@ -36,11 +39,7 @@ pub fn port_reads(net: &IrUnitNet) -> bool {
             mask[x] = true;
         }
     }
-    (n..net.const_pos).all(|r| row(&net.a, r).iter().chain(row(&net.b, r)).all(|&x| x >= n || mask[x]))
-}
-
-fn row(m: &[Vec<usize>], r: usize) -> &[usize] {
-    m.get(r).map_or(&[], Vec::as_slice)
+    (n..net.const_pos).all(|r| net.a.cols_or_empty(r).chain(net.b.cols_or_empty(r)).all(|x| x >= n || mask[x]))
 }
 
 /// `ProvedScope.outReads`: for each output port of `net`, the input ports whose bits it reads, ascending; and whether its
@@ -81,7 +80,7 @@ pub fn out_reads(net: &IrUnitNet, lookup: bool) -> (Vec<Vec<usize>>, bool) {
     let mut m = vec![0u64; words];
     for i in 0..n_rows {
         m.fill(0);
-        for &x in row(&net.a, n + i).iter().chain(row(&net.b, n + i)) {
+        for x in net.a.cols_or_empty(n + i).chain(net.b.cols_or_empty(n + i)) {
             col(&rows, i, x, &mut m);
         }
         rows[i * words..(i + 1) * words].copy_from_slice(&m);
@@ -179,12 +178,12 @@ fn seg_row(p: &Port) -> bool {
         segs.iter().all(|&(m, c)| WORD * (c - 1) <= m.div_ceil(8))
 }
 
-/// `ProvedScope.bitRows`: every row a [`v2_row`] or a [`seg_row`], in any mix, one output port each, the output rows (the
-/// last `out_row_ports.len()`) `v2_row`s.
+/// `ProvedScope.bitRows`: every row a [`v2_row`] or a [`seg_row`], in any mix, the output rows (the last
+/// `out_row_ports.len()`) included, one output port each.
 fn bit_rows(ports: &[Port], out_row_ports: &[usize]) -> bool {
     let n_in = ports.len().saturating_sub(out_row_ports.len());
     ports.iter().all(|p| v2_row(p) || seg_row(p)) && out_row_ports.iter().all(|&k| k == 1) &&
-        (0..out_row_ports.len()).all(|j| ports.get(n_in + j).is_some_and(v2_row))
+        (0..out_row_ports.len()).all(|j| ports.get(n_in + j).is_some_and(|p| v2_row(p) || seg_row(p)))
 }
 
 /// `ProvedScope.scopeWhy hidden` of a circuit outside `scopeOkI` (`scopeOk` when not `hidden`), `None` inside: the unit has
@@ -222,7 +221,7 @@ fn rows_why(ports: &[Port], out_row_ports: &[usize], hidden: bool) -> Option<&'s
     } else if hidden && !v1 && !bit_rows(ports, out_row_ports) {
         Some("rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all unsegmented \
               sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of 16 · words \
-              bits whose segments end in their last block, the output rows unsegmented, one output port each")
+              bits whose segments end in their last block, one output port per output row")
     } else {
         None
     }
@@ -234,18 +233,17 @@ fn tmpl_unit_log(cols: usize) -> usize {
 }
 
 /// `ProvedScope.scopeWhyT` of a templated circuit outside `scopeOkT`, `None` inside: a `--zk` session of one table at hidden
-/// outputs without the verifier's registered reads, whose unit reads only its leaf group and returns the outputs, of at most
-/// `2^32` rows by its root's columns (the `ORDER` line's), and whose rows `scopeOkI` admits; past those, the refusal is
+/// outputs, with or without the verifier's registered reads (which [`shared_rows_why`] and `Registered.check` hold to the
+/// ports and the public file, as for a flat statement), whose unit reads only its leaf group and returns the outputs, of at
+/// most `2^32` rows by its root's columns (the `ORDER` line's), and whose rows `scopeOkI` admits; past those, the refusal is
 /// `scopeWhy true`'s ([`circuit_why`]'s). A templated statement with pinned outputs is refused as every other is.
-pub fn tmpl_why(c: &Composite, hidden: bool, zk: bool, registered: bool, tables: usize) -> Option<String> {
+pub fn tmpl_why(c: &Composite, hidden: bool, zk: bool, tables: usize) -> Option<String> {
     let unit = c.unit();
     let cols = unit.order.as_ref().map_or(0, Vec::len);
     if !hidden {
         Some("a templated statement without hidden outputs".into())
     } else if !zk {
         Some("a templated statement without --zk".into())
-    } else if registered {
-        Some("a templated statement with the verifier's registered reads (--registered)".into())
     } else if tables > 1 {
         Some(format!("a templated statement in {tables} tables"))
     } else if unit.in_groups.len() != 1 {
@@ -314,7 +312,7 @@ pub fn check(c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result
         return Err(refusal(why));
     }
     if c.statement() == TMPL_STATEMENT {
-        return tmpl_why(c, true, zk, registered, tables).map_or(Ok(()), |why| Err(refusal(&why)));
+        return tmpl_why(c, true, zk, tables).map_or(Ok(()), |why| Err(refusal(&why)));
     }
     if wires_feed(c) && !wires_acyclic(c) {
         return Err(refusal(WIRES_WHY));
@@ -326,7 +324,7 @@ pub fn check(c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result
 mod tests {
     use super::*;
     use crate::circuit::Wire;
-    use crate::ir_block::{FlatCache, Group};
+    use crate::ir_block::{Group, PassCache, Rows};
     use crate::lookup::LookupNet;
 
     fn net(groups: Vec<Group>, in_words: usize, rows: Vec<(Vec<usize>, Vec<usize>)>) -> IrUnitNet {
@@ -339,7 +337,8 @@ mod tests {
         a.push(vec![const_pos]);
         b.push(vec![const_pos]);
         IrUnitNet { name: "unit".into(), useful: const_pos + 1, const_pos, in_groups: groups, out_groups: vec![], in_words, out_cols: vec![],
-                    a, b, unit_log: 9, sha256: [0; 32], leaves: None, cut: None, order: None, flat: FlatCache::default() }
+                    a: Rows::from_vecs(&a), b: Rows::from_vecs(&b), unit_log: 9, sha256: [0; 32], leaves: None, cut: None, order: None,
+                    pass: PassCache::default() }
     }
 
     #[test]
@@ -438,22 +437,28 @@ mod tests {
     }
 
     #[test]
-    fn hidden_outputs_admit_seg_rows_alone_or_mixed_the_outputs_unsegmented() {
+    fn hidden_outputs_admit_seg_rows_alone_or_mixed_input_or_output() {
         let out = port(64, 1, 1024, true, None);
-        // Lean's witnessSeg and witnessMix (ZkHidden/NonVacuousSeg.lean)
+        // Lean's witnessSeg, witnessMix and witnessSegOut (ZkHidden/NonVacuousSeg.lean)
         assert_eq!(rows_why(&[seg(1024, 2), out.clone()], &[1], true), None);
         assert_eq!(rows_why(&[seg(17408, 21), port(64, 1, 1024, true, None), out.clone()], &[1], true), None);
         assert!(rows_why(&[seg(1024, 2), out.clone()], &[1], false).is_some());
-        // witnessSegOut, witnessSegLate, two output ports, a v1 row among them
+        assert_eq!(rows_why(&[seg(1024, 2), seg(1024, 2)], &[1], true), None);
+        assert_eq!(rows_why(&[seg(1024, 2)], &[1], true), None);
+        assert_eq!(rows_why(&[out.clone(), seg(17408, 21)], &[1], true), None);
+        // witnessSegBad (a row-seg output row one compression short), witnessSegLate, an output row of two output
+        // ports, a v1 row among them
         let why = |ports: &[Port], outs: &[usize]| rows_why(ports, outs, true).unwrap();
-        assert_eq!(why(&[seg(1024, 2), seg(1024, 2)], &[1]),
+        assert_eq!(why(&[seg(1024, 2), seg(1024, 1)], &[1]),
                    "rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all unsegmented \
                     sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of 16 · words \
-                    bits whose segments end in their last block, the output rows unsegmented, one output port each");
+                    bits whose segments end in their last block, one output port per output row");
+        assert!(rows_why(&[seg(1024, 2), seg(1024, 3)], &[1], true).is_some());
+        assert!(rows_why(&[out.clone(), seg(896, 2)], &[1], true).is_some());
         assert!(rows_why(&[seg(896, 2), out.clone()], &[1], true).is_some());
         assert!(rows_why(&[seg(1024, 2), out.clone()], &[2], true).is_some());
+        assert!(rows_why(&[out.clone(), seg(1024, 2)], &[2], true).is_some());
         assert!(rows_why(&[seg(1024, 2), port(64, 1, 1024, false, None), out.clone()], &[1], true).is_some());
-        assert!(rows_why(&[seg(1024, 2)], &[1], true).is_some());
         assert_eq!(rows_why(&[seg(1024, 2), out.clone(), out], &[1, 1], true), None);
     }
 
@@ -615,18 +620,17 @@ mod tests {
     fn a_templated_statement_takes_lean_scope_ok_t() {
         // Lean's scopeWhyT, rule for rule and in its order
         let c = templated(flat_unit(), 130);
-        assert_eq!(tmpl_why(&c, true, true, false, 1), None);
-        let why = |hidden, zk, registered, tables| tmpl_why(&c, hidden, zk, registered, tables).unwrap();
-        assert_eq!(why(false, false, true, 2), "a templated statement without hidden outputs");
-        assert_eq!(why(true, false, true, 2), "a templated statement without --zk");
-        assert_eq!(why(true, true, true, 2), "a templated statement with the verifier's registered reads (--registered)");
-        assert_eq!(why(true, true, false, 2), "a templated statement in 2 tables");
-        assert_eq!(refusal(&why(true, false, false, 1)),
+        assert_eq!(tmpl_why(&c, true, true, 1), None);
+        let why = |hidden, zk, tables| tmpl_why(&c, hidden, zk, tables).unwrap();
+        assert_eq!(why(false, false, 2), "a templated statement without hidden outputs");
+        assert_eq!(why(true, false, 2), "a templated statement without --zk");
+        assert_eq!(why(true, true, 2), "a templated statement in 2 tables");
+        assert_eq!(refusal(&why(true, false, 1)),
                    "refused: a templated statement without --zk: a statement form the soundness proof does not cover");
         let two = templated(rms(0), 130);
-        assert_eq!(tmpl_why(&two, true, true, false, 1).as_deref(), Some("a templated unit reading 2 input groups"));
+        assert_eq!(tmpl_why(&two, true, true, 1).as_deref(), Some("a templated unit reading 2 input groups"));
         let tail = templated(tail(), 130);
-        assert_eq!(tmpl_why(&tail, true, true, false, 1).as_deref(),
+        assert_eq!(tmpl_why(&tail, true, true, 1).as_deref(),
                    Some("a templated circuit whose outputs a tail stage computes (META out_net)"));
         assert_eq!((tmpl_unit_log(0), tmpl_unit_log(130), tmpl_unit_log(1 << 32), tmpl_unit_log((1 << 32) + 1)), (7, 8, 32, 33));
     }
@@ -636,14 +640,14 @@ mod tests {
         // the rows scopeOkI admits pass whatever the unit's own size; past them, scopeWhy true's first failure
         let mut c = templated(flat_unit(), 130);
         c.nets[0].1.unit_log = 33;
-        assert_eq!(tmpl_why(&c, true, true, false, 1), None);
+        assert_eq!(tmpl_why(&c, true, true, 1), None);
         c.ports = vec![port(64, 1, 1000, true, None)];
-        assert_eq!(tmpl_why(&c, true, true, false, 1).as_deref(), Some("a unit of 2^33 rows"));
+        assert_eq!(tmpl_why(&c, true, true, 1).as_deref(), Some("a unit of 2^33 rows"));
         c.nets[0].1.unit_log = 9;
-        assert!(tmpl_why(&c, true, true, false, 1).unwrap().starts_with("rows that are neither"));
+        assert!(tmpl_why(&c, true, true, 1).unwrap().starts_with("rows that are neither"));
         c.ports = vec![];
         c.pinned = 1;
-        assert_eq!(tmpl_why(&c, true, true, false, 1).as_deref(), Some(PINNED_WHY));
+        assert_eq!(tmpl_why(&c, true, true, 1).as_deref(), Some(PINNED_WHY));
     }
 
     #[test]

@@ -1,5 +1,8 @@
-import Definitions.Accounting.JointPeriod
-import Definitions.Accounting.BandwidthAudit
+module
+
+public import Definitions.Accounting.JointPeriod
+public import Definitions.Accounting.BandwidthAudit
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A period whose PoUB audit is the bandwidth audit's game (trusted)
@@ -18,6 +21,8 @@ realization carries relayed tags: a device that relays tags in over a side chann
 (`Bandwidth.AuditRelay`), which this structure does not cover.
 -/
 
+@[expose] public section
+
 namespace Accounting
 
 /-- Period `r`'s PoUB audit is the bandwidth audit's game with a store of `N` blocks of `b` bits, `h`-bit tags, `s`
@@ -31,7 +36,7 @@ structure RealizesBandwidthOfAuditPerRunPeriod (G : ℕ) {N b h s : ℕ} {ι : T
   /-- the device of the game the node's device plays over the period's window, at the coins; its side sources, on-chip
   state, oracle queries and regenerations are within the device model's limits over the window -/
   dev : ((i : I) → Ω i) → Bandwidth.Device N b h d.chip (∑ i, d.cap i * r.win.len) G (d.rate .oracle * r.win.len)
-  /-- the device of the game is fixed by the other audits' coins: PoUB's own coins are drawn after it is -/
+  /-- the device of the game is fixed by the other audits' coins: PoUB's own coins are flipped after it is -/
   dev_update : ∀ ξ x, dev (Function.update ξ (r.own .poub) x) = dev ξ
   /-- PoUB's verdict is the game's, on PoUB's coins -/
   accepts_iff : ∀ ξ, r.accepts .poub ξ ↔

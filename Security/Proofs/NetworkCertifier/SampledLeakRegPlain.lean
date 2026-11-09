@@ -1,5 +1,42 @@
-import Proofs.NetworkCertifier.SampledLeakReg
+module
+
+public import Definitions.NetworkCertifier.SampledCharge
+public import Definitions.NetworkCertifier.SampledReg
+public import Proofs.Flock.Claims.Sampling.Deployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Sampling.DeployedSha512
+import Proofs.NetworkCertifier.SampledAuditAccepted
+import Proofs.NetworkCertifier.SampledLeakReg
 
 /-!
 # The leak bound at the registration's values, at the deployed plain record
@@ -7,11 +44,13 @@ import Proofs.Flock.Claims.Sampling.DeployedSha512
 `sampledLeak_registered` is stated at any record. At the deployed sampling record over any Flock record `F`
 (`SamplingDeploy.deployOf F c`) its trace commitment is `F`-free (`SamplingDeploy.deployOf_commit`), hm96 leaves under the
 verifier's own registered path check, and binds at every `H` with no hypothesis (`binds_deployOf`, from
-`Binding_of_regPath`). So the masked and plain records share one commitment (`deployPlain_commit`), and at the plain
-record (`SamplingDeploy.deployPlain`) the bound takes only the record's `KS` (`sampledLeak_registered_plain`), which
-`SamplingDeploy.sampling_deployed_plain_sha512` gives at SHA-512 at the deployed relation
+`SamplingDeploy.commit_binds`). So the masked and plain records share one commitment (`deployPlain_commit`), and at the
+plain record (`SamplingDeploy.deployPlain`) the bound takes only the record's `KS` (`sampledLeak_registered_plain`),
+which `SamplingDeploy.sampling_deployed_plain_sha512` gives at SHA-512 at the deployed relation
 (`sampledLeak_registered_plain_sha512`). `SampledAuditAccepted` is discharged by its proof.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 
@@ -20,8 +59,7 @@ open Claims Claims.Sampling
 /-- **The deployed commitment binds, at any Flock record**: hm96 leaves under the registered path check, at every `H`. -/
 theorem binds_deployOf {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T)
     (c : SamplingDeploy.Code) (H : Msg → Msg) : (SamplingDeploy.deployOf F c).commit.Binds H :=
-  Binding_of_regPath _ c.own c.at_ _ c.π c.layer (SamplingDeploy.deployOf_commit F c)
-    (fun H => hm96Leaf_binds H (SamplingDeploy.row_places c.place c.bits) c.salt) H
+  SamplingDeploy.commit_binds c H
 
 /-- The masked and plain records' trace commitment is one. -/
 theorem deployPlain_commit (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)

@@ -1,7 +1,42 @@
-import Proofs.Flock.Bridge.Canon
-import Proofs.Flock.Bridge.PortRoots
-import Proofs.Flock.Claims.Bridge.Transports
+module
+
+public import Proofs.Flock.Bridge.Canon
+public import Proofs.Flock.Claims.Bridge.Transports
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # A shaped registered opening opens the deployed commitment
@@ -27,6 +62,8 @@ At the session's binding (`vbOf`), `transports_shaped` reads a registered openin
 files that name each port once and `PortRoots.RootFixesDomain` registrations, and `transportsLiveC` is
 `Bridge.TransportsLiveC`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -75,7 +112,7 @@ theorem saltOf_length {d : ℕ} {o : Opening Bool} (h : (pathOf d o).length = 64
 
 section Layout
 
-variable {C : FlockSoundness.Audit.Circuit} {rows : Fin C.N → Option RowAt}
+variable {C : Verity.Boolean.Circuit} {rows : Fin C.N → Option RowAt}
 
 theorem placeOf_eq {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r) (hpl : r.place < r.width) :
     placeOf C rows i = ⟨r.width, ⟨r.place, hpl⟩⟩ := by
@@ -200,7 +237,7 @@ sits at port `r.port`, of the port's bits (`16 w` of them), at a circuit file th
 leaf at its port's bytes (`encPortH`) is the registered leaf of row `(r.leaf, r.port)`, opens `commitDep` under
 `rootsOf` at `i` to its bit `r.place`, with data `dataOf`: the salt, the row's path in the verifier's tree and the
 value's bits. -/
-theorem opens_commitDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem opens_commitDep (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r)
     (hq : r.port < c.ports.size) (hu : r.leaf < nl) (hb : r.width = c.ports[r.port]!.bits) (h16 : r.width % 16 = 0)
     (hpl : r.place < r.width) (hdup : Flock.Registered.dupName c = none) (hsep : PortRoots.RootFixesDomain c pub nl)
@@ -287,7 +324,7 @@ theorem hm96Pair_spec_salt (r y r' y' : List UInt8) (hy : y ≠ y') (h : H512 (h
   · exact hm96Pair_spec r y r' y' hr h
 
 /-- **An opening the deployed check passes carries a full path**: `64 · log2ceil nl` bytes after its salt. -/
-theorem pathOf_length_of_opens (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem pathOf_length_of_opens (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (nl : ℕ) (roots : List Msg) (o : Opening Bool) (h : (commitDep C rows c nl roots).Opens sha512Msg roots o = true) :
     (pathOf (Flock.log2ceil nl) o).length = 64 * Flock.log2ceil nl := by
   unfold commitDep at h
@@ -305,7 +342,7 @@ theorem pathOf_length_of_opens (C : FlockSoundness.Audit.Circuit) (rows : Fin C.
 /-- **The deployed check refuses a salt of another length**: once the path has a level (`2 ≤ nl` units), the leaf of
 a game opening `(r, y)` whose salt isn't `saltLen` bytes is the leaf of an opening the deployed check passes only by a
 SHA-512 collision. -/
-theorem leaf_salt (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ)
+theorem leaf_salt (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ)
     (roots : List Msg) (o : Opening Bool) (h : (commitDep C rows c nl roots).Opens sha512Msg roots o = true)
     (hd : 1 ≤ Flock.log2ceil nl) {r y : Msg} (hy : y.length ≠ saltLen)
     (hl : H512 (hm96Input r y) =
@@ -318,7 +355,7 @@ theorem leaf_salt (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option 
 /-- **The deployed check refuses a misshaped value**: at a position whose row has its port's bits, `16 w` of them, a
 game opening of a value that isn't `RowShaped` of the row's width has the leaf of a deployed opening's row only by a
 SHA-512 collision. -/
-theorem leaf_misshaped_dep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem leaf_misshaped_dep (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (d : ℕ) (o : Opening Bool) {r : RowAt} (hr : rowOfPos C rows o.pos = some r) (hq : r.port < c.ports.size)
     (hb : r.width = c.ports[r.port]!.bits) (hpl : r.place < r.width) (h16 : r.width % 16 = 0) {W : ℕ}
     (hW : r.width ≤ W) {v : BitVal W} (hv : ¬ (RowShaped v ∧ v.1.val = r.width)) (y : Msg)
@@ -342,15 +379,15 @@ theorem sum_filter_map {α : Type} (l : List α) (p : α → Bool) (f : α → �
   | nil => rfl
   | cons a l ih => by_cases hp : p a <;> simp [hp, ih]
 
-theorem off_eq_sum_ite (C : FlockSoundness.Audit.Circuit) (g : ℕ) :
+theorem off_eq_sum_ite (C : Verity.Boolean.Circuit) (g : ℕ) :
     off C g = ∑ h : Fin C.N, if h.val < g then gateSize (C.op h) else 0 := by
   rw [Fin.sum_univ_def, off, sum_filter_map]
   simp
 
-theorem gateSize_pos {N : ℕ} (o : FlockSoundness.Audit.Op N) : 0 < gateSize o := by
+theorem gateSize_pos {N : ℕ} (o : Verity.Boolean.Op N) : 0 < gateSize o := by
   cases o <;> simp [gateSize]
 
-theorem off_add_le_val (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : g.val < g'.val) :
+theorem off_add_le_val (C : Verity.Boolean.Circuit) {g g' : Fin C.N} (h : g.val < g'.val) :
     off C g.val + gateSize (C.op g) ≤ off C g'.val := by
   rw [off_eq_sum_ite, off_eq_sum_ite]
   calc (∑ h : Fin C.N, if h.val < g.val then gateSize (C.op h) else 0) + gateSize (C.op g)
@@ -365,20 +402,20 @@ theorem off_add_le_val (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : 
         · simp only [hx, ↓reduceIte, Nat.add_zero]
           split_ifs <;> omega
 
-theorem posOf_lt (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : g.val < g'.val) : posOf C g < posOf C g' := by
+theorem posOf_lt (C : Verity.Boolean.Circuit) {g g' : Fin C.N} (h : g.val < g'.val) : posOf C g < posOf C g' := by
   have h1 := off_add_le_val C h
   have h2 := gateSize_pos (C.op g)
   have h3 := gateSize_pos (C.op g')
   unfold posOf
   omega
 
-theorem posOf_inj (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : posOf C g = posOf C g') : g = g' := by
+theorem posOf_inj (C : Verity.Boolean.Circuit) {g g' : Fin C.N} (h : posOf C g = posOf C g') : g = g' := by
   rcases lt_trichotomy g.val g'.val with hl | he | hl
   · exact absurd h (posOf_lt C hl).ne
   · exact Fin.ext he
   · exact absurd h (posOf_lt C hl).ne'
 
-theorem wireOf_posOf (C : FlockSoundness.Audit.Circuit) (g : Fin C.N) : wireOf C (posOf C g) = some g := by
+theorem wireOf_posOf (C : Verity.Boolean.Circuit) (g : Fin C.N) : wireOf C (posOf C g) = some g := by
   unfold wireOf
   rw [List.find?_eq_some_iff_getElem]
   refine ⟨by simp, g.val, by simp, by simp, fun j hj => ?_⟩
@@ -389,11 +426,11 @@ theorem wireOf_posOf (C : FlockSoundness.Audit.Circuit) (g : Fin C.N) : wireOf C
   simp at this
   omega
 
-theorem rowOfPos_posOf {C : FlockSoundness.Audit.Circuit} (rows : Fin C.N → Option RowAt) (g : Fin C.N) :
+theorem rowOfPos_posOf {C : Verity.Boolean.Circuit} (rows : Fin C.N → Option RowAt) (g : Fin C.N) :
     rowOfPos C rows (posOf C g) = rows g := by
   simp only [rowOfPos, wireOf_posOf, Option.bind_some]
 
-/-! ## The game's openings at a C-Flock session -/
+/-! ## The game's openings at a Flock session -/
 
 section Game
 
@@ -407,7 +444,7 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.
   (hU : Built c.unit) {pub : Flock.Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
   (hpt : pub.tables = none)
 
-/-- **The game's value binding at a C-Flock session** (`SampledKSLive`'s `vb`). -/
+/-- **The game's value binding at a Flock session** (`SampledKSLive`'s `vb`). -/
 noncomputable abbrev vbOf := (rsZHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub hpt).bindingZ
   (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt)
 
@@ -497,7 +534,7 @@ theorem vbOf_leaf_row (h : HiddenExec.rowOfH c hU n (Discharge.Layout.outsOf c h
     rw [vbOf_com_fst] at h1
     cases h1
 
-/-- **The deployed layout's rows** at a C-Flock session: `SampledKSLive`'s `rows`, the game's row map read off the
+/-- **The deployed layout's rows** at a Flock session: `SampledKSLive`'s `rows`, the game's row map read off the
 circuit file. -/
 noncomputable def rowsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) :
     Fin ((keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)).N → Option RowAt := fun g =>
@@ -505,7 +542,7 @@ noncomputable def rowsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) :
     ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW c r.2.1, r.2.2.val⟩
 
 /-- **A shaped registered opening opens the deployed commitment** (`TransportsLive` at the shaped openings). In
-`SampledKSLive`'s setting, at a circuit file whose ports are rows the verifier of record reads (`RowsOk`), that names
+`SampledKSLive`'s setting, at a circuit file whose ports are rows the verifier reads (`RowsOk`), that names
 each port once (`Registered.dupName`), and roots that separate differently named ports (`PortRoots.RootFixesDomain`),
 at a wire `g` held by a registered row `r`: an opening `(p, v, y)` of `g`'s registered commit string at registration
 `R`, whose value `v` is `RowShaped` of the row's width and whose salt `y` has `saltLen` bytes, opens `commitDep` under
@@ -545,7 +582,7 @@ open scoped ENNReal
 
 open Classical in
 /-- **`TransportsLiveC` under roots that separate differently named ports.** `TransportsLiveC`'s setting (circuit files
-whose ports are rows the verifier of record reads, `RowsOk`, each named once), commitment, roots and hash, when the
+whose ports are rows the verifier reads, `RowsOk`, each named once), commitment, roots and hash, when the
 registration's roots separate
 differently named ports (`PortRoots.RootFixesDomain`): at every unit `u` and committed wire `g` of `u`, every opening
 `o` of `g`'s registered commit string at the prover's registration that is canonical at `g` (`canonOpen`: `g` has a row,

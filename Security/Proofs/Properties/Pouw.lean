@@ -1,6 +1,9 @@
-import Properties.Pouw
-import Proofs.Properties.Pouw.Grid
-import Proofs.Properties.Pouw.Draw
+module
+
+public import Properties.Pouw
+public import Proofs.Properties.Pouw.Grid
+public import Proofs.Properties.Pouw.Draw
+import Std.Data.DTreeMap.Internal.Operations
 
 /-!
 # Proofs of PoUW's window properties (`Properties.Pouw`)
@@ -8,6 +11,8 @@ import Proofs.Properties.Pouw.Draw
 The served numbers, by evaluation in the kernel (`decide +kernel`: no compiled code, only the kernel's reduction), and
 the refusals, by unfolding. The grid's properties are in `Proofs.Properties.Pouw.Grid` and K′'s in `Proofs.Properties.Pouw.Draw`.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Window
 
@@ -129,7 +134,7 @@ theorem drawMisses : DrawMisses := fun eps δ credited n w B k hk =>
 /-! ## Completeness
 
 The other half of the refusals: every input on a function's domain is answered. Each comes with one answered input of the
-served grid and draw. -/
+served grid and sample. -/
 
 theorem grid_complete (bits : Nat) (n lo : Int) :
     (1 ≤ n → floorPoint? bits n = .ok (floorPoint bits n.toNat) ∧ pad? bits n = .ok (pad bits n.toNat) ∧

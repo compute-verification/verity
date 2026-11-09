@@ -1,0 +1,76 @@
+# The check's task families and the envs their tasks run in (`verity graph`, README.md). Each family's lister is
+# `verity_graph/families/<family>.py` and each kind's runner `verity_graph/runners/<kind>.py`, with a name's - written _.
+# A family's table gives what its tasks leave out: `files`, the globs of the files its tasks cover (`graph.covered`); `kinds`,
+# its tasks' kinds, the first the default; `env`; `about`, a template over the task's id, kind, name (the id after
+# `<kind>:`) and vars; `resources`; and `timeout_s`. Each family's table is edited only with its lister.
+
+# An env's `spec` is the files (paths and globs) that pin it: its digest is over theirs.
+[env.py]
+spec = ["uv.lock", "pyproject.toml"]
+
+[env.lean]
+spec = ["**/lean-toolchain", "**/lake-manifest.json"]
+
+[env.rust]
+# the Rust toolchain and the Flock commit cargo builds against
+spec = ["verity/ml/flock/check_build.sh"]
+
+[family.test-file]
+# one task per test file of every suite but those the build family's lean-suites tasks run (suites.py's AFTER_LEAN); a suite's
+# [tool.verity.tests] worker_gb and timeout_s stand in for mem_gb and timeout_s
+files = ["**/tests/**/test_*.py", "**/tests/test_*.py"]
+kinds = ["test-file"]
+env = "py"
+about = "pytest on {name} alone, as suite {suite} runs it"
+resources = { cores = 1, mem_gb = 4, disk_gb = 2 }
+timeout_s = 900
+
+[family.lean-module]
+files = ["**/*.lean"]
+kinds = ["lean-module"]
+env = "lean"
+about = "compile and kernel-replay {name}"
+resources = { cores = 1, mem_gb = 6, disk_gb = 1 }
+# a Lean module's replay can outlive 900 s (Security/Proofs/Flock/VBridge/RecLink.lean's does)
+timeout_s = 3600
+
+[family.lean-env]
+files = ["**/lean-toolchain", "**/lake-manifest.json"]
+kinds = ["lean-env"]
+env = "lean"
+about = "make {name}'s lean env and kernel-replay its modules (scope {scope})"
+# the largest env's replay (Mathlib's on the toolchain's record, or ArkLib's with its packages on Mathlib's, which imports
+# Mathlib whole), its env made cold, with headroom; `cores` is the replay's LEAN_NUM_THREADS
+resources = { cores = 16, mem_gb = 32, disk_gb = 60 }
+timeout_s = 7200
+
+[family.lean-lock]
+files = ["**/lean-audit.json"]
+kinds = ["lean-lock"]
+env = "lean"
+about = "check the guarantees {name} locks against their records"
+resources = { cores = 1, mem_gb = 8, disk_gb = 2 }
+timeout_s = 1800
+
+[family.circuit-binding]
+# one task per circuit-check catalog binding, each from its slice of the records one circuit-catalog task builds, and one
+# coverage task; a task's cores and mem_gb are its circuit-check's --jobs and --mem-gb
+files = ["**/*.circuit-check.py", "**/*.circuit-check.json", "tools/verity/circuit_check/**"]
+kinds = ["circuit-binding", "circuit-coverage", "circuit-catalog"]
+env = "py"
+about = "circuit-check --binding {binding}"
+resources = { cores = 4, mem_gb = 32, disk_gb = 2 }
+timeout_s = 3600
+
+[family.build]
+# the files its tasks are made from (suites.py's AFTER_LEAN and the suites' pyproject.toml: lean-suites', whose inputs are the
+# whole tree)
+files = ["verity/core/service/flock/**", "verity/ml/flock/check_build.sh", "verity/ml/flock/live/**",
+         "verity/ml/flock/flock-*-b684b12.patch", "verity/ml/flock/verifier/**", "tools/verity/check/suites.py",
+         "**/pyproject.toml"]
+kinds = ["lean-build", "flock-circuit-build", "lean-agreement", "lean-unit-cut", "lean-suites", "flock-rust-tests"]
+env = "lean"
+about = "{kind} {name}"
+# a check slot's (`tools/verity/check/tasks.py`'s SLOT); the agreement needs 24 GB at least (`check.AGREEMENT_MIN_GB`)
+resources = { cores = 16, mem_gb = 64, disk_gb = 20 }
+timeout_s = 7200

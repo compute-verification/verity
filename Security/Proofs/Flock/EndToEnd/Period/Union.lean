@@ -1,8 +1,12 @@
-import Proofs.Flock.EndToEnd.Period.Run
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Game.Interleave
-import Proofs.Flock.Soundness.Game.Seq
+module
+
+public import Proofs.Flock.EndToEnd.Period.Run
+public import Definitions.Flock.Game
 import Mathlib.Algebra.BigOperators.Field
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Basic.ENNReal.BigOperators
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game
 
 /-!
 # A period's run: the union bound and the pooled escape
@@ -23,6 +27,8 @@ Both are inductions on the sampling blocks; within a sampling block, `value_runB
 take the sampling block's own probability out of the run, with the rest of the period bounded at every end of the
 sampling block.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

@@ -1,6 +1,8 @@
-import Definitions.Pouw.Assumptions.PearlC.Deadline
-import Definitions.Pouw.PearlC.Device
-import Definitions.Pouw.PearlC.DevicePricesLoop
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.Deadline
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.Deadline
 
 /-!
 # The deadline guarantees' premises are satisfiable (non-vacuity witnesses)
@@ -19,6 +21,8 @@ They are generic in the cost model, so they cover the honest W1 program at `W1.w
 salt`, the guarantees' cost model at W1. The run is constructed: these show the premises consistent, not that a
 physical run's record meets `HonestClock`, which stays the named assumption.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,6 +1,10 @@
-import Batteries.Tactic.OpenPrivate
-import Properties.Pouw.LiveSalt
-import Std.Tactic.Do
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Properties.Pouw.LiveSalt
+public import Std.Tactic.Do
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The challenger's ledger, for `Properties.Pouw.LiveSalt.LedgerShows`
@@ -22,15 +26,19 @@ The challenger's functions are monadic. Each fact about one is a Hoare triple pr
 it back at an `.ok` result.
 -/
 
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
+
 set_option mvcgen.warning false
 
-open private strOf join jsonTrue from SampledProofs.ChallengerSession
+open private strOf join jsonTrue from Spot.ChallengerSession
 
 namespace Properties.Pouw.LiveSalt.Ledger
 
 open Lean (Json)
 open Std.Do
-open SampledProofs.Challenger
+open Spot.Challenger
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} :
     (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
@@ -76,8 +84,8 @@ structure LedgerInv (pre : List LedgerEntry) (wins : Array Win) (v2 : Bool) : Pr
   ended : ∀ i (h : i < wins.size) e, wins[i].ended = some e → e ∈ pre ∧ e.kind = "end" ∧
     e.session = wins[i].opened.session ∧ wins[i].opened.seq < e.seq ∧
     (wins[i].opened.schema = LEDGER_SCHEMA → e.schema ≠ LEDGER_SCHEMA_V1) ∧
-    (e.schema = LEDGER_SCHEMA → (SampledProofs.getD e.body "record_leaf").isNull = false →
-      ∃ r, SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r ∧ wins[i].leaf < r ∧
+    (e.schema = LEDGER_SCHEMA → (Spot.getD e.body "record_leaf").isNull = false →
+      ∃ r, Spot.nat? (Spot.getD e.body "record_leaf") = some r ∧ wins[i].leaf < r ∧
         r < leafOf e.sig)
   ends : ∀ e ∈ pre, e.kind = "end" → ∃ i, ∃ h : i < wins.size, wins[i].opened.session = e.session ∧
     wins[i].ended = some e
@@ -106,8 +114,10 @@ theorem wp_ite {ε α : Type} {c : Prop} [Decidable c] {x y : Except ε α} {Q :
 
 theorem ledgerMessage_spec (I : ByteArray) (m : Json) : ⦃⌜True⌝⦄ ledgerMessage I m ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
-theorem join_spec (ps : Array Period) (cur : Array (String × String)) (i : Nat) (lane s : String) :
+theorem join_spec (ps : Array MonitoringPeriod) (cur : Array (String × String)) (i : Nat) (lane s : String) :
     ⦃⌜True⌝⦄ join ps cur i lane s ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+theorem verifyDays_spec (es : Array LedgerEntry) : ⦃⌜True⌝⦄ verifyDays es ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
 theorem inv_nil : LedgerInv [] #[] false where
   seq := by simp
@@ -257,17 +267,17 @@ theorem inv_open {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : Le
     · rw [hrve] at hkr; exact absurd (hk.symm.trans hkr) (by decide)
 
 theorem end_rec_some {e : LedgerEntry} {w : Win} {r : Nat} {records : Array (Nat × Nat)}
-    (hn : SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r)
+    (hn : Spot.nat? (Spot.getD e.body "record_leaf") = some r)
     (hb : (decide (w.leaf < r) && decide (r < leafOf e.sig) && !records.any fun x => x.1 == r) = true) :
-    e.schema = LEDGER_SCHEMA → (SampledProofs.getD e.body "record_leaf").isNull = false →
-      ∃ r, SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r ∧ w.leaf < r ∧ r < leafOf e.sig := by
+    e.schema = LEDGER_SCHEMA → (Spot.getD e.body "record_leaf").isNull = false →
+      ∃ r, Spot.nat? (Spot.getD e.body "record_leaf") = some r ∧ w.leaf < r ∧ r < leafOf e.sig := by
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hb
   exact fun _ _ => ⟨r, hn, hb.1.1, hb.1.2⟩
 
 theorem end_rec_none {e : LedgerEntry} {w : Win}
-    (h : ¬((e.schema == LEDGER_SCHEMA && !(SampledProofs.getD e.body "record_leaf").isNull) = true)) :
-    e.schema = LEDGER_SCHEMA → (SampledProofs.getD e.body "record_leaf").isNull = false →
-      ∃ r, SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r ∧ w.leaf < r ∧ r < leafOf e.sig := by
+    (h : ¬((e.schema == LEDGER_SCHEMA && !(Spot.getD e.body "record_leaf").isNull) = true)) :
+    e.schema = LEDGER_SCHEMA → (Spot.getD e.body "record_leaf").isNull = false →
+      ∃ r, Spot.nat? (Spot.getD e.body "record_leaf") = some r ∧ w.leaf < r ∧ r < leafOf e.sig := by
   intro hs hn
   exact absurd (by simp [hs, hn]) h
 
@@ -277,8 +287,8 @@ theorem inv_end {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : Led
     (hk : e.kind = "end")
     (hf : Array.findIdx? (fun x => x.opened.session == e.session) wins = some k)
     (hn : ¬(wins[k]!.ended.isSome = true))
-    (hr : e.schema = LEDGER_SCHEMA → (SampledProofs.getD e.body "record_leaf").isNull = false →
-      ∃ r, SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r ∧ wins[k]!.leaf < r ∧
+    (hr : e.schema = LEDGER_SCHEMA → (Spot.getD e.body "record_leaf").isNull = false →
+      ∃ r, Spot.nat? (Spot.getD e.body "record_leaf") = some r ∧ wins[k]!.leaf < r ∧
         r < leafOf e.sig) :
     LedgerInv (pre ++ [e]) (wins.modify k fun w => { w with ended := some e }) (v2 || e.schema == LEDGER_SCHEMA) := by
   obtain ⟨hk', hks, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hf
@@ -348,7 +358,7 @@ theorem inv_end {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} {e : Led
 -- `mvcgen` splits `verifyLedger`'s loop body into one goal per path through its checks
 set_option maxHeartbeats 4000000 in
 /-- The ledger's invariant holds of every ledger `verifyLedger` accepts. -/
-theorem verifyLedger_inv {es : Array LedgerEntry} {key : ChallengerKey} {r : Array Win × Array Period}
+theorem verifyLedger_inv {es : Array LedgerEntry} {key : ChallengerKey} {r : Array Win × Array MonitoringPeriod}
     (h : verifyLedger es key = .ok r) : ∃ v2, LedgerInv es.toList r.1 v2 := by
   unfold verifyLedger at h
   rw [bind_ok] at h
@@ -357,7 +367,7 @@ theorem verifyLedger_inv {es : Array LedgerEntry} {key : ChallengerKey} {r : Arr
   · have hr : r.1 = s.1 := by
       refine of_triple (Q := fun r => r.1 = s.1) ?_ h
       clear hI hs h
-      mvcgen [-Spec.throw_Except, throw_spec]
+      mvcgen [-Spec.throw_Except, throw_spec, verifyDays_spec]
     rw [hr]; exact ⟨_, hI⟩
   · intro pre e s t hI hb
     obtain ⟨wins, leaves, records, periods, current, reserves, prev, last, v2, twoStep⟩ := s
@@ -410,7 +420,7 @@ theorem toOption_spec {ε α : Type} (x : Except ε α) : ⦃⌜True⌝⦄ x.toO
 
 theorem ledgerTag_spec (s : String) : ⦃⌜True⌝⦄ ledgerTag? s ⦃⇓? a => ⌜ledgerTag? s = some a⌝⦄ := some_spec _
 
-theorem nat_spec (j : Json) : ⦃⌜True⌝⦄ SampledProofs.nat? j ⦃⇓? a => ⌜SampledProofs.nat? j = some a⌝⦄ := some_spec _
+theorem nat_spec (j : Json) : ⦃⌜True⌝⦄ Spot.nat? j ⦃⇓? a => ⌜Spot.nat? j = some a⌝⦄ := some_spec _
 
 theorem ledgerTag_some {s t : String} (h : ledgerTag? s = some t) : s = LEDGER_SCHEMA_V1 ∨ s = LEDGER_SCHEMA := by
   unfold ledgerTag? at h
@@ -443,7 +453,7 @@ theorem entries_arr {ls : Array Json} {es : Array LedgerEntry}
 -- the closers must not unfold `verifyLedger` or the key's hash while they search the context
 set_option maxHeartbeats 1000000 in
 /-- `checked` runs `verifyLedger` on the entries `LiveSalt.entries` reads. -/
-theorem checked_ok {ledger : Json} {key : ChallengerKey} {r : Array Win × Array Period}
+theorem checked_ok {ledger : Json} {key : ChallengerKey} {r : Array Win × Array MonitoringPeriod}
     (h : checked ledger key = .ok r) :
     ∃ es : Array LedgerEntry, entries ledger = es.toList ∧ verifyLedger es key = .ok r := by
   refine of_triple (Q := fun r => ∃ es : Array LedgerEntry, entries ledger = es.toList ∧ verifyLedger es key = .ok r) ?_ h
@@ -468,19 +478,19 @@ set_option maxHeartbeats 4000000 in
 /-- `auditedOpen` takes the v2 window named by the caller's root, closed by its `end`. -/
 theorem auditedOpen_ok {ledger window : Json} {key : ChallengerKey} {r : Audited × Json}
     (h : auditedOpen ledger window key = .ok r) :
-    ∃ (wp : Array Win × Array Period) (win : Win) (e : LedgerEntry), checked ledger key = .ok wp ∧
-      wp.1.find? (fun w => w.root == strOf (SampledProofs.getD window "root")) = some win ∧
+    ∃ (wp : Array Win × Array MonitoringPeriod) (win : Win) (e : LedgerEntry), checked ledger key = .ok wp ∧
+      wp.1.find? (fun w => w.root == strOf (Spot.getD window "root")) = some win ∧
       (win.opened.schema == LEDGER_SCHEMA) = true ∧ win.ended = some e ∧
-      jsonTrue (SampledProofs.getD e.body "closed") = true ∧
-      SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r.1.recordLeaf ∧
-      r.1.session = win.opened.session ∧ r.1.commitment = strOf (SampledProofs.getD e.body "commitment") := by
-  refine of_triple (Q := fun r => ∃ (wp : Array Win × Array Period) (win : Win) (e : LedgerEntry),
+      jsonTrue (Spot.getD e.body "closed") = true ∧
+      Spot.nat? (Spot.getD e.body "record_leaf") = some r.1.recordLeaf ∧
+      r.1.session = win.opened.session ∧ r.1.commitment = strOf (Spot.getD e.body "commitment") := by
+  refine of_triple (Q := fun r => ∃ (wp : Array Win × Array MonitoringPeriod) (win : Win) (e : LedgerEntry),
       checked ledger key = .ok wp ∧
-      wp.1.find? (fun w => w.root == strOf (SampledProofs.getD window "root")) = some win ∧
+      wp.1.find? (fun w => w.root == strOf (Spot.getD window "root")) = some win ∧
       (win.opened.schema == LEDGER_SCHEMA) = true ∧ win.ended = some e ∧
-      jsonTrue (SampledProofs.getD e.body "closed") = true ∧
-      SampledProofs.nat? (SampledProofs.getD e.body "record_leaf") = some r.1.recordLeaf ∧
-      r.1.session = win.opened.session ∧ r.1.commitment = strOf (SampledProofs.getD e.body "commitment")) ?_ h
+      jsonTrue (Spot.getD e.body "closed") = true ∧
+      Spot.nat? (Spot.getD e.body "record_leaf") = some r.1.recordLeaf ∧
+      r.1.session = win.opened.session ∧ r.1.commitment = strOf (Spot.getD e.body "commitment")) ?_ h
   clear h
   mvcgen [auditedOpen, -Spec.throw_Except, throw_spec, checked_spec]
   all_goals
@@ -492,13 +502,13 @@ theorem jsonTrue_eq {j : Json} (h : PouwCheck.jsonTrue j = true) : j = .bool tru
 theorem jsonTrue_eq' {j : Json} (h : jsonTrue j = true) : j = .bool true := by
   cases j <;> (try cases ‹Bool›) <;> first | rfl | cases h
 
-theorem nat_nonnull {j : Json} {n : Nat} (h : SampledProofs.nat? j = some n) : j.isNull = false := by
-  cases j <;> first | rfl | simp [SampledProofs.nat?, SampledProofs.int?] at h
+theorem nat_nonnull {j : Json} {n : Nat} (h : Spot.nat? j = some n) : j.isNull = false := by
+  cases j <;> first | rfl | simp [Spot.nat?, Spot.int?] at h
 
 theorem strOf_eq {j : Json} {s : String} (h : strOf j = s) (hs : s ≠ "") : j = .str s := by
   cases j <;> first | (subst h; rfl) | exact absurd h.symm hs
 
-theorem getD_root (x : Json) : SampledProofs.getD (Json.mkObj [("root", x)]) "root" = x := rfl
+theorem getD_root (x : Json) : Spot.getD (Json.mkObj [("root", x)]) "root" = x := (rfl)
 
 theorem idx_session {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} (hI : LedgerInv pre wins v2)
     {i j : Nat} (hi : i < wins.size) (hj : j < wins.size)
@@ -528,10 +538,10 @@ theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {
     (hfind : (List.find? (fun x => x.kind == "reserve") (PouwCheck.sessionEntries ledger a.session),
       List.find? (fun x => x.kind == "open") (PouwCheck.sessionEntries ledger a.session),
       List.find? (fun x => x.kind == "end") (PouwCheck.sessionEntries ledger a.session)) = (some rv, some op, some en))
-    (hfam : SampledProofs.jeq (SampledProofs.getD rv.body "families") (familiesJson PouwWindow.SALT_FAMILIES) = true)
-    (hres : (SampledProofs.int? (SampledProofs.getD op.body "reserve") == some (rv.seq : Int)) = true)
-    (hcomp : (PouwCheck.jsonTrue (SampledProofs.getD en.body "complete") &&
-      SampledProofs.jeq (SampledProofs.getD en.body "released")
+    (hfam : Spot.jeq (Spot.getD rv.body "families") (familiesJson PouwWindow.SALT_FAMILIES) = true)
+    (hres : (Spot.int? (Spot.getD op.body "reserve") == some (rv.seq : Int)) = true)
+    (hcomp : (PouwCheck.jsonTrue (Spot.getD en.body "complete") &&
+      Spot.jeq (Spot.getD en.body "released")
         (Json.mkObj [(PouwWindow.SALT, Lean.toJson (1 : Nat))])) = true) :
     LedgerShows ledger a.session R a.recordLeaf op.seq := by
   obtain ⟨ob, hao⟩ := pinnedSession_ok hpin

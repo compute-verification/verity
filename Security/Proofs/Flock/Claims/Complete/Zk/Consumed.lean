@@ -1,7 +1,48 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Goals
 import Proofs.Flock.Claims.Complete.Zk.Count
 import Proofs.Flock.Claims.Complete.Zk.Discharge
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.DeployRounds
 import Proofs.Flock.Claims.DeployRoundsZk
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Std.Data.String.ToNat
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Every recorded round of a masked rep is consumed (`ConsumedZk`)
@@ -14,6 +55,8 @@ import Proofs.Flock.Claims.DeployRoundsZk
 * The two streams together are the sends after the link (`Recs`), at most `rounds true` (`sendCountZk_goal`), so each
   holds exactly its rep's round count.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -86,12 +129,12 @@ theorem RunZk.inner_k (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : Lig
     exact hend
 
 /-- **Every recorded round of a masked rep is consumed** wherever its steps return: the goal `ConsumedZk`. -/
-theorem consumedZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
+theorem consumedZk_goal (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hP : JsonRT.ProverOkZk H rel) (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : LigeritoZk H rel)
     (hIn : Inner H rel) : ConsumedZk H rel := by
   intro o i hi r hr
   obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, -, -, -, ⟨bs, hbs, hrec⟩, -, -, hsess, -, -⟩ :=
-    JsonRT.RunZk.json S h64 hS hP o
+    JsonRT.RunZk.json h64 hS hP o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
   obtain ⟨v, hv⟩ := schedulesZk_goal H rel o (Setup.ofCircuit st) (by simp [htabs])
@@ -117,7 +160,7 @@ theorem consumedZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.O
   obtain ⟨k0, le0⟩ := RunZk.inner_k hRp hRS hLg hIn o htabs hv hsch (r := 0) (by omega)
   obtain ⟨k1, le1⟩ := RunZk.inner_k hRp hRS hLg hIn o htabs hv hsch (r := 1) (by omega)
   have hx : (o.extras 0).size = o.spec.points * st.regions.size := by
-    have he := JsonRT.repExtrasZk_goal S h64 hS hP o 0 (by simp [htabs])
+    have he := JsonRT.repExtrasZk_goal h64 hS hP o 0 (by simp [htabs])
     simp only [htabs, List.getElem!_toArray, List.getElem!_cons_zero] at he
     rw [FlockDeploy.extraClaims_size (st := st) he, hsess]
     simp [JsonRT.sessOf, pointsOf, Nat.mul_comm]

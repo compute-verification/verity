@@ -1,6 +1,25 @@
-import Proofs.Flock.EndToEnd.Carry.Statement
-import Proofs.Flock.EndToEnd.Blocks
+module
+
+public import Proofs.Flock.EndToEnd.Blocks
+public import Proofs.Flock.EndToEnd.Carry.Statement
+public import Proofs.Flock.EndToEnd.Period.Union
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.EndToEnd.Period
 import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Proof of the integrity audit over a monitoring period of blocks, with carried state
@@ -15,7 +34,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
   times the mixture's (`errAt_le_mix`), which `ecr/sha-512` at the leaf's finder bounds (`link_mass_le`), with the
   finder's cost at most `Σ_{t ∈ ℓ} (Σ_{j < t} t'_j + t'_t(1 + k_t))/m`.
 * `Flock.SecurityProofs.IntegrityHorizonCarried`: `IntegrityHorizon`'s proof, `period_unionE` in place of
-  `period_union` for the sessions accepted with a drawn unit wrong, each carried leaf's term summed over the monitoring period.
+  `period_union` for the sessions accepted with a sampled proof block wrong, each carried leaf's term summed over the monitoring period.
 * `CarriedBlocks.integrity_on`: the same on a set `I` of the sessions, as `Flock.SecurityProofs.integrity_on`, each
   carried leaf's term weighing only its sessions in `I` (`CarriedLeaf.carryOn`).
 * `Flock.SecurityProofs.IntegrityBlockCarried`: `CarriedBlocks.integrity_on` at block `b`'s sessions.
@@ -24,6 +43,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 * `Flock.SecurityProofs.IntegrityBlock_of_IntegrityBlockCarried`: `IntegrityBlockCarried` at `CarriedBlocks.ofServer`
   is `IntegrityBlock`, so the carried form strengthens it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 
@@ -358,7 +379,7 @@ theorem errBound_le (t : ℕ) (τ : Strategy (S.W t).game)
   refine ((S.W t).errBound_le_of _ _ (S.Xcar s t) (S.gAt s t τ) (S.err_le_gAt s t τ hL)).trans ?_
   rw [S.sum_gAt s t τ]
 
-/-- **One session's stage**: accepted with a drawn unit wrong, each carried leaf read at its value, with probability
+/-- **One session's stage**: accepted with a sampled proof block wrong, each carried leaf read at its value, with probability
 at most `ε_ks + δ_link` plus the carried term. -/
 theorem stage_le (t : ℕ) (τ : Strategy (S.W t).game) (hcr : (S.W t).CR τ) :
     prob (fun b => (S.record s t τ b).accepted ∧ (S.record s t τ b).drawnWrong) (S.W t).game τ ≤
@@ -505,7 +526,7 @@ theorem carry_le (I : Finset ℕ)
   rw [hsplit, ENNReal.ofReal_sum_of_nonneg hnn]
   exact Finset.sum_le_sum fun x _ => S.sum_periodE_le s I x (hA2 x)
 
-/-- **`IntegrityHorizonCarried` on a set `I` of the monitoring period's sessions**, at `M` wrong units: as
+/-- **`IntegrityHorizonCarried` on a set `I` of the monitoring period's sessions**, at `M` incorrect proof blocks: as
 `Flock.SecurityProofs.integrity_on`, with each session of `I`'s carried term. -/
 theorem integrity_on (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     (hqt : ∀ t ∈ I, q ≤ ((S.W t).kd : ℝ) / (S.W t).n)
@@ -521,7 +542,7 @@ theorem integrity_on (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
   classical
   set xq : ℝ≥0∞ := ENNReal.ofReal (1 - q)
   have hx : xq ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
-  -- some session of `I` accepted with a drawn unit wrong, each carried leaf read at its value
+  -- some session of `I` accepted with a sampled proof block wrong, each carried leaf read at its value
   have hA := period_unionE (fun t => (S.W t).game) (fun t => S.record s t)
     (fun r => r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) (fun t τ => (S.W t).CR τ)
     (fun t => if t ∈ I then (S.W t).ks + (S.W t).link else 0) (S.carriedOn s I) (S.carriedOn_nonneg s I)
@@ -531,7 +552,7 @@ theorem integrity_on (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
         exact (prob_mono (fun o ho => ho.2) _ _).trans (S.stage_le s t τ hτ)
       · simp only [carriedOn, ht, ↓reduceIte, ENNReal.ofReal_zero, add_zero]
         exact (prob_mono (q := fun _ => False) (fun o ho => ht ho.1) _ _).trans_eq (prob_false _ _)) S.T 0 s hs
-  -- every draw of `I` misses, with at least `M` wrong units in `I`
+  -- every sample of `I` misses, with at least `M` incorrect proof blocks in `I`
   have hB := period_horizon (fun t => (S.W t).game) (fun t => S.record s t)
     (fun r => r.idx ∈ I → ¬ r.drawnWrong) (fun r => if r.idx ∈ I then r.wrong else 0)
     (fun t τ => (S.W t).CR τ) xq hx
@@ -608,13 +629,13 @@ theorem IntegrityHorizonCarried : Flock.Guarantees.IntegrityHorizonCarried := by
   have hfac : ∀ t < S.T, ∀ m : ℕ, (1 - ((S.W t).kd : ℝ≥0∞) / (S.W t).n) ^ m ≤ xq ^ m :=
     fun t ht m => pow_le_pow_left₀ zero_le ((S.W t).one_sub_le hq (hqt t ht)) m
   have hgood := periodGood_mono _ S.T 0 s (fun j τ _ hj hcr => (⟨by omega, hcr⟩ : j < S.T ∧ (S.W j).CR τ)) hs
-  -- some session accepted with a drawn unit wrong, each carried leaf read at its value
+  -- some session accepted with a sampled proof block wrong, each carried leaf read at its value
   have hA := period_unionE (fun t => (S.W t).game) (fun t => S.record s t) (fun r => r.accepted ∧ r.drawnWrong)
     (fun t τ => t < S.T ∧ (S.W t).CR τ) (fun t => (S.W t).ks + (S.W t).link) (S.carriedOn s (Finset.range S.T))
     (S.carriedOn_nonneg s _) (fun t τ hτ => by
       simp only [CarriedBlocks.carriedOn, Finset.mem_range.2 hτ.1, ↓reduceIte]
       exact S.stage_le s t τ hτ.2) S.T 0 s hgood
-  -- every draw misses, with at least `M` wrong units in all
+  -- every sample misses, with at least `M` incorrect proof blocks in all
   have hB := period_horizon (fun t => (S.W t).game) (fun t => S.record s t) (fun r => ¬ r.drawnWrong)
     WindowRec.wrong (fun t τ => t < S.T ∧ (S.W t).CR τ) xq hx
     (fun t τ hτ => ⟨(S.wrongSet s t τ).card, fun _ => rfl,

@@ -31,10 +31,6 @@ tests/              pure-Python; the machine side of --on is exercised locally (
 tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
 
-The `telemetry` and `pods` packages were promoted from `veritor` `zk/campaign/` at
-commit `df7fbea3d` (branch `lane/r17-mprof`, 2026-09-21) and have since been
-edited here like the rest of the package.
-
 `research run` pre-writes `job.json` (the harness keeps an existing one) and
 calls the harness's `run()` directly: one execution engine, one record.
 
@@ -107,6 +103,7 @@ research merge --canary [--tool check] [--json]                    # the gates' 
 research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
+research lean-times ...  # Lean tasks' p95
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
@@ -158,7 +155,8 @@ one `--no-ff` merge commit each, and drive fast-forwards `checked` to the review
 stuck ready PR or a red, and the lander handles only what drive refuses. A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
-`pr:{n}@{head}`). No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
+`pr:{n}@{head}`); `ready` and `open` only warn of a body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes
+from KEY's goal label, nor `Issue: none: REASON`. No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
 root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
@@ -464,17 +462,17 @@ expired, `low` or `normal`, and preserved or regenerable, it holds no nested rec
 read again. A preserved path also needs its artifact to hold every file now under it at its size, so files custody trimmed never
 count as preserved, and `preserved.check` in head mode must find the artifact PRESERVED. An implicit record's marker must still vouch
 for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
-no remote; either way it prints every deletion and every skip with its reason. Its named failure: on 1 Oct node 2 held 737 GiB of
-unowned, unpreserved bitsets that nobody could decide to delete.
+no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of unowned,
+unpreserved files on a node that nobody can decide to delete.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
 `--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. A
 path no record covers has nobody to say yes and is never deleted. The records are read again just before `--apply` deletes. Each
 decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
-with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. Its named failure: on 3 Oct a disk cleanup ran a bare `rm -rf`
-on four FP8 passes (about 74 GB each) under `pouw/mvp-e2e`. Their record named @compute-accounting as owner until 7 Oct, but another
-lane had approved the deletion, so the passes were lost. Here that `rm` is refused with the true owner's name.
+with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. The failure it prevents: a disk cleanup's bare `rm -rf` of
+outputs whose record names another lane as owner, approved by a lane that doesn't own them, which loses them. Here that `rm` is
+refused with the true owner's name.
 
 ### Slack
 

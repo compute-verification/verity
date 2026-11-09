@@ -15,8 +15,16 @@ The `#guard`s at the end hold each to the function it stands in for on texts at 
 `CoreProtocol.Cli`'s hold `parseUpTo` and `parse` to `canonicalJson`. This imports only what `Core.Protocol` does, so
 anything that may import that (a composition's decoder) may import this.
 -/
-import Lean.Data.Json
-import Flock.Canon
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+meta import Lean.Data.Json
+meta import Flock.Canon
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Canonical
 
@@ -361,7 +369,7 @@ private def HEX : List String := ["", "00", "0", "0g", "ab", "AB", "é0", "éé"
 private def JSONS : List Json := [Json.null, .bool true, .bool false, .num 0, .num (-7), .num ⟨15, 1⟩, .str "",
   .str "a\"b\\c\nd\re\tf\x08g\x0ch\x01i\x1fé😀", .str "\x7f", .str "Δ ≥ 1", .str "\uffff\ue000\ud7ff",
   .str (String.singleton (Char.ofNat 0x10ffff)), .str "é", .str "e", .arr #[], .arr #[.num 1, .str "x", .arr #[.null]],
-  Json.mkObj [], Json.mkObj [("b", .num 1), ("a", .arr #[.bool false]), ("é", .str "\x00")],
+  Json.mkObj [], Json.mkObj [("b", .num 1), ("a", .arr #[.bool false]), ("é", .str (String.singleton (Char.ofNat 0)))],
   Json.mkObj [("k", .num ⟨1, 2⟩)]]
 
 #guard JSONS.all fun j => JSONS.all fun i =>

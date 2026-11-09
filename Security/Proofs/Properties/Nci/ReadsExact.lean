@@ -1,4 +1,31 @@
-import Proofs.Properties.Nci.Novel
+module
+
+public import Proofs.Properties.Nci.Novel
+import all Init.Data.Array.QSort.Basic
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Core.QSort
+import Proofs.Properties.Nci.Lemmas
+import Proofs.Properties.Accounting.Remote.Sort
+import Std.Data.HashSet.Lemmas
 
 /-!
 # Toward `Novel.ReadsExact`: what `Desc.analyze`'s pieces and segments name
@@ -11,6 +38,8 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
 * a slice of pieces, of a segment or of a sequence of segments is its positions `[a, b)` (`slice_pos`,
   `slicePieces_pos`, `segSlice_pos`, `psSlice_pos`, `pieces_pos`), and `shiftGates` moves gate positions
   (`shiftGates_pos`);
+* `Desc.coalesce` names a return's positions in the same order, each segment it gives one it was given or one piece
+  of positive count (`coalesce_pos`, `coalesce_mem`);
 * `PS.of` lays its segments end to end (`of_ok`), `ofPart` and `ofSeq` name a decoded sequence's references in order
   (`ofSeq_pos`, `partsPos_get`), where no strided part names a negative position, which the decoder ensures
   (`parsePartsIn_nonneg`), and `memberSpans` are a batch member's indices into its argument (`memberSpans_idx`);
@@ -23,8 +52,8 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   (`FromRows`), or `carriesRead` gives (`FromCarry`); `Seg.split` reads copies all alike once and one copy piece by
   piece, naming the same positions (`mem_segPos_alike`, `mem_segPos_split`);
 * `argSpans` is a member's used leaves' indices into its argument (`argSpans_batch`, `argSpans_xs`, `argSpans_other`);
-* `Array.qsort` by a key sorts by it (`qsort_sorted`), so `Desc.Ivs.norm` keeps exactly its intervals' leaves
-  (`norm_mem`), and `Desc.Ivs.covers` checks every leaf is in an interval (`covers_mem`);
+* `Desc.Ivs.norm`, which sorts by `List.mergeSort`, keeps exactly its intervals' leaves (`norm_mem`), and
+  `Desc.Ivs.covers` checks every leaf is in an interval (`covers_mem`);
 * a segment's gates (`Width.segGates`) are its gate positions (`segGates_pos`);
 * on the circuit's side, a gate's operands are its node's references resolved (`operands_mem`), and a gate of a
   primitive root node reads its member's operands in the root activation (`reads_rootPrim`);
@@ -104,6 +133,8 @@ by `carriesRead_shape`), so each read is `SegGood` (`segGood_of`). `RootGates` h
 segment is `SegNodes`, its gates of their widths, each piece's in one root node and a shifting segment's copies' in
 one (`RootNodes`, `rootGates_of`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
 
@@ -940,6 +971,205 @@ theorem tgt_eq_of_beq {t : Tgt} {p : Bool} {i : Nat} (h : (t == Tgt.ref p i) = t
 theorem form_eq_scan {f : Flock.Program.Form} (h : (f == .scan) = true) : f = .scan := by
   cases f <;> first | rfl | cases h
 
+/-! ## A summary's return coalesced
+
+`Desc.coalesce` joins a return's one-piece segments where they continue one progression (`Piece.join`) and stacks equal
+runs as rows (`Piece.stack`): it names the same positions in the same order (`coalesce_pos`), and each segment it gives
+is one it was given or one piece of positive count (`coalesce_mem`). -/
+
+theorem segsPos_push (X : Array Seg) (C : Seg) : segsPos (X.push C) = segsPos X ++ segPos C := by
+  rw [Array.push_eq_append, segsPos_append, segsPos_singleton]
+
+theorem gate_beq_eq {w : Nat} {t : Tgt} (h : (Tgt.gate w == t) = true) : t = .gate w := by
+  cases t with
+  | ref p i => cases h
+  | gate w' =>
+    have e : (Tgt.gate w == Tgt.gate w') = (w == w') := rfl
+    rw [e, beq_iff_eq] at h
+    rw [h]
+
+/-- **Joining two runs of a progression** names `p`'s positions then `q`'s. -/
+theorem join_pos (p q r : Piece) (h : Desc.Piece.join p q = some r) : pos r = pos p ++ pos q ∧ 0 < r.count := by
+  rcases p with ⟨tp, bp, sp, lp, rp, rsp⟩
+  rcases q with ⟨tq, bq, sq, lq, rq, rsq⟩
+  unfold Desc.Piece.join at h
+  cases tp with
+  | ref _ _ => cases h
+  | gate w =>
+    dsimp only at h
+    generalize hst0 : (if lp == 1 then bq - bp else sp) = st at h
+    split at h
+    · rename_i hc
+      simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true] at hc
+      obtain ⟨⟨⟨⟨⟨⟨⟨htq, hrp⟩, hrq⟩, hlp⟩, hlq⟩, -⟩, hst⟩, hb⟩ := hc
+      cases h
+      cases gate_beq_eq htq
+      subst hrp hrq
+      refine ⟨?_, by simp [Desc.Piece.count]; omega⟩
+      rw [pos_one, pos_one, pos_one, List.range_add, List.map_append, List.map_map]
+      have hfirst : ((List.range lp).map fun (k : Nat) => (Tgt.gate w, bp + (k : Int) * st)) =
+          (List.range lp).map fun (k : Nat) => (Tgt.gate w, bp + (k : Int) * sp) := by
+        by_cases h1 : lp = 1
+        · subst h1; simp
+        · have h1' : (lp == 1) = false := by simpa using h1
+          simp only [h1', Bool.false_eq_true, ite_false] at hst0
+          rw [hst0]
+      rw [hfirst]
+      congr 1
+      apply List.map_congr_left
+      intro k hk
+      simp only [Function.comp, Prod.mk.injEq, true_and]
+      rcases hst with hst | hst
+      · subst hst
+        have : k = 0 := by simpa using hk
+        subst this
+        simp only [Nat.add_zero, Int.natCast_zero, Int.zero_mul, Int.add_zero]
+        omega
+      · subst hst
+        rw [Int.natCast_add, Int.add_mul]
+        omega
+    · cases h
+
+/-- **Stacking a row under rows** names `p`'s positions then `q`'s. -/
+theorem stack_pos (p q r : Piece) (h : Desc.Piece.stack p q = some r) : pos r = pos p ++ pos q ∧ 0 < r.count := by
+  rcases p with ⟨tp, bp, sp, lp, rp, rsp⟩
+  rcases q with ⟨tq, bq, sq, lq, rq, rsq⟩
+  unfold Desc.Piece.stack at h
+  cases tp with
+  | ref _ _ => cases h
+  | gate w =>
+    dsimp only at h
+    generalize hrs0 : (if rp == 1 then bq - bp else rsp) = rs at h
+    split at h
+    · rename_i hc
+      simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true] at hc
+      obtain ⟨⟨⟨⟨⟨⟨⟨htq, hrp⟩, hrq⟩, hlp⟩, hlq⟩, hst⟩, -⟩, hb⟩ := hc
+      cases h
+      cases gate_beq_eq htq
+      subst hrq hlq
+      refine ⟨?_, by simp only [Desc.Piece.count]; exact Nat.mul_pos (Nat.succ_pos _) hlp⟩
+      rw [pos_one]
+      unfold pos
+      dsimp only
+      rw [List.range_succ, List.flatMap_append, List.flatMap_singleton]
+      have hfirst : ((List.range rp).flatMap fun (r' : Nat) => (List.range lq).map fun (t : Nat) =>
+            (Tgt.gate w, bp + (r' : Int) * rs + (t : Int) * sp)) =
+          (List.range rp).flatMap fun (r' : Nat) => (List.range lq).map fun (t : Nat) =>
+            (Tgt.gate w, bp + (r' : Int) * rsp + (t : Int) * sp) := by
+        by_cases h1 : rp = 1
+        · subst h1; simp
+        · have h1' : (rp == 1) = false := by simpa using h1
+          simp only [h1', Bool.false_eq_true, ite_false] at hrs0
+          rw [hrs0]
+      rw [hfirst]
+      congr 1
+      apply List.map_congr_left
+      intro k hk
+      simp only [Prod.mk.injEq, true_and]
+      rcases hst with hst | hst
+      · subst hst
+        have : k = 0 := by simpa using hk
+        subst this
+        simp only [Int.natCast_zero, Int.zero_mul, Int.add_zero]
+        omega
+      · subst hst
+        omega
+    · cases h
+
+/-- The piece of a segment of one copy of one piece names the segment's positions. -/
+theorem single_pos (s : Seg) (p : Piece) (h : s.single = some p) : segPos s = pos p := by
+  rcases s with ⟨⟨l⟩, len, reps, shift⟩
+  unfold Desc.Seg.single at h
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, beq_iff_eq] at hc
+    obtain ⟨hr, hsz⟩ := hc
+    subst hr
+    obtain ⟨a, rfl⟩ := List.length_eq_one_iff.1 (by simpa using hsz)
+    have : a = p := by simpa using h
+    subst this
+    simp [segPos, Desc.Seg.copy, shiftGates_pos, shiftPos_zero, posAll_singleton]
+  · cases h
+
+/-- **`joinWith`** names `out`'s positions then `s`'s, wherever `f`'s joins name their two pieces'. -/
+theorem joinWith_pos (f : Piece → Piece → Option Piece) (hf : ∀ p q r, f p q = some r → pos r = pos p ++ pos q)
+    (out : Array Seg) (s : Seg) : segsPos (Desc.Seg.joinWith f out s) = segsPos out ++ segPos s := by
+  unfold Desc.Seg.joinWith
+  split
+  · rename_i p q hp hq
+    split
+    · rename_i r hr
+      obtain ⟨b, hb, hbp⟩ := Option.bind_eq_some_iff.1 hp
+      obtain ⟨ys, rfl⟩ := Array.back?_eq_some_iff.1 hb
+      rw [Array.pop_push, segsPos_push, segsPos_push, segPos_one, hf p q r hr, single_pos b p hbp,
+        single_pos s q hq, List.append_assoc]
+    · exact segsPos_push out s
+  · exact segsPos_push out s
+
+/-- A property each of `out`'s segments and `s` have, and every one-piece segment of positive count, each segment
+`joinWith` gives has, wherever `f`'s joins are of positive count. -/
+theorem joinWith_mem (f : Piece → Piece → Option Piece) (hf : ∀ p q r, f p q = some r → 0 < r.count)
+    (Q : Seg → Prop) (hQ : ∀ r : Piece, 0 < r.count → Q (Seg.one r)) (out : Array Seg) (s : Seg)
+    (hout : ∀ g ∈ out.toList, Q g) (hs : Q s) : ∀ g ∈ (Desc.Seg.joinWith f out s).toList, Q g := by
+  have hpush : ∀ g ∈ (out.push s).toList, Q g := by
+    intro g hg
+    rw [Array.toList_push, List.mem_append, List.mem_singleton] at hg
+    rcases hg with hg | rfl
+    · exact hout g hg
+    · exact hs
+  unfold Desc.Seg.joinWith
+  split
+  · rename_i p q hp hq
+    split
+    · rename_i r hr
+      obtain ⟨b, hb, -⟩ := Option.bind_eq_some_iff.1 hp
+      obtain ⟨ys, rfl⟩ := Array.back?_eq_some_iff.1 hb
+      intro g hg
+      rw [Array.pop_push, Array.toList_push, List.mem_append, List.mem_singleton] at hg
+      rcases hg with hg | rfl
+      · exact hout g (by rw [Array.toList_push]; exact List.mem_append_left _ hg)
+      · exact hQ r (hf p q r hr)
+    · exact hpush
+  · exact hpush
+
+theorem foldl_joinWith_pos (f : Piece → Piece → Option Piece)
+    (hf : ∀ p q r, f p q = some r → pos r = pos p ++ pos q) :
+    ∀ (l : List Seg) (out : Array Seg), segsPos (l.foldl (Desc.Seg.joinWith f) out) = segsPos out ++ l.flatMap segPos
+  | [], out => by simp
+  | s :: l, out => by
+    rw [List.foldl_cons, foldl_joinWith_pos f hf l, joinWith_pos f hf, List.flatMap_cons, List.append_assoc]
+
+theorem foldl_joinWith_mem (f : Piece → Piece → Option Piece) (hf : ∀ p q r, f p q = some r → 0 < r.count)
+    (Q : Seg → Prop) (hQ : ∀ r : Piece, 0 < r.count → Q (Seg.one r)) :
+    ∀ (l : List Seg) (out : Array Seg), (∀ g ∈ out.toList, Q g) → (∀ g ∈ l, Q g) →
+      ∀ g ∈ (l.foldl (Desc.Seg.joinWith f) out).toList, Q g
+  | [], out, ho, _ => by simpa using ho
+  | s :: l, out, ho, hl => by
+    rw [List.foldl_cons]
+    exact foldl_joinWith_mem f hf Q hQ l _ (joinWith_mem f hf Q hQ out s ho (hl s (by simp)))
+      (fun g hg => hl g (by simp [hg]))
+
+/-- **`coalesce`** names its segments' positions in order. -/
+theorem coalesce_pos (segs : Array Seg) : segsPos (Desc.coalesce segs) = segsPos segs := by
+  have e : ∀ f : Piece → Piece → Option Piece, (∀ p q r, f p q = some r → pos r = pos p ++ pos q) →
+      ∀ x : Array Seg, segsPos (x.foldl (Desc.Seg.joinWith f) #[]) = segsPos x := by
+    intro f hf x
+    rw [← Array.foldl_toList, foldl_joinWith_pos f hf]
+    rfl
+  unfold Desc.coalesce
+  rw [e _ (fun p q r h => (stack_pos p q r h).1), e _ (fun p q r h => (join_pos p q r h).1)]
+
+/-- **Each segment `coalesce` gives is one of its segments, or one piece of positive count**: a property both have,
+it has. -/
+theorem coalesce_mem (Q : Seg → Prop) (hQ : ∀ r : Piece, 0 < r.count → Q (Seg.one r)) (segs : Array Seg)
+    (h : ∀ g ∈ segs.toList, Q g) : ∀ g ∈ (Desc.coalesce segs).toList, Q g := by
+  have e : ∀ f : Piece → Piece → Option Piece, (∀ p q r, f p q = some r → 0 < r.count) →
+      ∀ x : Array Seg, (∀ g ∈ x.toList, Q g) → ∀ g ∈ (x.foldl (Desc.Seg.joinWith f) #[]).toList, Q g := by
+    intro f hf x hx
+    rw [← Array.foldl_toList]
+    exact foldl_joinWith_mem f hf Q hQ _ _ (by simp) hx
+  exact e _ (fun p q r h => (stack_pos p q r h).2) _ (e _ (fun p q r h => (join_pos p q r h).2) _ h)
+
 theorem ofPart_affine (p : Bool) (i b c : Nat) :
     posAll (Desc.ofPart (.affine p i b c)) = (List.range c).map fun k => refPos ((Part.affine p i b c).get k) := by
   simp only [Desc.ofPart, posAll_singleton, pos_one, Flock.Program.Part.get, refPos]
@@ -1641,11 +1871,11 @@ theorem readsOf_spec (P : Prog) (memo : Array Desc.Summary) (reads : Array (Arra
       (rs.any fun x => x.ps.any fun q => match q.tgt with | .gate _ => false | _ => true) = false)
     (fun k acc y hy => by
       obtain ⟨rs, hrs, hy⟩ := Walk.except_bind_ok hy
-      by_cases hb : (rs.any fun x => x.ps.any fun q => match q.tgt with | .gate _ => false | _ => true) = true
-      · rw [if_pos hb] at hy; exact absurd hy (by intro h; cases h)
-      · rw [if_neg hb] at hy
+      split at hy
+      · exact absurd hy (by intro h; cases h)
+      · rename_i hb
         simp only [pure, Except.pure, Except.ok.injEq] at hy
-        exact ⟨rs, ⟨hrs, by simpa using hb⟩, hy.symm⟩) _ #[] r hr
+        exact ⟨rs, ⟨hrs, Bool.eq_false_iff.2 hb⟩, hy.symm⟩) _ #[] r hr
   have hn : ((P.defs[P.root]!).body.nodes.size - 0 + 1 - 1) / 1 = nodeCount P := by
     simp [nodeCount, DescAgree.rootBody]
   rw [List.length_range', hn] at h1
@@ -5489,8 +5719,12 @@ theorem allReps_of {segs : Array Seg} (h : AllReps segs) : AllReps (PS.of segs).
   simp only [Array.toList_filter, List.mem_filter] at hx
   exact h x hx.1
 
+/-- `coalesce` keeps its segments `RepsOk`: each it gives is one of them or of one copy. -/
+theorem allReps_coalesce {segs : Array Seg} (h : AllReps segs) : AllReps (Desc.coalesce segs) :=
+  coalesce_mem RepsOk (fun _ _ => repsOk_one rfl) segs h
+
 /-- **A summary's return segments are each `RepsOk`**: `Desc.summarize` lays `down`'s segments of its return end to
-end. -/
+end, coalesced. -/
 theorem summarize_reps (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
     (h : Desc.summarize P memo d = .ok s) : AllReps s.ret.segs := by
   unfold Desc.summarize at h
@@ -5528,7 +5762,7 @@ theorem summarize_reps (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Des
         | assumption
         | split
         | dsimp only [ForInStep.value])
-    exact allReps_of hret'
+    exact allReps_of (allReps_coalesce hret')
 
 theorem memo_push_reps {memo : Array Desc.Summary} {x : Desc.Summary} (hm : ∀ f : Nat, AllReps (memo[f]!).ret.segs)
     (hx : AllReps x.ret.segs) (f : Nat) : AllReps ((memo.push x)[f]!).ret.segs := by
@@ -5695,9 +5929,6 @@ theorem copies_seg_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
 theorem segsPos_push_append (X Y : Array Seg) (C : Seg) :
     segsPos (X.push C ++ Y) = segsPos X ++ segPos C ++ segsPos Y := by
   rw [segsPos_append, Array.push_eq_append, segsPos_append, segsPos_singleton]
-
-theorem segsPos_push (X : Array Seg) (C : Seg) : segsPos (X.push C) = segsPos X ++ segPos C := by
-  rw [Array.push_eq_append, segsPos_append, segsPos_singleton]
 
 /-! ## A batch of a composite's piece in its one-run case -/
 
@@ -9386,6 +9617,25 @@ theorem psPos_default : psPos (default : PS) = [] := rfl
 theorem psOk_default : PSOk (default : PS) :=
   ⟨fun i hi => absurd hi (Nat.not_lt_zero _), rfl, fun i hi => absurd hi (Nat.not_lt_zero _), rfl⟩
 
+/-- `coalesce` keeps its segments `ShapeOk`: a piece it joins names their positions, so the positions' facts hold, and
+is one copy of one piece of positive count. -/
+theorem shapeOk_coalesce {P : Prog} {d : Nat} {segs : Array Seg} (h : ∀ g ∈ segs.toList, ShapeOk P d g) :
+    ∀ g ∈ (Desc.coalesce segs).toList, ShapeOk P d g := by
+  intro g hg
+  rcases coalesce_mem (fun g => g ∈ segs.toList ∨ ∃ r, g = Seg.one r ∧ 0 < r.count)
+      (fun r hr => .inr ⟨r, rfl, hr⟩) segs (fun g hg => .inl hg) g hg with hg' | ⟨r, rfl, hr⟩
+  · exact h g hg'
+  · refine ⟨?_, fun x hx => ?_, fun q hq => ?_, Nat.le_refl 1⟩
+    · show (posAll #[r]).length = r.count
+      rw [posAll_singleton, pos_length]
+    · have : x ∈ segsPos segs := by
+        rw [← coalesce_pos]; exact List.mem_flatMap.2 ⟨_, hg, hx⟩
+      obtain ⟨g', hg', hx'⟩ := List.mem_flatMap.1 this
+      exact (h g' hg').2.1 x hx'
+    · have : q = r := by simpa [Seg.one] using hq
+      subst this
+      exact hr
+
 /-- **What `Desc.summarize` gives Definition `d` holds `RetOk`**, wherever `down`'s segments are `ShapeOk`
 (`DownShape`) and keep the gates they read (`DownSpec`) in its body, and the decoder's facts on its return hold. -/
 theorem summarize_retOk (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
@@ -9473,16 +9723,18 @@ theorem summarize_retOk (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : De
       · exact absurd hg (by simp [ret0])
       · obtain ⟨q, hq, hqv⟩ := forall2_mem hF v hv
         exact hS hp' Flock.Steps.FUEL q v (hq0 q hq) (hq1 q hq) (hq2 q hq) (hq3 q hq) hqv g hg
-    obtain ⟨hok, hpsPos, -⟩ := of_ok ret fun g hg => (hshape g hg).1
+    have hshape' := shapeOk_coalesce hshape
+    obtain ⟨hok, hpsPos, -⟩ := of_ok (Desc.coalesce ret) fun g hg => (hshape' g hg).1
+    rw [coalesce_pos] at hpsPos
     refine ⟨hok, fun x hx => ?_, fun g hg => (h3 g hg).2, fun sc hsc => ?_, fun g hg => ?_⟩
     · rw [hpsPos] at hx
       obtain ⟨g, hg, hxg⟩ := List.mem_flatMap.1 hx
       exact (hshape g hg).2.1 x hxg
     rotate_left
-    · change g ∈ (PS.of ret).segs.toList at hg
+    · change g ∈ (PS.of (Desc.coalesce ret)).segs.toList at hg
       rw [of_segs, Array.toList_filter, List.mem_filter] at hg
-      exact (hshape g hg.1).2.2.1
-    · show Agree P sc (psPos (PS.of ret)) ((List.range body.ret.count).map fun j =>
+      exact (hshape' g hg.1).2.2.1
+    · show Agree P sc (psPos (PS.of (Desc.coalesce ret))) ((List.range body.ret.count).map fun j =>
         Flock.Program.resolve P sc (body.ret.get j))
       rw [hpsPos, hout, segsPos_foldl, show segsPos ret0 = [] from rfl, List.nil_append]
       have ha := agree_trace (P := P) (sc := sc) (T := fun q => (pos q).map (den P sc)) hF
@@ -9744,259 +9996,6 @@ theorem argSpans_other (node : Flock.Program.Node) (i m : Nat) (used : Desc.Ivs)
   simp only [Bool.and_eq_true, decide_eq_true_eq]
   rw [if_neg this]
 
-
-open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
-
-/-! ## `Array.qsort` sorts by a key -/
-
-section QSort
-
-variable {α : Type} (f : α → Nat)
-
-/-- `bs` agrees with `as` outside `[lo, hi]`, and each of its elements in `[lo, hi]` is one of `as`'s there. -/
-def Within {n : Nat} (as bs : Vector α n) (lo hi : Nat) : Prop :=
-  (∀ t (h : t < n), (t < lo ∨ hi < t) → bs[t] = as[t]) ∧
-  (∀ t (h : t < n), lo ≤ t → t ≤ hi → ∃ s, ∃ hs : s < n, lo ≤ s ∧ s ≤ hi ∧ bs[t] = as[s])
-
-theorem within_refl {n : Nat} (as : Vector α n) (lo hi : Nat) : Within as as lo hi :=
-  ⟨fun _ _ _ => rfl, fun t h h1 h2 => ⟨t, h, h1, h2, rfl⟩⟩
-
-theorem within_trans {n : Nat} {as bs cs : Vector α n} {lo hi : Nat} (h1 : Within as bs lo hi)
-    (h2 : Within bs cs lo hi) : Within as cs lo hi := by
-  refine ⟨fun t h ht => (h2.1 t h ht).trans (h1.1 t h ht), fun t h a b => ?_⟩
-  obtain ⟨s, hs, s1, s2, e⟩ := h2.2 t h a b
-  obtain ⟨u, hu, u1, u2, e'⟩ := h1.2 s hs s1 s2
-  exact ⟨u, hu, u1, u2, e.trans e'⟩
-
-theorem within_mono {n : Nat} {as bs : Vector α n} {lo hi lo' hi' : Nat} (h : Within as bs lo hi) (h1 : lo' ≤ lo)
-    (h2 : hi ≤ hi') : Within as bs lo' hi' := by
-  refine ⟨fun t ht h' => h.1 t ht (by omega), fun t ht a b => ?_⟩
-  by_cases hin : lo ≤ t ∧ t ≤ hi
-  · obtain ⟨s, hs, s1, s2, e⟩ := h.2 t ht hin.1 hin.2
-    exact ⟨s, hs, by omega, by omega, e⟩
-  · exact ⟨t, ht, a, b, h.1 t ht (by omega)⟩
-
-theorem within_swap {n : Nat} (as : Vector α n) {lo hi i j : Nat} (hi' : i < n) (hj : j < n) (h1 : lo ≤ i)
-    (h2 : i ≤ hi) (h3 : lo ≤ j) (h4 : j ≤ hi) : Within as (as.swap i j hi' hj) lo hi := by
-  refine ⟨fun t h ht => ?_, fun t h a b => ?_⟩
-  · rw [Vector.getElem_swap_of_ne (by omega) (by omega)]
-  · rw [Vector.getElem_swap]
-    split
-    · exact ⟨j, hj, h3, h4, rfl⟩
-    · split
-      · exact ⟨i, hi', h1, h2, rfl⟩
-      · exact ⟨t, h, a, b, rfl⟩
-
-theorem within_ite_swap {n : Nat} (as : Vector α n) (b : Bool) {lo hi i j : Nat} (hi' : i < n) (hj : j < n)
-    (h1 : lo ≤ i) (h2 : i ≤ hi) (h3 : lo ≤ j) (h4 : j ≤ hi) :
-    Within as (if b then as.swap i j hi' hj else as) lo hi := by
-  split
-  · exact within_swap as hi' hj h1 h2 h3 h4
-  · exact within_refl as lo hi
-
-/-- `qpartition`'s loop: below `i` the elements are below the pivot, from `i` to `k` not, the pivot at `hi`; it ends
-with the pivot at its result, below `hi` when some element from `i` is not below it. -/
-theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (pivot : α) :
-    ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
-      (∀ t (h : t < n), lo ≤ t → t < i → f as[t] < f pivot) →
-      (∀ t (h : t < n), i ≤ t → t < k → f pivot ≤ f as[t]) →
-      as[hi] = pivot →
-      (∃ j, ∃ hj : j < n, i ≤ j ∧ j < hi ∧ f pivot ≤ f as[j]) →
-      let r := Array.qpartition.loop (fun x y => decide (f x < f y)) lo hi hhi pivot as i k ilo ik w
-      ∃ hm : r.1.1 < hi, Within as r.2 lo hi ∧
-        (∀ t (h : t < n), lo ≤ t → t < r.1.1 → f r.2[t] < f pivot) ∧
-        r.2[r.1.1] = pivot ∧
-        (∀ t (h : t < n), r.1.1 < t → t ≤ hi → f pivot ≤ f r.2[t]) := by
-  intro d
-  induction d using Nat.strongRecOn with
-  | _ d ih =>
-    intro as i k ilo ik w hd hlt hge hp hex
-    dsimp only
-    unfold Array.qpartition.loop
-    split
-    · rename_i hk
-      split
-      · rename_i hc
-        have hc' : f as[k] < f pivot := of_decide_eq_true hc
-        obtain ⟨hm, hw, h1, h2, h3⟩ := ih (hi - (k + 1)) (by omega) (as.swap i k (by omega) (by omega)) (i + 1)
-          (k + 1) (by omega) (by omega) (by omega) rfl
-          (fun t ht a b => by
-            rw [Vector.getElem_swap]
-            split
-            · rename_i e; subst e; exact hc'
-            · split
-              · omega
-              · exact hlt t ht a (by omega))
-          (fun t ht a b => by
-            rw [Vector.getElem_swap]
-            split
-            · omega
-            · split
-              · exact hge i (by omega) (Nat.le_refl _) (by omega)
-              · exact hge t ht (by omega) (by omega))
-          (by rw [Vector.getElem_swap_of_ne (by omega) (by omega)]; exact hp)
-          (by
-            obtain ⟨j, hj, j1, j2, hj'⟩ := hex
-            by_cases hji : j = i
-            · subst hji
-              have hik : j ≠ k := fun e => by subst e; omega
-              refine ⟨k, by omega, by omega, hk, ?_⟩
-              rw [Vector.getElem_swap_right]; exact hj'
-            · have hjk : j ≠ k := fun e => by subst e; omega
-              refine ⟨j, hj, by omega, j2, ?_⟩
-              rw [Vector.getElem_swap_of_ne hji hjk]; exact hj')
-        exact ⟨hm, within_trans (within_swap as _ _ ilo (by omega) (by omega) (by omega)) hw, h1, h2, h3⟩
-      · rename_i hc
-        have hc' : ¬ f as[k] < f pivot := fun h => hc (decide_eq_true h)
-        exact ih (hi - (k + 1)) (by omega) as i (k + 1) ilo (by omega) (by omega) rfl hlt
-          (fun t ht a b => by
-            by_cases e : t = k
-            · subst e; omega
-            · exact hge t ht a (by omega)) hp hex
-    · rename_i hk
-      have hkh : k = hi := by omega
-      subst hkh
-      obtain ⟨j, hj, j1, j2, hj'⟩ := hex
-      refine ⟨by dsimp only; omega, within_swap as (by omega) hhi ilo (by omega) (by omega) (Nat.le_refl _), ?_, ?_, ?_⟩
-      · intro t ht a b
-        dsimp only at b ⊢
-        rw [Vector.getElem_swap_of_ne (by omega) (by omega)]
-        exact hlt t ht a b
-      · dsimp only
-        rw [Vector.getElem_swap_left]; exact hp
-      · intro t ht a b
-        dsimp only at a ⊢
-        rw [Vector.getElem_swap]
-        split
-        · omega
-        · split
-          · exact hge i (by omega) (Nat.le_refl _) (by omega)
-          · exact hge t ht (by omega) (by omega)
-
-/-- `qpartition`'s third swap leaves its pivot at most the middle element. -/
-theorem median_le {n : Nat} (as : Vector α n) (i j : Nat) (hi : i < n) (hj : j < n) :
-    f (if decide (f as[i] < f as[j]) = true then as.swap i j hi hj else as)[j] ≤
-      f (if decide (f as[i] < f as[j]) = true then as.swap i j hi hj else as)[i] := by
-  split
-  · rename_i hc
-    rw [Vector.getElem_swap_left, Vector.getElem_swap_right]
-    exact Nat.le_of_lt (of_decide_eq_true hc)
-  · rename_i hc
-    exact Nat.le_of_not_lt fun h => hc (decide_eq_true h)
-
-theorem qpartition_core {n : Nat} (as as3 : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hhi : hi < n) (hlh : lo < hi)
-    (hmid : (lo + hi) / 2 < n) (hW : Within as as3 lo hi) (hmed : f as3[hi] ≤ f as3[(lo + hi) / 2]) :
-    let r := Array.qpartition.loop (fun x y => decide (f x < f y)) lo hi hhi as3[hi] as3 lo lo (Nat.le_refl _)
-      (Nat.le_refl _) w
-    r.1.1 < hi ∧ Within as r.2 lo hi ∧ ∃ v : Nat,
-      (∀ t (h : t < n), lo ≤ t → t ≤ r.1.1 → f r.2[t] ≤ v) ∧ (∀ t (h : t < n), r.1.1 < t → t ≤ hi → v ≤ f r.2[t]) := by
-  obtain ⟨hm, hw, h1, h2, h3⟩ := qpartition_loop_spec f hhi as3[hi] (hi - lo) as3 lo lo (Nat.le_refl _)
-    (Nat.le_refl _) w rfl (fun t _ a b => by omega) (fun t _ a b => by omega) rfl
-    ⟨(lo + hi) / 2, hmid, by omega, by omega, hmed⟩
-  refine ⟨hm, within_trans hW hw, f as3[hi], fun t ht a b => ?_, h3⟩
-  rcases Nat.lt_or_ge t (Array.qpartition.loop (fun x y => decide (f x < f y)) lo hi hhi as3[hi] as3 lo lo
-    (Nat.le_refl _) (Nat.le_refl _) w).1.1 with b' | b'
-  · exact Nat.le_of_lt (h1 t ht a b')
-  · have e : t = (Array.qpartition.loop (fun x y => decide (f x < f y)) lo hi hhi as3[hi] as3 lo lo
-      (Nat.le_refl _) (Nat.le_refl _) w).1.1 := by omega
-    simp only [e, h2, Nat.le_refl]
-
-/-- `qpartition` of `[lo, hi]`, `lo < hi`: its result `m` is below `hi`, the elements to `m` are at most `m`'s, after it
-at least, and only `[lo, hi]` changes, to elements it held. -/
-theorem qpartition_spec {n : Nat} (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n)
-    (hlh : lo < hi) :
-    let r := Array.qpartition as (fun x y => decide (f x < f y)) lo hi w hlo hhi
-    r.1.1 < hi ∧ Within as r.2 lo hi ∧ ∃ v : Nat,
-      (∀ t (h : t < n), lo ≤ t → t ≤ r.1.1 → f r.2[t] ≤ v) ∧ (∀ t (h : t < n), r.1.1 < t → t ≤ hi → v ≤ f r.2[t]) := by
-  dsimp only
-  unfold Array.qpartition
-  dsimp only
-  refine qpartition_core f as _ lo hi w hhi hlh (by omega) ?_ ?_
-  · refine within_trans (within_trans (within_ite_swap as _ _ _ ?_ ?_ ?_ ?_) (within_ite_swap _ _ _ _ ?_ ?_ ?_ ?_))
-      (within_ite_swap _ _ _ _ ?_ ?_ ?_ ?_) <;> omega
-  · exact median_le f _ _ _ _ _
-
-/-- `qsort`'s `sort` of `[lo, hi]` sorts it by `f`, changing only it, to elements it held. -/
-theorem sort_spec {n : Nat} :
-    ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
-      Within as (Array.qsort.sort (fun x y => decide (f x < f y)) as lo hi w hlo hhi) lo hi ∧
-      ∀ i j (hi' : i < n) (hj : j < n), lo ≤ i → i ≤ j → j ≤ hi →
-        f (Array.qsort.sort (fun x y => decide (f x < f y)) as lo hi w hlo hhi)[i] ≤
-          f (Array.qsort.sort (fun x y => decide (f x < f y)) as lo hi w hlo hhi)[j] := by
-  intro d
-  induction d using Nat.strongRecOn with
-  | _ d ih =>
-    intro as lo hi w hlo hhi hd
-    rw [Array.qsort.sort]
-    split
-    · rename_i h₁
-      have hp := qpartition_spec f as lo hi w hlo hhi h₁
-      revert hp
-      match Array.qpartition as (fun x y => decide (f x < f y)) lo hi w hlo hhi with
-      | (⟨mid, hmid⟩, as') =>
-        intro hp
-        dsimp only at hp ⊢
-        obtain ⟨hm, hW, v, hle, hge⟩ := hp
-        split
-        · omega
-        · obtain ⟨hW1, hS1⟩ := ih (mid - lo) (by omega) as' lo mid hmid.1 hlo (by omega) rfl
-          obtain ⟨hW2, hS2⟩ := ih (hi - (mid + 1)) (by omega)
-            (Array.qsort.sort (fun x y => decide (f x < f y)) as' lo mid hmid.1 hlo (by omega)) (mid + 1) hi
-            (by omega) (by omega) hhi rfl
-          refine ⟨within_trans hW (within_trans (within_mono hW1 (Nat.le_refl _) (by omega))
-            (within_mono hW2 (by omega) (Nat.le_refl _))), fun i j hi' hj a b c => ?_⟩
-          by_cases hjm : j ≤ mid
-          · rw [hW2.1 i hi' (by omega), hW2.1 j hj (by omega)]
-            exact hS1 i j hi' hj a b hjm
-          · by_cases him : mid + 1 ≤ i
-            · exact hS2 i j hi' hj him b c
-            · rw [hW2.1 i hi' (by omega)]
-              obtain ⟨s, hs, s1, s2, es⟩ := hW1.2 i hi' a (by omega)
-              obtain ⟨u, hu, u1, u2, eu⟩ := hW2.2 j hj (by omega) c
-              rw [es, eu, hW1.1 u hu (by omega)]
-              exact Nat.le_trans (hle s hs s1 s2) (hge u hu (by omega) u2)
-    · refine ⟨within_refl as lo hi, fun i j hi' hj a b c => ?_⟩
-      have e : i = j := by omega
-      subst e; exact Nat.le_refl _
-
-/-- **`Array.qsort` by a key sorts by it.** -/
-theorem qsort_sorted (as : Array α) :
-    (as.qsort (fun x y => decide (f x < f y))).toList.Pairwise (fun x y => f x ≤ f y) := by
-  unfold Array.qsort
-  split
-  · rename_i h
-    rw [Array.size_eq_zero_iff.1 h]
-    exact List.Pairwise.nil
-  · rename_i h
-    dsimp only
-    obtain ⟨-, hS⟩ := sort_spec f _ as.toVector (min 0 (as.size - 1)) (max (min 0 (as.size - 1))
-      (min (as.size - 1) (as.size - 1))) (by omega) (by omega) (by omega) rfl
-    rw [List.pairwise_iff_getElem]
-    intro i j hi hj hij
-    simp only [Array.length_toList, Vector.size_toArray] at hi hj
-    simp only [Array.getElem_toList, Vector.getElem_toArray]
-    exact hS i j hi hj (by omega) (by omega) (by omega)
-
-/-- `Array.qsort` by a key keeps only elements it was given. -/
-theorem qsort_mem (as : Array α) {x : α} (hx : x ∈ (as.qsort (fun x y => decide (f x < f y))).toList) :
-    x ∈ as.toList := by
-  unfold Array.qsort at hx
-  split at hx
-  · exact hx
-  · rename_i h
-    dsimp only at hx
-    obtain ⟨hW, -⟩ := sort_spec f _ as.toVector (min 0 (as.size - 1)) (max (min 0 (as.size - 1))
-      (min (as.size - 1) (as.size - 1))) (by omega) (by omega) (by omega) rfl
-    obtain ⟨t, ht, e⟩ := List.getElem_of_mem hx
-    simp only [Array.length_toList, Vector.size_toArray] at ht
-    obtain ⟨s, hs, -, -, es⟩ := hW.2 t ht (by omega) (by omega)
-    rw [← e]
-    simp only [Array.getElem_toList, Vector.getElem_toArray]
-    rw [es]
-    exact Array.mem_toList_iff.2 (Array.getElem_mem hs)
-
-end QSort
-
 /-! ## The used leaves' intervals (`Desc.Ivs.norm`, `Desc.Ivs.covers`) -/
 
 /-- `Desc.Ivs.norm`'s step: an interval starting within the last one's extends it, else it follows. -/
@@ -10006,10 +10005,17 @@ def normStep (acc : Array (Nat × Nat)) (p : Nat × Nat) : Array (Nat × Nat) :=
   | none => acc.push p
 
 theorem norm_eq (xs : Array (Nat × Nat)) :
-    Desc.Ivs.norm xs = ((xs.filter fun p => p.1 < p.2).qsort (fun x y => x.1 < y.1)).toList.foldl normStep #[] := by
+    Desc.Ivs.norm xs =
+      ((xs.filter fun p => p.1 < p.2).toList.mergeSort fun x y => decide (x.1 ≤ y.1)).foldl normStep #[] := by
   unfold Desc.Ivs.norm
-  rw [← Array.foldl_toList]
   rfl
+
+/-- `List.mergeSort` by starts sorts by them. -/
+theorem sorted_starts (L : List (Nat × Nat)) :
+    (L.mergeSort fun x y => decide (x.1 ≤ y.1)).Pairwise (fun x y => x.1 ≤ y.1) :=
+  (List.pairwise_mergeSort (le := fun x y : Nat × Nat => decide (x.1 ≤ y.1))
+    (fun a b c hab hbc => by simp only [decide_eq_true_eq] at *; omega)
+    (fun a b => by simp only [Bool.or_eq_true, decide_eq_true_eq]; omega) L).imp fun h => by simpa using h
 
 theorem inIvs_push (acc : Array (Nat × Nat)) (p : Nat × Nat) (a : Nat) :
     Width.inIvs (acc.push p).toList a ↔ Width.inIvs acc.toList a ∨ (p.1 ≤ a ∧ a < p.2) := by
@@ -10096,17 +10102,17 @@ theorem norm_sub (xs : Array (Nat × Nat)) (a : Nat) (h : Width.inIvs (Desc.Ivs.
   rcases normFold_sub _ #[] a h with h | ⟨iv, hiv, h⟩
   · obtain ⟨iv, hiv, -⟩ := h; simp at hiv
   · rw [← inIvs_nonempty]
-    exact ⟨iv, (Properties.RemoteAudit.qsort_toList_perm _ _).mem_iff.1 hiv, h⟩
+    exact ⟨iv, (List.mergeSort_perm _ _).mem_iff.1 hiv, h⟩
 
 /-- **`Desc.Ivs.norm` keeps exactly its intervals' leaves.** -/
 theorem norm_mem (xs : Array (Nat × Nat)) (a : Nat) :
     Width.inIvs (Desc.Ivs.norm xs).toList a ↔ Width.inIvs xs.toList a := by
   refine ⟨norm_sub xs a, fun h => ?_⟩
   rw [norm_eq]
-  apply normFold_sup _ #[] (qsort_sorted Prod.fst _) (fun p _ x hx => by simp at hx)
+  apply normFold_sup _ #[] (sorted_starts _) (fun p _ x hx => by simp at hx)
   rw [← inIvs_nonempty] at h
   obtain ⟨iv, hiv, h⟩ := h
-  exact Or.inr ⟨iv, (Properties.RemoteAudit.qsort_toList_perm _ _).mem_iff.2 hiv, h⟩
+  exact Or.inr ⟨iv, (List.mergeSort_perm _ _).mem_iff.2 hiv, h⟩
 
 /-- **What `Desc.Ivs.covers` checks**: every leaf below `n` is in an interval. -/
 theorem covers_mem (s : Desc.Ivs) (n : Nat) (h : s.covers n = true) (a : Nat) (ha : a < n) :
@@ -10469,7 +10475,8 @@ theorem carriesRead_of (Q : Seg → Prop) (c : Desc.Ctx)
         subst hy'
         refine ⟨v', rfl, hinit l (l + 1) v' (fun j' h1 h2 => ?_) hv'⟩
         rw [show j' = l by omega]
-        exact hG l (Std.HashSet.mem_toArray.1 (Array.mem_toList_iff.1 (qsort_mem (fun x => x) _ hl)))) o v1 hv1
+        exact hG l (Std.HashSet.mem_toArray.1
+          (Array.mem_toList_iff.1 (Verity.QSort.ByKey.qsort_mem (fun x => x) _ hl)))) o v1 hv1
     subst hsA
     have hfin : ∀ extra, y = .yield (o ++ sA ++ extra) → (∀ s ∈ extra.toList, Q s) →
         ∃ segs, y = .yield (o ++ segs) ∧ ∀ s ∈ segs.toList, Q s :=
@@ -12725,7 +12732,8 @@ theorem summarize_retW (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Des
       · obtain ⟨q, hq, hqv⟩ := forall2_mem hF v hv
         exact ⟨hS hp' Flock.Steps.FUEL q v (hq0 q hq) (hq1 q hq) (hq2 q hq) (hq3 q hq) hqv g hg,
           hW hp' q v (hq0 q hq) (hq1 q hq) (hq2 q hq) (hq3 q hq) (hq4 q hq) hqv g hg⟩
-    obtain ⟨-, hpsPos, -⟩ := of_ok ret fun g hg => (hgo g hg).1.1
+    obtain ⟨-, hpsPos, -⟩ := of_ok (Desc.coalesce ret) fun g hg => (shapeOk_coalesce (fun g hg => (hgo g hg).1) g hg).1
+    rw [coalesce_pos] at hpsPos
     intro w p hx'
     rw [hpsPos] at hx'
     obtain ⟨g, hg, hxg⟩ := List.mem_flatMap.1 hx'

@@ -6,25 +6,26 @@
 B is the verification overhead as a fraction of the plain workload's compute: GPU-seconds a plain GPU-second of the
 family, with every other resource converted at its price. Its parts:
 
-- the PoUW transform, γ − 1 (honest over plain int8, the machine model's γ on the family's measured kernel);
-- commitment hashing, receipts and the noise's draws (`commit_gpu`'s measured fractions of plain prefill time);
-- sampling, B_s: proving, staging and verifying the drawn units under the fitted C-Flock cost model (cost-model/v1),
+- the PoUW transform, its honest overhead γ (honest over plain int8 less 1, the machine model's ratio on the family's
+  measured kernel);
+- commitment hashing, receipts and the noise's samples (`commit_gpu`'s measured fractions of plain prefill time);
+- sampling, B_s: proving, staging and verifying the sampled proof blocks under the fitted Flock cost model (cost-model/v1),
   as the sampling planner spends it. `budget_sampling.json` is its frontier at δ_s (`sampling_sweep`): the least
-  ε_sample at each spend over a GPU-week of one RTX PRO 6000, with the plan's draws and cut. The provers are RTX PRO
+  ε_sample at each spend over a GPU-week of one RTX PRO 6000, with the plan's samples and cut. The provers are RTX PRO
   6000 workers, so a family's B_s buys B_s·gpu_usd_h/PROVER_USD_H of that spend.
 
 ε is the headline's sum, core plus sampling (ε[Π], with luck in the core). Core is ε_skip (less the share that checking
 P·V's served output removes) and ε_machine (route + cert), the machine model's under the floor credit at q* = 1.22 with
-operands free, and ε_luck at the protocol's rule. Sampling is the planner's ε_sample, the units a plan's draws leave
-unproved. With a seed a matmul, a drawn deficient unit is caught at 1 − p, so luck is ε_sample·σ_w/(1 − p): the machine
-model's full-checking ε_luck (one σ a round) times S over the draws. The cheater's best mix of wrong and deficient units
+operands free, and ε_luck at the protocol's rule. Sampling is the planner's ε_sample, the units a plan's samples leave
+unproved. With a seed a matmul, a sampled deficient unit is caught at 1 − p, so luck is ε_sample·σ_w/(1 − p): the machine
+model's full-checking ε_luck (one σ a round) times S over the samples. The cheater's best mix of wrong and deficient units
 gains ε_sample·max(σ_w/(1 − p), 1), which the sum bounds.
 
 The levers the optimum moves are verified filler (extra lane instructions a word, `FILL`; every term is divided by the
 design's own floor program, filler included), the sampling spend B_s (the rest of the budget: ε_sample only falls with
-it) and checking P·V's served output (on, since it costs only an opening and the epilogue in a drawn P·V unit's proof).
+it) and checking P·V's served output (on, since it costs only an opening and the epilogue in a sampled P·V unit's proof).
 The allocation is reported in cost-model/v1's two regimes: `plain` (fitted, one unit a session) and `sessions/256`
-(multi-round sessions amortize a session's cost 256-fold, the planner's estimate). `levers` reports the rest (draws,
+(multi-round sessions amortize a session's cost 256-fold, the planner's estimate). `levers` reports the rest (samples,
 batching, running sums committed anyway, hashing leaf size, the operand floor, P·V's noise, credited subset, L and noise
 bits) with what each moves. The run prints the allocation at 1×, 2×, 5× and 10× each family's B today and every lever's
 marginal Δε per unit of B there. Every constant carries its source and whether it is measured, modeled or assumed.
@@ -48,7 +49,7 @@ P_PASS = 0.75                     # a deficient unit's pass probability at 1-bit
 DEFICIT = LN_INV_DELTA / ((1 - P_PASS) * ROUNDS)   # d̄: full checking's deficit; the machine model's luck = σ_w·d̄
 
 #: cost-model/v1 is GPU-seconds of an RTX PRO
-#: 6000 proving and CPU-seconds at 1/55 of one, so a family pays it at this price (vy-nebius-1/2, measured price; that
+#: 6000 proving and CPU-seconds at 1/55 of one, so a family pays it at this price (measured on RTX PRO 6000s; that
 #: the provers are RTX PRO 6000 workers is assumed)
 PROVER_USD_H = 1.80
 SAMPLING_DATA = Path(__file__).with_name("budget_sampling.json")
@@ -59,7 +60,7 @@ REGIMES = {"plain": (1.0, 1.0), "sessions/256": (1.0, 1 / 256), "prefix, session
 ALLOCATED = ("plain", "sessions/256")
 #: the sweep's spends B_s, a fraction of an RTX PRO 6000's week, 8 a decade
 SPEND_GRID = tuple(round(10 ** (e / 8), 6) for e in range(-28, 21))
-#: today's draws: 2 a round over a week
+#: today's samples: 2 a round over a week
 TODAY_DRAWS = 2 * ROUNDS
 #: a sampled proof block's proof grows with the filler it recomputes (p = 0 needs the check to recompute it): its ANDs by
 #: (1 + y/16) at y extra lane instructions a word, as if the receipt arm were a quarter of the proof at fx1's 4 a word
@@ -67,7 +68,7 @@ TODAY_DRAWS = 2 * ROUNDS
 FILL_PROOF = 1 / 16
 
 #: of plain prefill time (`commit_gpu`, measured on sm_120 at 8 × 4K, applied to every family as
-#: assumed): SHA-512 operand tile leaves at R = 128 (+6.0%; R = 64 is +10.1%), receipts at S = 128, simulated draws.
+#: assumed): SHA-512 operand tile leaves at R = 128 (+6.0%; R = 64 is +10.1%), receipts at S = 128, simulated samples.
 #: R = 128's is cost-model/v1's commitment floor too.
 HASH_LEAVES = {64: 0.101, 128: 0.060}
 HASH_RECEIPTS = 0.016
@@ -94,8 +95,8 @@ class Family:
     """A GPU family's headline design, its price, and what eps_budget says of its P·V. Its filler sweep is
     `budget_fill.json` (`sweep`), the machine model's `eps --credit floor --operands free --q 1.22` on the design with
     `Design.with_fill` stacked on its own fillers; the sweep's ε_skip is the stored [skip] over the filled ♭ (decision
-    90). γ is honest over plain int8 a MMA on the measured kernel; past y = 0 the honest time is the machine model's
-    (modeled)."""
+    90). Its ratio 1 + γ is honest over plain int8 a MMA on the measured kernel; past y = 0 the honest time is the
+    machine model's (modeled)."""
     name: str
     device: str
     design: str
@@ -118,12 +119,12 @@ class Family:
     #: whole-model γ's change, dither-c against dither-c-peel in eps_budget (8B, floor credit; pv's γ is the TS model's)
     pv_noise: tuple[float, float] | None = None
     #: the next larger L's design on this device (machine model, measured kernels): (the headline's L, the larger L,
-    #: its core ε as a fraction, its γ)
+    #: its core ε as a fraction, its ratio 1 + γ)
     larger_l: tuple[int, int, float, float] | None = None
 
     @functools.cached_property
     def fill(self) -> dict[str, list[tuple[float, float, float, float, float]]]:
-        """Per filler mix, (y, γ, ε_skip, ε_machine, full checking's ε_luck) at each grid point, ε as fractions."""
+        """Per filler mix, (y, 1 + γ, ε_skip, ε_machine, full checking's ε_luck) at each grid point, ε as fractions."""
         return {m: [tuple(p) for p in pts] for m, pts in _fill_data()["families"][self.name]["curves"].items()}
 
     def mixes(self) -> list[str]:
@@ -185,6 +186,7 @@ def sweep(out: Path = FILL_DATA) -> dict:
                 r = cmd._eps_record(d0.with_fill(y, mix) if y else d0, pi, 1.22, data, "free", "floor", None, None,
                                     "full")
                 flat = r["baseline"]["cycles_per_mma"]
+                # the point's "gamma" is the machine model's ratio, 1 + γ
                 pts.append([y, round(r["gamma"], 5), round(r["terms"]["skip"] * flat0 / flat, 7),
                             round(r["terms"]["machine"], 7), round(r["terms"]["luck"], 7)])
             curves[name] = pts
@@ -252,7 +254,7 @@ def _sampling_data() -> dict:
 @functools.cache
 def curve(regime: str) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...], tuple[float, ...],
                                 tuple[str, ...]]:
-    """A regime's frontier as columns: spend, ε_sample, draws a week, unit share, cut."""
+    """A regime's frontier as columns: spend, ε_sample, samples a week, unit share, cut."""
     return tuple(zip(*_sampling_data()["regimes"][regime]["points"]))
 
 
@@ -264,7 +266,7 @@ def _loglog(xs, ys, x: float) -> float:
 
 
 def spend_for(draws: float, regime: str = "plain") -> float:
-    """The spend (an RTX PRO 6000's week) at which the regime's plan draws `draws` units a week."""
+    """The spend (an RTX PRO 6000's week) at which the regime's plan samples `draws` units a week."""
     xs, _, ds, _, _ = curve(regime)
     return _loglog(ds, xs, draws)
 
@@ -272,7 +274,7 @@ def spend_for(draws: float, regime: str = "plain") -> float:
 @dataclass(frozen=True)
 class Sample:
     eps: float           # OPT2's ε_sample at the plan
-    draws: float         # units drawn a week
+    draws: float         # units sampled a week
     spend: float         # the plan's spend, a fraction of an RTX PRO 6000's week, the filler's growth taken out
     cut: str
 
@@ -311,12 +313,12 @@ class Point:
     eps_luck: float
     eps_sample: float
     B: float
-    B_transform: float
+    B_transform: float     # the honest overhead γ
     B_hash: float
     B_sample: float
     draws: float
     cut: str
-    gamma: float
+    gamma: float           # the ratio honest over plain int8, 1 + γ
     sigma_w: float
 
     @property
@@ -487,7 +489,7 @@ def render(fams=FAMILIES, **kw) -> str:
         for regime in ALLOCATED:
             lines += [f"Regime `{regime}`:", "",
                       "| budget | config (mix, y, served) | ε | core | ε_skip | served | ε_machine | ε_luck | ε_sample | B "
-                      "| γ − 1 | hash + receipts + draws | B_s | draws a week | cut |",
+                      "| γ | hash + receipts + draws | B_s | draws a week | cut |",
                       "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
             alloc = allocation(f, regime=regime, **kw)
             rows = ([("today", t, [])] if regime == "plain" else []) + [(f"{m}× today", q, mg) for m, q, mg in alloc]

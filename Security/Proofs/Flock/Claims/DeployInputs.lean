@@ -1,14 +1,48 @@
-import Proofs.Flock.Claims.Scope.Matches
-import Flock.Registered
-import Flock.RecSetup
-import Proofs.Flock.Claims.JsonNorm
+module
+
+public import Flock.RecSetup
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.JsonNorm
+public import Proofs.Flock.Claims.Scope.Matches
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import VCVio.Prelude.Core
 
 /-!
 # The deployed verifier's statement: its bytes, its parser and its setup
 
 A statement `x` of Flock's deployed verifier is the canonical byte encoding (`Raw.encode`) of exactly what
 `flock-verify verify` reads besides the session directory: the `--statement` id, the circuit and public files, the lookup
-tables, `--zk` and `--coins os`, `--session-tables`, the drawn session's draw (the record's `unit_draw`), and the bytes of
+tables, `--zk` and whether it names `--coins os`, `--session-tables`, the sampled session's sample (the record's `unit_draw`), and the bytes of
 `--partition`, `--program`, `--work K` with `--work-table`, `--stratified`, `--closure`, `--registered` and
 `--public-inputs`. Fields are length-prefixed (8 bytes, little-endian), options and flags one tag byte, after a format
 string. `decode` reads that layout back and keeps only a reading whose encoding is `x` (`decode_encode`), so it is
@@ -16,7 +50,7 @@ injective (`decode_injective`).
 
 The verifier's own parsers then run on those bytes, as `Main.verifyCmd` runs them (`Raw.ins`): `Tags.byName?` on the
 statement id (a statement of `Tags.all`, else a templated one), the refusals of a plain-leaf statement under `--zk` and of `--zk` with `--coins`, the coins (`--zk`'s keyed coin tree,
-else `--coins`), `Json.parse` then, for the draw, `norm` (as `Main.recordDraw` rebuilds the record's), and
+else a committed seed's, and `--coins os` refused), `Flock.JsonParse.parse` then, for the sample, `norm` (as `Main.recordDraw` rebuilds the record's), and
 `Draw.workTableOfJson`, `Draw.closureMapOfJson` and `Registered.ofJson` on the files.
 The result is C's `Readable.Read` (`readOf`), so the claims' parser is C's `parseOf` (`parse`: `Read.parse`,
 `Stmt.setupTables` and under `--zk` every table's `Zk.shapeOk`, read as `Claims.Flock.Stmt` by `toReadable`), and the
@@ -24,13 +58,15 @@ scope check C's `scopeCheckOf`, the verifier's own scope refusal (`scopeCheck`: 
 `ProvedScope.sizesOk` on the tables), and each table's own statement C's `tableOf` (`table`); `readOf_zk` is the
 agreement on `--zk` that C's `scope_iff` and `scopeMatches` take.
 
-`Ins.setup` is `verifyCmd`'s `setupOf` at the statement's draw, with no recursive input and no `--identifier`: the
+`Ins.setup` is `verifyCmd`'s `setupOf` at the statement's sample, with no recursive input and no `--identifier`: the
 session's statement (`Stmt.setupTables`), each table's registered reads (`checkRegistered`) and the identifier's absence
 (`checkIdentifier` without `--identifier`), `Registered.checkFull`, `RecSetup.checks`, `Zk.shapeOk` under `--zk`,
-`RecCoins.check`, `RecVStar.checkPubRows`, and the draw's law (`ProvedScope.drawLaw`). It refuses a statement without
+`RecCoins.check`, `RecVStar.checkPubRows`, and the sample's law (`ProvedScope.drawLaw`). It refuses a statement without
 hm96-sha512 rows, which `verifyCmd` sets up on its compression circuit and then always refuses (such a session has no
-draw, `drawLaw zk tags false none`); the deployed form does not carry `--comp`.
+sample, `drawLaw zk tags false none`); the deployed form does not carry `--comp`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -40,7 +76,7 @@ open Lean (Json)
 /-! ## The statement's bytes -/
 
 /-- **What `flock-verify verify` reads of a statement**, as bytes and flags: the `--statement` id, the circuit and public
-files, the lookup tables the circuit pins, `--zk`, `--coins os`, `--session-tables`, the drawn session's draw (JSON text),
+files, the lookup tables the circuit pins, `--zk`, whether it names `--coins os` (which it refuses), `--session-tables`, the sampled session's sample (JSON text),
 and the files and numbers of `--partition`, `--program`, `--work`, `--work-table`, `--stratified`, `--closure`,
 `--registered` and `--public-inputs`. -/
 structure Raw where
@@ -169,11 +205,11 @@ theorem decode_injective {x y : Claims.Msg} {w : Raw} (hx : decode x = some w) (
 
 /-! ## The verifier's parsers -/
 
-/-- A file read as JSON, as `verifyCmd`'s inputs read one: UTF-8, then `Json.parse`. -/
+/-- A file read as JSON, as `verifyCmd`'s inputs read one: UTF-8, then `Flock.JsonParse.parse`. -/
 def jsonOf (what : String) (b : ByteArray) : Except String Json :=
   match String.fromUTF8? b with
   | none => .error s!"{what}: not UTF-8"
-  | some t => (Json.parse t).mapError fun e => s!"{what}: not JSON: {e}"
+  | some t => (Flock.JsonParse.parse t).mapError fun e => s!"{what}: not JSON: {e}"
 
 /-- What the setup reads of a parsed statement: the tags `--statement` names (`stmtTags`, before `--coins`), the
 verifier's own registered reads, and C's `Readable.Read`. -/
@@ -186,8 +222,8 @@ structure Ins where
 def Raw.ins (w : Raw) : Except String Ins := do
   let some tags := Tags.byName? w.statement | throw "unknown statement"
   if w.zk && tags.plainLeaves then throw s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves"
-  if w.zk && w.osCoins then throw "verify --zk: a --zk session's coins are its keyed coin tree, so --coins does not apply"
-  let coins : Coins := if w.zk then .tree (Zk.coinSpec (tags.tableNames w.count)) else if w.osCoins then .os else .seed
+  if w.osCoins then throw "verify: --coins os: the verifier reads coins only from a challenger's log (--coins is tree)"
+  let coins : Coins := if w.zk then .tree (Zk.coinSpec (tags.tableNames w.count)) else .seed
   let draw := (← w.draw.mapM (jsonOf "draw")).map Flock.norm
   let partition ← w.partition.mapM (jsonOf "partition")
   let table ← w.workTable.mapM fun b => do Draw.workTableOfJson (← jsonOf "work table" b)
@@ -197,7 +233,7 @@ def Raw.ins (w : Raw) : Except String Ins := do
     | some k, some t => some (k, t)
     | _, _ => none
   pure { stmtTags := tags, registered, read := {
-    I := { tags := tags.withCoins coins, circuitFile := w.circuit, publicFile := w.publicFile, coins, count := w.count,
+    I := { tags, circuitFile := w.circuit, publicFile := w.publicFile, coins, count := w.count,
            tables := w.tables, partition, program := w.program, work, stratified := w.stratified, closure }
     zk := w.zk, draw, publicInputs := w.publicInputs, registered := registered.isSome } }
 
@@ -207,7 +243,7 @@ def noIdentifier (st : Stmt) : V Unit :=
   | .error _ => pure ()
   | .ok _ => throw "identifier: the public header names an identifier; pass the verifier's own (--identifier F)"
 
-/-- **`verifyCmd`'s setup** at the statement's draw, with no recursive input and no `--identifier`. -/
+/-- **`verifyCmd`'s setup** at the statement's sample, with no recursive input and no `--identifier`. -/
 def Ins.setup (s : Ins) : V (SessionSpec × Array Stmt) := do
   let r := s.read
   if !r.tags.hm96Rows then
@@ -269,7 +305,7 @@ theorem Raw.ins_zk {w : Raw} {s : Ins} (h : w.ins = .ok s) : s.read.zk = w.zk :=
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; rfl)
 
-/-- **The statement's draw is rebuilt** (`norm`) from the JSON its bytes parse to. -/
+/-- **The statement's sample is rebuilt** (`norm`) from the JSON its bytes parse to. -/
 theorem Raw.ins_draw {w : Raw} {s : Ins} (h : w.ins = .ok s) :
     ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
   unfold Raw.ins at h
@@ -293,7 +329,7 @@ theorem readOf_zk {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : readOf z
     cases hw
     exact Raw.ins_zk hi
 
-/-- **A statement's draw is rebuilt** (`Flock.norm`, `Raw.ins_draw`). -/
+/-- **A statement's sample is rebuilt** (`Flock.norm`, `Raw.ins_draw`). -/
 theorem insOf_draw_norm {zk : Bool} {x : Claims.Msg} {s : Ins} (h : insOf zk x = some s) {d : Json}
     (hd : s.read.draw = some d) : Flock.norm d = d ∧ Claims.Json.Wf d := by
   unfold insOf at h

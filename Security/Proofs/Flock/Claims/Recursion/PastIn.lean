@@ -1,6 +1,47 @@
-import Proofs.Flock.Claims.Recursion.MoreSlots
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
-import Proofs.Flock.VBridge.InnerUnit
+module
+
+public import Proofs.Flock.Claims.Recursion.MoreSlots
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Recursive.VStarCheck
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 
 /-!
 # A port V\* outputs is an output row (`PastIn`)
@@ -14,6 +55,8 @@ at least as many output ports as V\* has outputs: otherwise its output words wou
 sits at or past `HmOut.nIn`.
 -/
 
+@[expose] public section
+
 namespace RecDeploy.MoreSlots
 
 open Flock
@@ -26,20 +69,20 @@ theorem sparse_outWords_pos (sh : RecSparse.Shape) : 0 < RecSparse.outWords sh :
   unfold RecSparse.outWords RecSparse.residualNames RecSparse.F_WORDS RecSparse.ROW_BLOCK
   cases sh.stacked <;> simp <;> omega
 
-/-- **Each V\* unit outputs a positive number of words per output**: one output `out` of `a > 0` words, or a level's
-`out` and `acc_out`, 64 words each. -/
+/-- **Each V\* unit outputs a positive number of words per output**: one output `out` of `a > 0` words, or two
+outputs of 64 words each (a level's `out` and `acc_out`, RecLink's `rin` and `rout`). -/
 theorem unit_outs {sv : VStar.Stmt} {u : VStar.UnitC} (h : sv.unit = .ok u) :
     (∃ a, 0 < a ∧ u.outPorts = [a] ∧ sv.sub.outputs = ["out"]) ∨
-      (u.outPorts = [64, 64] ∧ sv.sub.outputs = ["out", "acc_out"]) := by
+      (u.outPorts = [64, 64] ∧ ∃ n₁ n₂, sv.sub.outputs = [n₁, n₂]) := by
   cases sv with
   | recOpen l L H n =>
-    exact .inr ⟨(FlockVBridge.OfVStar.recOpenUnit_ok (h : VStar.recOpenUnit L H = .ok u)).2.2.2, rfl⟩
+    exact .inr ⟨(FlockVBridge.OfVStar.recOpenUnit_ok (h : VStar.recOpenUnit L H = .ok u)).2.2.2, _, _, rfl⟩
   | recOpenStacked l L H n =>
     have h' : (VStar.recOpenUnit L H >>= fun U => pure { U with name := VStar.recOpenStackedName L H }) =
         (.ok u : Except String VStar.UnitC) := h
     obtain ⟨U, hU, h2⟩ := FlockSoundness.Refine.ebind_ok h'
     cases h2
-    exact .inr ⟨(FlockVBridge.OfVStar.recOpenUnit_ok hU).2.2.2, rfl⟩
+    exact .inr ⟨(FlockVBridge.OfVStar.recOpenUnit_ok hU).2.2.2, _, _, rfl⟩
   | inner j name p =>
     exact .inl ⟨_, by decide,
       (FlockVBridge.OfVStar.innerUnit_ok (h : VStar.innerUnit p.S name = .ok u)).2.2.2.1, rfl⟩
@@ -59,6 +102,16 @@ theorem unit_outs {sv : VStar.Stmt} {u : VStar.UnitC} (h : sv.unit = .ok u) :
     have h' : (Except.ok (VStar.capUnit l N) : Except String VStar.UnitC) = .ok u := h
     obtain rfl := Except.ok.inj h'
     exact .inl ⟨_, by decide, rfl, rfl⟩
+  | link UB PB N =>
+    refine .inr ⟨?_, _, _, rfl⟩
+    have h' : VStar.linkUnit UB PB = .ok u := h
+    unfold VStar.linkUnit at h'
+    cases hc : Flock.RecLinkTree.checkShape UB PB with
+    | error e => rw [hc] at h'; cases h'
+    | ok v =>
+      rw [hc] at h'
+      cases h'
+      rfl
 
 /-! ## The circuit's output words -/
 
@@ -113,7 +166,7 @@ theorem pastIn_core {C : Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
     (hlo : C.leavesOut.getD 0 #[] = Array.range u.outWords)
     (hlt : ∀ o ∈ (C.leavesOut.getD 0 #[]).toList, o < C.outWords)
     (hU : (∃ a, 0 < a ∧ u.outPorts = [a] ∧ sub.outputs = ["out"]) ∨
-      (u.outPorts = [64, 64] ∧ sub.outputs = ["out", "acc_out"]))
+      (u.outPorts = [64, 64] ∧ ∃ n₁ n₂, sub.outputs = [n₁, n₂]))
     {nm : String} (hm : nm ∈ sub.outputs) {q : ℕ} (hq : C.ports.findIdx? (·.name == nm) = some q) :
     HmOut.nIn C ≤ q := by
   have hr' : C.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
@@ -122,7 +175,7 @@ theorem pastIn_core {C : Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
   have hnI : HmOut.nIn C = C.ports.size - C.outPorts.size := by
     unfold HmOut.nIn
     rw [hrr, Array.size_replicate]
-  rcases hU with ⟨a, ha, hp, ho⟩ | ⟨hp, ho⟩
+  rcases hU with ⟨a, ha, hp, ho⟩ | ⟨hp, n₁, n₂, ho⟩
   · have hr2 : C.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
         (sub.inputs.zip u.inPorts).map (fun p => (p.1, p.2, 16 * p.2)) ++
           [("out", (a + 63) / 64 * 64, 16 * ((a + 63) / 64 * 64))] := by
@@ -142,9 +195,9 @@ theorem pastIn_core {C : Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
     omega
   · have hr2 : C.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
         (sub.inputs.zip u.inPorts).map (fun p => (p.1, p.2, 16 * p.2)) ++
-          [("out", 64, 1024), ("acc_out", 64, 1024)] := by
+          [(n₁, 64, 1024), (n₂, 64, 1024)] := by
       rw [hr', hp, ho]
-      try rfl
+      simp
     generalize (sub.inputs.zip u.inPorts).map (fun p => (p.1, p.2, 16 * p.2)) = A at hr2
     have hA := past_inputs hr2 hnd (by rw [ho] at hm; simpa using hm) hq
     have hlen := congrArg List.length hr2
@@ -162,7 +215,7 @@ theorem pastIn_core {C : Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
         have hn1 : HmOut.nIn C + 0 = A.length + 1 := by rw [hnI]; omega
         have hpw : (C.ports.getD (A.length + 1) default).words = 64 := by
           have hg : (C.ports.toList.map (fun p => (p.name, p.words, p.bits)))[A.length + 1]? =
-              some ("acc_out", 64, 1024) := by
+              some (n₂, 64, 1024) := by
             rw [hr2, List.getElem?_append_right (by omega)]
             simp
           have hl : A.length + 1 < C.ports.size := by omega

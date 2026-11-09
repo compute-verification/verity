@@ -14,7 +14,7 @@
   research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
                                                    materialise the payload (file or tree, or just the files matching --path); prints the path;
                                                    --list prints the tree's files (path, bytes, local/remote) and fetches nothing
-  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D]] [--min-mb M] [--keep-trees] [--keep-registry FILE]...
+  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D] [--verify-remote]] [--min-mb M] [--keep-trees] [--keep-registry FILE]...
                      [--src-dir D [--src-origin URL]] [--json]
                                                    free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached;
@@ -346,7 +346,10 @@ def cmd_evict(argv: list[str]) -> int:
                     help="keep every blob an artifact of this registry holds (fixtures/artifacts.json's form: its `art:` keys); repeatable")
     ap.add_argument("--runs", action="store_true", help="also evict preserved big files from finished run directories (writes run-files.evicted.json)")
     ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root for --runs (default $RESEARCH_RUNS or ~/.research/runs)")
-    ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 30)")
+    ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 1440, a day)")
+    ap.add_argument("--verify-remote", action="store_true",
+                    help="--runs on an agent VM: a run's tree the local catalog records no verified replica of counts once its manifest "
+                         "and blobs are on the remote at their sizes (HEADs, no read-back; evict.py `on_remote`)")
     ap.add_argument("--src-dir", default=None, metavar="DIR",
                     help="also delete the `research run` source trees under DIR (<root>/src) recoverable on the node that nothing uses, "
                          "whatever the target (evict.py `evict_src`; needs root or CAP_SYS_PTRACE to read /proc)")
@@ -368,7 +371,7 @@ def cmd_evict(argv: list[str]) -> int:
         from ..runs import runs_root  # noqa: PLC0415
 
         rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
-                                    quiet_s=ns.quiet_min * 60, log=say)
+                                    quiet_s=ns.quiet_min * 60, log=say, remote_check=ns.verify_remote)
     if ns.src_dir:
         rep["src"] = EV.evict_src(Path(ns.src_dir), origin=ns.src_origin, dry_run=ns.dry_run, keep_s=ns.src_keep_h * 3600, log=say)
     if ns.json:
@@ -428,7 +431,7 @@ def cmd_select(argv: list[str]) -> int:
     `research data index` build) plus this store's matches the index lacks; from the catalog where there is no index.  Every form
     (text, `--ids`, `--json`) ends with one stderr line naming the source and, for the index, the time it is complete as of: a
     stale build answers only for what it had listed.  With no index that ever listed the bucket and a catalog holding no artifact,
-    an empty answer would mean nothing, so it exits 1 naming what is missing (a `research run` job's store, 19 Oct)."""
+    an empty answer would mean nothing, so it exits 1 naming what is missing (as in a `research run` job's store)."""
     from . import bucket_index as BI  # noqa: PLC0415
 
     ns = _select_parser().parse_args(argv)
@@ -490,7 +493,20 @@ def cmd_snapshot(argv: list[str]) -> int:
     return 0
 
 
+def _hide_tokens(v):
+    """``v`` with each JWT (a `label_auth` or `label_delegation` token) replaced by its length: a token read back stays valid for
+    minutes and lands in worker logs and run outputs, so the text views never print one (`--json` keeps the whole value)."""
+    if isinstance(v, dict):
+        return {k: _hide_tokens(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_hide_tokens(x) for x in v]
+    if isinstance(v, str) and v.startswith("eyJ") and v.count(".") == 2:
+        return f"<token, {len(v)} chars>"
+    return v
+
+
 def _fmt_label_value(v) -> str:
+    v = _hide_tokens(v)
     return v if isinstance(v, str) else json.dumps(v)
 
 
@@ -541,7 +557,7 @@ def cmd_labels(argv: list[str]) -> int:
         _dump([lab.to_doc() for lab in labs])
         return 0
     for lab in labs:
-        print(f"{lab.ts}  {lab.key}={json.dumps(lab.value) if not isinstance(lab.value, str) else lab.value}  by {lab.by}" + (f"  ref {lab.ref}" if lab.ref else ""))
+        print(f"{lab.ts}  {lab.key}={_fmt_label_value(lab.value)}  by {lab.by}" + (f"  ref {lab.ref}" if lab.ref else ""))
     if not labs:
         print(f"no labels on {ns.target}", file=sys.stderr)
     return 0
@@ -960,7 +976,9 @@ def cmd_push(argv: list[str]) -> int:
     artifact it references, and the assertions about the attempt, its derivation and those artifacts (`labels_sync.push_targets`; an
     explicit art: id pushes its own assertions) -- an attempt whose assertions did not all land is reported NOT preserved.  `--pending`
     pushes every local artifact without a verified remote replica, every attempt the remote lacks, and every local assertion the remote
-    lacks.  One object's failure is reported, the batch continues; exit 1 if anything is not PRESERVED."""
+    lacks.  An artifact withdrawn from the shared store (`research data withdraw`, its `withdrawn` label pulled from the remote first)
+    is refused, so a machine's copy never goes back up.  One object's failure is reported, the batch continues; exit 1 if anything
+    is not PRESERVED."""
     ap = _ap("push")
     ap.add_argument("targets", nargs="*", help="art:<hex> or run ids")
     ap.add_argument("--pending", action="store_true", help="everything local that the remote does not verifiably hold")
@@ -1017,6 +1035,8 @@ def cmd_push(argv: list[str]) -> int:
             print(f"\r  {p['id'][:16]}… {p['done']}/{p['objects'] - 1} blobs  {p['done'] / max(p['seconds'], 1e-9):.1f} obj/s", end="", file=sys.stderr, flush=True)
 
     notes_seen: set[str] = set()
+    if arts:                                                       # a withdrawal made elsewhere: its label first, so push refuses
+        LS.pull_targets(st, list(dict.fromkeys(arts)), jobs=ns.jobs)
     for a in dict.fromkeys(arts):
         try:
             rep = st.push(a, preserve=True, jobs=ns.jobs, verify=ns.verify, progress=heartbeat)

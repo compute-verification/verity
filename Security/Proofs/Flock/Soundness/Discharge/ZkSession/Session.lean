@@ -1,14 +1,16 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Table
-import Proofs.Flock.Soundness.SessionBatch
-import Proofs.Flock.Soundness.Audit.Extraction
-import Proofs.Flock.Soundness.Lowering
-import Proofs.Flock.Soundness.ExecDrawOS
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Table
+public import Proofs.Flock.Soundness.SessionBatch
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Lowering
+public import Proofs.Flock.Soundness.ExecDrawOS
 
 /-!
 # A batched `--zk` session and its audit (live/PROTOCOL.md §1–§7, PROTOCOL.md §5)
 
 `sessionZK` is `SessionBatch.sessionB` with `--zk` tables, as Lean defines the protocol at the interactive-oracle layer:
-`Commit` sends every table's level-0 oracle, one link-point draw serves all tables, and then every table's reps run
+`Commit` sends every table's level-0 oracle, one link-point sample serves all tables, and then every table's reps run
 concurrently, each rep with its pads commitment, the masked algebraic phase and level 0, and the inner proof
 (`tableAfterZK`). The session accepts when every table accepts (`acceptedZK`). A table (`TabZK`) carries its statement,
 its schedule and padded level 0, its link layout, its pads' layout and its inner proof's, with the conditions
@@ -18,40 +20,42 @@ its schedule and padded level 0, its link layout, its pads' layout and its inner
 (`CommittedPad`) with probability at most table `j`'s `padLinkError + (padRepError + εInner)²` (`TabZK.bound`), whatever
 the other tables do (`value_batch_getD_le`). Over every table at once the bound is the sum (`sessionZK_sound_any`).
 
-**The audit** (`analysisZK`, in the shape of `Audit.FlockBatched`): the verifier draws units by a law `L`, plans the
-`--zk` tables from the draw and the registration (`planZ`), and reads each drawn unit from one table (`tab`). A drawn
-unit wrong in the committed transcript `Xc` is charged to its table: either the table's oracle is not `CommittedPad`
+**The audit** (`analysisZK`, in the shape of `Audit.FlockBatched`): the verifier samples units by a sampling design `L`, plans the
+`--zk` tables from the sample and the registration (`planZ`), and reads each sampled proof block from one table (`tab`). A sampled
+proof block wrong in the committed transcript `Xc` is charged to its table: either the table's oracle is not `CommittedPad`
 (`ks`), or it is, and every satisfying padded witness near it decodes, on the unit's wires, to values other than `Xc`'s
 (`link`, `LinkEvZK`). At this layer the oracle is the prover's message, so extraction is the oracle itself and `ε_ks` is
 discharged by `sessionZK_sound` with no assumption (`zk_knowledgeSound`): it is the largest table bound of the plan,
-averaged over the draw (`ksAvgZK`). The lowering comes from each drawn unit's place in its table
+averaged over the sample (`ksAvgZK`). The lowering comes from each sampled proof block's place in its table
 (`loweringSoundZK_of_place`, `UnitPlace`), as without `--zk`.
 
-**The count curve** (`zk_flock_count`, and `zk_flock_count_execOS` at the live draw under A3): in the shape of
+**The count curve** (`zk_flock_count`, and `zk_flock_count_execOS` at the live sample under A3): in the shape of
 `Prog.flock_headline`,
 `Pr[accept ∧ at least K wrong units] ≤ miss(K) + ε_ks^zk + δ_link`, with
-* `miss(K)`: `Law.stratified`'s count curve at the live draw, under A3 (`uniform/io-getrandombytes`);
+* `miss(K)`: `Law.stratified`'s count curve at the live sample, under A3 (`uniform/io-getrandombytes`);
 * `ε_ks^zk = ksAvgZK`: per table `padLinkError + (padRepError + εInner)²`, proved here;
-* `δ_link`: the named `LinkSound` hypothesis, as `Audit.flock_batched_count` leaves it without `--zk`.
+* `δ_link`: the named `BindSound` hypothesis, as `Audit.flock_batched_count` leaves it without `--zk`.
 
 **Open guarantees** (what this statement does not cover, each a separate piece of work):
 * *The compiled `--zk` layer.* Here every oracle is a message. Under `--zk` the level-0 table, the pads (`Ch, Cμ`), the
   inner proof's `τ` and the coin tree are Merkle commitments with salted leaves, so the headline's `ε_ks` (knowledge
   extraction from caps, `ksAvgStrict` under `cr/sha-512`), `δ_link` (`LinkCR`, under `ecr/sha-512`) and `δ_tree`
-  (`TreeRewind`, under `cr/sha-512`) need a `--zk` compiled table and session. [e2e-exec]'s salted session
+  (`TreeRewind`, under `cr/sha-512`) need a `--zk` compiled table and session. The salted session
   (`Discharge/Exec/SessionL.lean`) fixes the table's openings to `Opens × Salts`; a version generic over the per-table
   game would carry `TabZK.after`'s compiled form.
-* *The `--zk` executable refinement*: that the executable verifier's `--zk` path runs this protocol (for [e2e-exec],
-  as `verify_refines_hm96` does without `--zk`), and with it the headline's `execAccept`.
+* *The `--zk` executable refinement*: that the executable verifier's `--zk` path runs this protocol (as
+  `verify_refines_hm96` does without `--zk`), and with it the headline's `execAccept`.
 * *`final_c'`'s place.* The protocol as Lean defines it receives `final_c'` before the inner proof (`restZK`); the live
   verifier never absorbs it, and a prover that picks it after the inner proof's batching coins can cancel the batched
   constraint. This statement describes the live verifier once it absorbs `final_c'` before the inner proof's label.
-* *The coin step in the session.* Coins here are fresh after each prover message (A6's per-round form). C-Flock ZK draws
+* *The coin step in the session.* Coins here are fresh after each prover message (A6's per-round form). Flock ZK samples
   them from a coin tree committed before the prover's first message; composing that into this session needs a
   round-by-round form of the session bound or a committed-coin semantics of `Game`.
-* *The non-ZK session's structural guarantees*, unchanged: the drawn units' places (`UnitPlace`: W6, `Layout.Aliased`),
+* *The non-ZK session's structural guarantees*, unchanged: the sampled proof blocks' places (`UnitPlace`: W6, `Layout.Aliased`),
   the constant and zero columns, and the rows' commit (`HmRowComputes`), as the headline takes them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 
@@ -121,7 +125,7 @@ end TabZK
 
 /-! ## The session -/
 
-/-- **A batched `--zk` session**: `Commit` sends every table's level-0 oracle, then one link-point draw, then every
+/-- **A batched `--zk` session**: `Commit` sends every table's level-0 oracle, then one link-point sample, then every
 table's reps concurrently. -/
 noncomputable def sessionZK (A : Arith F K) (ts : List (TabZK F mPts)) : Game (List (Bool × Oracle F)) :=
   .send (Fin ts.length → Oracle F) fun Cs => .coin (Fin 2 → Fin mPts → F) fun pts =>
@@ -186,15 +190,15 @@ theorem sessionZK_sound_any (A : Arith F K) (hA : A.Correct) (ts : List (TabZK F
 
 section Audit
 
-variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- The table of the plan that carries drawn unit `u`. -/
+/-- The table of the plan that carries sampled proof block `u`. -/
 abbrev tabOfZ (S : Finset (Fin n)) (R : Reg) (u : Fin n) : TabZK F mPts := (planZ S R).get (tab S R u)
 
 open Classical in
-/-- **The batched `--zk` session on a draw**: the plan's tables in one session; it accepts when every table accepts. -/
+/-- **The batched `--zk` session on a sample**: the plan's tables in one session; it accepts when every table accepts. -/
 noncomputable def batchedSessionZK (S : Finset (Fin n)) (R : Reg) : Game Bool :=
   (sessionZK A (planZ S R)).map fun outs => decide (acceptedZK (planZ S R) outs)
 
@@ -213,12 +217,12 @@ theorem prob_batchedSessionZK (S : Finset (Fin n)) (R : Reg) (τ : Strategy (bat
   funext outs
   exact propext decide_eq_true_iff
 
-/-- A decoder: for each drawn unit, the values a level-0 message of its table packs for it. -/
+/-- A decoder: for each sampled proof block, the values a level-0 message of its table packs for it. -/
 abbrev DecoderZK := (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) →
   Message F (tabOfZ planZ tab S R u).sch.k0 (tabOfZ planZ tab S R u).sch.level₀.logCols → (Fin C.N → Bool)
 
 /-- **The lowering, per `--zk` table** (`Audit.Partition.LoweringSoundB`'s form): a message packing a witness that
-satisfies the statement of drawn unit `u`'s table decodes to values on which `u` is correct. -/
+satisfies the statement of sampled proof block `u`'s table decodes to values on which `u` is correct. -/
 def LoweringSoundZK (decode : DecoderZK (C := C) planZ tab) : Prop :=
   ∀ S R u, u ∈ S → ∀ M, (tabOfZ planZ tab S R u).S.Satisfies
     (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M) → P.Correct (decode S R u M) u
@@ -232,7 +236,7 @@ def LinkEvZK (decode : DecoderZK (C := C) planZ tab) (S : Finset (Fin n)) (R : R
       (tabOfZ planZ tab S R u).S.Satisfies (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M) →
         ∃ g ∈ P.io u, decode S R u M g ≠ Xc g
 
-/-- The decoder of the drawn units' places: each unit is read from its block of the witness. -/
+/-- The decoder of the sampled proof blocks' places: each unit is read from its block of the witness. -/
 noncomputable def decodeOfPlace (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u) :
     DecoderZK (C := C) planZ tab :=
   fun S R u M => if h : u ∈ S then
@@ -240,7 +244,7 @@ noncomputable def decodeOfPlace (place : ∀ S R u, u ∈ S → UnitPlace P (tab
   else fun _ => false
 
 omit [Fintype K] [DecidableEq K] in
-/-- **The lowering from the drawn units' places** (`Lowering.lean`), as `loweringSoundB_of_place` without `--zk`. -/
+/-- **The lowering from the sampled proof blocks' places** (`Lowering.lean`), as `loweringSoundB_of_place` without `--zk`. -/
 theorem loweringSoundZK_of_place (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u) :
     LoweringSoundZK A P planZ tab (decodeOfPlace A P planZ tab place) := by
   intro S R u hu M hM
@@ -272,8 +276,8 @@ noncomputable def analysisZK (decode : DecoderZK (C := C) planZ tab)
       exact P.mem_wrong.1 hu (P.correct_congr (fun g hg => (hno g hg).symm) (hlow S R u hS M hsat))
     · exact Or.inl ⟨hacc, hc⟩
 
-/-- **The `--zk` audit's knowledge term**: after each draw, the largest bound of the plan's tables, averaged over
-the draw. -/
+/-- **The `--zk` audit's knowledge term**: after each sample, the largest bound of the plan's tables, averaged over
+the sample. -/
 noncomputable def ksAvgZK (L : Law n) (R : Reg) : ℝ≥0∞ :=
   avg fun ω => ⨆ j : Fin (planZ (L.draw ω) R).length, ((planZ (L.draw ω) R).get j).bound
 
@@ -292,14 +296,14 @@ theorem zk_flock_count (hA : A.Correct) (place : ∀ S R u, u ∈ S → UnitPlac
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZK A planZ) R → (Fin C.N → Bool))
     {δlink : (R : Reg) → Cont L Reg (batchedSessionZK A planZ) R → ℝ≥0∞}
     (hlink : (analysisZK A P planZ tab (decodeOfPlace A P planZ tab place) Xc
-      (loweringSoundZK_of_place A P planZ tab place)).LinkSound δlink)
+      (loweringSoundZK_of_place A P planZ tab place)).BindSound δlink)
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSessionZK A planZ))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card) (audit L Reg (batchedSessionZK A planZ)) σ ≤
       L.miss K + ksAvgZK planZ L (reg σ) + δlink (reg σ) (cont σ) :=
   extraction_audit_count (analysisZK A P planZ tab _ Xc (loweringSoundZK_of_place A P planZ tab place))
     (zk_knowledgeSound A P planZ tab hA _ Xc _) hlink K σ
 
-/-- **The `--zk` count curve at the live draw.** With the units drawn by `Flock.Draw.drawOS`'s stratified law on a
+/-- **The `--zk` count curve at the live sample.** With the units sampled by `Flock.Draw.drawWith`'s stratified sampling design on a
 byte source that A3 makes uniform (`hA3`), as in `Prog.flock_headline`:
 `Pr[accept ∧ at least K wrong units] ≤ miss(K) + ε_ks^zk + δ_link`, with `miss(K)` `Law.stratified`'s count curve. -/
 theorem zk_flock_count_execOS (hA : A.Correct)
@@ -313,7 +317,7 @@ theorem zk_flock_count_execOS (hA : A.Correct)
     {δlink : (R : Reg) → Cont (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ) R → ℝ≥0∞}
     (hlink : (analysisZK A P planZ tab (decodeOfPlace A P planZ tab place) Xc
-      (loweringSoundZK_of_place A P planZ tab place)).LinkSound δlink)
+      (loweringSoundZK_of_place A P planZ tab place)).BindSound δlink)
     (K : ℕ)
     (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ))) :

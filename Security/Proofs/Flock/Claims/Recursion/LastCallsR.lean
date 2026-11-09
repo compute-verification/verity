@@ -1,5 +1,42 @@
-import Proofs.Flock.Claims.Recursion.LastFilesR
-import Proofs.Flock.Claims.Recursion.CallsAgreeE
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.CallsAgreeE
+public import Proofs.Flock.Claims.Recursion.LastBindsR
+public import Proofs.Flock.Claims.Recursion.LastFilesR
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Claims.Recursion.LastSharedR
 
 /-!
 # The calls half of the deployed reader's last-message binding (`RecDeploy.RCallsBind`)
@@ -15,6 +52,8 @@ reps' own calls (`verdictJK_log`), and custody pins every input they read (`sess
 So `RCallsBind` holds at SHA-512 with no premise (`RecDeploy.rCallsBind_sha512`), and with the columns half the deployed
 bound record at the deployed reader meets `LastBindsEC` and `LastCoinFree` (`RecDeploy.lastR_sha512`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -49,7 +88,7 @@ theorem liveOfJ_pubs {spec : SessionSpec} {j : Json} {lv : Live} (h : FlockDeplo
 
 /-- `decodeWithK_pubs` at a parsed value. -/
 theorem decodeJWithK_pubs (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
-    {sess : Session} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∃ l pubs, Record.fld j "link" = .ok l ∧ Record.fld l "publics" = .ok pubs ∧
       List.Forall₂ (PubField pubs) spec.tables.toList sess.publics.toList := by
   unfold Record.decodeJWithK at h
@@ -82,7 +121,7 @@ theorem decodeJWithK_pubs (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
 
 /-- `decodeWithK_publics` at a parsed value. -/
 theorem decodeJWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Json}
-    {sess : Session} {lv : Live} (hd : Record.decodeJWithK keep hs spec j = .ok sess)
+    {sess : RunRecord} {lv : Live} (hd : Record.decodeJWithK keep hs spec j = .ok sess)
     (hl : FlockDeploy.liveOfJ spec j = .ok lv) : sess.publics = lv.publics := by
   obtain ⟨l, pubs, hl1, hp1, hf⟩ := decodeJWithK_pubs keep hs hd
   obtain ⟨l', pubs', hl1', hp1', hf'⟩ := liveOfJ_pubs hl
@@ -167,7 +206,7 @@ theorem decodeJK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec 
 theorem verdictJK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup}
     {j : Lean.Json} {proofs : Array ByteArray} {l₀ : Array ByteArray} :
     RetL (verifyJWithMK keep (Hashes.logged h) spec tabs j proofs) l₀ fun _ l' =>
-      ∃ (sess : Session) (schs : Array Schedule) (l₁ : Array ByteArray),
+      ∃ (sess : RunRecord) (schs : Array Schedule) (l₁ : Array ByteArray),
         (Record.decodeJWithK keep (Hashes.logged h) spec j).go l₀ = (.ok sess, l₁) ∧
         List.Forall₂ (fun st sch => fast100 st.m = some sch) tabs.toList schs.toList ∧
         tabs.size = spec.tables.size ∧ proofs.size = spec.repStreams.size ∧
@@ -222,7 +261,7 @@ theorem verdictJK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec
 theorem verdictJ_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup} {j : Lean.Json}
     {proofs : Array ByteArray} {L : Array ByteArray}
     (hv : (verifyJWithMK id (Hashes.logged h) spec tabs j proofs).go #[] = (.ok (), L)) :
-    ∃ (sess : Session) (schs : Array Schedule) (ds : List (List ByteArray)),
+    ∃ (sess : RunRecord) (schs : Array Schedule) (ds : List (List ByteArray)),
       Record.decodeJWithK (M := Flock.V) id (Hashes.ofSha512 h) spec j = .ok sess ∧
       List.Forall₂ (fun st sch => fast100 st.m = some sch) tabs.toList schs.toList ∧
       tabs.size = spec.tables.size ∧
@@ -248,7 +287,7 @@ theorem verdictJ_calls {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs 
 
 /-- `verdictE_calls_sub` at parsed values and `keep := id`. -/
 theorem verdictJ_calls_sub {spec : SessionSpec} {tabs : Array Setup} {j j' : Lean.Json}
-    {proofs : Array ByteArray} {L L' : Array ByteArray} {sess sess' : Session}
+    {proofs : Array ByteArray} {L L' : Array ByteArray} {sess sess' : RunRecord}
     (hv : (verifyJWithMK id (Hashes.logged Sha512.hash) spec tabs j proofs).go #[] = (.ok (), L))
     (hv' : (verifyJWithMK id (Hashes.logged Sha512.hash) spec tabs j' proofs).go #[] = (.ok (), L'))
     (hd : Record.decodeJWithK (M := Flock.V) id (Hashes.ofSha512 Sha512.hash) spec j = .ok sess)

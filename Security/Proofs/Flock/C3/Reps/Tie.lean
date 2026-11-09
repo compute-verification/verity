@@ -1,4 +1,19 @@
-import Proofs.Flock.C3.Compose.Decoder
+module
+
+public import Proofs.Flock.C3.Compose.Decoder
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The reps' tie: each rep's steps are a rep unit V*'s layers check
@@ -20,6 +35,8 @@ source's runs are tied so at every accepted outer proof.
   part (`ProofOfVals`), the setup's and schedule's (`SetupOfVals`), the record's frames (`FramesOfVals`) and the
   source's rep steps (`StepsOfVals`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 
@@ -69,7 +86,7 @@ structure UnitProof (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop where
 
 /-- **The setup's and schedule's part**: the setup's `m`, `k_log` and circuit fold are the shape's and `S`'s, its
 schedule is `fast100`'s and the model's `sch₀`, and its extra claims are `extra` claim by claim. -/
-structure UnitSetup (S : Model.Statement) (sch₀ : Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
+structure UnitSetup (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
     (sh : Flock.Shape) (v : UnitVals) : Prop where
   m : v.st.m = sh.m
   kL : v.st.fold.kLog = sh.kLog
@@ -117,7 +134,7 @@ structure UnitFrames (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop wher
 /-- **The steps' part**: the steps take the kinds of `holoRepC`'s shape, their messages are the proof's
 (`holoRepMsgs`) and their coin steps the record's rounds the program consumes, the proof's level-0 cap is `cap₀` and
 the openings at rep `r` are the proof's rows (`openRow`). -/
-structure UnitSteps (S : Model.Statement) (sch₀ : Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
+structure UnitSteps (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
     (cap₀ : Model.Cap Dig) (os : Model.Opens 𝔽 Dig) (r : ℕ) (ts : List Game.Step) (sh : Flock.Shape) (d : RepData)
     (v : UnitVals) : Prop where
   kinds : ts.map kindOf <+: holoRepShape 𝔽 𝕂 Dig S.m S.kLog extra.length sch₀
@@ -129,7 +146,7 @@ structure UnitSteps (S : Model.Statement) (sch₀ : Accounting.Schedule) (extra 
   opens : ∀ ℓ j, os r ℓ j = openRow v.p.ligerito v.sch ℓ j
 
 /-- **A rep unit from its parts** at values `d`, `v` meeting E's preconditions. -/
-def unitOfParts {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+def unitOfParts {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} {sh : Flock.Shape} {d : RepData}
     (v : UnitVals) (alg : AlgebraHolds sh d) (acc : AccHolds sh d) (hp : UnitProof sh d v)
     (hs : UnitSetup S sch₀ extra sh v) (hf : UnitFrames sh d v) (hst : UnitSteps S sch₀ extra cap₀ os r ts sh d v) :

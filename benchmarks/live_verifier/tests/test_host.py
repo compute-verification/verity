@@ -31,11 +31,13 @@ RS = ROOT / "benchmarks" / "remote_session"
 PACKAGING = ROOT / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "verifier"
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(RS))
+sys.path.insert(0, str(ROOT))
 
-import challengers  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import challengers  # noqa: E402
 import host as H  # noqa: E402
 import store_layout as SL  # noqa: E402
-import verifier as V  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import verifier as V  # noqa: E402
+from benchmarks.remote_session import verifier_process as VP  # noqa: E402
 
 T0 = datetime(2026, 10, 21, 13, 0, 0, tzinfo=timezone.utc)
 T1 = datetime(2026, 10, 21, 13, 30, 0, tzinfo=timezone.utc)
@@ -125,7 +127,8 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
         "period": "memory-line-1", "pin": KEY, "paced": ["2:8000:40:2", "4:16000:40:2"]}
     argv = req["argv"]
     assert argv == doc["argv"]
-    assert argv[:3] == ["/usr/bin/python3", "-I", str(H.TREE / "benchmarks" / "remote_session" / "verifier.py")]
+    assert argv[:3] == ["/usr/bin/python3", "-I",
+                        str(H.TREE / "benchmarks" / "remote_session" / "verifier_process.py")]
     i = argv.index("--paced")
     assert dict(zip(argv[3:i:2], argv[4:i:2])) == {
         "--host": "127.0.0.1", "--port": "7951", "--out": str(svc.runs / RUN / "out"), "--registry": str(svc.registry),
@@ -151,8 +154,8 @@ def test_a_run_is_refused_before_anything_starts_while_the_host_has_no_first_par
 
 
 def parsed(monkeypatch, argv: list[str]) -> tuple[argparse.Namespace, tuple]:
-    """verifier.py's arguments as its own parser reads the gate's command line, and where it then listens: its main up
-    to the listen, which nothing reaches."""
+    """The verifier's arguments as its own parser reads the gate's command line, and where it then listens: its
+    process's main (`verifier_process.py`) up to the listen, which nothing reaches."""
     got = {}
     parse = argparse.ArgumentParser.parse_args
 
@@ -172,7 +175,7 @@ def parsed(monkeypatch, argv: list[str]) -> tuple[argparse.Namespace, tuple]:
     monkeypatch.setattr(sys, "setswitchinterval", lambda s: None)
     monkeypatch.setattr(sys, "argv", argv[2:])
     with pytest.raises(Listened) as e:
-        V.main()
+        VP.main()
     return got["a"], e.value.args
 
 
@@ -514,7 +517,8 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
     "print(host.replay_module().__file__)",
     "sys.path.insert(0, str(host.RESEARCH)); from research.store import cli; print(cli.__file__)",
     "sys.argv = ['verifier.py', '--help']; runpy.run_path(str(host.VERIFIER), run_name='__main__')",
-    "sys.argv = ['auditor_line.py', '--help']; runpy.run_path(str(host.VERIFIER.parent / 'auditor_line.py'), "
+    "sys.argv = ['auditor_line.py', '--help']; "
+    "runpy.run_path(str(host.TREE / 'benchmarks' / 'remote_session' / 'auditor_line.py'), "
     "run_name='__main__')",
 ])
 def test_the_hosts_code_runs_on_a_python_with_no_site_packages(code, tmp_path):
@@ -626,6 +630,25 @@ def test_a_party_runs_its_module_from_the_pinned_tree_as_auditor_with_its_own_de
                                        str(svc.parties / "pous"), "--listen", "0.0.0.0:47610", "minutes=5"]
 
 
+def test_bw_party_holds_the_store_the_block_challenger_kept_for_a_pous_session_or_the_named_fixture_s(svc):
+    """The bandwidth party's registration is the host's: the block challenger's own record of the PoUS session the lane
+    names (its device on this host, by session id), or with `--fixture` the fixture's registration in the pinned tree;
+    never a path. A party that names neither is refused before it starts: V3's rerun 58a7 reached the gate through a key
+    whose forced command dropped `--pous-session`, so the party held the fixture's store and refused the session's node."""
+    sid = "0f" * 32
+    (rc, _), ran = party(svc, ["bw_party", "--pous-session", sid, "--minutes", "8"])
+    assert rc == 0 and ran[0][-11:] == ["-m", H.PARTIES["bw_party"][1], "--device", str(svc.parties / "bw"),
+                                        "--listen", "0.0.0.0:47612", "--pous-record", str(svc.parties / "pous"),
+                                        "--pous-session", sid, "minutes=8"]
+    (rc, _), ran = party(svc, ["bw_party", "--fixture"])
+    assert rc == 0 and ran[0][-9:] == ["-m", H.PARTIES["bw_party"][1], "--device", str(svc.parties / "bw"),
+                                       "--listen", "0.0.0.0:47612", *H.PARTY_FIXED["bw_party"], "minutes=60"]
+    assert (H.TREE / H.PARTY_FIXED["bw_party"][1]).is_file()
+    for words in (["bw_party"], ["bw_party", "--minutes", "10"]):
+        got, ran = party(svc, words)
+        assert "bw_party names no store" in refused(got) and ran == []
+
+
 @pytest.mark.parametrize("words, why", [
     (["wipe_party", "--egress-bits", "8"], "got '--egress-bits'"),
     (["wipe_party", "--device", "/tmp/x"], "got '--device'"),
@@ -637,6 +660,13 @@ def test_a_party_runs_its_module_from_the_pinned_tree_as_auditor_with_its_own_de
     (["challenger_party", "--reads", "8"], "challenger_party takes no flags"),
     (["challenger_party", "--minutes", "181"], "--minutes takes one integer"),
     (["wipe_party", "--minutes"], "--minutes takes one integer"),
+    (["bw_party", "--registration", "/tmp/r.json"], "bw_party takes --pous-session SID | --fixture; got '--registration'"),
+    (["bw_party", "--pous-record", "/tmp"], "got '--pous-record'"),
+    (["bw_party", "--pous-session", "../" + "a" * 61], "64 lowercase hex digits"),
+    (["bw_party", "--pous-session", "A" * 64], "64 lowercase hex digits"),
+    (["bw_party", "--pous-session", "a" * 64, "--pous-session", "b" * 64], "bw_party holds one store"),
+    (["bw_party", "--fixture", "--pous-session", "a" * 64], "bw_party holds one store"),
+    (["bw_party", "--pous-session", "a" * 64, "--fixture"], "bw_party holds one store"),
 ])
 def test_a_party_is_refused_any_flag_its_whitelist_lacks_before_it_starts(svc, words, why):
     got, ran = party(svc, words)
@@ -674,7 +704,9 @@ def test_party_key_prints_only_the_public_half_made_on_the_host(svc):
 
 def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
     """The parties run on the host's python3 (`-s -E`), where no package is installed: the modules resolve in the tree."""
-    code = "import verity.core.protocols.pous.wipe_party, verity.core.protocols.pous.period; print('ok')"
+    code = ("import verity.core.protocols.pous.wipe_party, verity.core.protocols.pous.period, "
+            "verity.core.devices.memory_challenger.challenger_party, verity.core.protocols.remote_bandwidth.p2_party; "
+            "print('ok')")
     p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", code], capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0 and p.stdout.strip() == "ok", p.stderr[-2000:]
 
@@ -717,8 +749,8 @@ def test_party_log_reads_the_sessions_and_each_ones_stdout_as_the_host_kept_it_f
 
 
 def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc):
-    (rc, _), ran = party(svc, ["bw_party", "--minutes", "10"])
+    (rc, _), ran = party(svc, ["bw_party", "--fixture", "--minutes", "10"])
     assert rc == 0 and ran[0][-9:] == ["-m", "verity.core.protocols.remote_bandwidth.p2_party", "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", "--registration",
                                        "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json", "minutes=10"]
-    assert "bw_party takes no flags" in refused(party(svc, ["bw_party", "--registration", "/tmp/x"])[0])
+    assert "bw_party takes --pous-session SID | --fixture" in refused(party(svc, ["bw_party", "--registration", "/tmp/x"])[0])

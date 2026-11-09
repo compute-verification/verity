@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Committed
-import Proofs.Flock.Claims.ZK.Deployed
+module
+
+public import Proofs.Flock.Claims.Sampling.Committed
+public import Proofs.Flock.Claims.ZK.Deployed
 
 /-!
 # Sampling's zero knowledge at the sessions' tables
@@ -31,6 +33,8 @@ cut views. So `TMsgLink` can hold at `Sampled.leaky` only where every checked se
 run's last coin. Where the sessions run one after another, each earlier session's final message is in the prefix, and
 `PrefixHides` needs instead each earlier session's whole view hidden against coins chosen after its commitments.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
@@ -98,10 +102,6 @@ noncomputable def withTabSim (L : Leaky W) [Fintype L.G.Coin]
     sim := L.tabSim Mc nS [] }
   dmsg := L.dmsg
   sim := L.tabSim Mc nS
-
-theorem withTabSim_prover (L : Leaky W) [Fintype L.G.Coin]
-    (Mc : ∀ lx x, L.G.Nonce → (Fin (L.G.K x) → L.G.Coin) → (L.proto lx).TCoinModel x) (nS : Msg → ℕ) :
-    (L.withTabSim Mc nS).G.prover = L.G.prover := rfl
 
 /-- **`SHVZK` of `withTabSim` at the leaf layer `lx`**, within `2·n_B·δ₁`, from the message links and the tables there,
 where every model's tape has at most `n_S(x)` elements. -/

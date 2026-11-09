@@ -20,6 +20,100 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_agents.py",
+    "tests/test_auto.py",
+    "tests/test_binprov.py",
+    "tests/test_bucket_index.py",
+    "tests/test_budgets.py",
+    "tests/test_carry.py",
+    "tests/test_checked_guard.py",
+    "tests/test_cli.py",
+    "tests/test_commitmap.py",
+    "tests/test_conftest.py",
+    "tests/test_console_status_export.py",
+    "tests/test_console_usage.py",
+    "tests/test_cores.py",
+    "tests/test_dirty_capture.py",
+    "tests/test_disk_hold.py",
+    "tests/test_doctor.py",
+    "tests/test_drive_alarms.py",
+    "tests/test_drive_carry.py",
+    "tests/test_drive_checked.py",
+    "tests/test_drive_config.py",
+    "tests/test_drive_executor.py",
+    "tests/test_drive_hold_lift.py",
+    "tests/test_drive_lowrisk.py",
+    "tests/test_drive_moves.py",
+    "tests/test_drive_policy.py",
+    "tests/test_drive_red_fixes.py",
+    "tests/test_drive_review.py",
+    "tests/test_drive_stale.py",
+    "tests/test_drive_unlandable.py",
+    "tests/test_env_credentials.py",
+    "tests/test_evict_src.py",
+    "tests/test_evict_src_local.py",
+    "tests/test_fixture_fetch.py",
+    "tests/test_gates.py",
+    "tests/test_holds.py",
+    "tests/test_jobs_dispatch.py",
+    "tests/test_jobuser.py",
+    "tests/test_mem_admission.py",
+    "tests/test_merge_gate.py",
+    "tests/test_merge_shards.py",
+    "tests/test_merge_sweep.py",
+    "tests/test_monitors.py",
+    "tests/test_nebius.py",
+    "tests/test_nebius_commit_pack.py",
+    "tests/test_nebius_dispatch_place.py",
+    "tests/test_nebius_fill_timing.py",
+    "tests/test_nebius_lean_sandbox.py",
+    "tests/test_nebius_lockout.py",
+    "tests/test_nebius_monitoring.py",
+    "tests/test_nebius_n2_spill.py",
+    "tests/test_nebius_sky.py",
+    "tests/test_notes.py",
+    "tests/test_notes_archive.py",
+    "tests/test_notes_sync.py",
+    "tests/test_pod_guard_daemon.py",
+    "tests/test_pod_lease.py",
+    "tests/test_pods_connect.py",
+    "tests/test_pods_registry.py",
+    "tests/test_pyspy.py",
+    "tests/test_pythonpath.py",
+    "tests/test_queue.py",
+    "tests/test_queue_drive.py",
+    "tests/test_queue_open.py",
+    "tests/test_queue_ported.py",
+    "tests/test_record_driver.py",
+    "tests/test_record_result.py",
+    "tests/test_remote_adopt.py",
+    "tests/test_remote_cwd.py",
+    "tests/test_remote_local.py",
+    "tests/test_remote_path.py",
+    "tests/test_remote_preflight.py",
+    "tests/test_remote_ship_git.py",
+    "tests/test_remote_ship_source.py",
+    "tests/test_remote_version.py",
+    "tests/test_repo_replicas.py",
+    "tests/test_research_cancel.py",
+    "tests/test_run_custody.py",
+    "tests/test_run_cwd_clone.py",
+    "tests/test_run_launched.py",
+    "tests/test_run_on_fixes.py",
+    "tests/test_scopemem.py",
+    "tests/test_secret_hint.py",
+    "tests/test_slack.py",
+    "tests/test_spec_alert.py",
+    "tests/test_steward.py",
+    "tests/test_store_honing.py",
+    "tests/test_store_labels_durability.py",
+    "tests/test_store_prov.py",
+    "tests/test_store_vllm_tools.py",
+    "tests/test_telemetry.py",
+    "tests/test_undeclared_derivation.py",
+]
 # Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
 # test_store_vllm_tools loads the vLLM stage Tools and hashes their closure (integrations/vllm, verity,
 # catalog, kernels, core);
@@ -38,9 +132,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # runs the Markdown caps' landing gate on the caps it reads. tools/verity/check/pins.py: test_queue commits it into its origin, so
 # the sync's pin rebuild (`repinned`) reads the real `PINS`. tools/move/rename.py, layout.py and restack.py and
 # tools/verity/check/move_check.py: test_drive_moves commits them into its origin, so the sync regenerates, certifies and
-# restacks a move with the scripts it runs from the tree.
+# restacks a move with the scripts it runs from the tree. tools/verity/graph/tests/key_vectors.json: test_drive_executor holds
+# the executor client's graph/v2 key rule to the vectors both sides of the contract reproduce. tools/verity/lean/lean_changed.py
+# and the files its `--inputs-key` loads (lean_audit.py, settings.py, module_keys.py, headers.py, check.py, siblings.py, axiom_probe.py,
+# tools/verity/check/common.py, slot.py, lean_slot.py, tools/verity/graph/verity_graph/contract.py): test_queue commits them
+# into its origin, so the records gate keys each commit's Lean inputs with its own code (`lean_keys`).
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
-          "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "benchmarks/tc_probe",
+          "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
           "pyproject.toml", "tools/config/pyproject.toml", "verity/ml/flock/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "benchmarks/harness/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
           "benchmarks/pouw/pyproject.toml", "tools/verity/check/pyproject.toml", "tools/verity/check/settings.py",
@@ -48,17 +146,22 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra
           "infra/cluster", "tools/verity/lean/pyproject.toml", "tools/verity/lean/run_daily.py", "tools/verity/lean/merge.py",
           "tools/verity/lean/check.py", "tools/verity/check/suites.py", "tools/verity/check/gates/markdown_caps.py", "tests/test_repository.py", "tests/test_retired_terms.py", "tools/verity/check/pins.py", "benchmarks/native_peak/pyproject.toml",
           "benchmarks/tc_probe_fp4/pyproject.toml", "tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py",
-          "tools/verity/check/move_check.py"]
+          "tools/verity/check/move_check.py", "tools/verity/graph/tests/key_vectors.json", "tools/verity/lean/lean_changed.py",
+          "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/headers.py",
+          "tools/verity/lean/siblings.py", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py", "tools/verity/check/common.py",
+          "tools/verity/graph/verity_graph/contract.py"]
 parallel = true
 # What the suites of packages depending on research read of it, and so key on in place of this directory: the store and its
 # telemetry, running and recording a run (`python -m research`, its CLI's other commands imported only when run), the merge
-# gate and queue `check` drives, the memory reservations a check slot holds (`mem`), and the pod registry; of the store and
-# telemetry, the files a `research data fetch` and a run's record import, so the store's bucket index, custody and eviction aren't
-# inputs of every dependent. Not the coordination tooling (Slack, notes, monitors, the steward) nor pods/nebius, which verity-ops
-# declares. A dependent's test that reads another file of it fails the guard until it is listed.
+# gate and queue `check` drives (with the Linear client the queue imports), the memory reservations a check slot holds (`mem`),
+# and the pod registry; of the store and telemetry, the files a `research data fetch` and a run's record import, so the store's
+# bucket index, custody and eviction aren't inputs of every dependent. Not the rest of the coordination tooling (Slack, notes,
+# monitors, the steward) nor pods/nebius, which verity-ops declares. A dependent's test that reads another file of it fails the
+# guard until it is listed.
 exports = ["tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py", "tools/research/src/research/cli.py",
            "tools/research/src/research/clone.py", "tools/research/src/research/compare.py", "tools/research/src/research/env.py",
-           "tools/research/src/research/gates.py", "tools/research/src/research/mem.py", "tools/research/src/research/merge.py",
+           "tools/research/src/research/gates.py", "tools/research/src/research/linear.py", "tools/research/src/research/mem.py",
+           "tools/research/src/research/merge.py", "tools/research/src/research/policy.py",
            "tools/research/src/research/pythonpath.py", "tools/research/src/research/queue.py",
            "tools/research/src/research/quick_tier.py", "tools/research/src/research/record.py",
            "tools/research/src/research/remote.py", "tools/research/src/research/result.py", "tools/research/src/research/runs.py",
@@ -78,3 +181,86 @@ exports = ["tools/research/src/research/__init__.py", "tools/research/src/resear
            "tools/research/src/research/telemetry/__init__.py", "tools/research/src/research/telemetry/cgroup.py",
            "tools/research/src/research/telemetry/events.py", "tools/research/src/research/telemetry/job.py",
            "tools/research/src/research/telemetry/source_identity.py"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/test_checked_guard.py",
+    "tests/test_drive_alarms.py",
+    "tests/test_drive_carry.py",
+    "tests/test_drive_checked.py",
+    "tests/test_drive_config.py",
+    "tests/test_drive_executor.py",
+    "tests/test_drive_hold_lift.py",
+    "tests/test_drive_lowrisk.py",
+    "tests/test_drive_moves.py",
+    "tests/test_drive_red_fixes.py",
+    "tests/test_drive_review.py",
+    "tests/test_drive_stale.py",
+    "tests/test_drive_unlandable.py",
+]
+paths = ["tools/verity/check/gates"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_cli.py", "tests/test_usage_cli.py"]
+paths = ["infra/cluster/src/cluster"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_drive_policy.py", "tests/test_queue_ported.py"]
+paths = ["tools/verity/check/gates/markdown_caps.py"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/test_cores.py",
+    "tests/test_jobuser.py",
+    "tests/test_mem_admission.py",
+    "tests/test_merge_gate.py",
+    "tests/test_remote_preflight.py",
+    "tests/test_remote_ship_source.py",
+    "tests/test_remote_version.py",
+    "tests/test_run_custody.py",
+    "tests/test_run_launched.py",
+    "tests/test_store_prov.py",
+]
+paths = ["tools/research/src/research"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_linear.py", "tests/test_slack.py"]
+paths = ["tests"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_nebius_commit_pack_sizes.py"]
+paths = ["tools/research/src/research/pods/nebius/sky"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/test_nebius_dispatch_lease_pool.py",
+    "tests/test_nebius_dispatch_pin.py",
+    "tests/test_nebius_dispatch_place.py",
+    "tests/test_nebius_dispatch_settings.py",
+    "tests/test_nebius_dispatch_stop.py",
+    "tests/test_nebius_dispatch_submit.py",
+    "tests/test_nebius_dispatch_tick.py",
+    "tests/test_nebius_fill_timing.py",
+    "tests/test_nebius_n2_spill.py",
+    "tests/test_nebius_release.py",
+]
+paths = ["tools/research/src/research/pods/nebius"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_nebius_lockout.py"]
+paths = ["tools/research/src/research/pods/nebius/lockout"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_nebius_monitoring.py"]
+paths = ["tools/research/src/research/pods/nebius/monitoring"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_nebius_sky.py"]
+paths = ["integrations/vllm/verity_vllm/pipeline"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_store_vllm_tools.py"]
+paths = ["integrations/vllm", "verity"]

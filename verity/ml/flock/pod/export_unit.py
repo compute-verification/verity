@@ -1,5 +1,5 @@
-"""flock-bench: export the binary-census unit circuit (gf2.py/unit.py, copied from the survey agent's
-internal/binary-census) as one Flock block-R1CS base block, C = I: row i is (A_i . z)(B_i . z) = z_i.
+"""flock-bench: export the binary-census unit circuit (`verity_flock.unit`, the tensor-core step over
+`verity_flock.gf2`'s forms) as one Flock block-R1CS base block, C = I: row i is (A_i . z)(B_i . z) = z_i.
 
 Column layout (one unit): inputs x, w, c (A = B = {i}); live ANDs in creation order (A, B = the two forms);
 one row per assertion L = 0, encoded (L + z_j) * 1 = z_j; one copy row per output bit that is not already a
@@ -9,7 +9,7 @@ A form's constant term is the constant column.
 Output (text): header "useful const n_in n_x n_w n_c"; `useful` lines "na a... nb b..."; then NV test vectors,
 each "inputs_hex z_hex" (LSB-first bit strings as little-endian hex), all rows checked here before writing.
 
-usage: python3 export_unit.py ampere_bf16|hopper_bf16|ada_e4m3|hopper_e4m3 OUT [NV]
+usage: PYTHONPATH=REPO:REPO/verity/ml/flock/python python3 export_unit.py ampere_bf16|hopper_bf16|ada_e4m3|hopper_e4m3 OUT [NV]
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import random
 import sys
 import time
 
-import unit as U
+from verity_flock import unit as U
 
 PIPES = {
     "ampere_bf16": (U.BF16, (8, 8), 25, -132),

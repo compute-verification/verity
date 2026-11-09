@@ -1,7 +1,40 @@
-import Proofs.Flock.Claims.Bridge.BindsColl
-import Proofs.Flock.Claims.Sampling.Deployed
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-import Proofs.Flock.C3.RegLevels.ValueTie
+module
+
+public import Proofs.Flock.C3.RegLevels.ValueTie
+public import Proofs.Flock.Claims.Bridge.WrongSet
+public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Recursive.ValueSrc
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The deployed check opens shaped rows only
@@ -14,14 +47,16 @@ hashes only `RowV2.enc` of a row of its place's width. So the openings the deplo
 * `row_eq_rowEncP`: a deployed opening's row is `rowEncP (rowPre true)` of its value (`valOf`), which is `RowShaped`
   of its place's width (`valOf_shaped`), at a place of `16 w` bits.
 * `row_ne_misshaped`: **a misshaped value's bytes are no deployed opening's row**: `rowEncP` is injective.
-* `opens_sha512`: at SHA-512 the deployed check passes exactly when the verifier's own port at the root `at_` names
-  opens the hm96 leaf of that row (`Flock.Registered.opensLeaf`), so `opens_shaped`: the leaf it opens is the game's
-  leaf of a shaped value.
+* `opens_sha512`: at SHA-512 the deployed check passes exactly when the verifier's own port at the root `at_` names,
+  among those the opening's position reads under its roots (`Code.ownAt`), opens the hm96 leaf of that row
+  (`Flock.Registered.opensLeaf`), so `opens_shaped`: the leaf it opens is the game's leaf of a shaped value.
 * `leaf_misshaped`: **a misshaped game opening's leaf is the leaf of a deployed opening only by a SHA-512 collision**
   (`Binding.hm96Pair_spec`).
 * `valOf_eq` and `opens_pathCommitRow`: a shaped value is the value of the row bits it agrees with, and the check of
   any path commitment over hm96 leaves of rows is the verifier's, for `Proofs.Flock.Bridge.Transports`.
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 
@@ -161,20 +196,23 @@ theorem opens_pathCommit (at_ : List Msg → ℕ → Option (Msg × ℕ)) (place
           ri.2 (bytes (π o)) = true :=
   opens_pathCommitRow at_ (row place bits) salt π own layer roots o
 
-/-- **At SHA-512 the deployed check is the verifier's** (`opens_pathCommit` at a sampled verifier's code). -/
+/-- **At SHA-512 the deployed check is the verifier's** (`opens_pathCommit` at a sampled verifier's code, at the ports
+the opening's position reads under its roots). -/
 theorem opens_sha512 (c : Code) (roots : List Msg) (o : Opening Bool) :
     (commit c).Opens sha512Msg roots o = true ↔
-      ∃ ri reg, c.at_ roots o.pos = some ri ∧ c.own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
+      ∃ ri reg, c.at_ roots o.pos = some ri ∧
+        (c.ownAt roots o.pos).find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
         Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input (row c.place c.bits o) (c.salt o)))))
           ri.2 (bytes (c.π o)) = true :=
-  opens_pathCommit c.at_ c.place c.bits c.salt c.π c.own c.layer roots o
+  opens_pathCommit c.at_ c.place c.bits c.salt c.π (c.ownAt roots o.pos) c.layer roots o
 
 /-- **The deployed check opens shaped values' leaves**: the leaf it opens is the game's hm96 leaf of the opening's value,
 `RowShaped` of its place's width. -/
 theorem opens_shaped (c : Code) (roots : List Msg) (o : Opening Bool) (h16 : (c.place o.pos).1 % 16 = 0)
     (hW : (c.place o.pos).1 ≤ W) :
     (commit c).Opens sha512Msg roots o = true ↔
-      ∃ ri reg, c.at_ roots o.pos = some ri ∧ c.own.find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
+      ∃ ri reg, c.at_ roots o.pos = some ri ∧
+        (c.ownAt roots o.pos).find? (fun p => decide (bs p.root = ri.1)) = some reg ∧
         Flock.Registered.opensLeaf reg (bytes (digBytes (H512 (hm96Input
           (rowEncP (FlockSoundness.Discharge.Hidden.rowPre true) (valOf c.place c.bits o W)) (c.salt o)))))
           ri.2 (bytes (c.π o)) = true := by

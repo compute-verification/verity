@@ -1,9 +1,41 @@
-import Proofs.Flock.Claims.ZK.GKProof
+module
+
+public import Proofs.Flock.Claims.ZK.GKExp
+public import Proofs.Flock.Claims.ZK.CoinCheck
+public import Proofs.Flock.Claims.ZK.Prefix
+public import Proofs.Flock.Claims.DeployCode
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.GKCost
-import Proofs.Flock.Claims.ZK.GKExp
-import Proofs.Flock.Claims.ZK.CoinCheck
-import Proofs.Flock.Claims.ZK.Prefix
-import Proofs.Flock.Claims.DeployCode
 
 /-!
 # Flock's zero knowledge against a malicious verifier, from its committed coins
@@ -87,8 +119,10 @@ hypotheses of `Flock.zkR_gkE_hm96` and of the theorems that discharge them, each
   `Proto.CoinCheck`), after which `Binding` needs nothing of `H`;
 * `G.K = (FlockDeploy.V true).k − 1`: the protocol's coins are the deployed verifier's, the link's and the recorded
   rounds' (`1 + rounds` where the statement sets up, none where it does not). Zero knowledge reads nothing else of
-  `FlockDeploy.deployZk` but its `zk`.
+  `FlockDeploy.deployZk` but its `zk`, and its rounds only at the relation's statements (`Flock.zkAt_withK`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -105,6 +139,19 @@ theorem Flock.zkR_of_proto {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Depl
   refine ⟨hzk, ?_⟩
   rw [show (fun x => D.V.k x + 1) = G.k from funext hk]
   exact G.gk_zk H _ N δA δB hA hB hB0 hC
+
+/-- The record `D` with its verifier's rounds read as `k`. -/
+def _root_.Claims.Flock.Deploy.withK {Coin Col T : Type} (D : Flock.Deploy Coin Col T) (k : Msg → ℕ) :
+    Flock.Deploy Coin Col T :=
+  { D with V := { D.V with k := k } }
+
+/-- **`ZKAt` reads the record's rounds only at its relation's statements**: it carries over from the record with its
+rounds read as `k` (`Deploy.withK`) where `k` is `D`'s rounds at every statement in the relation. -/
+theorem Flock.zkAt_withK {Coin Col T N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg}
+    {D : Flock.Deploy Coin Col T} {k : Msg → ℕ} {P : Flock.Wit → Prover (N × Ω)} {S : Simulator} {εzk γ : Msg → ℝ}
+    (hk : ∀ x w, Flock.R D.parse x w → k x = D.V.k x) (h : Claims.Flock.ZKAt H (D.withK k) P S εzk γ) :
+    Claims.Flock.ZKAt H D P S εzk γ :=
+  ⟨h.1, fun x w hR Θ Vs θ hv Ev => h.2 x w hR Θ Vs θ (hv.trans (congrArg (· + 1) (hk x w hR).symm)) Ev⟩
 
 /-- The deployed verifier has at least one message, the last, which it decides. -/
 theorem deployV_k_pos (zk : Bool) (x : Msg) : 0 < (FlockDeploy.V zk).k x := by
@@ -245,19 +292,6 @@ theorem Flock.zkR_gkE_hm96_deployZk (H : Msg → Msg)
       (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
   Flock.zkR_gkE_hm96 H _ G t ht rfl (fun x => (deployZk_proto_k rel G hK x).symm) δ₁ nL nB hA hB Tr nb root parse
     pos idx n depth dc hchk hdec
-
-/-- **The same at `FlockDeploy.deployZk`, from `Binding` itself.** -/
-theorem Flock.zkR_gkE_hm96_deployZk_bind (H : Msg → Msg)
-    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) (t : ℕ) (ht : 0 < t)
-    (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) (δ₁ : ENNReal) (nL nB : Msg → ℕ)
-    (hA : ∀ x w, Flock.R (FlockDeploy.deployZk rel).parse x w → ∀ (ν : G.Nonce)
-      (V : FlockSoundness.ZK.Responder Msg Out (G.K x + 1)) (E : (Fin (G.K x + 1) → Msg) → Prop),
-      |Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.msg x w ν)) V r)) -
-        Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.dmsg x ν)) V r))| ≤ 2 * nL x * δ₁.toReal)
-    (hB : G.SHVZK H (Flock.R (FlockDeploy.deployZk rel).parse) fun x => 2 * nB x * δ₁.toReal) (hC : G.Binding H) :
-    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover (G.simulatorE t (t * 3 ^ t))
-      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
-  Flock.zkR_gkE_hm96_bind H _ G t ht rfl (fun x => (deployZk_proto_k rel G hK x).symm) δ₁ nL nB hA hB hC
 
 /-- `S_GK`'s cost: `(1 + 5t)` runs in expectation (`SimCost`) at every cap `M`. -/
 theorem Flock.simCostExp_of_proto (H : Msg → Msg) (G : Proto Flock.Wit) (t M : ℕ) (cChk cMsg cSim : Msg → ℕ)

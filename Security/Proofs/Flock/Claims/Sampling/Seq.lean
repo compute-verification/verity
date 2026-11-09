@@ -1,10 +1,44 @@
-import Proofs.Flock.Claims.ZK.Layout
-import Proofs.Flock.Claims.Sampling.Deployed
+module
+
+public import Proofs.Flock.Claims.ZK.Layout
+public import Proofs.Flock.Claims.Sampling.Deployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Sampling's zero knowledge by sequential composition
 
-The masked sampled run is a first part whose messages the framing fixes (the registration and the draw), then `M`
+The masked sampled run is a first part whose messages the framing fixes (the registration and the sample), then `M`
 sessions back to back, each a complete run of one session protocol (Flock's masked record: its own `Hello`, coin tree
 and coins) at the statement the router puts it under, on a tape of its own. Its zero knowledge is the sessions' by
 sequential composition (`zkmalAt_layout` at `c = 0`): the first part costs nothing, since the router fixes its
@@ -16,7 +50,7 @@ messages from `(x, hist)` (`zkmalAt_public`), and `M` sessions cost `Σ_{j < M} 
 * `Framing.Routed`: the router puts each round in its part, and each session under the statement of its first
   history. `Framing.prover_flat`: then the prover sends the composed prover's messages and makes at least its calls
   (`Framing.honestSeq`, `HonestSeq`).
-* `Framing.SessionWit`: with no faulty unit, the openings a session reveals make a witness in the session's relation,
+* `Framing.SessionWit`: with no incorrect proof block, the openings a session reveals make a witness in the session's relation,
   at every history that starts it. `Seq.RelOnAt` is then a theorem (`Framing.relOnAt`), from `Rhon` and the reveal's
   facts (`Reference.found_opens`, `found_val`, `found_covers`).
 * `Framing.Shaped`: at every history that starts session `j`, the session protocol's rounds are the slot's, its
@@ -31,6 +65,8 @@ messages from `(x, hist)` (`zkmalAt_public`), and `M` sessions cost `Σ_{j < M} 
 The simulator is given the published leaf layer and doesn't read it: what the prover sends outside the sessions is a
 function of `(x, hist)`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
@@ -128,7 +164,7 @@ def Routed (M : ℕ) (x : Msg) : Prop :=
     ∀ j < M, ∀ hist : List (Msg × Msg), F.parts.start x j ≤ hist.length → hist.length < F.parts.start x (j + 1) →
       F.step x hist = .session j (F.step x (hist.take (F.parts.start x j))).stmt (hist.drop (F.parts.start x j))
 
-/-- **An honest unit's openings make a witness in its session's relation** `RF` at `x`: with no faulty unit, at every
+/-- **An honest unit's openings make a witness in its session's relation** `RF` at `x`: with no incorrect proof block, at every
 history that starts session `j < M`, openings that pass the commitment's check under the roots, are the committed
 values `Wit.val` reads, and cover every position the session reads under its statement that has a committed value,
 encode (`wit`) a witness in the statement's relation. `SessionWit`'s form at the masked router, at every history

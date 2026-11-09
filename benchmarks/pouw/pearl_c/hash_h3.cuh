@@ -1,4 +1,4 @@
-// Pearl-C's hashing format -h3, SHA-512 throughout (`verity.core.protocols.pouw.schemes.pearl_c`'s module docstring).  The
+// Pearl-C's hashing format -h3, SHA-512 throughout (`verity.ml.protocols.pouw.schemes.pearl_c`'s module docstring).  The
 // labels' H_l = `pearl_c.s512`, SHA-512 after a 128-byte label block, its first 32 bytes (the labels keep their `pearl-c/h3s/`
 // bytes, `pearl_c.S512_LABELS`); A's row digests (`s512_rows`) and the tile leaf, `sha512/row-seg/v1` over each row and over
 // the tile's messages; the trees `audit.HM96`: frame-v3-sha512 (`verity.ml.commitments.merkle`, hash="sha512") over
@@ -407,7 +407,7 @@ DEV void chacha20_block(const uint32_t* key, uint64_t counter, uint64_t nonce, u
 }
 DEV uint64_t rs_bswap64(uint64_t v) { return rs_be64((uint32_t)v, (uint32_t)(v >> 32)); }
 
-// the inner leaves of an `audit.HM96` tree (C-Flock's ``hm96_finish_leaves``): leaf i < i0 over x_i (p0 + 64 i: a row's
+// the inner leaves of an `audit.HM96` tree (Flock's ``launch_hm96_finish``): leaf i < i0 over x_i (p0 + 64 i: a row's
 // sha512/row-seg/v1 digest, or a tile leaf) and its salt y_i = `audit.hm96_salt`(key, nonce, i): b = x ⊕ M·y (the byte
 // tables), c = SHA-512(salt prefix ‖ y), hl = SHA-512(leaf prefix ‖ b ‖ c); s512_frame_leaves makes hl the frame leaf.  p0 x,
 // p1 out (64 B a leaf, hl), p2 the salt key (32 B), p3 `audit.hm96_kernel_constants` (the prefixes' midstates, 8 u64 each,

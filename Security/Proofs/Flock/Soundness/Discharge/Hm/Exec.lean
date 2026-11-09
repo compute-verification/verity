@@ -2,11 +2,15 @@
 The verifier's SHA-512 compression (`Flock.Sha512.compress`, straight-line over `UInt64` locals) is `Spec.compressV`:
 FIPS 180-4's three loops as folds (`compress_unfold`), then each fold against the spec by induction.
 -/
-import Mathlib.Tactic
-import Proofs.Flock.Soundness.Discharge.Hm.Spec
+module
+
+public import Mathlib.Tactic
+public import Proofs.Flock.Soundness.Discharge.Hm.Spec
 -- `hash_eq`'s `simp` over `Sha512.hash`'s loops (`Hm.Hash`) needs `Std.Legacy.Range.mk.congr_simp`, which
 -- `FlockLevel3.LookupRows` already realizes; a second copy there is refused by the audit's kernel replay.
-import Proofs.Flock.Level3.LookupRows
+public import Proofs.Flock.Level3.LookupRows
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 
@@ -36,8 +40,6 @@ def roundU (w : Array UInt64) (s : U8) (i : ℕ) : U8 :=
         Sha512.rotr s.2.2.2.2.1 41) + (s.2.2.2.2.1 &&& s.2.2.2.2.2.1 ^^^ ~~~s.2.2.2.2.1 &&& s.2.2.2.2.2.2.1) +
         Sha512.k[i]! + w[i]!),
     s.2.2.2.2.1, s.2.2.2.2.2.1, s.2.2.2.2.2.2.1)
-
-theorem wordBE_eq (data : ByteArray) (off i : ℕ) : wordBE data off i = Sha512.word data (off + 8 * i) := rfl
 
 theorem schedU_eq (w : Array UInt64) (i : ℕ) :
     schedU w i = w.push (Sha512.sched w[i - 16]! w[i - 15]! w[i - 7]! w[i - 2]!) := rfl

@@ -27,9 +27,8 @@ leaves, padding leaves past ``count``), so every known node has a sibling
 and a padding sibling is simply supplied by the proof like any other.  With
 one opened rank the multiproof is that rank's authentication path.
 
-Multiproofs are over the SHA frames only: ``frame-v3-sha512`` (``hash="sha512"``)
-and the SHA-256 frame the frozen SP1 backend reads.  A BLAKE3 domain
-(``frame-b3``, ``frame-b3s``) is refused.
+Multiproofs are over both frames: ``frame-v3-sha512`` (``hash="sha512"``)
+and the SHA-256 frame the frozen SP1 backend reads; any other hash is refused.
 """
 
 from __future__ import annotations
@@ -37,7 +36,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.ml.commitments.merkle import _NODE, MerkleTree, _hash, _uint, merkle_depth
+from verity.ml.commitments.merkle import _NODE, MerkleTree, frame_hash, _uint, merkle_depth
 from verity.ml.commitments.scheme import sha
 from verity.errors import ProtocolError
 
@@ -61,7 +60,7 @@ def _node_of(domain_id: bytes, hash: str = "sha256") -> Node:
     sha(hash)
 
     def node(level: int, index: int, left: bytes, right: bytes) -> bytes:
-        return _hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash=hash)
+        return frame_hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash=hash)
 
     return node
 
@@ -158,29 +157,41 @@ def verify_multiproof(
     proof: Sequence[bytes],
     hash: str = "sha256",
 ) -> bool:
-    """Whether the leaf digests ``leaves[rank]`` reconstruct ``root`` with ``proof`` (``hash`` the domain's frame hash).
+    """Whether the leaf digests ``leaves[rank]`` reconstruct ``root`` with ``proof`` (:func:`multiproof_root`)."""
 
-    False when a rank lies outside the tree, when ``leaves`` is empty (nothing
+    return (reconstructed := multiproof_root(count, domain_id, leaves, proof, hash)) is not None and reconstructed == root
+
+
+def multiproof_root(
+    count: int,
+    domain_id: bytes,
+    leaves: Mapping[int, bytes],
+    proof: Sequence[bytes],
+    hash: str = "sha256",
+) -> bytes | None:
+    """The root the leaf digests ``leaves[rank]`` reconstruct with ``proof`` (``hash`` the domain's frame hash).
+
+    None when a rank lies outside the tree, when ``leaves`` is empty (nothing
     is authenticated) or when the proof is not consumed exactly.  A ``hash``
     that is not a SHA frame's raises ``ValueError``.
     """
 
     if not leaves or any(not 0 <= rank < count for rank in leaves):
-        return False
-    cursor = 0
+        return None
+    node = _node_of(domain_id, hash)
+    needed = 0
 
-    def sibling(level: int, index: int) -> bytes:
-        nonlocal cursor
-        if cursor >= len(proof):
-            raise IndexError
-        cursor += 1
-        return proof[cursor - 1]
+    def count_sibling(level: int, index: int) -> bytes:
+        nonlocal needed
+        needed += 1
+        return b""
 
-    try:
-        reconstructed = _fold(count, leaves, sibling, _node_of(domain_id, hash))
-    except IndexError:
-        return False
-    return cursor == len(proof) and reconstructed == root
+    # which siblings are read depends on the ranks alone, not on any digest
+    _fold(count, dict.fromkeys(leaves, b""), count_sibling, lambda *_: b"")
+    if needed != len(proof):
+        return None
+    siblings = iter(proof)
+    return _fold(count, leaves, lambda level, index: next(siblings), node)
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,5 +235,6 @@ __all__ = [
     "multiproof",
     "multiproof_cost",
     "multiproof_from_paths",
+    "multiproof_root",
     "verify_multiproof",
 ]

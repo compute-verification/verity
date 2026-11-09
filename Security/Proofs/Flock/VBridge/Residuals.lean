@@ -1,5 +1,25 @@
-import Proofs.Flock.VBridge.Karatsuba
-import Proofs.Flock.Soundness.Discharge.Hm.Word
+module
+
+public import Proofs.Flock.VBridge.Karatsuba
+public import Proofs.Flock.Soundness.Discharge.Hm.Word
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # V*'s residuals: sums of GF(2^128) products, summed leaf by leaf
@@ -22,6 +42,8 @@ The Python cited is `backends/flock/python/verity_flock/rec_residuals.py` (blob 
 (`Flock.HmNets.and`) and `commit` is
 `sha512.commit` (`Flock.HmNets.commitW`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 
@@ -71,7 +93,7 @@ def xorAll (xs : List (List Lin)) : List Lin := xs.foldl xorL (List.replicate 12
 no row. Past the end of `ops` it has no terms, where Python's index would raise. -/
 def opForms (S : GfS) (W V : List Lin) (k : ℕ) : List Lin := xorAll ((S.ops.getD k []).map (termForms W V))
 
-/-- `_leaves` (`rec_residuals.py:266-269`): the operands of `gf2k.karatsuba`'s ANDs (`gf2k.py:159-167`) on `a` and `b` of
+/-- `_leaves` (`rec_residuals.py:266-269`): the operands of `gf128.karatsuba`'s ANDs (`gf128.py:48-56`) on `a` and `b` of
 `2^n` forms each, in its order: the low halves' leaves, the high halves', then the halves' sums'. -/
 def leaves : ℕ → List Lin → List Lin → List (Lin × Lin)
   | 0, a, b => [(a.headD Lin.zero, b.headD Lin.zero)]
@@ -79,7 +101,7 @@ def leaves : ℕ → List Lin → List Lin → List (Lin × Lin)
     leaves n (a.take (2 ^ n)) (b.take (2 ^ n)) ++ leaves n (a.drop (2 ^ n)) (b.drop (2 ^ n)) ++
       leaves n (addL (a.take (2 ^ n)) (a.drop (2 ^ n))) (addL (b.take (2 ^ n)) (b.drop (2 ^ n)))
 
-/-- `gf2k.karatsuba`'s XORs (`gf2k.py:168-173`, `kara`'s) over its ANDs' results `l` (`3^n` of them, in `leaves`' order):
+/-- `gf128.karatsuba`'s XORs (`gf128.py:57-62`, `kara`'s) over its ANDs' results `l` (`3^n` of them, in `leaves`' order):
 the product's `2·2^n − 1` coefficients. `_recombine` (`rec_residuals.py:256-263`) runs them and `gf2k.reduce_forms` on
 the leaves as variables, so its `rec[k]` is the support of `reduceG (recomb 7 l)`'s form `k` in `l`. -/
 def recomb : ℕ → List Lin → List Lin
@@ -129,17 +151,17 @@ def wbit (w : ℕ → F128) (q : ℕ) : Bool := bitOf (w (q / 128)) (q % 128)
 def ofBits (f : ℕ → Bool) : F128 :=
   ((List.range 128).map fun j => if f j then F128.monomial j else 0).foldl (· + ·) 0
 
-/-- `gf2k._term_value` (`gf2k.py:236-244`) on the ports' elements. `["wt", i, u]`'s bit `j` is the circuit's,
+/-- `gf2k._term_value` (`gf2k.py:177-185`) on the ports' elements. `["wt", i, u]`'s bit `j` is the circuit's,
 `W[128 (i + j) + u]`, which for `u < 128` is `gf2k`'s bit `u` of `w[i + j]`. -/
 def termVal (w v : ℕ → F128) : Term → F128
   | .w i => w i
   | .v i => v i
   | .wt i u => ofBits fun j => wbit w (128 * (i + j) + u)
 
-/-- `gf2k.residuals`' `op` (`gf2k.py:253-259`): operand `k`'s value, its terms' sum. -/
+/-- `gf2k.residuals`' `op` (`gf2k.py:224-230`): operand `k`'s value, its terms' sum. -/
 def opVal (S : GfS) (val : Term → F128) (k : ℕ) : F128 := ((S.ops.getD k []).map val).foldl (· + ·) 0
 
-/-- `gf2k.residuals` (`gf2k.py:262-268`): a residual's value, its added terms' sum, then each product `ops[a]·ops[b]` added,
+/-- `gf2k.residuals` (`gf2k.py:232-240`): a residual's value, its added terms' sum, then each product `ops[a]·ops[b]` added,
 in `Flock.F128`. -/
 def resVal (S : GfS) (val : Term → F128) (r : Res) : F128 :=
   (r.mul.map fun ab => opVal S val ab.1 * opVal S val ab.2).foldl (· + ·) ((r.add.map val).foldl (· + ·) 0)

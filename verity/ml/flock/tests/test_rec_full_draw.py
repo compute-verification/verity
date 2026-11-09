@@ -1,7 +1,7 @@
-"""The recursive inner session's sample: the coin server answers ``Register`` with the verifier's full draw
-(`verity_flock.rec_live.full_draw`, the stratified law at K = the population, so every unit) and the session record keeps
-it as ``unit_draw``, which `verify` holds to its own law (``--stratified N --program --partition``). `full_draw` is checked
-against Lean's own derivation (``flock-verify draw`` at K = N), and the controls `rec_inner.py forge` makes of a drawn
+"""The recursive inner session's sample: the challenger answers ``Register`` with the verifier's full sample
+(`verity_flock.rec_live.full_draw`, the stratified sampling design at K = the population, so every unit) and the session record keeps
+it as ``unit_draw``, which `verify` holds to its own sampling design (``--stratified N --program --partition``). `full_draw` is checked
+against Lean's own derivation (``flock-verify draw`` at K = N), and the controls `rec_inner.py forge` makes of a sampled
 record (no sample, a unit dropped) against what they change. `inner_draw` reads a record's sample as the verifier does and
 refuses a record without one, and `rec_vstage stage` refuses to stage V* over such a session."""
 from __future__ import annotations
@@ -45,7 +45,7 @@ def test_a_draw_is_a_unit_draw_object():
 def _programs():
     sys.path.insert(0, str(HERE))
     import stratified_agree as SA
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     t = SA._templates(2)
     for members in ([(t[0], 5)], [(t[0], 2), (t[1], 3), (t[0], 1)]):
@@ -56,7 +56,7 @@ def _programs():
 
 
 def test_the_full_draw_is_every_unit_and_each_stratum_whole():
-    from verity.core.protocols.sampled_proofs.one_stage import draw as D
+    from verity.core.protocols.spot.one_stage import draw as D
 
     for prog, q in _programs():
         d = RL.full_draw(prog, q)
@@ -68,9 +68,9 @@ def test_the_full_draw_is_every_unit_and_each_stratum_whole():
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_full_draw_is_the_lean_verifiers_own_at_k_the_population(tmp_path):
-    """`verify --stratified N` derives the law from its own program and partition object and draws by it: at K = N every
+    """`verify --stratified N` derives the sampling design from its own program and partition object and samples by it: at K = N every
     stratum samples all its units, whatever the coins, so its sample is `full_draw`'s, byte for byte once canonical."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity.ml.circuits.codec import canonical_json, encode_program
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)

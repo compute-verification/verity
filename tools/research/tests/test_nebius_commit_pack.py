@@ -137,7 +137,7 @@ def test_a_leased_commit_mounts_its_queues_lease_pool_and_requests_no_gpu(dispat
 
 
 def test_a_node_2_build_resubmits_its_commit_with_the_items_lease_and_pinned_template(dispatch, tmp_path, monkeypatch):
-    """n2_build.sh's Commit submit dropped the item's `lease` (4 of 10 leased items came back unleased, Oct 1) and its
+    """n2_build.sh's Commit submit must keep the item's `lease` (a leased item must not come back unleased) and its
     `template_sha`; its arguments must give dispatch.py's `submit` the item's own fields."""
     code = re.search(r"python3 - \"\$item\" << 'EOF'\n(.*?)\nEOF\n", (NEBIUS / "n2_build.sh").read_text(), re.S).group(1)
     tree, sha = _tree(tmp_path / "t"), dispatch.load_template("config-run")[1]
@@ -358,7 +358,7 @@ def test_the_pack_hold_sends_the_spool_out_deletes_unstarted_pods_and_drains_at_
 
 
 def test_a_pack_pod_starts_only_when_a_queued_entry_fits_the_bundle_cap(dispatch, tmp_path, monkeypatch):
-    """A pod that can claim nothing idles 3 min and exits: 66 pack pods (181 GPU-min) ran no Commit on Oct 1."""
+    """A pod that can claim nothing idles 3 min and exits, a GPU held for no Commit."""
     monkeypatch.setenv("PACK_BUNDLE_GLOBS", f"{tmp_path}/cov/*/commit/replay_bundle_p*")
     monkeypatch.setenv("PACK_BUNDLE_CAP_GB", "100")
     monkeypatch.setenv("PACK_BUNDLE_EST_GB", "60")
@@ -389,7 +389,7 @@ def test_a_pack_pod_starts_only_when_a_queued_entry_fits_the_bundle_cap(dispatch
 def test_no_pack_pod_starts_or_claims_from_1210z_and_none_runs_past_1235z(monkeypatch, path, drain):
     before = dict(os.environ)
     mod = _load(NEBIUS / path, f"windows_{drain[1]}", monkeypatch)
-    assert dict(os.environ) == before                    # on node 1 its dispatch.env reached the next tests (#925's train)
+    assert dict(os.environ) == before                    # on node 1 its dispatch.env would reach the next tests
     day = 1790812800                                     # 2026-10-01T00:00:00Z
 
     def at(h: int, m: int) -> float:
@@ -499,8 +499,8 @@ def test_the_bundle_cap_counts_the_commits_running_and_the_candidate(pilot):
 
 
 def test_a_full_pod_of_b8_1k_commits_fits_the_cap_with_each_models_measured_bundle(pilot):
-    """At 150 GB and 120 GB for every model, one B8 1k Commit ran at a time: the grid's bundles measured 25-57 GB, and the cap
-    held small Commits for 70-110 min with 6 of node 1's 8 GPUs empty (circuits, Oct 1)."""
+    """At 150 GB and 120 GB for every model, one B8 1k Commit runs at a time: the grid's bundles measure 25-57 GB, and the cap
+    would hold small Commits back with most of node 1's GPUs empty."""
     def e(model):
         return {"env": {"ROW": f"{model}__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager"}}
     small, phi3 = e("qwen3-06b"), e("phi3-mini")

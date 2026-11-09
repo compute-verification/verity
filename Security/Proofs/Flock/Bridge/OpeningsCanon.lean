@@ -1,11 +1,14 @@
-import Proofs.Flock.Bridge.Canon
+module
+
+public import Proofs.Flock.Bridge.Canon
 
 /-!
-# A drawn unit's openings are canonical (`Bridge.OpeningsCanonTarget`, proved)
+# A sampled proof block's openings are canonical (`Bridge.OpeningsCanonTarget`, proved)
 
-`OpeningsCanonTarget` asks `canonAt` at every committed wire of a drawn unit: at the constant `oneG` and the zero
-`zeroG` (`Bridge.constsOf`), the opening's bit is the constant; at any other wire, the opening is canonical
-(`canonOpen`), which asks the wire to have a row.
+`OpeningsCanonTarget` asks `canonAt` at every committed wire of a sampled proof block: at a constant (`Bridge.constsOf`), the
+opening's bit is the constant; at any other wire, the opening is canonical (`canonOpen`), which asks the wire to have a
+row. A sampled proof block's committed constants are the constant `oneG` and the zero `zeroG`: an input no unit reads is in no
+unit's `io` (`Bridge.owner_ne_none_of_io`).
 
 * `Bridge.canonOpenH rows g v y`: `g` has no row, or the opening is canonical there (`canonOpen`);
 * `Bridge.OpeningsCanonTargetH`: `OpeningsCanonTarget`'s second clause at `canonOpenH`;
@@ -14,13 +17,15 @@ import Proofs.Flock.Bridge.Canon
   witness holds there (`Readers.ofBits`'s `rowOf`), canonical by `rowShaped_rowOf` at `portRowW q = 16 · words ≤ W`,
   and whose salt is the witness's bytes at `saltAt`, `List.ofFn` over `Fin 192`;
 * `Bridge.openingsCanon_row`: the same, as `canonOpen`, at every wire that has a row;
-* `HiddenExec.rowOfH_ne_none_of_io`: a committed wire of a drawn unit other than the constant and the zero has a row
+* `HiddenExec.rowOfH_ne_none_of_io`: a committed wire of a sampled proof block other than the constant and the zero has a row
   (`Layout.single_gate`; a computed one is a returned output's, `OutsOut`, so an output row's bit);
 * `Bridge.openingsCanon_const`: at the constant and the zero, the opening's bit is the decoder's (`opening_spec`), which
   reads the unit's constant column, 1, or a zero column, 0, at the public place (`UnitPlace.decode_one`,
-  `constCols_keyProgH`, `zeroCols_keyProgH`);
+  `constCols_keyProgH`, `zeroCols_keyProgH`); a constant input no unit reads isn't the unit's;
 * `Bridge.openingsCanon : Bridge.OpeningsCanonTarget`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -35,6 +40,19 @@ theorem bytesAt_length {m N : ℕ} (z) (a : Fin N → Fin 8 → Fin (2 ^ m)) :
     (FlockSoundness.Binding.bytesAt (m := m) z a).length = N := by
   simp [FlockSoundness.Binding.bytesAt]
 
+/-- **A committed input of unit `u` has an owner**: an input wire in `u`'s `io` is one `u` reads. -/
+theorem owner_ne_none_of_io {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n}
+    {u : Fin n} {g : Fin C.N} (hg : g ∈ P.io u) (hin : P.unit g = none) : owner P g ≠ none := by
+  unfold FlockSoundness.Audit.Partition.io at hg
+  obtain ⟨-, hgu | ⟨h, hh, hga⟩⟩ := Finset.mem_filter.1 hg
+  · rw [hin] at hgu
+    cases hgu
+  · intro ho
+    unfold owner at ho
+    have := List.find?_eq_none.1 ho u (List.mem_finRange u)
+    simp only [decide_eq_true_eq, not_exists, not_and] at this
+    exact this h hh hga
+
 end Flock.Bridge
 
 namespace FlockSoundness.Discharge.HiddenExec
@@ -46,7 +64,7 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {Reg : Type} {mPts : 
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length} {si : SitesH plan tab}
 
-/-- **A committed wire of a drawn unit other than the constant and the zero has a row**: a committed gate with no row
+/-- **A committed wire of a sampled proof block other than the constant and the zero has a row**: a committed gate with no row
 is the zero, the constant or a computed gate of the unit (`Layout.single_gate`), and a computed one is a returned
 output's (`OutsOut`), so an output row's bit (`outBitRow_ne_none`), as in `keyProgH_valPinned`. -/
 theorem rowOfH_ne_none_of_io
@@ -87,7 +105,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkSession
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
-/-- **A drawn unit's openings are canonical where its wires have rows**, at `EndToEndHidden`'s session:
+/-- **A sampled proof block's openings are canonical where its wires have rows**, at `EndToEndHidden`'s session:
 `OpeningsCanonTarget` at `Bridge.canonOpenH`. -/
 def _root_.Flock.Bridge.OpeningsCanonTargetH : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -132,7 +150,7 @@ theorem _root_.Flock.Bridge.openingsCanonH : Bridge.OpeningsCanonTargetH := by
   exact Bridge.rowShaped_rowOf rfl
     ((Finset.le_sup (f := Discharge.Layout.portRowW D.unroll) (Finset.mem_univ q)).trans (Nat.le_succ _)) b
 
-/-- **At a wire with a row, a drawn unit's opening is canonical** (`canonOpen`), at `OpeningsCanonTargetH`'s session. -/
+/-- **At a wire with a row, a sampled proof block's opening is canonical** (`canonOpen`), at `OpeningsCanonTargetH`'s session. -/
 theorem _root_.Flock.Bridge.openingsCanon_row
     (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -156,7 +174,7 @@ theorem _root_.Flock.Bridge.openingsCanon_row
   intro P vb Cc rows S R u hu M hM g hg hr
   exact (Bridge.openingsCanonH n Reg I ht D hD hU pub hpub hpt hscope kd dj S₀ d₀ y₀ S R u hu M hM g hg).resolve_left hr
 
-/-- **At the constant and the zero, a drawn unit's opening carries the constant**, at `OpeningsCanonTarget`'s session:
+/-- **At the constant and the zero, a sampled proof block's opening carries the constant**, at `OpeningsCanonTarget`'s session:
 the opening's bit is the decoder's (`opening_spec`), which at the public place reads the unit's constant column, `1`
 (`UnitPlace.decode_one`, `constCols_keyProgH`), or a zero column, `0` (`zeroCols_keyProgH`). -/
 theorem _root_.Flock.Bridge.openingsCanon_const
@@ -191,7 +209,18 @@ theorem _root_.Flock.Bridge.openingsCanon_const
       (Discharge.Layout.outsOf D.unroll hU n) S R u hu c (by rw [hc, h1]; exact Finset.mem_singleton_self _)
     rw [← hc, hone]
     exact UnitPlace.decode_one _ hz
-  · cases hb
+  · rcases h2 with h2 | ⟨hlt, hown⟩
+    swap
+    · exact absurd hown (Bridge.owner_ne_none_of_io hg
+        (Discharge.Layout.unit_uniform_input (k := Discharge.Placed.inGates n (Discharge.Layout.keyB D.unroll hU))
+          (R := Discharge.Placed.circuitRows D.unroll hU)
+          (ins := Discharge.Placed.insOf n (Discharge.Layout.keyB D.unroll hU)
+            (Discharge.Aliased.keyIdx D.unroll (Discharge.Layout.keyB D.unroll hU)))
+          (one := Discharge.Placed.oneGate n (Discharge.Layout.keyB D.unroll hU))
+          (hone := Discharge.Placed.insOf_ne_one n (Discharge.Layout.keyB D.unroll hU)
+            (Discharge.Aliased.keyIdx D.unroll (Discharge.Layout.keyB D.unroll hU)))
+          n g hlt))
+    cases hb
     have hzero := FlockSoundness.Discharge.HiddenExec.zeroCols_keyProgH hU
       (sitesShHJ_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope)
       (Discharge.Layout.outsOf D.unroll hU n) S R u hu c (by rw [hc, h2]; exact Finset.mem_singleton_self _) _ hz
@@ -222,7 +251,7 @@ theorem _root_.Flock.Bridge.openingsCanon : Bridge.OpeningsCanonTarget := by
         (FlockSoundness.Discharge.Hidden.parse_untyped (FlockSoundness.Discharge.ZkBind.zkTyped ht)
           (Flock.Desc.parse_flat hD)).1
         (Discharge.Layout.scopeOkH_spec hU hscope).1 (Discharge.Layout.scopeOkH_spec hU hscope).2.2)
-      hu hg h1 h2 ?_
+      hu hg h1 (fun e => h2 (Or.inl e)) ?_
     simpa [rows] using h
   · exact h
 

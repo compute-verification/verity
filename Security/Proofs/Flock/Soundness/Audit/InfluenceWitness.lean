@@ -1,14 +1,15 @@
-import Proofs.Flock.Soundness.Audit.Influence
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Tactic.FinCases
-import Mathlib.Tactic.Positivity
+module
+
+public import Proofs.Flock.Soundness.Audit.Influence
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Tactic.FinCases
+public import Mathlib.Tactic.Positivity
 
 /-!
 # The influence theorems are not vacuous
 
-The witnesses (bc-89770364: Phase 19g, X-IC-1, and the two-stage and exfiltration instances of
-19i, X-IR-4): every hypothesis of the influence theorems can be met, together. `W.lemma47`'s conclusion is also not
-trivial; the others show only that the hypotheses can be met.
+Every hypothesis of the influence theorems can be met, together. `W.lemma47`'s conclusion is also not trivial; the
+others show only that the hypotheses can be met.
 
 * `W.lemma47` (`outputs_eq_of_separates`): a four-gate circuit, input `0`, gates `1 = ¬0` and `3 = ¬0` in unit `0`, gate
   `2 = ¬1` in unit `1`, outputs `{2, 3}`, delivered wires `D = {2}`. `K = {1}` separates `B = {0}` from `D`, and is
@@ -16,15 +17,14 @@ trivial; the others show only that the hypotheses can be met.
   the same value on `D`. `W.count` is the count `card_delivered_le` gives.
 * `Gen.harm_witness`: the hypotheses of `card_influenceSet_le_harm` hold on any partition and law, with the exits as
   separators and `hb u = card (exits {u})` (`Gen.exits_card_le`).
-* `A.influence`, `A.accepts`: a law that draws nothing, a session that always accepts and the honest committed
-  transcript meet `KnowledgeSound 0`, `LinkSound 0` and `AnchorsSound 0`, so `audit_influence` applies, and the audit
+* `A.influence`, `A.accepts`: a sampling design that samples nothing, a session that always accepts and the honest committed
+  transcript meet `KnowledgeSound 0`, `BindSound 0` and `AnchorsSound 0`, so `audit_influence` applies, and the audit
   accepts with probability `1`.
-* `Two.influence`, `Two.accepts`: the same for the two-stage audit. `W`'s partition refines itself, both stages draw
-  nothing, and `KnowledgeSound 0`, `LinkSound 0` and `AnchorsSound₂ 0` hold, so `twoStage_influence` applies, and the
-  audit accepts with probability `1`.
 * `Ex.exfil`: `audit_exfiltration`'s hypotheses hold together, for a one-bit message, with `A`'s audit at `0`, `Gen`'s
   exits, the harm bound `Ex.hH` (each unit's exported width), and `k = n = 2`, where `miss 3 = 0 < δ` (`Ex.hk`).
 -/
+
+@[expose] public section
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset
 open scoped ENNReal
@@ -33,13 +33,13 @@ namespace FlockSoundness.Audit.InfluenceWitness
 
 namespace W
 
-abbrev ops : Fin 4 → Op 4
+abbrev ops : Fin 4 → Verity.Boolean.Op 4
   | 0 => .input
   | 1 => .not 0
   | 2 => .not 1
   | 3 => .not 0
 
-abbrev C : Circuit where
+abbrev C : Verity.Boolean.Circuit where
   N := 4
   op := ops
   topo := by decide
@@ -136,7 +136,7 @@ theorem wrong_sub (Z : Fin C.N → Bool) (h1 : Z 1 = false) (h2 : Z 2 = true) : 
 def X : Fin C.N → Bool := ![false, false, true, false]
 def Y : Fin C.N → Bool := ![false, false, true, true]
 
-/-- **Lemma 4.7 is not vacuous**: two different transcripts, each with a wrong unit, agree on the delivered wire. -/
+/-- **Lemma 4.7 is not vacuous**: two different transcripts, each with an incorrect proof block, agree on the delivered wire. -/
 theorem lemma47 : X 2 = Y 2 ∧ X ≠ Y ∧ P.wrong X ≠ ∅ := by
   refine ⟨P.outputs_eq_of_separates hK hD hsep (inputs X rfl) (inputs Y rfl) (wrong_sub X rfl rfl)
     (wrong_sub Y rfl rfl) ?_ 2 (by simp [D]), ?_, ?_⟩
@@ -155,7 +155,7 @@ end W
 
 namespace Gen
 
-variable {C : Circuit} {n : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ}
 
 /-- The exits of a set are the union of its units' exits. -/
 theorem exits_card_le (P : Partition C n) (B : Finset (Fin n)) :
@@ -207,7 +207,7 @@ theorem hks : (P.analysis Xc ext).KnowledgeSound 0 := by
   rintro ok ⟨_, u, _, hu, _⟩
   exact notMem_empty u hu
 
-theorem hlink : (P.analysis Xc ext).LinkSound 0 := by
+theorem hlink : (P.analysis Xc ext).BindSound 0 := by
   intro R τ tgt
   refine (avg_mono fun ω => ?_).trans (avg_const (0 : ℝ≥0∞)).le
   refine (prob_mono (q := fun _ => False) ?_ _ _).trans (prob_false _ _).le
@@ -232,76 +232,6 @@ theorem accepts (σ : Strategy (audit L Unit session)) :
   simp [audit, prob, session, Game.map, L]
 
 end A
-
-namespace Two
-
-open W
-
-/-- `W`'s partition refines itself: each unit is its own replay unit. -/
-def r : P.Refines P := ⟨id, fun g => by simp⟩
-
-/-- Both stages draw nothing. -/
-def L : Law 2 := { Ω := Unit, draw := fun _ => ∅ }
-
-def L₂ : Fin 2 → Law 2 := fun _ => L
-
-abbrev Int : Finset (Fin 2) → Type := fun _ => Unit
-
-def session : Finset (Fin 2) → Unit → (S₁ : Finset (Fin 2)) → Int S₁ → Game Bool := fun _ _ _ _ => .ret true
-
-/-- The honest transcript on the anchors `a`. -/
-def H : Fin C.N → Bool := ![false, true, false, true]
-
-def X : (R : Unit) → Cont₁ L L₂ Unit Int session R → (Fin C.N → Bool) := fun _ _ => H
-
-def Yint : (R : Unit) → (ω₁ : L.Ω) → (I : Int (L.draw ω₁)) → Cont₂ L L₂ Unit Int session R ω₁ I →
-    (Fin C.N → Bool) := fun _ _ _ _ => H
-
-def ext : (S : Finset (Fin 2)) → (R : Unit) → (S₁ : Finset (Fin 2)) → (I : Int S₁) →
-    Strategy (session S R S₁ I) → Fin 2 → Option (Fin C.N → Bool) := fun _ _ _ _ _ _ => none
-
-theorem fine_empty (ω₁ : L.Ω) (ω₂ : ∀ u, (L₂ u).Ω) : fineDraw L L₂ ω₁ ω₂ = ∅ := by
-  simp [fineDraw, L]
-
-theorem hks : (r.analysis₂ X Yint ext).KnowledgeSound 0 := by
-  intro R c tgt
-  refine (avg_mono fun ω₁ => (avg_mono fun ω₂ => ?_).trans (avg_const (0 : ℝ≥0∞)).le).trans
-    (avg_const (0 : ℝ≥0∞)).le
-  refine (prob_mono (q := fun _ => False) ?_ _ _).trans (prob_false _ _).le
-  rintro ok ⟨_, v, _, hv, _⟩
-  rw [fine_empty] at hv
-  exact notMem_empty v hv
-
-theorem hlink : (r.analysis₂ X Yint ext).LinkSound 0 := by
-  intro R c tgt
-  refine (avg_mono fun ω₁ => (avg_mono fun ω₂ => ?_).trans (avg_const (0 : ℝ≥0∞)).le).trans
-    (avg_const (0 : ℝ≥0∞)).le
-  refine (prob_mono (q := fun _ => False) ?_ _ _).trans (prob_false _ _).le
-  rintro ok ⟨_, v, _, hv, _⟩
-  rw [fine_empty] at hv
-  exact notMem_empty v hv
-
-theorem hin : Partition.AnchorsSound₂ (C := C) X a 0 := by
-  intro σ
-  refine (prob_mono (q := fun _ => False) ?_ _ _).trans (prob_false _ _).le
-  rintro o ⟨_, hno⟩
-  exact hno (inputs H rfl)
-
-/-- **`twoStage_influence` is not vacuous**: its hypotheses, `AnchorsSound₂` among them, hold at `0`. -/
-theorem influence (δ : ℝ≥0∞) (σ : Strategy (twoStage L L₂ Unit Int session)) :
-    prob (fun o => o.1 = true ∧
-        Partition.out D (X (reg₂ σ) (cont₁ σ)) ∉ P.influenceSet D (effEscape L L₂ r.parent) a δ)
-      (twoStage L L₂ Unit Int session) σ ≤ δ + 0 + 0 + 0 :=
-  r.twoStage_influence X Yint ext hks hlink hin δ σ
-
-/-- The two-stage audit accepts with probability `1`. -/
-theorem accepts (σ : Strategy (twoStage L L₂ Unit Int session)) :
-    prob (fun o => o.1 = true) (twoStage L L₂ Unit Int session) σ = 1 := by
-  simp [twoStage, prob, session, Game.map, L, L₂]
-  convert ENNReal.mul_inv_cancel (a := ((Fintype.card (Fin 2 → Unit) : ℕ) : ℝ≥0∞)) (by simp) (by simp) using 3
-  all_goals rfl
-
-end Two
 
 namespace Ex
 

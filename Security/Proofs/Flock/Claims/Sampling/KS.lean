@@ -1,6 +1,49 @@
-import Proofs.Flock.Claims.Sampling.Bext
-import Proofs.Flock.Claims.Sampling.Escape
-import Proofs.Flock.Claims.Aggregate
+module
+
+public import Proofs.Flock.Claims.Aggregate
+public import Proofs.Flock.Claims.Sampling.Bext
+public import Proofs.Flock.Claims.Sampling.Escape
+public import Proofs.Flock.Claims.Sampling.Wait
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ERep
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Sampling.Binding
+import Proofs.Flock.Claims.Sampling.Cost
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # The sampling block's KS from Flock's KS
@@ -11,9 +54,9 @@ session; keep the openings that pass. This file proves it from Flock's KS at the
 the deployed sampled verifier, each a hypothesis to discharge there.
 
 * `SessionKS`, `DrawLaw`, `Refuses`, `InteriorFixed`, `SessionOpens`: **the hypotheses**. Flock's KS at the session a
-  selection picks among the checked units; the draw law over `Design.Pa` (`drawLaw_of_slots` proves it of the deployed
-  draw, `Sampling.Select.DrawLaw`); the scope refusal; the interior commitments fixed by the first stage; and that a
-  checked unit's Flock witness reveals openings making its proof unit correct.
+  selection picks among the checked units; the sampling design over `Design.Pa` (`drawLaw_of_slots` proves it of the deployed
+  sample, `Sampling.Select.DrawLaw`); the scope refusal; the interior commitments fixed by the first stage; and that a
+  checked unit's Flock witness reveals openings making its proof block correct.
 * `SlotsCover`, `SessionOpensSlots`: **sessions that cover several checked units**. Every checked unit has the rounds
   and session of the unit at a slot below `S x` (one session per unit at `S = nPU D`, `slotsCover_units`; one session
   over every checked unit at `S = 1`, `slotsCover_one`), and each slot's session has one Flock witness revealing what
@@ -24,11 +67,14 @@ the deployed sampled verifier, each a hypothesis to discharge there.
 * `split`: **the deterministic half**. At an accepted run whose extraction fails, the failure event `Fails` holds or
   the extractor's own calls collide (`CommitmentScheme.Binds`).
 * `inner_bad_le`, `outer_bad_le`, `Pr_fails_le`: **the probabilistic half**. Each wait's truncation and union bound
-  (`wait_bad_le`), its union's size against the slack `c` (`k = 2^40·(2·n_PU + 1)`), the draw law and Flock's
+  (`wait_bad_le`), its union's size against the slack `c` (`k = 2^j·(2·n_PU + 1)`, `rpow_le_slack`), the sampling
+  design and Flock's
   error at the inner wait, averaged over the first stage and the tapes: `Pr[Fails] ≤ κ(δ) + √(γ·Pr[B])`.
 * `KS_of`, `Bits_of`, `KSCount_of_KS`: **the claims**: `KS` through `KSLin_of_ownColl`; `Bits` with the extractor's
   costs; and the count form, at the miss clamped at `0`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
@@ -176,7 +222,7 @@ section Extractor
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **A checked proof unit's `E^rep`** at the run `r`, on the prover's runs `run'`: Flock's waits on the unit's session
+/-- **A checked proof block's `E^rep`** at the run `r`, on the prover's runs `run'`: Flock's waits on the unit's session
 (`unitExt`'s), `none` when `r` shows no session for `u` or the waits find no witness. -/
 noncomputable def unitWit (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
     (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) :
@@ -321,9 +367,9 @@ theorem mem_found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ 
 
 end Extractor
 
-/-! ## The faulty set's proof units -/
+/-! ## The incorrect set's proof blocks -/
 
-/-- **A faulty unit is wrong at any interior values**: at slot `v` of the faulty set, whatever interior values `ι`, its
+/-- **An incorrect proof block is wrong at any interior values**: at slot `v` of the incorrect set, whatever interior values `ι`, its
 proof block `b` is not correct on `ref_ι`. -/
 theorem faulty_wrong {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v : ℕ}
     (hv : v ∈ faulty H Cm s P w) (ι : ℕ → Bool) :
@@ -363,7 +409,7 @@ def SessionKS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
                   unitWit H D decode x (run H P D.V x ω) u (forkOn (D.stage2 x) r p.1) (p.2 i) = none) ≤
             κF D x + Real.sqrt (γF D x * β ω r)
 
-/-- **The draw law**: on a statement in scope, for each set `B` of proof blocks, a weight `esc` of the first-stage coins
+/-- **The sampling design**: on a statement in scope, for each set `B` of proof blocks, a weight `esc` of the first-stage coins
 bounds, at each, the probability over the second stage that the checked units (the first `n_PU`) miss every slot
 `v ∈ B`, and averages at most `P_a(B)`. -/
 def DrawLaw (D : Deploy Coin Col T) : Prop :=
@@ -549,7 +595,7 @@ theorem run_msgs_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (V : Verifie
   · rfl
 
 /-- **`InteriorFixed` from the interiors' place in the run**: where the second stage starts at round `t₀ x` and the
-interior roots a run shows are read off its first `t₀ x` messages (the interiors are registered after the draw and
+interior roots a run shows are read off its first `t₀ x` messages (the interiors are registered after the sample and
 before any proof), fresh second-stage coins keep them. -/
 theorem interiorFixed_of_prefix {Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T)
     (iroots : Msg → Seen → ℕ → List Msg) (t₀ : Msg → ℕ) (hst : ∀ x, ∀ t ∈ D.stage2 x, t₀ x ≤ t.val)
@@ -598,12 +644,12 @@ def BadOuter (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Co
     AllBad (fun d => (run' (g d)).out = .acc) (D.k x)
       (fun d u => ∀ v ∈ B, ¬ Good H D decode x run' (g d) v u) ((List.finRange (D.cap x)).map e.1) e.2
 
-/-- The faulty sets the relation at `δ` refuses: those of acceptance probability at most `δ`. -/
+/-- The incorrect sets the relation at `δ` refuses: those of acceptance probability at most `δ`. -/
 noncomputable def S₁ (d : Design) (Pt : Partition) (δ : ℝ) : Finset (Finset ℕ) :=
   (range Pt.blocks.length).powerset.filter fun B => d.Pa Pt B ≤ δ
 
 /-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some
-refused faulty set `B`, every kept outer run is bad for `B`. -/
+refused incorrect set `B`, every kept outer run is bad for `B`. -/
 def Fails (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (δ : ℝ) (x : Msg)
     (run' : (Fin (D.V.k x) → Coin) → Trace) (c : ECoins D x) : Prop :=
   ∃ s Pt, D.parse x = some s ∧ D.partition s = some Pt ∧ InScope Pt s ∧
@@ -613,7 +659,7 @@ def Fails (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) 
         (toE1 D x c))
 
 /-- **The split**: at an accepted run whose extraction fails, the failure event holds or the extractor's own calls
-collide. Otherwise take `B` the assembled witness's faulty set, refused at `δ`, and a kept outer run `r`; at the
+collide. Otherwise take `B` the assembled witness's incorrect set, refused at `δ`, and a kept outer run `r`; at the
 interior values the kept openings under `r`'s interior roots give, the proof block at each `v ∈ B` is wrong
 (`faulty_wrong`); a kept inner run that checks `v` and finds its witness would make it correct (`SessionOpens`, the
 kept openings agreeing), so `r` is bad for `B`. -/
@@ -692,22 +738,28 @@ end Split
 theorem card_S₁_le (d : Design) (Pt : Partition) (δ : ℝ) : (S₁ d Pt δ).card ≤ 2 ^ Pt.blocks.length :=
   (card_filter_le _ _).trans (by rw [card_powerset, card_range])
 
-/-- At most `2^m` sets, `m ≤ M + 1`, spread over `k = 2^40·(M + 1)` accepted runs cost at most the slack. -/
-theorem card_rpow_le_slack {N m M : ℕ} (hN : N ≤ 2 ^ m) (hm : m ≤ M + 1) :
-    (N : ℝ) ^ (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ)) ≤ slack := by
-  have hk : (0 : ℝ) < ((2 ^ 40 * (M + 1) : ℕ) : ℝ) := by positivity
-  calc (N : ℝ) ^ (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ)) ≤ ((2 : ℝ) ^ m) ^ (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ)) :=
+theorem one_le_slack : 1 ≤ slack := by
+  unfold slack
+  exact Real.one_le_rpow (by norm_num) (by positivity)
+
+/-- At most `2^m` sets spread over `k ≥ 2^j·m` accepted runs (`j = slackExp`) cost at most the slack. -/
+theorem rpow_le_slack {N m k : ℕ} (hN : N ≤ 2 ^ m) (hk : 2 ^ slackExp * m ≤ k) :
+    (N : ℝ) ^ (1 / (k : ℝ)) ≤ slack := by
+  rcases Nat.eq_zero_or_pos k with rfl | hk0
+  · rw [Nat.cast_zero, div_zero, Real.rpow_zero]
+    exact one_le_slack
+  have hkR : (0 : ℝ) < k := by exact_mod_cast hk0
+  have hj : (0 : ℝ) < 2 ^ slackExp := by positivity
+  calc (N : ℝ) ^ (1 / (k : ℝ)) ≤ ((2 : ℝ) ^ m) ^ (1 / (k : ℝ)) :=
         Real.rpow_le_rpow (Nat.cast_nonneg _) (by exact_mod_cast hN) (by positivity)
-    _ = (2 : ℝ) ^ ((m : ℝ) * (1 / ((2 ^ 40 * (M + 1) : ℕ) : ℝ))) := by
+    _ = (2 : ℝ) ^ ((m : ℝ) * (1 / (k : ℝ))) := by
         rw [← Real.rpow_natCast, ← Real.rpow_mul (by norm_num)]
     _ ≤ slack := by
         unfold slack
         refine Real.rpow_le_rpow_of_exponent_le (by norm_num) ?_
-        rw [Real.rpow_neg (by norm_num), mul_one_div, div_le_iff₀ hk]
-        have hm' : (m : ℝ) ≤ M + 1 := by exact_mod_cast hm
-        push_cast
-        norm_num
-        nlinarith
+        rw [Real.rpow_neg (by norm_num), Real.rpow_natCast, mul_one_div, div_le_iff₀ hkR, ← div_eq_inv_mul,
+          le_div_iff₀ hj, mul_comm]
+        exact_mod_cast hk
 
 /-! ## The failure event's probability -/
 
@@ -718,9 +770,8 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- The slack bound at the waits' `k`. -/
 theorem rpow_k_le_slack (D : Deploy Coin Col T) (x : Msg) {N m : ℕ} (hN : N ≤ 2 ^ m)
-    (hm : m ≤ 2 * nPU D x + 1) : (N : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack := by
-  unfold Deploy.k
-  exact card_rpow_le_slack hN hm
+    (hm : m ≤ 2 * nPU D x + 1) : (N : ℝ) ^ (1 / (D.k x : ℝ)) ≤ slack :=
+  rpow_le_slack hN (Nat.mul_le_mul_left _ hm)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem nPU_eq {D : Deploy Coin Col T} {x : Msg} {s : AuditStatement} {Pt : Partition} (hs : D.parse x = some s)
@@ -814,7 +865,7 @@ theorem inner_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
 
 set_option synthInstance.maxSize 1024 in
 omit [Inhabited Coin] in
-/-- **One tape's outer wait**: on a statement in scope at `(s, P)`, where the draw law holds and the checked unit any
+/-- **One tape's outer wait**: on a statement in scope at `(s, P)`, where the sampling design holds and the checked unit any
 selection picks at first-stage coins `r` finds no witness with probability at most `κs(r)`, the outer wait (times its
 acceptance) comes up short or, for some refused `B`, keeps only runs bad for `B`, with probability at most
 `T + c·(T + c·(δ + E[κs]))`, `T = 2k/K + e^{−k/8}`. -/
@@ -942,7 +993,7 @@ theorem Pr_fails_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
 
 set_option synthInstance.maxSize 1024 in
 /-- **Sampling: KS from Flock's KS.** Flock's KS at the checked units' sessions (`SessionKS`), the trace commitment's
-binding at `H`, and the deployed sampled verifier's named facts (the draw law, what a unit's Flock witness reveals,
+binding at `H`, and the deployed sampled verifier's named facts (the sampling design, what a unit's Flock witness reveals,
 the interior commitments fixed by the first stage, the scope refusal) give the block's `KS`: the split
 (`split`) puts a failed extraction at an accepted run in the failure event or an own-call collision, and the failure
 event has probability at most `κ(δ) + √(γ·Pr[B])` (`Pr_fails_le`). -/
@@ -976,7 +1027,7 @@ theorem Pa_le_miss (d : Design) (P : Partition) {t : ℕ} {B : Finset ℕ} (hB :
   exact le_ciSup (f := fun B : {B : Finset ℕ // B ⊆ range P.blocks.length ∧ t ≤ B.card} => d.Pa P B.1)
     (Set.finite_range _).bddAbove ⟨B, hB, ht⟩
 
-/-- **Sampling: the count form from KS**: `KS` at `δ = max(0, miss(t))` (`missAt`), a faulty set in `M_δ` having
+/-- **Sampling: the count form from KS**: `KS` at `δ = max(0, miss(t))` (`missAt`), an incorrect set in `M_δ` having
 fewer than `t` units (`Pa_le_miss`). -/
 theorem KSCount_of_KS {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D) : KSCount H D := by
   intro t decode hdec x hx Ω _ _ P

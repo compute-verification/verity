@@ -1,9 +1,12 @@
-import Definitions.Core.Guarantees.Circuit
+module
+
+public import Definitions.Core.Guarantees.Circuit
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # Lemmas about circuits and partitions
 
-Evaluation unfolds one gate at a time (`run_eq`), and the partition lemmas C-Flock's audit uses, for gates of any
+Evaluation unfolds one gate at a time (`run_eq`), and the partition lemmas Flock's audit uses, for gates of any
 width:
 
 * `compose`: if every unit is correct and the committed inputs are the anchors' values, every committed wire carries its
@@ -14,6 +17,8 @@ width:
   inside it, whatever the values on the coarse unit's interior;
 * `Containment.implementation`: a circuit that contains `C` implements it.
 -/
+
+@[expose] public section
 
 namespace Verity
 

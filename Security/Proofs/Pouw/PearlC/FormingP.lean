@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.FormingPDefs
-import Proofs.Pouw.PearlC.AtomErr
-import Definitions.Pouw.PearlC.Sm120
+module
+
+public import Definitions.Pouw.PearlC.FormingPDefs
+public import Proofs.Pouw.PearlC.AtomErr
+public import Definitions.Pouw.PearlC.Sm120
 
 /-!
 # P3 over a `Pipeline`: the step's error at any width, and sm_120's atom-mix
@@ -26,6 +28,8 @@ statement) and at sm_120's `w = 26`, and carries the flat-pair instances to `ato
 The width-generic alignment and normalization (`alignedW_value`, `normalizeW_spec`) are proved here rather than taken
 from `PeelExactProofs`' width-26 lemmas, since the step lemma is parametric in `w`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FormingP
 
@@ -103,9 +107,6 @@ theorem alignedW_natAbs_lt (w : ℕ) (E : ℤ) (t : Term) (hm : t.mag < 2 ^ 25) 
 
 /-- Truncation toward zero to `p` significant bits (`trunc14` at `p = 14`). -/
 def truncP (p : ℕ) (y : ℚ) : ℚ := if y = 0 then 0 else truncTo (2 ^ (binade |y| - ((p : ℤ) - 1))) y
-
-theorem truncP_14 : truncP 14 = trunc14 := by
-  funext y; simp only [truncP, trunc14]; norm_num
 
 theorem abs_truncP_sub_le {p : ℕ} (hp : 1 ≤ p) (y : ℚ) : |truncP p y - y| ≤ |y| / 2 ^ (p - 1) := by
   rcases eq_or_ne y 0 with rfl | hy
@@ -538,7 +539,7 @@ theorem rhoD_atomMixP_flat {z : ℤ} (hz : z ≤ -5) (fs : ℕ) (s : Shape) {S :
     {α β ρ c : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} (s' : Fin s.m → Fin 32 → Bool)
     (hN : ∀ i, flatNoise (β i) (s' i) = c i * (α i * ρ i)) (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448) (hc : ∀ i, 2667 / 5000 ≤ c i) (hc4 : ∀ i, c i ≤ 4)
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (fs : ℚ) * s.m * s.k - rhoD * fs * s.m * s.k ≤ fs * (live (atomMixP (sm120E4m3K32 z)).value S α β X).card := by
   refine rhoD_rel_pi fs s (ε := 1 / 2 ^ 18) (c := c)
     (p := fun i => (flat fun _ => false, flatF fun t => !s' i t)) (q := fun i => (flat fun _ => false, flatF (s' i)))
@@ -594,7 +595,7 @@ theorem saltDeadP_card_le {z : ℤ} (hz : z ≤ -5) (fs : ℕ) (s : Shape) (alph
     (hN : ∀ i, flatNoise (beta s.k (X i)) (s' i) = c i * (alpha s.k (X i) * ρ i))
     (hα : ∀ i, 0 < alpha s.k (X i)) (hfloor : ∀ i, 1 ≤ alpha s.k (X i) * ρ i)
     (hsat : ∀ i l, alpha s.k (X i) * (|X i l| + 4 * ρ i) ≤ 448) (hc : ∀ i, 2667 / 5000 ≤ c i)
-    (hc4 : ∀ i, c i ≤ 4) (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hc4 : ∀ i, c i ≤ 4) (hlive : LiveOperand Params.pi.σ ρ X) :
     (fs : ℚ) * (Finset.univ.filter fun e : Fin s.m × Fin s.k =>
       saltDeadP (sm120E4m3K32 z) alpha beta s.k (X e.1) e.2).card ≤ rhoD * fs * s.m * s.k :=
   saltDeadP_card_le_of_live _ fs alpha beta X
