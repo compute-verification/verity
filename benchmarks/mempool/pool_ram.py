@@ -450,6 +450,8 @@ class Mirror:
         self.last_walk: dict[int, int] = {}
         self.walked: int | None = None
         self.last_result: dict[int, tuple] = {}
+        #: each request's last executed step (`run` sets it)
+        self.last_step: dict[int, int] = {}
 
     def _pool(self, kv: Any) -> RamPool:
         if self.pool is None:
@@ -617,6 +619,7 @@ def run(engine: RP.Engine, requests: Sequence[RP.RequestIO], *, every: int = 1, 
         rp = RP.replay(engine, requests, **how)
     m.counts["steps"] = len(rp.steps)
     m.counts["tokens"] = sum(n for s in rp.steps for _, _, n in s.rows)
+    m.last_step = {i: k for k, s in enumerate(rp.steps) for i, _, _ in s.rows}
     if m.pool is not None:
         where = disagreement(m.kv, m.pool)
         if where:

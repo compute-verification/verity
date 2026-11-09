@@ -65,7 +65,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.certifier import advice as I1
+import verity.core.protocols.certifier.advice as I1
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
@@ -104,7 +104,7 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
     if digest is None:
         # TODO: COMPILER's own registered digest once compile_steps lands with one
         from verity_vllm.pipeline import source_identity as SI
-        digest = compiler_digest(name, SI.code_identity(SI.TREE)["sha256"])
+        digest = compiler_digest(name, SI.code_identity_of("the advice digest", SI.TREE)["sha256"])
     return AW.Capped(Compiler(name, digest), cap_bits)
 
 

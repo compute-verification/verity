@@ -73,7 +73,7 @@ open Claims
 /-- A verifier whose steps accept whatever they read accepts at the first round and calls `H` nowhere. -/
 theorem stepWith_acc {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
     (hv : ∀ as, vnext as = .ret .acc) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), 0 < n →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), 0 < n →
       (stepWith H P x ω vnext n hist as t).out = .acc ∧ (stepWith H P x ω vnext n hist as t).vLog = t.vLog
   | 0, _, _, _, h => absurd h (Nat.lt_irrefl 0)
   | _ + 1, _, _, _, _ => by simp [stepWith, hv, OC.eval]

@@ -243,7 +243,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"],
                       "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
+    law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the warden's link-window {at.window} "
                                       "(egress_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},

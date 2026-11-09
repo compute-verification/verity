@@ -1,8 +1,10 @@
 """`CacheStep_v3`'s specification (`verity.ml.protocols.certifier.cache_step_v3.Stream`) held to the RAM pool (`pool_ram`,
 itself held to vLLM's `_KV`) after every pool call, over the encodings' traces and synthetic ones: the two pools' states
-agree, and so do each call's results. The stream is cut into windows of about ``--window`` slots, the pool carried from
-one to the next, and each window passes its memory check (R = W, every read's t below its now). ``--vectors`` writes
-each trace's first windows that evict for the circuit's test (`test_network_certifier_cache_step_v3`).
+agree (but for the memo's stamps, which the RAM pool doesn't have), and so do each call's results, every memoized hit's
+among them. The stream is cut into windows of about ``--window`` slots, the pool carried from one to the next, and each
+window passes its memory check (R = W, every read's t below its now). ``--vectors`` writes each trace's first windows
+that evict for the circuit's test (`test_network_certifier_cache_step_v3`). `run` with ``check`` off and ``every`` 0 is
+`cost.py`'s measurement of a load's stream slots.
 
     python3 stream.py [--traces DIR] [--seeds N] [--window SLOTS] [--vectors OUT] [--json OUT]
 """
@@ -55,14 +57,16 @@ class _Keys:
 class StreamPool(PR.RamPool):
     """The RAM pool, with a `Stream` running the same calls beside it, held to it after each top-level call."""
 
-    def start(self, S: SimpleNamespace, window: int, keep: int) -> None:
-        self.S, self.window, self.keep_windows = S, window, keep
+    def start(self, S: SimpleNamespace, window: int, keep: int, check: bool = True, every: int = 1) -> None:
+        """Without ``check``, a window's memory check is skipped; the pools are compared after every ``every``-th call
+        (0: at the end only), each call's results after every call."""
+        self.S, self.window, self.keep_windows, self.check, self.every = S, window, keep, check, every
         self.reqs: dict[int, object] = {}
         self.carried: dict[tuple[int, int], int] = {}
         self.base = V3.empty_pool(S, _Keys(self))
         self.windows: list[dict] = []
         self.counts: Counter = Counter()
-        self.depth = 0
+        self.depth = self.calls = self.total = 0
         self._open(1, S.NB - 1)
 
     def _open(self, head: int, tail: int) -> None:
@@ -78,10 +82,11 @@ class StreamPool(PR.RamPool):
         st = self.stream
         if not st.slots:
             return
-        rng = random.Random(len(self.windows))
-        alpha, gamma = rng.getrandbits(128), rng.getrandbits(128)
-        R, W = st.fingerprints(alpha, gamma)
-        assert R == W and all(s.t < s.now for s in st.slots), f"window {len(self.windows)} fails its memory check"
+        if self.check:
+            rng = random.Random(len(self.windows))
+            alpha, gamma = rng.getrandbits(128), rng.getrandbits(128)
+            R, W = st.fingerprints(alpha, gamma)
+            assert R == W and all(s.t < s.now for s in st.slots), f"window {len(self.windows)} fails its memory check"
         self.counts["windows"] += 1
         self.counts["slots"] += len(st.slots)
         self.counts["entries"] += len(st.entries())
@@ -100,10 +105,17 @@ class StreamPool(PR.RamPool):
 
     def _call(self, kind: str, r: int, a: int, b: int = 0) -> tuple[int, int]:
         self.counts[kind] += 1
-        return self.stream.call(V3.Call(kind, r, a, b))
+        st = self.stream
+        n0, m0, w0 = len(st.slots), st.memos, st.rewalks
+        out = st.call(V3.Call(kind, r, a, b))
+        self.total += len(st.slots) - n0
+        self.counts["memo hits"] += st.memos - m0
+        self.counts["re-walks"] += st.rewalks - w0
+        return out
 
     def _agree(self) -> None:
-        where = disagreement(self)
+        self.calls += 1
+        where = self.every and self.calls % self.every == 0 and disagreement(self)
         if where:
             raise AssertionError(f"the stream leaves the RAM pool at its {where}")
         if len(self.stream.slots) >= self.window:
@@ -179,7 +191,7 @@ def disagreement(p: StreamPool) -> str | None:
     if st.tail != p.ram.value(("B", 0)).prev:
         return "queue's tail"
     for b in range(1, S.NB):
-        if V3.bsplit(S, st.value(T["B"], b)) != p.ram.value(("B", b))._asdict():
+        if {k: v for k, v in V3.bsplit(S, st.value(T["B"], b)).items() if k != "stamp"} != p.ram.value(("B", b))._asdict():
             return f"block {b}"
         k = p.ram.value(("K", b))
         if st.value(T["K"], b) != (key128(k) if k else 0):
@@ -199,30 +211,38 @@ def disagreement(p: StreamPool) -> str | None:
 
 
 class StreamMirror(PR.Mirror):
-    """`pool_ram`'s mirror with a `StreamPool` as its RAM pool."""
+    """`pool_ram`'s mirror with a `StreamPool` as its RAM pool; each step's count includes its stream slots."""
 
-    def __init__(self, S: SimpleNamespace, window: int, keep: int) -> None:
-        super().__init__(every=1, keep=False)
-        self.S, self.window_slots, self.keep_windows = S, window, keep
+    def __init__(self, S: SimpleNamespace, window: int, keep: int, check: bool = True, every: int = 1) -> None:
+        super().__init__(every=max(every, 1) if every else 10**12, keep=False)
+        self.S, self.window_slots, self.keep_windows, self.check_windows, self.every_call = S, window, keep, check, every
+        self.seen = 0
 
     def _pool(self, kv):
         if self.pool is None:
             self.pool, self.kv = StreamPool.like(kv, self.keep), kv
-            self.pool.start(self.S, self.window_slots, self.keep_windows)
+            self.pool.start(self.S, self.window_slots, self.keep_windows, self.check_windows, self.every_call)
         assert kv is self.kv, "one pool per replay"
         return self.pool
 
+    def _tally(self, before: Counter) -> None:
+        super()._tally(before)
+        self.steps[-1]["slots"] += self.pool.total - self.seen
+        self.seen = self.pool.total
 
-def run(eng: RP.Engine, reqs: list, how: dict, window: int, keep: int = 0) -> StreamPool:
+
+def run(eng: RP.Engine, reqs: list, how: dict, window: int, keep: int = 0, check: bool = True,
+        every: int = 1) -> StreamMirror:
+    """The replay with its pool mirrored on a `StreamPool` (`StreamPool.start`'s ``check`` and ``every``)."""
     S = statics(eng, reqs)
-    m = StreamMirror(S, window, keep)
+    m = StreamMirror(S, window, keep, check, every)
     with PR.mirrored(m):
         RP.replay(eng, reqs, **how)
     m.pool.close()
-    where = PR.disagreement(m.kv, m.pool)
+    where = PR.disagreement(m.kv, m.pool) or disagreement(m.pool)
     if where:
-        raise AssertionError(f"at the end: the RAM pool leaves vLLM's at its {where}")
-    return m.pool
+        raise AssertionError(f"at the end: the pools disagree at the {where}")
+    return m
 
 
 def main() -> None:
@@ -251,14 +271,14 @@ def main() -> None:
         if not eng.enable_prefix_caching:
             continue
         how = {"decide": lambda i, k, o, admit=admit: admit[i] <= k} if arrivals else {"admit": admit}
-        p = run(eng, reqs, how, a.window)
+        p = run(eng, reqs, how, a.window).pool
         row = {"run": name, "NB": eng.num_gpu_blocks, "B": eng.block_size, "statics": vars(p.S), **p.counts}
         report.append(row)
         total.update({k: v for k, v in p.counts.items() if not k.startswith("max")})
         total["runs"] += 1
         print(f"{name}: {dict(p.counts)}; agrees after every call, every window's memory check passes")
         if a.vectors and not arrivals:
-            v = run(eng, reqs, how, a.vector_window, a.keep)
+            v = run(eng, reqs, how, a.vector_window, a.keep).pool
             vectors.append({"run": name, "statics": vars(v.S), "windows": v.windows})
     print("total", dict(total))
     if a.json:

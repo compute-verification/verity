@@ -1,14 +1,14 @@
 module
 
 public import Definitions.Pouw.PearlC.HiddenTileGame
-public import Definitions.Pouw.PearlC.FlockTile.Bridge
+public import Definitions.Core.Game
 
 /-!
 # Flock's hidden audit: the TileRead session per sampled tile
 
 The hidden audit (`HiddenAudit`) plays, for each sampled tile, a proof game on the window's commitment. For Flock that
 game is the live `--zk` session of the TileRead statement at the tile's public `t_s`, which reads the window's committed
-rows at `tile_at(t_s)`, carried into core's games by the bridge (`toVerity`) and relabelled to flock-verify's verdict.
+rows at `tile_at(t_s)`, relabelled to flock-verify's verdict.
 
 TileRead's Definition and its Flock soundness (the restack plan's T1 and T3) are not in Lean yet, so the session is a
 parameter (`TileReadSession`): its window root, its live game per tile, its verdict, the class of strategies its
@@ -34,8 +34,8 @@ Definition and its Flock soundness land.
 * `Root` is the window root, the frame-v3-sha512 root over the window's hm96-sha512 rows, which the verifier holds, and
   `root U τ o` is the window root of the transcript `τ` committed under the opening `o` (its rows' salts).
 * `game H s U r g` is the live `--zk` session of the TileRead statement at the public `t_s` with `tile_at(t_s) = g`, on
-  the window root `r`, with the anchors the verifier recomputes from the oracle `H` and the salt `s`: Flock's game
-  (`FlockSoundness.Game`), ending in the live audit's output (for Flock's `auditLive`, the registration, the sample and
+  the window root `r`, with the anchors the verifier recomputes from the oracle `H` and the salt `s`: a game of core's
+  (`Verity.Game`, the one Flock's soundness is stated over), ending in the live audit's output (for Flock's `auditLive`, the registration, the sample and
   the session's transcript). `verdict` is flock-verify's verdict on that output.
 * `Cls U τ o H s g σ q` is the class Flock's soundness speaks of, for a strategy `σ` of tile `g`'s session, at budget
   `q`: T3's CR hypotheses, `cr/sha-512` for each table's knowledge finders (`TableCRZ`) and `ecr/sha-512` for the link
@@ -47,26 +47,26 @@ structure TileReadSession (Q R S : Type) where
   Opening : Type
   root : Workload → Transcript → Opening → Root
   Out : Workload → Type
-  game : (Q → R) → S → (U : Workload) → Root → ℕ → FlockSoundness.Game (Out U)
+  game : (Q → R) → S → (U : Workload) → Root → ℕ → Verity.Game (Out U)
   verdict : {U : Workload} → Out U → Bool
   Cls : (U : Workload) → (τ : Transcript) → (o : Opening) → (H : Q → R) → (s : S) → (g : ℕ) →
-    FlockSoundness.Game.Strategy (game H s U (root U τ o) g) → ℕ → Prop
+    Verity.Game.Strategy (game H s U (root U τ o) g) → ℕ → Prop
   Bad : (U : Workload) → (τ : Transcript) → (o : Opening) → (H : Q → R) → (s : S) → (g : ℕ) →
-    FlockSoundness.Game.Strategy (game H s U (root U τ o) g) → Out U → Prop
+    Verity.Game.Strategy (game H s U (root U τ o) g) → Out U → Prop
 
 namespace TileReadSession
 
 variable (F : TileReadSession Q R S)
 
-/-- Tile `g`'s proof game as the hidden audit plays it: the session's live game, through the bridge, relabelled to
-flock-verify's verdict. -/
+/-- Tile `g`'s proof game as the hidden audit plays it: the session's live game, relabelled to flock-verify's
+verdict. -/
 def proofGame (H : Q → R) (s : S) (U : Workload) (r : F.Root) (g : ℕ) : Verity.Game Bool :=
-  (toVerity (F.game H s U r g)).map F.verdict
+  (F.game H s U r g).map F.verdict
 
 /-- The strategy of the session's game that a strategy of tile `g`'s proof game is. -/
 def stratOf {H : Q → R} {s : S} {U : Workload} {r : F.Root} {g : ℕ}
-    (σ : Verity.Game.Strategy (F.proofGame H s U r g)) : FlockSoundness.Game.Strategy (F.game H s U r g) :=
-  stratOfVerity _ (Verity.Game.Strategy.ofMap F.verdict _ σ)
+    (σ : Verity.Game.Strategy (F.proofGame H s U r g)) : Verity.Game.Strategy (F.game H s U r g) :=
+  Verity.Game.Strategy.ofMap F.verdict _ σ
 
 /-- **The hidden audit's single-game class.** A strategy `σ` of a game `G`, on the transcript `τ` committed under the
 opening `o`, is in the class at `q` when, at every tile whose proof game `G` is (for every workload, oracle and salt), the
@@ -76,7 +76,7 @@ def cls (τ : Transcript) (o : F.Opening) (G : Verity.Game Bool) (σ : Verity.Ga
     F.Cls U τ o H s g (F.stratOf (cast (congrArg Verity.Game.Strategy e.symm) σ)) q
 
 /-- **Flock's hidden audit.** The root is the window root; each sampled tile's proof game is the TileRead session's live
-game through the bridge (`proofGame`); and the class is the batch provers whose every induced strategy on a tile's game
+game relabelled to the verdict (`proofGame`); and the class is the batch provers whose every induced strategy on a tile's game
 is in the session's class (`BoundedByInduced cls`). -/
 def audit : HiddenAudit Q R S where
   Root := F.Root
@@ -94,8 +94,8 @@ the restack plan's T3 (`Flock.Guarantees.EndToEndCanonicalP` at the sampled proo
 its event as `Bad`), at the TileRead statement. -/
 def TileReadSound (P : Protocol Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) (δzk : ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ (τ : Transcript) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ)
-    (σ : FlockSoundness.Game.Strategy (F.game H s U (F.root U τ o) g)) (q : ℕ), F.Cls U τ o H s g σ q →
-    FlockSoundness.Game.prob (fun x => F.verdict x = true ∧ F.Bad U τ o H s g σ x) (F.game H s U (F.root U τ o) g) σ ≤
+    (σ : Verity.Game.Strategy (F.game H s U (F.root U τ o) g)) (q : ℕ), F.Cls U τ o H s g σ q →
+    Verity.Game.prob (fun x => F.verdict x = true ∧ F.Bad U τ o H s g σ x) (F.game H s U (F.root U τ o) g) σ ≤
       ENNReal.ofReal (δzk q)
 
 /-- **The binding (open obligation, to be proved).** For every in-domain workload, transcript `τ`, opening `o`, oracle,
@@ -107,7 +107,7 @@ anchors (L8). -/
 def TileReadBinds (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) :
     Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ (τ : Transcript) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ)
-    (σ : FlockSoundness.Game.Strategy (F.game H s U (F.root U τ o) g)) (x : F.Out U),
+    (σ : Verity.Game.Strategy (F.game H s U (F.root U τ o) g)) (x : F.Out U),
     F.verdict x = true → ¬ F.Bad U τ o H s g σ x → g ∈ goodTiles P TR U H s τ ∪ blankTiles TR U τ
 
 end Pouw.PearlC.FlockTile

@@ -1710,6 +1710,11 @@
     },
     {
       "paths": {
+        "Security/Proofs/Flock/Soundness/LinkSound.lean": "Security/Proofs/Flock/Soundness/BindSound.lean"
+      }
+    },
+    {
+      "paths": {
         "Security/Definitions/SampledProofs.lean": "Security/Definitions/Spot.lean",
         "Security/Definitions/SampledProofs/": "Security/Definitions/Spot/",
         "Security/Proofs/Properties/SampledProofs.lean": "Security/Proofs/Properties/Spot.lean",
@@ -1723,6 +1728,14 @@
         "verity/core/service/sampled_proofs/": "verity/core/service/spot/",
         "verity/core/service/sampled_proofs/SampledProofs.lean": "verity/core/service/spot/Spot.lean",
         "verity/core/service/sampled_proofs/SampledProofs/": "verity/core/service/spot/Spot/"
+      }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Accounting/Guarantees/DeclaredCircuit.lean": "Security/Definitions/Accounting/Guarantees/RegisteredCircuit.lean",
+        "Security/Proofs/Accounting/DeclaredCircuit.lean": "Security/Proofs/Accounting/RegisteredCircuit.lean",
+        "Security/Proofs/Accounting/DeclaredCircuit/": "Security/Proofs/Accounting/RegisteredCircuit/",
+        "Security/Properties/Accounting/DeclaredCircuit.lean": "Security/Properties/Accounting/RegisteredCircuit.lean"
       }
     }
   ]

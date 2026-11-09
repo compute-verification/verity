@@ -31,7 +31,7 @@ at it (`PeriodTailMax`).
 * `CircuitWorkMonitoringPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
   (`Proofs.Accounting.ComposeMonitoringPeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
   can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `PeriodBudget`,
-  `PeriodTailMax` once at `t = ln(1/δ_s)`, `DrawnRightOff` at `n` rounds, the period layer's `Covers` on the credited
+  `PeriodTailMax` once at `t = ln(1/δ_s)`, `SampledRightOff` at `n` rounds, the period layer's `Covers` on the credited
   windows' live tiles and `WriterReads` (`PeriodCoversStmt`, `ServiceCovers`' argument with a window index, proved as
   `periodCovers` in `Proofs.Accounting.ComposeMonitoringPeriod.Covers`) and `UnitFixed`'s sums.
 * `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the

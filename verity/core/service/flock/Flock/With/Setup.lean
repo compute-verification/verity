@@ -23,6 +23,7 @@ module
 
 public import Flock.With.Hashes
 public import Flock.HmRow
+public import Flock.ByteLines
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -217,7 +218,7 @@ def parseRest (tags : Tags) (tables : List (String × ByteArray)) (tmpl : Option
     (sha : ByteArray) (lines : Array String) (name : String) (mj : Json) (classSha : ByteArray) : V Circuit := do
   let __s ← sectionsLoop tags lines ((match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
-    | none => pre), 2)
+    | none => pre), 2 + tmplLines tags lines)
   let mut nets := __s.1
   for k in Circuit.FORBIDDEN do
     if J.has mj k then throw s!"META: {k} (a verifier-evaluated part of the computation); the verifier only checks proofs"
@@ -363,6 +364,198 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
       classOfWith hs bytes head mj
     else pure ByteArray.empty
   parseRest tags tables tmpl pre sha lines name mj classSha
+
+/-- `parseWith` after the file's lines: `l0` and `l1` read as its header and META, then `k` with the circuit's name,
+META and class digest (`parseWith_head`). -/
+def headWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (l0 l1 : String)
+    (k : String → Json → ByteArray → V Circuit) : M Circuit := do
+  let head := l0.trimAsciiEnd.toString
+  if !head.startsWith (tags.fileFormat ++ " ") then throw s!"circuit: not a {tags.fileFormat} file"
+  let name := (head.drop (tags.fileFormat.length + 1)).toString
+  let metaLine := l1.trimAsciiEnd.toString
+  if !metaLine.startsWith "META " then throw "circuit: no META line"
+  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
+    | .ok j => pure j
+    | .error e => throw s!"META: {e}"
+  if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
+    throw s!"META: not {tags.statement}"
+  let classSha ← if tags.bindings then do
+      if !isSha512Hex ((mj.getObjValAs? String "program_sha512").toOption.getD "") then
+        throw "META: program_sha512 (the Program the partition is over) is not a SHA-512 digest"
+      let part := (mj.getObjVal? "partition").toOption.getD Json.null
+      let rule := (part.getObjValAs? String "rule").toOption.getD ""
+      if !(rule == PARTITION_V1 || rule == PARTITION_PROVISIONAL) || !isSha512Hex ((part.getObjValAs? String "digest").toOption.getD "") then
+        throw s!"META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"
+      classOfWith hs bytes head mj
+    else pure ByteArray.empty
+  k name mj classSha
+
+theorem parseWith_head (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
+    (tmpl : Option Typed.Template) (pre : Array (String × Net)) : parseWith hs tags bytes tables tmpl pre = (do
+      let sha ← hs.sha512 bytes
+      let text ← match String.fromUTF8? bytes with
+        | some s => pure s
+        | none => throw "circuit: not UTF-8"
+      let lines0 := (text.splitOn "\n").toArray
+      let lines := if lines0.back? == some "" then lines0.pop else lines0
+      headWith hs tags bytes (lines.getD 0 "") (lines.getD 1 "") fun name mj classSha =>
+        parseRest tags tables tmpl pre sha lines name mj classSha) := rfl
+
+/-- `sectionsLoop` over a view's lines, each `NET` block's rows read off the file's bytes (`sectionsLoopV_eq`). -/
+def sectionsLoopV (tags : Tags) (v : ByteLines.View) (s : Array (String × Net) × Nat) :
+    V (Array (String × Net) × Nat) :=
+  forIn Lean.Loop.mk s fun _ __s => do
+    let nets := __s.1
+    let at_ := __s.2
+    if at_ < v.count then
+      let h := tokens (v.str at_)
+      if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
+      let some n := h[2]!.toNat? | throw s!"circuit: {tags.blockKeyword} line count"
+      if at_ + 1 + n > v.count then throw s!"circuit: {h[1]!} is truncated"
+      let net ← match v.net (at_ + 1) (at_ + 1 + n) with
+        | .ok net => pure net
+        | .error e => throw s!"{h[1]!}: {e}"
+      return .yield (nets.push (h[1]!, net), at_ + 1 + n)
+    else return .done (nets, at_)
+
+theorem sectionsLoopV_eq (tags : Tags) (v : ByteLines.View) (hv : v.Ok) (s : Array (String × Net) × Nat) :
+    sectionsLoopV tags v s = sectionsLoop tags v.lines s := by
+  unfold sectionsLoopV sectionsLoop
+  simp only [ByteLines.View.size_lines, ByteLines.View.getElem!_lines, ByteLines.View.net_eq v hv.nums]
+
+theorem sectionsLoop_nil (tags : Tags) (nets : Array (String × Net)) (n : Nat) :
+    sectionsLoop tags #[] (nets, n) = pure (nets, n) := by
+  unfold sectionsLoop
+  show Lean.Loop.forIn _ _ _ = _
+  rw [Lean.Loop.forIn_eq_of_monadTail]
+  simp
+
+/-- `parseRest` with no template: its sections, past a template section (`tmplLines`), then the rest from the nets they
+give. -/
+theorem parseRest_split (tags : Tags) (tables : List (String × ByteArray)) (pre : Array (String × Net))
+    (sha : ByteArray) (lines : Array String) (name : String) (mj : Json) (classSha : ByteArray) :
+    parseRest tags tables none pre sha lines name mj classSha = (do
+      let s ← sectionsLoop tags lines (pre, 2 + tmplLines tags lines)
+      parseRest tags tables none s.1 sha #[] name mj classSha) := by
+  unfold parseRest
+  congr 1
+  funext s
+  rw [sectionsLoop_nil]
+  rfl
+
+theorem tmplLines_view (tags : Tags) (v : ByteLines.View) :
+    tmplLines tags #[v.str 0, v.str 1, v.str 2] = tmplLines tags v.lines := by
+  unfold tmplLines
+  rw [ByteLines.View.getD_lines]
+  rfl
+
+/-- `parseWith` with an ASCII file's lines read off its bytes (`ByteLines.View`), a row's numbers too, so a row makes no
+`String`; `parseWith` itself with a template, or for a file that is not ASCII. -/
+def parseWithB (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : M Circuit :=
+  match tmpl with
+  | some _ => parseWith hs tags bytes tables tmpl pre
+  | none =>
+    match ByteLines.View.of? bytes with
+    | none => parseWith hs tags bytes tables none pre
+    | some v => do
+      let sha ← hs.sha512 bytes
+      let text ← (pure v.s : M String)
+      if text = v.s then
+        headWith hs tags bytes (v.str 0) (v.str 1) fun name mj classSha => do
+          let s ← sectionsLoopV tags v (pre, 2 + tmplLines tags #[v.str 0, v.str 1, v.str 2])
+          parseRest tags tables none s.1 sha #[] name mj classSha
+      else
+        let lines0 := (text.splitOn "\n").toArray
+        let lines := if lines0.back? == some "" then lines0.pop else lines0
+        headWith hs tags bytes (lines.getD 0 "") (lines.getD 1 "") fun name mj classSha =>
+          parseRest tags tables none pre sha lines name mj classSha
+
+/-- Compiled code runs `parseWithB`; the kernel and every proof see `parseWith`. `@[csimp]` rewrites only code compiled
+after it, so it stays directly below `parseWith`, above every caller. -/
+@[csimp] theorem parseWith_eq_bytes : @parseWith = @parseWithB := by
+  funext M _ _ _ hs tags bytes tables tmpl pre
+  unfold parseWithB
+  cases tmpl with
+  | some t => rfl
+  | none =>
+    dsimp only
+    split
+    · rfl
+    · rename_i v hv
+      obtain ⟨hfrom, hok⟩ := ByteLines.View.of?_spec hv
+      rw [parseWith_head]
+      simp only [hfrom]
+      congr 1
+      funext sha
+      congr 1
+      funext text
+      by_cases ht : text = v.s
+      · subst ht
+        rw [ite_eq_left rfl, hok.lines, ByteLines.View.getD_lines, ByteLines.View.getD_lines]
+        refine congrArg (headWith hs tags bytes (v.str 0) (v.str 1)) (funext fun name => funext fun mj => funext fun cs => ?_)
+        rw [parseRest_split, sectionsLoopV_eq tags v hok, tmplLines_view]
+      · rw [ite_eq_right ht]
+
+/-- The class digest `headWith` reads off a file's lines `l0` and `l1` (`classOfWith`), hashed in a task when the statement
+binds it (`headWithT_eq`). Not inlined: the compiler sinks a `Task.spawn` bound in a body down to the branch that reads
+it. -/
+@[noinline] def classTask (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (l0 l1 : String) : Task (V ByteArray) :=
+  if tags.bindings then
+    Task.spawn fun _ => do
+      let mj ← match JsonParse.parse (l1.trimAsciiEnd.toString.drop 5).toString with
+        | .ok j => pure j
+        | .error e => throw s!"META: {e}"
+      classOfWith hs bytes l0.trimAsciiEnd.toString mj
+  else .pure (pure ByteArray.empty)
+
+/-- `headWith` in `V`, its class digest from the task `cls` (`headWithT_eq`). -/
+def headWithT (tags : Tags) (l0 l1 : String) (cls : Task (V ByteArray)) (k : String → Json → ByteArray → V Circuit) :
+    V Circuit := do
+  let head := l0.trimAsciiEnd.toString
+  if !head.startsWith (tags.fileFormat ++ " ") then throw s!"circuit: not a {tags.fileFormat} file"
+  let name := (head.drop (tags.fileFormat.length + 1)).toString
+  let metaLine := l1.trimAsciiEnd.toString
+  if !metaLine.startsWith "META " then throw "circuit: no META line"
+  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
+    | .ok j => pure j
+    | .error e => throw s!"META: {e}"
+  if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
+    throw s!"META: not {tags.statement}"
+  let classSha ← if tags.bindings then do
+      if !isSha512Hex ((mj.getObjValAs? String "program_sha512").toOption.getD "") then
+        throw "META: program_sha512 (the Program the partition is over) is not a SHA-512 digest"
+      let part := (mj.getObjVal? "partition").toOption.getD Json.null
+      let rule := (part.getObjValAs? String "rule").toOption.getD ""
+      if !(rule == PARTITION_V1 || rule == PARTITION_PROVISIONAL) || !isSha512Hex ((part.getObjValAs? String "digest").toOption.getD "") then
+        throw s!"META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"
+      cls.get
+    else pure ByteArray.empty
+  k name mj classSha
+
+theorem headWithT_eq (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (l0 l1 : String)
+    (k : String → Json → ByteArray → V Circuit) :
+    headWithT tags l0 l1 (classTask hs tags bytes l0 l1) k = headWith hs tags bytes l0 l1 k := by
+  unfold headWithT headWith classTask
+  dsimp only
+  cases JsonParse.parse (l1.trimAsciiEnd.toString.drop 5).toString <;> cases tags.bindings <;> rfl
+
+/-- `parseWithB`'s view branch over the view `v` its caller read, the class digest from the task `cls`
+(`parseWithVT_eq`). -/
+def parseWithVT (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
+    (v : ByteLines.View) (cls : Task (V ByteArray)) (pre : Array (String × Net)) : V Circuit := do
+  let sha ← hs.sha512 bytes
+  headWithT tags (v.str 0) (v.str 1) cls fun name mj classSha => do
+    let s ← sectionsLoopV tags v (pre, 2 + tmplLines tags #[v.str 0, v.str 1, v.str 2])
+    parseRest tags tables none s.1 sha #[] name mj classSha
+
+theorem parseWithVT_eq (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
+    {v : ByteLines.View} (hv : ByteLines.View.of? bytes = some v) (pre : Array (String × Net)) :
+    parseWithVT hs tags bytes tables v (classTask hs tags bytes (v.str 0) (v.str 1)) pre =
+      parseWith hs tags bytes tables none pre := by
+  rw [parseWith_eq_bytes]
+  unfold parseWithVT parseWithB
+  simp only [hv, pure_bind, ↓reduceIte, headWithT_eq]
 
 /-- `parseTyped` through the oracle. -/
 def parseTypedWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
@@ -708,8 +901,9 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
 def parseTmplWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
     M Circuit := do
   let mj ← metaOf bytes
+  if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
   let ctx := "templated statement META"
-  let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
+  let lines ← tmplOf bytes
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
     | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
   let tu ← TmplUnit.read (← Tmpl.parse lines) mode
@@ -725,6 +919,54 @@ def parseTmplWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : Li
 def parseCommitWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
     M Circuit :=
   if tags.isTmpl then parseTmplWith hs tags bytes tables else parseWith hs tags bytes tables
+
+/-- `parseTmplWith` in `V` over the file's view `v`, read once, with the class digest from the task `cls`, which hashes
+beside the template's parse, and the template's checks made once (`TmplUnit.readParsed`; `parseTmplWithV_eq`). Not
+inlined, so its caller spawns `cls` before the parse. -/
+@[noinline] def parseTmplWithVT (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
+    (v : ByteLines.View) (cls : Task (V ByteArray)) : V Circuit := do
+  let mj ← metaOf bytes
+  if J.has mj "definition" then throw "META definition: a unit class has no templated statement"
+  let ctx := "templated statement META"
+  let lines ← tmplOf bytes
+  let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
+    | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
+  let tu ← TmplUnit.readParsed lines mode
+  let c ← HmRow.parseWithVT hs tags bytes tables v cls #[("unit", tu.net)]
+  if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
+    throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
+  if HmOut.recUnit tu.net.name then
+    throw s!"circuit: a templated statement's unit {tu.net.name} is a recursion unit, which is read flat"
+  checkRows c
+  return { c with tmpl := some tu }
+
+/-- `parseTmplWith` in `V`: over the file's view (`ByteLines.View.of?`) with its class digest in a task
+(`parseTmplWithVT`), and `parseTmplWith` itself for a file that is not ASCII. -/
+def parseTmplWithV (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
+    V Circuit :=
+  match ByteLines.View.of? bytes with
+  | none => parseTmplWith hs tags bytes tables
+  | some v => parseTmplWithVT hs tags bytes tables v (HmRow.classTask hs tags bytes (v.str 0) (v.str 1))
+
+theorem parseTmplWithV_eq (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) :
+    parseTmplWithV hs tags bytes tables = parseTmplWith hs tags bytes tables := by
+  unfold parseTmplWithV
+  split
+  · rfl
+  · rename_i v hv
+    unfold parseTmplWithVT parseTmplWith
+    simp only [HmRow.parseWithVT_eq hs tags bytes tables hv, TmplUnit.readParsed_eq, bind_assoc]
+    try rfl
+
+/-- `parseCommitWith` in `V`, a templated statement's through `parseTmplWithV` (`parseCommitWithV_eq`). -/
+def parseCommitWithV (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
+    V Circuit :=
+  if tags.isTmpl then parseTmplWithV hs tags bytes tables else parseWith hs tags bytes tables
+
+theorem parseCommitWithV_eq (hs : Hashes V) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) :
+    parseCommitWithV hs tags bytes tables = parseCommitWith hs tags bytes tables := by
+  unfold parseCommitWithV parseCommitWith
+  rw [parseTmplWithV_eq]
 
 /-- `HmOut.checkPublic` through the oracle. -/
 def checkPublicWith (hs : Hashes M) (c : Circuit) (pub : Public) : M Unit := do

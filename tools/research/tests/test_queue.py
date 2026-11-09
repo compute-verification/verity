@@ -3317,7 +3317,7 @@ def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_a_node_refuse
         "  - Lean: 6 module(s) that are or import what it changes couldn't be built: "
         + "; ".join(f"its build on {n} exited 1 without a result line: research run: {n}: ssh: connect to host: Connection "
                     "refused" for n in PREFLIGHT_LEAN_ON)
-        + f": mark again once {first} or {second} builds them (`build` Lean slots are @infra's; `research status` there says "
+        + f": mark again once {first} or {second} builds them in its `build` Lean slots (`research status` there says "
           "why not)"], err
     assert [a[2] for a in launched] == [first, second]
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is False and _no_worktree_left(world)
@@ -3379,7 +3379,7 @@ def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_bui
         assert isinstance(got, str) and got == (
             f"its build on {first} exited 255 without a result line: ssh: connect to host {first} port 22: Connection timed "
             f"out; its build on {second} (run r20261030-190002-abcd) exited 1 without a result line: research: run "
-            f"r20261030-190002-abcd refused on {second}: the node is drained: mark again once {first} or {second} builds them (`build` Lean slots are @infra's; `research status` there says why not)"), got
+            f"r20261030-190002-abcd refused on {second}: the node is drained: mark again once {first} or {second} builds them in its `build` Lean slots (`research status` there says why not)"), got
 
 
 def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_its_result(tmp_path):
@@ -4913,6 +4913,29 @@ def test_dropped_entries_reads_a_frozen_reason_reworded_at_its_key_as_kept_and_a
     (f, why), = base["shape"]["frozen"].items()
     assert dropped_entries(base, lock(lambda d: d["shape"]["frozen"].update({f: why + " (reworded)"}))) == []
     assert dropped_entries(base, lock(lambda d: d["shape"]["frozen"].pop(f))) == [f"shape.frozen[{f}]"]
+
+
+@pytest.mark.parametrize("names", [
+    {"witnesses": {"W": {"nontrivial": "F"}}},
+    {"witnesses": {"W": {"nontrivial": ["E", "F"], "honest": ["H"]}}},
+    {"witnesses": {"W": {"nontrivial": "E", "honest": ["F"]}}},
+    {"claims": {"witnesses": {"C": {"fails": "F"}}}},
+    {"claims": {"witnesses": {"C": {"fails": "E", "meets": ["F"]}}}},
+    {"claims": {"generic": {"C": "F"}}},
+])
+def test_dropped_entries_lets_a_head_drop_the_frozen_entry_of_a_theorem_held_to_its_form(names):
+    """`check.py` holds a theorem `witnesses`, `claims.witnesses` or `claims.generic` names to its form instead of `shape`,
+    and reads no frozen entry of its: a head may drop it while the theorem stays listed, and the same drop of a guarantee
+    none of them names still drops it."""
+    from research.queue import dropped_entries
+
+    def lock(edit: Callable[[dict], object]) -> dict:
+        return json.loads(_lock_text(edit))
+
+    base = lock(lambda d: d.update(json.loads(json.dumps(names))))
+    assert dropped_entries(base, lock(lambda d: (d.update(json.loads(json.dumps(names))),
+                                                 d["shape"]["frozen"].pop("F")))) == []
+    assert dropped_entries(lock(lambda d: None), lock(lambda d: d["shape"]["frozen"].pop("F"))) == ["shape.frozen[F]"]
 
 
 def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guarantee_recorded_otherwise():

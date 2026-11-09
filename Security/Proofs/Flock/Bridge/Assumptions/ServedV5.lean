@@ -20,20 +20,20 @@ namespace Flock.Bridge.Assumptions
 open Flock
 
 /-- **The served registered session's files parse at public inputs.** There are a circuit file and a public file with the
-SHA-512 digests of the served registered `--zk` session
-`art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b` (`stage/circuit.txt`, 56,327,749 bytes, and
-`stage/pub-32.bin`, 44,158 bytes, a shared-row public file of 32 instances), such that, under the tags
+SHA-512 digests of the served registered `--zk` session (`SERVED` in `verity/ml/flock/tests/test_lean_ks_form.py`:
+`stage/circuit.txt`, 56,327,749 bytes, and `stage/pub-32.bin`, 44,158 bytes, a shared-row public file of 32 instances),
+such that, under the tags
 `verify --zk --statement verity/flock-circuit` sets one session up with (`Witness.zkTags` at the inputs
 `⟨Tags.circuit, cf, pf, 1, [], none, none⟩`: one table, no session tables, and no partition or program, which the tags
 don't read), the circuit file parses to a descriptor `D` (`Desc.parse`), `D` is in the hidden-output headlines' scope
 (`ProvedScope.scopeOkH`), no two of its ports share a name (`Registered.dupName`), its public input ports parse
 (`HmIn.parse`), and the public file loads over them (`HmIn.loadPublic`).
 
-Assumption record. It assumes a computation's result: run `r20261027-025931-f22c` evaluated each conjunct with these
-functions, built from the verifier's source at `main` 0600bab855, on that session's two files (the circuit has no
-public input ports, and the public file loads with 32 instances and its shared-row tables), and run
-`r20261027-114351-93be` evaluated them again at the source this module is checked at. It asks nothing of a hash or of
-the prover; a change to any of these functions or to the files makes it a new premise, to be checked by a new run. -/
+Assumption record. It assumes a computation's result: each conjunct evaluated with these functions, built from the
+source this module is checked at, on that session's two files (the circuit has no public input ports, and the public
+file loads with 32 instances and its shared-row tables); `flock-verify ks-form` reruns the form check on them
+(`verity/ml/flock/tests/test_lean_ks_form.py`). It asks nothing of a hash or of the prover; a change to any of these
+functions or to the files makes it a new premise, to be checked by a new run. -/
 def ServedFilesParseV5 : Prop :=
   ∃ cf pf : ByteArray,
     hexOf (Sha512.hash cf) =

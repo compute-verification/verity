@@ -67,8 +67,8 @@ term the subset sampling design's own escape, which is 0 where `K′ = N`. The c
 code's sample.
 
 Gap (6)'s `Pouw.Guarantees.Window.WindowDelta` (branch `cursor/pouw-window-eps-stmt2-c7a9`) bounds the same event in
-core's game (`Verity.Game`), with the window's knowledge and binding errors composed from its calls'. The bridge that makes
-it a discharge of `WindowBound` is named there (`Proofs.Pouw.Window.FlockBridge`).
+core's game (`Verity.Game`), with the window's knowledge and binding errors composed from its calls'. What makes it a
+discharge of `WindowBound` is named there (`Proofs.Pouw.Window.Flock`).
 
 **Pearl-C is out of scope**: it has its own game and premises (`TTOutTile`, `TileProofSound`,
 `Pouw.Guarantees.PearlCSampledByDeadline`).
@@ -157,7 +157,7 @@ theorem tileWork_metered [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P 
     have : (1 - g) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ) ≤ T :=
       (mul_le_mul_of_nonneg_left hle (sub_nonneg.2 hg)).trans hcost
     exact absurd hlt (not_lt.2 this)
-  simp only [pr, hempty, Finset.filter_false, Finset.card_empty, Nat.cast_zero, zero_div, le_refl]
+  simp only [pr, Claims.Pr, Claims.prUniform, hempty, Finset.filter_false, Finset.card_empty, Nat.cast_zero, zero_div, le_refl]
 
 /-- **Decision 107's domain holds a workload**: one coordinate unit `(1, 4096, 1)` with zero weights. -/
 theorem coordDomain_inhabited : ∃ U : Workload, U.InDomain coordDomain ∧ U.layout.N = 1 := by
@@ -307,9 +307,9 @@ filler, which is no PoUW unit, adds nothing to it.
 Its discharges:
 * `WindowBoundOfService`, at the service's law;
 * gap (6)'s `Pouw.Guarantees.Window.WindowDelta` at `𝓑 = harmSets W_ref ε ∧ CopyClosed`, with the service's
-  sessions as its calls at `η = 0` (`ServiceEscapes`), gives it at `β(H, s)` its right side at the play, through the
-  bridge to Flock's game in `Proofs.Pouw.Window.FlockBridge` (`Pouw.PearlC.FlockTile.prob_ofVerity`,
-  `CallAnalysis.ofFlock`, and its premise `FlockKnowledgeSound`; branch `cursor/pouw-window-eps-stmt2-c7a9`), with the
+  sessions as its calls at `η = 0` (`ServiceEscapes`), gives it at `β(H, s)` its right side at the play, through
+  Flock's analysis in `Proofs.Pouw.Window.Flock` (`CallAnalysis.ofFlock`, and its premise `FlockKnowledgeSound`;
+  branch `cursor/pouw-window-eps-stmt2-c7a9`), with the
   deployed wrong sets copy-closed (`Pouw.Window.WrongCopyClosed`) and `Realizes` at them. -/
 def WindowBound (P : Protocol Q R S) (U : Workload) (ε : ℝ) {n : ℕ} {Reg : Type} {Lr : Reg → Law n}
     {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}

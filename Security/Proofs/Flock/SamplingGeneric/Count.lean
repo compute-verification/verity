@@ -38,8 +38,8 @@ import Proofs.Flock.Claims.Sampling.KS
 /-!
 # The sampled compiler's count form
 
-`KSCount` from `KS` at any compiled sampled verifier (`Compiled.ksCount_of_ks`, `Sampling.KSCount_of_KS` generic): `KS`
-at `δ = max(0, miss(t))` (`missAt`), an incorrect set in `M_δ` having fewer than `t` proof blocks (`Sampling.Pa_le_miss`).
+`KSCount` from `KS` at any compiled sampled verifier (`Compiled.ksCount_of_ks`): `KS` at `δ = max(0, miss(t))`
+(`missAt`), an incorrect set in `M_δ` having fewer than `t` proof blocks (`Sampling.Pa_le_miss`).
 So `CompilerKS` gives `CompilerKSCount` (`compilerKSCount_of`).
 -/
 

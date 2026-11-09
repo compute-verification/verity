@@ -99,7 +99,7 @@ files' circuit, under openings `op` of the files that hold wherever the commitme
 files' constants, are within `F`, when on `C` the units unbound under any openings that hold at `κ` and wherever `val`
 opens a value are (`hgame`), and every value `val` opens passes `Cm` under `roots` (`hval`). -/
 theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bridge.Parsed} (ho : o = some r)
-    {C : FlockSoundness.Audit.Circuit} (hC : Flock.Bridge.keyCircuit r.D r.hU r.n = C)
+    {C : Verity.Boolean.Circuit} (hC : Flock.Bridge.keyCircuit r.D r.hU r.n = C)
     {P : FlockSoundness.Audit.Partition C r.n} (hP : HEq (Flock.Bridge.keyPartition r.D r.hU r.n) P)
     {κ₀ : Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Option Bool} {κ : Fin C.N → Option Bool} (hκ : HEq κ₀ κ)
     (hcon : ∀ g, Verity.parsedConsts (some r) g = κ₀ g)
@@ -117,7 +117,7 @@ theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bri
           ∀ v : BitVec ((Flock.Bridge.Parsed.circuit o).w g), v.getLsbD 0 = b → op g v)
     (hconst : ∀ g b, Verity.parsedConsts o g = some b → ∀ v : BitVec ((Flock.Bridge.Parsed.circuit o).w g),
       (∀ i : Fin ((Flock.Bridge.Parsed.circuit o).w g), v.getLsbD i.val = b) → op g v)
-    (tr : (Flock.Bridge.Parsed.circuit o).Transcript) (htr : HEq tr (Flock.Bridge.transcriptOf r.D r.hU r.n κ₀ val)) :
+    (tr : (Flock.Bridge.Parsed.circuit o).Trace) (htr : HEq tr (Flock.Bridge.transcriptOf r.D r.hU r.n κ₀ val)) :
     (Accounting.unbound (Flock.Bridge.Parsed.parts o) op tr).image Fin.val ⊆ F := by
   subst ho hC
   obtain rfl := eq_of_heq hP
@@ -184,7 +184,7 @@ theorem unbound_subset_faulty_part
       (∀ i : Fin (A.fileRead.circuit.w g), v.getLsbD i.val = b) → op g v)
     (w : Wit) :
     (Accounting.unbound A.fileRead.parts op
-        (cast (congrArg Verity.Circuit.Transcript A.circuit_eq.symm)
+        (cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
           (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ (w.val sha512Msg A.Cd
             (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.law) A.desc ⟨"", 0, []⟩
               A.roots))))).image Fin.val ⊆

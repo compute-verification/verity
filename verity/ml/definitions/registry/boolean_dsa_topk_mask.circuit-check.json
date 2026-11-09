@@ -1,5 +1,13 @@
 {
  "definitions": {
+  "DsaButterflyRowsPad_v2{T=6,N=9,K=8,W=3,E=16}": {
+   "and": 1296,
+   "type": "42505e73aeeea38ba1ec639e3cd9550a86c90bb228f06044de8723e5c6e6f9e63203e24eaf74b5927180a9ba35716619b8f2263742f2dc44a60101752e35ed2e"
+  },
+  "DsaButterflyRowsPad_v2{T=9,N=16,K=8,W=3,E=16}": {
+   "and": 1536,
+   "type": "5bdd8230a838fa8d7186c851ecd03054e1e4576b54682a4474281a34fc4dbd0794d229988e6c8ac2e226f90b32d32759e2f7ba4b33196c9191e28a06fbd65362"
+  },
   "DsaButterflyRows_v2{N=7,K=3,W=2,E=16}": {
    "and": 352,
    "type": "bfd19fce73c6a1e7ffbbcd65c15779138bf1b5f2fb2f7df443f445def93a3d15af3e3db239c12ce82a4e02566f691d594e0300a2891c606a53448f8a42453dcc"
@@ -15,6 +23,14 @@
   "DsaButterflySettings_v2{N=9,K=8}": {
    "and": 78,
    "type": "df5977d498141f1be82ace3c913d1efac171706daaf8519e863f3078eb15dbdf57ae3d485b4fbbf83558a883176959f6b61b380ff4acd8916b022ac44ac6772a"
+  },
+  "DsaRowValid_v1{N=20}": {
+   "and": 47,
+   "type": "43832c10de62e9838c0d7bf049c1c58d6cff059e32aa2c4a7aef50c4440c330faae28ea285696774765de626348e6db0438ad444b50717c358dc39313cc84bd5"
+  },
+  "DsaTopKMaskCounted_v2{N=20,TOPK=16}": {
+   "and": 3183,
+   "type": "7b7fe05b0bd6114b638a1233de981045dd5216470ce6c5f1811a22094aa9091b576cfa65522c251e1217583a91270db14804d48dc87074321a38db18ff23a8e4"
   },
   "DsaTopKMask_v2{N=20,TOPK=16}": {
    "and": 3096,

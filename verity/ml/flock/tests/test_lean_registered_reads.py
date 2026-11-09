@@ -49,7 +49,6 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 
 
 def _program() -> tuple[Program, dict]:
-    pytest.importorskip("verity_numerical")
     from verity_flock import subcircuit_templates as TM
 
     template = TM.rope_head(64).definition()
@@ -75,13 +74,13 @@ def stage(d: Path) -> SimpleNamespace:
     rows, the verifier's own reads file (its program's reads of cs and x, and the output rows), and the statement's
     bindings, under `d`."""
     from verity_flock import subcircuit_templates as TM
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     program, query = _program()
     part = P.partition(program, query)
-    s = InputSet.open(generate(TM.rope_head(64), len(POSITIONS), 20260928, d / "set")["path"])
+    s = InputSet.open(synthetic_set(TM.rope_head(64), len(POSITIONS), 20260928, d / "set")["path"])
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_digest(program),
                       statics=FC.set_statics(s))
     (d / "circuit.txt").write_text(text)

@@ -20,6 +20,7 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
   schema its Value names (`over`).
 * Declared, or refused: `population` (the record's `population`, `program` and `partition`, which are functions of the
   check and N); `population:<template>` (a stratified or work sampling design's strata, one per template); `window` (its provenance);
+  `seed_salt` when the window names one (the challenger's coin, so the Spec declares it of kind `coins`);
   `leaf_layer` and `anchors` when not empty; and a value's layout, `leaves:<value>` and `domain:<value>`, with
   `words:<value>` and `word_bits:<value>` for a registered value.
 
@@ -31,9 +32,9 @@ order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 **A window of templates.** A `Stream` takes one template, or a window's several (a TP rank's served window, every
 provable family of its step): the check's program is each template's digest and its query `Q_template_instances`, in
 the window's order, and each registration's population program is the templates' mixed population at the challenger's
-own counts (`register(counts=)`), sampled once by the Spec's sampling design, `stratified:K` with one stratum per template. The
-verifier reads one program and one query either way, so a window's registration, sample and run are its
-`check`, `Select.select` and `Run.run` as they are for one template's.
+own counts (`register(counts=)`), sampled once by the Spec's sampling design, `stratified-rate:NUM/DEN` or `work-rate:NUM/DEN`
+with one stratum per template. The verifier reads one program and one query either way, so a window's registration, sample
+and run are its `check`, `Select.select` and `Run.run` as they are for one template's.
 
 **The sample.** `register` logs the record and its receipt, whose `received` is the record's position in the stream's log.
 The challenger then samples once (`select`) from its coins (`coins.ChallengerCoins`, opened after the registration's
@@ -50,17 +51,32 @@ verifier's `Spot.Select` ports, held to them by its difftest on fixed coins.
 **A two-stage sampling design** (`TwoStage(grain, replay, k)`, `Stream(replay=)`). The registration is the boundary
 commitment: its population is the replay blocks, the instances of the replay block's Definition under the replay grain's
 query, and its roots are the boundary values (phase `serve`). The first stage (`select`) samples replay blocks by the
-`replay` law, a rate law or `subset:K`: the replay sample. The prover then replays each sampled replay block and commits its
+`replay` law, a rate law: the replay sample. The prover then replays each sampled replay block and commits its
 interior (phase `interior`) in the interior registration (`register_interiors`), over the Q·n_rho proof blocks of the Q
-sampled replay blocks, replay block `sample[i]`'s being [i·n_rho, (i+1)·n_rho), registered after the registration
-(`previous`) and before the second stage's coins. The second stage (the second `select`, on the interior registration)
-samples `k` proof blocks in each sampled replay block on fresh coins (`second_law`: one stratum per sampled replay block),
-and its sample is proved. The outcome holds both audit records and accepts when both do; its profile counts incorrect
-proof blocks at each replay block's footprint, which the boundary commitment fixes before any coin
-(`IntegrityProfile`'s two levels). One-stage is `Law`: a two-stage design whose replay blocks are single proof blocks is
+sampled replay blocks, registered after the registration (`previous`) and before the second stage's coins. A replay
+block holds n_t instances of each template t of the check (`replay_cells`, the check naming them in the order of their
+first instance), and the interior is template-major (`Stream.interior_program`): template t's Q·n_t proof blocks from
+off_t = Q·Σ_{t'<t} n_t', replay block `sample[i]`'s instances of it [off_t + i·n_t, off_t + (i+1)·n_t), one cell. The
+second stage (the second `select`, on the interior registration) samples k_t proof blocks in each cell of template t on
+fresh coins (`second_law`: one stratum per cell; `second_counts`), and its sample is proved. The outcome holds both
+audit records and accepts when both do; its profile counts incorrect proof blocks at each replay block's footprint,
+which the boundary commitment fixes before any coin (`IntegrityProfile`'s two levels). One-stage is `Law`: a two-stage design whose replay blocks are single proof blocks is
 refused, so each design has one form. Both stages' samples are the Lean verifier's (`Select.select`,
 `Select.selectSecond`), and its knowledge soundness at Flock's masked record is `SamplingDeploy.ksTwo_code`'s, under
 the premises that theorem takes.
+
+**The circuit files.** A two-stage run's second-stage sessions each verify against their template's circuit file: the
+flat Flock circuit file of one instance of it (`verity_flock.class_statement.UnitStager`, `unit_lowering` at
+`structural=False`, as one-stage's sessions verify against theirs), which binds the interior registration's partition
+and program digests. The auditor names each file by its SHA-512 in the run's interior params, `proofs.templates`
+(`template_circuits`), beside the header of the template's registered reference statement and the registered reads it
+reads, which round 2 takes as given and holds each statement's header and registered reads to but for the run's fields
+(`second_stage.RUN_FIELDS`, `second_stage.blank_reads`), and reproduces the file from public data
+alone: the template's Definition and rows, the interior's
+partition and program digests, the values it reads (`reads`), its AND gates per stage (`stage_ands`) and the leaf
+scheme, in a process where `FLOCK_PACK_WORDS`, `FLOCK_CORE_ROWS`, `FLOCK_PLAIN_LEAVES`, `FLOCK_OWN_ROWS` and
+`FLOCK_GEMM_TILE` are unset, since each changes the file. The interior's digests depend on Q, which a rate law draws, so
+the names are each run's and are handed to `outcome`.
 
 **The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
 coins, and reads its release on the challenger's clock (`salted_at`). `Stream.salt_released` instead records a salt
@@ -79,6 +95,13 @@ finite number, raises `ValueError`, and after the epoch ends a salt of either ki
 log holds `{"event": "salt", "salt", "salted_at"}` (with `"external": true` from `salt_released`), then each
 `{"event": "registration", "order", "registration", "salted_at", "received_at"}` or `{"event": "late-registration",
 "salted_at", "received_at"}`. With no registration deadline `register` reads no clock and logs nothing to the epoch log.
+
+**The window's seed salt.** `Stream.seed_salt` draws a window's seed salt at its open, before it serves: the one coin of
+the challenger's seed-salt family released after the window's open root (`coins.draw_seed_salt`), a family no sample
+reads, drawn once a window and before any registration of it (`seed-salted`, `seed-salt-late`), and logged
+(`{"event": "seed-salt", "window_root", "seed_salt", "seeded_at"}`). Each registration of that window is held to it by
+both verifiers (`registration.check`'s `seed_salt`, R6-seed-salt): its window names it, a certified input the window's
+circuits read. A verifier that didn't draw it reads it from the challenger's log (`coins.seed_salt_of`).
 
 **No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is sampled once, after its receipt (`select`); its
 proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
@@ -128,8 +151,7 @@ one-stage's audit record (null for `late` and `halted`). A `halted` outcome adds
 its `draw` is null when the registration was not sampled. `Outcome.record` is its SHA-512.
 
 **Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
-check with no proof deadline, and under a two-stage design a window of templates, a per-stratum `k` and more than one
-round. After R1 to R7, `register` refuses a `bernoulli` sampling design at any `p` (`bernoulli`), and `select` refuses a
+check with no proof deadline, and under a two-stage design more than one round. After R1 to R7, `register` refuses a `bernoulli` sampling design at any `p` (`bernoulli`), and `select` refuses a
 closure map (`closure`), which the sampled audit's soundness statement doesn't cover either.
 """
 from __future__ import annotations
@@ -143,15 +165,16 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Callable, Mapping, NoReturn, Sequence, TypeVar
 
-from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.codec import canonical_json, descriptor_id
 from verity.ml.circuits.defs import SpecializedDefinition
 from verity.ml.circuits.partition import Level
 from verity.ml.circuits.program import Program
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Subset
 
+from . import second_stage as SS
 from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
 from .one_stage.verdict import Verdict, _Collect
-from .coins import ChallengerCoins, OwnRandomness, closure_of, draw_first
+from .coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 HIDING = "hm96-sha512/"
@@ -256,23 +279,45 @@ class All:
         return {"rule": "all"}
 
 
+def fixed(text: Any) -> str:
+    """The refusal of a law that is no rate (`rate`): a fixed count `subset:K`, `stratified:K` or `work:K` samples each proof
+    block with K/N, which falls as the prover pads the N it registers. The Lean verifier's `Select.FIXED` is this."""
+    return ("a law is rate:NUM/DEN or rate:NUM/DEN:T (0 < NUM <= DEN, T >= 1), stratified-rate:NUM/DEN or work-rate:NUM/DEN "
+            f"(0 < NUM <= DEN) or bernoulli:NUM/DEN, not {text!r}: a fixed count samples each proof block with K/N, which "
+            "falls as the prover pads the N it registers")
+
+
+def rate(text: Any) -> bool:
+    """Whether a law text is a rate: a rate sampling design (`draw.parse_rate`), a stratified or work rate sampling design
+    (`draw.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses (`bernoulli`). The Lean verifier's
+    `Select.rate?` is this."""
+    if D.parse_rate(text) is not None or D.parse_strata_rate(text) is not None:
+        return True
+    try:
+        return D.parse_design(text)["law"] == "bernoulli"
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+
 @dataclass(frozen=True)
 class Law:
-    """A one-stage sampling design: the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T` (`draw.parse_rate`), what a new Spec states, or
-    one in one-stage's syntax (`draw.parse_law`): `subset:K`, `bernoulli:NUM/DEN`, `stratified:K` or `work:K`. A rate
-    samples `subset:K` at K = ceil(NUM N / DEN) rounded up to a multiple of the T tables (`draw.rate_count`) over the N
-    proof blocks each registration brings, so every proof block is sampled with probability at least NUM/DEN however large the prover
-    makes N; a fixed `subset:K` samples each with K/N."""
+    """A one-stage sampling design, a rate (`rate`): the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T`
+    (`draw.parse_rate`), the stratified rate `stratified-rate:NUM/DEN` or the work rate `work-rate:NUM/DEN`
+    (`draw.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses. A registration's N proof blocks
+    are the prover's to size, so a fixed count, `subset:K`, `stratified:K` or `work:K`, which samples each proof block with
+    K/N as the prover pads N, is refused (`fixed`). A rate samples `subset:K` at K = ceil(NUM N / DEN) rounded up to a
+    multiple of the T tables (`draw.rate_count`) over the N proof blocks each registration brings, so every proof block is
+    sampled with probability at least NUM/DEN however large the prover makes N. The stratified rate samples the stratified
+    sampling design at the K its strata need to draw ceil(NUM n_s / DEN) of each template's n_s proof blocks (`draw.strat_k`),
+    and the work rate the work sampling design at K = ceil(NUM N / DEN) with each stratum's floor at the rate
+    (`selection_table`, `draw.rate_floor`), so each stratum's proof blocks are sampled with probability at least NUM/DEN
+    however the prover spreads N over templates."""
 
     text: str
 
     def __post_init__(self) -> None:
-        if D.parse_rate(self.text) is None:
-            try:
-                D.parse_law(self.text)
-            except ValueError:
-                raise ValueError("a law is rate:NUM/DEN or rate:NUM/DEN:T (0 < NUM <= DEN, T >= 1), subset:K, stratified:K, "
-                                 f"work:K or bernoulli:NUM/DEN, not {self.text!r}") from None
+        if not rate(self.text):
+            raise ValueError(fixed(self.text))
 
     def to_json(self) -> dict[str, Any]:
         return {"rule": "law", "law": self.text}
@@ -304,39 +349,39 @@ def _grain(g: Any) -> bool:
 
 
 def _replay_law(text: Any) -> bool:
-    """`Select.replayLaw?`: a rate law or `subset:K`, a uniform sample of replay blocks."""
-    if D.parse_rate(text) is not None:
-        return True
-    try:
-        return D.parse_law(text)["law"] == "subset"
-    except (ValueError, TypeError):
-        return False
+    """`Select.replayLaw?`: a rate law, a uniform sample of replay blocks at the rate however many the prover registers."""
+    return D.parse_rate(text) is not None
 
 
 @dataclass(frozen=True)
 class TwoStage:
     """A two-stage sampling design (the module docstring). `grain`: the replay grain, the replay partition's query,
     `Q_template_instance` over the replay block's Definition (`partition.template_instance_query`), whose instances in the
-    registration's program are its replay blocks. `replay`: the first stage's law over them, a rate law or `subset:K`.
-    `k`: the proof blocks the second stage samples in each sampled replay block, on fresh coins after the interior
-    registration; a `Stream` holds it to 1 <= k < n_rho, since k = n_rho would prove whole replay blocks, and refuses
-    replay blocks of one proof block (`Law` is that design)."""
+    registration's program are its replay blocks. `replay`: the first stage's law over them, a rate law.
+    `k`: the proof blocks the second stage samples in each cell (a sampled replay block's instances of one template), on
+    fresh coins after the interior registration: one count for every template, or `{template's descriptor id: k_t}`
+    naming each of the check's templates once. A cell of fewer proof blocks than its count is proved whole
+    (`second_counts`); a `Stream` refuses a design that proves every cell whole, which would prove whole replay blocks,
+    and replay blocks of one proof block (`Law` is that design)."""
 
     grain: Mapping[str, Any]
     replay: str
-    k: int
+    k: int | Mapping[str, int]
 
     def __post_init__(self) -> None:
         if not _grain(self.grain):
             raise ValueError("a two-stage design's grain is the replay partition's query, Q_template_instance v0 over the "
                              f"replay block's Definition (partition.template_instance_query), not {self.grain!r}")
         if not _replay_law(self.replay):
-            raise ValueError(f"a two-stage rule's replay law is a rate law or subset:K, not {self.replay!r}")
-        if not (type(self.k) is int and self.k >= 1):
-            raise ValueError("a two-stage rule samples k >= 1 proof blocks in each replay block")
+            raise ValueError(f"a two-stage rule's replay law is a rate law, rate:NUM/DEN or rate:NUM/DEN:T, not {self.replay!r}")
+        if not (type(self.k) is int and self.k >= 1 or isinstance(self.k, Mapping) and self.k and all(
+                isinstance(t, str) and type(k) is int and k >= 1 for t, k in self.k.items())):
+            raise ValueError("a two-stage rule samples k >= 1 proof blocks in each cell: one count, or one per template "
+                             "{descriptor id: k_t}")
 
     def to_json(self) -> dict[str, Any]:
-        return {"rule": "two-stage", "grain": dict(self.grain), "replay": self.replay, "k": self.k}
+        return {"rule": "two-stage", "grain": dict(self.grain), "replay": self.replay,
+                "k": self.k if type(self.k) is int else dict(self.k)}
 
 
 Selection = All | Law | Sequential | TwoStage
@@ -442,6 +487,9 @@ class Spec:
                 raise ValueError(f"public item {p.item!r}: a commitment item names a declared value")
             if p.source == "window" and self.check.window is None:
                 raise ValueError(f"public item {p.item!r}: a window item needs the check's window statement")
+        if R.SEED_SALT in items and items[R.SEED_SALT].kind != "coins":
+            raise ValueError(f"public item {R.SEED_SALT!r}: the window's seed salt is the challenger's coin, of kind "
+                             "'coins'")
         for o in self.check.public_outputs:
             if o not in items or items[o].kind != "output":
                 raise ValueError(f"public output {o!r} needs a public item of kind 'output', with its reason")
@@ -592,6 +640,8 @@ def check_public(spec: Spec, record: Any, values: Sequence[Value] | None = None,
         need += [f"population:{s.get('template') if isinstance(s, Mapping) else s}" for s in law["strata"]]
     if "window" in record:
         need.append("window")
+    if isinstance(record.get("window"), Mapping) and R.SEED_SALT in record["window"]:
+        need.append(R.SEED_SALT)
     if record.get("leaf_layer") is not None:
         need.append("leaf_layer")
     if record.get("anchors"):
@@ -677,21 +727,76 @@ def _reads_positions(supplied: Mapping[str, Any] | None) -> bool:
         return False
 
 
-def selection_law(rule: Selection, n: int) -> dict[str, Any]:
-    """The sampling design a selection rule names over `n` proof blocks, before `draw.derive` expands it over the check's program and
-    query: `subset:n` for `All` and a `Law`'s own. A rate sampling design is `subset:K` at K = `draw.rate_count` over `n`, and raises
-    `Refused` (`rate`) unless 1 <= K <= n. A two-stage design's is its first stage's, over `n` replay blocks. The Lean
-    verifier's `Select.Rule.over`, then `Select.Rule.lawOver`, is this."""
+def selection_sizes(rule: Selection, program: Program, query: Mapping[str, Any]) -> list[int]:
+    """The strata sizes a stratified rate's K reads (`draw.strata_sizes` of `program` under `query`), none for any other rule.
+    Raises `Refused` (`rate`) where the query doesn't apply to a stratified rate, as `selection_table` does for a work rate.
+    The Lean verifier's `Select.strataSizes`, which `Rule.over` reads only for a stratified rate, is this."""
+    strata = D.parse_strata_rate(rule.text) if isinstance(rule, Law) else None
+    if strata is None or strata[0]:
+        return []
+    try:
+        return D.strata_sizes(program, query)
+    except P.QueryRefused as e:
+        raise _refuse("rate", {"law": rule.text, "reason": str(e)}) from None
+
+
+def selection_law(rule: Selection, n: int, sizes: Sequence[int] = ()) -> dict[str, Any]:
+    """The sampling design a selection rule names over `n` proof blocks in strata of `sizes` (`selection_sizes` of the check's
+    program and query), before `draw.derive` expands it over them: `subset:n` for `All` and a `Law`'s own. A rate sampling
+    design is `subset:K` at K = `draw.rate_count` over `n`, a stratified rate `stratified:K` at K = `draw.strat_k` over
+    `sizes`, and a work rate `work:K` at K = ceil(NUM n / DEN) over `selection_table`'s work table, each raising `Refused`
+    (`rate`) unless 1 <= K <= n, and a stratified rate without strata too. A two-stage design's is its first stage's, over
+    `n` replay blocks. The Lean verifier's `Select.Rule.over`, then `Select.Rule.lawOver`, is this."""
     if isinstance(rule, All):
         return {"law": "subset", "k": n}
     text = rule.replay if isinstance(rule, TwoStage) else rule.text
-    rate = D.parse_rate(text)
-    if rate is None:
-        return D.parse_law(text)
-    k = D.rate_count(*rate, n)
-    if not 1 <= k <= n:
+    rate, strata = D.parse_rate(text), D.parse_strata_rate(text)
+    if rate is None and strata is None:
+        return D.parse_design(text)
+    if rate is not None:
+        kind, k = "subset", D.rate_count(*rate, n)
+    elif strata[0]:
+        kind, k = "work", D.rate_count(strata[1], strata[2], 1, n)
+    else:
+        kind, k = "stratified", D.strat_k(strata[1], strata[2], sizes, n)
+    if not 1 <= k <= n or (kind == "stratified" and not sizes):
         raise _refuse("rate", {"law": text, "population": n, "k": k})
-    return {"law": "subset", "k": k}
+    return {"law": kind, "k": k}
+
+
+def selection_table(rule: Selection, program: Program, query: Mapping[str, Any],
+                    work_table: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+    """The work table a selection rule's sampling design (`selection_law`'s) is expanded over, from the challenger's own
+    `work_table`: a work rate's, each stratum of `program` under `query` with its floor at the rate (`draw.rate_table`), else
+    `work_table` itself. Raises `Refused` (`rate`) where the query doesn't apply, a work rate has no work table or it names
+    no work for a stratum's template. The Lean verifier's `Select.Rule.tableOver` is this."""
+    strata = D.parse_strata_rate(rule.text) if isinstance(rule, Law) else None
+    if strata is None or not strata[0]:
+        return work_table
+    try:
+        return D.rate_table(program, query, strata[1], strata[2], work_table)
+    except (P.QueryRefused, ValueError) as e:
+        raise _refuse("rate", {"law": rule.text, "reason": str(e)}) from None
+
+
+def params_law(law: Any, program: Program, query: Mapping[str, Any],
+               work_table: Mapping[str, Any] | None) -> tuple[Any, Mapping[str, Any] | None]:
+    """One-stage's parameters' agreed sampling design and the work table it is expanded over: a law object as given, with
+    `work_table`, or a rate as a selection rule states it (`draw.parse_rate`, `draw.parse_strata_rate`), its sampling design
+    over the population of `program` under `query` and its strata (`selection_law`) and its work table (`selection_table`). Raises
+    `ValueError` for any other text, a query that doesn't apply, or a rate `selection_law` or `selection_table` refuses.
+    The Lean verifier's `OneStage.design` is this."""
+    if not isinstance(law, str):
+        return law, work_table
+    if D.parse_rate(law) is None and D.parse_strata_rate(law) is None:
+        raise ValueError("a law stated as text is a rate, rate:NUM/DEN[:T], stratified-rate:NUM/DEN or work-rate:NUM/DEN, "
+                         f"not {law!r}")
+    rule = Law(law)
+    try:
+        law = selection_law(rule, P.units(program, query), selection_sizes(rule, program, query))
+        return law, selection_table(rule, program, query, work_table)
+    except (P.QueryRefused, Refused) as e:
+        raise ValueError(str(e)) from None
 
 
 #: The refusal of a `bernoulli` sampling design (`bernoulli`), the Lean verifier's `Draw.BERNOULLI`.
@@ -729,30 +834,127 @@ def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable
     return obj
 
 
-def second_law(sample: Sequence[int], n: int, k: int) -> dict[str, Any]:
-    """The second stage's sampling design over the len(sample)·n proof blocks of the replay sample `sample`, replay block
-    `sample[i]`'s being [i·n, (i+1)·n): one stratum per sampled replay block, named by its index in the registration,
-    `k` of its `n` proof blocks in each (`draw.stratum_k` at K = len(sample)·k is `k` in every stratum). The Lean
-    verifier's `Select.secondLaw` is this."""
-    return {"law": "stratified", "k": len(sample) * k,
-            "strata": [{"template": str(r), "units": [[i * n, (i + 1) * n]], "k": k} for i, r in enumerate(sample)]}
+def replay_cells(replay: Program, query: Mapping[str, Any]) -> tuple[int, ...]:
+    """Each template's proof blocks in one replay block (n_t), in the order the check's template query names them: the
+    query applied to the replay block's Program, counted by template. Raises `ValueError` where the query doesn't
+    apply, and where the query doesn't name each template of the replay block once, in the order of its first instance
+    in it, so that template t's cells are the statement's stratum t. The Lean verifier's `Select.replayCells` is this."""
+    try:
+        ranges = P.ranges(replay, query)
+    except (P.QueryRefused, ValueError) as e:
+        raise ValueError(f"the check's query doesn't apply to the replay block: {e}") from None
+    ids = _check_ids(query)
+    first = list(dict.fromkeys(t for t, _lo, _n in ranges))
+    if ids is None or first != ids:
+        raise ValueError(f"the check's templates {ids} are not the replay block's, each once, in the order of its first "
+                         f"instance in it ({first})")
+    return tuple(sum(n for t, _lo, n in ranges if t == i) for i in ids)
 
 
-def select_second(sample: Sequence[int], n: int, k: int, coins: Callable[[int], bytes], *,
+def _check_ids(query: Any) -> list[str] | None:
+    """The templates the check's template query names, in its order, its parameters checked as core's `validate` does;
+    None for any other query. The Lean verifier's `Select.templateIds` (`Flock.TemplateQuery.templatesOf`) is this."""
+    if not isinstance(query, Mapping):
+        return None
+    name = query.get("name") if isinstance(query.get("name"), str) else ""
+    version = query.get("version") if _nat(query.get("version")) else 0
+    params = query.get("params")
+    keys = sorted(params) if isinstance(params, Mapping) else []
+    if (name, version) == ("Q_template_instance", 0):
+        return [params["template"]] if keys == ["template"] and isinstance(params["template"], str) else None
+    ts = params.get("templates") if (name, version) == ("Q_template_instances", 0) and keys == ["templates"] else None
+    ok = isinstance(ts, list) and ts and all(isinstance(t, str) for t in ts) and len(set(ts)) == len(ts)
+    return list(ts) if ok else None
+
+
+def template_circuits(proofs: Mapping[str, Any] | None, query: Mapping[str, Any]
+                      ) -> tuple[tuple[str, str, dict[str, Any], dict[str, Any] | None], ...]:
+    """The auditor's params naming each template's circuit file and its registered reference statement's header and
+    registered reads (the module docstring), a two-stage run's `interior.params.proofs`: `{"templates": [{"template":
+    <descriptor id>, "circuit": <SHA-512, lowercase hex>, "header": <the registered reference statement's header>,
+    "registered": <the registered reads it reads, null for none>}, ...]}`, as (template, circuit, header,
+    registered) in the order the check's template query `query` names the templates, which is REPLAY_c's first-instance
+    order (`replay_cells`). None names no file and gives none. Raises `ValueError` for any other form, a circuit that
+    isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor null, and a
+    list that doesn't name each of the check's templates once, in its order. The Lean verifier's `Run.templateCircuits`
+    is this."""
+    if proofs is None:
+        return ()
+    ids = _check_ids(query)
+    if ids is None:
+        raise ValueError("a two-stage design's check is a template query")
+    form = ('the params\' proofs are {"templates": [{"template": <descriptor id>, "circuit": <SHA-512>, '
+            '"header": <object>, "registered": <object or null>}, ...]}')
+    if not isinstance(proofs, Mapping) or set(proofs) != {"templates"} or not isinstance(proofs["templates"], (list, tuple)):
+        raise ValueError(form)
+    named = []
+    for e in proofs["templates"]:
+        if not (isinstance(e, Mapping) and set(e) == {"template", "circuit", "header", "registered"}
+                and isinstance(e["template"], str) and isinstance(e["circuit"], str) and _DIGEST.fullmatch(e["circuit"])
+                and isinstance(e["header"], dict) and (e["registered"] is None or isinstance(e["registered"], dict))):
+            raise ValueError(f"{form}, each circuit a SHA-512 in lowercase hex, each header an object and each "
+                             f"registered an object or null: {e!r}")
+        named.append((e["template"], e["circuit"], e["header"], e["registered"]))
+    if [t for t, *_ in named] != ids:
+        raise ValueError(f"the params name the circuits of {[t for t, *_ in named]}, not the check's templates {ids}, "
+                         "each once, in its order")
+    return tuple(named)
+
+
+def second_counts(k: int | Mapping[str, Any], ids: Sequence[str], ns: Sequence[int]) -> tuple[int, ...]:
+    """The second stage's count in each cell of template t, in the check's order: the rule's `k` (or its k_t), and n_t for
+    a cell of fewer proof blocks (proved whole). Raises `ValueError` for a map that doesn't name each of the check's
+    templates `ids` once. The Lean verifier's `Select.Counts.over` is this."""
+    if isinstance(k, Mapping):
+        if set(k) != set(ids):
+            raise ValueError(f"a two-stage rule's counts name each of the check's templates once: {sorted(k)} vs {list(ids)}")
+        return tuple(min(k[t], n) for t, n in zip(ids, ns))
+    return tuple(min(k, n) for n in ns)
+
+
+def _offsets(q: int, ns: Sequence[int]) -> list[int]:
+    """Each template's first interior proof block, over a replay sample of `q`: Q·Σ_{t'<t} n_t'."""
+    return [q * sum(ns[:t]) for t in range(len(ns))]
+
+
+def second_law(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int]) -> dict[str, Any]:
+    """The second stage's sampling design over the interior's len(sample)·Σ n_t proof blocks, template-major: template
+    t's being [off_t, off_t + Q·n_t), off_t = Q·Σ_{t'<t} n_t', and sampled replay block `sample[i]`'s instances of it
+    [off_t + i·n_t, off_t + (i+1)·n_t), one cell. One stratum per cell, template by template and in each by sampled
+    replay block, named `r/t` (replay block r of the registration, template t of the check's), `ks[t]` of the cell's
+    `ns[t]` proof blocks in each; the strata tile [0, Q·Σ n_t) in order. The stratified law sizes each stratum's count
+    in proportion to its size, which cells of several templates' sizes don't follow, so the law is the work law at
+    k = 1 and unit work: its rule (`draw.work_k`) gives each stratum max(floor, 1) capped at its size, and each cell's
+    floor is its count. The Lean verifier's `Select.secondLaw` is this."""
+    off = _offsets(len(sample), ns)
+    return {"law": "work", "k": 1,
+            "strata": [{"template": f"{r}/{t}", "units": [[off[t] + i * n, off[t] + (i + 1) * n]], "work": 1,
+                        "floor": ks[t], "k": ks[t]}
+                       for t, n in enumerate(ns) for i, r in enumerate(sample)]}
+
+
+def select_second(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int], coins: Callable[[int], bytes], *,
                   sampler: Sampler | None = None) -> dict[str, Any]:
     """The second stage: `second_law`'s sample object over the replay sample's proof blocks, `sampler`'s sample or
     `coins.draw_first` on `coins` (the challenger's, opened after the interior registration's digest), held to
-    `draw.check_draw`. Raises `ValueError` for a replay sample that isn't ascending replay blocks, each once, a replay
-    block of fewer than two proof blocks (its design is `Law`'s), `k` not in [1, n), a sample not well formed under its sampling design,
-    and where `draw_first` does. The Lean verifier's `Select.selectSecond` is this."""
+    `draw.check_draw`. Raises `ValueError` for a replay sample that isn't ascending replay blocks, each once, cells that
+    aren't one or more templates' of at least one proof block each, a replay block of fewer than two proof blocks (its
+    design is `Law`'s), a count not in [1, n_t], counts that prove every cell whole (whole replay blocks), a sample not
+    well formed under its sampling design, and where `draw_first` does. The Lean verifier's `Select.selectSecond` is
+    this."""
     if not (sample and all(type(r) is int and r >= 0 for r in sample) and all(a < b for a, b in zip(sample, sample[1:]))):
         raise ValueError("a replay sample is one or more replay blocks, ascending, each once")
-    if n < 2:
-        raise ValueError(f"a replay block of {n} proof blocks is a proof block: its rule is 'law'")
-    if not 1 <= k < n:
-        raise ValueError(f"the second stage samples 1 to {n - 1} of each replay block's {n} proof blocks, not {k}: {n} "
-                         "would prove whole replay blocks")
-    law, m = second_law(sample, n, k), len(sample) * n
+    if not (ns and len(ks) == len(ns) and all(type(n) is int and n >= 1 for n in ns)):
+        raise ValueError("a replay block's cells are one or more templates', each of at least one proof block, with a "
+                         "count each")
+    if sum(ns) < 2:
+        raise ValueError(f"a replay block of {sum(ns)} proof blocks is a proof block: its rule is 'law'")
+    if not all(type(k) is int and 1 <= k <= n for k, n in zip(ks, ns)):
+        raise ValueError(f"the second stage samples 1 to n_t of each cell's n_t proof blocks: counts {list(ks)} over "
+                         f"cells of {list(ns)}")
+    if list(ks) == list(ns):
+        raise ValueError(f"counts {list(ks)} prove every cell of {list(ns)} whole, and so whole replay blocks")
+    law, m = second_law(sample, ns, ks), len(sample) * sum(ns)
     units = sorted(int(u) for u in (sampler(dict(law), m) if sampler is not None
                                     else draw_first(OwnRandomness(coins), law, m)["units"]))
     obj = {**law, "population": m, "units": units}
@@ -769,8 +971,9 @@ class _Entry:
     program: Program
     work_table: Mapping[str, Any] | None = None
     #: what `register` handed R1-R7 besides the record: (ports, leaf_layer, anchors, the log's records, registered,
-    #: supplied, pinned, schemas, window_root, held, outputs)
+    #: supplied, pinned, schemas, window_root, held, outputs), and its window's seed salt
     copies: tuple[Any, ...] = ()
+    seed_salt: str | None = None
     read: bytes | None = None
     closure: Mapping[int, Sequence[int]] | None = None
     draw: Draw | None = None
@@ -783,6 +986,7 @@ class _Entry:
     interior: WindowCommitmentRecord | None = None
     interior_program: Program | None = None
     interior_copies: tuple[Any, ...] = ()
+    interior_seed_salt: str | None = None
     second: Draw | None = None
     second_read: bytes | None = None
 
@@ -1294,8 +1498,11 @@ class Stream:
 
     A stream runs one epoch with one salt: `salt` issues it from the coins, or `salt_released` records one released
     elsewhere with its release, and under `Check.registration_deadline` every registration is received within the
-    deadline of that release, or the epoch ends (`ended`) at the first that isn't. `epoch_log` holds the challenger's
-    clock readings.
+    deadline of that release, or the epoch ends (`ended`) at the first that isn't. A window's seed salt is
+    `seed_salt`'s, drawn at the window's open, and both verifiers hold every registration of the window to name it
+    (R6). That it is drawn once a window and before the window's first registration is the stream's own bookkeeping,
+    outside the rules below: a verifier that didn't draw it reads it from the challenger's log, which shows the one coin
+    (`coins.seed_salt_of`). `epoch_log` holds the challenger's clock readings.
 
     The stream's own rules (the budget, the open registrations, the salt and both deadlines, and each registration's
     once-only orders) decide each op by the verifier (`verifier.stream`: the Lean's `Spot.Stream`
@@ -1311,22 +1518,28 @@ class Stream:
 
     A window's stream may take `values`, the values its mixed population takes ahead of its templates' parameters
     (`partition.mixed_population_program`'s, `(name, leaves, width)` each), which a registration registers as its
-    program's (R7); the stream's digest names them. `log` is the prover's records the challenger logged before the
+    program's (R7); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
+    the window's Program where it is another form than the mixed population (the network certifier's scan in its
+    generator form, one batch a template reading a shared input, say): its proof blocks under the check's query are the
+    templates', one range each, in the window's order, and it is each registration's population program, a registration
+    whose `counts` aren't its ranges' refused (`population`); the stream's digest names it. `log` is the prover's records the challenger logged before the
     stream, a registration of another Program whose values this stream's registrations reuse (`register`'s
     `outputs`), say: the stream's log starts with them, in order, so R6 and R7 read them, and none of them is sampled.
 
     Under a two-stage design, `replay` is the challenger's own copy of the replay block's Definition: the grain is its
     template query, each registration's population program is its N instances, and its `n_rho` proof blocks are the
-    instances of `unit` in its own Program under the check's query, in order. A registration is then the boundary
-    commitment and its `select` the first stage; `register_interiors` takes the interior registration, a second
-    `select` on it is the second stage, and `deliver` and `outcome` take that sample (the module docstring).
+    instances of `unit` (a window's templates) in its own Program under the check's query, `cells` of them each
+    template's (n_t, `replay_cells`) and `counts` the second stage's in each of its cells (k_t, `second_counts`). A
+    registration is then the boundary commitment and its `select` the first stage; `register_interiors` takes the
+    interior registration (`interior_program`), a second `select` on it is the second stage, and `deliver` and
+    `outcome` take that sample (the module docstring). A window's `values` are then the interior's.
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
                  coins: ChallengerCoins | None = None, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None,
                  values: Sequence[tuple[str, int, int]] = (), log: Sequence[Mapping[str, Any]] = (),
-                 replay: SpecializedDefinition | None = None) -> None:
+                 replay: SpecializedDefinition | None = None, program: Program | None = None) -> None:
         if isinstance(spec.selection, Sequential):
             raise ValueError("the service doesn't run a Sequential selection yet")
         if spec.check.window is not None or spec.check.deadline is not None:
@@ -1362,27 +1575,42 @@ class Stream:
                              "population of its templates (give its unit as a sequence of them)")
         if values:
             P.mixed_population_program([(u, 1) for u in units], values=values)
+        if program is not None:
+            if isinstance(unit, SpecializedDefinition) or values or replay is not None:
+                raise ValueError("a stream's program is a window's, of its templates, given in place of their mixed "
+                                 "population: it takes no values and no replay block")
+            if not isinstance(program, Program):
+                raise ValueError(f"a window's program is a Program, not {type(program).__name__}")
+            try:
+                got = [tid for tid, _lo, _n in P.ranges(program, query)]
+            except (P.QueryRefused, ValueError) as e:
+                raise ValueError(f"the check's query does not apply to the window's program: {e}") from None
+            if got != [P.template_id(u) for u in units]:
+                raise ValueError(f"the window's program's proof blocks are not one range a template, in the window's "
+                                 f"order: its ranges are {got}")
         try:
             earlier = [(dict(r), R.digest(r)) for r in log]
             R.held_roots(r for r, _d in earlier)
         except (AttributeError, KeyError, TypeError, ValueError) as e:
             raise ValueError("a stream's earlier log is the prover's records, each a JSON object whose registered "
                              f"entries name their value, domain and root: {type(e).__name__}: {e}") from None
-        self.replay, self.n_rho = replay, None
+        self.replay, self.n_rho, self.cells, self.counts = replay, None, (), ()
         if isinstance(spec.selection, TwoStage):
-            self.n_rho = self._replay_blocks(spec, unit, replay, rounds)
+            self.cells, self.counts = self._replay_blocks(spec, units, replay, rounds)
+            self.n_rho = sum(self.cells)
         elif replay is not None:
             raise ValueError("only a two-stage stream has a replay block (Stream(replay=))")
         self.spec, self.unit, self.budget, self.delta, self.challenger = spec, unit, budget, delta, challenger
         self.query = spec.selection.grain if isinstance(spec.selection, TwoStage) else spec.check.query
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
-        self.rounds, self.values = rounds, values
+        self.rounds, self.values, self.program = rounds, values, program
         self._coins, self._clock, self._sampler = coins, clock, sampler
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {}),
                                **({"prover": prover} if prover is not None else {}),
                                **({"coins": "challenger"} if isinstance(coins, ChallengerCoins) else {}),
-                               **({"values": [list(v) for v in values]} if values else {})})
+                               **({"values": [list(v) for v in values]} if values else {}),
+                               **({"program": P.program_digest(program)} if program is not None else {})})
         self.binding = None if prover is None else R._binding({"stream": self.digest, "prover": prover})
         self._params = {"budget": budget, "rounds": rounds,
                         "registration_deadline": _reading(spec.check.registration_deadline),
@@ -1399,6 +1627,7 @@ class Stream:
         self._records: list[dict[str, Any]] = []
         self._epoch_log: list[dict[str, Any]] = []
         self._salted_at: float | None = None
+        self._seed_salts: dict[str, bytes] = {}
         self._fleet: Fleet | None = None
         self._fleet_index: int | None = None
         self._digests: dict[str, int] = {}
@@ -1406,30 +1635,34 @@ class Stream:
             self._logged(r, d)
 
     @staticmethod
-    def _replay_blocks(spec: Spec, unit: Any, replay: Any, rounds: int) -> int:
-        """A two-stage stream's n_rho, the proof blocks of one replay block, once its copies fit the design; raises
+    def _replay_blocks(spec: Spec, units: Sequence[SpecializedDefinition], replay: Any,
+                       rounds: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        """A two-stage stream's cells, each template's proof blocks in one replay block (`replay_cells`, n_t in the
+        check's order), and the second stage's count in each (`second_counts`), once its copies fit the design; raises
         `ValueError` otherwise."""
         rule = spec.selection
         assert isinstance(rule, TwoStage)
         if not isinstance(replay, SpecializedDefinition):
             raise ValueError("a two-stage stream takes the challenger's copy of the replay block's Definition (replay=)")
-        if not isinstance(unit, SpecializedDefinition):
-            raise ValueError("a two-stage stream's proof blocks are one template's: a window of templates is not built "
-                             "for a two-stage design")
         if dict(rule.grain) != P.template_instance_query(replay):
             raise ValueError("the two-stage design's grain is not the template query over the challenger's replay block")
         program = Program(replay)
-        n = P.units(program, spec.check.query)
-        if n < 2:
-            raise ValueError(f"a replay block of {n} proof blocks is a proof block: its rule is 'law'")
-        if not P.in_order(program, spec.check.query, n):
-            raise ValueError("the replay block's proof blocks are not its instances of the check's template, in order")
-        if rule.k >= n:
-            raise ValueError(f"the second stage samples 1 to {n - 1} of each replay block's {n} proof blocks, not "
-                             f"{rule.k}: {n} would prove whole replay blocks")
+        ns = replay_cells(program, spec.check.query)
+        if sum(ns) < 2:
+            raise ValueError(f"a replay block of {sum(ns)} proof blocks is a proof block: its rule is 'law'")
+        try:
+            gates = P.unit_gates(program, spec.check.query)
+        except (P.QueryRefused, ValueError) as e:
+            raise ValueError("a proof block of the replay block has no gates of its own") from e
+        if len(gates) != sum(ns):
+            raise ValueError("a proof block of the replay block has no gates of its own")
+        ks = second_counts(rule.k, [P.template_id(u) for u in units], ns)
+        if ks == ns:
+            raise ValueError(f"the second stage's counts {list(rule.k.values()) if isinstance(rule.k, Mapping) else rule.k}"
+                             f" prove every cell of {list(ns)} whole, and so whole replay blocks")
         if rounds != 1:
             raise ValueError("each sample of a two-stage stream is proved after its own interior registration: one round")
-        return n
+        return ns, ks
 
     @property
     def failures(self) -> int:
@@ -1453,7 +1686,8 @@ class Stream:
     @property
     def epoch_log(self) -> tuple[dict[str, Any], ...]:
         """The epoch's clock readings, in order: the salt's release, `{"event": "salt", "salt": <hex>, "salted_at"}`
-        (with `"external": true` from `salt_released`, `salted_at` being its `released_at`), and under `Check.registration_deadline` each registration received, `{"event": "registration", "order",
+        (with `"external": true` from `salt_released`, `salted_at` being its `released_at`), each window's seed salt,
+        `{"event": "seed-salt", "window_root", "seed_salt": <hex>, "seeded_at"}` (`seed_salt`), and under `Check.registration_deadline` each registration received, `{"event": "registration", "order",
         "registration": <digest>, "salted_at", "received_at"}`, or refused as late, `{"event": "late-registration",
         "salted_at", "received_at"}` (`salted_at` null when no salt was issued). A registration refused on what it holds
         is not received, and not logged."""
@@ -1580,6 +1814,31 @@ class Stream:
         self._salted_at = released_at
         self._epoch_log.append({"event": "salt", "salt": salt.hex(), "salted_at": released_at, "external": True})
 
+    def seed_salt(self, coins: ChallengerCoins, window_root: str) -> bytes:
+        """The window's seed salt, drawn at the window's open, before it serves (`coins.draw_seed_salt`): the first coin
+        of the challenger's seed-salt family (`coins`, a `coins.ChallengerCoins` over that family of the window's
+        session), released after the window's open root `window_root`. Its release is read on the challenger's clock
+        (`seeded_at`) and logged (`epoch_log`). Each registration of the window (`register`'s and `register_interiors`'
+        `window_root`) is then held to it by both verifiers: its window names it (`registration.SEED_SALT`), and a
+        window that names another, or none, is refused (`R6-seed-salt`), as is a seed salt where the stream drew none.
+        Raises `Refused`: `seed-salted` (the window has its salt: nothing redraws it) or `seed-salt-late` (the stream
+        received a registration of the window already); and `CoinError` where the draw fails."""
+        if isinstance(window_root, str) and window_root in self._seed_salts:
+            raise _refuse("seed-salted", {"window_root": window_root})
+        if isinstance(window_root, str) and any(window_root in (*e.copies[8:9], *e.interior_copies[8:9])
+                                                for e in self._entries):
+            raise _refuse("seed-salt-late", {"window_root": window_root})
+        salt = draw_seed_salt(coins, window_root)
+        seeded_at = self._clock()
+        self._seed_salts[window_root] = salt
+        self._epoch_log.append({"event": "seed-salt", "window_root": window_root, "seed_salt": salt.hex(),
+                                "seeded_at": seeded_at})
+        return salt
+
+    def _seed_salt_of(self, window_root: str | None) -> str | None:
+        salt = self._seed_salts.get(window_root) if isinstance(window_root, str) else None
+        return None if salt is None else salt.hex()
+
     def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *, leaf_layer: str | None = None,
                  anchors: Sequence[Any] = (), registered: Mapping[str, int] | None = None,
                  work_table: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
@@ -1591,7 +1850,8 @@ class Stream:
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
         templates, in its order, at `counts`, the challenger's own `{template's descriptor id: instances}` of the window,
-        every template's at least one, taking the stream's `values`), the check's query, the selection rule's sampling
+        every template's at least one, taking the stream's `values`; or the stream's own `program`, its ranges `counts`),
+        the check's query, the selection rule's sampling
         design, `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`,
         `schemas`, `window_root`, `held` and `outputs`, as `registration.check` takes them). Then the receipt. Under
@@ -1603,12 +1863,15 @@ class Stream:
         many registrations without a final outcome as it may (`open`, `ready`), when it is late, when a window's `counts`
         aren't at least one instance for each of its templates and N in all, or a single proof block's stream is given any
         (`population`), when the rule's rate sampling design
-        samples none or more than N proof blocks (`rate`, `selection_law`, before R1-R7), when either check fails, or, after both,
+        samples none or more than N proof blocks or a stratified rate's strata don't apply (`rate`, `selection_law`, before
+        R1-R7) or a work rate's strata or work table don't apply (`rate`, `selection_table`, R1-R7 then reading its table),
+        when either check fails, or, after both,
         when the sampling design is `bernoulli` at any p (`bernoulli`, `BERNOULLI`), when the program's proof blocks read stratum by stratum
         are not its N proof blocks in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
         deadline = self.spec.check.registration_deadline
         op: dict[str, Any] = {"op": "register"}
         got: dict[str, Any] = {}
+        seed_salt = self._seed_salt_of(window_root)
 
         def received() -> float:
             got["received_at"] = self._clock()
@@ -1620,25 +1883,30 @@ class Stream:
             if v.ok and not (type(n) is int and n >= 1):
                 v = _refuse("population", n).verdict
             if v.ok:
-                try:
-                    law = selection_law(self.spec.selection, n)
-                except Refused as r:
-                    v = r.verdict
-            if v.ok:
                 program = self._program(n, counts)
                 if program is None:
                     v = _refuse("population", {"counts": counts, "templates": None if self.templates is None else
                                                [P.template_id(t) for t in self.templates]}).verdict
             if v.ok:
+                try:
+                    law = selection_law(self.spec.selection, n, selection_sizes(self.spec.selection, program, self.query))
+                except Refused as r:
+                    v = r.verdict
+            if v.ok:
+                try:
+                    table = selection_table(self.spec.selection, program, self.query, work_table)
+                except Refused as r:
+                    v = r.verdict
+            if v.ok:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, self.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
-                            work_table, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs)
+                            table, registered, supplied, pinned, self.binding, schemas, window_root, held,
+                            outputs=outputs, seed_salt=seed_salt)
                 if v.ok and bernoulli(law):
                     v = _refuse("bernoulli", {"law": law, "reason": BERNOULLI}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
                     v = _refuse("population-order", {"population": n}).verdict
-                got.update(program=program, law=law, earlier=earlier)
+                got.update(program=program, law=law, table=table, earlier=earlier)
             if v.ok and self._fleet is not None:
                 try:
                     self._fleet._admit(self)
@@ -1661,9 +1929,9 @@ class Stream:
             earlier = self._log[:]
         self._append(reg)
         program, law = got["program"], got["law"]
-        self._entries.append(_Entry(reg, D.derive(program, self.query, law, work_table), program, work_table,
+        self._entries.append(_Entry(reg, D.derive(program, self.query, law, got["table"]), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
-                                     window_root, held, outputs)))
+                                     window_root, held, outputs), seed_salt))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -1671,14 +1939,18 @@ class Stream:
 
     def _program(self, n: int, counts: Mapping[str, int] | None) -> Program | None:
         """The challenger's population program for a registration of N = `n`: `unit`'s N instances, or a window's mixed
-        population at `counts` (`register`'s), which number N in all, taking the stream's `values`; None when `counts`
-        don't fit the stream. A two-stage stream's is `replay`'s N instances, its replay blocks."""
-        if self.templates is None:
+        population at `counts` (`register`'s), which number N in all, taking the stream's `values`, or the stream's own
+        `program` where its ranges are `counts`; None when `counts` don't fit the stream. A two-stage stream's is
+        `replay`'s N instances, its replay blocks."""
+        if self.templates is None or self.replay is not None:
             return P.population_program(self.replay or self.unit, n) if counts is None else None
         ids = [P.template_id(t) for t in self.templates]
         if not (isinstance(counts, Mapping) and set(counts) == set(ids)
                 and all(type(counts[i]) is int and counts[i] >= 1 for i in ids) and sum(counts.values()) == n):
             return None
+        if self.program is not None:
+            ranges = {tid: m for tid, _lo, m in P.ranges(self.program, self.query)}
+            return self.program if ranges == dict(counts) else None
         return P.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values)
 
     def _public(self, record: Mapping[str, Any], interior: bool = False) -> Verdict:
@@ -1742,17 +2014,21 @@ class Stream:
                            window_root: str | None = None, held: Sequence[str] | None = None,
                            outputs: Mapping[str, Mapping[str, str]] | None = None) -> WindowCommitmentRecord:
         """Receive a two-stage design's interior registration, once, after the first stage `draw` and before its second
-        stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, replay block
-        `draw.units[i]`'s being [i·n_rho, (i+1)·n_rho). The public-items rule on the interior values under the check's
+        stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
+        (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
+        of it [off_t + i·n_t, off_t + (i+1)·n_t). The public-items rule on the interior values under the check's
         query, its population (`interior-population`: Q·n_rho), then one-stage's R1-R7 against the challenger's own copies
-        (`unit`'s Q·n_rho instances, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
+        (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the registration it follows, and the copies given here, as `register` takes them), and
         `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
+        It names no links or wires: the verifier derives them from the replay block's Definition
+        (`second_stage.replay_links`, `second_stage.replay_wires`).
         Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
         `interior-registered` (it has one), or either check failing."""
         first = draw.replay_sample or draw
         op: dict[str, Any] = {"op": "interiors", **self._drawn_op(first)}
         got: dict[str, Any] = {}
+        seed_salt = self._seed_salt_of(window_root)
 
         def checks() -> list[str] | None:
             m = len(first.units) * self.n_rho
@@ -1761,11 +2037,11 @@ class Stream:
                 v = _refuse("interior-population", {"population": n, "replay_sample": len(first.units),
                                                     "n_rho": self.n_rho}).verdict
             if v.ok:
-                program, query = P.population_program(self.unit, m), self.spec.check.query
+                program, query = self.interior_program(len(first.units)), self.spec.check.query
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, query, {"law": "subset", "k": m}, SCHEME, ports, leaf_layer, anchors,
                             earlier, None, None, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs)
+                            outputs=outputs, seed_salt=seed_salt)
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
                 got.update(program=program, earlier=earlier)
@@ -1784,7 +2060,17 @@ class Stream:
         e.interior, e.interior_program = reg, got["program"]
         e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held,
                              outputs)
+        e.interior_seed_salt = seed_salt
         return reg
+
+    def interior_program(self, q: int) -> Program:
+        """The challenger's interior program over a replay sample of `q`: `unit`'s Q·n_rho instances, or a window's mixed
+        population of its templates at Q·n_t each, in the check's order, taking the stream's `values` (which its proof
+        blocks read as registered values, an earlier record's among them: `register_interiors`' `outputs`)."""
+        assert self.n_rho is not None
+        if self.templates is None:
+            return P.population_program(self.unit, q * self.n_rho)
+        return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)], values=self.values)
 
     def _drawn_op(self, draw: Draw) -> dict[str, Any]:
         """What an op names a sample by: its registration's order and token and its token; for a two-stage design's
@@ -1856,7 +2142,7 @@ class Stream:
         first, reg = e.draw, e.interior
         assert first is not None and reg is not None and isinstance(self.spec.selection, TwoStage)
         op: dict[str, Any] = {"op": "second", **self._drawn_op(first), "interior": _registration_token(reg)}
-        k, got = self.spec.selection.k, {}
+        ns, ks, got = self.cells, self.counts, {}
 
         def checks() -> list[str] | None:
             read = bytearray()
@@ -1865,11 +2151,11 @@ class Stream:
                 b = self._coins(n)
                 read.extend(b)
                 return b
-            law = second_law(first.units, self.n_rho, k)
+            law = second_law(first.units, ns, ks)
             try:
-                obj = select_second(first.units, self.n_rho, k, coins, sampler=self._sampler)
+                obj = select_second(first.units, ns, ks, coins, sampler=self._sampler)
                 if self._sampler is None:
-                    obj, v = V.select_second(obj, bytes(read), first.units, self.n_rho, k)
+                    obj, v = V.select_second(obj, bytes(read), first.units, ns, ks)
                     if not v.ok:
                         raise Refused(v)
                 v = V.check_draw(obj, reg.record, law)
@@ -1932,7 +2218,8 @@ class Stream:
     def outcome(self, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
                 proved_units: Sequence[int] | None = None, instances: int | None = None, served: Sequence[int] | None = None,
                 session_roots: Mapping[str, str] | None = None, coins: Mapping[str, Any] | None = None,
-                interior_coins: Mapping[str, Any] | None = None) -> Outcome:
+                interior_coins: Mapping[str, Any] | None = None,
+                statements: Sequence[Mapping[str, Any]] | None = None, proofs: Mapping[str, Any] | None = None) -> Outcome:
         """The sample's final outcome, once. With no proof delivered: a reject (`late`) once the deadline has passed, and
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by the verifier,
@@ -1957,8 +2244,27 @@ class Stream:
         `proved_units`, `instances` and `served` are its, `session_roots` is held port by port to the registration
         whose port it names (the boundary values the sessions opened to the registration's audit record, when they
         opened any, and the rest to the interior registration's), `coins` is the first stage's evidence and
-        `interior_coins` the second stage's. The outcome accepts when the registration's audit record (over the replay
-        sample) and the interior registration's (over the sample) both do, and the run of record checks both."""
+        `interior_coins` the second stage's. `statements` are the second-stage sessions' (`second_stage`), which round 2
+        holds to the verdicts of record that checked them (each one's header, registered reads and sample, by the digests
+        and sample a verdict names), the interior registration and the second stage's cells as the interior
+        registration's audit record's `statements` check: a two-stage outcome without them fails it, and so does every
+        one while `second_stage.FORM` refuses the two-stage form. `proofs` is the auditor's params naming each template's
+        circuit file and the reference header and registered reads round 2 holds its statements to (`template_circuits`;
+        without them every statement fails ``second-header`` and ``second-values``), which the run of record reads from
+        its interior params. The outcome accepts
+        when the registration's audit record (over the replay sample) and the interior registration's (over the sample)
+        both do, and the run of record checks both. Raises `Refused` for `statements` on a one-stage outcome, and
+        (`proofs`) for `proofs` on a one-stage stream or in any form `template_circuits` refuses, before anything is
+        decided."""
+        if statements is not None and self.n_rho is None:
+            raise _refuse("statements", "second-stage statements are a two-stage outcome's")
+        if proofs is not None:
+            if self.n_rho is None:
+                raise _refuse("proofs", "a one-stage run's params name no template circuit files")
+            try:
+                template_circuits(proofs, self.spec.check.query)
+            except ValueError as e:
+                raise _refuse("proofs", str(e)) from None
         op: dict[str, Any] = {"op": "outcome", **{k: v for k, v in self._drawn_op(draw).items() if k != "second"}}
         got: dict[str, Any] = {}
         o = op["order"]
@@ -1979,7 +2285,7 @@ class Stream:
             if self.n_rho is not None:
                 got.update(zip(("audit", "public", "replay"), self._audit_two(e, verdicts, statement, proved_units,
                                                                               instances, served, session_roots, coins,
-                                                                              interior_coins)))
+                                                                              interior_coins, statements, proofs)))
                 op["accepted"] = got["audit"]["accepted"] and got["replay"]["accepted"]
                 return None
             got.update(zip(("audit", "public"), self._audit(e, draw, verdicts, statement, proved_units, instances, served,
@@ -2029,13 +2335,15 @@ class Stream:
                        "symbol": ACCEPT if accepted else REJECT, "public": public if accepted else {},
                        "audit": {k: x for k, x in rec.items() if k != "verifiers"}},
                       reg.record, e.program, self.spec.check.query,
-                      selection_law(self.spec.selection, reg.record["population"]), SCHEME, ports, leaf_layer, anchors,
+                      selection_law(self.spec.selection, reg.record["population"],
+                                    selection_sizes(self.spec.selection, e.program, self.spec.check.query)),
+                      SCHEME, ports, leaf_layer, anchors,
                       earlier, e.work_table, registered, self.spec.selection.to_json(),
                       [(x.name, x.registered) for x in self.spec.values], [p.item for p in self.spec.public],
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
-                      value_outputs=given)
+                      value_outputs=given, seed_salt=e.seed_salt)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2043,10 +2351,18 @@ class Stream:
     def _audit_two(self, e: _Entry, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any],
                    proved_units: Sequence[int] | None, instances: int | None, served: Sequence[int] | None,
                    session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None,
-                   interior_coins: Mapping[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+                   interior_coins: Mapping[str, Any] | None, statements: Sequence[Mapping[str, Any]] | None,
+                   proofs: Mapping[str, Any] | None = None
+                   ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
-        the second stage's sample and the registration's over the replay sample, both failing `run` where the whole
-        run isn't the verifier's; and the public outputs."""
+        the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
+        interior program's strata make, the design's links and wires, which it derives from the replay block's
+        Definition (`second_stage.replay_links`, `second_stage.replay_wires`), the reads the verdicts report, what they
+        name of each session they accepted
+        (`second_stage.verified_of`), and the reference header and registered reads the params `proofs` give each
+        template, `template_circuits`), and the registration's
+        over the replay sample, each taking the sessions' reads of its own ports at their own roots (`own_reads`), both
+        failing `run` where the whole run isn't the verifier's; and the public outputs."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
         reg, first, ireg, second = e.registration, e.draw, e.interior, e.second
         outputs = self.spec.check.public_outputs
@@ -2061,9 +2377,17 @@ class Stream:
         replayed = D.proved(first.draw)
         rec = V.audit_record(ireg.record, ireg.receipt, second.draw, second.law, proved,
                              len(proved) if instances is None else instances, statement, verdicts, self.delta,
-                             e.sessions, served, session_roots)
+                             e.sessions, served, session_roots, own_reads=True)
+        named = template_circuits(proofs, self.spec.check.query)
+        own = SS.Own(tuple(replayed), SS.parts(len(replayed), P.strata(e.interior_program, self.spec.check.query)),
+                     ireg.record, reg.record, tuple(D.proved(second.draw)),
+                     SS.replay_links(e.program, descriptor_id(self.replay), reg.record),
+                     A.session_registered(verdicts), SS.verified_of(verdicts),
+                     tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
+                     wires=SS.replay_wires(e.program, descriptor_id(self.replay)))
+        rec = SS.attach(rec, SS.check(SS.FORM, own, statements))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
-                                  verdicts, self.delta, e.sessions, None, replay_session_roots)
+                                  verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)
         accepted = rec["accepted"] and boundary["accepted"]
         if e.read is not None and e.second_read is not None and rec["verifiers"]["agree"] and \
                 boundary["verifiers"]["agree"]:
@@ -2074,20 +2398,24 @@ class Stream:
                        "audit": {k: x for k, x in boundary.items() if k != "verifiers"},
                        "interior": {"receipt": dict(ireg.receipt), "draw": dict(second.draw),
                                     "read": len(e.second_read), "audit": within}},
-                      reg.record, e.program, self.query, selection_law(self.spec.selection, reg.record["population"]),
+                      reg.record, e.program, self.query,
+                      selection_law(self.spec.selection, reg.record["population"],
+                                    selection_sizes(self.spec.selection, e.program, self.query)),
                       SCHEME, ports, leaf_layer, anchors, earlier, e.work_table, registered,
                       self.spec.selection.to_json(), [(x.name, x.registered) for x in self._values()],
                       [p.item for p in self.spec.public], self.challenger, reg.receipt["received"], e.read, e.closure,
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
-                      held=held, coins=coins, value_outputs=given,
+                      held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
+                                "seed_salt": e.interior_seed_salt,
                                 "replay": Program(self.replay),
                                 "values": [(x.name, x.registered) for x in self._values(interior=True)],
                                 "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,
                                 "coins": interior_coins, "proved_units": proved_units, "instances": instances,
-                                "served": served, "session_roots": session_roots})
+                                "served": served, "session_roots": session_roots, "statements": statements,
+                                "proofs": proofs})
             if not v.ok:
                 rec, boundary = _run_failed(rec, v), _run_failed(boundary, v)
         return rec, public, boundary
@@ -2130,18 +2458,23 @@ class Stream:
 
     def _footprint(self, e: _Entry) -> IntegrityProfile:
         """An accepted two-stage outcome's integrity profile: two levels, the replay blocks (`replay`, the registration's
-        partition) and their proof blocks (`A.LEVEL`, the interior registration's), n_rho in each. The first stage's
+        partition) and their proof blocks (`A.LEVEL`, the interior registration's). The first stage's
         uniform Q-subset of the N replay blocks is bounded by `Bernoulli(Q/N)` (`Design.Two.Pa_le_bernoulli_pop`: it
-        misses a set T with probability C(N − |T|, Q)/C(N, Q) ≤ (1 − Q/N)^|T|), and the second stage is `Subset(k)`
-        inside each sampled replay block. Its `accept(m)` is a replay block's at footprint m, the fewest
-        incorrect proof blocks of any interior consistent with its boundary commitment, which is fixed before any coin;
-        the prover's choice of interior after the first stage only raises it."""
+        misses a set T with probability C(N − |T|, Q)/C(N, Q) ≤ (1 − Q/N)^|T|). The second stage samples k_t of each
+        cell's n_t, and a replay block of T templates misses m incorrect proof blocks with probability at most
+        `Subset(K)`'s over T·n_max at K = min_t k_t: ∏_t C(n_t − w_t, k_t)/C(n_t, k_t) ≤ C(T·n_max − m, K)/C(T·n_max, K)
+        for Σ_t w_t = m, factor by factor, since ∏_t (1 − w_t/(n_t − j)) ≤ 1 − max_t w_t/(n_max − j)
+        ≤ 1 − m/(T·n_max − j). With one template that is `Subset(k)` over n_rho, exactly. Its `accept(m)` is a replay
+        block's at footprint m, the fewest incorrect proof blocks of any interior consistent with its boundary
+        commitment, which is fixed before any coin; the prover's choice of interior after the first stage only raises
+        it."""
         assert e.draw is not None and e.interior is not None and e.second is not None
-        reg, ireg, rule = e.registration.record, e.interior.record, self.spec.selection
-        assert isinstance(rule, TwoStage) and self.n_rho is not None
+        reg, ireg = e.registration.record, e.interior.record
+        assert self.n_rho is not None
         q, n = len(e.draw.units), reg["population"]
         return IntegrityProfile(levels=(Level(REPLAY, reg["partition"]), Level(A.LEVEL, ireg["partition"])),
-                                sizes=(n, self.n_rho), draws={REPLAY: Bernoulli(Fraction(q, n)), A.LEVEL: Subset(rule.k)},
+                                sizes=(n, len(self.cells) * max(self.cells)),
+                                draws={REPLAY: Bernoulli(Fraction(q, n)), A.LEVEL: Subset(min(self.counts))},
                                 delta=self.delta, programs=(reg["program"], ireg["program"]),
                                 drawn={REPLAY: q, A.LEVEL: len(e.second.units)})
 
@@ -2170,4 +2503,4 @@ __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "H
            "PHASES", "Pending", "Public", "REJECT", "REPLAY", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES",
            "Selection", "Sequential", "Session", "Spec", "Stream", "Terms", "TwoStage", "Value",
            "WindowCommitmentRecord", "boundary_values", "check_public", "check_verdicts", "interior_values",
-           "second_law", "select_draw", "select_second", "selection_law"]
+           "replay_cells", "second_counts", "second_law", "select_draw", "select_second", "selection_law"]
