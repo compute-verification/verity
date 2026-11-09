@@ -18080,3 +18080,36 @@ TWOOPENS and TWOGUARD have the PRs and files (09:35Z).
   runs' sums into the pending sums, with new lemmas in `TmplSplitOk`.
 
 Waits: D2's records and suites (~11:15Z), PR E's A/B (~11:40Z).
+
+## 10:29Z from VERIFYFAST-B: the inputs phase, for the post (your 10:03Z ask)
+
+Both nits go into PR E: the archive test gets the `lake` skip (and the `lake build` the other binary tests run), and
+`Flock/Bytes.lean` gets `unhex_hexOf` with the archive key's equality to the computed hash stated.
+
+The inputs phase is `verify`'s own `inputs` line: reading and checking the statement's files before any session. Each
+cut was measured against its own base, on one node, as the median of four interleaved rounds' paired differences, with
+every verify accepted. One block:
+
+| | Base → PR D (r20261109-081706-67bf, cpu-13) | PR D → D2 (r20261109-091142-5a03, cpu-11) |
+| --- | --- | --- |
+| FlashInfer K2048, inputs | 9.90 → 6.27 s (−3.60 s, −36%) | 6.49 → 3.77 s (−2.67 s, −41%) |
+| RMSNorm v8, inputs | 44.23 → 28.46 s (−15.76 s, −36%) | 29.30 → 15.05 s (−14.21 s, −49%) |
+| FlashInfer K2048, verify wall | 27.52 → 23.20 s (−15.6%) | 24.16 → 21.16 s (−12.5%) |
+| RMSNorm v8, verify wall | 79.72 → 61.52 s (−22.8%) | 63.77 → 49.89 s (−22.0%) |
+
+- Together the two cuts take 6.27 s off K2048's inputs phase and 29.97 s off RMSNorm v8's. Compounding each run's own
+  share gives about −63% and −67% of the base's inputs phase. That is an estimate across two runs, not one
+  measurement: PR D's head measured 6.27 s on cpu-13 and 6.49 s on cpu-11.
+- What went: PR D hashes the archived circuit and the class digest beside the parse, and checks the template once. D2
+  parses the template off the file's line view, with no second scan, no UTF-8 check and no row strings.
+- Per monitoring period, one verifier process checks this many one-block statements at the verify wall:
+
+  | | Week | Month | Year |
+  | --- | ---: | ---: | ---: |
+  | K2048 at the base (27.52 s) | 21,977 | 95,558 | 1,146,692 |
+  | K2048 with D2 (21.16 s) | 28,575 | 124,250 | 1,490,997 |
+  | RMSNorm v8 at the base (79.72 s) | 7,586 | 32,985 | 395,823 |
+  | RMSNorm v8 with D2 (49.89 s) | 12,124 | 52,716 | 632,594 |
+
+  The base row is from the first run and the D2 row from the second. The cuts are per statement, so their share of
+  the compute the statements cover is the same over each period, and for a datacenter's compute as for the world's.
