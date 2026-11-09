@@ -71,6 +71,7 @@ property left unchecked, and the report prints it under ``unchecked``, apart fro
 """
 from __future__ import annotations
 
+import importlib
 import random
 import sys
 import time
@@ -1410,12 +1411,15 @@ def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
 
 def cut_of(t: Any) -> list[tuple[Any, int]] | None:
     """The units serving stages Call ``t`` as, each Definition bound with how many of it, where the module whose function
-    builds ``t`` names its family in ``CUTS`` (family -> its cut at a binding's statics, `sparse_mla.CUTS`); else None.  Only
-    that module is read, which ``t``'s check reads already."""
+    builds ``t`` names its family in ``CUTS`` (family -> its cut at a binding's statics, `sparse_mla.CUTS`, or the name of the
+    module whose ``cut`` it is, `sampling.CUTS`); else None.  Only that module is read, which ``t``'s check reads already, and
+    the module it names, imported by that name."""
     from . import cache as CC
 
     mod = sys.modules.get(CC._function_module(getattr(t, "defn", t)) or "")
     cut = getattr(mod, "CUTS", {}).get(getattr(t, "base_id", None))
+    if isinstance(cut, str):
+        cut = importlib.import_module(cut).cut
     return None if cut is None else cut(t)
 
 
