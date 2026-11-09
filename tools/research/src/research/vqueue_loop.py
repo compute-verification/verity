@@ -276,6 +276,7 @@ class World:
         if main != self._main:                              # the merges' records onto the `main` before, as a sync drops them
             q = self.q
             q._merge_records, q._merge_keys, q._context, q._merged_from, self._main = {}, {}, None, {}, main
+            self._driver = None                             # it keeps the registry it read
         if self.labels_at is not None:
             self._relabel(main)
         return main
