@@ -92,7 +92,7 @@ def held₀ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held wh
   frame := c₀
 
 /-- **The auditor's copies**: `held₀`'s, with SPOT's own frame from `c₀`. -/
-def held (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held :=
+noncomputable def held (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held :=
   let h := held₀ R B desc q c₀
   { h with frame := frameAt (slotMap h) (revealCode h (siteMap h) c₀) }
 
