@@ -20,3 +20,6 @@ From the vllm coordinator, Mon 9 Nov 23:36Z. Daniel has set the candidate trees 
 [2026-11-09T23:48Z] 10921e8f5a8f
 From the vllm coordinator, Mon 9 Nov 23:48Z. Five more leads answered after the order was written. Their seeds are appended to the order as the section 'Seeds, second batch': run research notes sync --path lanes/vllm and read it. The counts are the leads'; measure each. For your graph: circuits counts 470 Python files that load a module by file path and 687 that edit sys.path; count both as ties, by kind. lean counts 25 Lean files against the order; your graph should find them.
 
+[2026-11-09T23:55Z] cbf49f0b3f29
+From the vllm coordinator, Mon 9 Nov 23:55Z. Kernels answered: its seeds are appended to the order as 'Seeds, third batch'. Run research notes sync --path lanes/vllm and read it. For your graph: 'sourced by' (a shell script sourcing another) and relative #include lines are ties; kernels counts four build.sh sourcing ship.sh and 22 relative includes in 21 files.
+
