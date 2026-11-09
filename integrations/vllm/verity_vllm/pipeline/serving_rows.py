@@ -60,7 +60,7 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
   ``RoPEHead_v1{D=..}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (D words each)
   ``GemmCoordinate_v1{K=..}``      every coordinate of the ``Gemm_v1`` rows of that K, as shared rows (M0's shared-row files): the
                                    ``x`` table (every token's input row), the ``w`` table (every weight row ``W[c, :]``) and ``y``,
-                                   the instances referencing them by ``verity/one-stage/gemm-grid/v0`` (:func:`grid`); the tables
+                                   the instances referencing them by ``verity/one-stage/gemm-grid/v0`` (`gemm_rows.grid`); the tables
                                    are fixed by the layout, never by the values, so repeated rows stay separate table rows
   ``ScaledMmS8Coordinate_v1{K=..}``  every coordinate of the ``ScaledMmS8_v1`` rows of that K, A6's bit rows per instance:
                                    ``x`` (the token's s8 codes then its f32 scale, row-seg), ``w`` (``W[c, :]`` then ``sw[c]``,
@@ -140,7 +140,7 @@ from verity_vllm.commit import index as IX, row_tables as RTB, step_rows
 from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chain_rows as CH, chunk_rows as CR, ingress_rows as IR
-from verity_vllm.pipeline import expert_rows as EX
+from verity_vllm.pipeline import expert_rows as EX, gemm_rows as GM
 from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import split_rows as SP, stage_rows as ST, weight_rows as WT
@@ -325,7 +325,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             D = int(d["statics"]["D"])
             m = CS.Member(t, (("x", D), ("cs", D)), (("out", D),), n, base)
         elif layout == "gemm":
-            K, groups = int(d["statics"]["K"]), grid(rs)
+            K, groups = int(d["statics"]["K"]), GM.grid(rs)
             rx, rw = sum(g["tokens"] for g in groups), sum(g["columns"] for g in groups)
             m = CS.Member(t, (("x", K), ("w", K)), (("y", 1),), sum(g["tokens"] * g["columns"] for g in groups), base,
                           tables=(("x", rx), ("w", rw)))
@@ -537,7 +537,7 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     if layout == "cols" and tp.packed:
         return PR.read_cols(m, rows, store, weights, arrivals, _slices, _packed)
     if layout == "gemm":
-        return _read_gemm(m, rows, store, weights, arrivals)
+        return GM.read(m, rows, store, weights, arrivals, _operand)
     if layout == "coord":
         return PR.read_coord(m, rows, store, weights, arrivals, _slices, _packed)
     if layout in READERS:
@@ -600,54 +600,6 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     if lo - m.base != m.n:
         raise ValueError(f"{m.key}: its rows hold {lo - m.base} units, not its {m.n} (a chunk is read with its template's others, `read_all`)")
     data = {"rows": {p: np.concatenate(cols[p]) for p, _ in m.rows}, "outs": {p: np.concatenate(cols[p]) for p, _ in m.outs}}
-    return data, entries
-
-
-def grid(rows: list[tuple[str, Any, dict, dict]]) -> list[dict[str, Any]]:
-    """``verity/one-stage/gemm-grid/v0``'s groups: one per GEMM site (op_path) in order of first appearance, each
-    ``{name, tokens, columns, x_base, w_base, rows}``; instance ``i`` of a group, ``j = i - base``, is token ``j div columns`` and
-    column ``j mod columns``, and reads ``x`` row ``x_base + j div columns`` and ``w`` row ``w_base + j mod columns``."""
-    by: dict[str, list] = {}
-    for x in rows:
-        by.setdefault(x[3]["op_path"], []).append(x)
-    out, xb, wb = [], 0, 0
-    for op, rs in by.items():
-        cols = int(rs[0][3]["statics"]["N"])
-        out.append({"name": op, "tokens": len(rs), "columns": cols, "x_base": xb, "w_base": wb, "rows": rs})
-        xb += len(rs)
-        wb += cols
-    return out
-
-
-def _read_gemm(m: CS.Member, rows: list[tuple[str, Any, dict, dict]], store: Any, weights: Callable,
-               arrivals: dict[str, int] | None) -> tuple[dict[str, Any], list[list[Any]]]:
-    """A GEMM member as shared rows: the ``x`` table (every token's input row, group by group), the ``w`` table (every weight row
-    ``W[c, :]``, read once per group), ``y`` (every output word, instance-major) and the refs of the grid rule."""
-    K = dict(m.rows)["x"]
-    xs, ws, ys, refs, entries = [], [], [], [], []
-    lo = m.base
-    for g in grid(rows):
-        T, N = g["tokens"], g["columns"]
-        rid0, pi0, r0, _d0 = g["rows"][0]
-        ws.append(np.asarray(_operand(pi0, store, weights, rid0, int((arrivals or {}).get(rid0, 0)), r0["args"][1]), dtype=np.uint16).reshape(N, K))
-        for rid, pi, r, d in g["rows"]:
-            if r["args"][1] != r0["args"][1]:
-                raise ValueError(f"row {r['i']}: {g['name']} reads another weight slice than its group's first row")
-            arrive = int((arrivals or {}).get(rid, 0))
-            xs.append(np.asarray(_operand(pi, store, weights, rid, arrive, r["args"][0]), dtype=np.uint16).reshape(1, K))
-            (member, width, _dt), = d["members"]
-            w, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
-            if w is None:
-                raise LookupError(f"row {r['i']} output {member}: {why}")
-            ys.append(np.asarray(w, dtype=np.uint16).reshape(-1))
-            layer = _LAYER.search(d["op_path"])
-            entries.append([lo, lo + N, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"], str(member),
-                            int(d["row"]), int(r["i"])])
-            lo += N
-        j = np.arange(T * N, dtype=np.int64)
-        refs.append(np.stack([g["x_base"] + j // N, g["w_base"] + j % N], axis=1))
-    data = {"rows": {"x": np.concatenate(xs), "w": np.concatenate(ws)}, "outs": {"y": np.concatenate(ys).reshape(-1, 1)},
-            "refs": np.concatenate(refs)}
     return data, entries
 
 
