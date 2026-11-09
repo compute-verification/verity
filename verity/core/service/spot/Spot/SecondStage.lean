@@ -50,6 +50,14 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     holds each instance's ref to the row at the position the read gives its unit (`Flock.Registered.check`), and
     `second-read` holds the read to the slot's own rows or its cell's replay block's; at any other it only bounds a ref
     by its table, so a ref could point a drawn unit at another unit's rows.
+  - `second-values`: its registered reads are not its template's reference statement's (`Own.refReads`, the
+    `--registered` file the auditor's params give the registered reference statement, fixed before the run), both with
+    each port's run fields blanked (`blankReads`), or the params give its template none. The run's fields are those
+    `second-read` holds to the run: every port's `root`, `domain` and `leaves` (`READ_RUN_FIELDS`), and the rows
+    (`reads`, `reads_from`: `READ_ROW_FIELDS`) of a port a link names or one reading the interior record's own port,
+    whose rows the run places (`runPlacesRows`). So the ports it reads registered, the value each reads, and the rows at
+    which it reads a value a registration registers are fixed before the run: `second-read` alone lets a port no link
+    names read any value either registration registers, at any rows.
 * **The links** (`Link`) are the verifier's own, derived from the replay block's registered Definition and never
   supplied (`replayLinks`): a template its body calls once that reads one of its parameters alone reads that boundary
   port, and one whose output it returns alone writes its output's, or, where it returns several fields, each one
@@ -67,8 +75,9 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   is not the statements' (`statementReads`). A passing check (`check_ok`) holds the interior record to the replay
   sample in its order (`interiorOrderOk_sample`), the statements to the parts, one each by position, every header to
   its template's reference placed in the run but for the run's fields (`check_ok_header`), every port a header shares
-  rows at to a registered read (`check_ok_refs`), every session's sample to the second draw, cell by cell, and every
-  read it reports to a statement's.
+  rows at to a registered read (`check_ok_refs`), every statement's registered reads to its template's reference
+  statement's but for the run's fields, a registered value's rows among what they hold (`check_ok_values`), every
+  session's sample to the second draw, cell by cell, and every read it reports to a statement's.
 * **The form**: once every check passes, the run is refused last (`two-stage-form`) unless `FORM` allows it; while it
   doesn't, no run passes (`check_refused`).
 -/
@@ -210,7 +219,8 @@ def linksOf? : Json → Option (Array Link)
 registrations' records, the second draw's units, the design's links (`replayLinks`, none when the replay block's
 Definition makes none), the `{value: root}` the verifiers of record report the sessions read
 (`Record.sessionRegistered`), what they name of each session they accepted (`verifiedOf`), and the reference header of
-each template's statement, as the auditor's params give it (`Run.templateCircuits`). -/
+each template's statement and the registered reads it was verified against (`refReads`, null for none), as the
+auditor's params give them (`Run.templateCircuits`). -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
@@ -221,6 +231,7 @@ structure Own where
   reported : Option (Array (String × Json)) := none
   verified : Array Checked := #[]
   refs : Array (String × Json) := #[]
+  refReads : Array (String × Json) := #[]
 
 /-- The record names its ports by template, `<template>/<port>`. -/
 def byTemplate (rec : Json) : Bool := (Record.byPort rec).any fun (q, _) => q.contains '/'
@@ -345,8 +356,10 @@ template's reference placed in the run in, which other checks hold instead: `ins
 (`second-population`), `units.blocks`, the indices cut into blocks of `vus_per_block` (the session's verifier, which
 refuses a header whose `units` aren't `Flock.HmRow.unitsEntry` of its indices), `frame_v3.roots` and
 `frame_v3.domain_ids` (`second-roots`), and `registered`, the reads' values, positions and paths (`second-read`, which
-holds each read to its root, domain and rows). A reference staged at other slots differs from the header only in the
-indices and their blocks. -/
+holds each read to its root, domain and rows, and `second-values`, which holds the value each port reads, and the rows
+at which it reads a value a registration registers, to the reference's, through the `--registered` file the session's
+verifier holds the header's to). A reference staged at other slots differs from the header only in the indices and
+their blocks. -/
 def RUN_FIELDS : List (List String) :=
   [["instances"], ["units", "indices"], ["units", "blocks"], ["frame_v3", "roots"], ["frame_v3", "domain_ids"],
     ["registered"]]
@@ -519,6 +532,47 @@ def refsOk (s : Stmt) : Bool :=
   let reads := entries (getD s.registered "ports")
   (entries (getD s.header "shared_rows")).all fun (port, _) => reads.any (·.1 == port)
 
+/-- **The run's fields** of every port of a registered-reads file, which `second-read` holds to the run (`sameAt`): the
+value's `root`, `domain` and `leaves`. -/
+def READ_RUN_FIELDS : List String := ["root", "domain", "leaves"]
+
+/-- **The rows** a port of a registered-reads file reads, slot `reads_from + k` its row `reads[k]`: run fields only
+where the run places them (`runPlacesRows`). -/
+def READ_ROW_FIELDS : List String := ["reads", "reads_from"]
+
+/-- Template `t`'s session port `port` reads registered-reads entry `e` at rows the run places, which `second-read`
+holds to the run (`rowsOk`): a port a link names, each slot at its cell's replay block's rows, or one reading the
+interior record's own port, each slot at its own rows (`readOk`'s first two cases). Any other port reads a value a
+registration registers, which `second-read` holds only to the value's root, domain and leaves (`sameAt`), so
+`second-values` holds its rows to the reference statement's, the same rows in every run. A workload whose rows there
+depend on the sampled block (a positional table) would need a rule of its own. -/
+def runPlacesRows (own : Own) (t port : String) (e : Json) : Bool :=
+  (linkOf own t port).isSome ||
+    match getD e "value" with
+    | .str v => ((Record.byPort own.interior).find? (·.1 == v)).isSome
+    | _ => false
+
+/-- Registered-reads file `r` of a session of template `t` with each port's run fields null: `READ_RUN_FIELDS`, and
+`READ_ROW_FIELDS` where the run places the port's rows (`runPlacesRows`); anything else unchanged. -/
+def blankReads (own : Own) (t : String) (r : Json) : Json :=
+  let blank (p : String) (e : Json) : Json :=
+    (if runPlacesRows own t p e then READ_RUN_FIELDS ++ READ_ROW_FIELDS else READ_RUN_FIELDS).foldl
+      (fun e k => setKey e k .null) e
+  match getD r "ports" with
+  | .obj _ => setKey r "ports" (Json.mkObj ((entries (getD r "ports")).toList.map fun (p, e) => (p, blank p e)))
+  | _ => r
+
+/-- The registered reads of template `t`'s reference statement, as the auditor's params give them (`Own.refReads`). -/
+def refReadsOf (own : Own) (t : String) : Option Json := (own.refReads.find? (·.1 == t)).map (·.2)
+
+/-- Statement `s`'s registered reads are its template's reference statement's but for the run's fields: the two the
+same with those blanked (`blankReads`), so null only where the reference's is, and each value a registration registers
+read at the reference's rows. False for a template the params give no reference reads. -/
+def valuesOk (own : Own) (s : Stmt) : Bool :=
+  match refReadsOf own s.template with
+  | some r => jeq (blankReads own s.template s.registered) (blankReads own s.template r)
+  | none => false
+
 /-- Statement `s`'s failing checks against its part `p` (module docstring), in order, `k` the part's position. -/
 def stmtCodes (own : Own) (named : Bool) (k : Nat) (p : Part) (s : Stmt) : List String :=
   let q := own.sample.size
@@ -530,7 +584,8 @@ def stmtCodes (own : Own) (named : Bool) (k : Nat) (p : Part) (s : Stmt) : List 
    ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
    ("second-sample", jeq s.draw (ownDraw q p own.drawn)),
    ("second-read", reads.all (fun (port, e) => readOk own named p port e) && linkedRead own p.template reads),
-   ("second-refs", refsOk s)].filterMap
+   ("second-refs", refsOk s),
+   ("second-values", valuesOk own s)].filterMap
     fun (code, ok) => if ok then none else some code
 
 def detailOf (i : Nat) (t : Json) : Json := Json.mkObj [("statement", Lean.toJson i), ("template", t)]
@@ -783,14 +838,16 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
 
 /-- A passing statement's checks: an accepted verdict of record checked its header, registered reads and sample, every
 one that did checked its session as one table, and its header at its position, population, roots, sample and
-registered reads, every port a link names among them, and every port its header shares rows at read registered. -/
+registered reads, every port a link names among them, every port its header shares rows at read registered, and its
+registered reads its template's reference statement's but for the run's fields. -/
 theorem stmtCodes_nil {own : Own} {named : Bool} {k : Nat} {p : Part} {s : Stmt} (h : stmtCodes own named k p s = []) :
     verifiedOk own s = true ∧ tablesOk own s = true ∧
       headerOk own named k s.template s.header = true ∧ populationOk own.sample.size p s.header = true ∧
       rootsOk named own.interior s.template s.header ((entries (getD s.registered "ports")).map (·.1)) = true ∧
       jeq s.draw (ownDraw own.sample.size p own.drawn) = true ∧
       (entries (getD s.registered "ports")).all (fun (port, e) => readOk own named p port e) = true ∧
-      linkedRead own p.template (entries (getD s.registered "ports")) = true ∧ refsOk s = true := by
+      linkedRead own p.template (entries (getD s.registered "ports")) = true ∧ refsOk s = true ∧
+      valuesOk own s = true := by
   simpa [stmtCodes, List.filterMap_eq_nil_iff, and_assoc] using h
 
 /-- The reference header `refOf` gives template `t` is one the auditor's params give it. -/
@@ -861,10 +918,51 @@ theorem check_ok_refs {allow : Bool} {own : Own} {ss : Array Json} (h : (check a
   obtain ⟨-, -, ps, hp, -, hst, -, -⟩ := check_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi
-  obtain ⟨-, -, -, -, -, -, hr, -, hrefs⟩ := stmtCodes_nil hc
+  obtain ⟨-, -, -, -, -, -, hr, -, hrefs, -⟩ := stmtCodes_nil hc
   refine ⟨s, p, hs, hf, fun port c hm => ?_⟩
   obtain ⟨e, he⟩ := refsOk_read hrefs hm
   exact ⟨e, he, Array.all_eq_true_iff_forall_mem.mp hr _ he⟩
+
+/-- The reference reads `refReadsOf` gives template `t` are ones the auditor's params give it. -/
+theorem refReadsOf_mem {own : Own} {t : String} {r : Json} (h : refReadsOf own t = some r) :
+    (t, r) ∈ own.refReads := by
+  unfold refReadsOf at h
+  cases hf : own.refReads.find? (·.1 == t) with
+  | none => rw [hf] at h; simp at h
+  | some e =>
+    rw [hf] at h
+    obtain ⟨t', r'⟩ := e
+    have ht : t' = t := by simpa using Array.find?_some hf
+    have hr : r' = r := by simpa using h
+    subst ht hr
+    exact Array.mem_of_find?_eq_some hf
+
+/-- **A passing `second-values`** names the registered reads the auditor's params give statement `s`'s template's
+reference statement, which `s`'s are but for the run's fields. -/
+theorem valuesOk_ref {own : Own} {s : Stmt} (h : valuesOk own s = true) :
+    ∃ r, (s.template, r) ∈ own.refReads ∧
+      jeq (blankReads own s.template s.registered) (blankReads own s.template r) = true := by
+  unfold valuesOk at h
+  cases hf : refReadsOf own s.template with
+  | none => simp [hf] at h
+  | some r =>
+    simp only [hf] at h
+    exact ⟨r, refReadsOf_mem hf, h⟩
+
+/-- **Every statement reads registered what its template's reference statement reads**: in a passing check, the `i`-th
+statement's registered reads, each port's run fields blanked (`blankReads`: every port's root, domain and leaves, and
+the rows of a port whose rows the run places, `runPlacesRows`), are those the auditor's params give its template's
+reference statement, blanked the same (`second-values`). The ports it reads registered, the value each reads, and the
+rows at which it reads a value a registration registers are fixed before the run. -/
+theorem check_ok_values {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
+    ∀ i < ss.size, ∃ s r, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧ (s.template, r) ∈ own.refReads ∧
+      jeq (blankReads own s.template s.registered) (blankReads own s.template r) = true := by
+  obtain ⟨-, -, _ps, -, -, hst, -, -⟩ := check_ok h
+  intro i hi
+  obtain ⟨s, p, hs, -, -, -, hc⟩ := hst i hi
+  obtain ⟨-, -, -, -, -, -, -, -, -, hv⟩ := stmtCodes_nil hc
+  obtain ⟨r, hr, hj⟩ := valuesOk_ref hv
+  exact ⟨s, r, hs, hr, hj⟩
 
 /-- **A verified entry is a verdict's**: each of `verifiedOf verdicts` is read off an accepted verdict of record among
 `verdicts`, its header's digest that verdict's `public_header_sha512`, its registered reads' its `registered_sha512`,
@@ -947,7 +1045,8 @@ private def exRef : Json :=
 /-- A replay sample of blocks 1 and 3 of 4, three proof blocks of one template in each, units 2 and 4 drawn. -/
 private def exOwn : Own :=
   { sample := #[1, 3], parts := parts 2 #[("Pair_v0", #[(0, 6)])], interior := exInterior,
-    boundary := exRec 4 [("bx", 5, 6)], drawn := #[2, 4], refs := #[("Pair_v0", exRef)] }
+    boundary := exRec 4 [("bx", 5, 6)], drawn := #[2, 4], refs := #[("Pair_v0", exRef)],
+    refReads := #[("Pair_v0", .null)] }
 
 private def exStmt (indices units : List Nat) : Json :=
   Json.mkObj [("template", "Pair_v0"), ("registered", .null),
@@ -964,8 +1063,15 @@ and sample (`Stmt.checked`). -/
 private def exVerifying (ss : Array Json) (own : Own := exOwn) : Own :=
   { own with verified := ss.filterMap fun j => (Stmt.ofJson? j).bind Stmt.checked }
 
-/-- Round 2's check of statements `ss`, each one's session checked by a verifier of record. -/
-private def exCheck (allow : Bool) (own : Own) (ss : Array Json) : Check := check allow (exVerifying ss own) (some ss)
+/-- `own` with the params giving each of statements `ss`' templates the registered reads its statement reads as its
+reference statement's, as an honest run's are. -/
+private def exReferring (ss : Array Json) (own : Own) : Own :=
+  { own with refReads := ss.filterMap fun j => (Stmt.ofJson? j).map fun s => (s.template, s.registered) }
+
+/-- Round 2's check of statements `ss`, each one's session checked by a verifier of record and its template's reference
+statement reading registered what it reads. -/
+private def exCheck (allow : Bool) (own : Own) (ss : Array Json) : Check :=
+  check allow (exVerifying ss (exReferring ss own)) (some ss)
 
 private def exHonest : Json := exStmt [0, 1, 2, 3, 4, 5] [2, 4]
 
@@ -1089,8 +1195,71 @@ private def exLinked : Own := { exOwn with links := some #[⟨"Pair_v0", "x", "b
 #guard (exCheck true { exOwn with links := none } #[exHonest]).codes == #["second-links"]
 #guard (check true { exOwn with links := none } none).codes == #["second-links"]
 #guard (check true { exOwn with links := some #[⟨"Other_v0", "x", "bx"⟩] } none).codes == #["second-links"]
-#guard (check true (exReported "x" 1 (exVerifying #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 4]]))
+#guard (check true (exReported "x" 1 (exVerifying #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 4]]
+  (exReferring #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]] exOwn)))
   (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-verified"]
+
+/-- `exOwn`, the interior registration registering values `w1` and `w2`, six leaves each at its own root and domain. -/
+private def exRegistering : Own :=
+  { exOwn with interior := exInterior.setObjVal! "registered" (Json.arr #[
+      Json.mkObj [("value", "w1"), ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson (6 : Nat))],
+      Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]]) }
+
+/-- Round 2's codes for statement `j` alone, its session checked by a verifier of record, the params giving its
+template's reference statement the registered reads of statement `r`. -/
+private def exValues (own : Own) (r j : Json) : Array String :=
+  (check true (exVerifying #[j] (exReferring #[r] own)) (some #[j])).codes
+
+/-- Statement `j`, its port `x`'s registered read's field `k` set to `v`. -/
+private def exReadField (k : String) (v : Json) (j : Json) : Json :=
+  let r := getD j "registered"
+  j.setObjVal! "registered" (r.setObjVal! "ports" (Json.mkObj [("x", (getD (getD r "ports") "x").setObjVal! k v)]))
+
+-- a registered value's rows are the reference's; a linked or own port's the run places
+#guard jeq (blankReads exRegistering "Pair_v0" (getD (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]) "registered"))
+  (Json.mkObj [("ports", Json.mkObj [("x", Json.mkObj [("value", "w2"), ("root", .null), ("domain", .null),
+    ("leaves", .null), ("reads_from", (0 : Nat)), ("reads", natsJson #[0, 1, 2, 3, 4, 5])])])])
+#guard jeq (blankReads exOwn "Pair_v0" (getD (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]) "registered")) (Json.mkObj
+  [("ports", Json.mkObj [("x", Json.mkObj [("value", "x"), ("root", .null), ("domain", .null), ("leaves", .null),
+    ("reads_from", .null), ("reads", .null)])])])
+#guard jeq (blankReads exLinked "Pair_v0" (getD (exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]) "registered")) (Json.mkObj
+  [("ports", Json.mkObj [("x", Json.mkObj [("value", "bx"), ("root", .null), ("domain", .null), ("leaves", .null),
+    ("reads_from", .null), ("reads", .null)])])])
+#guard jeq (blankReads exOwn "Pair_v0" .null) .null
+-- a port no link names reads a value either registration registers (`second-read`): the one its reference reads, at
+-- the run's root, domain and leaves and the reference's rows
+#guard (exCheck true (exReported "w2" 9 exRegistering) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
+#guard (exValues (exReported "w2" 9 exRegistering) (exReading "w2" 1 2 3 [0, 1, 2, 3, 4, 5])
+  (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5])).isEmpty
+-- the rows at which it reads a registered value, which `second-read` leaves to the run: refused at any but the
+-- reference's, while a linked or own port's rows are the run's to place
+#guard exValues (exReported "w2" 9 exRegistering) (exReading "w2" 9 5 6 [5])
+  (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
+#guard exValues (exReported "w2" 9 exRegistering) (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 4])
+  (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
+#guard exValues (exReported "w2" 9 exRegistering) (exReadField "reads_from" (3 : Nat)
+  (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5])) (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
+#guard (exValues (exReported "x" 1) (exReading "x" 1 2 6 [5, 4, 3, 2, 1, 0])
+  (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5])).isEmpty
+#guard (exValues (exReported "bx" 5 exLinked) (exReading "bx" 5 6 4 [0, 0, 0, 0, 0, 0])
+  (exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3])).isEmpty
+-- another value a registration registers, which `second-read` alone takes, so the run's choice: refused
+#guard exValues (exReported "w2" 9 exRegistering) (exReading "w1" 7 8 6 [0, 1, 2, 3, 4, 5])
+  (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
+#guard exValues (exReported "w1" 7 exRegistering) (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5])
+  (exReading "w1" 7 8 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
+#guard (exValues (exReported "x" 1) (exReadField "reads_from" (3 : Nat) (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]))
+  (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5])).isEmpty
+-- reads where the reference reads none, none where it reads one, a field of a port's other than the run's, or no
+-- reference reads for the template
+#guard exValues (exReported "x" 1) exHonest (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
+#guard exValues exOwn (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]) exHonest == #["second-values"]
+#guard exValues (exReported "x" 1) (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5])
+  (exReadField "row_schema" "hm96-sha512/row/v1" (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5])) == #["second-values"]
+#guard (check true (exVerifying #[exHonest] { exOwn with refReads := #[] }) (some #[exHonest])).codes ==
+  #["second-values"]
+#guard (check true (exVerifying #[exHonest] { exOwn with refReads := #[("Other_v0", .null)] })
+  (some #[exHonest])).codes == #["second-values"]
 
 /-- Port `p`'s read of the interior record's own port `p` at root `root`, domain `dom`, slot `k` reading row `reads[k]`. -/
 private def exOwnRead (p : String) (root dom : Nat) (reads : List Nat := [0, 1, 2, 3, 4, 5]) : String × Json :=
@@ -1128,6 +1297,11 @@ private def exShares (shared : List String) (read : List (String × Nat)) : Own 
 -- rows shared where the template's reference shares none
 #guard (exCheck true (exReported "x" 1) #[exSharing ["out", "x"] (some [exOwnRead "x" 1 2])]).codes ==
   #["second-header", "second-refs"]
+-- a session reading registered a port its template's reference statement doesn't, or not one it does
+#guard exValues (exReported "x" 1) (exSharing [] (some [exOwnRead "out" 3 4]))
+  (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
+#guard exValues (exReported "x" 1) (exSharing [] (some [exOwnRead "out" 3 4, exOwnRead "x" 1 2]))
+  (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
 
 /-- A statement for template `t`'s part. -/
 private def exFor (t : String) : Json := (exStmt [] []).setObjVal! "template" (.str t)

@@ -282,15 +282,17 @@ def reads(boundary_record: Mapping, interior_record: Mapping, window: CS.Binding
 
 def references(q: int, out: Path) -> dict:
     """The auditor's params (`service.template_circuits`' ``proofs``), fixed before the run: by template, in the check's
-    order, its circuit file's SHA-512 and its reference statement's header. The reference is `member_stager`'s statement
-    of the template's member in the interior window of ``q`` replay blocks (`interior_window`, under a run of its own,
-    whose fields round 2 places or blanks), bound to that window's partition and program as the sessions' circuits are,
-    on zero rows at the member's slots, one table row a unit a port as `interior` lays them out, salted under
-    `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its ``circuit.txt`` beside it, and its prover file is
-    deleted. Both files are a function of ``q`` and the design alone, byte for byte."""
+    order, its circuit file's SHA-512 and its reference statement's header and registered reads. The reference is
+    `member_stager`'s statement of the template's member in the interior window of ``q`` replay blocks
+    (`interior_window`, under a run of its own, whose fields round 2 places or blanks), bound to that window's partition
+    and program as the sessions' circuits are, on zero rows at the member's slots, one table row a unit a port as
+    `interior` lays them out, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its ``circuit.txt``
+    beside it, and its prover file is deleted. Both files are a function of ``q`` and the design alone, byte for byte.
+    Its registered reads are `reads`' file, which names none of the run's fields: each port the value it reads (a link
+    port the boundary port it opens, any other the member's own), its words and schema."""
     from verity_flock.class_statement import member_stager
 
-    window = interior_window("00" * 64, range(q))
+    window, names = interior_window("00" * 64, range(q)), boundary_ports(boundary_window(q, q))
     bind = {"partition": window.partition_digest, "program": window.partition["program"]}
     named = []
     for k, (m, defn) in enumerate(zip(window.members, TEMPLATES)):
@@ -300,7 +302,11 @@ def references(q: int, out: Path) -> dict:
         (d / "inst.bin").unlink()
         with open(d / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
-        named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header})
+        reads = LK.reads_file({p: {"value": names[LINKS[k][1]] if p == link(k) else m.port(p), "words": int(words),
+                                   "word_bits": REG.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
+                               for p, words in m.all_rows}, registered=REG)
+        named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header,
+                      "registered": reads})
     return {"templates": named}
 
 

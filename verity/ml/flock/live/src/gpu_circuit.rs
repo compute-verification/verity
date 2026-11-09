@@ -283,6 +283,10 @@ impl Pinned {
         (!b.is_empty() && unsafe { flock_cuda_host_register(b.as_ptr() as *mut c_void, b.len()) } != 0).then(|| Pinned(b.clone()))
     }
 
+    pub fn bytes(&self) -> usize {
+        self.0.len()
+    }
+
     /// Its `n` bytes rewritten in place by `fill` and shared again, still page-locked; None, and `fill` not called, while
     /// anything else holds them or at another size.
     pub fn refill(&mut self, n: usize, fill: &mut dyn FnMut(&mut [u8])) -> Option<std::sync::Arc<Vec<u8>>> {

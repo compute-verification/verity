@@ -12,6 +12,10 @@
 
 # the whole-tree invariants: each test exported when everything it needs is public
 when_closed = ["tests"]
+# fetched fixtures (entries of fixtures/artifacts.json git doesn't track) the export ships as tracked files, so the public
+# tree's tests read them with no store: each public, and each of its files at most a tracked file's limit
+# (tests/test_repository.py). vLLM's stored workloads: every row file the integration's tests and stages read
+fixtures = ["integrations/vllm/workloads"]
 
 [public]
 # SPOT: the generic sampling claim, its proofs, and sampled proofs' protocol and service
@@ -108,7 +112,8 @@ protocols = [
     "verity/ml/protocols/{pous,certifier}",
     "Security/*/{Nci,NciDesc}{,.lean}",
     "Security/Proofs/Properties/Nci{,.lean}",
-    "verity/core/primitives/identity",
+    # the table of domain separators' own entries: the other protocols' (its PoUW and shared parts are `needed`)
+    "verity/core/primitives/identity/Identity/Domains.lean",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
     # vLLM's PoUB session tests run PoUB's verifier side in process
     "integrations/vllm/tests/protocols/remote_bandwidth/{test_remote_session,test_in_place_gpu}.py",
@@ -223,6 +228,12 @@ from = "*"
 why = "the challenger and service code SPOT needs"
 paths = ["verity/core", "Security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}"]
 from = ["spot"]
+
+[[needed]]
+why = "the identity hash, and the parts of the table of domain separators PoUW's Lean reads: PoUW's and the shared ones"
+paths = ["verity/core/primitives/identity/Identity/{Sha512,Tagged}.lean",
+         "verity/core/primitives/identity/Identity/Domains/{Pouw,Shared}.lean"]
+from = "*"
 
 [[needed]]
 why = "the accounting PoUW needs"

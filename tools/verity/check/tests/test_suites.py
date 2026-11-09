@@ -517,9 +517,10 @@ def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_th
     clone` the shipped tree, whose origin/main is a remote-tracking ref), takes a SHA as given, and otherwise names the fix."""
     bare, tree, main, head = _shipped(tmp_path)
     S = _suites(monkeypatch, tree)
-    with pytest.raises(S.Unresolved, match=r"nor could it be fetched from origin .*--changed \$\(git rev-parse origin/main\)"):
+    with pytest.raises(S.Unresolved, match=r"nor could it be fetched from origin .*--changed \$\(git fetch -q origin main && "
+                                           r"git merge-base HEAD FETCH_HEAD\)"):
         S.changed_base("origin/main")
-    assert S.main(["--list", "--changed", "origin/main"]) == 2 and "Pass main's SHA" in capsys.readouterr().err
+    assert S.main(["--list", "--changed", "origin/main"]) == 2 and "a fetched main" in capsys.readouterr().err
     assert S.changed_base(main) == S.changed_base(main[:12]) == main
     assert S.main(["--list", "--changed", main]) == 0
     assert f"the change from {main[:12]} touches 1: a" in capsys.readouterr().out
@@ -539,6 +540,50 @@ def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_th
     with pytest.raises(S.Unresolved, match=r"has no commit origin/main \(a tree"):
         S.changed_base("origin/main")
     assert S.changed_base(main) == main
+
+
+def test_the_changed_refusals_advice_run_in_a_stale_checkout_gets_past_it(tmp_path, monkeypatch, capsys):
+    """The refusal's own advice, run as it says (in the lane's checkout, whose origin/main is as old as its snapshot), names a
+    base the shipped tree holds, and the change from it is the branch's alone; that checkout's `git rev-parse origin/main`
+    names an older main, whose diff takes in main's progress since."""
+    github, work = tmp_path / "github.git", tmp_path / "work"
+    _git(tmp_path, "init", "-q", "--bare", str(github))
+    work.mkdir()
+    _workspace(work)
+
+    def commit(path: str, body: str, msg: str) -> str:
+        (work / path).write_text(body)
+        _git(work, "add", "-A")
+        _git(work, "commit", "-q", "-m", msg)
+        return _git(work, "rev-parse", "HEAD")
+
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "main")
+    _git(work, "push", "-q", str(github), "HEAD:refs/heads/main")
+    lane = tmp_path / "lane"
+    _git(tmp_path, "clone", "-q", str(github), str(lane))                         # the snapshot: origin/main as of then
+    fork = commit("b/tests/test_b.py", "def test_b():\n    assert 1\n", "main moves b")
+    head = commit("a/tests/test_a.py", "def test_a():\n    assert 1\n", "the branch moves a")
+    _git(work, "push", "-q", str(github), f"{fork}:refs/heads/main", f"{head}:refs/heads/topic")
+    _git(lane, "fetch", "-q", "origin", "topic:topic")
+    _git(lane, "-c", "advice.detachedHead=false", "checkout", "-q", "topic")
+
+    bare = tmp_path / "verity.git"                                                # the machine's repository, as `_shipped`
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    _git(work, "push", "-q", str(bare), f"{head}:refs/research/ship")
+    tree = tmp_path / "src" / head
+    _git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(bare), str(tree))
+    _git(tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head)
+    S = _suites(monkeypatch, tree)
+    with pytest.raises(S.Unresolved) as refused:
+        S.changed_base("origin/main")
+    advice = re.search(r"`--changed (\$\(.+?\))`", str(refused.value))[1]
+    stale = _git(lane, "rev-parse", "origin/main")
+    base = subprocess.run(["bash", "-c", f"echo {advice}"], cwd=lane, capture_output=True, text=True, check=True).stdout.strip()
+    assert base == fork != stale
+    assert S.main(["--list", "--changed", base]) == 0 and "touches 1: a" in capsys.readouterr().out
+    assert S.main(["--list", "--changed", stale]) == 0
+    assert "touches 2: a, b" in capsys.readouterr().out, "the stale base takes in main's own change to b"
 
 
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
