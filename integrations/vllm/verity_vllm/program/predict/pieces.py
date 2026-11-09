@@ -9,13 +9,15 @@ epilogue:
 
 - a node that reads a weight or a peer Input is in the latest part among them: a weight `model.layers.{L}.*` is layer L's, the
   embedding the prologue's and the final norm and `lm_head` the epilogue's; a collective's peer Inputs are in its part (the
-  embedding's all-reduce the prologue, layer L's attention and MLP all-reduces layer L, the logits gather the epilogue);
-- any other node is in the latest part among the nodes it reads;
+  embedding's all-reduce the prologue, layer L's attention and MLP all-reduces layer L, the logits gather the epilogue); a part
+  earlier than the node before it starts the next launch;
+- any other node that reads a node is in the part of the node before it (a layer's residual add after the next layer's fused
+  all-reduce and norm is the next layer's);
 - a node that reads neither (a constant, or one computed from constants and the request's Inputs alone) is shared, named by its
   content.
 
-The body then splits into launches wherever a node's part is earlier than the one before it, and each part is the run of its nodes
-in each launch, in order. A node is written with references of its part's own: a node of its part by its index in the part, a node
+Each part is then the run of its nodes in each launch, in order; the launches are the passes the peer Inputs are laid out by
+(refused otherwise). A node is written with references of its part's own: a node of its part by its index in the part, a node
 of an earlier layer by how many layers back and its index there, the prologue's or epilogue's by its index there, a shared node by
 its content, a weight by its name less `model.layers.{L}.` and how many layers back, a peer Input by its pass, its collective, how
 many layers back and its peer, a request Input by name. Writing the launches' runs part by part in order and resolving each
@@ -247,24 +249,25 @@ def pieces(program, world: int) -> Pieces:
 
     pending: list[str] = []
     seen_shared: dict[str, int] = {}
-    launch, last, started = 0, -1, set()
+    launch, cur, started = 0, 0, set()
     for k, n in enumerate(nodes):
         parts = [p for a in n.args for p in _flat(a.refs)]
         mine = [x for p in parts for x in contributes(p)]
-        if not mine:
-            mine = [lab[p.idx] for p in parts if p.space == "n" and not isinstance(p, Explicit) and lab[p.idx] is not None]
-            mine += [lab[i] for p in parts if isinstance(p, Explicit) for s, i, _l in p.items if s == "n" and lab[i] is not None]
-        if not mine:
+        if mine:
+            p = max(mine)
+            if p < cur:
+                launch += 1
+        elif any(lab[p.idx] is not None for p in parts if p.space == "n" and not isinstance(p, Explicit)) or any(
+                s == "n" and lab[i] is not None for p in parts if isinstance(p, Explicit) for s, i, _l in p.items):
+            p = cur
+        else:
             base = hashlib.sha512(repr(entry(n, None)).encode()).hexdigest()[:32]
             seen = seen_shared.get(base, 0)
             seen_shared[base] = seen + 1
             skey[k] = key = base if not seen else f"{base}#{seen}"
             pending.append(key)
             continue
-        p = max(mine)
-        if p < last:
-            launch += 1
-        last = p
+        cur = p
         lab[k], local[k] = p, count[p]
         count[p] += 1
         s = streams[p]
@@ -275,6 +278,9 @@ def pieces(program, world: int) -> Pieces:
             s.update(repr(("shared", key)).encode() + b"\n")
         pending = []
         s.update(repr(entry(n, p)).encode() + b"\n")
+    passes = len({r for r, _kind, _part, _q in peers.values()})
+    if peers and launch + 1 != passes:
+        raise ValueError(f"the body splits into {launch + 1} launches, its peer Inputs into {passes} passes")
     for key in pending:
         streams[E].update(repr(("shared", key)).encode() + b"\n")
     streams[E].update(repr(("ret", tuple(part_key(p, E) for p in _flat(body.ret)))).encode() + b"\n")

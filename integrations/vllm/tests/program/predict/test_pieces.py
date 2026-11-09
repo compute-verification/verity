@@ -27,7 +27,7 @@ def _glm(hf: dict) -> Phi:
 
 def _parts(phi: Phi):
     """`phi`'s request of 5 prompt rows and one decode as class G's compiler builds it at a tensor-parallel rank, by part."""
-    r = build_program(phi, "request", LP=5, T=1, dead_free=True, batched=True, with_desc=False)
+    r = build_program(phi, "request", LP=5, T=1, batch=[[[5, 0]], [[1, 5]]], dead_free=True, batched=True, with_desc=False)
     return pieces(r.program, int(phi.tp["world"]))
 
 
