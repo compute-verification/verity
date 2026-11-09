@@ -228,7 +228,7 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
         if zero { vec![vec![F128::ZERO; n]; lanes] } else { rng.f128s_lanes(stream, lanes, n) }
     };
     let z = Level0Zk { queries0: zk_queries0(st.m).expect("checked when the statement is built"), t_pad: t, rep: 0,
-                       extra: Arc::new(draw(6, EXTRA_LANES, l).try_into().expect("EXTRA_LANES lanes")), pads: draw(7, lanes, t), tamper };
+                       extra: draw(6, EXTRA_LANES, l).into(), pads: draw(7, lanes, t), tamper };
     eprintln!("ZKL0\t{}", json!({"lanes": lanes, "t_pad": t, "extra_words": l, "s": tr.elapsed().as_secs_f64()}));
     z
 }
@@ -326,7 +326,10 @@ fn lean_level0(plan: &Plan, st: &Stmt, j: usize, w: &mut Witness, l0: &mut flock
         }
     }
     *zl = flock_core::lincheck::pack_z_lincheck_from_packed(&z[..], st.m, st.c.k_log);
-    l0.extra = Arc::new(got.extra.try_into().map_err(|_| "the Lean loop's level 0: not four extra lanes".to_string())?);
+    if got.extra.len() != flock_core::pcs::ligerito::zk::EXTRA_LANES {
+        return Err("the Lean loop's level 0: not four extra lanes".to_string());
+    }
+    l0.extra = got.extra.into();
     l0.pads = got.pads;
     salts.lock().unwrap_or_else(PoisonError::into_inner).set_level0(got.salts)?;
     Ok(Some(got.root))
@@ -1904,7 +1907,7 @@ impl Firewall {
             }
             s.expand(id, n)
         }));
-        let body = flock_live::firewall::link_body(z, &l0.extra[..], &l0.pads, &level0);
+        let body = flock_live::firewall::link_body(z, &l0.extra, &l0.pads, &level0);
         let (t0, c0) = (Instant::now(), flock_live::firewall::cpu_seconds());
         let root = lean_root.ok_or_else(|| refused("level-0 recheck: the table has no level 0 of the Lean session loop's"))?;
         let fin_root = finish.lock().unwrap_or_else(PoisonError::into_inner).level0(table, &root)?;
