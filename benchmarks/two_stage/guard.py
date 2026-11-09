@@ -29,7 +29,8 @@ used, and raises where they differ.
 ``python3 guard.py pack RUN_OUT FIXTURE`` packs a run's ``<case>/guard/`` for both cases into the guard test's fixture
 (`tests/test_guard.py`); ``python3 guard.py flip M2 OUT`` writes the test's flipped round-2 message (`flip_registered`);
 ``python3 guard.py refs GUARD`` moves the registered reads out of each ``ref-<t>.bin`` of an export that put them there
-into its ``ref-<t>.reads.json`` (`split_refs`).
+into its ``ref-<t>.reads.json`` (`split_refs`). The test's records that don't name their registrations' names are
+`drop_port`'s and `register`'s.
 """
 from __future__ import annotations
 
@@ -310,6 +311,24 @@ def flip_registered(m2: bytes) -> bytes:
     out[start + lo + at] = ord("1") if reads[at] == ord("0") else ord("0")
     json.loads(out[start + lo:start + hi])
     return bytes(out)
+
+
+def drop_port(rec: bytes, port: str) -> bytes:
+    """Record ``rec`` without its port ``port``'s root, and with a value of that name registered at the root's root,
+    domain and leaves, which round 2's registered-value arm reads (`SecondStage.sameAt`)."""
+    r = json.loads(rec)
+    (root,) = [e for e in r["roots"] if e["port"] == port]
+    r["roots"] = [e for e in r["roots"] if e["port"] != port]
+    r["registered"] = [*r.get("registered", []), {k: root[k] for k in ("root", "domain", "leaves")} | {"value": port}]
+    return json.dumps(r, sort_keys=True).encode()
+
+
+def register(rec: bytes, value: str, times: int) -> bytes:
+    """Record ``rec`` with ``value`` registered ``times`` times, each at its first port's root, domain and leaves."""
+    r = json.loads(rec)
+    entry = {k: r["roots"][0][k] for k in ("root", "domain", "leaves")} | {"value": value}
+    r["registered"] = [*r.get("registered", []), *[entry] * times]
+    return json.dumps(r, sort_keys=True).encode()
 
 
 if __name__ == "__main__":
