@@ -38,7 +38,7 @@ use flock_core::{
 use flock_field::F128;
 use flock_live::{
     circuit::*,
-    firewall::{Framer, Gate},
+    firewall::{Framer, Gate, cpu_seconds},
     run_record::RunLog,
     session_verify as sverify,
     zk_hooks::{Hooks, NoMask, ProverSeed},
@@ -4656,7 +4656,6 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
     }
 }
 
-/// `--tmpl-unit F`: a templated statement's unit rows at their positions (`flock-tmpl-unit`, `tests/lean/TmplUnit.lean`).
 /// `unit-walk`: circuit `--net` (default the statement's unit) over `--slots` slots of seeded input words, as the device
 /// witness builds its host units (`unit_ab_into`), at each `--wide` lane groups a pass (default 1,2,4,8) on each `--threads`
 /// pool size (default the global pool's) in turn, `--reps` rounds: a `WALK` line each with its wall and CPU seconds and
@@ -4685,9 +4684,9 @@ fn unit_walk(c: &Composite) {
         for pool in &pools {
             for &n in &widths {
                 out.fill(0);
-                let (t, cpu) = (Instant::now(), flock_live::firewall::cpu_seconds());
+                let (t, cpu) = (Instant::now(), cpu_seconds());
                 let ok = pool.install(|| flock_live::circuit::unit_ab_into_wide(net, ni, uw, &ins, &mut out, n));
-                let (wall_s, cpu_s) = (t.elapsed().as_secs_f64(), flock_live::firewall::cpu_seconds() - cpu);
+                let (wall_s, cpu_s) = (t.elapsed().as_secs_f64(), cpu_seconds() - cpu);
                 let want = first.get_or_insert_with(|| (ok, out.clone()));
                 println!("WALK\t{}", json!({"net": ni, "rows": net.useful, "nnz": nnz, "slots": slots,
                     "groups": slots.div_ceil(64), "wide": n, "rep": rep, "threads": pool.current_num_threads(),
@@ -4698,6 +4697,7 @@ fn unit_walk(c: &Composite) {
     }
 }
 
+/// `--tmpl-unit F`: a templated statement's unit rows at their positions (`flock-tmpl-unit`, `tests/lean/TmplUnit.lean`).
 fn load_composite(path: &str) -> Composite {
     let unit = Some(arg("--tmpl-unit", "")).filter(|p| !p.is_empty()).map(|p| std::fs::read_to_string(p).expect("--tmpl-unit"));
     Composite::parse_with(&std::fs::read_to_string(path).expect("circuit"), Some(&arg("--tables", "tables")), unit.as_deref())
