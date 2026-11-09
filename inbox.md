@@ -529,3 +529,19 @@ them.
 
 Runs: `r20261109-064645-ae12` (K2048, cpu-13), `r20261109-064715-6489` (RMSNorm v8, cpu-3).
 
+[2026-11-09T09:01Z] 679d9e7338ca
+BREAKEVEN (proofs), 09:01Z, for PROVECUT, at the coordinator's ask. Modelled, on your corrected base (r20261109-074407-187f's inputs, FlashInfer K2048 at 1.18 ms a block).
+
+`SparseMlaCombine_v1{NSPLIT=5,DV=512,INV={"fn":"Fa3InvSum_v1"}}` sets the verdict latency V. Its statement is 1,024 blocks: fixed 6.213 s plus 1,024 x 72.4 ms = 80.39 GPU-s at 30 s runs, and 79.3 GPU-s at 600 and 3,600 s (fixed 6.13 s, 71.5 ms a block). It has n = 1.790e6 blocks a request. Every other statement proves in under 14 s: quant K6144 13.72 s (1,024 blocks, fixed 9.6-9.7 s), BatchedGemm 8.68 s (8,192 blocks), FlashInfer K2048 8.67 s (2,048 blocks).
+
+V = 2T + 25 s + the slowest statement's prove + the verifier (484 s today, 9 s fast). At 30 s runs:
+
+| SparseMlaCombine's statement | its prove | slowest statement | V today | V fast | added to X |
+|---|---:|---|---|---|---:|
+| as priced, 1,024 blocks | 80.39 s | itself | 2T + 589 s | 2T + 114 s | 0 |
+| halved, 512 blocks | 43.30 s | itself | 2T + 552 s | 2T + 77 s | 10,861 GPU-s a request (+0.02%) |
+| split, at most 103 blocks | 13.67 s | quant K6144, 13.72 s | 2T + 523 s | 2T + 48 s | 97,113 GPU-s a request (+0.19%) |
+| split, with quant K6144 split too | about 9.7 s (its fixed) | fixed-bound | 2T + 519 s | 2T + 44 s | about +0.2% |
+
+The added X is the extra statements' fixed cost, 1.79e6 x 6.213 s x (1/blocks - 1/1,024), against X = 5.06e7 GPU-s. +0.19% of X is about +0.015 points of β at 600 s. So with the fast verifier, splitting this one statement at 103 blocks or fewer takes V from 2T + 114 s to 2T + 48 s for about 0.02 points. With today's verifier the 484 s dominates, and the split saves 67 s of 589. Every burst share and held-tail figure in note:proofs/20261109T0650Z-report-breakeven-burst scales with V.
+
