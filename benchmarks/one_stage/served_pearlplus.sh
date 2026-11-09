@@ -79,7 +79,9 @@
 # PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
 # registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W, and with
 # PEARLPLUS_CLASS (served_verdicts.sh's: V3C_CLASS, the class the window is committed at) `--class`, which refuses passes
-# that are not that class's fixed load, so the verdict's counts of passes, calls and tables are the class's. Its salt coin is the
+# that are not that class's fixed load, so the verdict's counts of passes, calls and tables are the class's, and whose
+# accept publishes its work in the grid form (verify_run.grid_work: the class's structural credit less the give-up padded
+# up to H1's window grid; the exact credit is the profile's exact_work, which `publish` holds on the node). Its salt coin is the
 # arm's: a live salt-only session of the window's own under the gate (`serve_pearl.live`), which step 5 holds each pass
 # to as above, else in-process, and the piece then claims no verdict.
 # The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`,
