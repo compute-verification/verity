@@ -1,8 +1,8 @@
 module
 
-public import Definitions.InferenceOnly.Dampener
+public import Definitions.InferenceOnly.Slowdown
 public import Definitions.InferenceOnly.Assumptions.Threads
-public import Definitions.InferenceOnly.Assumptions.Dampener
+public import Definitions.InferenceOnly.Assumptions.Slowdown
 public import Definitions.InferenceOnly.Assumptions.Baseline
 
 /-!
@@ -17,18 +17,18 @@ guarantee or of the model's accounting:
   of the compute audit's covert residual (`Accounting.Guarantees.CovertResidual`, `CovertResidualPerRun`), whose other
   accounts stay within `F·T − W_cert`;
 * the declared computation runs at `ρ` declared gates per counted multiplication, `M_d ≤ C/ρ`: the inference-only
-  policy's thread bound, `InferenceOnly.Guarantees.ThreadedThrottled`, which `DampenerThreaded` takes as proved rather
+  policy's thread bound, `InferenceOnly.Guarantees.ThreadedThrottled`, which `SlowdownThreaded` takes as proved rather
   than as a hypothesis;
 * incorrect proof blocks skip or inject at most the cheating share, `M_χ ≤ χ κ (C + U)/2`: what the sampled proofs' sample
   establishes (the cumulative bound, `Population.Exfil.tail_cumPrev`, at a budget);
 * the memory cap bounds the residual and the declared computation on the monitored servers together,
-  `M_r + M_d ≤ μ κ C/2`: `DampenerWindows` derives it, with `μ` the memory cap and one window of rounding, from the
+  `M_r + M_d ≤ μ κ C/2`: `SlowdownWindows` derives it, with `μ` the memory cap and one window of rounding, from the
   servers' windows, each holding at most `K Λ(K)/b_a` counted multiplications: the memory cap over threads
   (`Accounting.Guarantees.Actual.ThreadedRuntime`) at a whole-tick window `ω = L`, when one threading of the servers'
   computation counts the residual and the declared computation together.
 
-`Dampener` takes all five as hypotheses; `DampenerWindows` derives the memory cap's from the windows; `DampenerThreaded`
-also discharges the declared computation's with `ThreadedThrottled`, and `DampenerThreadedSlots` with
+`Slowdown` takes all five as hypotheses; `SlowdownWindows` derives the memory cap's from the windows; `SlowdownThreaded`
+also discharges the declared computation's with `ThreadedThrottled`, and `SlowdownThreadedSlots` with
 `ThreadedThrottledSlots`, weights charged per parameter slot.
 -/
 
@@ -36,7 +36,7 @@ also discharges the declared computation's with `ThreadedThrottled`, and `Dampen
 
 namespace InferenceOnly.Guarantees
 
-open Verity InferenceOnly.Dampener
+open Verity InferenceOnly.Slowdown
 
 /-- **The compute dampener.** A developer spends `C > 0` FLOP on monitored hardware and `U ≥ 0` on unmonitored
 hardware and computes `M` counted multiplications, each by one of four sources (`M ≤ M_U + M_r + M_d + M_χ`):
@@ -46,14 +46,14 @@ multiplication (`M_d ≤ C/ρ`), and incorrect proof blocks within the cheating 
 cap `μ` bounds the residual and the declared computation together (`M_r + M_d ≤ μ κ C/2`). Then the compute efficiency
 `η = (2/κ) M/(C + U)` is at most `s + min(r, μ) + ν + χ`, where `s = U/(C + U)`, `r = 1 − W_cert/C` and
 `ν = (1 − s) · 2/(κ ρ)`. -/
-def Dampener : Prop :=
+def Slowdown : Prop :=
   ∀ (κ C U W ρ μ χ : ℝ) (M Mu Mr Md Mx : ℕ),
     0 < κ → 0 < C → 0 ≤ U → M ≤ Mu + Mr + Md + Mx →
     (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Md : ℝ) ≤ C / ρ → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
     (Mr : ℝ) + Md ≤ κ * μ * C / 2 →
       efficiency κ M C U ≤ unregisteredShare C U + min (residualShare W C) μ + declaredShare κ ρ C U + χ
 
-/-- **The compute dampener with the memory cap from windows.** As `Dampener`, with the memory cap's hypothesis replaced
+/-- **The compute dampener with the memory cap from windows.** As `Slowdown`, with the memory cap's hypothesis replaced
 by the servers' windows. `n` servers of `F` gates a tick run for `H > 0` ticks, so that `n F H ≤ C`. Cut each server's
 horizon into `⌈H/L⌉` windows of `L = R/(αF)` ticks (`α F L = R`), each starting from at most `R` bits of state (what a
 wipe leaves) and taking in at most `αF` bits a tick, so that it reads at most `K = R + αF L = 2R` bits. When each window
@@ -61,7 +61,7 @@ holds at most `K Λ(K)/b_a` counted multiplications of the residual and the decl
 `b_a (M_r + M_d) ≤ n ⌈H/L⌉ K Λ(K)`, and `Λ(2R)` is in its quadratic regime (`e ≤ reuse · 2R/(4 d b_w)`), then
 `η ≤ s + min(r, μ (1 + L/H)) + ν + χ` with `μ = 2 reuse · R α/(κ d b_w b_a)`: the factor `1 + L/H` is the last window,
 cut at `H`, and is 1 + R/(αFH). -/
-def DampenerWindows : Prop :=
+def SlowdownWindows : Prop :=
   ∀ (κ C U W ρ χ : ℝ) (M Mu Mr Md Mx n : ℕ) (F H L R α reuse e d b_w b_a : ℝ),
     0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 ≤ reuse → 0 < d → 0 < b_w → 0 < b_a →
     M ≤ Mu + Mr + Md + Mx →
@@ -72,14 +72,14 @@ def DampenerWindows : Prop :=
         unregisteredShare C U + min (residualShare W C) (memoryCap reuse κ R α d b_w b_a * (1 + L / H)) +
           declaredShare κ ρ C U + χ
 
-/-- **The compute dampener over the inference-only policy's thread bound.** As `DampenerWindows`, with the declared
+/-- **The compute dampener over the inference-only policy's thread bound.** As `SlowdownWindows`, with the declared
 computation's bound proved: the declared circuit `d` contains the reference training circuit `r` (`Mc`), threaded by `T`
 and with incompressible weights, and complies at `(Γ, α)` (`CompliesRate`), with its registered information free of the
 reference circuit's fresh input (`ThetaRegistered`), so its counted multiplications `|T.M|` number at most
 `size(d)/ρ_T` (`InferenceOnly.Guarantees.ThreadedThrottled`), `ρ_T = b_a/(α Λ(α Γ))`, and `size(d) ≤ C`. The windows' bound is
 stated with `T`'s `Λ = T.bound`, as the memory cap over threads states it. Then `η ≤ s + min(r, μ (1 + L/H)) + ν_T + χ`
 with `ν_T = (1 − s) · 2/(κ ρ_T)` and `μ = 2 reuse · R α/(κ d b_w b_a)` at `T`'s reuse. -/
-def DampenerThreaded : Prop :=
+def SlowdownThreaded : Prop :=
   ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r)
     (dd e : ℕ) (Mc : Containment r.D d.D),
     0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
@@ -94,11 +94,11 @@ def DampenerThreaded : Prop :=
         unregisteredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
           declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
 
-/-- **The compute dampener over the inference-only policy's thread bound, per parameter slot**: `DampenerThreaded` with
+/-- **The compute dampener over the inference-only policy's thread bound, per parameter slot**: `SlowdownThreaded` with
 the reference circuit's weights incompressible per parameter slot of a slot map `σ`
 (`Assumptions.WeightsIncompressibleSlots`), its declared computation's bound from
 `InferenceOnly.Guarantees.ThreadedThrottledSlots`. -/
-def DampenerThreadedSlots : Prop :=
+def SlowdownThreadedSlots : Prop :=
   ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r)
     (σ : T.Slots) (dd e : ℕ) (Mc : Containment r.D d.D),
     0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →

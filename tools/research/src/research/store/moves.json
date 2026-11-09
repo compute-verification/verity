@@ -1764,6 +1764,16 @@
         "verity/core/protocols/network/tests/test_nci_desc_liveness.py": "verity/core/protocols/network/tests/test_inference_only_desc_liveness.py",
         "verity/core/protocols/network/tests/test_nci_lean_difftest.py": "verity/core/protocols/network/tests/test_inference_only_lean_difftest.py"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Accounting/Guarantees/Actual/Dampener.lean": "Security/Definitions/Accounting/Guarantees/Actual/Slowdown.lean",
+        "Security/Definitions/InferenceOnly/Assumptions/Dampener.lean": "Security/Definitions/InferenceOnly/Assumptions/Slowdown.lean",
+        "Security/Definitions/InferenceOnly/Dampener.lean": "Security/Definitions/InferenceOnly/Slowdown.lean",
+        "Security/Definitions/InferenceOnly/Guarantees/Dampener.lean": "Security/Definitions/InferenceOnly/Guarantees/Slowdown.lean",
+        "Security/Proofs/Accounting/Actual/Dampener.lean": "Security/Proofs/Accounting/Actual/Slowdown.lean",
+        "Security/Proofs/InferenceOnly/Dampener.lean": "Security/Proofs/InferenceOnly/Slowdown.lean"
+      }
     }
   ]
 }
