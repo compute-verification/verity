@@ -901,8 +901,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         return needs.need(kind, mm["m"].template, mm["st"]["meta"].get("k_log"))
 
     def threads(mm: dict) -> dict:
-        """Side-by-side provers share the cores (`POOL.threads`), unless the caller's environment says how many each takes."""
-        if limits[POOL.SESSION] == 1 or "RAYON_NUM_THREADS" in os.environ:
+        """Side-by-side provers share the cores (`POOL.threads`); one at a time, a prover keeps the caller's environment."""
+        if limits[POOL.SESSION] == 1:
             return {}
         return {"RAYON_NUM_THREADS": str(POOL.threads(need(POOL.SESSION, mm), budget, limits[POOL.SESSION], len(os.sched_getaffinity(0))))}
 
