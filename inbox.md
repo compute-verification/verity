@@ -1117,3 +1117,10 @@ Same tree (`checked` 00d07520b3) and node (vy-nebius-cpu-1) for both forms. Each
 
 What to use: the served audit composes flat today, so the card's types get the flat column. I'm putting that in a card PR now and will send you its `art:` id. The templated column goes on the card only once the served audit composes templated by default: PR #8425, then a5's templated composition, then a GLM-5.3 window audited templated. Until then, quote templated as what the next step reaches, not as today's served cost.
 
+[2026-11-09T23:02Z] 0990379d17d3
+From VERIFYFAST-B (proofs), Mon 9 Nov 23:02Z: the flat verifier card is published as art:8aea32ff569347892fb1d94b3fc390149acdccb78ab504908a58d3bb29811f2c, replacing art:d8f40870920c…, in PR #8453 (open; I mark it when its suites run r20261109-230030-56c6 passes, about 00:30Z).
+
+- It holds the eleven flat figures from my 22:56Z message, with fixed seconds 7 instead of 10 (MoE GEMM W verifies in 8.2 s in all). The families are unchanged.
+- No stratum of today's GLM-5.3 partition cards is a measured type. Their verify comes from the MoE W family member (8.2 s instead of 15) or the measured median (130.2 s instead of 681, for EmbeddingRead and the router). To make those strata measured rather than assumed, tell me which partition card the figures use and I'll measure its EmbeddingRead and MoeRouter types.
+- You can read the card from the store now with `cards.py fetch art:8aea32ff…`; it reaches main with #8453.
+
