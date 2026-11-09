@@ -4359,20 +4359,21 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces):
 
 
 def test_a_window_opens_the_pool_its_chain_left(pieces):
-    """Lean and Python agreeing on the pool chain: a window whose reset bit is clear opens the pool the previous window
-    of record left, of the same program, `pin` the previous record's `pout` entry, its domain and root, whatever the
-    verifier made of that window; one whose bit is set opens the empty pool, `pin` filled from `genesis`, which a
-    registration's first window must. Any other `pin` is refused by name (`R7-pool-chain`), a window naming another
-    bit than the verifier's pool holds, or none, is refused by name (`R6-pool-reset`), and a pool in another form
-    refuses the verifier's inputs."""
+    """Lean and Python agreeing on the pool chain: a window opens the pool the previous window of record left, of the
+    same program, `pin` the previous record's `pout` entry, its domain and root, whatever the verifier made of that
+    window; it opens the empty pool, `pin` filled from `genesis`, at a registration's first window, after the verifier
+    refused the window the public lag back (`refused`) and where serving resets it (`reset`), which the record's window
+    names. Any other `pin` is refused by name (`R7-pool-chain`), a window naming another reset than the verifier's pool
+    holds, or none, by name (`R6-pool-reset`), a second reset in a week by name (`R6-pool-reset-week`), and a pool in
+    another form refuses the verifier's inputs."""
     s, law = POOLED, {"k": 1, "law": "subset"}
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
-    pool = {"genesis": GENESIS, "pin": "pin", "pout": "pout", "reset": True}
+    pool = {"genesis": GENESIS, "pin": "pin", "pout": "pout", "refused": False, "reset": False, "spent": False}
     params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [], "parameters": s.signature,
               "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "pool": pool,
               "registered": {"pin": 16, "pout": 16}, "scheme": SCHEME, "window_root": EARLIER_WROOT, "work_table": None}
 
-    def record(window, pout, pin=None, log=(), reset=True):
+    def record(window, pout, pin=None, log=(), reset=False):
         return R.record(s.program, s.query, law, SCHEME, roots, {**window, R.POOL_RESET: reset}, leaf_layer=LEAF,
                         previous=R.digest(log[-1]) if log else None, registered=[pout, *([pin] if pin else [])])
 
@@ -4384,31 +4385,35 @@ def test_a_window_opens_the_pool_its_chain_left(pieces):
     empty = G.supplied_value(s.program, "pin", [[("bytes", GENESIS)]], record(EARLIER, pout0), ["pin"]).entry()
     first = record(EARLIER, pout0, empty)
     assert codes(params, first) == []
-    clear = {**pool, "reset": False}
-    assert codes({**params, "pool": clear}, record(EARLIER, pout0, empty, reset=False)) == ["R7-pool-chain"]
     carried = {**pout0, "value": "pin"}
-    then = {**params, "log": [first], "window_root": WROOT, "pool": clear}
-    assert codes(then, record(WINDOW, pout1, carried, [first], False)) == []
+    then = {**params, "log": [first], "window_root": WROOT}
+    assert codes(then, record(WINDOW, pout1, carried, [first])) == []
     for pin, want in (({**carried, "root": "ef" * 64}, ["R7-held", "R7-pool-chain"]),
                       (empty, ["R7-domain", "R7-held", "R7-pool-chain"]),
                       ({**pout1, "value": "pin"}, ["R7-domain", "R7-held", "R7-pool-chain"]),
                       ({**carried, "domain": pout1["domain"]}, ["R7-domain", "R7-pool-chain"])):
-        assert codes(then, record(WINDOW, pout1, pin, [first], False)) == want, pin
-    restart = {**then, "pool": pool}
-    assert codes(restart, record(WINDOW, pout1, empty, [first])) == []
-    assert codes(restart, record(WINDOW, pout1, carried, [first])) == ["R7-domain", "R7-supplied", "R7-pool-chain"]
+        assert codes(then, record(WINDOW, pout1, pin, [first])) == want, pin
+    for how in ({"refused": True}, {"reset": True}):
+        restart, reset = {**then, "pool": {**pool, **how}}, how.get("reset", False)
+        assert codes(restart, record(WINDOW, pout1, empty, [first], reset)) == [], how
+        assert codes(restart, record(WINDOW, pout1, carried, [first], reset)) == [
+            "R7-domain", "R7-supplied", "R7-pool-chain"], how
+    again = {**then, "pool": {**pool, "reset": True, "spent": True}}
+    assert codes(again, record(WINDOW, pout1, empty, [first], True)) == ["R6-pool-reset-week"]
+    assert codes({**then, "pool": {**pool, "spent": True}}, record(WINDOW, pout1, carried, [first])) == []
     for named in (True, None, 0, "false"):
         assert codes(then, record(WINDOW, pout1, carried, [first], named)) == ["R6-pool-reset"], named
     (pin1,) = s.entries({"pin": 16}, WROOT)
     assert codes({**then, "pool": None}, record(WINDOW, pout1, pin1, [first], None)) == []
     assert codes({**then, "pool": None}, record(WINDOW, pout1, pin1, [first], False)) == ["R6-pool-reset"]
-    for bad in ({k: v for k, v in pool.items() if k != "reset"}, {**pool, "pin": "pout"}, {**pool, "pin": "x"},
-                {**pool, "genesis": GENESIS.upper()}, {**pool, "genesis": GENESIS[:-2]}, {**pool, "reset": 1},
-                {**pool, "pout": 5}, []):
-        assert codes({**then, "pool": bad}, record(WINDOW, pout1, carried, [first], False)) == "reject", bad
+    for bad in (*({k: v for k, v in pool.items() if k != b} for b in ("refused", "reset", "spent")),
+                {**pool, "pin": "pout"}, {**pool, "pin": "x"}, {**pool, "genesis": GENESIS.upper()},
+                {**pool, "genesis": GENESIS[:-2]}, {**pool, "refused": 0}, {**pool, "reset": 1},
+                {**pool, "spent": None}, {**pool, "extra": False}, {**pool, "pout": 5}, []):
+        assert codes({**then, "pool": bad}, record(WINDOW, pout1, carried, [first])) == "reject", bad
     for extra in ({"supplied": {"pin": [[{"bytes": GENESIS}]]}}, {"outputs": {"pout": {"port": "x"}}},
                   {"row_schemas": {"pin": G.SCHEMA_SEG}}):
-        assert codes({**then, **extra}, record(WINDOW, pout1, carried, [first], False)) == "reject", extra
+        assert codes({**then, **extra}, record(WINDOW, pout1, carried, [first])) == "reject", extra
 
 
 def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces):
@@ -4416,8 +4421,9 @@ def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces
     network certifier signed for it, which the verifier pins (`ing`: the arrivals open at the last window's edge first,
     each at the values it arrived with and the outputs released of it); its rows (`req`) are its own, under its open
     root; and its pool chains. Three windows that carry the pool are accepted, arrivals with a continuation counted
-    from the outputs serving computed or the last window's arrivals again are `R7-held`, and a window whose reset bit is
-    set is accepted from the empty pool alone, still serving the continuations, its carried pool refused by name."""
+    from the outputs serving computed or the last window's arrivals again are `R7-held`, and a window that restarts its
+    pool, by the public rule or by serving's reset, is accepted from the empty pool alone, still serving the
+    continuations, its carried pool refused by name."""
     s, law = CONTINUED, {"k": 1, "law": "subset"}
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
     windows, wroots = (EARLIER, WINDOW, {**WINDOW, "row": 102}), (EARLIER_WROOT, WROOT, "a8" * 64)
@@ -4430,21 +4436,20 @@ def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces
         [[1, 7, 5], [1, 8, 2], [1, 9, 3], [0, 0, 0]], [[1, 7, 8], [1, 9, 3], [1, 10, 1], [0, 0, 0]],
         [[1, 9, 4], [1, 10, 1], [0, 0, 0], [0, 0, 0]]))]
 
-    def params(i, log, reset):
+    def params(i, log, **how):
+        pool = {"genesis": GENESIS, "pin": "pin", "pout": "pout", "refused": False, "reset": False, "spent": False}
         return {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": list(log),
                 "parameters": s.signature, "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
-                "pool": {"genesis": GENESIS, "pin": "pin", "pout": "pout", "reset": reset},
-                "pinned": {"ing": stamps[i]["root"]}, "registered": {"ing": 3, "req": 12, "pin": 16, "pout": 16},
-                "scheme": SCHEME, "window_root": wroots[i], "work_table": None}
+                "pool": {**pool, **how}, "pinned": {"ing": stamps[i]["root"]},
+                "registered": {"ing": 3, "req": 12, "pin": 16, "pout": 16}, "scheme": SCHEME,
+                "window_root": wroots[i], "work_table": None}
 
-    def record(i, pin, log=(), ing=None, reset=None):
+    def record(i, pin, log=(), ing=None, reset=False):
         """Window i's record after `log`, `pin` its entry for `pin`, the empty pool filled from `genesis` where it is
-        None, its window naming the reset bit `reset`, set by default where it opens the empty pool."""
-        bit = pin is None if reset is None else reset
-
+        None, its window naming the reset `reset`."""
         def bare(*extra):
-            return R.record(s.program, s.query, law, SCHEME, roots, {**windows[i], R.POOL_RESET: bit}, leaf_layer=LEAF,
-                            previous=R.digest(log[-1]) if log else None,
+            return R.record(s.program, s.query, law, SCHEME, roots, {**windows[i], R.POOL_RESET: reset},
+                            leaf_layer=LEAF, previous=R.digest(log[-1]) if log else None,
                             registered=[ing or stamps[i], *s.entries({"req": 12, "pout": 16}, wroots[i]), *extra])
 
         if pin is None:
@@ -4462,17 +4467,17 @@ def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces
     second = record(1, carried(first), [first])
     third = record(2, carried(second), [first, second])
     for i, rec in enumerate((first, second, third)):
-        assert codes(params(i, [first, second][:i], i == 0), rec) == [], i
+        assert codes(params(i, [first, second][:i]), rec) == [], i
     served = stamp([[1, 7, 9], [1, 9, 3], [1, 10, 1], [0, 0, 0]], "served")
     for ing in (served, stamps[0]):
-        assert codes(params(1, [first], False), record(1, carried(first), [first], ing)) == ["R7-held"], ing
-    assert codes(params(1, [first], False), record(1, None, [first], reset=False)) == [
-        "R7-domain", "R7-held", "R7-pool-chain"]
-    restart = params(2, [first, second], True)
-    assert codes(restart, record(2, None, [first, second])) == []
-    assert codes(restart, record(2, carried(second), [first, second], reset=True)) == [
-        "R7-domain", "R7-supplied", "R7-pool-chain"]
-    assert codes(restart, record(2, None, [first, second], stamps[1])) == ["R7-held"]
+        assert codes(params(1, [first]), record(1, carried(first), [first], ing)) == ["R7-held"], ing
+    assert codes(params(1, [first]), record(1, None, [first])) == ["R7-domain", "R7-held", "R7-pool-chain"]
+    for how in ({"refused": True}, {"reset": True}):
+        restart, reset = params(2, [first, second], **how), how.get("reset", False)
+        assert codes(restart, record(2, None, [first, second], reset=reset)) == [], how
+        assert codes(restart, record(2, carried(second), [first, second], reset=reset)) == [
+            "R7-domain", "R7-supplied", "R7-pool-chain"], how
+        assert codes(restart, record(2, None, [first, second], stamps[1], reset)) == ["R7-held"], how
 
 
 def test_a_root_with_a_trailing_newline_is_refused(pieces):
