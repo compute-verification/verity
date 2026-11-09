@@ -653,7 +653,7 @@
       "usergroup": "S0CA9EAFKED",
       "linear": "TRN",
       "owns": [
-        "benchmarks/rho/",
+        "benchmarks/slowdown/",
         "benchmarks/circuit_properties/"
       ],
       "branch_suffixes": [

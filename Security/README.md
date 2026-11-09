@@ -45,7 +45,7 @@ part 4's slowdown is a consequence of it, not a further source of difficulty. Al
 count** in one convention: the product arguments count weighted multiplications, the recovery argument counts output
 observations, and an application of the argument fixes one convention for Ω_*, every q_I and Q_rem.
 
-The numbers come from the slowdown calculator (`benchmarks/rho`), not from this file.
+The numbers come from the slowdown calculator (`benchmarks/slowdown`), not from this file.
 
 ### Objects
 

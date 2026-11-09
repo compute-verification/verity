@@ -291,7 +291,7 @@
     {"file": "benchmarks/resource_accounting/render.py", "rule": "E402", "count": 3},
     {"file": "benchmarks/resource_accounting/render.py", "rule": "E731", "count": 2},
     {"file": "benchmarks/resource_accounting/tests/test_resource_accounting.py", "rule": "E731", "count": 1},
-    {"file": "benchmarks/rho/tests/test_theorem.py", "rule": "E731", "count": 2},
+    {"file": "benchmarks/slowdown/tests/test_theorem.py", "rule": "E731", "count": 2},
     {"file": "benchmarks/sampling_plan/demo_a.py", "rule": "RUF100", "count": 4},
     {"file": "benchmarks/sampling_plan/h200.py", "rule": "RUF100", "count": 8},
     {"file": "benchmarks/sampling_plan/int8_llama.py", "rule": "RUF100", "count": 4},
