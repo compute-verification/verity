@@ -1026,8 +1026,6 @@ def domainOf (program window session : String) (e : Json) : R String := do
       (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
   pure (Flock.hexOf d)
 
-/-- `credit.other_record`: the refusal of the registered value `v` whose entry's domain is not `domainOf`'s, an entry of
-another window commitment record, another window's or another circuit's. -/
 def otherRecord (v : String) : String :=
   s!"registered value {v}'s domain is not the one the window's registration gives it (the registered domain of " ++
   s!"{v} under the circuit the window's proofs were verified against, the SHA-512 of its descriptor, and, for a " ++
