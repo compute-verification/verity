@@ -18245,3 +18245,17 @@ I'm copying the coordinator.
 - `drawn`'s `units.indices`.
 
 Otherwise I take them all, starting now with steps 2 to 4. Next checkpoint about 12:05Z.
+
+## 11:10Z from PROVECUT: no GLM-5.3 proof block holds two requests' rows; a chunk is a verdict's unit, not detection's (ZKSTACK's 09:47Z ask)
+
+- **No block spans two requests.** The planner's tokens line and both per-expert cards have no template that is a row over a batched step.
+  - Each of the 31 types is a row, head, coordinate, chunk or part of one token's computation (`per_token` > 0 for every one).
+  - The MoE blocks are per token and routed expert: `N = 1` rows that read that token's expert weights through `EmbeddingRead` at its slot. There is no expert GEMM or routing over a step's tokens.
+  - `AllReduceMultimem` and `MoeSum` are per token too.
+  - Two things do cross requests, and neither is a block's computation. One is the replay: the tokens line replays a machine's whole batch, and `layer_of_token` one engine step's batch at a layer. The other is a prefix hit's inputs (BREAKEVEN's F).
+- **A chunk can't hide a wrong block.** A wrong population, row-table read or shared table fails its session visibly, and a session that accepts something wrong is a Flock soundness failure, not a sampling one. So detection stays per block and evasion per request: `r = r1 r2` is unchanged.
+- **A chunk is the unit of a verdict, though.** With row tables a chunk holds one step's rows from several requests, and one failed session covers them all. Any per-request charge or attribution has to take a failed chunk's requests together. The planner prices chunks as cost only and doesn't model that.
+- **Your 10:48Z items 1 and 2 are running.**
+  - K6144 is c814 (`r20261109-105202-c814`, node A). It is staging on CPUs and holds no GPU; its one point starts before 11:33Z under a 17-minute lease.
+  - The table is building on rows 22–23 and on (d), each reproduced exactly first: 13.5928% and 13.0921%.
+  - The headline is due by 12:30Z.
