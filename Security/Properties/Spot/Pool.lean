@@ -1,7 +1,7 @@
 module
 
 public import Properties.Spot
-public import Definitions.NetworkCertifier.PoolRoots
+public import Definitions.NetworkCertifier.Carried
 
 /-!
 # A period's pool chain, from R7 on each of its records (`Properties.Spot.PeriodPoolChained`, `RootsChainedOfR7`)
@@ -12,8 +12,9 @@ chains the records' entries as `NetTiming.PoolChained` chains the carried pool's
 read as the canonical texts of its domain and root (`canonText`), the texts `jeq` compares. Each window's entry for
 `pin` is the previous window's last entry for `pout` where the window carries the previous window's pool
 (`Registration.Pool.chains`). Otherwise it is the pool its verifier opens (`openOf`): the empty pool's root, filled from
-`genesis`, at a registration's first window or after a failed window or another program's; and at the period's first
-window, possibly the pool of the window before the period. Each run's registered roots, read from its record (`dec`),
+`genesis`, where the public rule restarts the chain (at a registration's first window, at another program's, and the
+public lag `L` windows after one the verifier refused) or serving's reset does, at most once a week; and at the
+period's first window, possibly the pool of the window before the period. Each run's registered roots, read from its record (`dec`),
 then chain over digests as `NetTiming.Guarantees.RootsOfChecked` takes them (`RootsChainedOfR7`).
 -/
 
@@ -70,7 +71,7 @@ its verifier opens. -/
 def PeriodPoolChained : Prop :=
   ∀ {m : ℕ} (rec : Fin m → Json) (v : Fin m → Registration.Verifier) (p : Fin m → Registration.Pool) (pout : String),
     (∀ i, (v i).pool = some (p i)) → (∀ i, (p i).pout = pout) →
-    (∀ i : Fin m, 0 < i.val → (v i).log.back? = some (rec (NetTiming.prevRun i))) →
+    (∀ i j : Fin m, j.val + 1 = i.val → (v i).log.back? = some (rec j)) →
     (∀ i, PoolChained (rec i) (v i)) →
     NetTiming.PoolChained (fun i => (p i).chains (v i).log (Flock.hexOf (v i).program.sha512))
       (fun i => openOf (rec i) (v i) (p i)) (fun i => pinOf (rec i) (p i)) (fun i => poutOf (rec i) pout)
@@ -86,7 +87,7 @@ def RootsChainedOfR7 : Prop :=
     (G : Hash.Msg → Hash.Digest) (genesis : Fin m → Hash.Row) (pinRoot poutRoot : Fin m → Hash.Digest)
     (dec : Option String × Option String → Hash.Digest),
     (∀ i, (v i).pool = some (p i)) → (∀ i, (p i).pout = pout) →
-    (∀ i : Fin m, 0 < i.val → (v i).log.back? = some (rec (NetTiming.prevRun i))) →
+    (∀ i j : Fin m, j.val + 1 = i.val → (v i).log.back? = some (rec j)) →
     (∀ i, PoolChained (rec i) (v i)) →
     (∀ i, pinRoot i = dec (pinOf (rec i) (p i))) → (∀ i, poutRoot i = dec (poutOf (rec i) pout)) →
     (∀ i : Fin m, ¬(0 < i.val ∧ (p i).chains (v i).log (Flock.hexOf (v i).program.sha512) = true) →

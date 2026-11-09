@@ -48,7 +48,8 @@ theorem periodPoolChained : PeriodPoolChained := by
   rw [pinOf_eq_openOf (hp i) (hR7 i)]
   unfold NetTiming.poolOpen
   split_ifs with hc
-  · have h := openOf_of_chains (rec := rec i) (v := v i) (p := p i) hc.2 (hlog i hc.1)
+  · have h := openOf_of_chains (rec := rec i) (v := v i) (p := p i) hc.2
+      (hlog i ⟨i.val - 1, lt_of_le_of_lt (Nat.sub_le i.val 1) i.isLt⟩ (Nat.sub_add_cancel hc.1))
     rw [hout i] at h
     exact h
   · rfl
