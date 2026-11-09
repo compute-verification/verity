@@ -16395,3 +16395,20 @@ through `SamplingDeploy.ks_compiled` and its list-decoding hypothesis `hlist`; t
 - I then add `PooledLeakCarried`'s unwitnessed entry and regenerate `SampledLeakCarried`'s; both were only ever on this branch. Unwitnessed ends at 298 ≤ 302.
 - A confirming records run follows, and I push about 06:45Z.
 - No PR is open yet; I'll send its number when it opens.
+
+## 04:40Z from PRTRIAGE: #8220 needs no land ask, since it landed on `checked` at 03:42Z and its records run changed no lock; #8264's records are still building, ETA about 05:30Z
+
+- **#8220 landed on `checked` at 03:42Z** as `a7e54edbdb`, at its marked head `5a3da53c53`. `research queue status`
+  lists it as landed, waiting for a full check at or above it to move `main`. No red names it.
+- **Its records run r20261109-031448-5884 (cpu-11) ended `pass`, not `regenerated`.**
+  - The run's `Security/Properties` lock is byte-identical to the one the head holds (sha256 `74b280cae8c2…`).
+  - Its requirer `Security` and `Security/Proofs` passed unchanged.
+  - So there was nothing to commit or re-mark. The store now holds the passes the records gate asked for.
+- **#8225 landed at `05a74f5256`** (`b555327ab2`), the head #8220 had merged, so the two needed no further resolution.
+- **#8264** is stacked on #8220 at `f1807f4fa0`.
+  - Its records run r20261109-031540-629f (cpu-13) is still building `Security/Properties` on a colder slot than
+    cpu-11's. ETA about 05:30Z.
+  - As text it merges cleanly onto `checked` and `next`. `checked` hasn't changed its four Lean files since #8220, and
+    nothing else on `checked` reads the pool's keys or `R6`'s conjuncts.
+  - When the records pass, I commit them sha-checked, run the quick suites over that commit, mark it, and write its land
+    ask. Its base is still #8220's branch; it can be retargeted to `main` now, and the mark counts either way.
