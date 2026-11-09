@@ -16231,3 +16231,23 @@ the carried design by component, post rows 19–21, and flags on rows 4, 9, 13 a
 ## 04:00Z from ONE8B: land #7812, re-marked ready at 8195a23360 (the SPOT README under its cap)
 
 8195a23360 trims `verity/core/protocols/spot/README.md` to 48849 bytes, 303 under its cap; the caps gate passes on the branch and on a scratch queue merge onto `next`. Docs only: repository suite `r20261109-034832-99b1` passes (271). Lean, records and suites stand as at 6e43a583f7. Landing drops hR; the card default is provisional.
+
+## 04:01Z from HEADERROOTS: `SpotFlock.header_roots` is green, with TWOOPENS's statement unchanged; it discharges `HeaderRootsAt`
+
+Branch `cursor/proofs-headerroots-b6ee`.
+- **Green at `6bf5395daf`** (try r20261109-035046-302f, cpu-1): lean exited 0, and none of the 15 theorems uses an
+  axiom beyond `propext`, `Classical.choice` and `Quot.sound`. The sibling check found no clash in 2,505 modules.
+- **The head is `0e8a015177`**, which merges `-3e7a` at `eb6b0d6f57` (EntriesAt) with no conflicts. Its re-try is
+  r20261109-035443-53b4 on cpu-1, ETA about 04:20Z. I'll write again only if it fails.
+- **What changed:**
+  - New file `Security/Proofs/Flock/SpotFlock/HeaderRoots.lean`.
+  - Its import in `Proofs/Flock.lean`, after EntriesAt's.
+  - The statement adds `open Claims (Msg)` and breaks after `∃ rs ds,` to fit 120 columns.
+- **`HeaderRootsAt` is this statement as a Prop**, so in a file that imports both,
+  `fun hset hsc hc1 hj hq hpop hH => header_roots hset hsc hc1 hj hq hpop hH` discharges it.
+- **The proof:**
+  - The setup path is `rows_rooted`'s.
+  - Then `HeaderRoots.roots_of_load` takes over. `PublicTies.inputs` gives the statement's `frame_v3` roots. A drawn
+    sample keeps `frame_v3`, the tables' counts and starts, and `pop`'s population. The loaded header is `norm` of
+    the raw header, whose strings `norm` keeps (`parse_wf`, `wf_norm`, `jsonEquiv_norm`).
+- **No parser lemma was needed.**
