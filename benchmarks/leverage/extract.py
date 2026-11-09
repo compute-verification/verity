@@ -507,9 +507,10 @@ def part_rows(lm: LM, tok, a) -> dict:
 
 
 def ulp2(z: torch.Tensor, precision: str) -> torch.Tensor:
-    """The variance of rounding z to the served precision, ulp^2 / 12."""
+    """The variance of rounding z to the served precision, ulp^2 / 12, with |z| floored at 2^-8: an ulp that keeps
+    shrinking towards zero lets one logit near zero outweigh the prior and leave the normal equations singular."""
     mant = 7 if precision == "bf16" else 23
-    e = torch.floor(torch.log2(z.abs().clamp_min(1e-30)))
+    e = torch.floor(torch.log2(z.abs().clamp_min(2.0 ** -8)))
     return (2.0 ** (e - mant)).pow(2) / 12
 
 
@@ -534,13 +535,13 @@ def read_row(Et, g, Eb, zt, precision, s, tru, lm) -> tuple[float, float, torch.
     P = (A * w[:, None]).T @ A
     P[:-1, :-1] += torch.eye(A.shape[1] - 1, dtype=torch.float64)
     P[-1, -1] += 1e-12
-    C = torch.linalg.inv(P)
-    # Not C @ ...: a centred head (LayerNorm's, as a peel reads it) leaves P's condition near 1e14 at fp32's weights,
-    # where the explicit inverse loses the estimate and a solve doesn't.
+    # A solve, never an explicit inverse: a centred head (LayerNorm's, as a peel reads it) leaves P's condition near
+    # 1e14 at fp32's weights, where the inverse loses the estimate.
     xh = torch.linalg.solve(P, A.T @ (w * y))
     est = norm_dir(lm, xh[:-1]).float()
     r = float((est - tru).pow(2).mean())
-    mi = -0.5 * float(torch.linalg.slogdet(C[:-1, :-1])[1]) / math.log(2)
+    # x's posterior precision is P's Schur complement on c, whose log det is log det P - log P_cc.
+    mi = 0.5 * (float(torch.linalg.slogdet(P)[1]) - math.log(float(P[-1, -1]))) / math.log(2)
     return r, mi, est
 
 
