@@ -4,9 +4,11 @@
  "model": "GLM-5.3",
  "status": "measured",
  "provisional": true,
- "source": "art:cdef90831b5febd5308ec0f81cc2b5f20901197a94acad0779352d9bef53411b: benchmarks/one_stage/block_census.py's census of GLM-5.3's served circuit, every Program row of its Commit's Build on all 8 ranks and every step of one request (256 prompt tokens, 32 generated), cut into proof blocks; blocks, output bits and MACs counted from the circuit, ANDs the estimator's upper bound; rows no cut fits (SparseMlaSplit_v1, TokenSelect_v1) are in no stratum and in served_macs_per_token; the weights' bytes and parameters as the checkpoint's manifest and safetensors metadata give them",
+ "source": "art:cdef90831b5febd5308ec0f81cc2b5f20901197a94acad0779352d9bef53411b: benchmarks/one_stage/block_census.py's census of GLM-5.3's served circuit, every Program row of its Commit's Build on all 8 ranks and every step of one request (256 prompt tokens, 32 generated), cut into proof blocks; blocks, output bits and MACs counted from the circuit, ANDs the estimator's upper bound, except FlashInfer's K=6144 and K=2048 coordinates': each its block as benchmarks/served_units/stage.py builds it, its quantisation's RCP reads in lookup slots (chunk_rows.SLOT_LINEARS); rows no cut fits (SparseMlaSplit_v1, TokenSelect_v1) are in no stratum and in served_macs_per_token; the weights' bytes and parameters as the checkpoint's manifest and safetensors metadata give them",
  "runs": [
-  "r20261106-070310-502e"
+  "r20261106-070310-502e",
+  "r20261109-141315-3083",
+  "r20261109-143132-7f92"
  ],
  "owner": "@proofs",
  "value": {
@@ -77,7 +79,7 @@
     "macs": 6144,
     "out_bits": 16,
     "in_bits": 148992,
-    "ands": 22055981,
+    "ands": 12547119,
     "k_log": 26
    },
    {
@@ -87,7 +89,7 @@
     "macs": 2048,
     "out_bits": 16,
     "in_bits": 49664,
-    "ands": 7352045,
+    "ands": 4181775,
     "k_log": 24
    },
    {
@@ -1566,5 +1568,5 @@
    "every_block": 293301923.5679442
   }
  },
- "art": "art:a257f41c29b2dfd23cfce01ef820d18855c2cb2abbf4b0dbbcdb8cc1763b3777"
+ "art": "art:72d0d7ca9357ff811c8fb92042b25bcf87c5de24c3c2466d5abff03390300b99"
 }
