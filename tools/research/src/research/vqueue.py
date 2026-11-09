@@ -397,9 +397,10 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
         eject = Eject(n, heads[n], f"{hit} failed, and its changed files meet their inputs, no other member's", own)
     elif own and len(c1.members) == 1:
         n = c1.members[0]
-        eject = Eject(n, heads[n], f"{', '.join(f.task for f in own)} failed alone at {heads[n][:12]} and again when rerun "
-                                   "afresh, and no failing task's inputs meet its files: if a test flaked, delete it (a test "
-                                   "that flakes is deleted, not rerun)", own)
+        again = " and again when rerun afresh" if c1.reruns else ""
+        eject = Eject(n, heads[n], f"{', '.join(f.task for f in own)} failed alone at {heads[n][:12]}{again}, and no failing "
+                                   "task's inputs meet its files: if a test flaked, delete it (a test that flakes is deleted, "
+                                   "not rerun)", own)
     elif len(c1.members) == 1:
         n = c1.members[0]
         eject = Eject(n, heads[n], f"{_ring_why(c1)}, with only it merged on {c1.base[:12]}: a check that keeps erring on a "
