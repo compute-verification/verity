@@ -7,8 +7,9 @@ import Proofs.Flock.SamplingGeneric.TwoAt
 `lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` in `Security/Proofs`, with Flock's and the
 sampled proof system's code loaded native (`--load-dynlib`; `guard_node.py` links it and writes the command): the model's
 round-2 check (`SpotFlock.stmtOk`) on the run `guard.export` wrote to `DIR`, at the auditor's copies (`Held`) built from
-`DIR/held.json` and the reference statements `DIR/ref-<t>.bin` alone, never from the run's messages or coins. `M2`
-replaces round 2's message `DIR/m2.bin` (a negative's).
+`DIR/held.json`, the reference statements `DIR/ref-<t>.bin` and their templates' reference reads
+`DIR/ref-<t>.reads.json` alone, never from the run's messages or coins. `M2` replaces round 2's message `DIR/m2.bin` (a
+negative's).
 
 **What it evaluates.** `stmtOk` is its conjuncts on the registration alone and its conjuncts on the run (`stmtOk_split`):
 `regOk`, which is `partition` and `two` (both ignore the statement they are given), and `runOkAt`. This evaluates
@@ -113,13 +114,14 @@ def natsOf (what : String) (j : Json) : IO (List ℕ) := do
 def hexOf (what : String) (j : Json) : IO Claims.Msg := do
   return (← ok what (_root_.Flock.unhex (← ok what j.getStr?))).data.toList
 
-/-- **The auditor's copies**, from `held.json` (`held`) and the reference statements `refs`, behind the decision that
-each reference statement is in Flock's masked scope (`refAt_ok`); none where one isn't. The first stage's registration
+/-- **The auditor's copies**, from `held.json` (`held`), the reference statements `refs` and their templates' reference
+reads `reads` (`Held.refReads`, null past them), behind the decision that each reference statement is in Flock's masked
+scope (`refAt_ok`); none where one isn't. The first stage's registration
 is the boundary registration's program, query and work table with the stream's rule over them (`Select.resolve`, as
 the `select` piece takes it), the fields of `Registration.Verifier` the model doesn't read empty; `blockOf` is
 `filesBlockOf` at the members (`Held.ms`), and no proof block is checked whatever the stages sample (`always`): every
 slot of the toy's boundary layout is a request's. -/
-def heldOf (held : Json) (refs : Array Claims.Msg) : IO (Option Held) := do
+def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Option Held) := do
   let first := field held "first"
   let queryJ := field first "query"
   let P ← ok "program" do Spot.Program.parse (← _root_.Flock.canon (field first "program")).toUTF8
@@ -143,7 +145,7 @@ def heldOf (held : Json) (refs : Array Claims.Msg) : IO (Option Held) := do
         anchors := #[], log := #[], partition := none }
     let h₀ : Held :=
       { desc, vus, query, k, names, links, xS₀ := refAt refs, xS₀_ok := refAt_ok refs hz,
-        frame := SamplingDeploy.toyCode,
+        refReads := fun t => reads.getD t .null, frame := SamplingDeploy.toyCode,
         reg := { first := { verifier, rule, closure := none }, ns := ns.toArray, ks := ks.toArray,
                  blockOf := fun _ _ _ => 0, always := fun _ => false } }
     let ms := h₀.ms
@@ -263,12 +265,19 @@ def main (args : List String) : IO UInt32 := do
   let s₀ ← coinBytes (dir / "c0.bin")
   let s₁ ← coinBytes (dir / "c1.bin")
   let mut refs : Array Claims.Msg := #[]
+  let mut reads : Array Json := #[]
   for t in [0:4] do
-    if (← (dir / s!"ref-{t}.bin").pathExists) then refs := refs.push (← readMsg (dir / s!"ref-{t}.bin"))
+    if (← (dir / s!"ref-{t}.bin").pathExists) then
+      refs := refs.push (← readMsg (dir / s!"ref-{t}.bin"))
+      let r := dir / s!"ref-{t}.reads.json"
+      unless (← r.pathExists) do
+        throw (IO.userError s!"{r}: no reference reads; an export from before they left the reference statements \
+          (python3 benchmarks/two_stage/guard.py refs {dir})")
+      reads := reads.push (← ok r.toString (Json.parse (← IO.FS.readFile r)))
   let held ← ok "held.json" (Json.parse (← IO.FS.readFile (dir / "held.json")))
   say s!"read: x {x.length} B, m1 {m₁.length} B, m2 {m₂.length} B, {refs.size} references, {(← IO.monoMsNow) - t0} ms"
   let t1 ← IO.monoMsNow
-  let some h ← heldOf held refs
+  let some h ← heldOf held refs reads
     | do
       let whys := (List.range refs.size).filterMap fun t => (refWhy (refs.getD t [])).map (s!"ref-{t}: " ++ ·)
       for w in whys do say w

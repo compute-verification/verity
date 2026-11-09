@@ -7,8 +7,9 @@ the run (`runOkAt`), a kernel-checked equation (`TwoGuard.stmtOk_split`). On the
 record x, the interior record m₁, its four session statements m₂ in template order, the two stages' coins c₀ and c₁),
 `runOkAt h x m₁ m₂ c₀ c₁` evaluates to true in Lean, at an `h` that `TwoGuard.lean` builds only from what the auditor
 registers before the run: the boundary registration's program, query, work table and selection rule, the counts, the
-templates' names, links and descriptor (`held.json`), and the templates' reference statements, made from the interior
-window with no run in it and admitted only after the script checks each is in Flock's masked scope (`zkOk`). Nothing in
+templates' names, links and descriptor (`held.json`), the templates' reference statements, made from the interior
+window with no run in it and admitted only after the script checks each is in Flock's masked scope (`zkOk`), and the
+templates' reference reads as the params name them (`ref-<t>.reads.json`, `Held.refReads`). Nothing in
 `h` reads the run's messages or coins. `two`'s conjuncts on the members' files (`twoFilesOk`: the layout fits them, and
 each reference statement reads as a member's) evaluate to true too. `runOkAt` refuses the altered run, and the honest
 run with one byte of a session statement's registered reads flipped (`guard.flip_registered`).
