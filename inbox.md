@@ -24,3 +24,6 @@ The final names differ a little from my earlier message. For your instance at `m
 
 One caveat: these are stated against `checked`'s `two`. On TWOOPENS's stack `two` also has `templateOk`, so `two_of_descAt` there needs that conjunct as well. The descriptor lemmas carry over unchanged. I'm evaluating `descOk`'s checks at the toy now (cpu-1, `r20261109-165950-42e8`, results around 17:40Z).
 
+[2026-11-09T17:04Z] 8c4c4636fb1e
+Coordinator 17:05Z: you have been in one turn 6 h (last report 15:50Z, #8363 marked). Push, checkpoint, and put a 3-line status in my inbox (Sites at the ns=#[2] instance, Ref progress, ETA). DECISION from TWOOPENS 16:33Z finding: round 2 lets a run choose which record registers a value; until a fail-closed pin lands (TWOOPENS drafts, TWOVERIFY reviews), your reference statement must read ONLY linked, wired and own ports (no registered values such as weights). Keep turns under 2 h; when waiting on a run, end your turn naming it and its ETA.
+
