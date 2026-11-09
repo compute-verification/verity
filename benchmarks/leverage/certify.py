@@ -1,10 +1,12 @@
 """Certified sensitivity of the logits to one in-range fault, beside its true worst case.
 
 A fault sets one coordinate of one site, at a prompt's last position t, to any value in its range; everything else is
-honest, and every read is clamped to `clamp.py`'s boxes (`lm.Boxes`). The range is the readers' box (`box`) or, at a
+honest, and every read is clamped to `clamp.py`'s boxes (`lm.Boxes`). The range is the readers' box (`box`); at a
 linear's input, one FP8 code at its token's own group scale (`code`: what a block writing one 16-bit value can put
-there). The sites are the final norm's output and, for each depth k of --depths, the residual stream into layer L - k
-(`resid`) and that layer's MLP hidden units (`mlph`).
+there); or the values the --prompts' honest activations took at that coordinate, without headroom (`seen`: narrower
+than any clamp that would pass honest serving). The coordinates are --coords random ones and the --widest boxes'. The
+sites are the final norm's output and, for each depth k of --depths, the residual stream into layer L - k (`resid`)
+and that layer's MLP hidden units (`mlph`).
 
 At each of the --reach positions from t (t's own logits, then the next positions', which read t through attention):
 
@@ -325,17 +327,23 @@ def iv_forward(ctx: Ctx, site: str, layer: int, entry: dict, coord: int, parts: 
     return iv_head(ctx, x)
 
 
-def ranges(lm: LM, site: str, layer: int, x: torch.Tensor, cls: int, kinds: list[str]) -> dict[str, torch.Tensor]:
-    """Per kind, each coordinate's half-width B (its range is [-B, B]) at a position of class cls, x its honest
-    activation there as read. code: one FP8 code at plus or minus 448 times the token's own group scale."""
+def ranges(lm: LM, site: str, layer: int, x: torch.Tensor, cls: int, kinds: list[str],
+           seen: dict[tuple[str, int], Iv]) -> dict[str, Iv]:
+    """Per kind, each coordinate's range [lo, hi] at a position of class cls, x its honest activation there as read.
+    box: the clamp's. code: one FP8 code at plus or minus 448 times the token's own group scale. seen: the values the
+    prompts' honest activations took there, without headroom: narrower than any deployable clamp."""
     hb = lm.boxes.hi[(site, layer)][cls].float()
     out = {}
     for kind in kinds:
         if kind == "box":
-            out[kind] = hb
+            out[kind] = (-hb, hb)
         elif kind == "code" and site in GROUP_SITES:
-            own = E4M3_MAX * ue8m0_scale(x.reshape(-1, GROUP).abs().amax(-1).float())
-            out[kind] = torch.minimum(own.repeat_interleave(GROUP), hb)
+            own = torch.minimum(E4M3_MAX * ue8m0_scale(x.reshape(-1, GROUP).abs().amax(-1).float()).repeat_interleave(
+                GROUP), hb)
+            out[kind] = (-own, own)
+        elif kind == "seen" and (site, layer) in seen:
+            lo, hi = seen[(site, layer)]
+            out[kind] = (torch.minimum(lo, x), torch.maximum(hi, x))
     return out
 
 
@@ -413,7 +421,7 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--depths", default="1,2,4,8", help="k: the residual stream into layer L - k, its MLP hidden units")
     ap.add_argument("--sites", default="final,resid,mlph")
-    ap.add_argument("--kinds", default="box,code")
+    ap.add_argument("--kinds", default="box,code,seen")
     ap.add_argument("--prompts", type=int, default=8)
     ap.add_argument("--coords", type=int, default=4, help="random coordinates per site and prompt")
     ap.add_argument("--widest", type=int, default=2, help="and the coordinates with the widest boxes")
@@ -445,6 +453,16 @@ def main() -> int:
             plan.append(("resid", L - k - 1))
         if "mlph" in sites:
             plan.append(("mlph", L - k))
+    seen: dict[tuple[str, int], Iv] = {}
+    if "seen" in kinds:
+        for text in PROMPTS[:a.prompts]:
+            taps = {key: None for key in plan}
+            lm.forward(torch.tensor([tok.encode(text).ids]), Cache(), taps=taps)
+            for key, x in taps.items():
+                x = x[0, 1:].float()
+                lo, hi = x.amin(0), x.amax(0)
+                seen[key] = (torch.minimum(seen[key][0], lo), torch.maximum(seen[key][1], hi)) if key in seen else (
+                    lo, hi)
     recs = []
     t_start = time.time()
     with open(a.out / "faults.jsonl", "w") as fh:
@@ -470,27 +488,33 @@ def main() -> int:
             margin = zh.topk(2, -1).values
             for site, layer in plan:
                 x_site = taps[(site, layer)][0, 0].float()
-                rng = ranges(lm, site, layer, x_site, int(cls[0]), kinds)
+                rng = ranges(lm, site, layer, x_site, int(cls[0]), kinds, seen)
                 if not rng:
                     continue
                 hb = lm.boxes.hi[(site, layer)][int(cls[0])].float()
                 cs = torch.randperm(x_site.numel(), generator=gen)[:a.coords].tolist()
-                cs += [c_ for c_ in hb.argsort(descending=True)[:a.widest].tolist() if c_ not in cs]
+                picks = dict.fromkeys(cs, "random")
+                for c_ in hb.argsort(descending=True)[:a.widest].tolist():
+                    picks.setdefault(c_, "widest")
                 entry = {"final": taps.get(("final", L), [None])[0],
                          "mid": taps.get(("mid", layer), [None])[0],
                          "mlph": taps.get(("mlph", layer), [None])[0],
                          "resid_in": taps.get(("resid", layer), [None])[0]}
                 x_in = taps[("resid", layer - 1)] if site == "mlph" else None
-                for coord in cs:
-                    for kind, B in rng.items():
-                        Bc = float(B[coord])
+                for coord, pick in picks.items():
+                    for kind, (lo_v, hi_v) in rng.items():
+                        lo_c, hi_c = float(lo_v[coord]), float(hi_v[coord])
                         rec = {"prompt": pi, "t": t, "class": int(cls[0]), "site": site, "layer": layer,
                                "depth": L - layer if site != "resid" else L - layer - 1, "coord": coord,
-                               "kind": kind, "B": Bc, "honest": float(x_site[coord]),
-                               "margin": (margin[:, 0] - margin[:, 1]).tolist()}
+                               "pick": pick, "kind": kind, "lo": lo_c, "hi": hi_c, "B": max(-lo_c, hi_c),
+                               "honest": float(x_site[coord]), "margin": (margin[:, 0] - margin[:, 1]).tolist()}
                         if site == "final":
                             rec["depth"] = 0
-                        vals = (torch.linspace(-Bc, Bc, a.grid) * shrink).to(torch.bfloat16).float()
+                        mid_c = (lo_c + hi_c) / 2
+                        vals = (mid_c + (torch.linspace(lo_c, hi_c, a.grid) - mid_c) * shrink).to(torch.bfloat16)
+                        vals = vals.float()[(vals.float() >= lo_c) & (vals.float() <= hi_c)]
+                        if not len(vals):
+                            vals = x_site[coord].view(1)
                         if site == "final":
                             f = Fault.of(t, [("final", L, coord, float(v)) for v in vals])
                             zg = lm.forward(sid.expand(len(vals), R), Cache(dict(pre.kv), pre.sink).expand(len(vals)),
@@ -520,7 +544,7 @@ def main() -> int:
                         for clamp_on in clamps:
                             ctx = Ctx(lm, lm.boxes if clamp_on else None, cls, pre, t)
                             for P in pieces:
-                                parts = torch.linspace(-Bc, Bc, P + 1)
+                                parts = torch.linspace(lo_c, hi_c, P + 1)
                                 t0 = time.time()
                                 lo, hi = iv_forward(ctx, site, layer, entry, coord, parts)
                                 m = metrics(zh, lo, hi)
@@ -549,19 +573,20 @@ def main() -> int:
 
 
 def summarize(recs: list[dict], a: argparse.Namespace, lm: LM) -> dict:
-    """Per (site, depth, kind): the true and certified figures at the fault's own position and over the reach, as
-    medians and maxima over the faults."""
+    """Per (site, depth, kind, pick): the true and certified figures at the fault's own position and over the reach,
+    as medians and maxima over the faults."""
     groups: dict[tuple, list[dict]] = {}
     for r in recs:
-        groups.setdefault((r["site"], r["depth"], r["kind"]), []).append(r)
+        groups.setdefault((r["site"], r["depth"], r["kind"], r["pick"]), []).append(r)
 
     def q(xs: list[float], p: float) -> float:
         xs = sorted(xs)
         return xs[min(len(xs) - 1, int(p * len(xs)))] if xs else float("nan")
 
     out = []
-    for (site, depth, kind), rs in sorted(groups.items()):
-        g = {"site": site, "depth": depth, "kind": kind, "n": len(rs)}
+    for (site, depth, kind, pick), rs in sorted(groups.items()):
+        g = {"site": site, "depth": depth, "kind": kind, "pick": pick, "n": len(rs),
+             "range_width": {"median": q([r["hi"] - r["lo"] for r in rs], 0.5)}}
         for key in ("delta", "eps"):
             own = [r["true"][key][0] for r in rs]
             later = [max(r["true"][key][1:], default=0.0) for r in rs]
