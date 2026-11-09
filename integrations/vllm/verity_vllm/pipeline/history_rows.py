@@ -86,6 +86,19 @@ def blocks(statics: Mapping[str, Any]) -> int:
     return int(statics["TOPK"])
 
 
+def cached(pi: Any) -> int:
+    """The cached prompt rows request ProgramIndex ``pi``'s Program is served (its ``kv_prefix``'s C), 0 for none."""
+    return int((getattr(pi, "kv_prefix", None) or {}).get("C") or 0)
+
+
+def _uncached(t: str, rs: Sequence[Row]) -> None:
+    for x in rs:
+        if c := cached(x[1]):
+            raise ValueError(f"{t}: request {x[0]} is served {c} cached prompt rows; its history tables hold only positions it "
+                             f"computed itself, and its reads below {c} read its own replayed rows, which a window of history "
+                             "tables doesn't compose yet: serve it without a prefix-cache hit")
+
+
 class Plan:
     """The history reads and writers over a window's templates ``tmpls`` and their ``rows`` (`serving_rows.population`'s), with
     ``histories`` on: each read template's units in the module's order (``units``: each ``(row, j)``), the tables they read
@@ -101,6 +114,7 @@ class Plan:
         self.tables: dict[str, list[tuple[int, int, tuple[str, int]]]] = {}
         order: dict[tuple[str, int], int] = {}
         for t, rs in self.of.items():
+            _uncached(t, rs)
             fams = {_base(x[2]["spec"]) for x in rs}
             if len(fams) != 1 or not fams <= set(HISTORY):
                 raise ValueError(f"{t}: rows of {sorted(fams)}; a history read reads rows of one family of {sorted(HISTORY)}")
@@ -123,6 +137,7 @@ class Plan:
         self.written: dict[tuple[str, int], list[tuple[str, int]]] = {}
         for t in self.writers:
             rs = rows[list(tmpls).index(t)]
+            _uncached(t, rs)
             seen: dict[tuple[str, int, int, int], int] = {}
             for p in sorted(range(len(rs)), key=lambda p: (layer(rs[p][3]), int(rs[p][3]["step"]), int(rs[p][3]["row"]))):
                 rid, d = rs[p][0], rs[p][3]

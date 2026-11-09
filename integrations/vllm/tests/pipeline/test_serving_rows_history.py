@@ -149,6 +149,19 @@ def test_a_long_row_is_topk_reads_cut_by_table_and_its_writer_commits_its_tables
         HR.Plan(TMPLS, rows, False)
 
 
+def test_a_request_served_cached_prompt_rows_is_refused_by_name_in_a_window_of_history_tables(served):
+    """A table holds only positions its request computed itself: a request served a prefix-cache hit has no rows of its own
+    below it, so its writers or its reads are refused by name rather than appended from the table's edge at the wrong
+    positions."""
+    writes, reads = served.windows[0]
+    warm = SimpleNamespace(kv_prefix={"C": 4, "input": "prefix"})
+    assert HR.cached(None) == 0 and HR.cached(SimpleNamespace(kv_prefix=None)) == 0 and HR.cached(warm) == 4
+    for hit in ([[(x[0], warm, *x[2:]) for x in writes], reads], [writes, [(x[0], warm, *x[2:]) for x in reads]]):
+        with pytest.raises(ValueError, match="request r0 is served 4 cached prompt rows"):
+            HR.Plan(TMPLS, hit, True)
+    assert HR.Plan(TMPLS, [[(x[0], SimpleNamespace(kv_prefix=None), *x[2:]) for x in writes], reads], True).keys()
+
+
 def light(ms) -> SimpleNamespace:
     """A window of members ``ms`` as `serving_rows.window_values` reads it, with no population program to build (a real
     `rows.Binding` lowers the Boolean latent row and the V = 2^17 read, minutes on a CPU)."""

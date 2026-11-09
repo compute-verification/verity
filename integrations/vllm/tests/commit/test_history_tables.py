@@ -1,7 +1,7 @@
 """The committer's history tables (`commit.history_tables`): a table's root after each window's appends is the root the
 verifier recomputes from the strings the window commits, across a cut that continues the table from its edge; the window
 can commit those rows from the table's strings with the same root as hashing them in full; tables append from their edge
-only, are kept per request until it ends, and the switch is off by default and refused with prefix caching on."""
+only, are kept per request until it ends, and the switch is off by default."""
 from __future__ import annotations
 
 import hashlib
@@ -15,7 +15,6 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.ml.windows import rows as CS
 from verity_vllm.commit import history_tables as H
-from verity_vllm.program.predict.reads import PREFIX_CACHE
 
 PORT = "DsaLatentRow_v1/c0/o0"
 PROGRAM = "ab" * 64
@@ -104,12 +103,9 @@ def test_a_committed_window_releases_every_request_it_doesnt_name_open():
     assert H.release(hs) == 2 * 1344 and hs.requests() == [] and H.release(None) == 0
 
 
-def test_the_switch_is_off_by_default_and_refused_with_prefix_caching():
-    """`SWITCH` is off unless the registration sets it, and on it is refused by name with prefix caching on."""
+def test_the_switch_is_off_by_default():
+    """`SWITCH` is off unless the registration sets it."""
     assert not H.on(None) and not H.on({}) and H.on({H.SWITCH: True})
-    assert H.refusal({}) is None and H.refusal({H.SWITCH: True}) is None and H.refusal({PREFIX_CACHE: True}) is None
-    why = H.refusal({H.SWITCH: True, PREFIX_CACHE: True})
-    assert why is not None and H.SWITCH in why and PREFIX_CACHE in why
 
 
 def test_a_run_keeps_one_set_of_tables_across_its_windows_and_a_window_of_none_takes_none():

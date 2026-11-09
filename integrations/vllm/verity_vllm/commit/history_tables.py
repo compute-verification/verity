@@ -19,8 +19,9 @@ request ends (`Histories.end`), since any later window's read may open any earli
 their window's requests once it is committed, but those its request names ``open`` (`release`). Rows and salts are private:
 they stay in this process on the node and in the windows' private files, never under a run's output.
 
-The switch is refused with prefix caching on (`refusal`): a cache hit's leaf would be another request's row, bound only by a
-memory-checked pool, and no hit is derived by trusted Python.
+A table holds only positions its request computed itself, never another request's rows: with prefix caching on, a
+request served C cached prompt rows has none of its own below C, and its reads there read its own replayed rows. A window of
+history tables refuses such a request by name until it composes those reads (`pipeline.history_rows.Plan`).
 """
 from __future__ import annotations
 
@@ -29,9 +30,8 @@ from typing import Any
 
 from verity.ml.commitments import history as HT
 from verity.ml.commitments import hm96
-from verity_vllm.program.predict.reads import PREFIX_CACHE
 
-__all__ = ["Histories", "ROW_BYTES", "SWITCH", "WORDS", "check", "name", "of_request", "on", "refusal", "release"]
+__all__ = ["Histories", "ROW_BYTES", "SWITCH", "WORDS", "check", "name", "of_request", "on", "release"]
 
 #: the registration's engine switch the table-read form is under, off by default
 SWITCH = "dsa_table_reads"
@@ -44,14 +44,6 @@ ROW_BYTES = 2 * WORDS + hm96.SHA512.salt_bytes
 def on(config: Mapping[str, Any] | None) -> bool:
     """Whether the registration's engine config ``config`` turns the table-read form on."""
     return bool((config or {}).get(SWITCH, False))
-
-
-def refusal(config: Mapping[str, Any] | None) -> str | None:
-    """Why ``config`` can't turn `SWITCH` on, or None (off, or on without prefix caching)."""
-    if on(config) and (config or {}).get(PREFIX_CACHE):
-        return (f"{SWITCH} with {PREFIX_CACHE} on: a cache hit's history leaf would be another request's latent row, which only "
-                f"a memory-checked pool binds, and no hit is derived by trusted Python; serve with {PREFIX_CACHE} off")
-    return None
 
 
 def name(request: str, layer: int) -> str:
