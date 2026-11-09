@@ -16,7 +16,7 @@ import Proofs.InferenceOnly.FitSlotsWitness
 import Proofs.InferenceOnly.WeightsSlotsWitness
 import Proofs.InferenceOnly.FitRate
 import Proofs.InferenceOnly.FitWitness
-import Proofs.InferenceOnly.Dampener
+import Proofs.InferenceOnly.Slowdown
 import Proofs.InferenceOnly.Info
 import Proofs.InferenceOnly.Transfers
 import Proofs.InferenceOnly.Fmt

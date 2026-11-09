@@ -3,7 +3,7 @@ import Definitions.InferenceOnly.Guarantees.Remote
 /-!
 # The compute dampener, remote protocol, over a monitoring period: the statement
 
-`DampenerRemote` over a monitoring period of `T` windows (results are per monitoring period), with its
+`SlowdownRemote` over a monitoring period of `T` windows (results are per monitoring period), with its
 three premises on the protocols, `PouwSound`, `SampledDetection` and the thread bound's `Complies`, replaced by what
 each protocol's own guarantee gives on live coins. A window is one round of the verifier's live coins: window `t`'s
 coins `Ω t` are uniform and independent of the other windows', and a run of the period is `ξ : (t : Fin T) → Ω t`. Each
@@ -31,7 +31,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   predictable time its faulty blocks reach `K + 1`, the stopped, per-identity form of `IntegrityHorizon`'s own
   argument, which `FlockSoundness.Audit.Periods.prCoin_forall_sum_le_pow` bounds by `(1 − q)^(K+1)`. That is a tail
   bound, so the escape term needs no Markov's inequality: `J (1 − q)^(K+1)` at an escape share `J K B/C`, against
-  `DampenerRemote`'s `J ((1 − q)/q) B/(θC)`.
+  `SlowdownRemote`'s `J ((1 − q)/q) B/(θC)`.
 * **The halt**: `TerminalDetection` stays a named premise. The halt is code (`Fleet`'s R5-all in
   `verity/core/protocols/sampled_proofs/service.py`, its verifier of record `SampledProofs.Fleet`), and
   `Properties.SampledProofs` proves what it does (`FleetHaltIsFinal`, `NoAcceptAfterHalt`), but not this form: it halts
@@ -50,18 +50,18 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   a verdict lays out, with the threading `Th_i` the premise reads: it is not stated. The cover theorem's factor on the
   same verdicts, `InferenceOnlyCheck.Properties.CheckedCoverTraining` (proved), would replace `ρ_T = b_a/(αΛ)` by its own.
 
-Every other premise is `DampenerRemote`'s: the model's accounting of the four sources of counted multiplications, the
+Every other premise is `SlowdownRemote`'s: the model's accounting of the four sources of counted multiplications, the
 capacities `C` and `U` (`s = U/(C + U)`), and the hardware's rate `Φ` per identity. The developer's identities `I`
 are fixed over the period: nothing here models or rests on re-registration.
 
-`InferenceOnly.SecurityProofs.DampenerRemotePeriod` proves it. `DampenerRemotePeriod_honest` and `DampenerRemotePeriod_nontrivial`
+`InferenceOnly.SecurityProofs.SlowdownRemotePeriod` proves it. `SlowdownRemotePeriod_honest` and `SlowdownRemotePeriod_nontrivial`
 are its witnesses: its premises hold at a constructed honest developer, and at `AcceptAll`, a PoUW verifier that accepts
 every certificate, every other premise holds while PoUW's per-window bound and the conclusion fail.
 -/
 
 namespace InferenceOnly.Guarantees
 
-open Verity InferenceOnly.Dampener
+open Verity InferenceOnly.Slowdown
 
 /-- **The compute dampener, remote protocol, over a monitoring period.** A monitoring period of `T` windows, window `t`
 with its own uniform coins `Ω t`, independent of the others' (a window is a round of live coins: the deployment's
@@ -84,7 +84,7 @@ window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t 
   `Throttled`'s conclusion, `b_a |M_i| ≤ α Λ_i size(d_i)` at `Λ_i = Th_i.bound (αΓ) b_w dd e ≤ Λ`: what
   `DescThrottles` gives for a declaration the check of record accepts. The runs fit on the monitored compute,
   `∑ size(d_i) ≤ C`.
-* The counted multiplications `M` are as in `DampenerRemote`, with the declared runs' `∑ |M_i|`: unmonitored compute at
+* The counted multiplications `M` are as in `SlowdownRemote`, with the declared runs' `∑ |M_i|`: unmonitored compute at
   `MFU₀ ∈ (0, 1]` (`M_U ≤ MFU₀ κ U/2`), the residual outside the work certified correctly and run
   (`M_r ≤ κ (C − (1 − ε_W) W_cert + wrongCapacity + skipped)/2`, `W_cert` the period's certified work, `ε_W` PoUW's
   deficit), and faulty proof blocks within the cheating share `χ`.
@@ -96,7 +96,7 @@ least `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + J K B/C
 `r̂ = 1 − W_cert/C`, `s = U/(C + U)` and `ν_T = (1 − s) · 2αΛ/(κ b_a)`. At a pooled `δ` (1% and 10⁻⁶),
 `ε' = 2p/δ` and `K ≥ ln(2J/δ)/q` give `δ + ∑_t ks t`; the per-window figure is the statement at `T = 1`.
 With every proof block proved (`q = 1`), `K = 0` and the escape share is 0. -/
-def DampenerRemotePeriod : Prop :=
+def SlowdownRemotePeriod : Prop :=
   ∀ (T : ℕ) (Ω : Fin T → Type) [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
     (c : Fin T → ℝ) (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p ε : ℝ)
     (β ι : Type) [DecidableEq ι] (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T)
@@ -141,20 +141,20 @@ def DampenerRemotePeriod : Prop :=
                   (1 - unmonitoredShare C U) *
                     (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
                 declaredShare κ (rhoT α b_a Λ) C U + χ ∧
-            remoteDampener mfu (unmonitoredShare C U)
+            remoteSlowdown mfu (unmonitoredShare C U)
                 ((1 - unmonitoredShare C U) *
                     (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
                   declaredShare κ (rhoT α b_a Λ) C U + χ) ≤
               hardwareMultiple mfu κ (M ξ) C U)
 
-/-- **`DampenerRemotePeriod`'s premises hold where its conclusion says something**: an instance meets every premise with
+/-- **`SlowdownRemotePeriod`'s premises hold where its conclusion says something**: an instance meets every premise with
 the failure probability `δ = p/ε' + J (1 − q)^(K+1) + ∑_t ks t` at most `10⁻⁶`, and on every run the overhead bound on
-the hardware multiple (`remoteDampener`'s value) exceeds 1 while the run's own hardware multiple meets it. The proof's
+the hardware multiple (`remoteSlowdown`'s value) exceeds 1 while the run's own hardware multiple meets it. The proof's
 instance is an honest developer over one window, run by its one identity: its PoUW certificate right, no faulty proof
 block, no declared run, its monitored compute all certified work and its counted multiplications on its unmonitored
 compute at `MFU₀ = 1/2`, at the remote reference's `p = 3 · 2⁻⁴⁰` (`CircuitCredit`'s `δ_s + δ_bind + δ_ks`) and
 `ε' = 2p/δ` at the pooled `δ = 10⁻⁶`, with every proof block proved (`q = 1`, `K = 0`). -/
-def DampenerRemotePeriod_honest : Prop :=
+def SlowdownRemotePeriod_honest : Prop :=
   ∃ (T : ℕ) (Ω : Fin T → Type) (_ : ∀ t, Fintype (Ω t)) (_ : ∀ t, Nonempty (Ω t))
     (c : Fin T → ℝ) (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p ε : ℝ)
     (β ι : Type) (_ : DecidableEq ι) (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T)
@@ -193,11 +193,11 @@ def DampenerRemotePeriod_honest : Prop :=
     (∀ ξ, (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity c (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2) ∧
     (∀ ξ, (Mx ξ : ℝ) ≤ κ * χ * (C + U) / 2) ∧
     p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t ≤ 1 / 10 ^ 6 ∧
-    ∀ ξ, 1 < remoteDampener mfu (unmonitoredShare C U)
+    ∀ ξ, 1 < remoteSlowdown mfu (unmonitoredShare C U)
         ((1 - unmonitoredShare C U) *
             (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
           declaredShare κ (rhoT α b_a Λ) C U + χ) ∧
-      remoteDampener mfu (unmonitoredShare C U)
+      remoteSlowdown mfu (unmonitoredShare C U)
           ((1 - unmonitoredShare C U) *
               (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
             declaredShare κ (rhoT α b_a Λ) C U + χ) ≤
@@ -208,7 +208,7 @@ noncomputable section
 /-! **`AcceptAll`, a PoUW verifier that accepts every certificate**: one window, its coins a bit, run by the one
 identity at time 0, whose certificate, for all of the monitored compute, is wrong and accepted on every run. It has no
 faulty proof block and no declared run, all of the monitored compute is certified work, and the run's one counted
-multiplication is in the residual. `DampenerRemotePeriod_nontrivial` is stated at it, its numbers written in place. -/
+multiplication is in the residual. `SlowdownRemotePeriod_nontrivial` is stated at it, its numbers written in place. -/
 namespace AcceptAll
 
 /-- The window certifies all of the monitored compute, `C = 1`. -/
@@ -246,12 +246,12 @@ end AcceptAll
 
 end
 
-/-- **`DampenerRemotePeriod` is false without PoUW's per-window bound**: at `AcceptAll`, with `p = 0`, `ε' = 1/2`,
+/-- **`SlowdownRemotePeriod` is false without PoUW's per-window bound**: at `AcceptAll`, with `p = 0`, `ε' = 1/2`,
 `C = 1`, `U = 0`, `κ = 2`, `MFU₀ = 1`, `q = 1` and `K = 0`, every other premise holds, PoUW's per-window bound fails
 (the certificate is wrong with probability 1, above `p`), and the conclusion fails: at `δ = 0`, the run's compute
 efficiency is 1, above the bound `51/100`, and its hardware multiple is 1, below the overhead bound `100/51`, on every
 run. -/
-def DampenerRemotePeriod_nontrivial : Prop :=
+def SlowdownRemotePeriod_nontrivial : Prop :=
   -- every other premise: PoUW's capacities
   (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ t, 0 ≤ AcceptAll.c t) ∧ ∑ t, AcceptAll.c t ≤ 1 ∧
   -- sampled proofs, per window
@@ -301,7 +301,7 @@ def DampenerRemotePeriod_nontrivial : Prop :=
                   (residualShare (AcceptAll.W ξ) 1 + 0 * AcceptAll.W ξ / 1 + 1 / 2 +
                     lagShare (∅ : Finset Unit).card 0 1 + (∅ : Finset Unit).card * (0 : ℕ) * 0 / 1) +
               declaredShare 2 (rhoT 1 100 1) 1 0 + 0 ∧
-          remoteDampener 1 (unmonitoredShare 1 0)
+          remoteSlowdown 1 (unmonitoredShare 1 0)
               ((1 - unmonitoredShare 1 0) *
                   (residualShare (AcceptAll.W ξ) 1 + 0 * AcceptAll.W ξ / 1 + 1 / 2 +
                     lagShare (∅ : Finset Unit).card 0 1 + (∅ : Finset Unit).card * (0 : ℕ) * 0 / 1) +
