@@ -426,6 +426,41 @@ impl HostBuf {
         let held: Vec<HostBuf> = (0..count).map_while(|_| HostBuf::mapped(len)).collect();
         drop(held);
     }
+
+    /// `parts` back to back in mapped memory from the pool ([`crate::concat_into`]), which the device copies from at full
+    /// speed rather than through pageable staging; None where the runtime refuses or with `FC_COPY_PINNED=0`
+    pub fn concat<P: AsRef<[F128]>>(parts: &[P]) -> Option<Self> {
+        if std::env::var("FC_COPY_PINNED").as_deref() == Ok("0") {
+            return None;
+        }
+        let n: usize = parts.iter().map(|p| p.as_ref().len()).sum();
+        let mut b = HostBuf::mapped(2 * n)?;
+        // SAFETY: an F128 is two u64 words (lo, hi), and mapped memory is page-aligned
+        let out = unsafe { std::slice::from_raw_parts_mut(b.as_mut_ptr() as *mut std::mem::MaybeUninit<F128>, n) };
+        crate::concat_into(parts, out);
+        Some(b)
+    }
+}
+
+/// Words the device copies from the host once a rep: in mapped memory from the pool ([`HostBuf::concat`]), else on the heap
+#[cfg(feature = "sha512")]
+enum Words {
+    Pinned(HostBuf),
+    Heap(Vec<F128>),
+}
+
+#[cfg(feature = "sha512")]
+impl Words {
+    fn of(parts: &[Vec<F128>]) -> Self {
+        HostBuf::concat(parts).map_or_else(|| Words::Heap(crate::concat(parts)), Words::Pinned)
+    }
+
+    fn as_ptr(&self) -> *const u64 {
+        match self {
+            Words::Pinned(b) => b.as_ptr(),
+            Words::Heap(v) => v.as_ptr() as *const u64,
+        }
+    }
 }
 
 impl std::ops::Deref for HostBuf {
@@ -575,22 +610,18 @@ impl HostSlots {
         HostSlots { at, words, zab, ab, dev_zab: None, dev_rows: None, pinned_rows: None, hm96_rows: Vec::new() }
     }
 
-    /// Copy `rows` (the compressions' input rows) into page-locked memory, which the device copies from at full speed rather
-    /// than through pageable staging; for mapped host slots only, and not with `FC_ROWS_PINNED=0`
+    /// Copy `rows` (the compressions' input rows) into page-locked memory ([`HostBuf::concat`]), which the device copies from
+    /// at full speed rather than through pageable staging; for mapped host slots only, and not with `FC_ROWS_PINNED=0`
     pub fn pin_rows(&mut self, rows: &[F128]) {
         if !self.zab.is_mapped() || std::env::var("FC_ROWS_PINNED").as_deref() == Ok("0") {
             return;
         }
-        // SAFETY: an F128 is two u64 words (lo, hi)
-        let rw: &[u64] = unsafe { std::slice::from_raw_parts(rows.as_ptr() as *const u64, 2 * rows.len()) };
-        if let Some(mut b) = HostBuf::mapped(rw.len()) {
-            b.copy_from_slice(rw);
-            self.pinned_rows = Some(b);
-        }
+        self.pinned_rows = HostBuf::concat(&[rows]);
     }
 
     /// Copy the a, b host slots and `rows` (the compressions' input rows the device takes beside them) to device memory, which
-    /// the device then reads in place of the mapped host memory and the pageable rows. For a witness built ahead of its session
+    /// the device then reads in place of the mapped host memory and the pageable rows. The rows go through mapped memory from
+    /// the pool ([`HostBuf::concat`]), back in the pool once copied. For a witness built ahead of its session
     /// (`FC_DEV_PREFETCH=1`), the copies run beside the previous session's device work. Whatever the device has no room for
     /// stays on the host.
     pub fn upload(&mut self, rows: &[F128]) {
@@ -598,13 +629,23 @@ impl HostSlots {
             return;
         }
         let t = Instant::now();
+        let staged = HostBuf::concat(&[rows]);
         // SAFETY: an F128 is two u64 words (lo, hi), as the device takes the rows
-        let r: &[u64] = unsafe { std::slice::from_raw_parts(rows.as_ptr() as *const u64, 2 * rows.len()) };
+        let r: &[u64] = match &staged {
+            Some(b) => &b[..],
+            None => unsafe { std::slice::from_raw_parts(rows.as_ptr() as *const u64, 2 * rows.len()) },
+        };
+        let rows_bytes = 8 * r.len();
         self.dev_zab = DevBuf::copy_of(&self.zab);
         self.dev_rows = DevBuf::copy_of(r);
+        let rows_pinned = staged.is_some();
+        if self.dev_rows.is_none() {
+            self.pinned_rows = staged;
+        }
         if crate::circuit::unit_profile() {
-            eprintln!("UNITPROF\t{}", serde_json::json!({"part": "upload", "zab_bytes": 8 * self.zab.len(), "rows_bytes": 8 * r.len(),
-                "zab": self.dev_zab.is_some(), "rows": self.dev_rows.is_some(), "wall_s": t.elapsed().as_secs_f64()}));
+            eprintln!("UNITPROF\t{}", serde_json::json!({"part": "upload", "zab_bytes": 8 * self.zab.len(), "rows_bytes": rows_bytes,
+                "zab": self.dev_zab.is_some(), "rows": self.dev_rows.is_some(), "rows_pinned": rows_pinned,
+                "wall_s": t.elapsed().as_secs_f64()}));
         }
     }
 
@@ -1169,17 +1210,17 @@ pub fn prove_circuit(
         }
     }
     #[cfg(feature = "sha512")]
-    let zk_words: Option<(Vec<F128>, Vec<F128>)> = level0.filter(|_| !taken).map(|z| {
+    let zk_words: Option<(Words, Words)> = level0.filter(|_| !taken).map(|z| {
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
         assert!(z.pads.len() == w + flock_prover::pcs::ligerito::zk::EXTRA_LANES && z.pads.iter().all(|p| p.len() == z.t_pad));
         assert!(z.extra.iter().all(|x| x.len() == l), "zk: an extra lane of L words");
-        (crate::concat(&z.pads), crate::concat(&z.extra))
+        (Words::of(&z.pads), Words::of(&z.extra))
     });
     #[cfg(feature = "sha512")]
     if let Some(z) = level0 {
         (p.zk_on, p.zk_rep, p.zk_t_pad, p.zk_tamper) = (1, z.rep as i32, z.t_pad as i32, z.tamper as i32);
         if let Some((pads, extra)) = &zk_words {
-            (p.zk_pads, p.zk_extra) = (pads.as_ptr() as *const u64, extra.as_ptr() as *const u64);
+            (p.zk_pads, p.zk_extra) = (pads.as_ptr(), extra.as_ptr());
         }
     }
     #[cfg(not(feature = "sha512"))]
