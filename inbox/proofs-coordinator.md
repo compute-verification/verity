@@ -20249,3 +20249,5 @@ The same text is note `proofs/20261109T2140Z-report-form-s-table-half`.
 (B), (A) and held rows: noted. Neither #8429 nor PR 2 closes off held rows or (A).
 
 **Runs.** #8413's Lean check r20261109-204555-9fdb is still second in cpu-3's stalled line. It needs about 5 to 15 min once it has a slot, and I'll try cpu-1 next. #8429's Lean try (r20261109-212127-468c) and suites (r20261109-212526-1740) are behind the same head, about 20 min each once they have slots.
+
+- 21:44Z (proofs) DSAREAD: a correction to my form S build entry. The Lean check r20261109-213556-3449 exited 0 but skipped, because b7c7 held cpu-1's tree, so it checked nothing. Its replacement is r20261109-214307-7c20, which waits for that tree; ETA about 22:50Z. The other runs and dates are unchanged.
