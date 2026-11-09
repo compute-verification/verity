@@ -703,6 +703,25 @@ def test_the_run_beside_each_check_starts_once_a_candidate_its_record_is_kept_an
     assert started_again.tick() == [] and len(slim.started) == 2
 
 
+def test_a_fail_whose_every_failure_is_inherited_lands_once_the_run_beside_it_passed_under_slim_s_own_combine(env):
+    from research import vqueue_slim
+
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    slim = Slim()
+    slim.combine = vqueue_slim.combine                              # it keeps no `ended`: the loop carries it
+    loop = env.loop(vqueue.decide, slim=slim)
+    loop.world.slim_driver = lambda dry_run=False: "drive"
+    built, _ = loop.tick()
+    red = {"pytest:r": "sha512:red"}
+    env.listed(main, {"pytest:r": ["red.txt"]}, keys=red)
+    env.listed(built["sha"], {"pytest:r": ["red.txt"]}, keys=red)
+    env.result("sha512:red", "pytest:r", "fail")
+    assert loop.tick() == []                                        # the run beside still runs: the fail hasn't ended
+    slim.verdicts["run-1"] = PASS
+    assert _acts(loop.tick()) == ["slim", "red", "advance", "drop"] and env.main() == built["sha"]
+
+
 def test_the_shadow_advances_its_own_main_once_a_candidate_and_the_comparer_reads_one_advance_each(env):
     from research import vqueue_compare as vc
 
@@ -729,8 +748,11 @@ def test_the_shadow_advances_its_own_main_once_a_candidate_and_the_comparer_read
     assert all(s.cands[c["sha"]].passed for c in (one, two))
 
 
-def test_research_queue_vqueue_is_its_own_command(capsys):
+def test_research_queue_vqueue_is_its_own_command_and_runs_the_run_beside_each_check_with_vqueue_slim(capsys):
+    from research import vqueue_loop, vqueue_slim
+
     with pytest.raises(SystemExit) as e:
         Q.main(["vqueue", "--help"])
     said = capsys.readouterr().out
     assert e.value.code == 0 and all(o in said for o in ("--shadow", "--lean", "--pending-hours", "--no-slim"))
+    assert vqueue_loop._slim() is vqueue_slim
