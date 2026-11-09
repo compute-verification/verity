@@ -32,6 +32,7 @@ untraced = [
     "tests/test_pearl_c_vllm.py",
     "tests/test_receipts_adopters.py",
     "tests/test_salt_bind.py",
+    "tests/test_sass_gate.py",
     "tests/test_served_zk.py",
     "tests/test_theory_duo_kernel.py",
     "tests/test_theory_fold_kernel.py",
