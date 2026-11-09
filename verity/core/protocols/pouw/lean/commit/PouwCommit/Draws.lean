@@ -1,7 +1,7 @@
 module
 
 public import PouwCommit.Coins
-public import Identity.Domains
+public import Identity.Domains.Pouw
 
 /-!
 # The salts and samples PoUW derives (`verity.core.protocols.pouw.audit`; the clear audit's samples, `benchmarks/pouw/clear`)

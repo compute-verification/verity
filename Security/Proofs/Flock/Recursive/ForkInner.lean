@@ -18,8 +18,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Recursive.Compose
 import Proofs.Flock.Recursive.StageRead
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: the inner protocol's soundness in fork form, through the recursive audit

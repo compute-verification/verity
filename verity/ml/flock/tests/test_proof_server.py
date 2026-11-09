@@ -6,6 +6,7 @@ unfinished sessions without hanging the server's close."""
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -58,7 +59,8 @@ elif args[0] == "prove":
         host, port = j["verifier"].rsplit(":", 1)
         f = socket.create_connection((host, int(port))).makefile("rw")
         f.write(json.dumps({{"label": j["label"], "line": j, "argv": args, "device": os.environ.get("CUDA_VISIBLE_DEVICES"),
-                            "verify_ahead": os.environ.get("FC_VERIFY_AHEAD")}}) + "\\n")
+                            "verify_ahead": os.environ.get("FC_VERIFY_AHEAD"),
+                            "threads": os.environ.get("RAYON_NUM_THREADS")}}) + "\\n")
         f.flush()
         v = json.loads(f.readline())
         print("LIVE\\t" + json.dumps({{"label": j["label"], "accepted": v["accepted"], "run": n,
@@ -134,6 +136,33 @@ def test_provers_a_device_each_with_its_own_verifier_of_a_type(binary, tmp_path)
         assert s.dir.parent.name == f"verifier-{pin[:16]}-{s.prover[-1]}" and record(s)["queue"]["label"] == s.label
     with pytest.raises(ValueError, match="at least 1"):
         ProofServer(binary, tmp_path / "ps0", provers=0)
+
+
+def test_provers_that_share_the_node_split_its_threads(binary, tmp_path, monkeypatch):
+    """More than one prover in all (``devices`` × ``provers``): each prover's ``RAYON_NUM_THREADS`` is its even share of the
+    server's threads (the server's ``RAYON_NUM_THREADS``, else the CPUs it may run on), at least one, so each prover sizes
+    its host witness's passes for its own cores and not for every core. A lone prover's environment is the server's."""
+    pins = ["66" * 64, "77" * 64]
+
+    def pools(name: str, rayon: str | None, **kw) -> set[str | None]:
+        if rayon is None:
+            monkeypatch.delenv("RAYON_NUM_THREADS", raising=False)
+        else:
+            monkeypatch.setenv("RAYON_NUM_THREADS", rayon)
+        with ProofServer(binary, tmp_path / name, **kw) as ps:
+            sessions = [ps.submit(statement(tmp_path, pins[i % 2]), draw([i % 4]), f"s{i}") for i in range(8)]
+            got = [s.result() for s in sessions]
+        assert all(s.accepted for s in got)
+        return {record(s)["proved"]["threads"] for s in got}
+
+    cpus = len(os.sched_getaffinity(0))
+    assert pools("two-devices", "16", devices=[0, 1], provers=2) == {"4"}
+    assert pools("one-device", None, devices=[3], provers=2, env={"RAYON_NUM_THREADS": "7"}) == {"3"}
+    assert pools("cpus", None, devices=[3], provers=2) == {str(max(1, cpus // 2))}
+    assert pools("unset-is-cpus", "0", devices=[0, 1]) == {str(max(1, cpus // 2))}
+    assert pools("at-least-one", "1", devices=[0, 1], provers=2) == {"1"}
+    assert pools("lone", "16") == {"16"}
+    assert pools("lone-unset", None, devices=[5]) == {None}
 
 
 def test_one_cpu_prover_without_devices(binary, tmp_path):

@@ -10,9 +10,12 @@ reproduces. `long-w0` is two prompts of 2,220 and 2,304 tokens, 15 decodes each.
     research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu &&
       .venv/bin/python benchmarks/compile_cost/run.py --window long-w0 --out "$OUT" [--guard]'
 
-writes OUT/compile_cost.json: the window, its digests, wall seconds and peak RSS (`ru_maxrss`), and each phase's wall seconds and
-peak RSS while it ran (an RSS sampler thread), and prints `COMPILE-COST window=.. wall_min=.. peak_gib=.. digests=..`.
-`--requests A:LP:MAX,...` gives the window directly, `--layers N` truncates the model to its first N layers (a scaling
+writes OUT/compile_cost.json: the window, its digests, each Program's root nodes (by form and Definition, `root_kinds`), wall
+seconds and peak RSS (`ru_maxrss`), and each phase's wall seconds and peak RSS while it ran (an RSS sampler thread), and
+OUT/summary.json, `Compiled.summary()` (what `steps.trace_commands` and `steps.compare` read), and prints
+`COMPILE-COST window=.. wall_min=.. peak_gib=.. digests=..`.
+`--requests A:LP:MAX,...` gives the window directly, `--execution compiled` registers class G's compiled execution (the record's
+`graphs`: its compilation, CUDA-graph mode and capture sizes), `--layers N` truncates the model to its first N layers (a scaling
 measurement: its digests are another model's), `--profile` writes cProfile's stats (`profile.pstats`, and the top functions in
 `profile.txt`). `--guard` exits 1 unless each digest is the one `PINS` holds for the window.
 
@@ -29,6 +32,7 @@ import resource
 import sys
 import threading
 import time
+from collections import Counter
 from pathlib import Path
 
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
@@ -44,8 +48,8 @@ WINDOWS = {
 }
 #: each window's request Program digests at rank 0, in request order
 PINS: dict[str, list[str]] = {
-    "long-w0": ["c902ed97e90611101e2d02ba8dc98de33b3a5e6a32830e9b9dba7c4c11c701115231747028c7b97f08c646b27d3c142cd012b4dc2421ef13c06249c8b7bb14c8",
-                "00622f03f3cedf3ee1e8a2a908ca3e7184b320d6102aa97825d22e78161b8e29196e1ea73186f7c1bb5aa7ad997850c52e0f17767dbcda4855ea7952fbf1619c"],
+    "long-w0": ["14dced42c8580e22176ebebe5eb48b20666ef45ecb5e9aaea72b7b32804c319f5b3505d575a2f354232831ef2b076ca63fd51b5450115a607b4733fdca15c41c",
+                "6b3950ebbec98430e28892a0f1626da3a3050f63729da45d43e5a86d2697a81430b3d1c0084d959f3b2defb80a327d528e5a1f90660c9a255559f88a9907975e"],
 }
 
 
@@ -88,17 +92,20 @@ def session(reqs: list[tuple[int, int, int]]):
     return advice, ingress
 
 
-def registered(rank: int, layers: int | None):
-    """φ of GLM-5.3's checkpoint of record (its pinned config.json, FP8) on H200 at TP8 `rank`, class G's engine, the public seed."""
+def registered(rank: int, layers: int | None, execution: str = "eager"):
+    """φ of GLM-5.3's checkpoint of record (its pinned config.json, FP8) on H200 at TP8 `rank`, class G's engine at `execution` (compiled:
+    the target compilation class G serves it at, `engine_classes.compilation`), the public seed."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+    from verity_vllm.engine.profiles.engine_classes import compilation
     from verity_vllm.engine.served_seed import DEFAULT_SEED
     from verity_vllm.program.predict.phi import Phi
     from verity_vllm.program.predict.steps import Registered
     hf = json.loads(pinned_hf_config(GLM53["repo"], GLM53["revision"]).read_text())
     if layers is not None:
         hf = {**hf, "num_hidden_layers": layers, **{k: hf[k][:layers] for k in ("indexer_types", "mlp_layer_types")}}
-    phi = Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target=dict(TARGET), execution="eager",
-              tp={"world": 8, "rank": rank}, engine=dict(ENGINE))
+    graphs = compilation("G", execution)
+    phi = Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target={**TARGET, **({"compilation": graphs} if graphs else {})},
+              execution=execution, tp={"world": 8, "rank": rank}, engine=dict(ENGINE))
     return Registered.of(phi, default_seed=DEFAULT_SEED)
 
 
@@ -199,12 +206,18 @@ def main() -> int:
     ap.add_argument("--window", choices=sorted(WINDOWS), default=None)
     ap.add_argument("--requests", default=None, help="ARRIVE:LP:MAX_TOKENS,... in place of --window")
     ap.add_argument("--rank", type=int, default=0)
+    ap.add_argument("--execution", choices=("eager", "compiled"), default="eager",
+                    help="class G's execution: compiled is vLLM's breakable CUDA graphs at their capture sizes")
     ap.add_argument("--layers", type=int, default=None, help="the model's first N layers only (a scaling measurement)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--profile", action="store_true", help="cProfile the compile (profile.pstats, profile.txt)")
     ap.add_argument("--no-phases", action="store_true", help="no phase instrumentation")
     ap.add_argument("--guard", action="store_true", help="exit 1 unless the digests are the window's PINS")
+    ap.add_argument("--engine", default=None, help="KEY=INT,... over class G's engine (max_model_len, max_num_batched_tokens, "
+                    "long_prefill_token_threshold)")
     a = ap.parse_args()
+    if a.engine:
+        ENGINE.update({k: int(v) for k, v in (kv.split("=") for kv in a.engine.split(","))})
     if (a.window is None) == (a.requests is None):
         ap.error("one of --window and --requests")
     reqs = WINDOWS[a.window] if a.window else [tuple(int(x) for x in r.split(":")) for r in a.requests.split(",")]
@@ -215,7 +228,10 @@ def main() -> int:
         instrument(m)
     from verity_vllm.program.predict.steps import compile_steps
     advice, ingress = session(reqs)
-    reg = registered(a.rank, a.layers)
+    reg = registered(a.rank, a.layers, a.execution)
+    tp = reg.phi.target_profile()
+    graphs = {"compilation": tp.compilation, **({k: tp.COMPILATIONS[tp.compilation][k] for k in ("mode", "cudagraph_mode", "capture_sizes")}
+                                                if tp.compilation else {"cudagraph_mode": None})}
     prof = None
     if a.profile:
         import cProfile
@@ -234,11 +250,16 @@ def main() -> int:
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
     digests = [u.digest for u in compiled.requests]
     nodes = {d: len(p.fn.body.nodes) for d, p in compiled.programs.items()}
-    rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers,
-           "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "transfer_gates": list(transfer), "wall_s": round(wall, 3),
+    kinds = {d: dict(Counter(f"{n.form} {getattr(n.fn, 'name', None) or n.fn.id.split('{')[0]}" for n in p.fn.body.nodes).most_common())
+             for d, p in compiled.programs.items()}
+    rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers, "engine": dict(ENGINE),
+           "execution": a.execution, "graphs": graphs,
+           "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "root_kinds": kinds,
+           "transfer_gates": list(transfer), "wall_s": round(wall, 3),
            "wall_min": round(wall / 60, 3), "peak_gib": round(peak / 2**30, 3), "profiled": a.profile, "phases": m.by_phase(),
            "timeline": [d for d in m.done if d["phase"] != "Builder.finish"]}
     (out / "compile_cost.json").write_text(json.dumps(rec, indent=1) + "\n")
+    (out / "summary.json").write_text(json.dumps(compiled.summary(), indent=1) + "\n")
     if prof:
         import io
         import pstats
@@ -250,7 +271,7 @@ def main() -> int:
         (out / "profile.txt").write_text(s.getvalue())
     for p in rec["phases"]:
         print(f"  {'  ' * p['depth']}{p['phase']:<40} calls={p['calls']:<6} wall_s={p['wall_s']:<10} peak_gib={p['peak_gib']}")
-    print(f"COMPILE-COST window={rec['window']} layers={a.layers} wall_min={rec['wall_min']} peak_gib={rec['peak_gib']} "
+    print(f"COMPILE-COST window={rec['window']} execution={a.execution} layers={a.layers} wall_min={rec['wall_min']} peak_gib={rec['peak_gib']} "
           f"nodes={sorted(nodes.values())} digests={','.join(d[:16] for d in digests)} workload={compiled.workload.digest[:16]}", flush=True)
     if a.guard:
         want = PINS.get(a.window or "")

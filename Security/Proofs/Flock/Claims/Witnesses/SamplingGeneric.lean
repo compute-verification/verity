@@ -64,6 +64,13 @@ The lock's `meets` witnesses of these claims are Flock's decoder bounds at its d
 * `twoL`: a compiled verifier over `twoA` that samples both proof blocks of a two-input statement (`twoStmt`, partition
   `twoPart`), block `u`'s session at round `u`, under a commitment whose openings of `true` pass (`trueCm`). It meets
   `Compiled.Sessions` at every hash, its commitment binds, and the silent prover is accepted: `twoSessions_meets`.
+
+The network certifier's leak guarantees fail at two more compiled verifiers that accept everything, whose lemmas are
+`NetTiming.Witness`'s:
+
+* `leakL`: `sksL` at a statement whose program negates its input (`notStmt`, its partition `notPart` one proof block
+  `{0, 1}`, sampled `all`);
+* `certL`: `leakL` under `trueCm`.
 -/
 
 @[expose] public section
@@ -116,6 +123,8 @@ noncomputable def sksL (Coin : Type) : Compiled Coin (toyA Coin) where
   iroots _ _ _ := []
   reveal _ _ _ _ := []
   openCalls _ := 0
+  nOut _ := 1
+  nIn _ := 1
   Tape := Unit
   P _ := silentP
   δc _ _ := 0
@@ -132,7 +141,7 @@ theorem noHash_runExt (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = n
   unfold Compiled.runExt
   refine noHash_flatMapRP _ (fun iu => ?_) _
   split
-  · simp only [Compiled.unitExt, hs]
+  · simp only [Compiled.sessExt, Compiled.sessWit, hs]
     trivial
   · trivial
 
@@ -146,13 +155,13 @@ theorem noHash_compiledE (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v 
   · trivial
   · split_ifs
     -- The waits' coin lists are generalized first: unifying against them unfolds `List.finRange` at the cap.
-    · generalize List.map c.1 (List.finRange (L.cap x)) = rs
+    · generalize List.map c.1 (List.finRange (L.capOut x)) = rs
       refine noHash_bind _ _ (noHash_waitAccC _ _ _) fun outer => ?_
-      generalize (List.finRange (L.k x)).zip outer = jos
+      generalize (List.finRange (L.kOut x)).zip outer = jos
       refine noHash_bind _ _ (noHash_flatMapRP _ (fun jo => ?_) _) fun _ => trivial
-      generalize List.map (fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (L.cap x)) = rs'
+      generalize List.map (fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (L.capIn x)) = rs'
       refine noHash_bind _ _ (noHash_waitAccC _ _ _) fun inner => ?_
-      generalize (List.finRange (L.k x)).zip inner = lis
+      generalize (List.finRange (L.kIn x)).zip inner = lis
       exact noHash_flatMapRP _ (fun _ => noHash_runExt L hs _ _ _ _ _) _
     · trivial
 
@@ -211,14 +220,16 @@ theorem sksL_κ (x : Msg) : (sksL Coin).κ 0 x < 1 / 3 := by
   have hs := slack_le_two
   have hs0 := slack_pos
   have ho := sksD_outer (Coin := Coin) x
-  have hk : (sksL Coin).k x = (sksD Coin).k x := rfl
-  have hc : (sksL Coin).cap x = (sksD Coin).cap x := rfl
+  have hko : (sksL Coin).kOut x = (sksD Coin).k x := rfl
+  have hki : (sksL Coin).kIn x = (sksD Coin).k x := rfl
+  have hco : (sksL Coin).capOut x = (sksD Coin).cap x := rfl
+  have hci : (sksL Coin).capIn x = (sksD Coin).cap x := rfl
   have ho0 : 0 ≤ 2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) := by
     positivity
   have he : (sksL Coin).κ 0 x = (1 + slack) * (2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) +
       Real.exp (-((sksD Coin).k x : ℝ) / 8)) := by
     unfold Compiled.κ
-    rw [sksL_κs, hk, hc]
+    rw [sksL_κs, hko, hki, hco, hci]
     ring
   rw [he]
   generalize 2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) = X at ho ho0 ⊢
@@ -407,6 +418,8 @@ def twoL (Coin : Type) : Compiled Coin (twoA Coin) where
   iroots _ _ _ := []
   reveal s u _ _ := [(s.roots, ⟨u, true, []⟩)]
   openCalls _ := 0
+  nOut _ := 2
+  nIn _ := 2
   Tape := Unit
   P _ := silentP
   δc _ _ := 0
@@ -438,9 +451,9 @@ theorem twoL_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : �
         twoOut (twoMsg H P x ω 0) (twoMsg H P x ω 1)⟩ := by
   by_cases h : [twoMsg H P x ω 0, twoMsg H P x ω 1] = [[], []]
   · simp only [twoMsg, twoHist] at h ⊢
-    simp [run, twoL, twoV, stepWith, OC.eval, Trace.seen, twoOut, h]
+    simp [run, twoL, twoV, stepWith, OC.eval, Transcript.seen, twoOut, h]
   · simp only [twoMsg, twoHist] at h ⊢
-    simp [run, twoL, twoV, stepWith, OC.eval, Trace.seen, twoOut, h]
+    simp [run, twoL, twoV, stepWith, OC.eval, Transcript.seen, twoOut, h]
 
 omit [Fintype Coin] [Nonempty Coin] in
 theorem twoA_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (u : ℕ) (xS : Msg)
@@ -450,9 +463,9 @@ theorem twoA_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : �
       (run H (twoP H P x ω u) (twoA Coin).V xS () ρ).vLog = [] := by
   by_cases h : [twoMsg H P x ω u] = [[]]
   · simp only [twoMsg] at h ⊢
-    simp [run, twoA, sesV, twoP, stepWith, OC.eval, Trace.seen, sesOut, h]
+    simp [run, twoA, sesV, twoP, stepWith, OC.eval, Transcript.seen, sesOut, h]
   · simp only [twoMsg] at h ⊢
-    simp [run, twoA, sesV, twoP, stepWith, OC.eval, Trace.seen, sesOut, h]
+    simp [run, twoA, sesV, twoP, stepWith, OC.eval, Transcript.seen, sesOut, h]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem twoL_parse {x : Msg} {s : AuditStatement} (h : (twoL Coin).parse x = some s) : s = twoStmt :=
@@ -560,6 +573,12 @@ theorem twoL_sessions (H : Msg → Msg) : (twoL Coin).Sessions H where
       rw [Pr_congr fun d => iff_false_intro (hn d), Pr_false]
       exact two_Pa_nonneg B
   slots _ _ := le_rfl
+  shared _ _ _ _ _ i j u u' _ hu hu' hk := by
+    obtain rfl : i = j := hk
+    obtain rfl : u = u' := Option.some.inj (hu.symm.trans hu')
+    rfl
+  keys _ _ := Finset.card_image_le.trans (Finset.card_range _).le
+  unions _ := le_rfl
   refuses x _ _ _ _ _ := twoL_scope x
   interior _ _ _ _ _ _ _ := rfl
   fixed _ _ _ _ := ⟨Finset.subset_univ _, fun _ => rfl⟩
@@ -617,6 +636,25 @@ theorem twoSessions_meets {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabite
     (twoA Coin).KS H ∧ (twoL Coin).commit.Binds H ∧ (twoL Coin).Sessions H ∧ (twoL Coin).Scope [] ∧
       ∀ r, (twoL Coin).checked [] r = [0, 1] ∧ (run H silentP (twoL Coin).V [] () r).out = .acc :=
   ⟨twoA_KS H, trueCm_binds H, twoL_sessions H, twoL_scope [], fun r => ⟨rfl, twoL_silent H r⟩⟩
+
+/-! ## A statement whose program negates its input -/
+
+/-- One input gate and its negation, the negation returned. -/
+def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
+
+/-- The program, sampled `all`. -/
+def notStmt : AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
+
+/-- One class of one stratum of one proof block, `{0, 1}`. -/
+def notPart : Claims.Sampling.Partition := ⟨[[[[0, 1]]]]⟩
+
+/-- `sksL` at `notStmt`: the verifier accepts, no opening passes, and no unit has a session. -/
+noncomputable def leakL (Coin : Type) : Compiled Coin (toyA Coin) :=
+  { sksL Coin with parse := fun _ => some notStmt, partition := fun _ => some notPart }
+
+/-- `leakL` under `trueCm`: the verifier accepts, the openings of `true` pass, and no unit has a session. -/
+noncomputable def certL (Coin : Type) : Compiled Coin (toyA Coin) :=
+  { leakL Coin with commit := trueCm }
 
 end Claims.Witness.SamplingGeneric
 

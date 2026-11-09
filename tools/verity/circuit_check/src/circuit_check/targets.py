@@ -465,8 +465,13 @@ LAZY_OPERANDS: dict[str, tuple[str, ...]] = {
     "MoeExpertFp8Gemm_v1": ("w",),
     "MoeExpertFp8GemmW_v1": ("w",),
     "ScaledMmFp8BlockGrouped_v1": ("w",),
-    # activations: every rank's partial sums, and the latent rows DSA's top-k routes past INDEX_TOPK keys
+    # activations: every rank's partial sums, and the latent rows DSA's top-k routes past INDEX_TOPK keys (Waksman's network,
+    # the mask form's concentrator in words and in bits, and a row below its size class: its rows and their pad)
     "AllReduceMultimem_v1": ("parts",),
+    "DsaButterflyRows_v1": ("rows",),
+    "DsaButterflyRows_v2": ("rows",),
+    "DsaButterflyRowsPad_v1": ("rows", "pad"),
+    "DsaButterflyRowsPad_v2": ("rows", "pad"),
     "DsaWaksmanRows_v1": ("rows",),
 }
 
@@ -541,6 +546,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "all_reduce_multimem": {"WORLD": 8, "SIZE": 128, "TREES": trees, "FTZ": False},
             "all_reduce_nccl_tree": {"WORLD": 4, "SIZE": 8, "CHAIN": (0, 1, 2, 3)},
             "dsa_indexer_k_row": {"D": 128, "ROPE": 64, "EPS": 1e-6}, "dsa_indexer_q": {"H": 32, "D": 128, "ROPE": 64},
+            "dsa_latent_row": {"KVL": 512, "R": 64, "EPS": 1e-5},
             "dsa_mqa_logits": {"N": 4, "H": 32, "D": 128},
             "cublas_splitk_gemm": {"K": 64, "N": 3, "SPLIT_K": 4, "DOT": hop},
             "cublas_splitk_gemm_f32out": {"K": 64, "N": 3, "SPLIT_K": 4, "DOT": hop},
@@ -674,34 +680,57 @@ def word_call_families() -> set[str]:
 
 
 #: the families a Call calls where that Call's own partition goes unchecked (`checks.uncut`: over the partition's gate budget
-#: and not cut member by member, or over its leaf budget), each with the families of the Calls that pass it: each is a Call, so
-#: such a Call is partitioned by its callees (`checks.by_callees`) and every gate of it sits in a Call whose partition is
-#: checked.  ``test_circuit_check`` holds it to the suite's and the range spots' unchecked Calls, apart from those its
-#: ``OVER_PARTITION_BUDGET`` holds (each with why), which pass nothing
+#: and not cut member by member, or cut so down to a member over it, or over its leaf budget), each with the families of the
+#: Calls that pass it: each is a Call, so such a Call is partitioned by its callees (`checks.by_callees`) and every gate of it
+#: sits in a Call whose partition is checked.  ``test_circuit_check`` holds it to the suite's and the range spots' unchecked
+#: Calls, apart from those its ``OVER_PARTITION_BUDGET`` holds (each with why), which pass nothing
 CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "AllReduceMultimemVector_v1": ("AllReduceMultimem_v1",),
-    "And2_v1": ("MhcFusedSplit_v2",),
-    "Bf16AddF2fp_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "And2_v1": ("DsaButterflyTagBits_v1", "DsaRadixTies_v1", "MhcFusedSplit_v2"),
+    "Bf16AddF2fp_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
     "Bf16MulBf16_v2": ("AllReduceRmsNormMnnvl_v2",),
-    "Bf16ToF32_v2": ("AllReduceRmsNormMnnvl_v2",),
-    "Const1[0x0]_v1": ("MhcFusedSplit_v2",),
-    "Const32[0x3727c5ac]_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "Bf16ToF32_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "Const16[0x0000]_v1": ("DsaButterflyRows_v1",),
+    "Const1[0x0]_v1": (
+        "DsaButterflyRows_v2",
+        "DsaButterflySettings_v2",
+        "DsaButterflyTagBits_v1",
+        "DsaTopKMask_v2",
+        "MhcFusedSplit_v2",
+    ),
+    "Const1[0x1]_v1": ("DsaTopKMask_v2",),
+    "Const32[0x3727c5ac]_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
     "Const32[0x43800000]_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "Const32[0x44060000]_v2": ("RMSNormFusedCudaVector8_v4",),
+    "DsaButterflyCtl_v1": ("DsaButterflySettings_v2",),
+    "DsaButterflyTagBits_v1": ("DsaButterflySettings_v2",),
+    "DsaMqaLogit_v3": ("DsaMqaLogits_v3",),
     "DsaMqaLogitsKey_v1": ("DsaMqaLogits_v4",),
     "DsaMqaLogitsQ_v1": ("DsaMqaLogits_v4",),
-    "DsaMqaLogit_v3": ("DsaMqaLogits_v3",),
-    "F2fpBf16_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "DsaRadixPass_v1": ("DsaTopKMask_v2",),
+    "DsaRadixTies_v1": ("DsaTopKMask_v2",),
+    "DsaTopKKey_v2": ("DsaTopKMask_v2",),
+    "DsaWaksmanPick_v1": ("DsaButterflyRows_v1",),
+    "DsaWaksmanPick_v2": ("DsaButterflyRows_v2",),
+    "DsaWaksmanSwap_v1": ("DsaButterflyRows_v1",),
+    "DsaWaksmanSwap_v2": ("DsaButterflyRows_v2",),
+    "F2fpBf16_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
     "F32AddFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
+    "F32Add_v3": ("RMSNormFusedCudaVector8_v4",),
+    "F32Div_v3": ("RMSNormFusedCudaVector8_v4",),
     "F32MulFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
+    "F32Mul_v3": ("RMSNormFusedCudaVector8_v4",),
     "MhcFusedSplit_v2": ("MhcFusedPostPre_v2",),
     "MhcPreBigFuse_v2": ("MhcFusedPostPre_v2",),
     "MoeExpertFp8CoordinateW_v1": ("MoeExpertFp8GemmW_v1",),
     "MoeExpertFp8Coordinate_v1": ("MoeExpertFp8Gemm_v1",),
     "MoeExpertFp8ScaleRow_v1": ("MoeExpertFp8GemmW_v1", "MoeExpertFp8Gemm_v1"),
     "MufuRcpFtz_v2": ("AllReduceRmsNormMnnvl_v2",),
-    "Not_v1": ("MhcFusedSplit_v2",),
-    "RsqrtApprox_v2": ("AllReduceRmsNormMnnvl_v2",),
-    "Xor2_v1": ("MhcFusedSplit_v2",),
+    "Not_v1": ("DsaRadixTies_v1", "MhcFusedSplit_v2"),
+    "RMSNormPairSumCuda_v2": ("RMSNormFusedCudaVector8_v4",),
+    "RMSNormSumInOrderCuda_v2": ("RMSNormFusedCudaVector8_v4",),
+    "RsqrtApprox_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "Xor2_v1": ("DsaButterflyTagBits_v1", "DsaRadixTies_v1", "MhcFusedSplit_v2"),
 }
 
 

@@ -24,24 +24,33 @@ Flock's (`verity_flock.ir_lower.lower_gates`) lowers each activation of the Defi
 own circuit, so a commit is a row there, and an AND operand the form its builder gave it. `part` is `definition` for a builder
 ``build(C, S, *elements)`` with statics, traced once per binding; gate by gate, a part's linear forms grow without bound (one
 SHA-512 compression passes 1 GB).
+
+`folded` is a Definition of a builder ``build(C, bits)`` at its arguments' pattern P (`pattern_of`: each argument a constant or
+the XOR of the bits it holds, complemented or not), over those bits, and without a ``build``. A Definition made with
+``calls`` is traced on a `CallTracingCircuit`, where its builder reaching a folded Definition (``C.fold_call``, as
+`sha512.compress_gadget` does) gets fresh output bits and its body a call of ``name_v{version}{P}``: the folded circuit is
+written once per pattern, not once per use. Its ``traced`` is still the builder's whole circuit and its ``build`` the builder,
+so a lowering of an activation it holds whole is the one it was, and the call's ANDs are its builder's.
 """
 from __future__ import annotations
 
 import gc
+import re
 from bisect import bisect_left
 from dataclasses import dataclass
-from functools import lru_cache, wraps
+from functools import lru_cache, partial, wraps
 from types import SimpleNamespace
 from typing import Any, Callable, Sequence
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, FunctionDefinition, SpecializedDefinition
+from verity.ml.circuits.defs import CompositeDefinition, FunctionDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.refs import Affine, Coll, Explicit, Ref, concat
 from verity.ml.circuits.types import Array, Type
 
-from .forms import ONE, Circuit, L
+from .forms import ONE, ZERO, Circuit, L
 
-__all__ = ["TL", "Traced", "TracingCircuit", "definition", "emit", "part", "trace", "word_of"]
+__all__ = ["FOLDED", "TL", "CallTracingCircuit", "Traced", "TracingCircuit", "definition", "emit", "encode_pattern", "folded",
+           "parse_pattern", "part", "pattern_of", "trace", "word_of"]
 
 #: a form of more bits than this, not all in one block, keeps them as a `_Set`; else as a frozenset (one of each per set)
 _SMALL = 8
@@ -306,7 +315,121 @@ class TracingCircuit(Circuit):
                 a, b = self.data[v]
                 push(a.s)
                 push(b.s)
+            elif self.kind[v] == "call":
+                for f in self.calls[self.data[v][0]][2]:
+                    push(f.s)
         return seen
+
+
+class CallTracingCircuit(TracingCircuit):
+    """A `TracingCircuit` on which a `folded` Definition's builder, reached through `fold_call`, is a call of that Definition at
+    its arguments' pattern (`pattern_of`), its output bits fresh ``call`` bits, instead of the builder's gates: how `part` and
+    `definition` trace with ``calls``."""
+
+    def __init__(self, cse: bool = False):
+        super().__init__(cse)
+        self.calls: list = []
+
+    def _new(self, kind, data):
+        if kind == "call":
+            w = Circuit._new(self, kind, data)
+            return TL(w.s, 0, None, self.sets)
+        return super()._new(kind, data)
+
+    def fold_call(self, d: CompositeDefinition, args: list) -> list:
+        """``d``'s builder on the forms ``args`` as a call of ``d`` at their pattern: its ``d.n_out`` output bits."""
+        if len(args) != d.n_args:
+            raise ValueError(f"{d.name} takes {d.n_args} argument bits, not {len(args)}")
+        P, ops = pattern_of(args)
+        k = len(self.calls)
+        outs = [self._new("call", (k, j)) for j in range(d.n_out)]
+        self.calls.append((d, P, ops, outs))
+        return outs
+
+
+# --- argument patterns -------------------------------------------------------------------------------------------------------
+
+_TOKEN = re.compile(r"([zo])([1-9][0-9]*)|p(0|[1-9][0-9]*)(?:n([2-9]|[1-9][0-9]+))?|c(0|[1-9][0-9]*)|([xy])((?:0|[1-9][0-9]*)"
+                    r"(?:\.(?:0|[1-9][0-9]*))+)")
+
+
+def pattern_of(args: Sequence[L]) -> tuple[str, list[L]]:
+    """The pattern P of a call's argument forms ``args`` and its parameters: the bits the forms hold, numbered as they are first
+    read (a form's new bits in order), each argument a constant or the XOR of its bits' parameters, complemented or not. So
+    the call's Definition (`folded`) reads its arguments as the forms its builder would have read, up to the bits' names, and
+    takes each AND, constant and copy (`sha512.commit`) as the builder did. P, `encode_pattern`'s string, names the call's
+    Definition, so one P is one function of its parameters."""
+    col: dict[int, int] = {}
+    entries: list = []
+    for g in args:
+        if g.is_const():
+            entries.append("o" if g.c else "z")
+            continue
+        entries.append((tuple(sorted(col.setdefault(v, len(col)) for v in sorted(g.s))), g.c))
+    return encode_pattern(entries), [L(frozenset((v,)), 0) for v in col]
+
+
+def encode_pattern(entries: Sequence) -> str:
+    """A pattern's string, one token an argument or a run, joined by ``_``: ``z{k}`` / ``o{k}`` k constant 0 / 1 bits, ``p{i}``
+    parameter i and ``p{i}n{k}`` parameters i ... i + k - 1, ``c{i}`` NOT parameter i, ``x{i}.{j}...`` the XOR of the parameters
+    and ``y{i}.{j}...`` its NOT."""
+    out, a = [], 0
+    while a < len(entries):
+        e, b = entries[a], a + 1
+        if isinstance(e, str):
+            while b < len(entries) and entries[b] == e:
+                b += 1
+            out.append(f"{e}{b - a}")
+        elif len(e[0]) > 1:
+            out.append(("y" if e[1] else "x") + ".".join(map(str, e[0])))
+        elif e[1]:
+            out.append(f"c{e[0][0]}")
+        else:
+            while b < len(entries) and entries[b] == ((e[0][0] + b - a,), 0):
+                b += 1
+            out.append(f"p{e[0][0]}" + (f"n{b - a}" if b - a > 1 else ""))
+        a = b
+    return "_".join(out)
+
+
+@lru_cache(maxsize=None)
+def parse_pattern(P: str, n_args: int) -> tuple[tuple, int]:
+    """``(entries, parameters)`` of the pattern P over ``n_args`` arguments (`encode_pattern`): each entry ``"z"``, ``"o"`` or
+    ``(parameters, complemented)``. P is refused unless it is the one string `pattern_of` writes for its entries: parameters
+    first read in order, an XOR's of at least two in increasing order, those it reads first last."""
+    if not isinstance(P, str) or not P:
+        raise ValueError(f"a pattern P is a nonempty str, not {P!r}")
+    entries: list = []
+    n = 0
+    for tok in P.split("_"):
+        m = _TOKEN.fullmatch(tok)
+        if m is None:
+            raise ValueError(f"pattern {P[:80]!r}: {tok[:40]!r} is no token")
+        if m[1]:
+            entries += [m[1]] * int(m[2])
+            continue
+        if m[3] is not None:
+            run = [((int(m[3]) + j,), 0) for j in range(int(m[4] or 1))]
+        elif m[5] is not None:
+            run = [((int(m[5]),), 1)]
+        else:
+            ps = tuple(int(x) for x in m[7].split("."))
+            if list(ps) != sorted(set(ps)):
+                raise ValueError(f"pattern {P[:80]!r}: {tok[:40]!r} isn't an XOR of parameters in increasing order")
+            run = [(ps, int(m[6] == "y"))]
+        for e in run:
+            new = [i for i in e[0] if i >= n]
+            if new != list(range(n, n + len(new))):
+                raise ValueError(f"pattern {P[:80]!r}: parameter {new[-1]} is read before parameter {n}")
+            n += len(new)
+            entries.append(e)
+        if len(entries) > n_args:
+            break
+    if len(entries) != n_args:
+        raise ValueError(f"pattern {P[:80]!r} names {len(entries)} arguments, not {n_args}")
+    if encode_pattern(entries) != P:
+        raise ValueError(f"pattern {P[:80]!r} isn't written as `encode_pattern` writes it")
+    return tuple(entries), n
 
 
 _KINDS = ("and", "xor", "not")
@@ -346,24 +469,27 @@ def _flat_out(res: Any, ret: Type) -> list[L]:
     return [f for e in res for f in e]
 
 
-def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = True, key: tuple | None = None) -> Traced:
+def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = True, key: tuple | None = None,
+          calls: bool = False) -> Traced:
     """``build``'s gate circuit over ``params`` to ``ret``. ``key``, a Definition's (name, version, bindings), lets `CACHE`, when a
-    build has turned it on, give the circuit an earlier trace of the same key and code made."""
-    if key is not None and CACHE is not None:
+    build has turned it on, give the circuit an earlier trace of the same key and code made. With ``calls``, each `folded`
+    Definition the builder reaches through `CallTracingCircuit.fold_call` is a gate ``call:{name}:{P}`` over its parameters'
+    wires, read by one gate ``out{j}`` an output bit (`emit` writes them as a call); `CACHE` keeps no such circuit."""
+    if key is not None and CACHE is not None and not calls:
         return CACHE.trace(key, build, params, ret, cse)
     # The cyclic collector stays off while tracing: reference counting frees a trace's forms, and the collector's passes over
     # the live ones cost more than the trace itself.
     on = gc.isenabled()
     gc.disable()
     try:
-        return _trace(build, params, ret, cse)
+        return _trace(build, params, ret, cse, calls)
     finally:
         if on:
             gc.enable()
 
 
-def _trace(build: Callable, params: Sequence[Type], ret: Type, cse: bool) -> Traced:
-    C = TracingCircuit(cse=cse)
+def _trace(build: Callable, params: Sequence[Type], ret: Type, cse: bool, calls: bool = False) -> Traced:
+    C = CallTracingCircuit(cse=cse) if calls else TracingCircuit(cse=cse)
     ins = _elements_in(C, params)
     outs = [C.canon(f) for f in _flat_out(build(C, *ins), ret)]
     C.output("out", outs)
@@ -466,7 +592,18 @@ def _trace(build: Callable, params: Sequence[Type], ret: Type, cse: bool) -> Tra
         w = wire_of_bit[next(iter(h.s))]
         return by_key.setdefault(k, gate("not", w) if h.c else w)
 
-    for v in sorted(v for v in live if C.kind[v] == "and"):
+    called: set[int] = set()
+    for v in sorted(v for v in live if C.kind[v] in ("and", "call")):
+        if C.kind[v] == "call":
+            k = C.data[v][0]
+            if k not in called:
+                called.add(k)
+                d, P, ops, couts = C.calls[k]
+                w = gate(f"call:{d.name}:{P}", *[wire(f) for f in ops])
+                for j, o in enumerate(couts):
+                    (u,) = o.s
+                    wire_of_bit[u] = gate(f"out{j}", w)
+            continue
         a, b = C.data[v]
         if ONE.key() in (a.key(), b.key()):
             wire_of_bit[v] = wire(b if a.key() == ONE.key() else a)
@@ -533,11 +670,14 @@ def emit(T: Traced, params: Sequence[Type], ret: Type, B, *colls) -> Coll:
             if b in T.outputs:
                 c = B.call(BL.constant(b))
                 ref[b] = c.refs[0]
-    fg, gates, rank = T.first_gate, T.gates, {k: i for i, k in enumerate(_KINDS)}
+    fg, gates = T.first_gate, T.gates
+    rank = {k: i for i, k in enumerate(_KINDS)}
     depth = [0] * (fg + len(gates))
     for i, (_, ops) in enumerate(gates):
         depth[fg + i] = 1 + max(depth[o] for o in ops)
-    order = sorted(range(len(gates)), key=lambda i: (depth[fg + i], rank[gates[i][0]], i))
+    order = sorted(range(len(gates)),
+                   key=lambda i: (depth[fg + i], rank.get(gates[i][0], len(_KINDS) + gates[i][0].startswith("out")), i))
+    called: dict[int, Coll] = {}
     g = 0
     while g < len(order):
         i0 = order[g]
@@ -546,6 +686,18 @@ def emit(T: Traced, params: Sequence[Type], ret: Type, B, *colls) -> Coll:
         while h < len(order) and gates[order[h]][0] == kind and depth[fg + order[h]] == d:
             h += 1
         group = order[g:h]
+        if kind.startswith("call:"):
+            _, name, P = kind.split(":")
+            for i in group:
+                ops = gates[i][1]
+                called[fg + i] = B.call(bind(FOLDED[name], P=P), Coll(Array(len(ops), BL.BIT), _refs([ref[o] for o in ops])))
+            g = h
+            continue
+        if kind.startswith("out"):
+            for i in group:
+                ref[fg + i] = called[gates[i][1][0]].refs[int(kind[3:])]
+            g = h
+            continue
         if kind == "not":
             out = B.batch(BL.NOT, Coll(Array(len(group), BL.BIT), _refs([ref[gates[i][1][0]] for i in group])), axes=(0,))
         else:
@@ -559,45 +711,119 @@ def emit(T: Traced, params: Sequence[Type], ret: Type, B, *colls) -> Coll:
 
 
 def definition(name: str, version: int, build: Callable, params: Sequence[tuple[str, Type]], ret: Type, *, word: Any = None,
-               doc: str = "", conformance: str = "exact-model-tested", register: bool = True) -> CompositeDefinition:
+               doc: str = "", conformance: str = "exact-model-tested", register: bool = True,
+               calls: bool = False) -> CompositeDefinition:
     """The Boolean Definition ``name_v{version}`` that ``build`` computes (traced once, on first use of its body), computing the
-    word Definition ``word``."""
+    word Definition ``word``. With ``calls``, its body is traced with calls (`trace`): each `folded` Definition its builder
+    reaches is a call, and ``traced`` is still the builder's whole circuit, the one a lowering that runs ``build`` makes."""
     types = [t for _, t in params]
     traced: list[Traced] = []
     key = (name, version, {})
 
+    def flat() -> Traced:
+        return traced[0] if traced and not calls else trace(build, types, ret, key=key)
+
+    @lru_cache(maxsize=None)
+    def with_calls() -> Traced:
+        return trace(build, types, ret, key=key, calls=True)
+
     def body(B, S, *colls):
         if not traced:
-            traced.append(trace(build, types, ret, key=key))
+            traced.append(with_calls() if calls else trace(build, types, ret, key=key))
         return emit(traced[0], types, ret, B, *colls)
 
     d = CompositeDefinition(name, version, (), lambda S: (tuple(params), ret), body, doc=doc, conformance=conformance,
                             register=register)
     d.build = build  # type: ignore[attr-defined]
-    d.traced = lambda: traced[0] if traced else trace(build, types, ret, key=key)  # type: ignore[attr-defined]
+    d.traced = flat  # type: ignore[attr-defined]
+    d.traced_calls = with_calls  # type: ignore[attr-defined]
     d.word = word  # type: ignore[attr-defined]
     return d
 
 
 def part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str,
-         version: int = 1, *, register: bool = True, conformance: str = "exact-model-tested") -> CompositeDefinition:
+         version: int = 1, *, register: bool = True, conformance: str = "exact-model-tested",
+         calls: bool = False) -> CompositeDefinition:
     """The Definition ``name_v{version}`` traced from ``build(C, S, *elements)`` once per binding of ``statics`` (``traced(*key)``),
     which keeps ``build`` as `definition` does. A lowering passes S only to a Definition with statics
-    (`verity_flock.ir_lower._boolean_activation`), so without any its ``build`` takes the elements alone."""
+    (`verity_flock.ir_lower._boolean_activation`), so without any its ``build`` takes the elements alone. With ``calls`` its
+    body is traced with calls, as `definition`'s is."""
 
-    @lru_cache(maxsize=None)
-    def traced(*key) -> Traced:
+    def _traced(calls: bool, *key) -> Traced:
         S = SimpleNamespace(**dict(zip(statics, key)))
         params, ret = signature(S)
-        return trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
+        return trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret, calls=calls)
+
+    traced = lru_cache(maxsize=None)(partial(_traced, False))
+    emitted = lru_cache(maxsize=None)(partial(_traced, True)) if calls else traced
 
     def body(B, S, *colls):
         params, ret = signature(S)
-        return emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
+        return emit(emitted(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
 
     d = CompositeDefinition(name, version, statics, signature, body, conformance=conformance, doc=doc, register=register)
     d.build = build if statics else wraps(build)(lambda C, *e: build(C, SimpleNamespace(), *e))  # type: ignore[attr-defined]
     d.traced = traced  # type: ignore[attr-defined]
+    d.traced_calls = lru_cache(maxsize=None)(partial(_traced, True))  # type: ignore[attr-defined]
+    return d
+
+
+#: each `folded` Definition by name, which `emit` calls by a ``call:{name}:{P}`` gate
+FOLDED: dict[str, CompositeDefinition] = {}
+
+
+def folded(name: str, version: int, build: Callable, n_args: int, n_out: int, doc: str, *, register: bool = True,
+           conformance: str = "exact-model-tested") -> CompositeDefinition:
+    """The Definition ``name_v{version}{P}`` of ``build(C, bits)``, ``n_args`` bits to ``n_out``, at its arguments' pattern P
+    (`pattern_of`): over the pattern's parameters, as one ``Array<n, Value<1>>``, to ``Array<n_out, Value<1>>``, each argument
+    a constant or the XOR of parameters P names. A builder reaches it through `CallTracingCircuit.fold_call`, so a Definition
+    traced with calls (`trace`) calls it where its builder would have written ``build``'s gates. It has no ``build``: a lowering
+    that runs builders (`verity_flock.ir_lower`) lowers the caller's builder, which writes those gates again, and runs its
+    ``fold_build(S, C, x)`` (``build`` at the pattern ``S.P``) only on an activation no caller's builder holds."""
+
+    def fold_build(S, C, x):
+        """``build`` on the forms ``x``, the parameters, at the pattern ``S.P``."""
+        def arg(e):
+            if isinstance(e, str):
+                return ONE if e == "o" else ZERO
+            f = x[e[0][0]]
+            for i in e[0][1:]:
+                f = f ^ x[i]
+            return f.inv() if e[1] else f
+
+        return list(build(C, [arg(e) for e in parse_pattern(S.P, n_args)[0]]))
+
+    @lru_cache(maxsize=None)
+    def traced(P: str) -> Traced:
+        _, n = parse_pattern(P, n_args)
+        return trace(partial(fold_build, SimpleNamespace(P=P)), [Array(n, BL.BIT)], Array(n_out, BL.BIT))
+
+    def signature(S):
+        _, n = parse_pattern(S.P, n_args)
+        return (("x", Array(n, BL.BIT)),), Array(n_out, BL.BIT)
+
+    def body(B, S, x):
+        params, ret = signature(S)
+        return emit(traced(S.P), [t for _, t in params], ret, B, x)
+
+    def refuse(bindings: dict) -> str | None:
+        if "P" not in bindings:
+            return None
+        try:
+            parse_pattern(bindings["P"], n_args)
+        except ValueError as e:
+            return str(e)
+        return None
+
+    if name in FOLDED:
+        raise ValueError(f"a folded Definition named {name!r} exists")
+    d = CompositeDefinition(name, version, ("P",), signature, body, conformance=conformance, doc=doc, register=register,
+                            refuse=refuse)
+    d.fold = build  # type: ignore[attr-defined]
+    d.fold_build = fold_build  # type: ignore[attr-defined]
+    d.n_args, d.n_out = n_args, n_out  # type: ignore[attr-defined]
+    d.traced = traced  # type: ignore[attr-defined]
+    FOLDED[name] = d
     return d
 
 

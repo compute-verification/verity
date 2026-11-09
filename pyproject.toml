@@ -87,9 +87,11 @@ untraced = [
     "tests/test_boundaries.py",
     "tests/test_cli_conventions.py",
     "tests/test_doc_paths.py",
+    "tests/test_documented_commands.py",
     "tests/test_domains.py",
     "tests/test_examples.py",
     "tests/test_flock_json.py",
+    "tests/test_flock_literals.py",
     "tests/test_gate_paths.py",
     "tests/test_glossary_lean_names.py",
     "tests/test_lean_packages.py",
@@ -105,6 +107,7 @@ untraced = [
     "tests/test_retired_terms.py",
     "tests/test_seed_ports.py",
     "tests/test_verifier_cost.py",
+    "tests/test_vllm_boundary.py",
     "tests/test_vllm_public_api.py",
 ]
 inputs = [".", "AGENTS.md"]   # its lints read the docs: a listed `.md` keys its Markdown too (`suites.markdown`)

@@ -112,8 +112,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   (`charge_terms`) and each member's cost per sampled proof block (`per_unit`). The chain and tampered rounds sample
   too and are refused all the same: Lean holds every table row of a registered port, sampled or not, an output port's
   table its instances' rows. A member none of whose units is sampled (G > 1) runs no session.
-* **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round's
-  K sampled as prove_path's records audit samples (`a5_coins`): one session of the auditor's challenger on the group's root
+* **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round
+  sampled at the stratified rate of K in its N (`rule_of`: a stream's rule is a rate) as prove_path's records audit samples
+  (`a5_coins`): one session of the auditor's challenger on the group's root
   (`window_root`: the warden's session and the group's signed registrations), and the round's `service.Stream`
   (`spec_of`, `stream_of`: its own copy of the round's Program the generator form the round registers) on its coins
   (`a5_coins.RankCoins`): the session releases the window's seed salt at its open (its first coin of the seed-salt
@@ -1099,18 +1100,27 @@ def challenger(a, at: SimpleNamespace, out: Path):
         manager.shutdown()
 
 
+def rule_of(k: int, n: int) -> str:
+    """The round's stream rule over its ``n`` proof blocks: the stratified rate of ``k`` in ``n`` (`service.Law`), at least
+    ceil(k n_s / n) of each template's n_s, so each proof block is sampled with probability at least k/n however many the prover
+    registers."""
+    return f"stratified-rate:{min(k, n)}/{n}"
+
+
 def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[str, str], k: int,
             root: str, seed_item: S.Public) -> tuple[S.Spec, list, dict[str, int]]:
     """The honest round's `service.Spec` (prove_path's `a5.stream_of`): its unit the round's templates in order, its
     values the round's ports (each member's frame ports and the scan's trees, under their hiding ``schemas``), its
     public items what the registration shows (N, each template's stratum, the group, the leaf layer, each port's
-    layout and the window's seed salt, ``seed_item``, its coin), its selection ``stratified:k``, its proof deadline
-    `MEMBER_DEADLINE_S` a member and its context the group's root. -> (the spec, its proof blocks, `Stream.register`'s
-    counts: each template's proof blocks, over its members)."""
+    layout and the window's seed salt, ``seed_item``, its coin), its selection the stratified rate of ``k`` in N
+    (`rule_of`), its proof deadline `MEMBER_DEADLINE_S` a member and its context the group's root. -> (the spec, its proof
+    blocks, `Stream.register`'s counts: each template's proof blocks, over its members)."""
     units = [pg.stagers[tp].defn for tp in pg.templates]
-    law = S.Law(f"stratified:{k}")
     n = sum(m["n"] for m in members)
-    strata = [s["template"] for s in DR.derive(pg.program, pg.query, S.selection_law(law, n)).get("strata") or ()]
+    law = S.Law(rule_of(k, n))
+    named = S.selection_law(law, n, S.selection_sizes(law, pg.program, pg.query))
+    strata = [s["template"] for s in DR.derive(pg.program, pg.query, named,
+                                               S.selection_table(law, pg.program, pg.query, None)).get("strata") or ()]
     public = [("population", "N, the round's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
               ("window", "the round's provenance: the group's link-windows of the warden's run"),
               ("leaf_layer", "the leaf layer over the members' public files"),
@@ -1243,8 +1253,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         schemas[r["port"]] = WR.SCHEMA
         roots.append(r)
     leaf_layer = hashlib.sha512(M.canonical_json(publics)).hexdigest()
-    k = sum(m["n"] for m in members) if k is None else k
-    law = M.D.parse_design(f"stratified:{k}")
+    n = sum(m["n"] for m in members)
+    k = n if k is None else k
+    rule = f"stratified:{k}" if coins is None else rule_of(k, n)
+    law, table = (M.D.parse_design(rule), None) if coins is None else S.params_law(rule, pg.program, pg.query, None)
     win = {"kind": "stand-in", "of": f"round {name}: link-windows {at.windows} of {at.source}, their ingress and egress "
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}
@@ -1252,9 +1264,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
            "link": "registered: each warden row port, input or output, at the warden's signed root of its "
                    "link-window, unit base + k row k of the member's rows; the scan's state, prog and view, inputs and "
                    "outputs, at the prover's registered roots (scan/*)"}
-    rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
+    rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer,
+                                      work_table=table).to_json()}
     for m in members:
         checks[f"statement/{m['name']}"] = a7.statement_checks({**m, "name": m["at"]}, rec, want)
     receipt = R.receipt(rec, "one-stage-e2e verifier (scan_zk.py)")
@@ -1279,7 +1292,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         draw = refused = None
         try:
             stream = stream_of(a, spec, units, pg, rank)
-            rank.plan(coins.AC.need(f"stratified:{k}", pg.program, pg.query, rec["population"]))
+            rank.plan(coins.AC.need(rule, pg.program, pg.query, rec["population"]))
             rec = coins.AC.salted(rec, rank.take_salt(stream, coins.root))
             reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=coins.root, counts=counts)
             rank.commit(bytes.fromhex(reg.digest))
@@ -1301,7 +1314,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             for f in (out / "registration.json", out / "segment.json"):
                 os.link(f, vdir / f.name)
             return {**res, "accepted": False, "window_accepted": False, "verdicts": {}, "why": {"draw": refused},
-                    "opened": {}, "draw": {"law": f"stratified:{k}", "coins": coins.challenger, "refused": refused}}
+                    "opened": {}, "draw": {"law": rule, "coins": coins.challenger, "refused": refused}}
         lean_draw, receipt = dict(draw.draw), dict(draw.registration.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
@@ -1381,7 +1394,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     source = "a development challenger's (flock-verify draw, a0.challenger_draw)" if stream is None else \
         f"the auditor's challenger's ({coins.challenger}: a5_coins, the round's service.Stream)"
     return {**res, "accepted": bool(result.get("accepted")), "window_accepted": window_ok, "opened": opened,
-            "draw": {"law": f"stratified:{k}", "coins": source, "units": lean_draw["units"], "of": rec["population"]},
+            "draw": {"law": rule, "coins": source, "units": lean_draw["units"], "of": rec["population"]},
             **({"coins": told, "coin_negatives": {x: y["refused"] for x, y in neg.items()}} if told else {}),
             "audit": {x: result.get(x) for x in ("accepted", "complete", "wrong_units")},
             "failed": {c: v.get("codes") for c, v in (result.get("checks") or {}).items() if not v.get("ok")},
@@ -1701,9 +1714,10 @@ def main(argv=None) -> int:
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "execution phases, verified under its deployment's key, in place of the synthetic run")
     p.add_argument("--draw", type=int,
-                   help="K: Lean draw --stratified K on a development challenger's coins, only the sampled proof "
-                        "blocks proved; default every unit")
-    p.add_argument("--challenger", help="with --draw: the honest round's K drawn on the auditor's challenger's coins "
+                   help="K: Lean draw --stratified K on a development challenger's coins, only the SPOT proof "
+                        "blocks it draws proved; default every unit")
+    p.add_argument("--challenger", help="with --draw: the honest round drawn at the rate K/N (stratified-rate:K/N) on the "
+                   "auditor's challenger's coins "
                    "(a5_coins, the round's service.Stream), not the verifier's: local, or gate:USER@HOST "
                    "(the auditor's challenger through its gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, "

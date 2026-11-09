@@ -1,0 +1,20 @@
+{
+ "definitions": {
+  "SeedBlocks_v1{COIN=16,RID=4}": {
+   "and": 0,
+   "type": "cee62b92e1eb9bf01cc76d0c3c5ea10751218d2c731848b5a904349f42a621e4c78d207d2269aaa8f84962fb25dea41e6dd63ff84bbfc3f58bf520cdc4dc4931"
+  },
+  "SeedBlocks_v1{COIN=64,RID=16}": {
+   "and": 0,
+   "type": "6c62cc051b6e4601de301cebbed3802a76d44af6d7c2c9a0b0199b4f1822e3c6684e0328765c755a6f7ea6a3e23cb5d3cb16773ebffdd6b5dc0da78218757fb1"
+  },
+  "SeedEqual_v1": {
+   "and": 63,
+   "type": "76eca98b8c93f60717ddb23335653901bbc636a28e34383fc6846667f25294aa8944bd1a3541e443d8b9baabd816f80177ec423cd184ca47015d349cb9ddf6b0"
+  },
+  "SeedSelect_v1": {
+   "and": 64,
+   "type": "709b5cb7156a1c617ad9f1996c7d6bfd29b4c3b11cecb26f98d2c001b24cc85e91fd53898af3574b7be7b8eca9df04aa8a870515b1d8eccf1217e3afd7829a68"
+  }
+ }
+}

@@ -19,7 +19,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Soundness at `fast100`'s numbers, over everything flock-verify accepts without `--zk`

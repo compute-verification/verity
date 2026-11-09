@@ -43,9 +43,15 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     file and its statement's header (the prover's and the verifier's alike, or their statement digests differ), name
     every port of its circuit, its o0 at the registration's root for it, as Lean's `Registered.checkComplete` requires.
 
-    Runs a few minutes (lowering the scan's three templates at the test class, and the Lean's checks of each stream's
-    registration, sample and run), and catches what the stream's own window tests can't: that the scan's registered
-    Program is the one the challenger's stream rebuilds."""
+    Runs 4 to 10 minutes on a node, about 4 alone: the synthetic run, lowering and staging the scan's three templates,
+    and the Lean verifier's checks of the stream's registration, sample and run. It catches what no cheaper test
+    can, since only the honest challenger round on the scan's own staged statements has both:
+    - the R2 Program and partition mismatch, between the generator form the round registers and the Program the
+      challenger's stream rebuilds (the stream's own window tests use toy templates, never `scan_root`);
+    - a port of a staged member left out of its registered reads, which Lean's `checkComplete` refuses, so that every
+      session fails Lean's verify.
+    The test class is the smallest, the group is one link-window, and the draw is one more than the three strata: the
+    sessions are stubbed, so a smaller draw saves nothing."""
     setup, k = sz.TEST, 4
     h = sz.host(tmp_path / "warden", draw=k, setup=setup)
     at = h.at

@@ -165,7 +165,7 @@ def servedERep (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem outerStage_eval {V : Verifier Coin} (H : Msg → Msg) (E₂ : Extractor Coin W₂ V)
-    (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (x : Msg) (run : (Fin (V.k x) → Coin) → Trace)
+    (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (x : Msg) (run : (Fin (V.k x) → Coin) → Transcript)
     (d : (Fin (V.k x) → Coin) × E₂.C x) :
     (outerStage E₂ dec x d).eval H run =
       (dec x d.1 ((E₂.ext x d.1 d.2).eval H run).1, ((E₂.ext x d.1 d.2).eval H run).2.1,
@@ -211,7 +211,7 @@ theorem servedERep_runs_exp (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extrac
     _ ≤ (1 + m x * k x) * N₂ x := mul_le_mul_of_nonneg_left hEw hk
 
 /-- A wait makes no SHA-512 call of its own: against runs that log none, it makes none. -/
-theorem waitAcc_hashes {R : Type} (H : Msg → Msg) (run : R → Trace) (hrun : ∀ r, (run r).pLog = [] ∧ (run r).vLog = [])
+theorem waitAcc_hashes {R : Type} (H : Msg → Msg) (run : R → Transcript) (hrun : ∀ r, (run r).pLog = [] ∧ (run r).vLog = [])
     (k : ℕ) : ∀ (rs : List R) (acc : List Seen), ((waitAcc k rs acc).eval H run).2.1 = 0 := by
   intro rs
   induction rs with
@@ -223,7 +223,7 @@ theorem waitAcc_hashes {R : Type} (H : Msg → Msg) (run : R → Trace) (hrun : 
     · rfl
     · simp only [RP.eval, ih, (hrun r).1, (hrun r).2, List.length_nil]
 
-theorem firstWait_hashes {R W' Op' : Type} (H : Msg → Msg) (run : R → Trace)
+theorem firstWait_hashes {R W' Op' : Type} (H : Msg → Msg) (run : R → Transcript)
     (hrun : ∀ r, (run r).pLog = [] ∧ (run r).vLog = []) (k : ℕ) (opens : Seen → List Op')
     (assemble : List Op' → Option W') (check : W' → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).2.1 = 0 := by
@@ -240,7 +240,7 @@ theorem firstWait_hashes {R W' Op' : Type} (H : Msg → Msg) (run : R → Trace)
     · exact ih
 
 /-- **`E^rep` makes no SHA-512 call of its own**: against runs that log none, it makes none. -/
-theorem erepProg_hashes {D W' Op' : Type} (H : Msg → Msg) (run : D → Trace)
+theorem erepProg_hashes {D W' Op' : Type} (H : Msg → Msg) (run : D → Transcript)
     (hrun : ∀ d, (run d).pLog = [] ∧ (run d).vLog = []) (m k K : ℕ) (opens : Seen → List Op')
     (assemble : List Op' → Option W') (check : W' → Bool) (d₀ : D) (ρ : Fin m → Fin K → D) :
     ((erepProg m k K opens assemble check d₀ ρ).eval H run).2.1 = 0 := by
@@ -249,7 +249,7 @@ theorem erepProg_hashes {D W' Op' : Type} (H : Msg → Msg) (run : D → Trace)
   · exact firstWait_hashes H run hrun k opens assemble check _
   · rfl
 
-theorem servedRun_logs {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace) (r : R₁) :
+theorem servedRun_logs {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Transcript) (r : R₁) :
     (servedRun H q run r).pLog = [] ∧ (servedRun H q run r).vLog = [] := ⟨rfl, rfl⟩
 
 /-- **The composed extractor's SHA-512 calls, worst case**: the inner stage makes none of its own, so they are at most
