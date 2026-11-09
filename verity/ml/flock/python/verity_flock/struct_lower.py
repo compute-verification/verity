@@ -111,7 +111,7 @@ class _SlotRead:
 
     def __init__(self, C: Circuit, g: int, bits: list[int], at: int):
         self.table, self.idx, _w = C.lookups[g]
-        self.const_bits = IL.const_bits(self.table, bits)
+        self.const_bits = IL.table_const_bits(self.table, bits)
         self.bits = [j for j in bits if j not in self.const_bits]
         self.at, self.rows = at, len(self.bits)
         self.out_col = {j: at + t for t, j in enumerate(self.bits)}

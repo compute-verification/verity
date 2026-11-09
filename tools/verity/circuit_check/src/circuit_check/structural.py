@@ -374,7 +374,7 @@ def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon,
                     reads[g] = {j2: word[j2] for j2 in value_bits[g]}
                     ck = (table, tuple(value_bits[g]))
                     if ck not in consts:
-                        consts[ck] = IL.const_bits(table, value_bits[g])
+                        consts[ck] = IL.table_const_bits(table, value_bits[g])
                     reads[g].update((j2, 1 if c else ZERO) for j2, c in consts[ck].items())
                     slot_reads += 1
                     index_bits += len(idx)

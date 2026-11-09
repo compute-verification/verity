@@ -901,7 +901,7 @@ def _table_words(table: str, n: int) -> np.ndarray:
     return words
 
 
-def const_bits(table: str, bits: Sequence[int], words: np.ndarray | None = None) -> dict[int, int]:
+def table_const_bits(table: str, bits: Sequence[int], words: np.ndarray | None = None) -> dict[int, int]:
     """Of a read's value ``bits``, those constant over the whole table, with their value, for a library table (a program
     table's layout shows nothing of its content, so none of its bits is); ``words`` the table's, else read."""
     if not _library_table(table):
@@ -925,7 +925,7 @@ class _Read:
     :func:`fp.lookup`): the low and high index halves decode to one-hot minterms (each an AND of two half-minterms, recursively),
     row ``(j, h)`` is ``hi_h AND (XOR of the low minterms l with bit j of table[h * 2^lo + l] set)`` (omitted when that XOR is
     empty), and value bit j is the copy row ``(XOR over h of row (j, h)) AND 1``. Only the live value bits get rows, and a
-    library table's bits that are constant over the whole table get none: they are wired to the constant (``const_bits``).
+    library table's bits that are constant over the whole table get none: they are wired to the constant (`table_const_bits`).
     A program table keeps a row for every live bit, so its layout shows nothing of its content. Every row reads earlier rows,
     the index forms or the constant, so the index fixes every row."""
 
@@ -933,7 +933,7 @@ class _Read:
         self.table, self.idx, _width = C.lookups[g]
         n = len(self.idx)
         words = _table_words(self.table, n)
-        self.const_bits = const_bits(self.table, bits, words)
+        self.const_bits = table_const_bits(self.table, bits, words)
         bits = [j for j in bits if j not in self.const_bits]
         self.lo = READ_LO.get(n) or min(range(2, n - 1), key=lambda lb: (1 << lb) + (1 << (n - lb)) * (len(bits) + 1))
         self.hi = n - self.lo
