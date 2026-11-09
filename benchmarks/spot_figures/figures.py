@@ -36,14 +36,15 @@ def main(argv=None) -> None:
                     help="a request's tokens: the census's mean, or the workload card's request")
     ap.add_argument("--workers", type=int, default=os.cpu_count(), help="processes planning Figure 1's curves")
     ap.add_argument("--no-lean", dest="lean", action="store_false",
-                    help="plan Figure 1 without Lean's check of its one-stage and request-level designs")
+                    help="plan Figure 1 without Lean's check of its one-stage and request-level designs and "
+                         "without the break-even's certificate")
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     from render import render, render_appendix
 
     one = total_cost.run(args.model, request=args.request, workers=args.workers, lean=args.lean)
     one["at_budgets"] = total_cost.at_budgets(one)
-    one["breakeven"] = total_cost.breakeven(args.model, request=args.request, workers=args.workers)
+    one["breakeven"] = total_cost.breakeven(args.model, request=args.request, workers=args.workers, lean=args.lean)
     (args.out / "breakeven.txt").write_text(total_cost.breakeven_table(one["breakeven"]))
     write(one, args.out / "figure1.json")
     for name in one["scopes"]:

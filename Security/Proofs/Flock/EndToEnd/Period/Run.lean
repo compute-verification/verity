@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Flock.Game.Prob
+public import Definitions.Flock.Game
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 

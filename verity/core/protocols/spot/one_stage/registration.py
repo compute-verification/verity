@@ -95,7 +95,10 @@
   the chain restarts from the empty pool: `pin` is a supplied value filled from `genesis`, the empty pool's root, so
   its root is fixed.
   R7 refuses a record whose entry for `pin` is not the pool its window opens (`pool_open`) by name (`R7-pool-chain`),
-  beside the R7 codes the reuse or the fill gives it.
+  beside the R7 codes the reuse or the fill gives it. The pool's root is all the chain carries. What a window takes up
+  that the one before left open at its edge is part of its certified input, which the verifier pins at the root the
+  network certifier signed for the window, so a root the certifier didn't sign is `R7-held`, whether the window
+  carries the pool or restarts it.
 """
 from __future__ import annotations
 
