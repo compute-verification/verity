@@ -1,7 +1,7 @@
 """The interface `test_pearlplus_lean`'s cases drive, read from the Lean's source without building it: `pouw-pearlplus`'s
 options (`PouwPearlPlus/Main.lean`'s `parse`) are the ones the cases' argv passes, each taking a value or not as it does
 there; its `over_cap` rules and their default are `verify_run`'s; and the window record's value names it ties a run to
-(`PouwPearlPlus/Tie.lean`) are `verify_run`'s."""
+(`PouwPearlPlus/Tie.lean`), and why it refuses a W that registers no weight, are `verify_run`'s."""
 
 from __future__ import annotations
 
@@ -56,3 +56,6 @@ def test_the_tie_names_are_verify_runs():
     prefixes = re.search(r"def TIE_PREFIXES : List String := \[(.*)\]", tie).group(1)
     assert tuple(re.findall(r'"([^"]+)"', prefixes)) == VR.TIE_PREFIXES
     assert sorted(set(re.findall(r's!"(pearl-[ay]/\{s\}/\{c\})"', tie))) == [VR.TIE_A, VR.TIE_Y]
+    assert set(re.findall(r's!"(pearl-b/\{w\})"', tie)) == {VR.TIE_B}
+    untied = re.search(r'def UNTIED_WEIGHTS : String :=\s*"([^"]*)"', tie).group(1)
+    assert untied == VR.UNTIED_WEIGHTS

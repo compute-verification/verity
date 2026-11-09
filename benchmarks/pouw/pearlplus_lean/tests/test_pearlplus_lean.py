@@ -466,8 +466,9 @@ def test_a_run_tied_to_its_window_record(exe, tmp_path):
 
 def test_a_pass_that_is_not_ws(exe, tmp_path):
     """W whose entry for a call or a weight has another root (B another weight's: a foreign rootB) or domain, or lacks
-    one, or registers a call or weight the run doesn't have, or one twice, or isn't a v2 record: refused before the coin
-    (Python's `ValueError`, in its words), as the Python does."""
+    one, or registers a call or weight the run doesn't have, or one twice, or registers no weight at all (a W written
+    before the weights' entries, every call's entry right: untied, not a tie), or isn't a v2 record: refused before the
+    coin (Python's `ValueError`, in its words), as the Python does."""
     a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))
     good = T.window_record(a, b)
     reg = good["registered"]
@@ -489,6 +490,8 @@ def test_a_pass_that_is_not_ws(exe, tmp_path):
              ({**good, "registered": [*reg, b0]}, "ValueError: W registers pearl-b/0 twice"),
              ({**good, "registered": [*reg, {**b0, "value": "pearl-b/2"}]},
               "ValueError: W registers pearl-b/2, no weight of the run's"),
+             ({**good, "registered": [e for e in reg if not e["value"].startswith("pearl-b/")]},
+              f"ValueError: {VR.UNTIED_WEIGHTS}, so the run's rootB is no W's (pearl-b/0 first)"),
              ({**good, "format": "verity/registration/v1"},
               "ValueError: W is no verity/registration/v2 record with registered values")]
     for doc, why in cases:

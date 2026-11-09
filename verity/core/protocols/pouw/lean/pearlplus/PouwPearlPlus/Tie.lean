@@ -17,6 +17,9 @@ For pass s's call c, and each weight w the passes read:
 * ``pearl-b/{w}``: the pass's weight root (`Pass.weightRoots`, which the weights' root folds and `checkTile` opens B
   against), its n rows of K 32-bit words, under `weightBinding`'s, one entry however many passes read it.
 
+A W that registers no ``pearl-b/`` value at all (one written before W registered the weights) is refused as untied
+(`UNTIED_WEIGHTS`), whatever its calls' entries: the run's B is then no registered value.
+
 An entry that names no ``word_bits`` is at `registered.WORD_BITS` (16). The answer is `{record: digest(W), tables}`; the
 first mismatch is Python's `ValueError`, in its words. Every JSON comparison is by a match (`Want.holds`).
 -/
@@ -28,6 +31,10 @@ open Lean PouwCommit
 def TIE_PREFIXES : List String := ["pearl-a/", "pearl-y/", "pearl-b/"]
 /-- `verify_run.TIE_CALLS`: a call's values, a round's. -/
 def TIE_CALLS : List String := ["pearl-a/", "pearl-y/"]
+
+/-- `verify_run.UNTIED_WEIGHTS`: why a W that ties the calls alone is refused. -/
+def UNTIED_WEIGHTS : String :=
+  "W registers no weight's B rows (no pearl-b/ value: a window record written before W registered them)"
 
 /-- `verify_run._owner`: what a value is of, in a mismatch's words. -/
 def tieOwner (v : String) : String := if v.startsWith "pearl-b/" then "weight" else "call"
@@ -121,6 +128,9 @@ def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat))
   if let x :: xs := extra then
     let first := xs.foldl (fun m y => if y < m then y else m) x
     throw s!"W registers {first}, no {tieOwner first} of the run's"
+  if let some (b, _) := want.find? (·.1.startsWith "pearl-b/") then
+    if !got.any (·.1.startsWith "pearl-b/") then
+      throw s!"{UNTIED_WEIGHTS}, so the run's rootB is no W's ({b} first)"
   for (v, x) in want do
     let some e := got.lookup v | throw s!"W registers no {v}"
     let held (k : String) : Json :=

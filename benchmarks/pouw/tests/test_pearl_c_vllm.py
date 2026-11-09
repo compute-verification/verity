@@ -1659,7 +1659,9 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     the verdict credits, under the domains it recomputes from the salt and the call's index, and each weight's B rows at
     the root the epoch commits it under (PoUW's weights tree), and names W's digest in its answer.  A W whose root, domain
     (another salt's, call's or weight's), rows, words or word bits differ for any call or weight, which misses one, names
-    one twice or one the run doesn't hold, or which is not a v2 record, rejects the run before the coin."""
+    one twice or one the run doesn't hold, or which is not a v2 record, rejects the run before the coin.  So does a W
+    that registers every call right and no weight (written before W registered the weights): it reads as untied, by
+    `UNTIED_WEIGHTS`, through ``served_passes.py verify`` too."""
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     coins, w, man = published(path), window_record(path), json.loads(path.read_text())
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
@@ -1669,6 +1671,7 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     salt, (u0, u1) = bytes.fromhex(man["salt"]), man["matmuls"]
     b0, b1 = (next(e for e in w["registered"] if e["value"] == f"pearl-b/{x}") for x in (0, 1))
     n1 = b1["leaves"]
+    legacy = {**w, "registered": [e for e in w["registered"] if not e["value"].startswith("pearl-b/")]}
 
     def at(v: str, **kw) -> dict:
         return {**w, "registered": [{k: x for k, x in {**e, **kw}.items() if x is not None} if e["value"] == v else e
@@ -1693,10 +1696,14 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
              ({**w, "registered": [*w["registered"], b0]}, "W registers pearl-b/0 twice"),
              ({**w, "registered": [*w["registered"], {**b0, "value": "pearl-b/2"}]},
               "W registers pearl-b/2, no weight of the run's"),
+             (legacy, f"{VR.UNTIED_WEIGHTS}, so the run's rootB is no W's (pearl-b/0 first)"),
              ({**w, "format": REG.FORMAT}, f"W is no {REG.FORMAT_V2} record")]
     for bad, why in cases:
         r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=bad, test_instance=True)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
+    (lfile := tmp_path / "legacy.json").write_text(json.dumps(legacy))
+    rc, doc, answer = served_verify(path.parent, tmp_path / "legacy-verify.json", "--manifest", str(path), "--tie", str(lfile))
+    assert rc != 0 and answer["verdict"] == "reject" and VR.UNTIED_WEIGHTS in answer["reason"], doc["line"]
 
 
 def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_credits_them(tmp_path):

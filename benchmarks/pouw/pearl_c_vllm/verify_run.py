@@ -38,7 +38,9 @@ s-th pass with calls, its manifest's c-th call) is W's ``pearl-a/<s>/<c>`` and `
 and its rows, words and word bits; each weight w the passes read is W's ``pearl-b/<w>``, at the root the epoch's weights'
 root folds and the tiles' B rows open against, under `audit.weight_binding`'s domain, its n rows of K 32-bit words; and W
 names no other Pearl+ value but a dropped round's calls'. Any mismatch rejects the run, since a tie to roots the verdict
-didn't credit is vacuous.
+didn't credit is vacuous. A W that registers no ``pearl-b/`` value at all (one written before W registered the weights)
+is such a mismatch, named as one (`UNTIED_WEIGHTS`): its calls may all match, but the run's B is no registered value, so
+it never reads as a tie.
 
 The prover may drop passes from its retention before the coin (`served_passes.py retain`: a pass its CPU replay didn't
 finish, or one left over a cap): the verdict is over the retained passes alone, each at its round, and the dropped ones
@@ -470,6 +472,8 @@ TIE_A, TIE_Y, TIE_B = "pearl-a/{s}/{c}", "pearl-y/{s}/{c}", "pearl-b/{w}"
 #: W's Pearl+ values: a call's (a round's, `TIE_CALLS`) and a weight's
 TIE_PREFIXES = ("pearl-a/", "pearl-y/", "pearl-b/")
 TIE_CALLS = TIE_PREFIXES[:2]
+#: why `tie` refuses a W that ties the calls alone: it reads as untied weights, never as a tie
+UNTIED_WEIGHTS = "W registers no weight's B rows (no pearl-b/ value: a window record written before W registered them)"
 #: the coin record's schema (module docstring, "The coin record")
 COIN_SCHEMA = "verity-pouw/pearl-plus-coin/v2"
 #: the coin record's ``draw.from``: a draw session's coin on the auditor host's challenger, or this node's coins
@@ -545,6 +549,9 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
     want, skip = tie_entries(passes, rounds), {str(s) for s in dropped}
     if extra := sorted(v for v in set(got) - set(want) if not (v.startswith(TIE_CALLS) and v.split("/")[1] in skip)):
         raise ValueError(f"W registers {extra[0]}, no {_owner(extra[0])} of the run's")
+    if (b := next((v for v in want if v.startswith(TIE_PREFIXES[2])), None)) and not any(
+            v.startswith(TIE_PREFIXES[2]) for v in got):
+        raise ValueError(f"{UNTIED_WEIGHTS}, so the run's rootB is no W's ({b} first)")
     for v, x in want.items():
         if (e := got.get(v)) is None:
             raise ValueError(f"W registers no {v}")
