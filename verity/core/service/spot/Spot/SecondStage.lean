@@ -1199,8 +1199,8 @@ private def exReadField (k : String) (v : Json) (j : Json) : Json :=
 -- a port no link names reads a value either registration registers (`second-read`): the one its reference reads, at
 -- the run's root, domain, leaves and rows
 #guard (exCheck true (exReported "w2" 9 exRegistering) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
-#guard (exValues (exReported "w2" 9 exRegistering) (exReading "w2" 1 2 3 [5]) (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]))
-  .isEmpty
+#guard (exValues (exReported "w2" 9 exRegistering) (exReading "w2" 1 2 3 [5])
+  (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5])).isEmpty
 -- another value a registration registers, which `second-read` alone takes, so the run's choice: refused
 #guard exValues (exReported "w2" 9 exRegistering) (exReading "w1" 7 8 6 [0, 1, 2, 3, 4, 5])
   (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
