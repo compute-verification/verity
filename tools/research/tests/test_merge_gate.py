@@ -1227,9 +1227,8 @@ def test_verdicts_cites_a_pass_in_a_checks_reused_pack_as_that_check(tmp_path, m
 
 
 def test_verdicts_cites_a_post_landing_runs_pack_though_no_tool_recorded_it_and_no_other_untooled_run(tmp_path, monkeypatch):
-    """Drive cancels a train's check once every step it doesn't defer passed, and runs the deferred ones (pytest, circuit-check)
-    on the `main` it landed: `check.py --record --deferred STEPS`, recorded without `--tool check` so no gate takes it as a
-    check.  Its pack holds passes as a check's does, so `--verdicts` cites them part by part (`post_landing`); a run without the
+    """A run of a commit's deferred steps (pytest, circuit-check) beside or after its check: `check.py --record --deferred
+    STEPS`, recorded without `--tool check` so no gate takes it as a check.  Its pack holds passes as a check's does, so `--verdicts` cites them part by part (`post_landing`); a run without the
     tool of anything but the declared command with `--deferred STEPS` once is still another tool's."""
     import research.merge as M
     from research.store.local import LocalStore

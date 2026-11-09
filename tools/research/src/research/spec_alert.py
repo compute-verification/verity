@@ -1,5 +1,5 @@
 """The DM a spec change sends the person who reads the spec (the Slack registry's `daniel` entry) when it lands on main, by
-`research merge --push` or drive's landing: a change to what a guarantee says waits on nobody, and he is shown it.
+the verified queue's landing: a change to what a guarantee says waits on nobody, and he is shown it.
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
 hash; for one stated as a definition, that statement unfolded once, `unfolded_hash`, so a restated definition shows its

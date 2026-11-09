@@ -2766,7 +2766,7 @@ def test_a_121_word_reply_is_refused_with_the_fix_and_nothing_is_posted(fake, re
 
 
 def test_a_machine_report_is_held_to_no_length(fake, registry, capsys):
-    """Drive and the merge train post their reports (a red suite's failing lines, a revert) through `send` and `reply`."""
+    """The verified queue and the merge train post their reports (a red suite's failing lines, a revert) through `send` and `reply`."""
     root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
     for verb in ("send", "reply"):
         rc, _, err = run(capsys, verb, "--as", "infra", "--thread", root["ts"], "--quiet", "--report", "--text", words(400))

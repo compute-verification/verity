@@ -10,7 +10,7 @@ reason it can't change a verdict.  The role says what the setting can change:
 * ``where`` (`WHERE`): only where and when things run: paths, caches, slots, memory budgets, run ids.  `record` carries them as
   telemetry, outside the digest, and `suites.py` keys no pass on one.  Each says why (`Setting.reason`).
 * ``debug`` (`DEBUG`): a switch for a hand run that a run of record never takes: `refusals` refuses one set inside a recorded run
-  (`RESEARCH_RUN_ID`), and `train.sh` refuses one in the lander's shell (``settings.py --of-record``).
+  (`RESEARCH_RUN_ID`), and `train.sh` refuses one in the launching shell (``settings.py --of-record``).
 
 Read a setting as an attribute, ``S.CHECK_CACHE`` (or `get` by name): its value parsed from the process environment at that read,
 never cached, or its default when the variable is unset or empty.  An undeclared name is an AttributeError.  `refusals` names
@@ -137,10 +137,10 @@ SETTINGS: dict[str, Setting] = _declare(
       "--preflight`)", "the preflight decides whether a machine is prepared, never a verdict"),
     S("RESEARCH_PREFLIGHT_CUSTODY", str, None, WHERE, "the run's custody dir, through which the preflight reads the store",
       "as RESEARCH_PREFLIGHT_INPUTS"),
-    # ---- train.sh (the lander's launch) and pod_setup.sh
+    # ---- train.sh (the verified queue's launch) and pod_setup.sh
     S("TRAIN_AS", str, None, WHERE, "the handle train.sh posts a failed launch as; unset, ci", "telemetry"),
     S("MERGE_THREAD", str, None, WHERE, "the Slack thread train.sh posts a failed launch to", "telemetry"),
-    S("TRAIN_TREES", str, None, WHERE, "where train.sh puts its worktrees and logs (drive's auto plans' too); unset, TMPDIR",
+    S("TRAIN_TREES", str, None, WHERE, "where train.sh puts its worktrees and logs; unset, TMPDIR",
       "scratch space"),
     S("AWS_ACCESS_KEY_ID", str, None, WHERE, "the parent store key, which train.sh requires to mint the run's custody key",
       "a credential, never what a step computes", secret=True),

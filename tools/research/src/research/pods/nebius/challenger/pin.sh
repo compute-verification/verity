@@ -1,7 +1,7 @@
 #!/bin/bash
 # vy-challenger-pin COMMIT < TAR: pin the tree the challenger runs from, as root. COMMIT must be on origin/main's or
 # origin/next's first-parent history, which this script fetches from GitHub itself (a commits-only partial clone in
-# /var/cache/vy-challenger/main.git), so the host pins only what drive landed or put on next. TAR is infra's `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces
+# /var/cache/vy-challenger/main.git), so the host pins only what landed on main or is on next. TAR is infra's `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces
 # integrations/vllm/manifests/checkpoints-int8.json` of that commit (the manifest pins the checkpoints `model-register` takes, and
 # network_traces is the certifier rehearsal's, `certifier-rehearse`); it is
 # unpacked root-owned at /opt/vy-challenger/COMMIT, never changed after. The Lean toolchain its spot package names is
@@ -39,7 +39,7 @@ if ! grep -qx "$c" "$G/first-parent"; then
   n=$(git -C "$G" rev-parse refs/heads/next)
   git -C "$G" rev-list --first-parent refs/heads/next > "$G/next-first-parent"
   grep -qx "$c" "$G/next-first-parent" \
-    || die "$c is on neither origin/main's (main is $m) nor origin/next's (next is $n) first-parent history: pin a commit drive put on either"
+    || die "$c is on neither origin/main's (main is $m) nor origin/next's (next is $n) first-parent history: pin a commit on either"
   m=$n
 fi
 install -d -m 0755 -o root -g root "$O"

@@ -2223,7 +2223,7 @@ def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: 
     """How many of the ``jobs`` slots the suites that run in one process share (``seconds``: each one's last duration, None when
     none is recorded), the rest going to the ``parallel`` suites, which run one at a time over all of theirs. The fewest that let
     the one-process suites, longest first, finish about when their longest does, plus a slot for each with no recorded duration
-    up to a quarter of the jobs (a fresh test cache, as the lander's `--fresh` runs have, times none): the parallel suites keep
+    up to a quarter of the jobs (a fresh test cache, as `--fresh` runs have, times none): the parallel suites keep
     every slot the others couldn't use.  With ``mem_gb``, no more than it holds at `TEST_PROCESS_GB` each (a job sized
     to its CPUs alone can run more test processes than its scope holds, and the OOM killer takes the whole scope)."""
     if not parallel:

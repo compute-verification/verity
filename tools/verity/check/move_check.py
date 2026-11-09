@@ -1,5 +1,5 @@
-"""`move-check`: certify that BASE..HEAD is a pure move: drive's queue lands a layout move it regenerated on `next` only once this
-certifies it. It relaxes no gate: a certified move still goes through `check`.
+"""`move-check`: certify that BASE..HEAD is a pure move: `tools/move/stage.py` stages a layout move commit by commit, each
+certified by it. It relaxes no gate: a certified move still goes through `check`.
 
     uv run python tools/verity/check/move_check.py BASE HEAD [--map OLD=NEW ...] [--words MAP] [--json]
 

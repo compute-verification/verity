@@ -38,8 +38,8 @@ group = 2
 # `circuit-check --all` whole; one that holds some runs `--all --shard K/4` for each, and `check.py --combine` joins the shards
 # (`circuit-check --combine`), whose verdict is the unsharded run's
 shards = 4
-# Off the merge gate by the queue's policy (policy.toml's `off_gate`): the plans keep it, so putting it back is one line there. Its red
-# in drive's after-landing run names its culprit as any red does, and lands no PR touching its inputs until it passes.
+# Off the merge gate by the queue's policy (policy.toml's `off_gate`): the plans keep it, so putting it back is one line there. The
+# nightly's cold check runs it, and its red gates nothing.
 
 # Group 3: the Lean verifier, its partition check, then the agreement with upstream's Rust verifier.
 [[job]]
@@ -99,11 +99,11 @@ name = "ratchet-gate"
 owner = "vllm"
 part = "tests"
 group = 7
-# Off the merge gate by the queue's policy (policy.toml's `off_gate`) and out of the plans. It runs in drive's after-landing run
-# (`--deferred`, every job, its base the last verified commit; sharded, in its last shard), where a red's culprit is the
-# landing whose merge it names.
+# Off the merge gate by the queue's policy (policy.toml's `off_gate`) and out of the plans. It runs in the run beside each
+# candidate's check (`--deferred`, its base the commit of `main` below the candidate), judging the merges above that base,
+# and its red gates nothing.
 
-# The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
+# The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the caller's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
 # shards). These are written by hand and stay as fallbacks: `--shard auto[:MAX]` plans the shards from measured costs instead
 # (`shards.py`, `check.py --shard-plan` prints the plan), N the fewest that reach the critical path. Balanced on a cold check's

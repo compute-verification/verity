@@ -112,7 +112,7 @@ L5  (infra for lean, 10 min, then the first build ~40 min in the background) lea
 L6  (ci, 10 min) the merge mirror beside lean's sandbox: seed the bare repository on $first as n1's was seeded, then
     RESEARCH_MERGE_MIRROR=$first for \`research merge\` (merge.py MIRROR's default changes in the retire PR, L12).
 
-L7  (ci, 2 min) drive's machines: \`research queue drive --on ...\` gains $(echo "$names" | sed 's/ $//; s/ /,/g') and loses $N1 (before 13:00Z, n1's drain).
+L7  (ci, 2 min) the verified queue's machines: drive.toml's \`on\` gains $(echo "$names" | sed 's/ $//; s/ /,/g') and loses $N1 (before 13:00Z, n1's drain).
 
 L8  (infra, 13:00Z-14:30Z) n1 drains: no new check (L7), Kueue admits nothing after 13:00Z (drain_s), the running trains end;
     \`research queue status\` shows nothing on $N1.

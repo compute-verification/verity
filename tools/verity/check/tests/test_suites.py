@@ -1260,8 +1260,8 @@ def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
 
 
 def test_each_failed_suite_is_written_beside_the_json_as_it_fails(tmp_path):
-    """Under `--keep-going` a check runs on for many minutes after a suite fails, and drive would know only at its end;
-    `suites.failed.json`, rewritten as each suite fails, is what drive reads of a check still running."""
+    """Under `--keep-going` a check runs on for many minutes after a suite fails, and the queue would know only at its end;
+    `suites.failed.json`, rewritten as each suite fails, is what it reads of a check still running."""
     import json
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -2083,7 +2083,7 @@ def test_a_fetch_that_prints_no_report_names_its_error_and_keeps_its_own_log(tmp
 
 def test_a_failure_red_on_main_is_reported_failed_and_says_whether_it_failed_for_more_than_its_tests(tmp_path):
     """End to end: `suites.py --changed MAIN` reports `pkg`, whose `test_sibling` fails on `main` too, as failed, exit 1: the
-    runner reports each suite's real verdict, and whether a failure may stay red is drive's policy. Its row says which tests
+    runner reports each suite's real verdict, and whether a failure may stay red is the queue's policy. Its row says which tests
     failed and that it failed for nothing besides them (`beyond_tests`), what an allowance of a test needs."""
     import json
     import shutil

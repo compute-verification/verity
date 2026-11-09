@@ -82,7 +82,7 @@ def test_a_pack_carries_the_verdicts_and_nothing_else_and_never_replaces_an_entr
 
 
 def test_an_import_of_one_part_takes_only_its_entries(tmp_path, monkeypatch):
-    """`check.py --no-cache --circuit-cache` (drive's after-landing run) imports circuit-check's entries of a pack alone, so no
+    """`check.py --no-cache --circuit-cache` (a cold run that keeps circuit-check's reuse) imports circuit-check's entries of a pack alone, so no
     suite, Lean or step pass it carries is here for a step to reuse."""
     _fill(_machine(tmp_path, monkeypatch, "a"))
     V.export(pack := tmp_path / "pack.tar.gz")
@@ -243,7 +243,7 @@ def test_a_pack_holding_anything_but_verdict_entries_is_refused_whole(tmp_path, 
 
 
 def test_combine_streams_its_entries_and_writes_the_pack_holding_them_whole_would(tmp_path):
-    """`gather_verdicts` combines the newest recorded checks' packs on the lander's VM, and twelve of them held whole outgrew its
+    """`gather_verdicts` combines the newest recorded checks' packs on the launching VM, and twelve of them held whole outgrew its
     15 GB: combining keeps one entry at a time in memory, writes the same bytes, and leaves no spill behind."""
     import tracemalloc
 
@@ -342,7 +342,7 @@ def test_a_recorded_check_gathers_the_newest_recorded_checks_packs_into_one(tmp_
 
 
 def test_the_checks_gathered_are_the_ones_that_ended_last_so_a_long_ones_passes_reach_the_next_check(tmp_path, monkeypatch, capsys):
-    """A pre-warm of a cold circuit-check can run 4.5 h while drive starts more than twelve warm checks; ordered by start, its
+    """A pre-warm of a cold circuit-check can run 4.5 h while the queue starts more than twelve warm checks; ordered by start, its
     pack would be out of the window when the train it warmed ran."""
     check = _load("check")
     packs = {}

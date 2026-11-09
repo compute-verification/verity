@@ -113,7 +113,7 @@ def test_the_oldest_live_waiter_goes_first_and_a_dead_ones_ticket_is_dropped(nod
 
 
 def test_a_higher_class_goes_ahead_of_older_waiters_and_an_unranked_waiter_agrees_on_who_is_first(node):
-    """Drive's gates must not wait behind the lane jobs queued before them on node 2. The line is by class, then oldest; a
+    """The queue's checks must not wait behind the lane jobs queued before them on node 2. The line is by class, then oldest; a
     default-class ticket keeps the unranked name, so a waiter whose cpu-hold predates ranks (line[0] by name) sees the same line."""
     d, root = node
     names = [cores.ticket_name(r, ns, w) for r, ns, w in [(0, 5, "old"), (150, 9, "gate"), (100, 7, "capture"), (100, 8, "capture2"),

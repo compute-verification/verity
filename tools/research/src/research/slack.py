@@ -4264,7 +4264,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                                                                                help="checkout paths (none: read them from stdin)")
     cmd("subscriptions", "the subscribe calls this handle's holder makes", as_=True)
     p = cmd("send", "post a message: a new thread, or into --thread; the --to names lead it and get it", as_=True, body=True)
-    p.add_argument("--report", action="store_true", help="a program's report (drive, the merge train), held to no length")
+    p.add_argument("--report", action="store_true", help="a program's report (the verified queue, the merge train), held to no length")
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
@@ -4370,7 +4370,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True)
     p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
-    p.add_argument("--report", action="store_true", help="a program's report (drive, the merge train), held to no length")
+    p.add_argument("--report", action="store_true", help="a program's report (the verified queue, the merge train), held to no length")
     p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list, revoke (a poster)")
     p.add_argument("verb", choices=("open", "read", "close", "list", "revoke"))
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="the inbox's name: your handle")

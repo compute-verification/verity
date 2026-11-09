@@ -128,8 +128,8 @@ def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
 
 
 def test_a_lean_audit_fails_on_a_lock_record_difference_as_the_after_landing_run_does(tree, monkeypatch):
-    """An audit task never regenerates lock records (`--no-regenerate`, drive's after-landing run), listed or run: with
-    `--regenerate` it passed `Security` on a stale lock that the after-landing run of the same commit failed."""
+    """An audit task never regenerates lock records (`--no-regenerate`), listed or run: with `--regenerate` it passed
+    `Security` on a stale lock that a `--no-regenerate` run of the same commit failed."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("tasks_under_test", tree / "tools" / "verity" / "check" / "tasks.py")

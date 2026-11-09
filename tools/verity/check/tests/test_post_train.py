@@ -78,8 +78,8 @@ def test_only_a_landing_has_a_check_attempt_to_label(tmp_path):
 
 
 def test_drive_s_attempt_is_the_landing_s_when_it_ran_on_the_commit_or_on_its_merged_train(tmp_path, monkeypatch, capsys):
-    """A landing with deferred steps has no passed attempt in the store (its check still runs, or was cancelled at landing).  Drive
-    names the attempt it landed on; it is taken when it ran on the commit main was fast-forwarded to, or on the train main was
+    """A landing with deferred steps has no passed attempt in the store (its check still runs, or was cancelled at landing).  The
+    landing names the attempt it landed on; it is taken when it ran on the commit main was fast-forwarded to, or on the train main was
     merged onto (the merge's second parent), and refused otherwise."""
     origin, repo = tmp_path / "origin.git", tmp_path / "repo"
     _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
@@ -120,7 +120,7 @@ def test_drive_s_attempt_is_the_landing_s_when_it_ran_on_the_commit_or_on_its_me
 
 
 def test_a_landing_ending_in_drives_lock_commit_is_labelled_on_the_trains_check(tmp_path, monkeypatch, capsys):
-    """A landing with drive's lock commit on top has its check run on the train, the lock commit's parent, which
+    """A landing with a lock commit on top has its check run on the train, the lock commit's parent, which
     `check_attempt` reads, so its job labels it."""
     origin, repo = tmp_path / "origin.git", tmp_path / "repo"
     _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
@@ -414,7 +414,7 @@ def test_a_later_landing_is_main_s_tip_when_it_is_a_landing_after_the_commit(tmp
 
 
 def test_a_later_landing_with_no_check_line_is_found_by_the_attempt_its_own_job_recorded(tmp_path, monkeypatch):
-    """drive's landings carry no `Check:` line and drive cancels a train's check once it lands, so without a record no queued
+    """Landings that carry no `Check:` line, of a train whose check was cancelled once it landed, so without a record no queued
     job would ever be superseded. Each job records its landing's attempt (`note_attempt`), and a job that waited finds main's
     tip by it."""
     monkeypatch.setattr(PT, "LOCK", tmp_path / "post-train.lock")

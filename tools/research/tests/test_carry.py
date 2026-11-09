@@ -82,7 +82,7 @@ def test_a_merge_of_landed_main_carries_and_names_what_it_merged(repo: Path):
 
 def test_a_lock_that_differs_from_the_queues_merge_only_in_records_carries_since_the_lean_check_regenerates_them(repo: Path):
     """A lock's records (each guarantee's statement record, `reads`, each assumption's digest) are the build's, which the Lean
-    check rewrites as drive lands, and a pin is held to the tree, so neither needs a reviewer's eye."""
+    check rewrites, and a pin is held to the tree, so neither needs a reviewer's eye."""
     branch(repo, "pr")
     old = commit(repo, {"a.py": "a2\n", LOCK: lock(type_hash="bb")}, "the PR")
     git(repo, "checkout", "-q", "main")

@@ -106,8 +106,8 @@ def test_a_malformed_declaration_is_refused_with_the_reason(body, why):
 
 
 def test_the_policy_takes_circuit_check_and_ratchet_gate_off_the_gate():
-    """Which jobs gate a merge is the queue's policy (policy.toml's `off_gate`), not ci.toml's: circuit-check runs after landing, off
-    the gate, until `circuit-check --all` fits inside the rest of the check; ratchet-gate runs there too, reporting without
+    """Which jobs gate a merge is the queue's policy (policy.toml's `off_gate`), not ci.toml's: circuit-check is off
+    the gate until `circuit-check --all` fits inside the rest of the check; ratchet-gate is off it too, reporting without
     blocking a merge, and no plan names it."""
     a, b = D.parse('schema = "ci/v0"\n[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\n',
                    HANDLES, off=("a",))

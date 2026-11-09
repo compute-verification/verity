@@ -33,7 +33,7 @@ def test_a_full_cache_disk_blocks_every_slot(monkeypatch, tmp_path):
 
 def test_slot_py_shipped_alone_still_reads_its_slots(monkeypatch, tmp_path):
     """check.py's remote slot read sends slot.py's source alone, so loading common.py beside it failed on every node and
-    drive's train launched nothing; alone, the cache is the default path."""
+    the queue's train launched nothing; alone, the cache is the default path."""
     alone = tmp_path / "ship" / "slot.py"
     alone.parent.mkdir()
     alone.write_text((ROOT / "tools" / "verity" / "check" / "slot.py").read_text())

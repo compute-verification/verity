@@ -8,13 +8,13 @@ and each commit of that line is one of:
 
 - landed (`trusted` with no merge: on `checked` or `main`);
 - a merge of two parents whose other parent is trusted (`trusted(parent, merge)`: landed, or another PR's current marked head
-  with a land verdict and no hold, which drive's containment lands first, `Queue.entries`), and whose tree is what the queue's
+  with a land verdict and no hold, which the queue's containment lands first, `Queue.entries`), and whose tree is what the queue's
   merge of its parents gives (`queue.merged_tree`: its first parent's merge drivers, each conflicted pin rebuilt) but in
   generated content;
 - a commit that changes only generated content.
 
 Generated content is each pin of the pins tool (`queue.pins_at` at ``new``), which `pins.py --stale` holds to the tree, and
-each lock's records (`queue.LEAN_LOCK`: `lock_policy`), which a Lean check regenerates and drive commits as it lands.  The rest
+each lock's records (`queue.LEAN_LOCK`: `lock_policy`), which a records run regenerates and its PR carries.  The rest
 of a lock is policy a person writes and the Lean check keeps as written, so a lock that differs in it, or that the queue's
 merge leaves conflicted (the lock's merge driver refuses only over policy), is the PR's own change.  A merge's textual result
 can still be wrong where two changes interact; that is the risk `next` takes for every pair of members it merges, and the same

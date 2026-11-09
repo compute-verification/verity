@@ -5,16 +5,15 @@ the same.
     python3 tools/verity/check/gates/markdown_caps.py BASE TOP [--json]
 
 Only the change's own effect is judged, against the commit below it: when TOP is the queue's merge of a PR (two parents, a
-``Queue: #N`` subject: `research.queue._message`), its first parent, the tip of `next` it merged onto; else TOP's merge base
+``Queue: #N`` subject: `research.queue._message`), its first parent, the commit it merged onto; else TOP's merge base
 with BASE.  Each ``.md`` file that differs between the two (deletions aside) fails when it is over its cap in TOP and the
 change put it there: it was within the cap (or absent) below, or it grew.  One already over below that doesn't grow passes,
 with a note, so a file over its cap on `main` or in a member below is never laid on every PR above it.  The caps and fixes are
 BASE's ``tests/test_repository.py`` (read with ``git show`` and run with the standard library alone), so a change can't raise
 its own cap.
 
-The merge queue runs `main`'s copy of it as a warn gate (drive.toml's ``warn_gates``), which keeps no PR out: on a PR's head at
-`research queue ready`'s preflight, which prints its failure as a warning, and at the sync on the PR's merge onto `next`, where
-the members below add their bytes too, which drive tells the PR's owner once a head, to trim in their next PR.  Before marking
+The ready mark's preflight runs `main`'s copy of it on a PR's head as a warn gate (drive.toml's ``warn_gates``), which keeps no
+PR out: it prints its failure as a warning, for the owner to trim in their next PR.  Before marking
 a branch, run ``python3 tools/verity/check/gates/markdown_caps.py origin/main HEAD``.
 Exit 0 when no change puts a file over its cap, 1 when one does (with the fix), 2 on a usage or git error; ``--json`` prints
 `KIND`.
@@ -31,7 +30,7 @@ from pathlib import Path
 KIND = "markdown-caps-gate/v2"
 #: the module whose caps and fixes the gate applies, read at BASE
 CAPS = "tests/test_repository.py"
-#: the subject of the queue's merge of one PR onto `next`
+#: the subject of the queue's merge of one PR onto the commit below it
 QUEUE_SUBJECT = "Queue: #"
 
 

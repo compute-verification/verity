@@ -209,9 +209,8 @@ GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: The owner's word that a pull request is ready at one head (`research queue ready`), which the queue's admission of a single PR
 #: asks for; a train member needs none, since the train's own check is the gate.
 READY = "ready"
-#: A reviewer's verdict on a pull request at one head (`research queue review`): `land` lands it with drive's `land = "review"`
-#: once every member below it has one, `hold` keeps it and everything above it on `next`; the owner's own doesn't count
-#: (on `checked`; `main` follows only to commits whose after-landing run passed).
+#: A reviewer's verdict on a pull request at one head (`research queue review`): `land` lets the verified queue build it into
+#: a candidate, `hold` keeps it out; the owner's own doesn't count.
 REVIEWED = "reviewed"
 REVIEW_VERDICTS = ("land", "hold")
 #: Beside a ready mark or land verdict on `pr:<n>@<head>`, by its author: the Cursor identity token that authenticates it
@@ -227,13 +226,13 @@ LANDED = "landed"
 #: On `task:<key>`, by the executor from its run (`verity tasks run`): its verdict, or error with none (`research.executor`).
 TASK_VERDICT = "verdict"
 TASK_VERDICTS = ("pass", "fail", "error")
-#: On `commit:<sha>`, by drive in shadow mode: its after-landing run's verdicts beside the executor's (`executor.compare`).
+#: On `commit:<sha>`: a past after-landing run's verdicts beside the executor's, which nothing writes now.
 EXECUTOR_SHADOW = "executor_shadow"
 #: On `commit:<sha>`, by the executor: the art: id of the after-landing task graph it listed for that commit on a worker
-#: (`tasks-graph/v1`), whose keys drive reads verdicts under.
+#: (`tasks-graph/v1`), whose keys its verdicts are read under.
 TASKS_GRAPH = "tasks_graph"
 #: On `commit:<sha>`, by the executor: the art: id of the graph/v2 it listed for that commit on a worker (`verity-graph/v2`),
-#: whose keys drive reads results under.
+#: whose keys the verified queue reads results under.
 VERITY_GRAPH = "verity_graph"
 #: On `task:<key>`, by the executor's worker that ran a graph/v2 task (`verity graph run`): its result/v1 document.
 TASK_RESULT = "result"
@@ -408,7 +407,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
        "again unless its own change is the same (`StoreLabels`); a train member needs none (Q14)"),
     _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
-       "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner, and at a new head "
+       "reason as its ref; the verified queue counts one only by a reviewer who isn't the PR's owner, and at a new head "
        "whose own change is the same",
        REVIEW_VERDICTS),
     _k(LABEL_AUTH, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` or `reviewed = land` by the same author: "
@@ -424,18 +423,18 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "Checked: trailer names it (`research merge`; `--label-landed` for past landings)", pattern=r"[0-9a-f]{40}"),
     _k(TASK_VERDICT, GROUP_VERIFICATION, ENUM, "on task:<key>, by the executor from its run of `verity tasks run`: pass (passed) "
        "or fail (failed), or error when no run gave a result, which reads as not run; a step that skipped gets none; a fail "
-       "stands until an error after it, else the newest is the key's verdict (`research.executor.fold`)", TASK_VERDICTS),
+       "stands until an error after it, else the newest is the key's verdict", TASK_VERDICTS),
     _k(TASKS_GRAPH, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: the art: id of the after-landing task graph "
-       "(`tasks-graph/v1`) it listed for that commit on a worker; drive reads verdicts under its tasks' keys",
+       "(`tasks-graph/v1`) it listed for that commit on a worker, whose tasks' keys its verdicts are read under",
        pattern=r"art:[0-9a-f]{64}"),
     _k(VERITY_GRAPH, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: the art: id of the graph/v2 (`verity-graph/v2`) it "
-       "listed for that commit on a worker; drive with `executor = \"on\"` reads results under its tasks' keys",
+       "listed for that commit on a worker; the verified queue reads results under its tasks' keys",
        pattern=r"art:[0-9a-f]{64}"),
     _k(TASK_RESULT, GROUP_VERIFICATION, TEXT, "on task:<key>, by the executor's worker that ran a graph/v2 task (`verity graph run`): "
        "its result/v1 document, pass or fail (an error is never one); a key with any fail is failed (`research.executor.fold_results`)"),
-    _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by drive with `executor = \"shadow\"`: a JSON object comparing "
-       "the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: [{unit, old, executor}], "
-       "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),
+    _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, written by the old landing path's shadow mode and by nothing "
+       "now: a JSON object comparing an after-landing run's verdicts with the executor's ({check, graph, run, units, agree, "
+       "disagree: [{unit, old, executor}], pending, missing, executor_only, error, incomplete})"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),

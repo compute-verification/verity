@@ -49,7 +49,7 @@ class Ready:
     head: str
     files: frozenset[str]          # the paths its change touches, against its merge base with `main`
     lean: bool = False             # it changes Lean, a lock or a spec: a batch holds at most `Snapshot.lean` such members
-    rank: int = 0                  # the queue's order, lowest first (drive's priority file, then mark time)
+    rank: int = 0                  # the queue's order, lowest first (the priority file, then mark time)
     conflict: bool = False         # it doesn't merge onto `main`: the queue skips it until its head changes
 
 

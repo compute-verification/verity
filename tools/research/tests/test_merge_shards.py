@@ -200,7 +200,7 @@ def test_a_job_the_commits_ci_toml_declares_that_no_shard_runs_passes_nothing(wo
 
 
 def _off_gate(world):
-    """``world`` with feat's ci.toml also declaring `off`, a job drive's policy takes off the gate (policy.toml's `off_gate`, as
+    """``world`` with feat's ci.toml also declaring `off`, a job the policy takes off the gate (policy.toml's `off_gate`, as
     circuit-check is)."""
     main, _tip, _config, store = world
     _git(main, "checkout", "-q", "feat")
@@ -215,7 +215,7 @@ def _off_gate(world):
 
 def test_a_job_off_the_gate_is_required_of_no_check_whole_or_sharded(world):
     """circuit-check is off the gate until `circuit-check --all` fits inside the rest of the check: shards covering every job on
-    the gate combine into a passing check, a whole check without it passes, and its red is the after-landing run's to revert."""
+    the gate combine into a passing check, a whole check without it passes, and its red gates nothing."""
     from research.merge import declared_jobs, refused
 
     off = _off_gate(world)
@@ -281,7 +281,7 @@ def test_a_combine_without_the_targets_checkout_passes_nothing(world):
 
 
 def test_a_split_step_passes_in_a_shard_only_for_every_part_and_in_the_combine_for_all_of_them(world):
-    """Drive's Lean checks read `step_status(ID, "lean-audit")` from any passing run of a commit, and an after-landing shard is
+    """The Lean checks read `step_status(ID, "lean-audit")` from any passing run of a commit, and a deferred run's shard is
     one: shard 1 ran lean-audit on p alone, so its lean-audit is partial, as it is in a deferred run's shard; the combine's
     `lean-audit:p` and `:q` together pass."""
     _main, tip, _config, store = world

@@ -164,7 +164,7 @@ def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(
 
 def judge(doc, head: str, output: str = "its output is above", covers=None) -> str | None:
     """None when ``doc``, `tier`'s facts, show the tier passed at ``head``; else what failed, for the refusal.  ``output``: where the
-    builds' and the suites' output is.  ``covers``, given a failed suite's row, says whether drive's policy allows its failure
+    builds' and the suites' output is.  ``covers``, given a failed suite's row, says whether the policy (policy.toml) allows its failure
     (`queue.allowed`): a run whose every failed suite it covers passes."""
     if not isinstance(doc, dict) or doc.get("kind") != KIND:
         return f"it reported no {KIND} facts"

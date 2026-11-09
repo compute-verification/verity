@@ -1,4 +1,4 @@
-"""`gates/markdown_caps.py`, drive's warn gate for the Markdown caps: it applies `tests/test_repository.py`'s caps and fixes,
+"""`gates/markdown_caps.py`, the ready preflight's warn gate for the Markdown caps: it applies `tests/test_repository.py`'s caps and fixes,
 read at BASE, to each `.md` file that changed, at its size in TOP."""
 from __future__ import annotations
 

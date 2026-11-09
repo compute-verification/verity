@@ -1,4 +1,4 @@
-"""Drive's merges once the tree is on Lean's module system (`research.queue.ported`): git runs the `.lean` merge driver only on
+"""The queue's merges once the tree is on Lean's module system (`research.queue.ported`): git runs the `.lean` merge driver only on
 a file both sides changed, so a `.lean` file either side added before the port stays unported; the merged tree's codemod
 (`MODULES`, a stand-in here) runs over the whole merged tree, and what it rewrites is committed into the merge commit with each
 pin recording it; a codemod that fails refuses the merge.  A tree holding the codemod is on the module system only when its
@@ -104,7 +104,7 @@ def test_a_pr_adding_lean_made_before_the_port_above_a_ported_base_gets_it_porte
 
 
 def test_a_merge_changing_nothing_the_codemod_reads_onto_a_ported_base_runs_no_codemod(world, tmp_path):
-    """The codemod's run over the whole tree takes about 20 s on drive's control pod, and a sync merges hundreds of times: a
+    """The codemod's run over the whole tree takes about 20 s on the control pod, and a sync merges hundreds of times: a
     merge that changes no `.lean` file, Lake file or the port's tooling onto a tree on the module system takes that tree's
     porting as it is, and only the merge that brings Lean runs the codemod."""
     argv, runs = tmp_path / "argv", tmp_path / "runs"
@@ -288,7 +288,7 @@ def test_a_header_reader_that_fails_refuses_the_merge(world, tmp_path):
 
 
 def test_a_codemod_that_fails_refuses_the_merge(world, tmp_path):
-    """The PR is left out with the codemod's own words, as a conflict is (the state's `conflicts`, which drive posts to its
+    """The PR is left out with the codemod's own words, as a conflict is (the state's `conflicts`, which the queue posts to its
     owner), and the members above it merge."""
     fail = ("if Path('Lib/New.lean').exists():\n"
             "    print('Lib/New.lean: its header can\\'t be read: port it by hand', file=sys.stderr)\n    sys.exit(1)\n")

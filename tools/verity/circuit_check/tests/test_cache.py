@@ -376,7 +376,7 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
 
 def test_a_copy_of_the_tree_at_another_path_reuses_every_target(tmp_path):
     """Nothing of where the tree is or where the run starts is in a key or a read: a copy of the tree at another path, run from
-    its own root once the first is gone (as each of drive's checks runs in a tree of its own, removed after it), finds every
+    its own root once the first is gone (as each of the queue's checks runs in a tree of its own, removed after it), finds every
     target's key among the first run's entries and reuses it, storing nothing."""
     import shutil
 

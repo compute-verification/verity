@@ -659,7 +659,7 @@ def test_the_records_go_in_by_renames_inside_the_cache_as_its_path_resolves(tmp_
 
 
 def test_each_shard_holding_circuit_check_starts_from_the_records_and_one_refused_runs_nothing(tmp_path, monkeypatch, capsys):
-    """Drive gives every shard of its after-landing run the records step's artifact: each that holds a part of circuit-check
+    """Every shard of a sharded `--deferred` run takes the records step's artifact: each that holds a part of circuit-check
     unpacks it into circuit-check's cache before its steps; a shard without one ignores it; a refusal exits 2 before any step,
     as does an artifact where circuit-check keeps no cache."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261030-000000-abcd")

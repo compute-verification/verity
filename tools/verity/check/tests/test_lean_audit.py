@@ -222,9 +222,9 @@ sys.exit(1 if failed else 0)
 
 
 def test_the_lock_runs_audit_repairs_bookkeeping_and_the_caps_the_repaired_locks_break(tmp_path, monkeypatch):
-    """`--bookkeeping warn` (drive's lock run) reaches check.py: a package that fails only on bookkeeping passes on its
+    """`--bookkeeping warn` (a lock run) reaches check.py: a package that fails only on bookkeeping passes on its
     repaired lock, and a cap of `tests/test_lean_packages.py` that lock breaks is set to its count in a copy under `repaired/`,
-    which audit.json's `repaired` names for drive to commit, with every warning under `bookkeeping`. Without the flag the
+    which audit.json's `repaired` names for the run's caller to commit, with every warning under `bookkeeping`. Without the flag the
     package fails and nothing is repaired. The flag goes only with --regenerate, over every package: `--package` naming
     each, as check.py's `lean-audit:PKG` parts of a deferred run do, is every package, and one that leaves a package out
     fails."""
@@ -705,13 +705,13 @@ def _attempts(tmp: Path, rows: list[tuple[str, str, str, list[str]]]):
     return types.SimpleNamespace(sql=lambda q, a=(): db.execute(q, a).fetchall())
 
 
-#: drive's Lean check as the store records it: `slot.py` runs the check, so its tool is `python3`
+#: a deferred Lean check as the store records it: `slot.py` runs the check, so its tool is `python3`
 DEFERRED = ["python3", "tools/verity/check/slot.py", "--priority", "--by", "ci", "--", "uv", "run", "--locked", "python",
             "tools/verity/check/check.py", "--keep-going", "--deferred", "lean-audit"]
 
 
 def test_a_slot_wrapped_check_is_a_recorded_check_whose_bundle_and_verdicts_are_taken(tmp_path, monkeypatch):
-    """Checks run under `slot.py`, so the store records drive's trains, Lean checks and after-landing runs with tool
+    """Checks run under `slot.py`, so the store records trains, Lean checks and the runs beside the queue's candidates with tool
     `python3`; `shared_bundles` and `gathered_packs` selecting only tool `check` would leave each node without another's
     built modules or replay verdicts, building `Security/Proofs` cold (700 to 1,300 s) and replaying some 2,000 modules."""
     index = _attempts(tmp_path, [("r-lean", "python3", "failed", DEFERRED), ("r-other", "python3", "done", ["python3", "x.py"]),

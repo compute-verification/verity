@@ -64,7 +64,7 @@ def test_a_parallel_suite_that_reads_only_its_inputs_passes(tmp_path, monkeypatc
 
 def test_a_cached_module_read_outside_the_inputs_is_named_as_its_source(tmp_path, monkeypatch):
     """A suite that imports an undeclared helper through its warm `__pycache__` must not fail naming only `...cpython-*.pyc`,
-    which no PR's diff touches, so drive could find no culprit. The read is named as the `.py` source,
+    which no PR's diff touches, so the queue could find no culprit. The read is named as the `.py` source,
     attributed to the test module that imported it, warm or cold cache alike."""
     import py_compile
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)

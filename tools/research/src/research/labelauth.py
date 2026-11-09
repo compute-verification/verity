@@ -1,6 +1,6 @@
 """Authenticated ready marks and land verdicts: drive.toml's `signed_verdicts`.
 
-A label that lets drive land a PR, `ready = true` or `reviewed = land` on `pr:{n}@{head}`, counts with the flag on only beside a
+A label that lets the verified queue land a PR, `ready = true` or `reviewed = land` on `pr:{n}@{head}`, counts with the flag on only beside a
 `label_auth` label on the same target that authenticates it (`Verifier`).  Its value is ``{"for": NONCE, "token": JWT}``,
 optionally with ``"delegation"``: a Cursor OIDC token (issuer `ISSUER`, audience `AUDIENCE`) whose `nonce` claim is the label's
 nonce (`label_nonce`, SHA-512 over `LABEL_TAG` and the label's canonical document, so it names one target, key, value, author,
@@ -41,7 +41,7 @@ DELEGATION_SCHEMA = "verity/label-delegation/v1"
 #: the most seconds between a label's time and its token's `iat`: a token lives this long, and the label is written at once
 SKEW_S = 300
 DELEGATION_MAX_DAYS = 14
-#: the labels that let drive land a PR, by key: only these need a companion
+#: the labels that let the verified queue land a PR, by key: only these need a companion
 LANDING_VALUES = {vocab.READY: "true", vocab.REVIEWED: "land"}
 #: DER of SHA-256's DigestInfo, which an RS256 signature's padded block carries before the digest (RFC 8017, section 9.2)
 _SHA256_INFO = bytes.fromhex("3031300d060960864801650304020105000420")
@@ -65,7 +65,7 @@ def label_nonce(label: Label) -> str:
 
 
 def landing(label: Label) -> bool:
-    """Whether ``label`` lets drive land a PR (`LANDING_VALUES`), so it counts only authenticated."""
+    """Whether ``label`` lets the verified queue land a PR (`LANDING_VALUES`), so it counts only authenticated."""
     want = LANDING_VALUES.get(label.key)
     return want is not None and str(label.value).lower() == want
 

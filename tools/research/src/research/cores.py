@@ -14,7 +14,7 @@ taker removes it. Claims are taken under CLAIMS/.lock. Node 2's fill runner clai
 While the cores aren't free it waits in a line, reading the claims again every POLL_S: each waiter holds a locked ticket
 CLAIMS/wait.<ns>.<NAME> (`ticket_name`), and only the first live one may take cores, so a run asking for many isn't passed for
 ever by smaller ones (and the fill runner starts no pool job while one waits). The line is by class, then oldest first: `--rank R`
-is the class's priority less the default class's (the queue's placement, `cores.rank`), so drive's gates aren't behind every lane
+is the class's priority less the default class's (the queue's placement, `cores.rank`), so the queue's checks aren't behind every lane
 job queued before them. With `--ack FIFO` (the launch's, remote.LAUNCH_ACK) a wait
 acknowledges the launch as it starts, as disk-hold's does. A run asking for more cores than LIST has exits 2 at once.
 """

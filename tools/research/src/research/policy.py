@@ -1,6 +1,6 @@
-"""Drive's policy over what the runners (`suites.py`, `circuit-check`, check.py's steps) report (`PATH`,
-`tools/verity/check/policy.toml`): which ci.toml jobs are off the merge gate (`off_gate`) and which failures drive doesn't take as
-red until a deadline (`allow`):
+"""The landing policy over what the runners (`suites.py`, `circuit-check`, check.py's steps) report (`PATH`,
+`tools/verity/check/policy.toml`): which ci.toml jobs are off the merge gate (`off_gate`) and which failures the verified queue
+doesn't take as red until a deadline (`allow`):
 
     schema = "policy/v0"
     off_gate = ["circuit-check", "ratchet-gate"]
@@ -13,11 +13,11 @@ red until a deadline (`allow`):
 An unexpired allowance covers a failure (`Policy.suite`, `Policy.circuit`): a failed suite whose own `suite NAME` has one, or whose
 every failed test has one and that failed for nothing besides them (its report's `beyond_tests` is false); a failed circuit-check
 step whose every `FAIL` line's key (`circuit_keys`: `CHECK/CODE FAMILY`, the Definition without its statics) has one.  Expired, it
-is as if absent, and the judge names it (each Coverage's ``expired``) so drive's ring says which deadline passed.
+is as if absent, and the judge names it (each Coverage's ``expired``) so its owner is told which deadline passed.
 
-Drive reads the file at the commit it judges (`at`), so an allowance lands with the tip it lets pass and a red `checked` can be
-unblocked by a reviewed change; `research merge` reads `off_gate` at the commit it merges (`merge.declared_jobs`), and the quick
-tier's judge reads it at the tier's base, a commit of `main`.  Stdlib only."""
+The verified queue reads the file at the candidate it judges (`at`), so an allowance lands with the candidate it lets pass;
+`research merge` reads `off_gate` at the commit it merges (`merge.declared_jobs`), and the quick tier's judge reads it at the
+tier's base, a commit of `main`.  Stdlib only."""
 from __future__ import annotations
 
 import re

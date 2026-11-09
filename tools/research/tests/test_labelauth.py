@@ -336,7 +336,7 @@ def test_the_issuers_keys_are_fetched_and_the_last_set_covers_an_outage(tmp_path
 
 
 def test_drives_verifier_refuses_the_tick_when_it_cant_read_the_issuers_keys_or_the_registry(tmp_path, monkeypatch):
-    """Judging every mark absent would take every PR off `next`: drive does nothing instead, saying why."""
+    """Judging every mark absent would take every PR out of the queue: the queue does nothing instead, saying why."""
     def commit() -> None:
         subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
         subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty",

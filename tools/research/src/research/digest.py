@@ -3,7 +3,7 @@ regular sync. It shows:
 
 - the lane's doorbells, marked read;
 - other handles' new replies in the threads the lane watches;
-- what landed on `main` and what drive reverted there, and how many landed in the last 6 h;
+- what landed on `main` and what was reverted there, and how many landed in the last 6 h;
 - the queue's length by state, over every lane;
 - the lane's PRs whose queue state or head changed;
 - new or changed notes under lanes/LANE, each with the first 3 non-empty lines under its first 'Result so far' heading
@@ -48,7 +48,7 @@ FIRST_LOOKBACK_S = 3600
 RATE_WINDOW_H = 6
 CHANNEL = "agent-coordination"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+)")
-#: Drive's `git revert -m 1` of a breaking landing.
+#: A `git revert -m 1` of a breaking landing.
 REVERT_SUBJECT = re.compile(r'^Revert "Queue: #(\d+)')
 RESULT_HEADING = re.compile(r"#{2,4}\s+result so far", re.IGNORECASE)
 HEADING = re.compile(r"#{1,6}\s")
@@ -69,7 +69,7 @@ class Sources:
     doorbells: Callable[[str], list[dict]]            # since ts -> the lane's doorbells after it, marked read
     thread: Callable[[str, str, str], list[dict]]     # channel, thread ts, since ts -> its replies after it
     landings: Callable[[str | None], tuple[str, list[str]]]   # last main tip -> (tip, first-parent subjects, oldest first)
-    landed_since: Callable[[float], int]              # unix time -> drive's landings on main since then
+    landed_since: Callable[[float], int]              # unix time -> the landings on main since then
     queue: Callable[[], list[dict]]                   # `research queue status --json`
     pr_state: Callable[[int], str]                    # OPEN, MERGED, CLOSED, or "" when unknown
     notes: Callable[[str | None], tuple[str, list[str]]]      # last notes tip -> (tip, changed paths under lanes/LANE)

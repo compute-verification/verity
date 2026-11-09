@@ -49,20 +49,19 @@ answer for each:
                           (`rust_tests_key`) holds everything the build reads (the script, its pinned Flock commit and
                           toolchain, the patches, the live crate), and its tests compile those crates in release.  They don't
                           compile the `flock-circuit` binary target or the `sha512,glue` set, so an error only there is what
-                          this leaves to the after-landing run.  Implied by flock-rust-tests.
+                          this leaves to the full check.  Implied by flock-rust-tests.
     lean-build            `lake build` of the verifier.  Its audit (`lean-audit:` the verifier's package) builds every file of
                           the package from the same sources and toolchain, its key holding them, and replays each declaration;
                           the suites that run its binaries are keyed by those sources (`suites.built_from`) and ran on them,
                           as lean-agreement did when the change requires it.  Implied by those.
     lean-unit-cut         `unit_cut_agree.py` on 500 random cuts against the binary lean-build built.  verity-flock's
                           `test_unit_cut_agrees_with_the_reference` runs it on the first 300 of the same seed, against the
-                          binary its key now names, so this leaves the last 200 cuts to the after-landing run.  Implied by
+                          binary its key now names, so this leaves the last 200 cuts to the full check.  Implied by
                           the suite that runs it.
 
 The passes are looked up in this machine's caches (`local`: $CHECK_CACHE, $VERITY_TEST_CACHE and every check slot's test
 cache; not with --packs-only), in the verdict pack of each recorded check `gather_verdicts` would take (none with
---no-gather), in both packs of each recorded check of COMMIT and of its after-landing runs (`--deferred`, which drive runs on
-the `main` it landed: none with --no-gather) and of each RUN given with --from (the
+--no-gather), in both packs of each recorded check of COMMIT and of its `--deferred` runs (none with --no-gather) and of each RUN given with --from (the
 passes it stored, `verdicts.tar.gz`, and those it reused, `verdicts-reused.tar.xz`: `check.Reused`), and in each PACK given
 (which no gate cites).  A pass found in a recorded check's pack names that attempt, the pack's sha256, which `research merge
 --verdicts` cites, the run that earned it, and the files it is (`paths`).
@@ -525,7 +524,7 @@ ENDED = ("done", "failed", "cancelled")
 
 
 def own_checks(store, commit: str) -> list[str]:
-    """The recorded checks of ``commit`` that ended, and its after-landing runs (`check.py --deferred`, recorded without `--tool
+    """The recorded checks of ``commit`` that ended, and its `--deferred` runs (`check.py --deferred`, recorded without `--tool
     check`, so found by their argv), newest first."""
     rows = store.index.sql(f"SELECT id, tool FROM attempts WHERE source_commit = ? AND state IN ({', '.join('?' * len(ENDED))}) "
                            "ORDER BY start_utc DESC", (commit, *ENDED))

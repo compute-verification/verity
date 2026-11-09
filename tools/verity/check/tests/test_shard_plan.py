@@ -249,7 +249,7 @@ def test_combine_refuses_auto_shards_of_two_plans_and_takes_a_hand_plans_builds_
 
 
 def test_record_sends_an_auto_shard_its_plan_as_the_runs_input_and_refuses_one_without(tmp_path, monkeypatch):
-    """Drive's `after_landing_shards = "auto"`: `--record --shard auto:K/N --shard-plan-file PLAN --on M` launches shard K of
+    """An auto-planned shard: `--record --shard auto:K/N --shard-plan-file PLAN --on M` launches shard K of
     PLAN with PLAN sent as the run's `AUTO_PLAN` input, where the run's own `--shard auto:K/N` finds it, and with the parts of
     that shard alone; an auto shard without a plan, a plan without an auto shard or --on, and a plan of other steps are
     refused before anything launches."""

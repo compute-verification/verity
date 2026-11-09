@@ -37,7 +37,7 @@ def _launches(monkeypatch, *argvs):
 
 
 def test_every_launch_on_a_machine_asks_for_its_own_clone_and_a_local_one_runs_in_its_checkout(monkeypatch):
-    """A train's check and drive's after-landing run of the same commit, on one machine: each is a `research run --cwd clone`."""
+    """A train's check and a `--deferred` run of the same commit, on one machine: each is a `research run --cwd clone`."""
     on = _launches(monkeypatch, ["--on", "vy-x", "--priority", "--keep-going"],
                    ["--on", "vy-x", "--priority", "--keep-going", "--deferred", "lean-audit"])
     assert len(on) == 2

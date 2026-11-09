@@ -1,4 +1,4 @@
-"""`tools/verity/check/slot.py`: a `--record --on` check takes a free check slot's lock and cores, as the lander's train checks do."""
+"""`tools/verity/check/slot.py`: a `--record --on` check takes a free check slot's lock and cores, as the queue's train checks do."""
 from __future__ import annotations
 
 import fcntl
@@ -212,7 +212,7 @@ def test_a_scoped_check_on_a_node_that_caps_login_sessions_gets_the_same_memory_
 
 def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_path, monkeypatch, capsys):
     """Fail open: a run with no user manager or bus would otherwise fail every train check the slot
-    takes, which drive reads as the train failing."""
+    takes, which the queue reads as the train failing."""
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
     ran = {}
@@ -604,7 +604,7 @@ def test_status_names_who_asked_for_each_held_slot_and_each_live_waiter(tmp_path
     line = tmp_path / SLOT.LINE
     line.mkdir()
     (line / f"{1:020d}-1").write_text(json.dumps({**me, "run": "r-dead"}))           # a waiter that died: nobody holds its ticket
-    waiter = line / f"{SLOT.PRIORITY}{int((NOW.timestamp() - 300) * 1e9):020d}-4242"   # the lander's train check
+    waiter = line / f"{SLOT.PRIORITY}{int((NOW.timestamp() - 300) * 1e9):020d}-4242"   # the queue's train check
     waiter.write_text(json.dumps({"pid": 4242, "run": "r-waiting", "tree": "/workspace/research/src/bc63d108f", "by": "lander"}))
     wfd = _hold(waiter)
     a, b, w = SLOT.status(slots, tmp_path, NOW)
@@ -688,7 +688,7 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
 
 
 def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypatch, tmp_path):
-    """`--record --agreement`: the lander's check of a train that changes a pinned guarantee outside verity/ml/flock/ still runs
+    """`--record --agreement`: the check of a train that changes a pinned guarantee outside verity/ml/flock/ still runs
     the agreement step, with the pinned build and inputs as the run's inputs."""
     spec2 = importlib.util.spec_from_file_location("repo_check_agreement", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
@@ -719,7 +719,7 @@ def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypa
 
 
 def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_priority_ones(tmp_path):
-    """Merges unblock everyone: the lander's train check takes the next slot that frees ahead of lane checks
+    """Merges unblock everyone: the queue's train check takes the next slot that frees ahead of lane checks
     already waiting, never one a check is running in, and priority waiters keep their own arrival order."""
     line = tmp_path / SLOT.LINE
     line.mkdir()
@@ -736,13 +736,13 @@ def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_pr
 
 def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_ones(tmp_path):
     """The lowest train's check goes ahead of the checks of trains above it that came first, since only it can land next.
-    drive ranks a train's check by its members above `main`."""
-    unranked, u = SLOT.join(tmp_path, priority=True)                        # an older drive's check, with no rank
+    The queue ranks a train's check by its members above `main`."""
+    unranked, u = SLOT.join(tmp_path, priority=True)                        # an older queue's check, with no rank
     high, h = SLOT.join(tmp_path, priority=True, rank=30)                   # a train above, first to arrive
     low, lo = SLOT.join(tmp_path, priority=True, rank=15)                   # the lowest train, resent later
     lane, la = SLOT.join(tmp_path)
     assert SLOT.ahead(low) == 0 and SLOT.ahead(high) == 1 and SLOT.ahead(unranked) == 2 and SLOT.ahead(lane) == 3
-    post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the after-landing run of `main`
+    post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the run beside `main`'s check
     assert SLOT.ahead(post) == 0 and SLOT.ahead(low) == 1
     waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=UTC))
     assert [w["priority"] for w in waits] == [True, True, True, True, False]
@@ -1134,7 +1134,7 @@ def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp
 def test_a_train_check_counts_only_other_train_checks_reservations_and_a_lane_check_counts_every_one(tmp_path, monkeypatch, capsys):
     """A free train slot (mem=300) would read a negative net behind pool checks that reserve 279 GB each and use 25 and 5,
     and wait until someone shrank their reservations by hand. A
-    `--priority` waiter (a train's check, drive's after-landing run) counts another job at what it holds, already out of
+    `--priority` waiter (a train's check, the run beside a candidate's) counts another job at what it holds, already out of
     memory_gb, and another priority check's reservation in full; a lane's check still counts every reservation. Each check's own
     reservation is its slot's whole mem= in research.mem's GB: the after-landing run's 601.3 GB on n2 was slot a's mem=560."""
     proc = tmp_path / "proc"

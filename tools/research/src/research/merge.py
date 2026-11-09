@@ -261,7 +261,7 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     shard, ``commit`` and its config (``commit``'s tree of `tools/verity/check/`), with no step but passed or skipped and its
     steps' parts its shard's parts; together, one N with K = 1..N once each, one list of every part and one auto plan's digest
     (or none), whose parts they make exactly once and which covers every job ``commit``'s `ci.toml` puts on the gate
-    (`declared_jobs`: not circuit-check or ratchet-gate, which run after landing), and the same steps outside their parts (the
+    (`declared_jobs`: not circuit-check or ratchet-gate, which no merge needs), and the same steps outside their parts (the
     preflight), passed in each, but for the builds a shard runs beside its parts (an auto plan's, a hand plan's lean-build
     beside lean-suites' parts), whose verdict is their own shard's.  The steps: those once, then each part as its shard's step
     ran it."""

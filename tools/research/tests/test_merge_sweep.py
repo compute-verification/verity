@@ -284,7 +284,7 @@ def test_after_a_landing_the_declarations_command_starts_detached_on_the_commit(
 
 
 def test_the_after_landing_command_runs_in_a_worktree_of_the_landed_commit_that_goes_when_it_ends(tmp_path):
-    """Drive's queue clone is reset and cleaned every tick, so a `post_train.py` started there would lose the `.venv` `uv run`
+    """The queue's clone is reset and cleaned every tick, so a `post_train.py` started there would lose the `.venv` `uv run`
     made there; the command gets a tree of its own, which the caller's checkout moving can't touch."""
     repo, rec = tmp_path / "repo", tmp_path / "rec"
     (repo / "mytools").mkdir(parents=True)
@@ -794,7 +794,7 @@ def test_the_landings_go_to_the_merge_thread_quietly_and_a_failed_post_leaves_th
 
 
 def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(tmp_path):
-    """Drive lands a PR's commits; GitHub then marks the PR merged, so it was never open for the sweep, and its branch would
+    """The queue lands a PR's commits; GitHub then marks the PR merged, so it was never open for the sweep, and its branch would
     stay.  The merged PRs are the most recently updated ones (`ENDED_QUERY`; the fake refuses `gh pr list --state merged`):
     the newest 200 by number would leave out PRs that had waited in the queue, and their branches would stay."""
     repo, gh, tips, _merge = _world(tmp_path)

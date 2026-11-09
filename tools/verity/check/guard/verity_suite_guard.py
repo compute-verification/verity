@@ -63,7 +63,7 @@ _ACTIVE = bool(os.environ.get("VERITY_SUITE_ROOT") and _REPORT)
 _root = os.path.realpath(os.environ.get("VERITY_SUITE_ROOT", ""))
 _watch = frozenset(os.path.normpath(os.path.join(_root, p)) for p in json.loads(os.environ.get("VERITY_SUITE_WATCH", "[]")))
 #: file read outside the inputs (a cached module as its source) -> the test module reading when it was first opened ("*": a
-#: conftest or session fixture), so a failure names what was read and by whom, and drive can attribute it to a PR
+#: conftest or session fixture), so a failure names what was read and by whom, and the queue can attribute it to a PR
 _outside: dict[str, str] = {}
 _watched: set[str] = set()
 _tried: set[str] = set()
