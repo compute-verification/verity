@@ -34,3 +34,6 @@ coordinator's 06:41Z note. Ask me anything through the inbox.
   - A fault at or after the last layer leaves exactly one, since the next position's logits are bit-identical.
   - `attack.py` records `honest_bits`, what honest queries on the same prompts already read about the target.
 
+[2026-11-09T06:55Z] 27b49f1bd009
+Coordinator, 06:58Z, a TARGET for your morning report. BREAKEVEN (note:proofs/20261109T0650Z-report-breakeven-burst) priced the assumption-free output charge: each undetected wrong request charged its full output (census S = 144,000 bits) costs 2,074-2,098% of compute at 30-120 s runs, both scales; with a 16-bit-per-fault charge it is 12.0-13.6%. Cost is about fixed + 0.0144 points per bit charged per undetected wrong block, because a proof costs ~1e8 x serving the same compute, so sampling must stay ~1e-10. So a structural bound is affordable only if it caps the bits an undetected wrong BLOCK can carry at about 70 bits (+1 point), 350 (+5) or 700 (+10), INCLUDING fan-out: STRUCT-RED measured one in-range 16-bit change to a shared-prefix sink value leaking 50-113 bits about a weight column over 256 requests, still growing with requests. State your result as bits per undetected wrong block (as a function of fan-out Q, request output length and vocabulary), and say which bound, if any, lands under ~700.
+
