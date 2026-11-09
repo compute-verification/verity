@@ -1224,7 +1224,7 @@ fn lean_frame(frames: Option<(&str, &str, usize, usize)>) -> Result<(flock_live:
 /// Under the ZK server the rep's frame in the Lean session loop samples them instead, from the OS, and keeps them: of the
 /// session the loop names and the table (`frame`); the rep holds only their root.
 #[allow(clippy::too_many_arguments)]
-fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &flock_core::pcs::ligerito::zk::Level0Zk,
+fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &Arc<flock_core::pcs::ligerito::zk::Level0Zk>,
               points: &Arc<Mutex<Vec<Vec<F128>>>>, rep: usize, id: u64, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
               frame: Option<(&str, usize)>) -> ZkRep {
     let tz0 = Instant::now();
@@ -1250,13 +1250,17 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
     let root = frame_root.unwrap_or_else(|| own.as_ref().expect("a rep's own pads").1.root());
     let self_check = if plan.zero_witness { zkv::SelfCheck::Skip } else { plan.zk_self_check };
     let t_commit = tz0.elapsed().as_secs_f64();
-    // each rep's copy of the extra lanes (4 · 2^22 words at m = 35) written on rayon's threads, not one
-    let level0 = flock_core::pcs::ligerito::zk::Level0Zk {
-        queries0: level0.queries0, t_pad: level0.t_pad, rep: if plan.zk_shared_pair { 0 } else { rep }, tamper: level0.tamper,
-        extra: std::array::from_fn(|i| { use rayon::prelude::*; level0.extra[i].par_iter().copied().collect() }), pads: level0.pads.clone(),
+    // the rep's level 0 is the session's where it takes the session's pair (rep 0's), else a copy with its own: of the extra
+    // lanes (4 · 2^22 words at m = 35) written on rayon's threads, not one
+    let pair = if plan.zk_shared_pair { 0 } else { rep };
+    let level0 = if pair == level0.rep { level0.clone() } else {
+        Arc::new(flock_core::pcs::ligerito::zk::Level0Zk {
+            queries0: level0.queries0, t_pad: level0.t_pad, rep: pair, tamper: level0.tamper,
+            extra: std::array::from_fn(|i| { use rayon::prelude::*; level0.extra[i].par_iter().copied().collect() }), pads: level0.pads.clone(),
+        })
     };
     ZkRep { lay, own, root, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, final_c_solved: plan.zk_final_c_solved, self_check,
-            t_commit, level0: Arc::new(level0), lean: Mutex::new(lean) }
+            t_commit, level0, lean: Mutex::new(lean) }
 }
 
 /// M1 on the device: level 0's hiding and both reps' pads with their commitments, sampled beside the witness build (they depend on
@@ -1268,7 +1272,7 @@ fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, sa
               points: &Arc<Mutex<Vec<Vec<F128>>>>, rep0: std::sync::mpsc::Sender<(ZkRep, u64)>) -> (ZkRep, u64) {
     let mut prng = flock_live::zk_hooks::ProverRng::from_seed(seed);
     let tl0 = Instant::now();
-    let level0 = level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper);
+    let level0 = Arc::new(level0_zk(st, &mut prng, plan.zk_zero_pads, plan.zk_l0_tamper));
     let t_level0 = tl0.elapsed().as_secs_f64();
     let trees = pcs_of(st, lig).ligerito_prover_config().expect("Ligerito config").recursive_steps as u64;
     let id0 = salts.lock().unwrap_or_else(PoisonError::into_inner).next_id();
@@ -4126,6 +4130,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 (0, true, Some(l0), Some(WitData::Host(w))) => lean_level0(plan, st, 0, w, l0, salts, lean_got[0].take())?,
                 _ => None,
             };
+            let zk_level0 = zk_level0.map(Arc::new);
             let t_level0 = if zk_pre.is_some() { t_zk_pre_wait } else {
                 tl0.elapsed().as_secs_f64() + t_table + if j == 0 { t_lean_level0 } else { 0.0 }
             };
@@ -4139,7 +4144,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                     };
                     let l0 = match zk_pre.as_ref() {
                         Some(z) => z[0].as_ref().expect("rep 0's pads").0.level0.clone(),
-                        None => Arc::new(zk_level0.clone().expect("level 0's hiding")),
+                        None => zk_level0.clone().expect("level 0's hiding"),
                     };
                     let fin = lean_fin.as_ref().ok_or_else(|| flock_live::firewall::refused("a firewalled table without the session's Lean finish"))?;
                     let lean_root = if j == 0 { lean_root0.clone() } else { root0.clone() };
