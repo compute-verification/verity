@@ -271,7 +271,8 @@ def _unit(u: Any) -> tuple:
 def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], compiled: Any,
                    plan: Callable[..., Any]) -> None:
     """Refuse (`BatchDependent`) ``compiled`` (`steps.Compiled` of ``advice``, a Commit window's `Advice`, and ``ingress``) where a request's
-    outputs could depend on its batch-mates: R3, R2 and R1 of the module docstring, cheapest first. ``plan`` is `steps.plan_steps`.
+    outputs could depend on its batch-mates: R3, R2 and R1 of the module docstring, cheapest first. ``plan`` plans a solo `Advice`
+    (`steps._replan`).
     Returns None when every request's Programs read only its own certified inputs and the registration."""
     units = compiled.requests
     for u in units:

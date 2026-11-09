@@ -67,9 +67,10 @@ class Kind:
 #: declared field by field (`RUN`)
 PARAMS: dict[str, Kind] = {
     "prompt": Kind("certified", "the request's prompt ids: ingress v0's parse unit outputs them, else its certified body "
-                                "(`predict.steps.request_of`)"),
+                                "(`predict.ingress_policy.request_of`)"),
     "input_ids": Kind("certified", "a step wrapper's token ids (the Build's step trace): the prompt's and earlier samples'"),
-    "seed": Kind("certified", "the request's seed, its certified body's or the public default (`predict.steps.policy_of`)"),
+    "seed": Kind("certified", "the request's seed, its certified body's or derived from its id and the window's seed salt "
+                              "(`predict.ingress_policy.policy_of`)"),
     "prefix": Kind("block", "a request's first C positions' rows: the producers' outputs (a prefix-cache hit) or the last "
                             "window's edge ports (a carried request)"),
     "prefix_ik": Kind("block", "the indexer's key rows of the history, as ``prefix``"),
