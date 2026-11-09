@@ -20,8 +20,9 @@ first; any other `queue/*` branch is no candidate, and is logged once (`ignore`)
 the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
-no result for, included), on the merge gate's tasks, those drive's `executor = "on"` path gates on
-(none `"gate": false`, of `drive.SLIM_STEPS` or off the gate in policy.toml at the candidate): a failed task an unexpired
+no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`drive.RATCHET_STEP`: it judges
+each merge against its first parent, which a task keyed by its inputs can't) or off the gate in policy.toml at the candidate,
+so graph2's lean-agreement gates as the run beside the check's does: a failed task an unexpired
 allowance of that policy covers passed, as drive reads it (`Driver._task_allowed`); else a failed or blocked task is fail,
 each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing tests
 (result/v1's `failed_tests` and those graph2's verdict names of it) and its key and failing tests in its base's graph as graph2
@@ -94,7 +95,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import policy, vqueue
-from .drive import CI, JOB_OF_KIND, SLIM_STEPS, Driver, cancel_runs, gating, merge_thread_post
+from .drive import CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, Driver, cancel_runs, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, flags_at, label_verifier,
@@ -583,7 +584,7 @@ class World:
             self.log(f"research queue vqueue: {pol}: every job gates at {sha[:12]}")
             pol = policy.Policy()
         gates = [i for i, t in tasks.items() if t.get("gate", True) is not False
-                 and JOB_OF_KIND.get(t["kind"], t["kind"]) not in (*SLIM_STEPS, *pol.off_gate)]
+                 and JOB_OF_KIND.get(t["kind"], t["kind"]) not in (RATCHET_STEP, *pol.off_gate)]
         if not gates:
             return Judged(Verdict(LIST_FAILED), mark=f"empty {_digest(sorted(tasks))}", note="no task on the merge gate",
                           graph2=said, theirs=theirs)

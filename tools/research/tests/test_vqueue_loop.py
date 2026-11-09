@@ -995,6 +995,34 @@ def test_a_graph_lacking_a_job_main_waits_for_is_list_failed_marked_with_it_so_i
     assert loop.world.verdict(sha).verdict.state == PASS
 
 
+def test_graph2_s_lean_agreement_task_gates_and_a_ratchet_gate_task_doesn_t(env):
+    """graph2's lean-agreement task is on the merge gate, as it is in the run beside the check; ratchet-gate is off it: it
+    judges each merge against its first parent, which a task keyed by its inputs can't."""
+    one = env.put(1, {"v/check.py": "1\n"})
+    loop = env.loop(policy)
+    (built,) = loop.tick()
+    sha = built["sha"]
+
+    def listed(agree: str) -> None:
+        task = {"env": "py", "argv": ["t"], "vars": {}, "reads": [], "outputs": []}
+        env.graph2.list_graph(f"ready:{sha}", {
+            "schema": GRAPH_V2, "commit": sha, "envs": {"py": {"digest": "sha512:env"}},
+            "files": {"v/check.py": "sha512:v", "t/test_a.py": "sha512:t"},
+            "tasks": [{"id": "test-file:t/test_a.py", "kind": "test-file", "inputs": ["t/test_a.py"], "key": "sha512:a", **task},
+                      {"id": "lean-agreement:v", "kind": "lean-agreement", "inputs": ["v/check.py"], "key": agree, **task},
+                      {"id": "ratchet-gate:v", "kind": "ratchet-gate", "inputs": ["v/check.py"], "key": "sha512:r", **task}]})
+
+    listed("sha512:agree")
+    env.result("sha512:a", "test-file:t/test_a.py", PASS)
+    env.result("sha512:r", "ratchet-gate:v", FAIL)
+    env.result("sha512:agree", "lean-agreement:v", PASS)
+    assert loop.world.verdict(sha, built["base"]).verdict.state == PASS
+    listed("sha512:agree2")
+    env.result("sha512:agree2", "lean-agreement:v", FAIL)
+    assert [f.task for f in loop.world.verdict(sha, built["base"]).verdict.failed] == ["lean-agreement:v"]
+    assert _acts(loop.tick()) == ["eject", "drop"] and env.withdrawn == [(1, one)] and env.main() != sha
+
+
 ALLOWED = '''schema = "policy/v0"
 [[allow]]
 id = "suite zz"
