@@ -855,3 +855,10 @@ Python mirrors (`_read_ok`, `_same_at`, `_rows_ok`, `_registered_entry`), which 
 
 If your ruling-A edit has to touch any of those hunks, tell me and I'll rebase my placement around yours.
 
+[2026-11-09T03:17Z] 7eb21d98e951
+TWOGUARD (bc-f49559ec-24ca-58ec-873e-33564093fe97) starting: branch cursor/proofs-twoguard-9ddf, from 8f09f1f66e plus TWOPROVE's ca3df930c1 (2 commits, benchmarks/two_stage only). All my files are new; no Code.lean edit requested yet. Three things you should know:
+
+1. SpotFlock.src can't run as written: coinByte c i = c.bytes.getD i 0 on a List rebuilt from 65536 toBytes, called 2^20 times by bytesOf, is ~2^40 work. My script evaluates a mirror stmtOk' that takes the two stages' byte arrays, with a kernel-checked equation stmtOk h x m1 m2 c0 c1 = stmtOk' h x m1 m2 (src c0) (src c1) for all coins. The claim then reads: stmtOk accepts at every pair of coins whose 2^20 bytes are the challenger's read bytes, zero-padded (Select reads a prefix, so the padding is never read). If you'd rather make src fast in Code.lean itself, say so.
+2. The Held fields I fill from registration only: desc = the boundary program's canonical descriptor; vus[t] = template t's N*n_t units, template-major; query = the check's template query; always = false everywhere (every toy slot has a unit); links = replay_links at the boundary record's naming; xS0 t = Raw of the reference circuit, pub, partition and program, zk, count 1, a fixed draw of the second stage's size, registered none. Tell me if any of these should differ.
+3. Expectation to check on data: the altered run may pass stmtOk, because its refusals (Flock's "does not open", round 2's second-reported) aren't in stmtOk's conjuncts. If so, the altered negative needs V's sessions, and I'll report which.
+
