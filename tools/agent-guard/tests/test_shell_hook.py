@@ -390,6 +390,23 @@ def test_the_hook_starts_a_pull_at_most_once_per_interval_and_never_when_off(tmp
     assert ask("30") == {"permission": "allow"} and mark.stat().st_mtime == 10**10, "polled again within the interval"
 
 
+def test_the_pull_runs_from_the_checkout_under_a_root_that_is_not_one(tmp_path):
+    """A Task-launched cloud agent's workspace root is /agent, its checkout /agent/repos/verity: a pull from the root itself
+    fails in git, so that agent's messages never arrive."""
+    (tmp_path / "agent/repos/verity/.git").mkdir(parents=True)
+    (tmp_path / "ws/.git").mkdir(parents=True)
+
+    def checkout(root, cwd):
+        return subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); import shell_hook; "
+                               "print(shell_hook.checkout(*sys.argv[2:]))", str(HOOK.parent), root, cwd],
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    assert checkout(str(tmp_path / "agent"), "/tmp") == str(tmp_path / "agent/repos/verity")
+    assert checkout(str(tmp_path / "ws"), "/tmp") == str(tmp_path / "ws")
+    assert checkout(str(tmp_path / "empty"), "/tmp") == "/tmp"
+    assert checkout("", "/tmp") == "/tmp"
+
+
 def test_a_queued_message_refuses_the_agents_next_command_once_with_the_message_as_its_text(tmp_path):
     queue("bc-11111111-1111-4111-8111-111111111111", "rebase on main first", tmp_path)
     queue("bc-11111111-1111-4111-8111-111111111111", "then mark nothing", tmp_path)

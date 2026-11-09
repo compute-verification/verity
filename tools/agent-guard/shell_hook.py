@@ -466,6 +466,15 @@ def delivery(conversation: str) -> str | None:
     return text if text.strip() else None
 
 
+def checkout(root: str, cwd: str) -> str:
+    """The checkout an inbox pull runs from: the workspace root, or when the root isn't one (a Task-launched cloud agent's
+    `/agent`), the first checkout under its `repos/`, else the command's directory."""
+    if root and not os.path.exists(os.path.join(root, ".git")):
+        found = sorted(Path(root).glob("repos/*/.git"))
+        root = str(found[0].parent) if found else ""
+    return root or cwd
+
+
 def poll(conversation: str, repo: str) -> bool:
     """Start `inbox.py pull` for agent `conversation` from checkout `repo`, detached, unless one started within the poll
     interval; whether it started one."""
@@ -556,7 +565,7 @@ def main() -> int:
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
         try:
-            poll(conversation, root or cwd)
+            poll(conversation, checkout(root, cwd))
         except (OSError, ValueError) as e:              # nor a failed poll: the next command's hook tries again
             print(f"shell_hook: inbox poll failed: {e}", file=sys.stderr)
         try:
