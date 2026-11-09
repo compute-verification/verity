@@ -19152,3 +19152,23 @@ When `93b1` passes, I commit the records with the re-dates, mark #8309, and put 
   - vllm-dsatable-commit: the committer, one `HistoryTable` per (request, layer) behind `dsa_table_reads`, with prefix caching off (CIR-188 for on);
   - proofs DSAREAD: the Lean verifier taking a window's history tables into its registered-read check;
   - proofs PROVECUT: the served audit, `records_audit`, pinning each table's root through `ml.windows.history.pins`.
+
+## TWOVERIFY, 18:46Z: the `stmtOk` check. The model doesn't check the records the way `Run.run` does, so a run can route any port read to the registered-value arm (by reading, not kernel-checked)
+
+1. **Answer: no.** I read TWOOPENS's stack at `130932a6f8`.
+   - **What the model does.** `stmtOk` builds round 2's `Own` from the prover's own JSON: the boundary record from the run's statement (`decode x`) and the interior record from round 1 (`jsonMsg m₁`). It then runs round 2's checks and nothing else.
+   - **What `Run.run` does first.** It runs `Registration.check` on both records. `R3-ports` holds a record's ports to exactly the registration's own, with none missing, none extra and none twice, each at its leaves and domain. R7 does the same for its registered values.
+   - **The gap.** Neither check is in the model, and no theorem ties `Run.run` to the model. The model's docstring says so: `Run.run`'s registration steps aren't in this verifier.
+   - **On `checked`** the question doesn't arise. There the run supplies bare roots, and the auditor's `Held.registered` places them.
+2. **What this leaves free in the model, at the toy too.**
+   - **The fall-through.** `readOk` dispatches on what the records list. A read whose value neither record lists as a port falls through to `registeredEntry own.boundary v <|> registeredEntry own.interior v`, which accepts any root, domain and leaves that record gives (`sameAt`).
+   - **Nothing stops it.** No round-2 check makes round 1's record keep a port. `rootsOk` checks only the header's roots outside the read ports, and every toy port is a read port.
+   - **The route.** A run can drop its own port `v` from round 1's record and register a value named `v`, at a root it picks, in either record. `second-read` accepts that, and the arm becomes the registered one, where TWOOPENS's `armOf` is `none` and no arm fact applies.
+   - **Not traced.** With the port gone, `second-values` no longer blanks its rows, so they must equal the reference's, which name none. I haven't traced whether Flock then accepts the session, or what `Sites` gives there.
+   - **Duplicates.** A value listed twice is also free in the model: `registeredEntry` reads the first, and `portRoots` puts both into the statement's roots.
+   - **So the 17:05Z freedom covers every port read in the model,** not only registered values. In the deployed run, R3 and R7 refuse all of this, so my 18:03Z answer for `Run.run` stands.
+3. **What closes it.** Either of these would:
+   - **(a) Check the names in the model.** `stmtOk` checks both records' names the way R3 and R7 do (each record's ports and registered values exactly the registration's, once each), from copies held in `Held`. Roots stay run fields. This only mirrors checks `Run.run` already makes and changes no deployed code.
+   - **(b) Widen the round-2 pin.** Write the pin so `readOk` never takes a read's kind or record from the records. A read the reference makes of a port must find that port in its record. A registered value must be registered exactly once, in the record the registration names.
+
+   I'm sending TWOOPENS this so the draft covers it, and I'll review the draft against both. TWOINSTANCE's `Sites` work meets the same arm, so it may want this too.
