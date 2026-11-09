@@ -94,6 +94,16 @@ def test_tables_are_retained_per_request_until_it_ends():
     assert hs.requests() == ["r1"] and list(hs.entries()) == [("r1", 0)] and hs.edge("r0", 0) == 0
 
 
+def test_a_committed_window_releases_every_request_it_doesnt_name_open():
+    """Once a window is committed or refused, its requests' tables are released but those it names open, which the next
+    window appends to from their edge; a window of no tables releases nothing."""
+    hs = H.Histories(PROGRAM, capacity=16)
+    for r in ("r0", "r1", "r2"):
+        hs.append(r, 0, 0, _rows(12, 2))
+    assert H.release(hs, ["r1"]) == 4 * 1344 and hs.requests() == ["r1"] and hs.edge("r1", 0) == 2
+    assert H.release(hs) == 2 * 1344 and hs.requests() == [] and H.release(None) == 0
+
+
 def test_the_switch_is_off_by_default_and_refused_with_prefix_caching():
     """`SWITCH` is off unless the registration sets it, and on it is refused by name with prefix caching on."""
     assert not H.on(None) and not H.on({}) and H.on({H.SWITCH: True})
@@ -103,6 +113,8 @@ def test_the_switch_is_off_by_default_and_refused_with_prefix_caching():
 
 
 def test_a_run_keeps_one_set_of_tables_across_its_windows_and_a_window_of_none_takes_none():
+    """A serving process keeps one `Histories` per run's committer program, refused without one, and none for a window
+    without the switch."""
     assert H.of_request({"program": PROGRAM}, False) is None
     first = H.of_request({"program": PROGRAM * 2}, True)
     assert first is H.of_request({"program": PROGRAM * 2}, True) and first.program == PROGRAM * 2

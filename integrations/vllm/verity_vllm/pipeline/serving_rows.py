@@ -178,11 +178,12 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
             digests: Mapping[str, str] | None = None) -> tuple[Callable, Any]:
     """The replay's weights provider and a fresh opened reader for it, as before.  With a ``request``, the serving rows are committed
     first, through their own opened reader and before the replay's seed exists, a window of history tables into the process's
-    tables of the run (`commit.history_tables.of_request`); a failure is written beside them and changes no verdict."""
+    tables of the run (`commit.history_tables.of_request`), released after it but the requests it names ``open``
+    (`commit.history_tables.release`); a failure is written beside them and changes no verdict."""
     from verity_vllm.check.oracle_compare import OpenedReader
 
     if request:
-        req = json.loads(Path(request).read_text())
+        req, hs = json.loads(Path(request).read_text()), None
         try:
             hs = H.of_request(req.get("committer"), HR.on(json.loads(Path(req["partition"]).read_text())))
             after_commit(req["dir"], partition_file=req["partition"], programs=programs, bmap=bmap, committed=OpenedReader(com, rc),
@@ -193,6 +194,8 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
             Path(req["dir"]).mkdir(parents=True, exist_ok=True)
             (Path(req["dir"]) / "error.txt").write_text(traceback.format_exc())
             print(f"[serving-rows] FAILED (no verdict changes): {e!r}"[:400], flush=True)
+        finally:
+            H.release(hs, req.get("open", ()))
     return weights, OpenedReader(com, rc)
 
 

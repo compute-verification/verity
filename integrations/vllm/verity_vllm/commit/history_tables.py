@@ -15,7 +15,8 @@ public strings and never takes the prover's. The window commits each appended ro
 string the window commits and no row is hashed twice.
 
 Retention is per request: a table keeps every row and salt it holds, `ROW_BYTES` a row a layer beside its tree, until its
-request ends (`Histories.end`), since any later window's read may open any earlier position. Rows and salts are private:
+request ends (`Histories.end`), since any later window's read may open any earlier position; a Commit's hooks release
+their window's requests once it is committed, but those its request names ``open`` (`release`). Rows and salts are private:
 they stay in this process on the node and in the windows' private files, never under a run's output.
 
 The switch is refused with prefix caching on (`refusal`): a cache hit's leaf would be another request's row, bound only by a
@@ -134,6 +135,16 @@ def of_request(committer: Mapping[str, Any] | None, on: bool) -> Histories | Non
     if not isinstance(program, str) or not program:
         raise ValueError("a window of history tables takes its tables' program from its request's committer: give it")
     return _OPEN.setdefault(program, Histories(program))
+
+
+def release(hs: Histories | None, open_requests: Iterable[str] = ()) -> int:
+    """End every request of ``hs`` but ``open_requests``, once a window is committed or refused: a Commit serves its requests to
+    their finish before its window commits, so its window request names none open, and a window that cuts a request names it,
+    whose tables the next window appends to. -> the bytes released."""
+    if hs is None:
+        return 0
+    keep = {str(r) for r in open_requests}
+    return sum(hs.end(r) for r in hs.requests() if r not in keep)
 
 
 def check(t: HT.HistoryTable, strings: Sequence[bytes]) -> bool:
