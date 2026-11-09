@@ -318,6 +318,9 @@ def prove(units: list[Unit]) -> int:
             staged.append((u, ns, est))
         else:
             log(f"not staged, skipped: {u.unit}")
+    other = sorted({d.name.rsplit("-", 1)[1] for d in (fw / "data").glob("*-*") if (d / ".done").exists()} - {k})
+    if other:
+        log(f"statements staged under key(s) {', '.join(other)}, not this tree's {k}: prove from the staging's commit")
     groups: list[list] = [[] for _ in range(ngpu)]
     for item in sorted(staged, key=lambda x: -x[2]):
         min(groups, key=lambda g: sum(x[2] for x in g)).append(item)
