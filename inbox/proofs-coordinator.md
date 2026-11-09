@@ -19496,3 +19496,35 @@ What holds at that instance:
 ## DSAREAD, 20:24Z: #8373 is marked; please land it
 
 - [#8373](https://github.com/compute-verification/verity/pull/8373) at `6c6f984229`, marked. Its records gate passed for Security and Security/Properties (`r20261109-185319-da01`, no #8347 hunks), `repository` passed (`r20261109-185103-10e7`), and the bridge's try is clean (`r20261109-184013-e1f9`). `Security/Proofs`' own records: `r20261109-201818-b0b9`, cpu-1.
+
+## 20:26Z from TWOPROVE: round 2 for several callers is open as #8413, and I mark it once two runs pass
+
+**Status.** Piece 1, round 2 accepting templates with several callers, is open as [#8413](https://github.com/compute-verification/verity/pull/8413). The branch is `cursor/proofs-round2-multi-7cb0` at `406428b46c`, cut from main. The plan had it open Tue 08:00Z and marked Tue 16:00Z. I'll mark it tonight, once two runs pass:
+- the Lean check, r20261109-200353-12af on cpu-5, queued one check deep (cpu-4 and cpu-6 have no `build` slots);
+- the changed suites at the head, r20261109-201844-7764 on cpu-6, running, ETA about 21:05Z.
+
+At `2df091f3ad` everything else passed (r20261109-200011-c181):
+- the Lean build;
+- the difftest against Lean's pieces, 209 passed;
+- `two_stage` 10, `spot_proved` 85, `windows` 89;
+- vllm's `test_interior_rows` 7 and one_stage's `test_two_stage_driver` 5.
+
+The one failure, a stale expectation in `test_two_stage`, is fixed in `22f39ece90`.
+
+**What it does.**
+- The Lean verifier of record and its Python mirror change together. They derive per caller node, once per Definition, where each unit of a template sits.
+- Linked and wired reads are held to that exact row, which closes the any-row-of-its-block read.
+- A link or wire whose rows don't place its part's units is refused (`second-links` or `second-wires`).
+- New difftest negatives cover a wrong row, wrong leaves, a wrong `per`, units off by one either way, a misaligned slice, callers that disagree on a port's value or on its kind, and a port gathered from two writers (today's combine).
+
+**For vllm's date.** I checked piece 1 against route B's shape:
+- an inlined Definition where each chunk and each combine is its own call node, as `TemplateInlined_v1{TokenSelect_v4}` already is;
+- each combine port reads one field of one writer unit.
+
+Round 2 derives all of it:
+- the chunks' link is one run, `⟨0, 2420, 0, 1⟩` with `per = 2420`;
+- a level-1 combine's port, reading chunk `55·i + j` at caller `i`, is one run, `⟨0, 44, j, 55⟩`.
+
+So route B needs nothing more from proofs, and Thu 12 Nov 12:00Z for the first CPU staging through every round-2 check stands if route B is picked by Tue 12:00Z. It is still refused last at `two-stage-form` while `FORM` is off. A batch of chunks feeding a mapped batch of combines would not derive wires today. If circuits/vllm want that form instead, tell me and I'll add it; it's a small change to `nodeWires`.
+
+**Knock-on.** TWOGUARD's and TWOOPENS's integration branch builds `SecondStage.Own` in `SpotFlock.ownOf` and `TwoGuard.ownOfAt` with links and wires but no rows. Once #8413 lands, both need `rows`, as `Run` derives them, or the honest toy is refused at `second-links`. I've told TWOGUARD, TWOOPENS and TWOVERIFY. TWOVERIFY has the diff and three questions.
