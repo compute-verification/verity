@@ -200,7 +200,7 @@ def top_bits(ranks: np.ndarray, vocab: int) -> tuple[float, int]:
 
 
 def honest_first(lm: LM, pre_h: Cache, sfx: torch.Tensor, precision: str) -> tuple[torch.Tensor, torch.Tensor]:
-    """A request's honest first position after the honest prefix: served logprobs (1, V) and final norm output (1, d)."""
+    """A request's honest first position after the honest prefix: served logprobs (1, V), final norm output (1, d)."""
     L = lm.spec.layers
     th = {("final", L): None}
     z = lm.forward(sfx, copy_cache(pre_h), taps=th, last_only=True)[:, -1]
@@ -283,7 +283,7 @@ def weight_target(lm: LM, site: str, layer: int, coord: int) -> torch.Tensor | N
 
 
 def signed_targets(lm: LM, f: dict, n: int, seed: int) -> tuple[torch.Tensor | None, list[torch.Tensor]]:
-    """A fault's weight target signed by its push (value - honest), and n other columns of the same matrix signed alike."""
+    """A fault's weight target signed by its push (value - honest), and n other columns of its matrix signed alike."""
     t = weight_target(lm, f["site"], f["layer"], f["coord"])
     if t is None:
         return None, []
@@ -313,13 +313,15 @@ def decoded(served: np.ndarray, direct: np.ndarray) -> list[int]:
 
 
 def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, deltas: np.ndarray,
-                 target: torch.Tensor | None, controls: list[torch.Tensor], E: torch.Tensor, vocab: int,
-                 checkpoints: list[int]) -> dict:
+                 target: torch.Tensor | None, controls: list[torch.Tensor], ctrl_u: list[torch.Tensor],
+                 E: torch.Tensor, vocab: int, checkpoints: list[int]) -> dict:
     """The decoders' bits for one fault over Q requests (first served token). deltas (Q, d): the fault's effect on the
     final norm's output at each request's first served position; runner (Q,): each request's honest runner-up, the
     token a small push serves without any information about the fault's direction (the baseline). target: the
     weights' own direction for the fault, signed by its push; controls: other columns of the same matrix, signed
-    alike, which score the same decoded tokens for what common tokens give along any column."""
+    alike, which score the same decoded tokens for what common tokens give along any column. ctrl_u: other faults'
+    mean effects, the control of the split-half score (the mean effect fitted on one half of the requests, the
+    decoded tokens read from the other)."""
     s0, h0 = served[:, 0], honest[:, 0]
     direct = s0 != h0
     Q = len(direct)
@@ -345,6 +347,24 @@ def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, del
     acc = ok / n_pairs if n_pairs else 0.0
     out |= {"pairs": n_pairs, "pairs_ok": ok, "pair_bits": pair_bits(n_pairs, acc),
             "cos_mean": float(np.mean(cos)) if cos else None}
+    cu_ranks = [ranks_along(E, c) for c in ctrl_u]
+    if seen and cu_ranks:
+        pr = torch.tensor(sorted(seen))
+        gap = E[pr[:, 1]] - E[pr[:, 0]]
+        acc_cu = [float(((gap @ c) > 0).float().mean()) for c in ctrl_u]
+        out |= {"pair_acc_u_ctrl": float(np.mean(acc_cu)),
+                "pair_bits_u_ctrl": float(np.mean([pair_bits(n_pairs, x) for x in acc_cu]))}
+    if Q >= 4 and float(u_all.norm()) > 0:
+        tb, cb = [], []
+        for k in (0, 1):
+            fit, read = np.arange(Q) % 2 == k, np.arange(Q) % 2 != k
+            dec = decoded(s0[read], direct[read])
+            if dec:
+                tb.append(top_bits(ranks_along(E, D[torch.from_numpy(fit)].mean(0))[dec].numpy(), vocab)[0])
+                cb.append(float(np.mean([top_bits(r[dec].numpy(), vocab)[0] for r in cu_ranks])) if cu_ranks else 0.0)
+        if tb:
+            out |= {"split_bits_u": float(np.mean(tb)), "split_ctrl_u": float(np.mean(cb)),
+                    "split_net_u": float(np.mean(tb) - np.mean(cb))}
     ctrl_ranks = [ranks_along(E, c) for c in controls]
     if target is not None and seen:
         pr = torch.tensor(sorted(seen))
@@ -375,6 +395,27 @@ def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, del
     return out
 
 
+def score_flips(flips: list[tuple[int, int]], target: torch.Tensor | None, controls: list[torch.Tensor],
+                E: torch.Tensor, vocab: int) -> dict:
+    """A decode's weight bits from its (honest, served) pairs where the two differ: the served tokens as a decoded
+    set, and each distinct pair as an order claim, scored along the fault's signed target and its controls."""
+    if target is None or not flips:
+        return {}
+    dec = decoded(np.array([y for _, y in flips]), np.ones(len(flips), bool))
+    rank = ranks_along(E, target)
+    rb, rk = top_bits(rank[dec].numpy(), vocab)
+    cb = [top_bits(ranks_along(E, c)[dec].numpy(), vocab)[0] for c in controls] or [0.0]
+    pr = torch.tensor(sorted(set(flips)))
+    gap = E[pr[:, 1]] - E[pr[:, 0]]
+    acc_w = float(((gap @ target) > 0).float().mean())
+    acc_c = [float(((gap @ c) > 0).float().mean()) for c in controls]
+    return {"decoded": len(dec), "top_bits_w": rb, "top_k_w": rk, "ctrl_bits_w": float(np.mean(cb)),
+            "net_bits_w": rb - float(np.mean(cb)), "p1_w": int(int(rank[dec[0]]) == 0),
+            "in_top10_w": int(sum(int(rank[y]) < 10 for y in dec[:10])), "pairs": len(pr), "pair_acc_w": acc_w,
+            "pair_bits_w": pair_bits(len(pr), acc_w), "pair_acc_ctrl": float(np.mean(acc_c)) if acc_c else None,
+            "pair_bits_ctrl": float(np.mean([pair_bits(len(pr), x) for x in acc_c])) if acc_c else None}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="gpt2", choices=sorted(MODELS))
@@ -401,7 +442,8 @@ def main() -> int:
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--max-faults", type=int, default=0, help="keep at most this many faults (0: all)")
     ap.add_argument("--threads", type=int, default=0)
-    ap.add_argument("--controls", type=int, default=8, help="oracle: random columns that score a value fault's control")
+    ap.add_argument("--controls", type=int, default=8,
+                    help="random columns of the same matrix that score a value fault's control")
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
     if a.threads:
@@ -457,10 +499,16 @@ def main() -> int:
                     KL.append(o["kl"])
             S, H, Dl = torch.stack(S, 1).numpy(), torch.stack(H, 1).numpy(), torch.stack(Dl, 1).numpy()
             KL = torch.stack(KL, 1).numpy() if KL else None
+            U = torch.from_numpy(Dl).float().mean(1)
             for j, f in enumerate(chunk):
                 direct = S[j] != H[j]
                 target, controls = signed_targets(lm, f, a.controls, a.seed)
-                r = dict(f) | score_oracle(S[j], H[j], runner, Dl[j], target, controls, E, V, checkpoints)
+                key = (f["site"], f["layer"], f["coord"])
+                pool = [k for k in range(b) if (chunk[k]["site"], chunk[k]["layer"], chunk[k]["coord"]) != key
+                        and float(U[k].norm()) > 0]
+                picks = np.random.default_rng([a.seed, i + j]).permutation(pool)[:a.controls] if pool else []
+                r = dict(f) | score_oracle(S[j], H[j], runner, Dl[j], target, controls, [U[k] for k in picks], E, V,
+                                           checkpoints)
                 r["code_bits"] = code_bits(direct.reshape(-1), S[j].reshape(-1), V)
                 r["direct_reads"] = int(direct.sum())
                 last = r[f"q{checkpoints[-1]}"]
@@ -472,6 +520,7 @@ def main() -> int:
                 recs.append(r)
         else:
             per = [dict(f) | {"direct": 0, "code_bits": 0.0, "kl_bits": 0.0, "distinct": 0, "reads": 0} for f in chunk]
+            flips = [[] for _ in chunk]
             for p, prompt in enumerate(reqs):
                 ys, yh, kl = decode(lm, pre_f, pre_h, prompt, b, a.new, noise, p, a.precision)
                 d = (ys != yh).numpy()
@@ -481,6 +530,11 @@ def main() -> int:
                     per[j]["kl_bits"] += float(kl[j].sum())
                     per[j]["distinct"] += len(set(ys[j][torch.from_numpy(d[j])].tolist()))
                     per[j]["reads"] += a.new
+                    k = np.nonzero(d[j])[0]
+                    flips[j] += list(zip(yh[j].numpy()[k].tolist(), ys[j].numpy()[k].tolist()))
+            for j, f in enumerate(chunk):
+                target, controls = signed_targets(lm, f, a.controls, a.seed)
+                per[j] |= score_flips(flips[j], target, controls, E, V)
             recs += per
         print(f"faults {i + b}/{len(faults)}, {time.time() - t_start:.0f} s", file=sys.stderr, flush=True)
         (a.out / "persist.json").write_text(json.dumps({"partial": True, "faults": recs}))
@@ -496,13 +550,14 @@ def main() -> int:
                "direct_max": int(max(r["direct"] for r in rs)),
                "code_mean": float(np.mean([r["code_bits"] for r in rs])),
                "code_max": float(max(r["code_bits"] for r in rs))}
-        for key in ("pair_bits", "pair_bits_w", "pair_bits_ctrl", "top_bits_u", "base_bits_u", "top_bits_w",
-                    "base_bits_w", "ctrl_bits_w", "net_bits_w", "kl_bits"):
+        for key in ("pair_bits", "pair_bits_u_ctrl", "pair_bits_w", "pair_bits_ctrl", "top_bits_u", "base_bits_u",
+                    "split_bits_u", "split_ctrl_u", "split_net_u", "top_bits_w", "base_bits_w", "ctrl_bits_w",
+                    "net_bits_w", "kl_bits"):
             if any(r.get(key) is not None for r in rs):
                 vals = [r.get(key) or 0.0 for r in rs]
                 row[key + "_mean"], row[key + "_max"] = float(np.mean(vals)), float(max(vals))
         rows.append(row)
-    keys = ("code_bits", "pair_bits", "pair_bits_w", "top_bits_u", "top_bits_w", "net_bits_w")
+    keys = ("code_bits", "pair_bits", "pair_bits_w", "top_bits_u", "split_net_u", "top_bits_w", "net_bits_w")
     best = {key: max(recs, key=lambda r: r.get(key) or 0.0) for key in keys if any(key in r for r in recs)}
     summary = {"model": a.model, "revision": MODELS[a.model]["revision"], "vocab": V, "bits_per_token": math.log2(V),
                "mode": a.mode, "where": a.where, "fault_position": pf, "fault_class": pc, "prefix_tokens": ids.shape[1],
