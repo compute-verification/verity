@@ -2810,7 +2810,8 @@ class Queue:
             prefetch([(p.number, p.head) for p in open_prs])
             self.prefetch = None
         try:
-            onto = {"base": main, "landed": main, "queued": main} if loop else {}
+            old = _git(self.workdir, "rev-parse", "-q", "--verify", "refs/remotes/origin/checked^{commit}", check=False).stdout.strip()
+            onto = {"base": main, "landed": landed_with(self.workdir, main, old or None), "queued": main} if loop else {}
             entries = self.entries(prs, state, open_numbers={p.number for p in open_prs}, **onto)
             entries.update(waiting)
             entries.update(self.off_main(open_prs))
@@ -3259,6 +3260,18 @@ def rules_at(repo: Path, ref: str) -> Rules | None:
         if r.returncode == 0:
             return Rules.parse(r.stdout, path)
     return None
+
+
+def landed_with(repo: Path, main: str, old: str | None) -> str:
+    """What `entries` takes as landed onto ``main`` (its ``landed``): ``main``, and while ``main`` doesn't hold ``old``, the old
+    path's frozen `checked`, ``old`` too, as one commit with both as parents.  A head landed on `checked` passed drive's rules
+    and reaches `main` in an aggregate of `checked`, so a PR holding it doesn't wait for its PR, which may have moved on
+    unmarked since, as under drive."""
+    if not old or not _git(repo, "merge-base", "--is-ancestor", old, main, check=False).returncode:
+        return main
+    pinned = {**IDENTITY, "GIT_AUTHOR_DATE": "@0 +0000", "GIT_COMMITTER_DATE": "@0 +0000"}      # the same pair, the same commit
+    return _git(repo, "commit-tree", f"{main}^{{tree}}", "-p", main, "-p", old, "-m", "main and the old path's checked",
+                env=pinned).stdout.strip()
 
 
 def chain_of(repo: Path, base: str, ref: str) -> list[Member]:

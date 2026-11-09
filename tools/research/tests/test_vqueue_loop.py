@@ -846,6 +846,31 @@ def test_a_pr_the_priority_file_names_ahead_of_prs_its_head_holds_lands_them_wit
     assert [r.number for r in w.ready(env.main())] == [1, 2, 3]       # ranked below #1, #2 holds nothing ahead of it
 
 
+def test_a_head_landed_on_the_old_paths_checked_holds_no_pr_that_holds_it_as_under_drive(env):
+    """`checked`, frozen since the switch, holds heads that landed under drive's rules and reach `main` only in an aggregate
+    of it: a PR holding one doesn't wait for the PR that landed it, though that PR moved on unmarked since.  Without
+    `checked` it waits; once `main` holds `checked`, the head is on `main`."""
+    old = env.o.change({"a.txt": "1\n"})
+    _git(env.o.dev, "checkout", "-q", "--detach", "origin/main")
+    _git(env.o.dev, "merge", "-q", "--no-ff", "-m", "Queue: #1 landed on checked", old)
+    checked = _git(env.o.dev, "rev-parse", "HEAD")
+    _git(env.o.dev, "push", "-q", "origin", f"{checked}:refs/heads/checked")
+    env.o.gh.put(1, env.o.change({"a.txt": "2\n"}, base=old), ready=False)      # #1 moved on from the head that landed, unmarked
+    env.o.gh.put(2, env.o.change({"b.txt": "2\n"}, base=checked))                # #2 holds #1's landed head through `checked`
+    env.labels.marked_by = lambda n, h: f"lane-{n}" if (n, h) in env.o.gh.ready else None   # no mark withdrawn at #1's new head
+    loop = env.loop(lambda s: [])
+    w = loop.world
+    loop.tick()
+    assert [r.number for r in w.ready(env.main())] == [2]
+    _git(env.o.origin, "update-ref", "-d", "refs/heads/checked")
+    w.fetch()
+    assert [r.number for r in w.ready(env.main())] == []                       # #2 contains #1's commits, and #1 isn't marked
+    _git(env.o.origin, "update-ref", "refs/heads/checked", checked)
+    _git(env.o.origin, "update-ref", "refs/heads/main", checked)
+    w.fetch()
+    assert [r.number for r in w.ready(env.main())] == [2]
+
+
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
     made: list[Labels] = []
     loop = env.loop(lambda s: [])
