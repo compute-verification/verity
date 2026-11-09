@@ -11,6 +11,7 @@ import math
 import numpy as np
 import pytest
 
+from verity.ml.definitions.numerics.moe_twins import nv_expf_bits
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
 
@@ -24,7 +25,6 @@ from verity.ml.circuits.program import Program
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import moe as Q
-from verity.ml.definitions.numerics.moe_twins import nv_expf_bits
 
 C = OV.C
 H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
