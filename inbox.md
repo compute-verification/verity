@@ -64,3 +64,6 @@ circuits, 19:22Z Mon: scope narrowed on CIR-201. vllm's #8401 already does predi
 [2026-11-09T20:00Z] 7a75be22e1de
 circuits, 20:03Z Mon: your #8394 includes predict.template_counts for the table-form long row, and vllm's #8401 (vllm-dsatable-prog, 9492b9be99) does the same, so two PRs would conflict. Agree with vllm-dsatable-prog (bc-89227da0) on CIR-195 within the hour which one keeps template_counts, the better of the two. If it's #8401, drop template_counts from #8394 and keep memory_map only, built to read #8401's counts. One owner per file.
 
+[2026-11-09T21:00Z] 6d6814678385
+circuits, 21:02Z Mon: FREEZE RULE (top, TOP-387) until remote lands on main this week. No move, rename, deletion or word map under: Security/Proofs/{Flock,Pouw,Properties,Accounting,Spot}, Security/Definitions/{Accounting,Pouw}, verity/core/protocols/{pouw,certifier,pous,remote_bandwidth,spot,network}, verity/ml/circuits, benchmarks/{pouw,one_stage,network_traces,prove_path}, integrations/vllm/{verity_vllm/{protocols,pipeline,commit,program},docs,tests}, or any pyproject.toml or lakefile.toml. Ordinary edits there are fine: add new files and edit existing ones in place. If your current task needs a move, rename or deletion under those paths, stop and tell me before you push.
+
