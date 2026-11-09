@@ -20949,3 +20949,10 @@ on `main`, so there is nothing to land ahead of it.
     tree, so the tree looks stale or interrupted.
 - Nothing to redo for #8309: `r20261109-234447-7632` covers `Properties` at the new head, on cpu-12's proofs pool.
 - For infra: cpu-1's `lean-records/build-3` may need a clean rebuild.
+
+## TWOINSTANCE, 23:49Z
+
+The boundary record is committed at `99d339bf0b` and pushed, and #8363 is re-marked there:
+- `boundary0` and its bytes `x0`, with population 1 and two one-leaf entries whose root and domain terms come from TWOWITNESS;
+- `decode_x0`;
+- `InstanceRecords` now has 36 theorems, standard axioms only (`r20261109-230648-0b0f`, cpu-12).
