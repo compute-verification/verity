@@ -34,7 +34,7 @@ network certifier and the dataflow discharge. Its witnesses
 input to the faulted circuit, not an overwrite of a release, so SPOT's part of the channel is the fault patterns, of
 sizes summing to at most `M`, and the reach of a fault drops out. What faults at the patterns no cut covers do to the
 weights' exposure is the named assumption `FaultedUseHard` (λ), on a typical set of weights; a pattern an honest cut
-`κ` cuts (`Definitions.WeightSecurity.Cut`) costs the cut's hint in the channel instead, with no assumption.
+`κ` cuts (`Definitions.WeightSecurity.Cut`) counts in the channel by the cut's hint instead, and needs no assumption.
 `TheftServed` stays as the bound that takes no claim about the model. Its witnesses `TheftFaultedHonest` and
 `TheftFaultedNontrivial` are at the toy deployment with faults (`Definitions.WeightSecurity.ToyFaulted`), at the cut
 that cuts nothing.
@@ -155,9 +155,10 @@ string written in (`Simulable`), and the audit leaves `M` incorrect proof blocks
 `δ` (`Served.UndetectedLe`), then the outsider steals the weights with probability at most
 `Pr[gen ω ∉ Typ] + |S| · N^(λ - 1) · p + δ + Pr[a release isn't faithful]`. `|S|` is the fault channel's covert
 strings: each window's interior pattern or, where the cut `κ` cuts the window's pattern, `κ`'s hint, times the served
-channel's at the overwrite budget `(L + 1) · |O|`. So interior faults cost `N^λ = 2^(λ · C_arb)` and a cut fault its
-hint, where `TheftServed` charges every value their reach `E` can overwrite. At `Cut.none` every pattern is interior.
-`φ₀` is the empty pattern (`NoFault`). -/
+channel's at the overwrite budget `(L + 1) · |O|`. At `Cut.none` every pattern is interior and faults cost
+`N^λ = 2^(λ · C_arb)`, where `TheftServed` charges every value their reach `E` can overwrite. With a cut, a fault it
+cuts counts in `|S|` by its hint rather than its pattern and needs no `FaultedUseHard`; `N` still counts every
+pattern, as `FaultedUseHard` states its rate. `φ₀` is the empty pattern (`NoFault`). -/
 def TheftFaulted : Prop :=
   ∀ {Ω R Θ Q Adv O V Tick F Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv] [Fintype O]
     [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick] [Fintype F]

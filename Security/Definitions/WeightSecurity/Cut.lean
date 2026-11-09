@@ -24,9 +24,9 @@ the hints, in place of the patterns: the faults cost their hints' bits, with no 
   `Outsider.dropFaults`, `faultingAs`: such a party seen as an outsider against a datacenter that faults where it
   would;
 * `Cut.Interior κ Cf size φ₀`: the patterns `κ` doesn't cut, the only ones `TheftFaulted` takes `FaultedUseHard` at.
-  Its fault channel (`faultChannel`) carries a hint for a window whose pattern `κ` cuts, so those faults cost their
-  hints rather than `FaultedUseHard`'s rate. `Cut.none` cuts nothing, and `Cut.map` reads a cut through an encoding
-  of the answers (a token list as the release's `O → V`).
+  Its fault channel (`faultChannel`) carries a hint for a window whose pattern `κ` cuts, so those faults count by
+  their hints rather than their patterns and need no `FaultedUseHard`. `Cut.none` cuts nothing, and `Cut.map` reads a
+  cut through an encoding of the answers (a token list as the release's `O → V`).
 
 The cuts are stated for autoregressive decoding (`decode`): position `i`'s token is a function of the tokens before it,
 which holds when the release is tokens only, nothing decodes ahead, and no state is shared across requests. Two
