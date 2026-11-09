@@ -643,6 +643,91 @@ def test_a_fail_whose_every_failure_is_inherited_hasn_t_ended_while_graph2_count
     assert (v.ended, vqueue._reading(v)) == (True, PASS)
 
 
+@pytest.mark.parametrize("agree", [FAIL, PASS])
+def test_a_task_graph2_says_failed_that_the_loop_reads_passed_at_another_key_holds_its_candidate_and_rings_ci_once(env, agree):
+    """`--by executor` is self-asserted, and graph2's verdict overrides a label only at graph2's own key (`_said`): a pass for
+    `lean-build:x` with outputs graph2 never made, written before graph2's own, and a pass at the key those make for
+    `pytest:a`, which reads it, pass `pytest:a` while graph2's verdict names it failed.  The candidate is held, pending, `CI`
+    is rung once with the task, both keys and both readings, and it stays held until the two agree: on graph2's fail, read at
+    the loop's key, it fails and its PR is ejected; on graph2's pass, it lands."""
+    one = env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop)
+    (built,) = loop.tick()
+    sha, w = built["sha"], loop.world
+    keys = env.listed(sha, {"lean-build:x": ["x.lean"], "pytest:a": ["a.txt"]}, reads={"pytest:a": "lean-build:x"})
+    env.result(keys["lean-build:x"], "lean-build:x", PASS)
+    _, made, _ = w._settled(w.tasks.graph_v2(f"ready:{sha}")[1])
+    env.result(made["pytest:a"], "pytest:a", PASS)
+    theirs = Path(f"{script}.verdict.ready:{sha}")
+    theirs.write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [
+        {"task": "pytest:a", "key": "sha512:graph2s-own", "tests": ["t.py::test_a"], "inputs": ["a.txt"], "reads": []}]}))
+    held = L.Dispute("pytest:a", FAIL, "sha512:graph2s-own", made["pytest:a"])
+    assert str(held) == f"graph2 says pytest:a fail at sha512:graph2s-own, and the loop reads it pass at {made['pytest:a']}"
+    j = w.verdict(sha, built["base"])
+    assert (j.verdict, j.disputed, j.note) == (Verdict(PENDING), (held,),
+                                               f"graph2 says fail; held until graph2 and the loop agree: {held}")
+    acts = [r for _ in range(3) for r in loop.tick()]
+    (ring,) = acts
+    assert (ring["action"], ring["sha"], ring["why"], ring["to"], ring["done"], ring["task"]) == (
+        "ring", sha, str(held), ["@ci"], True, "pytest:a")
+    assert (ring["graph2"], ring["mine"]) == ({"state": FAIL, "key": "sha512:graph2s-own"},
+                                              {"state": PASS, "key": made["pytest:a"]})
+    assert env.posts == [f"@ci vqueue: {ring['text']}"] and f"ready:{sha} (#1) while graph2's" in ring["text"]
+    assert env.main() != sha and env.withdrawn == []
+    if agree == FAIL:
+        theirs.write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [
+            {"task": "pytest:a", "key": made["pytest:a"], "tests": ["t.py::test_a"]}]}))
+        assert _acts(loop.tick()) == ["eject", "drop"] and env.withdrawn == [(1, one)] and env.main() != sha
+    else:
+        theirs.write_text(json.dumps({"state": PASS, "pending": 0}))
+        assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and env.main() == sha
+    assert [p for p in env.posts if p.startswith("@ci vqueue: the verified queue holds")] == [env.posts[0]]
+
+
+#: a policy putting circuit-check's tasks off the merge gate, as `main`'s does
+OFF_GATE = 'schema = "policy/v0"\noff_gate = ["circuit-check"]\n'
+
+
+def test_a_task_the_verdict_needs_holds_it_on_graph2_s_fail_or_infra_but_one_off_the_gate_no_gating_task_reads_doesn_t(env):
+    """A candidate's verdict needs its gating tasks and what they read, transitively: a task off the gate (circuit-check's, by
+    the candidate's policy) that a gating task reads holds it on graph2's fail as a gating task does, and graph2's infra error
+    holds it as its fail does, wherever the loop reads the task passed.  A task off the gate that no gating task reads holds
+    nothing: graph2's verdict fails on circuit-check's tasks, which the loop doesn't gate on.  A `ready_verdict` label, which a
+    rerun leaves standing, holds nothing either."""
+    env.put(1, {"a.txt": "1\n", "tools/verity/check/policy.toml": OFF_GATE})
+    loop = env.loop(policy)
+    script = env.graph2_script(loop)
+    (built,) = loop.tick()
+    sha, w = built["sha"], loop.world
+    env.graph2.list_graph(f"ready:{sha}", _graph(sha, [
+        {"id": "lean-build:x", "kind": "lean-build", "inputs": ["x.lean"], "key": "sha512:x"},
+        {"id": "circuit-binding:u", "kind": "circuit-binding", "inputs": ["u.txt"],
+         "reads": [{"task": "lean-build:x", "output": "out"}]},
+        {"id": "pytest:a", "kind": "test-file", "inputs": ["a.txt"], "reads": [{"task": "circuit-binding:u", "output": "out"}]},
+        {"id": "circuit-binding:z", "kind": "circuit-binding", "inputs": ["z.txt"], "key": "sha512:z"}]))
+    env.result("sha512:x", "lean-build:x", PASS)
+    env.result("sha512:z", "circuit-binding:z", PASS)
+    for task in ("circuit-binding:u", "pytest:a"):
+        _, made, _ = w._settled(w.tasks.graph_v2(f"ready:{sha}")[1])
+        env.result(made[task], task, PASS)
+    verdict = Path(f"{script}.verdict.ready:{sha}")
+
+    def says(**entries) -> L.Judged:
+        verdict.write_text(json.dumps({"state": FAIL if "failed" in entries else INFRA, "pending": 0, **entries}))
+        return w.verdict(sha, built["base"])
+
+    assert (j := says(failed=[{"task": "circuit-binding:z", "key": "sha512:z-graph2"}])).verdict == Verdict(PASS)
+    assert j.disputed == ()
+    j = says(failed=[{"task": "circuit-binding:u", "key": "sha512:u-graph2"}])
+    assert (j.verdict, j.disputed) == (Verdict(PENDING),
+                                       (L.Dispute("circuit-binding:u", FAIL, "sha512:u-graph2", made["circuit-binding:u"]),))
+    j = says(infra=[{"task": "pytest:a", "key": "sha512:a-graph2", "why": "lost"}])
+    assert (j.verdict, j.disputed) == (Verdict(PENDING), (L.Dispute("pytest:a", INFRA, "sha512:a-graph2", made["pytest:a"]),))
+    labelled = {"state": FAIL, "labelled": "2026-01-01T00:00:00Z", "failed": [{"task": "pytest:a", "key": "sha512:a-graph2"}]}
+    assert L._disputed(labelled, ["pytest:a"], {"pytest:a": (PASS, None)}, {"pytest:a": made["pytest:a"]}) == ()
+
+
 def test_a_fault_main_has_too_is_inherited_by_what_it_names_so_no_pr_touching_its_inputs_is_ejected(env):
     """graph2 names no failing test of a task's own fault: its tests are the files it read outside its declared inputs
     (`undeclared:<path>`), else its fault (`fault:...`, without the run and node it names), from graph2's verdicts on the
