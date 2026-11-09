@@ -4344,6 +4344,14 @@
    "honest": ["WeightSecurity.SecurityProofs.TheftServedHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedNontrivial"
   },
+  "WeightSecurity.SecurityProofs.TheftServedReq": {
+   "honest": ["WeightSecurity.SecurityProofs.TheftServedHonest"],
+   "nontrivial": "WeightSecurity.SecurityProofs.TheftServedReqNontrivial"
+  },
+  "WeightSecurity.SecurityProofs.TheftServedMinEntropy": {
+   "honest": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest"],
+   "nontrivial": "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial"
+  },
   "Claims.Encodings.byPosBinds": {
    "honest": ["Claims.Encodings.byPosBinds_honest"],
    "nontrivial": "Claims.Encodings.byPosBinds_nontrivial"
@@ -25562,6 +25570,39 @@
    "type_hash": "cfa7b06985b5c8b8dec6f97915559bea807da289d4b8050472bd09ed583cafdc",
    "unfolded_hash": "8128d94e5bc857b76f22960f2d1e6add20aa06fcb4cb5b15b9a941f9f7e4f4d7"
   },
+  "WeightSecurity.SecurityProofs.TheftServedMinEntropy": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftServedMinEntropy : WeightSecurity.Guarantees.TheftServedMinEntropy"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["WeightSecurity.Served.UndetectedLe"],
+    "open": ["WeightSecurity.Assumptions.HonestUseHard"],
+    "reads": []
+   }
+  },
+  "WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest : WeightSecurity.Guarantees.TheftServedMinEntropyHonest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["WeightSecurity.Assumptions.HonestUseHard"]
+   }
+  },
+  "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial : WeightSecurity.Guarantees.TheftServedMinEntropyNontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   }
+  },
   "WeightSecurity.SecurityProofs.TheftServedNontrivial": {
    "owner": "@proofs",
    "signature": ["WeightSecurity.SecurityProofs.TheftServedNontrivial : WeightSecurity.Guarantees.TheftServedNontrivial"],
@@ -25574,6 +25615,28 @@
    },
    "type_hash": "d0365c6e6738345a9b26f7ac02c1b660bbf5438d5402f5573146a12746f0aa98",
    "unfolded_hash": "19def6b961b3508805908e2f18b83ad426efa871aab2635785f321499cf97571"
+  },
+  "WeightSecurity.SecurityProofs.TheftServedReq": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftServedReq : WeightSecurity.Guarantees.TheftServedReq"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["WeightSecurity.Served.UndetectedLe"],
+    "open": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "reads": []
+   }
+  },
+  "WeightSecurity.SecurityProofs.TheftServedReqNontrivial": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftServedReqNontrivial : WeightSecurity.Guarantees.TheftServedReqNontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   }
   },
   "WeightSecurity.SecurityProofs.TheftTight": {
    "owner": "@proofs",
@@ -26566,6 +26629,8 @@
    "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial": "lemma: PeriodBindingPerProver's nontrivial witness (LEAN-66): at onePeriod with every proof accepted, opening every slot to the coin bit by a verified path, kappa is 0 and the bound at q = 0, which is 0, fails, since the opened bit moves with every fresh sample; a counterexample about no protocol function (CMP-33).",
    "Flock.SecurityProofs.SampledKSTwo": "frozen (obligation,no-function): ksTwo_code at the deployed round order (SamplingDeploy.codeTwoAt), knowledge sound at SHA-512 from UniformRandomBytes at each challenger call (CallsUniform) and seven facts of the code (RegMatchesTwo, Code.RefusesTwo, Code.ReplayCap, Code.InteriorFixed, SessionRuns, SessionsIn, SessionOpensTwo), open until Spot.Run.run's checks prove them; it reads SampledKSTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SamplingGeneric's code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "WeightSecurity.SecurityProofs.TheftServed": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' locality as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
+   "WeightSecurity.SecurityProofs.TheftServedReq": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean), per charge unit and with the served channel's covert capacity in bits (WeightSecurity.servedBits), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' isolation (WeightSecurity.Served.Isolated) as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
+   "WeightSecurity.SecurityProofs.TheftServedMinEntropy": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean) by two to the served channel's covert capacity in bits less the weights' min-entropy under honest use, stated as honest-use hardness against every party (WeightSecurity.Assumptions.HonestUseHard at Set.univ), and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' isolation (WeightSecurity.Served.Isolated) as a probability term; it reads no function's acceptance.",
    "Pouw.NCP.GameProofs.gapFromTTNCP": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.GapFromTT": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.NCP.GapFromTTNCP_U_C2": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
