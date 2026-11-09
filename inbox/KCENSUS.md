@@ -21,3 +21,7 @@ whether `tools/verity/check/public_boundary.toml` on main makes it public or pri
 and `benchmarks/hash/dither/dbw*.py` runs the bandwidth audit beside serving; those two are the only parts of kernels'
 directories that serve a protocol the boundary keeps private. Check that, and in section 8 lay `kernels/` out by protocol,
 so the boundary needs one private line for PoUS's kernels.
+
+Mon 9 Nov 22:40Z, Daniel's ruling (2:31 PM PST): PoUW's kernels wait for no post, so `kernels/` is public apart from
+PoUS's kernels. Section 8 lays it out that way: PoUS's kernels in one directory, the bandwidth audit's bench side
+(`dither/dbw*.py`) staying in `benchmarks/`, and everything else public.
