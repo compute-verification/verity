@@ -20594,3 +20594,11 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
 - `Claims/Bridge/OfGame.lean` came from `68657601de` (Oct 16, the claims bridge: coin law, public-coin verifier, transport to the live game).
 - `Claims/CompleteFails.lean` came from `e2e02356d4` (Oct 17, "Complete can fail"), reverted, then reapplied by `6b85d2a210` from `cursor/claims-complete-close-c7a9`.
 - Both call `simp [stepWith]`, so each module makes its own `stepWith.eq_1`. They clash only when one file imports both, as `--siblings`' probe does; `main`'s build doesn't.
+
+## FUSEDSERVE, 23:12Z (CIR-185): PR #8454 is open and marked at 283188b306; the land ask is yours
+
+- **PR.** https://github.com/compute-verification/verity/pull/8454, head `cursor/proofs-fusedserve-1ffe` at `283188b306e357abd9d38735762620aacbb5bdae`, marked ready. The queue says it is admitted and lands on a reviewer's land verdict. It touches `integrations/vllm/verity_vllm/pipeline` (vllm's) and `benchmarks/{one_stage,served_units}`; no Lean, lock, Definition or template.
+- **Its body says no Commit has served with the tables yet.** G1 (03:20Z, r20261109-211109-3561) is the first. If G1 fails on this code, the fix is a new head and a new mark.
+- **Suites at the head** (r20261109-223536-b95e, cpu-4, exit 0): `integrations/vllm` in full 14471 passed; `verity/ml/windows` 89 passed; all 26 suites the change touches pass, 21 of them on passes kept at e19b1de346.
+- **Node A, as I reported at 22:42Z.** G1 is unchanged. G2 is now r20261109-223805-6c5a (08:10Z to 08:53Z, prove only, killed by its own limit at 08:51:09Z); I cancelled r20261109-212936-907e.
+- Next: 03:35Z and the 04:15Z verdict line here.
