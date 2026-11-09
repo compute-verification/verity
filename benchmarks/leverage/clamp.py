@@ -17,8 +17,9 @@ doubled (one more exponent step).
 
 Traffic is the hand-written sets (`traffic.CALIBRATION`, `traffic.HELDOUT`) and, with --mixed N, N texts of the pinned
 datasets' (`traffic.mixed`; Pile documents need `--with pyarrow`); --shard i/n splits a part's texts across runs.
-Calibration's texts end by position --cap + --new; complete and explain with --long N check N held-out Pile documents
-of --cap tokens instead (`traffic.long_texts`), positions calibration never saw. Calibrate with --run adds the
+Every text ends by position --cap + --new; calibrate with --long N adds N calibration Pile documents long enough for
+--cap tokens, and complete and explain with --long N check N held-out ones instead (`traffic.long_texts`), so that
+calibration reaches the positions served. Calibrate with --run adds the
 calibration run texts, and complete and explain with --runs the held-out ones (`traffic.run_texts`): runs of one token,
 long and short of the threshold, each followed by an ordinary text.
 
@@ -182,9 +183,9 @@ def sweep_first(lm: LM, stats: Stats | None, n: int, seed: int, batch: int, part
 
 def traffic(split: str, n_mixed: int, n_long: int = 0, cap: int = 0) -> list[tuple[str, str]]:
     """The hand-written set of `split` and n_mixed texts of the pinned datasets' (`traffic.mixed`), as (name, text); with
-    n_long, instead, that many held-out Pile documents of at least 5 characters a token of `cap` (`traffic.long_texts`)."""
+    n_long, instead, that many Pile documents of `split` of at least 5 characters a token of `cap` (`traffic.long_texts`)."""
     if n_long:
-        return long_texts(n_long, 5 * cap)
+        return long_texts(n_long, 5 * cap, split)
     hand = CALIBRATION if split == "calibration" else HELDOUT
     return [(f"hand:{i}", t) for i, t in enumerate(hand)] + (mixed(split, n_mixed) if n_mixed else [])
 
@@ -232,7 +233,8 @@ def part_calibrate(lm: LM, tok, a) -> dict:
                   torch.load(a.hosts)["hosts"] if a.hosts else None, a.run)
     t0 = time.time()
     specials = tuple(tok.decode([i], skip_special_tokens=False) for i in lm.special_ids())
-    texts = shard(traffic("calibration", a.mixed) + (run_texts("calibration", specials) if a.run else []), a.shard)
+    texts = shard(traffic("calibration", a.mixed) + (traffic("calibration", 0, a.long, a.cap) if a.long else [])
+                  + (run_texts("calibration", specials) if a.run else []), a.shard)
     for j, (name, text) in texts:
         ids = continued(lm, tok, text, a.new, a.cap)
         taps = {k: None for k in lm.sites()}
@@ -423,7 +425,8 @@ def main() -> int:
     ap.add_argument("--mixed", type=int, default=0,
                     help="texts of the pinned datasets (traffic.mixed) added to the hand-written set of the part's split")
     ap.add_argument("--long", type=int, default=0,
-                    help="complete, explain: only this many held-out Pile documents long enough for --cap tokens")
+                    help="calibrate: add this many calibration Pile documents long enough for --cap tokens; complete, "
+                         "explain: only this many held-out ones")
     ap.add_argument("--runs", action="store_true",
                     help="complete, explain: add the split's run texts (traffic.run_texts), runs of one token and after")
     ap.add_argument("--shard", default="0/1", help="i/n: this run's share of the texts (merge joins calibrate's)")

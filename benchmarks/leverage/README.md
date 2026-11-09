@@ -13,12 +13,13 @@ The models are small open ones (GPT-2 small, Qwen2.5-0.5B, Qwen2.5-1.5B), run on
   host token in a row on, since a long run forms the sink again and puts sinks on the ordinary text after it), with
   `--headroom` powers of two over the honest maximum, one value or one a class; a linear input's box goes through its
   FP8 per-128-group UE8M0 scale. Its traffic is `traffic.py`'s hand-written texts and, with `--mixed N`, the pinned
-  datasets' chat, web and multi-script texts; `--first-tokens -1` adds every vocabulary token at position 0, and
-  `--run` the calibration run texts. `--shard i/n` splits a part across runs, and `--part merge` joins calibrate
-  shards. `--part complete` serves the held-out texts under the boxes and counts the honest values they cut and the
-  served tokens that change; `--part explain` names each value outside its box with its token, context and class, and
-  each text's sink-like positions. With `--runs` both add the held-out run texts, and with `--long N --cap C` they
-  check N held-out Pile documents of C tokens instead.
+  datasets' chat, web and multi-script texts; `--first-tokens -1` adds every vocabulary token at position 0, `--run`
+  the calibration run texts (with a run of every special token), and `--long N --cap C` N calibration Pile documents
+  of C tokens, so that calibration reaches the positions served. `--shard i/n` splits a part across runs, and
+  `--part merge` joins calibrate shards. `--part complete` serves the held-out texts under the boxes and counts the
+  honest values they cut and the served tokens that change; `--part explain` names each value outside its box with
+  its token, context and class, and each text's sink-like positions. With `--runs` both add the held-out run texts,
+  and with `--long N --cap C` they check N held-out Pile documents of C tokens instead.
 - `reach.py`: one fault's reach in the served tokens by site, layer and value. Raw reach is the tokens that differ
   from the honest continuation; direct reach is the tokens no honest query on the served prefix reproduces. It
   reports their Shannon bound, their rank code and the per-position KL. `--temperature` samples under a shared-noise

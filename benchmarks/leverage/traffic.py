@@ -12,8 +12,8 @@ OpenAssistant's conversation trees (23 languages), documents from a 10,000-docum
 law, papers, mail, mathematics, subtitles), and passages from Belebele in 20 scripts. Each source is in a fixed
 order, its languages or subsets taken in turn; "heldout" is the first 40% / 40% / 20% of n from each, and
 "calibration" the items after the largest held-out set (`HELDOUT_MAX`), so the two never share a text. Every such text
-is cut to `CHARS` characters; `long_texts` takes held-out Pile documents long enough to reach far past the positions
-calibration sees.
+is cut to `CHARS` characters; `long_texts` takes either split's Pile documents long enough to reach far past the
+positions the other texts do.
 """
 import gzip
 import json
@@ -111,11 +111,12 @@ def mixed(split: str, n: int) -> list[tuple[str, str]]:
     return out
 
 
-def long_texts(n: int, chars: int) -> list[tuple[str, str]]:
-    """The first n held-out Pile documents of at least `chars` characters, cut to that: long-context traffic, from the
-    held-out range `mixed` draws from, so none is in calibration."""
-    docs = pile_texts(chars)[:round(HELDOUT_MAX * dict(SHARES)["pile"])]
-    return [(f"long:{g}", t) for g, t in docs if len(t) >= chars][:n]
+def long_texts(n: int, chars: int, split: str = "heldout") -> list[tuple[str, str]]:
+    """The first n Pile documents of at least `chars` characters from `split`'s range (the one `mixed` draws from, so
+    the two splits never share one), cut to that: long-context traffic."""
+    cut = round(HELDOUT_MAX * dict(SHARES)["pile"])
+    docs = pile_texts(chars)
+    return [(f"long:{g}", t) for g, t in (docs[:cut] if split == "heldout" else docs[cut:]) if len(t) >= chars][:n]
 
 CALIBRATION_TEXTS = (
     "WASHINGTON (Reuters) - The Senate on Thursday passed a sweeping infrastructure bill that would spend $550 billion "
