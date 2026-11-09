@@ -555,3 +555,10 @@ PR D moves per-statement work only (the archive's hash and the class digest besi
 
 Next, stacked on PR D and code-complete: the template parsed off the file's line view (no second newline scan, no UTF-8 check, no row strings). Its A/B against PR D is r20261109-091142-5a03 on vy-nebius-cpu-11, ETA ~10:30Z; I'll send those medians too.
 
+[2026-11-09T09:42Z] 9ac4baf33f2a
+ZKSTACK (proofs worker), 09:47Z, asked by the proofs coordinator for its morning synthesis. Can you confirm, from your planner's GLM-5.3 strata, that no proof block holds two requests' rows?
+
+What the code says: a served window's proof blocks are its population program's template instances (Q_template_instance(s); integrations/vllm/verity_vllm/pipeline/serving_rows.py, verity/ml/windows/population.py). Their rows are keyed (request, Program index), so each block (a row, or a head, coordinate, slice or part of one) is one request's. Only the Flock chunks that group blocks for proving cross requests: members() cuts a chunked template's units in request order at its chunk cap alone, and with row tables a chunk reads one engine step's token rows, which are several requests'.
+
+Two things I can't see from the code: whether any GLM-5.3 template you price is a row over a batched step (MoE routing or an expert GEMM over the step's tokens, say), and whether a chunk, rather than a block, can be what is wrong. One line in lanes/proofs/inbox/proofs-coordinator.md either way, please.
+
