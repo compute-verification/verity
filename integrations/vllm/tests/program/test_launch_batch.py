@@ -95,7 +95,7 @@ def test_under_breakable_graphs_a_steps_captured_kernels_run_at_its_capture_size
 
 
 def test_step_982_a_full_graph_decode_reduces_on_flashinfer_mnnvl_at_its_padded_size():
-    """Node A's replay r20261107-171723-72b6 under class G's FULL_AND_PIECEWISE graphs: step 982, 25 decoding sequences, replays a
+    """Node A's replay under class G's FULL_AND_PIECEWISE graphs: step 982, 25 decoding sequences, replays a
     FULL graph at 32 tokens; steps 163 and 436 (369 and 299 tokens, mixed) PIECEWISE graphs at 384 and 304; a step past 512 runs
     uncaptured.  No communicator of vLLM d9105ea80 reads the graph mode, so 32 rows reduce on FlashInfer's MNNVL (under its
     512 KiB), the PIECEWISE steps on symm_mem's multimem.  The FULL graph captures the attention at the padded batch, its 7

@@ -32,6 +32,8 @@ from typing import Any, Callable, Iterable, Iterator
 
 import numpy as np
 
+from verity.ml.definitions.tiny import TINY
+
 from . import cache as CC
 
 _LOADED = False
@@ -316,12 +318,6 @@ def kind_of(spec: str) -> str:
 
 # --- the catalog ----------------------------------------------------------------------------------------------------------------
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64, "QKV": 64, "GU": 64,
-        "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
-TINY_NOBIAS = {**TINY, "BIAS": False, "KVH": 2, "QKV": 96}
-#: FP8's per-token quantization reads whole 256-thread CTAs: every reduction length is at least 256
-TINY_FP8 = {**TINY, "H": 256, "NL": 1, "NH": 2, "KVH": 1, "D": 128, "I": 256, "V": 16, "QKV": 512, "GU": 512}
-
 
 #: the binding units (`cache`'s units of a binding file: a root function, a `_model_roots` entry, a `TEMPLATE_PARAMS` entry;
 #: this module's by name, a sidecar's as ``<file>#<name>``) whose roots reach each suite target, by Definition id (`suite`) or
@@ -469,8 +465,13 @@ LAZY_OPERANDS: dict[str, tuple[str, ...]] = {
     "MoeExpertFp8Gemm_v1": ("w",),
     "MoeExpertFp8GemmW_v1": ("w",),
     "ScaledMmFp8BlockGrouped_v1": ("w",),
-    # activations: every rank's partial sums, and the latent rows DSA's top-k routes past INDEX_TOPK keys
+    # activations: every rank's partial sums, and the latent rows DSA's top-k routes past INDEX_TOPK keys (Waksman's network,
+    # the mask form's concentrator in words and in bits, and a row below its size class: its rows and their pad)
     "AllReduceMultimem_v1": ("parts",),
+    "DsaButterflyRows_v1": ("rows",),
+    "DsaButterflyRows_v2": ("rows",),
+    "DsaButterflyRowsPad_v1": ("rows", "pad"),
+    "DsaButterflyRowsPad_v2": ("rows", "pad"),
     "DsaWaksmanRows_v1": ("rows",),
 }
 
@@ -677,16 +678,72 @@ def word_call_families() -> set[str]:
     return _SHORT["words"]
 
 
+#: the families a Call calls where that Call's own partition goes unchecked (`checks.uncut`: over the partition's gate budget
+#: and not cut member by member, or cut so down to a member over it, or over its leaf budget), each with the families of the
+#: Calls that pass it: each is a Call, so such a Call is partitioned by its callees (`checks.by_callees`) and every gate of it
+#: sits in a Call whose partition is checked.  ``test_circuit_check`` holds it to the suite's and the range spots' unchecked
+#: Calls, apart from those its ``OVER_PARTITION_BUDGET`` holds (each with why), which pass nothing
+CALLEE_CALLS: dict[str, tuple[str, ...]] = {
+    "AllReduceMultimemVector_v1": ("AllReduceMultimem_v1",),
+    "And2_v1": ("DsaButterflyTagBits_v1", "DsaRadixTies_v1", "MhcFusedSplit_v2"),
+    "Bf16AddF2fp_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "Bf16MulBf16_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "Bf16ToF32_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "Const16[0x0000]_v1": ("DsaButterflyRows_v1",),
+    "Const1[0x0]_v1": (
+        "DsaButterflyRows_v2",
+        "DsaButterflySettings_v2",
+        "DsaButterflyTagBits_v1",
+        "DsaTopKMask_v2",
+        "MhcFusedSplit_v2",
+    ),
+    "Const1[0x1]_v1": ("DsaTopKMask_v2",),
+    "Const32[0x3727c5ac]_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "Const32[0x43800000]_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "Const32[0x44060000]_v2": ("RMSNormFusedCudaVector8_v4",),
+    "DsaButterflyCtl_v1": ("DsaButterflySettings_v2",),
+    "DsaButterflyTagBits_v1": ("DsaButterflySettings_v2",),
+    "DsaMqaLogit_v3": ("DsaMqaLogits_v3",),
+    "DsaMqaLogitsKey_v1": ("DsaMqaLogits_v4",),
+    "DsaMqaLogitsQ_v1": ("DsaMqaLogits_v4",),
+    "DsaRadixPass_v1": ("DsaTopKMask_v2",),
+    "DsaRadixTies_v1": ("DsaTopKMask_v2",),
+    "DsaTopKKey_v2": ("DsaTopKMask_v2",),
+    "DsaWaksmanPick_v1": ("DsaButterflyRows_v1",),
+    "DsaWaksmanPick_v2": ("DsaButterflyRows_v2",),
+    "DsaWaksmanSwap_v1": ("DsaButterflyRows_v1",),
+    "DsaWaksmanSwap_v2": ("DsaButterflyRows_v2",),
+    "F2fpBf16_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "F32AddFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
+    "F32Add_v3": ("RMSNormFusedCudaVector8_v4",),
+    "F32Div_v3": ("RMSNormFusedCudaVector8_v4",),
+    "F32MulFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
+    "F32Mul_v3": ("RMSNormFusedCudaVector8_v4",),
+    "MhcFusedSplit_v2": ("MhcFusedPostPre_v2",),
+    "MhcPreBigFuse_v2": ("MhcFusedPostPre_v2",),
+    "MoeExpertFp8CoordinateW_v1": ("MoeExpertFp8GemmW_v1",),
+    "MoeExpertFp8Coordinate_v1": ("MoeExpertFp8Gemm_v1",),
+    "MoeExpertFp8ScaleRow_v1": ("MoeExpertFp8GemmW_v1", "MoeExpertFp8Gemm_v1"),
+    "MufuRcpFtz_v2": ("AllReduceRmsNormMnnvl_v2",),
+    "Not_v1": ("DsaRadixTies_v1", "MhcFusedSplit_v2"),
+    "RMSNormPairSumCuda_v2": ("RMSNormFusedCudaVector8_v4",),
+    "RMSNormSumInOrderCuda_v2": ("RMSNormFusedCudaVector8_v4",),
+    "RsqrtApprox_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "Xor2_v1": ("DsaButterflyTagBits_v1", "DsaRadixTies_v1", "MhcFusedSplit_v2"),
+}
+
+
 def call_families(found: dict[str, Any] | None = None) -> set[str]:
     """The Definition families a served Program calls, where the partition invariant applies: the word Call families
-    (`word_call_families`: the replay's row families, every frontend vocabulary kind, every template's Definition), and the
-    Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other
-    Definition's gates are partitioned inside the Call that contains them.  It builds the whole catalog, or takes ``found``, a
-    `suite` built already (`cli._tasks`'s: a later one would also hold what building its bodies registered); `is_call` asks
-    whether one family is among them without it, and refuses a family it can't decide so."""
+    (`word_call_families`: the replay's row families, every frontend vocabulary kind, every template's Definition), the
+    Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place), and the callees
+    of a Call whose own partition goes unchecked (`CALLEE_CALLS`).  Any other Definition's gates are partitioned inside the
+    Call that contains them.  It builds the whole catalog, or takes ``found``, a `suite` built already (`cli._tasks`'s: a later
+    one would also hold what building its bodies registered); `is_call` asks whether one family is among them without it, and
+    refuses a family it can't decide so."""
     if not _CALLS:
         words = word_call_families()
-        _CALLS.update(words | boolean_call_families(set(words), found))
+        _CALLS.update(words | boolean_call_families(set(words), found) | set(CALLEE_CALLS))
     return _CALLS
 
 
@@ -696,13 +753,14 @@ class Undecided(LookupError):
 
 def is_call(fam: str) -> bool:
     """Whether family ``fam`` is in `call_families`, never building the catalog for it: once `call_families` is known here, by it;
-    else a word Call family is; a family outside `boolean_call_candidates` is not; one `certified_boolean_calls` names is.  Any
-    other (a Boolean version of a word Call family that only Definitions the catalog reaches inside its roots could show) is
-    `Undecided`, by name, with the flags that decide it: the catalog's whole build is what ``--all`` pays once for every target."""
+    else a word Call family or a `CALLEE_CALLS` one is; a family outside `boolean_call_candidates` is not; one
+    `certified_boolean_calls` names is.  Any other (a Boolean version of a word Call family that only Definitions the catalog
+    reaches inside its roots could show) is `Undecided`, by name, with the flags that decide it: the catalog's whole build is what
+    ``--all`` pays once for every target."""
     if _CALLS:
         return fam in _CALLS
     words = word_call_families()
-    if fam in words:
+    if fam in words or fam in CALLEE_CALLS:
         return True
     if "candidates" not in _SHORT:
         _SHORT["candidates"] = boolean_call_candidates(words)

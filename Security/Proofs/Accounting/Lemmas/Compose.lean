@@ -16,8 +16,8 @@ name, and audited with the proofs: no record pins it.
 * `SplitRateExp`: `SplitRateAt` at the sharp `Λ`, with its `ν, ν₀` in closed form;
 * `SplitRateMerged`: `SplitRate` at `Λ = b(1 + Kρw_max)/(ρK(1 − q))` for any luck at most `q`;
 * `ServiceCovers`: the service's share, each skipped tile's late cone from the IR (`tileCone`), covers every tile that
-  isn't good at any joint run's modes on the IR's layer (`DrawnLayer.Covers`, from `DrawnLayer.covers_of_cone`);
-* `BindingOfECR`: a prover's `δ_bind` from `DrawnBindingOfFork`, AM–GM and `ecr/sha-512` on its fork finder,
+  isn't good at any joint run's modes on the IR's layer (`SampledLayer.Covers`, from `SampledLayer.covers_of_cone`);
+* `BindingOfECR`: a prover's `δ_bind` from `SampledBindingOfFork`, AM–GM and `ecr/sha-512` on its fork finder,
   the one reading of binding's number PoUW's per-prover floors share;
 * `WholeLuckOfEntropy`: `SeedLuckAt`'s whole half from `WholeEntropyAt` (the optional entropy premise), at any rate
   whose per-tile moment at that entropy is at most `1`.
@@ -90,11 +90,11 @@ service's at share `1` per unit of each skipped tile's late cone (`tileCone`, fr
 rounds' coins (`jointGame`; a split-stage window's `serviceGame` is one, at `SplitStages.joint`), and its proofs the
 IR's layer (`Declared.layer`, at any run-dependent half `pr`), committed as the layer says (`LayerCommitted`; at
 `Declared.atIR` always), the share covers the words of every tile that isn't good at the run's modes
-(`DrawnLayer.Covers` at `jointMode R`, the tiles' words and `N_w`). The layer is then bound at the IR's cuts (a
+(`SampledLayer.Covers` at `jointMode R`, the tiles' words and `N_w`). The layer is then bound at the IR's cuts (a
 computed value only its own unit reads at its later commit coin), reads each round's coin and has its slots and
 writers inside the IR (`StageCuts`, `StageCoins`, `StageSlots`), so a late edge of the layer is one of the IR's or
 stays in its unit, and a tile that isn't good is in the cone of a tile the run didn't pay for,
-which the share charges that cone (`DrawnLayer.covers_of_cone`). It reads no committed value and no rightness, so the
+which the share charges that cone (`SampledLayer.covers_of_cone`). It reads no committed value and no rightness, so the
 run's modes may read every round's coin. Tiles of no words are charged too: their cones are the bound's `D₀`. -/
 def ServiceCovers : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
@@ -106,15 +106,15 @@ def ServiceCovers : Prop :=
 
 open Classical in
 /-- **A prover's `δ_bind`, read through `ecr/sha-512`** (the one reading of binding's number, the one PoUW's
-per-prover floors use). For a sampled window's proofs (`DrawnLayer`) whose round-`w` slots lie in `L`, and a SHA-512
-collision finder `F` for `H` whose collisions bound the fork event up to `κ` (`DrawnLayer.Forked` at most
+per-prover floors use). For a sampled window's proofs (`SampledLayer`) whose round-`w` slots lie in `L`, and a SHA-512
+collision finder `F` for `H` whose collisions bound the fork event up to `κ` (`SampledLayer.Forked` at most
 `Pr[F finds] + κ`: the prover's fork finder, which runs the window twice from the cut and takes both openings with
 Flock's knowledge extractor, `κ` its extraction failure), for every `δ' > 0`
 `Pr[MovedIn w] ≤ δ' + |L|²/(4δ')·(ecr(F) + κ)`, where `ecr(F)` is `E[cost F]/2^256` if `F` meets `ecr/sha-512`
-(`Claims.ExpectedCR`) and `⊤` if it doesn't. It is `DrawnBindingOfFork` (`Pr[MovedIn]² ≤ |L|²·Pr[fork]`)
+(`Claims.ExpectedCR`) and `⊤` if it doesn't. It is `SampledBindingOfFork` (`Pr[MovedIn]² ≤ |L|²·Pr[fork]`)
 with AM–GM (`√(γx) ≤ δ' + γx/(4δ')`), and it assumes no hash: a prover whose fork finder beats `ecr` gets `⊤`, so it
 is the per-prover `δ_bind` the statements take (`MovedIn ≤ δ_bind`), on the IR's layer under live coins and on the
-sample's (`Declared.atDraw`) under seeded ones. `SeedLuckAt`'s `δ_b` is read the same way, at a round's roots, at about
+sample's (`Declared.atSample`) under seeded ones. `SeedLuckAt`'s `δ_b` is read the same way, at a round's roots, at about
 `2·T_q` SHA-512 calls. At the best `δ'` the bound is about `|L|·√(E[cost F]/2^256)`, and a seeded window prices it at
 the budget its premium reads (one `T` for the cheater): at `2^128` it is `|L|·2^-64` (`2^-44` to `2^-34` at `|L|` from
 `2^20` to `2^30`, not negligible beside `δ_s = 2^-40`), at `2^80` it is `|L|·2^-88` (`2^-68` to `2^-58`). `ecr` is the
@@ -122,7 +122,7 @@ weaker of the two collision claims at a fixed cost (`StrictBirthday` implies it)
 expected-time finders such as an extractor. -/
 def BindingOfECR : Prop :=
   ∀ {J Q Pos V : Type} [Nonempty V] (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ)
-    (pf : DrawnLayer C B S m s J Q Pos V) (w : Fin S) (L : Finset Pos) (H : Claims.Msg → Claims.Msg)
+    (pf : SampledLayer C B S m s J Q Pos V) (w : Fin S) (L : Finset Pos) (H : Claims.Msg → Claims.Msg)
     (F : Claims.Finder) (κ δ' : ℝ), (∀ j k, pf.pos w j k ∈ L) → 0 < δ' →
     prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => ∃ ℓ ∈ L, pf.Forked ℓ p.1 p.2) ≤
       F.Pr H + κ →

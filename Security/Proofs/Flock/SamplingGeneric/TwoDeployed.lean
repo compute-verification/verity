@@ -90,6 +90,10 @@ theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplayDraws two rs) (hsd
   replayDraws := hrd
   secondDraws := hsd
   slots _ _ := List.length_take_le _ _
+  unions x s Pt d hs hPt _ _ :=
+    (compiledTwo F c iroots two rs).unions_of_nPU_le
+      (fun x => (Claims.SamplingGeneric.ofDeploy_nPU (deployOf F c) iroots x).le)
+      (fun x => (Claims.SamplingGeneric.ofDeploy_nPU (deployOf F c) iroots x).le) x s Pt d hs hPt
   refuses := hr
   interior := hi
   fixed := Claims.SamplingGeneric.fixed_ofDeploy (deployOf F c) iroots hf

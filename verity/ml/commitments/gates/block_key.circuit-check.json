@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "BlockKey_v1{B=4,TOK=16}": {
+   "and": 85484,
+   "type": "7c2373c249348268f7f126f8fbc92fd2d27c890556aaef7d9fc30a0ae9dc30ae034a6962088e7e0adbfc323796228d98a2d366b69783ba940298814b1593eacc"
+  },
+  "KeyPrint_v1": {
+   "and": 6561,
+   "type": "587c076067969f9afced8f33322f6819017b1cd09bc4806c3d4cd5137293560b158a1a5ba694365a1162770f96df3151908cffc2c2628a5933c9b0d1fae6168d"
+  }
+ }
+}

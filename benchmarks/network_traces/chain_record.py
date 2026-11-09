@@ -574,7 +574,7 @@ def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = No
 
     * ``inputs``: every unit's input rows;
     * ``wired``: each wire's reader rows times one row of its port, a cut port's row its words over its cuts
-      (`SampledProofs.Wires`' ``wiredBits``);
+      (`Spot.Wires`' ``wiredBits``);
     * ``registered``: each registered read of a held parameter, its reader rows, and each table read and opening of a
       table over one, its ports' rows. A parameter is held where the verifier's pin of it (``pins``, ``{param: root}``,
       the verifier's own, never the record's) is the root the window's registration records for it (``roots``, its
@@ -949,7 +949,7 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    from verity.core.protocols.spot.one_stage import registration as R
     from verity.ml.commitments.identity import tagged_sha512
 
     try:

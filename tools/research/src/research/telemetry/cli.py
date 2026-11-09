@@ -111,7 +111,7 @@ def cmd_event(argv: list[str]) -> int:
     ap.add_argument("--proc", default=None, help="process label (default: the calling program's name)")
     ap.add_argument("--stages-txt", default=None, help="also append a `<stage> START|END <utc> ...` line to this file")
     ap.add_argument("kv", nargs="*", help="extra k=v fields")
-    # [R18 infra, r18-int-2; arch M-0025] `tele event submitted --stage S row=.. role=..` puts the k=v positionals AFTER the options:
+    # `tele event submitted --stage S row=.. role=..` puts the k=v positionals AFTER the options:
     # Python <= 3.11 argparse.parse_args rejects them ("unrecognized arguments"), 3.12 accepts; the pods run 3.11 (system python3) and
     # 3.12 (venv-py312) side by side.  parse_intermixed_args accepts the shape on every version the pods carry.
     a = ap.parse_intermixed_args(argv)

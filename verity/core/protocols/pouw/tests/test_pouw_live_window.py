@@ -17,7 +17,7 @@ import pytest
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 
 _spec = importlib.util.spec_from_file_location(
     "pouw_rounds_cases", Path(__file__).resolve().parents[1] / "lean/check/tests/pouw_rounds_cases.py")

@@ -31,7 +31,7 @@ sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
 import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 
@@ -44,7 +44,7 @@ OF = {"fixture": "integrations/vllm/tests/pipeline/test_serving_rows_splits.py",
 def commit(out: Path) -> CS.Binding:
     """The fixture's window of one row under ``<ROOT>/rank0`` committed into ``out`` as serving commits it, its salts fresh."""
     s = TS.Served()
-    w = replace(TS.window(s, law=D.parse_law(RULE)), run=f"{ROOT}/rank0")
+    w = replace(TS.window(s, law=D.parse_design(RULE)), run=f"{ROOT}/rank0")
     got = TS.read(s, w.members)
     c = CS.commit(w, [g for g, _e in got])
     CS.write(c, out, {"of": OF, "committer": {"module": "a5_sparse_mla.py"}}, IX.index_doc(w.members, [e for _g, e in got], w.run),

@@ -2,15 +2,14 @@ module
 
 public import Proofs.Flock.Soundness.Audit.OneStage
 public import Proofs.Flock.Soundness.Instance
-public import Definitions.Flock.Game.Batch
+public import Definitions.Flock.Game
 public import Mathlib.Order.CompletePartialOrder
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Soundness
 import VCVio.Prelude.Core
 
@@ -108,7 +107,7 @@ end FlockTable
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 /-- **The verifier's session on a sample**: the tables its plan derives from the sample and the
 transcript, run concurrently; it accepts when every table accepts. -/

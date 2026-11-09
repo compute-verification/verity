@@ -35,6 +35,10 @@ failure message carries its fix.
  `tests/lint/test_repo_silent_excepts.py` holds every other area to the same rule (below).
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
+- **vLLM's surface** (`test_vllm_surface.py`, list `vllm_surface.py`): every vLLM module the library imports whole, and
+ every name it imports from one, is listed with why the integration needs it. An unlisted import fails. An entry nothing
+ imports only warns, so the list may name an import that a change in flight adds. Where vLLM is installed, every entry
+ must resolve at the pin, so moving the pin starts from this list.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which
  extends the root `ruff.toml` (the rules every package selects, and why), keyed like the rules' violations. The formatter stays off. A PR that fixes or adds a
  ruff finding in `integrations/vllm` (a stale `noqa` deleted is one) edits `ruff.json` in the same PR.
@@ -100,7 +104,9 @@ or a data file), dated attributions and ISO dates, `note:` ids, Notion URLs, Lin
 timestamps and worker codenames (board ids, rounds, lanes, handles), against `tests/lint/allowlists/repo_lane_text.json`.
 AGENTS.md, ARCHITECTURE.md, GLOSSARY.md and the skills hold none. The gate fails a PR that adds one to a file it changes,
 naming each, with where the text goes: history to git, work to Linear, rulings to Notion, results to the store. It takes
-over P11's docstring patterns (board ids, lane tags, rounds and dates) for the whole tree.
+over P11's docstring patterns (board ids, lane tags, rounds and dates) for the whole tree. `tests/lint/test_repo_retired_terms.py`
+reads the whole text of the same files, identifiers included, for the terms `GLOSSARY.md`'s older names retire, against
+`tests/lint/allowlists/repo_retired_terms.json`, and the gate refuses a new one with the term to say.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too.** In `integrations/vllm`, a change may add no more

@@ -89,7 +89,7 @@ theorem openRel_of_run {e : ExecHolo} {u : C3Run e} {cl : ℕ} {sh : Flock.Shape
     (hpl : PlaysT (FlockC3.Opening.openingAt u) u.op (some u.opened))
     (hmsg : ∃ ρ γ, u.op = FlockC3.Opening.openSteps (fun i => vecOf 128 M.rs[i.val]!) ρ γ)
     (h₁ : Flock.RecAlgebra.ringSwitch M a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂))
-    (hcoin : u.op.filterMap Sum.getRight? = ((List.range' k₀ (k₂ - k₀)).map fun i => c[i]!).map (coinArr fOf)) :
+    (hcoin : u.op.filterMap Sum.getRight? = ((List.range' k₀ (k₂ - k₀)).map fun i => (c)[i]!).map (coinArr fOf)) :
     ∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened := by
   obtain ⟨rsr', rs', k₂', _lgr, _lg, h₁', -, rfl⟩ := opening_parts hrun
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ : (rsr = rsr' ∧ rs = rs') ∧ k₂ = k₂' := by simpa [h₁] using h₁'
@@ -113,20 +113,20 @@ theorem hR_of_run {e : ExecHolo} {u : C3Run e} {cl : ℕ} {sh : Flock.Shape}
     {msId : String} {cap : Array ByteArray} {p : Flock.LigeritoProof}
     (hcoin : ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ),
       Flock.RecAlgebra.ringSwitch M a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
-      u.op.filterMap Sum.getRight? = ((List.range' k₀ (k₂ - k₀)).map fun i => c[i]!).map (coinArr fOf))
+      u.op.filterMap Sum.getRight? = ((List.range' k₀ (k₂ - k₀)).map fun i => (c)[i]!).map (coinArr fOf))
     (hR' : ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts),
       Flock.RecAlgebra.ringSwitch M a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
       Flock.RecAlgebra.ligerito sh.sched M rs.T rs.sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((lgr, lg), k₁) →
       (∀ cs ∈ lg.conss.toList, Flock.RecAlgebra.Opened (Flock.MerkleScheme.sha512 msId) sh.sched cap p M cs) ∧
-      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf)) :
+      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf)) :
     ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts),
       Flock.RecAlgebra.ringSwitch M a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
       Flock.RecAlgebra.ligerito sh.sched M rs.T rs.sws k₂ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((lgr, lg), k₁) →
       (∀ cs ∈ lg.conss.toList, Flock.RecAlgebra.Opened (Flock.MerkleScheme.sha512 msId) sh.sched cap p M cs) ∧
       (∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened) ∧
-      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf) :=
+      u.lg.filterMap Sum.getRight? = ((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf) :=
   fun rsr rs k₂ lgr lg h₁ h₂ => ⟨(hR' rsr rs k₂ lgr lg h₁ h₂).1,
     openRel_of_run hsh hrun hz hne ha hshape hT hcl hpl hmsg h₁ (hcoin rsr rs k₂ h₁), (hR' rsr rs k₂ lgr lg h₁ h₂).2⟩
 
@@ -149,7 +149,7 @@ theorem hR_of_units {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type} {zs : (s : 
     {sibs : ℕ → Array ByteArray} {cap : Array ByteArray} {p : Flock.LigeritoProof}
     (hcoin : ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ),
       Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
-      u.op.filterMap Sum.getRight? = ((List.range' k₀ (k₂ - k₀)).map fun i => c[i]!).map (coinArr fOf))
+      u.op.filterMap Sum.getRight? = ((List.range' k₀ (k₂ - k₀)).map fun i => (c)[i]!).map (coinArr fOf))
     (hR' : ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts),
       Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
@@ -157,7 +157,7 @@ theorem hR_of_units {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type} {zs : (s : 
         .ok ((lgr, lg), k₁) →
       (∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) ∧ OpensUnits zs Lb sh ops sibs cap p lg ∧
       u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig e.rsch.sch) (ligMsgs p capDig sh.sched)
-        (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))) :
+        (((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf))) :
     ∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts),
       Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a k₀ (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
@@ -166,7 +166,7 @@ theorem hR_of_units {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type} {zs : (s : 
       (∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) ∧ OpensUnits zs Lb sh ops sibs cap p lg ∧
       (∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened) ∧
       u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig e.rsch.sch) (ligMsgs p capDig sh.sched)
-        (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf)) :=
+        (((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf)) :=
   fun rsr rs k₂ lgr lg h₁ h₂ => ⟨(hR' rsr rs k₂ lgr lg h₁ h₂).1, (hR' rsr rs k₂ lgr lg h₁ h₂).2.1,
     openRel_of_run hsh hrun hz hne ha hshape
       (fun k hk => decodedO_rsT sh w _ (by rw [FlockC3.Opening.shape_claims hsh]; exact hk)) hcl hpl htie h₁

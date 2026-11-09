@@ -17,6 +17,7 @@ import numpy as np
 
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.registry import tp_allreduce as T
+from verity.ml.definitions.registry import tp_allreduce_nodes as TN
 
 U32 = np.uint32
 
@@ -116,7 +117,7 @@ def multimem_rows(parts: np.ndarray, trees, ftz: bool) -> np.ndarray:
     RN to bf16."""
     parts = np.asarray(parts, np.uint16)
     W, size = parts.shape
-    trees = T.multimem_trees(trees, W)
+    trees = TN.multimem_trees(trees, W)
     out = np.empty(size, np.uint16)
     for lo, hi, owner in T.multimem_owners(W, size):
         out[lo:hi] = DR.f2fp_bf16(tree_sum(parts[:, lo:hi], trees[owner], ftz))

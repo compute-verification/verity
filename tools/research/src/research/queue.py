@@ -91,7 +91,7 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    as LANE's holder, let the Cursor agent AGENT (a worker) sign ready marks and
                                                    land verdicts as LANE for N days (default 7, at most 14): see Signed verdicts
     research queue baseline SHA --by ci [--steps STEP,...]
-                                                   fast-forward `main` now to SHA, a commit of `checked` ci knows is green on
+                                                   fast-forward `main` now to SHA, a commit of `checked` known green on
                                                    every step on the merge gate, beside drive's tick (no lock, no state written);
                                                    drive's next tick takes it as verified, and the review landing lands on it
                                                    (on the control pod: `/data/infra/drive.sh queue baseline SHA --by ci`)
@@ -142,7 +142,7 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    train a later `git revert` names. --out FILE writes them newest first, an
                                                    optional source for the verifier's --main file (`merge.main_line`), for a
                                                    deployment that wants credit's line to be the checked train heads rather than
-                                                   the raw `git rev-list --first-parent origin/main` infra writes by default
+                                                   the raw `git rev-list --first-parent origin/main`, the default
     research queue shadow-report [--tips N]
                                                    with drive.toml's `executor = "shadow"`: the newest N `checked` tips whose
                                                    after-landing run drive compared with the executor's verdicts, each one's
@@ -223,7 +223,7 @@ conflict in it, since keeping either side's text drops the other's.
 So a new push moves its PR to the tip, a dropped PR takes the commits after it
 along (they're merged again), and a `checked` that drive moved outside the sync (a landing, a revert, a merge of `main`) rebuilds
 `next` on it; one drive didn't write holds drive's tick, which syncs nothing on it until `checked` is reset to the last tip
-drive wrote or ci accepts it (`Driver._unwritten`, `accept-checked`).  Only drive syncs (`Queue._drive_only`): `eject` only
+drive wrote or it is accepted (`Driver._unwritten`, `accept-checked`).  Only drive syncs (`Queue._drive_only`): `eject` only
 withdraws the mark, for drive's next tick, and a hand `sync` on the control pod syncs as drive's tick does.  A
 PR whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
 `Queue.entries`; never by PR number, never for commits the two merely share, and never for commits admitted members below it on
@@ -286,7 +286,7 @@ conflicts refuse it.  A restack runs in the background, one `restack.py` a head 
 once (`_restack`, the state's `restacking`), and its PR waits off `next` meanwhile (`RESTACKING`), a wait that refuses nothing
 and rings no one; a later sync reads its result (the state's `restacks`) and merges the PR, drops the result once the PR's head
 changed, and runs a job that ended with none (it died, or ran past `RESTACK_WAIT_S`) once more before that failure refuses the
-PR.  A move or a restacked PR lands at a commit that isn't its head: the trailers keep it off `next` once
+PR, and one something else interrupted (SIGINT, SIGTERM, a restart of the pod) again without counting it.  A move or a restacked PR lands at a commit that isn't its head: the trailers keep it off `next` once
 landed (`queue_log`), and drive closes it once `main` reaches it (`Driver._close_carried`).  The low-risk lane stops at a
 move on `next`.  The preflight merges no move PR's head, and notes rather than refuses a conflict only in files a move changed.
 
@@ -401,7 +401,7 @@ GH_TIMEOUT_S = 120
 #: seconds of every `research queue status`
 GH_PAGES = 10
 GH_PER_PAGE = 100
-#: the lane's handle ends on a letter or digit, so a sentence's period (`Lane proofs.`) isn't part of it
+#: the lane's handle ends on a letter or digit, so a sentence's period (`Lane NAME.`) isn't part of it
 LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)`?", re.M)
 REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
@@ -444,6 +444,10 @@ RESTACK_LOST_S = RESTACK_WAIT_S + 300
 #: job's directory ($1)
 RESTACK_OUT = "restack.json"
 RESTACK_JOB = f'd=$1; shift; exec timeout -s INT -k 60 {RESTACK_WAIT_S} "$@" > "$d/{RESTACK_OUT}"'
+#: the exits of a restack job something else interrupted (`restack_end`): SIGINT's and SIGTERM's, 128 + the signal as `timeout`
+#: passes its command's on, which an operator, drive's stop or the pod's shutdown sends.  Not `timeout`'s own 124 at
+#: `RESTACK_WAIT_S`, nor SIGKILL's 137, which the OOM killer and `timeout -k` send too
+RESTACK_INTERRUPTED = ("130", "143")
 #: why a PR waits off `next` while it is restacked in the background (`Restacking`): it refuses nothing, so nothing caches it and
 #: drive tells no one (`drive.Driver.tell_out`)
 RESTACKING = "restacking across the move"
@@ -826,8 +830,8 @@ class DriveFlags:
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
     #: of `drive.SLIM_STEPS` alone beside it
     executor: str = "off"
-    #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
-    #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
+    #: the task executor's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it
+    #: puts `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
     executor_enqueue: tuple[str, ...] = ()
     #: a land verdict at an older head of a member's PR carries to its head when the commits since only merge trusted ones
     #: (`research.carry`, `drive.Driver._carry_verdicts`): "off"; "shadow", drive logs what it would carry and writes nothing;
@@ -930,7 +934,7 @@ class DriveFlags:
                 got[k] = doc[k]
         if "land" in doc:
             if doc["land"] == "check":
-                raise bad("land", "train landing was deleted with its code (#5070): drive lands on review only; set "
+                raise bad("land", "train landing was deleted with its code: drive lands on review only; set "
                                   "`land = \"review\"` or remove the key")
             if doc["land"] not in LANDINGS:
                 raise bad("land", f"one of {', '.join(LANDINGS)}")
@@ -2459,19 +2463,24 @@ class Queue:
     def _collect_restacks(self, wanted: set[str]) -> None:
         """Read each restack job that ended (`restack_end`) into `_restacks`, dropping its result once its PR's head is none of
         ``wanted``.  A job that ended with no result (it died, or ran past `RESTACK_WAIT_S`) runs once more, and then that is
-        the restack's failure."""
+        the restack's failure; one something else interrupted runs again without that counting as a try, so a stop or a
+        restart of the pod never refuses a PR."""
         ended = False
         for key, job in list(self._restacking.items()):
             if (end := restack_end(job, self.now())) is None:
                 continue
             ended = True
             del self._restacking[key]
-            (head, move), (said, how) = key.split(":"), end
+            (head, move), (said, how, interrupted) = key.split(":"), end
             if job["of"] not in wanted or not self._has(head):
                 self.log(f"research queue: the restack of {head[:12]} across the move {move[:12]} is dropped: "
                          + (f"its PR's head {job['of'][:8]} changed" if job["of"] not in wanted else "the clone lost it"))
             elif said is not None:
                 self._restacks[key] = said
+            elif interrupted:
+                self.log(f"research queue: the restack of {head[:12]} across the move {move[:12]} was interrupted ({how}); "
+                         "again, not counted as a try")
+                self._launch_restack(head, Move(move, job["map"]), job["of"], job["tries"], job["since"])
             elif job["tries"] < 2:
                 self.log(f"research queue: the restack of {head[:12]} across the move {move[:12]} ended with no result ({how}); "
                          "once more")
@@ -3361,17 +3370,18 @@ def _tail(r: subprocess.CompletedProcess, n: int = 6) -> str:
     return " | ".join(((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-n:])
 
 
-def restack_end(job: dict, now: float) -> tuple[dict | None, str] | None:
+def restack_end(job: dict, now: float) -> tuple[dict | None, str, bool] | None:
     """A restack job's end (`Queue._launch_restack`), its directories removed: (what `restack.py` said of its head, as a sync
     caches it, {"result": the restacked commit} or {"why": what it says}, else None; how the job ended, with its output's tail,
-    and why its results don't read when it exited 0).  None while it runs, up to `RESTACK_LOST_S` after its start."""
+    and why its results don't read when it exited 0; whether something else interrupted it: an exit of `RESTACK_INTERRUPTED`,
+    or its process gone with no exit written, a restart of the pod).  None while it runs, up to `RESTACK_LOST_S` after its
+    start."""
     from .drive import _job_end
 
     if (end := _job_end(job, RESTACK_OUT)) is None and now - job["at"] <= RESTACK_LOST_S:
         return None
     if not isinstance(end, tuple):
         shutil.rmtree(job["dir"], ignore_errors=True)
-        end = end or f"no exit written {RESTACK_LOST_S // 60} min after its start"
     unread = ""
     try:
         (x,) = json.loads(Path(job["out"], RESTACK_OUT).read_text())
@@ -3382,12 +3392,15 @@ def restack_end(job: dict, now: float) -> tuple[dict | None, str] | None:
     except (OSError, ValueError, TypeError, KeyError, AttributeError) as e:
         said, unread = None, f"; its results don't read ({type(e).__name__}: {e})"
     shutil.rmtree(job["out"], ignore_errors=True)
+    if end is None:
+        return said, f"no exit written {RESTACK_LOST_S // 60} min after its start", False
     if isinstance(end, str):
-        return said, end
+        return said, end, True
     rc, tail, _ = end
     stopped = f", stopped {RESTACK_WAIT_S // 60} min after its start" if rc == "124" else ""
     tail = " | ".join(tail.splitlines()[-6:])
-    return said, f"exit {rc}{stopped}" + (f": {tail}" if tail else "") + (unread if rc == "0" else "")
+    return (said, f"exit {rc}{stopped}" + (f": {tail}" if tail else "") + (unread if rc == "0" else ""),
+            rc in RESTACK_INTERRUPTED)
 
 
 def changed(repo: Path, base: str, commit: str) -> set[str]:
@@ -4167,7 +4180,7 @@ class LeanTimedOut(str):
 
 
 #: the fix a Lean step that couldn't build names, with where it builds
-LEAN_UNBUILT_FIX = "mark again once {on} builds them (`build` Lean slots are @infra's; `research status` there says why not)"
+LEAN_UNBUILT_FIX = "mark again once {on} builds them in its `build` Lean slots (`research status` there says why not)"
 
 
 def run_group(argv: list[str], cwd: Path, left: float) -> tuple[int | None, str]:
@@ -4311,6 +4324,23 @@ def _texts(section: str, entries: dict, g: str) -> list[str]:
 LOCK_NAME = re.compile(r"(?<![\w.'!?])([^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*)")
 
 
+def _held_to_form(lock: dict) -> set[str]:
+    """The theorems a lock's `claims.witnesses` (`fails`, `meets`), `witnesses` (`nontrivial`, `honest`) and `claims.generic`
+    name, which `check.py` holds to their form instead of `shape` (its `claim_witnesses` and `generic_claims`): it reads no
+    `shape.frozen` entry of theirs."""
+    claims = lock.get("claims") if isinstance(lock.get("claims"), dict) else {}
+    ws, gs, generic = (d if isinstance(d, dict) else {}
+                       for d in (claims.get("witnesses"), lock.get("witnesses"), claims.get("generic")))
+    names = [n for w in ws.values() if isinstance(w, dict)
+             for n in [w.get("fails"), *(w.get("meets") if isinstance(w.get("meets"), list) else [])]]
+    for w in gs.values():
+        if isinstance(w, dict):
+            n = w.get("nontrivial")
+            names += [n] if isinstance(n, str) else n if isinstance(n, list) else []
+            names += w.get("honest") if isinstance(w.get("honest"), list) else []
+    return {n for n in [*names, *generic.values()] if isinstance(n, str)}
+
+
 def _read_hashes(lock: dict) -> dict[str, str]:
     """{definition: its hash} over the lock's `reads`."""
     out: dict[str, str] = {}
@@ -4329,10 +4359,12 @@ def dropped_entries(base: dict, merged: dict) -> list[str]:
     definition is restated there; `check.py --update` keeps a premise only while the statement prints it, and the head's
     records run, or the lock run after its landing, checks its lock).  It may drop an entry whose text (a premise, a frozen
     entry's reason) it holds under a key of the section ``base`` lacks (renamed), a guarantee's premises while it adds as
-    many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them), and a frozen
-    entry's reason while it keeps the key (reworded: `check.py` reads the key and the reason's category, not its wording)."""
+    many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them), a frozen
+    entry's reason while it keeps the key (reworded: `check.py` reads the key and the reason's category, not its wording),
+    and the frozen entry of a theorem ``merged`` holds to its form (`_held_to_form`), which `check.py` never reads."""
     listed, was = merged.get("guarantees") or {}, base.get("guarantees") or {}
     old, new = _read_hashes(base), _read_hashes(merged)
+    inert = _held_to_form(merged)
 
     def restated(g: str) -> bool:
         names = LOCK_NAME.findall(" ".join((listed[g] if isinstance(listed[g], dict) else {}).get("signature") or []))
@@ -4351,7 +4383,7 @@ def dropped_entries(base: dict, merged: dict) -> list[str]:
             had, kept = _texts(section, b, g), _texts(section, m, g)
             gone = [t for t in had if t not in kept and t not in moved]
             if section == "frozen":
-                out += [f"shape.frozen[{g}]" for _ in gone if g not in m]
+                out += [f"shape.frozen[{g}]" for _ in gone if g not in m and g not in inert]
             elif len(gone) > len([t for t in kept if t not in had]):
                 out += [f"shape.inline[{g}]: " + (t if len(t) <= LOCK_DROP_SHOWN else t[:LOCK_DROP_SHOWN] + "…") for t in gone]
     return out
@@ -5534,15 +5566,15 @@ def _move_main(q: Queue, sha: str, verb: str, passed: str, wait: Callable[[], st
 
 def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     """`research queue baseline SHA --by ci [--steps STEP,...]`: fast-forward `main` to SHA, a commit on `checked`'s first-parent
-    chain whose after-landing steps ci knows are green (every one by default; with --steps, those), at once (`_move_main`): it
+    chain whose after-landing steps are known green (every one by default; with --steps, those), at once (`_move_main`): it
     waits for no tick, takes no lock of drive's and writes nothing of drive's state, and drive's next tick takes `main` there as
-    verified (`Driver._main_moved`), so the review landing lands on it.  Refused but by ci, off drive
+    verified (`Driver._main_moved`), so the review landing lands on it.  Refused without `--by ci`, off drive
     (`/data/infra/drive.sh queue baseline SHA --by ci` on the control pod), for --steps that leave out a step on the merge gate
     at SHA (`drive.gating`: not circuit-check), and for a SHA off that chain or below `main`; nothing to do when `main` holds it."""
     from .drive import AFTER_LANDING, gating
 
     if _who(by) != "ci":
-        raise QueueError(f"baseline: only ci records a green `main` (--by ci), not {by}")
+        raise QueueError(f"baseline: a green `main` is recorded only with --by ci, not --by {by}")
     green = [x for x in (steps or "").split(",") if x] or list(AFTER_LANDING)
     if unknown := [x for x in green if x not in AFTER_LANDING]:
         raise QueueError(f"baseline: --steps {', '.join(unknown)}: not after-landing steps ({', '.join(AFTER_LANDING)})")
@@ -5575,12 +5607,12 @@ def promote(q: Queue, states: Callable[[Path, list[str]], dict] | None = None,
 def accept_checked(q: Queue, sha: str, by: str) -> int:
     """`research queue accept-checked SHA --by ci`: record the landing branch (`checked`, `Queue.into`) at SHA, the tip it is at,
     among the tips drive takes (`drive["checked_tips"]`) though drive didn't write it, so drive's ticks, held on it
-    (`Driver._unwritten`), go on from it.  Refused but by ci, for a SHA that isn't the branch's tip, and off drive
+    (`Driver._unwritten`), go on from it.  Refused without `--by ci`, for a SHA that isn't the branch's tip, and off drive
     (`/data/infra/drive.sh queue accept-checked SHA --by ci` on the control pod)."""
     from .drive import CHECKED_TIPS
 
     if _who(by) != "ci":
-        raise QueueError(f"accept-checked: only ci accepts a `{q.into}` drive didn't write (--by ci), not {by}")
+        raise QueueError(f"accept-checked: a `{q.into}` drive didn't write is accepted only with --by ci, not --by {by}")
     q._clone()
     q.fetch()
     full = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).stdout.strip()
@@ -6031,7 +6063,7 @@ def main(argv: list[str]) -> int:
                     help="drive: run the after-landing check reusing no pass but circuit-check's per-target ones "
                          "(check.py --no-cache --circuit-cache)")
     for old in ("--max-running", "--train-size"):
-        ap.add_argument(old, type=int, metavar="N", help="drive: accepted and ignored (train landing was deleted, #5070)")
+        ap.add_argument(old, type=int, metavar="N", help="drive: accepted and ignored (train landing was deleted)")
     ap.add_argument("--land", action="store_true", help="review N: the verdict that lands it")
     ap.add_argument("--hold", metavar="REASON", help="review N: the verdict that keeps it, and everything above it, on `next`")
     ap.add_argument("--ref", help="review N --land: the note or reason the verdict rests on")
@@ -6223,8 +6255,7 @@ def main(argv: list[str]) -> int:
         own = weakref.WeakMethod(q.own_change)
         labels.change = lambda head: own()(head)
         if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:
-            q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted (#5070); drop them from "
-                  "drive's args")
+            q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted; drop them from drive's args")
         if a.command == "drive":
             q._clone()
             q.fetch()

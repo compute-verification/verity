@@ -8,20 +8,20 @@
 DEST gets the files `public_boundary.py` judges public (`public_boundary.toml`), in a new repository with one commit. A
 manifest's entry that names what the export doesn't copy is dropped: a lakefile's roots, executables, input files and path
 `require`s (with their `lake-manifest.json` entries), and each pyproject's members, sources, conflicts, extras, dependency
-groups and test paths. A `[project] dependencies` entry stays, and so does the source of a distribution one still needs. A
-list's entry naming a path the export doesn't copy is dropped too (`PATH_LISTS`: the lint allowlists, and the dead-code
-census's roots and keep-list), so a file made private takes its entries with it. Each rewrite must read, as TOML or JSON, as
-the old file less exactly those entries. A path `require`, an extra's entry and a
-dependency group's are the edges the check counts closed by the export (`EXPORT_CUTS`), and the export fails if its rewrite
-kept one; every other edge it copies as it stands, so a build of DEST fails where a file imports, runs or reads one the
-export doesn't copy.
+groups, test paths and console scripts. A `[project] dependencies` entry stays, and so does the source of a distribution one
+still needs. A list's entry naming a path the export doesn't copy is dropped too (`PATH_LISTS`: the lint allowlists, and the
+dead-code census's roots and keep-list), so a file made private takes its entries with it. Each rewrite must read, as TOML
+or JSON, as the old file less exactly those entries. A path `require`, an extra's entry, a dependency group's and a console
+script are the edges the check counts closed by the export (`EXPORT_CUTS`), and the export fails if its rewrite kept one;
+every other edge it copies as it stands, so a build of DEST fails where a file imports, runs or reads one the export doesn't
+copy.
 
 The report gives:
 
 * what the export copied, rewrote, and cut;
-* per area of the tree, the leftovers a reader of the public tree shouldn't meet, by kind, over whole files: `art:` ids, and
-  the lane-text lint's kinds (`tests/lint/test_repo_lane_text.py`: Linear, Slack, Notion and PR ids and links, agent ids,
-  lane handles, dates, names);
+* per area of the tree, the leftovers a reader of the public tree shouldn't meet, by kind, over whole files: the lane-text
+  lint's kinds (`tests/lint/test_repo_lane_text.py`: Linear, Slack, Notion and PR ids and links, agent ids, run and `art:`
+  ids, lane handles, dates, names) and agents' branches;
 * the known residue (`public_boundary.toml`'s `[[residue]]`), each entry's sites, and the change that removes it;
 * the third-party code DEST pins: the Lean packages its manifests pin, the Python distributions its lock resolves, and the
   Rust upstream Flock patches;
@@ -45,7 +45,7 @@ import time
 import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import NamedTuple
+from typing import Callable, NamedTuple
 
 HERE = Path(__file__).resolve().parent
 
@@ -59,9 +59,8 @@ def _load(name: str, path: Path):
 
 PB = _load("public_export_boundary", HERE / "public_boundary.py")
 LANE_TEXT = _load("public_export_lane_text", PB.ROOT / "tests" / "lint" / "test_repo_lane_text.py")
-#: what the lane-text lint doesn't look for: data ids (`fixtures/artifacts.json`'s), and agents' branches
-EXTRA = (("art", re.compile(r"(?<![\w-])art:[0-9A-Za-z][\w.:/-]*")),
-         ("branch", re.compile(r"(?<![\w/-])cursor/[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{4}\b")))
+#: what the lane-text lint doesn't look for: agents' branches
+EXTRA = (("branch", re.compile(r"(?<![\w/-])cursor/[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{4}\b")),)
 SCRUB_MAX_BYTES = 4 << 20
 #: a build step's limit, so one stuck step leaves the rest a report
 STEP_SECONDS = 4 * 3600
@@ -285,11 +284,13 @@ def _at(doc: dict, dotted: str) -> dict:
 
 
 def rewrite_pyproject(text: str, here: str, copied: set[str], dists: set[str], workspace: set[str],
-                      required: set[str] = frozenset()) -> tuple[str, list[tuple[str, str]]]:
-    """A pyproject at ``here`` without what names a member, distribution or test path the export doesn't copy: ``dists`` are
-    the copied workspace distributions, ``workspace`` all of them. A `[project] dependencies` entry stays, an edge the build
-    fails on, and so does the source of any distribution ``required`` names (one a kept dependency anywhere still needs):
-    without its source, uv would look for it on the package index."""
+                      required: set[str] = frozenset(), module: Callable[[str], list[str]] = lambda name: []
+                      ) -> tuple[str, list[tuple[str, str]]]:
+    """A pyproject at ``here`` without what names a member, distribution, test path or console script's module the export
+    doesn't copy: ``dists`` are the copied workspace distributions, ``workspace`` all of them, and ``module`` gives the files a
+    dotted module loads (`public_boundary.Tree`'s). A `[project] dependencies` entry stays, an edge the build fails on, and
+    so does the source of any distribution ``required`` names (one a kept dependency anywhere still needs): without its
+    source, uv would look for it on the package index."""
     doc = tomllib.loads(text)
     expect, dropped, out = copy.deepcopy(doc), [], []
 
@@ -326,6 +327,13 @@ def rewrite_pyproject(text: str, here: str, copied: set[str], dists: set[str], w
             dropped += [("conflict", json.dumps(c)) for c in t["conflicts"] if conflict(c)]
             _at(expect, b.name)["conflicts"] = [c for c in t["conflicts"] if not conflict(c)]
             body = lines_without(body, lambda line: any(foreign(n) for n in re.findall(r'package[ \t]*=[ \t]*"([^"]+)"', line)))
+        if b.name == "project.scripts":
+            gone = [k for k, v in t.items() if isinstance(v, str)
+                    and any(p not in copied for p in module(v.partition(":")[0].strip()))]
+            dropped += [("script", k) for k in gone]
+            for k in gone:
+                del _at(expect, b.name)[k]
+            body = lines_without(body, lambda line: (m := re.match(r"[ \t]*([\w.-]+)[ \t]*=", line)) and m.group(1) in gone)
         if b.name in ("dependency-groups", "project.optional-dependencies"):
             for group, reqs in t.items():
                 if isinstance(reqs, list) and any(map(dep, reqs)):
@@ -445,7 +453,8 @@ def export(tree, boundary, judgment, dest: Path) -> dict:
         new, dropped = (rewrite_path_list(old, f, tracked, copied) if listed
                         else rewrite_lakefile(old, here, copied) if name == "lakefile.toml"
                         else rewrite_manifest(old, here, copied) if name == "lake-manifest.json"
-                        else rewrite_pyproject(old, here, copied, exported, set(dists), required))
+                        else rewrite_pyproject(old, here, copied, exported, set(dists), required,
+                                               lambda m, f=f: tree._module(m, f)))
         if dropped:
             (dest / f).write_text(new, encoding="utf-8")
             rewrites[f] = dropped
@@ -454,6 +463,8 @@ def export(tree, boundary, judgment, dest: Path) -> dict:
     def dropped(e) -> bool:
         if e.kind == "lake require":
             return ("require", e.what) in rewrites.get(e.source, [])
+        if e.kind == "python script":
+            return ("script", e.what.partition(" = ")[0]) in rewrites.get(e.source, [])
         return any(k.startswith(("dependency-groups.", "optional-dependencies.")) and v == e.what
                    for k, v in rewrites.get(e.source, []))
 
