@@ -63,6 +63,7 @@ class Failed:
     tests: frozenset[str] = frozenset()       # its failing test ids, empty when unknown
     base_tests: frozenset[str] | None = None  # the base's failing tests of the same task id: None when it passed or is unknown
     tree: bool = False             # infra: graph2 saw it err on two or more nodes, so the tree breaks the machines
+    detail: str = ""               # what its failure says to a person, where it has words: a GitHub status's description and URL
 
 
 @dataclass(frozen=True)
