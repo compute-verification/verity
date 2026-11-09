@@ -4657,6 +4657,47 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
 }
 
 /// `--tmpl-unit F`: a templated statement's unit rows at their positions (`flock-tmpl-unit`, `tests/lean/TmplUnit.lean`).
+/// `unit-walk`: circuit `--net` (default the statement's unit) over `--slots` slots of seeded input words, as the device
+/// witness builds its host units (`unit_ab_into`), at each `--wide` lane groups a pass (default 1,2,4,8) on each `--threads`
+/// pool size (default the global pool's) in turn, `--reps` rounds: a `WALK` line each with its wall and CPU seconds and
+/// whether its packed words are the first run's. The walk reads no input value, so seeded words time it as a served
+/// statement's do.
+fn unit_walk(c: &Composite) {
+    let ni: usize = arg("--net", &c.unit_net.to_string()).parse().expect("--net");
+    let net = &c.nets[ni].1;
+    let slots: usize = arg("--slots", "2048").parse().expect("--slots");
+    let reps: usize = arg("--reps", "2").parse().expect("--reps");
+    let list = |name: &str, default: &str| -> Vec<usize> { arg(name, default).split(',').map(|w| w.parse().expect(name)).collect() };
+    let widths = list("--wide", "1,2,4,8");
+    let pools: Vec<rayon::ThreadPool> = list("--threads", &rayon::current_num_threads().to_string()).into_iter()
+        .map(|t| rayon::ThreadPoolBuilder::new().num_threads(t).stack_size(flock_live::THREAD_STACK).build().expect("a thread pool"))
+        .collect();
+    let uw = 1usize << (net.unit_log - 7);
+    let mut s = 0x9e37_79b9_7f4a_7c15u64 ^ arg("--seed", "1").parse::<u64>().expect("--seed");
+    let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+    let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|_| F128::new(r(), r())).collect()).collect();
+    let t = Instant::now();
+    let one_pass = net.one_pass();
+    let flat_s = t.elapsed().as_secs_f64();
+    let nnz = net.a.nnz() + net.b.nnz();
+    let (mut out, mut first) = (vec![0u64; 4 * uw * slots], None::<(bool, Vec<u64>)>);
+    for rep in 0..reps {
+        for pool in &pools {
+            for &n in &widths {
+                out.fill(0);
+                let (t, cpu) = (Instant::now(), flock_live::firewall::cpu_seconds());
+                let ok = pool.install(|| flock_live::circuit::unit_ab_into_wide(net, ni, uw, &ins, &mut out, n));
+                let (wall_s, cpu_s) = (t.elapsed().as_secs_f64(), flock_live::firewall::cpu_seconds() - cpu);
+                let want = first.get_or_insert_with(|| (ok, out.clone()));
+                println!("WALK\t{}", json!({"net": ni, "rows": net.useful, "nnz": nnz, "slots": slots,
+                    "groups": slots.div_ceil(64), "wide": n, "rep": rep, "threads": pool.current_num_threads(),
+                    "one_pass": one_pass, "flat_s": flat_s, "wall_s": wall_s, "cpu_s": cpu_s, "ok": ok,
+                    "same": want.0 == ok && want.1 == out}));
+            }
+        }
+    }
+}
+
 fn load_composite(path: &str) -> Composite {
     let unit = Some(arg("--tmpl-unit", "")).filter(|p| !p.is_empty()).map(|p| std::fs::read_to_string(p).expect("--tmpl-unit"));
     Composite::parse_with(&std::fs::read_to_string(path).expect("circuit"), Some(&arg("--tables", "tables")), unit.as_deref())
@@ -7265,6 +7306,9 @@ fn main() {
         }
         return;
     }
+    if cmd == "unit-walk" {
+        return unit_walk(&c);
+    }
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
         refuse("serve needs --pin (the pinned circuit's SHA-512)".into());
@@ -7350,6 +7394,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ..."),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8]"),
     }
 }
