@@ -33,14 +33,15 @@ sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
 import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_row_tables as TR  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
 from verity_vllm.commit import index as IX, row_tables as RTB  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/row-table-stand-in/v1").hexdigest()
-RULE = "stratified:2"
+#: Two of the fixture's 40 proof blocks, and a twentieth of however many it registers.
+RULE = "stratified-rate:1/20"
 OF = {"fixture": "integrations/vllm/tests/pipeline/test_row_tables.py", "context": TR.CTX.hex()}
 
 
@@ -48,9 +49,7 @@ def commit(out: Path) -> tuple[CS.Binding, dict[int, bytes]]:
     """The fixture's window under ``<ROOT>/rank0`` committed into ``out`` as serving commits it, its members' salts fresh;
     -> (the verifier's window, the step roots serving recorded)."""
     w, s, ms = TR.window()
-    w = replace(w, run=f"{ROOT}/rank0")
-    if D.parse_design(RULE) != w.law:
-        raise SystemExit(f"the fixture's law is {w.law}, not {RULE}")
+    w = a5.rated(replace(w, run=f"{ROOT}/rank0"), RULE)
     SRW._operand = s.operand  # the fixture's served operands, as `test_row_tables.committed` reads them
     got = SRW._read_s8(ms, s.rows, s, None, TR.ARRIVALS)
     live = {step: RTB.step_roots(TR.CTX, step, s.outputs(step), TR.ROW_KEY).root for step, _ in w.segments}

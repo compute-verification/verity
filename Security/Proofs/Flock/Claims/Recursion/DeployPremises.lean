@@ -107,11 +107,11 @@ def callsOf (rd : Readers) (x : Msg) (ws : List Claims.Flock.Wit) : List (Msg ×
 
 /-- **The inner verifier's run on the inner messages the outer witnesses give**, at the inner coins `cs`. -/
 def innerRunAt (H : Msg → Msg) (IV : Claims.Verifier Coin) (rd : Readers) (x : Msg) (ws : List Claims.Flock.Wit)
-    (cs : List Coin) : Claims.Trace :=
+    (cs : List Coin) : Claims.Transcript :=
   run H (replay (rd.msgs x ws)) IV (xIOf x) () fun i => cs.getD i.val default
 
 /-- A run's inner and staging messages. -/
-def runAs (n : ℕ) (t : Claims.Trace) : List Msg := (t.msgs.take n).map Prod.fst
+def runAs (n : ℕ) (t : Claims.Transcript) : List Msg := (t.msgs.take n).map Prod.fst
 
 /-- A run's inner and staging coins. -/
 def runCs {k : ℕ} (n : ℕ) (r : Fin k → Coin) : List Coin := (List.range n).map (coinSeq r)
