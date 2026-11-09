@@ -136,8 +136,9 @@ Carried.lean    the leak bounds over a carried pool: one run's relation at the r
                                          run before left and reads only the runs before it (runsBefore_congr,
                                          carried_step, encard_carried_le), and an opened row whose root matches but
                                          whose bits don't is a collision (rowSeg_bind); restarts serving picks
-                                         from a registered set multiply the count by its size; sampledLeakCarried,
-                                         pooledLeakReset, and pooledLeakCarried, its case of one pattern
+                                         from a registered set where every audit accepts multiply the count by its
+                                         size (encard_pooledCarried_le); sampledLeakCarried, pooledLeakReset,
+                                         pooledLeakCarried
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed

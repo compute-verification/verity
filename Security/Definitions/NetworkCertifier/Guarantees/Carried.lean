@@ -26,8 +26,9 @@ an opening is one found from two witnesses.
 
 `PooledLeakReset` is `PooledLeakCarried` where serving picks the restarts: each run's reset bit, and so the record rule's
 `chains` and opened rows `genesis`, at each secret and sample of the coins, from a registered finite set `Cs`. The pattern
-is advice, so the count gains the factor `#Cs`; the escape bound is unchanged. `PooledLeakCarried` is its case of one
-pattern.
+is advice, so the count gains the factor `#Cs`; the escape bound is unchanged. It counts the secrets whose audits all
+accept, so the pattern needs to lie in `Cs` only there, and a restart a public rule makes after a refused run costs
+nothing.
 -/
 
 @[expose] public section
@@ -128,14 +129,15 @@ def PooledLeakCarried : Prop :=
 /-- **The leak through the network certifier over a monitoring period whose runs carry the pool, with the restarts
 serving's choice** (conditional on its named inputs). `PooledLeakCarried`, where serving picks the record rule's restarts
 `chains` and opened rows `genesis` at each secret and sample of the coins: each run's reset bit, and at run 0 the previous
-period's closing row or the empty pool's. It picks them from a registered finite set `Cs`, and accepted runs open the root
-of the row the rule names at the pattern it picked (`CarriedRoots`):
+period's closing row or the empty pool's. Where every audit accepts, it picks them from a registered finite set `Cs`, and
+the runs open the root of the row the rule names at the pattern it picked (`CarriedRoots`):
 
 * for every secret, every audit accepts and the good event at the picked pattern fails (`PooledGoodCarried`) with
   probability at most `(1 - q)^Fmax + Σ e + Σ e' + Σ_i Pr[PoolColl i]`, as in `PooledLeakCarried`;
-* at every sample of the coins, the secrets that meet the good event at the pattern picked for them number at most
-  `#Cs` times `PooledLeakCarried`'s count. The pattern is advice of `log₂ #Cs` bits: `m` where every run's reset bit is
-  free, none where one pattern is registered. -/
+* at every sample of the coins, the secrets whose audits all accept and that meet the good event at the pattern picked
+  for them number at most `#Cs` times `PooledLeakCarried`'s count. The pattern is advice of `log₂ #Cs` bits: `m` where
+  every run's reset bit is free, `log₂ (m + 1)` where serving may choose one reset, none where one pattern is registered.
+  A restart a public rule makes after a refused run is outside `Cs`'s charge, since no audit is refused here. -/
 def PooledLeakReset : Prop :=
   ∀ {L K S : ℕ} (G : Hash.Msg → Hash.Digest) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
@@ -153,9 +155,11 @@ def PooledLeakReset : Prop :=
     (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
     (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
     (Cs : Finset ((Fin m → Bool) × (Fin m → Hash.Row))) (chains : Z → (Fin m → Ω) → Fin m → Bool)
-    (genesis : Z → (Fin m → Ω) → Fin m → Hash.Row) (hcs : ∀ z ∈ Zs, ∀ ω, (chains z ω, genesis z ω) ∈ Cs)
-    (hroot : ∀ z ∈ Zs, ∀ ω, CarriedRoots G lay k reg valid prow nrow Dj sw Pw ρ op (chains z ω) (genesis z ω))
-    (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
+    (genesis : Z → (Fin m → Ω) → Fin m → Hash.Row) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
+    (hcs : ∀ z ∈ Zs, ∀ ω, (∀ i, acc z i ω (ω i)) → (chains z ω, genesis z ω) ∈ Cs)
+    (hroot : ∀ z ∈ Zs, ∀ ω, (∀ i, acc z i ω (ω i)) →
+      CarriedRoots G lay k reg valid prow nrow Dj sw Pw ρ op (chains z ω) (genesis z ω))
+    (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
     (had : PeriodAdaptive n acc W) (rin rout : Z → (Fin m → Ω) → Fin m → Hash.Row) (e e' : Fin m → ℝ)
     (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
     (hesc : PeriodEscapes Zs acc W q e)
@@ -167,8 +171,9 @@ def PooledLeakReset : Prop :=
           (run tap (schedOf z ω, srvOf z ω)).2) ≤
         (1 - q) ^ Fmax + ∑ i, e i + ∑ i, e' i +
           ∑ i, Pr (fun ω => PoolColl G (chains z ω) (genesis z ω) (rin z ω) (rout z ω) i)) ∧
-      ∀ ω, {z | z ∈ Zs ∧ PooledGoodCarried lay k reg valid prow nrow Dj sw Pw ρ op (chains z ω) (genesis z ω) Fmax
-          (W z ω) (run tap (schedOf z ω, srvOf z ω)).2}.encard ≤
+      ∀ ω, {z | z ∈ Zs ∧ (∀ i, acc z i ω (ω i)) ∧
+          PooledGoodCarried lay k reg valid prow nrow Dj sw Pw ρ op (chains z ω) (genesis z ω) Fmax (W z ω)
+            (run tap (schedOf z ω, srvOf z ω)).2}.encard ≤
         (Cs.card : ℕ∞) * (Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax *
           2 ^ ((univ.sup fun i => (range (n i)).sup fun v => faultyBits (sw i).prog (Pw i) {v}) * Fmax) *
           ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
