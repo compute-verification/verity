@@ -134,7 +134,7 @@ BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
 ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/core/service/spot && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 
 # the verifier's lowering: a synthetic input set per template (its values are never read)

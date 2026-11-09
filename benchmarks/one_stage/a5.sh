@@ -41,7 +41,7 @@ BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
 ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier sampled-proofs-difftest) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/core/service/spot && lake build sampled-proofs-verifier sampled-proofs-difftest) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 # every member's server on a challenger of its own (`a0.session`); its coins and its audit are the build above
 export FLOCK_CHALLENGER=${FLOCK_CHALLENGER:-1} CHALLENGER_PY=$PY CHALLENGER_REPO=$REPO
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
