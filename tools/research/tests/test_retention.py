@@ -2,7 +2,10 @@
 Pure Python over tmp trees; the clock, the disk, the remote check and the in-use check are fakes (an fs remote for the real check)."""
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import socket
@@ -16,6 +19,7 @@ from research.cli import main as research_main
 from research.store import custody as CU
 from research.store.local import LocalStore
 
+REPO = Path(__file__).resolve().parents[3]
 NOW = datetime(2026, 10, 1, 19, 30, tzinfo=timezone.utc)
 PAST, FUTURE = "2026-09-25T00:00:00Z", "2026-10-08T00:00:00Z"
 NODE = "vy-test"
@@ -685,6 +689,83 @@ def test_rm_through_research(tmp_path, monkeypatch, capsys):
     assert research_main([*base, "--approved-by", "@compute-accounting", "--apply"]) == 0
     assert not p0.exists() and not p1.exists() and "deleted 2 of 2 path(s)" in capsys.readouterr().out
     assert [x["by"] for x in log_lines(root)][-2:] == [BY, BY]
+
+
+WHO = "r20261109-000500-ab12 (pid 4242)"
+
+
+def lean_tree(tree: Path, who: str | None = WHO) -> Path:
+    """A Lean records tree as `lean_changed.hold_tree` leaves it: its `.lock`, the `.who` naming the run, and a build."""
+    (tree / "pkg/.lake/build/lib/lean").mkdir(parents=True)
+    (tree / "pkg/.lake/build/lib/lean/Pkg.olean").write_bytes(b"olean")
+    (tree / R.LEAN_LOCK).touch()
+    if who is not None:
+        (tree / R.LEAN_WHO).write_text(who + "\n")
+    return tree
+
+
+@contextlib.contextmanager
+def held(tree: Path):
+    """A run working in `tree`: its `.lock` held, as `hold_tree` holds it."""
+    with open(tree / R.LEAN_LOCK, "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+
+
+def test_rm_refuses_a_lean_records_tree_a_run_holds_naming_the_run_and_deletes_it_once_free(tmp_path):
+    """Retention deleting a slot's records tree under its build crashed the run (FileNotFoundError on its .olean files): a path
+    that is, lies in or holds a tree whose lock a run holds is refused, the link to a tree on a larger volume and that volume's
+    directory alike, and deleted once the run ends."""
+    root = tmp_path / "ws"
+    kept(root, "research/home-cache", owner="@lean", expires=FUTURE)
+    kept(root, "research/cache", owner="@lean", expires=FUTURE)
+    records = root / "research/home-cache/verity-check" / R.LEAN_RECORDS
+    slot = lean_tree(records / "build-0")
+    volume = lean_tree(root / "research/cache/verity-check-root/lean-records_build-1")
+    (records / "build-1").symlink_to(volume, target_is_directory=True)
+    paths = [slot, slot / "pkg/.lake/build/lib/lean/Pkg.olean", records, records / "build-1", volume]
+    kw = {"approved_by": "@lean", "ref": REF, "root": root, "by": BY, "in_use": never_in_use, "now": clock, "node": NODE}
+    with held(slot), held(volume):
+        plan = R.rm(paths, apply=True, **kw)
+    assert all(p.exists() for p in paths) and plan["freed_bytes"] == 0
+    why = [a["reason"] for a in plan["actions"]]
+    assert [a["action"] for a in plan["actions"]] == ["refuse"] * 5
+    assert why[0] == why[1] == why[2] == (f"{slot} is a Lean records tree, and {WHO} holds its lock ({slot / '.lock'}): deleting it "
+                                          f"would crash that build; retry when the run ends")
+    assert why[3].startswith(f"{records / 'build-1'} is a Lean records tree, and {WHO} holds its lock"), "the link names it"
+    assert why[4].startswith(f"{volume} is a Lean records tree, and {WHO} holds its lock"), "its `.who` marks the link's target"
+    (slot / R.LEAN_WHO).unlink()
+    with held(slot):
+        assert "and a run its .who does not name holds its lock" in R.rm([slot], **kw)["actions"][0]["reason"]
+    assert [a["action"] for a in R.rm([records, volume], apply=True, **kw)["actions"]] == ["delete", "delete"]
+    assert not records.exists() and not volume.exists()
+
+
+def test_gc_skips_a_lean_records_tree_a_run_holds_and_takes_it_once_free(tmp_path):
+    root = tmp_path / "ws"
+    tree = kept(root, "research/home-cache/verity-check/lean-records")
+    lean_tree(tree / "build-0")
+    with held(tree / "build-0"):
+        plan = run_gc(root, Disk(100 * UNIT, 99 * UNIT, [tree]), force=True, low_pct=0, apply=True)
+    (a,) = plan["actions"]
+    assert a["action"] == "skip" and tree.exists()
+    assert a["reason"].startswith(f"in use: {tree / 'build-0'} is a Lean records tree, and {WHO} holds its lock")
+    plan = run_gc(root, Disk(100 * UNIT, 99 * UNIT, [tree]), force=True, low_pct=0, apply=True)
+    assert plan["actions"][0]["action"] == "delete" and not plan["actions"][0]["error"] and not tree.exists()
+
+
+def test_a_lean_records_tree_is_in_use_exactly_when_lean_audits_prune_keeps_it(tmp_path):
+    """Retention reads the lock `lean_audit.prune_records` takes (and `lean_changed.hold_tree` holds): a tree it would keep for a
+    run, retention leaves; one it would remove, retention may delete."""
+    spec = importlib.util.spec_from_file_location("lean_audit_for_retention", REPO / "tools/verity/lean/lean_audit.py")
+    la = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(la)
+    store = tmp_path / R.LEAN_RECORDS
+    busy, idle = lean_tree(store / "busy"), lean_tree(store / "idle", who=None)
+    with held(busy):
+        assert R.lean_in_use(busy, tmp_path).startswith(f"{busy} is a Lean records tree") and R.lean_in_use(idle, tmp_path) is None
+        assert la.prune_records(store, kept=0, slots=0) == 1
+    assert busy.exists() and not idle.exists()
 
 
 def test_expires_now_is_what_rm_tells_an_owner_to_record():

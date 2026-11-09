@@ -25,6 +25,10 @@ file now under it at its size, and the artifact PRESERVED on the remote, checked
 file in the job-script directories may name it (`JobScripts`). An implicit record also needs its marker to still vouch for the run
 dir (`custody.marker_problem`). A path holding a nested record is left whole. A dry run (the default) reads no remote.
 
+Neither command deletes a path that is, lies in or holds a Lean records tree (LEAN_RECORDS) whose `.lock` a run holds: it is
+refused, naming the run its `.who` names, to retry when that run ends. Each deletion holds those trees' locks while it runs, as
+`lean_audit.py --prune` does, so no run takes one meanwhile.
+
 `rm` deletes the paths it is given, with their owner's yes, for a cleanup the policy doesn't reach. A path qualifies only when a
 record covers it (its own or an ancestor's), that record and every record beneath it (sidecars and implicit ones) are valid, name
 the --approved-by handle as owner and are not `keep`, no job script names it, and nothing in it is read-only or a mount. A sealed
@@ -40,6 +44,7 @@ default) deletes and logs nothing.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -47,10 +52,11 @@ import shutil
 import socket
 import stat
 import sys
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Iterator, Sequence
 
 from .disk import HOLD_PCT, RELEASE_PCT
 from .store import custody as CU
@@ -643,9 +649,76 @@ def _in_sealed(path: Path) -> str | None:
     return None
 
 
+#: A Lean records tree (`lean_changed.py --records`, `--try`, `--build`): a slot's checkout and its builds, `lean-records/build-I`
+#: under the check cache (`lean_changed.RECORDS`), or that link's target on a larger volume. The run working in it holds its
+#: `.lock` (a flock) and names itself in its `.who` (`lean_changed.hold_tree`). `lean_audit.prune_records` removes a tree only
+#: while it holds that lock, and so do gc and rm (`_lean_locks`): a build whose tree goes from under it fails on a missing `.olean`.
+LEAN_RECORDS, LEAN_LOCK, LEAN_WHO = "lean-records", ".lock", ".who"
+
+
+def _lean_tree(d: Path) -> bool:
+    """Whether `d` (or the directory a link `d` names) is a Lean records tree: it holds a `.lock`, and lies in `lean-records/`
+    or holds a `.who`."""
+    try:
+        return (d / LEAN_LOCK).is_file() and (d.parent.name == LEAN_RECORDS or (d / LEAN_WHO).is_file())
+    except OSError:
+        return False
+
+
+def lean_trees(path: Path, root: Path) -> list[Path]:
+    """The Lean records trees `path` is or lies in (below `root`), else those it holds: a link to one counts, and the walk never
+    follows a link or descends into a tree or CODE_DIRS. OSError when a directory can't be read."""
+    p = Path(os.path.abspath(path))
+    out = [d for d in (p, *p.parents) if Path(root) in d.parents and _lean_tree(d)]
+    if out or not p.is_dir() or p.is_symlink():
+        return out
+    for base, dirs, _files in os.walk(p, onerror=_raise):
+        dirs.sort()
+        found = [d for d in dirs if _lean_tree(Path(base) / d)]
+        out += [Path(base) / d for d in found]
+        dirs[:] = [d for d in dirs if d not in found and d not in CODE_DIRS]
+    return out
+
+
+def _lean_holder(tree: Path) -> str:
+    try:
+        who = (tree / LEAN_WHO).read_text().strip()
+    except OSError:
+        who = ""
+    return (f"{tree} is a Lean records tree, and {who or 'a run its .who does not name'} holds its lock ({tree / LEAN_LOCK}): "
+            f"deleting it would crash that build; retry when the run ends")
+
+
+@contextmanager
+def _lean_locks(path: Path, root: Path) -> Iterator[str | None]:
+    """Hold the lock of every Lean records tree `path` is, lies in or holds (`lean_trees`) while the block runs, so no run takes
+    one meanwhile; yields None, or why not when a run holds one. OSError when a directory or a lock can't be read."""
+    with ExitStack() as stack:
+        held = None
+        for tree in lean_trees(path, root):
+            fd = os.open(tree / LEAN_LOCK, os.O_RDONLY)
+            stack.callback(os.close, fd)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                held = _lean_holder(tree)
+                break
+        yield held
+
+
+def lean_in_use(path: Path, root: Path) -> str | None:
+    """Why a Lean build is (or may be) working in `path` (`_lean_locks`), or None."""
+    try:
+        with _lean_locks(path, root) as held:
+            return held
+    except OSError as e:
+        return f"can't read all of it ({e}), so whether a Lean build works in it is unknown"
+
+
 def _delete(root: Path, path: Path) -> str | None:
     """Remove a recorded path with its sidecar; the error, or None. A tree holding a directory this process can't write into is
-    left whole, since rmtree would stop partway; a sealed run dir (store.sealed) is deleted whole by vy-seal-runs, as root."""
+    left whole, since rmtree would stop partway; a sealed run dir (store.sealed) is deleted whole by vy-seal-runs, as root. The
+    locks of the Lean records trees it is, lies in or holds are held throughout (`_lean_locks`), and one a run holds refuses it."""
     try:
         if root not in Path(os.path.abspath(path)).parents:
             return f"{path} is not under {root}"
@@ -653,15 +726,18 @@ def _delete(root: Path, path: Path) -> str | None:
             return f"{path} is a mount point"
         if why := _in_sealed(path):
             return why
-        if SL.sealed(path):
-            if err := SL.delete(path):
-                return f"sealed, and vy-seal-runs refused to delete it: {err}"
-        elif os.path.isdir(path) and not os.path.islink(path):
-            if ro := _read_only_dir(path):
-                return f"{ro} is read-only: its owner makes it writable, or keeps it"
-            shutil.rmtree(path)
-        else:
-            os.unlink(path)
+        with _lean_locks(path, root) as held:
+            if held:
+                return held
+            if SL.sealed(path):
+                if err := SL.delete(path):
+                    return f"sealed, and vy-seal-runs refused to delete it: {err}"
+            elif os.path.isdir(path) and not os.path.islink(path):
+                if ro := _read_only_dir(path):
+                    return f"{ro} is read-only: its owner makes it writable, or keeps it"
+                shutil.rmtree(path)
+            else:
+                os.unlink(path)
         beside(path).unlink(missing_ok=True)
     except OSError as e:
         return f"{type(e).__name__}: {e}"
@@ -726,6 +802,8 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         if fresh is None or fresh.record != row.record:
             why = "its record changed during gc: run gc again"
         elif u := in_use(p):
+            why = f"in use: {u}"
+        elif u := lean_in_use(p, root):
             why = f"in use: {u}"
         elif apply and row.record.get("preserved") and (r := remote_check(row.record["preserved"], p)):
             why = f"preserved {row.record['preserved']} is not verified on the remote: {r}"
@@ -813,6 +891,8 @@ def _refusal(path: Path, root: Path, approved_by: str, top: Found | None, below:
     if u := in_use(path):
         return f"in use: {u}"
     if why := _in_sealed(path):
+        return why
+    if why := lean_in_use(path, root):
         return why
     try:
         ro = _read_only_dir(path) if os.path.isdir(path) and not os.path.islink(path) and not SL.sealed(path) else None
