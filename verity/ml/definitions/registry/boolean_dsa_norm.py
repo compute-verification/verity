@@ -1,7 +1,9 @@
 """`dsa_norm`'s RMSNorms on bits: `DsaRMSNorm_v2{N, EPS}` and `TritonBlockRMSNorm_v2{N, BLOCK, WARPS, EPS}`, `dsa_norm.rms_norm` over
 `boolean_dsa.bit_ops` (core's Boolean FP32 pieces: `Bf16ToF32`, `F32Fma`, `F32Mul`, `F32Add`, `DivFullScaleA`, `DivFullRcp`,
-`RsqrtApprox`) and `F2fpBf16_v2`, each traced as one circuit (`boolean_dsa.flat`), so its word view is the `_v1` at the same statics.
-`DsaLatentRow_v2{KVL, R, EPS}` is `DsaLatentRow_v1` on bits, a composite of `DsaRMSNorm_v2` and `boolean_rope.RoPEHeadGptJ_v3`."""
+`RsqrtApprox`) and `F2fpBf16_v2`, and `DsaRMSNormSumSq_v2{N, EPS}` and `DsaRMSNormApply_v2{G}`, that row cut at its scale
+(`dsa_norm.sum_sq`, `dsa_norm.apply`), each traced as one circuit (`boolean_dsa.flat`), so its word view is the `_v1` at the same
+statics.  `DsaLatentRow_v2{KVL, R, EPS}` is `DsaLatentRow_v1` on bits, a composite of `DsaRMSNorm_v2` and
+`boolean_rope.RoPEHeadGptJ_v3`."""
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
@@ -12,7 +14,7 @@ from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
 from verity.ml.definitions.registry import boolean_rope as BR
 from verity.ml.definitions.registry import dsa_norm as DN
-from verity.ml.definitions.registry.boolean_dsa import bit_ops, flat
+from verity.ml.definitions.registry.boolean_dsa import F32, bit_ops, flat
 
 BF16 = Array(16, BL.BIT)
 
@@ -24,6 +26,25 @@ def _rms(B, S, x, w):
 
 DsaRMSNormV2 = flat("DsaRMSNorm", 2, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
                     _rms, DN.DsaRMSNorm)
+
+
+def _sum_sq(B, S, x):
+    """`DsaRMSNormSumSq_v1`'s body on bits."""
+    return DN.sum_sq(bit_ops(B), S, x)
+
+
+DsaRMSNormSumSqV2 = flat("DsaRMSNormSumSq", 2, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)),), F32), _sum_sq,
+                         DN.DsaRMSNormSumSq)
+
+
+def _apply(B, S, x, w, r):
+    """`DsaRMSNormApply_v1`'s body on bits."""
+    return DN.apply(bit_ops(B), S.G, x, w, r, BG.F2fpBf16, BF16)
+
+
+DsaRMSNormApplyV2 = flat("DsaRMSNormApply", 2, ["G"],
+                         lambda S: ((("x", Array(S.G, BF16)), ("w", Array(S.G, BF16)), ("r", F32)), Array(S.G, BF16)), _apply,
+                         DN.DsaRMSNormApply)
 
 
 def _block_rms(B, S, x, w):
@@ -48,4 +69,4 @@ DsaLatentRowV2 = EW.on_bits(
     lambda S: ((("kv", Array(S.KVL + S.R, BF16)), ("w", Array(S.KVL, BF16)), ("cs", Array(S.R, BF16))), Array(S.KVL + S.R, BF16)),
     _latent, DN.DsaLatentRow)
 
-BOOLEAN_DSA_NORM = [DsaRMSNormV2, TritonBlockRMSNormV2, DsaLatentRowV2]
+BOOLEAN_DSA_NORM = [DsaRMSNormV2, DsaRMSNormSumSqV2, DsaRMSNormApplyV2, TritonBlockRMSNormV2, DsaLatentRowV2]
