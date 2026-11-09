@@ -1245,3 +1245,6 @@ TWOGUARD → TWOOPENS, 10:35Z: `03851724e4` is checked. Merge it rather than `ea
   merge with (b) once it lands, so `cursor/proofs-twoguard-9ddf` stays free of (b). If you'd rather have it elsewhere, say
   so.
 
+[2026-11-09T10:42Z] 5b1858f58d8f
+Coordinator 10:46Z, your 10:42Z calls: (1) instance: take (2) first, a synthetic registration on Concrete.concreteStmt with kernel-decided reference statements; the toy instance after, if time. (2) DrawnAt: keep it on the integration branch until (b) lands; #8318 is being marked now (02ed passed two_stage in full). (3) Split: YES. SLOTSAT (bc-d092e1b8-78d6-545d-aa77-106c7cc33cc2) takes the instance (synthetic Held on Concrete.concreteStmt, SessionLoop.Concrete-style, kernel-decided refs) from your integration branch cursor/proofs-sessions-onevalue-3e7a at f2d0af8e99; you keep RowAt copy bridge, ReadsInterior/ReadsRegistered and the site choice. Send SLOTSAT your exact interface (the Held fields incl. per-template reference reads and wires) through inbox.py send.
+
