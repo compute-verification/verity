@@ -29,11 +29,12 @@ activation of the circuit's template (``Extract.claimedUnits``), and a class her
 
 A type of `CENSUS` is a block type of the serving rows by its census name (`serving_templates.template`, the name a proof
 overhead card prices it under), one whole Definition a proof block, laid out as the served composer lays its template
-(`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter of seeded N(0, 1) bf16 words) and
-statement (`chunk_rows.statement`: the 64-key sparse MLA split part's MUFU reads in Flock's lookup slots, its unit cut into
-stage nets under the automatic caps, which keep it within the GPU prover's slot types; RMSNorm's inline) under its unit name,
-so the statement is the served one but for its binding: its ``class_sha512`` is the served composer's. The circuit is streamed
-to circuit.txt once, every input's outputs checked against the Program's reference (``twin`` null).
+(`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter's leaves seeded at their width,
+`census_leaves`) and statement (`chunk_rows.statement`: the 64-key sparse MLA split part's MUFU reads in Flock's lookup
+slots, its unit cut into stage nets under the automatic caps, which keep it within the GPU prover's slot types; RMSNorm's
+and the FP8 linears' inline) under its unit name, so the statement is the served one but for its binding: its
+``class_sha512`` is the served composer's. The circuit is streamed to circuit.txt once, every input's outputs checked against
+the Program's reference (``twin`` null).
 
 Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, a PARTS type's partition.json, and beside a statement
 reading in slots the MUFU tables the prover reads (``tables/``, ``flock-circuit --tables``), as the served composer does.
@@ -59,6 +60,8 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 the block's inputs instead.
     gq          `CENSUS`: Fp8GroupQuantUe8m0_v1{K,G}, one token row's quantization to E4M3 in groups of G with power-of-two
                 scales, before an FP8 linear of K inputs (K = 6144: the hidden state's); a K below 6144 is a column block.
+    fi          `CENSUS`: FlashInferFp8Linear_v1{K,N}, the FlashInfer FP8 linear's output coordinate (N = 1) on one token row:
+                its bf16 x quantized in the block, an E4M3 weight row and its f32 block scales (K = 2048: q_b and o_proj).
     mla-split-part  `CENSUS`: SparseMlaSplitPart_v1 at T = 64, one query's sparse MLA over one split's 64 keys (FA3's).
     rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
@@ -217,10 +220,26 @@ class Census:
 _EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 CENSUS: dict[str, Census] = {
     "gq": Census("Fp8GroupQuantUe8m0_v1", {"K": 6144, "G": 128}),
+    "fi": Census("FlashInferFp8Linear_v1", {"K": 2048, "N": 1}),
     "mla-split-part": Census("SparseMlaSplitPart_v1", {}, 'T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
                              'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}'),
     "rmsnorm-v8": Census("RMSNormFusedCudaVector8_v1", {}, f"N=6144,EPS={_EPS},BLOCK=256"),
 }
+
+
+def census_leaves(rng: np.random.Generator, ty, n: int) -> np.ndarray:
+    """``n`` rows of a parameter of type ``ty`` as u16 words, its leaves packed at their width: bf16 of N(0, 1) for 16-bit
+    leaves, E4M3 codes other than NaN for 8-bit ones, f32 powers of two from 2^-10 to 2^-4 (a block scale) for 32-bit ones."""
+    w = set(ty.leaf_widths())
+    if w == {16}:
+        return bf16(rng.standard_normal((n, ty.leaves)))
+    if w == {8} and ty.leaves % 2 == 0:
+        c = rng.integers(0, 256, (n, ty.leaves), dtype=np.uint8)
+        c[(c & 0x7F) == 0x7F] ^= 1
+        return c.view("<u2")
+    if w == {32}:
+        return np.ldexp(np.ones((n, ty.leaves), np.float32), rng.integers(-10, -3, (n, ty.leaves))).astype("<f4").view("<u2")
+    raise SystemExit(f"stage.py: a census parameter of {ty.leaves} leaves of {sorted(w)} bits, which `census_leaves` doesn't draw")
 
 
 def _static(default, v: str):
@@ -295,14 +314,14 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
     tp = template(cen.name(S))
     d = tp.fn
     params, _ret = d.signature()
-    if any(set(ty.leaf_widths()) != {16} for _p, ty in params):
-        raise SystemExit(f"stage.py: {d.id} has a parameter that isn't 16-bit words, which a census type draws as bf16")
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
-    vals = {p: bf16(rng.standard_normal((n, ty.leaves))) for p, ty in params}
+    vals = {p: census_leaves(rng, ty, n) for p, ty in params}
     in_rows, out_rows = CR.unit_rows(tp)
     if any(p not in vals for *_r, ps in in_rows for p in ps):
         raise SystemExit(f"stage.py: {tp.id}'s served rows {in_rows} cut a parameter, which a census type draws whole")
     rows = {r: np.concatenate([vals[p] for p in ps], axis=1) for r, _s, _b, ps in in_rows}
+    if any(rows[r].shape != (n, b // 16) for r, _s, b, _ps in in_rows):
+        raise SystemExit(f"stage.py: {tp.id}'s drawn rows {[rows[r].shape for r, *_x in in_rows]} are not its rows' words")
     stmt = CR.statement(tp)
     t_draw = time.time() - t0
     st = CS.UnitStager(d, "unit/serving-rows", in_rows, out_rows, circuit=out / "circuit.txt", **stmt)
