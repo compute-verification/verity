@@ -43,6 +43,10 @@
   "Pouw.CostModel.Hashless": {
    "owner": "@compute-accounting",
    "digest": "23a998fe437179f7d77d2a07c5b8adec774502aef2d11fa5fbd8e4f475f92939"
+  },
+  "WeightSecurity.Assumptions.FaultedUseHard": {
+   "owner": "@proofs",
+   "digest": "67a6d0c1f4669ce5af4420f2aa0be27b428459109e45ad675db4a45dafab2ff6"
   }
  },
  "domain": {
@@ -390,6 +394,21 @@
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e",
    "why": "The final pack's relation holds."
+  },
+  "WeightSecurity.Assumptions.HonestUseHard": {
+   "owner": "@proofs",
+   "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
+   "why": "The honest-use rate p the bound is stated relative to: every party of the class steals the weights from honest queries with probability at most p, which holds at p = p_hon by definition, so the bound counts what leaks beyond honest serving; the honest witnesses meet it at the toy deployments (TheftHonest, TheftServedHonest, TheftServedMinEntropyHonest, TheftFaultedHonest)."
+  },
+  "WeightSecurity.Assumptions.Simulable": {
+   "owner": "@proofs",
+   "digest": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29",
+   "why": "A condition on the class the honest-use rate is about: it holds the outsider with each covert string written in, which the class of all parties does; the honest witnesses meet it at the toy deployments (TheftHonest, TheftServedHonest, TheftFaultedHonest)."
+  },
+  "WeightSecurity.NoFault": {
+   "owner": "@proofs",
+   "digest": "264e1f5841fb8b8efce93565492e493c6406dc51d8d8970d46ed6ca367e71251",
+   "why": "The pattern beside each honest query faults no proof block, so the fault budget M counts only the server's faults; the honest witness meets it at the toy deployment (TheftFaultedHonest)."
   },
   "WeightSecurity.Served.UndetectedLe": {
    "owner": "@proofs",
@@ -3302,23 +3321,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-07"
   },
-  "WeightSecurity.Assumptions.HonestUseHard": {
-   "owner": "@proofs",
-   "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
-   "issue": "PRF-413",
-   "due": "2026-11-06"
-  },
   "WeightSecurity.Assumptions.LeaksThrough": {
    "owner": "@proofs",
    "digest": "3a2698362a1e14711580dd145fafd0556395f7956c8d950e365e49f1246a683e",
    "issue": "PRF-413",
-   "due": "2026-11-06"
-  },
-  "WeightSecurity.Assumptions.Simulable": {
-   "owner": "@proofs",
-   "digest": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29",
-   "issue": "PRF-413",
-   "due": "2026-11-06"
+   "due": "2026-11-17"
   }
  },
  "trust": {
@@ -4344,6 +4351,10 @@
    "honest": ["WeightSecurity.SecurityProofs.TheftServedHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedNontrivial"
   },
+  "WeightSecurity.SecurityProofs.TheftFaulted": {
+   "honest": ["WeightSecurity.SecurityProofs.TheftFaultedHonest"],
+   "nontrivial": "WeightSecurity.SecurityProofs.TheftFaultedNontrivial"
+  },
   "Claims.Encodings.byPosBinds": {
    "honest": ["Claims.Encodings.byPosBinds_honest"],
    "nontrivial": "Claims.Encodings.byPosBinds_nontrivial"
@@ -5112,11 +5123,6 @@
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
   "Flock.SecurityProofs.SessionLoopZKDeployed": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659",
   "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc",
-  "Flock.SecurityProofs.SpotExfilTwo": {
-   "type_hash": "ac7eedcb10306cfde243f580a97a016d9c3e11b405fd8b68666bbbdf3b51cdf6",
-   "missing": "honest",
-   "why": "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)"
-  },
   "Flock.SecurityProofs.SpotKSTwo": {
    "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d",
    "missing": "honest",
@@ -5267,12 +5273,6 @@
   "NetTiming.SecurityProofs.PooledLeakAccepted": {
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
    "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
-  },
-  "NetTiming.SecurityProofs.PooledLeakChecked": {
-   "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
-   "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
   },
   "Pous.SecurityProofs.BandPubMeets14": {
    "type_hash": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
@@ -5475,6 +5475,17 @@
   "Verity.SecurityProofs.ServingBlockSum": {
    "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
    "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
+  },
+  "Flock.SecurityProofs.SpotExfilTwo": {
+   "type_hash": "ac7eedcb10306cfde243f580a97a016d9c3e11b405fd8b68666bbbdf3b51cdf6",
+   "missing": "honest",
+   "why": "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)"
+  },
+  "NetTiming.SecurityProofs.PooledLeakChecked": {
+   "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
+   "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
   }
  },
  "witnesses_assumed": {
@@ -25508,16 +25519,64 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": [
-     "WeightSecurity.Assumptions.HonestUseHard",
-     "WeightSecurity.Assumptions.LeaksThrough",
-     "WeightSecurity.Assumptions.Simulable"
-    ],
+    "domain": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "open": ["WeightSecurity.Assumptions.LeaksThrough"],
     "reads": []
    },
    "type_hash": "e9765a688f6dcb14a14db81583b5eef4eefb1b701eaa7af7e9cbc972256abad0",
    "unfolded_hash": "8f2bdeb5f0947ba7a5dca302c9c3c76a4c2eca1870eddc3a803d5eab2b75c762"
+  },
+  "WeightSecurity.SecurityProofs.TheftFaulted": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftFaulted : WeightSecurity.Guarantees.TheftFaulted"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": ["WeightSecurity.Assumptions.FaultedUseHard"],
+    "domain": [
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.NoFault",
+     "WeightSecurity.Served.UndetectedLe"
+    ],
+    "open": [],
+    "reads": ["WeightSecurity.Assumptions.FaultBudget", "WeightSecurity.Assumptions.patternCount"]
+   },
+   "type_hash": "c97d64a78151d0cc29028512eab03c45b8819137d1d7b96344d6357124dba8ac",
+   "unfolded_hash": "c01e53208e766320e95e63ff76fe191198d7661aa69bba5fc515eb47c71c4e7a"
+  },
+  "WeightSecurity.SecurityProofs.TheftFaultedHonest": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftFaultedHonest : WeightSecurity.Guarantees.TheftFaultedHonest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "WeightSecurity.Assumptions.FaultBudget",
+     "WeightSecurity.Assumptions.FaultedUseHard",
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.Assumptions.patternCount"
+    ]
+   },
+   "type_hash": "2e12ae30f8e11b937a4ce5276f85cc0844f4ec52099d8b6a729954b61184fb3a",
+   "unfolded_hash": "96401c8b4b650ffbca7adc14a8da21d7e81ed34a44b892167172f50dbada449e"
+  },
+  "WeightSecurity.SecurityProofs.TheftFaultedNontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "WeightSecurity.SecurityProofs.TheftFaultedNontrivial : WeightSecurity.Guarantees.TheftFaultedNontrivial"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["WeightSecurity.Assumptions.patternCount"]
+   },
+   "type_hash": "b40a8234f7dae5f1fa63ddd7db7b8b4e613569b40cfa3145514ca5f33255d431",
+   "unfolded_hash": "54b7a8ce98718276b773debf440c0adede4c17a8ac21f780dcfee096c3b9f8f0"
   },
   "WeightSecurity.SecurityProofs.TheftHonest": {
    "owner": "@proofs",
@@ -25559,8 +25618,12 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["WeightSecurity.Served.UndetectedLe"],
-    "open": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "domain": [
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.Served.UndetectedLe"
+    ],
+    "open": [],
     "reads": []
    },
    "type_hash": "3ba016bf392579018f28901a3762edbef405dcdecdff27caaccb6e9b4dcf4dd2",
@@ -25585,8 +25648,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["WeightSecurity.Served.UndetectedLe"],
-    "open": ["WeightSecurity.Assumptions.HonestUseHard"],
+    "domain": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Served.UndetectedLe"],
+    "open": [],
     "reads": []
    },
    "type_hash": "8b2f9f145e791c67699d3e5f661505469364bc71b0a9cc5d04383fc1768c2d05",
@@ -25642,8 +25705,12 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["WeightSecurity.Served.UndetectedLe"],
-    "open": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "domain": [
+     "WeightSecurity.Assumptions.HonestUseHard",
+     "WeightSecurity.Assumptions.Simulable",
+     "WeightSecurity.Served.UndetectedLe"
+    ],
+    "open": [],
     "reads": []
    },
    "type_hash": "9aa3f44f0c9c3699c124835ba59dd0ab41dc4ab634a16922f2c4f8fbffbb9567",
@@ -26537,6 +26604,7 @@
    "Pouw.SecurityProofs.PeriodBindingPerProver": "frozen (no-function): a bound on a period's binding (SampledLayer.BindingAt at Declared.periodLayer, which J10-R's tileLayer is) for every circuit, outcomes and openings, not a property of a Lean function's acceptance; it takes ecr/sha-512 at the prover's own fork finder (Claims.ExpectedCR, applied to that finder alone) and states kappa, the unverified-opening and split terms, in full, since no premise bounds them yet (CMP-33).",
    "Flock.SecurityProofs.SampledKSTwo": "frozen (obligation,no-function): ksTwo_code at the deployed round order (SamplingDeploy.codeTwoAt), knowledge sound at SHA-512 from UniformRandomBytes at each challenger call (CallsUniform) and seven facts of the code (RegMatchesTwo, Code.RefusesTwo, Code.ReplayCap, Code.InteriorFixed, SessionRuns, SessionsIn, SessionOpensTwo), open until Spot.Run.run's checks prove them; it reads SampledKSTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SamplingGeneric's code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "WeightSecurity.SecurityProofs.TheftServed": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' locality as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
+   "WeightSecurity.SecurityProofs.TheftFaulted": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Faulted.lean), with the audit's incorrect blocks as fault inputs to a faulted circuit rather than as overwrites of releases, under honest-use hardness on a typical set of weights (WeightSecurity.Assumptions.HonestUseHard), the model claim that faults within the budget M make the circuit at most N^(λ-1) times easier to use, N the number of fault patterns (WeightSecurity.Assumptions.FaultedUseHard), the fault channel's simulability (WeightSecurity.Assumptions.Simulable), an empty fault pattern beside each honest query (WeightSecurity.NoFault) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the atypical weights and the releases' faithfulness to the faulted run as probability terms, the second of which the network certifier's tie of each release to a trace of a checked dataflow discharges (Population.Dataflow.determinate_of_checked); it reads no function's acceptance.",
    "Pouw.NCP.GameProofs.gapFromTTNCP": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.GapFromTT": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.NCP.GapFromTTNCP_U_C2": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
@@ -26836,12 +26904,12 @@
     "Real.instLE.le c.Q (instHSub.hSub (instHSub.hSub (instHSub.hSub (instHSub.hSub (instHMul.hMul k b).cast d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) r.win.len).cast) (instHMul.hMul G b).cast) lam.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (D.κ δ (R.stmt ξ i)) δ) (instHMul.hMul (D.γ (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V D.E (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V D.E D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (Claims.Sampling.κ D δ (R.stmt ξ i)) δ) (instHMul.hMul (Claims.Sampling.γ D (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V (Claims.Sampling.E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V (Claims.Sampling.E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V (Claims.Sampling.E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (D.κ δ (R.stmt ξ i)) δ) (instHMul.hMul (D.γ (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V D.E (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V D.E D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": {
     "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -39231,17 +39299,32 @@
    }
   },
   "Definitions.WeightSecurity.Assumptions": {
-   "digest": "0c73be8318892d7a67d5d0963a192517086597473a3f75aa782db7430ef0a78e",
+   "digest": "66a88426fd9a8068b5f807983e51efde34f4ff51e9a304cb678c0a1c9ca79d2b",
    "definitions": {
+    "WeightSecurity.Assumptions.FaultBudget": "080406bc5ffda650543b6f3f67f23c54fdbf93f4e9c28b08c10f159312f12a5c",
+    "WeightSecurity.Assumptions.FaultedUseHard": "67a6d0c1f4669ce5af4420f2aa0be27b428459109e45ad675db4a45dafab2ff6",
     "WeightSecurity.Assumptions.HonestUseHard": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
     "WeightSecurity.Assumptions.LeaksThrough": "3a2698362a1e14711580dd145fafd0556395f7956c8d950e365e49f1246a683e",
-    "WeightSecurity.Assumptions.Simulable": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29"
+    "WeightSecurity.Assumptions.Simulable": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29",
+    "WeightSecurity.Assumptions.patternCount": "7911fca42b09f80a1931fa880d25bb5112617283c452fd72f6aa59f72f909396"
+   }
+  },
+  "Definitions.WeightSecurity.Faulted": {
+   "digest": "abfdd81c34905f2f2d3f6b615744b6aa51516b48c2f67f05f4008664c04375d7",
+   "definitions": {
+    "WeightSecurity.NoFault": "264e1f5841fb8b8efce93565492e493c6406dc51d8d8970d46ed6ca367e71251",
+    "WeightSecurity.Outsider.withFaults": "029d3f6e39a4e6112e43dd024984b671317ac8ee30364cbc376cb50a5d3450b2",
+    "WeightSecurity.Served.Faithful": "8ea78585faee2c95b29faad304e40f61e73c6a8af5b4129bf15b0e2294077972",
+    "WeightSecurity.faultChannel": "4ab2feaf38644defe045c818ca639ccd8fff99c6de7e6a568b8696c3318f0fa2"
    }
   },
   "Definitions.WeightSecurity.Guarantees": {
-   "digest": "83a9f0be041fdd593e29a861fa225e90773fec9829df1bbdcbb4698185a81e69",
+   "digest": "e107526f9219102122a0d06855525d3cd20b4f2596512afae10dea8ec2c4c1ac",
    "definitions": {
     "WeightSecurity.Guarantees.Theft": "243a4531b248cccfef6facd28bc3405391f5da31d56ab1cb55fcb1c107ca67af",
+    "WeightSecurity.Guarantees.TheftFaulted": "cc4f853eb07a6b26cb9dcd01197647fc7742f97d59627e480418b7b157df8aa2",
+    "WeightSecurity.Guarantees.TheftFaultedHonest": "2180d0e50151358e8c5437a16984a7002eb6e5946c0761ed837fa95e6377ea4b",
+    "WeightSecurity.Guarantees.TheftFaultedNontrivial": "15d22988f631dbb949b1ad802cd378c47b48f9daa356a2b05bdd633b9111d242",
     "WeightSecurity.Guarantees.TheftHonest": "edcebe0ece71b890e6f3ba54fd3daf68deef830b9bcf824f8453dd5b347b07c3",
     "WeightSecurity.Guarantees.TheftNontrivial": "01c971f2461b56cc999f6f851dd87a4be69c2c8c9d0692e56f2f452ce42fff75",
     "WeightSecurity.Guarantees.TheftServed": "3001e1613e4c171768f8231c43f04b9da48f65e1c192a23c70253af21ae82447",
@@ -39292,6 +39375,15 @@
     "WeightSecurity.Toy.silent": "b0b616e206663a6e8094b9a7b6a568306c8544a6490464c898cbc8a97812a48a",
     "WeightSecurity.Toy.thief": "f4c89279c043eba1b9034f27e3ae0cf393472af02867fd1e3f8d528d693db865",
     "WeightSecurity.Toy.user": "c0800da2e0d99641faf805d0b95e7ab038074cc2c43e192b5c6d739fd27034b2"
+   }
+  },
+  "Definitions.WeightSecurity.ToyFaulted": {
+   "digest": "e3a43527a8f8b26953aa48283f0006b519f53ed106594bc270695615cb6c5fa0",
+   "definitions": {
+    "WeightSecurity.ToyServed.Cf": "d72c5997f6d1bd3759d84ca77e8d9bc20b3e26d4219ef2cdb804c0333c76cd00",
+    "WeightSecurity.ToyServed.Fault": "5020c537a7deb4d5815c13c10f56876cdd8358401cbbde754d2e3ceef34e8adb",
+    "WeightSecurity.ToyServed.anyoneF": "3fca84f5675fba1822a51ea025ab67d9011d475f0cbe02755ebf78f8149187c3",
+    "WeightSecurity.ToyServed.size": "3791acb7c94c469abb8bc44952909ccfc73ec5267b0a6fd4ccf5e68a8efe98a9"
    }
   },
   "Definitions.WeightSecurity.ToyServed": {
