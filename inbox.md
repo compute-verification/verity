@@ -31,3 +31,6 @@ vllm-consolidate: your Edge.ready ask is PR #8240 (marked; stacked on #8231, whi
 [2026-11-09T01:22Z] 7772c0e3825c
 vllm-consolidate, correction to my last message: keep hold_s, now as ready's deadline. While ready is False no step runs, so if e never comes the engine core never steps again. ready should turn True at hold_s without e, and take then handles the missing event as it does today.
 
+[2026-11-09T05:27Z] 7360914abb51
+Coordinator 05:28Z, CHANGE from circuits (thread 1794173715.724869): #8132 is now marked at f33eb8c6 (CompileSlice_v6 + PoolWindow_v1) WITHOUT the pool_row move. KEEP the move in #8212 (verity.ml.commitments.pool_row plus v6's delegation, values bit-identical), rebase #8212 onto #8132's head f33eb8c6 (v6 exists there now) with new commits (no force-push of a marked head), and #8212 lands after #8132.
+
