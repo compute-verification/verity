@@ -3142,7 +3142,7 @@
   },
   "SpotFlock.FrameIs": {
    "owner": "@proofs",
-   "digest": "83e15af6714ecc736843f28b6643c5e304bf6fbd0a723f36c64a3aeae8956ff6",
+   "digest": "714034d9a2fae268bf44863040b54e27898690a19a395ee32fa6dc9102ee0222",
    "issue": "PRF-460",
    "due": "2026-11-30"
   },
@@ -47708,9 +47708,10 @@
    }
   },
   "Proofs.Flock.Claims.Sampling.ProgReads": {
-   "digest": "4bb2de9d0256bfdc185351630bf2e5c52f595cd757e3917b74f0fd2697701b0c",
+   "digest": "5e11537a1d295348c1ca4e69960e6be29549d91a1dc409a57f995f7af0d26ef6",
    "definitions": {
-    "Claims.Sampling.Prog.Needs": "fd39ed57316ae6da674fc3a315db063db34a78843768aa4ae3d00de1ee266dee"
+    "Claims.Sampling.Prog.Needs": "fd39ed57316ae6da674fc3a315db063db34a78843768aa4ae3d00de1ee266dee",
+    "Claims.Sampling.Prog.needsList": "eff10727ad5a0506c391a7313c81de3e3416278ba44ac09a2555a3eaa29025ea"
    }
   },
   "Proofs.Flock.Claims.Sampling.Reference.Prover": {
@@ -53583,7 +53584,7 @@
    }
   },
   "Proofs.Flock.SpotFlock.Code": {
-   "digest": "f990e630d57e6e9c0cfd6a5e4c7251c457ffecd1a1d381430c3d16bed7947f4a",
+   "digest": "b50e8c2d2560ee2e81127274faef67b8074e0058c32c8723f187ce98188dc761",
    "definitions": {
     "SpotFlock.FORMAT": "2818de3be25a09deb304c2f9123c88ee1a94d1618993288ee535b1cb350d0d56",
     "SpotFlock.Held": "cc5b31e596cc61ffd159bb4e1db5be76a7adae95e6ab8ca01fe85ad3b90a21b3",
@@ -53605,7 +53606,7 @@
     "SpotFlock.Roots.read": "52ce375b070c781247e74bb2dd3d82f93ed596b79cb0db75e5de7badc6024499",
     "SpotFlock.Roots.roots": "de99793b212e2ccb59facc19cb27249342f0e49ecf6c9199f57d2e221a1d6d54",
     "SpotFlock.V": "b6d6c3afcd221335ddb3f1154d389c1a787652119de8c802b6bf675f9d4509d3",
-    "SpotFlock.base": "fe1be13ae4b2fd94e16ea3b56e0a334886afefc67408c5887c9998849d4a0b76",
+    "SpotFlock.base": "26e44c396f5cadd71278f76cda488dded8248d440880ec82fb21af090067af0b",
     "SpotFlock.code": "630fc82f4cbbda717e77b63f3f813a5cc7644dd08f59c260a9053657c290838f",
     "SpotFlock.coinByte": "43927e511fb1a08e5466102b42a5299ff18dfcce23d44a15b9f4f051c0dfa44c",
     "SpotFlock.constAt": "750c06f31897d99e7a2754f10a89663282019f01e71579e19f2c4ebd1c67de7e",
@@ -53652,15 +53653,26 @@
    }
   },
   "Proofs.Flock.SpotFlock.Frame": {
-   "digest": "d6aca8b2add835dceb4365ed8ce7f0b3e4eaa4d6b539f989a93c4fab0fc4a27c",
+   "digest": "db5f6aacb51020640d3e5229fd92f704c0f4896aa822ea7873fba0bc91912590",
    "definitions": {
-    "SpotFlock.FrameIs": "83e15af6714ecc736843f28b6643c5e304bf6fbd0a723f36c64a3aeae8956ff6"
+    "SpotFlock.FrameIs": "714034d9a2fae268bf44863040b54e27898690a19a395ee32fa6dc9102ee0222"
    }
   },
   "Proofs.Flock.SpotFlock.Opens": {
    "digest": "04d8d735ec0dd626d0072130700dbb9befafdf06f47ae71c04fbba86e6aa7b78",
    "definitions": {
     "SpotFlock.seenAt": "631716f938c2a13bffb074d7ff2d0592961341a19ed4f712b7210acc3e929b09"
+   }
+  },
+  "Proofs.Flock.SpotFlock.Reveals": {
+   "digest": "522eed6d3c6d821ec4c1894d078f5b59c855bfc4dc40702ea7f979f7f4a60165",
+   "definitions": {
+    "SpotFlock.Reveal.frameAt": "ecba04565fb818a391dc59201edf0efe2b086051f05a480ad626d1f9d12780cd",
+    "SpotFlock.Reveal.needs": "212844efd51d420480ff736d223063122f18402315d65b8524d5b4abd9d61a8a",
+    "SpotFlock.Reveal.openAt": "c67b82dc94405fb1be5ba610e661b743e145ba6084eccaa3825f07bfbfad269f",
+    "SpotFlock.Reveal.reveal": "4462d248baf9cad217658943093e2bbb4b2f065c193a46c33decfac4a77f3cf6",
+    "SpotFlock.Reveal.reveals": "9a0aa7f39063cff61062e0efd3f08f1d6f46f36bfb65e30033083b0b98276fb9",
+    "SpotFlock.Reveal.rootsAt": "9c42b7ff2e2579d3034d4480434a4e94fd3316aff220dcdf66ed80256ed70fc0"
    }
   },
   "Proofs.Flock.VBridge.Family.Encode": {
