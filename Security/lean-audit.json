@@ -286,11 +286,6 @@
    "digest": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
    "why": "A scope: an opened row costs no advice bits only where the previous run's check pins its closing row, a valid run's closing row a function of its inputs, as CheckedUnique pins its checked inputs; the deployed check's honest witness concludes it."
   },
-  "NetTiming.CheckedRoots": {
-   "owner": "@proofs",
-   "digest": "132d4869d582635bd642797d37d0b07103eab6fb15772c97f64a7fc93f121498",
-   "why": "A scope: each run's in-circuit check holds the row it opens and the row it leaves to its registered roots on every valid run whose faults avoid the classes sampled all; the deployed check's honest witness concludes it."
-  },
   "NetTiming.CheckedUnique": {
    "owner": "@proofs",
    "digest": "218ece8715ff8f148a45704d6bc053db2a90664ab894f097b57f4808b4a9c73c",
@@ -306,11 +301,6 @@
    "digest": "559db99f683821879b48c8850d8fd77e243272bdbda83d3aaa8a7cdc7a38f2af",
    "why": "NetTiming.SecurityProofs.SampledAuditAccepted's statement, another listed guarantee",
    "cites": "NetTiming.SecurityProofs.SampledAuditAccepted"
-  },
-  "NetTiming.LeakAtCarried": {
-   "owner": "@proofs",
-   "digest": "c185ff749d54d82c552c9ace294749da80b4006dfddbe3e1633c6c82765becb2",
-   "why": "A scope: the conclusion (CarriedRoots) speaks of rows at which every run's leak relation holds, so the relation is its own antecedent, which no hypothesis of the guarantee supplies."
   },
   "NetTiming.OpensAtInputs": {
    "owner": "@proofs",
@@ -341,11 +331,6 @@
    "owner": "@proofs",
    "digest": "727b29fa325435eeddaf8266d17571053bd61f3138f42a01a5d24a37aaef1837",
    "why": "The layer below's guarantee at each window: the leak relation with checked inputs at the window's faulty set, which the live SampledLeakChecked gives."
-  },
-  "NetTiming.PoolChained": {
-   "owner": "@proofs",
-   "digest": "db1790a4b6e9d192443e9132982666d817be1aa8cd673d04334ecf17d0ec8c24",
-   "why": "A scope: the runs' registered roots chain under the record rule, each run's opening root the previous run's closing root where it carries the pool and the empty pool's root otherwise; the executable record rule (R7-pool-chain) gives it on accepted records."
   },
   "NetTiming.ResetsIn": {
    "owner": "@proofs",
@@ -4419,9 +4404,6 @@
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "nontrivial": "NetTiming.Witness.PooledLeakCarried_nontrivial"
   },
-  "NetTiming.SecurityProofs.RootsOfChecked": {
-   "nontrivial": "NetTiming.Witness.RootsOfChecked_nontrivial"
-  },
   "Verity.SecurityProofs.FingerprintCollision": {
    "honest": ["Verity.SecurityProofs.FingerprintCollision_honest"],
    "nontrivial": "Verity.SecurityProofs.FingerprintCollision_nontrivial"
@@ -5283,12 +5265,6 @@
    "missing": "honest",
    "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
    "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
-  },
-  "NetTiming.SecurityProofs.RootsOfChecked": {
-   "type_hash": "f34c02ed2812248675cc945e994fdd80a66e537d5662a9293be0fe6bb2055329",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that holds each run's opened and left rows to its registered roots in the circuit (CheckedRoots), beside the records' chained roots (PoolChained, from R7 on each record) (CIR-190)",
-   "unfolded_hash": "9ba281b49a5729c4a69f656f3b727b6adb327858b49afa3739806ff66ef6783e"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
@@ -18551,19 +18527,6 @@
    "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
    "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
   },
-  "NetTiming.SecurityProofs.RootsOfChecked": {
-   "owner": "@proofs",
-   "signature": ["NetTiming.SecurityProofs.RootsOfChecked : NetTiming.Guarantees.RootsOfChecked"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["NetTiming.CheckedRoots", "NetTiming.LeakAtCarried", "NetTiming.PoolChained"],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "f34c02ed2812248675cc945e994fdd80a66e537d5662a9293be0fe6bb2055329",
-   "unfolded_hash": "9ba281b49a5729c4a69f656f3b727b6adb327858b49afa3739806ff66ef6783e"
-  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "owner": "@proofs",
    "signature": ["NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted"],
@@ -18690,26 +18653,6 @@
     "reads": []
    },
    "type_hash": "b94dd1db998466e8b11a6be75417a1a1788a293be91adcf5f8790d5a5eba5e40"
-  },
-  "NetTiming.Witness.RootsOfChecked_nontrivial": {
-   "owner": "@proofs",
-   "signature": [
-    "NetTiming.Witness.RootsOfChecked_nontrivial :",
-    "  Not",
-    "    (NetTiming.CarriedRoots (fun m => ite (Eq m (Hash.RowSeg.outerPrefix 0)) (fun x => 0) fun x => 1)",
-    "      (fun x => NetTiming.Witness.notLay) (fun x => 0) (fun x => Finset.instEmptyCollection.emptyCollection)",
-    "      (fun x x_1 => True) (fun x => List.nil) (fun x => List.nil) 1 (fun x => NetTiming.Witness.notStmt)",
-    "      (fun x => NetTiming.Witness.notPart) (fun x x_1 => Bool.false) (fun x x_1 x_2 x_3 => List.nil)",
-    "      (fun x => Bool.false) fun x => List.cons Bool.true List.nil)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["NetTiming.LeakAtCarried"],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "d3108dab138c02cc6bccba5a8dff020933124ec698f2aafc350ed93fec07609e"
   },
   "NetTiming.Witness.SampledLeakCarried_nontrivial": {
    "owner": "@proofs",
@@ -26427,7 +26370,6 @@
    "NetTiming.SecurityProofs.SampledLeakChecked": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS at each deployment), on the statements whose check misses with probability at most εchk (CheckedWitness), and bounds AccSeqsChecked, the observation sequences the circuit's Program (circuitProgram) accepts with a valid run, where the check pins its checked inputs (CheckedUnique), not runs of the network check's code; it charges the free inputs outside each statement's registered and checked inputs (freeInputs \\ (reg ∪ chk)).",
    "NetTiming.SecurityProofs.PooledLeakChecked": "frozen (obligation,no-function,world-unlisted): It is PooledLeakAccepted's bound over one window's pool with the leak relation with checked inputs (LeakAtChecked) for LeakAt, conditional on the period's inputs as named hypotheses (PeriodChannel, PeriodAdaptive, PeriodEscapes, and PeriodLeaksChecked, which the live SampledLeakChecked would give at each window), not discharged; with trusted-host (TrustedHost) it bounds Pr[every window accepts ∧ ¬PooledGoodChecked] by (1 − q)^Fmax + Σ e_i + Σ e'_i and counts the secrets meeting PooledGoodChecked at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ (reg_i ∪ chk_i)) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code.",
    "NetTiming.SecurityProofs.PooledLeakCarried": "frozen (obligation,no-function,world-unlisted): It is PooledLeakChecked's bound over runs that carry the pool, each run opening the row the record rule names (PoolChained: the previous run's closing row, or a genesis row at a restart), where serving picks the restarts (chains) and opened rows (genesis) at each secret and sample of the coins, from a registered finite set Cs wherever every audit accepts (ResetsIn), each run pinning its closing row (CheckedClosing) and, wherever every audit accepts, opening the root the record rule names at the pattern picked (CarriedRoots), conditional on the period's inputs as named hypotheses (PeriodChannel, PeriodAdaptive, PeriodEscapes, and PeriodLeaksCarried, which a live SampledLeakCarried would give at each run), not discharged; with trusted-host (TrustedHost) it bounds Pr[every run accepts ∧ ¬PooledGoodCarried at the pattern picked] by (1 − q)^Fmax + Σ e_i + Σ e'_i + Σ_i Pr[PoolColl i], the last a SHA-512 collision between two rows with one root, and counts the secrets whose audits all accept and that meet PooledGoodCarried at the pattern picked for them at each draw of the coins by #Cs · #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ (reg_i ∪ chk_i ∪ prow_i)) · Dj^k_i, #Cs charging the pattern as advice (m + 1 patterns in a week's period under the public restart rule), so a restart the rule makes after a refused run is not charged; it is not a run of the sampled verifier, the challenger's draw or the network check's code.",
-   "NetTiming.SecurityProofs.RootsOfChecked": "frozen (obligation,no-function): It concludes the pooled bound's premise (CarriedRoots), each run opening a row with the digest of the row poolOpen names, from each run's in-circuit check of its registered roots (CheckedRoots) and the record rule's chained roots (PoolChained), both named hypotheses, with no probability; it is not a run of the sampled verifier or the network check's code.",
    "Verity.SecurityProofs.FingerprintCollision": "lemma: the collision bound behind a memory check's multiset equality test (Verity.MemCheck.fingerprint, Security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and multisets of packed records, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
    "Verity.SecurityProofs.PrintCollision": "lemma: the collision bound behind a memory check's key prints (Verity.MemCheck.element, Security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and set of packed keys, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
    "Verity.SecurityProofs.MemoryChecked": "lemma: offline memory checking over an abstract access log (Verity.MemCheck.Checked, Security/Definitions/Core/MemCheck.lean), the reference semantics a memory-checked circuit's log is held to, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
@@ -35497,12 +35439,6 @@
     "NetTiming.Guarantees.PeriodLeakAccepted": "9098e215204054fc1e0af27b52666c5660c2d72c7f5bf06af9aa474c1fedb476"
    }
   },
-  "Definitions.NetworkCertifier.Guarantees.PoolRoots": {
-   "digest": "84245a9b202546e371ad5145832161a51ce7e7fb44eaa461aabb883799ce695b",
-   "definitions": {
-    "NetTiming.Guarantees.RootsOfChecked": "45036de08a8c7c9a02005ec749f9aa29a264d4a50963c1917ebfaf5d878c7235"
-   }
-  },
   "Definitions.NetworkCertifier.Guarantees.Pooled": {
    "digest": "54fea0a567a4758143eeefd5ddfa44f6ff75b5659e11d867439071d9d3d95129",
    "definitions": {
@@ -35542,12 +35478,6 @@
    "definitions": {
     "NetTiming.SameRegistration": "7604bb256ec6683474664e855d7454fcef82e5bd22247f0e1b78612d6147c6d6",
     "NetTiming.WindowGood": "2d4c48a8e4d3aea767c94d5792b530db829601def700ed470ff08988857ae2ed"
-   }
-  },
-  "Definitions.NetworkCertifier.PoolRoots": {
-   "digest": "036070fe7218b8b5ea635d51ddf3cbed954925d68181fd12b455d7e7971f831b",
-   "definitions": {
-    "NetTiming.CheckedRoots": "132d4869d582635bd642797d37d0b07103eab6fb15772c97f64a7fc93f121498"
    }
   },
   "Definitions.NetworkCertifier.PooledLeak": {

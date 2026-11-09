@@ -73,10 +73,6 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                the leak relation at the rows its trace holds (OpensAtInputs, RLeakCarried)
 ../../Definitions/NetworkCertifier/Guarantees/Carried.lean  trusted: the leak bounds over a carried pool
                                (SampledLeakCarried, PooledLeakCarried)
-../../Definitions/NetworkCertifier/PoolRoots.lean  trusted: a check that holds a run's opened and left rows to the
-                               roots it registers (CheckedRoots)
-../../Definitions/NetworkCertifier/Guarantees/PoolRoots.lean  trusted: the opened rows' roots from each run's checks
-                               and the record rule (RootsOfChecked, which concludes CarriedRoots)
 ../../Definitions/NetworkCertifier/Witness.lean  trusted: the audit the leak bounds' nontrivial lemmas fail at
                                (notProg, notStmt, notPart, notLay; atNot, a deployment at it)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
@@ -143,10 +139,11 @@ Carried.lean    the leak bounds over a carried pool: one run's relation at the r
                                          whose bits don't is a collision (rowSeg_bind); restarts serving picks
                                          from a registered set where every audit accepts multiply the count by its
                                          size (encard_pooledCarried_le); sampledLeakCarried, pooledLeakCarried
-PoolRoots.lean  the opened rows' roots: a run's leak relation runs its check, so its opened and left rows have the
-                                         roots it registers (digests_of_leakAt), and the record rule registers at a
-                                         run's opening the root of the row poolOpen names (digest_open_of_leakAt);
-                                         rootsOfChecked
+PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its opened and left rows to the roots it
+                                         registers (CheckedRoots) and its leak relation give them those roots
+                                         (digests_of_leakAt), and the record rule registers at a run's opening the root
+                                         of the row poolOpen names (digest_open_of_leakAt), so CarriedRoots holds
+                                         (rootsOfChecked)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
@@ -156,7 +153,6 @@ WitnessesChecked.lean  the nontrivial lemmas of SampledLeakChecked and PooledLea
                                          lemmas wait on a deployed check
 WitnessesCarried.lean  the nontrivial lemmas of SampledLeakCarried and PooledLeakCarried; their honest
                                          lemmas wait on a deployed check
-WitnessesPoolRoots.lean  the nontrivial lemma of RootsOfChecked; its honest lemma waits on a deployed check
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: six theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
