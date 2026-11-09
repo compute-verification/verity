@@ -35,6 +35,7 @@ untraced = [
     "tests/test_pouw_piece.py",
     "tests/test_served_bandwidth.py",
     "tests/test_served_overhead.py",
+    "tests/test_served_pouw.py",
     "tests/test_served_verdicts.py",
 ]
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
@@ -78,7 +79,7 @@ inputs = ["verity", "verity/core/service/spot/lakefile.toml", "benchmarks/live_c
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_compose_cache.py"]
-paths = ["integrations/vllm/verity_vllm/acquire"]
+paths = ["integrations/vllm/verity_vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_prove_bundle.py", "tests/test_prove_leg_served.py"]

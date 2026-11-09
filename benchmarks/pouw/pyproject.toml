@@ -21,6 +21,9 @@ verity-exact-kit = { workspace = true }
 untraced = [
     "tests/test_facet_break.py",
     "tests/test_ffill.py",
+    "tests/test_ieee_pin.py",
+    "tests/test_np_kernel.py",
+    "tests/test_opcode_probe.py",
     "tests/test_pearl_c_hash_decode.py",
     "tests/test_pearl_c_hash_host.py",
     "tests/test_pearl_c_sm120.py",
@@ -214,6 +217,10 @@ paths = [
 [[tool.verity.tests.reads]]
 tests = ["tests/test_hidden_zk_summarize_rows.py"]
 paths = ["benchmarks/pouw/hidden_zk"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_partials.py"]
+paths = ["benchmarks/pouw/served_h1/partials.py", "integrations/vllm/verity_vllm"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm120.py", "tests/test_pearl_c_sm90.py"]
