@@ -17,7 +17,7 @@ public import SampledProofs.ChallengerCoins
 public import SampledProofs.ChallengerSession
 public import SampledProofs.PyJson
 public import SampledProofs.Registered
-public import Identity.Domains
+public import Identity.Domains.Pouw
 
 /-!
 # A served window's credited set, its sampled proof blocks and their outcome, its A rows and its period (`credit.py`)
