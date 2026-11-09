@@ -2,8 +2,7 @@ module
 
 public import Proofs.Flock.Recursive.Defs
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: binding a stage to a reference opening fixed before its coin

@@ -8,6 +8,7 @@ public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.NumbersDeploy
 import Proofs.Flock.SamplingGeneric.TwoKSAt
+import Proofs.Flock.SpotFlock.RevealsLe
 
 /-!
 # SPOT[Flock]'s two-stage verifier: the compiler's premises at its code
@@ -25,10 +26,11 @@ import Proofs.Flock.SamplingGeneric.TwoKSAt
 * `sessionsTwo_spot`: the two-stage contract from the same openings (`sessionsTwo_atOrder`).
 * `ksTwo_spot_one`, `efficient_spot_one`: one session a run. The session doesn't read the unit (`SpotFlock.session`),
   so every slot of a sample has one key (`SamplingDeploy.compiledTwoOne`) and the extractor runs Flock's once a run:
-  KS there, and its reruns, at most `1 + k_out + k_out·k_in·(1 + e_s)` in expectation, from the opening checks' count.
+  KS there, and its reruns, at most `1 + k_out + k_out·k_in·(1 + e_s)` in expectation. The code's reveal count
+  (`SpotFlock.revealsLe`) bounds the opening checks' calls (`openCallsLe_compiled`).
 * `ksAtTwo_spot`, `ksAtTwo_spot_one`: `CompiledTwo.KSAt`, KS with each hash term at a budget on one run's SHA-512 work
-  (`compilerKSAtTwo`), from the same openings and the reveal count (`SamplingDeploy.RevealsLe`), which bounds the
-  opening checks' calls (`openCallsLe_compiled`); and the same at one session a run.
+  (`compilerKSAtTwo`), from the same openings alone, the opening checks' calls bounded by the code's reveal count; and
+  the same at one session a run.
 -/
 
 @[expose] public section
@@ -91,36 +93,33 @@ theorem ksTwo_spot_one (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDep
   SamplingDeploy.ksTwo_one (code h) iroots (two h) (rs h) (cap h) (sessionsTwo_spot h hopens) fun _ _ _ _ => rfl
 
 /-- **SPOT[Flock]'s extractor with one session a run**: at most `1 + k_out + k_out·k_in·(1 + e_s)` reruns in
-expectation and `k_out·k_in·n_PU·openCalls` own SHA-512 calls, from the opening checks' count
-(`compilerEfficientTwo` at `sessionsTwo_one`). -/
+expectation and `k_out·k_in·n_PU·openCalls` own SHA-512 calls (`compilerEfficientTwo` at `sessionsTwo_one`), the
+opening checks' count from the code's reveal count (`revealsLe`). -/
 theorem efficient_spot_one (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
-      (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots)
-    (hopen : (SamplingDeploy.compiledTwoOne (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots
-      (two h) (rs h) (cap h)).OpenCallsLe FlockDeploy.sha512) :
+      (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
     (SamplingDeploy.compiledTwoOne (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
       (rs h) (cap h)).Efficient FlockDeploy.sha512 :=
   Claims.SamplingGeneric.compilerEfficientTwo FlockDeploy.Coin _ _ FlockDeploy.sha512
     (SamplingDeploy.sessionsTwo_one _ (code h) iroots (two h) (rs h) (cap h) _ (sessionsTwo_spot h hopens)
-      fun _ _ _ _ => rfl) hopen
+      fun _ _ _ _ => rfl)
+    (SamplingDeploy.openCallsLe_compiled _ (code h) iroots _ (revealsLe h))
 
 /-- **SPOT[Flock]'s two-stage knowledge soundness at a time budget**: `compilerKSAtTwo` at `ksTwo_spot`'s premises
-(`sessionsTwo_spot`), with Flock's KS and binding as in `ksTwo_masked`, and the opening checks' count from the reveal
-count (`openCallsLe_compiled`). -/
+(`sessionsTwo_spot`), with Flock's KS and binding as in `ksTwo_masked`, and the opening checks' count from the code's
+reveal count (`revealsLe`, `openCallsLe_compiled`). -/
 theorem ksAtTwo_spot (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
-      (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots)
-    (hrev : SamplingDeploy.RevealsLe (code h)) :
+      (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
       (rs h) (cap h)).KSAt FlockDeploy.sha512 :=
   Claims.SamplingGeneric.compilerKSAtTwo FlockDeploy.Coin _ _ FlockDeploy.sha512
     (Claims.SamplingGeneric.flockArgKS FlockDeploy.sha512 _ _root_.Flock.SecurityProofs.MaskedKS
       (Claims.Sampling.listWithin_deployZk _)) (SamplingDeploy.commit_binds (code h) _) (sessionsTwo_spot h hopens)
-    (SamplingDeploy.openCallsLe_compiled _ (code h) iroots _ hrev)
+    (SamplingDeploy.openCallsLe_compiled _ (code h) iroots _ (revealsLe h))
 
 /-- **SPOT[Flock] with one session a run, at a time budget**: `ksAtTwo_spot`'s statement at
 `SamplingDeploy.compiledTwoOne`, whose work counts one session a run (`compilerKSAtTwo` at `sessionsTwo_one`). -/
 theorem ksAtTwo_spot_one (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
-      (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots)
-    (hrev : SamplingDeploy.RevealsLe (code h)) :
+      (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
     (SamplingDeploy.compiledTwoOne (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
       (rs h) (cap h)).KSAt FlockDeploy.sha512 :=
   Claims.SamplingGeneric.compilerKSAtTwo FlockDeploy.Coin _ _ FlockDeploy.sha512
@@ -128,6 +127,6 @@ theorem ksAtTwo_spot_one (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockD
       (Claims.Sampling.listWithin_deployZk _)) (SamplingDeploy.commit_binds (code h) _)
     (SamplingDeploy.sessionsTwo_one _ (code h) iroots (two h) (rs h) (cap h) _ (sessionsTwo_spot h hopens)
       fun _ _ _ _ => rfl)
-    (SamplingDeploy.openCallsLe_compiled _ (code h) iroots _ hrev)
+    (SamplingDeploy.openCallsLe_compiled _ (code h) iroots _ (revealsLe h))
 
 end SpotFlock

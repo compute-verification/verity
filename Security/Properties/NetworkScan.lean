@@ -38,9 +38,9 @@ import Mathlib.Topology.Sheaves.Init
 # The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope
 
 The sampled audit's scope at a link-window's statement (`NetTiming.ScopeAcc`) has two halves: the sampling scope
-(`Claims.Sampling.Scope`, the sampled verifier's own, which `Claims.Sampling.ScopeMatches` equates with its scope
-check), and the statement's layout fitting its program over its horizon (`NetTiming.BoundaryGates.Fits`). The network
-check reads the second off the scan's Program (`scanOf`, the generator form); the first it doesn't read.
+(`Claims.SamplingGeneric.Compiled.Scope`, the compiled sampled verifier's own, which `Claims.ScopeMatches` equates with
+its scope check), and the statement's layout fitting its program over its horizon (`NetTiming.BoundaryGates.Fits`).
+The network check reads the second off the scan's Program (`scanOf`, the generator form); the first it doesn't read.
 
 **The layout** (`scanLayout`) is the generator form's, at the schedule's `S = lanes · slots` slots of `B` bytes and
 `T` buckets, over one egress link: at step `t`, slot `σ`'s presence gate is bit 0 of egress member `t`'s verdict (its
@@ -53,11 +53,12 @@ canonical layout's. A statement's layout is its descriptor's (`layOf`), at horiz
 **The flattening** (`Flattens`): the sampling statement's gates (`Claims.Sampling.AuditStatement.prog`, "the descriptor
 flattened") are its descriptor's canonical layout, gate for gate: as many, an input gate exactly where its primitive is
 an input node, reading exactly the gates its operands name, returning the gates its root's return resolves to.
-`StmtFlattens` says it of every statement a deployment parses; the deployed parser is the sampled verifier's
-(`SamplingDeploy.Code.parse`), so it is that code's premise.
+`StmtFlattens` says it of every statement a compiled sampled verifier parses; the deployed parser is the sampled
+verifier's (`SamplingDeploy.Code.parse`), so it is that code's premise.
 
 * `ScanFits`: an accepted scan's layout fits every flattening of its Program over `T` steps.
-* `ScanScopeAcc`: at a deployment whose statements are their descriptors flattened and whose scope check is its scope,
+* `ScanScopeAcc`: at a compiled verifier whose statements are their descriptors flattened and whose scope check is its
+  scope,
   a statement the scope check takes, whose descriptor is the accepted scan's canonical bytes, is in the sampled audit's
   scope at `layOf` and `T` (`ScopeAcc`). `Proofs.Properties.NetworkScan` derives it from `ScanFits`.
 -/
@@ -105,10 +106,11 @@ def Flattens (P : Flock.Program.Prog) (C : Claims.Sampling.Prog) : Prop :=
     ∀ g, g ∈ C.outs ↔ ∃ j < (P.defs[P.root]!).body.ret.count,
       Flock.Program.resolve P P.rootScope ((P.defs[P.root]!).body.ret.get j) = .ok g
 
-/-- **The deployment's statements are their descriptors flattened**: every statement `D` parses has a descriptor
-Flock decodes (`Flock.Program.decode`, as the sampled verifier's `Spot.Program.parse` does), and its gates
-are that Program's (`Flattens`). -/
-def StmtFlattens {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) : Prop :=
+/-- **The compiled verifier's statements are their descriptors flattened**: every statement `D` parses has a
+descriptor Flock decodes (`Flock.Program.decode`, as the sampled verifier's `Spot.Program.parse` does), and its
+gates are that Program's (`Flattens`). -/
+def StmtFlattens {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (D : Claims.SamplingGeneric.Compiled Coin A) :
+    Prop :=
   ∀ x s, D.parse x = some s → ∃ P, Flock.Program.decode ⟨s.desc.toArray⟩ = .ok P ∧ Flattens P s.prog
 
 /-- **An accepted scan's layout fits its Program flattened.** If `scanOf` accepts the scan `j` as the registered
@@ -121,15 +123,15 @@ def ScanFits : Prop :=
     scanOf j program s = .ok sc → Flock.canon j = .ok c → Flock.Program.decode c.toUTF8 = .ok P → Flattens P C →
       (scanLayout P s).Fits C s.window
 
-/-- **An accepted scan's statements are in the sampled audit's scope.** At a deployment `D` whose statements are their
-descriptors flattened (`StmtFlattens`) and whose scope check is its sampling scope (`ScopeMatches`), a statement `x`
-the scope check takes, every parse of which has the accepted scan's canonical bytes as its descriptor, is in
-`ScopeAcc` at the layout `layOf s` and the horizon `T`. -/
+/-- **An accepted scan's statements are in the sampled audit's scope.** At a compiled sampled verifier `D` whose
+statements are their descriptors flattened (`StmtFlattens`) and whose scope check is its sampling scope
+(`ScopeMatches`), a statement `x` the scope check takes, every parse of which has the accepted scan's canonical bytes
+as its descriptor, is in `ScopeAcc` at the layout `layOf s` and the horizon `T`. -/
 def ScanScopeAcc : Prop :=
-  ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (D : Claims.Sampling.Deploy Coin Col T) (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String)
-    (x : Claims.Msg),
-    StmtFlattens D → Claims.Sampling.ScopeMatches D → D.scopeCheck x = true →
+  ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Claims.SamplingGeneric.Arg Coin}
+    (D : Claims.SamplingGeneric.Compiled Coin A) (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan)
+    (c : String) (x : Claims.Msg),
+    StmtFlattens D → Claims.ScopeMatches D.Scope D.scopeCheck → D.scopeCheck x = true →
     scanOf j program s = .ok sc → Flock.canon j = .ok c →
     (∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8) →
       NetTiming.ScopeAcc D (layOf s) (fun _ => s.window) x
