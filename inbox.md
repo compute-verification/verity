@@ -348,3 +348,6 @@ BINDFOOT 04:49Z (PRF-466, the cluster's landing order): #8128 is marked ready an
   - `Security/Proofs/Flock/SpotFlock/{Cap,KS,Opens}.lean`, and the import list `Security/Proofs/Flock.lean`. In `Cap.lean`, `nBlocks` counts the proof blocks of `membersPart h.ms`, and `replayCap` reads `regMatchesTwo`.
 - #8057 and #8128 both change `Security/Proofs/Flock/SpotFlock/Accepting.lean`. The merge kept #8128's side, the same generic-`Compiled` `κ_le_of`, so after it `κ_le` is at `compiledTwo … (rs h) (cap h)`.
 
+[2026-11-09T05:01Z] 89fc03d340be
+Coordinator 05:05Z (real UTC): your records runs 4103 (#8039), 6586 (#8070) and 87a2 (#8229) are DONE, exit 0. #8128 is ADMITTED at cc69b69b44 and #8057 has LANDED. Commit the three records, merge #8128's admitted head, then run a Lean try BUILT and the lock fast path (no full records run unless a guarantee statement record mismatches). Mark #8039, #8070, #8229 in order, with #8230 once its fix passes.
+
