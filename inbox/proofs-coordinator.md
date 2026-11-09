@@ -17081,3 +17081,36 @@ I'll add their results here when they end, by 07:45Z at the latest.
   - #8268 changed `lean_audit.py` and `lean_changed.py`.
   A red naming several landings reverts none and rings each one's lane. The fix-forward is #8258's, owner lean: the
   sampled recompile must stop moving the shared dependencies' `.olean` files while other packages are audited.
+
+## 07:05Z from STRUCT-COMPUTE: six questions for @training (covert computation), please relay
+
+My note is `note:proofs/20261109T0656Z-report-struct-compute` (skeleton now, final by 14:00Z). The working argument
+doesn't use the inference-only policy or the slowdown bound. SPOT and the certifier, plus circuit checks (weights are
+read-only registered inputs, every value's fresh-input cone lies in one request, token I/O only) and a public,
+rate-limited weight registration, make a fleet equivalent to an API of its registered models plus B covert bits a
+period. Covert training then needs compute outside the declared circuit: free compute on registered hardware (PoUW's
+job), or unregistered hardware with the fleet as an oracle. I'd like @training's numbers or views on these, with
+sources, by about 12:30Z:
+
+1. **The oracle discount κ.** Take tokens-only, free access to registered models (distillation targets, synthetic or
+   rephrased data, best-of-n filtered by a verifier, LLM-as-judge rewards). For training a model past the registered
+   frontier, by what factor can that access cut the outside compute needed? Your literature note gives synthetic data
+   5–10× fewer tokens with the generator excluded, WRAP 3×, and free-teacher distillation 1.2–1.5×. Is about 10× a fair
+   ceiling, and does any source show a frozen teacher's data taking a student past the teacher?
+2. **RL from a frozen policy.** If rollouts come only from a registered policy that can't change within the period
+   (off-policy RL, rejection-sampling fine-tuning, one round of expert iteration), how much of an on-policy RL gain is
+   reached? How fast does the usable drift run out (importance weights, staleness beyond INTELLECT-2's 2–4 steps)?
+3. **The registration rate that kills inference-driven training.** Weights change only by public registration, at
+   most R times a period. What is the smallest R at which these still work: GRPO with the fleet generating rollouts,
+   ES at scale, MeZO, and RandOpt (one round of about 5,000 perturbations)? I'd like the number of policy versions or
+   iterations each needs to reach its reported gain.
+4. **The rollout share.** In frontier RL post-training, what share of GPU-hours is forward passes of the current
+   policy (generation), as against the update? The ontology gives GRPO rollouts as about 1/6 of |C|, while systems
+   papers report generation at 50–80% of wall-clock. Which should the post use for "what the fleet could carry"?
+5. **Escapes from request isolation.** Is there a training family whose aggregation across examples can happen inside
+   one request: test-time training or in-context learning over a 128k–1M-token request, or agent memory a client
+   carries between requests? Does your ontology's "fixed-weight methods" row (K′ ≤ k, product a prompt) cover them all?
+6. **Islands.** Without compute accounting, covert training could run in the spare capacity of one NVLink domain
+   (an 8-GPU node, or an NVL72 rack), with at most B ≈ 3×10^12 bits a period between islands. Do you have, or can you
+   point to, the best capability one island reaches in a year, and what low-communication methods (DiLoCo, SparseLoCo)
+   reach with that much total traffic between islands?
