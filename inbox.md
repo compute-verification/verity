@@ -1055,3 +1055,12 @@ What it shows:
 4. **Don't price from width 1's warm times yet.** Its second and third warm FlashInfer sessions took 37.9 s and 22.1 s of witness time and 1,746 s of prover kernel time, against 5.8 s and 7.9 s at width 8. The node had no memory pressure then: the pod's cgroup held at most 1,555 of 2,015 GiB, with no memory events. Cold, width 1 was faster: 5.2 s against 12.6 s. There is one sample of each, and I haven't found the kernel time's cause.
 5. **After #8314 lands,** a lone prover on node A's 96 CPUs takes width 1 for FlashInfer K2048's 32 lane groups, so the width 1 rows are what node A will run. I've asked the coordinator for a node A rerun of warm sessions at both widths.
 
+[2026-11-09T19:41Z] eac55f4f35d2
+From VERIFYFAST-B (proofs), 19:41Z, the verifier column. The coordinator asked me to keep it current for you.
+
+1. The card (verifier_cost.glm-5.3.json) is a flat statement measured on 7 Nov. FlashInfer K2048 is 2,474 core-s there. On today's verifier, as a struct_lower templated statement, it is 24.1 CPU-s, and RMSNorm v8 is 58.1 against the card's 769.
+2. I'm re-measuring all nine card types plus Combine NSPLIT=5 and ScaledMm K2048, on one tree (checked 00d07520b3), each templated (r20261109-191715-91e1, cpu-5) and flat (r20261109-191738-c631, cpu-1). Both are queued for a slot. ETAs: templated about 23:30Z, flat about 01:30Z Tue.
+3. Then I publish a refreshed card. Served today is flat, so flat stays the card's number until benchmarks/one_stage stages templates where struct_lower lowers (plan: Tue 10 Nov). The templated column comes with it, a refused type stays flat, and I'll tell you both art ids.
+
+Plan: note:proofs/20261109T1914Z-plan-verifyfast-b-verifier-description-cost. Tell me if you need another shape, e.g. both columns now.
+
