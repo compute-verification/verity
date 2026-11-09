@@ -27,6 +27,7 @@ import pytest
 import scan_traffic as ST
 
 from verity.core.protocols.certifier import continuation as C
+from verity.core.protocols.certifier import io_request as Q
 from verity.core.protocols.certifier import io_tie as IT
 from verity.core.protocols.certifier import warden as W
 from verity.core.protocols.certifier.active import PAD, id_request
@@ -274,10 +275,14 @@ def test_records_the_rule_cant_read_are_refused(run):
     i = _slot(run.ingress, 2, 2)
     data = run.ingress[0].grid[2][i]
     assert W.read_cell(data, B)[0] == W.DATA
-    changed = bytearray(data)
-    changed[W.HEADER.size + 40] ^= 1
-    refused("connection 2's request isn't a canonical id request", ingress=_with_cell(run.ingress, 2, i, bytes(changed)),
-            b=8)
+    lay = Q.layout(B)
+    moved, zero, cut = bytearray(data), bytearray(data), bytearray(data)
+    at = W.HEADER.size + lay.start + 1
+    assert data[at:at + 10] == b"       100"
+    moved[at:at + 10], zero[at + 6:at + 7], cut[at - 1:at] = b"100       ", b"0", b"}"
+    for bad, why in ((zero, "isn't a canonical id request \\("), (cut, "isn't a canonical id request \\("),
+                     (moved, "isn't a canonical id request: its bytes aren't the ones its fields give")):
+        refused(f"connection 2's request {why}", ingress=_with_cell(run.ingress, 2, i, bytes(bad)), b=8)
     assert [W.read_cell(c, B)[0] for c in run.ingress[0].grid[1][:2]] == [W.END, PAD]
     refused("connection 1's cell isn't its request's next",
             ingress=_with_cell(run.ingress, 1, _slot(run.ingress, 1, 1, 1), W.cell(W.DATA, 1, b"x" * PARAMS.payload, B)),

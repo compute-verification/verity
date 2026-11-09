@@ -213,15 +213,19 @@ def check(written: Sequence[Stamp], responses: Sequence[Response], b: int, eos: 
 
 # --- the network certifier's records ---------------------------------------------------------------------------------
 
-def _request(data: bytes, cell_bytes: int) -> Request | None:
-    """The fields of a canonical id request in the network certifier's cells (`id_request` at offset 0), or None for
-    other bytes."""
+def _request(q: int, data: bytes, cell_bytes: int) -> Request:
+    """The fields of connection q's request, a canonical id request in the network certifier's cells (`id_request` at
+    offset 0). Raises `Refused` (`records`) for other bytes."""
     try:
         body = json.loads(data.partition(b"\r\n\r\n")[2])
         r = Request(**{k: body[k] for k in Request._fields})._replace(prompt=tuple(body["prompt"]))
-        return r if id_request(**r._asdict(), frame_bytes=cell_bytes, offset=0) == data else None
-    except (ValueError, KeyError, TypeError):
-        return None
+        canonical = id_request(**r._asdict(), frame_bytes=cell_bytes, offset=0)
+    except (ValueError, KeyError, TypeError) as e:
+        raise Refused("records", f"connection {q}'s request isn't a canonical id request ({e})") from None
+    if canonical != data:
+        raise Refused("records", f"connection {q}'s request isn't a canonical id request: its bytes aren't the ones "
+                                 "its fields give")
+    return r
 
 
 def _buckets(params: W.WardenParams, records: Sequence[Record], b: int, what: str):
@@ -262,11 +266,7 @@ def read(params: W.WardenParams, ingress: Sequence[Record], egress: Sequence[Rec
             data.setdefault(q, []).append(payload)
             if kind == W.END:
                 at[q] = (len(at), t)
-    requests = {}
-    for q in at:
-        requests[q] = _request(b"".join(data[q]), params.cell_bytes)
-        if requests[q] is None:
-            raise Refused("records", f"connection {q}'s request isn't a canonical id request")
+    requests = {q: _request(q, b"".join(data[q]), params.cell_bytes) for q in at}
     ids: dict[int, list[tuple[int, int]]] = {q: [] for q in at}
     ended: dict[int, int] = {}
     for t, cells in _buckets(params, egress, b, "egress"):
