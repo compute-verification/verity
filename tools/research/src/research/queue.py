@@ -275,15 +275,17 @@ out with why.
 
 Moves.  A layout move lands from `next` with no pause in landing.  A PR whose body has a `Move: tools/move/NAME.toml` line
 (`PR.move`) is a move PR: its marked head is only the request.  Where the sync puts it, it is regenerated on the commit below it
-(`checked`'s tip once the members below it land): `tools/move/rename.py --map NAME.toml` at the root of a worktree of it, one
-commit on it with the PR's trailers and `Move: NAME.toml` (`_regenerate`), which `tools/verity/check/move_check.py` must
-certify, else the PR is left out with why (a map the tip lacks too).  Both scripts, and `restack.py` below, are the landing
+(`checked`'s tip once the members below it land): its map's script at the root of a worktree of it, `tools/move/rename.py
+--map NAME.toml` for a word map (`[words]`) and `tools/move/layout.py --map NAME.toml` for a path map (`[paths]`; with
+`--no-lock` on a tree with no `uv.lock`), one commit on it with the PR's trailers and its move line, `Move: NAME.toml` or
+`Layout-move: NAME.toml` (`_regenerate`), which `tools/verity/check/move_check.py` must certify, else the PR is left out with
+why (a map the tip lacks, or with both tables or neither, too).  The scripts, and `restack.py` below, are the landing
 branch's, as its landing gates are (`move_scripts`), so a member below the move can't change what judges it; a member below
 it that changes `tools/move/`'s scripts holds the move back until it lands, since the restack runs the move's base's.  It needs a ready
 mark and a land verdict like any PR, and is a Lean change when it moves Lean, so a lock run follows its landing; it lands as
 that one commit, under the after-landing run.  Each PR merged above a move, on `next` or among `checked`'s last
 `LANDED_WINDOW` first-parent commits, whose head lacks it is merged across it (`_merge_through`): restacked onto it by
-`tools/move/restack.py` when its change names a word of the move's map or its plain merge conflicts, so only its own
+`tools/move/restack.py` when its change names a word, path or module of the move's map or its plain merge conflicts, so only its own
 conflicts refuse it.  A restack runs in the background, one `restack.py` a head and at most drive.toml's `restack_jobs` at
 once (`_restack`, the state's `restacking`), and its PR waits off `next` meanwhile (`RESTACKING`), a wait that refuses nothing
 and rings no one; a later sync reads its result (the state's `restacks`) and merges the PR, drops the result once the PR's head
@@ -408,7 +410,7 @@ LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za
 REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
 TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
-#: a move PR's declaration in its body (`PR.move`): the word map, under `tools/move/`, that `rename.py --map` runs
+#: a move PR's declaration in its body (`PR.move`): the map, under `tools/move/`, whose move the queue regenerates (`MOVE_KINDS`)
 MOVE_RE = re.compile(r"^[ \t>*_]*Move[:\s]+`?(tools/move/[\w.-]+\.toml)`?[ \t.]*$", re.M)
 #: a Linear issue's key, as `open --issue KEY` takes it
 ISSUE_KEY_RE = re.compile(r"[A-Z][A-Z0-9]*-\d+")
@@ -429,11 +431,16 @@ GOALS_CACHE = Path("~/.research/cache/goals.json")
 ISSUE_LINK_RE = re.compile(r"(?i)\b(?:refs?|references|part of|contributes to|towards?|relates to|related to|close[sd]?|closing|"
                            r"fix(?:e[sd])?|fixing|resolve[sd]?|resolving|complete[sd]?|completing|implement(?:s|ed|ing)?)"
                            r"[ \t:]+(?-i:([A-Z][A-Z0-9]*-\d+))\b")
-#: the trailer of a move drive regenerated (`Queue._regenerate`), naming its map
-MOVE_TRAILER_RE = re.compile(r"^Move: (tools/move/[\w.-]+\.toml)$", re.M)
-#: the scripts a move runs, each as the landing branch has it (`move_scripts`): the move, its certificate, and carrying a branch
-#: across it
-RENAME, MOVE_CHECK, RESTACK = "tools/move/rename.py", "tools/verity/check/move_check.py", "tools/move/restack.py"
+#: the trailer of a move the queue regenerated (`Queue._regenerate`), naming its map: its move line as `restack.py`'s
+#: `MOVE_LINE` reads it, which names the script that reruns it (`MOVE_KINDS`)
+MOVE_TRAILER_RE = re.compile(r"^(?:Move|Layout-move): (tools/move/[\w.-]+\.toml)(?: --no-lock)?$", re.M)
+#: the scripts a move runs, each as the landing branch has it (`move_scripts`): a word map's move, a path map's, its
+#: certificate, and carrying a branch across it
+RENAME, LAYOUT = "tools/move/rename.py", "tools/move/layout.py"
+MOVE_CHECK, RESTACK = "tools/verity/check/move_check.py", "tools/move/restack.py"
+#: a map's kind, the one of its tables that is non-empty, and what its move runs and ends in: a word map's `rename.py` and
+#: `Move: MAP`, a path map's `layout.py` and `Layout-move: MAP`
+MOVE_KINDS = {"words": (RENAME, "Move"), "paths": (LAYOUT, "Layout-move")}
 #: what those scripts import from their own checkout: `tools/move/`'s other scripts (rename.py's `layout`), and the pins list
 #: move_check.py reads to tell a pin's rewritten digest from an edit
 MOVE_DIR, MOVE_PINS = "tools/move/", "tools/verity/check/pins.py"
@@ -639,8 +646,8 @@ class PR:
 
     @property
     def move(self) -> str | None:
-        """The word map a `Move: tools/move/NAME.toml` line of its body names: a move PR, whose head is only the request, which
-        the sync regenerates on the tip below it (`Queue._regenerate`)."""
+        """The map a `Move: tools/move/NAME.toml` line of its body names: a move PR, whose head is only the request, which
+        the queue regenerates on the tip below it (`Queue._regenerate`)."""
         m = MOVE_RE.search(self.body)
         return m.group(1) if m else None
 
@@ -1642,16 +1649,18 @@ def _message(pr: PR) -> str:
     return f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\nPR: #{pr.number}\nHead: {pr.head}\nOwner: {pr.owner}\n"
 
 
-def _move_message(pr: PR, tip: str, into: str, main: str) -> str:
-    return (f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\n`python3 {RENAME} --map {pr.move}` at the root of {tip}, regenerated "
-            f"by drive for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`, both as `{into}` {main[:12]} has them."
-            f"\n\nPR: #{pr.number}\nHead: {pr.head}\nOwner: {pr.owner}\nMove: {pr.move}\n")
+def _move_message(pr: PR, tip: str, into: str, main: str, line: str, args: list[str]) -> str:
+    """The message of ``pr``'s move made on ``tip`` by ``args`` (`SCRIPT --map MAP [FLAG...]`): that command, and the PR's
+    trailers, the last its move line, ``line`` with the map and its flags."""
+    return (f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\n`python3 {' '.join(args)}` at the root of {tip}, regenerated "
+            f"by the queue for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`, both as `{into}` {main[:12]} has "
+            f"them.\n\nPR: #{pr.number}\nHead: {pr.head}\nOwner: {pr.owner}\n{line}: {' '.join(args[2:])}\n")
 
 
 def queue_commit(commit: str, parents: str, body: str) -> Member | None:
     """The PR ``commit`` (its ``parents`` as `%P` gives them, its message ``body``) brings when the queue made it, else None:
-    a merge of a PR onto `next` (`Queue: #N`, with its `PR`, `Head` and `Owner` trailers: `_message`), or a move drive
-    regenerated, one commit with a `Move:` trailer too (`_move_message`).  Never a lander's commit, nor one whose `PR` isn't
+    a merge of a PR onto `next` (`Queue: #N`, with its `PR`, `Head` and `Owner` trailers: `_message`), or a move the queue
+    regenerated, one commit with its move line too (`_move_message`).  Never a lander's commit, nor one whose `PR` isn't
     `#N` or whose `Head` isn't a full commit id, as no commit the queue made has."""
     t = {k: v.strip() for k, v in TRAILER_RE.findall(body)}
     if (len(parents.split()) > 1 or MOVE_TRAILER_RE.search(body)) and body.startswith("Queue: #") and {"PR", "Head", "Owner"} <= set(t) \
@@ -1890,6 +1899,11 @@ class Queue:
     def base(self) -> str:
         """`into` as fetched: the ref `next` is built on."""
         return f"refs/remotes/origin/{self.into}"
+
+    @property
+    def main_ref(self) -> str:
+        """`main` as fetched: what a restack refuses a branch based past its move on (`_launch_restack`)."""
+        return "refs/remotes/origin/main"
 
     @property
     def slug(self) -> str:
@@ -2310,20 +2324,34 @@ class Queue:
         return got.get("commit"), got.get("why", "")
 
     def _regenerated(self, tip: str, pr: PR, main: str) -> tuple[str | None, str]:
-        """`rename.py --map MAP` (``pr``'s `Move:` line, ``tip``'s map) run at the root of a worktree of ``tip``, committed as one
-        commit on it with the PR's trailers and `Move: MAP` (`_move_message`), and certified by `move_check.py TIP COMMIT`;
-        the PR's head is only the request.  Both scripts are the landing branch's tip ``main``'s (`move_scripts`), as its
-        landing gates are, so a member below the move can't change what judges it; and a member below that changes
-        `tools/move/`'s scripts holds the move back, since `restack.py` carries the members above it with its base's.  A map
-        ``tip`` or a script ``main`` lacks, such a member, a script that fails, a map that renames nothing there, or a move
+        """The move of ``pr``'s `Move:` line, ``tip``'s map MAP, run at the root of a worktree of ``tip`` by the script of its
+        kind (`MOVE_KINDS`): `rename.py --map MAP` for a word map, `layout.py --map MAP` for a path map, with `--no-lock` where
+        ``tip`` has no `uv.lock` for its `uv lock` to update.  It is committed as one commit on ``tip`` with the PR's trailers
+        and its move line (`_move_message`), and certified by `move_check.py TIP COMMIT`; the PR's head is only the request.
+        The scripts are the landing branch's tip ``main``'s (`move_scripts`), as its landing gates are, so a member below the
+        move can't change what judges it; and a member below that changes `tools/move/`'s scripts holds the move back, since
+        `restack.py` carries the members above it with its base's.  A map ``tip`` lacks, or that doesn't parse there or isn't
+        exactly one kind, a script ``main`` lacks, such a member, a script that fails, a map that moves nothing there, or a move
         `move_check.py` refuses is the reason."""
         scripts, into = move_scripts(self.workdir, main), self.into
-        missing = [f"{p} at `{into}` {main[:12]}" for p in (RENAME, MOVE_CHECK) if p not in scripts]
-        if _git(self.workdir, "cat-file", "-e", f"{tip}:{pr.move}", check=False).returncode:
-            missing.insert(0, f"{pr.move} at {tip[:12]}")
-        if missing:
-            return None, (f"its move can't be regenerated: there's no {' or '.join(missing)}; land the map first, then mark the "
+        text = _git(self.workdir, "cat-file", "blob", f"{tip}:{pr.move}", check=False)
+        if text.returncode:
+            return None, (f"its move can't be regenerated: there's no {pr.move} at {tip[:12]}; land the map first, then mark the "
                           "move again")
+        try:
+            kinds = [k for k in MOVE_KINDS if tomllib.loads(text.stdout).get(k)]
+        except tomllib.TOMLDecodeError as e:
+            return None, f"its map {pr.move} doesn't parse at {tip[:12]}: {e}"
+        if len(kinds) != 1:
+            return None, (f"its map {pr.move} has {'both [words] and [paths]' if kinds else 'neither [words] nor [paths]'} at "
+                          f"{tip[:12]}: a map is a word map ({RENAME}) or a path map ({LAYOUT}), so a move that needs both is "
+                          "two move PRs, each with its map")
+        script, line = MOVE_KINDS[kinds[0]]
+        if missing := [p for p in (script, MOVE_CHECK) if p not in scripts]:
+            return None, f"its move can't be regenerated: `{into}` {main[:12]} has no {' or '.join(missing)}"
+        args = [script, "--map", pr.move]
+        if script == LAYOUT and _git(self.workdir, "cat-file", "-e", f"{tip}:uv.lock", check=False).returncode:
+            args.append("--no-lock")
         ours = move_scripts(self.workdir, tip)
         if changed := sorted(p for p in ours.keys() | scripts.keys()
                              if p.startswith(MOVE_DIR) and ours.get(p) != scripts.get(p)):
@@ -2334,19 +2362,19 @@ class Queue:
             wt = Path(tmp, "wt")
             _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
             try:
-                rename = write_scripts(self.workdir, scripts, Path(tmp, "rename")) / RENAME
-                r = subprocess.run([sys.executable, str(rename), "--map", pr.move, "--root", str(wt)], cwd=wt,
+                run = write_scripts(self.workdir, scripts, Path(tmp, "move")) / script
+                r = subprocess.run([sys.executable, str(run), *args[1:], "--root", str(wt)], cwd=wt,
                                    capture_output=True, text=True, env=_script_env())
                 if r.returncode:
-                    return None, f"`{RENAME} --map {pr.move}` failed on {tip[:12]} (exit {r.returncode}): {_tail(r)}"
+                    return None, f"`{' '.join(args)}` failed on {tip[:12]} (exit {r.returncode}): {_tail(r)}"
                 _git(wt, "add", "-A")
                 tree = _out(wt, "write-tree")
                 if tree == _out(self.workdir, "rev-parse", f"{tip}^{{tree}}"):
-                    return None, (f"`{RENAME} --map {pr.move}` changes nothing on {tip[:12]}: the move is in it already, or "
+                    return None, (f"`{' '.join(args)}` changes nothing on {tip[:12]}: the move is in it already, or "
                                   "its map moves nothing there")
-                commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-m", _move_message(pr, tip, into, main),
-                              env=IDENTITY).stdout.strip()
-                # written afresh: the rename ran the tree's own pins.py, which could rewrite anything already written
+                commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-m",
+                              _move_message(pr, tip, into, main, line, args), env=IDENTITY).stdout.strip()
+                # written afresh: the move ran the tree's own pins.py, which could rewrite anything already written
                 check = write_scripts(self.workdir, scripts, Path(tmp, "check")) / MOVE_CHECK
                 c = subprocess.run([sys.executable, str(check), tip, commit], cwd=wt, capture_output=True, text=True,
                                    env=_script_env())
@@ -2383,12 +2411,13 @@ class Queue:
         return commit, why
 
     def _sensitive(self, head: str, mv: Move) -> bool:
-        """Whether ``head``'s own change (from its merge base with the move's base) names a word of ``mv``'s map, in a path or a
-        line, as text in any case: a superset of what `rename.py` rewrites in it."""
+        """Whether ``head``'s own change (from its merge base with the move's base) names a word, path or module of ``mv``'s
+        map, in a path or a line, as text in any case: a superset of what `rename.py` or `layout.py` rewrites in it."""
         if mv.map not in self._words_of:
             r = _git(self.workdir, "show", f"{mv.commit}^1:{mv.map}", check=False)
-            data = tomllib.loads(r.stdout) if not r.returncode else {}      # it parsed: its rename.py made the move from it
-            words = {*data.get("words", {}), *(w for s in data.get("words_in", []) for w in s.get("words", {}))}
+            data = tomllib.loads(r.stdout) if not r.returncode else {}      # it parsed: its script made the move from it
+            words = {*data.get("words", {}), *(w for s in data.get("words_in", []) for w in s.get("words", {})),
+                     *data.get("paths", {}), *data.get("modules", {})}
             self._words_of[mv.map] = {w.lower() for w in words if w}
         r = _git(self.workdir, "diff", "-U0", "--no-color", "--no-ext-diff", f"{mv.commit}^1...{head}", check=False)
         low = r.stdout.lower()
@@ -2418,10 +2447,10 @@ class Queue:
         return got.get("result"), got.get("why", "")
 
     def _launch_restack(self, head: str, mv: Move, of: str, tries: int = 1, since: float | None = None) -> bool:
-        """Start `restack.py HEAD --move-commit MOVE --script rename.py --script-arg=--map --script-arg=MAP --json`, the landing
-        branch's copy run in the clone, in the background (`RESTACK_JOB`, `drive.detach`), unless this sync starts none or
-        `restack_jobs` run: whether it started.  It runs the move's base's `tools/move/` scripts, which `_regenerated` held to
-        the landing branch's when it made the move.  A landing branch without the script is the restack's failure."""
+        """Start `restack.py HEAD --move-commit MOVE --json`, the landing branch's copy run in the clone, in the background
+        (`RESTACK_JOB`, `drive.detach`), unless this sync starts none or `restack_jobs` run: whether it started.  It reruns
+        the move by its move line (`MOVE_TRAILER_RE`) with the move's base's `tools/move/` scripts, which `_regenerated` held
+        to the landing branch's when it made the move.  A landing branch without the script is the restack's failure."""
         key = f"{head}:{mv.commit}"
         if not self._restack_starts or len(self._restacking) >= self.restack_jobs:
             return False
@@ -2436,8 +2465,8 @@ class Queue:
         out = tempfile.mkdtemp(prefix="restack-", dir=root)
         path = Path(out, "restack.py")
         path.write_text(script.stdout, errors="surrogateescape")
-        argv = ["sh", "-c", RESTACK_JOB, "sh", out, sys.executable, str(path), head, "--move-commit", mv.commit, "--script", RENAME,
-                "--script-arg=--map", f"--script-arg={mv.map}", "--main", "refs/remotes/origin/main", "--json"]
+        argv = ["sh", "-c", RESTACK_JOB, "sh", out, sys.executable, str(path), head, "--move-commit", mv.commit,
+                "--main", self.main_ref, "--json"]
         now = self.now()
         self._restacking[key] = {**detach(self.workdir, argv, _script_env()), "out": out, "of": of, "map": mv.map, "at": now,
                                  "since": now if since is None else since, "tries": tries}
@@ -2677,7 +2706,7 @@ class Queue:
                     wait(n, str(r))
                     continue
             merged = True
-            # a regenerated move is `rename.py`'s output that `move_check.py` certified, lock texts included: what its map
+            # a regenerated move is its script's output that `move_check.py` certified, lock texts included: what its map
             # rewrites in a premise or a frozen entry's reason is no drop
             if not e.pr.move and commit not in (None, tip) and (drops := self._lock_drops(tip, e.pr.head, commit)):
                 commit, why = None, lock_drop_refusal(drops, self.branch)
@@ -3296,13 +3325,13 @@ def queue_merges(repo: Path, base: str, ref: str) -> list[Member]:
 
 @dataclass(frozen=True)
 class Move:
-    """A move drive regenerated (`Queue._regenerate`), on `next` or landed: its commit, one on its base, and its word map."""
+    """A move the queue regenerated (`Queue._regenerate`), below a PR or landed: its commit, one on its base, and its map."""
     commit: str
     map: str
 
 
 def queue_log(repo: Path, ref: str, n: int = LANDED_WINDOW) -> tuple[set[str], list[Move]]:
-    """(the heads the queue merged, the moves drive regenerated, oldest first) on ``ref``'s last ``n`` first-parent commits, by
+    """(the heads the queue merged, the moves it regenerated, oldest first) on ``ref``'s last ``n`` first-parent commits, by
     their trailers: a PR landed at a head ``ref`` doesn't contain (a regenerated move's, or one restacked through a move) is
     landed all the same."""
     heads, moves = set(), []
@@ -3365,14 +3394,14 @@ def old_next_refusal(old: list[Member], into: str) -> str:
 
 
 def move_of(repo: Path, commit: str) -> str | None:
-    """The word map of ``commit`` when it is a move drive regenerated (its `Move:` trailer), else None."""
+    """The map of ``commit`` when it is a move the queue regenerated (its move line: `MOVE_TRAILER_RE`), else None."""
     m = MOVE_TRAILER_RE.search(_git(repo, "log", "-1", "--format=%B", commit, check=False).stdout)
     return m.group(1) if m else None
 
 
 def _script_env() -> dict[str, str]:
     """The environment a move's script runs in: the queue's identity for the commits it makes, and no bytecode written into the
-    tree it runs on (`rename.py` refuses a dirty one)."""
+    tree it runs on (`rename.py` and `layout.py` refuse a dirty one)."""
     env = git_env(GIT_TERMINAL_PROMPT="0", PYTHONDONTWRITEBYTECODE="1", **IDENTITY)
     for k in DATES:
         env.pop(k, None)
@@ -4526,11 +4555,11 @@ class Preflight:
         if not pr.move:
             tree, files, r = merged_tree(self.repo, base, pr.head)
         if pr.move:
-            notes.append(f"the merged tree's checks: a move ({pr.move}), which drive's sync regenerates on the tip below it and "
+            notes.append(f"the merged tree's checks: a move ({pr.move}), which the queue regenerates on the tip below it and "
                          f"refuses there unless {MOVE_CHECK} certifies it")
         elif tree is None and files and (moves := self._only_moved(base, files)):
             notes.append(f"the merged tree's checks: it conflicts with {onto} in {', '.join(files)}, files only the move "
-                         f"{', '.join(moves)} changed, so drive's sync restacks it through the move and refuses it there if a "
+                         f"{', '.join(moves)} changed, so the queue restacks it through the move and refuses it there if a "
                          "conflict remains")
         elif tree is None and files:
             by = touched_by(self.repo, members, files)
@@ -4593,7 +4622,7 @@ class Preflight:
         return old_next_refusal(list(old.values()), into) if old else None
 
     def _only_moved(self, base: str, files: list[str]) -> list[str]:
-        """The moves drive regenerated below ``base`` (`queue_log`) that ``files``, a merge's conflicts, are all files of, when
+        """The moves the queue regenerated below ``base`` (`queue_log`) that ``files``, a merge's conflicts, are all files of, when
         they are; else none."""
         moves = queue_log(self.repo, base)[1]
         moved = set().union(*(changed(self.repo, f"{mv.commit}^1", mv.commit) for mv in moves))
