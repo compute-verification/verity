@@ -326,7 +326,7 @@ end InferenceOnly.Witness
 
 namespace InferenceOnly.SecurityProofs
 
-open Verity Finset InferenceOnly.Capability.Toy InferenceOnly.Witness InferenceOnly.Dampener
+open Verity Finset InferenceOnly.Capability.Toy InferenceOnly.Witness InferenceOnly.Slowdown
 
 theorem ThreadedTraining_honest : Guarantees.ThreadedTraining_honest :=
   ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights, coverage_T1⟩
@@ -422,7 +422,7 @@ theorem not_windowsHold_T0 : ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1
   rw [bound_T0, show (T0 D).M.card = 0 from rfl]
   norm_num
 
-theorem dampener_T0_fails :
+theorem slowdown_T0_fails :
     ¬ (efficiency 1 1 2 0 ≤
         unregisteredShare 2 0 +
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
@@ -430,29 +430,29 @@ theorem dampener_T0_fails :
   rw [bound_T0, show (T0 D).reuse = 0 from rfl]
   norm_num [efficiency, unregisteredShare, residualShare, memoryCap, declaredShare, rhoT]
 
-theorem DampenerThreaded_honest : Guarantees.DampenerThreaded_honest := by
+theorem SlowdownThreaded_honest : Guarantees.SlowdownThreaded_honest := by
   refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
     by norm_num [Assumptions.WindowLength], ?_, windowsHold_T1⟩
   rw [show T1.reuse = 1 from rfl]
   norm_num
 
-theorem DampenerThreaded_nontrivial : Guarantees.DampenerThreaded_nontrivial := by
+theorem SlowdownThreaded_nontrivial : Guarantees.SlowdownThreaded_nontrivial := by
   refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
     by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weights _ _ _ _ _,
     by rw [size_D]; norm_num, by decide, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num [Assumptions.WindowLength], by norm_num, not_windowsHold_T0, dampener_T0_fails⟩
+    by norm_num [Assumptions.WindowLength], by norm_num, not_windowsHold_T0, slowdown_T0_fails⟩
 
-theorem DampenerThreadedSlots_honest : Guarantees.DampenerThreadedSlots_honest := by
+theorem SlowdownThreadedSlots_honest : Guarantees.SlowdownThreadedSlots_honest := by
   refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weightsSlots, by rw [size_D]; norm_num, by decide,
     by norm_num [Assumptions.WindowLength], ?_, windowsHold_T1⟩
   rw [show T1.reuse = 1 from rfl]
   norm_num
 
-theorem DampenerThreadedSlots_nontrivial : Guarantees.DampenerThreadedSlots_nontrivial := by
+theorem SlowdownThreadedSlots_nontrivial : Guarantees.SlowdownThreadedSlots_nontrivial := by
   refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
     by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weightsSlots _ _ _ _ _,
     by rw [size_D]; norm_num, by decide, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num [Assumptions.WindowLength], by norm_num, not_windowsHold_T0, dampener_T0_fails⟩
+    by norm_num [Assumptions.WindowLength], by norm_num, not_windowsHold_T0, slowdown_T0_fails⟩
 
 theorem IncompressibleContainedTraining_honest : Guarantees.IncompressibleContainedTraining_honest :=
   ⟨compliesRate_D, theta_id D, ch1_T1_incompressible, coverage_ch1⟩
@@ -535,12 +535,12 @@ theorem oneWindow_not_pouwSound : ¬ Assumptions.PouwSound (PMF.uniformOfFintype
     at h2
   linarith
 
-theorem DampenerRemote_honest : Guarantees.DampenerRemote_honest :=
+theorem SlowdownRemote_honest : Guarantees.SlowdownRemote_honest :=
   ⟨oneWindow_withinCompute, oneWindow_pouwSound, fun _ b => b.elim, fun b => b.elim, compliesRate_D, theta_id D,
     T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
     fun _ => by norm_num [Assumptions.ResidualAtMost, wrongCapacity]⟩
 
-theorem DampenerRemote_nontrivial : Guarantees.DampenerRemote_nontrivial := by
+theorem SlowdownRemote_nontrivial : Guarantees.SlowdownRemote_nontrivial := by
   refine ⟨by norm_num, by norm_num, fun _ => by norm_num, oneWindow_withinCompute, oneWindow_not_pouwSound,
     by norm_num, by norm_num, by norm_num, fun _ b => b.elim, fun _ b => b.elim,
     fun _ _ _ => by simp, by norm_num, fun b => b.elim, by norm_num, by norm_num, by norm_num,

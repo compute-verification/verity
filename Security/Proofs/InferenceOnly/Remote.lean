@@ -1,7 +1,7 @@
 module
 
 public import Definitions.InferenceOnly.Guarantees.Remote
-public import Proofs.InferenceOnly.Dampener
+public import Proofs.InferenceOnly.Slowdown
 public import Proofs.InferenceOnly.Escape
 
 /-!
@@ -12,8 +12,8 @@ whose expectation `expected_wrong` swaps into the windows' marginals. `VerdictLa
 (`Finset.sum_sdiff`) and sums the rest by identity (`Finset.sum_fiberwise_of_maps_to`): under `TerminalDetection` one
 identity's faulty blocks at or after its first detected one all lie within `Δ` of it, so they skip at most `Φ Δ`.
 `escape_slack` is Markov's inequality again, on the escaped blocks' skipped work, whose expectation `expected_escaped`
-sums the per-identity bound `sampled_escape` derives from `SampledDetection`. `DampenerRemote` reads the residual's
-hypothesis outside both events as `DampenerThreaded`'s at `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, and sums the
+sums the per-identity bound `sampled_escape` derives from `SampledDetection`. `SlowdownRemote` reads the residual's
+hypothesis outside both events as `SlowdownThreaded`'s at `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, and sums the
 sources with no memory cap (`sources_le_at`, unmonitored compute at efficiency `MFU₀`) into both the efficiency and the
 hardware-multiple forms (`remote_core`); the union of the two events has probability at most the sum of theirs
 (`prob_or_le`), so the complement has probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)` (`prob_ge_of_not`), `μ`
@@ -26,7 +26,7 @@ open Verity.Game renaming prPMFReal → prob
 
 namespace InferenceOnly.SecurityProofs
 
-open Verity InferenceOnly.Dampener
+open Verity InferenceOnly.Slowdown
 
 /-- `prob` is monotone in the event. -/
 theorem prob_mono {Ω : Type} [Fintype Ω] (μ : PMF Ω) {E F : Ω → Prop} (h : ∀ ω, E ω → F ω) :
@@ -260,7 +260,7 @@ theorem remote_core {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 
     (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ) (hx : Mx ≤ κ * χ * (C + U) / 2) :
     efficiency κ M C U ≤
         unregisteredShare C U + (1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ ∧
-      remoteDampener a (unregisteredShare C U)
+      remoteSlowdown a (unregisteredShare C U)
           ((1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ) ≤
         hardwareMultiple a κ M C U := by
   have h := sources_le_at hκ hC hU hM hu hr hd hx
@@ -282,7 +282,7 @@ theorem residualShare_sub {W C εW ε L θ : ℝ} (hC : 0 < C) :
   unfold residualShare
   linear_combination (ε + L + θ) * hCi
 
-theorem DampenerRemote : Guarantees.DampenerRemote := by
+theorem SlowdownRemote : Guarantees.SlowdownRemote := by
   intro Ω _ μ N cap wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx Γ α b_w b_a r d T
     dd e Mc hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hα hbw hba hdd hcomp
     hB hthr hW hsize hM0 hM hu hres hx
