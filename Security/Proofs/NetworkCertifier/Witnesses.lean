@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.Witnesses.Sampling
 public import Definitions.NetworkCertifier.Guarantees.SampledAudit
 public import Definitions.NetworkCertifier.SampledCharge
 public import Definitions.NetworkCertifier.SampledReg
+public import Definitions.NetworkCertifier.Witness
 public import Proofs.Flock.Claims.DeployCode
 public import Proofs.Flock.Claims.Sampling.Leaf
 public import Proofs.Flock.Claims.Sampling.Select.Scope
@@ -60,7 +61,8 @@ whose verifier accepts everything.
   the rest: the record's decoder meets the list-decoding spec, a charge `β` bounds every possible incorrect set's
   committed bits at every `δ` (`charge_bounds`), and the hm96 commitment binds. Their acceptance conclusion fails at
   the accepting verifier: `SampledAuditAccepted` at `sksD`, where no opening passes, so the one unit is faulty and no
-  witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input. There,
+  witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input
+  (`Definitions.NetworkCertifier.Witness`). There,
   with nothing opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the
   trace carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
 * `PooledIncorrectBlocksLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_sample`), and its soundness
@@ -182,18 +184,6 @@ end Honest
 
 /-- A layout of one link of one slot, with no gate. -/
 def trivLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
-
-/-- One input gate and its negation, the negation returned. -/
-def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
-
-/-- The program, sampled `all`. -/
-def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
-
-/-- One class of one stratum of one proof block, `{0, 1}`. -/
-def notPart : Claims.Sampling.Partition := ⟨[[[[0, 1]]]]⟩
-
-/-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
-def notLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
 
 /-- One step: no frame on the link, every status complete. -/
 def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩

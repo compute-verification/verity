@@ -10,7 +10,7 @@ and the sampled population (`SetupCount.setupHidden_cost`). Each is a function o
 
 * `hmOutParse_ports`: an untyped circuit's ports are `HmRow.rowPorts` of its META line (`metaOf`).
 * `loadPublic_counts`: a public file's shared-row counts are `HmRow.sharedRows` of its header (`headerOf`) at the
-  circuit's ports (`sharedRows_ports`).
+  circuit's ports (`sharedRows_ports`), and the header the load keeps is that header.
 * `drawn_facts`: a sample keeps the counts, and its population is its JSON's (`Draw.UnitDraw.ofJson`).
 
 So the values at any hash are the ones at SHA-512 (`parse_ports_eq`, `load_counts_eq`, `drawn_pop`), where the
@@ -239,7 +239,7 @@ def headerOf (f : ByteArray) : Option Json :=
 
 theorem loadPublic_counts (h : ByteArray → ByteArray) (tags : Tags) (c : Circuit) (f : ByteArray) (pop : Public)
     (hp : HmRow.loadPublicWith (M := V) (Hashes.ofSha512 h) tags c f = .ok pop) :
-    ∃ hd, headerOf f = some hd ∧ HmRow.sharedRows tags c hd = .ok (pop.tables.map (·.counts)) := by
+    ∃ hd, headerOf f = some hd ∧ HmRow.sharedRows tags c hd = .ok (pop.tables.map (·.counts)) ∧ pop.header = hd := by
   unfold HmRow.loadPublicWith at hp
   simp (config := { zeta := false }) only [Hashes.ofSha512, monadLift_self] at hp
   cases hnl : findByte f 10 with
@@ -260,7 +260,7 @@ theorem loadPublic_counts (h : ByteArray → ByteArray) (tags : Tags) (c : Circu
     simp (config := { zeta := false }) only [hj] at hp
     obtain ⟨_, hte, -⟩ := except_bind_ok hp; cases hte
   | ok hd0 =>
-  simp (config := { zeta := false }) only [hj, pure_bind, jpB] at hp
+  simp (config := { zeta := false }) only [hj, jpB] at hp
   refine ⟨Flock.norm hd0, by simp only [headerOf, hnl, htx, hj, Except.toOption, Option.map_some], ?_⟩
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) pctx at hp
   (have hh := except_bind_ok hp; clear hp; obtain ⟨_, -, hp⟩ := hh)
@@ -291,7 +291,7 @@ theorem loadPublic_counts (h : ByteArray → ByteArray) (tags : Tags) (c : Circu
       simp (config := { zeta := false }) only at hp
       extract_lets (config := { underBinder := false, onlyGivenNames := true }) refs jpS at hp
       replace hp := ite_throw_ok hp
-      simp (config := { zeta := false }) only [jpS, pure_bind] at hp
+      simp (config := { zeta := false }) only [jpS] at hp
       exact ⟨_, rfl, hp⟩
   simp (config := { zeta := false }) only [jpT] at hp
   (have hh := except_bind_ok hp; clear hp; obtain ⟨_, -, hp⟩ := hh)
@@ -315,7 +315,7 @@ theorem loadPublic_counts (h : ByteArray → ByteArray) (tags : Tags) (c : Circu
   simp (config := { zeta := false }) only [jp7] at hp
   (have hh := except_bind_ok hp; clear hp; obtain ⟨_, -, hp⟩ := hh)
   cases hp
-  exact congrArg Except.ok htab.symm
+  exact ⟨congrArg Except.ok htab.symm, rfl⟩
 
 theorem drawn_facts (h : ByteArray → ByteArray) (c : Circuit) (pop pub : Public) (d : Json)
     (hp : HmRow.drawnWith (M := V) (Hashes.ofSha512 h) c pop d = .ok pub) :
@@ -375,8 +375,8 @@ theorem load_counts_eq (h h' : ByteArray → ByteArray) {tags : Tags} {c c' : Ci
     (hp : HmIn.loadPublicWith (M := V) (Hashes.ofSha512 h) tags c pi f = .ok pop)
     (hp' : HmRow.loadPublicWith (M := V) (Hashes.ofSha512 h') tags c' f = .ok pop') (hc : c.ports = c'.ports) :
     pop.tables.map (·.counts) = pop'.tables.map (·.counts) := by
-  obtain ⟨hd, e, s⟩ := loadPublic_counts h tags _ f pop (hmInLoad_row h tags c pi f pop hp)
-  obtain ⟨hd', e', s'⟩ := loadPublic_counts h' tags c' f pop' hp'
+  obtain ⟨hd, e, s, -⟩ := loadPublic_counts h tags _ f pop (hmInLoad_row h tags c pi f pop hp)
+  obtain ⟨hd', e', s', -⟩ := loadPublic_counts h' tags c' f pop' hp'
   rw [e] at e'
   cases e'
   have hs := sharedRows_ports (tags := tags) hd

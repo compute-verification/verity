@@ -4,7 +4,7 @@ The public statics record the actual launch block, because both kernels switch f
 large block to 256 threads when ``num_tokens >= 256``.  ``RMSNormCudaVector8_v1`` is
 ``rms_norm_kernel<c10::BFloat16, 8, 2, true>``.  ``RMSNormFusedCudaVector8_v1`` is
 ``fused_add_rms_norm_kernel<c10::BFloat16, 8, true>`` and returns both in-place outputs.
-``RMSNormFusedCudaVector8_v3`` is v1 in v1's f32 order with its sum of squares as batches, so its body has a few dozen
+``RMSNormFusedCudaVector8_v3``, the one served, is v1 in v1's f32 order with its sum of squares as batches, so its body has a few dozen
 nodes at any N where v1 unrolls every square.
 """
 from __future__ import annotations
@@ -108,8 +108,8 @@ def _vector_sum(B, rf):
     ),
     conformance="exact-model-tested",
 )
-def RMSNormFusedCudaVector8(B, S, x, res, w):
-    """The served residual-add CUDA RMSNorm vector path.
+def RMSNormFusedCudaVector8V1(B, S, x, res, w):
+    """The residual-add CUDA RMSNorm vector path, every square and add a node of its own.
 
     ``res'`` is the native BF16 add.  A vector partial is its four adjacent pair
     sums added left to right; a thread adds its later vector partials left to right.
@@ -213,8 +213,9 @@ def _cub_levels(B, partials):
     ),
     conformance="exact-model-tested",
 )
-def RMSNormFusedCudaVector8V3(B, S, x, res, w):
-    """``RMSNormFusedCudaVector8_v1`` in v1's f32 order, its sum of squares batched rather than unrolled.
+def RMSNormFusedCudaVector8(B, S, x, res, w):
+    """The served residual-add CUDA RMSNorm vector path: ``RMSNormFusedCudaVector8_v1`` in v1's f32 order, its sum of squares
+    batched rather than unrolled.
 
     The squares, their adjacent pair sums and each vector's four pair sums added left to right are one batch each; each
     thread's vector partials added left to right are one batch of per-lane scans; each of CUB's shuffle levels over the
@@ -234,14 +235,14 @@ def RMSNormFusedCudaVector8V3(B, S, x, res, w):
 
 from verity.ml.definitions.registry import boolean_norms as _boolean_norms  # noqa: E402
 
-_boolean_norms._set_cuda_vector8_words(RMSNormCudaVector8, RMSNormFusedCudaVector8)
+_boolean_norms._set_cuda_vector8_words(RMSNormCudaVector8, RMSNormFusedCudaVector8V1)
 
 
 __all__ = [
     "LARGE_BLOCK",
     "RMSNormCudaVector8",
     "RMSNormFusedCudaVector8",
-    "RMSNormFusedCudaVector8V3",
+    "RMSNormFusedCudaVector8V1",
     "RMSNormPairSumCuda",
     "RMSNormSumInOrderCuda",
     "RMSNormSumStepCuda",
