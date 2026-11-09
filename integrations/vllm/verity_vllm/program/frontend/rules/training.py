@@ -13,9 +13,10 @@ operands to f32 (`Bf16ToF32_v1`, exact), performs the f32 operation and rounds a
 CPU's bf16 kernels do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` or
 `mv` is instead F.linear's GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted
 (`cublas_bf16.train_route`), each k16 step the tensor core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div` are
-the GPU's (`Binary`), as are `silu_backward`'s operations, `lerp`'s, `addcdiv`'s, `_foreach_add`'s and a fused AdamW step's
-(`SiluBackward`, `Lerp`, `Addcdiv`, `ForeachAdd`, `FusedAdamW`, whose `beta^step` is `exp(step * log(beta))`: CUDA's `powf` is not
-modeled); a vector norm or a sum of a whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`); an f32
+the GPU's (`Binary`), as are the element-wise ops' operations, `silu_backward`'s, `lerp`'s, `addcdiv`'s, `_foreach_add`'s and a
+fused AdamW step's (`Unary`, `SiluBackward`, `Lerp`, `Addcdiv`, `ForeachAdd`, `FusedAdamW`, whose `beta^step` is
+`exp(step * log(beta))`: CUDA's `powf` is not modeled); `exp`, alone or inside `sigmoid` and `silu_backward`, is CUDA's `expf`
+(`NvExpf_v1`); a vector norm or a sum of a whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`); an f32
 embedding's gradient is its kernels' (`EmbeddingDenseBackward`); and the conversions to bf16, to and from f16 and from f32 to
 int64 and uint8, a clamp and a `kthvalue` are its own (`rules.training_masks`).
 
@@ -39,6 +40,7 @@ from verity.ml.circuits.ops import scalar as SC
 from verity.ml.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.ml.circuits.types import Array, Value
 from verity.ml.definitions.registry import int8_exact as IE
+from verity.ml.definitions.registry import moe as MOE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
 from verity.ml.definitions.registry import torch_embedding_f32 as TEF
@@ -65,6 +67,8 @@ _BINARY = {aten.add.Tensor: "add", aten.add.Scalar: "add", aten.sub.Tensor: "sub
 #: each operation's f32 Definition: torch CPU's, and the GPU's (every NaN result `F32_NAN_PTX`)
 _F32 = {"add": (P.F32Add, P.F32AddV2), "sub": (R.F32Sub, P.F32SubV2), "mul": (P.F32Mul, P.F32MulV2), "div": (P.F32Div, P.F32DivV2),
         "fma": (P.F32Fma, P.F32FmaV2)}
+#: `exp`: the reference vocabulary's (correctly rounded) on the CPU, and CUDA's `expf` (`moe.NvExpf`) on the GPU
+_EXP = (R.F32ExpRn, MOE.NvExpf)
 
 
 class Binary(_TrainRule):
@@ -152,10 +156,16 @@ class Unary(_TrainRule):
     `sqrt` is IEEE's (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow` 0.5) is MKL's, which is not IEEE's on some
     CPUs. A bf16 operand is widened and the result rounded to bf16, except where torch's bf16 kernel rounds in between, which is
     refused: `pow` 3 and -2 round the square, and `rsqrt` (and `pow` -0.5) the square root in its scalar loop; a bf16 `abs` is
-    refused too (torch's CPU kernel keeps a NaN's payload, its CUDA kernel rounds through f32)."""
+    refused too (torch's CPU kernel keeps a NaN's payload, its CUDA kernel rounds through f32). At a compute capability `cc`,
+    `exp` is CUDA's `expf` (`NvExpf_v1`, which its CUDA kernel calls), `sigmoid` its CUDA kernel's `1 / (1 + expf(-x))`, the
+    divisions, products and sums are the GPU's (`F32Div_v2`, `F32Mul_v2`, `F32Add_v2`) and a bf16 result is rounded by
+    `F2fpBf16_v1`."""
     info = _info("Unary", "aten neg/abs/floor/sqrt/rsqrt/reciprocal/exp/sigmoid/pow.Tensor_Scalar of f32 or bf16", "the operand is "
                  "an f32 or bf16 value", "pow's exponent is one torch special-cases (0, 0.5, 1, 2, 3, -0.5, -1, -2)",
                  "bf16: not abs, floor or rsqrt, nor pow 3, -2 or -0.5", "one batch per step over the elements")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
 
     def targets(self):
         return {aten.neg.default, aten.abs.default, aten.floor.default, aten.sqrt.default, aten.rsqrt.default,
@@ -176,6 +186,8 @@ class Unary(_TrainRule):
 
     def emit(self, node, ctx):
         S = ctx.shape_of_node(node)
+        gpu = self.cc is not None
+        div, mul, add = (_F32[op][gpu] for op in ("div", "mul", "add"))
         one = (_const(ctx, node, _bits(1.0)), None)
 
         def ew(fn, *ops):
@@ -199,22 +211,22 @@ class Unary(_TrainRule):
         elif t is aten.sqrt.default or e == 0.5:
             y = ew(R.F32Sqrt, x)
         elif t is aten.rsqrt.default or e == -0.5:
-            y = ew(P.F32Div, one, ew(R.F32Sqrt, x))
+            y = ew(div, one, ew(R.F32Sqrt, x))
         elif t is aten.reciprocal.default or e == -1:
-            y = ew(P.F32Div, one, x)
+            y = ew(div, one, x)
         elif t is aten.exp.default:
-            y = ew(R.F32ExpRn, x)
+            y = ew(_EXP[gpu], x)
         elif t is aten.sigmoid.default:
-            y = ew(P.F32Div, one, ew(P.F32Add, ew(R.F32ExpRn, ew(SC.F32Neg, x)), one))
+            y = ew(div, one, ew(add, ew(_EXP[gpu], ew(SC.F32Neg, x)), one))
         elif e == 2:
-            y = ew(P.F32Mul, x, x)
+            y = ew(mul, x, x)
         elif e == 3:
-            y = ew(P.F32Mul, ew(P.F32Mul, x, x), x)
+            y = ew(mul, ew(mul, x, x), x)
         elif e == -2:
-            y = ew(P.F32Div, one, ew(P.F32Mul, x, x))
+            y = ew(div, one, ew(mul, x, x))
         else:
-            y = ew(P.F32Add, one, (_const(ctx, node, 0), None))
-        ctx.define(node, _rounded(ctx, node, y[0].reshape(_tensor_type(S, 32)), S))
+            y = ew(add, one, (_const(ctx, node, 0), None))
+        ctx.define(node, _rounded(ctx, node, y[0].reshape(_tensor_type(S, 32)), S, P.F2fpBf16 if gpu else P.F32ToBf16Rn))
         ctx.record(self, node, {"op": str(t), "exponent": e, "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"x{math.prod(S)}")
 
 
@@ -333,7 +345,8 @@ class SiluBackward(_TrainRule):
     CPU kernel's scalar loop exactly; nvcc contracts `1 + x * (1 - s)` to one FFMA): `F32ExpRn_v1` as `Unary`'s `exp`,
     `F32Add_v1`, `F32Div_v1`, `F32Sub_v1`, `F32Fma_v1`, `F32Mul_v1`. bf16 operands are widened and the result rounded once
     (`F32ToBf16Rn_v1`), as both kernels compute in f32. At a compute capability `cc` the operations are the GPU's
-    (`F32Add_v2`, ..., `F32Mul_v2`) and a bf16 result is rounded by `F2fpBf16_v1`."""
+    (`F32Add_v2`, ..., `F32Mul_v2`), `exp` CUDA's `expf` (`NvExpf_v1`, as `Unary`'s) and a bf16 result is rounded by
+    `F2fpBf16_v1`."""
     info = _info("SiluBackward", "aten.silu_backward of f32 or bf16", "dy and x are values of the result's dtype",
                  "one batch per step over the elements")
 
@@ -361,7 +374,7 @@ class SiluBackward(_TrainRule):
             return _flat(_ew(ctx, node, _F32[op][gpu] if isinstance(op, str) else op, list(ops), S), S)
 
         dy, x = (_operand(ctx, node, a, S) for a in node.args[:2])
-        s = ew("div", one, ew("add", one, ew(R.F32ExpRn, ew(SC.F32Neg, x))))
+        s = ew("div", one, ew("add", one, ew(_EXP[gpu], ew(SC.F32Neg, x))))
         t = ew("fma", x, ew("sub", one, s), one)
         y = _ew(ctx, node, _F32["mul"][gpu], [ew("mul", dy, s), t], S)
         ctx.define(node, _rounded(ctx, node, y, S, P.F2fpBf16 if gpu else P.F32ToBf16Rn))
@@ -701,9 +714,9 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     comparison, mask, integer, conversion, lookup, order-statistic and copy rules after. `min_view_leaves` is 0 by default:
     the default views write a permuted view of fewer leaves than their limit as a list of its leaves, which the root's replay then
     substitutes as one reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s and `mv`s as that GPU's cuBLAS computes
-    them (`Matmul`), every add, sub, mul and div as its kernels do (`Binary`; `SiluBackward`, `ForeachAdd`, `Lerp` and
-    `Addcdiv` take the same operations) and the conversions to bf16, to and from f16 and from f32 to int64 and uint8 as its kernels do (`Cast`),
-    both placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel` does
+    them (`Matmul`), every add, sub, mul and div as its kernels do (`Binary`; `Unary`, `SiluBackward`, `ForeachAdd`, `Lerp` and
+    `Addcdiv` take the same operations, and `Unary`'s and `SiluBackward`'s `exp` is CUDA's `expf`) and the conversions to bf16,
+    to and from f16 and from f32 to int64 and uint8 as its kernels do (`Cast`), both placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel` does
     (`FullReduce`, before `Reduce`), an f32 embedding's gradient as its kernels do (`EmbeddingDenseBackward`), a fused AdamW step
     and a clamp as their kernels do (`FusedAdamW`, `Clamp`) and `kthvalue` as its radix select does (`KthValue`), in the rule set
     ``training-cc<major>.<minor>``.  `tf32`, at a `cc`: the step sets cuda.matmul.allow_tf32, which the traced graph doesn't
@@ -711,7 +724,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
 
     first = [StaticFloats(cc), BoxPermute(min_view_leaves), Matmul(cc, tf32)] + ([Binary(cc), Cast(cc)] if cc else [])
-    last = ([] if cc else [Binary()]) + [Unary(), Lerp(cc), Addcmul(), Addcdiv(cc), SiluBackward(cc), ForeachAdd(cc),
+    last = ([] if cc else [Binary()]) + [Unary(cc), Lerp(cc), Addcmul(), Addcdiv(cc), SiluBackward(cc), ForeachAdd(cc),
                                          FusedAdamW(cc), FullReduce(cc), Reduce(), IntSum(), AMax(), SafeSoftmax(),
                                          SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(), NllLossForward(), NllLossBackward(),
                                          EmbeddingDenseBackward(cc), Compare(), Logic(), IntOps(), Where(), Clamp(cc), Index(),
