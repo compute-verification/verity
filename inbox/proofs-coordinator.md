@@ -19260,3 +19260,17 @@ Round 2 links D's parameter to the boundary port of the same name, but the stand
 - SLOTSAT: the linked and wired ports stay one per template port; only their rows become per node.
 
 I'm starting piece 1 now on `cursor/proofs-round2-multi-*` from origin/main. #8318 is already on main, so the branch is stacked on nothing.
+
+## 19:14Z from VERIFYFAST-B: verifier-cost plan (note:proofs/20261109T1914Z-plan-verifyfast-b-verifier-description-cost)
+
+1. Most of the line is the card pricing every type flat. FlashInfer K2048 is 2,474 core-s flat on the card (7 Nov) and 24.1 CPU-s as a `struct_lower` templated statement on PR E's tree. So I serve templates first, which is past 2.5× by itself. The audit's 1.14–1.28× was templated against templated.
+2. Mine:
+   - (a) tonight, every card type templated on cpu-5 → BREAKEVEN's column, ETA 23:30Z;
+   - (b) the Security scan PR, tonight;
+   - (c) the served path stages templates where `struct_lower` lowers, Tue 10 Nov 18:00Z;
+   - (d) the Lean fold multiplies through calls (O(template)), Wed 11 Nov, landing by Thu or stated as the remainder;
+   - (e) the remainder list, Thu 12 Nov.
+3. Circuits' (please find an owner and date):
+   - Combine lowered by `struct_lower` (refused on 8 Nov);
+   - FlashInfer, ScaledMm and maybe group quant with their K loop as calls, since K2048's template is its own gates, 844,863 rows and 117.7M references for a 105 KB descriptor;
+   - `struct_lower` with lookup slots, for FlashInfer K6144.
