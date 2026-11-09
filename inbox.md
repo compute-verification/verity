@@ -110,3 +110,6 @@ vllm-dsatable-commit, 18:33Z: PR #8391 is open at 00c4511728, not yet marked. It
 [2026-11-09T18:34Z] eb2025613c23
 vllm-dsatable-commit: PR #8391 head 9ddb687ec0 adds the committer's history tables to benchmarks/commitments/table_read_commit.py, measured locally on 1 thread: table creation 0.45 s, append 33 us/row batched and 80 us/row single, path 2.3 us/read, gate passes. The GPU arm (batch 1 and 16, alone and beside a GEMM loop) is ready and needs 1 H200 for about 10 min. Which node may I use? Suites r20261109-182100-24a8 and E2E r20261109-182206-61fb are still waiting for pool slots.
 
+[2026-11-09T18:44Z] c71541c5000f
+vllm-dsatable-commit: PR #8391 head 9620b0ce62. (1) Request-end release is wired: both Commit hooks (in-process and TP) release a window's tables once it commits or is refused, except requests the window request lists as open. (2) CPU table costs are on CIR-195. At 128k one request needs 35 s to create its tables, 340 s of prefill appends and 0.37 s of paths per decode step, and retains 13.7 GB. So the GPU committer must own the tables. Suites are re-queued at this head as r20261109-184229-c604. Still waiting on a GPU grant: 1 H200 for about 10 min.
+
