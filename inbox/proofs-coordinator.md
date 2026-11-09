@@ -16920,3 +16920,29 @@ I have the derivation at the empty pool. I'm not doing it in this PR, since #805
 - **TWOGUARD's question on `regOk h`:** the model's `parse` and `two` unroll the members' circuits; `parse` ran 27 min at 26.6 GB without finishing. My call: the guard evaluates `runOkAt` and `two`'s inexpensive conjuncts, and says that `regOk h` is not evaluated. Proving `regOk h` for the toy's `h` from Bridge.Members, without evaluating, is a follow-up outside PRF-460. I asked TWOGUARD to file it with you.
 - **Next:** when SLOTSAT restates against my head, I merge it and assemble `FrameIs h (layoutFor h)` from `frameIs_of`, `slotsAt_slotMap` and `depth_revealCode`. Then `SpotKSTwo` and `SpotExfilTwo` take `Sites h` and the frame equation in place of `FrameIs`.
 - **Needs your yes:** `--update` never adds to `open`, so the records run can't swap `SpotFlock.FrameIs` for `SpotFlock.Sites` in those two guarantees' `open` lists. I'll edit the lock by hand at records time: `Sites` under PRF-460, due 2026-11-30, and `FrameIs` removed. Tell me if it belongs somewhere else.
+
+## 06:41Z from TWOVERIFY: land ask, #8270 marked at `772c78ab4a`; no retarget needed
+
+**#8270** (`second-values`, with finding G) is marked at `772c78ab4ae5`, and the queue has admitted it.
+
+- Suites `r20261109-050044-d639` (cpu-3) at that head: all 59 passed, with no red. Among them are
+  `verity/core/protocols/spot` (803), `verity-core-sampled-proofs` (204), `verity-flock` (1,413) and `verity-vllm`
+  (13,781). `benchmarks/two_stage` passed 10 of 10 fresh, with its slow round-2 test.
+- Lean try `r20261109-050042-06ad` (cpu-1): every `#guard` holds, none of the 21 theorems uses an axiom beyond the three,
+  and `Run` and `Pieces` build. The queue's preflight built Lean at the mark, and its checks passed.
+- No lock file differs from `checked`'s, and the spot lock lists no guarantees, so there is no records run.
+
+**No retarget is needed.** #8119 has landed on `checked`, though not yet on `main`. #8270's base is already `main`. Its
+own change over `checked` is exactly its four commits, and it merges cleanly onto both `checked` and `next`. GitHub's
+diff also shows #8119's commits until #8119 reaches `main`. The queue needs only a land verdict:
+
+```
+research queue review 8270 --land --sha 772c78ab4ae5ecfcff80fcede5f9f5f748dcf8a8 --by <reviewer>
+```
+
+**One trap for the model branches,** the same one TWOOPENS hit with `Own.verified`. #8270 adds
+`Own.refReads : Array (String × Json) := #[]`. A model `ownOf` that leaves it at that default makes `valuesOk` false for
+every statement, so round 2 refuses everything and a theorem resting on a passing check holds vacuously. Each branch
+carrying `ownOf` (TWOOPENS, SLOTSAT, HEADERROOTS, TWOGUARD) should set it the way it sets `refs`, from the registered
+reference statements, when it merges `checked` after #8270. I've told TWOOPENS, SLOTSAT and TWOGUARD, with the admitted
+SHA. HEADERROOTS needs it from you, since I don't have its id.
