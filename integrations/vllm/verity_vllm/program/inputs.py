@@ -69,11 +69,11 @@ class Kind:
 #: declared field by field (`RUN`)
 PARAMS: dict[str, Kind] = {
     "prompt": Kind("certified", "the request's prompt ids: ingress v0's parse unit outputs them, else its certified body "
-                                "(`predict.steps.request_of`)"),
+                                "(`predict.ingress_policy.request_of`)"),
     "input_ids": Kind("certified", "a step wrapper's token ids (the Build's step trace): the prompt's and earlier samples'"),
     "seed": Kind("witness", "the seed a stochastic request's sampler read, which serving decides: its Program's seed rule holds it "
                             "to its certified body's seed, else the one derived from the window's seed salt and its certified id "
-                            "(`frontend.seed_rule`, `predict.steps.policy_of`); a step wrapper's is its Build trace's", "",
+                            "(`frontend.seed_rule`, `predict.ingress_policy.policy_of`); a step wrapper's is its Build trace's", "",
                  "SeedCheck_v2"),
     "seeded": Kind("certified", "whether the request's certified body names a seed: ingress v1's parse unit outputs it "
                                 "(`IngressSampled_v1`)"),

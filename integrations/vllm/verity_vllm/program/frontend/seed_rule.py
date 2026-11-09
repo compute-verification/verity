@@ -186,7 +186,7 @@ def rid_entry(policy: dict, requests: Sequence[dict]) -> dict:
 
 
 def rid_in(sampling: Any) -> int:
-    """The RID a stochastic request's sampling policy states (its ``rid``: `steps.policy_of`, or `rid_of_ids` over a row)."""
+    """The RID a stochastic request's sampling policy states (its ``rid``: `ingress_policy.policy_of`, or `rid_of_ids` over a row)."""
     rid = sampling.get("rid") if isinstance(sampling, dict) else None
     if type(rid) is not int or rid < 1:
         raise ValueError(f"a stochastic request's Program checks its seed against the seed rule over its id, whose length in bytes "

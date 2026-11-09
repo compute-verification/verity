@@ -43,7 +43,7 @@ the close returns them, where its last row, after the close, reads past INDEX_TO
   returns a request it leaves with outputs to keep with its indexer's keys and scales on its edge where its last row reads past
   INDEX_TOPK keys (`segment.edge_groups`); and it sets the request's length rule (`steps.stop_of`, `RequestUnit.stop`);
 - each response's finish reason: ``finish``, advice, read ahead to set the request's length rule (`RequestUnit.stop`), and to
-  refuse a record its body contradicts (`steps.request_of`);
+  refuse a record its body contradicts (`ingress_policy.request_of`);
 - the outputs a request kept before the window opened: its carried ``kept``, advice, held to the last window's close
   (`window_advice.follows`);
 - when each output was released: ``release``, never read; the gate refuses it.
@@ -83,9 +83,9 @@ _SEED_WHY = ("a stochastic request's seed is certified, its body's seed or deriv
              "its Program's seed rule holds the seed its sampler reads to it: never a value the server draws or fills in")
 #: the registration's switch the prefix-cache hit's fields are under
 PREFIX_CACHE = "enable_prefix_caching"
-#: a certified body's field roles: the prompt (read apart, `steps.request_of`); how the response travels, which computes nothing;
-#: what only finishes a request (its T, which the advice's rows carry; `max_tokens` and `ignore_eos` hold its `output_len` and
-#: `finish`); what the sampling policy reads (`steps.policy_of`); and a parameter refused off its inert values
+#: a certified body's field roles: the prompt (read apart, `ingress_policy.request_of`); how the response travels, which computes
+#: nothing; what only finishes a request (its T, which the advice's rows carry; `max_tokens` and `ignore_eos` hold its `output_len`
+#: and `finish`); what the sampling policy reads (`ingress_policy.policy_of`); and a parameter refused off its inert values
 ROLES = ("prompt", "transport", "finish", "policy", "inert")
 
 
