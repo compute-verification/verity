@@ -972,6 +972,8 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     } else {
         Tables::one(st, inst)
     };
+    // each session's server is built after its accept (`server_of`): a configuration it would refuse is refused here instead
+    config_of(&tabs).check().unwrap_or_else(|e| refuse(e));
     let tree_from = tree_from_arg(&tabs, false);
     Serving { given, law, tabs, tree_from }
 }
@@ -7155,6 +7157,7 @@ fn serve_queue(c: Composite, path: &str) {
             }
         };
         let tabs = Tables::one(&st, &inst);
+        config_of(&tabs).check().unwrap_or_else(|e| refuse(e));
         let tree_from = tree_from.get_or_insert_with(|| tree_from_arg(&tabs, true)).clone();
         let sv = Serving { given: Some(draw), law: None, tabs, tree_from };
         let mut tag = json!({"label": j["label"]});
