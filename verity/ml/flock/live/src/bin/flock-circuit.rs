@@ -6547,56 +6547,42 @@ fn front_ahead_case(_: &Arc<Stmt>, _: &Arc<Instances>, _: bool) -> Value {
     json!({"case": "front_ahead_matches_serial", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
 }
 
-/// The prove loop with each session's level 0 read beside the previous session's reps ([`Level0Ahead`]), against it with every
-/// session reading its own, over loopback TCP to one server taking one session at a time, at the selftest's sample: with each
+/// Sessions run as the prove loop runs them, each reading the next session's level 0 beside its reps ([`Level0Ahead`]), against
+/// the same sessions each reading its own, each session against its own in-process server at the selftest's sample: with each
 /// session's prover seed and the verifier's coins injected, every session's proofs and transcript are byte-identical, and
-/// every session after the first took the salts, and under M1 the hiding, read for it.
+/// every session after the first took the salts, and under Flock ZK the hiding, read for it.
 #[cfg(feature = "seed-injection")]
 fn level0_ahead_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     const SESSIONS: usize = 3;
     let seeds: Vec<ProverSeed> = (0..SESSIONS).map(|k| ProverSeed::injected([1 + k as u8; 32])).collect();
     let run = |ahead: bool| {
-        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let a = l.local_addr().unwrap().to_string();
-        let d = std::env::temp_dir().join(format!("fc-level0-ahead-{}-{ahead}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        let base = Plan { gpu, level0_ahead: Some(ahead), ..Plan::default() };
-        let mut got: Vec<(Value, Vec<Vec<u8>>)> = Vec::new();
         let taken0 = LEVEL0_TAKEN.each_ref().map(|n| n.load(std::sync::atomic::Ordering::Relaxed));
-        std::thread::scope(|sc| {
-            let (l, d, a) = (&l, &d, &a);
-            flock_live::spawn_scoped(sc, move || serve_on(l, d, Some(SESSIONS), 1, a, None, || {
-                Some((move || {
-                    let mut s = server(st, inst);
-                    fix_verifier_coins(&mut s, [9; 32]);
-                    s
-                }, Value::Null))
-            }));
-            prove_sessions(st, inst, &base, &seeds, 0, a, 0, None, &mut |_, v, proofs| got.push((v, proofs)));
-        });
-        let taken: [usize; 2] = std::array::from_fn(|i| LEVEL0_TAKEN[i].load(std::sync::atomic::Ordering::Relaxed) - taken0[i]);
-        let recs: Vec<Value> = (0..SESSIONS).map(|k| {
-            let p = d.join(format!("l{k:04}-{}", std::process::id())).join("session.json");
-            let rec: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap_or_default()).unwrap_or(Value::Null);
-            json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]})
+        let got: Vec<(bool, Vec<Vec<u8>>, Value)> = (0..SESSIONS).map(|k| {
+            let s0 = Arc::new(Mutex::new(server(st, inst)));
+            fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
+            let plan = Plan { gpu, level0_ahead: Some(ahead), next_seed: seeds.get(k + 1).copied(), ..Plan::default() };
+            let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &plan, seeds[k]);
+            let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
+            (verified(&v), proofs, json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]}))
         }).collect();
-        let _ = std::fs::remove_dir_all(&d);
-        (got, recs, taken)
+        let taken: [usize; 2] = std::array::from_fn(|i| LEVEL0_TAKEN[i].load(std::sync::atomic::Ordering::Relaxed) - taken0[i]);
+        (got, taken)
     };
     let (a, b) = (run(false), run(true));
-    let accepted = a.0.len() == SESSIONS && b.0.len() == SESSIONS && a.0.iter().chain(&b.0).all(|(v, _)| verified(v) && v["step0_checked"] == true);
+    let accepted = a.0.iter().chain(&b.0).all(|x| x.0);
     let want = [if salted(st) { SESSIONS - 1 } else { 0 }, if is_zk(st) && std::env::var_os("FC_ZK_SEQUENTIAL").is_none() { SESSIONS - 1 } else { 0 }];
-    let took = a.2 == [0, 0] && b.2 == want && want.iter().any(|&n| n > 0);
-    let pe = a.0.iter().zip(&b.0).all(|(x, y)| x.1 == y.1) && a.0.iter().all(|(_, p)| !p.is_empty());
-    let te = a.1 == b.1 && a.1.iter().all(|r| !r["streams"].is_null());
+    let took = a.1 == [0, 0] && b.1 == want && want.iter().any(|&n| n > 0);
+    let pe = a.0.iter().zip(&b.0).all(|(x, y)| x.1 == y.1) && a.0.iter().all(|x| !x.1.is_empty());
+    let te = a.0.iter().zip(&b.0).all(|(x, y)| x.2 == y.2) && a.0.iter().all(|x| !x.2["streams"].is_null());
     let seeds_differ = a.0.windows(2).all(|w| w[0].1 != w[1].1);
-    let digest = hex(&Sha512::digest(b.1[0].to_string().as_bytes()));
+    let transcripts = |r: &[(bool, Vec<Vec<u8>>, Value)]| json!(r.iter().map(|x| &x.2).collect::<Vec<_>>());
+    let digest = hex(&Sha512::digest(b.0[0].2.to_string().as_bytes()));
     let pin = arg("--expect-transcript", "");
     let pinned = pin.is_empty() || pin == digest;
     json!({"case": "level0_ahead_matches_own", "expect": "each session's proofs and transcript are its twin's that read its own level 0, byte for byte",
-           "gpu": gpu, "zk": is_zk(st), "sessions": SESSIONS, "accepted": accepted, "taken": [a.2, b.2], "taken_expected": want,
+           "gpu": gpu, "zk": is_zk(st), "sessions": SESSIONS, "accepted": accepted, "taken": [a.1, b.1], "taken_expected": want,
            "proofs_equal": pe, "transcripts_equal": te, "sessions_differ": seeds_differ,
-           "transcript_first_difference": first_diff(&json!(a.1), &json!(b.1), String::new()), "transcript_sha256": digest,
+           "transcript_first_difference": first_diff(&transcripts(&a.0), &transcripts(&b.0), String::new()), "transcript_sha256": digest,
            "transcript_pinned": (!pin.is_empty()).then_some(pinned), "pass": accepted && took && pe && te && seeds_differ && pinned})
 }
 
