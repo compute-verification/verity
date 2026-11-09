@@ -29,6 +29,9 @@ def s8_words(K: int) -> int:
 #: (`window_circuit.CUTS`: FA2's v18 by `AttentionHead_v19`, FA3's v4 by `AttentionHead_v20`), each reading EX2 a score or
 #: RCP once
 SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5", "AttnBlock_v4", "AttnHeadEnd_v1")
+#: the FP8 linears whose quant's RCP reads `reads` lays out in lookup slots, which keeps each of their nets within the GPU
+#: prover's nonzeros (`GPU_NNZ_MAX`)
+SLOT_LINEARS = ("FlashInferFp8Linear_v1",)
 
 
 def reads(tp: Any) -> str:
@@ -44,6 +47,8 @@ def reads(tp: Any) -> str:
     from verity_vllm.pipeline import chain_rows as CH, split_rows as SP
     from verity_vllm.query.program_view import spec_base, spec_statics
 
+    if spec_base(tp.id) in SLOT_LINEARS:
+        return "slots"
     if tp.layout == "row":
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
     if tp.layout == "chain":
