@@ -449,11 +449,15 @@ def resolve (roots : Array (String × ByteArray × ByteArray)) (supplied : Json)
         | none, none => throw s!"history {n}: the verifier computed no table's root or domain of that name"
       | _ => pure s
     | _ => pure s
-  return Json.mkObj ((← (entries supplied).mapM fun (v, rows) => match rows with
-    | .arr rs => return (v, Json.arr (← rs.mapM fun r => match r with
-      | .arr ss => return Json.arr (← ss.mapM source)
-      | r => pure r))
-    | rows => pure (v, rows)).toList)
+  let row : Json → V Json := fun r => do
+    match r with
+    | .arr ss => return Json.arr (← ss.mapM source)
+    | r => pure r
+  let values ← (entries supplied).mapM fun (v, rows) => do
+    match rows with
+    | .arr rs => return (v, Json.arr (← rs.mapM row))
+    | rows => pure (v, rows)
+  return Json.mkObj values.toList
 
 /-- `{"leaf_layer", "digests": {key: hex}, "tables": [{"name", "program", "writer", "out", "words", "runs", "capacity",
 "first", "units", "members": [member with "key"]}], "held": {name: {value: [hex]}}, "registered": {name: hex}}` to
