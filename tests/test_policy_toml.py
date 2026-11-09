@@ -1,6 +1,7 @@
-"""policy.toml, drive's policy over what the runners report, parses strictly with this tree's research, each allowance's owner a
+"""policy.toml, the policy over what the runners report, parses strictly with this tree's research, each allowance's owner a
 handle of the registry, and takes only jobs ci.toml declares off the gate, every job ci.toml itself marks `gate = false` among
-them: drive reads it at the tip it judges and a bad file counts as no policy, so only this test catches one before it lands."""
+them: the verified queue reads it at the candidate it judges and a bad file counts as no policy, so only this test catches one
+before it lands."""
 from __future__ import annotations
 
 import json
