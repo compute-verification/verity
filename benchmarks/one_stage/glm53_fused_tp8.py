@@ -18,6 +18,7 @@ from pathlib import Path
 
 E, G, KB = 256, 128, 128
 PAIRS = {"w13": ("MoeExpertFp8Gemm_v1", 6144, 512, 1), "w2": ("MoeExpertFp8GemmW_v1", 256, 6144, 32)}
+FUSED = {"w13": "MoeExpertFp8ReadGemm_v1", "w2": "MoeExpertFp8ReadGemmW_v1"}
 KERNELS = ((True, "HopperE4m3QgmmaDot32_v1"), (False, "HopperE4m3MmaV2Dot32_v1"))
 
 
@@ -28,19 +29,22 @@ def row(proj: str, swap: bool, dot: str) -> str:
 
 
 def templates() -> list[str]:
-    """Each projection's scale-row read, then its fused blocks on each kernel."""
+    """Each projection's scale-row read, then its fused blocks on each kernel: of the pair row's unit templates
+    (`serving_rows.unit_templates`), its fused block of n rows."""
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.commitments.gates.embedding import read
-    from verity_vllm.pipeline import serving_templates as ST
+    from verity.ml.definitions.call_scope import spec_base, spec_statics
+    from verity_vllm.pipeline import serving_rows as SRW
 
     out = []
     for proj, (_fam, K, _N, n) in PAIRS.items():
         out.append(descriptor_id(read(E, 2 * K // G)))
         for swap, dot in KERNELS:
-            fused = ST.fused_block(row(proj, swap, dot), n)
-            if fused is None:
-                raise SystemExit(f"{row(proj, swap, dot)}: no fused block binds")
-            out.append(descriptor_id(fused))
+            fused = [t for t, _k in SRW.unit_templates(row(proj, swap, dot)) or ()
+                     if spec_base(t) == FUSED[proj] and int(spec_statics(t)["N"]) == n]
+            if len(fused) != 1:
+                raise SystemExit(f"{row(proj, swap, dot)}: {len(fused)} fused blocks of {n} rows bind, not one")
+            out.append(fused[0])
     return out
 
 
