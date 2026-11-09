@@ -38,7 +38,7 @@ public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Period
 public import Definitions.Accounting.Sheets
 public import Definitions.Accounting
-public import Definitions.SampledProofs
+public import Definitions.Spot
 public import Definitions.Claims
 public import Definitions.Claims.Encodings
 public import Definitions.Claims.Recursion
@@ -99,6 +99,8 @@ public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
+public import Definitions.NetworkCertifier.Guarantees.Checked
+public import Definitions.NetworkCertifier.Witness
 public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Guarantees
 public import Definitions.WeightSecurity

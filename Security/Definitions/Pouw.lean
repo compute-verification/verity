@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Pouw.Advantage
 public import Definitions.Pouw.Barrier.Defs
 public import Definitions.Pouw.Barrier.Pinned
 public import Definitions.Pouw.Basic.Mat
@@ -122,6 +123,15 @@ statement reviewer reads.
 basenames in each layer (`Definitions.Pouw.Fp8Atom.E4M3`, `Proofs.Pouw.Fp8Atom.Proofs`), and the topics' maps
 below name them by basename.
 
+## `Advantage`: the advantage form
+
+`G_ε` at the adversary's advantage `ε` with failure probability `δ(q, N)`, in the game (`Pouw.Gε`) and in Pearl-C's
+(`Pouw.PearlC.Gε`): what an adversary spends is at least the honest work of its correct units over `1 + ε`. `GGap` at
+the gap `g = ε/(1 + ε)` is the same property, and the gap is how the proofs carry it. The audit's statement in ε form
+(`AuditGε`), the bound `Ω_max` the reduction from TT reads (`Protocol.WrefWithin`) and route U's instance conditions
+(`NCP.Params.InstanceU`); the guarantees in ε form are `Definitions.Pouw.Guarantees.Advantage`, proved from their gap
+forms in `Proofs.Pouw.Advantage`.
+
 ## `Fp8Atom`: a bit-exact `HOPPER_E4M3_K32`
 
 The codec (`E4M3`), the step (`Atom`), the FP32 add of the running words (`Fp32`), the conformance vectors (`Vectors`,
@@ -143,7 +153,7 @@ staged in `H1TGapStaging`: the monotone chain gap, the last-slice split, and the
 `H1TCrossLateStaging` proves the cross-column late pairs in the exact-512 regime, from the statements in
 `H1TCrossLate`; the five theorems are granted, not pinned (pin when used), and the regime is empty for
 `k ≤ 19,430`. `H1TBoundedStaging` states the named assumptions and `H1TGap` for units of `k ≤ K`, proves the bounded
-γ corollary, and bounds the running words below `2^31` for `k ≤ 9,048` and below `2^32` for `k ≤ 18,096`, unpinned.
+gap corollary, and bounds the running words below `2^31` for `k ≤ 9,048` and below `2^32` for `k ≤ 18,096`, unpinned.
 `H1TShiftStaging` reduces the cross-column late pairs, where the chains after slice `T − 1`'s block 1 stay in one
 binade, to one slice's two block-1 words against step-`W` staircases (`TagStaircaseSplit`, unproved); where a chain
 crosses one power of two at one step, to the same with cuts (`TagCutSplit`, unproved); and below `2^e` it separates
@@ -183,10 +193,10 @@ statistic, the noise and the forming chains, the promoted product chain, and U's
 the encoders, the conversion and the atom-mix chain (`EncVectors`, generated from `verity.ml.tc`) and their kernel
 checks (`EncChecks`). P2, the clean-up chain (`Peel`): U's cancellation identities, where the rounding is, and the
 clean-up terms' liveness at degenerate inputs. P1, freezing under promotion (`Freeze`), and P3, the forming credit
-(`Forming`). The game (`Game`), named protocol (`Instance`), named assumption TT_OUT (`TTOut`) and γ
-from it (`Gap`). The hidden audit, the tile check as a proof over core's `Verity.Game` (`Hidden`), its open obligation
+(`Forming`). The game (`Game`), named protocol (`Instance`), named assumption TT_OUT (`TTOut`) and the
+gap from it (`Gap`). The hidden audit, the tile check as a proof over core's `Verity.Game` (`Hidden`), its open obligation
 that a sampled tile's proof is sound (`HiddenTile`), what a proof system gives per tile to meet it (`HiddenTileGame`, met
-in `SecurityProofs` through core's batch lemma) and the sampled audit's γ under it (`HiddenGap`). The sampled audit's
+in `SecurityProofs` through core's batch lemma) and the sampled audit's gap under it (`HiddenGap`). The sampled audit's
 completeness on a population of activations (`Completeness`), its one assumption, the honest tiles' measured cap rate
 (`HonestCap`, empirical), the proof that every honest word is an FP32 word's (`HonestWords`) and completeness from the
 two (`Completeness`).

@@ -53,7 +53,8 @@ hash `H`, the conjunction of the sampling claims below but `ZK`, reading of `F` 
 * `ScopeMatches`, from the deployed design's well-formedness (`scopeMatches_of`, `designWellFormed`) where the scope
   check is the readable scope's program part;
 * `Universal`, from the unit's Definition (`Universal_of`);
-* `Binding`, at hm96 leaves under the registered frame-v3-sha512 path check (`Binding_of_hm96`);
+* `Binding`, at hm96 leaves under the registered frame-v3-sha512 path check (`Binding_of_hm96`); at a commitment of
+  any form, a hypothesis (`sampling_assembled_bind`);
 * `FaultyBoundary` (`faultyBoundary`);
 * `KS`, on the statements in scope (`Scope`), from Flock's KS at the checked units' sessions (`SessionKS_of`, `KS_of`),
   with the binding, the sampling design (`drawLaw_of_slots`) and the verifier's refusal of what is out of scope
@@ -122,6 +123,32 @@ def Deploy.mask {Coin Col T : Type} (D : Deploy Coin Col T) (Nonce Rest : Type) 
   { toDeploy := D, Nonce := fun _ => Nonce, Rest := fun _ => Rest, tapeOf := fun _ => tapeOf, S := S }
 
 set_option synthInstance.maxSize 1024 in
+/-- **The sampling claims at a deployment whose sessions are any Flock record `F` and whose commitment binds**
+(`hbind`), at every hash: `sampling_assembled_of`'s conclusion, at a commitment of any form. -/
+theorem sampling_assembled_bind {T : Type}
+    (D : Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (H : Msg → Msg)
+    (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (p : Polynomial ℕ)
+    (hflock : D.flock = F) (hKS : Claims.Flock.KS H F)
+    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode)
+    (hcount : ∀ os, (F.dec os).2 ≤ p.eval (Claims.Flock.wordLen os))
+    (hε : ∀ x, 0 ≤ D.εtable x) (hbind : Binding D)
+    (hfixed : DrawFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
+    (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
+    (hprog : ProgramScope D) (hchecks : ChecksScope H D)
+    (hopen : OpenCallsLe H D) (huniv : UniversalIs D)
+    (hComplete : Complete H D) :
+    ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ KS H D ∧ KSCount H D ∧ Bits H D ∧
+      Efficient H D p ∧ Complete H D := by
+  subst hflock
+  have hscope : ScopeMatches D := scopeMatches_of D hslots hprog
+  have hrefuse : Refuses H D := refuses_of H D hscope hchecks
+  have hks : KS H D := KS_of iroots (hbind H) (SessionKS_of hKS hfixed hsessions hnum hε) hopens hfix
+    (drawLaw_of_slots D hslots) hrefuse hε
+  exact ⟨hscope, hbind, Universal_of huniv, faultyBoundary, hks, KSCount_of_KS hks,
+    Bits_of_KS hks (E_runs_exp H D hfixed) (E_own_le hopen) hε,
+    ⟨E_runs_le H D _, E_runs_exp H D hfixed _, E_own_le hopen _, hlist, hcount⟩, hComplete⟩
+
+set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at a deployment whose sessions are any Flock record `F`**, at every hash: the readable scope
 is the verifier's; the trace commitment binds; the universal unit runs its private circuit; the incorrect set is the
 boundary form's; KS, its count form and bits on the statements in scope at every decoder meeting Flock's `ListWithin`;
@@ -144,16 +171,9 @@ theorem sampling_assembled_of {T : Type}
     (hopen : OpenCallsLe H D) (huniv : UniversalIs D)
     (hComplete : Complete H D) :
     ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ KS H D ∧ KSCount H D ∧ Bits H D ∧
-      Efficient H D p ∧ Complete H D := by
-  subst hflock
-  have hbind : Binding D := Binding_of_hm96 D own at_ row salt π layer hcommit hrow
-  have hscope : ScopeMatches D := scopeMatches_of D hslots hprog
-  have hrefuse : Refuses H D := refuses_of H D hscope hchecks
-  have hks : KS H D := KS_of iroots (hbind H) (SessionKS_of hKS hfixed hsessions hnum hε) hopens hfix
-    (drawLaw_of_slots D hslots) hrefuse hε
-  exact ⟨hscope, hbind, Universal_of huniv, faultyBoundary, hks, KSCount_of_KS hks,
-    Bits_of_KS hks (E_runs_exp H D hfixed) (E_own_le hopen) hε,
-    ⟨E_runs_le H D _, E_runs_exp H D hfixed _, E_own_le hopen _, hlist, hcount⟩, hComplete⟩
+      Efficient H D p ∧ Complete H D :=
+  sampling_assembled_bind D H F p hflock hKS hlist hcount hε (Binding_of_hm96 D own at_ row salt π layer hcommit hrow)
+    hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hopen huniv hComplete
 
 /-- **The masked record's decoder lists within the radius**: it is the masked radius decoder
 (`FlockDeploy.decode_zk`, `FlockDeploy.listWithin_zk`). -/

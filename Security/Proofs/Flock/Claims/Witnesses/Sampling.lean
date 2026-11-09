@@ -299,7 +299,7 @@ theorem sksD_scope (x : Msg) : Scope (sksD Coin) x := ⟨toyStmt, toyPart, rfl, 
 
 theorem sksD_nPU (x : Msg) : nPU (sksD Coin) x = 1 := rfl
 
-theorem sksD_k (x : Msg) : (sksD Coin).k x = 2 ^ 40 * 3 := rfl
+theorem sksD_k (x : Msg) : (sksD Coin).k x = 2 ^ 10 * 3 := rfl
 
 theorem sksD_innerK (x : Msg) : (sksD Coin).innerK x = 256 := by
   have h : 4 * (64 * Real.exp 1) / Real.exp 1 = ((256 : ℕ) : ℝ) := by
@@ -310,8 +310,9 @@ theorem slack_pos : 0 < slack := by unfold slack; positivity
 
 theorem slack_le_two : slack ≤ 2 := by
   unfold slack
-  calc (2 : ℝ) ^ ((2 : ℝ) ^ (-40 : ℝ)) ≤ 2 ^ (1 : ℝ) :=
-        Real.rpow_le_rpow_of_exponent_le (by norm_num) (Real.rpow_le_one_of_one_le_of_nonpos (by norm_num) (by norm_num))
+  calc (2 : ℝ) ^ ((2 : ℝ) ^ (-(slackExp : ℝ))) ≤ 2 ^ (1 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le (by norm_num)
+          (Real.rpow_le_one_of_one_le_of_nonpos (by norm_num) (neg_nonpos.2 (Nat.cast_nonneg _)))
     _ = 2 := Real.rpow_one 2
 
 theorem exp_neg_le_inv {y : ℝ} (hy : 0 ≤ y) : Real.exp (-y) ≤ (y + 1)⁻¹ := by
@@ -337,14 +338,14 @@ theorem sksD_κF_nonneg (x : Msg) : 0 ≤ κF (sksD Coin) x := by
 
 theorem sksD_outer (x : Msg) :
     2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) ≤ 1 / 50 := by
-  have hk : ((sksD Coin).k x : ℝ) = 2 ^ 40 * 3 := by rw [sksD_k]; push_cast; ring
-  have hc : ((sksD Coin).cap x : ℝ) = 2 ^ 128 * (2 ^ 40 * 3) := by
+  have hk : ((sksD Coin).k x : ℝ) = 2 ^ 10 * 3 := by rw [sksD_k]; push_cast; ring
+  have hc : ((sksD Coin).cap x : ℝ) = 2 ^ 128 * (2 ^ 10 * 3) := by
     simp only [Deploy.cap, sksD_k]; push_cast; ring
   rw [hk, hc, neg_div]
-  have he := exp_neg_le_inv (show (0 : ℝ) ≤ 2 ^ 40 * 3 / 8 by positivity)
-  have h1 : (2 ^ 40 * 3 / 8 + 1 : ℝ)⁻¹ ≤ 1 / 100 := by
+  have he := exp_neg_le_inv (show (0 : ℝ) ≤ 2 ^ 10 * 3 / 8 by positivity)
+  have h1 : (2 ^ 10 * 3 / 8 + 1 : ℝ)⁻¹ ≤ 1 / 100 := by
     rw [inv_le_comm₀ (by positivity) (by norm_num)]; norm_num
-  have h2 : 2 * (2 ^ 40 * 3 : ℝ) / (2 ^ 128 * (2 ^ 40 * 3)) ≤ 1 / 100 := by
+  have h2 : 2 * (2 ^ 10 * 3 : ℝ) / (2 ^ 128 * (2 ^ 10 * 3)) ≤ 1 / 100 := by
     rw [div_le_iff₀ (by positivity)]; norm_num
   linarith
 

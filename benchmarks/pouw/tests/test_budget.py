@@ -17,7 +17,7 @@ sys.modules["pouw_budget"] = B
 spec.loader.exec_module(B)
 
 FAM = {f.name: f for f in B.FAMILIES}
-#: γ at y = 0, the machine model's on each family's measured kernel (budget_fill.json's first point)
+#: 1 + γ at y = 0, the machine model's ratio on each family's measured kernel (budget_fill.json's first point)
 GAMMA = {"sm_120": 2.1868, "H200": 2.3435, "B200": 2.5611, "L40S": 3.0144, "A100": 4.2263}
 
 

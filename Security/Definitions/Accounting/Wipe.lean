@@ -19,7 +19,7 @@ at a time and reads each label back under a deadline.
 * **The prover's strategy** (`Strategy`): any fill of the device's state from its state at the boundary and the labels,
   with any egress, any answer to each spot read from the device's state when the fill ends, the egress, the reads
   revealed before it in order and its own index, and any state it leaves for the block. Nothing constrains it but its
-  type. The type is what the auditor's devices enforce, each a premise on one party, as Daniel names them: the memory
+  type. The type is what the auditor's devices enforce, each a premise on one party: the memory
   challenger is `Faithful` (it reveals read `j + 1` only once read `j`'s answer arrived on time, so no answer reads a
   later index) and `Secret` (it keeps its key, so nothing of the labels reaches the device but the stream), and the
   site is `Covered` (every bit that leaves the device during the wipe crosses a link a network certifier watches, so the

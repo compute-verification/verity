@@ -10,8 +10,8 @@
    "declarations": 121
   },
   "Proofs/Accounting": {
-   "modules": 3,
-   "declarations": 50
+   "modules": 5,
+   "declarations": 56
   },
   "Proofs/Core": {
    "modules": 4,
@@ -37,7 +37,7 @@
    "modules": 49,
    "declarations": 412
   },
-  "Proofs/SampledProofs": {
+  "Proofs/Spot": {
    "modules": 7,
    "declarations": 89
   }

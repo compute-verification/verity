@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits.defs import REGISTRY, bind
-from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
+from verity.core.protocols.spot.one_stage import draw as DR, partition as P, registration as R
 from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cli
@@ -51,14 +51,14 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
                                                                           f"{ROPE}/{p}", CS.ROW_SCHEMA, heads, c["run_root"])}
              for p in ("x", "cs", "out")}
     pub = (wdir / "m0-public.bin").read_bytes()
-    v = R.check(rec, program, query, DR.parse_law(LAW), CS.SCHEME, ports, leaf_layer=CS.leaf_layer({ROPE: pub}))
+    v = R.check(rec, program, query, DR.parse_design(LAW), CS.SCHEME, ports, leaf_layer=CS.leaf_layer({ROPE: pub}))
     assert v.ok, v.detail
     # the same copies from the record alone, as the audit's verifier derives them (no committed value read)
     mine = DRW.window_of_record(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]))
     assert (mine.partition_digest, mine.run, CS.expected_ports(mine)) == (win["partition_digest"], c["run_root"], ports)
     # and from the window's own records: its circuit record, whose SHA-512 the registration binds
     assert w["circuit"] == hashlib.sha512((wdir / "circuit.json").read_bytes()).hexdigest()
-    got, _doc = IF.of_records(wdir, DR.parse_law(LAW), {ROPE: defn}.__getitem__)
+    got, _doc = IF.of_records(wdir, DR.parse_design(LAW), {ROPE: defn}.__getitem__)
     assert (got.partition_digest, got.run, got.members, CS.expected_ports(got)) == (mine.partition_digest, mine.run, mine.members, ports)
 
     # every hidden row is what was served: x the qkv row's head slice, cs the cache row at the token's position, out the rotated head

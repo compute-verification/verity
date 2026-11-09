@@ -1,8 +1,9 @@
 """A chunked serving-rows template's units (`serving_rows.chunked`) on the bit rows Flock's `UnitStager` stages: their rows
-(`unit_rows`) and table reads (`reads`), the most of them one flock-circuit statement holds (`chunk_cap`, a partition file's
-``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's chunks (`serving_rows.members`)
-and the verifier's circuit (``benchmarks/one_stage/compose_circuit.py --template``) are both laid out by `unit_rows` and
-`reads`.  Each function takes the template as `serving_rows.template` reads it."""
+(`unit_rows`), table reads (`reads`) and statement (`statement`), the most of them one flock-circuit statement holds
+(`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's
+chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
+(``benchmarks/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
+`serving_rows.template` reads it."""
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -14,6 +15,8 @@ from verity.ml.windows import interface as IF, rows as CS
 #: flock-circuit's spec shape (`verity/ml/flock/live/src/circuit.rs`'s `shape_in_range`, `benchmarks/one_stage/a6.py`'s `M_MAX`):
 #: a statement's dense size m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
 M_MAX = 35
+#: the layout mode of a table read's templated statement (`statement`; `verity_flock.tmpl.mode_of`)
+READ_LAYOUT = "iv/hybrid/4"
 
 
 def s8_words(K: int) -> int:
@@ -36,16 +39,29 @@ def reads(tp: Any) -> str:
     622 an AND, and its ``--zk`` prover ran out of memory at 600 GiB; in slots, 314M nonzeros for 8,473,952 ANDs, 37 an AND,
     k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
     five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
-    an AND inline) at their served shapes. A ``_v2`` body reads no table (its EX2 is gates), so it lowers flat either way."""
-    from verity_vllm.pipeline import split_rows as SP
+    an AND inline) at their served shapes. A ``CHAINS`` block reads as a split part of its NVIS keys does (slots for a whole
+    block), its end inline as the combine. A ``_v2`` body reads no table (its EX2 is gates), so it lowers flat either way."""
+    from verity_vllm.pipeline import chain_rows as CH, split_rows as SP
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     if tp.layout == "row":
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
+    if tp.layout == "chain":
+        S = spec_statics(tp.word)
+        return "inline" if CH.kind(tp) == "end" or int(S["NVIS"]) < int(S["BN"]) else "slots"
     if tp.layout != "split" or SP.combine(tp):
         return "inline"
     S = spec_statics(tp.word)
     return "slots" if int(S["T"]) >= int(S["BN"]) else "inline"
+
+
+def statement(tp: Any) -> dict[str, Any]:
+    """`UnitStager`'s statement arguments for chunked template ``tp``: a table read's (``read``) the templated statement at
+    `READ_LAYOUT` of the verifier's read template (``structural``: `verity_flock.read_tmpl`, the one template
+    `Flock.ReadNet.check` accepts); every other template's flat statement, its table reads laid out as `reads` says."""
+    if tp.layout == "read":
+        return {"layout": READ_LAYOUT, "structural": True}
+    return {"reads": reads(tp)}
 
 
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
@@ -62,7 +78,7 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
-    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "split", "slots", "read", "expert", "fused"):
+    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "split", "chain", "slots", "read", "expert", "fused"):
         raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
     g = {nm: k for k, (nm, _ty) in enumerate(tp.fn.signature()[0])}
 
@@ -76,7 +92,7 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
 
 def chunk_cap(tp: Any) -> int:
     """The most instances of chunked template ``tp`` one flock-circuit statement holds, as ``benchmarks/one_stage/a6.py``'s
-    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`) with its `reads`, then
+    ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`) as its `statement`, then
     ``vus_per_block`` blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes; a 64-key ``SparseMlaSplitPart``
     about 36 min at 71 GB): a partition file pins it as ``chunk_cap``."""
     import tempfile
@@ -86,7 +102,7 @@ def chunk_cap(tp: Any) -> int:
     in_rows, out_rows = unit_rows(tp)
     with tempfile.TemporaryDirectory() as d:
         st = UnitStager(tp.fn, "unit/serving-rows-cap", in_rows, out_rows, circuit=Path(d) / "circuit.txt",
-                        bind={"partition": "0" * 128, "program": "0" * 128}, reads=reads(tp))
+                        bind={"partition": "0" * 128, "program": "0" * 128}, **statement(tp))
     if M_MAX - st.meta["k_log"] < 3:
         raise ValueError(f"{tp.id}: k_log {st.meta['k_log']} leaves no statement inside the spec shape (m <= {M_MAX})")
     return int(st.meta["vus_per_block"]) << (M_MAX - int(st.meta["k_log"]))

@@ -52,6 +52,22 @@
    "and": 31662,
    "type": "0b2b20150f30c3001cf92d424c41af28ee283c8fab271725142a21bdcc01a928ce8d179c82c20dbde4bc5e3f8b71e44e0842edb735ee60e8baaf95995aa3e243"
   },
+  "RMSNormPairSumCuda_v2": {
+   "and": 812,
+   "type": "6719bab92d111c7fd6c9a761b2367ed672b3ef54786aae51a0c57b2793da0d21a1f451cb786773b1c21db4fada511a45e5a541a7e0f85ab25cb5fbc217fe2830"
+  },
+  "RMSNormSumInOrderCuda_v2{K=2}": {
+   "and": 812,
+   "type": "6719bab92d111c7fd6c9a761b2367ed672b3ef54786aae51a0c57b2793da0d21a1f451cb786773b1c21db4fada511a45e5a541a7e0f85ab25cb5fbc217fe2830"
+  },
+  "RMSNormSumInOrderCuda_v2{K=4}": {
+   "and": 2436,
+   "type": "9f30c0b7072fdaceb5023233bf1fff15fc75479ed54152188189234da7fef6e4aa8af371712a5db135eeb7b25d70682a37bf1734f0b7141706d2336af6b16927"
+  },
+  "RMSNormSumStepCuda_v2": {
+   "and": 812,
+   "type": "10ea46ed2b1628abd4166bc8afadfaff7ed01c277b9c5586c5ab813c37ec9b97225e7047f749e041fd8355c1589d24d748aca28de228664c58430586a77154a7"
+  },
   "ResidualAdd_v2{N=4}": {
    "and": 2868,
    "type": "68d096322cb68beca8028e695b7e15e14d22e5a546c0f55637c0e82d058463c470c2c158f9af24fd87d39a0212918f98f87c1065740e84995265f209c5561749"
