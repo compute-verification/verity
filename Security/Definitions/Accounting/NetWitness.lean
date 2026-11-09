@@ -43,7 +43,7 @@ def acceptAllNet : PeriodRun nullDevice Unit emptyCircuit (fun _ : Unit => Unit)
   fits _ := by
     intro t
     simp [Step.Fits, idleStep, nullDevice]
-  transcript _ g := g.elim0
+  trace _ g := g.elim0
   commWithin _ _ := False
   accepts _ _ := True
 

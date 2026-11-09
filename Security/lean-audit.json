@@ -30341,7 +30341,7 @@
    }
   },
   "Definitions.Accounting.JointPeriod": {
-   "digest": "794c263d230955e72cf5ecfdbe175aaeeb3fe9403132666ad30f99faaac942b9",
+   "digest": "87fa55fac9592fd51cd4053af2b7134968fd0ad6e095fd930e6c3aa1c471ae23",
    "definitions": {
     "Accounting.Audit": "f63dc62d5c08feba2df8b80cb7056be3f03373ad1ce530558c4a5b54162263b6",
     "Accounting.Audit.casesOn": "8c5ba045db80396171393ed0d92d169a6beaea158cf10b5acc088abe20f7aa0a",
@@ -30359,7 +30359,7 @@
     "Accounting.Certificates.W": "4d187c7591cdb0444f77276781b0ec8c687d894db0248ee32c639e7d4d723306",
     "Accounting.Certificates.ε": "088e88c395306b9ce00599770c82842fe27841b44758c9c786575193d84d09ce",
     "Accounting.PeriodRun": "27c7512ccfeeef20165e13c5a78f9e0c4bdbd2359da21a5ef0347e7921a61566",
-    "Accounting.PeriodRun.Holds": "9bec02a4f674684433ba6b85be42ba5adb9b269a9a990abcbe8e33a9f17c23df",
+    "Accounting.PeriodRun.Holds": "6c9962ee7a1586dceacda5adf954c1cb412939b013c01c2610c3ea72cb50ae16",
     "Accounting.PeriodRun.Sound": "4513323da308735e615d853a84c02fad17a033e83cf23d466e4519a31bcae2ba",
     "Accounting.PeriodRun.accepts": "246639cbb492699197e6367bb72487734503a606448072dc1faf6f1791d80d70",
     "Accounting.PeriodRun.acct": "aa7dc6a05bc08c377716b91dd0790415ca206b919f0d274d021bab5cf1cf4f5d",
@@ -30369,7 +30369,7 @@
     "Accounting.PeriodRun.parts": "b0a036f62794727b4ff8dd119991f8f8b2ab57e07b4b4a3efe32ea4689f01182",
     "Accounting.PeriodRun.read": "924f66b5dcfc521a86fe1cd81348760bf649e3fa7e395eb787b6123daed196d5",
     "Accounting.PeriodRun.schedule": "26ff345a15088968c86c2774474711e86a2af4458c5a8f3fbf3eb929f630c8f0",
-    "Accounting.PeriodRun.transcript": "c7bca93d401247175c85e8ea74958ffc1979c03aab471388e80322cce91f68ce",
+    "Accounting.PeriodRun.trace": "ebc5f40853735212c3025eb7c864312b02195abc338b5d781d75a3839e5f86ae",
     "Accounting.PeriodRun.units": "0c7063d3dce2a6618f36fb4c9b91a33e04f32ed170652a9fa419b3c7948901c7",
     "Accounting.PeriodRun.win": "80d4e5812f3db69b114ea8f3bf4be5c962e466ead6984657c30f390af92d183c",
     "Accounting.PeriodRun.work": "27c0e52af8765509bbce45b3428e2b0bfe368ce8f2d688e55ad8c79cb540cb67",
@@ -45317,18 +45317,18 @@
    }
   },
   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": {
-   "digest": "560c9d32cb17656e6eb0be260cefdf8e86d2bcbc783afbc5b033e5417d9d26c2",
+   "digest": "6a0ddff11859e5453406379f39d4cc6460ca5e968a1ae53254ae87eb635cfff8",
    "definitions": {
     "Accounting.Guarantees.Bridge.IntegrityOfIntegrityBlock": "24ef7ab95cb2946d1bd53964e8a739554a830f79711e1a0b4d587e6194e53661",
-    "Accounting.RealizesIntegrityOfIntegrityBlock": "7022c45dd260474a7c9630059b834c33f1e6b85238a3207172ef88c79f281502",
+    "Accounting.RealizesIntegrityOfIntegrityBlock": "c91c4802f6b2157caa53c6d28d1b53099b2d173f0a06c5f2f10c3da790dbce56",
     "Accounting.RealizesIntegrityOfIntegrityBlock.strat": "182a39be833c1bd24f962120e1191b3e2a8f07a270dd5c2320b095165d572f92"
    }
   },
   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": {
-   "digest": "eb3beaa5c98c3083312d2e1e8a25fbc8b27ffec8fa9cd1a30cc9a2a971867a37",
+   "digest": "56955a17f09744ee9a469bfd47872f27ca6e07318ef5bdfb678d40578f2310f9",
    "definitions": {
     "Accounting.Guarantees.Bridge.IntegrityOfIntegrityPeriod": "36fa5bfc6d0ad62ea5787136d0215eae24bd3ca9f02479701a8dfa793f85e9e1",
-    "Accounting.RealizesIntegrityOfIntegrityPeriod": "87aa8cbd969a62cd461a71850b660364c52349fa46f86012d3eeda1eee6055a0",
+    "Accounting.RealizesIntegrityOfIntegrityPeriod": "e50ae82c4391aeb9f2632c34d654702b0ab9914b3a1cd3e4affd299171749a8d",
     "Accounting.RealizesIntegrityOfIntegrityPeriod.strat": "519fcc4a3f9f0252e3d9fb393291a19856be4f941cf4b398ee3a6cb916af3c1c"
    }
   },
