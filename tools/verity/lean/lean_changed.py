@@ -96,7 +96,9 @@ Its result is of kind `FAST_KIND`, never a Lean verdict: no kernel replay and no
 `audit.json` and each package's `report.json` it leaves (`--out`, else the run's `lean-audit/`, else a temporary directory) and,
 in a recorded run, into its `result.json`, the Attempt's result. `check` fails its lean-audit step on a report of that kind or
 one without the replay (`check.lean_fast`), and `research merge` refuses an attempt whose result is of that kind
-(`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it.
+(`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it. The compiled modules it leaves are not a verdict either: in a
+run they go into its `lean-audit/` as a bundle (`lean_audit.LakeArtifacts.bundle_into`), and a node that restores one still
+replays every declaration through the kernel.
 
 The step tree holds the tracked files of each package whose audit misses, and those of the packages it requires by path or
 names under `proved_in`, at their paths in this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
@@ -1090,7 +1092,9 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     exits 0 on `PASS` and on `REGENERATED`, check.py's first failing status on `FAILED`, and 2 on `REFUSED`, when ``tree`` is
     not under `RECORDS`, ``name`` matches no single package, the memory refusal stops it or another run holds the tree past
     `TREE_WAIT_S`. A package whose records need no run (`reused`) is skipped, and with none left nothing runs and no slot is
-    taken; ``rebuild`` and ``moved`` run them all. Each package whose records passed or were regenerated is kept (`passed`)."""
+    taken; ``rebuild`` and ``moved`` run them all. Each package whose records passed or were regenerated is kept (`passed`).
+    In a run, the module versions its passing builds added to the node's artifact cache (`LakeArtifacts.put`) go into ``out``
+    as one bundle for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
 
@@ -1203,6 +1207,12 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     "it before it is built")
             else:
                 (tree / DIRTY).unlink(missing_ok=True)
+            if run_dir and artifacts.added and out.is_relative_to(Path(run_dir).resolve()):
+                try:
+                    dest, n = artifacts.bundle_into(out)
+                    log(f"lean-records: {n} module version(s) it added bundled for other nodes ({dest.name})")
+                except OSError as e:
+                    log(f"lean-records: nothing bundled for other nodes: {e}")
             records = verdicts(outcomes, new, out, tree, files, skip, log, committed)
             outcome = overall(records)
             return finish(pkg, outcome, (rc or 1) if outcome == FAILED else 0, out, update, "slot", records, log, passes)

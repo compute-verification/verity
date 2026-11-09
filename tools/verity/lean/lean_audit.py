@@ -928,6 +928,8 @@ MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]
 BUNDLE_CAP = 3 << 30
 #: a key of `lean-deps-urls.json` naming a recorded check's bundle by its sha256 (`shared_bundles`)
 SHARED = "lean-artifacts/"
+#: a run's file that is a bundle (`LakeArtifacts.bundle_into` in the run's `lean-audit/`), the path `shared_bundles` lists
+BUNDLE_FILE = re.compile(r"lean-audit/lean-artifacts(-\d+)?\.tar\.gz")
 #: how many of the newest recorded checks' bundles the launcher sends
 SHARED_LIMIT = 12
 
@@ -943,7 +945,8 @@ class LakeArtifacts:
     every declaration through the kernel.
 
     Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`); the
-    launcher sends a URL for each of the newest (`shared_bundles`), and a node takes in each it hasn't yet (`take`). A bundle is
+    launcher sends a URL for each of the newest (`shared_bundles`), and a node takes in each it hasn't yet (`take`). A records
+    run (`lean_changed.py --records`) bundles what it added the same way, which `shared_bundles` doesn't list yet. A bundle is
     trusted as far as its source, as a verdict pack is (`verdicts.py`): a recorded run."""
 
     def __init__(self, store: Path, cap: int = ARTIFACTS_CAP):
@@ -1086,6 +1089,13 @@ class LakeArtifacts:
                     t.add(self.store / "artifacts" / n, arcname=f"artifacts/{n}", recursive=False)
             os.replace(tmp, dest)
         return len(todo)
+
+    def bundle_into(self, out: Path) -> tuple[Path, int]:
+        """`bundle` at the first free name `shared_bundles` lists in ``out`` (`lean-artifacts.tar.gz`, then `-2`, ...):
+        (that path, the number of entries written)."""
+        dest = next(out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz" for i in range(1, 99)
+                    if not (out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
+        return dest, self.bundle(dest)
 
     def take(self, urls: dict[str, str], log=print) -> int:
         """Take in each bundle ``urls`` names (`SHARED` + its sha256) that this node hasn't: downloaded, checked against its
@@ -1363,9 +1373,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
                 log(f"lean-audit: {artifacts.put({work / p: reports[p] for p in ok}, since, log)} module version(s) new in "
                     "the artifact cache")
                 if bundle and artifacts.added:
-                    dest = next(out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz" for i in range(1, 99)
-                                if not (out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
-                    log(f"lean-audit: {artifacts.bundle(dest)} of them bundled for other nodes ({dest.name})")
+                    dest = artifacts.bundle_into(out)
+                    log(f"lean-audit: {dest[1]} of them bundled for other nodes ({dest[0].name})")
             except OSError as e:
                 log(f"lean-audit: the artifact cache was not written: {e}")
             builds.give_back(work, kept)
@@ -1513,7 +1522,7 @@ def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
         for (rid,) in rows:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
             for f in store.listing(art) if art else []:
-                if re.fullmatch(r"lean-audit/lean-artifacts(-\d+)?\.tar\.gz", f["path"]) and f["remote"] and f["sha256"] not in out:
+                if BUNDLE_FILE.fullmatch(f["path"]) and f["remote"] and f["sha256"] not in out:
                     out.append(f["sha256"])
             if len(out) >= limit:
                 break
