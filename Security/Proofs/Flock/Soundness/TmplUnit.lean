@@ -89,7 +89,8 @@ theorem foldUnit_eq_project {t : Tmpl} {mode : Mode} {lays : Array Lay} {sl : �
     · rw [getD_out hd] at hi
       exact absurd hi (Nat.not_lt_zero _)
   have hlay : LayOk t lays :=
-    ⟨fun d i j hi => wf_bound hwf d i j hi, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (wf_call hwf d hd i hi).2⟩
+    ⟨fun d i j hi => wf_bound hwf d i j hi, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (wf_call hwf d hd i hi).2,
+      layouts_defPos (layoutM_layouts hL) (wf_call hwf) (wf_small hwf)⟩
   obtain ⟨P, w1, w2, w3⟩ := v
   rw [foldSplit_eq_foldRef hS hR hlay hcall (wf_tmpl hwf).2.1 (wf_tmpl hwf).2.2.1 (wf_fit hwf)
       (layouts_defPos (layoutM_layouts hL) (wf_call hwf) (wf_small hwf)) (wf_tmpl hwf).1 hal (by omega) (by omega) hs,

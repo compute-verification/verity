@@ -185,9 +185,6 @@ def test_the_execution_label_names_the_batch_invariance(tmp_path):
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(strict=True, reason="records.json's DSV4 row pins step Programs recorded with the atomics-order Marlin align, which read "
-                   "a `schedule` input; the predicted Program keys the align by pair index (#7946's deterministic align). Delete this "
-                   "mark when vllm re-records the row with #7946's align served (#7980, VLLM-245).")
 @pytest.mark.parametrize("rank", [0, 7])
 def test_mhc_rank_step_equals_the_record(rank, tmp_path):
     """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected
@@ -366,11 +363,11 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
     assert sorted(phi.request_shapes()) == sorted(pin["requests"]), "the workload's request shapes are not its Build's"
     M, step = pin["step"]
     want = {"step": step, **{f"request LP{lp}_T{t}": d for (lp, t), d in pin["requests"].items()}, "workload": pin["workload"]}
-    got, canon, comps = {"step": build_program(phi, "step", M=M, pos0=8).digest}, {}, {}
+    got, comps = {"step": build_program(phi, "step", M=M, pos0=8).digest}, {}
     for lp, t in pin["requests"]:
         r = build_program(phi, "request", LP=lp, T=t)
-        got[f"request LP{lp}_T{t}"], comps[(lp, t)] = r.digest, S.request_component(r, canon)
-    got["workload"] = S.predict_workload(phi, comps, canon)["digest"]
+        got[f"request LP{lp}_T{t}"], comps[(lp, t)] = r.digest, S.request_component(r)
+    got["workload"] = S.predict_workload(phi, comps)["digest"]
     moved = [k for k in want if got[k] != want[k]]
     manifest, identities, over = pin["manifest"]
     stale = [k for k in over if k in moved]

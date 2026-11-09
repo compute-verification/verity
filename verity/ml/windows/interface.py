@@ -44,6 +44,11 @@ is ``k`` rows ``p#j``, row ``j`` its outer elements ``[j·n/k, (j+1)·n/k)``, an
 (`Wire.cut`). A unit that reads one row gathered from several writers' outputs reads it through a gather unit
 (``AllGather_v1``) whose ``parts`` are cut.
 
+The wires' dataflow between units is acyclic (`check_order`), since wires with a cycle pass every unit's check on a fixed
+point the prover chose. A circuit whose templates read one another (one template's units at every step of a scan) states
+an ``order``, a ranking of ranges of its units each wire follows in closed form, range by range of its reader units
+(`ordered` makes one); a circuit whose templates' wires have no cycle needs none.
+
 The circuit also declares what fills its other inputs (`Registered`, `Ingress`): rows of a registered parameter read at
 public positions (`Read`), a registered table's root or domain id (`TableRead`), a table's row opened at a hidden key
 (`Opening`), and the system's ingress at its step (`Ingress`). Every input row is wired, one of these, or free, and no row
@@ -82,7 +87,9 @@ from __future__ import annotations
 import bisect
 import functools
 import hashlib
+import heapq
 import importlib
+import itertools
 import json
 import math
 import pkgutil
@@ -469,6 +476,28 @@ class Wire(_Pattern):
         r = self.cut[0] if row is None else row
         return self.source((np.arange(lo, lo + n, dtype=np.int64) - self.at) * self.cut[1] + r - self.cut[0])
 
+    def indices_in(self, at: int, n: int) -> tuple[int, int]:
+        """The first and the last reader index of the wire's reader units in units ``[at, at + n)`` of its reader
+        (`Spot.Wires.Wire.indicesIn`)."""
+        c = self.cut[1]
+        return (max(at, self.at) - self.at) * c, max((min(at + n, self.at + self.reader_units) - self.at) * c - 1, 0)
+
+    def box(self, lo: int, hi: int) -> tuple[int, int]:
+        """Bounds on the writers of reader indices ``lo`` to ``hi`` (`Spot.Wires.Wire.box`): digit by digit,
+        the fastest first, where the indices left share the higher digits those digits' values and the digit's terms at
+        the two ends, else the digit's least and greatest term and the bounds on the higher digits."""
+        a = b = self.base
+        for k in range(len(self.radix) - 1, -1, -1):
+            r, s = self.radix[k], self.step[k]
+            if lo // r == hi // r:
+                q, rest = lo // r, 0
+                for j in range(k - 1, -1, -1):
+                    rest += q % self.radix[j] * self.step[j]
+                    q //= self.radix[j]
+                return a + min(lo % r * s, hi % r * s) + rest, b + max(lo % r * s, hi % r * s) + rest
+            a, b, lo, hi = a + min(0, s * (r - 1)), b + max(0, s * (r - 1)), lo // r, hi // r
+        return a, b
+
     def doc(self) -> dict[str, Any]:
         return {"reader": self.reader, "port": self.port, "writer": self.writer, "out": self.out, **self._doc()}
 
@@ -532,6 +561,46 @@ def coalesce(patterns: Sequence[Any]) -> list[Any]:
         out = merged
         if not changed:
             return sorted(out, key=lambda w: (type(w).__name__, w.reader, w.port, w.at, w.cut))
+
+
+def ordered(units: Mapping[str, int], wires: Sequence[Wire],
+            starts: Mapping[str, Sequence[int]]) -> tuple[tuple[str, int, int], ...]:
+    """An order for ``wires`` (`Circuit.order`, `check_order`): each template's units cut into ranges at its ``starts``
+    (``units``: each template's, by descriptor id), in a topological order of what the wires' closed forms need, every
+    range meeting a wire's box on the writers it reads in a range (`Wire.box`) before that range, the next at each step the
+    first ready range by template and unit. The work is per range and per wire's ranges, never per unit. Refused
+    (ValueError) where those needs have a cycle, naming a wire on it: a unit then reads itself, or a range holds units on
+    both sides of a chain of reads."""
+    cut = {t: sorted({0, *(s for s in starts.get(t, ()) if 0 < s < n)}) for t, n in units.items()}
+    nodes = sorted((t, k) for t, ss in cut.items() for k in range(len(ss)))
+    idx = {x: i for i, x in enumerate(nodes)}
+    end = {t: [*ss[1:], units[t]] for t, ss in cut.items()}
+    indeg, outs, why = [0] * len(nodes), [[] for _ in nodes], {}
+    for i, w in enumerate(wires):
+        ss = cut[w.reader]
+        for k in range(bisect.bisect_right(ss, w.at) - 1, bisect.bisect_left(ss, w.at + w.reader_units)):
+            lo, hi = (max(x, 0) for x in w.box(*w.indices_in(ss[k], end[w.reader][k] - ss[k])))
+            a = idx[(w.reader, k)]
+            for j in range(bisect.bisect_right(cut[w.writer], lo) - 1, bisect.bisect_right(cut[w.writer], hi)):
+                indeg[a] += 1
+                outs[idx[(w.writer, j)]].append(a)
+                why.setdefault(a, i)
+    ready = [i for i in range(len(nodes)) if indeg[i] == 0]
+    heapq.heapify(ready)
+    order = []
+    while ready:
+        i = heapq.heappop(ready)
+        t, k = nodes[i]
+        order.append((t, cut[t][k], end[t][k] - cut[t][k]))
+        for j in outs[i]:
+            indeg[j] -= 1
+            if indeg[j] == 0:
+                heapq.heappush(ready, j)
+    if len(order) < len(nodes):
+        stuck = next(i for i in range(len(nodes)) if indeg[i] and i in why)
+        raise ValueError(f"cycle: no order of the ranges {len(nodes)} puts wire {why[stuck]} {wires[why[stuck]].doc()} after "
+                         f"its writers: {len(nodes) - len(order)} ranges wait on one another")
+    return tuple(order)
 
 
 @dataclass(frozen=True)
@@ -643,13 +712,16 @@ class Ingress:
 
 
 def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[Wire],
-                cuts: Mapping[str, Mapping[str, int]] | None = None) -> None:
+                cuts: Mapping[str, Mapping[str, int]] | None = None,
+                order: Sequence[tuple[str, int, int]] | None = None) -> None:
     """Refuse (ValueError) the circuit's cuts and wires as `Spot.Wires.check` does, in its order (``templates``: by
     descriptor id, its layout and units): a cut naming no template's parameter or not dividing its outer length and words
     (``cuts``); then wire by wire, a reader or writer that is no template (``template``), a port no parameter of the reader
     or an output no output of the writer (``port``), rows not among the port's or a last digit that isn't ``C`` (``cut``),
     a reader row of other words than its writer's output row (``width``), reader or writer units outside their templates
-    (``bounds``); then two wires wiring one reader row (``overlap``). The work is per wire, never per unit."""
+    (``bounds``); then two wires wiring one reader row (``overlap``); then a dataflow between units that isn't acyclic
+    (`check_order`: ``order``, the circuit's `Circuit.order`, or with none ``cycle``). The work is per wire, never per
+    unit."""
     cuts = cuts or {}
     for tid, kv in cuts.items():
         lay = templates[tid][0] if tid in templates else None
@@ -677,6 +749,95 @@ def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[
             raise ValueError(f"wire {w.doc()}: reader units [{w.at}, {w.at + w.reader_units}) of {rn}, writer units [{lo}, {hi}] "
                              f"of {wn}; each among its template's")
     _disjoint([(w.reader, w.port, w.at, w.at + w.reader_units, w.cut[0], w.cut[0] + w.cut[1], w.doc()) for w in wires], "wires")
+    check_order({t: n for t, (_, n) in templates.items()}, wires, order)
+
+
+def check_order(units: Mapping[str, int], wires: Sequence[Wire],
+                order: Sequence[tuple[str, int, int]] | None = None) -> None:
+    """Refuse (ValueError) wires whose dataflow between units isn't acyclic, as `Spot.Wires.check`'s order does
+    (``units``: each template's, by descriptor id; ``wires`` already through `check_wires`' other checks). ``order`` ranks
+    ranges of units by their place in it, each ``(tid, at, n)`` the units ``[at, at + n)`` of ``tid``, in any order; it
+    is refused (``order``) unless each names a template and each template's ranges tile its units. A wire is in order when,
+    for every range meeting its reader units, every range meeting the box on the writers it reads there (`Wire.box`) ranks
+    below it, refused (``order``, naming the first wire that isn't). With no order, the templates are in a topological
+    order by their wires between templates (`_kahn`), refused (``cycle``) where they have a cycle, naming a wire on it,
+    and each template's ranges are its units cut at the reader units of the wires it reads itself by: such a wire passes
+    where each of its reader ranges reads only earlier ranges, and one reading its own range or a later one is refused
+    (``order``). The work is per template and range, and per wire the ranges it meets, never per unit."""
+    if order is None:
+        order = _kahn(units, wires)
+    ranges: dict[str, list[tuple[int, int, int]]] = {}
+    for k, b in enumerate(order):
+        if not (isinstance(b, tuple) and len(b) == 3 and isinstance(b[0], str) and _ints(b[1], b[2])) \
+                or b[0] not in units:
+            raise ValueError(f"order: range {k} {b!r} is not [template, at, n] of a template of {sorted(units)}")
+        ranges.setdefault(b[0], []).append((b[1], b[2], k))
+    for tid, u in units.items():
+        got = sorted(ranges.get(tid, []), key=lambda b: b[0])
+        ends = list(itertools.accumulate(n for _a, n, _k in got))
+        if [at for at, _n, _k in got] != [0, *ends[:-1]] or any(n < 1 for _a, n, _k in got) or ends[-1] != u:
+            raise ValueError(f"order: the ranges of {tid}, {[(at, n) for at, n, _k in got][:8]}…, don't tile its {u} units")
+        ranges[tid] = got
+    starts = {t: [at for at, _n, _k in got] for t, got in ranges.items()}
+
+    def ranks(t: str, lo: int, hi: int) -> list[int]:
+        got = ranges[t][max(bisect.bisect_right(starts[t], lo) - 1, 0):bisect.bisect_left(starts[t], hi)] if lo < hi else []
+        return [k for _a, _n, k in got]
+
+    for i, w in enumerate(wires):
+        got = ranges[w.reader]
+        for at, n, a in got[max(bisect.bisect_right(starts[w.reader], w.at) - 1, 0):
+                            bisect.bisect_left(starts[w.reader], w.at + w.reader_units)]:
+            lo, hi = w.box(*w.indices_in(at, n))
+            b = ranks(w.writer, max(lo, 0), max(hi, 0) + 1)
+            if b and not max(b) < a:
+                raise ValueError(f"order: wire {i} {w.doc()}: its reader units in range {a}, [{at}, {at + n}), read writer "
+                                 f"units [{lo}, {hi}] in ranges ranked to {max(b)} of the order; every range a wire reads in "
+                                 "a range ranks below it, so no unit reads itself")
+
+
+def _kahn(units: Mapping[str, int], wires: Sequence[Wire]) -> list[tuple[str, int, int]]:
+    """`Spot.Wires.kahn`: the templates in a topological order by their wires between templates, the next at each step
+    the first template by id that reads none not yet placed, each one's units cut into ranges at the first and the end
+    reader unit of each wire it reads itself by (`_cut`), in unit order: such a wire is then in order where each of its
+    reader ranges reads only earlier ranges. Refused (``cycle``) where every template not placed
+    reads one: walking back from the first of them along each one's first wire from one not placed, as many steps as
+    there are of them, ends on a cycle, and the refusal names that template's first such wire."""
+    ids = sorted(units)
+    idx = {t: i for i, t in enumerate(ids)}
+    es = [(j, idx[w.writer], idx[w.reader]) for j, w in enumerate(wires)
+          if w.writer in idx and w.reader in idx and w.writer != w.reader]
+    indeg, outs, ins = [0] * len(ids), [[] for _ in ids], [[] for _ in ids]
+    for j, wr, r in es:
+        indeg[r] += 1
+        outs[wr].append(r)
+        ins[r].append((j, wr))
+    done, out = [False] * len(ids), []
+    for _ in ids:
+        i = next((i for i in range(len(ids)) if not done[i] and indeg[i] == 0), None)
+        if i is None:
+            rest = [i for i in range(len(ids)) if not done[i]]
+            t = rest[0]
+            for _ in rest:
+                t = next((wr for _j, wr in ins[t] if not done[wr]), t)
+            j, cycle = next(j for j, wr in ins[t] if not done[wr]), [ids[t]]
+            while (u := next(wr for _j, wr in ins[idx[cycle[-1]]] if not done[wr])) != t:
+                cycle.append(ids[u])
+            raise ValueError(f"cycle: wire {j} {wires[j].doc()} is on a cycle of templates, each reading the next: "
+                             f"{' <- '.join(cycle + [ids[t]])}; wires between templates with a cycle are ordered by an "
+                             "order of their units' ranges (`Circuit.order`, `ordered`)")
+        done[i] = True
+        for r in outs[i]:
+            indeg[r] -= 1
+        out += _cut(ids[i], int(units[ids[i]]), wires)
+    return out
+
+
+def _cut(t: str, n: int, wires: Sequence[Wire]) -> list[tuple[str, int, int]]:
+    """`Spot.Wires.selfRanges`: template ``t``'s ``n`` units cut at the first and the end reader unit of each wire it
+    reads itself by (within ``[0, n]``), in unit order; one range ``(t, 0, n)`` where that leaves none."""
+    cs = sorted({0, n, *(min(x, n) for w in wires if w.reader == t == w.writer for x in (w.at, w.at + w.reader_units))})
+    return [(t, a, b - a) for a, b in zip(cs, cs[1:])] or [(t, 0, n)]
 
 
 def _cut_ok(w: _Pattern, k: int, what: str) -> None:
@@ -1017,7 +1178,8 @@ class Circuit:
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
     layout (the network certifier's, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
     ports read as several rows (`RowLayout.cut`); ``registered`` and ``ingress``, what fills its other inputs
-    (`check_inputs`); ``blocks``, its proof, inference and server blocks (`Blocks`)."""
+    (`check_inputs`); ``blocks``, its proof, inference and server blocks (`Blocks`); ``order``, the order of its units'
+    ranges its wires follow (`check_order`), or None for each template one range."""
     name: str
     templates: tuple[tuple[Any, int], ...]
     external: tuple[str, ...] = ()
@@ -1027,6 +1189,7 @@ class Circuit:
     registered: Registered | None = None
     ingress: tuple[Ingress, ...] = ()
     blocks: Blocks | None = None
+    order: tuple[tuple[str, int, int], ...] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "templates", tuple((fn, int(n)) for fn, n in self.templates))
@@ -1034,6 +1197,7 @@ class Circuit:
         object.__setattr__(self, "wires", tuple(self.wires))
         object.__setattr__(self, "cuts", _cuts(self.cuts))
         object.__setattr__(self, "ingress", tuple(self.ingress))
+        object.__setattr__(self, "order", order_of({"order": self.order} if self.order is not None else {}))
         for fn, n in self.templates:
             catalog(fn)
             layout(fn)
@@ -1047,7 +1211,7 @@ class Circuit:
             raise ValueError(f"{self.name}: external ports {bad} are no template's port")
         if not all(isinstance(w, Wire) for w in self.wires):
             raise ValueError(f"{self.name}: its wires are `Wire`s")
-        check_wires(self.layouts, self.wires, self.cuts)
+        check_wires(self.layouts, self.wires, self.cuts, self.order)
         check_inputs(self.layouts, self.cuts, self.wires, self.registered, self.ingress)
         program_values(self.registered)
         if self.boundary is not None:
@@ -1098,11 +1262,12 @@ class Circuit:
         return self.registered.reads if self.registered is not None else ()
 
     def declared(self) -> dict[str, Any]:
-        """The record's fields for its cuts, registered reads and ingress, each only when the circuit has one, so a circuit
-        without them records as before."""
+        """The record's fields for its cuts, registered reads, ingress and order, each only when the circuit has one, so a
+        circuit without them records as before."""
         return {**({"cuts": self.cuts} if self.cuts else {}),
                 **({"registered": self.registered.doc()} if self.registered is not None else {}),
-                **({"ingress": [g.doc() for g in self.ingress]} if self.ingress else {})}
+                **({"ingress": [g.doc() for g in self.ingress]} if self.ingress else {}),
+                **({"order": [list(b) for b in self.order]} if self.order is not None else {})}
 
     def description(self) -> dict[str, Any]:
         """The record's fields `input_count` reads: its templates, wires and declarations, none of its program."""
@@ -1147,7 +1312,7 @@ def members(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | N
     population program and query (`Circuit.program`), when the caller has them."""
     program, query = built or circuit.program()
     return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts, circuit.server_ends(),
-                    committed_reads(circuit.registered))
+                    committed_reads(circuit.registered), circuit.order)
 
 
 class _ReadIndex:
@@ -1234,7 +1399,8 @@ class _Drawn:
 
 def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[str, Any], cap: int,
              wires: Sequence[Wire], cuts: Mapping[str, Mapping[str, int]] | None = None,
-             servers: Mapping[str, Sequence[int]] | None = None, reads: Sequence[Read] = ()) -> tuple[CS.Member, ...]:
+             servers: Mapping[str, Sequence[int]] | None = None, reads: Sequence[Read] = (),
+             order: Sequence[tuple[str, int, int]] | None = None) -> tuple[CS.Member, ...]:
     """`members` of ``templates`` (``(Definition, units)``) under their population ``program`` and ``query``. A member's row
     is wired on all its units or on none (`rows.Member.wired`), so a template's units are cut at every wire's ends first, and
     a member's units are one server's, so they are cut at ``servers``' ends too (by template, `server_ends`). A registered
@@ -1245,7 +1411,7 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
     cuts, index = cuts or {}, _ReadIndex(reads)
     lays = {descriptor_id(fn): (layout(fn), n) for fn, n in templates}
-    check_wires(lays, wires, cuts)
+    check_wires(lays, wires, cuts, order)
     ranges = CS.template_partition(program, query).ranges
     base = {tid: lo for _k, tid, lo, _n in ranges}
     by: dict[str, list[Wire]] = {}
@@ -1627,7 +1793,7 @@ def circuit_bytes(doc: Mapping[str, Any]) -> bytes:
 
 #: a stated record's optional fields beside its cap and wires (`Circuit.declared`), of which a listed record declares only
 #: its registered reads, tables, table reads and openings (`listed_reads`)
-DECLARED = ("cuts", "registered", "ingress")
+DECLARED = ("cuts", "registered", "ingress", "order")
 #: a listed record's optional field beside its members for its window's ingress (`listed_ingress`)
 WINDOW_INGRESS = "window_ingress"
 
@@ -1641,6 +1807,18 @@ def declarations(doc: Mapping[str, Any]) -> tuple[tuple[Wire, ...], dict[str, di
     cuts = _cuts(doc.get("cuts", {}))
     registered = Registered.of(doc["registered"]) if "registered" in doc else None
     return wires, cuts, registered, _ingress_of(doc, "ingress")
+
+
+def order_of(doc: Mapping[str, Any]) -> tuple[tuple[str, int, int], ...] | None:
+    """A stated record's order of its units' ranges (`Circuit.order`), None where it states none, refused (ValueError) unless
+    a list of ``[template, at, n]``; checked against the templates and wires by `check_order`."""
+    if "order" not in doc:
+        return None
+    got = doc["order"]
+    if not isinstance(got, (list, tuple)) or not all(isinstance(b, (list, tuple)) and len(b) == 3 and isinstance(b[0], str)
+                                                     and _ints(b[1], b[2]) and b[1] >= 0 and b[2] >= 0 for b in got):
+        raise ValueError(f"a circuit's order is a list of [template, at, units], not {got!r}")
+    return tuple((t, a, n) for t, a, n in got)
 
 
 def window_ingress(doc: Mapping[str, Any]) -> tuple[Ingress, ...]:
@@ -1709,7 +1887,7 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     defs = [(resolve(t), int(n)) for t, n in doc["templates"]]
     lays = {descriptor_id(fn): (layout(fn), n) for fn, n in defs}
     wires, cuts, reg, ingress = declarations(doc)
-    check_wires(lays, wires, cuts)
+    check_wires(lays, wires, cuts, order_of(doc))
     check_inputs(lays, cuts, wires, reg, ingress)
 
     def row_bits(tid: str, port: str) -> int:
@@ -1819,11 +1997,12 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
             raise ValueError(f"a circuit record's wires are a list, not {doc['wires']!r}")
         wires, cuts, registered, ingress = declarations(doc)
         lays = {descriptor_id(fn): (layout(fn), n) for fn, n in defs}
-        check_wires(lays, wires, cuts)
+        order = order_of(doc)
+        check_wires(lays, wires, cuts, order)
         check_inputs(lays, cuts, wires, registered, ingress)
         servers = Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])[1] if "blocks" in doc else {}
         ms = _members(defs, program, query, doc["cap"], wires, cuts, servers,
-                      committed_reads(registered))
+                      committed_reads(registered), order)
     else:
         ms = _listed_members(doc)
     tables = tuple(CS.RowTable(t["segment"], t["name"], t["template"], t["words"], _frozen(t["keys"]),

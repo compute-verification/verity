@@ -15,6 +15,8 @@ its word).
     MoeExpertRow_v2{E,K}, MoeExpertCoordinate_v3{E,K,DOT}, MoeExpertCoordinateW_v3{E,K,DOT}
     MoeExpertGemm_v3{E,K,N,DOT}, MoeExpertGemmW_v3{E,K,N,DOT}
     MoeAlignRanks_v2{E,P,BM}, MoeAlignBlocks_v2{P,BM} and the align steps they Call, each _v2
+    RMSNormFusedCudaVector8_v4{N,EPS,BLOCK} and the parts its word body batches: RMSNormPairSumCuda_v2,
+    RMSNormSumStepCuda_v2, RMSNormSumInOrderCuda_v2{K}   (σ of the served CUDA fused norm, v3)
 
 Each is the served row's word Definition with no Boolean version of its own whose body's callees all have one: the collectives
 and plumbing of the TP rows, the GEMM of the rows on the Ampere accepted kinds (no declared target, the registered-values serve
@@ -25,7 +27,7 @@ word body and its callees' Boolean versions fix it; circuit-check pins each one'
 from __future__ import annotations
 
 from verity.ml.definitions.boolean import sigma_lift
-from verity.ml.definitions.registry import b1, b1_tp2, inductor as I, marlin_moe as MM, mhc, moe, ref_prims as R, tp_allreduce as TA
+from verity.ml.definitions.registry import b1, b1_tp2, cuda_rmsnorm as CR, inductor as I, marlin_moe as MM, mhc, moe, ref_prims as R, tp_allreduce as TA
 
 __all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "ArgmaxStepF32", "DotBf16", "EmbeddingShard",
            "Fa3AttentionHeadSplit", "Fa3AttentionSplit", "Gemm", "GemmCoordinate", "InductorAdd2RMSNorm", "InductorAdd2RMSNormFinal",
@@ -33,7 +35,8 @@ __all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "Argm
            "InductorSiluMul", "InductorSiluMulElem", "MhcFusedPostPre", "MoeAlignBefore", "MoeAlignBelow", "MoeAlignBlockOf",
            "MoeAlignBlocks", "MoeAlignPar", "MoeAlignRank", "MoeAlignRankStart", "MoeAlignRanks", "MoeAlignStart",
            "MoeExpertCoordinate", "MoeExpertCoordinateW", "MoeExpertGemm", "MoeExpertGemmW", "MoeExpertRow", "MoeRouterTopK",
-           "MoeRouterTopKNorm", "ResidualAdd", "RmsNormMnnvl"]
+           "MoeRouterTopKNorm", "RMSNormFusedCudaVector8", "RMSNormPairSumCuda", "RMSNormSumInOrderCuda",
+           "RMSNormSumStepCuda", "ResidualAdd", "RmsNormMnnvl"]
 
 ResidualAdd = sigma_lift(b1.ResidualAdd, 2)
 DotBf16 = sigma_lift(b1.DotBf16, 4)
@@ -77,3 +80,8 @@ MoeAlignBelow = sigma_lift(MM.MoeAlignBelow, 2)
 MoeAlignBlockOf = sigma_lift(MM.MoeAlignBlockOf, 2)
 MoeAlignPar = sigma_lift(MM.MoeAlignPar, 2)
 MoeAlignBlocks = sigma_lift(MM.MoeAlignBlocks, 2)
+
+RMSNormPairSumCuda = sigma_lift(CR.RMSNormPairSumCuda, 2)
+RMSNormSumStepCuda = sigma_lift(CR.RMSNormSumStepCuda, 2)
+RMSNormSumInOrderCuda = sigma_lift(CR.RMSNormSumInOrderCuda, 2)
+RMSNormFusedCudaVector8 = sigma_lift(CR.RMSNormFusedCudaVector8, 4)

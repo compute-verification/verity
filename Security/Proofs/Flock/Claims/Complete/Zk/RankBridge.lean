@@ -502,7 +502,7 @@ theorem coin_tauFin {k : ℕ} (r : Fin k → Coin) (f : Fin 4 → Fin 10 → ℕ
 open Classical in
 theorem pr_rankBound {k D κ : ℕ} {fix : Fin k → Fin D → Option GF128} (h : RankBound k D fix κ) :
     Claims.Pr (fun R : Fin k → Fin D → GF128 => ¬ RankFull fun i t => (fix i t).getD (R i t)) ≤ 1 / 2 ^ κ := by
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   unfold RankBound at h
   have hc : (0 : ℝ) < Fintype.card (Fin k → Fin D → GF128) := by exact_mod_cast Fintype.card_pos
   rw [div_le_div_iff₀ hc (by positivity), one_mul]

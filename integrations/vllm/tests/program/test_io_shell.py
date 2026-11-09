@@ -3,7 +3,8 @@
 Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network certifier's scan
 state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
 bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`; `SelectCollect_v2` v1 at a
-round)."""
+round). Ingress schema v1 likewise: its encoder's JSON in whole blocks, `IngressSampled_v1` as `sampled_reference` in and out of
+the schema, and the statics it refuses."""
 from __future__ import annotations
 
 import json
@@ -310,3 +311,101 @@ def test_the_boolean_definition_is_its_word(st):
     arr = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
     got = np.asarray(evaluate_words(target, arr), dtype=np.uint64).reshape(len(bodies), -1)
     assert np.array_equal(got, _ref(st, bodies))
+
+
+SAMPLED = {**SMALL, "RID": 6}
+NAMES = [c for c in map(chr, range(0x20, 0x7F)) if c not in '"\\']
+
+
+def _sampled(st: dict, n: int, seed: int) -> list[bytes]:
+    """Schema v1 bodies at ``st``: each field at its extremes (seeds null, 0 and 2^63 - 1, temperature 0 and 9.999999, top_p
+    0.000001 and 1, users of spaces and of '~'), then random ones."""
+    rng = np.random.default_rng(seed)
+    m, lp, v, rid = st["MODEL"], st["LP"], st["V"], st["RID"]
+    out = [X.sampled_encode(m, [0] * lp, 1, v, temperature=0.0, top_p=1.0, seed=None, user=" " * rid),
+           X.sampled_encode(m, [v - 1] * lp, 999999, v, temperature=9.999999, top_p=0.000001, seed=(1 << 63) - 1, user="~" * rid),
+           X.sampled_encode(m, [1] * lp, 2, v, temperature=0.5, top_p=0.5, seed=0, user="!" * rid)]
+    while len(out) < n:
+        s = None if rng.integers(0, 3) == 0 else int(rng.integers(0, 1 << 63, dtype=np.uint64)) // 10 ** int(rng.integers(0, 19))
+        out.append(X.sampled_encode(m, [int(rng.integers(0, v)) for _ in range(lp)], int(rng.integers(1, 3000)), v,
+                                    temperature=int(rng.integers(0, 10 ** 7)) / 10 ** 6,
+                                    top_p=int(rng.integers(1, 10 ** 6 + 1)) / 10 ** 6, seed=s,
+                                    user="".join(rng.choice(NAMES, rid))))
+    return out
+
+
+def _sampled_corrupt(st: dict, body: bytes) -> list[bytes]:
+    """Each byte of the ratios', the seed's and the user's fields set to a space, '0', '.', 'n', '?' (low nibble 15), '"',
+    '\\\\', DEL and 0xB0, and the seed field all '?', its largest low-nibble sum."""
+    _, fields, _ = X.layout(st["MODEL"], st["LP"], st["V"], st["RID"])
+    out = []
+    for off, w in fields[st["LP"] + 1:]:
+        out += [body[:i] + bytes([c]) + body[i + 1:] for i in range(off, off + w) for c in b' 0.n?"\\\x7f\xb0' if c != body[i]]
+    off, w = fields[st["LP"] + 3]
+    return out + [body[:off] + b"?" * w + body[off + w:]]
+
+
+def _sampled_word(st: dict, bodies: list[bytes]) -> np.ndarray:
+    arr = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
+    return np.asarray(evaluate_words(bind(BX.IngressSampledV1, **st), arr), dtype=np.uint64).reshape(len(bodies), -1)
+
+
+def _sampled_ref(st: dict, bodies: list[bytes]) -> np.ndarray:
+    return np.array([[ok, *ids, m, t, p, s, seed, *u] for ok, ids, m, t, p, s, seed, u in
+                     (X.sampled_reference(b, **st) for b in bodies)], dtype=np.uint64)
+
+
+def test_a_sampled_body_is_its_requests_json_in_whole_blocks_of_a_length_the_statics_fix():
+    a = X.sampled_encode(MODEL, [128000, 9, 0], 64, V, temperature=0.7, top_p=0.95, seed=None, user="req-07")
+    b = X.sampled_encode(MODEL, [1, 22, 333], 256, V, temperature=1.0, top_p=1.0, seed=(1 << 63) - 1, user="abcdef")
+    assert len(a) == len(b) == X.layout(MODEL, 3, V, 6)[2] and len(a) % X.BLOCK == 0
+    assert json.loads(a) == {"model": MODEL, "prompt": [128000, 9, 0], "max_tokens": 64, "temperature": 0.7, "top_p": 0.95,
+                             "seed": None, "user": "req-07", "stream": True}
+    assert json.loads(b)["seed"] == (1 << 63) - 1
+    ref = X.sampled_reference(a, MODEL, 3, V, 6)
+    assert ref[:6] == (1, [128000, 9, 0], 64, 700000, 950000, 0) and ref[7] == list(b"req-07")
+    for kw in ({"seed": 1 << 63}, {"seed": -1}, {"top_p": 0.0}, {"temperature": 0.1234567}, {"user": 're"07'}, {"user": ""}):
+        with pytest.raises(ValueError, match="ingress v1"):
+            X.sampled_encode(MODEL, [1], 1, V, **{"temperature": 0.5, "top_p": 0.5, "seed": None, "user": "r", **kw})
+
+
+@pytest.mark.parametrize("st", [SAMPLED, {"MODEL": MODEL, "LP": 2, "V": V, "RID": 16}], ids=["small", "served"])
+def test_the_sampled_parse_is_its_reference_in_and_out_of_the_schema(st):
+    """`IngressSampled_v1` is `sampled_reference` on bodies in schema v1 (every one ok) and on each of its fields' bytes
+    changed (some still in the schema, such as a digit made '0'), the seed's 64-bit sum at its largest included."""
+    bodies = _sampled(st, 16, 0)
+    bad = [c for b in bodies[:2] for c in _sampled_corrupt(st, b)]
+    got, want = _sampled_word(st, bodies + bad), _sampled_ref(st, bodies + bad)
+    assert np.array_equal(got, want)
+    assert got[: len(bodies), 0].all() and not got[len(bodies):, 0].all()
+    assert want[-1, st["LP"] + 5] == 15 * (10 ** 19 - 1) // 9
+
+
+def _v1(seed: str = "null", t: str = "0.700000", p: str = "1.000000", user: str = "req-07") -> bytes:
+    return _pad(f'{{"model":"m","prompt":[  1,  2,  3],"max_tokens":     5,"temperature":{t},"top_p":{p},"seed":{seed:>19},'
+                f'"user":"{user}","stream":true}}'.encode())
+
+
+@pytest.mark.parametrize("body, ok, why", [
+    (_v1(), 1, "null"),
+    (_v1(str((1 << 63) - 1)), 1, "the largest seed"),
+    (_v1(str(1 << 63)), 0, "a seed of 2^63"),
+    (_v1("05"), 0, "a seed with a leading zero"),
+    (_v1("NULL"), 0, "NULL"),
+    (_v1(" nul"), 0, "a truncated null"),
+    (_v1(p="0.000000"), 0, "top_p 0"),
+    (_v1(p="1.000001"), 0, "top_p past 1"),
+    (_v1(t="1,000000"), 0, "a ratio without its point"),
+    (_v1(t=" .700000"), 0, "a ratio with a space"),
+    (_v1(user='re"-07'), 0, "a quote in the user"),
+    (_v1(user="re\x7f-07"), 0, "DEL in the user"),
+])
+def test_a_sampled_body_in_or_out_of_the_schema(body, ok, why):
+    assert X.sampled_reference(body, **SAMPLED)[0] == ok, why
+    assert _sampled_word(SAMPLED, [body])[0, 0] == ok, why
+
+
+@pytest.mark.parametrize("kw", [{"RID": 0}, {"RID": True}, {"LP": 0}, {"MODEL": 'a"b'}])
+def test_sampled_statics_without_a_layout_are_refused(kw):
+    with pytest.raises(ValueError, match="refuses this binding"):
+        bind(BX.IngressSampledV1, **{**SAMPLED, **kw})

@@ -12,7 +12,8 @@ run, and proves the proof blocks its sample holds; a circuit file other than the
 is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
-names them or not. Under the registration's strata (`STRATA`) its public file's units are the population in order, and an
+names them or not. With it, a public file whose refs point one unit at another unit's rows is refused at its registered
+port. Under the registration's strata (`STRATA`) its public file's units are the population in order, and an
 accepted session under another population is rejected (`population_why`). A registration whose partition object queries
 the program for another population is rejected at setup, by the v2 audit and by `verify` alike: the circuit file binds the
 digest of its own partition object.
@@ -20,7 +21,10 @@ digest of its own partition object.
 Without registered reads (``registered`` None), `verify` refuses a program with an input bound at registration (a
 `RegisteredInput`) before Lean runs (fast tests, no fixture): Lean demands registered reads only where the public file's
 ``registered``, which the prover writes, names them. The fixture's program binds ``cs`` as a run input, so that refusal
-doesn't apply to it."""
+doesn't apply to it.
+
+`printed` prints Lean's own `printT` vectors as Lean does, and `fits_why` and `draw_fits_why` refuse a length at their
+limit and not below it (fast tests; the sampled-proofs service's difftest holds them to Lean's `fits` piece)."""
 from __future__ import annotations
 
 import hashlib
@@ -32,7 +36,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import produced as PRODUCED, proofs as PF
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
@@ -142,6 +146,53 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
                          program=RUN_ONLY, partition={"program": "p"}, registered=None)
     assert got is None and why[0] == "form" and why[1].endswith(SCOPE), why
+
+
+#: `Flock/Test/RecordText.lean`'s `printed` vectors and a text it `accepts`, which is its own printing, verbatim (Lean's
+#: string escapes read as Python's): a JSON text and `Flock.RecordText.printT` of the value Lean parses from it
+PRINTED = {
+    "escapes": ("{\"s\": \"a\\\"b\\\\c\\nd\\re\\tf\\u0001g\\u001fh/i\x7fjék l😀m\", \"e\": \"\", \"kéy\": 1}",
+                "{\"e\":\"\",\"kéy\":1,\"s\":\"a\\\"b\\\\c\\nd\\re\\u0009f\\u0001g\\u001fh/i\x7fjék l😀m\"}"),
+    "order": ("{\"b\": 1, \"a\": 2, \"B\": 3, \"aa\": 4, \"a_b\": 5, \"é\": 6, \"z\": {\"y\": 1, \"x\": [3, {\"q\": null, \"p\": true}]}}",
+              "{\"B\":3,\"a\":2,\"a_b\":5,\"aa\":4,\"b\":1,\"z\":{\"x\":[3,{\"p\":true,\"q\":null}],\"y\":1},\"é\":6}"),
+    "literals": ("{\"n\": null, \"t\": true, \"f\": false, \"arr\": [], \"obj\": {}, \"nested\": [[], [[]], {}]}",
+                 "{\"arr\":[],\"f\":false,\"n\":null,\"nested\":[[],[[]],{}],\"obj\":{},\"t\":true}"),
+    "integers": ("{\"z\": 0, \"neg\": -3, \"big\": 12345678901234567890, \"u64\": 18446744073709551615, \"i64\": -9223372036854775808}",
+                 "{\"big\":12345678901234567890,\"i64\":-9223372036854775808,\"neg\":-3,\"u64\":18446744073709551615,\"z\":0}"),
+    "verdict": ("{\"soundness\": {\"per_proof_log2\": -132.02, \"terms\": {\"coin_commitment_hiding\": -191.0, \"irs_field\": -169.441}}, \"accepted\": true, \"secs\": 0.53}",
+                "{\"accepted\":true,\"secs\":0.53,\"soundness\":{\"per_proof_log2\":-132.02,\"terms\":{\"coin_commitment_hiding\":-191,\"irs_field\":-169.441}}}"),
+    "accepted": ("{\"a\":\"\\u0009\",\"b\":0.00001}", "{\"a\":\"\\u0009\",\"b\":0.00001}"),
+}
+
+
+@pytest.mark.parametrize("text, want", PRINTED.values(), ids=PRINTED.keys())
+def test_printed_is_lean_printT_on_its_own_vectors(text, want):
+    assert PF.printed(json.loads(text)) == want
+    assert PF.printed_size(json.loads(text)) == len(want.encode())
+
+
+#: one field at its own size at a time, the rest empty: (field, value, size, the refusal naming it)
+FIELDS = [("circuit", b"abc", 3, "the circuit file"), ("public", b"abc", 3, "the public file"),
+          ("tables", [("", b"")] * 3, 3, "the number of lookup tables"),
+          ("tables", [("é", b"")], 2, "a lookup table"), ("tables", [("", b"abcd")], 4, "a lookup table"),
+          ("program", b"abcde", 5, "the program"), ("partition", {"a": 1}, 7, "the partition object"),
+          ("registered", ["é"], 6, "the registered reads")]
+
+
+@pytest.mark.parametrize("field, value, size, want", FIELDS, ids=[f"{f} {w}" for f, _, _, w in FIELDS])
+def test_fits_why_refuses_a_field_at_the_limit_and_not_below_it(field, value, size, want):
+    inputs = {"circuit": b"", "public": b"", "tables": [], "program": None, "partition": None, "registered": None}
+    inputs[field] = value
+    assert PF.fits_why(size, **inputs) == want
+    assert PF.fits_why(size + 1, **inputs) is None
+
+
+def test_fits_why_names_the_first_field_past_the_limit_and_the_draw_its_own():
+    assert PF.fits_why(1, b"x", b"y", [("t", b"z")], b"p", {}, []) == "the circuit file"
+    assert PF.fits_why(3, b"", b"", [], b"", {"a": 1}, ["é"]) == "the partition object"
+    assert PF.fits_why(PF.WORD, b"x", b"y", [("t", b"z")], b"p", {}, []) is None
+    assert PF.draw_fits_why(7, {"a": 1}) == "the draw" and PF.draw_fits_why(8, {"a": 1}) is None
+    assert PF.draw_fits_why(0, None) is None
 
 
 def _template(d: Path, const: int, meta: dict) -> Path:
@@ -256,6 +307,40 @@ def test_lean_without_registered_reads_refuses_the_statement_that_reads_them(fx,
     assert f.accepted is False and f.units == (), f
     if not unnamed:
         assert "the verifier holds no registered roots" in f.why, f
+
+
+def _pointed(fx: Path) -> str:
+    """The fixture's public file with the first drawn unit's ref at port 0 (the row it reads of that port's shared table)
+    pointed at the next instance's, as a prover pointing a drawn unit at another unit's rows would write it; its header
+    and tables kept. A drawn unit's, since the session's statement is the drawn units' (`Flock.Draw`); port 0, an input,
+    since a circuit's inputs precede its outputs, whose refs setup holds to each instance's own row."""
+    st = fx / "stage"
+    head, body = (st / "pub-32.bin").read_bytes().split(b"\n", 1)
+    header = json.loads(head)
+    n, np_ = header["instances"], len(header["shared_rows"])
+    at = PRODUCED.BC_BYTES * sum(header["shared_rows"].values())
+    refs = bytearray(body[at:at + 4 * n * np_])
+    i = header["units"]["indices"].index(DRAWN[0])
+    a, b = 4 * i * np_, 4 * ((i + 1) % n) * np_
+    assert refs[a:a + 4] != refs[b:b + 4], "the drawn unit and the next read one row at port 0: nothing to point"
+    refs[a:a + 4] = refs[b:b + 4]
+    (st / "pub-pointed.bin").write_bytes(head + b"\n" + body[:at] + bytes(refs) + body[at + 4 * n * np_:])
+    return "pub-pointed.bin"
+
+
+@lean
+@pytest.mark.slow
+def test_a_ref_pointed_at_another_units_rows_is_refused_at_its_registered_port(fx):
+    """Every port of the fixture's circuit is registered (`REGISTERED_ROOTS`), so the session's verifier holds each
+    instance's ref to the row at the position its unit's read names (`Flock.Registered.check`): a drawn unit's input ref
+    pointed at the next instance's row is refused at setup, before any proof is read, and proves no proof block. Round 2
+    requires every port a second-stage header shares rows at to be registered (`second-refs`), so its sessions' refs are
+    held this way."""
+    got, why = _verify(fx, fx / "session", public=_pointed(fx))
+    assert why is None, why
+    (f,) = got
+    assert f.accepted is False and f.units == (), f
+    assert f.why.startswith("setup: registered reads: port ") and " reads position " in f.why, f
 
 
 @lean

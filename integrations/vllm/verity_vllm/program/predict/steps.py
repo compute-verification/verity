@@ -1,11 +1,12 @@
 """I2, the compiler: a served session's advice -> the Programs its committed rows must pass (v0, request-major).
 
-`compile_steps(registered, advice, ingress, coin=)` reads these and nothing else of the run (and, under the advice code, the
+`compile_steps(registered, advice, ingress, salt=)` reads these and nothing else of the run (and, under the advice code, the
 certified record its string decodes against), and of the advice and the bodies only the fields `reads.READS` declares, each with
 its account in the output accounting (the advice through `reads.gate`):
 - `registered` (`Registered`): φ without workload or sampling (the model, target, TP, engine, execution and profile), ℓ, the
   public cap on the advice's length in bits, and the advice code, if the registration selects it (`Registered.code`).
-- `coin`: the window's verifier coin, public, which a stochastic request's seed derives from where its body names none (`reads.seed_of`).
+- `salt`: the window's seed salt, public, which a stochastic request's seed derives from where its body names none
+  (`reads.seed_of`): the bytes of the window record's ``seed_salt``.
 - `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
   the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
   that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Under the advice
@@ -34,7 +35,7 @@ its account in the output accounting (the advice through `reads.gate`):
   recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
 - Off batch invariance the compiler serves class G alone (`launch_class`, `engine.profiles.engine_classes.CLASS_G`: GLM-5.3 at
   TP8, eager or compiled at breakable CUDA graphs, on H200, under a registration of at most `CLASS_G_LIMITS`: steps of at most
-  8,192 tokens and 256 sequences, positions at most 32,768, prefill chunks of at most 256 rows, the prefix cache stated on or
+  8,192 tokens and 256 sequences, positions at most 131,072, prefill chunks of at most 256 rows, the prefix cache stated on or
   off), whose token-count-dependent kernel choices read the whole launch, padded to its capture size where it runs in a captured
   graph. There a request's Program is its rows in the window alone: the request wrapper after a
   history of C positions, at its launch context (`RequestUnit.launch`, `common._Launch`): per step of its Program, each of its
@@ -98,7 +99,7 @@ KV; `refused` names why. It records `check_compiled`'s refusal (`batch_rule`) ra
 
 The compiler digest is `score.code_version()`, with ℓ beside it. `Compiled.transfer_gates` lists the templates whose units hold
 transfer gates (the ingress parse and the token selects), each of which a window proves whole. `trace_commands` lists the Build traces (`verity-vllm build
---wrapper request`, in class G at the unit's `--launch-context`; none yet for a chunked prefill) of a compilation's Programs, and `compare` holds the compiled digests to them. With `named=True` each Program
+--wrapper request`, in class G at the unit's `--launch-context` and `--batched`) of a compilation's Programs, and `compare` holds the compiled digests to them. With `named=True` each Program
 carries what its trace's Build says beside it (`Compiled.named`, `naming`), so an auditor writes that Build with no vLLM.
 """
 from __future__ import annotations
@@ -112,6 +113,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
+from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
@@ -122,7 +124,7 @@ from verity.ml.definitions.registry import io_shell as IO
 
 from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape
-from .common import edge_config
+from .common import cyclic_gc_off, edge_config
 from .ingress_policy import ingress_body, policy_of, request_of
 from .phi import Phi
 from .segment import edge_groups, edge_of, launch_of, segment_of
@@ -244,7 +246,8 @@ class Compiled:
         (`RequestUnit.parse`) and its Program's token selects, whose sampled ids are the egress until an in-circuit renderer takes
         their place. No model-step template is among them."""
         ids = {u.parse.id for u in self.requests if u is not None and u.parse is not None}
-        ids |= {n.fn.id for p in self.programs.values() for n in p.fn.body.nodes if n.fn.id.split("{")[0].rsplit("_v", 1)[0] in EGRESS}
+        callees = {n.fn.id for p in self.programs.values() for n in p.fn.body.nodes}
+        ids |= {i for i in callees if i.split("{")[0].rsplit("_v", 1)[0] in EGRESS}
         return tuple(sorted(ids))
 
     def summary(self) -> dict:
@@ -481,30 +484,31 @@ class Plan:
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, after its C rows of
     history, in class G at its launch context and in its prefill chunks, at φ's rank, in the registered compiler's form
-    (`dead_free`) at any world, its length rule last; `named`: its trace's names (`naming.named_program`, no class-G decoder)."""
+    (`dead_free`) at any world, batched in class G, its length rule last; `named`: its trace's names (`naming.named_program`, no class-G decoder)."""
     phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
     if named:
         from .naming import named_program
         return named_program(phi, unit.LP, unit.T, unit.C, stop=unit.stop)
-    return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
-                         edge=unit.edge, stop=unit.stop)
+    r = build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
+                      edge=unit.edge, stop=unit.stop, with_desc=False, batched=not phi.target_profile().batch_invariant)
+    return replace(r, digest=program_digest(r.program))
 
 
-def compile_steps(registered: Registered, advice: Any, ingress: Any, *, coin: bytes | None = None, partial: bool = False,
+def compile_steps(registered: Registered, advice: Any, ingress: Any, *, salt: bytes | None = None, partial: bool = False,
                   named: bool = False, record: Any = None) -> Compiled:
     """The Programs of `advice`'s session (module docstring): each request's at its (LP, T, policy), GP-01 over them, and each step's
-    live rows as `RowRef`s. Total and deterministic: it reads `registered`, `advice`, `ingress` and the window's `coin` only (and
+    live rows as `RowRef`s. Total and deterministic: it reads `registered`, `advice`, `ingress` and the window's seed `salt` only (and
     `record`, the certified record a v1 string decodes against, under a registration that selects the advice code), and compiles
     them or raises `Unexpressible`. `partial` refuses request by request (`Compiled.refused`) where a refusal would otherwise
     refuse the session, a request whose Program the vocabulary refuses (a launch no capture covers) included.
     `named`: each Program with what its Build says beside it, as its trace would (`Compiled.named`, `naming.write_build`), or
-    `Unexpressible` where the naming doesn't reach it."""
+    `Unexpressible` where the naming doesn't reach it. The cyclic collector is off throughout (`cyclic_gc_off`, at the end)."""
     from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
 
     from .score import request_component
     adv = advice_of(registered, advice, record)
-    plan = _plan(registered, adv, ingress, partial, coin)
+    plan = _plan(registered, adv, ingress, partial, salt)
     built: dict[str, Any] = {}
     lost: dict[int, str] = {}
     for u in plan.distinct():
@@ -520,7 +524,6 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, coin: by
     programs: dict[str, Any] = {}
     comps: dict[str, Any] = {}
     digests: dict[str, str] = {}
-    canon: dict = {}
     names: dict[str, Any] = {}
     for u in plan.distinct():
         r = built[u.key()]
@@ -531,7 +534,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, coin: by
                                 f"({body.nodes[dead[0]].fn.id}) first, which no output reads: drop them in the lowering, on the "
                                 f"Build's side and predict's alike (`program.prune.without_dead_units` drops a request wrapper's)")
         programs[r.digest], digests[u.key()] = r.program, r.digest
-        comps[u.key()] = request_component(r, canon)
+        comps[u.key()] = request_component(r)
     units = [None if u is None else replace(u, digest=digests[u.key()]) for u in plan.requests]
     edge = None if registered.phi.target_profile().batch_invariant else edge_of(registered.phi, adv, units, plan.idle)
     wl = W.WorkloadProgram([W.WorkloadRequest(request_id_of(u.request), u.request, u.LP, u.events(), u.first_step, comps[u.key()],
@@ -543,7 +546,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, coin: by
                         cap_bits=registered.cap_bits, idle=plan.idle, named=names)
     from .batch import BatchDependent, check_compiled
     try:
-        check_compiled(registered, adv, ingress, compiled, lambda *a: _replan(*a, coin=coin))
+        check_compiled(registered, adv, ingress, compiled, lambda *a: _replan(*a, salt=salt))
     except BatchDependent as e:
         if not partial:
             raise
@@ -551,20 +554,20 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, coin: by
     return compiled
 
 
-def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, coin: bytes | None = None,
+def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, salt: bytes | None = None,
                record: Any = None) -> Plan:
     """`compile_steps` up to building Programs: every refusal, each request's shape and policy, and each step's live rows."""
-    return _plan(registered, advice_of(registered, advice, record), ingress, partial, coin)
+    return _plan(registered, advice_of(registered, advice, record), ingress, partial, salt)
 
 
-def _replan(registered: Registered, solo: WA.Advice, bodies: Mapping[str, Any], *, coin: bytes | None = None) -> Plan:
-    """`batch.check_compiled`'s plan of one request alone, under its session's window `coin`: its solo window `Advice` held to I1's
+def _replan(registered: Registered, solo: WA.Advice, bodies: Mapping[str, Any], *, salt: bytes | None = None) -> Plan:
+    """`batch.check_compiled`'s plan of one request alone, under its session's window seed `salt`: its solo window `Advice` held to I1's
     encoding, without ℓ or the certified record, which bound and decode the session's advice as it was sent, not an I1 the
     compiler derives from it."""
-    return _plan(registered, _window_advice(_advice_bytes(solo)), bodies, False, coin)
+    return _plan(registered, _window_advice(_advice_bytes(solo)), bodies, False, salt)
 
 
-def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, coin: bytes | None) -> Plan:
+def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: bytes | None) -> Plan:
     phi0 = registered.phi
     if not (bi := phi0.target_profile().batch_invariant):
         launch_class(phi0)
@@ -654,7 +657,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, coin: b
                     continue
                 chunks, launch = ((), None) if bi else launch_of(i, LP, T, C, rows[i], adv.steps)
                 edge = edge_groups(decoder(phi0, 1, 0), q) if i in left and launch is not None else ()
-                policy, seed = policy_of(i, params[i], phi0.target_profile().num_sms, request_id=q.id, coin=coin,
+                policy, seed = policy_of(i, params[i], phi0.target_profile().num_sms, request_id=q.id, salt=salt,
                                          carried=carry is not None)
                 if bi and C and policy["kind"] != "greedy":
                     raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens on a stochastic request (the cached stochastic "
@@ -729,7 +732,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`), on the pinned
     vLLM (CPU, on meta), each writing `<root>/<trace_dir>` at a `max_model_len` of at least its LP + T, under φ's GPU's name where
     φ states one (`--device-name`: the tuned kernel configs a GPU-free host reads); at tensor-parallel world W, φ's rank's
-    (`--tp W --rank r --dead-free`); in class G at the unit's launch context (`--launch-context '{"batch": ...}'`), with its
+    (`--tp W --rank r --dead-free`); in class G batched (`--batched`) at the unit's launch context (`--launch-context '{"batch": ...}'`), with its
     prefill chunks there when it has them (`'{"batch": ..., "chunks": ...}'`: the Build's chunked request wrapper,
     `vllm_meta.ChunkedGreedyRequest`); its length rule `--stop`. A Program with a window's edge rows has none (`NO_EDGE_TRACE`),
     so `compare` counts it `no_trace`."""
@@ -738,7 +741,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
     # the target's GPU name, which vLLM's get_device_name answers on any host (its tuned fused-MoE configs' key)
     device = ["--device-name", str(phi.target["device_name"])] if phi.target.get("device_name") else []
-    world = int(phi.tp.get("world", 1))
+    world, batched = int(phi.tp.get("world", 1)), ([] if phi.target_profile().batch_invariant else ["--batched"])
     tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
     for u in summary["requests"]:
         if u is None or u.get("edge") or (d := trace_dir(u)) in seen:
@@ -752,7 +755,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
                      *(["--stop", json.dumps(u["stop"], sort_keys=True, separators=(",", ":"))] if u.get("stop") else []),
                      "--model", phi.model["repo"], "--revision", phi.model["revision"],
                      "--max-model-len", str(max(max_model_len, int(u["LP"]) + int(u["T"]))),
-                     "--target", json.dumps(target, sort_keys=True), *device, "--profile", phi.profile, "--sampling", sampling, *tp])
+                     "--target", json.dumps(target, sort_keys=True), *device, "--profile", phi.profile, "--sampling", sampling, *tp, *batched])
     return cmds
 
 
@@ -772,3 +775,6 @@ def compare(summary: dict, root: str) -> dict:
                     **({} if traced or why is None else {"trace_error": why})})
     n = {k: sum(1 for x in out if x["outcome"] == k) for k in ("equal", "different", "no_trace")}
     return {"schema": SCHEMA + "/comparison", "compiler": summary["compiler"], "units": out, **n, "mismatches": n["different"] + n["no_trace"]}
+
+
+compile_steps = cyclic_gc_off(compile_steps)

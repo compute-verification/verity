@@ -241,7 +241,7 @@ theorem zeroCone_circuit (N : ℕ) : zeroCone Honest.scheme (circuit N) N = 0 :=
 
 theorem prob_true {Ω : Type} [Fintype Ω] [Nonempty Ω] {P : Ω → Prop} (h : ∀ x, P x) : prob P = 1 := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   rw [Finset.filter_true_of_mem fun x _ => h x, Finset.card_univ]
   exact div_self (Nat.cast_pos.mpr Fintype.card_pos).ne'
 
@@ -280,7 +280,7 @@ theorem creditPrefix_pos (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (reg
 
 theorem prob_pos_of {Ω : Type} [Fintype Ω] {P : Ω → Prop} (ω : Ω) (h : P ω) : 0 < prob P := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   exact div_pos (Nat.cast_pos.mpr (Finset.card_pos.mpr ⟨ω, Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩⟩))
     (Nat.cast_pos.mpr (Fintype.card_pos_iff.mpr ⟨ω⟩))
 

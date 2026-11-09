@@ -67,12 +67,12 @@ def request_of(i: int, q: WA.RequestAdvice, body: Any, vocab: int) -> tuple[tupl
     return tuple(prompt), params
 
 
-def policy_of(i: int, sampling: Any, num_sms: int | None, *, request_id: str = "", coin: bytes | None = None,
+def policy_of(i: int, sampling: Any, num_sms: int | None, *, request_id: str = "", salt: bytes | None = None,
               carried: bool = False) -> tuple[dict, int | None]:
     """Request `i`'s sampling policy as φ.sampling takes it, and its seed Input's value (None when greedy), from the parameters its
     body carries (`SamplingParams` names), refused where its Program wouldn't be the Build's. Top-p takes the registered split
     count S = registered_splits(num_SMs), the S serving pins every top-p launch to (`engine.topp_pin`), at any top_p. The seed is
-    `reads.SEED`'s, the body's or derived from ``request_id`` and the window's ``coin`` (`reads.seed_of`), else refused."""
+    `reads.SEED`'s, the body's or derived from ``request_id`` and the window's seed ``salt`` (`reads.seed_of`), else refused."""
     if not isinstance(sampling, Mapping) or any(type(k) is not str for k in sampling):
         raise Unexpressible(f"request {i}: its sampling parameters aren't an object of named values")
     s = dict(sampling)
@@ -93,4 +93,4 @@ def policy_of(i: int, sampling: Any, num_sms: int | None, *, request_id: str = "
     if t == 0:
         return {"kind": "greedy"}, None
     return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True,
-             "splits": registered_splits(int(num_sms))}, reads.seed_of(i, request_id, seed, coin, carried))
+             "splits": registered_splits(int(num_sms))}, reads.seed_of(i, request_id, seed, salt, carried))

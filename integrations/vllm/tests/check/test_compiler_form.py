@@ -28,7 +28,7 @@ def programs():
     """The Build's request Program (the registered compiler's) and the same request unpruned."""
     pruned = PB.build_program(PHI, "request", LP=8, T=3)
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
+        mp.setattr(PB, "dead_free_form", lambda b, **_: (b, list(range(len(b.nodes)))))
         full = PB.build_program(PHI, "request", LP=8, T=3)
     return pruned.program, full.program
 
