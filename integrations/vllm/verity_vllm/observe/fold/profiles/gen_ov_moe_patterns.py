@@ -42,7 +42,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry import act as _ACT
 from verity.ml.definitions.registry import moe as _MOE
 from verity_vllm.program.frontend import targets as T
-from verity_vllm.program.quarantine.ov_moe import moe as Q
+from verity.ml.definitions.registry import moe as Q
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (SiluAndMul, bound_args, find_descendants, is_int, is_row_major, op_name, scope_transparents, target_of,
