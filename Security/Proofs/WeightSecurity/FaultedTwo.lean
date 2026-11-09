@@ -6,7 +6,7 @@ public import Proofs.WeightSecurity.Two
 /-!
 # The restated theft theorem at a two-stage audit
 
-`TheftFaulted` over windows each audited by a two-stage sampled proof (`CompiledTwo`), at the budget
+`TheftFaulted` over windows each audited by SPOT's two-stage verifier (`CompiledTwo`), at the budget
 `M = T·(K − 1) + 1` that `two_undetected` leaves undetected with probability at most `Σ_t ε_t`. A two-stage window's
 incorrect count (`twoRec`) is the fewest replay blocks an extraction in `RTwo` marks, so here a fault pattern names
 replay blocks: `size φ` counts replay blocks, and a fault overrides a replay block's outputs.
