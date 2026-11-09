@@ -440,7 +440,11 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
 
 #: A served window's own fields, never published: the windows (closed, sealed or joined), its users, its engine steps and
 #: whether its requests filled the slots, its unpadded population, its advice's length and its windows' advice by number.
-OWN = frozenset({"windows", "users", "engine_steps", "every_slot", "population", "advice_bits", "bits_by_window"})
+#: And the exact credit of a Pearl+ run held to its class's fixed load (``exact_work``: `verify_run.verify_passes`'
+#: profile's, the Lean's printout's and `served_passes.py lean`'s record of both): the credit, credited tiles and MACs the
+#: rows the passes exclude and give up decide, which the published work replaces by its grid form (`verify_run.grid_work`).
+OWN = frozenset({"windows", "users", "engine_steps", "every_slot", "population", "advice_bits", "bits_by_window",
+                 "exact_work"})
 #: Fields that name a window or count its own where their value holds a number: the window's number, its steps, its
 #: requests' count, the windows refused. A window named ``all``, the bench Build's requests by name and a refusal's reason
 #: stay.
@@ -1723,8 +1727,9 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
     4. **Lean.** The Lean `PouwCheck.PearlPlus` verdict (`PEARLPLUS_LEAN`) accepts the same run commitment on the same
        draw source, holds the passes to the same W, and credits work over tiles at the reference's ε.
 
-    The answer is Pearl+'s, its work the Lean's, its profile the reference's with the lane, pin, period, session and the
-    Lean verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
+    The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
+    passes to their class's fixed load), its profile the reference's with the lane, pin, period, session and the Lean
+    verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
     from verity.protocols.pouw.verifier import credit as CR
     from verity.protocols.spot.device import remote
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
@@ -1823,7 +1828,8 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
     if eps is None or eps != _rational(ref.get("epsilon")):
         return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
     return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
-                                                              ("credited", "credited_tiles", "macs", "rho", "epsilon")}},
+                                                              ("credited", "credited_tiles", "macs", "rho", "epsilon")}
+                                 | ({"give_up": work["give_up"]} if "give_up" in work else {})},
             "profile": {**answer["profile"], "lane": lane, "key_sha512": key, "period": name, "session": session,
                         "draw_session": drew.get("session"), "reference_work": ref,
                         "lean": {k: lean.get(k) for k in ("verdict", "commitment", "source", "drawn", "work", "tie")}}}, None
