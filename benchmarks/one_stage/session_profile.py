@@ -3,6 +3,8 @@
 
     python benchmarks/one_stage/session_profile.py --sqlite P.sqlite --prove-out prove.out [--skip 1] [--json out.json]
         [--timeline PHASE]   # also PHASE's GPU ops in start order, in the first timed session's first rep that has it
+        [--gaps MS]          # also the prover thread's CUDA calls and the GPU's ops in the MS before each timed rep's device
+                             # windows and after them (the host around the device prover)
 
 A session's `prove_total_s` is its two reps' prove seconds. Each rep's device phases (the record's buckets ``t.witness``
 through ``t.ligerito``) run back to back, so each window is placed backward from Ligerito's phase mark (`phase_profile.py`'s,
@@ -66,6 +68,25 @@ def timeline(gpu, api, span, phase: str) -> None:
         print(f"  {(s - a) / 1e6:8.2f} {(e - s) / 1e6:7.2f} {busy / 1e6:7.2f} {n:4d} {mb}  {name} ({via})")
 
 
+def gaps(gpu, api, edges, span: int) -> None:
+    """The prover thread's CUDA calls and the GPU's ops in the `span` ns before each rep's first device window and after its
+    Ligerito, summed over the reps (ms a rep), the largest first."""
+    for side in ("before", "after"):
+        calls, ops = defaultdict(float), defaultdict(float)
+        for _, start, end, tid in edges:
+            a, b = (start - span, start) if side == "before" else (end, end + span)
+            for s, e, n, _, t in api:
+                if t == tid and s < b and e > a:
+                    calls[n.split("_v")[0]] += (min(e, b) - max(s, a)) / 1e6
+            for s, e, n, _, _, _ in gpu:
+                if s < b and e > a:
+                    ops[n.removeprefix("void ").split("<")[0].split("(")[0]] += (min(e, b) - max(s, a)) / 1e6
+        k = max(len(edges), 1)
+        print(f"{side} the device windows ({span / 1e6:.0f} ms, {len(edges)} reps), ms a rep:")
+        print("  CUDA calls: " + ", ".join(f"{n} {v / k:.2f}" for n, v in sorted(calls.items(), key=lambda kv: -kv[1])[:12]))
+        print("  GPU ops: " + ", ".join(f"{n} {v / k:.2f}" for n, v in sorted(ops.items(), key=lambda kv: -kv[1])[:10]))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sqlite", required=True)
@@ -74,6 +95,7 @@ def main() -> int:
     ap.add_argument("--skip", type=int, default=1)
     ap.add_argument("--json")
     ap.add_argument("--timeline", help="a device phase (encoding_commitment, zerocheck, ...)")
+    ap.add_argument("--gaps", type=float)
     a = ap.parse_args()
     gpu, api, osrt = load(a.sqlite)
     recs = sessions(a.prove_out)
@@ -84,6 +106,7 @@ def main() -> int:
         print("marks and reps differ in number: paired in order, the shorter list's length")
     per = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))  # session -> phase -> key -> value
     spans = []  # (session, phase, start, end)
+    edges = []  # (session, rep's first device window's start, its Ligerito's end, the prover thread)
     for (si, b), (s_lig, tid, _) in zip(reps, ms):
         end = s_lig + int(b["t.ligerito"] * 1e9)
         for k in reversed(DEVICE):
@@ -97,6 +120,7 @@ def main() -> int:
                 for f, v in w["name_ms"].items():
                     d["op:" + f] += v
             end = start
+        edges.append((si, end, s_lig + int(b["t.ligerito"] * 1e9), tid))
     for si, r in enumerate(recs):
         for k, v in host_parts(r).items():
             per[si][k]["wall_ms"] += 1e3 * sum(v)
@@ -122,6 +146,8 @@ def main() -> int:
         print(f"  {p:38s} {m['wall_ms']:7.1f} " + (f"{m['gpu_ms']:7.1f} | {m['idle_os_ms']:12.1f} {m['idle_api_ms']:6.1f} "
               f"{m['idle_sync_ms']:6.1f} {m['idle_host_ms']:6.1f} | " + ", ".join(f"{f} {v:.1f}" for f, v in fams)
               if dev else f"{'-':>7s} | (host; no device window)"))
+    if a.gaps:
+        gaps(gpu, api, [e for e in edges if e[0] >= a.skip], int(a.gaps * 1e6))
     if a.timeline:
         timeline(gpu, api, next(((s, e) for si, p, s, e in spans if p == a.timeline and si >= a.skip), None), a.timeline)
     if a.json:

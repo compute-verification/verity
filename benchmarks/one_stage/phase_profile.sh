@@ -18,7 +18,8 @@
 #          each staged once per KW (gq's stage takes about 50 min): a prover_is_deterministic selftest under M1 and under M0, and
 #          one M1 dev session, each under nsys with its allocations traced (device_peak.py: the peak of live device allocations and
 #          what was live then) and the GPU's processes sampled every 100 ms by nvidia-smi (which also counts the CUDA context)
-#   ab     ROUNDS rounds, order rotating, of one warm process (warm 1 + 3 M1 dev sessions) per build, base and new
+#   ab     ROUNDS rounds, order rotating, of one warm process (warm 1 + 3 M1 dev sessions) per build, AB_BASE and AB_NEW
+#          (default base and new: the builds of AS=base and AS=new); PHASE's median a rep and a session
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run under research run}; O=$D/out; mkdir -p $O
 REPO=$(pwd); W=${KW:-/workspace/jobs/phase}; mkdir -p $W; AS=${AS:-new}; STEPS=${STEPS:-setup,build,stage,ident,tl}
@@ -204,8 +205,9 @@ print(d, p[d]["inst"], p[d]["stage_dir"] + "/circuit.txt")' $ZU/plan.json)
   done
 fi
 if has ab; then
-  read -r BB _ < $W/base.env || { log "no base build"; exit 1; }
-  read -r NB _ < $W/new.env || { log "no new build"; exit 1; }
+  read -r BB _ < $W/${AB_BASE:-base}.env || { log "no ${AB_BASE:-base} build"; exit 1; }
+  read -r NB _ < $W/${AB_NEW:-new}.env || { log "no ${AB_NEW:-new} build"; exit 1; }
+  log "ab: base is ${AB_BASE:-base}'s build ($BB), new is ${AB_NEW:-new}'s ($NB)"
   for r in $(seq $ROUNDS); do
     if [ $((r % 2)) = 1 ]; then order="base new"; else order="new base"; fi
     for v in $order; do
@@ -216,14 +218,16 @@ if has ab; then
 import json, pathlib, statistics, sys
 o, phase = pathlib.Path(sys.argv[1]), sys.argv[2]
 for v in ("base", "new"):
-    tot, ph = [], []
+    tot, ph, ses = [], [], []
     for p in sorted(o.glob(f"ab-{v}-r*/**/prove.out")):
         recs = [json.loads(l.split("\t", 1)[1]) for l in p.read_text().splitlines() if l.startswith("LIVE\t")][1:]
         tot += [r["prove_total_s"] for r in recs]
         ph += [b[phase] for r in recs for b in r["buckets"] if phase in b]
+        ses += [sum(b.get(phase, 0.0) for b in r["buckets"]) for r in recs]
     if tot:
         print(f"ab {v}: prove_total_s median {statistics.median(tot):.4f} over {len(tot)} sessions {[round(x, 3) for x in tot]}; "
-              f"{phase} median {1e3 * statistics.median(ph):.2f} ms a rep over {len(ph)}")
+              f"{phase} median {1e3 * statistics.median(ph):.2f} ms a rep over {len(ph)}, {1e3 * statistics.median(ses):.2f} ms a "
+              f"session {[round(1e3 * x, 1) for x in ses]}")
 PYEOF
 fi
 log "phase_profile: done fail=$fail"
