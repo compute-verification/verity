@@ -605,8 +605,8 @@ def _digests(words: np.ndarray) -> bytes:
     return np.asarray(words, dtype="<u2").view("<u8").astype(">u8").tobytes()
 
 
-def _words(b: bytes) -> np.ndarray:
-    """Consecutive 64-byte digests as `Digest` words (`interface.digest_words`), concatenated."""
+def _digest_words(b: bytes) -> np.ndarray:
+    """`_digests`' inverse: consecutive 64-byte digests as `Digest` words (`interface.digest_words`), concatenated."""
     return np.concatenate([digest_words(b[i:i + 64]) for i in range(0, len(b), 64)])
 
 
@@ -622,8 +622,8 @@ def table_reads(tc: TableCommit, toks: Sequence[int]) -> dict[str, dict[str, np.
         row = np.asarray(tc.rows[k]) if k < n else np.zeros(H, np.uint16)
         salt = bytes(tc.salts[k]) if k < n else bytes(_HM.salt_bytes)
         for p, v in (("tok", np.asarray([k & 0xFFFF, k >> 16])), ("root", digest_words(tc.root)),
-                     ("domain", digest_words(tc.domain.domain_id)), ("row", row), ("salt", _words(salt)),
-                     ("path", _words(tc.path(k))), ("o0", row), ("o1", np.ones(1))):
+                     ("domain", digest_words(tc.domain.domain_id)), ("row", row), ("salt", _digest_words(salt)),
+                     ("path", _digest_words(tc.path(k))), ("o0", row), ("o1", np.ones(1))):
             cols[p].append(np.asarray(v, dtype=np.uint16))
     rows = {p: np.stack(cols[p]) for p in READ}
     return {"rows": rows, "outs": {"o0": np.stack(cols["o0"]), "o1": np.stack(cols["o1"])}}
