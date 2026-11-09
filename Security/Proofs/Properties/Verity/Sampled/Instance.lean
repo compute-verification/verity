@@ -57,7 +57,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 /-- A one-coin finder's success is `0` or `1`, so below `1` it is `0`. -/
 theorem pr_unit {p : Unit → Prop} (h : Claims.Pr p < 1) : Claims.Pr p = 0 := by
   classical
-  unfold Claims.Pr at *
+  unfold Claims.Pr Claims.prUniform at *
   by_cases hp : p ()
   · rw [Finset.filter_true_of_mem fun x _ => by cases x; exact hp] at h
     simp at h
@@ -301,11 +301,22 @@ def premisesOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → 
     ∀ A, I.sessions θ F = some A → (K.live A θ F c σ).FinderCR (K.project A θ F c σ) (I.base.cost θ F c σ)
   | a => I.base.premises a
 
+/-- The read finder's published collision bound at `t` calls (`Vocab.crBound` at `callsMulOf`, `callsAddOf`). -/
+noncomputable def sampledBound (θ : ByteArray) (t : ℕ) : ℝ :=
+  ((I.callsMulOf θ .sampled * t + I.callsAddOf θ .sampled : ℕ) : ℝ) / 2 ^ (256 : ℝ)
+
 /-- **SPOT's δ at the parameters `θ`**: the deployment's session's (`Live.delta`) at the read finder's
 published bound; `⊤` where the deployment runs no session, which bounds nothing there. -/
 noncomputable def deltaOf (θ : ByteArray) : Subprotocol → ℕ → ℝ≥0∞
-  | .sampled, t => ((I.session θ).map fun A => A.delta t (I.base.crBound θ .sampled t)).getD ⊤
+  | .sampled, t => ((I.session θ).map fun A => A.delta t (I.sampledBound θ t)).getD ⊤
   | a, t => I.base.delta θ a t
+
+theorem deltaOf_some {θ : ByteArray} {A : Live} (h : I.session θ = some A) (t : ℕ) :
+    I.deltaOf θ .sampled t = A.delta t (I.sampledBound θ t) := by
+  simp [deltaOf, h]
+
+theorem deltaOf_none {θ : ByteArray} (h : I.session θ = none) (t : ℕ) : I.deltaOf θ .sampled t = ⊤ := by
+  simp [deltaOf, h]
 
 noncomputable def lossOf : Subprotocol → ByteArray → ℝ≥0∞ → ℝ≥0∞
   | .sampled => fun _ _ => 0
@@ -507,10 +518,7 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFind
     obtain ⟨h1, h2⟩ := I.fileCR K hcr
     exact ⟨hpr A h, hm, hr, hb, strict_of_zero (pr_unit h1), strict_of_zero (pr_unit h2)⟩
   premises _ _ _ _ := Iff.rfl
-  delta θ F A h t := by
-    show A.delta t _ ≤ ((I.session θ).map fun A => A.delta t (I.base.crBound θ .sampled t)).getD ⊤
-    rw [(I.sessions_some h).1]
-    exact le_rfl
+  delta θ F A h t := (I.deltaOf_some (I.sessions_some h).1 t).symm.le
 
 /-! ## `Covers` -/
 
@@ -563,9 +571,7 @@ theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hS
     Covers (I.vocab K) k I.sessions := by
   intro θ F hS hP c σ hcr
   rcases hA : I.session θ with _ | A
-  · show _ ≤ ((I.session θ).map fun A => A.delta _ (I.base.crBound θ .sampled _)).getD ⊤
-    rw [hA]
-    exact le_top
+  · exact le_top.trans_eq (I.deltaOf_none hA _).symm
   refine le_of_eq_of_le ?_ zero_le
   by_contra hne
   obtain ⟨t, hv⟩ := exists_tape_of_prob_ne hne
@@ -765,7 +771,6 @@ noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
     signs_le := deployment.signs_le fun _ => []
     forger_signed := fun _ _ _ _ _ _ => Nat.zero_le _
     computed := fun _ _ _ _ _ => ∅
-    macs := fun _ _ _ _ _ => 0
     world := fun _ _ _ _ _ => Verity.Idle.world
     world_window := fun _ _ _ _ _ => rfl
     world_capacity := fun _ _ _ _ _ => rfl

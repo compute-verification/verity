@@ -6,11 +6,10 @@ public import Proofs.Properties.Verity.Sampled.Instance
 # v2's session at the registered files (`Instance.SessionAt`)
 
 `SessionAt` asks, at each parameters `θ` where the deployment runs a session (`Instance.session θ`), that v2 set it up
-on every accepted play's committed files naming the registered circuit and public files; where it runs none, sampled
-proofs' published δ is `⊤` (`Instance.deltaOf`). v2's reading of committed files
-(`readOf`) is their circuit and public files' and the lookup tables the circuit file registers (`pinnedTables`), so
-files naming the same circuit and public files are read alike (`read_files`, `setsUp_files`), whichever tables they
-hold. That v2 reads the registered tables on the blobs sent is the coupling's (`TablesSent`, whose failure is a SHA-512
+on every accepted play's committed files naming the registered circuit and public files; where it runs none, SPOT's
+published δ is `⊤` (`Instance.deltaOf`). v2's reading of committed files (`readOf`) is their circuit and public files'
+and the lookup tables the circuit file registers (`pinnedTables`), so files naming the same circuit and public files are
+read alike (`read_files`, `setsUp_files`), whichever tables they hold. That v2 reads the registered tables on the blobs sent is the coupling's (`TablesSent`, whose failure is a SHA-512
 collision the read finder outputs, `Binding.finder_of_tables`).
 
 What is left is `SessionRegistered`: the deployment's session at `θ`, where it runs one, is one v2 sets up on the
