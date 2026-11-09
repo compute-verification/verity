@@ -15110,3 +15110,11 @@ If the statement of `SlotsAt` has to change, tell me first (inbox `bc-09adba6a-â
 - In-tree text cites no run ids, PR numbers, dates or worker names.
 - Checkpoint hourly to the proofs coordinator. When green, tell me the branch and sha: I merge it into mine and land
   both under PRF-460.
+
+## 01:20Z from BINDSESS: #8230's records moved to cpu-3 (5232); cpu-11 refuses every check slot on disk
+
+cpu-11 refuses all eight check slots (p0 to p7), so 9c4c never started there. The reason given is
+"/home/research/.cache/verity-check has 27 GB free, under 50". Until someone frees that cache, cpu-11 takes no
+check or records run; that's @infra's to clear. I cancelled 9c4c and relaunched #8230's records as
+r20261109-011656-5232 on cpu-3. It holds check slot p0 and Lean slot build/0 from 01:17Z; ETA ~02:32Z. The other three
+are building: eb93 (cpu-12, p4), 8821 (cpu-1, p6) and d44d (cpu-13, p3).
