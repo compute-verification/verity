@@ -10,6 +10,7 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Binding
 import Proofs.Flock.Claims.Sampling.Extract
 import Proofs.Flock.SamplingGeneric.Assemble
+import Proofs.Flock.SamplingGeneric.TwoCap
 import Proofs.Flock.Soundness.Rewinding
 
 /-!
@@ -23,8 +24,6 @@ block's committed interior (`OffIreg`).
 
 * `correct_refIn_congr`: a proof block's correctness on its replay block's values reads the boundary values only below
   the program's gates and the interior values only at the replay block's gates.
-* `iregVal_forkOn`, `fregTwo_forkOn`: the committed interior and the committed incorrect set read the run's coins off
-  the second stage only.
 * `iopensAt_some`, `iopensAt_of_mem`: what a run's extractions open under a replay block's interior roots is a kept
   opening that passes, and, at a run that doesn't disagree with itself, every such opening.
 * `iop`, `iplur`, `OffIreg`, `IConflict`: at a tape and first-stage coins, the second stages' openings of the program's
@@ -44,6 +43,10 @@ block's committed interior (`OffIreg`).
   at the committed boundary trace averaged over the tape.
 * `eventTwo_split`, `eventTwo_le`: the event at a tape as the union of those four, and **the primary conjunct of
   `CompiledTwo.KSRegTwo`**, at most `ε_reg,2`.
+
+The committed interior and the committed incorrect set read no second-stage coin (`CompiledTwo.iregVal_forkOn`,
+`CompiledTwo.FregTwo_forkOn`), and the incorrect set is the grid's incorrect proof blocks at the committed traces
+(`CompiledTwo.FregTwo_eq`), all in `SamplingGeneric/TwoCap.lean`.
 -/
 
 @[expose] public section
@@ -72,8 +75,8 @@ end Claims.Sampling
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Opening Partition InScopeTwo cell replayOf forkOn forkOn_forkOn wrongInAt
-  gateBlock gateBlock_of_mem correct_refIn_congr val_assemble ιOf ιOf_eq)
+open Claims.Sampling (AuditStatement Opening Partition InScopeTwo cell replayOf forkOn wrongInAt
+  gateBlock gateBlock_of_mem correct_refIn_congr val_assemble ιOf ιOf_eq wrongAllAt_subset)
 
 namespace Compiled
 
@@ -162,19 +165,6 @@ end Compiled
 namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-
-/-! ## The committed interior reads the first stage's coins -/
-
-/-- The committed interior at `r` is the one at any second stage on `r`'s first stage. -/
-theorem iregVal_forkOn (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (r e : Fin (L.V.k x) → Coin) : L.iregVal H P x ω (forkOn (L.stage2 x) r e) = L.iregVal H P x ω r := by
-  funext ρ g
-  simp only [iregVal, forkOn_forkOn]
-
-/-- So is the committed incorrect set. -/
-theorem fregTwo_forkOn (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (r e : Fin (L.V.k x) → Coin) : L.FregTwo H P x ω (forkOn (L.stage2 x) r e) = L.FregTwo H P x ω r := by
-  simp only [FregTwo, iregVal_forkOn]
 
 /-! ## A run's interior openings -/
 
@@ -487,11 +477,9 @@ theorem fregTwo_lt {H : Msg → Msg} {L : CompiledTwo Coin A} {x : Msg} {s : Aud
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) {v : ℕ} (hv : v ∈ L.FregTwo H P x ω r) :
     v < L.nPU x := by
-  simp only [FregTwo, hs, hPt, hd, mem_biUnion, mem_product, mem_range] at hv
-  obtain ⟨p, -, hvw⟩ := hv
-  simp only [wrongInAt, cell, mem_filter, mem_range] at hvw
+  rw [FregTwo_eq H L P hs hPt hd ω r] at hv
   rw [Compiled.nPU_eq hs hPt]
-  exact hvw.1.1
+  exact mem_range.1 (wrongAllAt_subset s Pt d.part _ _ hv)
 
 set_option synthInstance.maxSize 1024 in
 /-- **The event at a tape**: an accepted run that samples a proof block of `FregTwo` has the first such block's session
@@ -551,7 +539,7 @@ theorem eventTwo_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hb
       L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) :=
     Compiled.pr_unfound_le_at H L.toCompiled P β hβ0 hβ
       (fun ω r => L.leadSel x (L.selIn x (L.FregTwo H P x ω r)))
-      (fun ω r e => by simp only [fregTwo_forkOn]) fun ω r sl => hκ ω r sl
+      (fun ω r e => by simp only [FregTwo_forkOn]) fun ω r sl => hκ ω r sl
   have hI := Compiled.pr_inConf_le hbind hs P
   have hO := Compiled.ex_offReg_le hbind hs P
   have hIC := ex_offIreg_le hbind hS hs d.part P
