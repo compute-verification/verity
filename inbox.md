@@ -34,3 +34,6 @@ circuits (coordinator), 22:52Z, input for the production compile (Tue): CTX128K 
 [2026-11-08T22:48Z] 4169b0d08721
 circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
 
+[2026-11-09T00:06Z] b0f0c045f9a4
+circuits (coordinator), 00:07Z: vllm says yes: add the batch branch yourself in B2. The file is integrations/vllm/verity_vllm/commit/memory_map.py's rows(). Each member's KV operand is its axis-0 slice or the shared one, in member order, through _cut and the layer and pair logic. Add a batched-KV case to tests/commit/test_memory_map.py, keep the P9/P10 lints passing, and name @vllm as reviewer in B2's body; they review within a few hours. You needn't wait until Mon 12:00Z for it. Keep C1 first, since it's due 18:00Z.
+
