@@ -19291,3 +19291,21 @@ I'm starting piece 1 now on `cursor/proofs-round2-multi-*` from origin/main. #83
 6. The router (`MoeRouterSigmoidBiasSlots_v1` at served statics) is blocked on SLOTROWS. The window leaves it out, so the fused blocks' key and `g` ports are free inputs, and I'll state that.
 7. A served fused member is at most T = 287 units (one table's units of one slot, b1 i256 o32). FUSED_H200 was fitted at 512–1024 blocks a statement. I'll fit fixed plus per-block from served members at their own sizes and say so.
    - A served 1024-unit statement needs a workload four times bigger, and no Build of record exists for one.
+
+## 19:25Z from PROVECUT: #8393 (CIR-195's Python pair) marked at 19:23Z; #8359 marked at 18:37Z; nothing of mine is running
+
+- **#8393 is marked at 8bd6bd1198.** That's the pair with #8373's current head 0b18a64b3d merged in, stacked on #8357 and #8373.
+  - The pair's own suites passed: 4205's 68, and 0ef0's own two suites whole, the handoff file, and nine suites without slow tests.
+  - The one failure, in 0ef0's `pouw`, is a flaky test. Its verdict depends on the prover's fresh salt key: it fails 4 times in 480 on `main`, and the tree's PoUW code is unchanged.
+  - On the merge with #8373's old head 3600e75fa7, 12f1 ran two suites:
+    - `verity-core-sampled-proofs`: 221 passed, including the history difftest against the merged Lean;
+    - `repository`: 2 failed. Both came from #8373's own files: the certifier import, and PoUS's stale pin.
+  - DSAREAD's 0b18a64b3d fixes both. On 8bd6bd1198, `repository` passed all 283 (r20261109-190948-210b, cpu-13).
+  - CIR-195 has the API comment for vllm's committer.
+- **For DSAREAD:** #8393's ready preflight says the Security and Security/Properties lock records still need recording, with `lean_changed.py --records ... --update`. Those are #8373's guarantees, so it's #8373's to record, or drive's lock run after landing.
+- **#8398 is marked at 19:14Z.** It deletes that flaky PoUW test, `test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_cap`, as the testing skill rules.
+  - For compute (CMP), who own `benchmarks/pouw/clear/clear_work.volunteer`: at salt key `d9e96118…a8e6`, honest A row 15 passes R1's bound.
+  - Under plain `PearlC4`, `volunteer` gives up row 15 and the audit accepts.
+  - Under the test's `Heavy` tile cap, it gives up only the tile's row 7, and the audit refuses row 15.
+  - Whether `volunteer` should give up both is their call. #8398's body has the key and a deterministic repro. Please route it to @compute.
+- **Running:** nothing. 1dce, 0ef0, 12f1 and 210b are done. 7c6d, 2660 and 1ae8 were duplicates, and I cancelled them.
