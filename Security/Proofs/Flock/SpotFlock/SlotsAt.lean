@@ -5,24 +5,24 @@ public import Proofs.Flock.SpotFlock.RevealAt
 /-!
 # `SlotsAt` at the base frame, from where each gate's value sits
 
-`slotsAt_slotMap`: where every gate's value has one site that holds at every accepted run's checked unit that needs it
-(`Sites h`), `SlotsAt` holds at the slot map `slotMap h` (each gate's site's slot), the base frame
-`revealCode h (siteMap h) c₀` and the layout `layoutFor h`, for every `c₀`. `slotsAt_of` is the same at any site map
-whose sites hold. None of `slotMap`, `revealCode` and `layoutFor` reads `h.frame` (`slotMap_frame`,
+`slotsAt_slotMap`: where every gate's value has one address that holds at every accepted run's checked unit that needs
+it (`Addresses h`), `SlotsAt` holds at the slot map `slotMap h` (each gate's address's slot), the base frame
+`revealCode h (addressMap h) c₀` and the layout `layoutFor h`, for every `c₀`. `slotsAt_of` is the same at any address
+map whose addresses hold. None of `slotMap`, `revealCode` and `layoutFor` reads `h.frame` (`slotMap_frame`,
 `revealCode_frame`, `layoutFor_frame`).
 
 At every accepted run's checked unit the layout puts the unit in a block of its session's first table
 (`CheckedRun.blockOf_some`) and each gate at a column of that table (`CheckedRun.wire_lt`, `colAt_lt`).
 
-**A site holds at a run** (`CheckedRun.SiteHolds`): three facts about gate `g`'s site at one checked unit of an
-accepted run, at the port the site names in that unit's session (`Site.port`).
+**An address holds at a run** (`CheckedRun.AddressHolds`): three facts about gate `g`'s address at one checked unit of
+an accepted run, at the port the address names in that unit's session (`Address.port`).
 
 * `Counted`: the unit's instance is below the table's count.
-* `RowAt`: the site's place is as wide as its port's row in that table, and the bit the row holds at the place, at the
-  unit's instance, is the one the layout reads.
+* `RowAt`: the address's place is as wide as its port's row in that table, and the bit the row holds at the place, at
+  the unit's instance, is the one the layout reads.
 * the branch facts, each giving the slot's row as the frame reads it off the gate's roots (`leafAt`, `unitsAt`): at a
   port a registered read is named like (`ReadsRegistered`), the port is the first of its name, the gate's roots are
-  those round 2 reads the value under (`readRoots`), and the site's slot names the entry round 2 reads the value off
+  those round 2 reads the value under (`readRoots`), and the address's slot names the entry round 2 reads the value off
   (`readKeyAt`), at the read's schema, its leaf the session header's position for the row; at a one-table session's
   other ports (`ReadsInterior`), the gate is one its replay block doesn't commit, and the slot names the template's port
   of the interior record, sized, at the published tree's schema, its units the tree's leaves and its leaf the drawn
@@ -33,12 +33,12 @@ A slot reads its row off the roots, so one slot fits every replay sample: under 
 (`leafAt_irootsOf`), the second stage's population as the two-stage registration lays it out; under the run's roots it
 reads its fixed leaf (`leafAt_decode`).
 
-The row's format is not part of a site: every port of the session's first table is an unsegmented bit row
+The row's format is not part of an address: every port of the session's first table is an unsegmented bit row
 (`CheckedRun.v2Row_port`), since the pin holds the session's circuit to its template's reference statement's, whose
 ports `templateOk` holds to `ProvedScope.v2Row`.
 
-`Sites h` is a premise, not a theorem, because the verifier's checks don't give it today, and at some registrations it
-can't hold:
+`Addresses h` is a premise, not a theorem, because the verifier's checks don't give it today, and at some registrations
+it can't hold:
 
 * the width (`RowAt`'s first fact): one place for every unit that needs the gate, so the ports that hold it in
   different sessions must have one width;
@@ -123,11 +123,11 @@ variable (r : CheckedRun)
 /-- **The unit's instance is one of its session's first table's instances.** -/
 def Counted : Prop := r.n h < r.sts[0]!.pub.n
 
-/-- **The site's port reads a registered value**: a registered read `reg` is named like the unit's port, it is the
-first port of that name, the gate's roots are those round 2 reads `reg`'s value under, and the site's slot names the
+/-- **The address's port reads a registered value**: a registered read `reg` is named like the unit's port, it is the
+first port of that name, the gate's roots are those round 2 reads `reg`'s value under, and the address's slot names the
 entry round 2 reads the value off, at `reg`'s schema, not sized; under those roots its leaf (`leafAt`), at an entry of
 `reg`'s leaf count, is the position the session header gives the instance's row. -/
-def ReadsRegistered (S : Site) (g : ℕ) : Prop :=
+def ReadsRegistered (S : Address) (g : ℕ) : Prop :=
   ∃ reg, regNamed r.ins r.sts (S.port r.u) = some reg ∧
     (List.range r.sts[0]!.c.ports.size).find? (fun q => r.sts[0]!.c.ports[q]!.name == reg.name) = some (S.port r.u) ∧
     r.roots h g = readRoots h r.x r.m₁ r.c₀ r.c₁ r.ρ (templateOf h.ms r.u) reg.name reg.value ∧
@@ -139,12 +139,12 @@ def ReadsRegistered (S : Site) (g : ℕ) : Prop :=
         leafAt (r.roots h g) S.slot e =
           positions.getD (_root_.Flock.Registered.ref t r.sts[0]!.c.ports.size (S.port r.u) (r.n h)) 0
 
-/-- **The site's port reads the interior record**: no registered read is named like the unit's port, the session has
-one table, the gate is one the unit's replay block doesn't commit, and the site's slot names the template's port of
+/-- **The address's port reads the interior record**: no registered read is named like the unit's port, the session has
+one table, the gate is one the unit's replay block doesn't commit, and the address's slot names the template's port of
 the interior record, sized; over any population the session's public file loads, the slot has the published tree's
 schema, and under the replay block's roots its units are the tree's leaves and its leaf (`leafAt`) the drawn unit's
 row. -/
-def ReadsInterior (S : Site) (g : ℕ) : Prop :=
+def ReadsInterior (S : Address) (g : ℕ) : Prop :=
   regNamed r.ins r.sts (S.port r.u) = none ∧ r.ins.read.I.count ≤ 1 ∧ S.port r.u < r.sts[0]!.c.ports.size ∧
     (g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false) ∧
     S.slot.key = .interior (h.names.getD (templateOf h.ms r.u) "") (r.sts[0]!.c.ports[S.port r.u]!).name ∧
@@ -155,14 +155,14 @@ def ReadsInterior (S : Site) (g : ℕ) : Prop :=
     ∀ e, entryAt (iroots r.x r.seen r.ρ) S.slot = some e →
       leafAt (iroots r.x r.seen r.ρ) S.slot e = rowAt r.sts[0]!.c pop (S.port r.u) (unitOf r.ins.read.draw (r.n h))
 
-/-- **Gate `g`'s value sits at site `S`** in the run (the module's docstring). -/
-def SiteHolds (S : Site) (g : ℕ) : Prop :=
+/-- **Gate `g`'s value sits at address `S`** in the run (the module's docstring). -/
+def AddressHolds (S : Address) (g : ℕ) : Prop :=
   r.Counted h ∧ r.RowAt h S g ∧ (r.ReadsRegistered h S g ∨ r.ReadsInterior h S g)
 
 end CheckedRun
 
-/-- **Each gate's slot**: its site's. -/
-def slotsOf (site : ℕ → Option Site) (g : ℕ) : Option Slot := (site g).map Site.slot
+/-- **Each gate's slot**: its address's. -/
+def slotsOf (addr : ℕ → Option Address) (g : ℕ) : Option Slot := (addr g).map Address.slot
 
 namespace CheckedRun
 
@@ -263,18 +263,18 @@ theorem v2_of_v2Row {p : _root_.Flock.Port} (hp : _root_.Flock.ProvedScope.v2Row
   unfold _root_.Flock.ProvedScope.v2Row at hp
   cases hv : p.v2 <;> cases hs : p.segs <;> simp_all
 
-/-- **`SlotsAtGate` at a site that holds**: at a checked unit of an accepted run, at a gate it needs whose site holds
-there, the code's opening is the site's (`openAt_revealCode`): its value is the witness's bit at the layout's column,
-its row and salt are the site's port's at the unit's instance (`row_opening`, `salt_opening`), and its path is
-`pathAt`'s (`path_opening`). -/
-theorem slotsAtGate (hr : r.Ok h) {site : ℕ → Option Site} (c₀ : Code) {g : ℕ} {S : Site} (hsS : site g = some S)
-    (hg : r.s.prog.Needs r.b g) (hH : r.SiteHolds h S g) :
-    SlotsAtGate h (slotsOf site) (revealCode h site c₀) (layoutFor h) r.x r.s r.m₀ r.m₁ r.m₂ r.c₀ r.c₁ r.rest r.wF r.u
+/-- **`SlotsAtGate` at an address that holds**: at a checked unit of an accepted run, at a gate it needs whose address
+holds there, the code's opening is the address's (`openAt_revealCode`): its value is the witness's bit at the layout's
+column, its row and salt are the address's port's at the unit's instance (`row_opening`, `salt_opening`), and its path
+is `pathAt`'s (`path_opening`). -/
+theorem slotsAtGate (hr : r.Ok h) {addr : ℕ → Option Address} (c₀ : Code) {g : ℕ} {S : Address} (hsS : addr g = some S)
+    (hg : r.s.prog.Needs r.b g) (hH : r.AddressHolds h S g) :
+    SlotsAtGate h (slotsOf addr) (revealCode h addr c₀) (layoutFor h) r.x r.s r.m₀ r.m₁ r.m₂ r.c₀ r.c₁ r.rest r.wF r.u
       r.ρ r.ins r.sts g := by
   obtain ⟨hn, hR, hrd⟩ := hH
   have hj := sts_pos hr
   have e0 : r.sts[0]! = r.sts[0] := getElem!_pos r.sts 0 hj
-  have hsl : slotsOf site g = some S.slot := by simp [slotsOf, hsS]
+  have hsl : slotsOf addr g = some S.slot := by simp [slotsOf, hsS]
   have hq : S.port r.u < r.sts[0]!.c.ports.size := by
     rcases hrd with ⟨reg, -, hfind, -⟩ | ⟨-, -, hq, -⟩
     · exact List.mem_range.1 (List.mem_of_find?_eq_some hfind)
@@ -285,13 +285,13 @@ theorem slotsAtGate (hr : r.Ok h) {site : ℕ → Option Site} (c₀ : Code) {g 
   intro o
   have ho : o = r.opening h S g := openAt_revealCode hr hsS hg c₀
   rw [ho]
-  refine ⟨rfl, row_opening hsS hv2 hseg hR, salt_opening site c₀ S g, ?_⟩
+  refine ⟨rfl, row_opening hsS hv2 hseg hR, salt_opening addr c₀ S g, ?_⟩
   rw [← e0]
   rcases hrd with ⟨reg, hreg, hfind, hroots, hkey, hsch, hsz, hleaf⟩ | ⟨hnone, hc1, hq, hint, hkey, hsz, hI⟩
   · obtain ⟨own, hown, hfo⟩ := Option.bind_eq_some_iff.1 hreg
     refine Or.inl ⟨own, reg, hown, Array.mem_of_find?_eq_some hfo, hfind, hroots,
       fun t positions paths ht hent => ⟨S.slot, hsl, hkey, hsch, hsz, hleaf t positions paths ht hent, ?_⟩⟩
-    rw [path_opening site c₀ S g]
+    rw [path_opening addr c₀ S g]
     simp only [pathAt, hreg, ht, hent]
   · have hR' : (r.opening h S g).1 = iroots r.x r.seen r.ρ := by
       rw [roots_opening hr S g, if_pos hint]
@@ -301,51 +301,51 @@ theorem slotsAtGate (hr : r.Ok h) {site : ℕ → Option Site} (c₀ : Code) {g 
       simpa using Array.find?_eq_none.1 hnf reg hreg
     · obtain ⟨hsc, hun, hl⟩ := hI pop hpop
       refine ⟨S.slot, hsl, hkey, hsc, hsz, by rw [hR']; exact hun, fun e he => by rw [hR'] at he ⊢; exact hl e he, ?_⟩
-      rw [path_opening site c₀ S g]
+      rw [path_opening addr c₀ S g]
       simp only [pathAt, hnone, hpop]
 
 end CheckedRun
 
-/-- **`SlotsAt` at any site map whose sites hold**: where each gate a checked unit of an accepted run needs has a site
-that holds there (`CheckedRun.slotsAtGate`). -/
-theorem slotsAt_of {site : ℕ → Option Site}
-    (hS : ∀ r : CheckedRun, r.Ok h → ∀ g, r.s.prog.Needs r.b g → ∃ S, site g = some S ∧ r.SiteHolds h S g)
-    (c₀ : Code) : SlotsAt h (slotsOf site) (revealCode h site c₀) (layoutFor h) := by
+/-- **`SlotsAt` at any address map whose addresses hold**: where each gate a checked unit of an accepted run needs has
+an address that holds there (`CheckedRun.slotsAtGate`). -/
+theorem slotsAt_of {addr : ℕ → Option Address}
+    (hS : ∀ r : CheckedRun, r.Ok h → ∀ g, r.s.prog.Needs r.b g → ∃ S, addr g = some S ∧ r.AddressHolds h S g)
+    (c₀ : Code) : SlotsAt h (slotsOf addr) (revealCode h addr c₀) (layoutFor h) := by
   intro x s Pt d m₀ m₁ m₂ c₀' c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset g hg
   have hr : CheckedRun.Ok h ⟨x, s, m₀, m₁, m₂, c₀', c₁, rest, wF, u, b, ρ, rb, ins, sts⟩ :=
     ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩
   obtain ⟨S, hsS, hH⟩ := hS _ hr g hg
   exact CheckedRun.slotsAtGate hr c₀ hsS hg hH
 
-/-- **Every gate's value has one site**, fixed before the run, that holds at every accepted run's checked unit that
-needs the gate (`CheckedRun.SiteHolds`). The premise `SlotsAt` rests on (the module's docstring). -/
-def Sites : Prop :=
-  ∀ g, ∃ S : Site, ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.SiteHolds h S g
+/-- **Every gate's value has one address**, fixed before the run, that holds at every accepted run's checked unit that
+needs the gate (`CheckedRun.AddressHolds`). The premise `SlotsAt` rests on (the module's docstring). -/
+def Addresses : Prop :=
+  ∀ g, ∃ S : Address, ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g
 
 open Classical in
-/-- **The site map**: each gate's site where it has one that holds at every run that needs it. -/
-noncomputable def siteMap (g : ℕ) : Option Site :=
-  if hx : ∃ S : Site, ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.SiteHolds h S g then some hx.choose
+/-- **The address map**: each gate's address where it has one that holds at every run that needs it. -/
+noncomputable def addressMap (g : ℕ) : Option Address :=
+  if hx : ∃ S : Address, ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g then some hx.choose
   else none
 
-/-- **The slot map**: each gate's site's slot. -/
-noncomputable def slotMap : ℕ → Option Slot := slotsOf (siteMap h)
+/-- **The slot map**: each gate's address's slot. -/
+noncomputable def slotMap : ℕ → Option Slot := slotsOf (addressMap h)
 
-theorem siteMap_spec (hS : Sites h) (g : ℕ) :
-    ∃ S, siteMap h g = some S ∧ ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.SiteHolds h S g :=
+theorem addressMap_spec (hS : Addresses h) (g : ℕ) :
+    ∃ S, addressMap h g = some S ∧ ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g :=
   ⟨(hS g).choose, dite_eq_left (hS g), (hS g).choose_spec⟩
 
 /-- **`SlotsAt` at the slot map** (the module's docstring). -/
-theorem slotsAt_slotMap (hS : Sites h) (c₀ : Code) :
-    SlotsAt h (slotMap h) (revealCode h (siteMap h) c₀) (layoutFor h) :=
+theorem slotsAt_slotMap (hS : Addresses h) (c₀ : Code) :
+    SlotsAt h (slotMap h) (revealCode h (addressMap h) c₀) (layoutFor h) :=
   slotsAt_of h (fun r hr g hg => by
-    obtain ⟨S, hs, hH⟩ := siteMap_spec h hS g
+    obtain ⟨S, hs, hH⟩ := addressMap_spec h hS g
     exact ⟨S, hs, hH r hr hg⟩) c₀
 
 theorem slotMap_frame (f : Code) : slotMap { h with frame := f } = slotMap h := rfl
 
-theorem revealCode_frame (f : Code) (site : ℕ → Option Site) (c₀ : Code) :
-    revealCode { h with frame := f } site c₀ = revealCode h site c₀ := rfl
+theorem revealCode_frame (f : Code) (addr : ℕ → Option Address) (c₀ : Code) :
+    revealCode { h with frame := f } addr c₀ = revealCode h addr c₀ := rfl
 
 theorem layoutFor_frame (f : Code) : layoutFor { h with frame := f } = layoutFor h := rfl
 
