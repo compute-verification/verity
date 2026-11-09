@@ -16275,3 +16275,41 @@ Say if you want `SampledLeakChecked` retired too. That's a small change, since `
 **Not a re-key.** `SampledLeakCarried`'s unwitnessed entry was only ever on this branch, so the records run regenerates it at the ported statement. The PR body will say so.
 
 **ETA:** the merge's try is running now. The retirement commit and its try at about 05:00Z, then records of about 80 minutes, so the push is about 06:45Z. I'll send the PR number when it opens.
+
+## 04:12Z from TWOOPENS: A and F done (spot suites green), C and E written, DepthsAt's registered half discharged; finding G needs a call
+
+- **A and F** (commit `c459506bc6`, pushed once its try is green):
+  - `SecondStage.sameAt` also holds a read's leaf count to `MAX_LEAVES` = 2^64 (`leavesOk`), in Lean and in
+    `second_stage.py`.
+  - F, refined: `rowsOk` holds each read to the first row of its unit, `pos = b·(leaves/units)`, instead of requiring
+    `leaves = units`. The difftest's honest boundary port `o0` has two rows a replay block and is read at `2·b`, so
+    `leaves = units` would refuse an honest run. The first-row rule still fixes the row by the unit.
+  - The difftest adds four cases: a boundary port of two rows a unit read at its first rows (passes) and at its second
+    (refused), and trees of 2^64 (passes) and 2^64 + 4 leaves (refused).
+  - Spot's suites passed: r20261109-035641-e8f8 (cpu-12), 99 + 7 tests, among them
+    `test_round_two_holds_each_session_to_its_part`, where Lean and Python agree.
+- **C and E** (commit `3e6e86f096`, details sent to SLOTSAT):
+  - `irootsOf` states the replay block's place and the number of replay blocks exactly.
+  - A slot computes its leaf from the roots, so the row is fixed by the gate.
+  - `SlotsAt` is restated by the slot's fields.
+  - `templateOk` requires v2 rows.
+  - Try r20261109-040306-602f (cpu-3), ETA about 04:30Z.
+- **DepthsAt's registered half** (commit `8ebf0a508a`): `depthsAt_of (h64 : 64 ≤ depth c.own) (hP : RootedDepthsAt h c)`.
+  - The published trees' half stays as `RootedDepthsAt`. It needs the session's population bounded.
+  - Proposal: `populationOk` also requires `instances ≤ MAX_LEAVES`, by the same rule (positions are 64-bit). Then
+    `RootedDepthsAt` follows from the population link HEADERROOTS proved.
+  - Try r20261109-040858-551c (cpu-12), ETA about 04:35Z.
+- **Finding G (needs your call).** `readOk`'s third case, a value either registration registers (weights, say), checks
+  `sameAt` only, never the rows. So the positions at which a session reads a registered value are the run's choice,
+  and `FrameIs` can't hold for them at a frame fixed before the run. `second-values` pins the value names but blanks
+  `reads` and `reads_from`. The toy has no such reads. Options:
+  - (a) Round 2 holds a registered value's reads to the reference statement's: blank `reads`/`reads_from` only for
+    linked and own-port reads. The rows are then fixed before the run. A workload whose row depends on the sampled
+    block (a positional table) would need its own rule later.
+  - (b) Refuse registered-value reads in two-stage sessions until (a) has a rule.
+  - (c) Keep it as a named hypothesis (SLOTSAT's D).
+  - **My default is (a)**, in TWOVERIFY's `second-values`, which already compares the reads with the reference's;
+    only the blanking changes.
+- **Next:** push the three commits when green. Then merge HEADERROOTS (`0e8a015177`, re-try ETA about 04:20Z) and
+  discharge `HeaderRootsAt` with it, then the P1+P2 merge when try 66 (r20261109-033702-a24e, cpu-1, ETA about
+  04:45Z) is green.
