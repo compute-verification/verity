@@ -125,7 +125,7 @@ def _simple(s: str):
     try:
         words = list(lex)
     except ValueError:
-        return
+        return "a quote left open: no command line"
     cmd: list[str] = []
     for w in [*words, ";"]:
         if w and set(w) <= set(";&|()"):
@@ -244,8 +244,17 @@ def _child() -> None:
                 raise _HandOff(rest)
         raise _Acts(f"starts {' '.join(argv)[:120]}")
 
+    def tracing() -> bool:
+        """Whether this event is the suite's read tracer's own (it logs from its audit hook), not the CLI's."""
+        f = sys._getframe(1)
+        while f is not None:
+            if f.f_code.co_filename.endswith("verity_suite_reads.py"):
+                return True
+            f = f.f_back
+        return False
+
     def hook(event: str, args: tuple) -> None:
-        if not state["armed"]:
+        if not state["armed"] or event in ("sys._getframe", "object.__getattr__") or tracing():
             return
         if event == "subprocess.Popen":
             handoff(args[1] if isinstance(args[1], (list, tuple)) else [args[1]])
@@ -363,6 +372,9 @@ def failures() -> dict[tuple[str, str], str]:
 
 @pytest.mark.slow
 def test_every_documented_command_line_parses():
+    judged = sum(r["status"] != "acts" for r in results())
+    assert judged > len(results()) / 2, (f"the child judged only {judged} of {len(results())} command lines: something acts before "
+                                         f"every CLI parses (an audit hook's own writes?): {[r['why'] for r in results()][:3]}")
     new = {k: v for k, v in failures().items() if k not in KNOWN}
     assert not new, "documented command lines that don't parse against their CLI (fix the line, or the CLI):\n" + "\n".join(
         f"  {f}: `{cmd}`: {why}" for (f, cmd), why in sorted(new.items()))
@@ -380,8 +392,9 @@ def test_the_child_parses_without_running():
         ["research", "status", "RUN", "--json"], ["research", "status", "--no-such-flag"], ["research", "doctor", "--json"])]
     p = subprocess.run([sys.executable, __file__, "--child"], cwd=ROOT, input="".join(json.dumps(c) + "\n" for c in probe),
                        capture_output=True, text=True)
-    got = [json.loads(x)["status"] for x in p.stdout.splitlines()]
-    assert got[:2] == ["ok", "fails"] and got[2] in ("ok", "acts"), (got, p.stderr[-2000:])
+    got = [json.loads(x) for x in p.stdout.splitlines()]
+    assert [g["status"] for g in got][:2] == ["ok", "fails"] and got[2]["status"] in ("ok", "acts"), (
+        [(g["status"], g["why"]) for g in got], p.stderr[-2000:])
 
 
 if __name__ == "__main__" and sys.argv[1:] == ["--child"]:
