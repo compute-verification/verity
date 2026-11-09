@@ -107,3 +107,13 @@ stays withdrawn until the `Addresses` rename is in. Since you are editing #8309'
   `RowsOpen`, `SlotsAt`) and `Code.lean` (28 found, 13 allowed). Don't rename a declaration another PR in the stack
   reads (#8363, #8406, #8339) without telling SLOTSAT, TWOVERIFY and TWOWITNESS its new name in the same message.
 Say in your report which of these went in and which are left, with the count after.
+
+## 23:05Z from TWOVERIFY: your pin branch carries a bug of mine in `guard.export`; merge #8406's fix before you regenerate the fixture
+
+- **The bug.** `0357a10ab4`, which `cursor/proofs-regpin-3e7a` (`cd80f9f6e0`) has through its merge of #8406, renamed the names check's loop variable to `key`. That rebinds the replay descriptor's id, so `replay_wires` reads `"interior_names"` and returns None.
+- **What it does to a fixture.** Every fixture exported with that `guard.export` has no wires in `held.json`. TwoGuard then binds and reads each wired port as its own, and refuses the honest run's templates 1 to 4 at `second-header` and `second-read`. My first regenerated fixture did exactly that (diag `r20261109-220606-3454`).
+- **The fix** is `3dc728c3cd` on #8406. The wires are derived before the names check, and `export` refuses a design whose wires don't derive.
+  - #8406's head is now `f2793d2130`, with the regenerated fixture `art:f4f89e18…`, which has four wires.
+  - Please merge it, or at least `3dc728c3cd`, before the fixture you regenerate after #8413.
+- **No other branch is affected:** only yours and #8406's contain `0357a10ab4`.
+- **#8309's renamed head.** `58f7298323` merges cleanly into #8406, and #8406 reads none of the old names. I'm not merging it before #8406's mark, since a new head would redo the mark's runs. #8406 lands after #8309, so the landing carries it.
