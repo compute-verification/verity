@@ -264,17 +264,16 @@ def main (args : List String) : IO UInt32 := do
   let m₂ ← readMsg (rest.head?.map (System.FilePath.mk ·) |>.getD (dir / "m2.bin"))
   let s₀ ← coinBytes (dir / "c0.bin")
   let s₁ ← coinBytes (dir / "c1.bin")
+  let held ← ok "held.json" (Json.parse (← IO.FS.readFile (dir / "held.json")))
   let mut refs : Array Claims.Msg := #[]
   let mut reads : Array Json := #[]
-  for t in [0:4] do
-    if (← (dir / s!"ref-{t}.bin").pathExists) then
-      refs := refs.push (← readMsg (dir / s!"ref-{t}.bin"))
-      let r := dir / s!"ref-{t}.reads.json"
-      unless (← r.pathExists) do
-        throw (IO.userError s!"{r}: no reference reads; an export from before they left the reference statements \
-          (python3 benchmarks/two_stage/guard.py refs {dir})")
-      reads := reads.push (← ok r.toString (Json.parse (← IO.FS.readFile r)))
-  let held ← ok "held.json" (Json.parse (← IO.FS.readFile (dir / "held.json")))
+  for t in [0:(← ok "names" (field held "names").getArr?).size] do
+    refs := refs.push (← readMsg (dir / s!"ref-{t}.bin"))
+    let r := dir / s!"ref-{t}.reads.json"
+    unless (← r.pathExists) do
+      throw (IO.userError s!"{r}: no reference reads; an export from before they left the reference statements \
+        (python3 benchmarks/two_stage/guard.py refs {dir})")
+    reads := reads.push (← ok r.toString (Json.parse (← IO.FS.readFile r)))
   say s!"read: x {x.length} B, m1 {m₁.length} B, m2 {m₂.length} B, {refs.size} references, {(← IO.monoMsNow) - t0} ms"
   let t1 ← IO.monoMsNow
   let some h ← heldOf held refs reads
