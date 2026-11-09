@@ -21,7 +21,8 @@ statement, and `SessionsIn` holds wherever a reference draw file exists (`∃ d,
   positive at the reference (`N₀_pos`) and `0` where nothing sets up, and its statement fits its length words (`Fits`),
   so flock-verify reads it as `baseRaw` with the draw file (`ins_of_setupOf`).
 
-Then `InnerNumbers` at the record is `innerNumbers_deploy` (`innerNumbers`).
+Then `InnerNumbers` at the record is `innerNumbers_deploy` (`innerNumbers`): every unit of the record's code has the
+reference's `N₀`, so `SessionsIn` holds at `Code.atInnerN₀` too (`sessionsIn_atInnerN₀`).
 -/
 
 @[expose] public section
@@ -148,8 +149,16 @@ theorem sessionsIn (e : Ext) (h : ∃ d, RefOk A o d) : SamplingDeploy.SessionsI
   · rw [h1]
     exact ⟨kept_in h hn hf, N₀_eq_of_nums hn⟩
 
-/-- **`InnerNumbers` at the record**, wherever a reference draw file exists. -/
+/-- **`SessionsIn` at the statement's `N₀`**: at a code whose every unit's `N₀` is its statement's, `SessionsIn` holds
+at `Code.atInnerN₀` too, the code the one-stage inner numbers read. -/
+theorem sessionsIn_atInnerN₀ {c : SamplingDeploy.Code} (h : SamplingDeploy.SessionsIn c)
+    (hu : ∀ x u, c.unitN₀ x u = c.innerN₀ x) : SamplingDeploy.SessionsIn c.atInnerN₀ :=
+  fun x u v xS vS hs => ⟨(h x u v xS vS hs).1, (h x u v xS vS hs).2.trans (hu x u)⟩
+
+/-- **`InnerNumbers` at the record**, wherever a reference draw file exists: `innerNumbers_deploy` at the record's
+code, whose units' `N₀` are the reference's (`sessionsIn_atInnerN₀`). -/
 theorem innerNumbers (e : Ext) (h : ∃ d, RefOk A o d) : Claims.Sampling.InnerNumbers (record A o e) :=
-  SamplingDeploy.innerNumbers_deploy _root_.Flock.Readable.relation (code A o e) (sessionsIn e h)
+  SamplingDeploy.innerNumbers_deploy _root_.Flock.Readable.relation (code A o e)
+    (sessionsIn_atInnerN₀ (sessionsIn e h) fun x u => (code_unitN₀ e x u).trans (code_innerN₀ e x).symm)
 
 end Verity.Sampled.Record
