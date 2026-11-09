@@ -5,13 +5,14 @@ public import Proofs.Nci.Cut
 /-!
 # The min-cut statements say something
 
-`Cut_honest` and each guarantee's `_nontrivial`, at the toy `Nci.Cut.Toy`. The toy's `w`- and `x`-words are each one
-unregistered input, which every separator from the unregistered inputs holds (`card_inter_le_kappa`), so
-`|S ∩ W| + |S ∩ X| ≤ κ(S)` (`toy_card_words_le`): that is (H) at unit costs for every read cap, and at `κ(S) ≤ 1` no
-matmul has both a `w`- and an `x`-word in `S`, so `Π(k) = 0` and `α = 0` for `k ≤ 1` (`toy_piMax`, `toy_alpha`). Each
-MAC is its output's one wire, so no set of gates finishes an output it holds no wire of (`toy_clear`), and (E) holds at
-every `b`. One block holding both MACs reads the three inputs (`toy_reads_P1`); a block for each reads two
-(`toy_reads_P2`).
+`Cut_honest`, `CountHE_honest` and each guarantee's `_nontrivial`, at the toy `Nci.Cut.Toy`. The toy's `w`- and
+`x`-words are each one unregistered input, which every separator from the unregistered inputs holds
+(`card_inter_le_kappa`), so `|S ∩ W| + |S ∩ X| ≤ κ(S)` (`toy_card_words_le`): that is (H) at unit costs for every read
+cap, and at `κ(S) ≤ 1` no matmul has both a `w`- and an `x`-word in `S`, so `Π(k) = 0` and `α = 0` for `k ≤ 1`
+(`toy_piMax`, `toy_alpha`). Each MAC is its output's one wire, so no set of gates finishes an output it holds no wire of
+(`toy_clear`), and (E) holds at every `b`. One block holding both MACs reads the three inputs (`toy_reads_P1`); a block
+for each reads two (`toy_reads_P2`), so the toy complies with `CompliesAtMost 1 2 2` (`toy_complies`); every block of a
+partition reads an unregistered input, so it fails `CompliesAtMost c 0 n` at every `c` and `n` (`toy_not_complies`).
 -/
 
 @[expose] public section
