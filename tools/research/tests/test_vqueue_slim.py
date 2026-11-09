@@ -221,7 +221,7 @@ def test_a_failed_preflight_fails_the_candidate_with_the_paths_drive_names_its_c
     d = _slim(h, tmp_path, preflight_lints=LINT_LOG)
     (st,) = [st for st in step_records(d) if st["status"] == "failed"]
     assert step_paths(d, st) == LINT_PATHS
-    assert judge(h.d, rec) == Verdict(FAIL, (_failed(h, base, sha, "preflight-lints", LINT_PATHS),))
+    assert judge(h.d, rec) == Verdict(FAIL, (_failed(h, base, sha, "preflight-lints", LINT_PATHS),), ended=True)
 
 
 def test_a_failures_absolute_paths_meet_the_files_drive_matches_them_to(world, monkeypatch, tmp_path):
@@ -246,7 +246,7 @@ def test_a_red_ratchet_gate_fails_the_candidate_only_on_the_gate(world, monkeypa
     rec = start(h.d, sha, base)
     _slim(h, tmp_path, ratchet_gate="  merge 1 (0123456789ab): failed: grows p01.json 2 -> 3 entries\n")
     assert judge(h.d, rec) == (Verdict(PASS) if "ratchet-gate" in off_gate else
-                               Verdict(FAIL, (_failed(h, base, sha, "ratchet-gate"),)))
+                               Verdict(FAIL, (_failed(h, base, sha, "ratchet-gate"),), ended=True))
 
 
 @pytest.mark.parametrize("agreement", [True, False])
@@ -256,7 +256,7 @@ def test_lean_agreement_is_judged_only_when_the_run_ran_it(world, monkeypatch, t
     rec = start(h.d, sha, base)
     d = _slim(h, tmp_path, **({"lean_agreement": "lean-agreement: the verifiers disagree on 3 of 40 vectors\n"} if agreement else {}))
     assert ("lean-agreement" in {st["step"] for st in step_records(d)}) is agreement
-    assert judge(h.d, rec) == (Verdict(FAIL, (_failed(h, base, sha, "lean-agreement"),)) if agreement else Verdict(PASS))
+    assert judge(h.d, rec) == (Verdict(FAIL, (_failed(h, base, sha, "lean-agreement"),), ended=True) if agreement else Verdict(PASS))
 
 
 @pytest.mark.parametrize("rc, why", [(NOT_STARTED, f"never ran or was stopped (done rc={NOT_STARTED})"),

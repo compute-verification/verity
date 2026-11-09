@@ -203,7 +203,8 @@ def test_the_report_line_by_line(world, capsys):
         f"longest pending: 1.00 h, {C6[:12]} (#109) built {hm('15:00')}, still pending",
         "builds dropped stale: 1; infra retries: 1; rings: 1; failed actions: 1",
         f"  drop {C6[:12]} {hm('15:05')} failed: {PUSH_FAILED}",
-        "soundness: every advance (3) was to a candidate on the logged main, none with a failed outcome (3 with a logged pass)",
+        "soundness: every advance (3) was to a candidate the log built on the logged main, none with a failed outcome (3 with a "
+        "logged pass)",
     ]
     warnings = rest[14:]
     assert len(warnings) == 4 and all(x.startswith("warning: ") for x in warnings)
@@ -369,6 +370,22 @@ def test_an_advance_off_the_logged_main_or_of_a_failed_candidate_is_unsound():
     assert f"warning: {rep['warnings'][0]}" in text.splitlines()
     assert rep["liveness"]["longest_pending"]["sha"] == X3 and rep["liveness"]["longest_pending"]["hours"] == 0.25
     assert rep["liveness"]["dropped_stale"] == []                      # a drop `on main` isn't stale
+
+
+def test_an_advance_of_a_sha_the_log_never_built_is_unsound_on_the_logged_main_too():
+    """`main` moves only to a candidate the loop built and judged: an advance on the logged `main` naming its members, of a sha
+    no build line names, violates soundness."""
+    entries, bad = vc.parse_log("\n".join(json.dumps(d) for d in (
+        decision("10:00", 1, "build", M0, sha=X1, base=M0, members=[1]),
+        decision("10:10", 2, "advance", M0, sha=X1, base=M0),
+        decision("10:20", 3, "advance", X1, sha=X2, base=X1, members=[2]),
+    )))
+    assert bad == []
+    rep = vc.compare(entries, vc.parse_chain(""), [], None, {}, lambda heads: {}, vc.when(at("10:00")), vc.when(at("12:00")))
+    assert rep["soundness"]["ok"] is False and rep["soundness"]["advances"] == 2
+    assert [(v["sha"], v["base"], v["why"]) for v in rep["soundness"]["violations"]] == [
+        (X2, X1, "the log holds no build of it")]
+    assert f"  {X2[:12]} {hm('10:20')}: the log holds no build of it (base {X1[:12]}, main {X1[:12]})" in vc.render(rep)
 
 
 def test_an_advance_that_lists_no_heads_holds_its_members_at_the_heads_built():
