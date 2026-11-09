@@ -497,10 +497,10 @@ def request_program(registered: Registered, unit: RequestUnit, named: bool = Fal
 def compile_steps(registered: Registered, advice: Any, ingress: Any, *, salt: bytes | None = None, partial: bool = False,
                   named: bool = False, record: Any = None) -> Compiled:
     """The Programs of `advice`'s session (module docstring): each request's at its (LP, T, policy), GP-01 over them, and each step's
-    live rows as `RowRef`s. Total and deterministic: it reads `registered`, `advice`, `ingress` and the window's seed `salt` only
-    (and `record`, the certified record a v1 string decodes against, under a registration that selects the advice code), and
-    compiles them or raises `Unexpressible`. `partial` refuses request by request (`Compiled.refused`) where a refusal would
-    otherwise refuse the session, a request whose Program the vocabulary refuses (a launch no capture covers) included.
+    live rows as `RowRef`s. Total and deterministic: it reads `registered`, `advice`, `ingress` and the window's seed `salt` only (and
+    `record`, the certified record a v1 string decodes against, under a registration that selects the advice code), and compiles
+    them or raises `Unexpressible`. `partial` refuses request by request (`Compiled.refused`) where a refusal would otherwise
+    refuse the session, a request whose Program the vocabulary refuses (a launch no capture covers) included.
     `named`: each Program with what its Build says beside it, as its trace would (`Compiled.named`, `naming.write_build`), or
     `Unexpressible` where the naming doesn't reach it. The cyclic collector is off throughout (`cyclic_gc_off`, at the end)."""
     from verity_vllm.pipeline.global_program import request_id_of
@@ -561,9 +561,9 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
 
 
 def _replan(registered: Registered, solo: WA.Advice, bodies: Mapping[str, Any], *, salt: bytes | None = None) -> Plan:
-    """`batch.check_compiled`'s plan of one request alone, under its session's window seed `salt`: its solo window `Advice` held
-    to I1's encoding, without ℓ or the certified record, which bound and decode the session's advice as it was sent, not an I1
-    the compiler derives from it."""
+    """`batch.check_compiled`'s plan of one request alone, under its session's window seed `salt`: its solo window `Advice` held to I1's
+    encoding, without ℓ or the certified record, which bound and decode the session's advice as it was sent, not an I1 the
+    compiler derives from it."""
     return _plan(registered, _window_advice(_advice_bytes(solo)), bodies, False, salt)
 
 

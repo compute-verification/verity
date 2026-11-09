@@ -11,7 +11,7 @@ witness the prover's run derived) to the prover's pool.
 
 `check_trace_v4` runs each unit's calls in vLLM's order as CompileSlice_v4 makes them, on one CacheStep_v3 stream
 (`cache_step_v3.Stream`) from the empty pool over the whole trace, every request numbered by its id and its block keys
-printed into RK: each hit, evictable count and return a call derives is `_KV`'s.
+printed into RK: each hit, evictable count and return a call derives is `BlockPool`'s.
 
     python3 compile_slice_pool.py tests/fixtures/async-prefix-cache.jsonl tests/fixtures/async-crush.json.gz \\
         tests/fixtures/sync-crush.json.gz [--R 16 --W 64 --A 16] [--v4] [--out REPORT.json]
@@ -121,9 +121,9 @@ def check_trace_v4(path: Path, *, R: int, W: int, A: int) -> dict[str, Any]:
         for kind, i in got.order:
             if kind == "c" and (got.hit[i], got.ev[i]) != (inp.hit[i], inp.evict[i]):
                 raise AssertionError(f"{where}: candidate {i}'s hit and evictable count {got.hit[i], got.ev[i]}, "
-                                     f"_KV's {inp.hit[i], inp.evict[i]}")
+                                     f"BlockPool's {inp.hit[i], inp.evict[i]}")
             if kind == "p" and got.ret[i] != inp.ret[i]:
-                raise AssertionError(f"{where}: slot {i}'s returns {got.ret[i]}, _KV's {inp.ret[i]}")
+                raise AssertionError(f"{where}: slot {i}'s returns {got.ret[i]}, BlockPool's {inp.ret[i]}")
         counts["hits"] += sum(got.hit[c] > 0 for kind, c in got.order if kind == "c")
         counts["lookups"] += sum(kind == "c" for kind, _ in got.order)
         counts["frees"] += sum(kind == "p" for kind, _ in got.order)
