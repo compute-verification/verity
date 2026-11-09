@@ -53,6 +53,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import probe as P  # noqa: E402
+
+# isort: split
+# verity_config is importable once probe has put tools/config on sys.path
 from verity_config.settings import SHARED  # noqa: E402
 
 ARCH = "sm_120a"
@@ -586,7 +589,7 @@ void f1_teardown(void) {
 """
 
 
-def kernel_source(form) -> str:
+def kernel_source(form: Form | SimtMultiplier) -> str:
     return tensor_kernel(form) if form.tensor else simt_kernel(form)
 
 
@@ -687,7 +690,7 @@ def _op(toks: list[str]) -> str:
     return toks[1] if toks[0].startswith("@") and len(toks) > 1 else toks[0]
 
 
-def form_gate(form, hist: dict, calls: list | None = None) -> dict:
+def form_gate(form: Form | SimtMultiplier, hist: dict, calls: list | None = None) -> dict:
     """What the timed loop holds.  Tensor forms: the MMA-family instructions, a nonzero multiple of BODY (one PTX MMA may lower
     to several: ``sass_per_ptx`` > 1, recorded), or, where ptxas emulates the form, exactly BODY calls in the loop (and none
     elsewhere) to callees holding MMA instructions, whose MMAs are counted per PTX instruction (``emulated``); SIMT forms: exactly
@@ -795,7 +798,7 @@ def _half_bits(rng, shape, bf16: bool, lo: int, hi: int) -> np.ndarray:
     return (s << 15) | (rng.integers(lo, hi, size=shape, dtype=np.uint32) << 10) | rng.integers(0, 1024, size=shape, dtype=np.uint32)
 
 
-def operand_words(fmt: str, rng, shape, small: bool = False) -> np.ndarray:
+def operand_words(fmt: str, rng: np.random.Generator, shape: tuple[int, ...], small: bool = False) -> np.ndarray:
     """u32 words of one operand register (or a double's two words interleaved lo, hi) in a form's input format."""
     if fmt == "e2m1x8" or fmt == "b32":
         return rng.integers(0, 2**32, size=shape, dtype=np.uint64).astype(np.uint32)
@@ -900,14 +903,14 @@ def simt_inputs(op: SimtMultiplier, threads: int, seed: int) -> np.ndarray:
     return out
 
 
-def inputs(form, threads: int, seed: int) -> np.ndarray:
+def inputs(form: Form | SimtMultiplier, threads: int, seed: int) -> np.ndarray:
     return tensor_inputs(form, threads, seed) if form.tensor else simt_inputs(form, threads, seed)
 
 
 # ------------------------------------------------------------------------------------------------------------------------ device
 
 class F1Device:
-    def __init__(self, so: Path, kernels: list[str]):
+    def __init__(self, so: Path, kernels: list[str]) -> None:
         self.lib = lib = ctypes.CDLL(str(so))
         V, I, L = ctypes.c_void_p, ctypes.c_int, ctypes.c_longlong
         lib.f1_device.argtypes = [ctypes.POINTER(I)] * 4
@@ -955,7 +958,8 @@ class F1Device:
             raise RuntimeError(f"f1_occupancy({name}) rc={rc}")
         return n.value
 
-    def run(self, name: str, slot: int, nblocks: int, tpb: int, iters: int, want: bool = False):
+    def run(self, name: str, slot: int, nblocks: int, tpb: int, iters: int,
+            want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         ms = ctypes.c_float()
         sink = np.zeros(nblocks * tpb * 2, np.uint32) if want else None
         cyc = np.zeros(nblocks, np.int64)
@@ -975,26 +979,26 @@ class FakeF1:
 
     SMS, MHZ = 188, 2000.0
 
-    def __init__(self, kernels: list[str]):
+    def __init__(self, kernels: list[str]) -> None:
         self.index = {n: i for i, n in enumerate(kernels)}
 
     def identity(self) -> dict:
         return {"device": "FAKE SILICON", "compute_capability": "12.0", "driver": None, "gpu_uuid": "GPU-fake", "backend": "fake",
                 "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
-    def clocks(self, uuid):
+    def clocks(self, uuid: str | None) -> None:
         return None
 
     def device(self) -> dict:
         return {"sms": self.SMS, "max_threads_per_sm": 1536, "cc": "12.0"}
 
-    def alloc(self, nslots, max_threads, max_blocks) -> None:
+    def alloc(self, nslots: int, max_threads: int, max_blocks: int) -> None:
         pass
 
-    def upload(self, slot, words) -> None:
+    def upload(self, slot: int, words: np.ndarray) -> None:
         pass
 
-    def occupancy(self, name, tpb) -> int:
+    def occupancy(self, name: str, tpb: int) -> int:
         return 4 if BY_NAME[name].tensor else 6
 
     def _products_per_sm_clk(self, name: str) -> float:
@@ -1004,7 +1008,8 @@ class FakeF1:
         base = 8192 / 4  # dense NVFP4: 2,048 products per SM per clock
         return base * (1.0 if f.family == "fp4" else 0.5 if f.family in ("f8f6f4", "mxf8f6f4", "fp8", "int") else 0.25)
 
-    def run(self, name, slot, nblocks, tpb, iters, want=False):
+    def run(self, name: str, slot: int, nblocks: int, tpb: int, iters: int,
+            want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         f = BY_NAME[name]
         per_launch = iters * (BODY * nblocks * tpb // 32 * f.products if f.tensor else SIMT_CH * SIMT_U * nblocks * tpb * f.products)
         cycles = per_launch / self.SMS / self._products_per_sm_clk(name)
@@ -1020,7 +1025,7 @@ class FakeF1:
 
 # ------------------------------------------------------------------------------------------------------------------------- run
 
-def grid(form, d: dict, occ: int) -> dict:
+def grid(form: Form | SimtMultiplier, d: dict, occ: int) -> dict:
     if form.tensor:
         bps = min(4, occ)
         tpb = TENSOR_TPB
@@ -1030,7 +1035,7 @@ def grid(form, d: dict, occ: int) -> dict:
     return {"threads_per_block": tpb, "blocks_per_sm": bps, "blocks": d["sms"] * bps, "warps_per_sm": bps * tpb // 32}
 
 
-def work_per_launch(form, g: dict, iters: int) -> tuple[float, float, float]:
+def work_per_launch(form: Form | SimtMultiplier, g: dict, iters: int) -> tuple[float, float, float]:
     """(instructions, nonzero products, logical MACs) of one launch: warp instructions for tensor forms, thread ops for SIMT."""
     if form.tensor:
         inst = float(iters) * BODY * g["blocks"] * g["threads_per_block"] / 32
@@ -1044,7 +1049,7 @@ def clock_label(samples: list, launch_mhz: list[float], locked_mhz: float | None
     return W.clock_label(samples, launch_mhz, locked_mhz)
 
 
-def run_family(args) -> int:
+def run_family(args: argparse.Namespace) -> int:
     t_all = time.time()
     bdir = Path(os.path.expandvars(args.build))
     out = Path(os.path.expandvars(args.out))
@@ -1148,7 +1153,7 @@ def run_family(args) -> int:
     return finish(out, rec, failures, args, per, t_all)
 
 
-def finish(out: Path, rec: dict, failures: list[str], args, per: dict | None, t_all: float) -> int:
+def finish(out: Path, rec: dict, failures: list[str], args: argparse.Namespace, per: dict | None, t_all: float) -> int:
     rec["failures"] = failures
     rec["elapsed_s"] = time.time() - t_all
     name = f"{args.family}.json" if not args.fake_silicon else f"{args.family}.fake.json"
@@ -1207,7 +1212,7 @@ def scan_lib(path: str, arch: str = "sm_120", timeout_s: float = 1200.0) -> dict
     return rec
 
 
-def scan_libs(args) -> int:
+def scan_libs(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
     libs = [x for x in (args.libs.split(",") if args.libs else DEFAULT_LIBS) if x]
@@ -1249,7 +1254,7 @@ def mma_class(op: str) -> str:
     return ".".join(keep)
 
 
-def collect(args) -> int:
+def collect(args: argparse.Namespace) -> int:
     """The price table over every recorded family (each priced against the NVFP4 of its own chunk), the claim's check, the
     ptxas-refused forms, and (with --libscan) every multiply-family opcode NVIDIA's sm_120 libraries use that no F1 form reached."""
     out = Path(os.path.expandvars(args.out))
@@ -1341,7 +1346,7 @@ def collect(args) -> int:
     return 0 if ok else 1
 
 
-def build_cmd(args) -> int:
+def build_cmd(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     names = [x for x in args.forms.split(",") if x] if args.forms else None
     rec = build(out, names, args.jobs)
