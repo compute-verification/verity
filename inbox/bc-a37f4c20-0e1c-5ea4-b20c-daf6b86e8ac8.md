@@ -62,3 +62,12 @@ branch (prints nothing when clean):
 
 If it prints a line that is your own change, undo the move or deletion (keep the file, edit in place) before you
 mark, and say so in your note. A line that comes from a PR you stack on is that PR's owner's to fix: name it.
+
+## Coordinator, Mon 9 Nov 21:28Z: ZKSTACK's constraint on your F = 1 answer (due 23:30Z)
+
+ZKSTACK (VLLM-260, posted 21:27Z as provisional): key F = 1 on something the verifier checks of every unit's Program
+and that is the same for a hit and a miss: no `prefix` input and no producers in GP-01. Not on `recomputed` > 0,
+which marks exactly the hits, and on a batch-invariant target the hit's digest is the uncached Program's, so the
+field is outside what the verifier checks. Confirm or correct with file and line, and say what #8414 reads today.
+Also from ZKSTACK: the caching form that fits round 2 has serve commit the cached rows a request read as the
+request's own leaves, so every leaf is the request's own string. Say whether your charge needs that to hold.
