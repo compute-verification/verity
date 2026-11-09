@@ -2488,7 +2488,7 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
-    circuit, public = b"not a circuit file", _public_of(rec)
+    circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     for order in ORDERS:
         ch, d, coins = _challenger_draw(random.Random(f"v2-order-{order}"), s, law, rec, 1, order=order)
         proved = DR.proved(d)
