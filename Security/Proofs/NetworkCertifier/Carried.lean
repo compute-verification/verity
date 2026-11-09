@@ -367,12 +367,12 @@ theorem encard_carried_le {L K S m : ℕ} (lay : AuditStatement → BoundaryGate
 
 /-- **The leak through the network certifier over a monitoring period whose runs carry the pool**:
 `Guarantees.PooledLeakCarried`. The count is `encard_pooledJoint_le` at `encard_carried_le`, `b` the most committed bits
-of one of the period's proof blocks. The escape bound is `pr_pooled_le` at each run's leak relation, its opening root
-and no collision at its opening: those give rows that chain, since equal roots are equal rows or a collision
-(`Hash.BindingProofs.rowSeg_bind`). -/
+of one of the period's proof blocks. The escape bound is `pr_pooled_le` at each run's leak relation and no collision at
+its opening: with the roots the record rule names (`CarriedRoots`), those give rows that chain, since equal roots are
+equal rows or a collision (`Hash.BindingProofs.rowSeg_bind`). -/
 theorem pooledLeakCarried : Guarantees.PooledLeakCarried := by
-  intro L K S G lay k reg chk valid prow nrow Dj m sw Pw ρ op n hchk hcls chains genesis Ω _ _ Conn Cell Srv Dev Z _
-    arr f tap run htrust cap Ss Zs schedOf srvOf dec hch acc W had rin rout e e' eo he q hq0 hq1 hesc hleak hroot Fmax
+  intro L K S G lay k reg chk valid prow nrow Dj m sw Pw ρ op n hchk hcls chains genesis hroot Ω _ _ Conn Cell Srv Dev
+    Z _ arr f tap run htrust cap Ss Zs schedOf srvOf dec hch acc W had rin rout e e' he q hq0 hq1 hesc hleak Fmax
   obtain ⟨-, hfit, hs, hdz⟩ := hch
   obtain ⟨hacc, hW, hWn⟩ := had
   refine ⟨fun z hz => ?_, fun ω => ?_⟩
@@ -380,40 +380,30 @@ theorem pooledLeakCarried : Guarantees.PooledLeakCarried := by
     let Good : Fin m → (Fin m → Ω) → Prop := fun i ω =>
       LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (obs ω) i)) (rin z ω i)
           (rout z ω i) (W z ω i) (obs ω i) ∧
-        Hash.RowSeg.digest G (rin z ω i) = Hash.RowSeg.digest G (poolOpen chains genesis (rout z ω) i) ∧
         ¬PoolColl G chains genesis (rin z ω) (rout z ω) i
     have hleak' : ∀ i, Pr (fun ω => acc z i ω (ω i) ∧ ¬Good i ω) ≤
-        e' i + eo i + Pr (fun ω => PoolColl G chains genesis (rin z ω) (rout z ω) i) := by
+        e' i + Pr (fun ω => PoolColl G chains genesis (rin z ω) (rout z ω) i) := by
       intro i
-      have hr : Pr (fun ω => (acc z i ω (ω i) ∧
-            Hash.RowSeg.digest G (rin z ω i) ≠ Hash.RowSeg.digest G (poolOpen chains genesis (rout z ω) i)) ∨
-            PoolColl G chains genesis (rin z ω) (rout z ω) i) ≤
-          eo i + Pr (fun ω => PoolColl G chains genesis (rin z ω) (rout z ω) i) :=
-        Pr_or_le (fun ω h => h) (hroot z hz i) le_rfl
-      rw [add_assoc]
-      refine Pr_or_le (fun ω h => ?_) (hleak z hz i) hr
+      refine Pr_or_le (fun ω h => ?_) (hleak z hz i) le_rfl
       obtain ⟨ha, hng⟩ := h
       by_cases h1 : LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (obs ω) i))
           (rin z ω i) (rout z ω i) (W z ω i) (obs ω i)
-      · right
-        by_cases h2 : Hash.RowSeg.digest G (rin z ω i) = Hash.RowSeg.digest G (poolOpen chains genesis (rout z ω) i)
-        · exact Or.inr (Classical.byContradiction fun h3 => hng ⟨h1, h2, h3⟩)
-        · exact Or.inl ⟨ha, h2⟩
+      · exact Or.inr (Classical.byContradiction fun h2 => hng ⟨h1, h2⟩)
       · exact Or.inl ⟨ha, h1⟩
     calc Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
           ¬PooledGoodCarried lay k reg valid prow nrow Dj sw Pw ρ op chains genesis Fmax (W z ω) (obs ω))
         ≤ Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧ ¬(∑ i, (W z ω i).card < Fmax ∧ ∀ i, Good i ω)) := by
           refine Pr_mono fun ω h => ⟨h.1, fun hg => h.2 ?_⟩
           obtain ⟨hlt, hgood⟩ := hg
-          refine ⟨hlt, rin z ω, rout z ω, fun i => ?_, fun i => (hgood i).1⟩
-          obtain ⟨-, hd, hnc⟩ := hgood i
-          exact (Hash.BindingProofs.rowSeg_bind G hd).resolve_right hnc
+          have hd := hroot (obs ω) (W z ω) (rin z ω) (rout z ω) fun i => (hgood i).1
+          exact ⟨hlt, rin z ω, rout z ω,
+            fun i => (Hash.BindingProofs.rowSeg_bind G (hd i)).resolve_right (hgood i).2, fun i => (hgood i).1⟩
       _ ≤ (1 - q) ^ Fmax + ∑ i, e i +
-            ∑ i, (e' i + eo i + Pr (fun ω => PoolColl G chains genesis (rin z ω) (rout z ω) i)) :=
+            ∑ i, (e' i + Pr (fun ω => PoolColl G chains genesis (rin z ω) (rout z ω) i)) :=
           pr_pooled_le (acc z) (hacc z) (W z) (hW z) e
-            (fun i => e' i + eo i + Pr (fun ω => PoolColl G chains genesis (rin z ω) (rout z ω) i)) he q hq0 hq1
+            (fun i => e' i + Pr (fun ω => PoolColl G chains genesis (rin z ω) (rout z ω) i)) he q hq0 hq1
             (hesc z hz) Good hleak' Fmax
-      _ = _ := by rw [Finset.sum_add_distrib, Finset.sum_add_distrib]; ring
+      _ = _ := by rw [Finset.sum_add_distrib]; ring
   · exact encard_pooledJoint_le
       (fun F o => ∃ rin rout : Fin m → Hash.Row, PoolChained chains genesis rin rout ∧
         ∀ i, LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) (op i (runsBefore o i)) (rin i)

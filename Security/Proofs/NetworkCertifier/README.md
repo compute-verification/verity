@@ -66,8 +66,9 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/Carried.lean  trusted: runs chained through the pool's root: the record rule over a
                                period's runs (poolOpen, PoolChained), a check that pins the closing row
                                (CheckedClosing), the sequences accepted from an opened row (AcceptedCarried,
-                               LeakAtCarried), and the period's good event and named inputs (PooledGoodCarried,
-                               PeriodLeaksCarried, PeriodRoots, PoolColl)
+                               LeakAtCarried), accepted runs opening the roots the record rule names (CarriedRoots),
+                               and the period's good event and named input (PooledGoodCarried, PeriodLeaksCarried,
+                               PoolColl)
 ../../Definitions/NetworkCertifier/Guarantees/Carried.lean  trusted: the leak bound over a carried pool
                                (PooledLeakCarried)
 ../../Definitions/NetworkCertifier/Witness.lean  trusted: the audit the leak bounds' nontrivial lemmas fail at
