@@ -129,7 +129,7 @@ def b_entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
     out = []
     for w in sorted(shapes):
         n, k = shapes[w]
-        if "root" not in (man.get("weights") or {}).get(str(w), {}):
+        if "root" not in man.get("weights", {}).get(str(w), {}):
             raise ValueError(f"round {s}'s pass commits no root of weight {w}, whose B rows W registers")
         out.append({"value": b_value(w), "root": bytes.fromhex(man["weights"][str(w)]["root"]).hex(), "leaves": n,
                     "words": k, "domain": rows_domain(weight_binding(w), -2, n, HM96).domain_id.hex(), G.WIDTH_KEY: WORD_BITS})
