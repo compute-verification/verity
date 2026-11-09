@@ -19,7 +19,10 @@ At each of the --reach positions from t (t's own logits, then the next positions
         site's interval is also cut to its box, as the readers' clamps cut its values.
 
 eps bounds every served token's log-likelihood ratio at temperature 1 (at T it scales about as 1/T). Over the reach a
-fault's zCDP charge is log2(e) * sum_n eps_n^2 / 2 bits (`rho_bits`), and its pure-DP charge log2(e) * sum_n eps_n.
+fault's zCDP charge is log2(e) * sum_n eps_n^2 / 2 bits (`rho_bits`), its pure-DP charge log2(e) * sum_n eps_n
+(`pure_bits`), and its KL charge (`kl_bits`) log2(e) times the sum of the tokens' KL divergences (true) or of
+osc_n^2 / 8, Hoeffding's bound on them (cert). With --reach-true N the true worst case is also taken over N positions
+from t, the later ones following the honest greedy tokens (`true_long`).
 
   uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/certify.py --model gpt2 --boxes boxes.pt --out "$OUT"
 """
@@ -426,6 +429,7 @@ def main() -> int:
     ap.add_argument("--coords", type=int, default=4, help="random coordinates per site and prompt")
     ap.add_argument("--widest", type=int, default=2, help="and the coordinates with the widest boxes")
     ap.add_argument("--reach", type=int, default=4, help="positions from the fault's whose logits are bounded")
+    ap.add_argument("--reach-true", type=int, default=0, help="positions over which the true worst case is also taken")
     ap.add_argument("--grid", type=int, default=65, help="fault values for the true worst case")
     ap.add_argument("--pieces", default="1,16", help="parts the range is split into for IBP, one forward each")
     ap.add_argument("--iv-clamp", default="on", choices=("on", "off", "both"))
@@ -473,18 +477,19 @@ def main() -> int:
             lm.forward(ids[:, :t], pre)
             c = Cache(dict(pre.kv), pre.sink)
             suffix = [ids[0, t]]
-            for _ in range(a.reach - 1):
+            for _ in range(max(a.reach, a.reach_true) - 1):
                 suffix.append(lm.forward(suffix[-1].view(1, 1), c)[0, -1].argmax())
             sid = torch.stack(suffix).view(1, -1)
-            R = sid.shape[1]
+            R, R_all = a.reach, sid.shape[1]
             keys = {("resid", l) for s, l in plan if s in ("resid", "mlph")} | {("resid", l - 1) for s, l in plan
                                                                                 if s == "mlph"}
             keys |= {("mid", l) for s, l in plan if s == "mlph"} | {(s, l) for s, l in plan if s in ("mlph", "final")}
             keys |= {("resid", L - 1)}
             taps = {key: None for key in keys}
-            zh = lm.forward(sid, Cache(dict(pre.kv), pre.sink), taps=taps)[0].float()
-            cls_all, _ = lm.boxes.classes(t, R, sid, pre.sink)
-            cls = cls_all[0]
+            zh_all = lm.forward(sid, Cache(dict(pre.kv), pre.sink), taps=taps)[0].float()
+            zh = zh_all[:R]
+            cls_all, _ = lm.boxes.classes(t, R_all, sid, pre.sink)
+            cls = cls_all[0, :R]
             margin = zh.topk(2, -1).values
             for site, layer in plan:
                 x_site = taps[(site, layer)][0, 0].float()
@@ -496,10 +501,9 @@ def main() -> int:
                 picks = dict.fromkeys(cs, "random")
                 for c_ in hb.argsort(descending=True)[:a.widest].tolist():
                     picks.setdefault(c_, "widest")
-                entry = {"final": taps.get(("final", L), [None])[0],
-                         "mid": taps.get(("mid", layer), [None])[0],
-                         "mlph": taps.get(("mlph", layer), [None])[0],
-                         "resid_in": taps.get(("resid", layer), [None])[0]}
+                entry = {name: taps[key][0, :R] if key in taps else None
+                         for name, key in (("final", ("final", L)), ("mid", ("mid", layer)), ("mlph", ("mlph", layer)),
+                                           ("resid_in", ("resid", layer)))}
                 x_in = taps[("resid", layer - 1)] if site == "mlph" else None
                 for coord, pick in picks.items():
                     for kind, (lo_v, hi_v) in rng.items():
@@ -515,23 +519,30 @@ def main() -> int:
                         vals = vals.float()[(vals.float() >= lo_c) & (vals.float() <= hi_c)]
                         if not len(vals):
                             vals = x_site[coord].view(1)
+                        G = len(vals)
                         if site == "final":
                             f = Fault.of(t, [("final", L, coord, float(v)) for v in vals])
-                            zg = lm.forward(sid.expand(len(vals), R), Cache(dict(pre.kv), pre.sink).expand(len(vals)),
-                                            fault=f, x_in=taps[("resid", L - 1)].expand(len(vals), -1, -1),
-                                            first_layer=L, pos0=t)
+                            zg_all = lm.forward(sid.expand(G, R_all), Cache(dict(pre.kv), pre.sink).expand(G),
+                                                fault=f, x_in=taps[("resid", L - 1)].expand(G, -1, -1),
+                                                first_layer=L, pos0=t)
                         elif site == "mlph":
                             f = Fault.of(t, [("mlph", layer, coord, float(v)) for v in vals])
-                            zg = lm.forward(sid.expand(len(vals), R), Cache(dict(pre.kv), pre.sink).expand(len(vals)),
-                                            fault=f, x_in=x_in.expand(len(vals), -1, -1), first_layer=layer, pos0=t)
+                            zg_all = lm.forward(sid.expand(G, R_all), Cache(dict(pre.kv), pre.sink).expand(G),
+                                                fault=f, x_in=x_in.expand(G, -1, -1), first_layer=layer, pos0=t)
                         else:
-                            xg = taps[("resid", layer)].expand(len(vals), -1, -1).clone()
+                            xg = taps[("resid", layer)].expand(G, -1, -1).clone()
                             xg[:, 0, coord] = vals
-                            zg = lm.forward(sid.expand(len(vals), R), Cache(dict(pre.kv), pre.sink).expand(len(vals)),
-                                            x_in=xg, first_layer=layer + 1, pos0=t)
-                        zg = zg.float()
+                            zg_all = lm.forward(sid.expand(G, R_all), Cache(dict(pre.kv), pre.sink).expand(G),
+                                                x_in=xg, first_layer=layer + 1, pos0=t)
+                        zg_all = zg_all.float()
+                        zg = zg_all[:, :R]
                         dz = (zg - zh).double()
-                        lpd = (torch.log_softmax(zg.double(), -1) - torch.log_softmax(zh.double(), -1)).abs().amax(-1)
+                        lp_h = torch.log_softmax(zh_all.double(), -1)
+                        lp_g = torch.log_softmax(zg_all.double(), -1)
+                        lpd_all = (lp_g - lp_h).abs().amax(-1)
+                        kl_all = (lp_g.exp() * (lp_g - lp_h)).sum(-1).clamp_min(0)
+                        del lp_g
+                        lpd, kl = lpd_all[:, :R], kl_all[:, :R]
                         rec["true"] = {
                             "delta": dz.abs().amax(-1).amax(0).tolist(),
                             "eps": lpd.amax(0).tolist(),
@@ -539,7 +550,17 @@ def main() -> int:
                             "flip": (zg.argmax(-1) != zh.argmax(-1)).any(0).tolist(),
                             "rho_bits": float((lpd.pow(2).sum(-1) / 2).amax()) * LOG2E,
                             "pure_bits": float(lpd.sum(-1).amax()) * LOG2E,
+                            "kl_bits": float(kl.sum(-1).amax()) * LOG2E,
                         }
+                        if R_all > R:
+                            rec["true_long"] = {
+                                "eps": lpd_all.amax(0).tolist(),
+                                "kl": kl_all.amax(0).tolist(),
+                                "flip": (zg_all.argmax(-1) != zh_all.argmax(-1)).any(0).tolist(),
+                                "rho_bits": float((lpd_all.pow(2).sum(-1) / 2).amax()) * LOG2E,
+                                "pure_bits": float(lpd_all.sum(-1).amax()) * LOG2E,
+                                "kl_bits": float(kl_all.sum(-1).amax()) * LOG2E,
+                            }
                         rec["cert"] = {}
                         for clamp_on in clamps:
                             ctx = Ctx(lm, lm.boxes if clamp_on else None, cls, pre, t)
@@ -559,6 +580,7 @@ def main() -> int:
                                     "greedy": m["greedy"].all(0).tolist(),
                                     "rho_bits": float((eps_parts.pow(2).sum(-1) / 2).amax()) * LOG2E,
                                     "pure_bits": float(eps_parts.sum(-1).amax()) * LOG2E,
+                                    "kl_bits": float((m["osc"].pow(2).sum(-1) / 8).amax()) * LOG2E,
                                     "width": float((hi - lo).amax()),
                                     "violations": int((viol > tol).sum()),
                                     "worst_violation": float(viol.amax()),
@@ -593,8 +615,17 @@ def summarize(recs: list[dict], a: argparse.Namespace, lm: LM) -> dict:
             g[f"true_{key}_t"] = {"median": q(own, 0.5), "p90": q(own, 0.9), "max": max(own)}
             g[f"true_{key}_later"] = {"median": q(later, 0.5), "max": max(later)}
         g["true_flip_t"] = sum(r["true"]["flip"][0] for r in rs) / len(rs)
-        g["true_rho_bits"] = {"median": q([r["true"]["rho_bits"] for r in rs], 0.5),
-                              "max": max(r["true"]["rho_bits"] for r in rs)}
+        for key in ("rho_bits", "pure_bits", "kl_bits"):
+            g[f"true_{key}"] = {"median": q([r["true"][key] for r in rs], 0.5), "max": max(r["true"][key] for r in rs)}
+        if "true_long" in rs[0]:
+            g["true_long"] = {key: {"median": q([r["true_long"][key] for r in rs], 0.5),
+                                    "max": max(r["true_long"][key] for r in rs)}
+                              for key in ("rho_bits", "pure_bits", "kl_bits")}
+            n = len(rs[0]["true_long"]["eps"])
+            g["true_long"]["eps_by_position"] = {"median": [q([r["true_long"]["eps"][i] for r in rs], 0.5)
+                                                            for i in range(n)],
+                                                 "max": [max(r["true_long"]["eps"][i] for r in rs) for i in range(n)]}
+            g["true_long"]["flips_later"] = q([sum(r["true_long"]["flip"][1:]) for r in rs], 0.5)
         g["cert"] = {}
         for name in rs[0]["cert"]:
             cs = [r["cert"][name] for r in rs]
@@ -605,13 +636,15 @@ def summarize(recs: list[dict], a: argparse.Namespace, lm: LM) -> dict:
                 "greedy_t": sum(c["greedy"][0] for c in cs) / len(cs),
                 "greedy_all": sum(all(c["greedy"]) for c in cs) / len(cs),
                 "rho_bits": {"median": q([c["rho_bits"] for c in cs], 0.5), "max": max(c["rho_bits"] for c in cs)},
+                "kl_bits": {"median": q([c["kl_bits"] for c in cs], 0.5), "max": max(c["kl_bits"] for c in cs)},
                 "inflation_t": {"median": q([c["delta"][0] / max(r["true"]["delta"][0], 1e-12)
                                              for c, r in zip(cs, rs)], 0.5)},
                 "violations": sum(c["violations"] for c in cs),
             }
         out.append(g)
     return {"model": a.model, "revision": MODELS[a.model]["revision"], "boxes": str(a.boxes), "layers": lm.spec.layers,
-            "vocab": lm.spec.vocab, "prompts": a.prompts, "reach": a.reach, "grid": a.grid, "pieces": a.pieces,
+            "vocab": lm.spec.vocab, "prompts": a.prompts, "reach": a.reach, "reach_true": a.reach_true,
+            "grid": a.grid, "pieces": a.pieces,
             "iv_clamp": a.iv_clamp, "faults": len(recs), "groups": out}
 
 
