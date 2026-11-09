@@ -1,11 +1,17 @@
 """The replay's pure parts: a trace's arrivals (times from its start, breaks drawn or from reverts) and the old path's
 figures from the same trace."""
+import fake_vqueue as vq
 import pytest
 
-from verity_landq import replay, sim
+from verity_landq import replay, sim, snapshots
 
 A = sim.Task("unit:a", frozenset({"a/"}), 10.0)
 W = sim.World(tasks=(A,))
+Q = snapshots.Driver(vq)
+
+
+def simulate(trace: list[sim.Arrival]) -> sim.Report:
+    return sim.simulate(trace, W, replay.lq.Policy(), step=Q.step, state=Q.start("main"))
 
 
 def row(pr: int, ready: str, main: str | None, *paths: str, reviewed: str | None = None, reverted: bool = False) -> dict:
@@ -41,7 +47,7 @@ def test_a_pr_that_landed_twice_arrives_as_two_changes_and_both_land() -> None:
     doc = dict(DOC, arrivals=[row(1, "01:00", "02:30", "a/x.py"), {**row(1, "01:10", "05:00", "a/y.py"), "head": "h1b"}])
     got, _ = replay.arrivals(doc, 0.0, 0, W)
     assert [(a.pr, a.head) for a in got] == [(1, "h1"), (1 + replay.REPEAT, "h1b")]
-    assert all(x.main is not None for x in sim.simulate(got, W, replay.lq.Policy()).landings)
+    assert all(x.main is not None for x in simulate(got).landings)
 
 
 def test_the_old_path_reads_main_lag_from_the_review_and_from_the_landing_on_checked() -> None:
@@ -54,15 +60,15 @@ def test_the_old_path_reads_main_lag_from_the_review_and_from_the_landing_on_che
 
 
 def test_the_table_has_the_old_path_and_one_row_per_combination() -> None:
-    s = sim.summary(sim.simulate(replay.arrivals(DOC, 0.0, 0, W)[0], W, replay.lq.Policy()))
+    s = sim.summary(simulate(replay.arrivals(DOC, 0.0, 0, W)[0]))
     text = replay._table(replay.old_path(DOC), [{"batch": 4, "depth": 2, "nodes": 4, **s}])
     assert text.splitlines()[1].startswith("old path") and text.splitlines()[2].startswith("4  2  4")
 
 
-def test_set_reads_snapshot_fields_and_the_model_refuses_them() -> None:
+def test_set_reads_snapshot_fields_and_the_queue_must_be_a_checkouts_vqueue() -> None:
     assert [replay._field(s) for s in ("lean=3", "pending_s=1.5e4", "now=.5", "x=a")] == [
         ("lean", 3), ("pending_s", 15000.0), ("now", 0.5), ("x", "a")]
-    with pytest.raises(SystemExit, match="snapshot queue"):
+    with pytest.raises(SystemExit, match="give `vqueue:SRC`"):
         replay.queue("model", {"lean": 3})
-    with pytest.raises(SystemExit, match="starts no deferred task"):
-        replay.queue("model", {}, frozenset({"slim"}))
+    with pytest.raises(SystemExit, match="research/vqueue.py"):
+        replay.queue("vqueue:no-such-checkout")

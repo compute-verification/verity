@@ -1,10 +1,12 @@
-"""A world for the model's property tests: PRs that break tasks, candidate trees built from merges, and every event the
-model's decisions call for delivered in a random order, with infra outcomes and false fails mixed in.  The checks read only
-what the world delivered (its log) and what it knows (which PRs a tree holds), never the model's state."""
+"""A world for a queue's property tests: PRs that break tasks, candidate trees built from merges, and every event the
+queue's decisions call for delivered in a random order, with infra outcomes and false fails mixed in.  The queue is a
+`step` from a start `state`, as `snapshots.Driver` gives them for a snapshot queue's `decide`.  The checks read only what
+the world delivered (its log) and what it knows (which PRs a tree holds), never the queue's state."""
 from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
+from typing import Any
 
 from verity_landq import model as lq
 
@@ -45,7 +47,7 @@ class Run:
     parent: dict = field(default_factory=dict)
     mains: list = field(default_factory=list)
     unsound: list = field(default_factory=list)
-    state: lq.State | None = None
+    state: Any = None
     steps: int = 0
     pending: int = 0
 
@@ -68,16 +70,15 @@ def random_scenario(rng: random.Random, *, bad: float = 0.25, infra: float = 0.0
             touched = sorted(t for t, ins in tasks.items() if (a.paths | b.paths) & ins)
             if touched:
                 inter.append((a.pr, b.pr, rng.choice(touched)))
-    policy = lq.Policy(batch=rng.randint(1, 4), depth=rng.randint(1, 3), page_after=rng.randint(1, 3))
+    policy = lq.Policy(batch=rng.randint(1, 4), depth=rng.randint(1, 3))
     return Scenario(tasks, tuple(prs), policy, rng.randrange(2**32), infra, flaky, tuple(inter))
 
 
-def run(s: Scenario, step=lq.step, limit: int = 20_000, state=None) -> Run:
-    """Drive the model (or another queue: ``step`` from ``state``) through the scenario until nothing is left to deliver (or
-    `limit` events)."""
+def run(s: Scenario, step, state, limit: int = 20_000) -> Run:
+    """Drive the queue, ``step`` from ``state`` (its start with `main` at `MAIN0`), through the scenario until nothing is
+    left to deliver (or `limit` events)."""
     rng = random.Random(s.order)
     r = Run(s, trees={MAIN0: frozenset()}, parent={MAIN0: None}, mains=[MAIN0])
-    state = lq.State.start(MAIN0) if state is None else state
     flaky = [s.flaky]
     pending: list = []
     after: dict[str, list] = {}

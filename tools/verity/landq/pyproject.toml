@@ -1,7 +1,7 @@
 [project]
 name = "verity-landq"
 version = "0.0.0"
-description = "The landing queue's decision logic as a pure reference model (`main` moves only to a candidate whose exact tree passed every gating task), and a simulator that replays PR traffic through it."
+description = "A simulator that replays PR traffic through the verified queue's decide (research.vqueue, run by a snapshot driver), beside what the old path did with the same PRs."
 requires-python = ">=3.12"
 dependencies = []
 

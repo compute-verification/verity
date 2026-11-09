@@ -1,6 +1,6 @@
 """The snapshot driver runs a `decide(snapshot)` queue through the simulator and the property harness: a small queue with
-the verified queue's contract lands what passes, ejects by inputs, retries infra, and the harness catches it advancing to a
-tree that failed."""
+the verified queue's contract lands what passes, ejects by inputs, retries infra and reruns a fail, and the driver hands
+`decide` each field the contract has.  The property checks over it are `test_properties`'."""
 import random
 import types
 from dataclasses import dataclass
@@ -27,7 +27,7 @@ def run(trace: list[sim.Arrival], world: sim.World = W, policy: lq.Policy = TWO)
     return sim.simulate(trace, world, policy, step=D.step, state=D.start("main"))
 
 
-def test_a_pr_lands_through_decide_when_the_model_would() -> None:
+def test_a_pr_lands_through_decide_after_its_build_its_listing_and_its_task() -> None:
     assert {x.pr: x.main for x in run([arrive(1, 0.0, "a/x.py")]).landings} == {1: 15.0}
 
 
@@ -46,28 +46,6 @@ def test_infra_is_retried_and_never_ejects() -> None:
         assert s["landed"] == 12 and s["ejects"] == 0
         retries += s["retries"]
     assert retries > 4
-
-
-def test_the_harness_finds_no_unsound_advance_by_a_sound_snapshot_queue() -> None:
-    moves = 0
-    for seed in range(100):
-        r = harness.run(harness.random_scenario(random.Random(seed), infra=0.2), step=D.step, state=D.start(harness.MAIN0))
-        assert not r.unsound, (seed, r.unsound)
-        moves += len(r.mains) - 1
-    assert moves > 100
-
-
-def test_the_harness_catches_a_snapshot_queue_that_advances_on_a_fail(monkeypatch: pytest.MonkeyPatch) -> None:
-    real = vq.decide
-
-    def broken(s):
-        c = s.candidates[0] if s.candidates else None
-        return [vq.Advance(c.sha)] if c is not None and c.verdict.state == vq.FAIL else real(s)
-
-    monkeypatch.setattr(vq, "decide", broken)
-    hit = next((seed for seed in range(200) if harness.run(harness.random_scenario(random.Random(seed)), step=D.step,
-                                                            state=D.start(harness.MAIN0)).unsound), None)
-    assert hit is not None
 
 
 def test_the_drop_of_a_candidate_now_on_main_records_its_pass() -> None:
@@ -275,5 +253,5 @@ def test_a_pr_lands_once_its_check_and_then_the_run_beside_it_passed() -> None:
 
 def test_rings_are_the_queues_own_unless_set() -> None:
     s = D.start("m")
-    assert D.snapshot(s, lq.Policy(page_after=1)).rings == vq.Snapshot("m", (), (), ()).rings
+    assert D.snapshot(s, lq.Policy()).rings == vq.Snapshot("m", (), (), ()).rings
     assert snapshots.Driver(vq, rings=1).snapshot(s, lq.Policy()).rings == 1

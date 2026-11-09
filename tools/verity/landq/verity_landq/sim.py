@@ -1,13 +1,17 @@
-"""A discrete-event world that replays PR traffic through the landing queue's model, and what the queue would have done.
+"""A discrete-event world that replays PR traffic through a landing queue, and what the queue would have done.
 
-    from verity_landq import model as lq, sim
+    from research import vqueue
+    from verity_landq import model as lq, sim, snapshots
+    q = snapshots.Driver(vqueue)
     world = sim.World(tasks=(sim.Task("pytest:a", frozenset({"a/"}), 12.0),), nodes=4)
-    report = sim.simulate([sim.Arrival(7, "<head>", 0.0, frozenset({"a/x.py"}))], world, lq.Policy(batch=4, depth=2))
+    report = sim.simulate([sim.Arrival(7, "<head>", 0.0, frozenset({"a/x.py"}))], world, lq.Policy(batch=4, depth=2),
+                          step=q.step, state=q.start("main"))
     sim.summary(report)["p90_h"]
 
 Times are minutes from the trace's start.  The world holds what the queue doesn't decide: when each PR is marked ready and
 reviewed, what its change touches and which gating tasks it breaks, the tasks with their inputs and durations, the nodes
-that run them, and the faults.  The queue is `model.step`, or any function of its signature.
+that run them, and the faults.  The queue is a `step(state, event, policy)` from a start `state`, as `snapshots.Driver`
+gives them for a snapshot queue's `decide`.
 
 - A candidate's tree is built `World.build` minutes after its `Build`, and its tasks are listed `World.listing` minutes
   later.  Every task listed gates.
@@ -35,7 +39,7 @@ import hashlib
 import heapq
 import random
 from dataclasses import dataclass, field
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from verity_landq import model as lq
 
@@ -101,7 +105,6 @@ class Report:
     end: float
     nodes: int
     candidates: int = 0
-    bisections: int = 0
     retries: int = 0
     reruns: int = 0
     pages: int = 0
@@ -112,15 +115,15 @@ class Report:
     unsound: tuple[str, ...] = ()               # trees main moved to that fail a test main didn't
 
 
-Step = Callable[[lq.State, lq.Event, lq.Policy], tuple[lq.State, tuple[lq.Decision, ...]]]
+Step = Callable[[Any, lq.Event, lq.Policy], tuple[Any, tuple[lq.Decision, ...]]]
 
 
-def simulate(arrivals: Iterable[Arrival], world: World, policy: lq.Policy, *, step: Step = lq.step, main: str = "main",
-             state=None, limit: int = 5_000_000, until: float | None = None) -> Report:
-    """Replay ``arrivals`` through ``step`` in ``world`` until nothing is left to happen, ``limit`` events, or minute
-    ``until``, where the report ends.  ``state`` is the queue's start (`State.start(main)` when None); another queue's state
-    need only list its candidates as `stack`, each with its `tree`, and a `now` it has is set to the minute of each event
-    before the event is stepped."""
+def simulate(arrivals: Iterable[Arrival], world: World, policy: lq.Policy, *, step: Step, state: Any, main: str = "main",
+             limit: int = 5_000_000, until: float | None = None) -> Report:
+    """Replay ``arrivals`` through the queue ``step`` from ``state``, its start with `main` at ``main``, in ``world`` until
+    nothing is left to happen, ``limit`` events, or minute ``until``, where the report ends.  The state need only list the
+    queue's candidates as `stack`, each with its `tree`; a `now` it has is set to the minute of each event before the event
+    is stepped."""
     return _Sim(tuple(arrivals), world, policy, step, main, limit, state).run(until)
 
 
@@ -134,7 +137,7 @@ def summary(r: Report, *, within: float = 120.0, lag: float = 180.0, every: floa
     """Ready-to-main quantiles (hours) over the arrivals that reached `main`, from the ready mark and from the review
     (``review_*``, which leaves out the wait for a review), the share of all arrivals on `main` within ``within`` minutes of
     their ready mark, main's lag (its worst, and the share of samples every ``every`` minutes from ``start`` at most
-    ``lag``), and what the queue spent: candidates, bisections, ejects, retries, runs and node use."""
+    ``lag``), and what the queue spent: candidates, ejects, retries, runs and node use."""
     rows = [x for x in r.landings if x.ready >= start]
     hours = [(x.main - x.ready) / 60 for x in rows if x.main is not None]
     reviewed = [(x.main - x.batchable) / 60 for x in rows if x.main is not None]
@@ -144,7 +147,7 @@ def summary(r: Report, *, within: float = 120.0, lag: float = 180.0, every: floa
             "within": sum(x.main is not None and x.main - x.ready <= within for x in rows) / len(rows) if rows else 0.0,
             "lag_max_h": max(samples, default=0.0) / 60, "lag_ok": sum(s <= lag for s in samples) / len(samples) if samples else 1.0,
             "ejects": sum(x.ejects for x in rows), "false_ejects": sum(x.false_ejects for x in rows),
-            "candidates": r.candidates, "bisections": r.bisections, "advances": r.advances, "retries": r.retries,
+            "candidates": r.candidates, "advances": r.advances, "retries": r.retries,
             "reruns": r.reruns, "pages": r.pages, "runs": r.runs, "cached": r.cached,
             "utilization": r.busy / (r.nodes * (r.end - start)) if r.end > start else 0.0, "unsound": len(r.unsound)}
 
@@ -213,14 +216,14 @@ def _tests(bad: frozenset[tuple[int, str]], i: int) -> frozenset[str]:
 
 class _Sim:
     def __init__(self, arrivals: tuple[Arrival, ...], world: World, policy: lq.Policy, step: Step, main: str, limit: int,
-                 state=None):
+                 state: Any):
         self.world, self.policy, self.step, self.limit = world, policy, step, limit
         self.tasks = world.tasks
         self.names = [t.name for t in self.tasks]
         self.index = {t.name: i for i, t in enumerate(self.tasks)}
         self.touch = Index(self.tasks).touch
         self.rng = random.Random(world.seed)
-        self.state = lq.State.start(main) if state is None else state
+        self.state = state
         self.now = 0.0
         self.heap: list = []
         self.n = 0
@@ -246,7 +249,7 @@ class _Sim:
         self.rows: list[dict] = []
         self.open: dict[int, tuple[str, float]] = {}
         self.held: list[tuple[float, float]] = []
-        self.counts = dict(candidates=0, bisections=0, retries=0, reruns=0, pages=0, runs=0, cached=0, advances=0)
+        self.counts = dict(candidates=0, retries=0, reruns=0, pages=0, runs=0, cached=0, advances=0)
         self.busy = 0.0
         self.unsound: list[str] = []
         for a in sorted(arrivals, key=lambda a: (a.ready, a.pr)):
@@ -305,8 +308,6 @@ class _Sim:
         if hasattr(self.state, "now"):
             self.state.now = self.now
         self.state, ds = self.step(self.state, event, self.policy)
-        if any(isinstance(d, lq.Cancel) and d.why == lq.BISECTED for d in ds):
-            self.counts["bisections"] += 1
         for d in ds:
             getattr(self, "do_" + type(d).__name__)(d)
         if self.live:
@@ -473,6 +474,3 @@ class _Sim:
 
     def do_Page(self, d: lq.Page) -> None:
         self.counts["pages"] += 1
-
-    def do_SetAside(self, d: lq.SetAside) -> None:
-        pass

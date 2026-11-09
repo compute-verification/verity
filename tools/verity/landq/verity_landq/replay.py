@@ -1,9 +1,10 @@
-"""Replay real PR traffic through the landing queue's model, beside what the old path did with the same PRs.  This module
-does the I/O that `model` and `sim` don't.
+"""Replay real PR traffic through the verified queue's `decide`, beside what the old path did with the same PRs.  This
+module does the I/O that `sim` and `snapshots` don't.
 
     uv run python -m verity_landq.replay trace --since SINCE --until UNTIL --out trace.json
     uv run python -m verity_landq.replay tasks PLAN --out tasks.json
-    uv run python -m verity_landq.replay run trace.json tasks.json --batch 1,2,4,6,8 --depth 1,2,3 --nodes 2,4,8 --out replay.json
+    uv run python -m verity_landq.replay run trace.json tasks.json --queue vqueue:SRC --batch 8,16 --depth 3 --nodes 32 \
+        --out replay.json
 
 `trace` reads a window of landings, in a clone with `checked` and `main` fetched, `gh` authenticated and `research` on the
 PATH.  Each `Queue: #N` merge on `checked`'s first-parent chain is an arrival: its second parent is the PR's head, and its
@@ -18,8 +19,8 @@ requires; and the whole tree for a `lean-suites` part, as graph/v2 keys one.
 
 `run` replays the trace in every combination of batch size, depth and node count, with breaking PRs, infra errors and false
 fails drawn at the rates given, `--seeds` times each, and prints one row per combination beside the old path's.  The queue
-is the model, or with `--queue vqueue:SRC` the snapshot queue `research.vqueue` from a checkout (`snapshots.Driver`), whose
-snapshot fields `--set KEY=VALUE` sets (`--set lean=3`), and whose driver starts the tasks `--defer TASK` names as the loop
+is `research.vqueue` from a checkout (`--queue vqueue:SRC`, SRC its `tools/research/src`), driven by `snapshots.Driver`,
+whose snapshot fields `--set KEY=VALUE` sets (`--set lean=3`), and which starts the tasks `--defer TASK` names as the loop
 starts the run beside a check (`--defer slim`).
 """
 from __future__ import annotations
@@ -244,18 +245,12 @@ def old_path(doc: dict, within: float = 120.0, lag: float = 180.0, every: float 
 
 
 def queue(spec: str, fields: dict | None = None, deferred: frozenset[str] = frozenset()) -> tuple:
-    """The queue a run replays: ``model`` (`model.step`), or ``vqueue:SRC``, the snapshot queue `research.vqueue` imported
-    from the directory SRC (a checkout's `tools/research/src`), driven by `snapshots.Driver` with snapshot ``fields`` and
-    the ``deferred`` tasks it starts; as (step, start)."""
-    if spec == "model":
-        if fields or deferred:
-            named = ", ".join([*(fields or {}), *sorted(deferred)])
-            raise SystemExit(f"--set and --defer ({named}) are a snapshot queue's (`--queue vqueue:SRC`): the model "
-                             "starts no deferred task")
-        return lq.step, lq.State.start
+    """The queue a run replays, ``vqueue:SRC``: the snapshot queue `research.vqueue` imported from the directory SRC (a
+    checkout's `tools/research/src`), driven by `snapshots.Driver` with snapshot ``fields`` and the ``deferred`` tasks it
+    starts; as (step, start)."""
     kind, _, src = spec.partition(":")
     if kind != "vqueue" or not (Path(src) / "research" / "vqueue.py").is_file():
-        raise SystemExit(f"--queue {spec}: give `model` or `vqueue:SRC`, SRC a directory holding research/vqueue.py")
+        raise SystemExit(f"--queue {spec}: give `vqueue:SRC`, SRC a directory holding research/vqueue.py")
     sys.path.insert(0, src)
     from research import vqueue
     driver = snapshots.Driver(vqueue, deferred=deferred, **(fields or {}))
@@ -293,7 +288,7 @@ def _mean(rows: list[dict]) -> dict:
 
 def _table(old: dict, rows: list[dict]) -> str:
     head = ("k  d  nodes   p50 h   p90 h  from review: p50 h   p90 h  on main ≤2 h  lag max h  lag ≤3 h  ejects  false  "
-            "bisect  cands  node use")
+            "cands  node use")
     lines = [head, f"old path       {old['p50_h']:6.2f}  {old['p90_h']:6.2f}  {old['review_p50_h']:19.2f}  "
                    f"{old['review_p90_h']:6.2f}  {old['within']:12.0%}  {old['lag_max_h']:9.1f}  {old['lag_ok']:8.0%}   (the "
                    f"oldest landing on checked not yet on main, from {old['checked_from'][:16]}: max "
@@ -302,7 +297,7 @@ def _table(old: dict, rows: list[dict]) -> str:
         lines.append(f"{r['batch']:<2d} {r['depth']:<2d} {r['nodes']:<5d}  {r['p50_h']:6.2f}  {r['p90_h']:6.2f}  "
                      f"{r['review_p50_h']:19.2f}  {r['review_p90_h']:6.2f}  "
                      f"{r['within']:12.0%}  {r['lag_max_h']:9.1f}  {r['lag_ok']:8.0%}  {r['ejects']:6.1f}  "
-                     f"{r['false_ejects']:5.1f}  {r['bisections']:6.1f}  {r['candidates']:5.0f}  {r['utilization']:8.0%}")
+                     f"{r['false_ejects']:5.1f}  {r['candidates']:5.0f}  {r['utilization']:8.0%}")
     return "\n".join(lines)
 
 
@@ -338,7 +333,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--fix", type=float, default=120.0, help="minutes until an ejected PR comes back fixed")
     r.add_argument("--build", type=float, default=2.0)
     r.add_argument("--listing", type=float, default=3.0)
-    r.add_argument("--queue", default="model", help="`model`, or `vqueue:SRC` for research.vqueue from SRC")
+    r.add_argument("--queue", required=True, metavar="vqueue:SRC",
+                   help="research.vqueue from SRC, a checkout's tools/research/src")
     r.add_argument("--set", dest="fields", type=_field, action="append", default=[], metavar="KEY=VALUE",
                    help="a snapshot field for a snapshot queue, such as lean=3 (repeatable)")
     r.add_argument("--defer", action="append", default=[], metavar="TASK",

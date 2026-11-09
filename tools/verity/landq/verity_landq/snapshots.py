@@ -1,5 +1,5 @@
 """Drive a snapshot queue, a pure `decide(snapshot) -> actions` with the verified queue's contract (`research.vqueue`), with
-the model's events and decisions, so the simulator and the property tests run it as they run `model.step`.
+`model`'s events and decisions, so the simulator and the property tests run it.
 
     from research import vqueue
     from verity_landq import sim, snapshots
@@ -8,20 +8,20 @@ the model's events and decisions, so the simulator and the property tests run it
 
 The driver stands in for the queue's loop.  It builds each snapshot from what the events said: the ready and reviewed PRs,
 the candidates with the verdict their results make, and the outcomes of decided candidates.  It calls `decide` and turns
-each action into the model's decision with the same effect on the world, and calls it again until it asks for nothing
-new, as a loop that ticks often would.  A tick that builds waits for its trees before deciding again, as the loop's builds
+each action into a `model` decision with the same effect on the world, and calls it again until it asks for nothing new,
+as a loop that ticks often would.  A tick that builds waits for its trees before deciding again, as the loop's builds
 finish within its tick.  A candidate's verdict is `fail` once a task failed, else `infra` once a task's outcome is an infra
 error, though others still run, as the loop reads graph2's, else `pass` once every listed task passed, else `pending`.  An
-infra outcome a retry asks for again is set aside.  The driver fills each field the contract has
-and leaves the rest to their defaults: a failure's key, its key on the candidate's base, its failing tests and the base's
-(as the world's results give them), whether the verdict has ended (every listed task has an outcome) with its infra
-errors beside its failures, a candidate's reruns and when its check was enqueued, and the snapshot's time (the
-simulator's minutes, as seconds).  The policy gives the snapshot's batch and depth; keyword arguments set its other
-fields, such as `lean` or `rings`, which otherwise keep the queue's own defaults (the model's `page_after` doesn't reach
-them).  A `Ring` pages once a candidate and why, and a `Red` once a base and task, as the loop rings them; a `Rerun` runs
-the failed keys' tasks afresh.  A task named in `deferred` (`sim.Task.deferred`) starts once, as the loop starts the run
-beside a check: on the lowest candidate, while it is on `main`, once the queue's reading of its other tasks' verdict (the
-module's `_reading` where it has one) is pass.  The module is a parameter, so nothing here imports it.
+infra outcome a retry asks for again is set aside.  The driver fills each field the contract has and leaves the rest to
+their defaults: a failure's key, its key on the candidate's base, its failing tests and the base's (as the world's results
+give them), whether the verdict has ended (every listed task has an outcome) with its infra errors beside its failures, a
+candidate's reruns and when its check was enqueued, and the snapshot's time (the simulator's minutes, as seconds).  The
+policy gives the snapshot's batch and depth; keyword arguments set its other fields, such as `lean` or `rings`, which
+otherwise keep the queue's own defaults.  A `Ring` pages once a candidate and why, and a `Red` once a base and task, as
+the loop rings them; a `Rerun` runs the failed keys' tasks afresh.  A task named in `deferred` (`sim.Task.deferred`)
+starts once, as the loop starts the run beside a check: on the lowest candidate, while it is on `main`, once the queue's
+reading of its other tasks' verdict (the module's `_reading` where it has one) is pass.  The module is a parameter, so
+nothing here imports it.
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ from verity_landq import model as lq
 LEAN = (".lean", "lean-audit.json", "lakefile.toml", "lake-manifest.json", "lean-toolchain")
 #: the most decide calls one event leads to
 TICKS = 8
-#: the whole tree as the contract's inputs say it (a glob whose `**` crosses directories), for the model's `.`
+#: the whole tree as the contract's inputs say it (a glob whose `**` crosses directories), for the `.` `touches` reads
 WHOLE = "**"
 
 
@@ -217,7 +217,7 @@ class Driver:
         s.cid += 1
         s.stack.append(c)
         s.building.add(c.cid)
-        return [lq.Build(c.cid, a.base, members, False)]
+        return [lq.Build(c.cid, a.base, members)]
 
     def do_Advance(self, s: QState, a) -> list[lq.Decision]:
         i = self.find(s, a.sha)
