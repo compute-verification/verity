@@ -3,8 +3,8 @@
 challenger session on the group's root (`a5_coins.start`, its serve.py under live_challenger's stub of the Lean
 verifier's coins), and the round's `service.Stream` registering and sampling the round on its coins. Only the proofs
 are stubbed (`a8.session`, `a0.lean_verify`): proving needs Flock's and the Lean's binaries, which a node's run of
-``scan_zk.sh`` builds. Of the altered coins' evidence only the evidence for another window is replayed
-(`a5_coins.negatives`' are a5_coins' tests')."""
+``scan_zk.sh`` builds. Of the challenger's negatives only the evidence for another window and the missing seed salt are
+replayed (`a5_coins.negatives`' are a5_coins' tests')."""
 from __future__ import annotations
 
 import importlib.util
@@ -37,10 +37,13 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     round registers (`scan_root`, `stream_of`), so it registers and samples the round: a stratified sample of 4 with
     each template's stratum sampled, a session for each member holding a sampled unit and only for those, a
     registration of the generator form's digest and partition, and coins whose evidence holds against the group's root
-    and the registration's digest. A stream that rebuilt the templates' mixed population instead refused it at R2
-    (``R2-program``, ``R2-partition``) and drew nothing. Each member's registered reads, the verifier's file and its
-    statement's header (the prover's and the verifier's alike, or their statement digests differ), name every port of
-    its circuit, its o0 at the registration's root for it, as Lean's `Registered.checkComplete` requires.
+    and the registration's digest. The registration names the window's seed salt the session released at its open, whose
+    evidence holds too, and the stream refuses the honest evidence for another window and the honest coins without the
+    salt's evidence at the Lean run's register (``seed-salt``). A stream that rebuilt the templates' mixed population
+    instead refused it at R2 (``R2-program``, ``R2-partition``) and drew nothing. Each member's registered reads, the
+    verifier's file and its statement's header (the prover's and the verifier's alike, or their statement digests
+    differ), name every port of its circuit, its o0 at the registration's root for it, as Lean's
+    `Registered.checkComplete` requires.
 
     Runs a few minutes (lowering the scan's three templates at the test class, and the Lean's checks of each stream's
     registration, sample and run), and catches what the stream's own window tests can't: that the scan's registered
@@ -93,6 +96,8 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     receipt = json.loads((out / "receipt.json").read_text())
     assert receipt and json.loads((out / "draw.json").read_text())["units"] == units
     assert res["coins"]["coins_reason"] is None
+    assert res["coins"]["seed_salt_reason"] is None and rec["window"]["seed_salt"] == res["coins"]["seed_salt"]
+    assert res["coin_negatives"] == {"coins-for-another-window": True, "seed-salt-missing": True}
 
     roots = {r["port"]: r["root"] for r in rec["roots"]}
     for m in members:
