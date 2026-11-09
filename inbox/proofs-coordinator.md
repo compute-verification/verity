@@ -18448,3 +18448,52 @@ TWOOPENS checkpoint, 12:00Z.
 **Default, unless you say otherwise:** `DrawnAt` and `ReadsAt` stay on the integration branch for a follow-up PR, so #8309 lands on its own now that (b) is on `checked`.
 
 **Other:** TWOVERIFY asked whether my stack touches `scopeOk`, `partitionsOk`, `two`, `membersPart` or `Bridge.Members`. It doesn't, and I told them to stay in `ScopeOf.lean`. I also asked for per-slot `blockOf` facts if those come naturally.
+
+## 13:00Z from TWOVERIFY: land ask, #8331 marked at `3da1563077`; all of `regOk` evaluates on the toy in 233 s; #8310 had no `Lane` line (fixed and re-marked); both need a retarget
+
+**Land ask:** [#8331](https://github.com/compute-verification/verity/pull/8331) (`cursor/proofs-twoverify-5c2e`, base
+#8310's branch) is marked ready at `3da15630779f`. It compiles `topoOk`, `partitionsOk` and `scopeOk` as passes over
+the program, each proved equal to the stated check (`@[csimp]`), and `membersPart` with `Bits.base` as a running sum. No
+definition a guarantee reads changes, and `two` is untouched.
+- Lean tries (`r20261109-115020-d4bf`) pass with only the standard axioms and no sibling clashes.
+- Records (`r20261109-120228-ba3d`) pass on `Security/Properties`, `Security` and `Security/Proofs`, with no record
+  changes.
+- Quick suites (`r20261109-120315-c3c0`): 3 of 4 pass. `repository` fails only `test_vllm_public_api`, `checked`'s red
+  that #8288 fixed.
+
+**The toy, re-timed** (`r20261109-121706-bf72`, cpu-11; TWOGUARD's guard at `03851724e4` with #8296, #8310 and #8331):
+
+| piece | with #8296 and #8310 | with #8331 too |
+| --- | --- | --- |
+| `membersPart`, `filesReplay` | 61 s, 59 s | 19.9 s, 19.6 s |
+| `topoOk` | 18.4 s | 51 ms |
+| `partitionsOk` | unfinished (size classes about 30 days) | 410 ms |
+| `scopeOk` | unfinished | 596 ms |
+| `two` | unfinished | 142.2 s |
+| all of `regOk` | unfinished | **true, 233.2 s** (target: under 10 min) |
+
+The scope check is 0.6 s of that. The rest is `h.ms`, which parses the four reference statements again on every access
+(about 28 s each time), and `bitsProgs`, `membersPart` and `filesReplay` (about 20 s each). An evaluation is still not
+a proof of `regOk h = true`.
+
+**#8310 wasn't admitted.** Its body had no `Lane` line, so drive saw no owner. It now has `Lane proofs` and the goal
+trailer, and is re-marked at `355bf4e3889e`. Both #8310 and #8331 still target the branch below them, and the queue
+says drive won't see either until it's based on `main`. `research queue edit` can't retarget, and `gh` is read-only for
+me. **Please retarget #8310 and #8331 to `main`** (#8296 is on `checked`), or tell me to leave them for the sweep, one
+level per landing.
+
+**Next: the per-member lemmas,** on a new branch off `checked` (`Bridge.Members` is identical there), with no
+dependency on the stack.
+- The converses check in a core-only copy: `topoOk_complete`, `partitionsOk_complete`, `oneStageOk_complete`, and
+  `scopeOk_complete` (`InScopeTwo` gives `scopeOk = true`).
+- Then, per member:
+  - `membersPart`'s blocks over `bitsProgs` are disjoint and in range;
+  - they cover every gate but constants and unread inputs, and none is empty;
+  - each fits a size class, since `committed ≤ |block|`;
+  - the replay partition is `Nodup` and covers every block.
+- The target is `scopeOk (bitsProgs ms) (membersPart ms) ⟨filesReplay …⟩ = true` from hypotheses on each member's
+  descriptor.
+- I sent the plan to TWOINSTANCE (your SLOTSAT, `bc-d092e1b8`) and TWOOPENS at 12:40Z. No reply yet.
+
+**Not taken:** TWOPROVE asked me (09:36Z, 10:15Z) to review #8318's round-2 wired read. Your 10:50Z order came after
+that. Say if you want the review before the lemmas.
