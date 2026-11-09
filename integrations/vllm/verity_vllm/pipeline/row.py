@@ -34,7 +34,7 @@ from verity_vllm import protocols as PO
 from verity_vllm.config import (ROOT, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError, done_source_refusal,
                                 group, option, row_file, row_path, row_world)
 from verity_vllm.pipeline import config_record as CR
-from verity_vllm.pipeline import research
+from verity_vllm.pipeline.row_driver import research
 from verity_vllm import settings
 
 STAGES = "build,match,commit"
@@ -217,7 +217,7 @@ def fa_version(workload: str, target: str | None = None) -> int:
 
 def main(o: Any) -> int:
     if isinstance(o, Stage):
-        return research.stage(o, run_row)
+        return research().stage(o, run_row)
     if isinstance(o, Run):
         return run_row(o, o.stages)
     if isinstance(o, Chain):
@@ -228,9 +228,9 @@ def main(o: Any) -> int:
         from verity_vllm.pipeline import cli
         first = o.stages.split(",")[0]
         st = cli.parse("row", ["stage", first, o.row, o.role, o.repo, o.rev, *o.flags], o.env.environ)
-        return research.chain(o, st.env.sweep_dir)
+        return research().chain(o, st.env.sweep_dir)
     if isinstance(o, Shed):
-        return research.shed(o)
+        return research().shed(o)
     print(fa_version(o.workload, o.target))
     sys.stdout.flush()
     return 0
