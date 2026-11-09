@@ -37,7 +37,7 @@
      "sparse MLA at the census request's keys (128k's are about 8\u00d7)",
      "design (d): approved, not built",
      "the 875-token cap: approved, not certified",
-     "the cap's S at log2 V bits a token: no lemma bounds a token word by V; at 32 bits a token it is its own column",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
@@ -45,24 +45,6 @@
      "m = 37: not built (its cells only)"
     ],
     "cells": {
-     "875-token cap": {
-      "without m = 37": {
-       "world week": 0.9057642449726208,
-       "world month": 0.9211403843690028,
-       "world year": 0.947548629606233,
-       "datacenter week": 0.8205400522772209,
-       "datacenter month": 0.8359018057631904,
-       "datacenter year": 0.8623802159439183
-      },
-      "with m = 37": {
-       "world week": 0.641521102039778,
-       "world month": 0.652096126193648,
-       "world year": 0.6702586978055813,
-       "datacenter week": 0.5812366845354471,
-       "datacenter month": 0.5934827243712144,
-       "datacenter year": 0.6116943777959192
-      }
-     },
      "875-token cap at 32 bits a token": {
       "without m = 37": {
        "world week": 0.9282549874593987,
@@ -79,6 +61,24 @@
        "datacenter week": 0.5938638185866633,
        "datacenter month": 0.6045781134882515,
        "datacenter year": 0.6229608551429691
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 0.9057642449726208,
+       "world month": 0.9211403843690028,
+       "world year": 0.947548629606233,
+       "datacenter week": 0.8205400522772209,
+       "datacenter month": 0.8359018057631904,
+       "datacenter year": 0.8623802159439183
+      },
+      "with m = 37": {
+       "world week": 0.641521102039778,
+       "world month": 0.652096126193648,
+       "world year": 0.6702586978055813,
+       "datacenter week": 0.5812366845354471,
+       "datacenter month": 0.5934827243712144,
+       "datacenter year": 0.6116943777959192
       }
      },
      "census S": {
@@ -119,7 +119,7 @@
      "sparse MLA at the 128k plan's selected keys (modeled, rough)",
      "design (d): approved, not built",
      "the 875-token cap: approved, not certified",
-     "the cap's S at log2 V bits a token: no lemma bounds a token word by V; at 32 bits a token it is its own column",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
@@ -127,24 +127,6 @@
      "m = 37: not built (its cells only)"
     ],
     "cells": {
-     "875-token cap": {
-      "without m = 37": {
-       "world week": 1.1383995271827956,
-       "world month": 1.1549091969603145,
-       "world year": 1.183208231345826,
-       "datacenter week": 1.0442571451252989,
-       "datacenter month": 1.0610081831696465,
-       "datacenter year": 1.0897145537702473
-      },
-      "with m = 37": {
-       "world week": 0.8074451681175213,
-       "world month": 0.8190166201923271,
-       "world year": 0.8388509361625865,
-       "datacenter week": 0.7414628392760196,
-       "datacenter month": 0.7532030693467067,
-       "datacenter year": 0.7733222588508584
-      }
-     },
      "875-token cap at 32 bits a token": {
       "without m = 37": {
        "world week": 1.2450071753171303,
@@ -161,6 +143,24 @@
        "datacenter week": 0.8032074273984828,
        "datacenter month": 0.8149375717656543,
        "datacenter year": 0.8350763180322041
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 1.1383995271827956,
+       "world month": 1.1549091969603145,
+       "world year": 1.183208231345826,
+       "datacenter week": 1.0442571451252989,
+       "datacenter month": 1.0610081831696465,
+       "datacenter year": 1.0897145537702473
+      },
+      "with m = 37": {
+       "world week": 0.8074451681175213,
+       "world month": 0.8190166201923271,
+       "world year": 0.8388509361625865,
+       "datacenter week": 0.7414628392760196,
+       "datacenter month": 0.7532030693467067,
+       "datacenter year": 0.7733222588508584
       }
      },
      "census S": {
@@ -205,7 +205,7 @@
      "sparse MLA at the census request's keys (128k's are about 8\u00d7)",
      "design (d): approved, not built",
      "the 875-token cap: approved, not certified",
-     "the cap's S at log2 V bits a token: no lemma bounds a token word by V; at 32 bits a token it is its own column",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
@@ -213,24 +213,6 @@
      "m = 37: not built (its cells only)"
     ],
     "cells": {
-     "875-token cap": {
-      "without m = 37": {
-       "world week": 0.0836599393453981,
-       "world month": 0.08395365316332637,
-       "world year": 0.0844555910366099,
-       "datacenter week": 0.08199060503078037,
-       "datacenter month": 0.08228799727489165,
-       "datacenter year": 0.08279734250488319
-      },
-      "with m = 37": {
-       "world week": 0.0711589564713207,
-       "world month": 0.07138145138754139,
-       "world year": 0.07176335469647273,
-       "datacenter week": 0.06992132505195776,
-       "datacenter month": 0.07013865834464994,
-       "datacenter year": 0.07051152713576558
-      }
-     },
      "875-token cap at 32 bits a token": {
       "without m = 37": {
        "world week": 0.09726083604401795,
@@ -247,6 +229,24 @@
        "datacenter week": 0.07675805133633398,
        "datacenter month": 0.07699102615332237,
        "datacenter year": 0.07738680506138233
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 0.0836599393453981,
+       "world month": 0.08395365316332637,
+       "world year": 0.0844555910366099,
+       "datacenter week": 0.08199060503078037,
+       "datacenter month": 0.08228799727489165,
+       "datacenter year": 0.08279734250488319
+      },
+      "with m = 37": {
+       "world week": 0.0711589564713207,
+       "world month": 0.07138145138754139,
+       "world year": 0.07176335469647273,
+       "datacenter week": 0.06992132505195776,
+       "datacenter month": 0.07013865834464994,
+       "datacenter year": 0.07051152713576558
       }
      },
      "census S": {
@@ -287,7 +287,7 @@
      "sparse MLA at the 128k plan's selected keys (modeled, rough)",
      "design (d): approved, not built",
      "the 875-token cap: approved, not certified",
-     "the cap's S at log2 V bits a token: no lemma bounds a token word by V; at 32 bits a token it is its own column",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
@@ -295,24 +295,6 @@
      "m = 37: not built (its cells only)"
     ],
     "cells": {
-     "875-token cap": {
-      "without m = 37": {
-       "world week": 0.17969878629441857,
-       "world month": 0.1800310783893075,
-       "world year": 0.18061352219511181,
-       "datacenter week": 0.1776889015172618,
-       "datacenter month": 0.17806354932680762,
-       "datacenter year": 0.1787044039191885
-      },
-      "with m = 37": {
-       "world week": 0.13377617179595486,
-       "world month": 0.13411847151531509,
-       "world year": 0.13470859849733843,
-       "datacenter week": 0.1318628576763168,
-       "datacenter month": 0.13219224302964513,
-       "datacenter year": 0.1327709532756691
-      }
-     },
      "875-token cap at 32 bits a token": {
       "without m = 37": {
        "world week": 0.25657428869102705,
@@ -329,6 +311,24 @@
        "datacenter week": 0.16914525307600384,
        "datacenter month": 0.1694779216765438,
        "datacenter year": 0.17003902915268423
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 0.17969878629441857,
+       "world month": 0.1800310783893075,
+       "world year": 0.18061352219511181,
+       "datacenter week": 0.1776889015172618,
+       "datacenter month": 0.17806354932680762,
+       "datacenter year": 0.1787044039191885
+      },
+      "with m = 37": {
+       "world week": 0.13377617179595486,
+       "world month": 0.13411847151531509,
+       "world year": 0.13470859849733843,
+       "datacenter week": 0.1318628576763168,
+       "datacenter month": 0.13219224302964513,
+       "datacenter year": 0.1327709532756691
       }
      },
      "census S": {
@@ -374,7 +374,7 @@
      "sparse MLA at the census request's keys (128k's are about 8\u00d7)",
      "design (d): approved, not built",
      "the 875-token cap: approved, not certified",
-     "the cap's S at log2 V bits a token: no lemma bounds a token word by V; at 32 bits a token it is its own column",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
@@ -382,24 +382,6 @@
      "m = 37: not built (its cells only)"
     ],
     "cells": {
-     "875-token cap": {
-      "without m = 37": {
-       "world week": 0.07055912821028033,
-       "world month": 0.07083326356053284,
-       "world year": 0.07130197659671222,
-       "datacenter week": 0.06873138053836646,
-       "datacenter month": 0.06927719499894257,
-       "datacenter year": 0.06951322700687246
-      },
-      "with m = 37": {
-       "world week": 0.061612983346248096,
-       "world month": 0.061806663289318074,
-       "world year": 0.06213893409361824,
-       "datacenter week": 0.06035499788590947,
-       "datacenter month": 0.06056001910963275,
-       "datacenter year": 0.06104749222282509
-      }
-     },
      "875-token cap at 32 bits a token": {
       "without m = 37": {
        "world week": 0.07526718024924105,
@@ -416,6 +398,24 @@
        "datacenter week": 0.06294603297548836,
        "datacenter month": 0.0631614353360554,
        "datacenter year": 0.06352931577906587
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 0.07055912821028033,
+       "world month": 0.07083326356053284,
+       "world year": 0.07130197659671222,
+       "datacenter week": 0.06873138053836646,
+       "datacenter month": 0.06927719499894257,
+       "datacenter year": 0.06951322700687246
+      },
+      "with m = 37": {
+       "world week": 0.061612983346248096,
+       "world month": 0.061806663289318074,
+       "world year": 0.06213893409361824,
+       "datacenter week": 0.06035499788590947,
+       "datacenter month": 0.06056001910963275,
+       "datacenter year": 0.06104749222282509
       }
      },
      "census S": {
@@ -457,7 +457,7 @@
      "sparse MLA at the 128k plan's selected keys (modeled, rough)",
      "design (d): approved, not built",
      "the 875-token cap: approved, not certified",
-     "the cap's S at log2 V bits a token: no lemma bounds a token word by V; at 32 bits a token it is its own column",
+     "the cap's S: quoted at the 32 bits a token the capped form counts; at log2 V bits only if a token word takes at most V values",
      "the wait at e: the cache's hold on the trace (modeled)",
      "the certified tick: simulated on Llama-3.2-1B traces (modeled; the card's high +2.54 pt)",
      "the deterministic top-k: kernel-modeled",
@@ -465,24 +465,6 @@
      "m = 37: not built (its cells only)"
     ],
     "cells": {
-     "875-token cap": {
-      "without m = 37": {
-       "world week": 0.10149249371503866,
-       "world month": 0.10186713714084007,
-       "world year": 0.1025115945922283,
-       "datacenter week": 0.0993851180570555,
-       "datacenter month": 0.09975253641945216,
-       "datacenter year": 0.10039123783856857
-      },
-      "with m = 37": {
-       "world week": 0.08613626062702325,
-       "world month": 0.08644750492323353,
-       "world year": 0.0869827028563818,
-       "datacenter week": 0.08438364244376678,
-       "datacenter month": 0.08468985418649301,
-       "datacenter year": 0.08522121703535637
-      }
-     },
      "875-token cap at 32 bits a token": {
       "without m = 37": {
        "world week": 0.1234533928939477,
@@ -499,6 +481,24 @@
        "datacenter week": 0.09616942854466756,
        "datacenter month": 0.09648016459599597,
        "datacenter year": 0.09700911901782631
+      }
+     },
+     "875-token cap at log2 V bits a token (if a token word takes at most V values)": {
+      "without m = 37": {
+       "world week": 0.10149249371503866,
+       "world month": 0.10186713714084007,
+       "world year": 0.1025115945922283,
+       "datacenter week": 0.0993851180570555,
+       "datacenter month": 0.09975253641945216,
+       "datacenter year": 0.10039123783856857
+      },
+      "with m = 37": {
+       "world week": 0.08613626062702325,
+       "world month": 0.08644750492323353,
+       "world year": 0.0869827028563818,
+       "datacenter week": 0.08438364244376678,
+       "datacenter month": 0.08468985418649301,
+       "datacenter year": 0.08522121703535637
       }
      },
      "census S": {
@@ -528,5 +528,5 @@
   ],
   "quote": "no row is served-measured; the served cut's rows are card-priced: (i) today's served blocks, registered MoE cut as the planner prices it, (i) today's served blocks, registered MoE cut on its own premises"
  },
- "art": "art:01441e1c12d7371a0631ef0c459c2b477c87d1701ae834b8b851634d5ab8ccf9"
+ "art": "art:71e23833d3a538d2fc7abd33f396f2fc3e4ba9f639ad721fac57cf4f6eded249"
 }
