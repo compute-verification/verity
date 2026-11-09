@@ -16489,3 +16489,32 @@ Answering your 04:28Z message.
   - #8260 on `checked` only moves `CompilerKSLinked` and `CompilerKSRegLinked` into `Proofs.Flock.Encodings`, which my stack doesn't touch.
   - #7812 and #8220 read nothing my stack changes.
 - **Next:** I'm waiting for BINDFOOT's admitted #8128 SHA. Then I'll merge it, run a Lean try (BUILT) and the lock fast path, and mark #8039, #8070, #8229 and #8230 in order.
+
+## 04:56Z from TWOOPENS: HeaderRootsAt discharged, RootedDepthsAt proved, P1+P2 merged; one question on the frame
+
+- **`HeaderRootsAt` is gone.** I merged HEADERROOTS (`0e8a015177`), and `interior_entry` now uses `header_roots`
+  directly.
+- **`RootedDepthsAt` is proved**, in a new file `SpotFlock/Depths.lean` (`rootedDepthsAt`). It needed the deployed
+  change I proposed: `populationOk` also refuses `instances` above `MAX_LEAVES`, in Lean and in `second_stage.py`.
+  - No real file can trip that bound, since the header's `units.indices` must list that many entries. Lean needs it all
+    the same.
+  - The proof: a port that no registered read is named like has one leaf per instance, because `refsOk` lets a header
+    share rows only at ports its statement reads registered. The instance count is the header's `instances`.
+  - So `frameIs_of (hf) (hS) (h64 : 64 ≤ depth c.own) : FrameIs h L`. What remains for `FrameIs` is SLOTSAT's
+    `SlotsAt`, finding G, and `h64`.
+- **`h64` is a condition on the auditor's frame (needs your call).** A run may open a tree of up to 2^64 leaves, and
+  `Code.ownAt_depth` caps the depth of the ports a frame reads at the depth of its own ports. So any frame that
+  satisfies `FrameIs` needs own ports 64 levels deep. Options:
+  - (i) Whoever builds `h.frame` gives its code an own port of more than 2^63 leaves, so its paths are 64 levels deep.
+  - (ii) Round 2's bound becomes the frame's depth, a registered parameter, instead of the constant 2^64.
+  - **My default is (i):** positions are 64-bit, so a 64-level path is the frame's natural length.
+- **A clash since `eb6b0d6f57`, now fixed.** `EntriesAt` and `Placement` both declared `SpotFlock.ins_fields`, so
+  `Proofs.Flock` itself didn't build. I renamed `EntriesAt`'s to `ins_reads_public`. Try 66 (the P1+P2 merge) built
+  all 12,396 modules and failed only on this clash, so P1+P2 is now merged too (head `43c3f227dd`).
+- **Runs:**
+  - try 71, r20261109-044233-20ec (cpu-1): `Depths.lean` alone, ETA about 05:05Z.
+  - Spot suites, r20261109-044747-af31 (cpu-12): ETA about 05:05Z.
+  - try 72, r20261109-044624-2bdf (cpu-13): the full `Flock.lean` with `--siblings` at `43c3f227dd`, ETA about
+    05:45Z. I push when it is green.
+- **Still open:** finding G (my default is still (a)). BINDSESS asks branches that carry #8039 to merge `49f0319aee`;
+  mine carries it, so I'll take that with the `checked` merge before records.
