@@ -23,8 +23,9 @@ ones.
 3. **The committed incorrect set** (`FregTwo`): over the grid of replay blocks and strata, the proof blocks incorrect at
    the committed boundary trace and their replay block's committed interior.
 4. **The error** (`εregTwo`): `Compiled.εreg`'s four terms (the sessions' knowledge error, and the boundary trace's
-   binding at `B_conf`) and the interior's binding, `N·√Pr[B_conf,2] + Pr[B_conf,2]`, at the finder whose two runs
-   share the first stage's coins (`BconfTwo`).
+   binding at `B_conf`, whose `Pr[B_conf]` also pays for one run's extractions opening an interior gate two ways) and
+   the interior's binding across runs, `N·√Pr[B_conf,2]`, at the finder whose two runs share the first stage's coins
+   (`BconfTwo`).
 5. **The claims**: `CompiledTwo.KSRegTwo`, two conjuncts on the run's coins, the event and the threshold form;
    `CompiledTwo.HeadlineTwo`, the acceptance probability at the committed boundary trace's best interiors;
    `CompiledTwo.MissTwo`, the miss at the replay blocks wrong at the committed boundary; and the compiler's statements.
@@ -122,7 +123,8 @@ noncomputable def FregTwo (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type}
 /-- **`B_conf,2`**: the prover's tape, the run's coins, two independent second stages at them, each with the extractor's
 coins there, and the first collision among the calls the two runs' extractions make themselves. Two runs that share
 the first stage's coins show one interior root for each replay block (`Sessions.interior`), so two extractions that
-open one interior gate two ways give one. Its cost is `Compiled.Bconf`'s at those two runs. -/
+open one interior gate two ways give one; two independent runs (`Compiled.Bconf`'s) show different interior roots and
+give none. Its cost is `Compiled.Bconf`'s at those two runs. -/
 noncomputable def BconfTwo (H : Msg → Msg) (L : CompiledTwo Coin A) : FinderFamily := fun Ω _ _ P x =>
   match L.parse x with
   | none => { S := Unit, out := fun _ => none, cost := fun _ => 0 }
@@ -148,12 +150,13 @@ noncomputable def BconfTwo (H : Msg → Msg) (L : CompiledTwo Coin A) : FinderFa
             (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2).eval H
               (run H P L.V x q.1)).2.1 }
 
-/-- **The committed form's error at two stages**: `Compiled.εreg`'s four terms and the committed interior's binding,
-`ε_reg,2 = κ_s + √(k(x)·γ_s·Pr[B]) + N·√Pr[B_conf] + Pr[B_conf] + N·√Pr[B_conf,2] + Pr[B_conf,2]`, `N` the program's
-gates, which bound the interior gates of the replay blocks a run samples as well as the boundary's. -/
+/-- **The committed form's error at two stages**: `Compiled.εreg`'s four terms and the committed interior's binding
+across runs, `ε_reg,2 = κ_s + √(k(x)·γ_s·Pr[B]) + N·√Pr[B_conf] + Pr[B_conf] + N·√Pr[B_conf,2]`, `N` the program's
+gates. Each gate is in at most one replay block, whose interior alone `Prog.refIn` reads there, so `N` bounds the
+interior positions as well as the boundary's. -/
 noncomputable def εregTwo (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) : ℝ :=
-  L.εreg H x P + L.nG x * Real.sqrt ((BconfTwo H L Ω P x).Pr H) + (BconfTwo H L Ω P x).Pr H
+  L.εreg H x P + L.nG x * Real.sqrt ((BconfTwo H L Ω P x).Pr H)
 
 /-! ## 5. The claims -/
 
