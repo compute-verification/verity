@@ -32,15 +32,18 @@ block's committed interior (`OffIreg`).
   plurality; a run off them; and two second stages that open a gate two ways.
 * `pr_offIreg_le`: **the rewinding lemma at the committed interior**: at a tape and first-stage coins, a second stage's
   extractions open a gate off the committed interior with probability at most `N·√Pr[two second stages conflict]`.
-* `pr_iconflict_le`: two second stages at shared first-stage coins see one interior root per replay block
-  (`Sessions.interior`), so their conflict is a collision `B_conf,2` finds (`CompiledTwo.BconfTwo`).
+* `pr_iconflict_le`, `ex_offIreg_le`: two second stages at shared first-stage coins see one interior root per replay
+  block (`Sessions.interior`), so their conflict is a collision `B_conf,2` finds (`CompiledTwo.BconfTwo`); averaged,
+  the run is off the committed interior with probability at most `N·√Pr[B_conf,2]`.
 * `regTwo_split`: **the deterministic half**: at an accepted run that samples a proof block of `FregTwo`, the first such
   block's session is unfound at its first slot, or the run disagrees with itself, or is off the committed boundary trace
   or the committed interior; otherwise `Sessions.opens` at the block's replay block makes it correct at the committed
   traces.
-* `Compiled.selIn`, `Compiled.pr_unfound_le_at`: the first sampled slot whose block is in a set, and the sessions' bound
-  at a selection that reads the run's coins off the second stage only.
-* `eventTwo_le`: **the primary conjunct of `CompiledTwo.KSRegTwo`**, at most `ε_reg,2`.
+* `Compiled.selIn`, `Compiled.pr_unfound_le_at`, `Compiled.ex_offReg_le`: the first sampled slot whose block is in a
+  set, the sessions' bound at a selection that reads the run's coins off the second stage only, and the rewinding lemma
+  at the committed boundary trace averaged over the tape.
+* `eventTwo_split`, `eventTwo_le`: the event at a tape as the union of those four, and **the primary conjunct of
+  `CompiledTwo.KSRegTwo`**, at most `ε_reg,2`.
 -/
 
 @[expose] public section
@@ -69,8 +72,8 @@ end Claims.Sampling
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition InScopeTwo cell replayOf forkOn forkOn_forkOn wrongInAt gateBlock
-  gateBlock_of_mem correct_refIn_congr val_assemble ιOf ιOf_eq)
+open Claims.Sampling (AuditStatement Opening Partition InScopeTwo cell replayOf forkOn forkOn_forkOn wrongInAt
+  gateBlock gateBlock_of_mem correct_refIn_congr val_assemble ιOf ιOf_eq)
 
 namespace Compiled
 
@@ -141,6 +144,17 @@ theorem pr_unfound_le_at (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω :
         refine add_le_add le_rfl ((Ex_sqrt_le _ fun p => mul_nonneg hγ0 (hβ0 _ _)).trans (Real.sqrt_le_sqrt ?_))
         rw [Ex_mul_left]
         exact mul_le_mul_of_nonneg_left hβ hγ0
+
+/-- **The rewinding lemma at the committed trace, averaged over the tape**: at most `N·√Pr[B_conf]` (Jensen's
+inequality). -/
+theorem ex_offReg_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) ≤
+      L.nG x * Real.sqrt ((Bconf H L Ω P x).Pr H) := by
+  refine (Ex_mono fun ω => L.pr_offReg_le H P x ω).trans ?_
+  rw [Ex_mul_left]
+  exact mul_le_mul_of_nonneg_left ((Ex_sqrt_le _ fun _ => Pr_nonneg _).trans
+    (Real.sqrt_le_sqrt (pr_conflict_le hbind hs P))) (Nat.cast_nonneg _)
 
 end Compiled
 
@@ -353,6 +367,32 @@ theorem pr_iconflict_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.co
     (forkOn (L.stage2 x) q.2.1 q.2.2.2.1, q.2.2.2.2) (Or.inl ha) (Or.inr ha') hroots (ha2.trans ha2'.symm)
     (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
 
+/-- **The rewinding lemma at the committed interior, averaged over the tape and the first stage**: at most
+`N·√Pr[B_conf,2]` (Jensen's inequality). -/
+theorem ex_offIreg_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    {x : Msg} {s : AuditStatement} (hs : L.parse x = some s) (Pρ : Partition) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) :
+    Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω Pρ rc.1 rc.2) ≤
+      L.nG x * Real.sqrt ((BconfTwo H L Ω P x).Pr H) :=
+  calc Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω Pρ rc.1 rc.2)
+      ≤ Ex (fun ω : Ω => Ex fun r : Fin (L.V.k x) → Coin => L.nG x * Real.sqrt (Pr fun ee :
+          ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+            L.IConflict H P x ω Pρ r ee)) :=
+        Ex_mono fun ω => (Pr_forkOn_prod (L.stage2 x) (fun (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+          L.OffIreg H P x ω Pρ r c)).trans_le (Ex_mono fun r => L.pr_offIreg_le H P x ω Pρ r)
+    _ = Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => L.nG x * Real.sqrt (Pr fun ee :
+          ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+            L.IConflict H P x p.1 Pρ p.2 ee)) :=
+        (Ex_prod (fun p : Ω × (Fin (L.V.k x) → Coin) => L.nG x * Real.sqrt (Pr fun ee :
+          ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+            L.IConflict H P x p.1 Pρ p.2 ee))).symm
+    _ = L.nG x * Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => Real.sqrt (Pr fun ee :
+          ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+            L.IConflict H P x p.1 Pρ p.2 ee)) := Ex_mul_left _ _
+    _ ≤ L.nG x * Real.sqrt ((BconfTwo H L Ω P x).Pr H) :=
+        mul_le_mul_of_nonneg_left ((Ex_sqrt_le _ fun _ => Pr_nonneg _).trans
+          (Real.sqrt_le_sqrt (pr_iconflict_le hbind hS hs Pρ P))) (Nat.cast_nonneg _)
+
 /-! ## The deterministic half -/
 
 set_option synthInstance.maxSize 1024 in
@@ -441,7 +481,53 @@ theorem regTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions
 
 /-! ## The event -/
 
+/-- The committed incorrect set's proof blocks are proof blocks of `Pt`, so below `n_PU`. -/
+theorem fregTwo_lt {H : Msg → Msg} {L : CompiledTwo Coin A} {x : Msg} {s : AuditStatement} {Pt : Partition}
+    {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
+    {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) {v : ℕ} (hv : v ∈ L.FregTwo H P x ω r) :
+    v < L.nPU x := by
+  simp only [FregTwo, hs, hPt, hd, mem_biUnion, mem_product, mem_range] at hv
+  obtain ⟨p, -, hvw⟩ := hv
+  simp only [wrongInAt, cell, mem_filter, mem_range] at hvw
+  rw [Compiled.nPU_eq hs hPt]
+  exact hvw.1.1
+
 set_option synthInstance.maxSize 1024 in
+/-- **The event at a tape**: an accepted run that samples a proof block of `FregTwo` has the first such block's session
+unfound at its first slot (at `leadSel (selIn FregTwo)`), or disagrees with itself, or is off the committed boundary
+trace or off the committed interior (`regTwo_split`). -/
+theorem eventTwo_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
+    {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
+    (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω) (ω : Ω) :
+    Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
+      ∃ u ∈ L.checked x r, u ∈ L.FregTwo H P x ω r) ≤
+      Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
+        ∃ i, L.leadSel x (L.selIn x (L.FregTwo H P x ω rc.1)) (L.checked x rc.1) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
+      (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) +
+        (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) +
+          Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω d.part rc.1 rc.2))) := by
+  have hIO := (Sampling.Pr_union_le
+    (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2)
+    (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+      L.OffReg H P x ω rc.1 rc.2 ∨ L.OffIreg H P x ω d.part rc.1 rc.2)).trans
+      (add_le_add le_rfl (Sampling.Pr_union_le
+        (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2)
+        (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω d.part rc.1 rc.2)))
+  refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
+    ∃ u ∈ L.checked x r, u ∈ L.FregTwo H P x ω r)).symm.trans_le
+      (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
+  obtain ⟨hacc, v, hvl, hvF⟩ := hrc
+  obtain ⟨i, hi, u, hiu, huF⟩ := L.selIn_some x (hS.slots x rc.1)
+    (fun _ hw => fregTwo_lt hs hPt hd P ω rc.1 hw) hvl hvF
+  obtain ⟨i₀, u₀, hlead, hu₀⟩ := Compiled.leadOf_some hiu u.isLt
+  rcases regTwo_split hS hs hPt hd hin P ω rc.1 rc.2 hacc i u hiu huF i₀ u₀ hlead hu₀ with h | h | h | h
+  · exact Or.inl ⟨hacc, i₀, by rw [Compiled.leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
+  · exact Or.inr (Or.inl h)
+  · exact Or.inr (Or.inr (Or.inl h))
+  · exact Or.inr (Or.inr (Or.inr h))
+
 /-- **The primary conjunct of `KSRegTwo`, from the sessions' bound**: at each tape, an accepted run that samples a
 proof block of `FregTwo` has the first such block's session unfound at its first slot (the sessions' bound at
 `leadSel (selIn FregTwo)`, which reads the run's coins off the second stage only), or its extractions disagree with
@@ -456,41 +542,6 @@ theorem eventTwo_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hb
   obtain ⟨s, Pt, d, hs, hPt, hd, hin⟩ := hsc
   have hSK : L.toCompiled.SessionKS H := Compiled.sessionKS_of hA ⟨hS.fixed, hS.runs⟩
   obtain ⟨β, hβ0, hβ, hκ⟩ := hSK x Ω P
-  have hFlt : ∀ ω r, ∀ v ∈ L.FregTwo H P x ω r, v < L.nPU x := by
-    intro ω r v hv
-    simp only [FregTwo, hs, hPt, hd, mem_biUnion, mem_product, mem_range] at hv
-    obtain ⟨p, -, hvw⟩ := hv
-    simp only [wrongInAt, cell, mem_filter, mem_range] at hvw
-    rw [Compiled.nPU_eq hs hPt]
-    exact hvw.1.1
-  have hper : ∀ ω, Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-      ∃ u ∈ L.checked x r, u ∈ L.FregTwo H P x ω r) ≤
-      Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selIn x (L.FregTwo H P x ω rc.1)) (L.checked x rc.1) = some i ∧
-          ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
-            ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
-      (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) +
-        (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) +
-          Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω d.part rc.1 rc.2))) := by
-    intro ω
-    have hIO := (Sampling.Pr_union_le
-      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2)
-      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-        L.OffReg H P x ω rc.1 rc.2 ∨ L.OffIreg H P x ω d.part rc.1 rc.2)).trans
-        (add_le_add le_rfl (Sampling.Pr_union_le
-          (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2)
-          (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω d.part rc.1 rc.2)))
-    refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-      ∃ u ∈ L.checked x r, u ∈ L.FregTwo H P x ω r)).symm.trans_le
-        (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
-    obtain ⟨hacc, v, hvl, hvF⟩ := hrc
-    obtain ⟨i, hi, u, hiu, huF⟩ := L.selIn_some x (hS.slots x rc.1) (hFlt ω rc.1) hvl hvF
-    obtain ⟨i₀, u₀, hlead, hu₀⟩ := Compiled.leadOf_some hiu u.isLt
-    rcases regTwo_split hS hs hPt hd hin P ω rc.1 rc.2 hacc i u hiu huF i₀ u₀ hlead hu₀ with h | h | h | h
-    · exact Or.inl ⟨hacc, i₀, by rw [Compiled.leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
-    · exact Or.inr (Or.inl h)
-    · exact Or.inr (Or.inr (Or.inl h))
-    · exact Or.inr (Or.inr (Or.inr h))
   have hT : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧
         ∃ i, L.leadSel x (L.selIn x (L.FregTwo H P x ω rc.1)) (L.checked x rc.1) = some i ∧
@@ -501,31 +552,9 @@ theorem eventTwo_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H) (hb
       (fun ω r => L.leadSel x (L.selIn x (L.FregTwo H P x ω r)))
       (fun ω r e => by simp only [fregTwo_forkOn]) fun ω r sl => hκ ω r sl
   have hI := Compiled.pr_inConf_le hbind hs P
-  have hn : (0 : ℝ) ≤ L.nG x := Nat.cast_nonneg _
-  have hO : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) ≤
-      L.nG x * Real.sqrt ((Bconf H L.toCompiled Ω P x).Pr H) := by
-    refine (Ex_mono fun ω => L.pr_offReg_le H P x ω).trans ?_
-    rw [Ex_mul_left]
-    exact mul_le_mul_of_nonneg_left ((Ex_sqrt_le _ fun _ => Pr_nonneg _).trans
-      (Real.sqrt_le_sqrt (Compiled.pr_conflict_le hbind hs P))) hn
-  have hIC : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      L.OffIreg H P x ω d.part rc.1 rc.2) ≤ L.nG x * Real.sqrt ((BconfTwo H L Ω P x).Pr H) :=
-    calc Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffIreg H P x ω d.part rc.1 rc.2)
-        ≤ Ex (fun ω : Ω => Ex fun r : Fin (L.V.k x) → Coin => L.nG x * Real.sqrt (Pr fun ee :
-            ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-              L.IConflict H P x ω d.part r ee)) :=
-          Ex_mono fun ω => (Pr_forkOn_prod (L.stage2 x) (fun (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
-            L.OffIreg H P x ω d.part r c)).trans_le (Ex_mono fun r => L.pr_offIreg_le H P x ω d.part r)
-      _ = Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => L.nG x * Real.sqrt (Pr fun ee :
-            ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-              L.IConflict H P x p.1 d.part p.2 ee)) := (Ex_prod _).symm
-      _ = L.nG x * Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => Real.sqrt (Pr fun ee :
-            ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-              L.IConflict H P x p.1 d.part p.2 ee)) := Ex_mul_left _ _
-      _ ≤ L.nG x * Real.sqrt ((BconfTwo H L Ω P x).Pr H) :=
-          mul_le_mul_of_nonneg_left ((Ex_sqrt_le _ fun _ => Pr_nonneg _).trans
-            (Real.sqrt_le_sqrt (pr_iconflict_le hbind hS hs d.part P))) hn
-  refine (Sampling.Pr_prod_eq_Ex _).trans_le ((Ex_mono hper).trans ?_)
+  have hO := Compiled.ex_offReg_le hbind hs P
+  have hIC := ex_offIreg_le hbind hS hs d.part P
+  refine (Sampling.Pr_prod_eq_Ex _).trans_le ((Ex_mono (eventTwo_split hS hs hPt hd hin P)).trans ?_)
   rw [Ex_add, Ex_add, Ex_add]
   unfold εregTwo Compiled.εreg
   linarith
