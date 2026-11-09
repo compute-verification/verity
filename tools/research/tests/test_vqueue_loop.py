@@ -235,6 +235,30 @@ def test_a_retry_sets_its_infra_results_aside_so_the_check_is_pending_until_a_ne
     assert _acts(loop.tick()) == ["advance"] and env.main() == sha
 
 
+@pytest.mark.parametrize("said", [INFRA, PENDING, FAIL])
+def test_a_retry_reruns_its_infra_keys_itself_while_graph2_s_own_verdict_isnt_infra(env, said):
+    """graph2's enqueue reruns a check's infra keys only while its own verdict is infra: with a task still pending, or one
+    failed (here at its base's key, so the loop's reading is infra), the retry reruns them."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop, {"state": said})
+    (built,) = loop.tick()
+    sha, red = built["sha"], {"pytest:r": "sha512:red"}
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], **({"pytest:b": ["b.txt"]} if said == PENDING else {}),
+                            **({"pytest:r": ["red.txt"]} if said == FAIL else {})}, keys=red)
+    env.listed(main, {"pytest:r": ["red.txt"]}, keys=red)
+    env.result("sha512:red", "pytest:r", "fail")
+    env.result(a := keys["pytest:a"], "pytest:a", "error", infra=True)
+    (retry,) = loop.tick()
+    assert (retry["action"], retry["counts"], len(env.graph2.enqueued())) == ("retry", {a: 1}, 2)
+    if said == INFRA:
+        assert not Path(f"{script}.rerun").exists() and "rerun" not in retry
+    else:
+        assert Path(f"{script}.rerun").read_text() == f"ready:{sha} {a}\n" and retry["rerun"] == f"ready:{sha} requeued 1"
+    assert loop.tick() == []
+
+
 def test_a_member_that_doesnt_merge_onto_the_build_is_left_out_logged_and_its_owner_told_once(env):
     env.put(1, {"a.txt": "1\n"})
     two = env.put(2, {"a.txt": "2\n"})

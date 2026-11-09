@@ -36,9 +36,10 @@ starts the run beside it.  Advance pushes `main` to the candidate with a lease o
 `main` moves (`Driver._on_main`).  Drop cancels the check (graph2's `cancel`, where it has one), deletes the branch and logs
 its outcome, with its base and its inherited failures, their inputs whole, which `history` reads back.  Eject withdraws the
 PR's ready mark at its head (`Queue.eject`, under the clone's queue lock) and tells its owner the failed tasks, their keys and
-where their logs are.  Retry enqueues again (graph2 reruns what ended in infra errors, lists a check whose listing failed,
-and leaves a pending one as it is), setting the infra results aside, and starts a run beside it that ended in infra again.
-Rerun runs the keys afresh (graph2's `rerun`), their results set aside, a key of the run beside starting that run again;
+where their logs are.  Retry enqueues again (graph2 lists a check whose listing failed, reruns what ended in infra errors
+once its own verdict is infra, and leaves a pending one as it is), reruns those keys itself while graph2's verdict is
+another (a task still runs, or one failed), sets the infra results aside, and starts a run beside it that ended in infra
+again.  Rerun runs the keys afresh (graph2's `rerun`), their results set aside, a key of the run beside starting that run again;
 without graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells infra's handle (`drive.INFRA`), once a
 candidate and why.  Red tells `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else
 its job's) that it is red on them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun
@@ -1072,16 +1073,19 @@ class Loop:
         return (f"@{handle}" if handle else CI,)
 
     def _retry(self, c: Candidate, t: Tick) -> list[dict]:
-        """Enqueue ``c``'s check again: graph2 reruns what ended in infra errors, lists it again, or leaves it running.  The
-        infra results so far are set aside (`Past.since`), so it is pending until graph2 says something newer, and a run
-        beside it that ended in infra is started again."""
+        """Enqueue ``c``'s check again: graph2 lists it again, reruns what ended in infra errors once its own verdict is
+        infra, or leaves it running; while graph2's verdict is another (a task still runs, or one failed), the infra keys are
+        rerun here (graph2's `rerun`).  The infra results so far are set aside (`Past.since`), so it is pending until graph2
+        says something newer, and a run beside it that ended in infra is started again."""
         j, line = t.judged[c.sha], dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads)
         built = t.past.built(c.sha) or {}
         priority = built.get("priority") if isinstance(built.get("priority"), int) else 0
         counts = self.world.counts(f.key for f in c.verdict.infra)
         self.world.enqueue(c.sha, priority)
+        said = self.world.rerun(c.sha, list(counts)) if counts and j.graph2 != INFRA else None
         rec = self.record(t, "retry", **line, priority=priority, why=f"{c.verdict.state}: {j.note or 'enqueued again'}",
-                          failed=c.verdict.infra, mark=j.mark, counts=counts, enqueued=True, done=True)
+                          failed=c.verdict.infra, mark=j.mark, counts=counts, enqueued=True, done=True,
+                          **({"rerun": said} if said is not None else {}))
         again = self._start(t, c.sha, c.base, line, "started again") if j.slim is not None and j.slim.state == INFRA else []
         return [rec, *again]
 
