@@ -398,12 +398,13 @@ class Serving:
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
                  served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
-                 arm: Any = None) -> None:
+                 arm: Any = None, pool: tuple[Any, int] | None = None) -> None:
         self.runner = Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks,
-                                       arm=arm(self.runner) if arm is not None else None) if commit else None
+                                       arm=arm(self.runner) if arm is not None else None,
+                                       **({"pool": pool[0], "pool_block": pool[1]} if pool else {})) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
         self.server = so.Server(proto=protocol or proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512,
                                 tokenizer=Tokenizer(),
@@ -938,3 +939,45 @@ def test_the_served_class_defaults_to_the_engines_and_refuses_too_few_rows():
         so.served_class(opts("--served-rows-class", '{"X": 1}'))
     with pytest.raises(cli.UsageError, match="under --max-num-seqs 8"):
         so.preflight(opts("--served-rows-class", '{"R": 4}'), which=lambda _: "/v/bin/ninja")
+
+
+# ---------------------------------------------------------------------------------------------------------------- pool rows
+
+def test_each_close_exports_the_prefix_cache_s_pool_row(tmp_path):
+    """With the engine's pool and its block size, each close writes the pool's row and root to pool_rows/w<k>.json and
+    its NB and root to the window's line. A pool a running request holds blocks of is refused by name in the line, and
+    the window, which no coin reads the row of yet, still passes."""
+    from tests.engine.test_pool_row import B, WANT, pool
+    from verity.ml.commitments import pool_row as R
+
+    root = R.root(WANT).hex()
+    (tmp_path / "free").mkdir()
+    (tmp_path / "held").mkdir()
+    with Serving(tmp_path / "free", window_steps=2, pool=(pool, B)) as s:
+        serve_concurrently(s, [CERTIFIER_BODY, dict(CERTIFIER_BODY, prompt=[5, 6])])
+    wins = records(tmp_path / "free", "windows.jsonl")
+    assert len(wins) > 1 and all(w["passed"] and w["pool_row"] == {"nb": 6, "root": root} for w in wins)
+    assert json.loads((tmp_path / "free" / "pool_rows" / f"w{wins[-1]['window']}.json").read_text())["root"] == root
+    with Serving(tmp_path / "held", window_steps=4, pool=(lambda: pool(free=(3, 1, 5, 2), held=(4,)), B)) as s:
+        serve_concurrently(s, [CERTIFIER_BODY])
+    wins = records(tmp_path / "held", "windows.jsonl")
+    assert wins and all(w["passed"] and "1 blocks are held" in w["pool_row"]["refused"] for w in wins)
+    with pytest.raises(ValueError, match="needs both the live pool and its blocks' size"):
+        sc.CommitWindows(None, tmp_path, run_id="t", window_steps=4, pool=pool)
+
+
+def test_the_pool_row_setting_is_a_token_width_and_needs_the_prefix_cache(tmp_path, monkeypatch):
+    man = predicted.row(tmp_path)
+
+    def opts(*more: str) -> so.Options:
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more], environ={})
+
+    ninja = lambda _: "/v/bin/ninja"  # noqa: E731
+    so.preflight(opts(), which=ninja)
+    monkeypatch.setenv("VERITY_POOL_ROW", "18")
+    with pytest.raises(cli.UsageError, match="needs --prefix-caching and the Commit"):
+        so.preflight(opts(), which=ninja)
+    so.preflight(opts("--prefix-caching"), which=ninja)
+    monkeypatch.setenv("VERITY_POOL_ROW", "-1")
+    with pytest.raises(cli.UsageError, match="a token width is at least 1"):
+        so.preflight(opts("--prefix-caching"), which=ninja)
