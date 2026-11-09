@@ -778,6 +778,18 @@ theorem kept_nil (b : Bool) (c : Array String) (x : String) :
     Registration.kept b c x = #[] ↔ c = #[] ∧ b = true := by
   cases b <;> simp [Registration.kept, addCode_ne_nil]
 
+/-- R6's pool codes (`Registration.poolMarks`) add none exactly when the window names the pool's reset, week and spent
+mark and no reset falls where the week's is spent before it. -/
+theorem poolMarks_nil (w : Json) (pool : Option Registration.Pool) (log : Array Json) (c : Array String) :
+    Registration.poolMarks w pool log c = #[] ↔ c = #[] ∧
+      jeq (getD w "pool_reset") (match pool with | some p => .bool p.reset | none => .null) = true ∧
+      jeq (getD w "pool_week") (match pool with | some p => Lean.toJson p.week | none => .null) = true ∧
+      jeq (getD w "pool_spent")
+        (match pool with | some p => .bool (p.reset || p.spentBefore log) | none => .null) = true ∧
+      (match pool with | some p => !(p.reset && p.spentBefore log) | none => true) = true := by
+  rw [Registration.poolMarks, kept_nil, kept_nil, kept_nil, kept_nil]
+  exact ⟨fun ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩ => ⟨a, r, wk, s, o⟩, fun ⟨a, r, wk, s, o⟩ => ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩⟩
+
 theorem any_false_iff {α : Type} (xs : Array α) (p : α → Bool) : xs.any p = false ↔ ∀ x ∈ xs, p x = false := by
   rw [Bool.eq_false_iff, ne_eq, Array.any_eq_true']
   simp
@@ -834,12 +846,12 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     simp only [j13]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
-      rw [h14, kept_nil, checkOutputs_nil, kept_nil, kept_nil, kept_nil, kept_nil, kept_nil, poolChained_iff]
-      exact ⟨fun ⟨⟨⟨⟨⟨⟨⟨⟨a, s⟩, r⟩, w⟩, p⟩, o⟩, b⟩, q⟩, _⟩ => ⟨a, s, r, w, p, o, ⟨b, q⟩, trivial⟩,
-        fun ⟨a, s, r, w, p, o, ⟨b, q⟩, _⟩ => ⟨⟨⟨⟨⟨⟨⟨⟨a, s⟩, r⟩, w⟩, p⟩, o⟩, b⟩, q⟩, trivial⟩⟩
-    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, kept_nil]
-      exact ⟨fun ⟨⟨⟨⟨⟨⟨a, s⟩, r⟩, w⟩, p⟩, o⟩, _⟩ => ⟨a, s, r, w, p, o, trivial, trivial⟩,
-        fun ⟨a, s, r, w, p, o, _⟩ => ⟨⟨⟨⟨⟨⟨a, s⟩, r⟩, w⟩, p⟩, o⟩, trivial⟩⟩
+      rw [h14, kept_nil, checkOutputs_nil, poolMarks_nil, kept_nil, poolChained_iff]
+      exact ⟨fun ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, _⟩ => ⟨a, s, r, wk, p, o, ⟨b, q⟩, trivial⟩,
+        fun ⟨a, s, r, wk, p, o, ⟨b, q⟩, _⟩ => ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, trivial⟩⟩
+    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, kept_nil, poolMarks_nil]
+      exact ⟨fun ⟨⟨⟨a, s⟩, r, wk, p, o⟩, _⟩ => ⟨a, s, r, wk, p, o, trivial, trivial⟩,
+        fun ⟨a, s, r, wk, p, o, _⟩ => ⟨⟨⟨a, s⟩, r, wk, p, o⟩, trivial⟩⟩
   have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
       jeq (getD (get "window") "stream") (.str sp.1) = true ∧
       jeq (getD (get "window") "prover") (.str sp.2) = true) ∧

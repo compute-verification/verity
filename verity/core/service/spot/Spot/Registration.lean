@@ -462,6 +462,17 @@ def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
 def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
 
+/-- R6's pool codes added to `c`: the window `w` names the pool's reset, week and spent mark (`R6-pool-reset`,
+`R6-pool-week`, `R6-pool-spent`), and a reset where the week's is spent before it is refused (`R6-pool-reset-week`).
+One term rather than four lines, since `check_eq_checkRef`'s `simp` copies every line after `check`'s `binding` block
+into each branch of its join points. -/
+def poolMarks (w : Json) (pool : Option Pool) (log : Array Json) (c : Array String) : Array String :=
+  kept (onceOk pool log)
+    (kept (jeq (getD w "pool_spent") (optSpent pool log))
+      (kept (jeq (getD w "pool_week") (optWeek pool))
+        (kept (jeq (getD w "pool_reset") (optReset pool)) c "R6-pool-reset") "R6-pool-week") "R6-pool-spent")
+    "R6-pool-reset-week"
+
 /-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
@@ -522,10 +533,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
   -- `kept` terms, not statements: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
   c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
-  c := kept (jeq (getD (get "window") "pool_reset") (optReset v.pool)) c "R6-pool-reset"
-  c := kept (jeq (getD (get "window") "pool_week") (optWeek v.pool)) c "R6-pool-week"
-  c := kept (jeq (getD (get "window") "pool_spent") (optSpent v.pool v.log)) c "R6-pool-spent"
-  c := kept (onceOk v.pool v.log) c "R6-pool-reset-week"
+  c := poolMarks (get "window") v.pool v.log c
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
@@ -596,10 +604,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
   c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
-  c := kept (jeq (getD (get "window") "pool_reset") (optReset v.pool)) c "R6-pool-reset"
-  c := kept (jeq (getD (get "window") "pool_week") (optWeek v.pool)) c "R6-pool-week"
-  c := kept (jeq (getD (get "window") "pool_spent") (optSpent v.pool v.log)) c "R6-pool-spent"
-  c := kept (onceOk v.pool v.log) c "R6-pool-reset-week"
+  c := poolMarks (get "window") v.pool v.log c
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
