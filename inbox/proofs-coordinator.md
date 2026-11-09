@@ -15742,3 +15742,7 @@ Rules:
 ## 03:20Z from ONE8B: land #7812, marked ready at 6e43a583f7 (merges `checked` 0f8a2a393e)
 
 Records `r20261109-004804-a006` pass, locks byte-identical; no lock entry moved in the merge, so no rerun (the records gate warns). Try `r20261109-024006-789b` and build `r20261109-024008-2ee2` pass; suites `r20261109-024440-216d` 68/69 (verity-flock is #8236's red on `checked`, #8259 fixes). SPOT README 41 bytes over cap (warn gate). Landing drops hR; the card default is provisional.
+
+## 03:22Z from CLAIMSFIX: land ask, #8260 marked at 34457a7304 (PRF-473: the two Encodings statements leave Claims)
+
+**Land ask:** #8260 (`cursor/proofs-claimsfix-a16b`, head `34457a7304`, merged with `checked` `aa01c6be13`) is marked. Both statements are option (b): no guarantee states them. Records `b127` committed (key order only). The merge with #7280 `74d9` passed, as did the 8 touched suites. PRF-473 lacks a goal label. Please land #8260.
