@@ -27,6 +27,7 @@ from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.ml.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.pipeline import interior_rows as IR, serving_rows as SRW
 
 ROPE = "RoPEHead_v1{D=64}"
@@ -64,8 +65,8 @@ def _weights(world):
     return read
 
 
-def _replay(world, rid: str) -> IR.Replay:
-    return IR.Replay(index_of(world.inst), rid, PROMPTS[rid], _weights(world))
+def _replay(world, rid: str) -> Replay:
+    return Replay(index_of(world.inst), rid, PROMPTS[rid], _weights(world))
 
 
 def _served(world, rid: str):
@@ -104,7 +105,7 @@ def test_a_replay_names_what_it_cannot_give(world):
     cached = copy.copy(index_of(world.inst))
     cached.kv_prefix = {"C": 2}
     with pytest.raises(ValueError, match=r"another request computed: .*recompute_hits=True"):
-        IR.Replay(cached, "r0", PROMPTS["r0"], _weights(world))
+        Replay(cached, "r0", PROMPTS["r0"], _weights(world))
 
 
 def test_a_span_pads_to_its_size_class_with_its_last_unit(world):
