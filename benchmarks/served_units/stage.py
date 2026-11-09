@@ -63,7 +63,12 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
     fi          `CENSUS`: FlashInferFp8Linear_v1{K,N}, the FlashInfer FP8 linear's output coordinate (N = 1) on one token row:
                 its bf16 x quantized in the block, an E4M3 weight row and its f32 block scales (K = 2048: q_b and o_proj).
     mla-split-part  `CENSUS`: SparseMlaSplitPart_v1 at T = 64, one query's sparse MLA over one split's 64 keys (FA3's).
+    mla-first-block  `CENSUS`: SparseMlaHeadBlock_v1{NVIS,FIRST=true}, one head's first visited key block of a chain (default
+                NVIS = 63, the partial block's most keys).
     rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
+    router-row, router-slots  `CENSUS`: MoeRouterSigmoidBias_v1 and its slots form MoeRouterSigmoidBiasSlots_v1 (the
+                per-expert cut's) at E = 256, TOPK = 8: one token's sigmoid router over its f32 logits and bias.
+    dsa-q-row   `CENSUS`: DsaIndexerQ_v1{H=32,D=128,ROPE=64}, one token's DSA indexer query row.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -218,12 +223,18 @@ class Census:
 
 
 _EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
+_ROUTER = 'SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"'
 CENSUS: dict[str, Census] = {
     "gq": Census("Fp8GroupQuantUe8m0_v1", {"K": 6144, "G": 128}),
     "fi": Census("FlashInferFp8Linear_v1", {"K": 2048, "N": 1}),
     "mla-split-part": Census("SparseMlaSplitPart_v1", {}, 'T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
                              'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}'),
+    "mla-first-block": Census("SparseMlaHeadBlock_v1", {"DR": 64, "DV": 512, "NVIS": 63},
+                              'FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}'),
     "rmsnorm-v8": Census("RMSNormFusedCudaVector8_v1", {}, f"N=6144,EPS={_EPS},BLOCK=256"),
+    "router-row": Census("MoeRouterSigmoidBias_v1", {"E": 256, "TOPK": 8}, _ROUTER),
+    "router-slots": Census("MoeRouterSigmoidBiasSlots_v1", {"E": 256, "TOPK": 8}, _ROUTER),
+    "dsa-q-row": Census("DsaIndexerQ_v1", {"H": 32, "D": 128, "ROPE": 64}),
 }
 
 

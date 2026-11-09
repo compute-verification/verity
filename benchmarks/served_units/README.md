@@ -18,7 +18,10 @@ Three kinds of type (`stage.py`'s docstring has each):
   own `sha512/row/v1` rows; the circuit binds the Q_word partition, and Lean gets its own copy of the partition object
   (`--partition`) and takes the proof blocks as stated;
 - a block type of the serving rows by its census name (`CENSUS`: the FP8 group quantization, `gq:K=384` a column block of
-  K = 6144), one whole Definition a proof block, staged like a `UNITS` type on bf16 rows, held to the Program's reference.
+  K = 6144; FlashInfer's FP8 linear; sparse MLA's split part and a chain's first key block; the fused RMSNorm; the MoE
+  router's row and slots form; DSA's indexer query), one whole Definition a proof block, on its served rows and statement
+  (`chunk_rows.unit_rows` and `chunk_rows.statement`, its table reads inline or in lookup slots as served), each parameter
+  drawn at its leaves' width, held to the Program's reference.
 
 Files:
 
