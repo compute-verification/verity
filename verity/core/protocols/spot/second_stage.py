@@ -561,30 +561,37 @@ def _field_of(t: Any, s: int, c: int) -> tuple[int, int] | None:
 
 def _return_links(cs: _Callers, fn: Any) -> list[_Share] | None:
     """`SecondStage.returnLinks`: the links replay block `fn`'s return makes, each its share: each part of its return,
-    which holds all of its leaves, node `k`'s whole output, `k` a template's of one output, within one field `j` of the
-    return at a multiple of that output's leaves from the field's first, makes the template's ``o0`` `fn`'s ``o<j>``,
-    the field's rows a block those of the output's width, and `k`'s units the field's rows from there on, one each.
-    None when a part is anything else."""
+    which holds all of its leaves, an output of node `k`, a template's: one whole field `f` of its output where `k` is
+    one instance (`_field_at`), the field's leaves its width, or else `k`'s whole output, the template's of one output
+    (`f` = 0), its leaves its width. Within one field `j` of the return at a multiple of that width from the field's
+    first, it makes the template's ``o<f>`` `fn`'s ``o<j>``, the field's rows a block those of that width, and `k`'s
+    units the field's rows from there on, one each. None when a part is anything else."""
     nodes, rty, parts = fn.body.nodes, fn.signature()[1], _parts(fn.body.ret)
     if sum(r.count for r in parts) != rty.leaves:
         return None
     out, s = [], 0
     for r in parts:
         start, s = s, s + r.count
-        if not (isinstance(r, Affine) and r.space == "n" and r.base == 0 and r.idx < len(nodes)):
+        if not (isinstance(r, Affine) and r.space == "n" and r.idx < len(nodes)):
             return None
         x, t = nodes[r.idx], cs.template[r.idx]
-        w = 0 if t is None else t.signature()[1].leaves
-        if t is None or _outputs(t.signature()[1]) != 1 or w <= 0 or not r.count == x.out.leaves == _members(x) * w:
+        if t is None:
+            return None
+        tty = t.signature()[1]
+        if _members(x) == 1:
+            f, w = _field_at(tty, r.base, r.count) if x.out.leaves == tty.leaves else None, r.count
+        else:
+            f, w = 0 if r.base == 0 and _outputs(tty) == 1 and r.count == x.out.leaves else None, tty.leaves
+        if f is None or w <= 0 or r.count != _members(x) * w:
             return None
         at = _field_of(rty, start, r.count)
         if at is None:
             return None
         j, off = at
-        f = _fields(rty)[j]
-        if (start - off) % w or f.leaves % w:
+        g = _fields(rty)[j]
+        if (start - off) % w or g.leaves % w:
             return None
-        out.append(_Share(Link(descriptor_id(t), "o0", f"o{j}"), descriptor_id(t), f.leaves // w,
+        out.append(_Share(Link(descriptor_id(t), f"o{f}", f"o{j}"), descriptor_id(t), g.leaves // w,
                           Run(cs.first[r.idx], _members(x), (start - off) // w, 0 if _members(x) == 1 else 1)))
     return out
 

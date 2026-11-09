@@ -4426,7 +4426,8 @@ SWAP = bind(CompositeDefinition("CoreSpotSwap", 0, (), lambda S: ((("x", Array(2
 #: second's output, returned beside them; ID8 over the second output of DUO, a template of two; and, deriving none, PAIR
 #: over two parameters, PAIR over a slice not one of its rows, an ID8 batch mapped over a PAIR batch's outputs, PAIR
 #: over the parameter and over SWAP's output (a port one caller links and another wires), and PAIR over two ID8 outputs
-#: (a port gathered from two writers).
+#: (a port gathered from two writers); then DUO over each of two rows, its first outputs returned, its second, both as
+#: two fields, and, deriving none, the first's first beside the second's second.
 MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, body, register=False))
                  for name, sig, body in (
     ("Pairs", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
@@ -4444,7 +4445,16 @@ MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, b
     ("Kinds", lambda S: ((("x", Array(2, Value(8))),), Array(2, Value(8))),
      lambda B, S, x: array_of([B.call(PAIR, x), B.call(PAIR, B.call(SWAP, x))])),
     ("Gathered", lambda S: ((("x", Array(2, Value(8))),), Value(8)),
-     lambda B, S, x: B.call(PAIR, array_of([B.call(ID8, x[0]), B.call(ID8, x[1])]))))]
+     lambda B, S, x: B.call(PAIR, array_of([B.call(ID8, x[0]), B.call(ID8, x[1])]))),
+    ("Heads", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
+     lambda B, S, x: array_of([B.call(DUO, x[0])[0], B.call(DUO, x[1])[0]])),
+    ("Tails", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
+     lambda B, S, x: array_of([B.call(DUO, x[0])[1], B.call(DUO, x[1])[1]])),
+    ("Halves", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Tuple(Array(2, Value(8)), Array(2, Value(8)))),
+     lambda B, S, x: (lambda a, b: tuple_of(array_of([a[0], b[0]]), array_of([a[1], b[1]])))(
+         B.call(DUO, x[0]), B.call(DUO, x[1]))),
+    ("Uneven", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
+     lambda B, S, x: array_of([B.call(DUO, x[0])[0], B.call(DUO, x[1])[1]])))]
 REPLAY_PROGRAMS = [(P.population_program(r, 2), codec.descriptor_id(r)) for r in REPLAYS] + [
     (P.mixed_population_program([(BLOCK, 2), (PAIR, 3)]), codec.descriptor_id(BLOCK))] + [
     (P.population_program(r, 2), codec.descriptor_id(r)) for r in WIRE_REPLAYS + MULTI_REPLAYS]
@@ -6205,9 +6215,11 @@ def test_the_designs_rows_place_each_callers_units(pieces):
     its own output a field of one row; ID8 over DUO's second output reads it at DUO's `o1`. PAIR's callers reading two
     parameters, or a slice not one of its rows, or one the parameter and the other SWAP's output, make no links, and
     the last no wires either; an ID8 batch mapped over a PAIR batch's outputs, or PAIR over two ID8 outputs, makes no
-    wires; the rows are then only those of the others."""
+    wires; the rows are then only those of the others. DUO over each of two rows, returned one field of each, links
+    that field's port (`o<f>`), each field returned its own; its first output at one caller and its second at the other
+    links neither."""
     pair, id8, duo = (codec.descriptor_id(d) for d in (PAIR, ID8, DUO))
-    pairs, crossed, fan, field, apart, askew, members, kinds, gathered = MULTI_REPLAYS
+    pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven = MULTI_REPLAYS
 
     def link(t, port, value):
         return {"port": port, "template": t, "value": value}
@@ -6232,6 +6244,11 @@ def test_the_designs_rows_place_each_callers_units(pieces):
         (members, [link(pair, "x", "x"), link(id8, "o0", "o0")], None, rows((pair, "x", 2, two), (id8, "o0", 2, two))),
         (kinds, None, None, []),
         (gathered, [link(id8, "y", "x"), link(pair, "o0", "o0")], None, rows((id8, "y", 2, two), (pair, "o0", 1, one))),
+        (heads, [link(duo, "x", "x"), link(duo, "o0", "o0")], [], rows((duo, "x", 2, two), (duo, "o0", 2, two))),
+        (tails, [link(duo, "x", "x"), link(duo, "o1", "o0")], [], rows((duo, "x", 2, two), (duo, "o1", 2, two))),
+        (halves, [link(duo, "x", "x"), link(duo, "o0", "o0"), link(duo, "o1", "o1")], [],
+         rows((duo, "x", 2, two), (duo, "o0", 2, two), (duo, "o1", 2, two))),
+        (uneven, None, [], []),
     ]
     for r, links, wires, want in cases:
         c = {"program": _json(codec.encode_program(P.population_program(r, 2))), "replay": codec.descriptor_id(r),

@@ -435,6 +435,38 @@ private def exReturning (ks : List Nat) : Array Flock.Program.Defn :=
   some #[(⟨"Pair_v0", "x", "x"⟩, 3, #[⟨0, 1, 2, 0⟩, ⟨1, 2, 0, 1⟩])]
 #guard linksOf (exReturning [1, 0]) 1 == none
 #guard linksOf (exReturning [0, 0]) 1 == none
+
+/-- A template `Two_v0` of one parameter `x`, returning two fields. -/
+private def exTwoDefn : Flock.Program.Defn :=
+  exDefn "Two_v0" false #["x"] #[exNode .prim 2 #[exArg true 0], exNode .prim 2 #[exArg true 0]]
+    #[.affine false 0 0 1, .affine false 1 0 1] (.tuple #[.value 8, .value 8])
+
+/-- `Two_v0` (3) called on leaf `i` of the replay block's `x`. -/
+private def exTwoAt (i : Nat) : Flock.Program.Node :=
+  { exNode .call 3 #[exParts #[.affine true 0 i 1]] with out := .tuple #[.value 8, .value 8] }
+
+/-- `exDefsN 2` with `Two_v0` (3), the replay block's body `block` returning `ret` of type `rty`. -/
+private def exHeads (ret : Array Flock.Program.Part) (rty : Flock.Program.Ty := .array 2 (.value 8))
+    (block : Array Flock.Program.Node := #[exTwoAt 0, exTwoAt 1]) : Array Flock.Program.Defn :=
+  (exDefsN 2 block ret rty).push exTwoDefn
+
+-- a caller of one instance returns one whole field `f` of its output, linking the template's `o<f>`, each field its
+-- own link; its whole output of two fields, the same field unlike its callers, a batch's field, or a caller's output
+-- not its template's, none
+#guard linkRuns (exHeads #[.affine false 0 0 1, .affine false 1 0 1]) 1 ==
+  some #[(⟨"Two_v0", "x", "x"⟩, 2, #[⟨0, 2, 0, 1⟩]), (⟨"Two_v0", "o0", "o0"⟩, 2, #[⟨0, 2, 0, 1⟩])]
+#guard linksOf (exHeads #[.affine false 0 1 1, .affine false 1 1 1]) 1 ==
+  some #[⟨"Two_v0", "x", "x"⟩, ⟨"Two_v0", "o1", "o0"⟩]
+#guard linkRuns (exHeads #[.affine false 0 0 1, .affine false 1 0 1, .affine false 0 1 1, .affine false 1 1 1]
+    (.tuple #[.array 2 (.value 8), .array 2 (.value 8)])) 1 ==
+  some #[(⟨"Two_v0", "x", "x"⟩, 2, #[⟨0, 2, 0, 1⟩]), (⟨"Two_v0", "o0", "o0"⟩, 2, #[⟨0, 2, 0, 1⟩]),
+    (⟨"Two_v0", "o1", "o1"⟩, 2, #[⟨0, 2, 0, 1⟩])]
+#guard linksOf (exHeads #[.affine false 0 0 2, .affine false 1 0 2] (.array 4 (.value 8))) 1 == none
+#guard linksOf (exHeads #[.affine false 0 0 1, .affine false 1 1 1]) 1 == none
+#guard linksOf (exHeads #[.affine false 0 0 1] (.value 8) #[{ exNode .batch 3
+    #[{ exParts #[.affine true 0 0 2] with dims := some (2, 1) }] with n := 2, out := .array 2 exTwoDefn.ret }]) 1 ==
+  none
+#guard linksOf (exHeads #[.affine false 0 0 1] (.value 8) #[exNode .call 3 #[exParts #[.affine true 0 0 1]]]) 1 == none
 -- a batch's members read one row each, an outer axis mapped, or the one row a shared argument is
 #guard linkRuns (exDefsN 2 #[{ exNode .batch 0 #[{ exParts #[.affine true 0 0 2] with dims := some (2, 1) }] with
     n := 2 }] #[] (.tuple #[])) 1 == some #[(⟨"Pair_v0", "x", "x"⟩, 2, #[⟨0, 2, 0, 1⟩])]

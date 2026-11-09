@@ -67,8 +67,9 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   supplied (`replayLinks`). A template is a composite every node calling which is one of the body's, its callers, its
   units in a replay block theirs in body order, a batch's members one each (`callersOf`). One whose callers each read
   one aligned row of one of the block's parameters, of the template's parameter's width, reads that boundary port
-  (`slice`), and one whose callers' whole outputs the block returns writes its output's, or, where it returns several
-  fields, the field they are in (`o<j>` for field `j`). Every caller reads a linked port alike, of one value.
+  (`slice`), and one whose callers' outputs the block returns, each one whole field `o<f>` of a caller of one instance or
+  a batch's whole output of a template of one output, writes the block's output at that port, or, where it returns
+  several fields, the field they are in (`o<j>` for field `j`). Every caller reads a linked port alike, of one value.
 * **The wires** (`Wire`) are the verifier's own too, from the same Definition (`replayWires`): a template whose
   parameter is, at each caller, one field of one instance of another template's caller reads that template's output
   port `o<f>` for field `f`, its writer's, and the interior commits that value once, at its writer's port (no copy
@@ -490,23 +491,30 @@ def fieldOf (t : Flock.Program.Ty) (s c : Nat) : Option (Nat × Nat) :=
     (0, none)).2
 
 /-- The links replay block `D`'s return makes, each its share (`Share`): each part of its return, which holds all of
-its leaves, node `k`'s whole output, `k` a template's of one output, within one field `j` of the return at a multiple
-of that output's leaves from the field's first, makes the template's `o0` `D`'s `o<j>`, the field's rows a block those
-of the output's width, and `k`'s units the field's rows from there on, one each. None when a part is anything else. -/
+its leaves, an output of node `k`, a template's: one whole field `f` of its output where `k` is one instance
+(`fieldAt`), the field's leaves its width, or else `k`'s whole output, the template's of one output (`f` = 0), its
+leaves its width. Within one field `j` of the return at a multiple of that width from the field's first, it makes the
+template's `o<f>` `D`'s `o<j>`, the field's rows a block those of that width, and `k`'s units the field's rows from
+there on, one each. None when a part is anything else. -/
 def returnLinks (cs : Callers) (D : Flock.Program.Defn) : Option (List (Share Link)) := do
   guard (D.body.ret.count == D.ret.leaves)
   (List.range D.body.ret.parts.size).mapM fun q => do
     let part ← D.body.ret.parts[q]?
     let s ← D.body.ret.starts[q]?
-    let .affine false k 0 c := part | none
+    let .affine false k o c := part | none
     let x ← D.body.nodes[k]?
     let t ← cs.of k
-    let w := t.ret.leaves
-    guard (outputs t.ret == 1 && 0 < w && c == x.out.leaves && c == x.members * w)
+    let (f, w) ← if x.members == 1 then do
+        guard (x.out.leaves == t.ret.leaves)
+        pure ((← fieldAt t.ret o c), c)
+      else do
+        guard (o == 0 && outputs t.ret == 1 && c == x.out.leaves)
+        pure (0, t.ret.leaves)
+    guard (0 < w && c == x.members * w)
     let (j, off) ← fieldOf D.ret s c
-    let f ← (fields D.ret)[j]?
-    guard ((s - off) % w == 0 && f.leaves % w == 0)
-    pure ⟨⟨t.key, "o0", "o" ++ toString j⟩, x.fn, f.leaves / w,
+    let g ← (fields D.ret)[j]?
+    guard ((s - off) % w == 0 && g.leaves % w == 0)
+    pure ⟨⟨t.key, "o" ++ toString f, "o" ++ toString j⟩, x.fn, g.leaves / w,
       ⟨cs.first.getD k 0, x.members, (s - off) / w, if x.members == 1 then 0 else 1⟩⟩
 
 /-- **The design's links** with their rows a block and runs, from replay block `defs[d]`'s registered Definition, its
