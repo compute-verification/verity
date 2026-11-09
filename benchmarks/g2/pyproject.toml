@@ -1,0 +1,2 @@
+# Declares nothing: this directory's renderers and their tests are deleted, and the served arm's test runs in
+# `benchmarks/served_commit`'s suite. The file is all that is left of the directory.
