@@ -4,7 +4,8 @@ import Proofs.Flock.SamplingGeneric.TwoAt
 /-!
 # SPOT[Flock]'s two-stage model on a run of the two-stage toy
 
-`lake env lean --run TwoGuard.lean DIR MODE [M2]`, in `Security/Proofs` with `Proofs.Flock.SpotFlock.Code` built: the
+`lake env lean --tstack=KB --run TwoGuard.lean DIR MODE [M2]`, in `Security/Proofs` with the two modules it imports
+built: the
 model's round-2 check (`SpotFlock.stmtOk`) on the run `guard.export` wrote to `DIR`, at the auditor's copies (`Held`)
 built from `DIR/held.json` and the reference statements `DIR/ref-<t>.bin` alone, never from the run's messages or coins.
 `M2` replaces round 2's message `DIR/m2.bin` (a negative's).
@@ -13,7 +14,8 @@ built from `DIR/held.json` and the reference statements `DIR/ref-<t>.bin` alone,
   statements are not in Flock's masked scope (`Held.xS₀_ok`, decided before any `Held` exists).
 * `diag`: each conjunct of `stmtOk` on its own, in the order `stmtOk` reads them, with its time, then `stmtOkAt`.
 
-Every line starts `GUARD `; the last is `GUARD-RESULT {json}`.
+Every line starts `GUARD `; the last is `GUARD-RESULT {json}`. The work runs on a thread of its own, whose stack
+`--tstack` sets: the model's statement parsers recurse deeper than the interpreter's main thread holds.
 
 **The coins.** `stmtOk` reads each coin only through its bytes (`SpotFlock.src`), so `stmtOkAt` takes the bytes, and
 `stmtOk_eq` says it is `stmtOk` at every pair of coins with those bytes. `src` itself reads its `2^20` bytes one list
@@ -130,7 +132,7 @@ def say (line : String) : IO Unit := do
 /-- `f ()`, said with `fmt` and its time in ms, which it returns beside it. -/
 def timed {α : Type} (label : String) (f : Unit → α) (fmt : α → String) : IO (α × ℕ) := do
   let t0 ← IO.monoMsNow
-  let a := f ()
+  let a ← IO.lazyPure f
   say s!"{label} = {fmt a}"
   let ms := (← IO.monoMsNow) - t0
   say s!"{label}: {ms} ms"
@@ -144,6 +146,16 @@ def readMsg (p : System.FilePath) : IO Claims.Msg := return (← IO.FS.readBinFi
 def coinBytes (p : System.FilePath) : IO ByteArray := do
   let r ← IO.FS.readBinFile p
   return r ++ ⟨Array.replicate (L - r.size) 0⟩
+
+/-- `zkOk`'s steps on a reference statement, before any `Held` reads it. -/
+def diagRef (xS : Claims.Msg) : IO Unit := do
+  let (w?, _) ← timed "ref0 decode" (fun _ => FlockDeploy.decode xS) (fun w => b w.isSome)
+  let some w := w? | return
+  let (s?, _) ← timed "ref0 ins" (fun _ => w.ins.toOption) (fun s => b s.isSome)
+  let some s := s? | return
+  let _ ← timed "ref0 read.setup" (fun _ => s.read.setup.toOption.map (·.2.size)) toString
+  let _ ← timed "ref0 setup" (fun _ => s.setup.toOption.map (·.2.size)) toString
+  let _ ← timed "ref0 zkOk" (fun _ => zkOk xS) b
 
 /-- Each conjunct of `stmtOk` on its own, in `stmtOk`'s order. -/
 def diag (h : Held) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : IO Unit := do
@@ -206,6 +218,7 @@ def main (args : List String) : IO UInt32 := do
     if (← (dir / s!"ref-{t}.bin").pathExists) then refs := refs.push (← readMsg (dir / s!"ref-{t}.bin"))
   let held ← ok "held.json" (Json.parse (← IO.FS.readFile (dir / "held.json")))
   say s!"read: x {x.length} B, m1 {m₁.length} B, m2 {m₂.length} B, {refs.size} references, {(← IO.monoMsNow) - t0} ms"
+  if mode == "diag" then diagRef (refs.getD 0 [])
   let t1 ← IO.monoMsNow
   let some h ← heldOf held refs
     | do
@@ -220,4 +233,7 @@ def main (args : List String) : IO UInt32 := do
 
 end TwoGuard
 
-def main (args : List String) : IO UInt32 := TwoGuard.main args
+def main (args : List String) : IO UInt32 := do
+  match ← IO.wait (← IO.asTask (TwoGuard.main args) (prio := .dedicated)) with
+  | .ok r => return r
+  | .error e => throw e

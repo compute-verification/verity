@@ -24,6 +24,8 @@ import lean_changed as LC  # noqa: E402
 
 PKG = "Security/Proofs"
 MODULES = ("Proofs.Flock.SpotFlock.Code", "Proofs.Flock.SamplingGeneric.TwoAt")
+#: the script's thread's stack, in KiB (`lean --tstack`): reserved, and touched only as deep as the parsers recurse
+TSTACK_KIB = 128 << 20
 
 
 def main(argv: list[str]) -> int:
@@ -62,11 +64,12 @@ def main(argv: list[str]) -> int:
             if rc == 0:
                 if argv[:1] == ["--pytest"]:
                     env = {**os.environ, "VERITY_TWO_STAGE_GUARD": str(tree / PKG)}
-                    rc = subprocess.run([sys.executable, "-m", "pytest", "-q", str(HERE / "test_guard.py"), *argv[1:]],
-                                        cwd=ROOT, env=env).returncode
+                    uv = shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")
+                    rc = subprocess.run([uv, "run", "--no-project", "--with", "pytest", "python", "-m", "pytest", "-q",
+                                         str(HERE / "test_guard.py"), *argv[1:]], cwd=ROOT, env=env).returncode
                 else:
                     rc, _ = LC.build(PKG, tree, lake, sandbox=False,
-                                     cmd=["env", "lean", "--run", str(HERE / "TwoGuard.lean"), *argv])
+                                     cmd=["env", "lean", f"--tstack={TSTACK_KIB}", "--run", str(HERE / "TwoGuard.lean"), *argv])
             (tree / LC.DIRTY).unlink(missing_ok=True)
             return rc
     finally:

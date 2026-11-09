@@ -7,6 +7,7 @@ copies it reads them against (`SpotFlock.Held`), as `tests/TwoGuard.lean` reads 
 * ``m2.bin``: round 2's message, each template's session statement as `FlockDeploy.Raw.encode` of what Lean's
   `flock-verify verify` read for it (its verify log's command line, the objects of its session's archive, its record's
   ``unit_draw``), in template order, as `FlockDeploy.encList (encBytes ·)`;
+* ``verdicts.json``: Lean's `flock-verify verify` verdict on each of those statements, in template order (`verdict`);
 * ``c0.bin`` and ``c1.bin``: the bytes of the challenger's coins each stage's sample read (`service.Stream`'s);
 * ``ref-<t>.bin``: template ``t``'s reference statement (`Held.xS₀`), made from what is fixed before the run: its
   reference circuit and public file (`toy.references`), the reference window's partition and program as a5 writes a
@@ -25,6 +26,7 @@ used, and raises where they differ.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import lzma
 import re
@@ -97,8 +99,8 @@ def verify_args(log: Path) -> list[str]:
 
 def session_statement(session_dir: Path) -> bytes:
     """The statement Lean's `flock-verify verify` read for a member's session (``audit/session-m<k>``), as
-    `FlockDeploy.Raw.encode`: the objects its command line names in its archive, the MUFU tables the archive holds, and
-    its session record's ``unit_draw``."""
+    `FlockDeploy.Raw.encode`: the objects its command line names in its archive (each checked to hash to its name), the
+    MUFU tables the archive holds, and its session record's ``unit_draw``."""
     args = verify_args(session_dir / "lean-verify.log")
     opts: dict[str, str] = {}
     flags = set()
@@ -115,16 +117,30 @@ def session_statement(session_dir: Path) -> bytes:
     if not archive.is_dir():
         archive = session_dir / "archive"
 
+    def named(h: str) -> bytes:
+        b = (archive / "sha512" / h).read_bytes()
+        if hashlib.sha512(b).hexdigest() != h:
+            raise ValueError(f"{archive}: object {h[:16]}… does not hash to its name")
+        return b
+
     def obj(flag: str) -> bytes | None:
-        return (archive / "sha512" / opts[flag]).read_bytes() if flag in opts else None
+        return named(opts[flag]) if flag in opts else None
     record = json.loads((Path(opts["--session"]) if Path(opts["--session"]).is_dir() else
                          next((session_dir / "sessions").iterdir())).joinpath("session.json").read_text())
     draw = record.get("unit_draw")
     return raw(opts["--statement"], obj("--circuit"), obj("--public"),
-               [(n, (archive / "sha512" / h).read_bytes()) for n, h in mufu_tables() if (archive / "sha512" / h).exists()],
+               [(n, named(h)) for n, h in mufu_tables() if (archive / "sha512" / h).exists()],
                zk="--zk" in flags, os_coins=opts.get("--coins") == "os", count=int(opts.get("--session-tables", "1")),
                draw=None if draw is None else compact(draw), partition=obj("--partition"), program=obj("--program"),
                registered=obj("--registered"))
+
+
+def verdict(session_dir: Path) -> dict:
+    """Lean's `flock-verify verify` verdict on a member's session: its verify log's ``VERDICT`` line's ``accepted`` and
+    ``why``."""
+    line = [x for x in (session_dir / "lean-verify.log").read_text().splitlines() if x.startswith("VERDICT ")][-1]
+    v = json.loads(line.removeprefix("VERDICT "))
+    return {"accepted": v["accepted"], "why": v.get("why", "")}
 
 
 def ref_draw(q: int, n_t: int, k: int) -> dict:
@@ -182,6 +198,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
             draw=compact(ref_draw(q, n_t, k)), partition=part, program=prog))
         stmts.append(session_statement(audit / f"session-m{t}"))
     (out / "m2.bin").write_bytes(enc_list(enc_bytes, stmts))
+    (out / "verdicts.json").write_text(json.dumps([verdict(audit / f"session-m{t}") for t in range(len(stmts))]))
     (out / "x.bin").write_bytes((run_out / "boundary" / "registration.json").read_bytes())
     (out / "m1.bin").write_bytes((run_out / "interior" / "registration.json").read_bytes())
     if entry.read is None or entry.second_read is None:
