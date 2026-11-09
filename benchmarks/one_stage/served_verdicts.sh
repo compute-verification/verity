@@ -314,7 +314,8 @@
 # nothing of its own (served_pearlplus.sh's PEARLPLUS_TIE): it takes the window's epoch pearl/w<k>/, writes W
 # (`retain --window-record`), and runs `served_verdicts.sh pearl-tie` (PEARLPLUS_TIE_CMD) before its coin: the window's
 # advice and `prove_path.py window-commit --window-registration W --pearl-passes DIR --law V3C_LAW`, the circuit cut at
-# Pearl+'s linears and R chained right after W, in the serve dir's pearlplus/w<k>/; then `verify --tie W`. V3c then runs
+# Pearl+'s linears and R chained right after W, in the serve dir's pearlplus/w<k>/; then `verify --tie W --class
+# V3C_CLASS` (PEARLPLUS_CLASS), which refuses passes that aren't the class's fixed load. V3c then runs
 # after step 4 and before the record (on a node short of its audit's memory, deferred as under H1_TIE): it audits that
 # commit, held to W (WINDOW-COMMIT), with records_audit's --tie W (V3C-TIE), and the record reads R and that audit's
 # summary from pearlplus/w<k>/tie (`record --window-tie`), where `pearlplus_of_record` holds them to W.
