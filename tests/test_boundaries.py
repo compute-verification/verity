@@ -93,7 +93,7 @@ ALLOWED = {
     # deployment layer (`wipe_parties`), their messages the wire's. The
     # memory challenger reports its sessions under its party's per-period root (`core.attest`).
     "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
-                            "ml.randomness"},
+                            "ml.randomness", "core.protocols.reporting"},
     # The bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
@@ -108,7 +108,7 @@ ALLOWED = {
     # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.spot", "core.protocols.pous", "core.wire",
-                                        "core.deploy"},
+                                        "core.deploy", "core.protocols.reporting"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).
     "core.protocols.pouw": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness", "core.protocols.profile",
                             "core.protocols.spot"},
@@ -117,6 +117,8 @@ ALLOWED = {
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.spot"},
     # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
     "core.protocols.record": set(),
+    # The reporting grid every monitoring-period report states, its periods and δs: stdlib only.
+    "core.protocols.reporting": set(),
     # What the protocols' provers build and their verifiers don't read, which no core unit imports.  PoUW's and the
     # certifier's are stated over their protocol's parameters and records in core (`ML_IMPORTS_CORE`), and PoUW's schemes
     # and circuits over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts).
@@ -213,7 +215,7 @@ SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which co
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
     "tools/research/console/verity_console.py": "the console reads `cluster.usage`, and moves to infra/ with research's pods, "
-                                                "deploy and Slack code in the follow-up to the platform layout move (#1450)",
+                                                "deploy and Slack code",
 }
 #: Files outside ``benchmarks/`` that import a module of it, by name or by path, each with its owner and what it imports.
 #: ``benchmarks/`` is measurement only: a number a protocol uses reaches it
@@ -240,28 +242,15 @@ BENCHMARKS_IMPORTERS = {
                                                                             "`inplace` (`benchmarks/remote_session`)",
     "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
     "verity/ml/flock/python/verity_flock/struct_lower.py": "proofs: H1's unit (`benchmarks/pouw/h1_prove`, `hidden_zk`)",
-    # Flock and circuit-check build statements from the numerical benchmarks' templates and lowerings
+    # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
-        "verity/ml/flock/pod/gemm_hill.py", "verity/ml/flock/pod/read_gadget.py", "verity/ml/flock/pod/rec_inner.py",
-        "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/boolean_export.py",
-        "verity/ml/flock/python/verity_flock/circuit.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
+        "verity/ml/flock/pod/gemm_hill.py", "verity/ml/flock/pod/read_gadget.py",
+        "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
         "verity/ml/flock/python/verity_flock/instances.py", "verity/ml/flock/python/verity_flock/ir_bench.py",
         "verity/ml/flock/python/verity_flock/register.py",
-        "verity/ml/flock/tests/plain_hidden.py",
-        "verity/ml/flock/tests/test_backend.py", "verity/ml/flock/tests/test_circuit.py",
-        "verity/ml/flock/tests/test_class_statement.py", "verity/ml/flock/tests/test_derive.py",
-        "verity/ml/flock/tests/test_flock_rows.py", "verity/ml/flock/tests/test_gemm_hill.py",
-        "verity/ml/flock/tests/test_inner_registered.py", "verity/ml/flock/tests/test_ir_lowering.py",
-        "verity/ml/flock/tests/test_ir_sampling.py", "verity/ml/flock/tests/test_lean_hidden_outputs.py",
-        "verity/ml/flock/tests/test_lean_plain_hidden_tables.py",
-        "verity/ml/flock/tests/test_lean_registered_bit_rows.py", "verity/ml/flock/tests/test_lean_registered_reads.py",
-        "verity/ml/flock/tests/test_lean_served_registered.py", "verity/ml/flock/tests/test_lean_session_tables.py",
-        "verity/ml/flock/tests/test_lean_typed_statement.py", "verity/ml/flock/tests/test_lean_verifier.py",
-        "verity/ml/flock/tests/test_stage_typed.py", "verity/ml/flock/tests/test_typed_statement.py",
-        "verity/ml/flock/tests/tmpl_statement.py",
-    ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s templates, generator, input sets and lowerings"),
-    "tools/verity/circuit_check/src/circuit_check/checks.py":
-        "circuits: `verity_numerical.bench` (`benchmarks/numerical`)'s lowerings, as circuit-check targets",
+        "verity/ml/flock/tests/test_backend_bench.py", "verity/ml/flock/tests/test_class_statement.py",
+        "verity/ml/flock/tests/test_gemm_hill.py", "verity/ml/flock/tests/test_ir_lowering_bench.py",
+    ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
     **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tools/research/tests/test_store_prov.py"),
                     "infra: the store's tool registry names `benchmarks.<probe>.tool` modules (tc_probe, tc_probe_fp4, "
@@ -300,7 +289,7 @@ BENCHMARKS_IMPORTERS = {
 #: with the file that defines it and why tests need it.
 TEST_ONLY = {
     "_build_unchecked": ("verity/ml/circuits/partition_v2.py",
-                         "`partition_v2.build` without its refusal of units of several size classes (CIR-64), for the tests "
+                         "`partition_v2.build` without its refusal of units of several size classes, for the tests "
                          "of `check` on advice past the builder's scope, as a prover may send it"),
 }
 

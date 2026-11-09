@@ -33,10 +33,10 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
-# `SampledKSLiveV2`'s file preconditions, refused by the verifiers (`SampledKSLiveV3`)
+# `SampledKSLiveV2`'s file preconditions, refused by the verifiers (`Bridge.SampledKSLiveRoots`)
 
 `SampledKSLiveV2` takes four things of the files as hypotheses: every port a row/v1, row/v2 or row-seg/v1 row
 (`Bridge.RowsOk`, which the scope check `scopeOkH` already gives: `Bridge.rowsOk_of_scopeOkH`), each of its own name
@@ -53,9 +53,10 @@ refuses the registration (`Spot.Run.run`,
   (`Slots.popOk`), which the run checks at registration.
 * `rowsOk_of_scopeOkH`, `rootsColl_none_of_collides_false`, `popMatches_of_popOk`: the checks give V2's hypotheses. The
   roots check is computed at the public file's population, so the game's `n` is identified with it (`pub.n = n`).
-* `SampledKSLiveV3`: `SampledKSLiveV2` with its event `LiveAcceptsKS ∧ RunPopOk` in place of `LiveAcceptsZK` and
-  without the three hypotheses. `sampledKSLiveV3_of` derives it from `SampledKSLiveV2`: files that pass give V2's
-  hypotheses, and at files that fail the event is empty.
+* `SampledKSLiveRoots`: `SampledKSLiveV2` with its event `LiveAcceptsKS ∧ RunPopOk` in place of `LiveAcceptsZK` and
+  without the three hypotheses. `sampledKSLiveRoots_of` derives it from `SampledKSLiveV2`: files that pass give V2's
+  hypotheses, and at files that fail the event is empty. `SampledKSLiveV3` (`ScopeGate`) reads its other file
+  preconditions off acceptance too.
 -/
 
 @[expose] public section
@@ -98,10 +99,6 @@ the descriptor `desc` parses and its population under the query `qr` is `n` unit
 def RunPopOk (desc : Claims.Msg) (qr : Lean.Json) (n : ℕ) : Prop :=
   ∃ p, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Slots.popOk p qr n = true
 
-end Flock.Bridge
-
-namespace Flock.Guarantees
-
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
@@ -118,8 +115,8 @@ give the game's `n` units in order, in the strata `Bridge.nsOf desc qr` the stat
 relation fails. It has none of V2's hypotheses `RowsOk`,
 `dupName = none`, `rootsColl = none` and `PopMatches`; the game's `n` is the public file's population (`pub.n = n`).
 Its finders' charges are V2's: `2(t' + v)` and `t' + v` for the knowledge finders and `t' + v` per run for the link
-finders. `SampledKSLiveV2` implies it (`sampledKSLiveV3_of`). -/
-def SampledKSLiveV3 : Prop :=
+finders. `SampledKSLiveV2` implies it (`sampledKSLiveRoots_of`). -/
+def SampledKSLiveRoots : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
@@ -187,11 +184,11 @@ def SampledKSLiveV3 : Prop :=
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * ((t' + v) * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
-/-- **`SampledKSLiveV2` gives `SampledKSLiveV3`**: at files that pass the verifiers' checks they give V2's hypotheses
+/-- **`SampledKSLiveV2` gives `SampledKSLiveRoots`**: at files that pass the verifiers' checks they give V2's hypotheses
 (`Bridge.rowsOk_of_scopeOkH`, `Flock.PortRoots.check_ok`, `Bridge.rootsColl_none_of_collides_false` at `pub.n = n`,
 `Bridge.popMatches_of_popOk`)
-and V3's event is inside V2's; at files that fail, V3's event is empty. -/
-theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
+and its event is inside V2's; at files that fail, its event is empty. -/
+theorem sampledKSLiveRoots_of (h : Guarantees.SampledKSLiveV2) : SampledKSLiveRoots := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hn desc qr kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
     hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ v hv q L P vb σ Xr δ Cc rows roots Cd κ hT hL
   by_cases hc : Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
@@ -208,4 +205,4 @@ theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
   · exact (prob_mono (q := fun _ => False) (fun o ho => hc ⟨ho.1.1.2, ho.1.2⟩) _ τ).trans
       ((prob_false _ τ).le.trans zero_le)
 
-end Flock.Guarantees
+end Flock.Bridge

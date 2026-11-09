@@ -43,14 +43,23 @@ def test_a_request_line_is_plotted_at_every_registration_and_compared_in_the_set
         gpus * window, t.POD * gpus * window, c["datacenter_machines"].value * gpus * window]
 
 
+def _falling(gap: float = 1.0):
+    """A bound of 1e6 bits times the overhead's multiple over β, Lean's `gap` times the planner's."""
+    def bound(line, scale, beta, lean=False):
+        y = 1e6 * scale / beta * (gap if lean else 1.0)
+        return {"y": y, "count": y, "binds": "count"} | ({"lean": True, "planner": y / gap} if lean else {})
+    return bound
+
+
 def test_a_break_even_bisects_to_its_target_and_says_when_none_is_in_reach(monkeypatch):
     """The overhead's multiple at which a bound rising in it reaches the target, and the β at which a bound falling in
-    β does, each within its tolerance; None when the span's best end is above the target, the end when its worst is
-    below; and the floor at the least overhead."""
-    monkeypatch.setattr(t, "_bound", lambda line, scale, beta: 1e6 * scale / beta)
+    β does, each within its tolerance on the side where the bound is at most the target; None when the span's best end
+    is above the target, the end when its worst is below; and the floor at the least overhead."""
+    monkeypatch.setattr(t, "_bound", _falling())
     h = t._solve(("h", 1e3, None, 0.01, 1e-3))
-    assert h == pytest.approx(1e-5, rel=2e-3)
-    assert t._solve(("beta", 1e3, None, 0.01, 1e-3)) == pytest.approx(1e3, rel=2e-3)
+    assert h == pytest.approx(1e-5, rel=2e-3) and h <= 1e-5
+    beta = t._solve(("beta", 1e3, None, 0.01, 1e-3))
+    assert beta == pytest.approx(1e3, rel=2e-3) and beta >= 1e3
     assert t._solve(("h", 1e-12, None, 0.01, 1e-3)) is None and t._solve(("h", 1e30, None, 0.01, 1e-3)) == 1e2
     assert t._solve(("beta", 1e-12, None, 0.01, 1e-3)) is None
     assert t._solve(("h", None, None, 0.01, 1e-3)) == pytest.approx(1e6 * 1e-12 / 0.01)
@@ -58,6 +67,54 @@ def test_a_break_even_bisects_to_its_target_and_says_when_none_is_in_reach(monke
           "rows": [{"config": "tokens", "registration": "pod", "scope": "world week", "overhead": 2.0, "floor": 8e6,
                     "h": {"FP8": 2e-5}, "beta": {"FP8": None}}]}
     assert t.breakeven_table(be).splitlines()[1] == "(A) | pod | world week | 2 | 1 MB | 2e-05 | none"
+
+
+def test_lean_certifies_a_break_even_at_or_past_the_solved_point(monkeypatch):
+    """Lean's certificate is the solved point where Lean's bits are at most the target, else the first step outward
+    where they are (up in β, down in the overhead), each step twice the last, and none past `STEPS` steps; the floor
+    is Lean's bound at the least overhead."""
+    monkeypatch.setattr(t, "_bound", _falling(1.0025))
+    beta = t._solve(("beta", 1e3, None, 0.01, 1e-3))
+    cert = t._certify(("beta", 1e3, None, 0.01, 1e-3, beta))
+    assert cert["at"] >= 1002.5 and cert["at"] == pytest.approx(beta * 1.001 ** (2 ** cert["steps"] - 1))
+    assert cert["steps"] >= 2 and cert["at"] / 1002.5 <= 1.001 ** 2 ** (cert["steps"] - 1)
+    assert cert["y"] <= 1e3 and (cert["lean"], cert["binds"]) == (True, "count")
+    h = t._solve(("h", 1e3, None, 0.01, 1e-3))
+    cert = t._certify(("h", 1e3, None, 0.01, 1e-3, h))
+    assert cert["at"] <= 1e-5 / 1.0025 and cert["y"] <= 1e3
+    assert t._certify(("beta", 1e3, None, 0.01, 1e-3, None)) is None
+    monkeypatch.setattr(t, "_bound", _falling(1.1))
+    cert = t._certify(("beta", 1e3, None, 0.01, 1e-3, t._solve(("beta", 1e3, None, 0.01, 1e-3))))
+    assert (cert["at"], cert["steps"]) == (None, t.STEPS) and cert["y"] > 1e3
+    floor = t._certify(("h", None, None, 0.01, 1e-3, 1.0))
+    assert floor["y"] == pytest.approx(1.1e6 * 1e-12 / 0.01) and floor["at"] == t.SPANS["h"][0]
+
+
+def test_the_break_even_table_shows_what_lean_certifies(monkeypatch):
+    """With Lean, each patterns'-form line's row carries a certificate for its floor and each break-even, an overhead
+    for `h`, and the table prints those, marking where the served bits bind and where Lean doesn't certify one."""
+    def solve(job):
+        what, target = job[:2]
+        return 3.0 if target is None else 0.5 if what == "h" else 0.07
+
+    def certify(job):
+        what, target, *_, x = job
+        return {"at": None if what == "h" and (target or 0) > 4.5e12 else x, "steps": 0, "y": 8e6,
+                "binds": "served" if what == "beta" else "count", "count": 9e6, "lean": True, "planner": 8e6,
+                "theta": 1.0}
+
+    monkeypatch.setattr(t, "_solve", solve)
+    monkeypatch.setattr(t, "_certify", certify)
+    be = t.breakeven("GLM-5.3", ("world week",))
+    assert be["lean"]["exe"] == t.plancheck.EXE
+    assert [r["config"] for r in be["rows"]] == [n for n, c in t.CONFIGURATIONS.items() if c.form == "patterns"]
+    for r in be["rows"]:
+        assert r["lean"]["h"]["FP4"]["at"] == pytest.approx(0.5 * r["overhead"]) and r["lean"]["h"]["FP8"]["at"] is None
+        assert r["lean"]["beta"]["FP8"]["at"] == 0.07 and r["lean"]["floor"]["y"] == 8e6
+    row = t.breakeven_table(be).splitlines()[1].split(" | ")
+    assert row[4:] == ["1 MB", "uncertified", f"{0.5 * be['rows'][0]['overhead']:.3g}", "0.07 (served)",
+                       "0.07 (served)"]
+    assert t.breakeven("GLM-5.3", ("world week",), lean=False)["rows"][0].get("lean") is None
 
 
 def test_a_partition_card_cuts_the_circuit_and_keeps_its_macs():
@@ -110,6 +167,21 @@ def test_every_line_prices_its_blocks_one_way():
         t.priced(c | {"partition": f1.InputCard(stray, "", "measured", "one unstaged block")}, po)
 
 
+def test_a_block_measured_at_another_size_of_its_definition_scales_with_its_k_log():
+    """A residual add of 384 columns, which the card measures only at 6144, 2^4 times smaller as the strata size both:
+    the card's seconds a block over 2^4 and its cap times 2^4, its statement's fixed seconds unchanged."""
+    c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
+    b = next(b for b in po["value"]["blocks"] if b["block"] == "ResidualAdd_v1{N=6144}")
+    strata = c["partition"].value["strata"]
+    k = next((x["k_log"] for x in strata if x["block"] == b["block"]), b["k_log"])
+    narrow = {"block": "ResidualAdd_v1{N=384}", "per_token": 16, "macs": 0, "out_bits": 6144, "k_log": k - 4}
+    part = f1.InputCard(c["partition"].value | {"strata": [*strata, narrow]}, "", "measured", "a column block more")
+    p = t.priced(c | {"partition": part}, po)
+    got = next(x for x in p["partition"].value["strata"] if x["block"] == narrow["block"])
+    assert (got["priced"], got["seconds_per_block"]) == ("measured", b["seconds_per_block"] / 16)
+    assert (got["fixed_seconds"], got["statement_blocks"]) == (b["fixed_seconds"], b["statement_blocks"] * 16)
+
+
 def test_the_kept_priced_taxes_are_the_generators():
     """While a configuration's tax is priced, the kept card's is what `priced_card` prices from the kept cards."""
     kept = t.taxes(cards.load("serve_tax", "GLM-5.3"))
@@ -132,6 +204,35 @@ def test_a_card_without_every_configuration_is_refused():
         cards.check(t.priced_card("GLM-5.3") | {"value": {"baseline": "x", "configurations": [
             {"config": "tokens", "status": "priced", "tax": .1, "low": .2, "high": .3, "lower_bound": False,
              "parts": []}]}})
+
+
+def test_each_statement_pays_its_verify_at_the_cards_ratio():
+    """A statement's verify is its type's measured core-seconds, its family's line (through two members, or through the
+    fixed seconds and one), else the measured median, at the card's core-seconds a GPU-second, added to the
+    statement's fixed seconds and nothing else; a family member that isn't measured is refused."""
+    vc = cards.load("verifier_cost", "GLM-5.3")
+    v = vc["value"]
+    by = {x["block"]: x["core_seconds"] for x in v["types"]}
+    assert t.verifier_seconds(v, "FlashInferFp8Linear_v1{K=2048,N=1}") == (by["FlashInferFp8Linear_v1{K=2048,"],
+                                                                         "measured")
+    k4096, how = t.verifier_seconds(v, "FlashInferFp8Linear_v1{K=4096,N=1}")
+    assert how == "family" and k4096 == pytest.approx(v["fixed_seconds"] + 2 * (by["FlashInferFp8Linear_v1{K=2048,"]
+                                                                                 - v["fixed_seconds"]))
+    lo, hi = by["SparseMlaCombine_v1{NSPLIT=2,"], by["SparseMlaCombine_v1{NSPLIT=12,"]
+    assert t.verifier_seconds(v, "SparseMlaCombine_v1{NSPLIT=5,DV=512}")[0] == pytest.approx(lo + 3 * (hi - lo) / 10)
+    assert t.verifier_seconds(v, "MoeExpertFp8BlockGemm_v4{K=6144}") == (by["MoeExpertFp8GemmW_v1{"], "family")
+    assert t.verifier_seconds(v, "Unseen_v1{K=3}")[1] == "assumed"
+    c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
+    p = t.priced(c, po)
+    q = t.verified(p, vc)
+    for x, y in zip(p["partition"].value["strata"], q["partition"].value["strata"]):
+        assert y["fixed_seconds"] == pytest.approx(x["fixed_seconds"] + y["verify_core_seconds"]
+                                                   / v["core_seconds_per_gpu_second"])
+        assert y["seconds_per_block"] == x["seconds_per_block"] and y["price_macs"] == x["price_macs"]
+    assert q["verifier_cost"].value == pytest.approx(5.40 / (2 * 0.015 + 8 * 0.0045))
+    bad = v | {"families": [{"types": ["X"], "size": None, "members": ["Unmeasured_v1{"]}]}
+    with pytest.raises(ValueError, match="none of the measured"):
+        cards.check(vc | {"value": bad})
 
 
 def most_written(cells, k, q, replay_blocks, delta, footprint):
@@ -231,9 +332,9 @@ def measured(tmp_path_factory) -> dict:
 def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     """The planned scope: each line's x is its tax plus β, a measured tax as it comes; the exfiltration lines never
     above the served bits, saying which term binds, a wider registration never above a narrower one, sampling more
-    requests under a cap past them, and the patterns' form below the sets'; both infiltration lines plotted, and (C)'s
-    falling with β; skipped work only for (C); the
-    captions name what each rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
+    requests under a cap past them, and the patterns' form below the sets' wherever it doesn't reach the served bits;
+    both infiltration lines plotted, and (C)'s falling with β; skipped work only for (C); the captions name what each
+    rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
     configuration at four shares, about a minute on four workers, the only test of the series end to end."""
     out, scope = measured, "datacenter week"
     served = out["scopes"][scope]["served_bits"]
@@ -262,7 +363,8 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     for name in ("tokens", "per_expert"):
         spans = [lines[n]["y"] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert all(b <= a * (1 + 1e-9) for x in zip(*spans) for a, b in zip(x, x[1:])), name
-        assert lines[name]["y"][at] < lines[f"{name}_sets"]["y"][at]
+        patterns, sets = lines[name]["y"][at], lines[f"{name}_sets"]["y"][at]
+        assert patterns <= sets and (patterns < sets or lines[name]["binds"][at] == "served"), name
         for n in (name, f"{name}_pod", f"{name}_datacenter"):
             assert all(k >= 1 and k >= q for q, k in zip(lines[n]["registration_sample"], lines[n]["registration_cap"]))
             assert all(0 <= p <= s <= 1 for s, p in zip(lines[n]["shared"], lines[n]["padding"]))
@@ -289,4 +391,4 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
                                        "figure1_skipped_work_datacenter_week.png",
                                        "figure1_skipped_work_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert (t.stem("datacenter year"), t.stem("datacenter year", "skipped_work")) == ("figure1", "figure1_skipped_work")
+    assert (t.stem("world year"), t.stem("world year", "skipped_work")) == ("figure1", "figure1_skipped_work")

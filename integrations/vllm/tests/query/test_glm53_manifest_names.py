@@ -80,7 +80,7 @@ class _Build:
         if not self.fused(step, norm):
             ar = self.call("AllReduceMultimem_v1", f"{site}.all_reduce_{self.coll}/all_reduce[0]/all_reduce", self.parts(own, M * N),
                            (("out", M * N, 16),))
-            rows = [self.call("RMSNormFusedCudaVector8_v1", f"{norm}/fused_add_rms_norm[{i}]", [R(ar, "out"), residual[i], nw],
+            rows = [self.call("RMSNormFusedCudaVector8_v3", f"{norm}/fused_add_rms_norm[{i}]", [R(ar, "out"), residual[i], nw],
                               (("0", N, 16), ("1", N, 16))) for i in range(M)]
             return [R(c, "0") for c in rows], [R(c, "1") for c in rows]
         k = self.coll
@@ -198,7 +198,7 @@ def test_each_norms_collective_is_spelt_under_the_norm_on_both_paths(manifests):
             by.setdefault((r["step"], r["op_path"]), {})[r["output_member"]] = (r["spec"], r["invocation"], r["element_range"])
     for norm in NORMS:
         pre = by[(0, norm)]
-        assert {k: v[0] for k, v in pre.items()} == {"0": "RMSNormFusedCudaVector8_v1", "1": "RMSNormFusedCudaVector8_v1",
+        assert {k: v[0] for k, v in pre.items()} == {"0": "RMSNormFusedCudaVector8_v3", "1": "RMSNormFusedCudaVector8_v3",
                                                      "all_reduce": "AllReduceMultimem_v1", f"part_rank{rank}": "AllReduceMultimem_v1"}, norm
         assert pre["all_reduce"][2] == pre[f"part_rank{rank}"][2] == [0, 2 * N], "the flat all-reduce and its partial are the whole [M, N]"
         dec = by[(1, norm)]

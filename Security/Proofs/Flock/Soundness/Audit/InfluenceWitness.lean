@@ -33,13 +33,13 @@ namespace FlockSoundness.Audit.InfluenceWitness
 
 namespace W
 
-abbrev ops : Fin 4 → Op 4
+abbrev ops : Fin 4 → Verity.Boolean.Op 4
   | 0 => .input
   | 1 => .not 0
   | 2 => .not 1
   | 3 => .not 0
 
-abbrev C : Circuit where
+abbrev C : Verity.Boolean.Circuit where
   N := 4
   op := ops
   topo := by decide
@@ -155,7 +155,7 @@ end W
 
 namespace Gen
 
-variable {C : Circuit} {n : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ}
 
 /-- The exits of a set are the union of its units' exits. -/
 theorem exits_card_le (P : Partition C n) (B : Finset (Fin n)) :

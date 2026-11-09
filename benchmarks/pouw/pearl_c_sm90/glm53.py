@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     for r in rows:
         verdict = "refused: " + "; ".join(r["refused"]) if r["refused"] else \
-            "γ " + ", ".join(f"{k} {100 * v:.4f}%" for k, v in r["gamma"].items())
+            "ε " + ", ".join(f"{k} {100 * v / (1 - v):.4f}%" for k, v in r["gamma"].items())
         print(f"{r['name']:38s} n {r['n']:5d} k {r['k']:5d} {r['layers']:8s} {r['stock']:26s} {verdict}")
     return 0
 

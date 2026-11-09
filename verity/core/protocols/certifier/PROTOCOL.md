@@ -1125,7 +1125,7 @@ of the incorrect proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ
 1. **Fix a.** Then every proof block's circuit is fixed, because `compile` is a function of the registered items and of
    a. So for each a the audit is the one-stage audit of a fixed circuit, and `audit_influence` applies: the audit
    accepts while the values it delivers lie outside Φ_a with probability at most δ_audit. Φ_a is the set of values
-   reachable when the incorrect proof blocks form a set whose acceptance probability is at least δ, and it is fixed before
+   reachable when the incorrect proof blocks form a set whose miss probability is at least δ, and it is fixed before
    the sample.
 2. **With no incorrect proof block, the egress is a function of I and a.** Every committed value is the forward evaluation of the
    compiled circuits from I, w and a, because every value a circuit reads has exactly one writer (A2). Each tie proof
@@ -1995,16 +1995,20 @@ difftest compares (`NetTiming.SecurityProofs.Code`): `CodeExpectedRow`, `CodeAcc
 ## The active network certifier (`warden`)
 
 The wire is client ↔ network certifier ↔ server, with the network certifier responsible only for limiting network steganography and
-certifying exactly the bits it sees. So the network certifier knows bytes only: nothing in it belongs to vLLM
-or to any workload. `warden.py`'s docstring has its cells, admission, schedule and failures. This section says what
-its wire can carry.
+certifying exactly the bits it sees. So nothing in the network certifier belongs to vLLM or to any workload: it knows
+bytes, and one form of them, the egress record's ("The egress record"), the only form it releases toward a client.
+`warden.py`'s docstring has its cells, admission, schedule, egress form and failures. This section says what its wire
+can carry.
 
 **The schedule's public parameters** are `WardenParams`, fixed before the run:
 - B (`cell_bytes`), r (`slots`), τ (`bucket_ms`), D (`delay`), the lanes, the queue and the window T;
-- the bounds `ingress_cells`, `ingress_buckets` and `egress_cells`.
+- the bounds `ingress_cells`, `ingress_buckets` and `egress_cells`;
+- the egress form (`egress`): `id`, the egress record's, or `bytes`, which relays any server's bytes, for the
+  rehearsals of a server that answers in another form.
 
-`WardenParams.digest` binds them, and every record head's `parameters` is that digest. The ticker's slack is the active
-certifier's.
+`WardenParams.digest` binds them, with the cell kinds and the fail reasons, and every record head's `parameters` is that
+digest. The period check reads the id form's schedules only (`NetworkCheck.Period.egressForm`), so a `bytes` run's
+records are certified under a digest no period check takes. The ticker's slack is the active certifier's.
 
 **What the wire is a function of.** On connection q the network certifier sends r cells of B bytes each way in every bucket, from
 q's admission s to its last bucket. The kinds and buckets of q's egress cells are a function of the parameters and
@@ -2023,7 +2027,10 @@ connection has opened, and what it releases before then is buffered for the serv
 fails q there, which is f.
 
 Every `DATA` and `END` cell's content is the bytes, cut at fixed offsets (byte k is in cell ⌊k/P⌋), never by when or
-how they were read.
+how they were read. In the id form the network certifier releases a cut cell only if `io_tie.parse_cell` reads it: at
+any other it fails the connection (`format`) in that cell's slot, and none of the cell's bytes leaves. It refuses and
+never rewrites. An honest id-form server writes one `io_tie.id_event` of exactly P bytes an output, then `TRAILER`, so
+the cut gives one event a `DATA` cell and the `END` holds the trailer; any other byte stream fails at its first cell.
 
 **The leak bound** is what a server can signal on the wire beyond the response it sends:
 - **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).
@@ -2045,8 +2052,10 @@ how they were read.
   - A server that fails connection q picks the egress cell it fails at, or not to fail: at most n + 1 ≤
     `egress_cells` + 1 outcomes.
   - Every failure sends the same `FAIL` cell, with no payload: a missed deadline, a stream that hasn't ended by the
-    last cell, a broken server connection, and the client's own two. The reason is a frame of the network certifier's `fails`
-    record, in the bucket of the `FAIL`: witness, certified with the others and never on the wire.
+    last cell, a broken server connection, a cell out of the egress form, and the client's own two. The reason is a
+    frame of the network certifier's `fails` record, in the bucket of the `FAIL`: witness, certified with the others
+    and never on the wire. A server that departs from the form at cell i gives the client what a server late at cell
+    i does, so `format` adds no outcome.
   - A failure the client causes (`ingress`, `malformed`) fails at once, and only returns the client's own bits to it.
   - A failed connection frees its lane at its `FAIL`'s bucket, so f also moves later connections' s. That carries no
     bits beyond f's, which this term charges, though they reach another client.
@@ -2070,8 +2079,8 @@ checked here.
 wire's bits. The third record, `fails`, holds one reason a failed connection.
 - Each window's three records are certified as the certifier's are (record v2 and `certificate.Issuer`), with the network
   certifier's parameters digest in the head. A head is witness, so no reason reaches the client.
-- `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's, whose `FAIL` cells
-  and reasons don't match one for one, or in which a connection failed.
+- `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's (and, in the id form,
+  the egress form's), whose `FAIL` cells and reasons don't match one for one, or in which a connection failed.
 - `benchmarks/network_traces/warden_serve.py` runs the network certifier live and checks that each client got exactly its egress
   record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`)
   runs the same rehearsal on the auditor's host.

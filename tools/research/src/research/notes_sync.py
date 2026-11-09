@@ -118,7 +118,7 @@ CITE_HINTS = {"run": "a run is in the store once its attempt is on the remote: `
 def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None) -> subprocess.CompletedProcess:
     """git in `root`; output that is not UTF-8 (a diff of a binary or Latin-1 file) is decoded with replacement characters.
     Commits are unsigned: the notes repo needs no signatures, and an agent VM's signing key is often missing from its agent,
-    which made every commit and rebase here fail (TOP-90 row 27)."""
+    which would make every commit and rebase here fail."""
     return subprocess.run(["git", "-C", str(root), "-c", "commit.gpgsign=false", *args], capture_output=True, text=True,
                           errors="replace", timeout=timeout, input=input)
 
@@ -184,7 +184,7 @@ REFUSED = ("Authentication failed", "could not read Username", "Permission denie
 
 def refused(stderr: str) -> bool:
     """Whether a failed fetch or push was refused (credentials, permissions, no such repository), which no retry changes. Anything
-    else, a lost push race or a lock or transfer error two machines' syncs under load hit (6 Oct, load 156), is retried."""
+    else, a lost push race or a lock or transfer error two machines' syncs hit under heavy load, is retried."""
     return any(k in stderr for k in REFUSED)
 
 
@@ -214,7 +214,7 @@ _CLONE_LOCK = threading.Lock()
 def ensure_clone(root: Path) -> str | None:
     """Clone NOTES_URL to `root` when `root` is missing and there is a notes token (a fresh cloud VM), its `origin` the plain
     URL: a line saying it did, or why it failed; None when there was nothing to do.  One thread of a process clones at a time
-    (`research run`'s machine probes run in parallel: a clone directory named by pid alone was each other's, 26 Oct), and each
+    (`research run`'s machine probes run in parallel, so a clone directory named by pid alone would be each other's), and each
     clones into a directory of its own, so another process cloning beside it never touches it."""
     root = Path(root).expanduser()
     if root.exists() or not (t := token_url(NOTES_URL)):
@@ -526,8 +526,7 @@ def citation_warnings(cites: dict[str, list[str]], remote=None) -> list[str]:
 
 def clear_stale_lock(root: Path, now: float | None = None, procs: Path = Path("/proc")) -> bool:
     """Remove the repository's index.lock when it is over STALE_LOCK_S old and no git process works in the repository; whether it
-    did.  A git killed mid-write leaves it, and every later sync then fails at its rebase (the control pod's steward, 19 Oct: three
-    times in three hours, each cleared by hand)."""
+    did.  A git killed mid-write leaves it, and every later sync then fails at its rebase until someone clears it by hand."""
     gitdir = (_out(root, "rev-parse", "--absolute-git-dir") or "").strip()
     if not gitdir:
         return False
@@ -592,7 +591,7 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
                 conflict = [x for x in (_out(root, "diff", "--name-only", "--diff-filter=U") or "").splitlines() if x]
                 _run(root, "rebase", "--abort")
                 if not _out(root, "symbolic-ref", "-q", "HEAD"):
-                    # an abort that lost its rebase-merge directory (NFS, 3 and 6 Oct) leaves HEAD detached at the remote branch
+                    # an abort that lost its rebase-merge directory (as on NFS) leaves HEAD detached at the remote branch
                     _run(root, "checkout", "-q", branch)
                 return {**rep, "rc": 3, "conflict": conflict,
                         "error": "rebase conflict; nothing was dropped (the local commit is kept, the rebase aborted): resolve "

@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.spot import challenger as C
+from verity.core.protocols.spot import coins as T
 from verity.core.protocols.spot import remote as R
 
 from test_serve import Auditor, finish, session, start, trusted
@@ -61,6 +63,47 @@ def test_a_session_through_the_link_exempts_exactly_its_coins_and_counts_the_res
     assert roots == {"positions": (bytes([0]) * 64, bytes([1]) * 64), "replay": ()}
     assert record["counted"]["commitment"]["bytes"] == len(R.HEADER.pack(0, 0)) + len(
         json.dumps({"type": "commitment", "commitment": commitment.to_json()}, sort_keys=True, separators=(",", ":")))
+
+
+#: the coins of a withheld session whose release, as one frame, is past `remote.MAX_HEAD`, which the link faults
+#: malformed
+RELEASED = 722
+
+
+def test_a_withheld_release_past_one_frame_passes_the_link_in_frames(tmp_path):
+    """A withheld session (`--withhold`) whose client read 722 coins: as one frame its release at the close is past
+    `remote.MAX_HEAD`, which the link faults malformed, cutting the close; in frames (`remote.release_frames`) the link
+    passes each at D7's cell size, the client settles every coin and serve.py ends the session closed. The link's
+    record counts the layout, each raw coin and each release frame (`other`), exempts none and cuts nothing, every
+    link-window complete."""
+    auditor = Auditor(tmp_path)
+    families = json.dumps([["positions", RELEASED], ["replay", 1]])
+    proc, out, first = start(tmp_path, "out", None, "--withhold", "--families", families, auditor=auditor)
+    relay = link(out, int(first.split(":")[1]), "--cell-bytes", "4096")
+    listening = relay.stdout.readline()
+    assert listening.startswith("listening 127.0.0.1:")
+    client = R.RemoteChallenger.connect(listening.split()[1])
+    coins = T.ChallengerCoins(C.LiveRecord(client, "positions"))
+    coins.commit(bytes([7]) * 64)
+    coins(RELEASED * C.COIN_BYTES)
+    client.close()
+    coins.settle()
+    assert finish(proc)[0] == 0
+    relay.send_signal(signal.SIGTERM)
+    _, err = relay.communicate()
+    assert relay.returncode == 0, err
+
+    opened = [client.opened["positions", i] for i in range(RELEASED)]
+    one = json.dumps({"type": "released", "released": {"commitment": client.commitment.to_json(),
+                                                       "openings": [o.to_json() for o in opened]}},
+                     sort_keys=True, separators=(",", ":"))
+    frames = R.release_frames(client.commitment, opened)
+    assert len(one) > R.MAX_HEAD and len(frames) > 1 and coins.record.reason() is None
+    record = json.loads((out / L.SUMMARY).read_text())
+    assert record["complete"] and [e["cut"] for e in record["connections"]] == [False]
+    assert all(w["coins"] is None and w["coin-requests"] is None for w in record["windows"])
+    assert record["coins"]["frames"] == 0 and set(record["counted"]) == {"other"}
+    assert record["counted"]["other"]["frames"] == 1 + RELEASED + len(frames)
 
 
 def test_the_tunnel_goes_straight_to_the_peer_and_its_end_stops_the_link(tmp_path, monkeypatch):

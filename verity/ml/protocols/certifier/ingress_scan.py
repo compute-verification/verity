@@ -101,7 +101,8 @@ them.
 and slot stride `every` are its own (B, r, lanes and EVERY; the network certifier's window is whole slot strides,
 `WardenParams`), whose `ingress_cells` is at most C, whose `ingress_buckets` is at most WITHIN (a request's `END` is in
 S_{A−1}, or its ingress failed), whose delay is D (at least WITHIN + EVERY − 1, so a request's anchor is at most
-admitted + D, where its egress starts) and whose `egress_cells` is at most KO + 1 (a response's ids fit `out`). The
+admitted + D, where its egress starts), whose `egress_cells` is at most KO + 1 (a response's ids fit `out`) and whose
+egress form is the id form, the egress record's (the cells `io_tie.parse_cell` reads, and no others leave). The
 network certifier frees a lane after its connection's `END` cell, at admitted + D + ⌊n / r⌋, the bucket the slot's hold
 ends, so NR = lanes slots suffice. A request the class can't hold is refused, never truncated: a prompt of more than KI
 ids (the network certifier bounds a request's cells, not its ids) at the cell that takes its `fields` past KI, and a
@@ -249,7 +250,8 @@ class Class:
                 "ingress_cells": (params.ingress_cells <= self.C, f"<= C = {self.C}"),
                 "ingress_buckets": (params.ingress_buckets <= self.WITHIN, f"<= WITHIN = {self.WITHIN}"),
                 "delay": (params.delay == self.D, f"= D = {self.D}"),
-                "egress_cells": (params.egress_cells <= self.KO + 1, f"<= KO + 1 = {self.KO + 1}")}
+                "egress_cells": (params.egress_cells <= self.KO + 1, f"<= KO + 1 = {self.KO + 1}"),
+                "egress": (params.egress == "id", "= id, the egress record's form")}
         bad = [f"{k} {want} (it is {getattr(params, k)})" for k, (ok, want) in need.items() if not ok]
         if bad:
             raise ValueError(f"{self} doesn't serve the warden at these parameters: set " + "; ".join(bad))

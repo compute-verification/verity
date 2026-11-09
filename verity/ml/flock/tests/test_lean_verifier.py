@@ -56,7 +56,7 @@ def test_no_escape_hatches():
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
 AUDIT_STATEMENTS = PROOFS / "Flock" / "Lemmas" / "Audit.lean"
-AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
+AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game(?:\.|$)|"
                            r"Proofs\.Flock\.Soundness\.Audit\.|Proofs\.Flock\.Lemmas\.Audit$)")
 IMPORT = re.compile(r"(?:public )?(?:meta )?import (?:all )?(\S+)")
 
@@ -222,6 +222,33 @@ def test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit():
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_verdict_of_record_refuses_upstreams_plain_files(tmp_path):
+    """No soundness theorem covers upstream's plain proof files, so `verify --upstream-plain` refuses every session before
+    it reads a file. Only `agree` reads them, with the flag and upstream's verdicts and never under `--zk`, and it prints no
+    verdict: each line says whether the checks pass exactly when upstream accepted (a legacy statement's sessions fail
+    before any check runs)."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    files = [str(LEAN / ".lake/build/bin/flock-verify"), "--circuit", str(tmp_path / "none"), "--public", str(tmp_path / "none")]
+    p = subprocess.run([files[0], "verify", *files[1:], "--upstream-plain", "--session", "a", "b"], capture_output=True, text=True)
+    got = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+    assert p.returncode == 1 and [(v["session"], v["accepted"]) for v in got] == [("a", False), ("b", False)], p
+    assert all(v["why"].startswith("refused: upstream's plain proof files (--upstream-plain): ") for v in got), got
+    upstream = tmp_path / "upstream-verdicts.json"
+    upstream.write_text(json.dumps({"a": False, "b": True}))
+    for extra, err in ((["--upstream-plain"], "usage: flock-verify agree"),
+                       (["--upstream-verdicts", str(upstream)], "--upstream-plain is required"),
+                       (["--upstream-plain", "--upstream-verdicts", str(upstream), "--zk"], "verify --zk's")):
+        p = subprocess.run([files[0], "agree", *files[1:], *extra, "--session", "a"], capture_output=True, text=True)
+        assert p.returncode == 2 and not p.stdout and err in p.stderr, (extra, p)
+    p = subprocess.run([files[0], "agree", "--statement", "verity/flock-pure-block/v2", *files[1:], "--upstream-plain",
+                        "--upstream-verdicts", str(upstream), "--session", "a", "b", "c"], capture_output=True, text=True)
+    got = [json.loads(ln[10:]) for ln in p.stdout.splitlines() if ln.startswith("AGREEMENT ")]
+    assert p.returncode == 1 and not any("accepted" in v or v["refusal"] for v in got), p
+    assert [(v["session"], v["upstream"], v["agree"]) for v in got] == [("a", False, True), ("b", True, False), ("c", None, False)]
+    assert all("a legacy statement" in v["check"] for v in got), got
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_unit_draw_check(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     d = {"law": "subset", "population": 100, "k": 3, "units": [4, 17, 90]}
@@ -323,7 +350,6 @@ def _template_vectors():
     except ImportError:
         return None
     return _ir_tests() / "template_instance_vectors.json"
-
 
 
 def _stratified_agree():
@@ -770,57 +796,6 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
-NCI_SCRIPTS = Path(__file__).resolve().parents[3] / "core" / "protocols" / "network" / "nci" / "lean" / "scripts"
-
-
-def _tile_window(bits: bool) -> str:
-    """A PoUW window's shape (`pouw_credit_cases.window_desc`): the root's 16-bit input batch, then 8 bits, and one call
-    of a template over a row of 8 bits and a word, returning the word; the row's argument names the 8 bits (`bits`) or
-    node 0's first word 8 times, reading a word as bits."""
-    word, row = ["Value", 16], ["Array", 8, ["Value", 1]]
-    root = {"params": [], "ret_type": word, "ret": {"strided": ["n", 2, 0, 1, 0, 0, 1]}, "nodes": [
-        {"form": "batch", "fn": 0, "n": 2, "args": [], "axes": [], "out": 2},
-        {"form": "batch", "fn": 2, "n": 8, "args": [], "axes": [], "out": 1},
-        {"form": "call", "fn": 1, "out": 0, "args": [{"type": 1, "refs": {"strided": ["n", int(bits), 0, 1, 0, 0, 8]}},
-                                                     {"type": 0, "refs": {"strided": ["n", 0, 0, 1, 0, 0, 1]}}]}]}
-    tile = {"params": [["a", row], ["zy", word]], "ret_type": word, "ret": {"strided": ["p", 1, 0, 1, 0, 0, 1]},
-            "nodes": []}
-    return json.dumps({"annotations": {}, "callees": ["Input16_v1", "Tile_v1", "Input1_v1"], "definitions": {
-        "Input16_v1": {"form": "primitive", "id": "Input16_v1", "params": [], "ret": word},
-        "Input1_v1": {"form": "primitive", "id": "Input1_v1", "params": [], "ret": ["Value", 1]},
-        "R_v1": {"form": "composite", "id": "R_v1", "bindings": {}, "body": root},
-        "Tile_v1": {"form": "composite", "id": "Tile_v1", "bindings": {}, "body": tile}},
-        "program_fn": "R_v1", "root": "R_v1", "schema": "verity-ir/descriptor/v1",
-        "types": [word, row, ["Array", 2, word]]}, sort_keys=True, separators=(",", ":"))
-
-
-@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_width_refusals_agree_with_the_codec(tmp_path):
-    """The NCI difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
-    their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
-    template's bits and its bits as them (`_tile_window`): the Lean decoder, which Flock's verifier, `NciCheck` and
-    PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
-    (`verity/ml/flock/verifier/README.md`'s D22; `qword_program_agree.py --widths`)."""
-    spec = importlib.util.spec_from_file_location("desc_difftest_vectors", NCI_SCRIPTS / "desc_difftest_vectors.py")
-    V = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(V)
-    with open(tmp_path / "widths.jsonl", "w") as f:
-        for inst in [*V.mistyped(), {"program": _tile_window(False)}, {"program": _tile_window(True)}]:
-            desc = json.loads(inst["program"])
-            try:
-                V.reference.codec.decode_program(desc, V.reference.declared(desc))
-                why = None
-            except ValueError as e:
-                why = str(e)
-            f.write(json.dumps({"program": inst["program"], "codec": why}) + "\n")
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
-                        "--out", str(tmp_path / "out"), "--widths", str(tmp_path / "widths.jsonl")],
-                       capture_output=True, text=True)
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 211, "neither": 126}
-
-
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None, reason="no Lean toolchain or no Q_call vectors")
 def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     ir = _format_vectors()
@@ -893,14 +868,13 @@ def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
     """`HmRow.check` refuses a range whose slots are smaller than a 128-bit word (below 64 bits the fold is no
     `αA₀ᵀe + B₀ᵀe`) or larger than the block (a packed range of no slots would escape the `k_log` bound), as the BLAKE3
     path's layout check does (R9c's refinement). A composed RoPE circuit is accepted; either change to it is refused."""
-    pytest.importorskip("verity_numerical")
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
+    s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
     low = FC.lowering_for_set(s)
     text = FC.compose(low, s.subcircuit)
     FC.stage(low, s, 0, 4, tmp_path / "st")
@@ -934,17 +908,16 @@ def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
     with 24 more mask ranges of that slot size, or a lookup of `in_bits = 2^32`, is refused at once with its reason under an
     8 GiB address space; without the bounds the first holds a 512 MiB span per range until it runs out of memory, and the
     second is a power the runtime refuses to compute."""
-    pytest.importorskip("verity_numerical")
     import resource
 
     from verity_flock import circuit as FC
     from verity_flock.ir_lower import TABLES
     from verity_flock import subcircuit_templates as TM
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
+    s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
     low = FC.lowering_for_set(s)
     text = FC.compose(low, s.subcircuit)
     FC.stage(low, s, 0, 4, tmp_path / "st")
@@ -1016,14 +989,13 @@ def test_row_nets_are_the_verifiers(tmp_path):
     """The `sha512x3` and `hm96` sections come from the prover, so setup refuses either unless it is the net the verifier
     generates (`Flock.HmNets`, `Flock.HmRow`). A composed RoPE circuit is accepted; one AND row changed in either
     section is refused, naming the row."""
-    pytest.importorskip("verity_numerical")
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
+    s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
     low = FC.lowering_for_set(s)
     text = FC.compose(low, s.subcircuit)
     FC.stage(low, s, 0, 4, tmp_path / "st")

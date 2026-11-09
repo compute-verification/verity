@@ -25,7 +25,7 @@ simulation, `Refine/LiveSim.lean`, reads exactly these), at each sample `S` and 
 session with salted commitments, its instance of these pieces and its bound against `ZkSession.sessionZK` are
 `Discharge/ZkLink`'s.
 
-`DecodesZK` is R11b at `--zk` (`Exec.DecodesAll`'s form): on every live outcome flock-verify `--zk` accepts, each rep's
+`DecodesZK` is the decoder premise at `--zk` (`Exec.DecodesAll`'s form): on every live outcome flock-verify `--zk` accepts, each rep's
 game runs on the tape decoded from its stream and its proof file, and the table's verdict on those runs, with the cap
 `root_B` decodes to and the openings the proof files decode to, holds. `simAuditZK` is the audit strategy the simulation
 builds from a live prover.
@@ -53,7 +53,7 @@ variable [∀ S R, Nonempty (Op S R)] (I : Inputs) (wr : Finset (Fin n) → Reg 
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify `--zk` accepts** (R11b at `--zk`, named): at every sample and
+/-- **The decoder is right on the sessions flock-verify `--zk` accepts** (the decoder premise at `--zk`, named): at every sample and
 registration, on every live outcome whose session directory `AcceptsZK` holds of, each rep's game runs on the tape
 decoded from its stream and its proof file, and the compiled table's verdict on those runs, with the cap `root_B`
 decodes to and the openings the proof files decode to, holds. -/

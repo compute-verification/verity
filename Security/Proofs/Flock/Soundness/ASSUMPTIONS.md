@@ -24,9 +24,9 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 
 ## Soundness's assumptions (taken without proof)
 
-Soundness rests on five. Three are `Prop`s in `Assumptions.lean`, taken as hypotheses: SHA-512's
+Soundness rests on five. Three are `Prop`s in `Definitions/Assumptions/Flock.lean`, hypotheses: SHA-512's
 collision resistance in two forms, and the randomness of the challenger's coins the unit sample reads. The fourth, A6,
-is the challenger's live-coin part's randomness for the round coins, which the model embodies (A6, below). The fifth, `live-verifier`, is
+is the challenger's live-coin part's randomness for the round coins, which the model embodies. The fifth, `live-verifier`, is
 the record's custody (nothing in the record authenticates its writer): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
 `Assumptions.Zk.RecordCustodyZK`, in `Assumptions/Zk.lean`. The table's last row is zero
 knowledge's, not soundness's: a model claim about the honest prover. The development declares no
@@ -366,7 +366,7 @@ malicious-verifier claim rests on beyond the theorems.
   witness at fixed addresses, as `Layout.row`, `Layout.salt` (`rowAt`, `saltAt`) and `HmRows.bcAt` are; a reader that
   chooses its values discharges nothing.
 - **Proved so far** for `sha512/row/v1` rows: `row_bc_setupH` (untyped, given `hv1` and `ho`), `keyedRowsOuts_computes`
-  (e2e-layout's sampled proof blocks) and `row_bc_setupH_typed` (typed, no hypothesis); `assumption-notes/hm-row-computes.md`.
+  (the keyed layout's sampled proof blocks) and `row_bc_setupH_typed` (typed, no hypothesis); `assumption-notes/hm-row-computes.md`.
 - **Upstream:** watch entry `hm-row-computes`.
 
 A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved: `mcaError_le_bchks25`, from DKT26 in
@@ -412,7 +412,7 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 | `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
 | `Partition.SessionSound` | `ε` | oracle layer only: a session with a sampled incorrect proof block accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-205`), from `table_value_sound`, `execArith_correct` and the lowering |
 | `Partition.LoweringSound` | — | a sampled incorrect proof block lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
-| `IsHarmBound` | `H` | every set of incorrect proof blocks with acceptance probability at least `δ` has harm (a consumer's weight per incorrect proof block) at most `H` | the value core's `Stratified.harm_bound` returns; that implementation is not proved |
+| `IsHarmBound` | `H` | every set of incorrect proof blocks with miss probability at least `δ` has harm (a consumer's weight per incorrect proof block) at most `H` | the value core's `Stratified.harm_bound` returns; that implementation is not proved |
 
 Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a sampled proof block
 before the session's first coin, not bounds state by state.

@@ -43,8 +43,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Served
 import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.VBridge.Full
 import Std.Tactic.BVDecide.Normalize.Bool
 
@@ -553,7 +552,7 @@ theorem groupedDrawMisses_nontrivial :
     rfl
   have h1 : Pouw.RelativeSecurity.prob
       (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) = 1 := by
-    unfold Pouw.RelativeSecurity.prob
+    unfold Pouw.RelativeSecurity.prob Claims.prUniform
     have hf : ∀ inst : DecidablePred (fun g : (i : Fin idleLaw.size) → Fin idleLaw[i].need → Fin 256 =>
         ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d),
         @Finset.filter _ _ inst Finset.univ = Finset.univ := fun _ => Finset.filter_true_of_mem fun g _ => hall g

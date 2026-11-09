@@ -24,8 +24,8 @@ Remote accepts only when all three accept over one commitment that binds them, e
 (`Core.Composition.same`); any one's rejection rejects it, whatever the others answer. It rests on live coins (flipped after
 the commitment, never flipped again) and on what each subprotocol's own
 guarantee assumes; each subprotocol states its guarantee in `Security/`, and the composite states none of its own in Lean
-yet, so no demo's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
-Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only demo that steps through the whole remote composite, on CPU with a
+yet, so no demo's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet. `lifecycle/` is the
+only demo that steps through the whole remote composite, on CPU with a
 stand-in prover. Its demo is the vLLM demo (`verity demo vllm`): one served run of Llama-3.2-1B INT8 on one H200,
 sampled proofs and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs
 remote's sampled-proofs half. The inference-only policy runs in `lifecycle/` only: no served run produces the declared

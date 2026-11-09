@@ -1,4 +1,4 @@
-"""pods/nebius/fleet.py (INF-60): the fleet's usage record and daily compute report, the H200s included, and the quota watch."""
+"""pods/nebius/fleet.py: the fleet's usage record and daily compute report, the H200s included, and the quota watch."""
 from __future__ import annotations
 
 import json
@@ -20,7 +20,7 @@ def test_a_probe_reads_gpus_load_cores_and_memory_and_a_cpu_vm_has_no_gpus():
 
 
 def test_the_report_prices_hours_seen_running_and_counts_idle_hours_and_unread_samples(tmp_path, monkeypatch):
-    """vy-nebius-1's GPUs sat ~0% busy for a week unseen (18 Oct): the report puts each VM's dollars beside its GPU busy share and
+    """A node's GPUs must not sit idle for a week unseen: the report puts each VM's dollars beside its GPU busy share and
     idle hours, most expensive first; a sample that couldn't be read is never idle."""
     monkeypatch.setattr(F, "FLEET_DIR", tmp_path)
     t0 = 1_800_000_000
@@ -46,8 +46,8 @@ def test_the_report_prices_hours_seen_running_and_counts_idle_hours_and_unread_s
 
 
 def test_a_memory_bound_job_on_few_cores_is_not_idle(tmp_path, monkeypatch):
-    """vy-glm53-cpu-2, 25 Oct: circuits' GLM folds ran back to back on 2-4 of 192 cores holding 150-700 GB of 755 GB, and the
-    daily post called it idle 22.3 h of 24. Memory in use at IDLE_MEM_SHARE or more counts as use."""
+    """A job on a few of 192 cores holding hundreds of GB of memory is not idle, though its load is. Memory in use at
+    IDLE_MEM_SHARE or more counts as use."""
     monkeypatch.setattr(F, "FLEET_DIR", tmp_path)
     t0 = 1_800_000_000
 
@@ -167,7 +167,7 @@ def test_a_quota_at_80_percent_of_its_limit_is_a_finding(monkeypatch):
 
 
 def test_a_restarted_loop_doesnt_post_a_quota_alert_it_already_posted_that_day(tmp_path, monkeypatch):
-    """Each supervisor restart re-posted every quota alert (four at 02:06, 02:19 and 02:23Z on 20 Oct): what was told is kept per UTC
+    """A supervisor restart must not re-post every quota alert: what was told is kept per UTC
     day in $FLEET_DIR, and a day's file older than two days goes."""
     monkeypatch.setattr(F, "FLEET_DIR", tmp_path)
     monkeypatch.setattr(F, "sample", lambda now: None)
