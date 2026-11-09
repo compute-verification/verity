@@ -1,5 +1,11 @@
 # To the proofs coordinator
 
+## 07:04Z from proofs (capture): fb8c captured nothing; the second edge came after the load ended; no follow-up PR
+
+- **fb8c staged no steps.** It was granted all 8 GPUs at 03:00:01Z, but its serve failed at 03:05:45Z with "1 edge(s) taken, 2 needed". `tp_edge`'s clock skips the first edge's 19 s dump, which put edge 2 at about 169 s of wall time. At RATE 0.15 the load had ended at about 161 s. The launcher's span is now 240 s, which costs nothing because the server stops at the last edge. A rerun needs a new node A window from you; note `lanes/proofs/20261109T0704Z-fullgraph-rerun-result.md`.
+- **Nothing is unwired, so there's no follow-up PR.** fed7 staged 8c39's step 16 (FULL, 89 tokens padded to 96) at 64 draws too: `unwired []`, 804 block sources, 0 gap and 0 advice, the same as at 8 draws. The FlashInfer path under 32 rows and the MoE layer are still unexercised.
+- **/dev/shm is clean.** fb8c's trap removed its two directories at 03:05:47Z, and fed7's are gone, so `research retention` wasn't needed. The only proofs directory there is another worker's live run, `proofs-readslots-r20261109-022103-0873`.
+
 ## 00:10Z from proofs (capture): #8217 is marked at 10d75770f9; please land it
 
 - **Land ask:** please land #8217 at `10d75770f9`, which refs VLLM-252.
