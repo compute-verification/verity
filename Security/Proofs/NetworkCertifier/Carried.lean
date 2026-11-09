@@ -229,8 +229,8 @@ theorem carried_step {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay 
 /-- **A valid trace run gives the leak relation from the trace's rows**: `rLeakChecked_of`'s run (the trace's inputs, and
 its values held at the incorrect set's committed gates) reads the trace's values at opening gates that are inputs, and
 leaves the trace run's values at the closing gates. -/
-theorem rLeakCarried_of {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ}
-    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
+theorem rLeakCarried_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg)
+    (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
     (valid : AuditStatement → (ℕ → Bool) → Prop) (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow)
     (Dj : ℕ) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit} {s : AuditStatement} {P : Partition}
     (hs : D.parse x = some s) (hP : D.partition s = some P) (hRel : RelS H D.commit δ s P w)
@@ -289,16 +289,16 @@ theorem rLeak_of_rLeakCarried {H : Msg → Msg} {Cm : CommitmentScheme Bool} {pa
 /-- **`KSLinOn` moves from `RAcc δ` to the leak relation from the trace's rows**, on the statements where the check holds
 on the trace's run except with probability `εchk` (`CheckedWitness`), at `κ + εchk`: `ksLinOn_rLeakChecked`'s argument
 at `rLeakCarried_of`. -/
-theorem ksLinOn_rLeakCarried {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-    [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) {δ : ℝ} (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ)
+theorem ksLinOn_rLeakCarried {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
     (valid : AuditStatement → (ℕ → Bool) → Prop) (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow)
     (εchk : Msg → ℝ) (Dj : ℕ)
-    (h : KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ)
-      (γ D) (fun _ => 1) (Bext H D.V (E D decode))) :
-    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D decode valid εchk x)
+    (h : KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) D.E (D.κ δ) D.γ
+      (fun _ => 1) (Bext H D.V D.E)) :
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D valid εchk x)
       (RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj)
-      (E D decode) (fun x => κ D δ x + εchk x) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) := by
+      D.E (fun x => D.κ δ x + εchk x) D.γ (fun _ => 1) (Bext H D.V D.E) := by
   intro x hx Ω _ _ P
   have h1 := h x hx.1 Ω P
   have h2 := hx.2 Ω P
@@ -307,7 +307,7 @@ theorem ksLinOn_rLeakCarried {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] 
   refine (Claims.Sampling.Pr_or_le (fun r hr => ?_) h1 h2).trans (le_of_eq ?_)
   · beta_reduce at hr ⊢
     obtain ⟨hacc, hng⟩ := hr
-    generalize ((E D decode).eval H P x r.1 r.2.1 r.2.2).1 = ow at hng ⊢
+    generalize (D.E.eval H P x r.1 r.2.1 r.2.2).1 = ow at hng ⊢
     rcases ow with _ | w
     · exact Or.inl ⟨hacc, fun hR => by simp only [Rel.ext] at hR⟩
     · by_cases hR : RAcc H D.commit D.parse D.partition L K S lay k δ x w
@@ -350,12 +350,12 @@ theorem encard_accSeqsCarried_le {L K S : ℕ} (C : Prog) (P : Partition) (d : D
     _ ≤ _ := encard_accSeqsChecked_le C P d lay n hfits chk valid hchk (reg ∪ prow.toFinset) ρ' δ op D
     _ = _ := by rw [Finset.union_right_comm]
 
-/-- **One carried run's leak bound, given `SampledAuditAccepted`**: `Guarantees.SampledLeakCarried`, from
-`ksLinOn_rLeakCarried` at `KSAccepted`'s bound and `encard_accSeqsCarried_le` on the statements whose layout fits. -/
+/-- **One carried run's leak bound**: `Guarantees.SampledLeakCarried`, from `ksLinOn_rLeakCarried` at `KSAccepted`'s
+bound (`SecurityProofs.SampledAuditAccepted`) and `encard_accSeqsCarried_le` on the statements whose layout fits. -/
 theorem sampledLeakCarried : Guarantees.SampledLeakCarried := by
-  intro hSA Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg chk valid prow nrow hopen εchk Dj
-  refine ⟨ksLinOn_rLeakCarried H D lay k decode reg valid prow nrow hopen εchk Dj
-      (hSA H D L K S lay k hks δ decode hδ hdec), fun x hx s P hs hP hchk op ρ rin => ?_⟩
+  intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid prow nrow hopen εchk Dj
+  refine ⟨ksLinOn_rLeakCarried H D lay k reg valid prow nrow hopen εchk Dj
+      (SecurityProofs.SampledAuditAccepted H D L K S lay k hks δ hδ), fun x hx s P hs hP hchk op ρ rin => ?_⟩
   obtain ⟨s', hs', hfits⟩ := hx.2
   rw [Option.some_injective _ (hs'.symm.trans hs)] at hfits
   exact encard_accSeqsCarried_le s.prog P s.design (lay s) (k s) hfits (chk s) (valid s) hchk (reg s) ρ (prow s)

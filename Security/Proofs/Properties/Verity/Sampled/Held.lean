@@ -99,6 +99,7 @@ theorem step_drawn {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads
   dsimp only at h
   split at h
   · rename_i record hrec
+    obtain ⟨_, -, h⟩ := ebind_ok h
     exact ⟨recB, record, hb, hrec, verdictOf_drawn (push_ok h hall)⟩
   · cases h
 
@@ -543,6 +544,7 @@ theorem step_proved {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Read
   dsimp only at h
   split at h
   · rename_i record hrec
+    obtain ⟨_, -, h⟩ := ebind_ok h
     have hv := push_ok h hall
     rw [hv] at h
     obtain ⟨units, hu, hp⟩ := push_proved h

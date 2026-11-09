@@ -29,14 +29,14 @@ theorem Counting_honest : Guarantees.Counting_honest := by
   have attained : (2 : ℝ) / 2 * ∑ v ∈ Formalism.counted, (Formalism.weight v : ℝ) = (2 * 2 : ℕ) := by
     rw [show ∑ v ∈ Formalism.counted, (Formalism.weight v : ℝ) = 4 by exact_mod_cast total]
     norm_num
-  refine ⟨CKSize_honest, by decide, by norm_num, fun u => by exact_mod_cast cap u, attained, fun T₀ _ => ?_⟩
+  refine ⟨by decide, by norm_num, fun u => by exact_mod_cast cap u, attained, fun T₀ _ => ?_⟩
   rw [slowdown, show (2 : ℝ) / (T₀ * 2) * ∑ v ∈ Formalism.counted, (Formalism.weight v : ℝ) =
     (2 / 2 * ∑ v ∈ Formalism.counted, (Formalism.weight v : ℝ)) / T₀ by ring, attained]
 
 theorem Counting_nontrivial : Guarantees.Counting_nontrivial := by
   have over : ∑ v ∈ Formalism.counted ∩ Formalism.Honest.gates 1, Formalism.heavy v = 3 := by decide +kernel
   have total : ∑ v ∈ Formalism.counted, Formalism.heavy v = 5 := by decide +kernel
-  refine ⟨CKSize_honest, by decide, by norm_num, fun h => ?_, ?_⟩
+  refine ⟨by decide, by norm_num, fun h => ?_, ?_⟩
   · have h1 := h 1
     rw [show ∑ v ∈ Formalism.counted ∩ Formalism.Honest.gates 1, (Formalism.heavy v : ℝ) = 3 by
       exact_mod_cast over] at h1

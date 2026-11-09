@@ -29,7 +29,7 @@ from verity_vllm.pipeline import launch_context as LC
 from verity.ml.definitions.boolean import write_word
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
-from verity_vllm.program.prune import registered_form
+from verity_vllm.program.prune import BATCHED, registered_form
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
@@ -328,14 +328,14 @@ def _cuda_available() -> bool:
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
         target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False, cached: int = 0,
-        dead_free: bool = False, stop: dict | None = None) -> dict:
+        dead_free: bool = False, stop: dict | None = None, batched: bool = False) -> dict:
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
     the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
     reports, answered on a GPU-free host (`--device-name`, else the workload row class's: `engine.profiles.devices`;
     `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
     `cached`: the request's prefix-cached rows C (`vllm_meta.CachedGreedyRequest`; `prefix_cache.json`, `program.prefix_plan`).
     `dead_free`: a TP rank's request wrapper in the registered compiler's form too (`program.prune.dead_free`), as one rank's always is:
-    the rank Programs `predict.steps.compile_steps` compiles.  A TP row of record keeps every unit (its Match counts every collective row).
+    the rank Programs `predict.steps.compile_steps` compiles.  A TP row of record keeps every unit (its Match counts every collective row).  `batched`: that form batched (`program.prune.BATCHED`), class G's.
     `stop`: the request's length rule over its outputs (`frontend.stop_rule.spec`), the derive config's ``stop``: its last check."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     os.makedirs(out, exist_ok=True)
@@ -347,6 +347,8 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
         raise ValueError(f"--tp {tp} --rank {rank}")
     if dead_free and (tp == 1 or wrapper != "request"):
         raise ValueError(f"--dead-free names a TP rank's request wrapper (a one-rank request's always is), not --wrapper {wrapper} at --tp {tp}")
+    if batched and (wrapper != "request" or not (tp == 1 or dead_free) or (target is not None and target.ir == "boolean")):
+        raise ValueError(f"--batched names a word request wrapper in the registered compiler's form (--dead-free at a TP rank), not --wrapper {wrapper} at --tp {tp}")
     if target is None:   # no declared target: the target is THIS host's GPU, queried once (multi_processor_count, capability); GPU-free host -> default
         target = TargetProfile.from_device() if _cuda_available() else TargetProfile.default()
         res_target_source = "device" if _cuda_available() else "default"
@@ -361,7 +363,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                  "tp": {"world": int(tp), "rank": int(rank), **({"dead_free": True} if dead_free else {})},
                  # the LAUNCH CONTEXT (structural input): per request step the varlen launch's max_seqlen_q over every
                  # co-scheduled sequence (frontend.targets.parse_launch_context).  FA3's tile rule reads it; None = own rows (B1 semantics, digests unchanged)
-                 "launch_context": launch, **({"stop": stop} if stop is not None else {})}
+                 "launch_context": launch, **({"stop": stop} if stop is not None else {}), **({"form": BATCHED} if batched else {})}
     try:
         res["code_rev"] = json.load(open("EXPORT.json"))
     except Exception:  # noqa: BLE001
@@ -397,7 +399,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp, device_name)}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop)
+                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop, batched=batched)
     except _Refused:
         pass
     res = _finish(out, res, t_start)
@@ -416,7 +418,7 @@ class _Refused(Exception):
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0,
-               dead_free: bool = False, stop: dict | None = None) -> None:
+               dead_free: bool = False, stop: dict | None = None, batched: bool = False) -> None:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity, applied_kernels, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
         from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
@@ -531,7 +533,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, config=config or None,
                                     rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
                                     check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, registered_values=bool(target.registered_values),
-                                    session=session, dead_free=wrapper == "request" and (tp == 1 or dead_free) and registered_form(target.ir))
+                                    session=session, dead_free=wrapper == "request" and (tp == 1 or dead_free) and (BATCHED if batched else registered_form(target.ir)))
             rep = derived(rep) if target.ir == "boolean" else rep
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
@@ -739,6 +741,7 @@ class Options:
     dead_free: bool = option("--dead-free", action="store_true", default=False,
                              help="a TP rank's request wrapper in the registered compiler's form (program.prune.dead_free), as one rank's always is: "
                                   "the rank Programs predict.steps.compile_steps compiles; a TP row of record keeps every unit")
+    batched: bool = option("--batched", action="store_true", default=False, help="the request wrapper's registered compiler's form batched (program.prune.batched_form): class G's, as predict.steps.compile_steps compiles it; with --dead-free at a TP rank")
     launch_context: str | None = option("--launch-context", default=None,
                                         help="the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's max_seqlen_q over "
                                         "every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt has N rows), JSON list [n0, n1, ...] "
@@ -780,7 +783,7 @@ def main(a: Options) -> int:
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
                   tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_context), emit=emit,
                   engine_args=workload_engine_args(a.workload, a.tp), device_name=a.device_name or named, batch_dispatch=LC.batch_dispatch_of(a.workload),
-                  cached=a.cached, dead_free=a.dead_free, stop=_stop_arg(a.stop))
+                  cached=a.cached, dead_free=a.dead_free, batched=a.batched, stop=_stop_arg(a.stop))
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)
