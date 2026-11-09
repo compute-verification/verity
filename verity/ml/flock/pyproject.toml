@@ -134,7 +134,6 @@ paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/ml/flock/
 tests = ["tests/test_challenger_audit.py"]
 # `lake build sampled-proofs-difftest`: its package and those it requires by path
 paths = [
-    "verity/core/primitives/identity",
     "verity/core/primitives/lms/lean",
     "verity/core/protocols/interface",
     "verity/core/service/flock",

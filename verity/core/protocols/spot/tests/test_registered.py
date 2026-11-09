@@ -673,6 +673,34 @@ def test_a_window_root_and_held_values_are_the_verifiers_in_one_form():
             R.check(recs[0], prog, Q, **kw, window_root=WINDOWS[0], held=bad)
 
 
+def test_a_seed_salt_the_server_chose_is_refused_by_name():
+    """The window's seed salt is the verifier's, read from its challenger's log (`coins.seed_salt_of`), never the
+    record's: a verifier that read it accepts a window naming it and refuses by name (`R6-seed-salt`) one naming another
+    or none; one that read none refuses a window naming any, a salt the server chose, and the detail names both. A salt
+    is read on the window's session in one form: in another, or without the window's open root, the verifier refuses its
+    own inputs."""
+    prog = _program()
+    w = _registered(prog)
+    x = G.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])
+    (rec,), kw = _windows(prog, [x], w)
+    kw = {**kw, "window_root": WINDOWS[0], "held": ["W"]}
+    salt, other = "5a" * 64, "5b" * 64
+    named = lambda s: {**rec, "window": {**rec["window"], R.SEED_SALT: s}}  # noqa: E731
+    assert R.check(named(salt), prog, Q, **kw, seed_salt=salt).ok
+    assert R.check(rec, prog, Q, **kw).ok
+    for s in (other, salt.upper(), None, 5):
+        assert R.check(named(s), prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",), s
+    assert R.check(rec, prog, Q, **kw, seed_salt=salt).codes == ("R6-seed-salt",)
+    chosen = R.check(named(salt), prog, Q, **kw)
+    assert chosen.codes == ("R6-seed-salt",)
+    assert chosen.detail == {"R6-seed-salt": {"registered": salt, "verifier": None}}
+    for bad in (salt.upper(), salt[:-2], salt + "\n", "", 5, bytes.fromhex(salt)):
+        with pytest.raises(ValueError, match="seed salt is lowercase hex"):
+            R.check(named(salt), prog, Q, **kw, seed_salt=bad)
+    with pytest.raises(ValueError, match="window's open root"):
+        R.check(named(salt), prog, Q, **{**kw, "window_root": None, "held": None}, seed_salt=salt)
+
+
 def test_a_record_without_registered_values_keeps_v1s_bytes():
     prog = _program()
     rec, _ = _record(prog, _registered(prog))
@@ -1107,6 +1135,113 @@ def test_r7_reuses_an_earlier_records_registered_value():
                 {"W": {**out["W"], "record": "EE" * 64}}):
         with pytest.raises(ValueError):
             R.check(rec, prog, Q, **kw, outputs=bad)
+
+
+# -- the pool chain ----------------------------------------------------------------------------------------------------
+
+#: a pool's root as PoolWindow registers its `pin` and `pout`: one row, a SHA-512 digest of 32-bit leaves
+POOL_ROOT = Array(1, _digest(32))
+#: the empty pool's root, which a chain restarts from
+GENESIS = hashlib.sha512(b"the empty pool").hexdigest()
+#: each window's closing pool, a row of 16 words, and its open root
+POOLS = [[(0x01000193 * (w + 1) + i) & 0xFFFFFFFF for i in range(16)] for w in range(3)]
+POOL_WINDOWS = (*WINDOWS, "c3" * 64)
+
+
+def _pooled() -> Program:
+    """Units that read a row of x and of the weights W, in a program whose window opens a pool from `pin` and leaves it
+    in `pout`, which no unit here reads."""
+    def sig(S):
+        return (("x", Array(len(POS), Array(2, Value(8)))), ("W", Array(len(TABLE), Array(2, Value(8)))),
+                ("pin", POOL_ROOT), ("pout", POOL_ROOT)), Array(len(POS), Value(8))
+
+    def body(B, S, x, W, pin, pout):
+        return coll_concat(sig(S)[1], [B.call(MIX, x[i], W[p]) for i, p in enumerate(POS)])
+
+    return Program(bind(CompositeDefinition("RegisteredTestPooledProgram", 0, (), sig, body, register=False)))
+
+
+def _pool_window(prog: Program, w: G.Registered, i: int, log, pin=None):
+    """Window `i`'s record of `_pooled`, the next after `log`: x and `pout` (`POOLS[i]`) afresh under its window's open
+    root, the weights `w` held, and `pin` the entry `pin`, the empty pool filled from `genesis` by default; with the
+    verifier's R7 arguments, its pool accepting the previous window."""
+    d = P.program_digest(prog)
+    base, ports = _record(prog, w)
+    x = G.Registered.commit(d, "x", X_ROWS, window=POOL_WINDOWS[i])
+    pout = G.Registered.commit(d, "pout", [POOLS[i]], word_bits=32, window=POOL_WINDOWS[i])
+
+    def record(pin_entry):
+        return R.record(prog, Q, LAW, SCHEME, base["roots"], {**SERVED, "row": 7 + i},
+                        previous=R.digest(log[-1]) if log else None,
+                        registered=[x.entry(), w.entry(), pout.entry(), *([pin_entry] if pin_entry else [])])
+
+    if pin is None:
+        pin = G.supplied_value(prog, "pin", [[("bytes", GENESIS)]], record(None), ["pin"]).entry()
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"x": 2, "W": 2, "pin": 16, "pout": 16},
+          "log": list(log), "window_root": POOL_WINDOWS[i], "held": ["W"],
+          "pool": {"pin": "pin", "pout": "pout", "genesis": GENESIS, "accepted": True}}
+    return record(pin), kw
+
+
+def _entry(rec, value: str) -> dict:
+    return next(e for e in rec["registered"] if e["value"] == value)
+
+
+def test_a_window_opens_the_pool_the_previous_window_of_record_left():
+    """Pool chain: a registration's first window opens the empty pool, `pin` filled from `genesis` under a fixed domain,
+    and each next window the pool the previous window of record left, `pin` the previous record's `pout` entry, its
+    domain and root (the window's open root binds `pout`'s domain, so no other window's pool opens under it). A wrong
+    `pin` is refused by name (`R7-pool-chain`): another pool under the window's own domain, the empty pool where the chain
+    carries, or the window's own `pout`."""
+    prog = _pooled()
+    w = _registered(prog)
+    first, kw = _pool_window(prog, w, 0, [])
+    assert R.check(first, prog, Q, **kw).ok
+    fixed = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[0]], word_bits=32).entry()
+    assert _entry(first, "pin")["domain"] == fixed["domain"]
+    carried = {**_entry(first, "pout"), "value": "pin"}
+    second, kw2 = _pool_window(prog, w, 1, [first], carried)
+    assert R.pool_chains(kw2["pool"], [first], prog)
+    assert R.check(second, prog, Q, **kw2).ok
+    third, kw3 = _pool_window(prog, w, 2, [first, second], {**_entry(second, "pout"), "value": "pin"})
+    assert R.check(third, prog, Q, **kw3).ok
+    other = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[2]], word_bits=32, window=POOL_WINDOWS[1])
+    for pin, codes in (({**carried, "root": other.root.hex()}, ("R7-held", "R7-pool-chain")),
+                       (other.entry(), ("R7-domain", "R7-held", "R7-pool-chain")),
+                       (_entry(first, "pin"), ("R7-domain", "R7-held", "R7-pool-chain")),
+                       ({**_entry(second, "pout"), "value": "pin"}, ("R7-domain", "R7-held", "R7-pool-chain")),
+                       ({**carried, "domain": _entry(second, "pout")["domain"]}, ("R7-domain", "R7-pool-chain"))):
+        wrong, _ = _pool_window(prog, w, 1, [first], pin)
+        assert R.check(wrong, prog, Q, **kw2).codes == codes, pin
+
+
+def test_a_chain_restarts_from_the_empty_pool_after_a_failed_window():
+    """After a window the verifier failed or refused (`accepted` false), or past a registration boundary (a previous
+    record of another program), the next window opens the empty pool again: only `pin` filled from `genesis` is accepted,
+    and the failed window's pool is refused by name. A malformed pool refuses the verifier's own inputs."""
+    prog = _pooled()
+    w = _registered(prog)
+    first, kw = _pool_window(prog, w, 0, [])
+    failed = {**kw["pool"], "accepted": False}
+    restart, kw2 = _pool_window(prog, w, 1, [first])
+    assert not R.pool_chains(failed, [first], prog)
+    assert R.check(restart, prog, Q, **{**kw2, "pool": failed}).ok
+    assert R.check(restart, prog, Q, **kw2).codes == ("R7-domain", "R7-held", "R7-pool-chain")
+    carried, _ = _pool_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"})
+    assert R.check(carried, prog, Q, **kw2).ok
+    assert R.check(carried, prog, Q, **{**kw2, "pool": failed}).codes == ("R7-domain", "R7-supplied", "R7-pool-chain")
+    elsewhere, _ = _record(_program(), _registered(_program()))
+    boundary, kw3 = _pool_window(prog, w, 1, [elsewhere])
+    assert not R.pool_chains(kw3["pool"], [elsewhere], prog)
+    assert R.check(boundary, prog, Q, **kw3).ok
+    pool = kw["pool"]
+    for bad, change in (({k: v for k, v in pool.items() if k != "accepted"}, {}), ({**pool, "pin": "pout"}, {}),
+                        ({**pool, "pin": "V"}, {}), ({**pool, "genesis": GENESIS.upper()}, {}),
+                        ({**pool, "genesis": GENESIS[:-2]}, {}), ({**pool, "accepted": 1}, {}),
+                        (pool, {"supplied": {"pin": [[{"bytes": GENESIS}]]}}), (pool, {"pinned": {"pout": "ab" * 64}}),
+                        (pool, {"schemas": {"pin": G.SCHEMA_SEG}})):
+        with pytest.raises(ValueError):
+            R.check(first, prog, Q, **{**kw, "pool": bad, **change})
 
 
 #: Pearl+'s y trees' binding tag: PoUW's rows domain over a call's served y, at salt nonce 2^61 + the call's index

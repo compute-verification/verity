@@ -22,6 +22,12 @@ and ``units.indices``, which ``second-population`` holds, ``units.blocks``, the 
 session's verifier holds to them, ``frame_v3.roots`` and ``frame_v3.domain_ids``, which ``second-roots`` holds, and
 ``registered``, whose reads ``second-read`` holds (``second-header``).
 
+A header that shares rows (``shared_rows``: tables whose rows its instances read by the refs in its public file's body)
+shares them only at ports its statement reads registered (``second-refs``, `_refs_ok`): there the session's verifier
+holds each instance's ref to the row at the position the read gives its unit (`Flock.Registered.check`), and
+``second-read`` holds the read to the slot's own rows or its cell's replay block's; elsewhere it only bounds a ref by its
+table, so a ref could point a drawn unit at another unit's rows.
+
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
 statement is read.
@@ -474,6 +480,13 @@ def _linked_read(own: Own, t: str, reads: Sequence[tuple[str, Any]]) -> bool:
     return all(x.template != t or any(port == x.port for port, _ in reads) for x in own.links or ())
 
 
+def _refs_ok(s: Stmt) -> bool:
+    """`SecondStage.refsOk`: statement `s` reads registered every port its header shares rows at (``shared_rows``, the
+    tables whose rows its instances read by the refs in its public file's body)."""
+    reads = _entries(_get(s.registered, "ports"))
+    return all(any(name == port for name, _ in reads) for port, _ in _entries(_get(s.header, "shared_rows")))
+
+
 def _stmt_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
     q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
     checks = (("second-header", _header_ok(own, named, k, s.template, s.header)),
@@ -481,7 +494,8 @@ def _stmt_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
               ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
-               and _linked_read(own, p.template, reads)))
+               and _linked_read(own, p.template, reads)),
+              ("second-refs", _refs_ok(s)))
     return [code for code, ok in checks if not ok]
 
 

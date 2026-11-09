@@ -25,11 +25,6 @@ path = "../flock"
 name = "lms"
 path = "../../primitives/lms/lean"
 
-# Round 2 recomputes the served header's port bindings under the window-domain rule (`Spot.SecondStage.portBinding`).
-[[require]]
-name = "core_identity"
-path = "../../primitives/identity"
-
 [[require]]
 name = "verity_difftest"
 path = "../../difftest/lean"

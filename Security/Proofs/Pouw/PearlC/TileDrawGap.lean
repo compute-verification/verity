@@ -35,7 +35,7 @@ open Finset _root_.Pouw.PearlC.Assumptions Pouw.Fp8Atom
 theorem ex_le_add_pr {α : Type} [Fintype α] (f : α → ℝ) (E : α → Prop) (δ : ℝ) (hδ : 0 ≤ δ)
     (h1 : ∀ a, f a ≤ δ + 1) (h2 : ∀ a, ¬ E a → f a ≤ δ) : Claims.Ex f ≤ δ + pr E := by
   classical
-  unfold Claims.Ex pr
+  unfold Claims.Ex pr Claims.Pr Claims.prUniform
   rcases Nat.eq_zero_or_pos (Fintype.card α) with h0 | hpos
   · rw [h0, Nat.cast_zero, div_zero, div_zero, add_zero]
     exact hδ
