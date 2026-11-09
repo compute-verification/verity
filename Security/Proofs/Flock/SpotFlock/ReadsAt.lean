@@ -519,6 +519,22 @@ theorem regEntry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u : ℕ
   rw [hents] at hreads
   exact ⟨st, rec, draw, e, hst, hrec, hdraw, Array.all_eq_true_iff_forall_mem.1 hreads _ hm, hrf⟩
 
+/-- **A statement's roots are its record's**: the statement `parse` gives decodes, at the decoded record's roots. -/
+theorem parse_roots {x : Msg} {s : AuditStatement} (hs : parse h x = some s) :
+    ∃ st, decode x = some st ∧ s.roots = st.roots := by
+  unfold parse at hs
+  cases hd : decode x with
+  | none => simp [hd] at hs
+  | some st => rw [hd] at hs; cases hs; exact ⟨st, rfl, rfl⟩
+
+/-- **The entry round 2 reads a registered read off**, in a run whose statement, round-1 record and second stage's
+draw are `st`, `rec` and `draw`: `readKey` at that run's records. -/
+theorem readKeyAt_of {x m₁ : Msg} {c₀ c₁ : FlockDeploy.Coin} {st : Roots} {rec draw : Json}
+    (hx : decode x = some st) (hrec : jsonMsg m₁ = some rec) (hdraw : secondDraw h c₀ c₁ = some draw) (t : ℕ)
+    (port v : String) :
+    readKeyAt h x m₁ c₀ c₁ t port v = readKey (ownOf h st rec draw c₀) (h.names.getD t "") port v := by
+  simp only [readKeyAt, hx, hrec, hdraw]
+
 end SpotFlock.ReadsAt
 
 namespace SpotFlock.CheckedRun
@@ -898,5 +914,32 @@ theorem leafAt_own {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 
     leafAt (irootsOf r.m₁ r.ρ) s en =
       positions.getD (_root_.Flock.Registered.ref t r.sts[0]!.c.ports.size p (r.n h)) 0 :=
   leafAt_reg h hr hc1 hcnt hown hreg hp hs (harm_own h hr hc1 hS hs0 hst hpos hu harm) ht hent hl
+
+/-- **A checked unit's gate is opened under its replay block's interior roots**, as the round-1 message states them,
+where the gate is one of that block's gates and none of its boundary, and under the statement's otherwise
+(`Reveal.rootsAt_eq`). -/
+theorem roots_eq {r : CheckedRun} (hr : r.Ok h) (g : ℕ) :
+    r.roots h g = if g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false then irootsOf r.m₁ r.ρ else r.s.roots := by
+  obtain ⟨Pt, d, spec, -, hP, h2, -, -, -, -, -, hρ, hrb, -⟩ := hr
+  exact Reveal.rootsAt_eq (partition h) (two h) (iroots []) hP h2 hρ hrb
+
+/-- **A registered read's roots are the gate's** where round 2 reads it off the interior record exactly when the gate
+is one of the unit's replay block's and none of its boundary: `ReadsRegistered`'s roots, given which arm the read
+takes. -/
+theorem roots_readRoots {r : CheckedRun} (hr : r.Ok h) {st : Roots} {rec draw : Lean.Json}
+    (hx : decode r.x = some st) (hrec : jsonMsg r.m₁ = some rec) (hdraw : secondDraw h r.c₀ r.c₁ = some draw)
+    {g t : ℕ} {port v : String}
+    (harm : (g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false) ↔
+      readsInterior (ownOf h st rec draw r.c₀) (h.names.getD t "") port v = true) :
+    r.roots h g = readRoots h r.x r.m₁ r.c₀ r.c₁ r.ρ t port v := by
+  obtain ⟨-, -, -, hs, -⟩ := id hr
+  obtain ⟨st', hx', hroots⟩ := ReadsAt.parse_roots h hs
+  rw [hx] at hx'
+  cases hx'
+  rw [roots_eq h hr g]
+  simp only [readRoots, hx, hrec, hdraw]
+  by_cases hg : g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false
+  · rw [if_pos hg, if_pos (harm.1 hg)]
+  · rw [if_neg hg, if_neg (fun h' => hg (harm.2 h')), hroots]
 
 end SpotFlock.CheckedRun
