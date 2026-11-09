@@ -74,10 +74,11 @@ shared = [
 ]
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
-# the benchmarks the demonstration runs: of `one_stage`, the files the remote demo's launch runs
+# the benchmarks the demonstration runs: of `one_stage`, the files the remote demo's launch runs, but the served window's
+# launcher (`served_verdicts.sh`), which runs the private served window and `benchmarks/prove_path`
 benchmarks = [
     "benchmarks/{flock_s8_block,recursion_e2e}",
-    "benchmarks/one_stage/{served_verdicts,served_pearlplus,served_composite}.sh",
+    "benchmarks/one_stage/{served_pearlplus,served_composite}.sh",
     "benchmarks/one_stage/{served_verdicts,composite,served_cases,inference_only,served_integrity,served_shares}.py",
     # the block record the served verdicts write, which `served_verdicts.py` loads from `examples/h200/interfaces`
     "examples/h200/interfaces/verity_e2e_demo/block_record.py",
@@ -153,6 +154,16 @@ checks = [
     "integrations/vllm/tools/migrate/superseded_quarantine.py",
     "integrations/vllm/tests/{migrate/test_superseded_quarantine,program/test_superseded_kept}.py",
 ]
+# vLLM's tests held to a private oracle: H1's GPU rigs and circuits (`benchmarks/pouw/{h1_prove,hidden_zk,served_h1}`, the
+# live challenger's models and auditor), the int8 step's perplexity bench (`benchmarks/ppl`), and the tests that import them
+oracle_tests = [
+    "integrations/vllm/tests/engine/{ppl_oracle,test_int8_checkpoint,test_int8_exact,test_int8_experts,test_int8_k_scales}.py",
+    "integrations/vllm/tests/engine/int8_{attention_capture,attention_tpot,chunked,exact,experts,kscale}_gpu.py",
+    "integrations/vllm/tests/pipeline/test_{commit_coins,serve_h1,serve_tie}.py",
+    "integrations/vllm/tests/protocols/{challenger_host,pouw_h1_circuits,pouw_h1_gpu,pouw_h1_ranks_gpu,pouw_h1_rehearsal}.py",
+    "integrations/vllm/tests/protocols/test_pouw_h1{,_circuits,_commit,_drawn,_gpu_args,_handoff,_live,_ranks_commit}.py",
+    "integrations/vllm/tests/protocols/test_{credit_gate,pouw_pearl_c_served,rt4_h1_challenger}.py",
+]
 team = [
     "infra",
     "tools/{research,agent-guard}",
@@ -168,6 +179,9 @@ team = [
     "integrations/vllm/tests/lint/test_merge_allowlist.py",
     "integrations/vllm/tests/pipeline/test_{circuit_db,source_identity,research_tools,workload_fetch}.py",
     "integrations/vllm/tests/regression/test_attempt_resolution.py",
+    # a row's stages as research Attempts (`row stage|chain|shed`), which `row_driver.research` loads by name, and its test
+    "integrations/vllm/verity_vllm/pipeline/research.py",
+    "integrations/vllm/tests/pipeline/test_row_chain.py",
 ]
 # Flock's measurement campaigns (their pod scripts, the bench drivers they run, the run and store tool's declarations)
 # and the tests that read the numerical bench, circuit-check or NCI's difftest vectors
