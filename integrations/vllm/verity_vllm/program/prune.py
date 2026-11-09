@@ -383,12 +383,10 @@ def batched_form(body: Body) -> tuple[Body, list[int]]:
     memo: dict[int, Refs] = {}
     logs: dict[int, list] = {}
     done: dict[int, list] = {}
-    kv: dict[str, bool] = {}
     k = 0
     while k < len(nodes):
         n, hi = nodes[k], k + 1
-        if n.form == "call" and not (kv[n.fn.id] if n.fn.id in kv else kv.setdefault(n.fn.id, holds_kv(n.fn))) and not (
-                peers and any(_top(a.refs, peers, done)[1] for a in n.args)):
+        if n.form == "call" and not (peers and any(_top(a.refs, peers, done)[1] for a in n.args)):
             while hi < len(nodes) and nodes[hi].form == "call" and nodes[hi].fn.id == n.fn.id and all(
                     (t := _top(a.refs, peers, done))[0] < k and not t[1] for a in nodes[hi].args):
                 hi += 1
