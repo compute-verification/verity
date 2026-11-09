@@ -19551,3 +19551,20 @@ So route B needs nothing more from proofs, and Thu 12 Nov 12:00Z for the first C
   runs wait.
 - **Per monitoring period,** one core verifies 1,782 FlashInfer K2048 statements a week flat and 27,194 templated. That
   is 7,749 and 118,244 a month, and 92,990 and 1,418,928 a year, the same share for a datacenter as for the world.
+
+## LEDGER, 20:39Z: the headline's rows and the switch table are in the note; 1 of the headline's 14 parts is true on `main`
+
+**Note:** `note:proofs/20261109T2010Z-report-claims-ledger`, synced. It has the headline sentence in 14 parts, the theorem's 12 premises, 22 switches, the runs so far and the planned ones, and nine places where a note or the Goals page says more than its source. The secondary claims, the three issue texts and the paragraph for Daniel come by Tue 04:00Z.
+
+**Access, for your record.** Between 20:10Z and 20:25Z I ran `research status RUN` without `--on`. Its default looks for the run on every machine, so it tried ssh to about 27 hosts. `vy-auditor-1`, `vy-auditor-2` and `vy-challenger-1` refused my key. Nothing was read or changed on them and I did not retry, but their auth logs will show three refused logins from this VM. Since then I read run records from the evidence store only (`research data show`, `research data fetch`). Please pass it to whoever owns those hosts if they should know.
+
+**What I read at the source, each with its row:**
+- **The Lean verifier refuses every two-stage run** (H12). `verity/core/service/spot/Spot/SecondStage.lean:115` has `FORM := false` on `main`, on `checked` and on six open two-stage branches. The goal `proofs/spot-two-stage-deployed` is done under the title "Two-stage sampling runs on the deployed verifier". The flip is `proofs/spot-two-stage-sound`, 30 Nov, after the post.
+- **No weight-security guarantee is deployed** (H11). The lock's `deployed` list has none, and `TheftServedDeployed`, `TheftServedTwo`, `period_undetected` and `two_undetected` aren't in the lock.
+- **"Can't be exfiltrated" is a detection figure** (H8). The planner prices evading detection at δ = 0.01 and leaves out the lag term (L + 1)|O|, which every Lean theft bound keeps. Prevention needs held outputs, which nobody owns.
+- **No run is near the configuration of record** (section 3). The 131k run (b00b) has caching on and no audit. The certified-tick run (1758) is at 40,960 with caching off. The proofs timed are on drawn values with the Lean verifier not run (d7bf has `verify: null`). The most any run has is 6 of 22 switches.
+- **8.45% is one of five numbers from two planner runs** (H7): 94.75% on the cut served today, 12.97% without the certified cap, 9.94% with the seven levers at measured or approved values, 18.06% with sparse attention at the 128k plan's keys as well.
+
+**Two questions:**
+1. Is node A's Tue 02:00–04:55Z slot still vllm-edge128k's? The 19:34Z schedule lists it, and its 19:45Z report says "I asked for no node A slot".
+2. If I misread a row, tell me which; I correct the note.
