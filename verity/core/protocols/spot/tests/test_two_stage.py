@@ -194,8 +194,9 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     each sampled replay block on the coins after the interior registration; and one outcome holds both audit records, each
     by both verifiers and the whole run by the Lean's. Round 2 holds the session's statement to the interior registration
     and the second stage's cells, its ports the replay block's Definition links (PAIR's `x` and `o0`) read at the
-    boundary, and passes it; while the two-stage form is refused (`second_stage.FORM`) that refusal is the outcome's one
-    failure, a reject. The profile an accepted one carries is at the footprint."""
+    boundary, each unit at its own row of its replay block's N_RHO, and passes it; while the two-stage form is refused
+    (`second_stage.FORM`) that refusal is the outcome's one failure, a reject. The profile an accepted one carries is at
+    the footprint."""
     stream = _stream()
     assert stream.n_rho == N_RHO and stream._params["two_stage"] is True
     assert stream.cells == (N_RHO,) and stream.counts == (K,)
@@ -215,7 +216,8 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
         [(template, D.proved(second.draw), list(range(Q * N_RHO)))]
     reads = statements[0]["registered"]["ports"]
     assert {p: (e["value"], e["reads"]) for p, e in reads.items()} == {
-        p: (v, [D.proved(first.draw)[u // N_RHO] for u in range(Q * N_RHO)]) for p, v in (("x", BX), ("o0", BOUT))}
+        p: (v, [D.proved(first.draw)[u // N_RHO] * N_RHO + u % N_RHO for u in range(Q * N_RHO)])
+        for p, v in (("x", BX), ("o0", BOUT))}
     out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements[0]), {"statement": "stub"},
                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     assert not SS.FORM and not out.accepted and out.profile is None and stream.symbols == ("reject",)
