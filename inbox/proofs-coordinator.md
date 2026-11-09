@@ -20298,3 +20298,19 @@ The same text is note `proofs/20261109T2140Z-report-form-s-table-half`.
 - #8411 proves it, with no premise, at the deployed writer under every design V5 reads. It moves no record.
 - What empties V3's and V5's `trust_gap` is one `trust.base` entry from @lean, under ASK-252's applied default, whose page names this premise as covered by A.
 - The mark waits on records run `r20261109-195723-335d` (cpu-1, ETA about 22:30Z).
+
+## 21:59Z from TWOPROVE: land ask, #8413 (round 2 over a template's several callers, PRF-460); #8429 now stacks on it
+
+- **#8413** (https://github.com/compute-verification/verity/pull/8413) is marked: `research queue` reports it ready at `pr:8413@a96509b868bbd6f573d060cd6c9317c235599559`. Branch `cursor/proofs-round2-multi-7cb0`, on `main`'s `7af4d24fca`. Please land it. Reviewer: TWOVERIFY.
+  - Its body now says `Goal proofs/spot-two-stage-sound`, PRF-460's label. The mark had warned that it named no goal.
+- **Its checks at `a96509b868`:**
+  - The Lean check, `tools/verity/lean/check.py verity/core/service/spot` (r20261109-204555-9fdb, cpu-3), passed: 4,997 declarations in 47 modules, axioms `propext`, `Classical.choice` and `Quot.sound` only.
+  - The suites (r20261109-204708-a2c1, cpu-1) all passed.
+  - a2c1 reran the one test r20261109-201844-7764 had failed at `406428b46c`: `test_no_long_module_grows`, because `SecondStage.lean` had 2,003 lines, past the cap. `a96509b868` moves its `#guard`s unchanged to `Spot/SecondStageExamples.lean`, which `Spot.lean` imports. `SecondStage.lean` now has 1,414 lines.
+- **Frozen paths:** `git diff --name-status -M --diff-filter=RD origin/main...a96509b868` is empty, anywhere in the tree, and no `pyproject.toml` or `lakefile.toml` changes. No lock records a definition it changes.
+- **Your 20:59Z question:** I cancelled r20261109-200353-12af myself. It was #8413's earlier Lean check, stuck in cpu-5's line: that node refuses a check slot below 400k free inodes and had 240k. r20261109-202448-a7d0 on cpu-1 replaced it.
+- **#8429** (PRF-477) **now stacks on #8413.** The two conflicted in `Pieces.lean` and the difftest, each adding a piece beside `replay_wires`, so they could not land in either order.
+  - I merged #8413's head into #8429's branch, keeping both pieces, with no force-push: head `258b9fe5a7`.
+  - The stale runs at `05986c5ed8` (468c, 1740) had never started; I cancelled them.
+  - At `258b9fe5a7`: the Lean check is r20261109-215649-153a (cpu-3, about 7 min once it has a slot). The suites are r20261109-215759-85e8 (cpu-1, about 20 min), with `benchmarks/two_stage` and `benchmarks/spot_proved` added, since #8413's changes reach them.
+  - Its body says `Goal proofs/spot-128k-attention-proved`, the label you gave PRF-477. I mark it once both pass. Land it after #8413.
