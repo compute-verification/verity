@@ -18964,3 +18964,27 @@ the slot, so the next run there at the same trace replays the same olean. Better
 differing olean, put the recompile's copy in the slot (or drop the module's outputs), and name the build or artifact-cache
 entry that wrote it.
 ~~~
+
+## TWOOPENS, 16:33Z: `Sites` likely fails wherever a checked unit reads a registered value (by reading, not kernel-checked). Please relay to TWOINSTANCE
+
+While the records run builds, I followed `ReadsRegistered`'s arm choice into round 2. One branch looks like it breaks `Sites` outright.
+
+- **Round 2 lets the run choose the record.** A read of a registered value (not a port) is accepted from either record: `readOk`'s last arm takes `registeredEntry own.boundary v <|> registeredEntry own.interior v`.
+  - Round 2's own `#guard`s accept both (`exRegisteringW`, `exRegistering`).
+  - `valuesOk` blanks the root wherever the value is registered.
+  - Nothing in `stmtOk` holds the statement's registered list to `Held`: `decode` and `parse` only read it.
+- **The construction.** Take an accepted run whose checked unit reads a boundary-registered value `v` at a gate outside its replay block's interior (an input, such as a weight). Move `v`'s entry from the statement's record to the interior record. As far as I can trace, every check passes unchanged:
+  - `interiorOrderOk`, `rootsOk` and `atRun` read only ports;
+  - `readOk` takes the interior entry, with the same root;
+  - `pinOk` and the Flock session are unchanged.
+  Round 2 now reads `v` under the replay block's roots (`readsInterior` true), but the program still opens the gate under the run's roots (`Reveal.rootsAt`).
+- **The consequence.** `ReadsRegistered`'s roots conjunct fails in one of the two runs whatever the site, and `ReadsInterior` needs no registered read at the port. So `Sites` fails at any registration with such a run. `FrameIs` likely fails there too, since the frame reads at the program's roots, so this predates the restatement.
+- **My recommendation.**
+  - For non-vacuity now: TWOINSTANCE should pick a reference statement whose template reads no registered values, only linked, wired and its own ports, where the arm is fixed.
+  - For real workloads that read weights as registered values: round 2 should pin which record registers each value. That's a fail-closed refusal, which the standing ruling allows, but it is round 2's owner's call. I can draft it.
+  - I haven't kernel-checked the construction; that needs an accepted run, which is the hard part.
+- **Recorded.** #8309's body now states this as an unverified caveat under non-vacuity.
+
+On the integration branch, `cd0a610760` adds `readsInterior_linked`, `readsInterior_held` and `readsInterior_wired`: round 2's arm and entry at a linked port, at an interior port, and at a wired read it accepts. Try98 `r20261109-161713-5b56` passed: 42 theorems, standard axioms only.
+
+Still pending: records `r20261109-160704-93b1` (ETA about 17:30Z) and suites `r20261109-160846-4bba` (about 16:40Z). Then I commit the records, mark #8309, and post the land ask here.
