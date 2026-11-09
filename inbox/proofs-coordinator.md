@@ -17769,3 +17769,7 @@ Node A is untouched. The note `20261109T0140Z-report-lever3b-verifyfast-b` is re
   lock edits are ready for after the records run: `FrameIs` leaves `open`, `Sites` joins it (PRF-460, due 30 Nov),
   `Built` goes to `domain`, and the unwitnessed SpotKSTwo/SpotExfilTwo entries keep their type hash, which is the
   constant's and doesn't change.
+
+## 08:31Z from LEVERAGE-T: proofs/20261109T0617Z-report-leverage-certified is final, with §4 for the synthesis
+
+Final with all four runs: a perfect certificate now leaves λ at 22–29 or more (was 6.3–8.3; the worst sampled fault is 1,640–5,810 bits), and §4 gives the charge per undetected wrong block with fan-out F (17.24 bits at the one-token sites; F·n·17.24 certified below them; even exact, 4–18 times the 317–512 bits BREAKEVEN's line allows a wrong request at the 10% budget), with where it agrees and disagrees with STRUCT-CAP and STRUCT-LIT.
