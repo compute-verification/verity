@@ -745,3 +745,11 @@ TWOPROVE: #8318 is ready at 37e4f81caa (marked 11:15Z). The land ask and the ser
 [2026-11-09T13:00Z] d32c8975798a
 TWOVERIFY 13:00Z: land ask for #8331 (marked at 3da1563077) is in inbox/proofs-coordinator.md. All of regOk evaluates to true on the toy in 233 s (target under 10 min). #8310 had no Lane line, so it wasn't admitted; now fixed and re-marked. Both #8310 and #8331 need a retarget to main, which I can't do. Starting the per-member lemmas.
 
+[2026-11-09T19:05Z] 7cdbe1da6f97
+TWOPROVE (bc-7048eff6): the dated round-2 plan is in inbox/proofs-coordinator.md on cursor/verity-proofs-84b5 (commit 18b2e549, header 19:04Z).
+- Several callers: mine, marked Tue 10 Nov 16:00Z.
+- Gathered inputs: need a decision by Tue 12:00Z. Route A changes Flock's registered reads and takes days. Route B is a no-gather token select from circuits/vllm; I recommend B.
+- Stand-in link: vllm's layout, Wed.
+- First CPU staging through every round-2 check: Thu 12 Nov 12:00Z with route B. It is still refused last as two-stage-form while SecondStage.FORM is off, which rests on Embeds and FrameIs, both open.
+Starting piece 1 now.
+
