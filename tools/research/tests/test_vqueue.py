@@ -11,8 +11,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 import pytest
-from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
-                             Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, decide, meets)
+from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
+                             Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, decide, meets)
 
 MAIN = "m0"
 
@@ -529,6 +529,127 @@ def test_a_red_main_lands_what_fails_nothing_more_and_its_reds_only_shrink():
         Advance("c2"), Drop("c2", "on main", Outcome((6,), heads(6), PASS))]
 
 
+# ---- the records run before a Lean candidate's check ---------------------------------------------------------------------------
+
+def stale(pkg: str = "Security", *inputs: str) -> Failed:
+    """graph2's lean-lock fail of ``pkg``: its lock records don't match its tree."""
+    return Failed(f"lean-lock:{pkg}", f"key:lean-lock:{pkg}", frozenset(inputs or (f"{pkg}/",)))
+
+
+def lean(n: int, *files: str) -> Ready:
+    return pr(n, None, *(files or (f"Security/A{n}.lean",)), lean=True)
+
+
+#: a records run that runs
+RUNNING = RecordsRun()
+
+
+def waiting(sha: str, base: str, *members: int, records: RecordsRun | None = RUNNING, held: float | None = None,
+            ) -> Candidate:
+    """A candidate built with its records run first (`Build.records`), whose check waits for it."""
+    return replace(cand(sha, base, *members, tries=0), records=records, waits=True, held=held)
+
+
+def test_a_batch_with_a_lean_member_is_built_with_its_records_run_first_and_any_other_is_not():
+    """`Build.records`: a member that changes Lean, a lock or a spec (`Ready.lean`) has the batch's records regenerated before
+    its check.  A batch with none, or with the step off (`Snapshot.records`), starts its check at once."""
+    assert decide(snap(ready=[pr(1), lean(2), pr(3)], records=True)) == [Build((1, 2, 3), MAIN, 2, records=True)]
+    assert decide(snap(cand("c1", MAIN, 1), ready=[pr(1), lean(2)], records=True)) == [Build((2,), "c1", 1, records=True)]
+    assert decide(snap(ready=prs(1, 3), records=True)) == [Build((1, 3), MAIN, 2)]
+    assert decide(snap(ready=[pr(1), lean(2), pr(3)])) == [Build((1, 2, 3), MAIN, 2)]
+
+
+def test_a_candidate_whose_check_waits_reads_no_verdict_and_nothing_is_built_on_it():
+    """Whatever its verdict says (graph2 knows no check of it), it is never read; and while its records run runs no batch is
+    built on it, which its records commit would drop.  The candidate below it is decided as ever."""
+    c1 = replace(waiting("c1", MAIN, 1), verdict=Verdict(FAIL, (task("t", "Security/"),), ended=True))
+    assert decide(snap(c1, ready=[lean(1), *prs(2, 3)], depth=3, records=True)) == []
+    s = snap(cand("c0", MAIN, 3, state=PASS), waiting("c1", "c0", 1), ready=[lean(1), *prs(2, 3)], depth=3, records=True)
+    assert decide(s) == [Advance("c0"), Drop("c0", "on main", Outcome((3,), heads(3), PASS))]
+    assert decide(replace(s, candidates=(cand("c0", MAIN, 3), waiting("c1", "c0", 1)))) == []
+
+
+def test_a_records_run_is_launched_once_more_after_infra_and_its_pending_rings_infra_only_with_why():
+    """No record of a start (a tick cut off after its build line) launches it; one that ended in infra is launched again,
+    once; pending, nothing happens; pending with why (its passed run's records can't be read yet), infra is rung, in words a
+    ring says once."""
+    s = snap(waiting("c1", MAIN, 1, records=None), ready=[lean(1), pr(2)], records=True)
+    assert decide(s) == [Regenerate("c1")]
+    assert decide(replace(s, candidates=(waiting("c1", MAIN, 1, records=RecordsRun(INFRA, "it registered no run")),))) == [
+        Regenerate("c1")]
+    assert decide(replace(s, candidates=(waiting("c1", MAIN, 1),))) == []
+    why = "r1 passed, but its Lean report (lean-audit) can't be read yet"
+    assert decide(replace(s, candidates=(waiting("c1", MAIN, 1, records=RecordsRun(PENDING, why)),))) == [
+        Ring("c1", f"c1's records run: {why}")]
+
+
+def test_a_passed_records_run_starts_its_candidates_check_and_a_commit_held_past_pending_s_drops_it():
+    """`Commit` (on it as built, or on its records commit: the loop's to tell), each tick while it is held, `pending_s` from
+    the first hold; then it is dropped, no outcome, and its members are built again."""
+    s = snap(waiting("c1", MAIN, 1, 2, records=RecordsRun(PASS)), ready=[lean(1), pr(2)], records=True, now=9000.0)
+    assert decide(s) == [Commit("c1")]
+    held = replace(s, candidates=(waiting("c1", MAIN, 1, 2, records=RecordsRun(PASS), held=1000.0),))
+    assert decide(replace(held, now=1000.0 + 4 * 3600)) == [Commit("c1")]
+    assert decide(replace(held, now=1001.0 + 4 * 3600)) == [
+        Drop("c1", "its records commit is still held 4 h after it was first: its members are built again"),
+        Build((1, 2), MAIN, 2, records=True)]
+
+
+def test_a_records_run_that_failed_drops_its_candidate_ejects_its_lean_members_and_builds_the_rest():
+    """Each Lean member is ejected with the run's reason, out of the next batch until it is marked again; the others go into
+    that batch, which has no Lean member left, so its check starts at once; the outcome suspects the Lean members."""
+    r = RecordsRun(FAIL, "it failed: r1 failed rc=1")
+    acts = decide(snap(waiting("c1", MAIN, 1, 2, 3, records=r), ready=[lean(1), pr(2), lean(3), pr(4)], records=True, lean=2))
+    why = "its records run refused its records: it failed: r1 failed rc=1"
+    assert acts == [Eject(1, "h1", why), Eject(3, "h3", why), Drop("c1", why, Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (1, 3), MAIN)),
+                    Build((2, 4), MAIN, 2)]
+
+
+def test_a_records_run_that_ended_in_infra_twice_refuses_and_rings_infra():
+    r = RecordsRun(INFRA, "it never ran or was stopped (r1)", starts=2)
+    acts = decide(snap(waiting("c1", MAIN, 1, 2, records=r), ready=[lean(1), pr(2)], records=True))
+    refused = "its records run ended in infra twice: it never ran or was stopped (r1)"
+    assert acts == [Ring("c1", "c1's records run ended in infra twice: it never ran or was stopped (r1)"), Eject(1, "h1", refused),
+                    Drop("c1", refused, Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)), Build((2,), MAIN, 2)]
+
+
+def test_a_refused_candidate_above_another_is_dropped_alone_and_the_next_batch_goes_on_the_one_below():
+    r = RecordsRun(FAIL, "it failed: r2 failed rc=1")
+    s = snap(cand("c1", MAIN, 1), waiting("c2", "c1", 2, 3, records=r), ready=[pr(1), lean(2), pr(3)], depth=3, records=True)
+    why = "its records run refused its records: it failed: r2 failed rc=1"
+    assert decide(s) == [Eject(2, "h2", why), Drop("c2", why, Outcome((2, 3), heads(2, 3), FAIL, (2,), "c1")),
+                         Build((3,), "c1", 2)]
+
+
+def test_a_candidate_above_a_refused_one_is_dropped_with_it():
+    """None is built on a candidate whose check waits, but should a log hold one, it goes with it, as above any that fails."""
+    r = RecordsRun(FAIL, "it failed: r1 failed rc=1")
+    s = snap(waiting("c1", MAIN, 1, records=r), cand("c2", "c1", 2), ready=[lean(1), pr(2)], records=True)
+    why = "its records run refused its records: it failed: r1 failed rc=1"
+    assert decide(s) == [Eject(1, "h1", why), Drop("c1", why, Outcome((1,), heads(1), FAIL, (1,), MAIN)),
+                         Drop("c2", "its base failed"), Build((2,), MAIN, 2)]
+
+
+def test_a_records_commit_is_checked_in_place_of_the_candidate_it_repairs_with_every_candidate_above_that_dropped():
+    """Same members, same base: the records commit wins whatever the shas' order, and the chain goes on from it (the loop
+    pushes the records commit and leaves the candidate for the next tick to drop here, so a tick cut off after the push
+    still finds it and adopts the commit)."""
+    for name in ("a", "z"):
+        fixed = replace(cand(name, MAIN, 1), repairs="c1")
+        s = snap(waiting("c1", MAIN, 1, records=RecordsRun(PASS)), fixed, cand("c2", "c1", 2), ready=[lean(1), *prs(2, 3)],
+                 records=True)
+        assert decide(s) == [Drop("c1", f"its records were regenerated in {name}, which is checked in its place"),
+                             Drop("c2", "its base was dropped"), Build((2, 3), name, 1)]
+
+
+def test_a_records_commit_whose_records_are_stale_still_fails_as_any_candidate_with_no_second_records_run():
+    """Its check found what its records run didn't settle: an ordinary fail, ejected as any is."""
+    c = replace(cand("c1r", MAIN, 1, state=FAIL, failed=(stale(),)), repairs="c1")
+    assert decide(snap(c, ready=[lean(1)], records=True)) == [
+        Eject(1, "h1", "lean-lock:Security failed, and its changed files meet their inputs, no other member's", (stale(),)),
+        Drop("c1r", "failed: lean-lock:Security", Outcome((1,), heads(1), FAIL, (1,), MAIN))]
+
+
 # ---- 3. fill --------------------------------------------------------------------------------------------------------------------
 
 def test_a_batch_goes_on_main_at_priority_depth_or_on_the_chains_top_at_depth_minus_its_position():
@@ -623,10 +744,16 @@ def test_decide_reads_no_clock_files_or_randomness(monkeypatch):
 HAWKEYE = "benchmarks/numerical/tests/reference/test_hawkeye_close.py"
 
 
+#: a tree's member that stands for the records a records commit regenerated (`Play`)
+RECORDS = 0
+
+
 @dataclass
 class Play:
     """A small world for the red team's cases: `decide`'s actions applied as the loop does, each pending candidate's verdict
-    from ``oracle(tree, candidate)``, and a clock that moves ``step_s`` a tick."""
+    from ``oracle(tree, candidate)`` once its check started, each pending records run's from ``records(tree, candidate)``, a
+    passed run's candidate checked as built, or, when ``regenerates(tree, candidate)``, its records commit (its tree with
+    `RECORDS`) checked in its place, and a clock that moves ``step_s`` a tick."""
     ready: list[Ready]
     oracle: Callable[[frozenset[int], Candidate], Verdict]
     kw: dict = field(default_factory=dict)
@@ -639,6 +766,10 @@ class Play:
     ejected: list[Eject] = field(default_factory=list)
     acts: list[list] = field(default_factory=list)
     built: int = 0
+    records: Callable[[frozenset[int], Candidate], RecordsRun] | None = None
+    regenerates: Callable[[frozenset[int], Candidate], bool] | None = None
+    #: the ticks whose actions built a batch while a candidate's check waited for its records run, none of it dropped
+    built_on_waiting: list[int] = field(default_factory=list)
 
     def tick(self) -> list:
         now = len(self.acts) * self.step_s
@@ -646,6 +777,9 @@ class Play:
         acts = decide(Snapshot(self.main, tuple(r for r in self.ready if r.number not in gone), tuple(self.cands.values()),
                                tuple(self.history), now=now, **self.kw))
         self.acts.append(acts)
+        dropped = {a.sha for a in acts if isinstance(a, Drop)}
+        if any(c.waits and c.sha not in dropped for c in self.cands.values()) and any(isinstance(a, Build) for a in acts):
+            self.built_on_waiting.append(len(self.acts))
         for a in acts:
             if isinstance(a, Advance):
                 self.main = a.sha
@@ -664,10 +798,26 @@ class Play:
                 self.built += 1
                 sha = f"c{self.built}"
                 self.trees[sha] = self.trees[a.base] | set(a.members)
-                self.cands[sha] = Candidate(sha, a.base, a.members, tuple(f"h{m}" for m in a.members), enqueued=now)
+                c = Candidate(sha, a.base, a.members, tuple(f"h{m}" for m in a.members), enqueued=now)
+                self.cands[sha] = replace(c, tries=0, enqueued=None, records=RecordsRun(), waits=True) if a.records else c
+            elif isinstance(a, Regenerate):
+                c = self.cands[a.sha]
+                self.cands[a.sha] = replace(c, records=RecordsRun(starts=c.records.starts + 1 if c.records else 1))
+            elif isinstance(a, Commit):
+                c = self.cands[a.sha]
+                if self.regenerates is None or not self.regenerates(self.trees[a.sha], c):
+                    self.cands[a.sha] = replace(c, waits=False, tries=1, enqueued=now)
+                    continue
+                sha = f"{a.sha}r"
+                self.trees[sha] = self.trees[a.sha] | {RECORDS}
+                self.cands[sha] = Candidate(sha, c.base, c.members, c.heads, enqueued=now, repairs=a.sha)
+                self.cands.pop(a.sha)
         for sha, c in self.cands.items():
-            if c.verdict.state == PENDING:
+            if c.verdict.state == PENDING and not c.waits:
                 self.cands[sha] = replace(c, verdict=self.oracle(self.trees[sha], c))
+            if c.records is not None and c.records.state == PENDING and self.records is not None:
+                got = self.records(self.trees[sha], c)
+                self.cands[sha] = replace(self.cands[sha], records=replace(got, starts=c.records.starts))
         return acts
 
     def run(self, ticks: int = 60) -> Play:
@@ -677,6 +827,34 @@ class Play:
 
     def count(self, kind: type) -> int:
         return sum(isinstance(a, kind) for acts in self.acts for a in acts)
+
+
+def test_two_lean_prs_whose_records_go_stale_only_together_land_together_with_their_records_commit():
+    """Each carries its own records, and merged they leave a lock's records stale, as two Lean PRs meeting do: their
+    candidate's records are regenerated on its tree before its check and committed on top of it, and that records commit,
+    checked in its place, lands all three, nobody ejected or bisected, one batch built."""
+    def oracle(tree, c):
+        return Verdict(FAIL, (stale(),), ended=True) if {1, 2} <= tree and RECORDS not in tree else Verdict(PASS)
+
+    p = Play([lean(1), lean(2), pr(3)], oracle, {"records": True, "lean": 2}, records=lambda tree, c: RecordsRun(PASS),
+             regenerates=lambda tree, c: {1, 2} <= tree).run(12)
+    assert sorted(p.landed) == [1, 2, 3] and not p.ejected and p.main == "c1r" and p.built == 1
+    assert p.count(Commit) == 1 and p.count(Regenerate) == 0 and not any(o.state == FAIL for o in p.history)
+
+
+def test_a_lean_pr_whose_records_run_regenerates_nothing_lands_as_built_and_nothing_is_built_while_a_check_waits():
+    """No records commit: its check starts on the candidate as built.  A slow records run holds every batch above it, and
+    the batch below it goes on."""
+    slow = Counter()
+
+    def records(tree, c):
+        slow[c.sha] += 1
+        return RecordsRun(PASS) if slow[c.sha] > 3 else RecordsRun()
+
+    p = Play([pr(1), lean(2), pr(3), pr(4)], lambda tree, c: Verdict(PASS), {"records": True, "batch": 1, "depth": 3},
+             records=records, regenerates=lambda tree, c: False).run(20)
+    assert sorted(p.landed) == [1, 2, 3, 4] and not p.ejected and p.count(Commit) == 1 and p.built == 4
+    assert not p.built_on_waiting and not any(sha.endswith("r") for sha in p.trees)
 
 
 def test_a_red_main_no_pr_touches_lands_every_pr_and_rings_its_red_once():
