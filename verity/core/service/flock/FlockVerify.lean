@@ -296,13 +296,13 @@ theorem stdKnowing_eq (file : ByteArray) : stdKnowing file (Sha512.hash file) = 
 /-- `ProvedScope.circuitOf` with the file's SHA-512 `sha` computed beforehand (`circuitOfKnowing_eq`). -/
 def circuitOfKnowing (sha : ByteArray) (tags : Tags) (file : ByteArray) (tables : List (String × ByteArray)) :
     V Circuit :=
-  if tags.hiddenOutputs then HmOut.parseCommitWith (stdKnowing file sha) tags file tables
+  if tags.hiddenOutputs then HmOut.parseCommitWithV (stdKnowing file sha) tags file tables
   else HmRow.parseWith (stdKnowing file sha) tags file tables
 
 theorem circuitOfKnowing_eq (tags : Tags) (file : ByteArray) (tables : List (String × ByteArray)) :
     circuitOfKnowing (Sha512.hash file) tags file tables = ProvedScope.circuitOf tags file tables := by
   unfold circuitOfKnowing ProvedScope.circuitOf
-  rw [stdKnowing_eq, With.outParseCommitWith_std, With.parseWith_std]
+  rw [HmOut.parseCommitWithV_eq, stdKnowing_eq, With.outParseCommitWith_std, With.parseWith_std]
 
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
