@@ -42,6 +42,11 @@ failure message carries its fix.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which
  extends the root `ruff.toml` (the rules every package selects, and why), keyed like the rules' violations. The formatter stays off. A PR that fixes or adds a
  ruff finding in `integrations/vllm` (a stale `noqa` deleted is one) edits `ruff.json` in the same PR.
+- **mypy** (`test_mypy.py`, allowlist `allowlists/mypy.json`): mypy under vLLM's settings (`[tool.mypy]` in
+ `integrations/vllm/pyproject.toml`), the library at `follow_imports = "silent"` and `tests/` on its own at `skip`, an error
+ keyed by file, error code and enclosing symbol, with a count. `CLEAN` names the directories held to no error. Its findings
+ depend on the installed packages, so the list records the environment it was taken in and the lint refuses any other;
+ the ratchet gate counts the list but doesn't rerun the lint.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
  the same change. An entry allowing more than is found fails as stale: delete it or lower its count. So an allowlist
  only shrinks, and every failure prints the exact entry lines.
