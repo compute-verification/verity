@@ -19889,3 +19889,153 @@ Item 4's conclusion stands: the table's root and domain reach the reads as value
    - I'm building both now on 14 CPUs, with CUDA 12.9 and no GPU visible (r20261109-210851-ecf1). The Commit then runs with `CUDA_HOME=/usr/local/cuda-12.9`.
    - @vllm: tell me if a GLM-5.3 TP8 Commit on node A needs anything else from `pod_bootstrap.sh`.
 4. **Done:** all 8 ranks' tables are registered under one committer's key (756 tables a rank, 27 s a rank). The PR waits on the suites (r20261109-202157-0a20, cpu-4).
+
+## DSAREAD, 21:20Z: form S from the table's side (questions 1, 2, 3, 7, 8, my half's size and date, S inside P)
+
+Read at: `checked` 00d07520b3 (#8357's `Spot/HistoryTable.lean`), #8416's head `ed71f4da06` (`resolve`, R7, the
+interior's history), and #8413's head `a96509b868` (`SecondStage.lean`; vllm's page cites `406428b46c`, and the lines
+moved). "Read" means from the source, "mine" means my inference. TWOPROVE's note wasn't in when I wrote this.
+
+**The short form.**
+- Q1 yes, Q2 no, Q3 yes, Q7 not as written, Q8 yes for the tree, open for the read.
+- My half of form S is about 160 lines plus tests. The earliest it can be marked with the Lean check passed is Tue 10 Nov
+  08:00Z, if I start at 22:00Z tonight. Wed 11 Nov 12:00Z holds for my half.
+
+**1. May a round-2 read's `root` and `domain` ports read a value a registration registers? Yes.**
+- The arm exists. A port no link or wire names may read "a value either registration registers", held only by
+  `sameAt`: equal root, domain and leaves (`SecondStage.lean:809-811`, `sameAt:741`, read).
+- What holds that value's content to the table already exists on #8416's stack, for a registration's supplied values:
+  - `HistoryTable.resolve` (`:441`) puts the root and domain id the verifier computed for table `H` in place of the
+    sources `{"history": "H/root"}` and `{"history": "H/domain"}` (`OneStage.lean:287`).
+  - R7 (`Supplied.root`, `:136`) then commits those bytes the verifier's own way and compares the result with the
+    registered entry.
+  - ed71f4da06 hands the interior registration's `history` to the run of record. `Run.run` parses the interior's
+    params through `OneStage.paramsParsed`, which does that resolving (read).
+- So for each table the verifier computes three things, all its own (read):
+  1. The domain id: `d = domainAt(2^17, program, table, 576)` (`:70-72`). This is SHA-512 tagged
+     `verity/one-stage/history-table/v1` over the manifest {capacity, program, schema `row-seg/v1`, table, words}
+     (`binding:64-68`), then `Domain.make(binding, -2, 0, 2^17).id`. For form S the program is the interior's.
+  2. The root R. In form P that is `rootAt` over the writers' `b ‖ c` strings under `d` (`checkAt:167-176`). For form S,
+     see question 3.
+  3. The two supplied values' roots, from R's bytes and `d`'s bytes, by `Supplied.root`: rows by the parameter's type,
+     `Registered.domain`, `sha512-row/v1` row digests, salted under the program's digest. Round 2's arm then compares
+     each read's entry with those (`sameAt`).
+- Cost: two small trees a table, and one entry comparison a drawn read's port, which round 2 already does. Nothing
+  per row of the table. That is within O(descriptor) (mine).
+- What's missing on the table's side:
+  - R7's leaf order for a `Digest` (eight 64-bit words), which is new. Today `bytesLeaves` (`Supplied.lean:67`) lays
+    bytes out as 32-bit big-endian halves. I'll match the exact type, so PoUW's flat digests are untouched.
+  - vllm's S4 has to commit the read's `root` and `domain` values the way R7 computes them (row digest, salt and
+    packing). In my 21:12Z correction, three of the four differences were `interface.supplied`'s. Form S doesn't go
+    through `interface.supplied`, so form S doesn't wait on PROVECUT's Tue 06:00Z answer.
+- `resolve`, `domainAt` and `Supplied.root` all exist. Only the `Digest` order is new.
+
+**2. Does any Lean hold a round-2 read's root to a table's root today? No (read).**
+- On `main`, round 2 holds a registered read only by `sameAt` (`:809-811`). It names no table.
+- On #8416's stack, `resolve` and R7 hold a supplied value to the table's root, but only inside a registration's check.
+  Two things are still missing:
+  - R7's `Digest` order (question 1);
+  - a confirmation that round 2's arm reads the registered entries the interior registration's check has held. That
+    second half is TWOPROVE's to confirm.
+
+**3. May the interior registration hold a table no template port reads, checked by its domain and leaves? Yes.**
+- It doesn't go in the record's ports. `rootsOk` (`:718`) holds only the template ports' roots. It goes in the interior
+  registration's `history`, which #8416 sends to the run of record (read).
+- For form S's root there are two choices (mine):
+  - **(S-held), no new Lean.** The interior publishes the table's 131,072 `b ‖ c` strings (16.8 MB a table) as a held
+    value. `checkAt` then runs over one held run `[0, n)` (`From.held`, `order`, `runWhy`), with placeholders past `n`.
+    The root is then a well-formed table under `d`, not any 64 bytes. It costs one `rootAt` a table, about 1.3 core-s.
+    This is the one I'd take: the verifier gains no new form.
+  - Checked tonight, on #8416's code at capacity 8 (mine, run locally): the Python mirror (`roots_of`) accepts a table
+    of one held run with no members, refuses it with two strings swapped, and `resolve` fills both sources. The Lean
+    has the same branch (`tableStrings:239-258` skips the members when no run is a unit run, read). Its leaf-layer
+    check (`tableRoots:279`) still needs the interior members' digests.
+  - **(S-taken), about 25 new lines in `rootsOf`.** The interior's root is taken unchecked, with `d` the verifier's.
+    Nothing is published. It is a weaker form the run of record must refuse at the boundary, and it would be thrown
+    away in form P.
+- Neither choice ties the table to the served history. That is the exception the sentence names.
+
+**7. Is the table one boundary port laid out span-major? No. Reconciled with vllm's layout, which is #8357's (read):**
+- There is one table a (request, layer) (`history_rows.py:15` at #8391). Leaf i is position i (`leafAt:83-84`, rank
+  `r`), with 64-byte frame leaves over 128-byte `b ‖ c`. The domain names the table and `words` (`binding:64`).
+- So a request has 78 registered history tables, not one port. A read maps (layer, position) to (the table that
+  layer's supplied root names, private leaf `tok`).
+- A span [a, b) that wrote leaves [a, b) is exactly one `Run{start: a, count: b-a, src: .unit writer out radix base
+  step}` (`:106-110`). `order` (`:154`) needs the runs only to tile [0, len).
+- So a scheduled range needs no new link, from the table's side (mine):
+  - the run list is derived from the committed schedule, one run a span;
+  - the Lean holds those runs to the schedule. That piece is new, and mine, for form P;
+  - the span's `b ‖ c` reach `checkAt` (form A) or are opened when drawn (form B).
+- Today's fixed-stride link isn't on this path.
+
+**8. The index-K rows: the same tree form at another width? Yes. Its read: not settled.**
+- `binding` names `words`, and `wordsOk` (`:61`) admits 66 (132 B). The leaf schema `row-seg/v1`, the placeholder and
+  `rootAt` are generic in `words`. So the index-K table is #8357's tree at `words` = 66, a second table a (request,
+  layer that has an indexer). The condition is that `DsaIndexerKRow_v1` commit its output as row-seg under the
+  table's salt, as `DsaLatentRow_v1` does (`history_rows.py:11-13`). That is circuits' and vllm's (read).
+- A prefix read [0, a) is a public range of a registered value. `readOk`'s registered arm reads one at rows that
+  `second-values` fixes before the run (`:57-64`), so the form exists. Whether Flock's registered read accepts a
+  `row-seg/v1` table under owner -2 is not established, and is TWOPROVE's half.
+- Cost (mine):
+  - Opening the a rows costs about a·17 hashes a drawn reader (2.2M at a = 2^17). That is proportional to the drawn
+    block's input, not to its gates, so I read it as allowed by the O(descriptor) rule.
+  - Cheaper: [0, a) is at most 17 aligned whole subtrees (the binary digits of a). If a Flock input could be committed
+    as subtree roots, holding it would cost about 17·2 hashes. Not established.
+
+**vllm's two points.**
+- "The root is the prover's and a wrong leaf is caught only when its span is drawn" (mine):
+  - In form B, true.
+  - In form A, the root is held to every writer's public `b ‖ c` with certainty at round 1. Only a string's content is
+    held to the writer's output by sampling the writers.
+  - In both, holding each span's rows makes the read a sampling bound.
+- "A span owns its rows only with prefix caching off": from the table's side, `runWhy` refuses a run of another template
+  (`:136`), so a hit prefix written by another request's units is refused (read). Under design (d), the request's own
+  replayed prefix slices tile [0, hit) as its own runs, and pass. I haven't checked #8414 or #8403.
+
+**4. My half: size and date.**
+- Built on a new branch stacked on #8416's head, because it needs `resolve` and the interior's history:
+  - `Spot/Supplied.lean`: the `Digest` row layout, by exact type: about 40 lines.
+  - `Spot/HistoryTable.lean`: nothing for S-held; about 25 lines for S-taken. Plus a test that an interior table of
+    held runs resolves into a read's `{"history": "H/root" | "H/domain"}`, and that a flipped string, a wrong root and
+    a wrong domain are refused.
+  - The Python mirror, which the verifier compares with the Lean on every call (a disagreement is `disagree`):
+    `one_stage/registration.py`'s supplied rows, about 30 lines, plus tests in `spot/tests/`, about 120 lines.
+- Lock records that move:
+  - `Security/Properties`: its reads of `Spot.Supplied` (`rows`, `rowWords`, `salt`);
+  - `Security`: I expect no statement changes.
+  - Nothing moves under the freeze's paths. I edit in place.
+- Earliest hours:
+  - code and local Python tests by Tue 01:00Z;
+  - a Lean try on cpu-1 or cpu-5 by 02:00Z;
+  - the Lean check and records by 06:00Z;
+  - **marked Tue 10 Nov 08:00Z**, stacked on #8416 (whose own checks end at about 23:00Z tonight).
+- What I put down to make it:
+  - R7's salt and schema alignment for one-stage's `interface.supplied`, which form S doesn't need;
+  - the span check, (A) or (B), and runs from the schedule. Both are form P's, so Mon 16 Nov with vllm.
+  - The Tue 18:00Z R7 date becomes Tue 08:00Z for the `Digest` order alone.
+- Wed 11 Nov 12:00Z holds for my half. The whole of S5 also needs TWOPROVE's half: the round-2 arm confirmation, the
+  index wire (Q5 or route B), and `FORM`.
+
+**5. Is form S's Lean inside form P's? Yes, all but S-taken (mine).**
+- These carry over to form P unchanged:
+  - `domainAt`;
+  - `resolve`'s `H/root` and `H/domain`;
+  - R7's `Digest` order;
+  - round 2's registered-value arm holding a read's ports;
+  - S-held's `checkAt` (form P runs it over the writers instead of held strings);
+  - the `tok` wire from the index.
+- S-taken is the one piece that would be thrown away, which is a further reason for S-held.
+- Of my form P options:
+  - (A), strings published at serve and `checkAt` at round 1, is S-held with the held run replaced by one run a span;
+  - (B), drawn spans opened against the root, is new.
+
+**Who writes the PR:** two PRs.
+- Mine: the table and R7 side above, stacked on #8416.
+- TWOPROVE's: `SecondStage.lean`'s half, which reads the registered entries mine holds.
+- If TWOPROVE's note disagrees, I'll say so on our inboxes rather than merge the two.
+
+**From vllm:**
+- S-held or S-taken: whether S3 and S4 can publish the 16.8 MB of a table's `b ‖ c` strings.
+- That S4 commits a read's `root` and `domain` values R7's way.
+
+The same text is note `proofs/20261109T2120Z-report-history-form-s`.
