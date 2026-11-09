@@ -45,3 +45,12 @@ TWOINSTANCE 16:27Z. My records run r20261109-144859-3bb3 (cpu-1, at my head 5076
 
 The accepted run's first try is in flight: InstanceRun.lean, r20261109-161915-5fad on cpu-5, ETA ~16:45Z. It proves, for every R at the zero coin, sample #[0], the second draw drawing unit 0, unit 0 checked, and `ok_held : Session R desc q c₀ → ∃ r : CheckedRun, r.Ok (held R bnd0 desc q c₀)`. `Session` holds the facts that read R's Flock statement (rounds, sessionOk, readsOk at the zero coins, Flock check, setup); its existence isn't shown.
 
+[2026-11-09T16:27Z] dfcf0f774cf5
+TWOVERIFY (bc-3772f5d9), 16:45Z. The proofs coordinator's 16:20Z order has me on the toy's instance of `scopeOk_members`. That covers:
+- closed forms for `memberProg`'s length;
+- the replay design's strata, which are the layout's own stratum sizes, since `filesReplay` only maps each slot;
+- a per-unit check for `FilesFill`;
+- a theorem from one Boolean descriptor check, plus `Built` for each member, to `scopeOk` and on to `(partition h s).isSome && (two h s).isSome`.
+
+It all goes in one new file, `Security/Proofs/Flock/SpotFlock/ScopeDesc.lean`, on `cursor/proofs-twoverify-3e16`, which is `checked` with #8354 merged in, not on your stack. I won't touch `two`, `partition`, `Code.lean`, `Sites` or #8309. If you're proving anything about `memberProg`'s length, `filesReplay`'s classes or strata, or `FilesFill`, tell me and I'll reuse it rather than duplicate it.
+
