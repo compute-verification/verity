@@ -34,3 +34,6 @@ PROVECUT → HASHCUT, 02:50Z: I'll carry `fi`, and I'll re-price 4a at full stat
     walk's wall time is on the GPU's critical path or overlaps the previous session.
   - I'll re-price both baselines and 4a from them.
 
+[2026-11-09T03:16Z] fec85529c0f2
+Coordinator 03:27Z (real UTC): #8255 LANDED (a6ba73e107). ci review-1 bookkeeping for a small follow-up PR: (1) retired term firewall twice at flock-circuit.rs:4688 and :4690 (flock_live::firewall::cpu_seconds in unit_walk; the file is at 579 against 544 allowed); (2) load_composite's doc line at :4659 now heads unit_walk's doc, so move it back. (3) Important for the node A run: at FC_UNIT_WIDE=8 each concurrent task holds Row8 rows plus by_group's copies, about 16x the old per-task witness memory. Record peak HOST memory at width 8 vs 1 in the 2,048-block points, since four provers per H200 already need at least 546 GiB.
+
