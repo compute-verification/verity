@@ -47,6 +47,77 @@ def readKey (own : Spot.SecondStage.Own) (t port v : String) : SlotKey :=
   | some l => .port l.value
   | none => if ((Spot.Record.byPort own.interior).find? (·.1 == v)).isSome then .port v else .reg v
 
+/-- **Each value a `mapM` over `Option` returns is one of its arguments' images.** -/
+theorem mem_of_mapM_some {α β : Type} {f : α → Option β} :
+    ∀ {l : List α} {r : List β}, l.mapM f = some r → ∀ y ∈ r, ∃ x ∈ l, f x = some y
+  | [], r, hm => by
+    rw [List.mapM_nil] at hm
+    cases hm
+    intro y hy
+    cases hy
+  | a :: l, r, hm => by
+    simp only [List.mapM_cons, Option.bind_eq_bind, Option.pure_def] at hm
+    obtain ⟨b, hb, hm⟩ := Option.bind_eq_some_iff.1 hm
+    obtain ⟨r', hr', hm⟩ := Option.bind_eq_some_iff.1 hm
+    have e : r = b :: r' := (Option.some.inj hm).symm
+    subst e
+    intro y hy
+    rcases List.mem_cons.1 hy with rfl | hy
+    · exact ⟨a, List.mem_cons_self, hb⟩
+    · obtain ⟨x, hx, hfx⟩ := mem_of_mapM_some hr' y hy
+      exact ⟨x, List.mem_cons_of_mem a hx, hfx⟩
+
+/-- **A fold that keeps an entry named `v` and adds one at a root whose port is `v` ends with one**: folding `f` over
+the roots `rs` from `acc`, where `acc` has an entry named `v` or a root of `rs` names port `v`. -/
+theorem fold_named {v : String} {f : Array (String × Json) → Json → Array (String × Json)}
+    (keep : ∀ acc r, (∃ x ∈ acc, x.1 = v) → ∃ x ∈ f acc r, x.1 = v)
+    (add : ∀ acc r, Spot.getD r "port" = .str v → ∃ x ∈ f acc r, x.1 = v) :
+    ∀ (rs : List Json) (acc : Array (String × Json)),
+      ((∃ x ∈ acc, x.1 = v) ∨ ∃ r ∈ rs, Spot.getD r "port" = .str v) → ∃ x ∈ rs.foldl f acc, x.1 = v
+  | [], _, .inl hx => by rw [List.foldl_nil]; exact hx
+  | [], _, .inr ⟨_, hr, _⟩ => by cases hr
+  | r :: rs, acc, hx => by
+    rw [List.foldl_cons]
+    refine fold_named keep add rs (f acc r) ?_
+    rcases hx with hx | ⟨r', hr', hp⟩
+    · exact .inl (keep acc r hx)
+    · rcases List.mem_cons.1 hr' with he | hr'
+      · subst he
+        exact .inl (add acc _ hp)
+      · exact .inr ⟨r', hr', hp⟩
+
+/-- **A port a record's roots name is one `Record.byPort` finds**: each name `namesAt` reads off the record's roots'
+ports (as `recordOk` reads them) is the name of one of `Record.byPort`'s entries. -/
+theorem byPort_find_of_namesAt {rec : Json} {ps : List String} (hps : namesAt rec "roots" "port" = some ps)
+    {v : String} (hv : v ∈ ps) : ((Spot.Record.byPort rec).find? (·.1 == v)).isSome = true := by
+  unfold namesAt at hps
+  obtain ⟨r, hr, hrv⟩ := mem_of_mapM_some hps v hv
+  try dsimp only at hrv
+  have hp : Spot.getD r "port" = .str v := by
+    cases hj : Spot.getD r "port" <;> rw [hj] at hrv <;> cases hrv <;> rfl
+  obtain ⟨x, hx, hxv⟩ : ∃ x ∈ Spot.Record.byPort rec, x.1 = v := by
+    unfold Spot.Record.byPort
+    rw [← Array.foldl_toList]
+    refine fold_named ?keep ?add _ #[] (.inr ⟨r, ?mem, hp⟩)
+    case keep =>
+      intro acc r' ⟨x, hx, hxv⟩
+      try dsimp only
+      split
+      · rename_i p _
+        by_cases hpv : p = v
+        · exact ⟨(p, r'), Array.mem_push.2 (.inr rfl), hpv⟩
+        · refine ⟨x, Array.mem_push.2 (.inl (Array.mem_filter.2 ⟨hx, ?_⟩)), hxv⟩
+          simp only [hxv, bne_iff_ne, ne_eq]
+          exact fun he => hpv he.symm
+      · exact ⟨x, hx, hxv⟩
+    case add =>
+      intro acc r' hp'
+      simp only [hp']
+      exact ⟨(v, r'), Array.mem_push.2 (.inr rfl), rfl⟩
+    case mem =>
+      cases hroots : Spot.getD rec "roots" <;> rw [hroots] at hr <;> simpa using hr
+  exact Array.find?_isSome.2 ⟨x, hx, by simp [hxv]⟩
+
 variable (h : Held)
 
 /-- **The roots round 2 reads template `t`'s registered read of value `v` at port `port` under**, in the run at
@@ -64,6 +135,26 @@ def readKeyAt (x m₁ : Msg) (c₀ c₁ : FlockDeploy.Coin) (t : ℕ) (port v : 
   match decode x, jsonMsg m₁, secondDraw h c₀ c₁ with
   | some st, some rec, some draw => readKey (ownOf h st rec draw c₀) (h.names.getD t "") port v
   | _, _, _ => .reg v
+
+/-- **An own port's value is read off the interior record**: in a run whose records name their registrations' names
+(`recordsOk`, which `stmtOk` holds: `recordsOk_of_stmtOk`), at a port no link names, a value `Held` lists among the
+interior registration's ports is read off the interior record (`readsInterior`), under the replay block's roots, at
+that port's entry (`readKey`). So the run doesn't choose the arm of such a read. -/
+theorem readsInterior_own {x m₁ : Msg} (hr : recordsOk h x m₁ = true) {st rec} (hd : decode x = some st)
+    (hj : jsonMsg m₁ = some rec) {draw c₀} {t port v : String}
+    (hl : Spot.SecondStage.linkOf (ownOf h st rec draw c₀) t port = none) (hv : v ∈ h.interiorNames.ports) :
+    readsInterior (ownOf h st rec draw c₀) t port v = true ∧ readKey (ownOf h st rec draw c₀) t port v = .port v := by
+  simp only [recordsOk, hd, hj, Bool.and_eq_true] at hr
+  obtain ⟨ps, hps, -, hmem⟩ := (recordOk_spec hr.2).1
+  have hf : ((Spot.Record.byPort (ownOf h st rec draw c₀).interior).find? (·.1 == v)).isSome = true :=
+    byPort_find_of_namesAt hps ((hmem v).2 hv)
+  refine ⟨?_, ?_⟩
+  · unfold readsInterior
+    rw [hl]
+    exact hf
+  · unfold readKey
+    rw [hl]
+    exact if_pos hf
 
 /-- **The reveal opens the session's rows, and gate `g`'s slot names where they are** (the module's docstring), at a
 checked unit `u` of the run at statement `x` (parsed `s`), round messages `m₀`, `m₁`, `m₂`, coins `c₀` and `c₁` and the
