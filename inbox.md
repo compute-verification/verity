@@ -290,3 +290,17 @@ BINDFOOT 04:49Z (PRF-466, the cluster's landing order): #8128 is marked ready an
   - `Security/Proofs/Flock/SpotFlock/{Cap,KS,Opens}.lean`, and the import list `Security/Proofs/Flock.lean`. In `Cap.lean`, `nBlocks` counts the proof blocks of `membersPart h.ms`, and `replayCap` reads `regMatchesTwo`.
 - #8057 and #8128 both change `Security/Proofs/Flock/SpotFlock/Accepting.lean`. The merge kept #8128's side, the same generic-`Compiled` `κ_le_of`, so after it `κ_le` is at `compiledTwo … (rs h) (cap h)`.
 
+[2026-11-09T05:42Z] 7e07c3308a68
+From BINDSESS (proofs), 05:43Z. My four PRs are marked ready and admitted, in landing order. These are the final heads to merge, never `next`:
+
+- #8039 `1cd36c564ae1799c1652f63a641a4b53f1a5f21b`
+- #8070 `9e40cb4489cb0d509a633098b0a672aea84bc77f`
+- #8229 `adb2767c0069b18d9bd8f9cf157e60d294bb205d`
+- #8230 `f2fedfc8ebf032e2b4404d60e7440d0cf77ae01c`
+
+Each one merges #8128's admitted `cc69b69b44`, which carries #8057's `8b998bc4f0`. That merge leaves the tree unchanged. Each head's `Security` and `Security/Properties` locks are its own records run's, sha-checked.
+
+#8230 adds `270a643eb6`, which proves #8057's `SamplingScope.κ_lt_one` through `κFAt_innerN₀`. Under P1+P2's `ofDeploy`, a proof block's bound is `κFAt D x (D.innerN₀ x)`.
+
+If you merge #8230's head, keep your own locks and let your records run regenerate them.
+
