@@ -136,7 +136,8 @@ theorem depth_revealOwn : depth revealOwn = 64 := by
   have h1 : Nat.log2 (2 ^ 64 - 1) = 63 := (Nat.log2_eq_iff (by norm_num)).2 ⟨by norm_num, by norm_num⟩
   have h2 : ¬ ((2 : ℕ) ^ 64 ≤ 1) := by norm_num
   show max (_root_.Flock.log2ceil (2 ^ 64)) 0 = 64
-  rw [_root_.Flock.log2ceil, if_neg h2, h1] <;> omega
+  rw [_root_.Flock.log2ceil, if_neg h2, h1]
+  omega
 
 /-! ## The unit's instance -/
 
@@ -276,7 +277,7 @@ def unitsAt (x : Msg) : ℕ :=
   | some s => ((partition h s).getD ⟨[]⟩).blocks.length
   | none => 0
 
-theorem units_base (x : Msg) : units (base h) x = unitsAt h x := rfl
+theorem units_eq_unitsAt (x : Msg) : units (base h) x = unitsAt h x := rfl
 
 /-- **A checked unit of a run, with its session's setup**: the values `SlotsAt` quantifies over. The run's statement
 `x` and its parse `s`, its first three messages and the coins of rounds 0 and 1, the rest of its transcript, the
@@ -355,13 +356,14 @@ theorem open_mem {site : ℕ → Option Site} {S : Site} {g : ℕ} (hr : r.Ok h)
     (openAt h site r.s r.u r.seen r.wF r.m₁ r.m₂)
   rw [hb']
   refine List.mem_filterMap.2 ⟨g, mem_needsOf hg, ?_⟩
-  simp only [openAt, hs, hset] <;> rfl
+  simp only [openAt, hs, hset]
 
 theorem roots_opening (hr : r.Ok h) (S : Site) (g : ℕ) :
     (r.opening h S g).1 = if g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false then iroots r.x r.seen r.ρ else r.s.roots := by
   obtain ⟨Pt, d, spec, -, hP, h2, -, -, -, -, -, hρ, hrb, -⟩ := hr
   show rootsAt h r.s r.seen r.u g = _
-  simp only [rootsAt, hP, h2, hρ, hrb] <;> rfl
+  simp only [rootsAt, hP, h2, hρ, hrb]
+  rfl
 
 theorem row_opening {site : ℕ → Option Site} {c₀ : Code} {S : Site} {g : ℕ} (hs : site g = some S)
     (hR : r.RowAt h S g) :
@@ -386,7 +388,7 @@ theorem row_opening {site : ℕ → Option Site} {c₀ : Code} {S : Site} {g : �
     · show (rowBitsAt r.p r.wF (r.n h) S.port).getD ((revealCode h site c₀).place g).2 false =
         _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.β h) (r.wire h g)
       rw [hplace, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hlt, Option.getD_some, ← hcopy]
-      simp only [rowBitsAt, List.getElem_ofFn] <;> rfl
+      simp only [rowBitsAt, List.getElem_ofFn]
     · intro i _
       exact bitsOf_dataOf _ _ _ i
   rw [row, hrow]
@@ -397,7 +399,7 @@ theorem row_opening {site : ℕ → Option Site} {c₀ : Code} {S : Site} {g : �
         (2 * (r.sts[0]!.c.ports[S.port]!).words)
         (FlockSoundness.Typed.msgCol r.sts[0]!.c (r.n h % r.sts[0]!.c.g) S.port))
   rw [FlockSoundness.Discharge.Hidden.Any.rowMsg, hseg, hlen]
-  simp only [Option.isSome_none, Bool.false_eq_true, FlockSoundness.Discharge.Hidden.rowPre, hv2, eq_self_iff_true,
+  simp only [Option.isSome_none, Bool.false_eq_true, FlockSoundness.Discharge.Hidden.rowPre, hv2,
     ↓reduceIte]
   congr 1
   exact packBits_ofFn (_root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.n h / r.sts[0]!.c.g))
@@ -405,8 +407,9 @@ theorem row_opening {site : ℕ → Option Site} {c₀ : Code} {S : Site} {g : �
 
 theorem salt_opening (site : ℕ → Option Site) (c₀ : Code) (S : Site) (g : ℕ) :
     (revealCode h site c₀).salt (r.opening h S g).2 =
-      (_root_.Flock.InnerRows.salt r.p r.wF 0 (r.n h) S.port).data.toList :=
-  saltOf_dataOf (r.opening h S g).2 _ _ _ rfl
+      (_root_.Flock.InnerRows.salt r.p r.wF 0 (r.n h) S.port).data.toList := by
+  show saltOf (r.opening h S g).2 = _
+  rw [saltOf_dataOf (r.opening h S g).2 _ _ _ rfl]
 
 theorem path_opening (site : ℕ → Option Site) (c₀ : Code) (S : Site) (g : ℕ) :
     bytes ((revealCode h site c₀).π (r.opening h S g).2) = pathAt r.ins r.sts (r.n h) S.port := by
