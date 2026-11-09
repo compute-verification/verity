@@ -152,7 +152,7 @@ theorem Design.Two.firstRate_subsetInputs (d : Design.Two) {Q : ℕ} (hd : Subse
     sub_nonneg.2 (div_le_one_of_le₀ (by exact_mod_cast hQ) (Nat.cast_nonneg _))
   refine (d.subsetInputs_Pa_le hd hP hQ T hT).trans ?_
   rw [← prod_const]
-  refine prod_le_prod (fun ρ _ => ?_) (fun ρ _ => ?_) <;> split_ifs
+  refine prod_le_prod₀ (fun ρ _ => ?_) (fun ρ _ => ?_) <;> split_ifs
   · exact hr
   · simp
   · exact le_rfl
