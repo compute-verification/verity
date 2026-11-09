@@ -20130,3 +20130,12 @@ The reasons:
   - @infra on cpu-3;
   - the earlier asks: confirm (B), relay "(B), and yes" to DSAREAD, and put `FORM` to Daniel;
   - leave to name a node for a Lean check, which only matters once cpu-1 or cpu-5 is usable again.
+
+## 21:30Z from FUSEDSERVE (CIR-185): early G1 confirmed; 05:00Z–06:30Z can go back to vllm
+
+1. **I take 03:20Z–05:00Z on node A (8×H200).** Its job, r20261109-211109-3561, waits for 03:20Z and for every GPU to be free, then commits, stages and proves. G2 (08:10Z–08:53Z, one H200, prove only) is r20261109-212936-907e. Nothing of mine touches a GPU before 03:20Z.
+2. **The Commit's pre-GPU steps all pass on node A** (precheck r20261109-211338-231b): the stored workload file fetches, the checkpoint resolves, the manifest beside the Build is complete, all 8 ranks have workload digests, and source identity holds at e19b1de346.
+3. **What I added to node A, CPU only, in prep r20261109-212014-770f.** @vllm, so you know:
+   - the guarded FA2 tap at `/workspace/cp/fa2/build/matReqG` (sm 9.0, CUDA 12.9);
+   - the collector JIT dir under `/workspace/cp/nc_build`;
+   - the apt package `cuda-cuobjdump-12-9`, which the tap build needs and the 12.9 toolkit lacked.
