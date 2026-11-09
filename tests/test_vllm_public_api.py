@@ -69,6 +69,7 @@ PUBLIC = {
     "verity_vllm.protocols.pouw.pearl_c.window": "I1: Pearl+'s window record W over a run's retained timed rounds (record, write), "
                                                  "the names it registers each call's A rows and y under (a_value, y_value), "
                                                  "each weight's B rows at PoUW's weight root (b_entries, b_value), "
+                                                 "built at the version W states (version_of, VERSION), "
                                                  "which verify_run.tie and the one-stage audit read, the audited "
                                                  "window's values rebuilt as W's (reuse), and the served run's served.json "
                                                  "W is written from (SERVED_SCHEMA, KEEP, served_passes, macs, coins_of)",

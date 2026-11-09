@@ -9,6 +9,7 @@ CPU only: the passes are manifests the test writes.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import fields
 from pathlib import Path
 from types import SimpleNamespace
@@ -69,7 +70,8 @@ def test_w_registers_each_retained_timed_rounds_calls_under_the_rounds_served_nu
     w = PWR.write(tmp_path / "out" / "w.json", passes, [2, 3])
     assert json.loads((tmp_path / "out" / "w.json").read_text()) == w
     assert (w["format"], w["protocol"], w["previous"]) == (REG.FORMAT_V2, REG.PROTOCOL, None)
-    assert w["window"] == {"kind": "served", "entry": ENTRY, "scheme": SCHEME, "salt": SALT.hex()}
+    assert w["window"] == {"kind": "served", "entry": ENTRY, "scheme": SCHEME, "salt": SALT.hex(), "version": PWR.VERSION}
+    assert PWR.version_of(w) == PWR.VERSION == 2
     assert [e["value"] for e in w["registered"]] == ["pearl-a/2/0", "pearl-y/2/0", "pearl-a/2/1", "pearl-y/2/1",
                                                       "pearl-a/3/0", "pearl-y/3/0", "pearl-b/0", "pearl-b/1"]
     mans = [json.loads(Path(passes[i]["manifest"]).read_text()) for i in (3, 4)]
@@ -89,18 +91,36 @@ def test_w_registers_each_retained_timed_rounds_calls_under_the_rounds_served_nu
     assert PWR.record(mans, rounds=[2, 3]) == w and PWR.record(mans, "ab" * 64, [2, 3])["previous"] == "ab" * 64
     assert [e["value"] for e in PWR.write(tmp_path / "w3.json", passes, [3])["registered"]] == ["pearl-a/3/0", "pearl-y/3/0",
                                                                                                "pearl-b/0"]
+    old = PWR.record(mans, rounds=[2, 3], version=1)
+    assert old == {**w, "window": {"kind": "served", "entry": ENTRY, "scheme": SCHEME, "salt": SALT.hex()},
+                   "registered": w["registered"][:6]} and PWR.version_of(old) == 1
+
+
+def test_w_at_version_1_is_the_one_written_before_w_registered_the_weights():
+    """A W states its version in its header: version 2, or none, version 1 (the run of record's W, its header the kind,
+    entry, scheme and salt, its values the calls' alone). A header stating any other version, 1 included, is refused, as
+    is a W built at a version that isn't one."""
+    head = {"kind": "served", "entry": ENTRY, "scheme": SCHEME, "salt": SALT.hex()}
+    assert (PWR.version_of({"window": head}), PWR.version_of({}), PWR.VERSIONS) == (1, 1, (1, 2))
+    for v in (1, 3, "2", 2.0, True, None):
+        with pytest.raises(ValueError, match=re.escape(PWR.UNKNOWN_VERSION)):
+            PWR.version_of({"window": {**head, "version": v}})
+    with pytest.raises(ValueError, match="W is version 1 or 2, not 3"):
+        PWR.record([{"salt": SALT.hex()}], version=3)
 
 
 def test_w_is_refused_for_rounds_it_cant_register(tmp_path, monkeypatch):
     """A retained warm-up round (the verdict ties every retained round to W, which lists only the timed call's), a round
     that is no pass with calls or retained no manifest, no round, rounds out of order, a call that commits no y, passes
     under two salts, a weight a pass commits no root of, a weight two rounds commit as other rows (another root, or another
-    n) and rows that aren't hm96's: each refused, naming why, and nothing is written."""
+    n), a weight two calls of one pass read at other shapes, and rows that aren't hm96's: each refused, naming why, and
+    nothing is written."""
     out, passes = tmp_path / "w.json", served(tmp_path)
     good = json.loads(Path(passes[3]["manifest"]).read_text())
     later = json.loads(Path(passes[4]["manifest"]).read_text())
     rooted = {**later, "weights": {"0": {**later["weights"]["0"], "root": "c1" * 64}}}
     wider = {**later, "matmuls": [{**later["matmuls"][0], "n": 128}]}
+    reshaped = {**good, "matmuls": [good["matmuls"][0], {**good["matmuls"][1], "weight": 0}]}
     cases = [(lambda: PWR.write(out, passes, [1, 2]), "round 1 is the warm-up's (timed false) and retained"),
              (lambda: PWR.write(out, passes, [4]), "no round 4 among the run's 4 passes with calls"),
              (lambda: PWR.write(out, [{"units": 1}], [0]), "round 0 retained no manifest"),
@@ -116,7 +136,10 @@ def test_w_is_refused_for_rounds_it_cant_register(tmp_path, monkeypatch):
              (lambda: PWR.record([good, rooted], rounds=[2, 3]),
               "round 3's pass commits pearl-b/0 as other rows than an earlier round's"),
              (lambda: PWR.record([good, wider], rounds=[2, 3]),
-              "round 3's pass commits pearl-b/0 as other rows than an earlier round's")]
+              "round 3's pass commits pearl-b/0 as other rows than an earlier round's"),
+             (lambda: PWR.record([reshaped], rounds=[2]),
+              "round 2's call 1 (index 3) reads weight 0 as 128 rows of 128 words, and an earlier call as 64 of 128: W "
+              "registers one shape of each weight's B rows")]
     for call, why in cases:
         with pytest.raises(ValueError, match=why.replace("(", r"\(").replace(")", r"\)")):
             call()
@@ -154,8 +177,10 @@ def committed(key: bytes, calls: list[tuple[int, int, int, int, int]], s: int = 
 def test_the_audited_windows_values_are_ws_from_the_rows_its_proof_blocks_make():
     """`reuse` commits each value W registers from the rows the audited circuit's proof blocks make of it, as Pearl+
     committed the call's A rows and y, so each value's entry is W's and its tree opens each row at W's root, at the
-    round W numbers it (round 2, the timed call's first). W holds no salt key. Rows the proof blocks make otherwise (one bit
-    of one A row), another key, a W other than the passes' record, or the passes at another round is refused."""
+    round W numbers it (round 2, the timed call's first), W at version 2 or at version 1 (built at the version it states).
+    W holds no salt key. Rows the proof blocks make otherwise (one bit of one A row), another key, a W other than the
+    passes' record at its version (a version-2 W's values under a header that states none), or the passes at another
+    round is refused."""
     key = bytes(range(100, 132))
     man, rows, _b = committed(key, [(7, 16, 5, 64, 128), (8, 32, 17, 128, 64)], s=2)
     w = PWR.record([man], rounds=[2])
@@ -167,12 +192,16 @@ def test_the_audited_windows_values_are_ws_from_the_rows_its_proof_blocks_make()
     for v, x in got.items():
         root = bytes.fromhex(theirs[v]["root"])
         assert all(G.verify_read(x.domain, root, p, x.bcs[p], x.path(p), G.SCHEMA_SEG) for p in range(x.leaves))
+    old = PWR.record([man], rounds=[2], version=1)
+    assert {v: x.entry() for v, x in PWR.reuse(old, [man], lambda name, n, empty: rows[name], rounds=[2]).items()} == theirs
+    unstated = {**w, "window": {k: x for k, x in w["window"].items() if k != "version"}}
     flipped = {**rows, "pearl-a/2/1": rows["pearl-a/2/1"].copy()}
     flipped["pearl-a/2/1"][3, 0] ^= 1
     for bad, mans, of, at, why in (
             (w, [man], flipped, [2], "pearl-a/2/1: the rows the audited circuit's proof blocks make of it are not"),
             (w, [{**man, "hm96_salt_key": bytes(32).hex()}], rows, [2], "pearl-a/2/0: the rows"),
             ({**w, "registered": w["registered"][:-1]}, [man], rows, [2], "W is not the window record of these passes"),
+            (unstated, [man], rows, [2], "W is not the window record of these passes"),
             (w, [man], rows, None, "W is not the window record of these passes")):
         with pytest.raises(ValueError, match=why):
             PWR.reuse(bad, mans, lambda name, n, empty, of=of: of[name], rounds=at)
