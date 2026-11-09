@@ -81,10 +81,9 @@ def first_seen(ps: list[tuple[datetime, str]], since: datetime) -> dict[str, dat
 def _labels(target: str, key: str) -> list[dict]:
     r = subprocess.run(["research", "data", "labels", target, "--key", key, "--history", "--json"], capture_output=True,
                        text=True, env={**os.environ, "RESEARCH_AT_CHECKOUT": "1"})
-    try:
-        return json.loads(r.stdout or "[]")
-    except json.JSONDecodeError:
-        return []
+    if r.returncode:
+        raise SystemExit(f"research data labels {target} --key {key} failed ({r.returncode}): {r.stderr.strip()[-400:]}")
+    return json.loads(r.stdout or "[]")
 
 
 def _marks(pr: int, head: str) -> tuple[datetime | None, datetime | None]:
