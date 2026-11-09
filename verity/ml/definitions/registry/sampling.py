@@ -177,11 +177,13 @@ def _i32(u: int) -> int:
     return u - (1 << 32) if u & 0x80000000 else u
 
 
-def nv_logf(a: int) -> int:
-    """libdevice `__nv_logf` on an fp32 word (FTZ)."""
+def nv_logf(a: int, ftz: bool = True) -> int:
+    """libdevice `__nv_logf` on an fp32 word (FTZ); with `ftz` False its build without flush-to-zero, whose 2^23 scaling of an
+    input below FLT_MIN is ``mul.rn.f32`` (exact), so a subnormal's log is finite. No later operand or result of either build is
+    subnormal, so the builds differ only in that scaling."""
     a &= M32
     small = _f(a) < _f(FLT_MIN_BITS)
-    a2 = mul_ftz(a, TWO_P23_BITS) if small else a
+    a2 = (mul_ftz(a, TWO_P23_BITS) if ftz else _u(_f(a) * 8388608.0)) if small else a
     i0 = 0xC1B80000 if small else 0
     ai = _i32(a2)
     e = (ai - 1059760811) & -8388608
@@ -215,9 +217,10 @@ def _gpu_nan(u: int) -> int:
     return LOG_NAN if (u & 0x7F800000) == 0x7F800000 and (u & 0x7FFFFF) else u
 
 
-def nv_logf_gpu(a: int) -> int:
-    """`nv_logf` with every NaN result `LOG_NAN`, the GPU's (`NvLogf_v2`); every other word is `nv_logf`'s."""
-    return _gpu_nan(nv_logf(a))
+def nv_logf_gpu(a: int, ftz: bool = True) -> int:
+    """`nv_logf` with every NaN result `LOG_NAN`, the GPU's (`NvLogf_v2`; without `ftz`, `NvLogf_v4`); every other word is
+    `nv_logf`'s."""
+    return _gpu_nan(nv_logf(a, ftz))
 
 
 def nv_log1pf_gpu(a: int) -> int:

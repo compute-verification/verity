@@ -17,7 +17,7 @@ the GPU's (`Binary`), as are `silu_backward`'s operations, `lerp`'s, `addcdiv`'s
 (`SiluBackward`, `Lerp`, `Addcdiv`, `ForeachAdd`, `FusedAdamW`, whose `beta^step` is `exp(step * log(beta))`: CUDA's `powf` is not
 modeled); a vector norm or a sum of a whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`); an f32
 embedding's gradient is its kernels' (`EmbeddingDenseBackward`); and the conversions to bf16, to and from f16 and from f32 to
-int64 and uint8, a clamp and a `kthvalue` are its own (`rules.training_masks`).
+int64 and uint8, a clamp and a `kthvalue` are its own (`rules.training_masks`), and `log` is CUDA's `logf` (`Log`).
 
     training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
@@ -38,6 +38,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import scalar as SC
 from verity.ml.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.ml.circuits.types import Array, Value
+from verity.ml.definitions.registry import gumbel_boolean as GBL
 from verity.ml.definitions.registry import int8_exact as IE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
@@ -216,6 +217,34 @@ class Unary(_TrainRule):
             y = ew(P.F32Add, one, (_const(ctx, node, 0), None))
         ctx.define(node, _rounded(ctx, node, y[0].reshape(_tensor_type(S, 32)), S))
         ctx.record(self, node, {"op": str(t), "exponent": e, "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"x{math.prod(S)}")
+
+
+class Log(_TrainRule):
+    """`log` of an f32 or bf16 value at a compute capability `cc`, as torch's CUDA kernel computes it: CUDA's `logf`, which is
+    libdevice's ``__nv_logf`` without flush-to-zero (`NvLogf_v5`, every NaN result 0x7FFFFFFF), a bf16 operand widened and the
+    result rounded by `F2fpBf16_v1`. Without `cc` it refuses: torch CPU's vectorized log is not modeled."""
+    info = _info("Log", "aten.log of f32 or bf16 at a compute capability", "a compute capability",
+                 "the operand is an f32 or bf16 value", "one batch per step over the elements")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
+
+    def targets(self):
+        return {aten.log.default}
+
+    def applies(self, node, ctx):
+        if self.cc is None:
+            return "numerics_unregistered: torch CPU's log is not modeled; at a compute capability it is CUDA's logf"
+        why = _operand_ok(ctx, node.args[0], tuple(_DT))
+        if why or not isinstance(ctx.val(node.args[0]), Coll):
+            return why or "the operand is not a value"
+        return True
+
+    def emit(self, node, ctx):
+        S = ctx.shape_of_node(node)
+        y = _ew(ctx, node, GBL.NvLogfV5, [_operand(ctx, node, node.args[0], S)], S)
+        ctx.define(node, _rounded(ctx, node, y, S, P.F2fpBf16))
+        ctx.record(self, node, {"shape": list(S), "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"NvLogf_v5 x{math.prod(S)}")
 
 
 class Lerp(_TrainRule):
@@ -714,7 +743,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     last = ([] if cc else [Binary()]) + [Unary(), Lerp(cc), Addcmul(), Addcdiv(cc), SiluBackward(cc), ForeachAdd(cc),
                                          FusedAdamW(cc), FullReduce(cc), Reduce(), IntSum(), AMax(), SafeSoftmax(),
                                          SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(), NllLossForward(), NllLossBackward(),
-                                         EmbeddingDenseBackward(cc), Compare(), Logic(), IntOps(), Where(), Clamp(cc), Index(),
+                                         EmbeddingDenseBackward(cc), Log(cc), Compare(), Logic(), IntOps(), Where(), Clamp(cc), Index(),
                                          KthValue(cc), Copy(cc)] + ([] if cc else [Cast()])
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
     return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
@@ -722,5 +751,5 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Addcdiv", "SiluBackward", "ForeachAdd", "FusedAdamW",
            "FullReduce", "Reduce", "IntSum", "AMax", "SafeSoftmax", "SoftmaxBackward", "LogSoftmax", "LogSoftmaxBackward",
-           "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward", "Compare", "Logic", "IntOps", "Where", "Clamp", "Cast",
+           "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward", "Log", "Compare", "Logic", "IntOps", "Where", "Clamp", "Cast",
            "Index", "KthValue", "Copy"]
