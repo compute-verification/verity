@@ -53,6 +53,12 @@ def _wire(m, dst, port):
     return next(w for w in m["wires"] if w[0] == dst and w[1] == port[0] and w[2] == port[1])
 
 
+def _other_width(m):
+    """stage0's input port 0 wired from a port of the unit's of another width."""
+    w = _wire(m, "stage0", (0, 0))
+    w[5] = next(p for p, n in enumerate(m["out_widths"][0]) if n != m["in_widths"][1][0])
+
+
 def test_a_split_is_its_definitions_lowering_by_construction(split):
     """Three nets and three slot words (two ex2, one rcp of an ex2's value): each slot word is one uninterpreted node per
     table and index on both sides, so the forms agree without reading a table."""
@@ -77,7 +83,7 @@ def test_the_command_holds_a_registered_definitions_split(tmp_path):
     (lambda m: m["wires"].append(list(m["wires"][0])), "wires"),
     (lambda m: m["wires"].append(["unit", 0, 0, "unit", 0, 0]), "wires"),
     (lambda m: _wire(m, "lookup:rcp", (0, 0)).__setitem__(3, "stage1"), "wires"),
-    (lambda m: _wire(m, "stage0", (0, 0)).__setitem__(5, 1), "wires"),
+    (_other_width, "wires"),
     (lambda m: m["outs"][-1].__setitem__(0, ["to", 9]), "ports"),
 ], ids=["a port no wire fills", "a port wired twice", "a wire into the unit", "an index from a later net",
         "a width that disagrees", "no outputs"])

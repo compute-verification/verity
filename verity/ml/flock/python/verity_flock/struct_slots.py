@@ -5,8 +5,11 @@ unit's, the last stage returning the outputs.
 
 Depth is `read_slots`' (an input bit 0, a row its operands' greatest, a slot read's value bits one more than its index's
 greatest), found once per Definition and pattern of its inputs' depths (`_Info`), so a Definition is split once per depth
-pattern however many copies place it, and the split never walks the unrolled rows. A Definition's part in stage s (`_Proj`)
-holds, in their order: its rows of depth s; the index bits of each read whose index is of depth s, committed; the value bits
+pattern however many copies place it, and the split never walks the unrolled rows. A row is placed in the stage of its depth,
+or as late as what reads it allows (`_Split.plan`, once per depth pattern and pattern of its caller's reads), so a value only a
+later stage reads is computed there from what it was computed from; `lower` keeps the placement whose nets pass fewer bits
+on (`boundary`). A Definition's part in stage s (`_Proj`)
+holds, in their order: its rows placed in stage s; the index bits of each read whose index is of depth s, committed; the value bits
 of each read whose value is of depth s, copied from the read's slot word; and its copies' parts in stage s. Its inputs are
 the inputs it reads in stage s; then each earlier value it reads (its own or a copy's, of depth p < s), grouped by p, its
 own first and then each copy's in copy order; then each slot word it reads, its own then its copies': so a run of copies
@@ -56,13 +59,18 @@ class Split:
 
 @dataclass
 class _Info:
+    """A Definition at a pattern of its inputs' depths (``prof``), or a plan of it (`_Split.plan`): each own column's stage
+    (``dep``), its copies (``kids``, each at its start), each slot read's index depth, the stages it has rows in, and (a
+    plan) the earliest stage reading each of its inputs (``in_dem``)."""
+
     e: int
-    prof: bytes
+    prof: Any
     dep: dict = field(default_factory=dict)
     starts: list = field(default_factory=list)
     kids: list = field(default_factory=list)
     site_d: list = field(default_factory=list)
     stages: set = field(default_factory=set)
+    in_dem: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -199,6 +207,66 @@ class _Split:
                 I.stages |= kid.stages
         self.infos[key] = I
         return I
+
+    def plan(self, I: _Info, dem: dict[int, int]) -> _Info:
+        """``I`` with each row as late as what reads it allows: its stage the earliest of its readers', never before its
+        depth (a row nothing reads at its depth), ``dem`` the earliest stage reading each column of it its caller reads. A
+        slot read's index stays at its depth and its value bits one later, so the slots are wired as the depths place them;
+        reading the items last to first, every reader of an item is placed before it."""
+        key = (I.e, I.prof, tuple(sorted(dem.items())))
+        J = self.infos.get(key)
+        if J is not None:
+            return J
+        P = self.prep[I.e]
+        d = P.d
+        c0, c1 = d.cols, d.cols + d.ins
+        cons: dict[int, int] = {}
+        kcons: dict[int, dict[int, int]] = {}
+        J = _Info(I.e, key[1:], {}, I.starts, [None] * len(I.kids), I.site_d)
+
+        def read(x: int, s: int) -> None:
+            if x >= c1:
+                return
+            if x >= c0:
+                J.in_dem[x - c0] = min(J.in_dem.get(x - c0, s), s)
+            elif x in I.dep:
+                cons[x] = min(cons.get(x, s), s)
+            else:
+                k = self._kid(I, x)
+                if k is not None:
+                    m = kcons.setdefault(k[0], {})
+                    m[x - k[1]] = min(m.get(x - k[1], s), s)
+
+        for x, s in dem.items():
+            read(x, s)
+        ki = len(I.kids)
+        for _pos, kind, p in reversed(P.items):
+            if kind == 0:
+                col, a, b = d.rows[p]
+                v = max(I.dep[col], cons.get(col, I.dep[col]))
+                J.dep[col] = v
+                J.stages.add(v)
+                for x in a + b:
+                    read(x, v)
+            elif kind == 1:
+                site, q = P.sites[p], I.site_d[p]
+                for _j, c in site.vals:
+                    J.dep[c] = q + 1
+                J.stages.update((q, q + 1))
+                for f in site.idx:
+                    for x in f:
+                        read(x, q)
+            else:
+                ki -= 1
+                start, kid = I.kids[ki]
+                kp = self.plan(kid, kcons.pop(ki, {}))
+                J.kids[ki] = (start, kp)
+                J.stages |= kp.stages
+                bound = _bound(d.calls[p[0]], p[1])
+                for k, v in kp.in_dem.items():
+                    read(bound[k], v)
+        self.infos[key] = J
+        return J
 
     def col_in(self, pr: _Proj, I: _Info, x: int) -> int:
         c = pr.own.get(x)
@@ -356,9 +424,10 @@ def _groups(g: list[str]) -> tuple[int, list[int], list[int]]:
     return v[2], widths, v[at + 4:at + 4 + n_out]
 
 
-def split(t: T.Tmpl, sites: dict[int, list], name: str = "unit") -> Split | None:
+def split(t: T.Tmpl, sites: dict[int, list], name: str = "unit", late: bool = False) -> Split | None:
     """``t`` (`struct_lower.lower`'s with ``slots``, ``sites`` each Definition's `Spec.sites`) split at its slot reads (the
-    module docstring); None when it has none."""
+    module docstring), each row in the stage of its depth or, ``late``, as late as what reads it allows (`_Split.plan`);
+    None when it has none."""
     S = _Split(t, sites)
     r0 = t.defs[t.root]
     _iw, in_widths, ret_widths = _groups(t.groups)
@@ -379,6 +448,8 @@ def split(t: T.Tmpl, sites: dict[int, list], name: str = "unit") -> Split | None
     D = max([*top.stages, *(rdepth(x) for _c, a in outs for x in a)], default=0)
     if D == 0:
         return None
+    if late:
+        top = S.plan(top, {x - c0.base: D for _c, a in outs for x in a if c0.base <= x < c0.base + top_cols})
     parts = [S.proj(top, s) if s in top.stages else None for s in range(D + 1)]
     # each later stage's root inputs: per depth p its addresses (("in", c) a unit input, ("t", a) the top's), then words
     needs: list[dict[int, list]] = []
@@ -516,7 +587,17 @@ def lower(target, name: str = "unit", ports: SL.Ports | None = None, slots: dict
     """``target`` lowered structurally with its reads of ``slots``' tables (default `SLOTS`) in lookup slots: the split
     (None: it reads no such table, and the template is the unit), the template it was split from, and the lowerer."""
     tm, lw, _top = SL.lower(target, name=name, ports=ports, slots=SLOTS if slots is None else slots, **kw)
-    return split(tm, {sp.index: sp.sites for sp in lw.order if sp.sites}, name), tm, lw
+    sites = {sp.index: sp.sites for sp in lw.order if sp.sites}
+    early = split(tm, sites, name)
+    if early is None:
+        return None, tm, lw
+    late = split(tm, sites, name, late=True)
+    return (late if boundary(late) < boundary(early) else early), tm, lw
+
+
+def boundary(sp: Split) -> int:
+    """The bits a split's nets pass to later nets: what its stages read from earlier nets, its slots' words aside."""
+    return sum(w for tags, ws in zip(sp.ins[1:], sp.in_widths[1:]) for tag, w in zip(tags, ws) if tag[0] == "from")
 
 
 def _lookup(table: str, idx: np.ndarray) -> np.ndarray:
@@ -609,5 +690,5 @@ def stats(sp: Split) -> dict:
                      "refs": sum(len(a) + len(b) for d in tm.defs for _c, a, b in d.rows),
                      "calls": sum(len(d.calls) for d in tm.defs), "defs": len(tm.defs),
                      "unrolled_rows": T.totals(tm)["rows"], "root_cols": tm.defs[tm.root].cols})
-    return {"nets": nets, "lookups": len(sp.lookups), "wires": len(sp.wires),
+    return {"nets": nets, "lookups": len(sp.lookups), "wires": len(sp.wires), "boundary_bits": boundary(sp),
             "tables": sorted({t for t, _s in sp.lookups})}

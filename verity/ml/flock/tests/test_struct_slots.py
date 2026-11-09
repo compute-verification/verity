@@ -3,11 +3,13 @@ template a net, wired as `read_slots` wires a flat unit's, computes what the fla
 slot read is no split."""
 from __future__ import annotations
 
+import numpy as np
 from verity.ml.circuits.defs import CompositeDefinition
 from verity.ml.circuits.ops.fp32 import F32AddFtz
 from verity.ml.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz
 from verity.ml.circuits.refs import array_of
 from verity.ml.circuits.types import Array, Value
+from verity_flock import struct_lower as SL
 from verity_flock import struct_slots as SS
 from verity_flock import tmpl as T
 
@@ -39,6 +41,19 @@ def test_a_read_of_a_reads_value_is_a_later_stage_and_the_split_is_the_flat_lowe
     stages = {(SS.net_name(s), 0, p) for s in range(1, len(sp.nets)) for p in range(len(sp.in_widths[s]))}
     assert len(dsts) == len(set(dsts)) and set(dsts) == slots | stages
     assert SS.check(CHAIN, seed=1)["mismatched_bits"] == 0
+
+
+def test_rows_only_a_later_stage_reads_are_placed_there_when_that_passes_fewer_bits():
+    """Placed at their depths, the unit passes on what it computes from x and y for stage1; placed as late as their readers
+    allow, stage1 computes it from x and y itself. Both splits compute the same outputs, and `lower` keeps the one passing
+    fewer bits between its nets."""
+    tm, lw, _top = SL.lower(CHAIN, slots=SS.SLOTS)
+    sites = {sp.index: sp.sites for sp in lw.order if sp.sites}
+    early, late = (SS.split(tm, sites, late=v) for v in (False, True))
+    assert SS.boundary(late) < SS.boundary(early) and all(T.ordered(n)["ok"] for n in late.nets)
+    x = np.random.default_rng(2).integers(0, 1 << 64, size=(64, 1), dtype=np.uint64)
+    assert np.array_equal(SS.evaluate(early, x), SS.evaluate(late, x))
+    assert SS.boundary(SS.lower(CHAIN)[0]) == SS.boundary(late)
 
 
 def test_a_split_is_written_and_read_back(tmp_path):
