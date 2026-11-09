@@ -7,31 +7,33 @@ rewrites each tick: each candidate's verdict beside graph2's, and the jobs its g
 
 The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`refs/vqueue/`), so drive's clone, its worktree and
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
-(`Queue.entries`, reading drive's state), with a land verdict by a non-owner or under the low-risk rule (drive.toml's
-`lowrisk_lane` and `lowrisk_excludes` at `main`), not on `main` yet, ranked by drive's priority file then mark time, each after
-the ready PRs it contains; `files` is its change against its merge base with `main`, `lean` drive's Lean-change test
-(`queue.lean_change`), and `conflict` whether `Queue._merge` merges it onto `main`, kept by (head, `main`).  `candidates` are
-origin's `queue/<sha12>` branches, each the `Queue: #N` merges on its first-parent line down to `main` or another candidate.
-A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`) on the merge gate's tasks, those drive's
-`executor = "on"` path gates on (none of `drive.SLIM_STEPS`, none off the gate in policy.toml at the candidate): a failed or
-blocked task is fail, else a task whose newest result is graph2's infra error (`detail.infra`) is infra, else every gating task
-passed is pass, else pending.  No graph while graph2 says its listing failed (`verdict`, else its `ready_verdict` label), or a
-graph that can't be read, is list-failed.  graph2's own verdict, where it has one, is compared and a disagreement logged.
+(`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
+`signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner or under the low-risk
+rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`), not on `main` yet, ranked by drive's priority file then
+mark time, each after the ready PRs it contains; `files` is its change against its merge base with `main`, `lean` drive's
+Lean-change test (`queue.lean_change`), and `conflict` whether `Queue._merge` merges it onto `main`, kept by (head, `main`).
+`candidates` are origin's `queue/<sha12>` branches, each the `Queue: #N` merges on its first-parent line down to `main` or
+another candidate, lowest first.  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`) on the merge
+gate's tasks, those drive's `executor = "on"` path gates on (none of `drive.SLIM_STEPS`, none off the gate in policy.toml at
+the candidate): a failed or blocked task is fail, else a task whose newest result is graph2's infra error (`detail.infra`) is
+infra, else every gating task passed is pass, else pending.  No graph while graph2 says its listing failed (`verdict`, else its
+`ready_verdict` label), a graph that can't be read, or no graph of a candidate the log never enqueued is list-failed.  graph2's
+own verdict, where it has one, is compared and a disagreement logged.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
 owner told once per head and base), pushes `queue/<sha12>` and enqueues `ready:<sha>` as graph/v2 at its priority.  Advance
 pushes `main` to the candidate with a lease on its base and does what drive does when `main` moves (`Driver._on_main`).  Drop
 cancels the check (graph2's `cancel`, where it has one), deletes the branch and logs its outcome.  Eject withdraws the PR's
-ready mark at its head (`Queue.eject`) and tells its owner the failed tasks, their keys and where their logs are.  Retry
-enqueues again, once for each terminal infra or list-failed verdict (by its evidence: the infra results there are, graph2's
-listing verdict).  Ring tells infra's handle (`drive.INFRA`), once a candidate.  Each action and its result is one JSON line
-in the log.
+ready mark at its head (`Queue.eject`, under the clone's queue lock) and tells its owner the failed tasks, their keys and where
+their logs are.  Retry enqueues again, once for each terminal infra or list-failed verdict (by its evidence: the infra results
+there are, graph2's listing verdict).  Ring tells infra's handle (`drive.INFRA`), once a candidate.  Each action and its result
+is one JSON line in the log, whose directory also holds the loop's caches.
 
 `--shadow` logs advance, eject, ring and every message with `shadow: true` and does none of them, and builds, drops and
 retries: its `main` is the newest candidate it advanced (logged) while origin's `main` is below it, a pass its `main` no longer
-holds is no history, and a PR it ejected stays out until marked again.  `--dry-run` prints the snapshot and the actions and writes nothing: no ref on origin, no log, no
-enqueue, no label, no message.  The loop never writes drive's state, its priority file, `next`, `checked` or a label, but an
-eject's without `--shadow`.
+holds is no history, and a PR it ejected stays out until marked again.  `--dry-run` prints the snapshot and the actions and
+writes nothing: no ref on origin, no log, no enqueue, no label, no message.  The loop never writes drive's state, its priority
+file, `next`, `checked` or a label, but an eject's without `--shadow`.
 
 On the control pod it runs beside drive, from a pinned checkout of this tree, in drive's clone (or its own clone of origin):
 `research queue vqueue --shadow --log /data/vqueue/decisions.jsonl`, with `--once` for one tick and `--dry-run` to see one.
