@@ -263,7 +263,7 @@ read at a replay block.
 * `slots`, `refuses` (at `CompiledTwo.Scope`), `fixed` and `runs`: `Sessions`'.
 * `unions`: on a statement in scope, both waits' unions are within their bits: the outer wait's, over the sets' counts
   per cell, `M ≤ n_out` (`footBits`), and the inner wait's, over sets of the proof blocks of the replay blocks `r`
-  samples, `|sampleBlocks| ≤ n_in` at every `r`.
+  samples, `|sampleBlocks| ≤ n_in` at every `r` of which some second-stage fork is accepted.
 * `interior`: the roots a run shows for a replay block's interior values are the same at fresh second-stage coins.
 * `opens`: on a statement in scope, at an accepted run that samples `u` and shows its session, a witness in `A`'s
   relation at the session's statement reveals openings such that any values and interior values agreeing with those
@@ -281,7 +281,9 @@ structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
             escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (X ∩ cell Pt d.part ρ t).card
   slots : ∀ x r, (L.checked x r).length ≤ L.nPU x
   unions : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
-    footBits Pt d ≤ L.nOut x ∧ ∀ r : Fin (L.V.k x) → Coin, (sampleBlocks Pt d.part (L.replaySample x r)).card ≤ L.nIn x
+    footBits Pt d ≤ L.nOut x ∧ ∀ (Ω : Type) (P : Prover Ω) ω (r e : Fin (L.V.k x) → Coin),
+      (run H P L.V x ω (forkOn (L.stage2 x) r e)).out = .acc →
+        (sampleBlocks Pt d.part (L.replaySample x r)).card ≤ L.nIn x
   refuses : ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P L.V x ω r).out = .acc → L.Scope x
   interior : ∀ x (Ω : Type) (P : Prover Ω) ω r e ρ,
     L.iroots x (run H P L.V x ω (forkOn (L.stage2 x) r e)).seen ρ = L.iroots x (run H P L.V x ω r).seen ρ
