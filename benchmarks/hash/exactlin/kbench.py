@@ -183,8 +183,8 @@ def timed(fns: dict, reps: int, clock: Callable[[], int | None], calls: int,
     return {arm: statistics.median(v) for arm, v in us.items()}, us, {"clocks": clocks, "replays_per_item": per}
 
 
-def shape_row(n: int, k: int, m: int, reps: int, clock: Callable[[], int | None], arms: tuple[str, ...] = ARMS, names: list[str] | None = None,
-              special: bool = False) -> dict:
+def shape_row(n: int, k: int, m: int, reps: int, clock: Callable[[], int | None], arms: tuple[str, ...] = ARMS,
+              names: list[str] | None = None, special: bool = False) -> dict:
     name = ",".join(names or [])
     copies = copies_for(n, k)
     x = kgate.activations(m, k, 7 + m, special=special)
