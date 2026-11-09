@@ -5838,10 +5838,11 @@
     "Definitions.Core",
     "Definitions.WeightSecurity",
     "Definitions.WeightSecurity.Assumptions",
+    "Definitions.Assumptions",
     "Definitions.WeightSecurity.Guarantees"
    ],
    "except": [],
-   "why": "a guarantee is stated over weight security's definitions and assumptions, never over a proof",
+   "why": "a guarantee is stated over weight security's definitions, its premises and the named assumptions, never over a proof",
    "sealed": true
   },
   "Definitions.Assumptions": {
@@ -5853,10 +5854,12 @@
     "Definitions.Accounting",
     "Definitions.Nci",
     "Definitions.Pouw",
+    "Definitions.WeightSecurity",
+    "Definitions.WeightSecurity.Assumptions",
     "Definitions.Assumptions"
    ],
    "sealed": true,
-   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's (Definitions.Nci.Cut, Definitions.Nci.Formalism) and PoUW's cost model (Definitions.Pouw.Game.Defs, for Definitions.Assumptions.Pouw), never a guarantee or a proof"
+   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's (Definitions.Nci.Cut, Definitions.Nci.Formalism), PoUW's cost model (Definitions.Pouw.Game.Defs, for Definitions.Assumptions.Pouw) and weight security's definitions and premises (for Definitions.Assumptions.WeightSecurity), never a guarantee or a proof"
   }
  },
  "reads_exempt": {
