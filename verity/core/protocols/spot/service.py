@@ -2021,8 +2021,8 @@ class Stream:
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the registration it follows, and the copies given here, as `register` takes them), and
         `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
-        It names no links or wires: the verifier derives them from the replay block's Definition
-        (`second_stage.replay_links`, `second_stage.replay_wires`).
+        It names no links, wires or rows: the verifier derives them from the replay block's Definition
+        (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`).
         Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
         `interior-registered` (it has one), or either check failing."""
         first = draw.replay_sample or draw
@@ -2356,8 +2356,9 @@ class Stream:
                    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
         the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
-        interior program's strata make, the design's links and wires, which it derives from the replay block's
-        Definition (`second_stage.replay_links`, `second_stage.replay_wires`), the reads the verdicts report, what they
+        interior program's strata make, the design's links and wires and their rows, which it derives from the replay
+        block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`), the
+        reads the verdicts report, what they
         name of each session they accepted
         (`second_stage.verified_of`), and the reference header and registered reads the params `proofs` give each
         template, `template_circuits`), and the registration's
@@ -2384,7 +2385,8 @@ class Stream:
                      SS.replay_links(e.program, descriptor_id(self.replay), reg.record),
                      A.session_registered(verdicts), SS.verified_of(verdicts),
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
-                     wires=SS.replay_wires(e.program, descriptor_id(self.replay)))
+                     wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
+                     rows=SS.replay_rows(e.program, descriptor_id(self.replay)))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)
