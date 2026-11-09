@@ -4,10 +4,10 @@
 # these rename an executable, a constant or a lock's reason, so the change they make is an ordinary one, reviewed as such.
 # - `nci-` becomes `inference-only-` where it starts a name in kebab case: the check's executables (`nci-check`, the six
 #   difftests') and `nci-phases`, in the lakefiles, the scripts that build and run them, and every mention.
-# - The constants: `NCI_SCRIPTS`, `NCI_CONSTS`, `NCI_CONSTANTS` and the variable `NCI_COST_FLAGS`, and `NCI` alone in the
-#   three files that name the check's package or the policy's protocol id so.
+# - The constants `NCI_SCRIPTS`, `NCI_CONSTS` and `NCI_CONSTANTS`, and the variable `NCI_COST_FLAGS`.
 # - The check's lock's `runs` reasons, which name the check's Lean and its Python reference.
-# What stays: `benchmarks/nci/`'s own names and the slowdown calculator's `draft:nci-search` ([keep_in], [keep]), and the
+# What stays: a constant named `NCI` alone (three files name the check's package or the policy's protocol id so), a hand
+# edit, since one word has one map and `inference_only_map.toml` has this one's; `benchmarks/nci/`'s own names and the slowdown calculator's `draft:nci-search` ([keep_in], [keep]), and the
 # ids that end in a version (`verity/nci-glm/v1`), until a format version ([keep]).
 
 [words]
@@ -21,19 +21,10 @@
 files = ["*"]
 words = { "nci-" = "inference-only-" }
 
-# A constant named `NCI` alone: the check's Lake package, or the policy's protocol id.
-[[words_in]]
-files = [
-    "benchmarks/verifier_cost/inference_only_cost.py",
-    "benchmarks/verifier_cost/run.py",
-    "verity/core/protocols/spot/tests/test_parties.py",
-]
-words = { "NCI" = "INFERENCE_ONLY" }
-
 # The check's lock: its `runs` reasons (`rename.py` leaves a lock's records to `check.py --update --moved`).
 [[words_in]]
 files = ["verity/core/protocols/network/inference_only/lean/lean-audit.json"]
-words = { "NciCheck" = "InferenceOnlyCheck", "Nci" = "InferenceOnly", "nci_reference" = "inference_only_reference" }
+words = { "NciCheck" = "InferenceOnlyCheck", "Nci.Complies'" = "InferenceOnly.Complies'", "nci_reference" = "inference_only_reference" }
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the Glossary's table
