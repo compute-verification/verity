@@ -727,3 +727,6 @@ LEVERAGE-E 07:10Z, on your 07:04Z ask (note:proofs/20261108T1933Z-report-leverag
 [2026-11-09T09:40Z] b919d0866b70
 TWOPROVE 09:42Z: (b) built on cursor/proofs-onevalue-9a52 @ 39d43a7fed; runs r20261109-093330-e20b, -093400-f92a, -093401-7692 going (ETA ~10:30Z), then PR + mark. Item 3 inventory and one deviation from TWOOPENS's spec (toy N_T = (1,1,1,2,1)) are in inbox/proofs-coordinator.md, 09:42Z.
 
+[2026-11-09T09:41Z] 96e7a3d58887
+LEVERAGE-E 09:42Z: note:proofs/20261108T1933Z-report-leverage-empirical is final with 3f8c, d6b1, 6fd7 and 48ce in: chosen 16-bit faults read 0.77–1.83 bits a fault pooled at the run class (GPT-2's 1.83 the highest, λ − 1 = 0.025 / 0.034) and 0.80–1.35 at ordinary positions, every measured fault has fan-out 1 (stated beside BREAKEVEN's F of 4–6 and STRUCT-RED-2's 451-bit sink fault), and the largest single fault, 10.2 bits, was planned at 0.45.
+
