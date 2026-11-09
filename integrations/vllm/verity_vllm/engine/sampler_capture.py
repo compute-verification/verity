@@ -64,7 +64,7 @@ class Capture:
 def piece_rows(logits: Any, ids: Any, c: int | None = None, *, pad: int | None = None) -> dict[str, dict[str, Any]]:
     """A token select's pieces' rows on the logits' device, as `pipeline.interior_rows.pieces` lays them out on the host:
     ``logits`` the n kept rows (bf16, or their int16 bits), ``ids`` the n sampled ids, ``c`` `TokenSelect_v4`'s chunk
-    (``min(CHUNK, V)``). By template, its ports' u16 words as int16: each token's V / c `TokenSelectChunk_v2` units (a
+    (``min(CHUNK, V)``). By template, its ports' u16 words as int16, each input row named after its parameter: each token's V / c `TokenSelectChunk_v2` units (a
     chunk of its row in, its first maximum above -inf and that maximum's index out, a NaN never taken), then its
     `TokenSelectCombine_v2` unit (logits[0] and the chunks' outputs in, the token out). Refused unless the combine
     selects every id. ``pad``: the size class's tokens, the last row and id repeated to it first, as `Span.padded` pads
@@ -97,8 +97,8 @@ def piece_rows(logits: Any, ids: Any, c: int | None = None, *, pad: int | None =
     if not torch.equal(tok, ids):
         raise ValueError(f"the chunks and combine select {tok.tolist()[:8]}..., the sampler {ids.tolist()[:8]}...")
     i32 = idx.to(torch.int32).view(torch.int16)
-    return {f"TokenSelectChunk_v2{{C={c}}}": {"in0": x.reshape(n * k, c), "o0": best[:, None], "o1": i32.view(n * k, 2)},
-            f"TokenSelectCombine_v2{{V={V},C={c}}}": {"in0": x[:, :1], "in1": best.view(n, k), "in2": i32.view(n, 2 * k),
+    return {f"TokenSelectChunk_v2{{C={c}}}": {"x": x.reshape(n * k, c), "o0": best[:, None], "o1": i32.view(n * k, 2)},
+            f"TokenSelectCombine_v2{{V={V},C={c}}}": {"x0": x[:, :1], "best": best.view(n, k), "idx": i32.view(n, 2 * k),
                                                       "o0": ids.to(torch.int32).view(torch.int16).view(n, 2)}}
 
 

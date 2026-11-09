@@ -61,14 +61,14 @@ def _spans(seed: int) -> tuple[IR.Span, ...]:
     out, = evaluate(T, t_x0, t_best, [tok])
     got = []
     for fn, ins, o in ((W, [[x0], best, _u32(idx).reshape(-1).tolist()], tok), (T, [[t_x0], t_best, _u32([tok])[0].tolist()], out)):
-        m = SRW.unit_member(P.template_id(fn), 1)
+        m = IR.named(SRW.unit_member(P.template_id(fn), 1))
         data = {"rows": {p: np.asarray([a], dtype=np.uint16) for (p, _w), a in zip(m.rows, ins, strict=True)},
                 "outs": {"o0": _u32([o])}}
         got.append(IR.Span(f"s{seed}", m, data, [[0, 1]], "p" * 64))
     xs = rng.integers(0, 1 << 16, (2, 64), dtype=np.uint16)
     bi = [evaluate(X, r.tolist()) for r in xs]
-    data = {"rows": {"in0": xs}, "outs": {"o0": np.asarray([[b] for b, _i in bi], np.uint16), "o1": _u32([i for _b, i in bi])}}
-    return (*got, IR.Span(f"s{seed}", SRW.unit_member(P.template_id(X), 2), data, [[0, 2]], "p" * 64))
+    data = {"rows": {"x": xs}, "outs": {"o0": np.asarray([[b] for b, _i in bi], np.uint16), "o1": _u32([i for _b, i in bi])}}
+    return (*got, IR.Span(f"s{seed}", IR.named(SRW.unit_member(P.template_id(X), 2)), data, [[0, 2]], "p" * 64))
 
 
 def _boundary_window() -> CS.Binding:
@@ -107,8 +107,8 @@ def _refused(f) -> tuple[str, ...]:
 
 
 def test_a_wired_port_is_its_writers_output_rows_and_registers_on_the_challengers_ports():
-    """Round 2 derives one wire, `T`'s ``idx`` from `W`'s output, which a served unit stages as its row ``in2``. The
-    interior commits `W`'s Q tokens once: `T`'s ``in2`` has no tree, its table `W`'s Q output rows, unit u of span s
+    """Round 2 derives one wire, `T`'s ``idx`` from `W`'s output, the interior's row of that name (`named`). The
+    interior commits `W`'s Q tokens once: `T`'s ``idx`` has no tree, its table `W`'s Q output rows, unit u of span s
     reading `W`'s unit s, round 2's wired read. It registers on the challenger's ports derived with the wire, after a
     copy without it is refused, and a device commitment of the same roots holds the same refs. A replay whose ``idx``
     rows aren't `W`'s tokens, and a wire to a template the interior lacks, are refused before any commitment."""
@@ -119,8 +119,8 @@ def test_a_wired_port_is_its_writers_output_rows_and_registers_on_the_challenger
     it = IR.interior(per, CELLS, reg.digest, first.units, row=ROW, wires=WIRES)
     w = it.committed.window
     mw, mt, _mx = w.members
-    assert (mt.wired, mt.wired_trees, dict(mt.tables)["in2"]) == ((("in2", "o0", (0, 1)),), False, Q)
-    assert w.held(mt, "in2") == mw.port("o0") and mt.port("in2") not in it.ports and mw.port("o0") in it.ports
+    assert (mt.wired, mt.wired_trees, dict(mt.tables)["idx"]) == ((("idx", "o0", (0, 1)),), False, Q)
+    assert w.held(mt, "idx") == mw.port("o0") and mt.port("idx") not in it.ports and mw.port("o0") in it.ports
     assert it.committed.refs[1][:, 2].tolist() == [0, 1]
     assert it.ports == IR.interior_ports(members, CELLS, reg.digest, first.units, WIRES)
     assert _refused(lambda: IR.register(stream, first, it, ports=IR.interior_ports(members, CELLS, reg.digest,
@@ -134,7 +134,7 @@ def test_a_wired_port_is_its_writers_output_rows_and_registers_on_the_challenger
     assert (gpu.committed.bc, gpu.committed.salts) == (c.bc, c.salts)
     assert all(np.array_equal(gpu.committed.refs[k][:, :len(m.rows)], c.refs[k][:, :len(m.rows)])
                for k, m in enumerate(w.members))
-    bad = [(a, replace(b, data={**b.data, "rows": {**b.data["rows"], "in2": b.data["rows"]["in2"] ^ 1}}), x) for a, b, x in per]
+    bad = [(a, replace(b, data={**b.data, "rows": {**b.data["rows"], "idx": b.data["rows"]["idx"] ^ 1}}), x) for a, b, x in per]
     with pytest.raises(ValueError, match="rows are not the 'o0' rows of the"):
         IR.interior(bad, CELLS, reg.digest, first.units, row=ROW, wires=WIRES)
     with pytest.raises(ValueError, match="templates the window has not both of"):

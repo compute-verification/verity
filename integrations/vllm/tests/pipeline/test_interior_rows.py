@@ -373,8 +373,9 @@ def test_a_token_selects_pieces_are_its_chunks_and_combine_by_their_definitions(
     k = V // C
     for s in _selects(tmp_path, V).values():
         chunks, comb = IR.pieces(s, c)
-        assert (chunks.member, comb.member) == (SRW.unit_member(f"TokenSelectChunk_v2{{C={C}}}", s.n * k),
-                                                SRW.unit_member(f"TokenSelectCombine_v2{{V={V},C={C}}}", s.n))
+        assert (chunks.member, comb.member) == (IR.named(SRW.unit_member(f"TokenSelectChunk_v2{{C={C}}}", s.n * k)),
+                                                IR.named(SRW.unit_member(f"TokenSelectCombine_v2{{V={V},C={C}}}", s.n)))
+        assert [p for p, _w in chunks.member.rows + comb.member.rows] == ["x", "x0", "best", "idx"]
         assert [w for _p, w in comb.member.rows] == [1, k, 2 * k]
         best, idx = chunks.data["outs"]["o0"][:, 0].tolist(), chunks.data["outs"]["o1"].view("<u4")[:, 0].tolist()
         for j, row in enumerate(s.data["rows"]["in0"].tolist()):
@@ -382,7 +383,7 @@ def test_a_token_selects_pieces_are_its_chunks_and_combine_by_their_definitions(
             assert list(zip(best[j * k:(j + 1) * k], idx[j * k:(j + 1) * k])) == [tuple(p) for p in parts]
             token = evaluate(bind(DF.TokenSelectCombineV2, V=V, C=C), row[0], [p[0] for p in parts], [p[1] for p in parts])
             assert token == (int(s.data["outs"][out].view("<u4")[j, 0]),)
-        assert comb.data["rows"]["in1"].reshape(-1).tolist() == best and comb.data["rows"]["in0"][:, 0].tolist() == [
+        assert comb.data["rows"]["best"].reshape(-1).tolist() == best and comb.data["rows"]["x0"][:, 0].tolist() == [
             r[0] for r in s.data["rows"]["in0"].tolist()]
     wrong = s.data["outs"][out].copy()
     wrong[0, 0] ^= 1
@@ -412,6 +413,18 @@ def test_a_token_selects_pieces_on_the_logits_device_are_its_pieces_on_the_host(
             SC.piece_rows(logits, torch.from_numpy(ids ^ 1), c)
         with pytest.raises(ValueError, match="don't pad to a size class of 4"):
             SC.piece_rows(logits, ids, c, pad=4)
+
+
+def test_a_token_selects_pieces_stage_as_the_second_stage_stages_an_interior_member():
+    """`named` gives each piece's member the rows the second stage stages it on (`class_statement.member_stager`: row r
+    its Definition's input r), at a vocabulary whose combine rows hold a whole SHA-512 block, while `serving_rows.
+    unit_member`'s positional ``in<g>`` rows are refused there."""
+    from verity_flock import class_statement as CST
+    for t in ("TokenSelectChunk_v2{C=64}", "TokenSelectCombine_v2{V=4096,C=64}"):
+        fn, m = SRW.template(t).fn, SRW.unit_member(t, 2)
+        CST.member_stager(fn, IR.named(m), None)
+        with pytest.raises(ValueError, match="are not the parameters"):
+            CST.member_stager(fn, m, None)
 
 
 def test_a_token_selects_interior_is_template_major_one_shared_row_member_a_piece(tmp_path):
@@ -447,7 +460,7 @@ def test_a_token_selects_pieces_pad_by_whole_tokens_as_its_inlined_replay_blocks
     calls = SRW.template(t).fn.body.nodes
     assert tuple({P.template_id(n.fn): None for n in calls}) == (chunks.member.template, comb.member.template)
     assert (chunks.group, comb.group) == (2, 1)
-    pad = chunks.padded(14)["rows"]["in0"]
+    pad = chunks.padded(14)["rows"]["x"]
     assert np.array_equal(pad[10:], np.tile(pad[8:10], (2, 1))) and not np.array_equal(pad[10], pad[11])
     whole = np.concatenate([rows, rows[-1:], rows[-1:]])
     fn = SRW.template(t).fn

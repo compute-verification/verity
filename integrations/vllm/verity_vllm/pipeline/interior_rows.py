@@ -371,11 +371,21 @@ def _combine(x0: np.ndarray, best: np.ndarray, idx: np.ndarray, c: int) -> np.nd
     return tok
 
 
+def named(m: CS.Member) -> CS.Member:
+    """Unit member ``m`` (`serving_rows.unit_member`) with each row named after the parameter it holds (row ``in<g>``,
+    parameter g), as the second stage stages an interior member (`class_statement.member_stager`: row r is its
+    Definition's input r) and round 2 names a wire's or a link's port."""
+    names = {f"in{g}": p for g, (p, _t) in enumerate(SRW.template(m.template).fn.signature()[0])}
+    if [r for r, _w in m.rows] != list(names):
+        raise ValueError(f"{m.template}: rows {[r for r, _w in m.rows]} are not one whole row a parameter, {list(names)}")
+    return replace(m, rows=tuple((names[r], w) for r, w in m.rows), schemas=tuple((names.get(r, r), s) for r, s in m.schemas))
+
+
 def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
     """A token select's span ``s`` as the units Flock proves it by, as `TokenSelect_v4` calls them: each token's V / c
     `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}` unit over
     logits[0] and the chunks' (best, idx). Each piece's member is its template's bit rows, as Flock stages a unit
-    (`serving_rows.unit_member`). The chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
+    (`serving_rows.unit_member`), each row named after its parameter (`named`). The chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
     be ``s``'s tokens, or nothing is committed. The chunks' ``group`` is a token's V / c units, so a span pads by whole
     tokens, as `TokenSelect_v4` inlined in a replay block (one instance a served token) lays its pieces out.
     ``c``: `TokenSelect_v4`'s chunk, ``min(CHUNK, V)``."""
@@ -395,7 +405,7 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
               [s.data["outs"][out]]))
     got = []
     for t, units, ins, outs in split:
-        m = SRW.unit_member(t, units)
+        m = named(SRW.unit_member(t, units))
         data = {"rows": {p: a.astype(np.uint16) for (p, _w), a in zip(m.rows, ins, strict=True)},
                 "outs": {p: a.astype(np.uint16) for (p, _w), a in zip(m.outs, outs, strict=True)}}
         scale = units // n
@@ -421,16 +431,6 @@ def _cells(members: Members, n_rho: Cells) -> tuple[tuple[CS.Member, ...], tuple
     return ms, cells
 
 
-def _row(m: CS.Member, param: str) -> str:
-    """Member ``m``'s row of its template's parameter ``param``: the row of that name, else ``in<g>``, parameter g's as a
-    served unit stages it (`chunk_rows.unit_rows`)."""
-    names = [p for p, _t in SRW.template(m.template).fn.signature()[0]]
-    row = param if param in dict(m.rows) else f"in{names.index(param)}" if param in names else None
-    if row not in dict(m.rows):
-        raise ValueError(f"{m.template}: no one row of {[p for p, _w in m.rows]} is its parameter {param!r}, which a wire names")
-    return row
-
-
 def _held(ms: Sequence[CS.Member], cells: Sequence[int], offs: Sequence[int], q: int,
           wires: Sequence[Any]) -> list[dict[str, Any]]:
     """Each member's wired ports, ``{port: (out, writer member, writers)}`` (`rows.Member.wired`): at wire w's port, unit u
@@ -442,7 +442,10 @@ def _held(ms: Sequence[CS.Member], cells: Sequence[int], offs: Sequence[int], q:
         r, k = at.get(w.template), at.get(w.writer)
         if r is None or k is None:
             raise ValueError(f"a wire from {w.writer} to {w.template}, templates the window has not both of: {list(at)}")
-        port = _row(ms[r], w.port)
+        port = w.port
+        if port not in dict(ms[r].rows):
+            raise ValueError(f"{w.template}: a wire names its parameter {port!r}, which none of its rows "
+                             f"{[p for p, _w in ms[r].rows]} is: an interior member's rows are its parameters (`named`)")
         if port in out[r]:
             raise ValueError(f"{w.template}: its {port!r} row is wired twice")
         out[r][port] = (w.wport, k, tuple(offs[k] + (u // cells[r]) * cells[k] for u in range(q * cells[r])))
@@ -587,4 +590,4 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
 
 
 __all__ = ["MOVED", "DeviceCommit", "Interior", "Replay", "Span", "captured", "committed", "gather", "interior", "interior_ports",
-           "interior_run", "interior_window", "pieces", "port_map", "register", "span"]
+           "interior_run", "interior_window", "named", "pieces", "port_map", "register", "span"]
