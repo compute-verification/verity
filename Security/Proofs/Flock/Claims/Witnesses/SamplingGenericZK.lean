@@ -151,6 +151,8 @@ def talkL (Coin : Type) : ZkCompiled Coin (talkArg Coin) where
   iroots _ _ _ := []
   reveal _ _ _ _ := []
   openCalls _ := 0
+  nOut _ := 1
+  nIn _ := 1
   Tape := (Fin 1 → Unit) × (Fin 1 → Unit)
   P _ := ⟨fun _ _ _ => .ret [0]⟩
   δc _ _ := 1
@@ -370,6 +372,8 @@ noncomputable def zkL : ZkCompiled FlockDeploy.Coin zkA where
   iroots _ _ _ := []
   reveal _ _ _ _ := []
   openCalls _ := 0
+  nOut _ := 1
+  nIn _ := 1
   Tape := (Fin 1 → zkFlock.Nonce) × (Fin 1 → zkFlock.Rest)
   P _ := ⟨fun x hist t => (zkFlock.prover ⟨[]⟩).next x hist (t.1 ⟨0, Nat.one_pos⟩, t.2 ⟨0, Nat.one_pos⟩)⟩
   δc _ _ := 1

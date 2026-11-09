@@ -10,8 +10,10 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 `slots` piece that sample in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
-`service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
-`Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
+`service.check_verdicts`), for the `fits` piece v2's refusal of a length a session's statement can't hold
+(`proofs.fits_why`, `proofs.draw_fits_why`) at small limits, and for the `run` piece (a registration's whole run,
+`Run.run`) those references in a `Stream`'s order.
+The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
 refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
 Call among them, whose unit `Q_word` takes in the 32-bit class and `Q_call` at `X = 16` refuses, and `SHARED`, whose
@@ -51,6 +53,7 @@ from unittest import mock
 import pytest
 from hypothesis import strategies as st
 
+import settings
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.pouw import audit as PA
@@ -1008,6 +1011,33 @@ def slots(j):
     proved = set(DR.proved(out["draw"]))
     blocks = [b for c in classes for s in c for b in s]
     return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
+
+
+_LOWER_HEX = re.compile(r"(?:[0-9a-f]{2})*")
+
+
+def _unhex(x) -> bytes:
+    if not (isinstance(x, str) and _LOWER_HEX.fullmatch(x)):
+        raise D.Reject("not lowercase hex of whole bytes")
+    return bytes.fromhex(x)
+
+
+def fits(j):
+    """`OneStageZk.fitsWhy` and `drawFitsWhy` at ``limit`` (`proofs.fits_why`, `proofs.draw_fits_why`): the files hex,
+    the tables ``[name, hex]`` pairs, the program hex or null, and the partition object, registered reads and draw null
+    for none."""
+    j = _json(j)
+    if not (isinstance(j, dict) and _nat(j.get("limit"))):
+        raise D.Reject("limit is not a natural number")
+    circuit, public = _unhex(j.get("circuit")), _unhex(j.get("public"))
+    ts = j.get("tables")
+    if not (isinstance(ts, list) and all(isinstance(t, list) and len(t) == 2 and all(isinstance(x, str) for x in t)
+                                         for t in ts)):
+        raise D.Reject("tables is not a list of names and their hex")
+    tables = [(name, _unhex(b)) for name, b in ts]
+    program = None if j.get("program") is None else _unhex(j["program"])
+    return {"inputs": PF.fits_why(j["limit"], circuit, public, tables, program, j.get("partition"), j.get("registered")),
+            "draw": PF.draw_fits_why(j["limit"], j.get("draw"))}
 
 
 def _public_units(public) -> list:
@@ -2596,6 +2626,24 @@ def committed_bits(j):
     return out
 
 
+def unit_gates(j):
+    """Each unit's root gates `[lo, hi)` over a program and query (`partition.unit_gates`), twice, as Lean gives them a
+    template query's instances a range at a time and by the walk unit by unit that replaced (`Partition.unitGates`,
+    `Partition.unitGatesRef`)."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc, query = _obj(j.get("program"), "program"), _obj(j.get("query"), "query")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    try:
+        gates = [[lo, hi] for lo, hi in P.unit_gates(PROGRAMS[sha], query)]
+    except (P.QueryRefused, ValueError) as e:
+        raise D.Reject(str(e)) from None
+    return [gates, gates]
+
+
 PIECES = "sampled-proofs-difftest"
 
 
@@ -2625,6 +2673,8 @@ COMMITTED_BITS = D.Port(PIECES, "committed_bits", committed_bits, st.one_of(
     st.builds(lambda m, x: {"program": json.loads(_calls(tuple(m))), "X": x},
               st.lists(st.sampled_from(range(len(CALLEES))), min_size=1, max_size=5), st.sampled_from([4, 8, 16, 32])),
     JSON), package=PACKAGE)
+UNIT_GATES = D.Port(PIECES, "unit_gates", unit_gates, st.one_of(
+    st.builds(lambda c: {"program": c[0], "query": c[1]}, partitions()), JSON), package=PACKAGE)
 _REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # noqa: E731
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
     _audit_inputs(_REGISTRATION_OF, [RECORD, PARAMS, ENTRIES, REGISTERED_PARAMS, SUPPLIED], 2),
@@ -3050,6 +3100,17 @@ TEMPLATE_CIRCUITS = D.Port(PIECES, "template_circuits", template_circuits,
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
 SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
+_FITS_HEX = st.binary(max_size=6).map(bytes.hex)
+_FITS_JSON = st.recursive(st.none() | st.booleans() | st.integers(-300, 300) | TEXT | st.sampled_from(["\n\r\t\\", "\x1f\x7f"]),
+                          lambda inner: st.lists(inner, max_size=3) | st.dictionaries(TEXT, inner, max_size=3),
+                          max_leaves=5)
+FITS = D.Port(PIECES, "fits", fits, st.one_of(
+    st.builds(lambda limit, c, p, ts, program, part, reg, draw: {
+        "circuit": c, "draw": draw, "limit": limit, "partition": part, "program": program, "public": p, "registered": reg,
+        "tables": ts}, st.integers(0, 24), _FITS_HEX, _FITS_HEX, st.lists(st.tuples(TEXT, _FITS_HEX).map(list), max_size=3),
+        st.none() | _FITS_HEX, _FITS_JSON, _FITS_JSON, _FITS_JSON),
+    JSON), package=PACKAGE)
+
 
 @st.composite
 def file_populations(draw) -> dict:
@@ -3934,13 +3995,14 @@ HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hi
 pieces = D.server_fixture(DECODE)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300),
+              (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400),
               (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (SELECT_SECOND, 300),
+              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (SELECT_SECOND, 300), (FITS, 400),
               (TEMPLATE_CIRCUITS, 300)]
 
 
@@ -4033,6 +4095,63 @@ def test_the_slots_follow_the_strata(pieces):
     units = [b["unit"] for b in blocks]
     drawn = [units.index(u) for u in select(case)["draw"]["units"]]
     assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
+
+
+#: Units of the toy and the real-template populations `unit_gates` is held to its walk at: L5's population on one
+#: GPU, and past it.
+UNIT_GATES_AT = [147, 1001]
+
+
+@pytest.mark.parametrize("n", UNIT_GATES_AT)
+def test_the_unit_gates_by_range_are_the_walks(pieces, n):
+    """At `n` units of `PAIR`, `TRIPLE` and `QUAD` at 1 : 6 : 3, Lean's unit gates laid out a range at a time are its walk's
+    unit by unit and Python's (`unit_gates`), and its slots, which lay those gates out, are Python's (`slots`)."""
+    members = tuple((t, max(1, round(n * w / 10))) for t, w in ((0, 1), (1, 6), (2, 3)))
+    desc = json.loads(_population(members))
+    query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
+    kind, out = D.replay(UNIT_GATES, {"program": desc, "query": query}, pieces)
+    assert kind == "output"
+    gates, walk = json.loads(out)
+    assert len(gates) == n and gates == walk
+    case = {"closure": None, "program": desc, "query": query, "rule": {"law": "subset:4", "rule": "law"},
+            "source": hashlib.shake_256(b"slots").hexdigest(400), "work_table": None}
+    assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(slots(copy.deepcopy(case))))
+
+
+#: A served model's template mix, per template its units in the population: L5's seven, at their shares of its units.
+REAL_TEMPLATES = [
+    ('MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}', 32),
+    ("EmbeddingRead_v1{V=256,H=3072}", 131072),
+    ("EmbeddingRead_v1{V=256,H=96}", 1024),
+    ('MoeExpertFp8BlockGemm_v4{K=6144,N=1,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}', 131072),
+    ("EmbeddingRead_v1{V=256,H=4096}", 49152),
+    ("EmbeddingRead_v1{V=256,H=4}", 12288),
+    ('MoeExpertFp8BlockGemmW_v4{K=256,N=32,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}', 49152),
+]
+
+
+@pytest.mark.skipif(not settings.REAL_TEMPLATES,
+                    reason="about 18 minutes and 34 GB: set VERITY_SPOT_REAL_TEMPLATES=1")
+@pytest.mark.parametrize("n", UNIT_GATES_AT)
+def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
+    """At `n` units of `REAL_TEMPLATES`, whose Definitions call one another as the catalog's do (the toy's call nothing),
+    Lean's unit gates laid out a range at a time are its walk's unit by unit. Python's `partition.unit_gates` isn't asked:
+    its partition over these templates takes more memory than a suite has."""
+    from verity.ml.circuits.population import mixed_population_program
+    from verity.ml.definitions.registry.catalog import load
+    from verity.ml.windows import interface as IF
+
+    load()
+    total = sum(c for _t, c in REAL_TEMPLATES)
+    counts = [max(1, n * c // total) for _t, c in REAL_TEMPLATES]
+    counts[counts.index(max(counts))] += n - sum(counts)
+    templates = [IF.resolve(t) for t, _c in REAL_TEMPLATES]
+    program = mixed_population_program(list(zip(templates, counts)))
+    case = {"program": _json(codec.encode_program(program)), "query": _json(PO.template_instances_query(templates))}
+    kind, out = pieces.call("unit_gates", case)
+    assert kind == "output", out
+    gates, walk = json.loads(out)
+    assert len(gates) == n and gates == walk
 
 
 def test_the_call_queries_cut_call_by_call(pieces):

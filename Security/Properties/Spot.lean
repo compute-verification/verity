@@ -244,10 +244,24 @@ def PoolChained (rec : Json) (v : Registration.Verifier) : Prop :=
     Registration.poolOpen rec v p = some (d, r) ∧
     jeq (getD e "domain") (.str d) = true ∧ jeq (getD e "root") (.str r) = true
 
-/-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7 and its pool
-chain when the verifier expects values registered. -/
+/-- R7's roots at the values the verifier pinned (`Registration.checkRegistered`'s `R7-held`), which R7 implies: of the
+verifier's own entries (`Registration.ownEntries`), each value it pinned before the record (`pinned`, the first root it
+pins the value to) and neither fills (`supplied`) nor takes from an earlier run (`outputs`) has that root in the record's
+entry for it (`Registration.entryOf`, the last naming it). A window's certified input is such a value: the verifier pins
+the window's arrivals at the root the network certifier signed for the window. So an arrival open at the previous
+window's edge, which continues as a fresh arrival `(id, P + e)` with the `e` outputs the certifier released of it, is
+registered at that root, and a record registering the window's arrivals under any other root, such as arrivals counted
+from the outputs serving computed (`P + n`) or the previous window's arrivals again, is refused. -/
+def PinnedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
+  ∀ mine, Registration.ownEntries v = .ok mine → ∀ want ∈ mine, v.supplied.any (·.1 == want.value) = false →
+    v.outputs.any (·.1 == want.value) = false → ∀ x ∈ v.pinned.find? (·.1 == want.value), ∀ e,
+      Registration.entryOf rec want.value = some e → jeq (getD e "root") (.str x.2) = true
+
+/-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7, its pool
+chain and its pinned roots (`PinnedHeld`) when the verifier expects values registered. -/
 def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
-  R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧ (ExpectsV2 v → R7 rec v ∧ PoolChained rec v)
+  R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
+    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v)
 
 /-! ## The sample: the registered law over the registered population -/
 
