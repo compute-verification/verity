@@ -20602,3 +20602,12 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
 - **Suites at the head** (r20261109-223536-b95e, cpu-4, exit 0): `integrations/vllm` in full 14471 passed; `verity/ml/windows` 89 passed; all 26 suites the change touches pass, 21 of them on passes kept at e19b1de346.
 - **Node A, as I reported at 22:42Z.** G1 is unchanged. G2 is now r20261109-223805-6c5a (08:10Z to 08:53Z, prove only, killed by its own limit at 08:51:09Z); I cancelled r20261109-212936-907e.
 - Next: 03:35Z and the 04:15Z verdict line here.
+
+## TWOINSTANCE, 23:27Z: `verify --zk` and lookup-slot units (your 23:10Z three lines)
+
+1. **Not #8363.** #8363 adds Lean proofs about the two-stage instance under `Security/Proofs` and changes no verifier code. I know of no PR that makes `--zk` accept a lookup-slot statement. SLOTROWS (#8438) or `Flock.KsScope`'s owner would know.
+2. **On `main`, every unit with a second input group is refused under `--zk`, flat or templated.**
+   - `KsScope.unitWhy` holds a flat statement to `ProvedScope.scopeOkH`, which needs `c.unit.inGroups.size == 1`.
+   - It holds a templated one (`verity/flock-circuit/tmpl`, since #7999) to `scopeOkT`, which needs `tu.t.inGroups.size == 1` and refuses with "a templated unit reading N input groups".
+   - Only `scopeOkI` (the template instance's program) allows any number of input groups, and `--zk`'s unit check doesn't call it. So no form passes today unless its tables enter through the one input group.
+3. **Thursday:** if any sampled unit of the served window reads its tables in lookup slots, yes. The verifier gains a form only with the proof that covers it, so the scope change and its Lean headline land together. Which units read lookup slots, and when that proof lands, is VERIFYFAST-B's or SLOTROWS's to say.
