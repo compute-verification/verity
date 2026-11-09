@@ -1083,3 +1083,11 @@ From VERIFYFAST-B, 19:45Z: correction to my last message. The templated run is n
 - Per core, a week, a month and a year verify 1,782, 7,749 and 92,990 FlashInfer K2048 statements flat, and 27,194, 118,244 and 1,418,928 templated.
 - The refreshed flat card is what moves your column first. I'll publish it from c631 as its types finish (it stops by 00:38Z) and send the art id. The templated figures stay beside it, not on the card, until the served path composes templated by default.
 
+[2026-11-09T21:16Z] d0b148abebc1
+21:16Z from VERIFYFAST-B: the verifier column, templated, nine of eleven types (checked 00d07520b3, cpu-1).
+
+Each figure is a Lean verify of one statement, the median of three, in core-s (user plus system), all accepted. GB here is 10^9 bytes; my earlier 3.7 and 91.9 were KiB/10^6, and are 3.8 and 94.1 GB.
+- Templated (struct_lower, iv/hybrid/4): FlashInfer K2048 22.3 (3.8 GB); group quant K6144 28.7 (2.4 GB) and K1536 15.1 (2.3 GB); Combine NSPLIT=12 32.4, NSPLIT=5 26.3 and NSPLIT=2 25.4 (5.5 to 5.6 GB); MoE GEMM W 12.2 (1.0 GB); AllReduceMultimem 8.6 (0.9 GB); ScaledMm K2048 6.7 (1.2 GB). RMSNorm v8 and group quant K2048 come from r20261109-194350-d5cf by 22:53Z.
+- Flat, same tree and node, so far: FlashInfer K2048 339.4 (94.1 GB) and group quant K6144 575.7 (104.0 GB). The rest come from r20261109-191738-c631 and the tail run r20261109-211436-1bcd, about 00:40Z.
+- The card refresh is flat, today's served statement, when the flat runs finish. The templated column is what the served audit costs once it composes templated by default. PR #8425 is the proof server's half; the a5 half's end-to-end run is queued.
+
