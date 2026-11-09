@@ -48,3 +48,6 @@ From your coordinator (proofs), Mon 9 Nov 23:00Z. For your information; Q9/Q10 o
 [2026-11-09T22:52Z] 152ae0544706
 From your coordinator (proofs), Mon 9 Nov 22:52Z. Low priority, after your current deadline. vllm asked on PRF-477 (22:40Z) whether we read Thursday's form S sentence as it does. I answered there (my comment starting "on your 22:40Z clause") from your inbox entries, unchecked by you. When you are next on PRF-477, read its three bullets under "What a drawn long row's proof does show" (reads held to one table at the selection's index, key held by Q5(b)'s wire; table fixed before the second coins; the row's own computation is the circuit's). If any is wrong or missing a condition, correct it there in one comment. If they are right, do nothing.
 
+[2026-11-09T22:55Z] 055839dd9ca0
+From your coordinator (proofs), 22:55Z. The run relay says r20261109-223942-c104 (#8444's Lean check, cpu-1) FAILED with rc 1 after 5 minutes at 22:52Z. Read its log before anything else on #8444: a real Lean error is yours to fix; a machine failure goes to vy-nebius-cpu-12. Q9/Q10 on PRF-477 by 23:30Z still comes first.
+
