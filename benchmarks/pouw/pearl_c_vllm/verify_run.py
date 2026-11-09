@@ -713,6 +713,11 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     a pass of another is a test instance's, read only with ``test_instance``, whose verdict credits nothing (``credited``
     0), as ``--recorded``'s salt claims nothing.
 
+    An accepted run's line names its credit (the protocol's output), the draw and the tie. How many exclusion tiles the
+    passes' given-up rows made, each replayed tile's id and the MACs the passes declare are the retained values' to
+    decide: the first two are the profile's (``exclusion_tiles``, ``tiles``) and ``verdicts``, which
+    `served_verdicts.publish` holds on the node, and the last is ``public.work.macs``.
+
     ``window_class`` is the window's class, (slots, prompt ids, outputs), where the run is a window's (``window``): passes held
     to W whose rows by round aren't the class's fixed load are refused (`held_to_load`, `off_load`), before the coin, and
     the tie names the class it held (``"load"``). Without it the verdict holds the passes to no load, and its counts of
@@ -848,10 +853,13 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         tie_clause += ", a test instance's, credited nothing"
     out.update(answer={"protocol": PROTOCOL, "verdict": "accept", "reason": None, "commitment": root.hex(), "public": public,
                        "profile": profile},
-               line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} drawn and {excluded} exclusion tiles over "
+               # the line names the credit, the protocol's output, and the draw; not how many exclusion tiles the passes'
+               # given-up rows made, nor the MACs the passes declare, which the retained values decide (`profile`,
+               # `public.work.macs`)
+               line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} drawn tiles and the exclusion tiles over "
                      f"{len(passes)} passes, y committed and checked on {sum(r is not None for r in ys)} of {len(ys)} calls"
                      f"{tie_clause}; "
-                     f"{credit['credited']:,} of {credit['macs']:,} MACs credited at ε {float(Fraction(credit['epsilon'])):.4g}, "
+                     f"{credit['credited']:,} MACs credited at ε {float(Fraction(credit['epsilon'])):.4g}, "
                      f"δ {delta} (Pearl's Assumption 1); run {root.hex()[:16]}, source {source.hex()[:16]}; verifier {commit}"))
     return out
 

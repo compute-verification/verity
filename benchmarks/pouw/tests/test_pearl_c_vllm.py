@@ -11,6 +11,7 @@ import inspect
 import json
 import math
 import random
+import re
 import shlex
 import shutil
 import socket
@@ -1212,7 +1213,8 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     """``served_passes.py verify`` draws over the passes with calls that the serve's served.json names, skipping the empty
     one the run left open: it accepts an honest pass and credits its MACs at Pearl's assumption in a core answer, and the
     same pass with a weight row flipped (opened on the excluded row's tile, whatever the draw) fails the whole run.  A
-    test instance's verdict credits nothing."""
+    test instance's verdict credits nothing.  The line names the credit and the draw, and neither the exclusion tiles'
+    count nor the MACs the pass declares, which its given-up rows decide."""
     path, *_ = honest_pass
     served = {"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4, "manifest": str(path)},
                                      {"pass": 1, "units": 0, "tiles": 0}]}
@@ -1226,6 +1228,9 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     man = json.loads(path.read_text())
     assert answer["public"]["passes"][0]["y"] == [u["y"]["root"] for u in man["matmuls"]]
     assert "y committed and checked on 2 of 2 calls" in doc["line"]
+    assert answer["profile"]["exclusion_tiles"] > 0 and " drawn tiles and the exclusion tiles over 1 passes, " in doc["line"]
+    assert "; 0 MACs credited at ε " in doc["line"] and f"{work['macs']:,}" not in doc["line"]
+    assert not re.search(r"\d[\d,]* (exclusion tiles|of [\d,]+ MACs)", doc["line"])
     rows = path.parent / man["weights"]["0"]["rows"]["path"]
     bad = bytearray(rows.read_bytes())
     bad[1] ^= 0x01
