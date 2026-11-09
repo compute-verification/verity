@@ -43,13 +43,14 @@ import Proofs.NetworkCertifier.WitnessesChecked
 * `SampledLeakCarried`. Its acceptance conclusion fails at the accepting verifier `leakD`, as `SampledLeakChecked`'s does,
   at the check every run passes and no opening or closing gate: a witness in `RLeakCarried` is in `RLeak`
   (`rLeak_of_rLeakCarried`), and none is (`leakD_noRLeak`).
-* `PooledLeakCarried`. At one run whose audit always accepts, `q = 1`, `Fmax = 1`, no error, every row the empty pool's,
-  and its observations empty where the horizon is one step: no run meets its leak relation, no opening collides (the two
-  digests of the empty row hash one message, `poolColl_empty`), and the escape bound reads `1 ≤ 0`.
+* `PooledLeakCarried` and `PooledLeakReset`, the latter at its one pattern of no restarts. At one run whose audit always
+  accepts, `q = 1`, `Fmax = 1`, no error, every row the empty pool's, and its observations empty where the horizon is one
+  step: no run meets its leak relation, no opening collides (the two digests of the empty row hash one message,
+  `poolColl_empty`), and the escape bound reads `1 ≤ 0`.
 
 Their honest lemmas are open. `SampledLeakCarried`'s needs a deployed check that pins its checked inputs
-(`CheckedUnique`) and its miss bounded (`CheckedWitness`), and `PooledLeakCarried`'s one that pins its checked inputs, its
-closing row (`CheckedClosing`) and the roots it opens and leaves (`CarriedRoots`).
+(`CheckedUnique`) and its miss bounded (`CheckedWitness`), and `PooledLeakCarried`'s and `PooledLeakReset`'s one that
+pins its checked inputs, its closing row (`CheckedClosing`) and the roots it opens and leaves (`CarriedRoots`).
 -/
 
 @[expose] public section
@@ -92,9 +93,9 @@ theorem poolColl_empty (G : Hash.Msg → Hash.Digest) {m : ℕ} (chains : Fin m 
   simp [Hash.RowSeg.hashed, hseg, hopen] at hx hy
   exact hne (hx.trans hy.symm)
 
-/-- **`PooledLeakCarried`'s escape bound fails at an audit that always accepts**: one run, `q = 1`, `Fmax = 1`, no
-error, every row the empty pool's, and the run's observations empty where its horizon is one step, so its good event
-fails at every sample and no opening collides. -/
+/-- **`PooledLeakCarried`'s escape bound fails at an audit that always accepts**, and `PooledLeakReset`'s at its one
+pattern of no restarts: one run, `q = 1`, `Fmax = 1`, no error, every row the empty pool's, and the run's observations
+empty where its horizon is one step, so its good event fails at every sample and no opening collides. -/
 theorem PooledLeakCarried_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         ¬PooledGoodCarried (K := 1) (fun _ => notLay) (fun _ => 1) (fun _ => ∅) (fun _ _ => True) (fun _ => [])

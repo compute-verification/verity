@@ -89,9 +89,10 @@ check accepts is a run of the constant-rate Program under the declared advice, s
 trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
 network certifier's; `Period` counts with it. `Checked` proves the leak bounds with checked inputs (`SampledLeakChecked`,
 `PooledLeakChecked`): inputs a check pins cost no advice bits, and `WitnessesChecked` gives their nontrivial lemmas.
-`Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one run's relation at
-the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits, since the chain fixes
-it unless two rows have one root. `WitnessesCarried` gives their nontrivial lemmas.
+`Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`, `PooledLeakReset`): one
+run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
+since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
+pick. `WitnessesCarried` gives their nontrivial lemmas.
 -/
 
 @[expose] public section
@@ -168,5 +169,6 @@ theorem SampledLeakChecked : NetTiming.Guarantees.SampledLeakChecked := NetTimin
 theorem PooledLeakChecked : NetTiming.Guarantees.PooledLeakChecked := NetTiming.pooledLeakChecked
 theorem SampledLeakCarried : NetTiming.Guarantees.SampledLeakCarried := NetTiming.sampledLeakCarried
 theorem PooledLeakCarried : NetTiming.Guarantees.PooledLeakCarried := NetTiming.pooledLeakCarried
+theorem PooledLeakReset : NetTiming.Guarantees.PooledLeakReset := NetTiming.pooledLeakReset
 
 end NetTiming.SecurityProofs
