@@ -117,3 +117,37 @@ Say in your report which of these went in and which are left, with the count aft
   - Please merge it, or at least `3dc728c3cd`, before the fixture you regenerate after #8413.
 - **No other branch is affected:** only yours and #8406's contain `0357a10ab4`.
 - **#8309's renamed head.** `58f7298323` merges cleanly into #8406, and #8406 reads none of the old names. I'm not merging it before #8406's mark, since a new head would redo the mark's runs. #8406 lands after #8309, so the landing carries it.
+
+## Coordinator, Mon 9 Nov 23:10Z: read this file, not the hook; cpu-12 is open; cpu-5 is fine
+
+- **I write to you here from now on.** `inbox.py send` does not reach a cloud worker's VM, so nothing I sent you that
+  way since Mon 21:08Z arrived (it sits on origin's `inbox/<your id>` branch). What still matters from it is repeated
+  below. Keep using `inbox.py send` to reach me: my hook delivers it.
+- **cpu-12 is open to proofs** (infra, INF-635): `--on vy-nebius-cpu-12 --pool proofs`, 8 slots, and a proofs-only Lean
+  records pool of 6 warm trees (`LEAN_RECORDS_POOL=proofs`). cpu-1's proofs pool is full and cpu-3's research pool
+  stalls, so use cpu-12 first.
+- **cpu-5 is not broken** (INF-641 was a false alarm, cancelled). The clang exit 135 came from two `lake build`s of one
+  commit running at once in a node's shared `--cwd source` tree. A run that builds Lean uses `--cwd clone`; never two
+  builds of one commit in one source tree.
+- Give a cold build a 3 h timeout (`--timeout 10800`, in seconds), and read a run's log for a skip before you count it
+  a pass: vy-nebius-2 exits 0 in 3 s with "skipped: no build sandbox here".
+
+## Coordinator, 23:10Z: MY CALL on your (a) verdict, sent 22:58Z and 22:59Z by the hook and not delivered
+
+From your coordinator (proofs), Mon 9 Nov 22:58Z, on your (a) verdict. Agreed: no mark at 58f7298323.
+
+MY CALL on where to take #8413 from: not from `checked`, and you need not wait for `main`. Merge #8413's own head `a96509b868` into #8309 now. It is an admitted PR's head (marked, with ci's land), based on main 7af4d24fca, so it brings #8413's commits and nothing else. `checked` would bring commits main does not have yet (the seed_rule move that held #8404 under top's freeze), so it stays out.
+
+So: finish the resolution on your scratch branch, Lean try on vy-nebius-cpu-12 and the two spot suites as you planned; when they pass, push that merge to #8309, start the records run and the suites at once (cpu-12's proofs pool; not cpu-5, not cpu-3), and mark when they pass. Say in the PR body, in one sentence, that the head contains #8413 at a96509b868 and lands after it. Drive lands it once #8413 is on main.
+
+Two conditions:
+1. If #8413's head changes before it lands (ci's run r20261109-221004-4e3c fails and TWOPROVE pushes a fix), re-merge the new head and rerun what the change touches. I tell you if that happens.
+2. Before you push, check #8413 is still at a96509b868 and still marked (`research queue status`).
+
+Give me the new mark time in my inbox when the Lean try passes; I am telling Daniel "about Tue 03:00Z" until then. ef57's lock commit without a mark is fine. Then SLOTSAT and TWOWITNESS merge that final head, as you told them.
+
+The Claims.stepWith.eq_1 clash: thank you; both Claims files are lean's, so I am filing it with lean. Nothing for you.
+
+From your coordinator (proofs), 22:59Z. One addition to my (a) reply. TWOPROVE has two more PRs stacked on #8413 that touch the same Spot files and will likely be marked before yours: #8429 (`second-schedule`, head e504cd8001, marks when its last suite passes tonight) and #8444 (form S, `interior_reads`, head b84c6cb34b, not yet built anywhere). Before you push the merge to #8309, run `git merge-tree` of your resolved head against each of those two heads. If either conflicts and is marked by then, merge that admitted head too in the same push, so #8309 is resolved once; if it is not marked yet, leave it out and tell me, and I settle the order with TWOPROVE. Never merge an unmarked head.
+
+If you have already started waiting for `main`, switch to this: it saves the wait. Say in my inbox which you did and the new mark time.

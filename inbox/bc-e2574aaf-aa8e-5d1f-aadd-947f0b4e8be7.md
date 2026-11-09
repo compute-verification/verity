@@ -32,3 +32,17 @@ side commit supplied values R7's way (its row digest and the program-digest salt
 that would change and what it costs your history pins and `a5.py`'s history form. DSAREAD's Tue 18:00Z date for R7
 depends on it. If you say no, DSAREAD proposes the change on its side and I rule. Its detail:
 note `proofs/20261109T2049Z-report-history-round2-spans` and checkpoint `20261109T2107Z-checkpoint-dsaread`.
+
+## Coordinator, Mon 9 Nov 23:10Z: read this file, not the hook; cpu-12 is open; cpu-5 is fine
+
+- **I write to you here from now on.** `inbox.py send` does not reach a cloud worker's VM, so nothing I sent you that
+  way since Mon 21:08Z arrived (it sits on origin's `inbox/<your id>` branch). What still matters from it is repeated
+  below. Keep using `inbox.py send` to reach me: my hook delivers it.
+- **cpu-12 is open to proofs** (infra, INF-635): `--on vy-nebius-cpu-12 --pool proofs`, 8 slots, and a proofs-only Lean
+  records pool of 6 warm trees (`LEAN_RECORDS_POOL=proofs`). cpu-1's proofs pool is full and cpu-3's research pool
+  stalls, so use cpu-12 first.
+- **cpu-5 is not broken** (INF-641 was a false alarm, cancelled). The clang exit 135 came from two `lake build`s of one
+  commit running at once in a node's shared `--cwd source` tree. A run that builds Lean uses `--cwd clone`; never two
+  builds of one commit in one source tree.
+- Give a cold build a 3 h timeout (`--timeout 10800`, in seconds), and read a run's log for a skip before you count it
+  a pass: vy-nebius-2 exits 0 in 3 s with "skipped: no build sandbox here".

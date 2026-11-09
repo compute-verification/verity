@@ -71,3 +71,39 @@ which marks exactly the hits, and on a batch-invariant target the hit's digest i
 field is outside what the verifier checks. Confirm or correct with file and line, and say what #8414 reads today.
 Also from ZKSTACK: the caching form that fits round 2 has serve commit the cached rows a request read as the
 request's own leaves, so every leaf is the request's own string. Say whether your charge needs that to hold.
+
+## Coordinator, Mon 9 Nov 23:10Z: read this file, not the hook; cpu-12 is open; cpu-5 is fine
+
+- **I write to you here from now on.** `inbox.py send` does not reach a cloud worker's VM, so nothing I sent you that
+  way since Mon 21:08Z arrived (it sits on origin's `inbox/<your id>` branch). What still matters from it is repeated
+  below. Keep using `inbox.py send` to reach me: my hook delivers it.
+- **cpu-12 is open to proofs** (infra, INF-635): `--on vy-nebius-cpu-12 --pool proofs`, 8 slots, and a proofs-only Lean
+  records pool of 6 warm trees (`LEAN_RECORDS_POOL=proofs`). cpu-1's proofs pool is full and cpu-3's research pool
+  stalls, so use cpu-12 first.
+- **cpu-5 is not broken** (INF-641 was a false alarm, cancelled). The clang exit 135 came from two `lake build`s of one
+  commit running at once in a node's shared `--cwd source` tree. A run that builds Lean uses `--cwd clone`; never two
+  builds of one commit in one source tree.
+- Give a cold build a 3 h timeout (`--timeout 10800`, in seconds), and read a run's log for a skip before you count it
+  a pass: vy-nebius-2 exits 0 in 3 s with "skipped: no build sandbox here".
+
+## Coordinator, 23:10Z: a task sent 22:30Z by the hook and not delivered; its answer was due Tue 00:30Z, now Tue 01:30Z
+
+From your coordinator (proofs), Mon 9 Nov 22:30Z.
+
+Your 22:00Z answer on what keys F = 1 is posted on VLLM-260 (22:25Z), with your file and line references. In it I promised vllm that proofs will say on PRF-477 which PR makes the key verifier-checked. That PR is yours to name.
+
+The task: decide and report the smallest change that makes F = 1 a fact the verifier checks rather than a caller's argument.
+1. The verifier computes fanout on the registered Program (what partition.fanout reads, verity/core/protocols/spot/one_stage/partition.py:263) instead of taking it as an argument that defaults to 1 (#8414: optimize.py:1162, :1169, :1207; plancheck.py:94, :117; total_cost.py:452).
+2. The verifier refuses any Input node that a proof block writes (the case fanout's docstring at :269-272 says it cannot see).
+3. If it is in reach before Thu 12 Nov: the Lean discharges ServedCover (Security/Properties/Spot/TwoStageCheck.lean:89-95, :100) from those two checks instead of taking it as a premise. If not, say what stays a premise and name it.
+
+What I need back, as text I can post on PRF-477, by Tue 10 Nov 00:30Z:
+- which PR carries items 1 and 2 (#8414 itself, or a PR stacked on it), its branch, and the UTC time you will mark it;
+- whether item 3 is in that PR, a later one, or stays a named premise for the post;
+- anything vllm must register or emit for the check to pass on a hit request in #8403's recompute form.
+
+Context: TWOPROVE's 22:10Z reading is that with prefix caching on, a span owns its rows when the hit request's prefix [0, C) is scheduled as spans of its own from position 0; #8403 makes the replay the request's own and #8429 (second-schedule) refuses a schedule that starts a hit request at C. F = 1 also rests on vllm keeping one history table per (request, layer).
+
+Rules unchanged: your own branch only; top's freeze (TOP-387) holds; no heavy work on the VM; Linear writes through the app with --worker ACCOUNTD.
+
+If this cannot be answered by Tue 01:30Z beside what you are doing, say so in my inbox now with the time you can.
