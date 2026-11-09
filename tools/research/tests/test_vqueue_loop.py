@@ -2361,6 +2361,30 @@ def test_end_to_end_on_drives_lock_run_its_records_commit_lands_or_a_statement_c
     assert _git(env.o.origin, "rev-parse", "main^") == sha and env.withdrawn == [] and env.posts == []
 
 
+@pytest.mark.parametrize("flag, records", [((), vqueue_records), (("--no-records",), None)])
+def test_the_command_runs_each_records_run_with_vqueue_records_and_none_with_no_records(monkeypatch, tmp_path, flag, records):
+    import research.store.local as local
+
+    made = []
+
+    class Made:
+        def __init__(self, world, log, **kw):
+            made.append(kw)
+
+        def tick(self):
+            return []
+
+    labels = type("Labels", (), dict.fromkeys(("ready", "before_cutoff", "marked_by", "marked_at", "prefetch")))()
+    for mod, name, fake in ((L, "Loop", Made), (L, "StoreLabels", lambda store, log=None: labels),
+                            (L, "_Clone", lambda *a, **k: type("Clone", (), {})()), (L, "World", lambda *a, **k: None),
+                            (L, "Executor", lambda *a, **k: None), (L, "Transport", lambda *a, **k: None),
+                            (Q, "remote_and_repo", lambda *a: ("origin", "o/r")), (Q, "GitHub", lambda slug: None),
+                            (Q, "credential_args", lambda *a: ()), (local, "LocalStore", lambda root: None)):
+        monkeypatch.setattr(mod, name, fake)
+    assert L.main(["--dry-run", "--log", str(tmp_path / "log"), *flag]) == 0
+    assert made[0]["records"] is records and made[0]["dry_run"]
+
+
 def test_research_queue_vqueue_is_its_own_command_and_runs_the_run_beside_each_check_with_vqueue_slim(capsys):
     from research import vqueue_loop, vqueue_slim
 
