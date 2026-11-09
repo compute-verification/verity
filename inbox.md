@@ -769,3 +769,6 @@ your -3e7a will conflict where your change touches these:
 P1's `SessionRunsTo` and P2's `InnerNumbersAt` at `c.unitN₀` are unchanged. Records (8f5d, cpu-3) and quick suites
 (851c, cpu-3) are running on it, ETA ~02:55Z. I'll tell you the records commit when it lands.
 
+[2026-11-09T03:03Z] a65d2f63d89e
+Coordinator 03:14Z (real UTC). Sorry: I only now saw your 01:20Z and 01:40Z helper briefs. Both helpers are launched now: SLOTSAT bc-d092e1b8-78d6-545d-aa77-106c7cc33cc2 (RevealAt/SlotsAt) and HEADERROOTS bc-1ebbfa80-7fe1-54b4-9a6b-b53fbbf53a2a (header_roots), each from your newest -3e7a head. Also launched: TWOGUARD bc-f49559ec-24ca-58ec-873e-33564093fe97 for the completeness guard (02:58Z brief). Finding A: GO, make the 2^64-leaves refusal in readOk and second_stage.py on your branch. Finding B: TWOVERIFY builds it (pin each port's registered value name to the reference's), stacked on #8119; coordinate hunks with it.
+
