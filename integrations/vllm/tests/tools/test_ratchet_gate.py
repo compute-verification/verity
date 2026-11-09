@@ -191,12 +191,12 @@ def test_no_counted_kind_grows_and_one_ratchet_does_not_pay_for_another(repo):
 
 
 TYPED = "integrations/vllm/tests/lint/allowlists/typed_records.json"
-CHECK, COMMIT, RECORDS = "verity_vllm/check", "verity_vllm/commit", "verity_vllm/records"
+CHECK, COMMIT, RECORDS = "verity_vllm/check/run.py", "verity_vllm/commit/plan.py", "verity_vllm/records/workload.py"
 
 
-def _or_empty(package: str, n: int) -> dict:
-    """typed_records' count of `.get(k) or []` reads in one package"""
-    return {"file": package, "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": n}
+def _or_empty(file: str, n: int) -> dict:
+    """typed_records' count of `.get(k) or []` reads in one file"""
+    return {"file": file, "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": n}
 
 
 def _schema(file: str) -> dict:
@@ -206,7 +206,7 @@ def _schema(file: str) -> dict:
 
 def test_a_move_between_packages_keeps_its_kinds_total_as_4545_moves_reads_from_check_to_commit(repo):
     """A move of `.get(k) or []` reads from check/ to commit/, to break their cycle, raises commit's count 53 -> 87 as
-    check's falls 252 -> 218.  A new package is paid for the same way; a new per-site entry isn't, by any kind."""
+    check's falls 252 -> 218.  A new file is paid for the same way; a new per-site entry isn't, by any kind."""
     gates = _schema("verity_vllm/check/gates.py")
     repo.commit("typed_records", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), gates)})
     repo.git("checkout", "-q", "-b", "pr")
@@ -215,7 +215,7 @@ def test_a_move_between_packages_keeps_its_kinds_total_as_4545_moves_reads_from_
     assert (c["verdict"], c["before"], c["after"], c["fix"]) == ("passed", 5, 5, [])
     assert c["pooled"] == [f"{TYPED} or-empty 305 -> 305 in total over 2 moved key(s)"]
     assert c["why"] == f"5 -> 5 ratchet exceptions; pooled: {c['pooled'][0]}"
-    repo.commit("a new package, which check pays for", {
+    repo.commit("a new file, which check pays for", {
         TYPED: _allowlist(_or_empty(CHECK, 210), _or_empty(COMMIT, 87), _or_empty(RECORDS, 8), gates)})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["before"], c["after"]) == ("passed", 5, 6)
@@ -240,7 +240,7 @@ def test_a_kinds_total_may_not_grow_and_the_failure_names_the_totals_and_the_key
     assert doc["failures"][0]["fix"] == c["fix"]
     repo.git("checkout", "-q", "-b", "fresh", "main")
     one = {k: v for k, v in _or_empty(RECORDS, 1).items() if k != "count"}
-    repo.commit("a new package of one read, nothing paid", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), one)})
+    repo.commit("a new file of one read, nothing paid", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), one)})
     [c] = G.gate("main", "fresh")["changes"]
     assert c["verdict"] == "failed" and c["why"].startswith(f"grows {TYPED} or-empty 305 -> 306 in total")
     assert c["fix"] == [f"{TYPED}: {G.key(one)} 0 -> 1"]
