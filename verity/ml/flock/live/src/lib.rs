@@ -107,6 +107,34 @@ pub fn spawn_scoped<'s, 'e, T: Send + 's>(sc: &'s std::thread::Scope<'s, 'e>, f:
     flock_core::spawn_scoped(sc, f)
 }
 
+/// `parts` back to back, copied in parallel a chunk at a time (many short parts or a few long ones)
+pub fn concat<P: AsRef<[F128]>>(parts: &[P]) -> Vec<F128> {
+    let n = parts.iter().map(|p| p.as_ref().len()).sum();
+    let mut out: Vec<F128> = Vec::with_capacity(n);
+    concat_into(parts, &mut out.spare_capacity_mut()[..n]);
+    // SAFETY: concat_into wrote all n words
+    unsafe { out.set_len(n) };
+    out
+}
+
+/// [`concat`] into `out`, which is exactly as long as the parts: every word of it written
+pub fn concat_into<P: AsRef<[F128]>>(parts: &[P], out: &mut [std::mem::MaybeUninit<F128>]) {
+    use rayon::prelude::*;
+    assert_eq!(out.len(), parts.iter().map(|p| p.as_ref().len()).sum::<usize>(), "concat_into: a destination as long as the parts");
+    let mut rest = out;
+    let mut pairs = Vec::new();
+    for s in parts.iter().flat_map(|p| p.as_ref().chunks(1 << 15)) {
+        let (a, b) = std::mem::take(&mut rest).split_at_mut(s.len());
+        pairs.push((a, s));
+        rest = b;
+    }
+    pairs.into_par_iter().for_each(|(d, s)| {
+        for (d, &x) in d.iter_mut().zip(s) {
+            d.write(x);
+        }
+    });
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Framing (transcript-v2: 16-byte header [op][kind][0;6][len u64 LE], payload zero-padded to 16).
 // ---------------------------------------------------------------------------------------------------------------
@@ -2714,5 +2742,30 @@ mod thread_stack_tests {
         let states = pool.install(|| flock_core::run_hetero_chunks_stateful(64, || 0usize, |s, _| *s += chunk(&helped)));
         assert_eq!(states.iter().sum::<usize>(), 64 * (16 << 10));
         assert_eq!(flock_core::all_core_pool().install(|| deep(16 << 10)), 16 << 10);
+    }
+}
+
+#[cfg(test)]
+mod concat_tests {
+    use super::*;
+
+    #[test]
+    fn concat_is_the_parts_in_order() {
+        let mut parts: Vec<Vec<F128>> = (0..300u64).map(|k| (0..k % 7).map(|i| F128::new(k, i)).collect()).collect();
+        parts.push((0..100_000u64).map(|i| F128::new(i, !i)).collect());
+        let slices: Vec<&[F128]> = parts.iter().map(Vec::as_slice).collect();
+        assert!(concat(&slices) == parts.concat());
+        assert!(concat(&parts) == parts.concat());
+        assert!(concat::<Vec<F128>>(&[]).is_empty());
+        let mut out = vec![std::mem::MaybeUninit::new(F128::new(7, 7)); parts.iter().map(Vec::len).sum()];
+        concat_into(&parts, &mut out);
+        assert!(out.iter().map(|x| unsafe { x.assume_init_read() }).collect::<Vec<_>>() == parts.concat());
+    }
+
+    #[test]
+    #[should_panic(expected = "a destination as long as the parts")]
+    fn concat_into_takes_only_its_length() {
+        let mut out = vec![std::mem::MaybeUninit::<F128>::uninit(); 3];
+        concat_into(&[vec![F128::new(1, 2); 2]], &mut out);
     }
 }

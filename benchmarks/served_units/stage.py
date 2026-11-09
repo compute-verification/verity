@@ -1,8 +1,8 @@
 """stage.py UNIT N OUT [--public-weights [--packed]]: N inputs of one served proof-block type's Q_word proof block, from synthetic
 values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs.
 
-    UNIT  TYPE[:S=V,...]   a type of `UNITS` or `PARTS` at its statics (each type's defaults are its model's: GLM-5.3's at TP8,
-                           s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192
+    UNIT  TYPE[:S=V,...]   a type of `UNITS`, `PARTS` or `CENSUS` at its statics (each type's defaults are its model's: GLM-5.3's
+                           at TP8, s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192, gq:K=384
     --public-weights       a `UNITS` type's weight row ``w`` as public input ports (`UnitStager`'s ``public_inputs``, each leaf in
                            its own u16 words) instead of a row hashed in the circuit, on the same values: the price of the block
                            with its weight row's in-circuit opening removed, the in-circuit share a registered weight encoding
@@ -27,6 +27,11 @@ them on every input (``twin`` null: no served twin cuts the same proof block).  
 ``flock-verify --partition``); not the program, from which it derives a statement's proof blocks only where each is one whole
 activation of the circuit's template (``Extract.claimedUnits``), and a class here is part of one, on synthetic Calls.
 
+A type of `CENSUS` is a block type of the serving rows by its census name (`serving_templates.template`, the name a proof
+overhead card prices it under), one whole Definition a proof block, staged like a `UNITS` type: each parameter one ``row/v2``
+input row of seeded N(0, 1) bf16 words, each output one ``row/v2`` output row, the circuit streamed to circuit.txt once,
+every input's outputs checked against the Program's reference (``twin`` null).
+
 Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, and a PARTS type's partition.json.
 
 Types (GLM-5.3's statics from its config: hidden 6144, q_lora 2048, kv_lora 512, moe_intermediate 2048, 256 experts, top 8,
@@ -48,6 +53,10 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
     moe-gemmw   block from all 256 experts' (`fp8_moe_experts`): K = 512 of a w13 coordinate (a middle chunk) and one w2
                 coordinate, on the H200's wgmma step.  `moe-w13` and `moe-w2` are the same products with the expert's rows as
                 the block's inputs instead.
+    gq          `CENSUS`: Fp8GroupQuantUe8m0_v1{K,G}, one token row's quantization to E4M3 in groups of G with power-of-two
+                scales, before an FP8 linear of K inputs (K = 6144: the hidden state's); a K below 6144 is a column block.
+    mla-split-part  `CENSUS`: SparseMlaSplitPart_v1 at T = 64, one query's sparse MLA over one split's 64 keys (FA3's).
+    rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -188,17 +197,39 @@ for _p in PARTS.values():
     _p.defaults.setdefault("C", 0)
 
 
+@dataclass(frozen=True)
+class Census:
+    """A census type: its family, bound at statics ``S`` in the order of ``defaults`` (its census name's), then ``fixed``, the
+    statics no spec overrides (a function's or a float's, as the census name writes them)."""
+
+    family: str
+    defaults: dict
+    fixed: str = ""
+
+    def name(self, S: dict) -> str:
+        return f"{self.family}{{{','.join([*(f'{k}={v}' for k, v in S.items()), *filter(None, [self.fixed])])}}}"
+
+
+_EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
+CENSUS: dict[str, Census] = {
+    "gq": Census("Fp8GroupQuantUe8m0_v1", {"K": 6144, "G": 128}),
+    "mla-split-part": Census("SparseMlaSplitPart_v1", {}, 'T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
+                             'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}'),
+    "rmsnorm-v8": Census("RMSNormFusedCudaVector8_v1", {}, f"N=6144,EPS={_EPS},BLOCK=256"),
+}
+
+
 def _static(default, v: str):
     if isinstance(default, bool):
         return v.lower() in ("1", "true")
     return type(default)(v)
 
 
-def parse(spec: str) -> tuple[str, Unit | Part, dict]:
+def parse(spec: str) -> tuple[str, Unit | Part | Census, dict]:
     name, _, rest = spec.partition(":")
-    if name not in UNITS and name not in PARTS:
-        raise SystemExit(f"stage.py: unit type {name!r} is not one of {sorted(UNITS) + sorted(PARTS)}")
-    u = UNITS.get(name) or PARTS[name]
+    if name not in UNITS and name not in PARTS and name not in CENSUS:
+        raise SystemExit(f"stage.py: unit type {name!r} is not one of {sorted(UNITS) + sorted(PARTS) + sorted(CENSUS)}")
+    u = UNITS.get(name) or PARTS.get(name) or CENSUS[name]
     S = dict(u.defaults)
     for kv in filter(None, rest.split(",")):
         k, _, v = kv.partition("=")
@@ -243,6 +274,35 @@ def stage_part(name: str, part: Part, S: dict, tag: str, n: int, out: Path, t0: 
             "seconds": {"draw": round(t_draw, 1), "total": round(time.time() - t0, 1)}, "maxrss_gb": gb()}
 
 
+def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t0: float) -> dict:
+    """``n`` inputs of the census type's Definition, a proof block each, as stage.json's record."""
+    from verity_vllm.pipeline.serving_rows import template
+
+    d = template(cen.name(S)).fn
+    params, ret = d.signature()
+    if any(set(ty.leaf_widths()) != {16} for _p, ty in params):
+        raise SystemExit(f"stage.py: {d.id} has a parameter that isn't 16-bit words, which a census type draws as bf16")
+    rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
+    rows = {p: bf16(rng.standard_normal((n, ty.leaves))) for p, ty in params}
+    t_draw = time.time() - t0
+    in_rows = [(p, V2, 16 * ty.leaves, [p]) for p, ty in params]
+    out_rows = [(V2, (j,)) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
+    st = CS.UnitStager(d, f"unit/served-{tag}", in_rows, out_rows, circuit=out / "circuit.txt")
+    t_built = time.time() - t0
+    salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
+    got = st.stage(rows, out, salt_key)
+    meta = got["meta"]
+    return {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id, "census": cen.name(S),
+            "in_rows": [[r, s, b] for r, s, b, _ in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
+            "unit_nnz": got["unit_nnz"], "k_log": meta["k_log"], "unit_log": meta.get("unit_log"),
+            "vus_per_block": meta.get("vus_per_block"), "row_schemas": meta.get("row_schemas"),
+            "circuit_bytes": (out / "circuit.txt").stat().st_size, "circuit_sha512": st.pin, "class_sha512": st.class_sha512,
+            "inst_bytes": (out / "inst.bin").stat().st_size, "pub_bytes": (out / "pub.bin").stat().st_size, "macs": 0,
+            "twin": None, "seconds": {"draw": round(t_draw, 1), "built": round(t_built - t_draw, 1),
+                                      "round": round(time.time() - t0 - t_built, 1), "total": round(time.time() - t0, 1)},
+            "maxrss_gb": gb()}
+
+
 def public_words(d, row: np.ndarray, params: tuple[str, ...], packed: bool = False) -> dict[str, np.ndarray]:
     """Each of ``params``, read in order from the row words ``row`` ``(n, words)``, as a public input port: its leaves each in
     their own ceil(bits / 16) u16 words, low first (`class_statement.unit_lowering`'s public layout), or with ``packed`` the
@@ -279,10 +339,10 @@ def main() -> None:
     t0 = time.time()
     name, u, S = parse(spec)
     tag = f"{name}-" + "-".join(f"{k.lower()}{v}" for k, v in sorted(S.items()))
-    if isinstance(u, Part):
+    if isinstance(u, (Part, Census)):
         if public:
             raise SystemExit(f"stage.py: --public-weights is for a type of UNITS, not {name}")
-        rec = stage_part(name, u, S, tag, n, out, t0)
+        rec = (stage_part if isinstance(u, Part) else stage_census)(name, u, S, tag, n, out, t0)
         (out / "pin.txt").write_text(rec["circuit_sha512"])
         (out / "stage.json").write_text(json.dumps(rec, indent=1))
         print(json.dumps(rec), flush=True)

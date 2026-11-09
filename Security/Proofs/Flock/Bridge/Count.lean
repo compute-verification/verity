@@ -60,7 +60,7 @@ namespace Flock.Bridge
 
 open FlockSoundness.Audit
 
-variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} {κ : Fin C.N → Option Bool}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {κ : Fin C.N → Option Bool}
 
 theorem blocks_length_partOf (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n) :
     (partOf P κ ns).blocks.length = n := by

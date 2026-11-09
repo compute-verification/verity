@@ -51,11 +51,11 @@ def _day(u: dt.datetime, weekday: bool = False) -> str:
 
 def slack_dates(text: str, now: dt.datetime | None = None) -> str:
     """Each dated UTC time outside code, links and URLs, as `<!date^UNIX^{date_short_pretty} {time}|FALLBACK>`:
-    `YYYY-MM-DDTHH:MM[:SS]Z`, or `HH:MMZ` (or `both`'s `7:55 AM PDT (14:55Z)`) right after a date such as `14 Oct`,
-    `Oct 14` or `Oct 14, 2026` (a date without a year is the one nearest `now`; before `both`'s form it is the Pacific date).
+    `YYYY-MM-DDTHH:MM[:SS]Z`, or `HH:MMZ` (or `both`'s `7:55 AM PDT (14:55Z)`) right after a date such as `DD Mon`,
+    `Mon DD` or `Mon DD, YYYY` (a date without a year is the one nearest `now`; before `both`'s form it is the Pacific date).
     A weekday written before the date goes into the token, and the fallback names the Pacific one: the writer's was the UTC
     day's, which a time across Pacific midnight contradicts.
-    A time with no date stays as written: guessing its day put a 14 Oct deadline on today."""
+    A time with no date stays as written: guessing its day can put another day's deadline on today."""
     t0 = _utc(now or dt.datetime.now(UTC))
 
     def token(m: re.Match) -> str:

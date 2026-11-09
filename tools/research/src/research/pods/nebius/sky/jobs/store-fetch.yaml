@@ -1,4 +1,4 @@
-# Evidence-store artifacts onto node 1 for a reader with no store remote there (console, 2 Oct): `research data fetch` of each
+# Evidence-store artifacts onto node 1 for a reader with no store remote there: `research data fetch` of each
 # full art id in ARTS (whitespace-separated `art:<64 hex>`), with PATHS (globs, `--path`) selecting a tree's files, into
 # $OUT/<NAME, else a UTC stamp>/<hex>/, laid out as the artifact is (a file artifact lands under its name). Beside them,
 # fetched.tsv has a line per file (art id, path, sha256), and `<art id> - not fetched` for an id whose fetch failed or wrote no

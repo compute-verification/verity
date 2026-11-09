@@ -210,7 +210,7 @@ them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, w
 
 **The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its windows send no
 hits and no order entries. `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no
-length terms. `CompileSlice_v4` (`compile_slice_v4`, the served windows' slice) charges them with
+length terms. `CompileSlice_v6` (`compile_slice_v6`, the served windows' slice) charges them with
 `ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its ``a_valid``, mt its certified
 max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What holds ``cert`` to the
 certified record is a stand-in, the honest cert row under the certifier's salt, until max_tokens is read from the

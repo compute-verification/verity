@@ -37,8 +37,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.SoundAtBridge
 import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # A checked unit's proof layer is sound through its Flock sessions (the proof)
@@ -46,7 +45,7 @@ import Proofs.Flock.Soundness.Game.Prob
 `Accounting.SecurityProofs.TS.CheckedSessionSound`. `AcceptedLive` holds by the layer's definition. `ServedChecksHold`
 takes the value layer itself as the relation's assignment: `RowsSession.RowsAt` says the circuit's evaluation agrees
 with it on each sampled proof block's wires. `ServedRootsLinked` at `0` is the window's sampling design at an event of probability `0` in
-every session's game: under `kd = n` the sample is every unit (`RowsSession.draw_full`, from `subset_spec`), so at an
+every session's game: under `kd = n` the sample is every unit (`RowsSession.sample_full`, from `subset_spec`), so at an
 accepted outcome whose units are right `Flock.SecurityProofs.ServedRowsLinked` makes every registered read of the
 value layer the committed row (`RowsSession.servedEv_false`). `SoundAt δ` is then
 `Accounting.SecurityProofs.TS.SessionSoundAt` at `δs = 0`.
@@ -142,7 +141,7 @@ variable (s : RowsSession)
 
 /-- **Under full checking the sample is every unit**: at `kd = n` the subset sample, when it runs, is `n` distinct units
 below `n` (`subset_spec`), and when it doesn't the sampling design samples every unit. -/
-theorem draw_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ := by
+theorem sample_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ := by
   show (match Law.runOS (s.src ω) (.subset s.kd) s.n with
     | some d => Finset.univ.filter fun u : Fin s.n => u.val ∈ d.units
     | none => Finset.univ) = Finset.univ
@@ -171,7 +170,7 @@ theorem servedEv_false (hk : s.kd = s.n)
   dsimp only [rowsReg, openedReg, regRead]
   split_ifs with h1 h2
   all_goals first
-    | have hu : (⟨a, h1.1⟩ : Fin s.n) ∈ s.L.draw ω := by rw [s.draw_full hk ω]; exact Finset.mem_univ _
+    | have hu : (⟨a, h1.1⟩ : Fin s.n) ∈ s.L.draw ω := by rw [s.sample_full hk ω]; exact Finset.mem_univ _
       exact congrArg some (Flock.SecurityProofs.ServedRowsLinked s (s.L.draw ω) R o ⟨a, h1.1⟩ hacc hu (hS _)
         (hD _ hu).2 _ h2.1 h2.2)
     | rfl
@@ -244,7 +243,7 @@ the `ok` port (`PortsOk`) and registered served roots asked only of a session `P
 and the committed rows where it fails, so nothing is asked there (`prob_servedOn`). -/
 theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String) (P : RowsSession → Prop) (δ : ℝ)
-    (hCR : ∀ x w i, (sess x w i).CR) (hLaw : Accounting.Assumptions.TS.WindowLaw sess out)
+    (hCR : ∀ x w i, (sess x w i).CR) (hLaw : Accounting.Assumptions.TS.WindowDesign sess out)
     (hP : ∀ s, P s → PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)
     (hδ : ∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ) :
     (checkedOnLayer sess out ok P).SoundAt δ := by

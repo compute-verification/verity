@@ -8,7 +8,14 @@ charges a window, what binds the charge's inputs, and a served window at its eng
 (`compile_slice_v2`) is the same slice with vLLM's block pool (`CacheStep_v2`) in place of the evictable and returned
 counts' stand-in; its charge is this one. `CompileSlice_v3` (`compile_slice_v3`) is v2 computing its schedule rather
 than checking it, with no ChargeLink, the served rows and last rows registered reads it holds to the computed ones: its
-advice input is exactly ℓ_w gates wide, so the charge is ℓ_w. `CompileSlice_v4` (`compile_slice_v4`) is v1 charging
+advice input is exactly ℓ_w gates wide, so the charge is ℓ_w. `CompileSlice_v4` (`compile_slice_v4`) is v3 with its
+pool calls answered by `CacheStep_v3`'s memory-checked stream. Until a Lean lemma shows its checked witness unique,
+that witness counts as free input at its width, so its charge is ℓ_w plus the witness's width (`free_width`).
+`CompileSlice_v5` (`compile_slice_v5`) is v4 at its window's activity: the keys are
+one a block the window keys, from a ragged token row registered with each slot's keyed block count, RB's touched list
+is the addresses the stream touches, and each running slot's request number is carried in the slot row ``cout``
+registers. Its charge is v4's, at its own checked witness's width.
+`CompileSlice_v6` (`compile_slice_v6`) is v1 charging
 the length terms too, `window_charge.ChargeLink_v2{D, 0, 0, K}` ([charge-chain.md](charge-chain.md), "The slice").
 
 **The charge** is `charge_chain.ChargeLink_v1{D}` (`build_link`; [charge-chain.md](charge-chain.md)):

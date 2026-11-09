@@ -9,7 +9,7 @@ order of every frame are fixed by the declared Program.
 - **Trust.** The certifier is auditor-trusted: it runs on a host the developer doesn't control, and the auditor trusts it
   to run the grid and to sign what it ran. That trust, with the custody of its keys and of its LMS leaf state, is the
   named assumption `trusted-host`. The challenger's live coins reach it on two more premises, named in
-  `verity/core/protocols/sampled_proofs/README.md`, with the coins' path in `benchmarks/live_challenger/auditor.py`:
+  `verity/core/protocols/spot/README.md`, with the coins' path in `benchmarks/live_challenger/auditor.py`:
   `CoinsConfidential`, stated as `Pouw.Assumptions.CoinsConfidential`
   (`Security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the certifier's
   boundary before it has them), and `OneClock` (the challenger's release times and the certifier's ingress ticks are
@@ -169,7 +169,7 @@ on the signature's unforgeability, and on an honest certifier.
 ## Through the proof system (`service`)
 
 One execution phase's certificates are registered through the proof system
-(`verity.core.protocols.sampled_proofs.service`) as a `Spec` of its own (`service.LinkWindows`, one per link):
+(`verity.core.protocols.spot.service`) as a `Spec` of its own (`service.LinkWindows`, one per link):
 - **Committed:** one value, `certificates`, of four leaves: the execution phase's egress and ingress certified records,
   leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, the certifier's salt, then the
   certificate), and their heads,
@@ -1126,7 +1126,7 @@ of the incorrect proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ
 1. **Fix a.** Then every proof block's circuit is fixed, because `compile` is a function of the registered items and of
    a. So for each a the audit is the one-stage audit of a fixed circuit, and `audit_influence` applies: the audit
    accepts while the values it delivers lie outside Φ_a with probability at most δ_audit. Φ_a is the set of values
-   reachable when the incorrect proof blocks form a set whose acceptance probability is at least δ, and it is fixed before
+   reachable when the incorrect proof blocks form a set whose miss probability is at least δ, and it is fixed before
    the sample.
 2. **With no incorrect proof block, the egress is a function of I and a.** Every committed value is the forward evaluation of the
    compiled circuits from I, w and a, because every value a circuit reads has exactly one writer (A2). Each tie proof
@@ -1650,7 +1650,7 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   - The counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`).
     Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
     the book's public tables isn't built, so the circuit charges the decisions only.
-  - The length terms' max_tokens in the slice. `CompileSlice_v4` reads every length slot from ``cert``, so none is free
+  - The length terms' max_tokens in the slice. `CompileSlice_v6` reads every length slot from ``cert``, so none is free
     witness, but what holds ``cert`` to the certified record is a stand-in, the honest cert row under the certifier's
     salt, until max_tokens is read from the certified body. The circuit bounds max_tokens only from above, so a lower
     one the output still fits passes at a lower charge. `compile_slice_zk` proves `CompileSlice_v1`, whose charge is
@@ -1677,7 +1677,7 @@ Its step rows are held to the committed ``srv`` row, which the verifier holds by
 registers before the sample (`served_rows`), so the phase-10 attack's six passes are refused; at G < P, the served rows'
 blocks, its P / G rows (`CompileSliceRowGroups_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its charge is
 `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
-chain. `CompileSlice_v4` (`compile_slice_v4`), the served windows' slice, is v1 charging the length terms too:
+chain. `CompileSlice_v6` (`compile_slice_v6`), the served windows' slice, is v1 charging the length terms too:
 `ChargeLink_v2{D, 0, 0, K}`, a length slot for each certified arrival, its certified max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
 advised window is proved, a served window at its engine's class (w212 under its AsyncScheduler, 1,021,302 ANDs, and
 857,866 at the sync class), and its `--zk` runs through `benchmarks/network_traces/compile_slice_zk.py`.
@@ -1793,7 +1793,7 @@ them.
     like the salt.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof system returned for p (`Registration`, from
-    `sampled_proofs.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
+    `spot.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
     registration receipt (`one_stage.registration.RECEIPT`) whose digest is the record's own and the registration's,
     and `registered` reads p off the registration: by default `served_window`, which reads the provenance
     `{"kind": "served", "window": p}`, and otherwise the reader the protocol gives (`Proxy(registered=…)`). It also
@@ -2010,16 +2010,20 @@ difftest compares (`NetTiming.SecurityProofs.Code`): `CodeExpectedRow`, `CodeAcc
 ## The active network certifier (`warden`)
 
 The wire is client ↔ network certifier ↔ server, with the network certifier responsible only for limiting network steganography and
-certifying exactly the bits it sees. So the network certifier knows bytes only: nothing in it belongs to vLLM
-or to any workload. `warden.py`'s docstring has its cells, admission, schedule and failures. This section says what
-its wire can carry.
+certifying exactly the bits it sees. So nothing in the network certifier belongs to vLLM or to any workload: it knows
+bytes, and one form of them, the egress record's ("The egress record"), the only form it releases toward a client.
+`warden.py`'s docstring has its cells, admission, schedule, egress form and failures. This section says what its wire
+can carry.
 
 **The schedule's public parameters** are `WardenParams`, fixed before the run:
 - B (`cell_bytes`), r (`slots`), τ (`bucket_ms`), D (`delay`), the lanes, the queue and the window T;
-- the bounds `ingress_cells`, `ingress_buckets` and `egress_cells`.
+- the bounds `ingress_cells`, `ingress_buckets` and `egress_cells`;
+- the egress form (`egress`): `id`, the egress record's, or `bytes`, which relays any server's bytes, for the
+  rehearsals of a server that answers in another form.
 
-`WardenParams.digest` binds them, and every record head's `parameters` is that digest. The ticker's slack is the active
-certifier's.
+`WardenParams.digest` binds them, with the cell kinds and the fail reasons, and every record head's `parameters` is that
+digest. The period check reads the id form's schedules only (`NetworkCheck.Period.egressForm`), so a `bytes` run's
+records are certified under a digest no period check takes. The ticker's slack is the active certifier's.
 
 **What the wire is a function of.** On connection q the network certifier sends r cells of B bytes each way in every bucket, from
 q's admission s to its last bucket. The kinds and buckets of q's egress cells are a function of the parameters and
@@ -2038,7 +2042,10 @@ connection has opened, and what it releases before then is buffered for the serv
 fails q there, which is f.
 
 Every `DATA` and `END` cell's content is the bytes, cut at fixed offsets (byte k is in cell ⌊k/P⌋), never by when or
-how they were read.
+how they were read. In the id form the network certifier releases a cut cell only if `io_tie.parse_cell` reads it: at
+any other it fails the connection (`format`) in that cell's slot, and none of the cell's bytes leaves. It refuses and
+never rewrites. An honest id-form server writes one `io_tie.id_event` of exactly P bytes an output, then `TRAILER`, so
+the cut gives one event a `DATA` cell and the `END` holds the trailer; any other byte stream fails at its first cell.
 
 **The leak bound** is what a server can signal on the wire beyond the response it sends:
 - **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).
@@ -2060,8 +2067,10 @@ how they were read.
   - A server that fails connection q picks the egress cell it fails at, or not to fail: at most n + 1 ≤
     `egress_cells` + 1 outcomes.
   - Every failure sends the same `FAIL` cell, with no payload: a missed deadline, a stream that hasn't ended by the
-    last cell, a broken server connection, and the client's own two. The reason is a frame of the network certifier's `fails`
-    record, in the bucket of the `FAIL`: witness, certified with the others and never on the wire.
+    last cell, a broken server connection, a cell out of the egress form, and the client's own two. The reason is a
+    frame of the network certifier's `fails` record, in the bucket of the `FAIL`: witness, certified with the others
+    and never on the wire. A server that departs from the form at cell i gives the client what a server late at cell
+    i does, so `format` adds no outcome.
   - A failure the client causes (`ingress`, `malformed`) fails at once, and only returns the client's own bits to it.
   - A failed connection frees its lane at its `FAIL`'s bucket, so f also moves later connections' s. That carries no
     bits beyond f's, which this term charges, though they reach another client.
@@ -2085,8 +2094,8 @@ checked here.
 wire's bits. The third record, `fails`, holds one reason a failed connection.
 - Each window's three records are certified as the certifier's are (record v2 and `certificate.Issuer`), with the network
   certifier's parameters digest in the head. A head is witness, so no reason reaches the client.
-- `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's, whose `FAIL` cells
-  and reasons don't match one for one, or in which a connection failed.
+- `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's (and, in the id form,
+  the egress form's), whose `FAIL` cells and reasons don't match one for one, or in which a connection failed.
 - `benchmarks/network_traces/warden_serve.py` runs the network certifier live and checks that each client got exactly its egress
   record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`)
   runs the same rehearsal on the auditor's host.

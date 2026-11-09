@@ -112,7 +112,7 @@ its circuit = reference tests, sidecar and ZK run (`benchmarks/network_traces/co
 demonstration classes (`demo`, `demo_async`) and at the served vLLM run's sizes. At AS = 1 ``rows`` is ``map``'s: R²
 products of a slot's row and 2·R·(R − 1) one-to-one ANDs a step in place of the slot-for-slot comparison.
 
-**The charge** is `CODE`, v1's `charge_chain.SliceCharge`; a version of the slice (`compile_slice_v4`) brings its own,
+**The charge** is `CODE`, v1's `charge_chain.SliceCharge`; a version of the slice (`compile_slice_v6`) brings its own,
 with its fields for ``pub``, ``cin``, ``cout`` and ``cert``'s tail, its circuit and its reference.
 """
 from __future__ import annotations

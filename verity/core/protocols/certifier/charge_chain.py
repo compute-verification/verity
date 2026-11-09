@@ -52,8 +52,8 @@ from verity.core.protocols.certifier import arith_encode as AE
 from verity.core.protocols.certifier import replay_chain as RC
 from verity.core.protocols.certifier.arith_encode import Carry, ChargeBook
 from verity.core.protocols.certifier.head_check import BIT, _part
-from verity.core.protocols.sampled_proofs.one_stage import produced
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import produced
+from verity.core.protocols.spot.one_stage import registered as G
 
 VALUE = "replay-charge"
 WORD_BITS = 16
@@ -272,7 +272,7 @@ LENGTH_BITS = 32
 
 
 def check_length_slots(st: dict) -> dict:
-    """`st`, a compile slice's statics, as a slice charging the length terms takes them (`compile_slice_v4`): refused
+    """`st`, a compile slice's statics, as a slice charging the length terms takes them (`compile_slice_v6`): refused
     where an output length, LW = bitlen(L) bits (`replay_chain.widths`), is wider than a length slot's `LENGTH_BITS`."""
     if (lw := RC.widths(SimpleNamespace(**st)).LW) > LENGTH_BITS:
         raise ValueError(f"statics {dict(st)}: an output length of {lw} bits, wider than a length slot's {LENGTH_BITS}")
@@ -281,7 +281,7 @@ def check_length_slots(st: dict) -> dict:
 
 class SliceCharge:
     """The compile slice's charge (`compile_slice.CODE`): `ChargeLink_v1{D}` on ``pub``'s book from ``cin`` to ``cout``
-    over ``adv``'s decisions; `compile_slice_v4`'s adds the length terms. `pub_fields`, ``pub``'s fields past c;
+    over ``adv``'s decisions; `compile_slice_v6`'s adds the length terms. `pub_fields`, ``pub``'s fields past c;
     `carry_bits`, a carry row's width; `cert_fields`, ``cert``'s past its arrivals and their tokens; `link`, the
     circuit's (ok, charged) on the unit's rows split into their fields' elements and the decisions' enables;
     `reference`, its (ok, bits, carry' row) on a unit's rows (bits each); `book`, ``pub``'s values for the registered
