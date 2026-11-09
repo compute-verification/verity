@@ -3,8 +3,8 @@
 The Blackwell counterpart of `benchmarks/tc_probe`. Each probe runs an instruction on its GPU, raw bits in and out, and
 compares every output word with the instruction's pinned model in `verity/ml/circuits/silicon` (`BLACKWELL_SM120_NVF4`,
 `BLACKWELL_SM120_MXF4`, `GroupSum`). Where no model is pinned yet, a capture decides between named candidates. Every
-mismatch is recorded, and nothing is tuned to fit. Everything runs on sm_120a (RTX 5090, RTX PRO 6000) unless its file
-says sm_100a (B200).
+mismatch is recorded, and nothing is tuned to fit. Beside the probes, price microbenchmarks time each multiplier against
+dense NVFP4. Everything runs on sm_120a (RTX 5090, RTX PRO 6000) unless its file says sm_100a (B200).
 
 ## Probes
 
@@ -22,18 +22,28 @@ says sm_100a (B200).
 - `model5.py`: autoproof's model5, the control `probe.py` keeps. The probe refuted it on sm_120.
 - `stage0_sm120.py`: which FP4-path mnemonics ptxas accepts for sm_120a, and what each lowers to. It is record-only.
 
+## Prices
+
+- `w1_price.py` (`w1_price.cu`): each FP4-path row's sustained issue rate and dependent-chain latency.
+- `f1_rates.py`: every sm_120a multiplier priced per nonzero product against dense NVFP4, the measurement behind the
+  premise `fp4-tile-only/sm120`.
+
 ## Records and tests
 
-- `tool.py`: the store declaration (`tc_probe_fp4`), which says which parameters key a result.
+- `tool.py`: the store declarations (`tc_probe_fp4`, `tc_price_fp4`, `tc_rates_fp4`), which say which parameters key a
+  result.
 - `tests/`: the CPU side, which builds and runs no kernel. It covers the K = 32 candidates against `GroupSum`, the cast
-  references against brute force, the sparse rows' mapping, the fake-silicon dry runs and the store declaration.
-  `tests/test_f8_model.py` holds `f8_model.step` to `GroupSum.step` word for word.
+  references against brute force, the sparse rows' mapping, the fake-silicon dry runs, the W1 driver's gates and the store
+  declarations. `tests/test_f8_model.py` holds `f8_model.step` to `GroupSum.step` word for word.
 
 From the repository root after `uv sync --all-packages`, on a GPU of the instruction's architecture with nvcc (and
 `cuobjdump` for `--sass-check`):
 
 ~~~text
 uv run python benchmarks/tc_probe_fp4/probe.py --instruction nvf4 --out DIR --sass-check --sweep --n-random 4096
+uv run python benchmarks/tc_probe_fp4/w1_price.py --out DIR --expect-uuid GPU-UUID
+uv run python benchmarks/tc_probe_fp4/w1_price.py --out DIR --fake-silicon                 # CPU dry run
+uv run python benchmarks/tc_probe_fp4/f1_rates.py build --out DIR                          # ptxas, the timed library, SASS gates
 OUT=DIR bash benchmarks/tc_probe_fp4/f8_sm100.sh                                           # on a B200
 uv run tools/verity/check/suites.py benchmarks/tc_probe_fp4                                # the CPU suite
 ~~~
