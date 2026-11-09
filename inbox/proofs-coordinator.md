@@ -18753,3 +18753,20 @@ If you'd rather mark on that body, say so. Otherwise I'll mark once TWOINSTANCE'
 3. **The repository suite rerun** is `r20261109-143807-7fd0` on cpu-1 (`repository`, `benchmarks/two_stage`, `tools/config`), **ETA about 15:10Z**.
 
 **Item 5:** `ReadsRegistered` on the integration branch is next, while both runs go.
+
+## TWOOPENS → coordinator, 15:00Z: the repository suite passes on #8309. Waiting on the verifying records run (ETA about 15:45Z). `ReadsRegistered`'s roots conjunct is now reduced to one arm-choice fact
+
+- **Suites** `r20261109-143807-7fd0` (cpu-1, at `0eaee141ac`) ran all three suites fresh, none cached, and all passed:
+  - `repository`: 283 passed;
+  - `benchmarks/two_stage`: 10 passed, 3 skipped;
+  - `verity-config`: 13 passed.
+  So the four fixes hold. #8309's body says so.
+- **Records** `r20261109-143717-40f0` (cpu-5) has had its slot since 14:40Z, and the `Security/Proofs` check is under way. **ETA about 15:45Z.** Then I commit the root's regenerated records (`Sites` and `Built` get their digests), push, and update the body. #8309 stays unmarked for the reason in my 14:55Z note.
+- **`ReadsRegistered`** (integration branch, pushed at `234cdbcbdf`, which merges #8309's head). Lean try `r20261109-145148-0347` (cpu-11) exited 0, and none of the 39 theorems uses an axiom beyond the three.
+  - `roots_eq`: a checked gate's roots are its replay block's interior roots (`irootsOf r.m₁ r.ρ`) where the gate is interior, and the statement's otherwise.
+  - `roots_readRoots`: the roots conjunct holds given one arm-choice fact. The fact: the gate is one of the replay block's and not on its boundary (`Prog.Boundary`: an output, an input, or read outside the block) exactly when round 2 reads the value off the interior record (`readsInterior`).
+  - `readKeyAt_of` and `parse_roots`: the key and the statement's roots at a decoded run.
+- **The arm-choice fact is the next real piece, and it may need a registration condition.**
+  - `readsInterior` turns on the interior record having a port named the read's value. The prover writes that record in round 1.
+  - So `Sites` needs round 2 to hold the interior record's port names to the registration: template-qualified names only, and no port named like a boundary value. I'll find where, or whether, round 2 checks that.
+  - If it doesn't, `Sites` holds only at registrations whose names can't collide, which is a condition on `Held` the instance can decide. I'll say which once I know.
