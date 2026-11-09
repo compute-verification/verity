@@ -28,7 +28,7 @@ $R "$S"                         # every suite whose inputs changed since it last
 $R "$S flock verity"            # these suites (a package name, a directory, or a unique part of one)
 $R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
 $R "$S --quick"                 # without the tests marked slow
-$R "$S --changed $(git rev-parse origin/main) --quick"   # only the suites your change touches: the pre-mark run (AGENTS.md)
+$R "$S --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"   # only the suites your change touches: the pre-mark run
 $R "$S --fresh"                 # ignore the cache
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
@@ -40,7 +40,7 @@ checkout. It starts its own `research run` in a slot of the research pool `resea
 nodes' check slots take train checks only), so inside a `research run` it is refused, naming this command.
 
 Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
-`cd verity/ml/flock && uv run pytest tests/test_layouts.py -k typed`. It doesn't cache and doesn't load the read guard. The shell
+`cd verity/ml/flock && uv run pytest tests/test_layouts.py -k round_trip`. It doesn't cache and doesn't load the read guard. The shell
 hook refuses a local pytest that names no file or `-k`; `AGENT_GUARD_LOCAL_OK=1` is the opt-in.
 
 A pass is cached under a hash of the suite's inputs (its directory, its workspace dependencies, the paths it declares,

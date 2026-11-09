@@ -6566,9 +6566,26 @@ def test_a_frozen_reason_starts_with_its_category_and_an_unstated_statement_is_u
              "spec_definitions": [{"name": "P.A", "module": "P.Guarantees", "kind": "def", "statement": True}]}
     out = A.shape(pol | {"shape": {"frozen": {"P.b": "RESTATE: split the iff", "P.A": "unstated: owed"}}}, facts)
     assert [f.split()[1] for f in out] == ["shape.frozen[P.b]"] and "starts with no category" in out[0]
-    out = A.shape(pol | {"shape": {"frozen": {"P.b": "unstated: x", "P.A": "lemma: y"}}}, facts)
+    out = A.shape(pol | {"shape": {"frozen": {"P.b": "unstated: x", "P.A": "frozen: y"}}}, facts)
     assert sorted(f.split()[1] for f in out) == ["shape.frozen[P.A]", "shape.frozen[P.b]"], out
     assert A.category("falsified (conjecture): rests on P.C") == "falsified" and A.category("lemmas") is None
+
+
+def test_a_lemma_or_a_completeness_theorem_is_refused_with_its_fix():
+    """The lock lists what is assumed and what is proved: a `shape.frozen` reason starting `lemma` or `completeness` is
+    no category, and its failure (`UNLISTED`) says to take the theorem off `guarantees`, or to name a completeness theorem
+    under its guarantee's `witnesses` entry when it is that guarantee's honest witness."""
+    facts = {"pins": {g: {"shape": [part(inputs=[("x", 0)])]} for g in ("P.b", "P.c", "P.d")}}
+    pol = {"guarantees": {"P.b": {}, "P.c": {}, "P.d": {}},
+           "shape": {"frozen": {"P.b": "lemma: a step of P.a's proof", "P.c": "completeness (honest): P.a's device",
+                                "P.d": "frozen: not swept yet"}}}
+    out = A.shape(pol, facts)
+    assert [(f.code, f.entry) for f in out] == [("shape.frozen-unlisted", "P.b"), ("shape.frozen-unlisted", "P.c")], out
+    assert "starts with `lemma`: a lemma is not listed: remove it from `guarantees`" in out[0]
+    assert "starts with `completeness`: a completeness theorem is not listed: name it under its guarantee's " \
+           "`witnesses` entry" in out[1]
+    assert A.category("lemma: x") is None and A.category("completeness: x") is None
+    assert not set(A.UNLISTED) & set(A.CATEGORIES)
 
 
 def test_a_property_on_a_conjecture_lists_it_and_one_on_a_falsified_conjecture_comes_off():

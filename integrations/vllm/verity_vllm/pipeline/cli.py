@@ -126,6 +126,13 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
 }
 
+#: Why a command's module can be absent from a tree, for the refusal that names it: the public release leaves out what
+#: reads a private protocol.
+ABSENT: dict[str, str] = {
+    "serve-openai": "the served window (this endpoint and the window circuit) reads the network certifier's encoding, which the "
+                    "public release leaves out, so it ships without a runnable served window",
+}
+
 
 #: The pod layout's machine paths: the default of an option (``Class.field``) that neither its flag nor its
 #: environment variable sets.
@@ -277,7 +284,14 @@ def main(argv: list[str] | None = None) -> Any:
         except settings.UnknownSetting as e:
             print(f"{PROG}: {e}", file=sys.stderr)
             return 2
-    parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
+    try:
+        parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
+    except ModuleNotFoundError as e:
+        if e.name != COMMANDS[argv[0]][0]:
+            raise
+        why = ABSENT.get(argv[0])
+        print(f"{PROG}: {argv[0]}: its module {e.name} is not on this tree" + (f": {why}" if why else ""), file=sys.stderr)
+        return 2
     process_settings(os.environ)
     if process:
         # run records store sys.argv as the command's own command line, the one `python -m <module>` gave it
