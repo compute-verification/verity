@@ -293,6 +293,7 @@ changed, and runs a job that ended with none (it died, or ran past `RESTACK_WAIT
 PR, and one something else interrupted (SIGINT, SIGTERM, a restart of the pod) again without counting it.  A move or a restacked PR lands at a commit that isn't its head: the trailers keep it off `next` once
 landed (`queue_log`), and drive closes it once `main` reaches it (`Driver._close_carried`).  The low-risk lane stops at a
 move on `next`.  The preflight merges no move PR's head, and notes rather than refuses a conflict only in files a move changed.
+The verified queue's loop builds a move PR and the members above it the same way, on a candidate's base (`vqueue_loop`).
 
 Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
 as any other, by a fast-forward of `checked` (no new merge commit), commits the lock records a lock run regenerates after a

@@ -10,10 +10,12 @@ lacks, and the `queue/*` branches it ignores.
 The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`refs/vqueue/`), so drive's clone, its worktree and
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
-`signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner or under the low-risk
-rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`), not on `main` yet, ranked by drive's priority file then
-mark time, each after the ready PRs it contains; `files` is its change against its merge base with `main`, `lean` drive's
-Lean-change test (`queue.lean_change`), and `conflict` whether `Queue._merge` merges it onto `main`, kept by (head, `main`).
+`signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner or, but for a move,
+under the low-risk rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`), not on `main` yet nor landed by the
+queue's trailers there (`queue_log`), ranked by drive's priority file then mark time, each after the ready PRs it contains;
+`files` is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`), and
+`conflict` whether `Queue._merge` merges it onto `main`, or where it doesn't, its restack across the moves on `main` its head
+lacks (`Queue._merge_through`), kept by (head, `main`); one whose restack runs is conflicting until it ends.
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
@@ -47,10 +49,22 @@ starts at startup and each time `main` moves (and once more after infra).  A ste
 `main`'s failed it too, and its own when `main`'s passed it (`vqueue_slim.based`); while `main`'s runs, at most `pending_s`
 after it started, a fail whose every other failure is inherited is pending.
 
-The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
-owner told once per head and base), pushes `queue/<sha12>` (or takes as its own one no line names that is the same build made
-before, as a tick cut off after its push leaves: `adopted`), logs it, enqueues `ready:<sha>` as graph/v2 at its priority and
-starts the run beside its check.
+Moves.  A PR whose body says `Move: tools/move/NAME.toml` is a move, as drive lands one: its head is only the request, and
+its `files` and `lean` are those of its move regenerated on `main`, by `main`'s scripts (`Queue._regenerate`: `rename.py`
+for a word map, `layout.py` for a path map, `queue.MOVE_KINDS`), one commit ending in the PR's trailers and its move line,
+certified by `main`'s `move_check.py`.  One whose move doesn't regenerate on `main` (a map missing, unparsed or of both kinds
+or neither, a script that fails, a commit `move_check.py` refuses) is out of `ready`, never merged stale, and its owner told
+why once a head (`refuse`).  A member above a move it lacks crosses it by `restack.py` when its change names a word, path or
+module of the move's map or its plain merge conflicts, a job in the background meanwhile (`Queue._restack`), and waits for
+it, told no one (`wait`).  The moves made, the restacks read and those running are kept in the loop's cache (`moves.json`),
+never in drive's state, a restack while its move is on `main` or a candidate.  Once a move lands, `on_main` closes its PR
+(`Driver._close_carried`).
+
+The actions.  Build merges its members in order onto its base (`Queue._merge_through`, across the moves below it its head
+lacks), a move's being its move regenerated on the tip below it, leaving out one that doesn't merge or regenerate (`skip`, its
+owner told once per head and base) and one whose restack runs (`wait`), pushes `queue/<sha12>` (or takes as its own one no
+line names that is the same build made before, as a tick cut off after its push leaves: `adopted`), logs it, enqueues
+`ready:<sha>` as graph/v2 at its priority and starts the run beside its check.
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what drive does when `main` moves
 (`Driver._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.
 Drop cancels the check (graph2's `cancel`, where it has one) and the run beside it while that runs (one still launching once
@@ -68,17 +82,17 @@ same tick, as in an outage (`Loop._outage`); a base candidates wait on for want 
 `BASE_RING_S` after it was first asked for (`Loop._bases`).  Red tells `CI` and the owners of what the base fails (as drive
 names them: a test file's suite's, else its job's) that it is red on them, once a base and task.  A test graph2's verdict
 says flaked (`flaky`: a fail a rerun replaced) is told to its file's owner in drive's registry and `CI`, once a key: a test
-that flakes is deleted.  A skip's, ring's, red's or flake's message is logged as about to be posted (`posting`) before it is,
-and its record says whether it was (`posted`): one whose tick stopped in between is told, so no one is told twice, and one
-whose post failed is told again.  Each action and its result is one JSON line in the log, whose directory also holds the
-loop's caches.
+that flakes is deleted.  A skip's, refusal's, ring's, red's or flake's message is logged as about to be posted (`posting`)
+before it is, and its record says whether it was (`posted`): one whose tick stopped in between is told, so no one is told
+twice, and one whose post failed is told again.  Each action and its result is one JSON line in the log, whose directory also
+holds the loop's caches.
 
 `--shadow` logs advance, eject, ring, red, flake and every message with `shadow: true` and does none of them, and builds,
 drops, retries, reruns and starts the runs beside: its `main` is the newest candidate it advanced (`refs/vqueue/shadow` in the
 clone, never pushed, else its log's newest advance) while origin's `main` is below it, a pass its `main` no longer holds is no
 history, and a PR it ejected stays out until marked again.  `--dry-run` prints the snapshot and the actions and writes
-nothing: no ref on origin, no log, no enqueue, no label, no message, no run.  The loop never writes drive's state, its
-priority file, `next`, `checked` or a label, but an eject's without `--shadow`.
+nothing: no ref on origin, no log, no enqueue, no label, no message, no run, no restack.  The loop never writes drive's state,
+its priority file, `next`, `checked` or a label, but an eject's without `--shadow`.
 
 On the control pod it runs beside drive, from a pinned checkout of this tree, in drive's clone (or its own clone of origin):
 `research queue vqueue --shadow --log /data/vqueue/decisions.jsonl` (`--batch`, `--depth` and `--lean` default to 16, 3 and
@@ -109,8 +123,9 @@ from . import policy, vqueue
 from .drive import CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Driver, cancel_runs, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
-from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, flags_at, label_verifier,
-                    lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at, unreviewed)
+from .queue import (PR, WORKDIR, Member, Move, Queue, QueueError, Restacking, StoreLabels, _git, _out, base_drivers, changed,
+                    flags_at, label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit, queue_log,
+                    review_owners, rules_at, unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
                      Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
 
@@ -297,6 +312,14 @@ class Past:
 
         return {k for r in self.of("skip") if r.get("done") or r.get("shadow") for k in heads(r)} | self._posting("skip", heads)
 
+    def refused(self) -> set[str]:
+        """The heads of the move PRs whose refusal was told (`Loop._refusals`)."""
+        def heads(r: dict) -> set[str]:
+            return set(r.get("heads") or ())
+
+        told = {h for r in self.of("refuse") if r.get("done") or r.get("shadow") for h in heads(r)}
+        return told | self._posting("refuse", heads)
+
     def reds(self, base: str) -> set[str]:
         """The tasks ``base`` was told red on."""
         def tasks(r: dict) -> set[str]:
@@ -418,7 +441,10 @@ class Transport(QueueTransport):
 
 class _Clone(Queue):
     """The queue in a clone it doesn't bring to the remote's state (drive's, or the loop's own): the loop fetches into `NS`, and
-    `main` as fetched is its `MAIN`, not drive's `refs/remotes/origin/main`."""
+    `main` as fetched is its `MAIN`, not drive's `refs/remotes/origin/main`.  The moves it regenerated, the restacks it read
+    and those running (`Queue._regenerate`, `_restack`) are kept in ``moves_at``, the loop's cache, never in drive's state."""
+
+    moves_at: Path | None = None
 
     def _clone(self) -> None:
         return None
@@ -427,29 +453,51 @@ class _Clone(Queue):
     def base(self) -> str:
         return MAIN
 
+    @property
+    def main_ref(self) -> str:
+        return MAIN
+
+    def _save_restacks(self) -> None:
+        """Saved at once, as drive saves them, so a tick that fails after starting or reading a restack neither starts it again
+        nor loses its result; not on a dry run, which starts none."""
+        if self.moves_at is None or not self._restack_starts:
+            return
+        tmp = self.moves_at.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"made": self._made, "restacks": self._restacks, "restacking": self._restacking},
+                                  indent=1, sort_keys=True) + "\n")
+        tmp.replace(self.moves_at)
+
 
 class World:
     """What the loop reads and changes: git in the clone and on origin, graph2, the labels, the PRs and the merge thread.  Each
     effect is one method, so a test fakes what it doesn't run for real.  With ``labels_at`` (a new `StoreLabels`), each tick
-    reads the labels afresh (`_relabel`).  ``cache`` is where it keeps the heads' own changes and the issuer's keys, not in
-    drive's files."""
+    reads the labels afresh (`_relabel`).  ``cache`` is where it keeps the heads' own changes, the issuer's keys and the
+    moves' work (`_Clone.moves_at`), not in drive's files.  The queue's clock is ``now``, which its restacks read."""
 
     def __init__(self, q: Queue, labels, tasks: Executor, *, graph2: tuple[str, ...] = (), priority_file: Path | None = None,
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
                  labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None):
         self.q, self.labels, self.tasks, self.graph2 = q, labels, tasks, tuple(graph2)
         self.priority_file, self.now, self.repo, self.labels_at = priority_file, now, q.workdir, labels_at
+        q.now = now
         self.keys = cache / "issuer-keys.json" if cache is not None else None
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
             q._kept_at = cache / "own-changes.json"
             q._kept = json.loads(q._kept_at.read_text()) if q._kept_at.is_file() else {}
+            q.moves_at = cache / "moves.json"
+            kept = json.loads(q.moves_at.read_text()) if q.moves_at.is_file() else {}
+            q._made, q._restacks, q._restacking = (kept.get(k) or {} for k in ("made", "restacks", "restacking"))
         self.post: Callable[[str, tuple[str, ...]], bool] = post or merge_thread_post
         #: graph2's subcommands it was found to lack (`_graph2`)
         self.absent: set[str] = set()
-        #: by (head, `main`): its files (`_changed`), and (lean, conflict) (`_judge`)
+        #: by (head, `main`): its files (`_changed`), (lean, conflict) (`_judge`), and where `git merge-tree` conflicts, whether
+        #: it doesn't merge through the moves its head lacks either (`_judge_through`)
         self._files: dict[tuple[str, str], frozenset[str]] = {}
         self._judged: dict[tuple[str, str], tuple[bool, bool]] = {}
+        self._through: dict[tuple[str, str], bool] = {}
+        #: what the last `ready` refused of each move PR: {number: (its head, why)} (`_move`)
+        self.refused: dict[int, tuple[str, str]] = {}
         self._prs: dict[int, PR] | None = None
         self._driver: Driver | None = None
         self._slim: Driver | None = None
@@ -510,20 +558,28 @@ class World:
         return not _git(self.repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
 
     def ready(self, main: str) -> list[Ready]:
-        """The open PRs drive would land from `next` now, as `vqueue.Ready`."""
+        """The open PRs drive would land from `next` now, as `vqueue.Ready`: a move PR by its move regenerated on ``main``
+        (`_move`), and a PR whose `git merge-tree` onto ``main`` conflicts by its merge through the moves on ``main`` its
+        head lacks (`_judge_through`).  A head the queue's trailers on ``main`` name landed (`queue_log`: a move's, a restacked
+        one's) is no longer ready, and one a restack carries in the background waits (`conflict`)."""
         q, labels = self.q, self.labels
-        prs = [p for p in self.open().values() if p.base == "main" and not p.move]
+        flags = flags_at(self.repo, main)
+        landed, q._moves = queue_log(self.repo, main)
+        prs = [p for p in self.open().values() if p.base == "main" and p.head not in landed]
         if missing := [p for p in prs if p.head in self._missing(p.head for p in prs)]:
             q._remote(self.repo, *QUIET, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "origin",
                       *(f"+refs/pull/{p.number}/head:{NS}/pr/{p.number}" for p in missing))
         gone = self._missing(p.head for p in prs)
         prs = [p for p in prs if p.head not in gone and not self._ancestor(p.head, main)]
+        q.restack_jobs, q._used, q._upcoming, self.refused = flags.restack_jobs, set(), [], {}
+        if q._restack_starts:
+            q._collect_restacks({p.head for p in self.open().values()})
         labels.prefetch([(p.number, p.head) for p in prs])
         entries = q.entries(prs, q.load_state(), base=main, landed=main, queued=main, open_numbers=set(self.open()))
-        flags = flags_at(self.repo, main)
         excludes = tuple(flags.lowrisk_excludes) if flags.lowrisk_lane else ()
         self._files = {k: v for k, v in self._files.items() if k[1] == main}
         self._judged = {k: v for k, v in self._judged.items() if k[1] == main}
+        self._through = {k: v for k, v in self._through.items() if k[1] == main}
         admitted = [n for n, e in entries.items() if e.state == "ready"]
         with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:
             files = dict(zip(admitted, pool.map(lambda n: self._changed(main, entries[n].pr.head), admitted)))
@@ -532,12 +588,21 @@ class World:
                 p, reviews = entries[n].pr, labels.reviews(n, entries[n].pr.head)
                 landing = unreviewed(reviews, review_owners(q, labels, n, p.head, p.owner, self.open())) is None
                 held = (unreviewed(reviews, ()) or "").startswith("held")
-                if landing or not held and lowrisk(files[n], excludes):
+                if landing or not p.move and not held and lowrisk(files[n], excludes):
                     took.append(n)
-            new = any((entries[n].pr.head, main) not in self._judged for n in took)
+            plain = [n for n in took if not entries[n].pr.move]
+            new = any((entries[n].pr.head, main) not in self._judged for n in plain)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
                 chosen = {n: (files[n], *j)
-                          for n, j in zip(took, pool.map(lambda n: self._judge(main, entries[n].pr.head, cfg), took))}
+                          for n, j in zip(plain, pool.map(lambda n: self._judge(main, entries[n].pr.head, cfg), plain))}
+        carried = {job["of"] for job in q._restacking.values()}
+        for n in took:                                      # one at a time: each runs a move's scripts or starts a restack
+            p = entries[n].pr
+            if p.move:
+                chosen[n] = self._move(main, p)
+            elif chosen[n][2] or p.head in carried:
+                chosen[n] = (*chosen[n][:2], p.head in carried or self._judge_through(main, p))
+        self._keep_moves([main, *self.refs().values()])
         first = {n: i for i, n in enumerate(priority_list(self.priority_file) if self.priority_file else ())}
         # a PR the priority file names ahead of PRs whose heads its own holds (an aggregate, such as a commit of `checked`'s
         # chain) lands them with it, so they don't build first; a stack the file doesn't rank still lands its bases first
@@ -575,6 +640,38 @@ class World:
             self._judged[key] = (lean_change(self.repo, head, _out(self.repo, "merge-base", main, head)),
                                  merged_tree(self.repo, main, head, config=config)[0] is None)
         return self._judged[key]
+
+    def _move(self, main: str, p: PR) -> tuple[frozenset[str], bool, bool]:
+        """Move PR ``p`` as `_judge` judges a PR, by its move regenerated on ``main`` (`Queue._regenerate`, once a head and
+        `main`): (the files the move changes, whether it is a Lean change, whether it is refused), each refusal's reason in
+        `refused`.  Its head is only the request, so nothing of it is merged."""
+        commit, why = self.q._regenerate(main, p, main)
+        if commit is None:
+            self.refused[p.number] = (p.head, why)
+            return frozenset(), False, True
+        return frozenset(changed(self.repo, main, commit)), lean_change(self.repo, commit, main), False
+
+    def _judge_through(self, main: str, p: PR) -> bool:
+        """Whether ``p``, whose `git merge-tree` onto ``main`` conflicts, doesn't merge onto it as a build merges it either
+        (`Queue._merge_through`: restacked across each move on ``main`` its head lacks when that's what conflicts), kept by
+        (head, ``main``) once known.  While its restack runs in the background it doesn't, and its owner isn't told."""
+        if (key := (p.head, main)) not in self._through:
+            try:
+                self._through[key] = self.q._merge_through(main, p, [])[0] is None
+            except Restacking:
+                return True
+        return self._through[key]
+
+    def _keep_moves(self, tips: Iterable[str]) -> None:
+        """The moves regenerated that this tick used, and the restacks read that it used or whose move is on one of ``tips``
+        (`main` and the candidates, as drive's sync keeps those of `next`'s) or regenerated, in the loop's cache
+        (`_Clone.moves_at`)."""
+        q = self.q
+        q._made = {k: v for k, v in q._made.items() if k in q._used}
+        moves = {mv.commit for t in dict.fromkeys(tips) for mv in queue_log(self.repo, t)[1]}
+        moves |= {v["commit"] for v in q._made.values() if v.get("commit")}
+        q._restacks = {k: v for k, v in q._restacks.items() if k in q._used or k.rpartition(":")[2] in moves}
+        q._save_restacks()
 
     def refs(self) -> dict[str, str]:
         """origin's `queue/*` branches as fetched: {name under `queue/`: sha}."""
@@ -884,17 +981,29 @@ class World:
 
     # -- effects
 
-    def build(self, prs: list[PR], base: str) -> tuple[str, list[Member], list[tuple[PR, str]]]:
-        """``prs`` merged in order onto ``base`` (`Queue._merge`): (the tip, the members merged, (PR, why) of each left out)."""
-        tip, merged, left = base, [], []
+    def build(self, prs: list[PR], base: str, main: str) -> tuple[str, list[Member], list[tuple[PR, str]], list[tuple[PR, str]]]:
+        """``prs`` in order onto ``base``, as drive's sync builds `next` with `main` at ``main``: a move PR's move regenerated
+        on what is built so far (`Queue._regenerate`, with ``main``'s scripts), each other PR merged across each move below it
+        that its head lacks (`Queue._merge_through`): (the tip, the members, (PR, why) of each left out, (PR, why) of each
+        waiting on its restack in the background, `Restacking`)."""
+        q = self.q
+        q._moves, q._upcoming = queue_log(self.repo, base)[1], [p.head for p in prs if not p.move]
+        tip, merged, left, waits = base, [], [], []
         for p in prs:
-            commit, why = self.q._merge(tip, p, merged)
+            try:
+                commit, why = q._regenerate(tip, p, main) if p.move else q._merge_through(tip, p, merged)
+            except Restacking as r:
+                waits.append((p, str(r)))
+                continue
             if commit is None or commit == tip:
                 left.append((p, why or f"its head {p.head[:12]} is already in what it merges onto"))
                 continue
             merged.append(Member(p.number, p.head, p.owner or "", commit))
             tip = commit
-        return tip, merged, left
+            if p.move:
+                q._moves.append(Move(commit, p.move))
+        q._save_restacks()
+        return tip, merged, left, waits
 
     def push(self, sha: str, ref: str, lease: str | None = None) -> None:
         """origin's ``ref`` to ``sha`` ("": deleted), with a lease on ``lease`` when given."""
@@ -1379,9 +1488,10 @@ class Loop:
     # -- a tick
 
     def tick(self) -> list[dict]:
-        """One tick: the records it logged (with --dry-run, those it would have)."""
+        """One tick: the records it logged (with --dry-run, those it would have, and no restack started)."""
         past = Past.read(self.log_path, self.now() - WINDOW_S)
         self.last = max(past.tick, self.last) + 1
+        self.world.q._restack_starts = not self.dry_run
         t = self.snapshot(past, self.last)
         if self.dry_run:
             self.out(self.summary(t))
@@ -1392,6 +1502,7 @@ class Loop:
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
                for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._flaky(t) + self._bases(t)
         new += self._launched(t)
+        new += self._refusals(t)
         new += [self._on_main(t, adv, told) for adv, told in t.past.moved()]
         for rec in new:
             self.write(rec)
@@ -1463,6 +1574,7 @@ class Loop:
                          + "".join(f"\n  infra {f.task} {f.key[:19]}" for f in c.verdict.infra))
         lines.append(f"history {len(s.history)}: " + " ".join(o.state for o in s.history[-10:]))
         lines += [f"ignored queue/{name} at {sha[:12]}: no build of the loop's" for name, sha in t.foreign.items()]
+        lines += [f"refused #{n}'s move at {head[:12]}: {why}" for n, (head, why) in sorted(self.world.refused.items())]
         return "\n".join(lines)
 
     # -- the actions
@@ -1518,10 +1630,13 @@ class Loop:
             raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
         if self.slim is not None:
             w.slim_driver()                                 # before anything is pushed
-        tip, merged, left = w.build([w.prs[n] for n in a.members], a.base)
-        recs = []
+        tip, merged, left, waits = w.build([w.prs[n] for n in a.members], a.base, t.main)
+        recs = [self.record(t, "wait", base=a.base, members=[p.number], heads=[p.head], number=p.number, why=why)
+                for p, why in waits]
         for p, why in left:
             text = None if (key := f"{p.head}@{a.base}") in t.told else (
+                f"#{p.number}'s move ({p.move}) at {p.head[:12]} is left out of the verified queue's candidate on "
+                f"{a.base[:12]}: {why}" if p.move else
                 f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {a.base[:12]}: {why}. "
                 f"It is left out until it merges: merge `main` into it")
             posts = text is not None and not self.shadow
@@ -1725,6 +1840,23 @@ class Loop:
                 recs.append(self.record(t, "flaky", sha=c.sha, base=c.base, members=c.members, heads=c.heads, key=key,
                                         task=task, tests=tests, inputs=e.get("inputs"), text=text, to=list(to), done=done,
                                         **({} if self.shadow else {"posted": done})))
+        return recs
+
+    def _refusals(self, t: Tick) -> list[dict]:
+        """Tell the owner of each move PR the snapshot refused (`World.ready`: its move doesn't regenerate on `main`, or isn't
+        certified there) why, once a head (`Past.refused`): it stays out, never merged stale, until a new head or a new `main`
+        regenerates it.  With --shadow, logged only."""
+        w, recs, told = self.world, [], t.past.refused()
+        for n, (head, why) in sorted(w.refused.items()):
+            if head in told:
+                continue
+            told.add(head)
+            p = w.prs.get(n)
+            text = (f"#{n}'s move ({p.move if p else 'its map'}) at {head[:12]} doesn't regenerate on `main` {t.main[:12]}: "
+                    f"{why}. The verified queue leaves it out until it does, at a new head or on a new `main`")
+            done = not self.shadow and self._say(t, "refuse", text, self.owner(n), heads=[head], number=n)
+            recs.append(self.record(t, "refuse", members=[n], heads=[head], number=n, why=why, text=text, done=done,
+                                    **({} if self.shadow else {"posted": done})))
         return recs
 
     def _bases(self, t: Tick) -> list[dict]:

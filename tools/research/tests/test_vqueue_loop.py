@@ -93,7 +93,7 @@ class Env:
         monkeypatch.setattr(L, "gating", lambda repo, sha: list(self.gates))
         self.graph2.list_graph(f"ready:{self.main()}", {"schema": GRAPH_V2, "commit": self.main(), "tasks": []})
 
-    def loop(self, decide, clone: str = "clone", **kw) -> Loop:
+    def loop(self, decide, clone: str = "clone", cache: Path | None = None, **kw) -> Loop:
         path = self.tmp / clone
         if not path.exists():
             _git(self.tmp, "clone", "-q", str(self.o.origin), str(path))
@@ -102,7 +102,7 @@ class Env:
                    land_into="main")
         q.branch = "main"
         w = Fake(q, self.labels, Executor(self.graph2), post=lambda text, to=(): self.posts.append(text) or True,
-                 now=lambda: self.clock)
+                 now=lambda: self.clock, cache=cache)
         w.withdrawn, w.cancelled = self.withdrawn, self.cancelled
         return Loop(w, self.log, decide=decide, now=lambda: self.clock, out=self.out.append, **kw)
 

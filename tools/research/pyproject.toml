@@ -115,6 +115,7 @@ untraced = [
     "tests/test_undeclared_derivation.py",
     "tests/test_vqueue_compare.py",
     "tests/test_vqueue_loop.py",
+    "tests/test_vqueue_moves.py",
     "tests/test_vqueue_slim.py",
 ]
 # Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
@@ -134,8 +135,9 @@ untraced = [
 # tools/verity/check/gates/markdown_caps.py and tests/test_repository.py: test_queue commits them into its origin, so its sync
 # runs the Markdown caps' landing gate on the caps it reads. tools/verity/check/pins.py: test_queue commits it into its origin, so
 # the sync's pin rebuild (`repinned`) reads the real `PINS`. tools/move/rename.py, layout.py and restack.py and
-# tools/verity/check/move_check.py: test_drive_moves commits them into its origin, so the sync regenerates, certifies and
-# restacks a move with the scripts it runs from the tree. tools/verity/graph/tests/key_vectors.json: test_drive_executor holds
+# tools/verity/check/move_check.py: test_drive_moves and test_vqueue_moves commit them into their origins, so drive's sync and
+# the verified queue's loop regenerate, certify and restack a move with the scripts they run from the tree.
+# tools/verity/graph/tests/key_vectors.json: test_drive_executor holds
 # the executor client's graph/v2 key rule to the vectors both sides of the contract reproduce. tools/verity/lean/lean_changed.py
 # and the files its `--inputs-key` loads (lean_audit.py, settings.py, module_keys.py, headers.py, check.py, siblings.py, axiom_probe.py,
 # tools/verity/check/common.py, slot.py, lean_slot.py, tools/verity/graph/verity_graph/contract.py): test_queue commits them
