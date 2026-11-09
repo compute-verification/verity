@@ -59,7 +59,9 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
-  (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
+  (`serving_rows.leaf_layer`), with a window's history tables (`audit`'s ``history``, `ml.windows.history.params`), each
+  table's root the verifier of record computes from its writers' public bodies, to which it holds the window's registered
+  root (a root it refuses is a refusal before the draw), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
   either kind names the record's commitment, and it is a stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the
   run root of record, the digest of the bundle's manifest it opened and that commitment, or a served window whose run is the run
   root of record, a SHA-512 root, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose
@@ -249,6 +251,21 @@ def tie(a: argparse.Namespace) -> dict[str, Any]:
     ``--tie``): one-stage's ``log`` (that record), ``registered`` (each value's words), ``outputs`` (each value that
     record's) and ``schemas`` (their row formats), as `verifier.check` takes them; empty without one."""
     return dict(getattr(a, "tie", None) or {})
+
+
+def registration_check(a: argparse.Namespace, rec: dict, program: Program, query: dict, law: dict, want: dict,
+                       leaf_layer: str | None, table: dict | None, history: dict | None = None) -> dict[str, Any]:
+    """`verifier.check`'s verdict on the window's registration (R1-R7, under its `tie`), with its history tables
+    (``history``, `ml.windows.history.params`): the roots the verifier of record computes from the members' public bodies
+    the leaf layer binds, to which it holds the window's registered roots. A root it refuses (`history.roots_of`'s
+    ValueError) is a refusal, code ``history``."""
+    try:
+        return V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=history,
+                       **tie(a)).to_json()
+    except ValueError as e:
+        if history is None:
+            raise
+        return {"ok": False, "codes": ["history"], "detail": {"history": str(e)}}
 
 
 def registering(a: argparse.Namespace) -> dict[str, Any]:
@@ -640,7 +657,8 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served: Path, source: Callable[[dict], dict], port: int,
           summary: dict, more_negatives: dict | None = None, rank: int | None = None,
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
-          ports: int | None = None, drawn: tuple[dict, dict, dict] | None = None) -> tuple[dict, bool]:
+          ports: int | None = None, drawn: tuple[dict, dict, dict] | None = None,
+          history: Callable[[dict[str, bytes]], dict | None] | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its registration's ``window`` to
     ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
     ``step_roots``, what serving recorded before each step's coin, `tables.check_row_tables`), one Lean sample by its sampling design
@@ -655,7 +673,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
     registration (a two-stage design's second stage of its interior registration), its draw, law and receipt, proved in
     place of a5's own; the summary's ``handed`` is then what the audit record took (its verdicts, statement, sessions,
-    proved units, instances, served units and session roots), for the caller's stream's outcome."""
+    proved units, instances, served units and session roots), for the caller's stream's outcome. ``history``: the verifier
+    of record's history tables from the members' public bodies by key (`ml.windows.history.params`), which the
+    registration's check holds the window's registered roots to before the draw (`registration_check`); None for a window
+    with none."""
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
@@ -749,8 +770,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
-    checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
-                                     **tie(a)).to_json()
+    hist = history(publics) if history is not None else None
+    checks["registration"] = registration_check(a, rec, program, query, law, want, leaf_layer, table, hist)
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -1012,6 +1033,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
         v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table, **tie(a))
         neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        if hist is not None:
+            name = min(hist["registered"])
+            root = hist["registered"][name]
+            wrong = {**hist, "registered": {**hist["registered"], name: root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
+            v = registration_check(a, rec, program, query, law, want, leaf_layer, table, wrong)
+            neg["history-root-not-its-writers-strings"] = {"refused": not v["ok"], "codes": list(v["codes"])}
         v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
         neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
         neg.update(wiring_negatives(mine.members, publics))
