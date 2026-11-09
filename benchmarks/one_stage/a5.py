@@ -61,7 +61,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
   (`serving_rows.leaf_layer`), with a window's history tables (`audit`'s ``history``, `ml.windows.history.params`), each
   table's root the verifier of record computes from its writers' public bodies, to which it holds the window's registered
-  root (a root it refuses is a refusal before the draw), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
+  root, in its check before the draw and in the stream's registrations its run of record reads (a root both its verifiers
+  refuse is `registration.HISTORY`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
   either kind names the record's commitment, and it is a stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the
   run root of record, the digest of the bundle's manifest it opened and that commitment, or a served window whose run is the run
   root of record, a SHA-512 root, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose
@@ -253,24 +254,10 @@ def tie(a: argparse.Namespace) -> dict[str, Any]:
     return dict(getattr(a, "tie", None) or {})
 
 
-def registration_check(a: argparse.Namespace, rec: dict, program: Program, query: dict, law: dict, want: dict,
-                       leaf_layer: str | None, table: dict | None, history: dict | None = None) -> dict[str, Any]:
-    """`verifier.check`'s verdict on the window's registration (R1-R7, under its `tie`), with its history tables
-    (``history``, `ml.windows.history.params`): the roots the verifier of record computes from the members' public bodies
-    the leaf layer binds, to which it holds the window's registered roots. A root it refuses (`history.roots_of`'s
-    ValueError) is a refusal, code ``history``."""
-    try:
-        return V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=history,
-                       **tie(a)).to_json()
-    except ValueError as e:
-        if history is None:
-            raise
-        return {"ok": False, "codes": ["history"], "detail": {"history": str(e)}}
-
-
-def registering(a: argparse.Namespace) -> dict[str, Any]:
-    """`tie` as a stream's `register` takes it: the log is the stream's (`stream_of`)."""
-    return {k: v for k, v in tie(a).items() if k != "log"}
+def registering(a: argparse.Namespace, history: dict | None = None) -> dict[str, Any]:
+    """`tie` as a stream's `register` takes it (the log is the stream's, `stream_of`), with the window's history tables
+    (``history``, `audit`'s), which the run of record holds the window's registered roots to."""
+    return {**{k: v for k, v in tie(a).items() if k != "log"}, **({"history": history} if history is not None else {})}
 
 
 def program_values(program: Program) -> tuple[tuple[str, int, int], ...]:
@@ -351,11 +338,13 @@ def port_refusal(mine: CS.Binding, draw: dict, port: int, ports: int | None) -> 
 
 
 def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, members: list[dict], want: dict,
-               leaf_layer: str | None) -> tuple[S.Stream | None, S.Draw | None, dict | None, Callable[[int], bytes],
-                                                dict | None, dict | None, int | None]:
+               leaf_layer: str | None, history: dict | None = None
+               ) -> tuple[S.Stream | None, S.Draw | None, dict | None, Callable[[int], bytes], dict | None, dict | None,
+                          int | None]:
     """Rank ``rank``'s sample of record (`stream_of`): the stream registers the window under the TP run root (`register`, at
     the window's counts), and samples once (`select`: Lean's `Select.select` on the bytes read, then `check_draw`), on the
-    challenger's coins (``a.coins``): the rank first plans its sample's coins from its window (`a5_coins.need`), which opens
+    challenger's coins (``a.coins``), with the window's history tables (``history``): the rank first plans its sample's
+    coins from its window (`a5_coins.need`), which opens
     the step's one session once every rank has planned (`a5_coins.Draws.plan`); then the coins commit to the registration's
     digest and the stream reads them in the rank's turn on the step's one client. -> (the stream, its
     sample, `register`'s counts, the coins (their `read`: the bytes read), the challenger coins' segment, why it sampled none,
@@ -366,7 +355,7 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, me
         stream, counts = stream_of(a, mine, members, want, leaf_layer, coins)
         coins.plan(AC.need(a.rule, mine.program, mine.query, mine.population, mine.work_table))
         reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
-                              **registering(a))
+                              **registering(a, history))
         coins.commit(bytes.fromhex(reg.digest))
         draw = stream.select(reg)
     except S.Refused as e:
@@ -380,8 +369,10 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, me
 
 def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, coins: AC.VerifierCoins,
                      rec: dict, mine: CS.Binding, members: list[dict], want: dict, leaf_layer: str | None,
-                     sessions: list[str], verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
-    """The sample's outcome of record on the verifier's own coins: its proof delivered (`Stream.deliver`) and its outcome
+                     sessions: list[str], verdicts: dict, statement: dict, given: dict, history: dict | None = None
+                     ) -> tuple[dict | None, dict, dict]:
+    """The sample's outcome of record on the verifier's own coins (each stream registering with the window's history
+    tables, ``history``): its proof delivered (`Stream.deliver`) and its outcome
     (`Stream.outcome`, ``given`` its proved units, instances, served units and session roots) with no coins' evidence,
     whose audit record fails `run` unless the Lean verifier's whole run (`Run.run`, `coin_source` verifier, its
     window the TP run root) is the Python's. Then the refusals that apply to the verifier's coins
@@ -399,7 +390,7 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
     neg = AC.verifier_negatives(
         lambda c: stream_of(a, mine, members, want, leaf_layer, c)[0],
         lambda s: s.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
-                             **registering(a)),
+                             **registering(a, history)),
         stream, coins, draw, outcome, a.window_root)
     checks = (result or {}).get("checks") or {}
     record = {"source": stream.coin_source, "challenger": stream.challenger, "read": bytes(coins.read).hex(), "outcome": told,
@@ -409,8 +400,9 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
 
 def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, rec: dict, mine: CS.Binding,
                   members: list[dict], want: dict, leaf_layer: str | None, read: bytes, segment: dict, sessions: list[str],
-                  verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
-    """The sample's outcome of record once the challenger's session has ended (`a5_coins.Draws.evidence`): its proof delivered
+                  verdicts: dict, statement: dict, given: dict, history: dict | None = None) -> tuple[dict | None, dict, dict]:
+    """The sample's outcome of record once the challenger's session has ended (`a5_coins.Draws.evidence`), each stream
+    registering with the window's history tables (``history``): its proof delivered
     (`Stream.deliver`) and its outcome (`Stream.outcome`, ``given`` its proved units, instances, served units and session
     roots) with the coins' evidence, whose audit record fails `run` unless the Lean verifier's whole run
     (`Run.run`, its window the TP run root) is the Python's; and `coins.coins_reason` (Python's
@@ -452,7 +444,7 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read))
         try:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table,
-                                    **registering(a)))
+                                    **registering(a, history)))
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
             got, audit = outcome(s, d, coins)
@@ -674,9 +666,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     registration (a two-stage design's second stage of its interior registration), its draw, law and receipt, proved in
     place of a5's own; the summary's ``handed`` is then what the audit record took (its verdicts, statement, sessions,
     proved units, instances, served units and session roots), for the caller's stream's outcome. ``history``: the verifier
-    of record's history tables from the members' public bodies by key (`ml.windows.history.params`), which the
-    registration's check holds the window's registered roots to before the draw (`registration_check`); None for a window
-    with none."""
+    of record's history tables from the members' public bodies by key (`ml.windows.history.params`), to which the
+    registration's check holds the window's registered roots before the draw, and the stream's registrations for its run
+    of record; None for a window with none."""
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
@@ -771,7 +763,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
     hist = history(publics) if history is not None else None
-    checks["registration"] = registration_check(a, rec, program, query, law, want, leaf_layer, table, hist)
+    checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
+                                     history=hist, **tie(a)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -812,7 +805,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                {"law": "subset", "k": law["k"]}, n_all, R.digest(rec), out / "draw.log")
         union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     else:
-        stream, draw, counts_of, coins, segment, refused, need = coins_draw(a, rank, rec, mine, members, want, leaf_layer)
+        stream, draw, counts_of, coins, segment, refused, need = coins_draw(a, rank, rec, mine, members, want, leaf_layer,
+                                                                            hist)
         read = bytes(coins.read)
         (out / "segment.json").write_text(json.dumps({"source": "challenger",
                                                       "segment": segment, "read": read.hex(), "need": need}, sort_keys=True))
@@ -990,7 +984,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                  "session_roots": session_roots}
         result, coin_neg, summary["coins"] = coins_outcome(
             a, stream, draw, counts_of, rec, mine, members, want, leaf_layer, read, segment, sessions, verdicts, statement,
-            given)
+            given, hist)
         if result is None:
             summary.update(audit={"accepted": False, "outcome": summary["coins"]["outcome"]}, draw=union_draw["units"],
                            negatives={x: y["refused"] for x, y in coin_neg.items()})
@@ -1037,8 +1031,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             name = min(hist["registered"])
             root = hist["registered"][name]
             wrong = {**hist, "registered": {**hist["registered"], name: root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
-            v = registration_check(a, rec, program, query, law, want, leaf_layer, table, wrong)
-            neg["history-root-not-its-writers-strings"] = {"refused": not v["ok"], "codes": list(v["codes"])}
+            v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
+                        **tie(a))
+            neg["history-root-not-its-writers-strings"] = {"refused": v.codes == (R.HISTORY,), "codes": list(v.codes)}
         v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
         neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
         neg.update(wiring_negatives(mine.members, publics))

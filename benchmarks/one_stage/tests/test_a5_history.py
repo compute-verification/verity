@@ -1,7 +1,8 @@
-"""a5's registration check on a window with a history table (`a5.registration_check`): the verifier of record, the Lean
-and its Python mirror, computes the table's root from its writer's public bodies, which the leaf layer binds
-(`ml.windows.history.params`), and accepts the root the window registers; that root with a bit flipped (a5's negative)
-and the root over the same rows in another order are refused by both, a5's code ``history``."""
+"""a5 on a window with a history table: the verifier of record, the Lean and its Python mirror, computes the table's
+root from its writer's public bodies, which the leaf layer binds (`ml.windows.history.params`), and accepts the root the
+window registers, in a5's check before the draw (`verifier.check`) and in its stream's registration, the run of record's
+(`a5.registering`); that root with a bit flipped (a5's negative) and the root over the same rows in another order are
+refused by both, `registration.HISTORY`."""
 
 from __future__ import annotations
 
@@ -11,8 +12,10 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
-from verity.core.protocols.spot.one_stage import registration as R, verifier as V
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import draw as D, registration as R, verifier as V
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -20,12 +23,17 @@ from verity.ml.circuits.ops import gemm as G
 from verity.ml.commitments import history as HT
 from verity.ml.windows import history as HW, interface as I, rows as CS
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import a5 as A5
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "core" / "protocols" / "spot" / "tests"))
+import a5 as A5  # noqa: E402
+import fake_challenger as FC  # noqa: E402
 
 G8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
 G8ID = descriptor_id(G8)
-LAW = {"law": "stratified", "k": 2}
+LAW = "stratified:2"
+#: the stream's rate, whose law over the window's four units is `LAW` (`service.params_law`)
+RULE = "stratified-rate:1/2"
 RUN = "ab" * 64
 
 
@@ -45,7 +53,7 @@ def _window(d: Path, n: int = 4):
     runs = ({"start": 0, "count": n, "writer": G8ID, "out": "o0", "radix": [n], "base": 0, "step": [1]},)
     circuit = I.Circuit("history", ((G8, n),),
                         registered=I.Registered({}, histories=(I.History("latent", "program", G8ID, "o0", 8, runs, 16),)))
-    win = I.Window(circuit, RUN, LAW, 2, registered={"latent": table})
+    win = I.Window(circuit, RUN, D.parse_design(LAW), 2, registered={"latent": table})
     win.record(G8, [x, w], [y])
     c = win.close(salt_key=bytes(32))
     win.write(c, d, {"label": "test"}, registrar=R)
@@ -58,22 +66,30 @@ def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers
     roots = I.registered_roots(rec["window"])
     assert roots == {"latent": table.root.hex()}
     leaf, want = CS.leaf_layer(publics), CS.expected_ports(mine)
-    hist = HW.params(doc, mine, publics, roots)
+    hist = HW.params(doc, mine, publics, HW.pins(doc, roots))
+    a = argparse.Namespace(rule=RULE, session_timeout=1, window_root=mine.run, delta=0.5)
+    assert A5.rated(mine, RULE) == mine
 
-    def check(h: dict | None) -> dict:
-        return A5.registration_check(argparse.Namespace(), rec, mine.program, mine.query, mine.law, want, leaf,
-                                     mine.work_table, h)
+    def check(h: dict | None) -> V.Verdict:
+        return V.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, want, leaf_layer=leaf,
+                       work_table=mine.work_table, history=h)
+
+    def register(h: dict | None) -> S.WindowCommitmentRecord:
+        stream, counts = A5.stream_of(a, mine, [{"defn": G8, "m": m} for m in mine.members], want, leaf,
+                                      FC.Challenger("a5-history"))
+        return stream.register(rec, want, leaf_layer=leaf, window_root=a.window_root, counts=counts,
+                               work_table=mine.work_table, **A5.registering(a, h))
 
     got = check(hist)
-    assert got["ok"] and got["verifiers"]["lean"] == got["verifiers"]["python"], got
-    assert check(None)["ok"]
+    assert got.ok and got.verifiers["lean"] == got.verifiers["python"], got
+    assert check(None).ok and register(hist).digest == R.digest(rec)
     r = roots["latent"]
     other = HT.HistoryTable("program", "latent", 8, 16)
     other.append(np.stack(table.rows[::-1]), table.salts[::-1])
     for wrong in (r[:-1] + format(int(r[-1], 16) ^ 1, "x"), other.root.hex()):
         bad = {**hist, "registered": {"latent": wrong}}
         got = check(bad)
-        assert (got["ok"], got["codes"]) == (False, ["history"]) and "not the table's root" in got["detail"]["history"]
-        params = V._params(mine.program, mine.query, mine.law, CS.SCHEME, want, leaf, (), (), None, mine.work_table, None,
-                           history=bad)
-        assert "refused" in V.lean("registration", {"params": params, "record": rec})
+        assert got.codes == (R.HISTORY,) and "not the table's root" in got.detail[R.HISTORY]["python"], got
+        with pytest.raises(S.Refused) as e:
+            register(bad)
+        assert e.value.verdict.codes == (R.HISTORY,)
