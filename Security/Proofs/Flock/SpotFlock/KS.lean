@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.Facts
 public import Proofs.Flock.SpotFlock.Coins
+public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Sessions
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.Claims.Sampling.Deployed
@@ -14,7 +15,7 @@ public import Proofs.Flock.Claims.NumbersDeploy
 `SpotFlock.code h`:
 
 * `regMatchesTwo_code`, `refusesTwo_code`, `interiorFixed_code`: `RegMatchesTwo`, `Code.RefusesTwo` and
-  `Code.InteriorFixed`;
+  `Code.InteriorFixed`; `replayCap` (`SpotFlock.Cap`) is `Code.ReplayCap` at `SpotFlock.cap h`;
 * `sessionsIn_code`: `SessionsIn`, the reference statement being in Flock's masked scope (`Held.xS₀_ok`): every
   session's statement has its shapes, so its `N₀` is the code's;
 * `ksTwo_spot`: `CompiledTwo.KS` at Flock's masked record and SHA-512, from the sessions' openings
@@ -50,14 +51,16 @@ theorem sessionsIn_code : SamplingDeploy.SessionsIn (code h) := by
     simp [FlockDeploy.tableLen, List.map_map, Function.comp_def]
 
 /-- **SPOT[Flock]'s two-stage knowledge soundness at its code**: `ksTwo_atOrder` at `SpotFlock.code h`, A3 at its
-coins' bytes, its code's facts and its sessions' runs proved, from the sessions' openings. -/
+coins' bytes, its code's facts and its sessions' runs proved, from the sessions' openings. Its inner count is the
+replay cap (`SpotFlock.cap`). -/
 theorem ksTwo_spot (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
-    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h)).KS
-      FlockDeploy.sha512 :=
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h)
+      (cap h)).KS FlockDeploy.sha512 :=
   SamplingDeploy.ksTwo_atOrder (base h) (reg h) (two h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte)
-    (fun _ => coinByte) iroots callsUniform callsUniform (regMatchesTwo_code h) (refusesTwo_code h _)
-    (interiorFixed_code h _) (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h)
+    (fun _ => coinByte) iroots (cap h) callsUniform callsUniform (regMatchesTwo_code h) (refusesTwo_code h _)
+    (replayCap h _) (interiorFixed_code h _) (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512)
+    (sessionsIn_code h)
     hopens
 
 end SpotFlock
