@@ -4,19 +4,19 @@ import Mathlib.Analysis.Real.Sqrt
 /-!
 # The main theorem's inequalities after Loomis–Whitney
 
-The proof of the main theorem (updated matrix multiplications are slowed down by `F`) bounds each IU `R` by the counts
+The proof of the main theorem (updated matrix multiplications are slowed down by `F`) bounds each inference block `R` by the counts
 `p` (weight entries it uses), `τ` (full positions), `Q` (input entries it uses at its other positions) and `Y` (output
 entries it contributes products to there). These are its steps after Loomis–Whitney (`LoomisWhitney.lean`), stated over
 plain numbers in the draft's variables: `b_w` and `b_a` the widths of a weight and an activation entry, `d` the smallest
 inner dimension, `K = αΓ` the per-IU read cap and `μ` the weight on the two read counts.
 
 * Cauchy–Schwarz over the multiplications `ℓ`: `∑ ℓ √(p_ℓ q_ℓ y_ℓ) ≤ √(p Q Y)` (`sum_sqrt_mul_mul_le`).
-* The μ weighting: two lower bounds on the IUs' total reads, combined with weights `μ` and `1 - μ` (`mu_weighting`).
-* `1/s + μ/u ≥ (1 + √μ)² / (u + s)` (`sq_one_add_sqrt_div_le`) and AM–GM (`am_gm_step`), which together bound each IU's
+* The μ weighting: two lower bounds on the inference blocks' total reads, combined with weights `μ` and `1 - μ` (`mu_weighting`).
+* `1/s + μ/u ≥ (1 + √μ)² / (u + s)` (`sq_one_add_sqrt_div_le`) and AM–GM (`am_gm_step`), which together bound each inference block's
   share of the weighted reads by `c₁ p τ + c₂ √(p Q Y)` (`iu_reads_ge`), and so the total by `min c₁ c₂ · G`
   (`min_mul_sum_le_reads`).
 * With dark gates (`Contained.lean`): the μ weighting when the partial sums count exceeds the reads by what dark gates
-  absorb (`mu_weighting_budget`), and a second per-IU bound, at most `E` products per input entry an IU uses at its other
+  absorb (`mu_weighting_budget`), and a second per-IU bound, at most `E` products per input entry an inference block uses at its other
   positions, which gives `μ b_a / Λ` in place of `min c₁ c₂` (`column_le`, `max_mul_sum_le`).
 * `F`'s closed form: the maximum over `μ` of `min c₁ c₂` is attained, at `μ = 1/4` or where the two terms meet
   (`isGreatest_min_one_add_sqrt`, and `isGreatest_F` in the draft's variables), and a total read cap of `α size(D)` makes
@@ -27,7 +27,7 @@ namespace InferenceOnly.SecurityProofs
 
 open Finset
 
-/-- **Cauchy–Schwarz over the multiplications**: an IU that uses at most `P` weight entries of each multiplication `ℓ`
+/-- **Cauchy–Schwarz over the multiplications**: an inference block that uses at most `P` weight entries of each multiplication `ℓ`
 computes at most `∑ ℓ √(p_ℓ q_ℓ y_ℓ) ≤ √(P Q Y)` products at its other positions, where `Q = ∑ q_ℓ`, `Y = ∑ y_ℓ`. -/
 theorem sum_sqrt_mul_mul_le {L : Type*} (s : Finset L) {P : ℝ} {p q y : L → ℝ} (hp : ∀ ℓ ∈ s, p ℓ ≤ P)
     (hq : ∀ ℓ ∈ s, 0 ≤ q ℓ) (hy : ∀ ℓ ∈ s, 0 ≤ y ℓ) :
@@ -43,8 +43,8 @@ theorem sum_sqrt_mul_mul_le {L : Type*} (s : Finset L) {P : ℝ} {p q y : L → 
     _ = √(P * (∑ ℓ ∈ s, q ℓ) * ∑ ℓ ∈ s, y ℓ) := by
         rw [mul_assoc, Real.sqrt_mul' _ (mul_nonneg (sum_nonneg hq) (sum_nonneg hy))]
 
-/-- **The μ weighting**: the IUs' total reads `T` are at least each IU's own reads `u R + a R` summed (weights, then
-activations or partial sums), and at least the weights plus the partial sums that split entries pass between IUs,
+/-- **The μ weighting**: the inference blocks' total reads `T` are at least each inference block's own reads `u R + a R` summed (weights, then
+activations or partial sums), and at least the weights plus the partial sums that split entries pass between inference blocks,
 `u R + b R` summed; the per-IU reads may include some of those partial sums, so the counts combine with weights `μ` and
 `1 - μ` rather than adding. In the draft, `u = b_w p`, `a = b_a (d τ + Q)` and `b = (b_a / 2) Y`. -/
 theorem mu_weighting {ι : Type*} (s : Finset ι) {T μ : ℝ} {u a b : ι → ℝ} (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1)
@@ -58,8 +58,8 @@ theorem mu_weighting {ι : Type*} (s : Finset ι) {T μ : ℝ} {u a b : ι → �
         add_le_add (mul_le_mul_of_nonneg_left h₁ hμ₀) (mul_le_mul_of_nonneg_left h₂ (by linarith))
     _ = T := by ring
 
-/-- The bound on the weight that the μ weighting puts on an IU's reads: `1/s + μ/u ≥ (1 + √μ)² / (u + s)`, where `u` is
-the IU's weight reads and `s` its activation reads (Cauchy–Schwarz in Engel's form). -/
+/-- The bound on the weight that the μ weighting puts on an inference block's reads: `1/s + μ/u ≥ (1 + √μ)² / (u + s)`, where `u` is
+the inference block's weight reads and `s` its activation reads (Cauchy–Schwarz in Engel's form). -/
 theorem sq_one_add_sqrt_div_le {u s μ : ℝ} (hu : 0 < u) (hs : 0 < s) (hμ : 0 ≤ μ) :
     (1 + √μ) ^ 2 / (u + s) ≤ 1 / s + μ / u := by
   obtain ⟨m, hm, rfl⟩ : ∃ m, 0 ≤ m ∧ μ = m ^ 2 := ⟨√μ, Real.sqrt_nonneg _, (Real.sq_sqrt hμ).symm⟩
@@ -73,7 +73,7 @@ theorem am_gm_step {u s μ v₂ v₃ : ℝ} (hu : 0 < u) (hs : 0 < s) (hμ : 0 �
   rw [show u * v₂ * v₃ * (1 / s + μ / u) = (u * v₂ / s + μ * v₂) * v₃ by field_simp, Real.sqrt_mul hX]
   nlinarith [sq_nonneg (√(u * v₂ / s + μ * v₂) - √v₃), Real.sq_sqrt hX, Real.sq_sqrt hv₃]
 
-/-- **One IU's share of the weighted reads**: an IU within the read cap `b_w p + b_a (d τ + Q) ≤ K` contributes at least
+/-- **One inference block's share of the weighted reads**: an inference block within the read cap `b_w p + b_a (d τ + Q) ≤ K` contributes at least
 `c₁ p τ + c₂ √(p Q Y)` to `∑ R (b_w p + μ b_a (d τ + Q) + (1 - μ) (b_a/2) Y)`, where
 `c₁ = (1 + √μ)² b_w b_a d / K` and `c₂ = √2 (1 + √μ) √(1 - μ) b_a √(b_w / K)` are the two terms of `F`'s minimum. -/
 theorem iu_reads_ge {bw ba d K μ p τ Q Y : ℝ} (hbw : 0 < bw) (hba : 0 < ba) (hd : 0 < d) (hK : 0 < K)
@@ -91,7 +91,7 @@ theorem iu_reads_ge {bw ba d K μ p τ Q Y : ℝ} (hbw : 0 < bw) (hba : 0 < ba) 
     have hQ0 : Q = 0 := by nlinarith
     subst hτ0 hQ0
     simpa using add_nonneg (by positivity : 0 ≤ bw * p) hrest
-  -- u = b_w p, s = b_a (d τ + Q), and k = 1/s + μ/u is the weight the μ weighting puts on the IU's reads
+  -- u = b_w p, s = b_a (d τ + Q), and k = 1/s + μ/u is the weight the μ weighting puts on the inference block's reads
   have hu : 0 < bw * p := by positivity
   have hs' : 0 < ba * (d * τ + Q) := by positivity
   set k := 1 / (ba * (d * τ + Q)) + μ / (bw * p) with hk_def
@@ -121,8 +121,8 @@ theorem iu_reads_ge {bw ba d K μ p τ Q Y : ℝ} (hbw : 0 < bw) (hba : 0 < ba) 
         (bw * p * (ba * Q) / (ba * (d * τ + Q)) + μ * (ba * Q) + (1 - μ) * (ba / 2 * Y)) := add_le_add full other
     _ = _ := by field_simp; ring
 
-/-- **The IUs' weighted reads bound their products**: if each IU `R` computes at most `g R ≤ p τ + √(p Q Y)` products
-(Lemma 1, and Loomis–Whitney with Cauchy–Schwarz) within its read cap, and the IUs' total reads `T` are at least both
+/-- **The inference blocks' weighted reads bound their products**: if each inference block `R` computes at most `g R ≤ p τ + √(p Q Y)` products
+(Lemma 1, and Loomis–Whitney with Cauchy–Schwarz) within its read cap, and the inference blocks' total reads `T` are at least both
 counts of the μ weighting, then `T ≥ min c₁ c₂ · ∑ R g R`. -/
 theorem min_mul_sum_le_reads {ι : Type*} (s : Finset ι) {bw ba d K μ T : ℝ} (hbw : 0 < bw) (hba : 0 < ba)
     (hd : 0 < d) (hK : 0 < K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1) {p τ Q Y g : ι → ℝ} (hp : ∀ R ∈ s, 0 ≤ p R)
@@ -157,7 +157,7 @@ theorem mu_weighting_budget {ι : Type*} (s : Finset ι) {T B μ : ℝ} {u a b :
         add_le_add (mul_le_mul_of_nonneg_left h₁ hμ₀) (mul_le_mul_of_nonneg_left h₂ (by linarith))
     _ = T + (1 - μ) * B := by ring
 
-/-- **The column count, weighted**: an IU within the read cap `b_w p + b_a (d τ + Q) ≤ K` that computes at most
+/-- **The column count, weighted**: an inference block within the read cap `b_w p + b_a (d τ + Q) ≤ K` that computes at most
 `g ≤ p τ + E Q` products has `μ b_a g / Λ ≤ b_w p + μ b_a (d τ + Q)` for any `Λ ≥ E` and `Λ ≥ K / (4 b_w d)`: by AM–GM,
 `4 b_w d · b_a p τ ≤ (b_w p + b_a d τ)² ≤ K (b_w p + b_a d τ)`. -/
 theorem column_le {bw ba d K μ p τ Q E Λ g : ℝ} (hbw : 0 < bw) (hba : 0 < ba) (hd : 0 < d) (hK : 0 < K)
@@ -185,8 +185,8 @@ theorem column_le {bw ba d K μ p τ Q E Λ g : ℝ} (hbw : 0 < bw) (hba : 0 < b
   rw [div_mul_eq_mul_div, div_le_iff₀ hΛ0]
   nlinarith [mul_le_mul_of_nonneg_left hμ₁ (mul_nonneg hΛ0.le (mul_nonneg hbw.le hp))]
 
-/-- **The IUs' weighted reads bound their products, by columns too**: as `min_mul_sum_le_reads`, with the weighted
-reads themselves at most `T`, and each IU's products also at most `p τ + E Q`, `T ≥ max (min c₁ c₂) (μ b_a / Λ) · ∑ g`
+/-- **The inference blocks' weighted reads bound their products, by columns too**: as `min_mul_sum_le_reads`, with the weighted
+reads themselves at most `T`, and each inference block's products also at most `p τ + E Q`, `T ≥ max (min c₁ c₂) (μ b_a / Λ) · ∑ g`
 for any `Λ ≥ E` and `Λ ≥ K / (4 b_w d)` (`column_le`). -/
 theorem max_mul_sum_le {ι : Type*} (s : Finset ι) {bw ba d K μ E Λ T : ℝ} (hbw : 0 < bw) (hba : 0 < ba) (hd : 0 < d)
     (hK : 0 < K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1) (hE : E ≤ Λ) (hΛ : K / (4 * bw * d) ≤ Λ) {p τ Q Y g : ι → ℝ}
@@ -323,7 +323,7 @@ theorem isGreatest_F {bw ba d K α : ℝ} (hbw : 0 < bw) (hba : 0 < ba) (hd : 0 
       field_simp
       ring
 
-/-- **The theorem's last step**: if the IUs' reads bound `min c₁ c₂ · G ≤ α S` for every `μ`, where `G` is the number of
+/-- **The theorem's last step**: if the inference blocks' reads bound `min c₁ c₂ · G ≤ α S` for every `μ`, where `G` is the number of
 products and `S` is `size(D)`, then `D` is larger than the multiplications' `2G` gates by at least `F`. -/
 theorem F_le_div_of_reads {bw ba d K α S G : ℝ} (hbw : 0 < bw) (hba : 0 < ba) (hd : 0 < d) (hK : 0 < K)
     (hα : 0 < α) (hG : 0 < G)

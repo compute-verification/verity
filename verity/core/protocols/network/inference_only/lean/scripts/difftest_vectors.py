@@ -15,8 +15,8 @@ reduction tree, a chain of matrix-vector products (the inference-only policy dra
 and a nested one whose gates sit in calls, batches (of a primitive and of a composite) and a scan. Its parameters are
 values and arrays of widths from 1 to 32 bits, some bound at registration, and its primitives take one to four values
 or an array. θ is empty, every input (refused, `theta-not-registered`, where one is bound per run), the registered
-inputs, or a random set of them. A division is one IU, one IU per gate, runs of consecutive gates or a random
-assignment, numbered in a random order; `Γ` is at, below or above the division's largest IU, and `α` at, just below or
+inputs, or a random set of them. A division is one inference block, one inference block per gate, runs of consecutive gates or a random
+assignment, numbered in a random order; `Γ` is at, below or above the division's largest inference block, and `α` at, just below or
 just above its largest fresh input per gate, written reduced or not. About a third of the instances are malformed, each in one way the
 check refuses (every code of `InferenceOnlyCheck.Check`). Then come `mistyped_vectors.cases()`'s (`mistyped()`): references
 that name leaves of other widths than their types give them, which the codec and the check refuse as `program`, and

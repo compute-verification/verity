@@ -12,12 +12,12 @@ computed, so never in a baseline. So `novelReads d R_b` is the width of `(transf
 `FlockSoundness.Audit.Circuit.toCircuit` meets, `boolean_w`), these are numbers of gates (`novelReads_eq_card`,
 `novelReads_eq_card_add`).
 
-So compliance with the inference-only policy is a ratio of two certified numbers. Machine `b`'s IU condition, `Complies`'s condition on one IU, holds
+So compliance with the inference-only policy is a ratio of two certified numbers. Machine `b`'s IU condition, `Complies`'s condition on one inference block, holds
 exactly when `size R_b ≤ Γ` and `|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b` (`iu_iff_counts`), with
 `|transfersInto b|` network accounting's certified count of the bits into `b` and `size R_b` compute credit's total for
 `b`. When every novel input reaches `b` through another machine, it is `|transfersInto b| ≤ α · size R_b`
-(`iu_iff_wire`). That is the form a server needs among clients and the auditor's warden, which needn't comply as IUs: the
-warden reads every bit it relays. When each machine is one IU and every machine meets its condition, the whole
+(`iu_iff_wire`). That is the form a server needs among clients and the auditor's warden, which needn't comply as inference blocks: the
+warden reads every bit it relays. When each machine is one inference block and every machine meets its condition, the whole
 declaration complies (`complies_of_counts`).
 
 In the subcircuits' terms (`machine`), the transfer gates from `a` to `b` are `(machine a).inner ∩ (machine b).ins`
@@ -179,12 +179,12 @@ theorem novelReads_eq_card_add (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
     novelReads d (P.gates b) = (transfersInto P b).card + (inputsRead P b \ d.θ).card := by
   rw [novelReads_eq_add, width_eq_card hw, width_eq_card hw]
 
-/-- **One machine's IU condition from its counts** (the Boolean profile): `Complies`'s condition on the IU `R_b`
+/-- **One machine's IU condition from its counts** (the Boolean profile): `Complies`'s condition on the inference block `R_b`
 (at most `Γ` gates, at most `α` bits of novel information per gate) holds exactly when `size R_b ≤ Γ` and
 `|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b`: network accounting's certified bits into `b`, plus the novel
 input gates `b` reads itself, against compute credit's total for `b`. It is stated for one machine because the others
-need not comply as IUs: a server's session is one IU, while the clients and the auditor's warden, which reads every bit
-it relays, are not IUs of the server's workload. -/
+need not comply as inference blocks: a server's session is one inference block, while the clients and the auditor's warden, which reads every bit
+it relays, are not inference blocks of the server's workload. -/
 theorem iu_iff_counts (Γ : ℕ) (α : ℝ) (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
     (d.D.size (P.gates b) ≤ Γ ∧ (novelReads d (P.gates b) : ℝ) ≤ α * d.D.size (P.gates b)) ↔
       (d.D.size (P.gates b) ≤ Γ ∧
@@ -199,7 +199,7 @@ theorem iu_iff_wire (Γ : ℕ) (α : ℝ) (hw : ∀ g, d.D.w g = 1) (b : Fin n) 
       (d.D.size (P.gates b) ≤ Γ ∧ ((transfersInto P b).card : ℝ) ≤ α * d.D.size (P.gates b)) := by
   rw [iu_iff_counts d P Γ α hw, sdiff_eq_empty_iff_subset.2 hθ, card_empty, Nat.cast_zero, add_zero]
 
-/-- **Compliance from the certified counts** (the Boolean profile): when the machines are the IU division, one IU per
+/-- **Compliance from the certified counts** (the Boolean profile): when the machines are the inference block division, one inference block per
 machine (a whole-node session), and every machine `b` has at most `Γ` credited gates and
 `|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b`, the declaration complies at `(Γ, α)`. The left side is
 `|(transfersInto b ∪ inputsRead b) \ θ|`, the two sets being disjoint and the wire outside the baseline. -/

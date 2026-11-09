@@ -8,7 +8,7 @@ import InferenceOnlyCheck.DescDifftest
 batch's members one by one (a stack overflow, a time and a memory linear in them), each at a small `n` and at an
 `n` of `2^22` to `2^52`. `InferenceOnlyCheck/DescLivenessMain.lean` fails unless, on every case, `InferenceOnlyCheck.Desc.check` gives on the
 small instance what `InferenceOnlyCheck.check` gives on it expanded gate by gate (`expand`), and on the big one a verdict that is
-the small one's (`same`) or has its novel reads per IU (`novel`, where the gates grow with `n`). That it finishes is the
+the small one's (`same`) or has its novel reads per inference block (`novel`, where the gates grow with `n`). That it finishes is the
 point: the big instances are past anything `InferenceOnlyCheck.Desc` walks one by one (`InferenceOnlyCheck.Desc.WALK`). The Lean audit runs it
 (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
@@ -30,7 +30,7 @@ def expand (j : Json) : Except String Json := do
   let owner := (Array.range i.owner.size).flatMap fun k => (gates k).map fun _ => i.owner[k]!
   return j.setObjVal! "theta" (Json.arr theta) |>.setObjVal! "owner" (Json.arr owner)
 
-/-- Per IU its novel reads, from a verdict. -/
+/-- Per inference block its novel reads, from a verdict. -/
 def novel (v : Json) : Json :=
   match v.getObjValD "ius" with
   | .arr us => Json.arr (us.map fun u => match u with | .arr #[_, x] => x | _ => Json.null)

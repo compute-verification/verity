@@ -3,7 +3,7 @@ import Definitions.InferenceOnly.Links
 /-!
 # The inference-only policy's activations premise over all of training's counted multiplications
 
-`ActivationsIncompressible` charges an IU for the weight and input entries of one chain it uses. Training's counted
+`ActivationsIncompressible` charges an inference block for the weight and input entries of one chain it uses. Training's counted
 multiplications (`Threading`: an updated weight times an activation, in the forward pass and in the activation
 gradients) span many chains that share their activations, so a bound per chain cannot be added up over them.
 `ActivationsIncompressibleAll` states the same charge once, over every counted multiplication of the reference circuit,
@@ -33,7 +33,7 @@ what is excluded: an activation computed from no counted multiplication, or from
 
 It is meant for honest training circuits whose weights, and every activation computed from no counted multiplication,
 depend on more than `Γ` work of training since the commitment, with no low-rank update (LoRA) whose factors are
-narrower than the weights they update, and with the read cap: without it an IU that runs a transformer's first layers at
+narrower than the weights they update, and with the read cap: without it an inference block that runs a transformer's first layers at
 many positions reads their weights once and computes the next layer's inputs itself. -/
 def ActivationsIncompressibleAll (c : Declaration) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
   ∀ R, Small c Γ K R →

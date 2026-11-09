@@ -14,13 +14,13 @@ open Verity
 
 open Classical in
 /-- **Incompressibility of weights and activations, at most `k` products to a gate** (`ActivationsIncompressible` on a
-`PackedChain`). Every IU `R` of `D` (a set of at most `Γ` computed gates) that reads at most `K` bits of novel information
+`PackedChain`). Every inference block `R` of `D` (a set of at most `Γ` computed gates) that reads at most `K` bits of novel information
 reads at least `b_w` bits for each weight entry it uses and `b_a` bits for each input entry it uses, other than an input
 entry linked to an entry whole in `R`:
 `b_w · #(weight entries R uses) + b_a · #(input entries R uses, not linked to an entry whole in R) ≤ width(in(R) \ θ)`.
 "Uses" means that `R` holds the gate of a product of the entry, a gate that may hold up to `k` products.
 
-On an honest `Dot16` circuit (`k = 16`) it reads as the per-product form does. An IU that holds one step gate, the 16
+On an honest `Dot16` circuit (`k = 16`) it reads as the per-product form does. An inference block that holds one step gate, the 16
 products `W_ℓ[i, j] x_t^{(ℓ)}[j]` of one entry at 16 consecutive `j`, uses 16 weight entries and 16 input entries, and is
 charged `16 b_w + 16 b_a`; the gate reads the previous accumulator, the 16 activations and the 16 weights, which is
 `16 b_w + 16 b_a` plus the accumulator's width. None of those input entries is linked to an entry whole in a single

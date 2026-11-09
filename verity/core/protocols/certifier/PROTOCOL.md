@@ -936,7 +936,7 @@ client's view read back from its record, over a monitoring period of sampled aud
 inputs' bits, log2 of its possible faulty sets, their committed bits and the timing, and each window's audit fails with
 probability at most δ + ε_ks + ε_bind + Pr[B_tap].
 
-The inference-only policy charges an isolation block the ingress covert capacity from the last wipe before it starts,
+The inference-only policy charges an inference block the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of K, which the caller passes in bits
 (`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under the inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
 calibration report records the K it used.

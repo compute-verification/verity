@@ -8,8 +8,8 @@ import InferenceOnlyCheck.DescDifftest
 θ's `provenance`, and the trusted input beside it), each expanded gate by gate where the policy check gives it a verdict
 and its provenance is one entry per θ entry, and `scripts/inference_only_reference.py`'s `check_baseline` on each.
 `InferenceOnlyCheck/BaselineDifftestMain.lean` fails unless `InferenceOnlyCheck.Baseline.check` gives Python's result on every case and
-`InferenceOnlyCheck.Baseline.checkUnrolled`'s on every expansion: per IU its size and novel reads, the verdict and the first failing
-IU, or the first refusal's code. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not
+`InferenceOnlyCheck.Baseline.checkUnrolled`'s on every expansion: per inference block its size and novel reads, the verdict and the first failing
+inference block, or the first refusal's code. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not
 a proof.
 -/
 
