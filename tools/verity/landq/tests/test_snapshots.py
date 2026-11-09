@@ -203,6 +203,17 @@ def test_a_rerun_clears_the_failed_keys_and_asks_the_world_to_run_them_afresh() 
     assert (s.stack[0].reruns, sorted(s.stack[0].results)) == (1, ["unit:a"])
 
 
+def test_a_ring_pages_once_a_candidate_and_why_and_a_red_once_a_base_and_task() -> None:
+    s = snapshots.QState("m")
+    s.stack.append(lone({}, frozenset({"unit:a"})))
+    assert len(D.do_Ring(s, vq.Ring("T1", "infra")) + D.do_Ring(s, vq.Ring("T1", "infra"))) == 1
+    assert len(D.do_Ring(s, vq.Ring("T1", "pending"))) == 1
+    a, b = (vq.Failed(t, "1", frozenset({"a/"})) for t in ("unit:a", "unit:b"))
+    red = types.SimpleNamespace(sha="T1", base="m", why="", failed=(a,))
+    assert [len(D.do_Red(s, red)), len(D.do_Red(s, red))] == [1, 0]
+    assert D.do_Red(s, types.SimpleNamespace(sha="T1", base="m", why="", failed=(a, b))) == [lq.Page("T1", "red: unit:b", 0)]
+
+
 def test_an_action_naming_a_candidate_that_isnt_live_is_refused() -> None:
     odd = types.SimpleNamespace(**{k: getattr(vq, k) for k in dir(vq) if not k.startswith("_")})
     odd.decide = lambda s: [vq.Advance("nope")]

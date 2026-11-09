@@ -17,8 +17,8 @@ and leaves the rest to their defaults: a failure's key, its key on the candidate
 errors beside its failures, a candidate's reruns and when its check was enqueued, and the snapshot's time (the
 simulator's minutes, as seconds).  The policy gives the snapshot's batch and depth; keyword arguments set its other
 fields, such as `lean` or `rings`, which otherwise keep the queue's own defaults (the model's `page_after` doesn't reach
-them).  A `Ring` or a `Red` is rung as a page, and a `Rerun` runs the failed keys' tasks afresh.  The module is a
-parameter, so nothing here imports it.
+them).  A `Ring` pages once a candidate and why, and a `Red` once a base and task, as the loop rings them; a `Rerun` runs
+the failed keys' tasks afresh.  The module is a parameter, so nothing here imports it.
 """
 from __future__ import annotations
 
@@ -61,6 +61,7 @@ class QState:
     rank: int = 0
     decides: int = 0
     now: float = 0.0
+    rung: set[tuple[str, str]] = field(default_factory=set)  # (candidate, why) rings and (base, task) reds already paged
 
 
 def _fields(cls) -> frozenset[str]:
@@ -243,7 +244,14 @@ class Driver:
 
     def do_Ring(self, s: QState, a) -> list[lq.Decision]:
         c = s.stack[self.find(s, a.sha)]
+        if (a.sha, a.why) in s.rung:
+            return []
+        s.rung.add((a.sha, a.why))
         return [lq.Page(c.tree, "", c.tries)]
 
     def do_Red(self, s: QState, a) -> list[lq.Decision]:
-        return [lq.Page(a.sha, "red: " + ", ".join(f.task for f in a.failed), 0)]
+        new = {(a.base, f.task) for f in a.failed} - s.rung
+        if not new:
+            return []
+        s.rung |= new
+        return [lq.Page(a.sha, "red: " + ", ".join(sorted(t for _, t in new)), 0)]
