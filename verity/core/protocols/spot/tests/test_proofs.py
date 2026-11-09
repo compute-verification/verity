@@ -21,7 +21,10 @@ digest of its own partition object.
 Without registered reads (``registered`` None), `verify` refuses a program with an input bound at registration (a
 `RegisteredInput`) before Lean runs (fast tests, no fixture): Lean demands registered reads only where the public file's
 ``registered``, which the prover writes, names them. The fixture's program binds ``cs`` as a run input, so that refusal
-doesn't apply to it."""
+doesn't apply to it.
+
+`printed` prints Lean's own `printT` vectors as Lean does, and `fits_why` and `draw_fits_why` refuse a length at their
+limit and not below it (fast tests; the sampled-proofs service's difftest holds them to Lean's `fits` piece)."""
 from __future__ import annotations
 
 import hashlib
@@ -143,6 +146,53 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
                          program=RUN_ONLY, partition={"program": "p"}, registered=None)
     assert got is None and why[0] == "form" and why[1].endswith(SCOPE), why
+
+
+#: `Flock/Test/RecordText.lean`'s `printed` vectors and a text it `accepts`, which is its own printing, verbatim (Lean's
+#: string escapes read as Python's): a JSON text and `Flock.RecordText.printT` of the value Lean parses from it
+PRINTED = {
+    "escapes": ("{\"s\": \"a\\\"b\\\\c\\nd\\re\\tf\\u0001g\\u001fh/i\x7fjék l😀m\", \"e\": \"\", \"kéy\": 1}",
+                "{\"e\":\"\",\"kéy\":1,\"s\":\"a\\\"b\\\\c\\nd\\re\\u0009f\\u0001g\\u001fh/i\x7fjék l😀m\"}"),
+    "order": ("{\"b\": 1, \"a\": 2, \"B\": 3, \"aa\": 4, \"a_b\": 5, \"é\": 6, \"z\": {\"y\": 1, \"x\": [3, {\"q\": null, \"p\": true}]}}",
+              "{\"B\":3,\"a\":2,\"a_b\":5,\"aa\":4,\"b\":1,\"z\":{\"x\":[3,{\"p\":true,\"q\":null}],\"y\":1},\"é\":6}"),
+    "literals": ("{\"n\": null, \"t\": true, \"f\": false, \"arr\": [], \"obj\": {}, \"nested\": [[], [[]], {}]}",
+                 "{\"arr\":[],\"f\":false,\"n\":null,\"nested\":[[],[[]],{}],\"obj\":{},\"t\":true}"),
+    "integers": ("{\"z\": 0, \"neg\": -3, \"big\": 12345678901234567890, \"u64\": 18446744073709551615, \"i64\": -9223372036854775808}",
+                 "{\"big\":12345678901234567890,\"i64\":-9223372036854775808,\"neg\":-3,\"u64\":18446744073709551615,\"z\":0}"),
+    "verdict": ("{\"soundness\": {\"per_proof_log2\": -132.02, \"terms\": {\"coin_commitment_hiding\": -191.0, \"irs_field\": -169.441}}, \"accepted\": true, \"secs\": 0.53}",
+                "{\"accepted\":true,\"secs\":0.53,\"soundness\":{\"per_proof_log2\":-132.02,\"terms\":{\"coin_commitment_hiding\":-191,\"irs_field\":-169.441}}}"),
+    "accepted": ("{\"a\":\"\\u0009\",\"b\":0.00001}", "{\"a\":\"\\u0009\",\"b\":0.00001}"),
+}
+
+
+@pytest.mark.parametrize("text, want", PRINTED.values(), ids=PRINTED.keys())
+def test_printed_is_lean_printT_on_its_own_vectors(text, want):
+    assert PF.printed(json.loads(text)) == want
+    assert PF.printed_size(json.loads(text)) == len(want.encode())
+
+
+#: one field at its own size at a time, the rest empty: (field, value, size, the refusal naming it)
+FIELDS = [("circuit", b"abc", 3, "the circuit file"), ("public", b"abc", 3, "the public file"),
+          ("tables", [("", b"")] * 3, 3, "the number of lookup tables"),
+          ("tables", [("é", b"")], 2, "a lookup table"), ("tables", [("", b"abcd")], 4, "a lookup table"),
+          ("program", b"abcde", 5, "the program"), ("partition", {"a": 1}, 7, "the partition object"),
+          ("registered", ["é"], 6, "the registered reads")]
+
+
+@pytest.mark.parametrize("field, value, size, want", FIELDS, ids=[f"{f} {w}" for f, _, _, w in FIELDS])
+def test_fits_why_refuses_a_field_at_the_limit_and_not_below_it(field, value, size, want):
+    inputs = {"circuit": b"", "public": b"", "tables": [], "program": None, "partition": None, "registered": None}
+    inputs[field] = value
+    assert PF.fits_why(size, **inputs) == want
+    assert PF.fits_why(size + 1, **inputs) is None
+
+
+def test_fits_why_names_the_first_field_past_the_limit_and_the_draw_its_own():
+    assert PF.fits_why(1, b"x", b"y", [("t", b"z")], b"p", {}, []) == "the circuit file"
+    assert PF.fits_why(3, b"", b"", [], b"", {"a": 1}, ["é"]) == "the partition object"
+    assert PF.fits_why(PF.WORD, b"x", b"y", [("t", b"z")], b"p", {}, []) is None
+    assert PF.draw_fits_why(7, {"a": 1}) == "the draw" and PF.draw_fits_why(8, {"a": 1}) is None
+    assert PF.draw_fits_why(0, None) is None
 
 
 def _template(d: Path, const: int, meta: dict) -> Path:

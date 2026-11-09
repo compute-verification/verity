@@ -200,7 +200,7 @@ soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alon
 and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate (how a PR lands: the
 team skill). A red's culprit is the one landing whose change touches what its failure names (its files, the files declaring
 a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
-forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
+forward, marking a fix within 30 min, or drive then reverts it on `checked`; a red naming several landings reverts none and
 rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
 is the only check before it joins, and a body naming no live goal gets a warning, never a refusal. A change a `warn_gates`
 gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
