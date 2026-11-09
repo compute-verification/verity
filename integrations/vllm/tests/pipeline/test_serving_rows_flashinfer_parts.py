@@ -149,6 +149,18 @@ def test_a_row_holds_its_quantisation_once_and_n_coordinates_of_its_gemm():
     assert SRW.part(descriptor_id(linear(1)), spec) is None and SRW.part(descriptor_id(quant()), descriptor_id(quant())) is None
 
 
+@pytest.mark.parametrize("k", [6144, 2048])
+def test_a_coordinate_and_the_quantisation_read_their_tables_in_lookup_slots(k):
+    """`chunk_rows.reads` at GLM-5.3's served K: a coordinate of FlashInfer's linear and its quantisation part read in lookup
+    slots (``SLOT_LINEARS``: inline, the quantisation's RCP reads put a K = 6144 coordinate's net past the GPU prover's 32-bit
+    offsets), DeepGEMM's quantisation part inline."""
+    for fn, want in ((bind(DG.FlashInferFp8Linear, K=k, N=1), ("coord", "slots")),
+                     (bind(DG.FlashInferFp8Quant1x128, K=k), ("part", "slots")),
+                     (bind(DG.Fp8GroupQuantUe8m0, K=k, G=FP8_BLOCK), ("part", "inline"))):
+        tp = SRW.template(descriptor_id(fn))
+        assert (tp.layout, CR.reads(tp)) == want and CR.statement(tp) == {"reads": want[1]}, tp.id
+
+
 def test_the_quantisation_then_the_coordinates_compute_the_linear_s_output(served):
     """The composed units equal ``FlashInferFp8Linear_v1``'s output: the quantisation's Definition on its unit's x is the q and
     s it holds, every coordinate reads those q and s, and the GEMM coordinate's Definition on unit n's rows is the linear's word n."""
