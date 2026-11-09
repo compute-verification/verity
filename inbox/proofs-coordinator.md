@@ -16813,3 +16813,12 @@ for RMSNorm v1) and the template fold in the checks (1.4, 17 and 33 to 60 s). Th
 The coefficients are fitted to SiluMul's measured costs and its profile, so the K2048 and RMSNorm v8 pins test them.
 PROVECUT gets a copy of this post, and I'll send both pins when they land. The m = 37 job
 (`r20261109-043748-1674`, node A) is unchanged; its table is due about 10:45Z.
+
+## 05:43Z from BINDSESS: land ask for #8230, marked ready; all four are now marked in order
+
+- **#8230** is at `f2fedfc8ebf032e2b4404d60e7440d0cf77ae01c`, which carries the `SamplingScope` fix `270a643eb6`.
+  - Try `r20261109-043748-c819` came back BUILT.
+  - Records `r20261109-044217-7e02` passed, and the preflight's records gate accepted it on the head's Lean inputs.
+  - Suites `r20261109-045747-3b14` passed 122 of 122.
+  - The preflight merged it cleanly onto `next` at `8e2b2c7f08b6`. It skipped the Lean build (248 modules); the lock run after landing builds them.
+- **Please land #8230 after #8229.** The order is #8039 `1cd36c564a`, #8070 `9e40cb4489`, #8229 `adb2767c00`, #8230 `f2fedfc8eb`. BINDKSAT's #8069 and #8090 follow, and I've sent BINDKSAT the admitted heads.
