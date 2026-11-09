@@ -1,11 +1,13 @@
 /-
 A templated statement's template read off the file's line view (`ByteLines.View`), which its parse cuts once:
 `HmOut.tmplOfView` is `HmOut.tmplOf` (`tmplOfView_eq`), without its second scan for `'\n'`s, its UTF-8 check and its
-copy of the template's text.
+copy of the template's text. The template's parse reads its lines through the view (`View.tmplLine`), and each row's
+numbers off the file's bytes (`View.tmplNums`), so a row makes no `String` (`View.parseAt_tmpl`).
 -/
 module
 
 public import Flock.ByteLines
+public import Flock.Tmpl
 public import Flock.TmplSection
 
 @[expose] public section
@@ -325,6 +327,31 @@ theorem View.splitOn_cuts {b : ByteArray} {v : View} (h : View.of? b = some v) :
     simp only [Function.comp_apply]
     rw [show j + 1 + i = j + (i + 1) by omega]
 
+/-- Line `i` of the template's `k` on the view, from the file's line 3 on; `""` past the last. -/
+def View.tmplLine (v : View) (k i : Nat) : String := if i < k then v.str (3 + i) else ""
+
+/-- `View.tmplLine`'s numbers, read off the file's bytes (`View.nums`). -/
+def View.tmplNums (v : View) (k i : Nat) : Option (Array Nat) := if i < k then v.nums (3 + i) else Net.lineNums ""
+
+/-- The template's parse through the view is its parse of the template's lines. -/
+theorem View.parseAt_tmpl {b : ByteArray} {v : View} (h : View.of? b = some v) (k : Nat) :
+    Tmpl.parseAt k (v.tmplLine k) (v.tmplNums k) = Tmpl.parse ((Array.range k).map fun i => v.str (3 + i)) := by
+  have hg : ∀ i, ((Array.range k).map fun i => v.str (3 + i)).getD i "" = v.tmplLine k i := fun i => by
+    unfold View.tmplLine
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range]
+    by_cases hi : i < k <;> simp [hi]
+  rw [Tmpl.parse_eq_fast]
+  unfold Tmpl.parseFast
+  congr 1
+  · simp
+  · funext i; exact (hg i).symm
+  · funext i
+    rw [hg]
+    unfold View.tmplLine View.tmplNums
+    by_cases hi : i < k
+    · simp only [hi, ↓reduceIte]; exact (of?_spec h).2.nums (3 + i)
+    · simp only [hi, ↓reduceIte]
+
 /-- `HmOut.tmplOf`'s loop from cut `j`: `l.length` more `'\n'`s, so cut `j + l.length`, or `msg` past the last cut. -/
 theorem View.forIn_cuts {b : ByteArray} {v : View} (h : View.of? b = some v) (msg : String)
     (f : Nat → Nat → V (ForInStep Nat))
@@ -433,5 +460,37 @@ theorem HmOut.tmplOfView_eq {b : ByteArray} {v : ByteLines.View} (h : ByteLines.
           congr 1
           apply Array.toList_inj.mp
           simp [Function.comp_def]
+
+/-- How many lines the template on the view `v` has, with `tmplOfView`'s errors (`tmplOfView_count`): the parse reads
+them off the view (`View.tmplLine`), never as one array. -/
+def HmOut.tmplCountView (v : ByteLines.View) : V Nat :=
+  let bad := "circuit: no template section (TEMPLATE n, then the template's n lines) after META"
+  if v.cuts.size < 3 then throw bad
+  else
+    let h := tokens (v.str 2)
+    match (if h.size == 2 && h[0]! == "TEMPLATE" then h[1]!.toNat? else none) with
+    | none => throw bad
+    | some k =>
+      if k == 0 then pure 0
+      else if v.cuts.size < 3 + k then throw "circuit: the template section is truncated"
+      else pure k
+
+theorem HmOut.tmplOfView_count (v : ByteLines.View) :
+    HmOut.tmplOfView v = (fun k => (Array.range k).map fun i => v.str (3 + i)) <$> HmOut.tmplCountView v := by
+  unfold tmplOfView tmplCountView
+  by_cases h3 : v.cuts.size < 3
+  · simp only [h3, ↓reduceIte]; rfl
+  · simp only [h3, ↓reduceIte]
+    split
+    · rfl
+    · rename_i k _
+      by_cases hk0 : k = 0
+      · subst hk0
+        simp only [beq_self_eq_true, ↓reduceIte, map_pure, Array.range_eq_empty_iff.mpr rfl, Array.map_empty]
+      · have hk0' : (k == 0) = false := by simpa using hk0
+        simp only [hk0', Bool.false_eq_true, ↓reduceIte]
+        by_cases hk : v.cuts.size < 3 + k
+        · simp only [hk, ↓reduceIte]; rfl
+        · simp only [hk, ↓reduceIte]; rfl
 
 end Flock
