@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from tests.program.test_workload_program import _edge_wl, _groups
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as REG, registration as R
+from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R
 from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity.ml.circuits.partition_object import calls
