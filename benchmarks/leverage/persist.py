@@ -14,7 +14,9 @@ Read modes (--mode):
           same code over all Q·obs reads of the one fault, and two decoders that never see the weights:
             pairs  each direct read (honest y0, served y1) is read as "the fault prefers y1 to y0", scored against
                    the order of the vocabulary along the fault's leave-one-out mean effect on the final norm's output
-                   (u: what the logits move by, E u, is a fixed function of the weights if u is a fixed direction);
+                   (u: what the logits move by, E u, is a fixed function of the weights if u is a fixed direction),
+                   and for a value fault along the weights' own column, as independent bits and against directions
+                   drawn like any column of the matrix (pair_scores);
             top    the distinct served tokens of the direct reads, scored as the vocabulary's top set along u: if all
                    of them rank within u's top K, they carry log2 C(V, n) - log2 C(K, n) bits about u's order. The
                    honest tokens of the same requests, ranked the same way, are the baseline.
@@ -189,19 +191,56 @@ def pair_bits(n: int, acc: float) -> float:
     return n * (1 - h)
 
 
-def pair_scores(pairs: set[tuple[int, int]], target: torch.Tensor | None, controls: list[torch.Tensor],
-                E: torch.Tensor) -> dict:
-    """Distinct (honest y0, served y1) pairs as claims "y1 is above y0", scored along the signed target and along each
-    control column."""
+def tail_bits(z: float) -> float:
+    """-log2 P(N(0, 1) > z)."""
+    if z < 8:
+        return -math.log2(0.5 * math.erfc(z / math.sqrt(2)))
+    return (z * z / 2 + math.log(z * math.sqrt(2 * math.pi))) / math.log(2)
+
+
+def null_directions(cols: torch.Tensor, samples: int, seed: int) -> torch.Tensor:
+    """Directions drawn from the Gaussian with the mean and covariance of a matrix's (signed) columns: a column as a
+    decoder that doesn't know the weights sees it."""
+    m = cols.mean(0)
+    z = torch.randn(samples, cols.shape[0], generator=torch.Generator().manual_seed(seed))
+    return m + z @ (cols - m) / math.sqrt(cols.shape[0])
+
+
+def pair_scores(pairs: list[tuple[int, int]], target: torch.Tensor | None, controls: list[torch.Tensor],
+                E: torch.Tensor, ks: list[int], null: torch.Tensor | None = None) -> list[dict]:
+    """Distinct (honest y0, served y1) pairs, in order of first appearance, as claims "y1 is above y0", scored over
+    the first k pairs for each k in ks along the signed target and along each control column. pair_bits counts the
+    claims as independent bits. Against `null` (directions drawn like a column), S, the claims a direction satisfies,
+    has a mean and spread that account for claims sharing tokens and for what every column shares: pairz_bits is
+    -log2 P(S_null >= S) from them (a Gaussian tail), pairz_emp the same tail counted in the draws (at most log2 of
+    their number). A control column is a draw of the null, so its pairz_bits average about 1.44 when the null fits."""
     if target is None or not pairs:
-        return {}
-    pr = torch.tensor(sorted(pairs))
+        return [{} for _ in ks]
+    pr = torch.tensor(pairs)
     gap = E[pr[:, 1]] - E[pr[:, 0]]
-    acc_w = float(((gap @ target) > 0).float().mean())
-    acc_c = [float(((gap @ c) > 0).float().mean()) for c in controls]
-    return {"pairs": len(pr), "pair_acc_w": acc_w, "pair_bits_w": pair_bits(len(pr), acc_w),
-            "pair_acc_ctrl": float(np.mean(acc_c)) if acc_c else None,
-            "pair_bits_ctrl": float(np.mean([pair_bits(len(pr), x) for x in acc_c])) if acc_c else None}
+    hits = lambda t: ((gap @ t) > 0).to(torch.int32).cumsum(0)  # noqa: E731
+    hw, hc = hits(target), [hits(c) for c in controls]
+    sn = (null @ gap.T > 0).to(torch.int32).cumsum(1) if null is not None else None
+    out = []
+    for k in ks:
+        if k == 0:
+            out.append({})
+            continue
+        acc_w, acc_c = float(hw[k - 1]) / k, [float(h[k - 1]) / k for h in hc]
+        row = {"pairs": k, "pair_acc_w": acc_w, "pair_bits_w": pair_bits(k, acc_w),
+               "pair_acc_ctrl": float(np.mean(acc_c)) if acc_c else None,
+               "pair_bits_ctrl": float(np.mean([pair_bits(k, x) for x in acc_c])) if acc_c else None}
+        if sn is not None:
+            s = sn[:, k - 1].double()
+            mu, sd = float(s.mean()), max(float(s.std()), 1e-9)
+            zb = lambda x: tail_bits((x - mu) / sd)  # noqa: E731
+            emp = lambda x: -math.log2(max(float((s >= x).double().mean()), 1 / len(s)))  # noqa: E731
+            cz = [zb(float(h[k - 1])) for h in hc]
+            row |= {"pairz_bits_w": zb(float(hw[k - 1])), "pairz_emp_w": emp(float(hw[k - 1])),
+                    "pairz_null_acc": mu / k, "pairz_null_sd": sd / k,
+                    "pairz_bits_ctrl": float(np.mean(cz)) if cz else None, "pairz_ctrl_max": max(cz, default=None)}
+        out.append(row)
+    return out
 
 
 def top_bits(ranks: np.ndarray, vocab: int) -> tuple[float, int]:
@@ -297,15 +336,24 @@ def weight_target(lm: LM, site: str, layer: int, coord: int) -> torch.Tensor | N
     return sum(wo[:, (kh * r + i) * s.head_dim + e] for i in range(r)) * W["norm.weight"].float()
 
 
-def signed_targets(lm: LM, f: dict, n: int, seed: int) -> tuple[torch.Tensor | None, list[torch.Tensor]]:
-    """A fault's weight target signed by its push (value - honest), and n other columns of its matrix signed alike."""
-    t = weight_target(lm, f["site"], f["layer"], f["coord"])
-    if t is None:
-        return None, []
+_COLUMNS: dict[tuple[str, int], torch.Tensor] = {}
+
+
+def signed_targets(lm: LM, f: dict, n: int, seed: int, samples: int = 0
+                   ) -> tuple[torch.Tensor | None, list[torch.Tensor], torch.Tensor | None]:
+    """A fault's weight target signed by its push (value - honest), n other columns of its matrix signed alike, and
+    `samples` null directions drawn like any column of it, signed alike (none for 0)."""
+    if weight_target(lm, f["site"], f["layer"], f["coord"]) is None:
+        return None, [], None
+    key = (f["site"], f["layer"])
+    if key not in _COLUMNS:
+        _COLUMNS[key] = torch.stack([weight_target(lm, *key, c) for c in range(v_width(lm))])
     sgn = 1.0 if f["value"] >= f["honest"] else -1.0
+    cols = sgn * _COLUMNS[key]
     rng = np.random.default_rng([seed, f["layer"], f["coord"]])
     others = [c for c in rng.permutation(v_width(lm)).tolist() if c != f["coord"]][:n]
-    return sgn * t, [sgn * weight_target(lm, f["site"], f["layer"], c) for c in others]
+    null = null_directions(cols, samples, seed) if samples else None
+    return cols[f["coord"]], [cols[c] for c in others], null
 
 
 def v_width(lm: LM) -> int:
@@ -329,7 +377,7 @@ def decoded(served: np.ndarray, direct: np.ndarray) -> list[int]:
 
 def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, deltas: np.ndarray,
                  target: torch.Tensor | None, controls: list[torch.Tensor], ctrl_u: list[torch.Tensor],
-                 E: torch.Tensor, vocab: int, checkpoints: list[int]) -> dict:
+                 E: torch.Tensor, vocab: int, checkpoints: list[int], null: torch.Tensor | None = None) -> dict:
     """The decoders' bits for one fault over Q requests (first served token). deltas (Q, d): the fault's effect on the
     final norm's output at each request's first served position; runner (Q,): each request's honest runner-up, the
     token a small push serves without any information about the fault's direction (the baseline). target: the
@@ -381,15 +429,20 @@ def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, del
             out |= {"split_bits_u": float(np.mean(tb)), "split_ctrl_u": float(np.mean(cb)),
                     "split_net_u": float(np.mean(tb) - np.mean(cb))}
     ctrl_ranks = [ranks_along(E, c) for c in controls]
-    out |= pair_scores(seen, target, controls, E)
-    for qc in checkpoints:
-        if qc > Q:
-            continue
+    pairs, first = [], []
+    for q in np.nonzero(direct)[0]:
+        p = (int(h0[q]), int(s0[q]))
+        if p not in pairs:
+            pairs.append(p)
+            first.append(int(q))
+    qcs = [qc for qc in checkpoints if qc <= Q]
+    scored = pair_scores(pairs, target, controls, E, [sum(f < qc for f in first) for qc in qcs] + [len(pairs)], null)
+    out |= scored[-1]
+    for qc, ps in zip(qcs, scored):
         dq = direct[:qc]
         dec = decoded(s0[:qc], dq)
         base = sorted({int(r) for r in runner[:qc][dq]})
-        row = {"direct": int(dq.sum()), "code_bits": code_bits(dq, s0[:qc], vocab), "decoded": len(dec)}
-        row |= pair_scores({(int(h0[q]), int(s0[q])) for q in np.nonzero(dq)[0]}, target, controls, E)
+        row = {"direct": int(dq.sum()), "code_bits": code_bits(dq, s0[:qc], vocab), "decoded": len(dec)} | ps
         for name, rank in targets.items():
             rb, rk = top_bits(rank[dec].numpy() if dec else np.array([], dtype=np.int64), vocab)
             bb, bk = top_bits(rank[base].numpy() if base else np.array([], dtype=np.int64), vocab)
@@ -405,7 +458,7 @@ def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, del
 
 
 def score_flips(flips: list[tuple[int, int]], target: torch.Tensor | None, controls: list[torch.Tensor],
-                E: torch.Tensor, vocab: int) -> dict:
+                E: torch.Tensor, vocab: int, null: torch.Tensor | None = None) -> dict:
     """A decode's weight bits from its (honest, served) pairs where the two differ: the served tokens as a decoded
     set, and each distinct pair as an order claim, scored along the fault's signed target and its controls."""
     if target is None or not flips:
@@ -414,9 +467,11 @@ def score_flips(flips: list[tuple[int, int]], target: torch.Tensor | None, contr
     rank = ranks_along(E, target)
     rb, rk = top_bits(rank[dec].numpy(), vocab)
     cb = [top_bits(ranks_along(E, c)[dec].numpy(), vocab)[0] for c in controls] or [0.0]
+    pairs = list(dict.fromkeys(flips))
     return {"decoded": len(dec), "top_bits_w": rb, "top_k_w": rk, "ctrl_bits_w": float(np.mean(cb)),
             "net_bits_w": rb - float(np.mean(cb)), "p1_w": int(int(rank[dec[0]]) == 0),
-            "in_top10_w": int(sum(int(rank[y]) < 10 for y in dec[:10]))} | pair_scores(set(flips), target, controls, E)
+            "in_top10_w": int(sum(int(rank[y]) < 10 for y in dec[:10]))} | pair_scores(
+                pairs, target, controls, E, [len(pairs)], null)[0]
 
 
 def main() -> int:
@@ -436,6 +491,8 @@ def main() -> int:
     ap.add_argument("--obs", type=int, default=1, help="oracle: served tokens a request returns")
     ap.add_argument("--cut", default="margin", choices=("margin", "random"),
                     help="oracle: where each request's text ends (margin: at the honest near-tie)")
+    ap.add_argument("--cut-max", type=int, default=48,
+                    help="oracle: a request's text ends at most this many tokens in (the request pool grows with it)")
     ap.add_argument("--prompts", type=int, default=4, help="decode: prompts after the prefix")
     ap.add_argument("--new", type=int, default=128, help="decode: served tokens")
     ap.add_argument("--temperature", type=float, default=0.0)
@@ -447,6 +504,8 @@ def main() -> int:
     ap.add_argument("--threads", type=int, default=0)
     ap.add_argument("--controls", type=int, default=8,
                     help="random columns of the same matrix that score a value fault's control")
+    ap.add_argument("--null-samples", type=int, default=8192,
+                    help="directions drawn like a column that the pairwise claims' surprisal is read against (0: none)")
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
     if a.threads:
@@ -477,14 +536,15 @@ def main() -> int:
         faults = faults[:a.max_faults]
     E = lm.E.float()
     t_start = time.time()
-    checkpoints = sorted({q for q in (8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, a.queries)
-                          if q <= a.queries})
     if a.mode == "oracle":
-        reqs = suffixes(lm, tok, pre_h, a.queries, gen, a.cut, a.precision)
+        reqs = suffixes(lm, tok, pre_h, a.queries, gen, a.cut, a.precision, hi=a.cut_max)
         hons = [honest_first(lm, pre_h, sfx, a.precision) for sfx in reqs]
         runner = np.array([int(h[0][0].topk(2).indices[1]) for h in hons])
     else:
         reqs = [torch.tensor([tok.encode(t).ids]) for t in PROMPTS[:a.prompts]]
+    # The pool can hold fewer requests than --queries; the last checkpoint is what it holds.
+    checkpoints = sorted({q for q in (8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048,
+                                      3072) if q < len(reqs)} | {len(reqs)})
     recs = []
     for i in range(0, len(faults), a.batch):
         chunk = faults[i:i + a.batch]
@@ -506,13 +566,13 @@ def main() -> int:
             U = torch.from_numpy(Dl).float().mean(1)
             for j, f in enumerate(chunk):
                 direct = S[j] != H[j]
-                target, controls = signed_targets(lm, f, a.controls, a.seed)
+                target, controls, null = signed_targets(lm, f, a.controls, a.seed, a.null_samples)
                 key = (f["site"], f["layer"], f["coord"])
                 pool = [k for k in range(b) if (chunk[k]["site"], chunk[k]["layer"], chunk[k]["coord"]) != key
                         and float(U[k].norm()) > 0]
                 picks = np.random.default_rng([a.seed, i + j]).permutation(pool)[:a.controls] if pool else []
                 r = dict(f) | score_oracle(S[j], H[j], runner, Dl[j], target, controls, [U[k] for k in picks], E, V,
-                                           checkpoints)
+                                           checkpoints, null)
                 r["code_bits"] = code_bits(direct.reshape(-1), S[j].reshape(-1), V)
                 r["direct_reads"] = int(direct.sum())
                 last = r[f"q{checkpoints[-1]}"]
@@ -537,8 +597,8 @@ def main() -> int:
                     k = np.nonzero(d[j])[0]
                     flips[j] += list(zip(yh[j].numpy()[k].tolist(), ys[j].numpy()[k].tolist()))
             for j, f in enumerate(chunk):
-                target, controls = signed_targets(lm, f, a.controls, a.seed)
-                per[j] |= score_flips(flips[j], target, controls, E, V)
+                target, controls, null = signed_targets(lm, f, a.controls, a.seed, a.null_samples)
+                per[j] |= score_flips(flips[j], target, controls, E, V, null)
             recs += per
         print(f"faults {i + b}/{len(faults)}, {time.time() - t_start:.0f} s", file=sys.stderr, flush=True)
         (a.out / "persist.json").write_text(json.dumps({"partial": True, "faults": recs}))
@@ -556,17 +616,19 @@ def main() -> int:
                "code_max": float(max(r["code_bits"] for r in rs))}
         for key in ("pair_bits", "pair_bits_u_ctrl", "pair_bits_w", "pair_bits_ctrl", "top_bits_u", "base_bits_u",
                     "split_bits_u", "split_ctrl_u", "split_net_u", "top_bits_w", "base_bits_w", "ctrl_bits_w",
-                    "net_bits_w", "kl_bits"):
+                    "net_bits_w", "pairz_bits_w", "pairz_bits_ctrl", "kl_bits"):
             if any(r.get(key) is not None for r in rs):
                 vals = [r.get(key) or 0.0 for r in rs]
                 row[key + "_mean"], row[key + "_max"] = float(np.mean(vals)), float(max(vals))
         rows.append(row)
-    keys = ("code_bits", "pair_bits", "pair_bits_w", "top_bits_u", "split_net_u", "top_bits_w", "net_bits_w")
+    keys = ("code_bits", "pair_bits", "pair_bits_w", "pairz_bits_w", "top_bits_u", "split_net_u", "top_bits_w",
+            "net_bits_w")
     best = {key: max(recs, key=lambda r: r.get(key) or 0.0) for key in keys if any(key in r for r in recs)}
     summary = {"model": a.model, "revision": MODELS[a.model]["revision"], "vocab": V, "bits_per_token": math.log2(V),
                "mode": a.mode, "where": a.where, "fault_position": pf, "fault_class": pc, "prefix_tokens": ids.shape[1],
                "boxes": str(a.boxes) if a.boxes else None, "temperature": a.temperature, "seeds": a.seeds,
-               "repeats": hidden, "reads_per_fault": (a.queries * a.obs if a.mode == "oracle" else a.prompts * a.new),
+               "repeats": hidden, "requests": len(reqs),
+               "reads_per_fault": (len(reqs) * a.obs if a.mode == "oracle" else len(reqs) * a.new),
                "faults": len(recs), "seconds": time.time() - t_start, "best": best, "groups": rows,
                "args": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(a).items()}}
     if lm.boxes is not None:
