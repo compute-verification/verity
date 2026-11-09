@@ -19,7 +19,11 @@ verity-exact-kit = { workspace = true }
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
+    "tests/test_facet_break.py",
     "tests/test_ffill.py",
+    "tests/test_ieee_pin.py",
+    "tests/test_np_kernel.py",
+    "tests/test_opcode_probe.py",
     "tests/test_pearl_c_hash_decode.py",
     "tests/test_pearl_c_hash_host.py",
     "tests/test_pearl_c_sm120.py",
@@ -28,6 +32,7 @@ untraced = [
     "tests/test_pearl_c_vllm.py",
     "tests/test_receipts_adopters.py",
     "tests/test_salt_bind.py",
+    "tests/test_sass_gate.py",
     "tests/test_served_zk.py",
     "tests/test_theory_duo_kernel.py",
     "tests/test_theory_fold_kernel.py",
@@ -174,7 +179,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_dc.py"]
-paths = ["benchmarks/pouw/opcode_probe"]
+paths = ["benchmarks/pouw/opcode_probe", "verity/hardware"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -185,6 +190,10 @@ tests = [
     "tests/test_served_h1_producer.py",
 ]
 paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_dither_j10r_form.py"]
+paths = ["integrations/vllm/verity_vllm"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_facet_break.py"]
@@ -200,13 +209,27 @@ paths = [
     "verity/core/protocols/pouw",
     "verity/core/protocols/spot/one_stage",
     "verity/ml/circuits",
-    "verity/ml/commitments/frame_v3",
+    "verity/ml/commitments",
     "verity/ml/flock/python/verity_flock",
+    "verity/ml/protocols/pouw/circuit",
+    "verity/ml/windows",
 ]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_hidden_zk_summarize_rows.py"]
 paths = ["benchmarks/pouw/hidden_zk"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_partials.py", "tests/test_served_h1_partials.py"]
+paths = [
+    "benchmarks/pouw/served_h1/partials.py",
+    "integrations/vllm/verity_vllm",
+    "verity/core/protocols/pouw",
+    "verity/core/protocols/spot/one_stage",
+    "verity/ml/commitments",
+    "verity/ml/protocols/pouw",
+    "verity/ml/windows",
+]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm120.py", "tests/test_pearl_c_sm90.py"]
@@ -230,4 +253,13 @@ paths = ["verity/core/protocols/pouw/lean/check/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_theory_cpw.py"]
-paths = ["verity/core/protocols/pouw", "verity/ml/circuits", "verity/ml/kernels"]
+paths = [
+    "benchmarks/pouw/eps_budget.py",
+    "benchmarks/pouw/lean_headline.py",
+    "benchmarks/pouw/machine_model/verity_machine_model",
+    "verity/core/protocols/pouw",
+    "verity/ml/circuits",
+    "verity/ml/kernels",
+    "verity/ml/protocols/__init__.py",
+    "verity/ml/protocols/pouw",
+]

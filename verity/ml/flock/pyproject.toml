@@ -31,14 +31,18 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = [
     "tests/test_arena_layout.py",
     "tests/test_challenger_audit.py",
+    "tests/test_challengers.py",
     "tests/test_circuit.py",
     "tests/test_class_statement.py",
     "tests/test_class_statement_redteam_1178.py",
     "tests/test_flock_rows.py",
     "tests/test_flock_rows_vectors.py",
     "tests/test_hm96_leaves.py",
+    "tests/test_honest_reqs.py",
+    "tests/test_honest_session.py",
     "tests/test_inner_registered.py",
     "tests/test_ir_lowering.py",
+    "tests/test_ir_lowering_bench.py",
     "tests/test_ir_sampling.py",
     "tests/test_lean_coin_tree.py",
     "tests/test_lean_forged_proofs.py",
@@ -63,6 +67,7 @@ untraced = [
     "tests/test_ligerito_folds.py",
     "tests/test_pod_lean_verdicts.py",
     "tests/test_pouw_rows.py",
+    "tests/test_proof_server.py",
     "tests/test_read_tmpl.py", "tests/test_read_tmpl_stager.py",
     "tests/test_rec_algebra.py",
     "tests/test_rec_inner_stage.py",
@@ -147,6 +152,7 @@ tests = [
     "tests/test_inner_registered.py",
     "tests/test_ir_lowering.py",
     "tests/test_ir_sampling.py",
+    "tests/test_lean_draw_laws.py",
     "tests/test_lean_registered_bit_rows.py",
     "tests/test_stage_typed.py",
     "tests/test_typed_statement.py",
@@ -237,6 +243,7 @@ paths = ["verity/core/protocols/pouw/lean/check/models.json"]
 tests = ["tests/test_partition_units.py", "tests/test_rec_shape.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
+    "integrations/vllm/verity_vllm",
     "verity/core/protocols/certifier",
     "verity/core/protocols/pous",
     "verity/ml",
@@ -247,7 +254,7 @@ tests = ["tests/test_randomness_spec.py"]
 paths = ["verity/core/service/flock/Flock/Draw.lean", "verity/core/service/flock/Flock/Hash.lean"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_rec_circuits.py"]
+tests = ["tests/test_rec_circuits.py", "tests/test_rec_link.py"]
 paths = ["verity/ml/circuits", "verity/ml/flock/python/verity_flock"]
 
 [[tool.verity.tests.reads]]

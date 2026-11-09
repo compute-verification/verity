@@ -61,6 +61,7 @@ untraced = [
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
     "tests/pipeline/test_boundary_plan.py",
+    "tests/pipeline/test_boundary_rows.py",
     "tests/pipeline/test_commit_group.py",
     "tests/pipeline/test_commit_tree_of_record.py",
     "tests/pipeline/test_experiment_index.py",
@@ -70,6 +71,7 @@ untraced = [
     "tests/pipeline/test_row.py",
     "tests/pipeline/test_row_tables_stream.py",
     "tests/pipeline/test_serve_h1.py",
+    "tests/pipeline/test_serve_tie.py",
     "tests/pipeline/test_source_identity.py",
     "tests/pipeline/test_tp_gpu_lease.py",
     "tests/program/predict/test_predict.py",
@@ -78,7 +80,11 @@ untraced = [
     "tests/protocols/test_credit_gate.py",
     "tests/protocols/test_pouw_h1.py",
     "tests/protocols/test_pouw_h1_commit.py",
+    "tests/protocols/test_pouw_h1_drawn.py",
     "tests/protocols/test_pouw_h1_live.py",
+    "tests/protocols/test_pouw_h1_ranks.py",
+    "tests/protocols/test_pouw_h1_ranks_commit.py",
+    "tests/protocols/test_pouw_lead.py",
     "tests/protocols/test_pouw_pearl_c_served.py",
     "tests/protocols/test_rt4_h1_challenger.py",
     "tests/tools/test_ratchet_gate.py",
@@ -188,6 +194,18 @@ paths = ["integrations/vllm/verity_vllm/pipeline"]
 
 [[tool.verity.tests.reads]]
 tests = [
+    "tests/check/test_fold_sampler_construction.py",
+    "tests/check/test_g4_addressed_instances.py",
+    "tests/pipeline/test_circuit_db.py",
+    "tests/pipeline/test_single_request_build_path.py",
+    "tests/program/test_sampling_rows.py",
+    "tests/regression/test_step_segmentation.py",
+    "tests/regression/test_store_io.py",
+]
+paths = ["tools/research/src/research"]
+
+[[tool.verity.tests.reads]]
+tests = [
     "tests/check/test_gates_fixtures.py",
     "tests/engine/test_env.py",
     "tests/observe/test_fold_build_versions.py",
@@ -198,12 +216,17 @@ tests = [
 paths = ["integrations/vllm/verity_vllm"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/check/test_tp2_d90_fixture.py"]
-paths = ["integrations/vllm/verity_vllm/check/match", "integrations/vllm/verity_vllm/check/replay"]
+tests = [
+    "tests/check/test_pouw_ncp_v2_end_to_end.py",
+    "tests/pipeline/test_llm.py",
+    "tests/protocols/test_pouw.py",
+    "tests/protocols/test_protocol_options.py",
+]
+paths = ["integrations/vllm/verity_vllm/commit/scheme.py", "integrations/vllm/verity_vllm/protocols", "verity/ml/commitments"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/commit/test_native_jit_load.py"]
-paths = ["integrations/vllm/verity_vllm/commit/committer/hidden_gpu_src"]
+tests = ["tests/check/test_tp2_d90_fixture.py"]
+paths = ["integrations/vllm/verity_vllm/check/match", "integrations/vllm/verity_vllm/check/replay"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/commit/test_pinned_pool_exact.py", "tests/observe/test_pouw_fold.py"]
@@ -240,10 +263,6 @@ tests = [
 paths = ["integrations/vllm", "verity"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/pipeline/test_circuit_db.py"]
-paths = ["tools/research/src/research"]
-
-[[tool.verity.tests.reads]]
 tests = [
     "tests/pipeline/test_config_run.py",
     "tests/pipeline/test_tp_run_root.py",
@@ -278,6 +297,10 @@ tests = [
 paths = ["benchmarks/remote_session", "verity/core/protocols/remote_bandwidth"]
 
 [[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_serve_remote.py"]
+paths = ["integrations/vllm/verity_vllm/protocols/remote_bandwidth"]
+
+[[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_serve_row.py"]
 paths = [
     "integrations/vllm/verity_vllm/engine",
@@ -288,9 +311,13 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = [
+    "tests/program/predict/test_block_counts.py",
+    "tests/program/predict/test_inference_blocks.py",
     "tests/program/predict/test_window_circuit.py",
     "tests/program/predict/test_window_circuit_fa3.py",
     "tests/program/predict/test_window_circuit_int8.py",
+    "tests/program/predict/test_window_circuit_tables.py",
+    "tests/program/test_fp8_moe_per_expert.py",
 ]
 paths = ["verity/ml/circuits/ops"]
 
@@ -301,6 +328,14 @@ paths = ["verity/core/protocols/certifier"]
 [[tool.verity.tests.reads]]
 tests = ["tests/program/test_compiled_relations_warm_vml.py"]
 paths = ["integrations/vllm/verity_vllm/check"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/test_inputs.py"]
+paths = ["integrations/vllm/tests/program/predict/test_steps.py", "integrations/vllm/tests/program/test_dsa_topk.py"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/test_jit_build_dir.py"]
+paths = ["verity/ml/definitions/numerics"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/test_moe_fp8_definition_imports.py"]
@@ -316,7 +351,7 @@ paths = ["benchmarks/pous/p2_v1"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/query/test_word.py"]
-paths = ["integrations/vllm/verity_vllm/pipeline", "verity/ml/circuits"]
+paths = ["integrations/vllm/verity_vllm/pipeline", "verity/ml/circuits", "verity/ml/definitions/encoding.py"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_imports_resolve.py", "tests/test_no_dead_modules.py"]

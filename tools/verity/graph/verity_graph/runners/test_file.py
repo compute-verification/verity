@@ -1,7 +1,9 @@
 """A test-file task (`families/test_file.py`): pytest on its one test file as `tools/verity/check/suites.py` runs the file's suite,
 from the suite's directory (the task's `vars` `suite`) with the suite's configuration, the read guard (`-p verity_suite_guard`),
 no cache provider and a fresh `--basetemp`, in one process (`-p no:xdist`), after fetching the registered fixtures `suites.py`
-would fetch for the suite.
+would fetch for the suite. A task that reads lean-build's outputs (`vars` `lean`, the package) first sets up the Lean toolchain
+as lean-build does and puts them in its tree (`lean_build.place`), and its tests find lake on the PATH, as `suites.py
+--lean-built` runs their suite after check's lean-build.
 
 The guard runs with no inputs declared to it, so it records every file of the tree the run opens, the test process's (a cached
 module as its source) and the Pythons its tests start; the runner holds them to the task's inputs. A read of none of them, of no
@@ -15,7 +17,8 @@ native code (`compilers`).
 
 Its status: pytest's exit 0, or 5 when the file holds no test to run, is a pass; 1 (a test failed) and 2 (collecting failed, or
 a `pytest.exit`) are a fail; death by a signal, any other exit, no guard report, a Python started that couldn't trace itself, an
-untraced program in a task not keyed on its suite's tree, and fixtures that couldn't be fetched are an error. `detail` holds the guard's counts (passed, failed, skipped and errors, a
+untraced program in a task not keyed on its suite's tree, fixtures that couldn't be fetched and a Lean toolchain that didn't set
+up are an error. `detail` holds the guard's counts (passed, failed, skipped and errors, a
 setup's or teardown's), pytest's exit, the failed tests' node ids and the untraced programs."""
 from __future__ import annotations
 
@@ -31,7 +34,7 @@ import tomllib
 from pathlib import Path
 
 from .. import ROOT, graph
-from . import call
+from . import call, lean_build
 
 GUARD = ROOT / "tools" / "verity" / "check" / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
@@ -60,6 +63,10 @@ def run(task: dict, work: Path) -> dict:
     if (need := fixtures(task, tests)) and call([sys.executable, "-P", "-m", "research", "data", "fetch-fixtures", "--repo",
                                                 str(ROOT), *need], work, ROOT):
         return {"status": "error", "detail": {"error": f"fixtures could not be fetched: {', '.join(need)[:400]}"}}
+    if lean := task["vars"].get("lean"):
+        if rc := call(["bash", "-c", lean_build.ELAN + "lake --version"], work, ROOT / lean):
+            return {"status": "error", "detail": {"error": f"the Lean toolchain didn't set up (exit {rc})"}}
+        lean_build.place(task, work)
     for f in (REPORT, READS):
         (work / f).unlink(missing_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix="verity-test-file-"))
@@ -92,10 +99,12 @@ def fixtures(task: dict, tests: dict) -> list[str]:
 
 def environment(task: dict, tests: dict, work: Path, suite: Path) -> dict[str, str]:
     """The test process's environment: this one's less `DROP`, this Python's directory first on the PATH (a test's `python3` is the
-    workspace's, as under `uv run`, which runs `suites.py`), thread pools sized to the task's cores, a git identity (tests commit
-    in throwaway repositories), and the guard's variables, which declare no inputs to it."""
+    workspace's, as under `uv run`, which runs `suites.py`) and elan's next for a task that reads lean-build's outputs (as
+    `lean_build.ELAN` puts it), thread pools sized to the task's cores, a git identity (tests commit in throwaway
+    repositories), and the guard's variables, which declare no inputs to it."""
     env = {k: v for k, v in os.environ.items() if not k.startswith(DROP_PREFIXES) and k not in DROP}
-    env["PATH"] = os.pathsep.join([str(Path(sys.executable).parent), *filter(None, [env.get("PATH")])])
+    elan = [str(Path.home() / ".elan" / "bin")] if task["vars"].get("lean") else []
+    env["PATH"] = os.pathsep.join([str(Path(sys.executable).parent), *elan, *filter(None, [env.get("PATH")])])
     for v in THREAD_VARS:
         env.setdefault(v, str(max(1, int(task["resources"]["cores"]))))
     for k in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):

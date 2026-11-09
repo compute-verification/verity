@@ -16,7 +16,7 @@ spec = ["**/lean-toolchain", "**/lake-manifest.json"]
 spec = ["verity/ml/flock/check_build.sh"]
 
 [family.test-file]
-# one task per test file of every suite but those the build family's lean-suites tasks run (suites.py's AFTER_LEAN); a suite's
+# one task per test file of every suite, those check runs after lean-build (suites.py's AFTER_LEAN) on its outputs; a suite's
 # [tool.verity.tests] worker_gb and timeout_s stand in for mem_gb and timeout_s
 files = ["**/tests/**/test_*.py", "**/tests/test_*.py"]
 kinds = ["test-file"]
@@ -63,12 +63,9 @@ resources = { cores = 4, mem_gb = 32, disk_gb = 2 }
 timeout_s = 3600
 
 [family.build]
-# the files its tasks are made from (suites.py's AFTER_LEAN and the suites' pyproject.toml: lean-suites', whose inputs are the
-# whole tree)
 files = ["verity/core/service/flock/**", "verity/ml/flock/check_build.sh", "verity/ml/flock/live/**",
-         "verity/ml/flock/flock-*-b684b12.patch", "verity/ml/flock/verifier/**", "tools/verity/check/suites.py",
-         "**/pyproject.toml"]
-kinds = ["lean-build", "flock-circuit-build", "lean-agreement", "lean-unit-cut", "lean-suites", "flock-rust-tests"]
+         "verity/ml/flock/flock-*-b684b12.patch", "verity/ml/flock/verifier/**"]
+kinds = ["lean-build", "flock-circuit-build", "lean-agreement", "lean-unit-cut", "flock-rust-tests"]
 env = "lean"
 about = "{kind} {name}"
 # a check slot's (`tools/verity/check/tasks.py`'s SLOT); the agreement needs 24 GB at least (`check.AGREEMENT_MIN_GB`)

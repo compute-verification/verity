@@ -21,6 +21,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_a0_archive_once.py",
+    "tests/test_a0_challenger_draw.py",
+    "tests/test_a0_session_challenger.py",
+    "tests/test_a0_templated.py",
     "tests/test_a5_coins.py",
     "tests/test_a5_memo.py",
     "tests/test_a5_outputs.py",
@@ -28,9 +31,14 @@ untraced = [
     "tests/test_a5_tp_gates.py",
     "tests/test_a5_tp_store.py",
     "tests/test_a5_warden.py",
+    "tests/test_composite.py",
+    "tests/test_pouw_piece.py",
     "tests/test_served_bandwidth.py",
     "tests/test_served_overhead.py",
+    "tests/test_served_pouw.py",
     "tests/test_served_verdicts.py",
+    "tests/test_two_stage_driver.py",
+    "tests/test_vllm_example.py",
 ]
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
@@ -70,6 +78,10 @@ inputs = ["verity", "verity/core/service/spot/lakefile.toml", "benchmarks/live_c
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_compose_cache.py"]
+paths = ["integrations/vllm/verity_vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_prove_bundle.py", "tests/test_prove_leg_served.py"]

@@ -10,6 +10,7 @@ untraced = [
     "tests/test_drawn.py",
     "tests/test_line.py",
     "tests/test_p2.py",
+    "tests/test_p2_case.py",
     "tests/test_p2_party.py",
     "tests/test_pooled.py",
     "tests/test_protocol.py",

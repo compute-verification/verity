@@ -1,9 +1,7 @@
 """The test-file family: one task per test file of every suite, which `runners/test_file.py` runs alone under the suites' read guard.
 
 Suites are what `tools/verity/check/suites.py` finds (`discover`): each directory whose `pyproject.toml` configures pytest, the
-repository's own at the root, but those check runs after its Lean steps (`build.lean_suites`, `suites.AFTER_LEAN`), which the
-build family's lean-suites tasks run whole once lean-build has built what they need. A suite's test files are its `test_*.py`
-under its `testpaths`, outside a data directory
+repository's own at the root. A suite's test files are its `test_*.py` under its `testpaths`, outside a data directory
 (`DATA_DIRS`) and the suites nested in it (`suites.test_files`). A task's inputs are what running its one file reads, found from
 the commit's files alone:
 
@@ -53,6 +51,10 @@ the commit's files alone:
 
 A task names its suite's directory in `vars` (`suite`), where the runner runs pytest. Its memory is the suite's `[tool.verity.tests]
 worker_gb` and its timeout the suite's `timeout_s` where it declares them, else `[family.test-file]`'s.
+
+A task of a suite check runs after its Lean steps (`build.lean_suites`, `suites.AFTER_LEAN`) runs on what lean-build built
+(`on_lean`): it reads each of lean-build's outputs, which its runner puts in the tree, and its key is its file's inputs, as
+any other's, with those outputs' digests.
 """
 from __future__ import annotations
 
@@ -69,11 +71,18 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..graph import RUNNERS
+
 KIND = "test-file"
 #: the read guard the runner loads into pytest, the one `suites.py` loads
 GUARD = ("tools/verity/check/guard/verity_suite_guard.py", "tools/verity/check/guard/child/sitecustomize.py",
          "tools/verity/check/guard/child/verity_suite_reads.py")
 REGISTRY = "fixtures/artifacts.json"
+#: the runner module that puts lean-build's outputs in a tree (`lean_build.place`), which the test-file runner runs for a task
+#: that reads them
+PLACE = f"{RUNNERS}/lean_build.py"
+#: the disk of a task that reads lean-build's outputs: them staged and unpacked, and the Lake packages its tests build beside
+LEAN_DISK_GB = 20
 #: directories whose `test_*.py` files are data a test hands on, not tests (`suites._DATA_DIRS`)
 DATA_DIRS = frozenset({"fixtures", "data", "expected", "testdata"})
 STDLIB = frozenset(sys.stdlib_module_names)
@@ -1084,6 +1093,19 @@ def fetched(tree: Tree) -> list[str]:
     return sorted(v for k, v in reg.items() if k.startswith("art:") and isinstance(v, str) and v not in tree.files)
 
 
+def on_lean(root: Path, files: list[str]) -> dict:
+    """What a task of a suite check runs after lean-build (`build.lean_suites`) holds beside its file's own: a read of each of
+    lean-build's outputs (`build.lean_outputs`), which its runner puts in the tree before pytest, with lake on the PATH, as
+    check's lean-suites step runs those suites (`--lean-built`); the package in `vars` `lean`; the runner that puts them there
+    (`PLACE`) among its inputs; one test process's memory (`suites.TEST_PROCESS_GB`) and suites.py's timeout of a suite
+    (`SUITE_TIMEOUT_S`) where the suite declares none; and the disk they take (`LEAN_DISK_GB`)."""
+    from . import build  # build imports this module's
+
+    lit = build.suites_literals(root, files, "TEST_PROCESS_GB", "SUITE_TIMEOUT_S")
+    return {"reads": [{"task": build.BUILD, "output": o["name"]} for o in build.lean_outputs(root, files)], "lean": build.LEAN,
+            "mem_gb": lit.get("TEST_PROCESS_GB"), "timeout_s": lit.get("SUITE_TIMEOUT_S")}
+
+
 def tasks(root: Path, files: list[str]) -> list[dict]:
     from .build import lean_suites  # build imports this module's
 
@@ -1092,18 +1114,24 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
     suites = discover(tree)
     fixtures = fetched(tree)
     after = set(lean_suites(root, files))
+    lean = on_lean(root, files) if after else {}
     out = []
     for s in suites:
-        if not after.isdisjoint((s.name, s.path)):
-            continue
         data = declared(tree, s, suites, fixtures)
         tests = suite_tests(tree, s, suites)
         walked = walks(tree, s, tests)
         untraced = _named_tests(s, tests, s.untraced, "[tool.verity.tests] untraced")
         every = whole(tree, s, suites) if untraced else []
+        built = not after.isdisjoint((s.name, s.path))
+        gb, timeout = s.mem_gb or lean.get("mem_gb"), s.timeout_s or lean.get("timeout_s")
         for f in tests:
             t = task(tree, imports, s, f, data, walked.get(f, set()))
             if f in untraced:
                 t["inputs"], t["vars"]["untraced"] = sorted({*t["inputs"], *every}), "suite"
+            if built:
+                t["inputs"], t["reads"], t["vars"]["lean"] = sorted({*t["inputs"], PLACE}), lean["reads"], lean["lean"]
+                t["resources"] = {**({"mem_gb": gb} if gb else {}), "disk_gb": LEAN_DISK_GB}
+                if timeout:
+                    t["timeout_s"] = math.ceil(timeout)
             out.append(t)
     return sorted(out, key=lambda t: t["id"])

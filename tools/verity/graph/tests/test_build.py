@@ -1,17 +1,18 @@
 """The build family: on this tree its tasks are check's steps (the inputs check keys them by, the executables the Flock suite
-runs, what check.py reads to run the agreement, the suites check runs after lean-build) and its runners run check's commands,
-telling a fail, the tree's, from an error, the machine's (a skip among them: nothing ran), on stand-ins for lake,
-check_build.sh, check.py, unit_cut_agree.py, suites.py and the store."""
+runs and the rest of the verifier's build packed, what check.py reads to run the agreement) and its runners run check's
+commands, telling a fail, the tree's, from an error, the machine's (a skip among them: nothing ran), on stand-ins for lake,
+check_build.sh, check.py, unit_cut_agree.py and the store; what lean-build outputs goes back into a reader's tree whole."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import importlib.util
+import io
 import json
-import math
 import os
-import shlex
 import subprocess
 import sys
+import tarfile
 import tomllib
 from pathlib import Path
 
@@ -19,15 +20,14 @@ import pytest
 
 from verity_graph import ROOT, contract, graph, runners
 from verity_graph.families import build
-from verity_graph.runners import flock_circuit_build, flock_rust_tests, lean_agreement, lean_build, lean_suites, lean_unit_cut
+from verity_graph.runners import flock_circuit_build, flock_rust_tests, lean_agreement, lean_build, lean_unit_cut
 
 spec = importlib.util.spec_from_file_location("graph_check", ROOT / "tools" / "verity" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
-AGREE, BUILD, CIRCUIT = (f"lean-agreement:{build.VERIFIER}", f"lean-build:{build.LEAN}", f"flock-circuit-build:{build.FLOCK}/live")
-RUST, UNIT, SUITES = f"flock-rust-tests:{build.FLOCK}/live", f"lean-unit-cut:{build.UNIT_CUT}", "lean-suites:a"
-FLOCK_PART = "lean-suites:verity-flock:1/6"
+AGREE, CIRCUIT = f"lean-agreement:{build.VERIFIER}", f"flock-circuit-build:{build.FLOCK}/live"
+RUST, UNIT = f"flock-rust-tests:{build.FLOCK}/live", f"lean-unit-cut:{build.UNIT_CUT}"
 
 
 @pytest.fixture(scope="module")
@@ -39,62 +39,31 @@ def _own(task: dict) -> list[str]:
     return [p for p in task["inputs"] if p not in graph.runner_sources(task["kind"])]
 
 
-def _suites(doc: dict) -> list[dict]:
-    return [t for t in doc["tasks"] if t["kind"] == "lean-suites"]
-
-
 def test_the_build_family_is_check_s_steps_with_the_inputs_check_keys_them_by(doc):
     by = {t["id"]: t for t in doc["tasks"]}
-    assert sorted(set(by) - {t["id"] for t in _suites(doc)}) == sorted([CIRCUIT, RUST, AGREE, BUILD, UNIT])
+    assert sorted(by) == sorted([CIRCUIT, RUST, AGREE, build.BUILD, UNIT])
     files = graph.tracked(ROOT)
     for rust in (CIRCUIT, RUST):
         assert _own(by[rust]) == CHECK.rust_tests_inputs(files) and by[rust]["env"] == "rust" and by[rust]["key"]
     verifier = [p for p in _own(by[AGREE]) if p.startswith(build.VERIFIER + "/")]
-    assert sorted({*_own(by[BUILD]), *verifier}) == sorted(CHECK.agreement_closure(files)), \
+    assert sorted({*_own(by[build.BUILD]), *verifier}) == sorted(CHECK.agreement_closure(files)), \
         "the agreement's key in check covers the verifier's package (the build's inputs) and its own directory"
-    verify = [{"task": BUILD, "output": "flock-verify"}]
-    assert by[AGREE]["reads"] == by[UNIT]["reads"] == verify and not by[AGREE]["key"] and by[BUILD]["key"]
+    verify = [{"task": build.BUILD, "output": "flock-verify"}]
+    assert by[AGREE]["reads"] == by[UNIT]["reads"] == verify and not by[AGREE]["key"] and by[build.BUILD]["key"]
     assert {build.UNIT_CUT, "verity/ml/circuits/partition.py"} <= set(_own(by[UNIT])) <= {
         build.UNIT_CUT, *(f for f in files if f.startswith("verity/") and f.endswith("/__init__.py")),
         *(f for f in files if f.startswith("verity/ml/circuits/"))}, "the script and what it imports, which reads no data"
-    for t in _suites(doc):
-        assert t["inputs"] == files, f"{t['id']}: check's lean-suites, keyed by the whole tree"
-        assert t["reads"] == [{"task": BUILD, "output": o["name"]} for o in by[BUILD]["outputs"]] and not t["key"]
-        assert {t["vars"]["bin"] + "/" + r["output"] for r in t["reads"]} == {o["path"] for o in by[BUILD]["outputs"]}
 
 
-def test_lean_suites_is_check_s_lean_suites_step_a_suite_or_a_part_a_task(doc):
-    """Each suite check's lean-suites step runs is one task, or one a part of `build.PARTS`, in check's order: every suite once,
-    every part of a split one once; a parallel suite takes a slot and another one process, each at its own timeout."""
-    ran = [(t["vars"]["suites"], t["vars"].get("files")) for t in sorted(_suites(doc), key=lambda t: t["id"])]
-    want = [(s, f"{k}/{build.PARTS[s]}" if s in build.PARTS else None) for s in CHECK.SUITES.AFTER_LEAN
-            for k in range(1, build.PARTS.get(s, 1) + 1)]
-    assert sorted(ran, key=str) == sorted(want, key=str) and len(ran) == len(set(ran))
-    assert FLOCK_PART in {t["id"] for t in _suites(doc)}, "the Flock suite, which runs for hours on one slot, is in parts"
-    fam = graph.spec(ROOT)["family"]["build"]
-    suites = CHECK.SUITES.discover()
-    for t in _suites(doc):
-        s = next(x for x in suites if t["vars"]["suites"] in (x.name, x.path))
-        one = {"cores": 1, "mem_gb": s.worker_gb or CHECK.SUITES.TEST_PROCESS_GB, "disk_gb": build.SUITES_DISK_GB}
-        assert t["resources"] == ({**fam["resources"], "disk_gb": build.SUITES_DISK_GB} if s.parallel else one), t["id"]
-        assert t["timeout_s"] == (math.ceil(s.timeout_s) if s.timeout_s else fam["timeout_s"]), t["id"]
-
-
-def test_a_part_s_files_are_every_mth_by_path_whatever_this_machine_measured():
-    """The runner hands suites.py a timing record with none of a split suite's files (`lean_suites.TIMINGS`), so the partition
-    packs equal costs by path: part K holds files K, K+M, ..., the same on every machine, and the M parts hold each file once."""
-    files = [f"s/tests/test_{c}.py" for c in "kjihgfedcba"]
-    parts = CHECK.SUITES.partition(files, {}, 4)
-    assert parts == [sorted(files)[k::4] for k in range(4)]
-    assert sorted(f for p in parts for f in p) == sorted(files)
-
-
-def test_lean_build_outputs_the_executables_the_flock_suite_runs_at_their_paths(doc):
-    lb, agree = (next(t for t in doc["tasks"] if t["id"] == i) for i in (BUILD, AGREE))
+def test_lean_build_outputs_the_executables_the_flock_suite_runs_at_their_paths_and_the_rest_of_its_build(doc):
+    lb, agree = (next(t for t in doc["tasks"] if t["id"] == i) for i in (build.BUILD, AGREE))
     tests = tomllib.loads((ROOT / "verity" / "ml" / "flock" / "pyproject.toml").read_text())["tool"]["verity"]["tests"]
-    bins = [a for a in tests["artifacts"] if a.startswith(f"{build.LEAN}/.lake/build/bin/")]
+    bins = [a for a in tests["artifacts"] if a.startswith(f"{build.BIN}/")]
     assert bins and set(bins) <= {o["path"] for o in lb["outputs"]}
     assert agree["vars"]["verify"] == next(o["path"] for o in lb["outputs"] if o["name"] == "flock-verify")
+    assert {o["name"]: o["path"] for o in lb["outputs"]} == {
+        **{e: f"{build.LEAN}/{lean_build.TREE}/bin/{e}" for e in build.executables(ROOT, graph.tracked(ROOT))},
+        lean_build.BUILD: f"{build.LEAN}/{lean_build.PACKED}"}, "where the runner's `place` finds each in a reader's work"
 
 
 def test_the_runners_run_what_check_runs():
@@ -102,10 +71,9 @@ def test_the_runners_run_what_check_runs():
     assert next(j for j in CHECK.JOBS if j.name == "flock-circuit-build").halts_on in flock_circuit_build.FAILS
     assert f'print(f"{lean_agreement.CANNOT} {{why}}"' in (ROOT / lean_agreement.CHECK).read_text()
     assert (ROOT / flock_circuit_build.SCRIPT).is_file() and (ROOT / lean_agreement.PIN).is_file()
-    assert f'print(f"\\n{lean_suites.WROTE} ' in (ROOT / lean_suites.SUITES).read_text()
 
 
-def test_flock_rust_tests_lean_unit_cut_and_lean_suites_run_check_s_argv(doc, tmp_path, monkeypatch):
+def test_flock_rust_tests_and_lean_unit_cut_run_check_s_argv(doc, tmp_path, monkeypatch):
     """Each runs the argv `check.groups` builds for its step, at the cores check gives it, its work directory where check names
     its output directory, and the executable it reads where check finds it in the tree."""
     out = tmp_path / "out"
@@ -119,9 +87,8 @@ def test_flock_rust_tests_lean_unit_cut_and_lean_suites_run_check_s_argv(doc, tm
         assert cwd == ROOT
         seen.append(argv)
         return 1
-    for m in (flock_rust_tests, lean_unit_cut, lean_suites):
+    for m in (flock_rust_tests, lean_unit_cut):
         monkeypatch.setattr(m, "call", call)
-    monkeypatch.setattr(lean_suites, "place", lambda task, work: None)          # no executable put in this tree
     rust = check["flock-rust-tests"]
     cores = int(rust[1].partition("=")[2])
     flock_rust_tests.run({**by[RUST], "resources": {**by[RUST]["resources"], "cores": cores}}, out)
@@ -131,21 +98,6 @@ def test_flock_rust_tests_lean_unit_cut_and_lean_suites_run_check_s_argv(doc, tm
     verify.write_bytes(b"fv")
     lean_unit_cut.run(by[UNIT], out)
     assert [str(ROOT / by[UNIT]["vars"]["verify"]) if a == str(verify) else a for a in seen.pop()] == check["lean-unit-cut"]
-    words = shlex.split(check["lean-suites"][2].removeprefix(lean_build.ELAN))
-    n = len(CHECK.SUITES.AFTER_LEAN)
-    assert words[2:2 + n] == list(CHECK.SUITES.AFTER_LEAN)
-    jobs = words.index("--jobs") + 2
-    whole = next(t["id"] for t in _suites(doc) if "files" not in t["vars"])
-    for t in (by[whole], by[FLOCK_PART]):
-        lean_suites.run({**t, "resources": {**t["resources"], "cores": int(words[jobs - 1])}}, out)
-        (bash, c, mine), = seen
-        seen.clear()
-        assert [bash, c] == check["lean-suites"][:2] and mine.startswith(lean_build.ELAN)
-        part = ["--files", t["vars"]["files"], "--timings", str(out / lean_suites.TIMINGS)] if "files" in t["vars"] else []
-        assert shlex.split(mine.removeprefix(lean_build.ELAN)) == [
-            *words[:2], t["vars"]["suites"], *words[2 + n:jobs], "--mem-gb", str(t["resources"]["mem_gb"]), *part], \
-            "check's words to its --jobs on the task's suite; then the task's memory, where check gives its slot's share, and its part"
-    assert json.loads((out / lean_suites.TIMINGS).read_text()) == {"verity-flock": {}}
 
 
 AUDIT = """
@@ -180,41 +132,24 @@ def test_check_reads_are_all_the_agreement_reads_of_the_tree_outside_the_verifie
     assert opened and not {f for f in opened if not f.startswith(build.VERIFIER + "/")} - set(build.CHECK_READS)
 
 
-def test_a_tree_without_the_verifier_lists_none_of_its_lean_tasks(tmp_path, monkeypatch):
+def test_a_tree_without_the_verifier_lists_none_of_its_lean_tasks(tmp_path):
     (tmp_path / build.LEAN).mkdir(parents=True)
     (tmp_path / build.LEAN / "lakefile.toml").write_text('defaultTargets = ["v"]\n[[lean_exe]]\nname = "v"\n')
     assert build.tasks(tmp_path, []) == []
     script = [f"{build.FLOCK}/check_build.sh"]
     assert [t["id"] for t in build.tasks(tmp_path, script)] == [CIRCUIT, RUST]
     lean = [f"{build.LEAN}/lakefile.toml", f"{build.LEAN}/V.lean"]
-    assert [t["id"] for t in build.tasks(tmp_path, lean)] == [BUILD]
-    assert [t["id"] for t in build.tasks(tmp_path, [*lean, f"{build.VERIFIER}/upstream.json", build.UNIT_CUT])] == [BUILD], \
+    assert [t["id"] for t in build.tasks(tmp_path, lean)] == [build.BUILD]
+    assert [t["id"] for t in build.tasks(tmp_path, [*lean, f"{build.VERIFIER}/upstream.json", build.UNIT_CUT])] == [build.BUILD], \
         "the agreement and the partition check need flock-verify among the executables"
     (tmp_path / build.LEAN / "lakefile.toml").write_text('defaultTargets = ["flock-verify"]\n[[lean_exe]]\nname = "flock-verify"\n')
-    pytest_ = "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n"
-    for f, text in ((build.UNIT_CUT, "import json\n"), (build.SUITES, 'AFTER_LEAN = ("a", "b/c", "gone")\nTEST_PROCESS_GB = 9\n'),
-                    ("pyproject.toml", '[project]\nname = "toy"\n'),
-                    ("pkg/a/pyproject.toml", f'[project]\nname = "a"\n{pytest_}[tool.verity.tests]\nworker_gb = 3\n'),
-                    ("b/c/pyproject.toml", f"{pytest_}[tool.verity.tests]\nparallel = true\ntimeout_s = 99.5\n")):
-        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / f).write_text(text)
-    files = [*lean, build.UNIT_CUT, build.SUITES, "b/c/pyproject.toml", "pkg/a/pyproject.toml", "pyproject.toml"]
-    monkeypatch.setattr(build, "PARTS", {"a": 2})
-    got = {t["id"]: t for t in build.tasks(tmp_path, files)}
-    parts = ["lean-suites:a:1/2", "lean-suites:a:2/2"]
-    assert list(got) == [BUILD, UNIT, *parts, "lean-suites:b/c", "lean-suites:gone"] and got[UNIT]["inputs"] == [build.UNIT_CUT]
-    assert [got[p]["vars"] for p in parts] == [{"suites": "a", "files": f"{k}/2", "bin": f"{build.LEAN}/.lake/build/bin"}
-                                               for k in (1, 2)]
-    assert all(got[p]["resources"] == {"cores": 1, "mem_gb": 3, "disk_gb": 60} and "timeout_s" not in got[p] for p in parts), \
-        "one process at the suite's worker_gb, at the family's timeout"
-    assert got["lean-suites:b/c"]["resources"] == {"disk_gb": 60} and got["lean-suites:b/c"]["timeout_s"] == 100, \
-        "a parallel suite takes the family's slot, at its own timeout"
-    assert got["lean-suites:gone"]["resources"] == {"cores": 1, "mem_gb": 9, "disk_gb": 60}, \
-        "a name no suite has is listed, so suites.py's refusal of it is an error"
-    assert all(t["inputs"] == files for i, t in got.items() if i.startswith("lean-suites:"))
-    (tmp_path / build.SUITES).write_text("AFTER = ()\n")
-    assert not any(t["id"].startswith("lean-suites:") for t in build.tasks(tmp_path, [*lean, build.SUITES])), \
-        "no AFTER_LEAN, no lean-suites"
+    (tmp_path / build.UNIT_CUT).parent.mkdir(parents=True)
+    (tmp_path / build.UNIT_CUT).write_text("import json\n")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "toy"\n')
+    got = {t["id"]: t for t in build.tasks(tmp_path, [*lean, build.UNIT_CUT, "pyproject.toml"])}
+    assert list(got) == [build.BUILD, UNIT] and got[UNIT]["inputs"] == [build.UNIT_CUT]
+    assert got[build.BUILD]["outputs"] == [{"name": "flock-verify", "path": f"{build.BIN}/flock-verify"},
+                                           {"name": "build", "path": f"{build.LEAN}/.lake/build.tar.gz"}]
 
 
 def _graph(*tasks: dict) -> dict:
@@ -236,7 +171,7 @@ def _tree(tmp_path: Path, monkeypatch, files: dict[str, str]) -> Path:
         (root / p).parent.mkdir(parents=True, exist_ok=True)
         (root / p).write_text(text)
         (root / p).chmod(0o755)
-    for m in (lean_build, flock_circuit_build, lean_agreement, flock_rust_tests, lean_unit_cut, lean_suites):
+    for m in (lean_build, flock_circuit_build, lean_agreement, flock_rust_tests, lean_unit_cut):
         monkeypatch.setattr(m, "ROOT", root)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))                        # no elan or cargo of the machine's
     monkeypatch.setenv("PATH", str(root / "bin"), prepend=os.pathsep)
@@ -246,21 +181,36 @@ def _tree(tmp_path: Path, monkeypatch, files: dict[str, str]) -> Path:
 LAKE = """#!/bin/sh
 case "$1" in
   --version) {version} ;;
-  build) mkdir -p .lake/build/bin && printf 'fv' > .lake/build/bin/flock-verify && {build} ;;
+  build) mkdir -p .lake/build/bin .lake/build/lib/lean && printf 'fv' > .lake/build/bin/flock-verify &&
+         printf 'h' > .lake/build/bin/flock-verify.hash && printf 'o' > .lake/build/lib/lean/V.olean && {build} ;;
 esac
 """
+LEAN_OUTPUTS = [{"name": "flock-verify", "path": "pkg/.lake/build/bin/flock-verify"}, {"name": "build", "path": "pkg/.lake/build.tar.gz"}]
+
+
+def _members(archive: Path) -> dict[str, tuple[bytes, int]]:
+    with tarfile.open(archive, "r:gz") as tar:
+        return {m.name: (tar.extractfile(m).read(), m.mode) for m in tar}
 
 
 @pytest.mark.parametrize(("version", "build_", "status"), [
     ("exit 0", "exit 0", "pass"), ("exit 0", "echo 'error: build failed'; exit 1", "fail"),
     ("exit 0", "kill -9 $$", "error"), ("echo 'error: could not download toolchain'; exit 1", "exit 0", "error")])
 def test_lean_build(tmp_path, monkeypatch, version, build_, status):
-    _tree(tmp_path, monkeypatch, {"bin/lake": LAKE.format(version=version, build=build_), "pkg/lean-toolchain": "v4\n"})
-    doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean",
-                  "outputs": [{"name": "flock-verify", "path": "pkg/.lake/build/bin/flock-verify"}]})
+    """A pass outputs each executable and the rest of the build packed, and records that its tree holds them, so a reader
+    there places nothing."""
+    root = _tree(tmp_path, monkeypatch, {"bin/lake": LAKE.format(version=version, build=build_), "pkg/lean-toolchain": "v4\n"})
+    doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean", "outputs": LEAN_OUTPUTS})
     res = _execute(doc, tmp_path / "work", lean_build.run)
     assert res["status"] == status, res
-    assert (res["outputs"] == {"flock-verify": contract.digest(b"fv")}) == (status == "pass")
+    if status != "pass":
+        assert res["outputs"] == {}
+        return
+    archive = tmp_path / "work" / "pkg" / lean_build.PACKED
+    assert res["outputs"] == {"flock-verify": contract.digest(b"fv"), "build": contract.file_digest(archive)}
+    assert _members(archive) == {"bin/flock-verify.hash": (b"h", 0o644), "lib/lean/V.olean": (b"o", 0o644)}, \
+        "the build but the executables, which are outputs of their own"
+    assert json.loads((root / "pkg" / lean_build.PLACED).read_text()) == res["outputs"]
 
 
 @pytest.mark.parametrize(("script", "status"), [
@@ -388,68 +338,85 @@ def test_lean_unit_cut(tmp_path, monkeypatch, how, status):
         assert res["detail"]["why"].startswith("ImportError: cannot import name 'validate_unit_cut'"), res
 
 
-SUITES_STANDIN = """import json, os, shutil, signal, sys
-from pathlib import Path
-a = sys.argv[1:]
-names = a[:a.index("--lean-built")]
-assert shutil.which("lake") and a[a.index("--jobs") + 1] == "3" and a[a.index("--mem-gb") + 1] == "5" and "--timeouts" in a
-fv = Path(__file__).resolve().parents[3] / "pkg" / "bin" / "flock-verify"
-assert os.access(fv, os.X_OK) and fv.read_text() in ("fv", "fv-old"), "the executable read, at its path in the tree"
-how = Path(os.environ["HOW"]).read_text()
-if how == "part":
-    timings = json.loads(Path(a[a.index("--timings") + 1]).read_text())
-    assert a[a.index("--files") + 1] == "2/4" and timings == {n: {} for n in names}, (a, timings)
-else:
-    assert "--files" not in a and "--timings" not in a
-if how == "kill":
-    os.kill(os.getpid(), signal.SIGKILL)
-if how == "usage":
-    sys.exit(2)
-rows = [{"suite": "lean/" + n, "name": n, "status": "passed", "failed_tests": [],
-         **({"part": {"ks": [2], "m": 4}} if how == "part" else {})} for n in names]
-if how == "missing":
-    rows.pop()
-if how == "cached":
-    rows[0]["status"] = "cached"
-if how == "tests":
-    rows[1].update(status="failed", failed_tests=["tests/test_v.py::test_v"])
-if how == "kill a suite":
-    rows[1].update(status="failed")
-if how == "timeout":
-    rows[1].update(status="failed", timed_out=600.0)
-Path(a[a.index("--json") + 1]).write_text(json.dumps(rows))
-if how == "wrote":
-    print("\\nthe tests changed 1 files in the repository (tests write under tmp_path):\\n  x.txt")
-sys.exit(1 if how in ("tests", "kill a suite", "timeout", "wrote") else 0)
-"""
+def _build(root: Path, files: dict[str, bytes], when: int = 0) -> Path:
+    """A package at ``root`` whose `.lake/build` holds ``files``, each touched at ``when``; executable when its name says so."""
+    for name, data in files.items():
+        f = root / lean_build.TREE / name
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(data)
+        f.chmod(0o755 if "exe" in name else 0o644)
+        os.utime(f, (when, when))
+    return root
 
 
-@pytest.mark.parametrize(("how", "status"), [("pass", "pass"), ("cached", "pass"), ("tests", "fail"), ("timeout", "fail"),
-                                             ("wrote", "fail"), ("kill a suite", "error"), ("missing", "error"),
-                                             ("usage", "error"), ("kill", "error"), ("pass old", "pass"), ("part", "pass")])
-def test_lean_suites(tmp_path, monkeypatch, how, status):
-    """suites.py --lean-built on the task's suites, with lake on the PATH, after the executables it reads are put at their paths
-    in the tree (over another build's there); a suite that failed is named with its failed tests, and a suite the report lacks,
-    one that failed on nothing its row names (a kill) and a usage error are no result.  A part's task runs `--files K/M` on a
-    timing record that holds none of its suites' files, and its report's rows, of the suite's part, are the suite's."""
-    root = _tree(tmp_path, monkeypatch, {lean_suites.SUITES: SUITES_STANDIN, "bin/lake": "#!/bin/sh\n",
-                                         **({"pkg/bin/flock-verify": "fv-old"} if how == "pass old" else {})})
-    (tmp_path / "how").write_text(how.removesuffix(" old"))
-    monkeypatch.setenv("HOW", str(tmp_path / "how"))
-    doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean",
-                  "outputs": [{"name": "flock-verify", "path": "pkg/bin/flock-verify"}]},
-                 {"id": SUITES, "kind": "lean-suites", "env": "py",
-                  "vars": {"suites": "a b/c", "bin": "pkg/bin", **({"files": "2/4"} if how == "part" else {})},
-                  "reads": [{"task": "lean-build:pkg", "output": "flock-verify"}],
-                  "outputs": [{"name": "report", "path": lean_suites.REPORT}], "resources": {"cores": 3, "mem_gb": 5, "disk_gb": 1}})
+BUILT = {"lib/lean/V.olean": b"o", "lib/lean/V.trace": b'{"depHash": "1"}', "ir/V.c": b"c", "lib/exe-helper": b"x"}
+
+
+def test_one_build_packs_to_one_archive_s_bytes_wherever_it_is(tmp_path):
+    """Its files in path order, their bytes and whether each is executable: no path, owner, time or name of the archive's."""
+    one, two = _build(tmp_path / "one" / "pkg", BUILT), _build(tmp_path / "two" / "deeper" / "pkg", BUILT, when=10 ** 9)
+    lean_build.pack(one, tmp_path / "a.tar.gz", set())
+    lean_build.pack(two, tmp_path / "other-name.tar.gz", set())
+    assert (tmp_path / "a.tar.gz").read_bytes() == (tmp_path / "other-name.tar.gz").read_bytes()
+    with tarfile.open(tmp_path / "a.tar.gz", "r:gz") as tar:
+        assert [(m.name, m.mode, m.mtime, m.uid, m.uname) for m in tar] == [
+            ("ir/V.c", 0o644, 0, 0, ""), ("lib/exe-helper", 0o755, 0, 0, ""), ("lib/lean/V.olean", 0o644, 0, 0, ""),
+            ("lib/lean/V.trace", 0o644, 0, 0, "")]
+    lean_build.pack(one, tmp_path / "less.tar.gz", {one / lean_build.TREE / "ir/V.c"})
+    assert sorted(_members(tmp_path / "less.tar.gz")) == ["lib/exe-helper", "lib/lean/V.olean", "lib/lean/V.trace"]
+
+
+def _stage(tmp_path: Path, exe: bytes, built: dict[str, bytes]) -> tuple[dict, Path]:
+    """A reader of lean-build's executable `v` and `build`, and its work directory with them staged: bytes, no mode bits."""
     work = tmp_path / "work"
-    (work / "pkg" / "bin").mkdir(parents=True)
-    (work / "pkg" / "bin" / "flock-verify").write_text("fv")
-    res = _execute(doc, work, lean_suites.run)
-    assert res["status"] == status, res
-    assert (root / "pkg" / "bin" / "flock-verify").read_text() == "fv" and os.access(root / "pkg" / "bin" / "flock-verify", os.X_OK)
-    if how == "tests":
-        assert res["detail"]["failed"] == [{"name": "b/c", "suite": "lean/b/c", "failed_tests": ["tests/test_v.py::test_v"]}]
-        assert res["detail"]["suites"] == {"a": "passed", "b/c": "failed"}
-    if how == "missing":
-        assert res["detail"]["error"] == "not run: b/c", res
+    (work / "pkg" / lean_build.TREE / "bin").mkdir(parents=True, exist_ok=True)
+    (work / "pkg" / lean_build.TREE / "bin" / "v").write_bytes(exe)
+    lean_build.pack(_build(tmp_path / "built" / "pkg", built), work / "pkg" / lean_build.PACKED, set())
+    reads = [{"task": "lean-build:pkg", "output": o} for o in ("build", "v")]
+    return {"id": "test-file:t/tests/test_v.py", "vars": {"suite": "t", "lean": "pkg"}, "reads": reads}, work
+
+
+def _files(tree: Path) -> dict[str, tuple[bytes, bool]]:
+    return {p.relative_to(tree).as_posix(): (p.read_bytes(), os.access(p, os.X_OK)) for p in tree.rglob("*") if p.is_file()}
+
+
+def test_a_reader_s_tree_holds_what_lean_build_output_once_placed(tmp_path, monkeypatch):
+    """`place` puts each executable at its path, executable, and the packed build back where it was built from, in a tree with
+    none; a second reader of the same outputs writes nothing, and one of another build's outputs places them over the first's."""
+    root = _tree(tmp_path, monkeypatch, {"pkg/lean-toolchain": "v4\n"})
+    task, work = _stage(tmp_path, b"exe", BUILT)
+    lean_build.place(task, work)
+    tree = root / "pkg" / lean_build.TREE
+    assert _files(tree) == {"bin/v": (b"exe", True), **{n: (b, "exe" in n) for n, b in BUILT.items()}}
+    assert not [p for p in tree.rglob(".*")], "no file half written is left beside its place"
+    (tree / "lib/lean/V.olean").write_bytes(b"rebuilt here")
+    lean_build.place(task, work)
+    assert (tree / "lib/lean/V.olean").read_bytes() == b"rebuilt here", "placed once a tree: the record names these outputs"
+    task, work = _stage(tmp_path, b"exe2", {**BUILT, "lib/lean/W.olean": b"w"})
+    lean_build.place(task, work)
+    assert _files(tree) == {"bin/v": (b"exe2", True), **{n: (b, "exe" in n) for n, b in BUILT.items()}, "lib/lean/W.olean": (b"w", False)}
+
+
+def test_a_reader_in_the_tree_lean_build_built_places_nothing(tmp_path, monkeypatch):
+    """lean-build records what its tree holds, so its readers on that machine leave the build as Lake left it."""
+    root = _tree(tmp_path, monkeypatch, {"bin/lake": LAKE.format(version="exit 0", build="exit 0"), "pkg/lean-toolchain": "v4\n"})
+    doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean", "outputs": LEAN_OUTPUTS})
+    assert _execute(doc, tmp_path / "lb", lean_build.run)["status"] == "pass"
+    olean = root / "pkg" / lean_build.TREE / "lib" / "lean" / "V.olean"
+    olean.write_bytes(b"as lake left it")
+    reader = {"id": "test-file:t/tests/test_v.py", "vars": {"suite": "t", "lean": "pkg"},
+              "reads": [{"task": "lean-build:pkg", "output": o["name"]} for o in LEAN_OUTPUTS]}
+    lean_build.place(reader, tmp_path / "lb")
+    assert olean.read_bytes() == b"as lake left it"
+
+
+def test_an_archive_member_that_is_no_file_under_the_build_is_refused(tmp_path):
+    raw = io.BytesIO()
+    with gzip.GzipFile(fileobj=raw, mode="wb") as gz, tarfile.open(fileobj=gz, mode="w") as tar:
+        info = tarfile.TarInfo("../outside")
+        info.size = 1
+        tar.addfile(info, io.BytesIO(b"x"))
+    (tmp_path / "bad.tar.gz").write_bytes(raw.getvalue())
+    with pytest.raises(ValueError, match="no file of a build directory"):
+        lean_build.unpack(tmp_path / "bad.tar.gz", tmp_path / "pkg")
+    assert not (tmp_path / "outside").exists()

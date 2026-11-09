@@ -1,5 +1,6 @@
 """The test-file family: on this tree its tasks are the test files `suites.py` runs; on a toy checkout its listing is the same
-bytes from any checkout of the same files, a suite check runs after its Lean steps makes none, and a test file's inputs are its conftests, the `__init__.py` files their import runs,
+bytes from any checkout of the same files, a suite check runs after its Lean steps reads lean-build's outputs with each file
+keyed on its own inputs, and a test file's inputs are its conftests, the `__init__.py` files their import runs,
 their import closure, what they start, the suite's declared data and reads, the pyprojects above it and the read guard; and its runner's
 status is pytest's verdict on the file under the read guard: a pass, a fail when a test or its collection failed, an error when
 the file read outside its inputs or pytest was killed."""
@@ -15,22 +16,28 @@ from pathlib import Path
 import pytest
 from conftest import toy_tree
 
-from verity_graph import ROOT, graph, runners
+from verity_graph import ROOT, contract, graph, runners
 from verity_graph.families import build
 from verity_graph.families import test_file as family
+from verity_graph.runners import lean_build
 from verity_graph.runners import test_file as runner
 
 
-def _table() -> str:
-    """`[family.test-file]` as this tree's tasks.toml has it."""
+def _table(head: str = "[family.test-file]") -> str:
+    """The table ``head`` as this tree's tasks.toml has it."""
     text = (ROOT / graph.SPEC).read_text()
-    start = text.index("[family.test-file]")
+    start = text.index(head)
     end = text.find("\n[", start)
     return text[start:] if end < 0 else text[start:end]
 
 
 SPEC = '[env.py]\nspec = ["uv.lock", "pyproject.toml"]\n\n' + _table()
 LISTERS = {"test-file": family.tasks}
+#: a toy checkout's tasks.toml with the build family's, whose lean-build the suites check runs after it read
+LEAN_SPEC = f"{SPEC}\n{_table('[env.lean]')}\n{_table('[family.build]')}\n"
+#: the Lean verifier lean-build builds, with its runner, which places what it outputs for the test files that read it
+VERIFIER = {f"{build.LEAN}/lakefile.toml": 'defaultTargets = ["v", "w"]\n[[lean_exe]]\nname = "v"\n[[lean_exe]]\nname = "w"\n',
+            f"{build.LEAN}/V.lean": "", f"{build.LEAN}/lean-toolchain": "v4\n", family.PLACE: ""}
 #: what every toy checkout holds besides its suite: the files the core and the family make inputs of every task
 BASE = {f"{graph.RUNNERS}/test_file.py": "", **{p: "" for p in family.GUARD}}
 
@@ -143,24 +150,58 @@ def test_a_test_file_s_inputs(tmp_path):
         "import_module(name) is followed only for a constant name"
 
 
-def test_a_suite_check_runs_after_its_lean_steps_makes_no_test_file_task(tmp_path):
-    """A suite `suites.AFTER_LEAN` names, by its name or its path, runs once: as the build family's lean-suites task, after
-    lean-build has built what it runs, never as test-file tasks besides; in a tree without the verifier, which lists no
-    lean-suites task, its files are test-file tasks, as check runs it with the rest there."""
-    pytest_ = '\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
-    files = {**SUITE, build.SUITES: 'AFTER_LEAN = ("toy-suite", "t")\n',
-             "t/pyproject.toml": f'[project]\nname = "toy-t"\n{pytest_}', "t/tests/test_t.py": "def test_t():\n    pass\n",
-             "u/pyproject.toml": f'[project]\nname = "toy-u"\n{pytest_}', "u/tests/test_u.py": "def test_u():\n    pass\n"}
-    plain = toy_tree(tmp_path / "plain", SPEC, files)
-    assert [t["id"] for t in family.tasks(plain, graph.tracked(plain))] == [
-        "test-file:s/tests/sub/test_b.py", "test-file:s/tests/test_a.py", "test-file:s/tests/test_c.py",
-        "test-file:s/tests/test_d.py", "test-file:t/tests/test_t.py", "test-file:u/tests/test_u.py"]
+_PYTEST = '\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+#: suite `s` (toy-suite) and `t` run after lean-build, `u` with the rest
+AFTER = {**SUITE, build.SUITES: 'AFTER_LEAN = ("toy-suite", "t")\nTEST_PROCESS_GB = 9\nSUITE_TIMEOUT_S = 3600.0\n',
+         "t/pyproject.toml": f'[project]\nname = "toy-t"\n{_PYTEST}', "t/tests/test_t.py": "def test_t():\n    pass\n",
+         "u/pyproject.toml": f'[project]\nname = "toy-u"\n{_PYTEST}', "u/tests/test_u.py": "def test_u():\n    pass\n"}
+
+
+def test_a_suite_check_runs_after_its_lean_steps_reads_what_lean_build_built(tmp_path):
+    """A suite `suites.AFTER_LEAN` names, by its name or its path, is a task a test file like any other, keyed on what its file
+    reads, that reads each of lean-build's outputs too, which its runner places (`PLACE`, an input), at one test process's
+    memory and suites.py's timeout of a suite unless its suite declares its own; in a tree without the verifier none reads
+    anything, as check runs those suites with the rest there."""
+    plain = toy_tree(tmp_path / "plain", SPEC, AFTER)
+    flat = {t["id"]: t for t in family.tasks(plain, graph.tracked(plain))}
+    ids = ["test-file:s/tests/sub/test_b.py", "test-file:s/tests/test_a.py", "test-file:s/tests/test_c.py",
+           "test-file:s/tests/test_d.py", "test-file:t/tests/test_t.py", "test-file:u/tests/test_u.py"]
+    assert list(flat) == ids and not any("reads" in t or "lean" in t["vars"] for t in flat.values())
     assert build.tasks(plain, graph.tracked(plain)) == []
-    lean = {f"{build.LEAN}/lakefile.toml": 'defaultTargets = ["v"]\n[[lean_exe]]\nname = "v"\n', f"{build.LEAN}/V.lean": ""}
-    root = toy_tree(tmp_path / "tree", SPEC, {**files, **lean})
-    assert [t["id"] for t in family.tasks(root, graph.tracked(root))] == ["test-file:u/tests/test_u.py"]
-    assert [t["id"] for t in build.tasks(root, graph.tracked(root)) if t["kind"] == "lean-suites"] == [
-        "lean-suites:toy-suite", "lean-suites:t"]
+    root = toy_tree(tmp_path / "tree", SPEC, {**AFTER, **VERIFIER})
+    by = {t["id"]: t for t in family.tasks(root, graph.tracked(root))}
+    lb = next(t for t in build.tasks(root, graph.tracked(root)) if t["id"] == build.BUILD)
+    assert list(by) == ids and [o["name"] for o in lb["outputs"]] == ["v", "w", "build"]
+    for i in ids[:-1]:
+        assert by[i]["reads"] == [{"task": build.BUILD, "output": o["name"]} for o in lb["outputs"]], i
+        assert by[i]["vars"] == {**flat[i]["vars"], "lean": build.LEAN}
+        assert by[i]["inputs"] == sorted({*flat[i]["inputs"], family.PLACE}), "its own file's inputs, and the runner that places"
+    assert by["test-file:s/tests/test_a.py"]["resources"] == {"mem_gb": 6, "disk_gb": family.LEAN_DISK_GB}
+    assert by["test-file:s/tests/test_a.py"]["timeout_s"] == 121, "the suite's own worker_gb and timeout_s"
+    assert by["test-file:t/tests/test_t.py"]["resources"] == {"mem_gb": 9, "disk_gb": family.LEAN_DISK_GB}
+    assert by["test-file:t/tests/test_t.py"]["timeout_s"] == 3600
+    assert by["test-file:u/tests/test_u.py"] == flat["test-file:u/tests/test_u.py"]
+
+
+def _keys(root: Path) -> dict[str, str]:
+    """Each test-file task's key in the listing of ``root``, lean-build's outputs at fixed digests."""
+    doc = graph.listing(root, listers={**LISTERS, "build": build.tasks})
+    lb = next(t for t in doc["tasks"] if t["id"] == build.BUILD)
+    outputs = {build.BUILD: {o["name"]: contract.digest(o["name"].encode()) for o in lb["outputs"]}}
+    return {t["id"]: contract.key(t, doc["files"], outputs, doc["envs"][t["env"]]["digest"])
+            for t in doc["tasks"] if t["kind"] == "test-file"}
+
+
+def test_a_change_to_one_test_file_of_a_suite_after_lean_build_rekeys_its_task_alone(tmp_path):
+    """Its key is its own file's inputs, and the digests of lean-build's outputs; the listing is the same bytes on each
+    listing."""
+    tree = {**AFTER, **VERIFIER, f"{graph.RUNNERS}/lean_build.py": ""}
+    one, two = (toy_tree(tmp_path / d, LEAN_SPEC, x) for d, x in (
+        ("one", tree), ("two", {**tree, "s/tests/test_c.py": tree["s/tests/test_c.py"] + "\n\ndef test_more():\n    pass\n"})))
+    a, b = _keys(one), _keys(two)
+    assert sorted(i for i in a if a[i] != b[i]) == ["test-file:s/tests/test_c.py"]
+    assert json.dumps(graph.listing(one, listers={**LISTERS, "build": build.tasks})) == json.dumps(
+        graph.listing(one, listers={**LISTERS, "build": build.tasks}))
 
 
 WALKS = {
@@ -329,3 +370,39 @@ def test_it_fetches_the_registered_fixtures_git_does_not_hold(tmp_path, monkeypa
     task = {"vars": {"suite": "s"}, "inputs": [family.REGISTRY]}
     assert runner.fixtures(task, {"inputs": ["data"]}) == ["data/d.bin", "s/fx/a.bin"]
     assert runner.fixtures({**task, "inputs": []}, {}) == [], "a task that doesn't read the registry fetches nothing"
+
+
+def test_a_file_of_a_suite_after_lean_build_runs_on_its_outputs_in_the_tree(tmp_path, monkeypatch):
+    """Its runner sets up the Lean toolchain, puts lean-build's outputs in the tree (`lean_build.place`) and runs pytest with
+    lake on the PATH; a toolchain that doesn't set up is an error, before anything is placed."""
+    test = ('import os\nimport shutil\nfrom pathlib import Path\n\n'
+            f'BUILD = Path(__file__).parents[2] / "{build.LEAN}" / ".lake" / "build"\n\n\n'
+            'def test_it_runs_on_what_lean_build_built():\n'
+            '    assert shutil.which("lake") and os.access(BUILD / "bin" / "v", os.X_OK)\n'
+            '    assert (BUILD / "bin" / "v").read_bytes() == b"v" and (BUILD / "lib" / "V.olean").read_bytes() == b"o"\n')
+    files = {**BASE, **VERIFIER, build.SUITES: 'AFTER_LEAN = ("toy-suite",)\n', ".gitignore": ".lake/\n",
+             "s/pyproject.toml": f'[project]\nname = "toy-suite"\n{_PYTEST}', "s/tests/test_v.py": test}
+    root = toy_tree(tmp_path / "tree", LEAN_SPEC, files)
+    doc = graph.listing(root, listers={**LISTERS, "build": build.tasks})
+    task = next(t for t in doc["tasks"] if t["id"] == "test-file:s/tests/test_v.py")
+    (tmp_path / "built" / lean_build.TREE / "lib").mkdir(parents=True)
+    (tmp_path / "built" / lean_build.TREE / "lib" / "V.olean").write_bytes(b"o")
+    (tmp_path / "bin").mkdir()
+    for m in (runner, lean_build):
+        monkeypatch.setattr(m, "ROOT", root)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))                        # no elan of the machine's
+    monkeypatch.setenv("PATH", str(tmp_path / "bin"), prepend=os.pathsep)
+    for version, status in (("exit 1", "error"), ("exit 0", "pass")):
+        (tmp_path / "bin" / "lake").write_text(f"#!/bin/sh\n{version}\n")
+        (tmp_path / "bin" / "lake").chmod(0o755)
+        work = tmp_path / f"work-{status}"
+        (work / build.BIN).mkdir(parents=True)
+        for e in ("v", "w"):
+            (work / build.BIN / e).write_bytes(e.encode())                     # an artifact is its bytes: no mode bits
+        lean_build.pack(tmp_path / "built", work / build.LEAN / lean_build.PACKED, set())
+        r = runners.execute(task, doc, work)
+        assert r["status"] == status and not r["undeclared_reads"], r
+        if status == "error":
+            assert r["detail"]["error"] == "the Lean toolchain didn't set up (exit 1)"
+            assert not (root / build.LEAN / lean_build.TREE).exists()
+    assert r["detail"]["passed"] == 1 and set(r["detail"]["ignored"]) == {f"{build.BIN}/v", f"{build.LEAN}/.lake/build/lib/V.olean"}

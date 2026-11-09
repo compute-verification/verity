@@ -5,7 +5,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_vstar_difftest.py", "tests/test_vstar_in_difftest.py", "tests/test_vstar_menu.py"]
+untraced = ["tests/test_vstar_difftest.py", "tests/test_vstar_in_difftest.py", "tests/test_vstar_menu.py",
+            "tests/test_vstar_recursive.py"]
 # Test-only: the references are Flock's Python builders (verity_flock) over core's forms, gadgets and codec, and a
 # statement's bindings are the one-stage audit's partition (`one_stage.partition`, which `rec_residuals.statement` reads)
 # and its registered values (`one_stage.registered`, which the stagers commit V*'s port inputs under);

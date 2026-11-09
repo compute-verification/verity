@@ -37,7 +37,7 @@ What the record takes beside v2's acceptance:
 namespace Verity.Sampled.Record
 
 open Lean (Json)
-open Claims (Msg Out Seen Prover Trace stepWith run coinSeq)
+open Claims (Msg Out Seen Prover Transcript stepWith run coinSeq)
 open FlockDeploy (Coin Final Ins)
 open Verity.Recursive.BaseSetup (bind_ok)
 
@@ -224,7 +224,7 @@ theorem reach (hpass : drawOk A o (drawOf (run H P (V A o) (xOf A o) ω r).seen)
   have hd : (((run H P (V A o) (xOf A o) ω r).msgs.take (DRAW_ROUNDS + 1)).map Prod.fst).getD DRAW_ROUNDS [] =
       drawOf (run H P (V A o) (xOf A o) ω r).seen := by
     unfold drawOf
-    simp only [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_take, Trace.seen,
+    simp only [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_take, Transcript.seen,
       Nat.lt_add_one, ↓reduceIte]
   have hc : ((List.range (DRAW_ROUNDS + 1)).map (coinSeq r)).take DRAW_ROUNDS = coinsAt r := by
     unfold coinsAt
@@ -656,7 +656,7 @@ theorem acc_of_pass (A : Live) (o : Own) {p : _root_.Spot.OneStageZk.Params}
   have hreach := reach FlockDeploy.sha512 P ω r hpass
   have hsm : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs =
       (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs := by
-    simp only [Trace.seen]
+    simp only [Transcript.seen]
   have hmem : s ∈ ev.sessions := by rw [hs]; exact Array.mem_singleton_self s
   obtain ⟨⟨m, link, hm1, hlink⟩, f, hfin, hstmt, hrecB, hfiles⟩ := hshow.2 (by rw [hsm]; exact hreach) s hmem
   obtain ⟨rec, hrecD, J, hJ, hrJ⟩ := hshow.1 (by rw [hsm]; omega) s hmem
