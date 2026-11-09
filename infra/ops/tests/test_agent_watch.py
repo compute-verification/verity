@@ -1406,16 +1406,33 @@ def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_l
         ("dropped", W1_, "run-w", "2026-10-18T19:45:00Z", "2026-10-18T19:32:53Z", "circuits", "worker")]
 
 
-def test_a_worker_seen_active_then_idle_is_a_run_that_ended_however_old_its_latest_run_id(tmp_path):
+def test_a_task_worker_whose_latest_run_id_never_moves_is_never_called_dropped(tmp_path):
     """circuits' CC-KEY (INF-390): resumed by Task, it kept a 2 Nov latestRunId through ten runs on 9 Nov, and each IDLE after
-    its work read as a message that never became a run. A message that reaches it while IDLE is still dropped."""
+    its work read as a message that never became a run. Seen working with its latest API run finished, it is a Task worker."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits worker ({W1_})")
     st = {**worker("ACTIVE", "2026-10-18T19:40:00Z", name="CC-KEY"), "latestRunId": "run-w"}
     api, clock, w = coordinators(tmp_path, [], {"run-w": {"status": "FINISHED", "updatedAt": "2026-10-18T19:00:00Z"}},
                                  workers={W1_: st}, notes=notes)
+    for update in ({"status": "ACTIVE"}, {"status": "IDLE", "updatedAt": "2026-10-18T19:45:00Z"},
+                   {"updatedAt": "2026-10-18T20:05:00Z"}):
+        st.update(update)
+        w.sweep(lambda r: None)
+        clock.t += 60
+    assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == []
+
+
+def test_a_worker_with_api_runs_seen_active_then_idle_is_a_run_that_ended_and_a_later_message_is_dropped(tmp_path):
+    """A pool reviewer's runs are the API's: its IDLE right after an ACTIVE read is the run it was doing ending; a message
+    that moves it later, with no run, is dropped."""
+    notes = tmp_path / "notes"
+    note(notes, "ci", "a.md", f"ci reviewer ({W1_})")
+    st = {**worker("ACTIVE", "2026-10-18T19:40:00Z", name="review-1"), "latestRunId": "run-w"}
+    runs = {"run-w": {"status": "RUNNING", "updatedAt": "2026-10-18T19:40:00Z"}}
+    api, clock, w = coordinators(tmp_path, [], runs, workers={W1_: st}, notes=notes)
     w.sweep(lambda r: None)
-    st.update(status="IDLE", updatedAt="2026-10-18T19:45:00Z")
+    runs["run-w"].update(status="FINISHED", updatedAt="2026-10-18T19:44:00Z")
+    st.update(status="IDLE", updatedAt="2026-10-18T19:50:00Z")
     clock.t += 60
     w.sweep(lambda r: None)
     assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == [], "it ran and stopped: nothing was dropped"

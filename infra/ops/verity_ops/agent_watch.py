@@ -1511,6 +1511,9 @@ class Watch:
             if status == "ACTIVE":
                 if prev != "ACTIVE":                            # updatedAt moves on a status change, not during work
                     w["since"], w["long"] = updated, False
+                if (not w.get("no_runs") and (latest := info.get("latestRunId"))
+                        and (x := self.read({**info, "id": agent}, latest)) and x.get("status") == "FINISHED"):
+                    w["no_runs"] = True                         # it works with its latest API run finished: a Task worker
                 if not w["long"] and t - w["since"] >= self.worker_long_s:
                     w["long"] = True
                     self.record("worker_long", r, since=iso(w["since"]), hours=int((t - w["since"]) // 3600), **detail)
@@ -1523,9 +1526,11 @@ class Watch:
                     self.hold("worker_idle", r, t, w, at=iso(updated), since=iso(updated), **detail)
             elif status == "ARCHIVED":
                 w["gone"] = True
-            # an IDLE read right after an ACTIVE one is a run that ended, however old `latestRunId` reads (circuits' CC-KEY,
-            # resumed by Task, kept a 2 Nov latestRunId through ten runs on 9 Nov: INF-390)
-            if status == "IDLE" and w.get("idle_at") != updated and (latest := info.get("latestRunId")):
+            # a Task worker's runs aren't the API's, so its `latestRunId` never moves (circuits' CC-KEY kept a 2 Nov one through
+            # ten runs on 9 Nov, INF-390): only a worker whose runs the API lists can drop a message, and an IDLE read right
+            # after an ACTIVE one is a run that ended
+            if (status == "IDLE" and not w.get("no_runs") and w.get("idle_at") != updated
+                    and (latest := info.get("latestRunId"))):
                 self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, role="worker", **detail)
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
                       and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S]:
