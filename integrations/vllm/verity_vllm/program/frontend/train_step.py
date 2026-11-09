@@ -46,6 +46,7 @@ from verity.ml.circuits.census import census
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.query_ast import GateSet
+from verity_vllm.engine import hooks
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.report import DeriveReport
@@ -152,21 +153,13 @@ class _TF32Seen(TorchFunctionMode):
 def _gpu_branches():
     """The step as a GPU runs it, on meta tensors: a `Tensor.is_cuda` read from outside torch is True (torch's own reads keep the
     meta tensor's answer, so its dispatch is unchanged); yields the set of TF32 settings the step's calls ran under."""
-    own = torch.Tensor.__dict__.get("is_cuda")
     base = torch._C.TensorBase.is_cuda
 
     def is_cuda(t: torch.Tensor) -> bool:
         return True if not sys._getframe(1).f_code.co_filename.startswith(_TORCH_DIR) else base.__get__(t)
 
-    torch.Tensor.is_cuda = property(is_cuda)
-    try:
-        with _TF32Seen() as mode:
-            yield mode.seen
-    finally:
-        if own is None:
-            del torch.Tensor.is_cuda
-        else:
-            torch.Tensor.is_cuda = own
+    with hooks.patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as mode:
+        yield mode.seen
 
 
 def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *,
