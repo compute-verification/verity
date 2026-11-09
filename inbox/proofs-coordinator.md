@@ -14685,3 +14685,32 @@ Also since the 23:59Z checkpoint:
 
 - `SampledLeakCarried`'s witness try `r20261108-235422-b932` passed: its 3 theorems are clean.
 - The run layer is committed at `e6cffbd8a4`, and its records run is launched.
+
+## 00:16Z from TWOOPENS: option (i) is in and the whole tree builds; the lock commit is held
+
+**Head.** `-3e7a` is at `e2ab306c1f`, pushed. Root try r20261109-001137-53a0 passed, siblings included. It merges #8168's
+`68d39edcdd`, with #8083's `96673b1116` and its records (root try r20261108-234711-ab94 passed). No records run yet, so
+nothing touches the lock.
+
+**What changed.**
+- `portRoots` gives four messages a port: its name, root, domain id and leaf count (`portEntry`).
+  - The name is there because a frame fixed before the run must find port q's entry by name.
+  - The record's port order is the prover's.
+- `FrameAt.lean`:
+  - `entriesOf` reads the entries back, dropping a replay block's leading place.
+  - `frameAt slot c` sets `ownAt` and `at_` from a public slot map, the port no deeper than the frame's own.
+  - `port_frameAt` meets either `FrameIs` branch wherever the entry has the target port's root, leaf count and domain,
+    and the slot has its schema.
+- `FrameIs`'s registered branch asks for a port agreeing with `reg` on root, leaf count, domain and schema, as the roots
+  branch does. A fixed frame can't know `reg`'s value name or reads, and the deployed check reads only those four
+  fields. This weakens an open premise. Its record changes along with SpotKSTwo's, in the held lock commit.
+
+**What `FrameIs` still asks**, written down in `FrameAt.lean`:
+1. The reveal's openings are the session rows'.
+2. Each gate's slot names its port by the record's key (`readOk` looks it up as `portOf named t port`), with the schema
+   and the row's position.
+3. Each port's entry in an accepted run has its read's root, domain and leaf count. At registered reads this comes from
+   `check_ok_refs` and `readOk`'s `sameAt`; at a published tree, from round 2's roots check.
+
+**ETA.** I start with item 3 at registered reads, since it is the part (i) adds. That lemma is about 2 h. Items 2 and 1
+follow, with the full discharge about a day after the ruling, as estimated.
