@@ -19,6 +19,8 @@ from research.vqueue_loop import Loop, World, _Clone, branch
 from test_queue import World as Origin, _git
 
 T0 = 1_900_000_000.0
+#: the env's spec files in each listed graph
+SPEC = ("pyproject.toml", "uv.lock")
 
 
 @dataclass(frozen=True)
@@ -102,22 +104,35 @@ class Env:
         return [json.loads(x) for x in self.log.read_text().splitlines()] if self.log.is_file() else []
 
     def listed(self, sha: str, tasks: dict[str, list[str]], reads: dict[str, str] | None = None,
-               keys: dict[str, str] | None = None) -> dict[str, str]:
-        """graph2's listing of `ready:<sha>`: a task of each ``tasks`` with those inputs, keyed (by ``keys``, else by ``sha``)
-        unless it reads another (``reads``: {task: the task it reads, whose output `out` it reads})."""
-        reads, keys = reads or {}, keys or {}
-        graph = {"schema": GRAPH_V2, "commit": sha, "files": {f: f"sha512:{f}" for ins in tasks.values() for f in ins},
-                 "envs": {"py": {"digest": "sha512:env"}},
-                 "tasks": [{"id": i, "kind": "test-file", "env": "py", "argv": ["t", i], "vars": {}, "inputs": ins,
+               keys: dict[str, str] | None = None, suites: dict[str, str] | None = None) -> dict[str, str]:
+        """graph2's listing of `ready:<sha>`: a task of each ``tasks`` with those inputs (and the suite of ``suites``), in an env
+        whose spec is `SPEC`, keyed (by ``keys``, else by ``sha``) unless it reads another (``reads``: {task: the task it
+        reads, whose output `out` it reads})."""
+        reads, keys, suites = reads or {}, keys or {}, suites or {}
+        graph = {"schema": GRAPH_V2, "commit": sha,
+                 "files": {f: f"sha512:{f}" for f in [*SPEC, *(f for ins in tasks.values() for f in ins)]},
+                 "envs": {"py": {"digest": "sha512:env", "spec": list(SPEC)}},
+                 "tasks": [{"id": i, "kind": "test-file", "env": "py", "argv": ["t", i],
+                            "vars": {"suite": suites[i]} if i in suites else {}, "inputs": ins,
                             "reads": [{"task": reads[i], "output": "out"}] if i in reads else [],
                             "outputs": [{"name": "out", "path": f"{i}.out"}],
                             **({} if i in reads else {"key": keys.get(i, f"sha512:{sha[:8]}-{i}")})} for i, ins in tasks.items()]}
         self.graph2.list_graph(f"ready:{sha}", graph)
         return {t["id"]: t.get("key", "") for t in graph["tasks"]}
 
-    def result(self, key: str, task: str, status: str, infra: bool = False) -> None:
+    def result(self, key: str, task: str, status: str, infra: bool = False, tests: list[str] | None = None) -> None:
+        detail = {**({"infra": True} if infra else {}), **({"failed_tests": tests} if tests is not None else {})}
         self.graph2.finish_result({"key": key, "task": task, "status": status, "outputs": {"out": "sha512:o"},
-                                   **({"detail": {"infra": True}} if infra else {})})
+                                   **({"detail": detail} if detail else {})})
+
+    def graph2_script(self, loop: Loop, verdict: dict | None = None) -> Path:
+        """A graph2 with `verdict`, `cancel` and `rerun` for ``loop``: its verdict ``verdict`` (default a fail), and each cancel
+        and rerun appended to `<script>.cancel` and `<script>.rerun`."""
+        (script := self.tmp / "graph2.py").write_text(GRAPH2)
+        if verdict is not None:
+            Path(f"{script}.verdict").write_text(json.dumps(verdict))
+        loop.world.graph2 = (sys.executable, str(script))
+        return script
 
 
 @pytest.fixture
@@ -200,7 +215,7 @@ def test_a_failed_candidate_ejects_the_member_its_failed_inputs_meet_and_the_res
     assert env.queued() == {branch(again["sha"]): again["sha"]}
 
 
-def test_an_infra_verdict_is_retried_once_for_each_terminal_verdict_and_rings_infra_once_out_of_tries(env):
+def test_a_retry_sets_its_infra_results_aside_so_the_check_is_pending_until_a_newer_one_and_infra_is_rung_once(env):
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy)
     (built,) = loop.tick()
@@ -208,18 +223,13 @@ def test_an_infra_verdict_is_retried_once_for_each_terminal_verdict_and_rings_in
     keys = env.listed(sha, {"pytest:a": ["a.txt"]})
     env.result(keys["pytest:a"], "pytest:a", "error", infra=True)
     (retry,) = loop.tick()
-    assert (retry["action"], retry["enqueued"], retry["failed"]) == ("retry", True, [{"task": "pytest:a", "key": keys["pytest:a"]}])
-    (held,) = loop.tick()                                       # the same infra verdict: its retry has no result yet
-    assert (held["action"], held["enqueued"]) == ("retry", False) and "nothing new" in held["why"]
-    assert loop.tick() == []                                    # ... said once
-    assert len(env.graph2.enqueued()) == 2
+    assert (retry["action"], retry["enqueued"], retry["counts"]) == ("retry", True, {keys["pytest:a"]: 1})
+    assert retry["failed"] == [{"task": "pytest:a", "key": keys["pytest:a"]}]
+    assert loop.tick() == [] and len(env.graph2.enqueued()) == 2       # the error it retried is set aside: pending
     env.result(keys["pytest:a"], "pytest:a", "error", infra=True)
-    (retry,) = loop.tick()
-    assert retry["enqueued"] and len(env.graph2.enqueued()) == 3
-    env.result(keys["pytest:a"], "pytest:a", "error", infra=True)
-    (ring,) = loop.tick()                                       # three enqueues: the policy rings
+    (ring,) = loop.tick()                                       # infra again after `rings` enqueues: the policy rings
     assert ring["action"] == "ring" and ring["done"] and env.posts[-1].startswith("@infra vqueue:"), env.posts
-    assert loop.tick() == [] and len(env.posts) == 1 and len(env.graph2.enqueued()) == 3
+    assert loop.tick() == [] and len(env.posts) == 1 and len(env.graph2.enqueued()) == 2       # once for each why
     env.result(keys["pytest:a"], "pytest:a", "pass")
     assert _acts(loop.tick()) == ["advance"] and env.main() == sha
 
@@ -327,7 +337,7 @@ def test_the_policy_itself_ejects_the_member_a_failure_meets_rebuilds_the_rest_a
 
 
 @pytest.mark.parametrize("shadow", [False, True])
-def test_a_failure_at_its_bases_key_reds_the_base_once_and_only_a_fix_is_built_on_it_until_one_lands(env, shadow):
+def test_a_failure_at_its_bases_key_reds_the_base_once_and_the_candidate_lands_past_it_once_the_rest_passed(env, shadow):
     main = env.main()
     one = env.put(1, {"a.txt": "1\n"})
     loop = env.loop(vqueue.decide, shadow=shadow)
@@ -335,30 +345,30 @@ def test_a_failure_at_its_bases_key_reds_the_base_once_and_only_a_fix_is_built_o
     red, failed = {"pytest:r": "sha512:red"}, [{"task": "pytest:r", "key": "sha512:red"}]
     env.listed(main, {"pytest:r": ["red.txt"]}, keys=red)               # the base's graph: `pytest:r` at the same key
     keys = env.listed(built["sha"], {"pytest:a": ["a.txt"], "pytest:r": ["red.txt"]}, keys=red)
-    env.result(keys["pytest:a"], "pytest:a", "pass")
     env.result("sha512:red", "pytest:r", "fail")
-    told, drop = loop.tick()                                            # nobody blamed, and #1 is no fix: nothing built
+    assert loop.tick() == []                                            # `pytest:a` still runs: the fail hasn't ended
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    told, advance, landed = loop.tick()                                 # nobody blamed: `main`'s reds only shrink
     assert (told["action"], told["base"], told["failed"], told["to"], told["shadow"]) == ("red", main, failed, ["@ci"], shadow)
     assert f"base {main[:12]} is red" in told["text"] and env.posts == ([] if shadow else [f"@ci vqueue: {told['text']}"])
-    assert drop["outcome"] == {"members": [1], "heads": [one], "state": FAIL, "suspects": [], "base": main, "inherited": [
-        {"task": "pytest:r", "key": "sha512:red", "inputs": ["red.txt"], "base_key": "sha512:red"}]}
-    assert loop.tick() == [] and env.withdrawn == []                    # the log's outcome keeps the base red
-    env.put(2, {"red.txt": "no fix\n"})
+    assert (advance["action"], landed["action"], landed["why"]) == ("advance", "drop", "on main")
+    assert landed["outcome"] == {"members": [1], "heads": [one], "state": PASS, "suspects": [], "base": main, "inherited": [
+        {"task": "pytest:r", "key": "sha512:red", "inputs": sorted(["red.txt", *SPEC]), "base_key": "sha512:red"}]}
+    env.put(2, {"b.txt": "2\n"})
     (two,) = loop.tick()
-    assert (two["action"], two["members"], two["base"]) == ("build", [2], main)
-    env.listed(two["sha"], {"pytest:r": ["red.txt"]}, keys=red)         # its change leaves `pytest:r` as it was
-    again, dropped = loop.tick()
-    assert (again["action"], again["text"], dropped["outcome"]["suspects"]) == ("red", None, [])     # told once a task
-    assert len(env.posts) == (0 if shadow else 1) and loop.tick() == []                              # the same batch fails so
-    fix = env.put(2, {"red.txt": "fixed\n"})
+    assert (two["action"], two["members"], two["base"]) == ("build", [2], built["sha"])
+    keys = env.listed(two["sha"], {"pytest:b": ["b.txt"], "pytest:r": ["red.txt"]}, keys=red)
+    env.result(keys["pytest:b"], "pytest:b", "pass")
+    assert _acts(loop.tick()) == ["advance", "drop"]                    # the same red, told once
+    fix = env.put(3, {"red.txt": "fixed\n"})
     (three,) = loop.tick()
-    assert (three["members"], three["heads"], three["base"]) == ([2], [fix], main)
+    assert (three["members"], three["heads"], three["base"]) == ([3], [fix], two["sha"])
     keys = env.listed(three["sha"], {"pytest:r": ["red.txt"]})
     env.result(keys["pytest:r"], "pytest:r", "pass")
-    advance, landed, after = loop.tick()
-    assert (advance["action"], landed["outcome"]["state"]) == ("advance", PASS)
-    assert (after["action"], after["members"], after["base"]) == ("build", [1], three["sha"])       # past the red base
-    assert env.main() == (main if shadow else three["sha"]) and env.withdrawn == []
+    advance, landed = loop.tick()
+    assert (advance["action"], landed["outcome"]) == ("advance", {"members": [3], "heads": [fix], "state": PASS,
+                                                                  "suspects": []})
+    assert env.main() == (main if shadow else three["sha"]) and env.withdrawn == [] and len(env.posts) == (0 if shadow else 1)
 
 
 def test_a_shadow_under_the_policy_itself_builds_on_the_main_it_advanced_to_until_origin_s_moves_elsewhere(env):
@@ -422,25 +432,29 @@ def test_a_build_whose_enqueue_failed_is_logged_stops_the_tick_and_is_enqueued_b
 
 
 GRAPH2 = '''
-import argparse, json, sys
+import argparse, json, os, sys
 ap = argparse.ArgumentParser()
 sub = ap.add_subparsers(dest="cmd", required=True)
-for c in ("verdict", "cancel"):
-    sub.add_parser(c).add_argument("--check")
+for c in ("verdict", "cancel", "rerun"):
+    p = sub.add_parser(c)
+    p.add_argument("--check")
+    p.add_argument("--keys", nargs="*", default=[])
 a = ap.parse_args()
+said = sys.argv[0] + ".verdict"
 if a.cmd == "verdict":
-    print(json.dumps({"state": "fail", "check": a.check}))
+    print(open(said).read() if os.path.exists(said) else json.dumps({"state": "fail", "check": a.check}))
 else:
-    with open(sys.argv[0] + ".cancelled", "a") as f:
-        f.write(a.check + "\\n")
+    with open(f"{sys.argv[0]}.{a.cmd}", "a") as f:
+        f.write(" ".join([a.check, *a.keys]) + "\\n")
+    if a.cmd == "rerun":
+        print(f"{a.check} requeued {len(a.keys)}")
 '''
 
 
 def test_graph2_s_own_verdict_is_kept_beside_the_loop_s_and_its_cancel_runs_on_a_drop(env):
-    (script := env.tmp / "graph2.py").write_text(GRAPH2)
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy, state=(state := env.tmp / "vqueue" / "state.json"))
-    loop.world.graph2 = (sys.executable, str(script))
+    script = env.graph2_script(loop)
     (built,) = loop.tick()
     sha = built["sha"]
     keys = env.listed(sha, {"pytest:a": ["a.txt"]})
@@ -450,7 +464,7 @@ def test_graph2_s_own_verdict_is_kept_beside_the_loop_s_and_its_cancel_runs_on_a
     assert kept["candidates"][sha]["mine"] == PASS and kept["candidates"][sha]["graph2"] == FAIL and kept["disagree"] == [sha]
     assert any("graph2 says fail" in x for x in env.out)
     (drop,) = loop.tick()
-    assert drop["cancel"] == "cancelled" and Path(f"{script}.cancelled").read_text() == f"ready:{sha}\n"
+    assert drop["cancel"] == "cancelled" and Path(f"{script}.cancel").read_text() == f"ready:{sha}\n"
 
 
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):

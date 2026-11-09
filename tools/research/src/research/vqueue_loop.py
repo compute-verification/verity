@@ -48,12 +48,13 @@ import concurrent.futures
 import fcntl
 import hashlib
 import json
+import os
 import re
 import shlex
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable
@@ -65,7 +66,7 @@ from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_key,
 from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, flags_at, label_verifier, lean_change,
                     lowrisk, priority_list, queue_commit, review_owners, rules_at, unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
-                     Ready, Red, Retry, Ring, Snapshot, Verdict)
+                     Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict)
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
 GRAPH2 = ("python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executor/graph2.db", "--events", "/root/executor/events")
@@ -78,6 +79,8 @@ INTERVAL_S = 60
 #: the clone's refs the loop fetches into, none of drive's
 NS = "refs/vqueue"
 MAIN = f"{NS}/main"
+#: the shadow's own `main`, never pushed: the newest candidate it advanced
+SHADOW = f"{NS}/shadow"
 #: no automatic gc or maintenance under drive's own commands in its clone
 QUIET = ("-c", "gc.auto=0", "-c", "maintenance.auto=false")
 TIME, STAMP_RE = "%Y-%m-%dT%H:%M:%SZ", re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
@@ -85,8 +88,10 @@ TIME, STAMP_RE = "%Y-%m-%dT%H:%M:%SZ", re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d
 READY_VERDICT = "ready_verdict"
 #: who ejects, as drive's ejections are by
 EJECTOR = "ci"
-#: the newest first-parent commits a candidate's walk reads before it gives up on finding its base
+#: the most first-parent commits a candidate's walk reads above its base
 WALK = 64
+#: `vqueue.Failed`'s fields: a verdict fills each it has (`_failure`)
+FAILED_FIELDS = frozenset(f.name for f in fields(Failed))
 #: the PRs judged at once (`World._judge`): a merge onto `main` takes seconds in drive's clone, and a moved `main` judges every
 #: ready PR again
 JOBS = 8
@@ -158,13 +163,44 @@ class Past:
                      and (on is None or o["state"] != PASS or on(r.get("sha") or "")))
 
     def tries(self, sha: str) -> int:
-        return sum(1 for r in self.lines if r.get("sha") == sha and r.get("action") in ("build", "retry") and r.get("enqueued"))
+        return sum(1 for r in self._enqueues(sha))
 
-    def retried(self, sha: str) -> set[str]:
-        return {r.get("mark") for r in self.of("retry", sha) if r.get("mark")}
+    def enqueued(self, sha: str) -> float | None:
+        """When `ready:<sha>` was first enqueued."""
+        return next((unstamp(r.get("at")) for r in self._enqueues(sha)), None)
 
-    def rung(self) -> set[str]:
-        return {r["sha"] for r in self.of("ring") if r.get("done") or r.get("shadow")}
+    def _enqueues(self, sha: str) -> Iterable[dict]:
+        return (r for r in self.lines if r.get("sha") == sha and r.get("action") in ("build", "retry") and r.get("enqueued"))
+
+    def reruns(self, sha: str) -> int:
+        return sum(1 for r in self.of("rerun", sha) if r.get("done") or r.get("absent"))
+
+    def since(self, sha: str) -> dict[str, int]:
+        """How many results each key had when a retry or a rerun of ``sha`` set them aside: its verdict reads only those after."""
+        out: dict[str, int] = {}
+        for r in self.lines:
+            if r.get("sha") == sha and r.get("action") in ("retry", "rerun") and r.get("done"):
+                for k, n in (r.get("counts") or {}).items():
+                    out[k] = max(out.get(k, 0), n)
+        return out
+
+    def builds(self) -> dict[str, dict]:
+        """The loop's own candidates, each pushed build's line by its sha (a build whose enqueue failed is one too)."""
+        return {r["sha"]: r for r in self.of("build") if r.get("sha")}
+
+    def slim(self, sha: str) -> tuple[bool, dict | None]:
+        """Whether the run beside ``sha``'s check was started, and the newest record of it (`vqueue_slim.start`)."""
+        recs = self.of("slim", sha)
+        return bool(recs), recs[-1].get("record") if recs else None
+
+    def ignored(self) -> set[str]:
+        return {r.get("sha") for r in self.of("ignore")}
+
+    def flaked(self) -> set[str]:
+        return {r.get("key") for r in self.of("flaky") if r.get("done") or r.get("shadow")}
+
+    def rung(self) -> set[tuple[str, str]]:
+        return {(r["sha"], r.get("why")) for r in self.of("ring") if r.get("done") or r.get("shadow")}
 
     def told(self) -> set[str]:
         return {f"{h}@{r.get('base')}" for r in self.of("skip") if r.get("done") or r.get("shadow") for h in r.get("heads") or ()}
@@ -181,8 +217,9 @@ class Past:
 @dataclass
 class Judged:
     """A candidate's verdict with what it rests on: ``mark`` names the terminal infra or list-failed evidence a retry answers,
-    ``graph2`` is graph2's own verdict, and ``lacks`` the jobs `main` waits for (`drive.gating`) that no task of the graph runs,
-    which drive's `executor = "on"` path takes as no promotion and this verdict only reports."""
+    ``graph2`` is graph2's own verdict (``theirs`` its whole JSON), ``lacks`` the jobs `main` waits for (`drive.gating`) that no
+    task of the graph runs, which drive's `executor = "on"` path takes as no promotion and this verdict only reports, and
+    ``slim`` the verdict of the run beside the check (`vqueue_slim.judge`), combined into ``verdict``."""
     verdict: Verdict
     mark: str | None = None
     note: str = ""
@@ -190,34 +227,46 @@ class Judged:
     lacks: tuple[str, ...] = ()
     #: whether graph2 listed it, or said its listing failed
     listed: bool = True
+    theirs: dict | None = None
+    slim: Verdict | None = None
 
 
 class _Seen:
-    """A transport that keeps each key's results as `Executor.settle` reads them: an infra error folds to pending there."""
+    """A transport that keeps each key's results as `Executor.settle` reads them (an infra error folds to pending there), each
+    key's from its ``since``-th on: a retry or a rerun set the earlier ones aside."""
 
-    def __init__(self, transport):
-        self.transport, self.got = transport, {}
+    def __init__(self, transport, since: dict[str, int] | None = None):
+        self.transport, self.since, self.got = transport, since or {}, {}
 
     def results(self, keys: list[str]) -> dict[str, list[object]]:
-        got = self.transport.results(keys)
+        if isinstance(self.transport, Transport):
+            got = self.transport.results(keys, self.since)
+        else:
+            got = {k: v[self.since.get(k, 0):] for k, v in self.transport.results(keys).items()}
         self.got.update(got)
         return got
 
 
 class Transport(QueueTransport):
     """`QueueTransport`, pulling a key's results from the store's remote again while none of them passed or failed: graph2 labels
-    an infra error as a result, and a retry's result comes after it."""
+    an infra error as a result, and a retry's or a rerun's result comes after it.  With ``since``, each key's from its
+    ``since``-th on, so one set aside reads as no result and is pulled again."""
 
-    def results(self, keys: list[str]) -> dict[str, list[object]]:
+    def results(self, keys: list[str], since: dict[str, int] | None = None) -> dict[str, list[object]]:
         from .queue import PREFETCH_JOBS
         from .store import labels_sync, vocab
 
-        have = {k: [lab.value for lab in self.store.labels(task_target(k), key=vocab.TASK_RESULT)] for k in keys}
-        if (todo := [k for k, v in have.items() if fold_results(v, k)[0] == PENDING]) \
+        since = since or {}
+
+        def have(k: str) -> list[object]:
+            return [lab.value for lab in self.store.labels(task_target(k), key=vocab.TASK_RESULT)][since.get(k, 0):]
+
+        got = {k: have(k) for k in keys}
+        if (todo := [k for k, v in got.items() if fold_results(v, k)[0] == PENDING]) \
                 and getattr(self.store, "remote", None) is not None:
             labels_sync.pull_targets(self.store, [task_target(k) for k in todo], jobs=PREFETCH_JOBS)
-            have.update({k: [lab.value for lab in self.store.labels(task_target(k), key=vocab.TASK_RESULT)] for k in todo})
-        return have
+            got.update({k: have(k) for k in todo})
+        return got
 
 
 class _Clone(Queue):
@@ -256,6 +305,7 @@ class World:
         self._judged: dict[tuple[str, str], tuple[bool, bool]] = {}
         self._prs: dict[int, PR] | None = None
         self._driver: Driver | None = None
+        self._slim: Driver | None = None
         self._main: str | None = None
         #: what the last `ready` read: {number: the PR at its ready head}
         self.prs: dict[int, PR] = {}
@@ -365,56 +415,68 @@ class World:
                                  not ("tree" in rec or rec.get("merged")))
         return self._judged[key]
 
-    def candidates(self) -> list[str]:
-        """The candidates on origin, as fetched: their shas."""
-        return list(dict.fromkeys(_out(self.repo, "for-each-ref", "--format=%(objectname)", f"{NS}/queue/").split()))
+    def refs(self) -> dict[str, str]:
+        """origin's `queue/*` branches as fetched: {name under `queue/`: sha}."""
+        out = _out(self.repo, "for-each-ref", "--format=%(refname) %(objectname)", f"{NS}/queue/")
+        return {ref.removeprefix(f"{NS}/queue/"): sha for ref, sha in (line.split() for line in out.splitlines())}
 
-    def walk(self, sha: str, stops: set[str], main: str) -> tuple[str, list[Member]] | None:
-        """(its base, its members oldest first) of candidate ``sha``: the `Queue: #N` merges on its first-parent line down to the
-        first commit that is one of ``stops`` or on ``main``; None when that line holds anything else first."""
+    def members(self, sha: str, base: str, prs: Iterable[int], heads: Iterable[str]) -> list[Member]:
+        """Candidate ``sha``'s members as `Driver._on_main` reads them, oldest first: the `Queue: #N` merges on its first-parent
+        line above ``base``, while they are the PRs ``prs`` at ``heads`` as built; else those, without their merges."""
+        prs, heads = list(prs), list(heads)
         recs = [r.strip() for r in _out(self.repo, "log", "--first-parent", f"-n{WALK}", "--format=%H%x00%P%x00%B%x1e",
-                                         sha).split("\x1e") if r.strip()]
-        members: list[Member] = []
-        for i, rec in enumerate(recs):
-            c, parents, body = rec.split("\x00", 2)
-            if i and (c in stops or self._ancestor(c, main)):
-                return c, members[::-1]
-            if (m := queue_commit(c, parents, body)) is None:
-                return None
-            members.append(m)
-        return None
+                                         f"{base}..{sha}").split("\x1e") if r.strip()]
+        walked = [queue_commit(*r.split("\x00", 2)) for r in reversed(recs)]
+        if all(walked) and [(m.pr, m.head) for m in walked] == list(zip(prs, heads)):
+            return walked
+        self.log(f"research queue vqueue: {sha[:12]}'s first-parent line above {base[:12]} isn't its members' merges as built")
+        return [Member(p, h, "", "") for p, h in zip(prs, heads)]
 
-    def verdict(self, sha: str, base: str = "") -> Judged:
-        """Candidate ``sha``'s verdict from graph2's results (see the module's docstring), beside graph2's own, each failed task
-        with its key in its base ``base``'s graph (`_base_keys`)."""
+    def shadow_main(self) -> str | None:
+        """The newest candidate the shadow advanced, as it keeps it (`SHADOW`)."""
+        r = _git(self.repo, "rev-parse", "-q", "--verify", f"{SHADOW}^{{commit}}", check=False)
+        return r.stdout.strip() or None
+
+    def set_shadow_main(self, sha: str) -> None:
+        _git(self.repo, "update-ref", SHADOW, sha)
+
+    def verdict(self, sha: str, base: str = "", since: dict[str, int] | None = None,
+                base_since: dict[str, int] | None = None) -> Judged:
+        """Candidate ``sha``'s verdict from graph2's results (see the module's docstring), each key's from its ``since``-th on,
+        beside graph2's own, each failed task with its key and failing tests in its base ``base``'s graph (`_base`), read with
+        ``base_since``."""
         check = f"ready:{sha}"
         theirs = self.graph2_verdict(sha)
         said = theirs.get("state") if isinstance(theirs, dict) else None
         try:
             got = self.tasks.graph_v2(check)
         except ValueError as e:
-            return Judged(Verdict(LIST_FAILED), mark=f"unreadable {_digest(str(e))}", note=str(e), graph2=said)
+            return Judged(Verdict(LIST_FAILED), mark=f"unreadable {_digest(str(e))}", note=str(e), graph2=said, theirs=theirs)
         if got is None:
             if said == LIST_FAILED:
                 return Judged(Verdict(LIST_FAILED), mark=f"list-failed {_digest(theirs)}", note=str(theirs.get("why") or ""),
-                              graph2=said)
-            return Judged(Verdict(PENDING), note="not listed yet", graph2=said, listed=False)
+                              graph2=said, theirs=theirs)
+            return Judged(Verdict(PENDING), note="not listed yet", graph2=said, listed=False, theirs=theirs)
         _, graph = got
-        tasks = {t["id"]: t for t in graph["tasks"]}
+        tasks, envs = {t["id"]: t for t in graph["tasks"]}, graph.get("envs") or {}
         if isinstance(pol := policy.at(self.repo, sha), str):
             self.log(f"research queue vqueue: {pol}: every job gates at {sha[:12]}")
             pol = policy.Policy()
-        gates = [i for i, t in tasks.items() if JOB_OF_KIND.get(t["kind"], t["kind"]) not in (*SLIM_STEPS, *pol.off_gate)]
+        gates = [i for i, t in tasks.items() if t.get("gate", True) is not False
+                 and JOB_OF_KIND.get(t["kind"], t["kind"]) not in (*SLIM_STEPS, *pol.off_gate)]
         if not gates:
             return Judged(Verdict(LIST_FAILED), mark=f"empty {_digest(sorted(tasks))}", note="no task on the merge gate",
-                          graph2=said)
-        states, keys, seen = self._settled(graph)
+                          graph2=said, theirs=theirs)
+        states, keys, seen = self._settled(graph, since)
         inputs: dict[str, frozenset[str]] = {}
 
         def reach(i: str) -> frozenset[str]:
+            """``i``'s inputs, its env's spec files and those of each task it reads, transitively."""
             if i not in inputs:
                 inputs[i] = frozenset()
-                inputs[i] = frozenset(tasks[i]["inputs"]).union(*(reach(r["task"]) for r in tasks[i]["reads"]))
+                t = tasks[i]
+                inputs[i] = frozenset(t["inputs"]).union((envs.get(t["env"]) or {}).get("spec") or (),
+                                                         *(reach(r["task"]) for r in t["reads"]))
             return inputs[i]
 
         def under(i: str, seen_: set[str]) -> list[str]:
@@ -432,11 +494,14 @@ class World:
             elif states[i][0] == BLOCKED:
                 bad += [j for j in under(i, set()) if states[j][0] == FAIL] or [i]
         infra = [i for i in needed if states[i][0] == PENDING and _infra(seen.got.get(keys[i]) or (), keys[i])]
-        based = self._base_keys(base, set(bad)) if bad else {}
-        fail = tuple(Failed(i, keys[i], reach(i), based.get(i)) for i in dict.fromkeys(bad))
-        down = tuple(Failed(i, keys[i], reach(i)) for i in infra)
+        ended = all(states[i][0] != PENDING or set(under(i, set())) & set(infra) for i in gates)
+        based = self._base(base, set(bad), base_since) if bad else {}
+        tree = {e.get("task"): bool(e.get("tree")) for e in (theirs or {}).get("infra") or () if isinstance(e, dict)}
+        fail = tuple(_failure(i, keys[i], reach(i), base_key=based.get(i, (None, None))[0], tests=_tests(states[i][1]),
+                              base_tests=based.get(i, (None, None))[1]) for i in dict.fromkeys(bad))
+        down = tuple(_failure(i, keys[i], reach(i), tree=tree.get(i, False)) for i in infra)
         if fail:
-            mine = Verdict(FAIL, fail, down)
+            mine = Verdict(FAIL, fail, down, ended=ended)
         elif down:
             mine = Verdict(INFRA, (), down)
         elif all(states[i][0] == PASS for i in gates):
@@ -448,12 +513,12 @@ class World:
         lacks = tuple(s for s in gating(self.repo, sha) if s not in jobs and s not in SLIM_STEPS)
         note = "; ".join([*([f"graph2 says {said}"] if said in vqueue.STATES and said != mine.state else []),
                           *([f"no task of {', '.join(lacks)}"] if lacks else [])])
-        return Judged(mine, mark=mark if mine.state == INFRA else None, note=note, graph2=said, lacks=lacks)
+        return Judged(mine, mark=mark if mine.state == INFRA else None, note=note, graph2=said, lacks=lacks, theirs=theirs)
 
-    def _settled(self, graph: dict) -> tuple[dict[str, tuple], dict[str, str], _Seen]:
-        """``graph``'s tasks settled on graph2's results (`Executor.settle`), each one's key, the graph's or one made from its
-        reads ("" while they haven't all passed), and the results read."""
-        seen = _Seen(self.tasks.transport)
+    def _settled(self, graph: dict, since: dict[str, int] | None = None) -> tuple[dict[str, tuple], dict[str, str], _Seen]:
+        """``graph``'s tasks settled on graph2's results (`Executor.settle`), each key's from its ``since``-th on, each one's key,
+        the graph's or one made from its reads ("" while they haven't all passed), and the results read."""
+        seen = _Seen(self.tasks.transport, since)
         states = Executor(seen).settle(graph)
         files, envs = graph.get("files") or {}, graph.get("envs") or {}
         keys: dict[str, str] = {}
@@ -464,9 +529,11 @@ class World:
                                              if states[t["id"]][0] != BLOCKED and all(s[0] == PASS for s in reads) else "")
         return states, keys, seen
 
-    def _base_keys(self, base: str, ids: set[str]) -> dict[str, str]:
-        """The keys tasks ``ids`` have in ``base``'s graph, as graph2 listed it, where one is made there: graph2 keys a task by
-        all it reads, so a candidate's task at its base's key fails as it did there (`vqueue.Failed.base_key`)."""
+    def _base(self, base: str, ids: set[str], since: dict[str, int] | None = None
+              ) -> dict[str, tuple[str | None, frozenset[str] | None]]:
+        """For each of tasks ``ids`` in ``base``'s graph, as graph2 listed it: its key there, where one is made (graph2 keys a
+        task by all it reads, so a candidate's task at its base's key fails as it did there: `vqueue.Failed.base_key`), and its
+        failing tests there, None unless it failed naming them (`vqueue.Failed.base_tests`)."""
         if not base:
             return {}
         try:
@@ -476,8 +543,28 @@ class World:
             return {}
         if got is None:
             return {}
-        _, keys, _ = self._settled(got[1])
-        return {i: keys[i] for i in ids if keys.get(i)}
+        states, keys, _ = self._settled(got[1], since)
+        return {i: (keys[i] or None, (_tests(states[i][1]) or None) if states[i][0] == FAIL else None)
+                for i in ids if i in keys}
+
+    def counts(self, keys: Iterable[str]) -> dict[str, int]:
+        """How many results each of graph2's ``keys`` has (`sha512:…`; a key of the run beside the check has none)."""
+        keys = [k for k in dict.fromkeys(keys) if k.startswith("sha512:")]
+        return {k: len(v) for k, v in self.tasks.transport.results(keys).items()} if keys else {}
+
+    def rerun(self, sha: str, keys: Iterable[str]) -> str | None:
+        """graph2's `rerun` of ``keys`` on `ready:<sha>`, as said; None when graph2 has no `rerun`."""
+        if (r := self._graph2("rerun", "--check", f"ready:{sha}", "--keys", *keys)) is None:
+            return None
+        if r.returncode:
+            raise QueueError(f"graph2 rerun ready:{sha[:12]} exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}")
+        return r.stdout.strip()
+
+    def failing_tests(self, key: str) -> frozenset[str]:
+        """The tests ``key``'s newest failed result names, those a rerun set aside included."""
+        docs = self.tasks.transport.results([key]).get(key) or ()
+        return next((t for d in reversed(list(docs)) if isinstance(d, dict) and d.get("status") == FAIL
+                     and (t := _tests(d))), frozenset())
 
     def graph2_verdict(self, sha: str) -> dict | None:
         """graph2's own verdict on `ready:<sha>`: its `verdict` command's JSON, else its `ready_verdict` label's, else None."""
@@ -575,22 +662,32 @@ class World:
         p = self.prs.get(number) or self.open().get(number)
         return self.q.handle(p) if p is not None else None
 
-    def task_owners(self, sha: str, ids: Iterable[str]) -> tuple[str, ...]:
-        """The handles owning tasks ``ids`` of ``sha``'s graph, as drive names the owner of what failed (`Driver._red_owners`):
-        a test file's suite's in the registry, else its job's in ci.toml at ``sha``."""
+    def _tasks(self, sha: str) -> dict[str, dict]:
         try:
             got = self.tasks.graph_v2(f"ready:{sha}")
         except ValueError as e:
             self.log(f"research queue vqueue: {sha[:12]}'s graph can't be read, so its failed tasks' owners aren't told: {e}")
             got = None
-        by, d, out = {t["id"]: t for t in got[1]["tasks"]} if got else {}, self.driver(), []
+        return {t["id"]: t for t in got[1]["tasks"]} if got else {}
+
+    def task_owners(self, sha: str, ids: Iterable[str]) -> tuple[str, ...]:
+        """The handles owning tasks ``ids`` of ``sha``'s graph, as drive names the owner of what failed (`Driver._red_owners`):
+        a test file's suite's in the registry, else its job's in ci.toml at ``sha``."""
+        by, d, out = self._tasks(sha), self.driver(), []
         for i in ids:
             if (t := by.get(i)) is None:
                 continue
-            suite = (t.get("vars") or {}).get("suite") if t["kind"] == "test-file" else None
-            if h := (d._path_owner(suite) if isinstance(suite, str) else None) or d._step_owner(d._job(t), sha):
+            if h := (d._path_owner(s) if isinstance(s := _suite(t), str) else None) or d._step_owner(d._job(t), sha):
                 out.append(f"@{h}")
         return tuple(dict.fromkeys(out))
+
+    def test_owners(self, sha: str, task: str, tests: Iterable[str]) -> tuple[str, ...]:
+        """The handles owning ``tests`` (result/v1's ids, relative to the suite of test file ``task`` of ``sha``'s graph): each
+        one's file's owner in the registry, as drive reads a failed test's path; else the task's owners."""
+        d, suite = self.driver(), _suite(self._tasks(sha).get(task) or {})
+        out = [f"@{h}" for x in tests if isinstance(suite, str)
+               and (h := d._path_owner(os.path.normpath(os.path.join(suite, x.split("::")[0]))))]
+        return tuple(dict.fromkeys(out)) or self.task_owners(sha, [task])
 
     def say(self, text: str, to: tuple[str, ...]) -> bool:
         """``text`` posted to ``to`` in the merge thread, as drive posts."""
@@ -601,6 +698,33 @@ class World:
             self._driver = Driver(self.q, on="", post=self.post, now=self.now)
         return self._driver
 
+    def slim_driver(self, dry_run: bool = False) -> Driver:
+        """The Driver the run beside each check is launched and judged with (`vqueue_slim`), on drive's machines: drive.toml's
+        `on` at `main` when first asked.  It outlives the ticks, as `vqueue_slim.judge` expects."""
+        if self._slim is None:
+            if not (on := flags_at(self.repo, self._main or MAIN).on):
+                raise QueueError(f"drive.toml at main {(self._main or MAIN)[:12]} names no `on`, drive's machines, so no run "
+                                 "beside a candidate's check can launch: name them, or run with --no-slim")
+            self._slim = Driver(self.q, on=on, post=self.post, now=self.now)
+            self._slim.dry_run = dry_run
+        return self._slim
+
+
+def _suite(t: dict) -> str | None:
+    """A test file task's suite, the directory its result's test ids are relative to."""
+    return s if t.get("kind") == "test-file" and isinstance(s := (t.get("vars") or {}).get("suite"), str) else None
+
+
+def _tests(doc: object) -> frozenset[str]:
+    """The failing tests a result names (result/v1's `failed_tests`)."""
+    got = (doc.get("detail") or {}).get("failed_tests") if isinstance(doc, dict) else None
+    return frozenset(x for x in got if isinstance(x, str)) if isinstance(got, list) else frozenset()
+
+
+def _failure(task: str, key: str, inputs: frozenset[str], **kw) -> Failed:
+    """A `vqueue.Failed`, each of ``kw`` it has a field for."""
+    return Failed(task, key, inputs, **{k: v for k, v in kw.items() if k in FAILED_FIELDS})
+
 
 def _infra(docs: Iterable[object], key: str) -> bool:
     """Whether ``key``'s newest result is graph2's infra error, its attempts run out."""
@@ -610,26 +734,30 @@ def _infra(docs: Iterable[object], key: str) -> bool:
 
 @dataclass
 class Tick:
-    """What one tick saw: its snapshot and what each action needs that the snapshot doesn't hold."""
+    """What one tick saw: its snapshot and what each action needs that the snapshot doesn't hold: ``foreign``, origin's
+    `queue/*` branches no build of the loop's made ({name: sha}), which are no candidates."""
     n: int
     main: str
     origin: str
     snap: Snapshot
     judged: dict[str, Judged]
-    members: dict[str, list[Member]]
     past: Past
     #: each (head, base) a skip told its owner of, as `head@base`
     told: set[str] = field(default_factory=set)
+    foreign: dict[str, str] = field(default_factory=dict)
 
 
 class Loop:
-    """The verified queue's loop on ``world``: `tick` once, or `run` every ``interval`` seconds."""
+    """The verified queue's loop on ``world``: `tick` once, or `run` every ``interval`` seconds.  ``slim`` is
+    `research.vqueue_slim` (its `start`, `judge` and `combine`), or None to judge each candidate on its graph2 check alone."""
 
     def __init__(self, world: World, log: Path, *, decide: Callable[[Snapshot], list[Action]] = vqueue.decide,
-                 shadow: bool = False, dry_run: bool = False, batch: int = 6, depth: int = 2,
-                 now: Callable[[], float] = time.time, out: Callable[[str], None] = print, state: Path | None = None):
+                 shadow: bool = False, dry_run: bool = False, batch: int = 6, depth: int = 2, lean: int = 1,
+                 pending_s: float = 4 * 3600, slim=None, now: Callable[[], float] = time.time,
+                 out: Callable[[str], None] = print, state: Path | None = None):
         self.world, self.log_path, self.decide, self.shadow, self.dry_run = world, Path(log), decide, shadow, dry_run
-        self.batch, self.depth, self.now, self.out, self.state = batch, depth, now, out, state
+        self.batch, self.depth, self.lean, self.pending_s, self.slim = batch, depth, lean, pending_s, slim
+        self.now, self.out, self.state = now, out, state
         #: the last tick this loop ran: a tick that logs nothing still counts
         self.last = 0
 
@@ -638,12 +766,7 @@ class Loop:
     def snapshot(self, past: Past, n: int) -> Tick:
         w = self.world
         origin = w.fetch()
-        main = origin
-        if self.shadow:                                     # the newest candidate this shadow advanced, while above origin's
-            for r in reversed(past.of("advance")):
-                if r.get("shadow") and r.get("sha") and not w._missing([r["sha"]]) and w._ancestor(origin, r["sha"]):
-                    main = r["sha"]
-                    break
+        main = self._shadow_main(past, origin) if self.shadow else origin
         ejected = {(r.get("number"), (r.get("heads") or [None])[0]): r.get("at") for r in past.of("eject") if r.get("shadow")}
         ready = []
         for x in w.ready(main):
@@ -651,25 +774,24 @@ class Loop:
             if at is not None and not (w.labels.marked_at(x.number, x.head) or "") > at:
                 continue
             ready.append(x)
-        shas = w.candidates()
-        cands, judged, members = [], {}, {}
-        for sha in shas:
-            built = past.built(sha)
-            walked = None if w._ancestor(sha, main) and built else w.walk(sha, set(shas) - {sha}, main)
-            if walked is not None:
-                base, ms = walked
-            elif built:
-                base, ms = built["base"], [Member(p, h, "", "") for p, h in zip(built["members"], built["heads"])]
-            else:
-                base, ms = "", []
-                w.log(f"research queue vqueue: candidate {sha[:12]} holds a commit that is no `Queue: #N` merge above its base")
-            j = w.verdict(sha, base)
+        refs, builds = w.refs(), past.builds()
+        if older := {sha for name, sha in refs.items() if name == sha[:12] and sha not in builds} - past.ignored():
+            builds |= {sha: r for sha, r in Past.read(self.log_path, 0).builds().items() if sha in older}
+        mine = {sha for name, sha in refs.items() if name == sha[:12] and sha in builds}
+        foreign = {name: sha for name, sha in refs.items() if sha not in mine or name != sha[:12]}
+        cands, judged = [], {}
+        for sha in sorted(mine):
+            b = builds[sha]
+            base, prs, heads = b.get("base") or "", tuple(b.get("members") or ()), tuple(b.get("heads") or ())
+            j = w.verdict(sha, base, past.since(sha), past.since(base))
             if not j.listed and not past.tries(sha):        # pushed, and its enqueue failed or never ran
                 j = Judged(Verdict(LIST_FAILED), mark="not enqueued", note="the log holds no enqueue of it", graph2=j.graph2,
-                           listed=False)
+                           listed=False, theirs=j.theirs)
+            if self.slim is not None and not w._ancestor(sha, main):
+                j = self._beside(past, n, main, origin, sha, base, prs, heads, j)
             judged[sha] = j
-            members[sha] = ms
-            cands.append(Candidate(sha, base, tuple(m.pr for m in ms), tuple(m.head for m in ms), j.verdict, past.tries(sha)))
+            cands.append(Candidate(sha, base, prs, heads, j.verdict, past.tries(sha), reruns=past.reruns(sha),
+                                   enqueued=past.enqueued(sha)))
         on = {c.sha: c.base for c in cands}
 
         def height(sha: str, seen: tuple[str, ...] = ()) -> int:
@@ -677,8 +799,43 @@ class Loop:
 
         cands.sort(key=lambda c: (height(c.sha), c.sha))       # each after the candidate it is built on
         history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
-        snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth)
-        return Tick(n, main, origin, snap, judged, members, past, past.told())
+        snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth,
+                        lean=self.lean, now=self.now(), pending_s=self.pending_s)
+        return Tick(n, main, origin, snap, judged, past, past.told(), foreign)
+
+    def _shadow_main(self, past: Past, origin: str) -> str:
+        """The shadow's `main`: the newest candidate it advanced (`SHADOW`, else its log's newest advance) while origin's `main`
+        is below it; else origin's."""
+        w = self.world
+        for sha in (w.shadow_main(), next((r["sha"] for r in reversed(past.of("advance")) if r.get("shadow") and r.get("sha")),
+                                          None)):
+            if sha and not w._missing([sha]) and w._ancestor(origin, sha):
+                return sha
+        return origin
+
+    def _beside(self, past: Past, n: int, main: str, origin: str, sha: str, base: str, prs: tuple[int, ...],
+                heads: tuple[str, ...], j: Judged) -> Judged:
+        """``j`` combined with the verdict of the run beside candidate ``sha``'s check (`vqueue_slim`): started once a candidate
+        (again by a retry of its infra), judged each tick, its record logged whenever it changed; with --dry-run, judged on the
+        record last logged, and nothing started or written."""
+        started, rec = past.slim(sha)
+        line = dict(sha=sha, base=base, members=prs, heads=heads)
+        d = self.world.slim_driver(self.dry_run)
+        if not started and not self.dry_run:
+            self.write(got := self._started(n, main, origin, line))
+            rec = got["record"]
+        if not started and self.dry_run:
+            v = Verdict(PENDING)
+        else:
+            was = json.dumps(rec, sort_keys=True)
+            v = self.slim.judge(d, rec)
+            if json.dumps(rec, sort_keys=True) != was and not self.dry_run:
+                self.write(self._line(n, main, origin, "slim", **line, why=f"judged {v.state}", record=rec, done=True))
+        both = self.slim.combine(j.verdict, v)
+        if both.state == FAIL:              # `combine` keeps no `ended`: a fail has ended once both checks stopped running
+            g = j.verdict
+            both = replace(both, ended=(g.state != PENDING and (g.state != FAIL or g.ended)) and v.state != PENDING)
+        return replace(j, verdict=both, slim=v)
 
     # -- a tick
 
@@ -693,7 +850,10 @@ class Loop:
         if self.dry_run:
             self.out("\n".join(f"would {_name(a)}: {a}" for a in actions) or "nothing to do")
             return []
-        logged: list[dict] = []
+        logged = [self.record(t, "ignore", sha=sha, why=f"origin's queue/{name} is no build of the loop's: no candidate")
+                  for name, sha in t.foreign.items() if sha not in past.ignored()] + self._flaky(t)
+        for rec in logged:
+            self.write(rec)
         for a in actions:
             try:
                 recs = self.apply(a, t)
@@ -757,18 +917,21 @@ class Loop:
 
     # -- the actions
 
-    def record(self, t: Tick, action: str, *, sha: str | None = None, base: str | None = None, members: Iterable[int] = (),
-               heads: Iterable[str] = (), priority: int | None = None, number: int | None = None, why: str = "",
-               outcome: Outcome | None = None, failed: Iterable[Failed] = (), **extra) -> dict:
-        return {"at": stamp(self.now()), "tick": t.n, "shadow": self.shadow, "main": t.main, "action": action, "sha": sha,
+    def record(self, t: Tick, action: str, **kw) -> dict:
+        return self._line(t.n, t.main, t.origin, action, **kw)
+
+    def _line(self, n: int, main: str, origin: str, action: str, *, sha: str | None = None, base: str | None = None,
+              members: Iterable[int] = (), heads: Iterable[str] = (), priority: int | None = None, number: int | None = None,
+              why: str = "", outcome: Outcome | None = None, failed: Iterable[Failed] = (), **extra) -> dict:
+        return {"at": stamp(self.now()), "tick": n, "shadow": self.shadow, "main": main, "action": action, "sha": sha,
                 "base": base, "members": list(members), "heads": list(heads), "priority": priority, "number": number,
                 "why": why, "outcome": outcome and {"members": list(outcome.members), "heads": list(outcome.heads),
                                                     "state": outcome.state, "suspects": list(outcome.suspects),
                                                     **({"base": outcome.base} if outcome.base else {}),
                                                     **({"inherited": [_failed_doc(f) for f in outcome.inherited]}
                                                        if outcome.inherited else {})},
-                "failed": [{"task": f.task, "key": f.key} for f in failed],
-                **({"origin_main": t.origin} if t.origin != t.main else {}), **extra}
+                "failed": [{"task": f.task, "key": f.key, **({"tests": sorted(f.tests)} if f.tests else {})} for f in failed],
+                **({"origin_main": origin} if origin != main else {}), **extra}
 
     def write(self, rec: dict) -> None:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -791,6 +954,8 @@ class Loop:
             return [self._drop(a, c, t)]
         if isinstance(a, Retry):
             return self._retry(c, t)
+        if isinstance(a, Rerun):
+            return self._rerun(a, c, t)
         if isinstance(a, Ring):
             return self._ring(a, c, t)
         if isinstance(a, Red):
@@ -801,6 +966,8 @@ class Loop:
         w = self.world
         if unknown := [n for n in a.members if n not in w.prs]:
             raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
+        if self.slim is not None:
+            w.slim_driver()                                 # before anything is pushed
         tip, merged, left = w.build([w.prs[n] for n in a.members], a.base)
         recs = []
         for p, why in left:
@@ -820,13 +987,32 @@ class Loop:
                 "priority": a.priority}
         try:
             w.enqueue(tip, a.priority)
-        except QueueError as e:                             # pushed: the next tick reads it as not enqueued, and retries
+        except (QueueError, OSError, subprocess.SubprocessError) as e:  # pushed: the next tick reads it as not enqueued
             return [*recs, self.record(t, "build", **line, enqueued=False, done=True, error=str(e)[-600:])]
-        return [*recs, self.record(t, "build", **line, enqueued=True, done=True)]
+        return [*recs, self.record(t, "build", **line, enqueued=True, done=True), *self._start(t, tip, a.base, line)]
+
+    def _start(self, t: Tick, sha: str, base: str, line: dict, why: str = "started") -> list[dict]:
+        """The run beside candidate ``sha``'s check started (`vqueue_slim.start`), its record logged; a start that fails is
+        logged with no record, which `vqueue_slim.judge` reads as infra."""
+        if self.slim is None:
+            return []
+        return [self._started(t.n, t.main, t.origin, {**line, "sha": sha, "base": base}, why)]
+
+    def _started(self, n: int, main: str, origin: str, line: dict, why: str = "started") -> dict:
+        d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
+        try:
+            rec, error = self.slim.start(d, line["sha"], line["base"]), None
+        except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
+            rec, error = None, f"{type(e).__name__}: {e}"[-600:]
+        return self._line(n, main, origin, "slim", **line, why=why, record=rec, done=True,
+                          **({"start_error": error} if error else {}))
 
     def _advance(self, c: Candidate, t: Tick) -> dict:
-        if not self.shadow:
-            self.world.advance(c.sha, c.base, t.members[c.sha])
+        w = self.world
+        if self.shadow:
+            w.set_shadow_main(c.sha)
+        else:
+            w.advance(c.sha, c.base, w.members(c.sha, c.base, c.members, c.heads))
         return self.record(t, "advance", sha=c.sha, base=c.base, members=c.members, heads=c.heads,
                            why=f"`main` {c.base[:12]} fast-forwarded to it", done=not self.shadow)
 
@@ -859,24 +1045,58 @@ class Loop:
         return (f"@{handle}" if handle else CI,)
 
     def _retry(self, c: Candidate, t: Tick) -> list[dict]:
-        j = t.judged[c.sha]
-        why = (f"{c.verdict.state} verdict ({j.mark}) was retried already, and graph2 has said nothing new since" if j.mark in
-               t.past.retried(c.sha) else None if j.mark else f"its verdict is {c.verdict.state}, not a terminal infra or "
-               f"list-failed one")
-        if why is not None:
-            if any(r.get("why") == why for r in t.past.of("retry", c.sha)):
-                return []
-            return [self.record(t, "retry", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=why, mark=j.mark,
-                                enqueued=False, done=False)]
+        """Enqueue ``c``'s check again: graph2 reruns what ended in infra errors, lists it again, or leaves it running.  The
+        infra results so far are set aside (`Past.since`), so it is pending until graph2 says something newer, and a run
+        beside it that ended in infra is started again."""
+        j, line = t.judged[c.sha], dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads)
         built = t.past.built(c.sha) or {}
         priority = built.get("priority") if isinstance(built.get("priority"), int) else 0
+        counts = self.world.counts(f.key for f in c.verdict.infra)
         self.world.enqueue(c.sha, priority)
-        return [self.record(t, "retry", sha=c.sha, base=c.base, members=c.members, heads=c.heads, priority=priority,
-                            why=f"{c.verdict.state}: {j.note or 'enqueued again'}", failed=c.verdict.infra, mark=j.mark,
-                            enqueued=True, done=True)]
+        rec = self.record(t, "retry", **line, priority=priority, why=f"{c.verdict.state}: {j.note or 'enqueued again'}",
+                          failed=c.verdict.infra, mark=j.mark, counts=counts, enqueued=True, done=True)
+        again = self._start(t, c.sha, c.base, line, "started again") if j.slim is not None and j.slim.state == INFRA else []
+        return [rec, *again]
+
+    def _rerun(self, a: Rerun, c: Candidate, t: Tick) -> list[dict]:
+        """Run ``a.keys`` afresh (graph2's `rerun`), their results so far set aside (`Past.since`) so each reads pending until
+        it has a newer one; a key of the run beside the check starts that run again.  Without graph2's `rerun`, logged as
+        absent: the policy takes the rerun as done, and its failure stands."""
+        w, line = self.world, dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads)
+        j = t.judged[c.sha]
+        beside = {f.key for f in j.slim.failed} if j.slim is not None else set()
+        keys = [k for k in a.keys if k not in beside]
+        failed = [f for f in c.verdict.failed if f.key in a.keys]
+        counts = w.counts(keys)
+        said = w.rerun(c.sha, keys) if keys else ""
+        if said is None:
+            return [self.record(t, "rerun", **line, why="graph2 has no `rerun`: the failure stands", failed=failed,
+                                keys=list(a.keys), absent=True, done=False)]
+        again = self._start(t, c.sha, c.base, line, "started again: its failure is rerun") if set(a.keys) & beside else []
+        return [self.record(t, "rerun", **line, why=f"the lone member's own failures, afresh: {said or 'the run beside'}",
+                            failed=failed, keys=list(a.keys), counts=counts, done=True), *again]
+
+    def _flaky(self, t: Tick) -> list[dict]:
+        """Ring the owners of each test graph2 says flaked (its verdict's `flaky`: a fail a rerun replaced), once a key: a test
+        that flakes is deleted, not rerun.  With --shadow, logged only."""
+        w, recs, rung = self.world, [], t.past.flaked()
+        for c in t.snap.candidates:
+            for e in (t.judged[c.sha].theirs or {}).get("flaky") or ():
+                if not isinstance(e, dict) or not isinstance(key := e.get("key"), str) or key in rung:
+                    continue
+                rung.add(key)
+                task, tests = str(e.get("task")), sorted(w.failing_tests(key))
+                to = tuple(dict.fromkeys((*w.test_owners(c.sha, task, tests), CI)))
+                text = (f"{task} (key {key}) flaked on the verified queue's candidate ready:{c.sha[:12]}: it failed"
+                        + (f" ({', '.join(tests)})" if tests else "") + ", then passed when rerun afresh. A test that flakes "
+                        "is deleted, not rerun: delete it, or make it deterministic")
+                done = not self.shadow and w.say(text, to)
+                recs.append(self.record(t, "flaky", sha=c.sha, base=c.base, members=c.members, heads=c.heads, key=key,
+                                        task=task, tests=tests, inputs=e.get("inputs"), text=text, to=list(to), done=done))
+        return recs
 
     def _ring(self, a: Ring, c: Candidate, t: Tick) -> list[dict]:
-        if c.sha in t.past.rung():
+        if (c.sha, a.why) in t.past.rung():
             return []
         infra = "; ".join(f"{f.task} (key {f.key})" for f in c.verdict.infra)
         text = (f"the verified queue's candidate ready:{c.sha} ({' '.join(f'#{n}' for n in c.members)}) is {c.verdict.state} "
@@ -905,6 +1125,15 @@ class Loop:
 
 def _name(a: Action) -> str:
     return type(a).__name__.lower()
+
+
+def _slim():
+    """`research.vqueue_slim`, None while this tree has none."""
+    import importlib
+    import importlib.util
+
+    name = f"{__package__}.vqueue_slim"
+    return importlib.import_module(name) if importlib.util.find_spec(name) is not None else None
 
 
 def _locked(path: Path):
@@ -937,11 +1166,23 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--graph2", default=shlex.join(GRAPH2), help="graph2's argv before its subcommand (default the control pod's)")
     ap.add_argument("--batch", type=int, default=6, help="the most members a candidate holds (default 6)")
     ap.add_argument("--depth", type=int, default=2, help="the most candidates stacked at once (default 2)")
+    ap.add_argument("--lean", type=int, default=1, help="the most members of a candidate that change Lean, a lock or a spec "
+                                                        "(default 1)")
+    ap.add_argument("--pending-hours", type=float, default=4.0,
+                    help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
+                         "again; rung at twice that (default 4)")
+    ap.add_argument("--no-slim", action="store_true",
+                    help="judge each candidate on its graph2 check alone, with no run beside it of lean-agreement and the "
+                         "preflights (research.vqueue_slim), which it otherwise launches on drive's machines")
     ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red and messages, and do none of them")
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
     a = ap.parse_args(argv)
+    if (slim := None if a.no_slim else _slim()) is None and not a.no_slim:
+        print("research queue vqueue: research.vqueue_slim isn't in this tree, so no run beside a candidate's check can start: "
+              "--no-slim judges each candidate on its graph2 check alone", file=sys.stderr)
+        return 1
     lock = None if a.dry_run else _locked(a.lock)
     if not a.dry_run and lock is None:
         print(f"research queue vqueue: another tick holds {a.lock}", file=sys.stderr)
@@ -961,7 +1202,8 @@ def main(argv: list[str]) -> int:
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent)
-        loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, state=a.state)
+        loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
+                    pending_s=a.pending_hours * 3600, slim=slim, state=a.state)
         if a.once or a.dry_run:
             loop.tick()
             return 0
