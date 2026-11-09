@@ -257,7 +257,7 @@ def _sig_cut(S):
 def _edge(C, S, state, slots, erets, valid, ids, a_O, a_cut):
     """The edge after the window's last step: at AS = 0 each running slot's free in vLLM's preemption order, from the
     last slot down, then 1 in ok iff the open requests are the cut ones, each having emitted its a_O (the module's
-    docstring); at AS = 1 a request still running refuses."""
+    docstring); at AS = 1 it frees nothing, and a request still running refuses."""
     Sc, sh = CS.chain(S), V5._step_shape(S)
     Z, R, W, K, CW, RW, IW = RC.widths(Sc), S.R, S.W, S.K, sh.CW, sh.RW, S.IW
     st, p = RC._split(list(state), RC.row_fields(Sc)), RC._split(list(slots), V5.pool_fields(S))
@@ -291,7 +291,7 @@ def _edge(C, S, state, slots, erets, valid, ids, a_O, a_cut):
     for t in range(R):
         j = R - 1 - t
         held = RS._cdiv(C, st["run_comp"][j], LB, CW)
-        on = C.AND(run[j], V5._nz(C, held))
+        on = ZERO if S.AS else C.AND(run[j], V5._nz(C, held))
         bad.append(C.AND(on.inv(), V5._nz(C, rets[t])))
         recs.append(([on], const_bits(V3S.KINDS["free"], 3), RS._pad(p["rq"][j], RW), held, [ZERO] * CW, rets[t],
                      [ZERO] * CW))
