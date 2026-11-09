@@ -629,6 +629,26 @@ def test_a_lone_member_s_failure_its_files_dont_meet_is_rerun_once_afresh_and_th
     assert script is None or Path(f"{script}.rerun").read_text().count("\n") == 1
 
 
+def test_a_rerun_sets_its_key_s_results_aside_for_the_candidate_above_too_as_graph2_drops_its_cached_result(env):
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    env.graph2_script(loop, {"state": PENDING})
+    (one,) = loop.tick()
+    env.put(2, {"b.txt": "2\n"})
+    (two,) = loop.tick()
+    z = "sha512:z"                                                  # z reads nothing either member changes: one key in both
+    k1 = env.listed(one["sha"], {"pytest:a": ["a.txt"], "pytest:z": ["z.txt"]}, keys={"pytest:z": z})
+    k2 = env.listed(two["sha"], {"pytest:b": ["b.txt"], "pytest:z": ["z.txt"]}, keys={"pytest:z": z})
+    env.result(k1["pytest:a"], "pytest:a", "pass")
+    env.result(k2["pytest:b"], "pytest:b", "pass")
+    env.result(z, "pytest:z", "fail")
+    (rerun,) = loop.tick()
+    assert (two["base"], rerun["action"], rerun["sha"], rerun["keys"]) == (one["sha"], "rerun", one["sha"], [z])
+    env.result(z, "pytest:z", "pass")
+    assert _acts(loop.tick()) == ["advance", "drop"] and env.main() == one["sha"]
+    assert _acts(loop.tick()) == ["advance", "drop"] and env.main() == two["sha"] and env.posts == []     # no red on z
+
+
 @pytest.mark.parametrize("shadow", [False, True])
 def test_a_test_graph2_says_flaked_rings_its_file_s_owner_once_a_key_and_the_shadow_only_logs_it(env, shadow):
     env.put(1, {"a.txt": "1\n"})

@@ -17,10 +17,10 @@ Lean-change test (`queue.lean_change`), and `conflict` whether `Queue._merge` me
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
-the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>`
-(`Executor.settle`), each key's from the first a retry or a rerun didn't set aside (a task graph2's `verdict` says failed by
-its own fault, which it labels no result for, failed), on the merge gate's tasks, those drive's `executor = "on"` path gates
-on (none `"gate": false`, of `drive.SLIM_STEPS` or off the gate in policy.toml at the candidate): a failed or blocked task is
+the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
+each key's from the first its retry or any candidate's rerun didn't set aside (a task graph2's `verdict` says failed by its
+own fault, which it labels no result for, failed), on the merge gate's tasks, those drive's `executor = "on"` path gates on
+(none `"gate": false`, of `drive.SLIM_STEPS` or off the gate in policy.toml at the candidate): a failed or blocked task is
 fail, each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing tests
 (result/v1's `failed_tests`) and its key and failing tests in its base's graph as graph2 listed it, where there are
 (`Failed.base_key`, `Failed.base_tests`), ended once no gating task runs but behind an infra error; else a task whose newest
@@ -193,10 +193,11 @@ class Past:
         return sum(1 for r in self.of("rerun", sha) if r.get("done") or r.get("absent"))
 
     def since(self, sha: str) -> dict[str, int]:
-        """How many results each key had when a retry or a rerun of ``sha`` set them aside: its verdict reads only those after."""
+        """How many results each key had when a retry of ``sha``, or a rerun of any candidate's, set them aside: its verdict
+        reads only those after.  graph2's `rerun` drops a key's cached result for every check that has the key."""
         out: dict[str, int] = {}
         for r in self.lines:
-            if r.get("sha") == sha and r.get("action") in ("retry", "rerun") and r.get("done"):
+            if r.get("done") and (r.get("action") == "rerun" or r.get("action") == "retry" and r.get("sha") == sha):
                 for k, n in (r.get("counts") or {}).items():
                     out[k] = max(out.get(k, 0), n)
         return out
