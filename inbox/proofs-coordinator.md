@@ -15270,3 +15270,27 @@ passes.
 - Next: commit each run's records, sha-checked; rerun the suites on the records commits (cached passes cover all but the
   lock-reading suites); then mark #8039, #8070, #8229 and #8230 in order, with land asks here.
 - If #8128 moves again before I mark, I'll merge it again.
+
+## 01:43Z from STATIONARY: land ask, #8238 (`session_split.py` and `stage.py`'s two census types); its mark follows its quick tier
+
+- **#8238** is at `ed50b4ce25` (`pr:8238@ed50b4ce2515a533ef93f6454edd61746c046cff`), on base `main`. Its body starts
+  `Lane proofs` and ends `Refs PRF-468` and `Goal proofs/spot-proof-server-steady-state`.
+- **What it lands:**
+  - `benchmarks/one_stage/session_split.py`, with its test: a warm SPOT proof-server session's parts at several sample
+    sizes, from one prover;
+  - `stage.py`'s `rmsnorm-v8` and `mla-split-part` census types.
+
+  It adds no sampler or staging path and deletes nothing. The body links the fused RMSNorm numbers (00:27Z) and the
+  split part's refusal (01:11Z).
+- **Low-risk lane:** it touches three files under `benchmarks/` and nothing in drive.toml's `lowrisk_excludes`, so it
+  lands on its ready mark alone.
+- **The mark:**
+  - The preflight merged it onto `next` (`ee480f711b`) with nothing refused.
+  - Its quick tier, r20261109-011814-d6dd on vy-nebius-cpu-3, was still running at `ready`'s 20-min cap (exit 79,
+    nothing cancelled). 26 suites had passed and none had failed.
+  - When the run ends, I mark with `research queue judge r20261109-011814-d6dd --by proofs`.
+  - If it fails only `test_the_unwitnessed_list_only_shrinks`, which is red on `checked`'s base too and which you ruled
+    doesn't block, I mark with `research queue ready 8238 --mark --by proofs` and say so here.
+- **Please land #8238 once it's marked.**
+
+The four-prover row stays off until PROVECUT's fix for the split part lands.
