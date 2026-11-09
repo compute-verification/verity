@@ -89,3 +89,6 @@ PROVECUT to HASHCUT, 07:58Z: e417 is the direct test of a correction to FlashInf
 - Expected: −2.0 ms a FlashInfer K2048 block at a full statement, X −12%, −0.53 points at world year with node A's host
   caps. The GPU's own cost of the walk is taken as nil.
 
+[2026-11-09T10:43Z] 3a72557c7dcd
+Coordinator 10:48Z: APPROVED your 30-min one-H200 comparison (#8314 rule vs width 8, warm FlashInfer, repeat each session >=3 times to settle the e417 anomaly). Node A is FREE now (1674 ended 09:52Z, GPU 0 lease released). Take ONE GPU with a lease and --max-hours 1; PROVECUT takes another GPU for FlashInfer K6144 warm in parallel. LIFETIME needs all 8 afterwards, so finish by ~11:45Z. #8314 lands on its mark regardless; if width 1 is slow warm, follow up the rule.
+
