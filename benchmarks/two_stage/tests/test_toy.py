@@ -1,12 +1,13 @@
 """The two-stage toy before anything is proved (`audit.py` proves it, on a node): each template and the replay
 block are their numpy models; the replay block is its templates' instances; the challenger's stream over the toy's design
 has its cells, its interior program and one second-stage stratum a (span, template) cell of the interior; the interior is
-template-major and wired as the replay block's edges; each link member's registered rows are the boundary record's at the replay sample's leaves, under
-its salts, and open its root there, at the boundary port the design's links name, and every other port's rows open the
-interior record's at their own leaves, as the verifier's own reads (from the two records and S alone) name them; both
-registrations pass the verifier's check; a link
-row one bit off, a read of another leaf and a broken wire are refused; and each session's public header is its template's
-reference statement's, which the auditor stages before the run, placed in the run, as round 2 holds it."""
+template-major and wired as the replay block's edges, each wired port with no tree of its own; each link member's
+registered rows are the boundary record's at the replay sample's leaves, under its salts, and open its root there, at the
+boundary port the design's links name, and every other port's rows open the interior record's, at their own leaves or a
+wired port's at its writer's, as the verifier's own reads (from the two records and S alone) name them; both
+registrations pass the verifier's check; a link row one bit off, a read of another leaf and a broken wire are refused;
+and each session's public header is its template's reference statement's, which the auditor stages before the run,
+placed in the run, as round 2 holds it, at the wires the replay block's Definition makes."""
 
 from __future__ import annotations
 
@@ -59,17 +60,17 @@ def rows_bc(c, port: str, n: int) -> list[bytes]:
 def test_each_template_and_the_replay_block_are_their_models():
     u = T.ingress(5, b"model")
     r = T.replay(u)
-    for defn, x, y in ((T.LINK_IN, u, u), (T.FOLD, u, r["fold"]), (T.FLIP, r["fold"], r["flip0"]),
-                       (T.FLIP, r["flip0"], r["flip1"]), (T.LINK_OUT, r["flip1"], r["flip1"]), (T.REPLAY, u, r["egress"])):
+    for defn, x, y in ((T.LINK_IN, u, u), (T.FOLD, u, r["fold"]), (T.FLIP, r["fold"], r["flip"]),
+                       (T.FLIP_B, r["flip"], r["flip_b"]), (T.LINK_OUT, r["flip"], r["flip"]),
+                       (T.REPLAY, u, r["egress"])):
         assert np.array_equal(np.asarray(evaluate_bits(defn, T.bits(x))).reshape(len(u), -1), T.bits(y)), defn.id
-    assert np.array_equal(r["egress"], u[:, :T.H // T.WORD] & u[:, T.H // T.WORD:])
+    assert np.array_equal(r["egress"], ~(u[:, :T.H // T.WORD] & u[:, T.H // T.WORD:]))
 
 
 def test_the_replay_block_is_its_templates_instances():
     ids = [P.template_id(t) for t in T.TEMPLATES]
     got = P.ranges(Program(T.REPLAY), P.template_instances_query(T.TEMPLATES))
-    assert [t for t, _, _ in got] == [ids[0], ids[1], ids[2], ids[2], ids[3]] and [n for *_, n in got] == [1] * T.N_RHO
-    assert [sum(1 for t, _, _ in got if t == i) for i in ids] == list(T.N_T)
+    assert [(t, n) for t, _, n in got] == list(zip(ids, T.N_T)) and sum(T.N_T) == T.N_RHO
 
 
 def test_the_challengers_stream_has_the_toys_cells_and_its_interior_program():
@@ -85,13 +86,24 @@ def test_the_challengers_stream_has_the_toys_cells_and_its_interior_program():
 
 
 def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run):
-    win = run["it"].window
-    assert [m.base for m in win.members] == T.offsets(Q) == [0, Q, 2 * Q, 4 * Q]
+    """Each instance's input reads its writer's (`toy.WRITERS`) one output in its span, one wire a port and one writer a
+    wire, FLIP_B's two instances a span the same row, and a wired port commits no tree: its rows are its writer's tree's
+    leaves, one tree a value, its table the writer's output rows (their ``b || c``) and each unit's ref its writer's row."""
+    win, c = run["it"].window, run["it"].committed
+    assert [m.base for m in win.members] == T.offsets(Q) == [0, Q, 2 * Q, 3 * Q, 5 * Q]
     assert [m.n for m in win.members] == [Q * n for n in T.N_T] and win.population == Q * T.N_RHO
     assert P.in_order(win.program, win.query, Q * T.N_RHO)
-    flip = win.members[2]
-    (_p, _o, writers), = flip.wired
-    assert writers[2 * 1] == T.offsets(Q)[1] + 1 and writers[2 * 1 + 1] == T.offsets(Q)[2] + 2
+    assert win.members[0].wired == () and T.WRITERS[0] is None
+    for t, m in enumerate(win.members[1:], 1):
+        w, spans = T.WRITERS[t], tuple(i for i in range(Q) for _ in range(T.N_T[t]))
+        (p, o, writers), = m.wired
+        assert (p, o, writers) == (T.LAYOUT[t][0][0][0], "o0", tuple(T.offsets(Q)[w] + i for i in spans))
+        assert win.held(m, p) == win.members[w].port("o0") and win.held_leaves(m, p) == spans
+        assert m.port(p) not in c.roots and m.port(p) not in T.CS.expected_ports(win)
+        assert dict(m.tables)[p] == win.members[w].n == Q and tuple(c.refs[t][:, 0].tolist()) == spans
+        assert c.bc[m.port(p)] == c.bc[win.members[w].port("o0")]
+    assert set(c.roots) == set(T.CS.expected_ports(win)) == {
+        m.port(p) for m in win.members for p, _ in m.all_rows if win.held(m, p) == m.port(p)}
     WI.validate(win.members)
     assert WI.check(win.members, publics(run["it"].committed)) == {}
 
@@ -122,24 +134,28 @@ def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_bound
                    for s, x, path in zip(SAMPLE, mine, header["paths"]))
 
 
-def test_every_other_port_reads_the_interior_record_at_its_own_leaves(run):
+def test_every_other_port_reads_the_interior_record_at_its_own_leaves_or_its_writers(run):
     it, irec = run["it"], run["irec"]
     c, win = it.committed, it.window
     reads = T.reads(run["brec"], irec, win, SAMPLE)
     roots = {r["port"]: r for r in irec["roots"]}
     head = json.loads((run["tmp"] / "interior" / "window.json").read_text())
     for t, m in enumerate(win.members):
-        assert m.tables == tuple((p, m.n) for p, _ in m.rows)
+        assert m.tables == tuple((p, m.n if T.WRITERS[t] is None else win.members[T.WRITERS[t]].n) for p, _ in m.rows)
         for p, words in m.all_rows:
             if p == T.link(t):
                 continue
-            value = m.port(p)
+            value, leaves = win.held(m, p), list(win.held_leaves(m, p))
+            assert (value == m.port(p)) == (p not in {x for x, _o, _ws in m.wired})
             e, header = reads[m.key]["ports"][p], T.CS.registered_header(head, t)[p]
-            assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], m.n,
+            n = roots[value]["leaves"]
+            assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], n,
                                                                          roots[value]["domain"])
-            assert e["reads"] == header["positions"] == list(range(m.n)) and (e[REG.READS_FROM], e["words"]) == (m.base, words)
-            assert all(REG.verify_read(c.domains[value], c.roots[value], i, x, bytes.fromhex(path), T.V2)
-                       for i, (x, path) in enumerate(zip(rows_bc(c, value, m.n), header["paths"], strict=True)))
+            assert e["reads"] == leaves and (e[REG.READS_FROM], e["words"]) == (m.base, words)
+            assert header["positions"] == list(range(n)) == list(range(dict(m.tables).get(p, m.n)))
+            held = rows_bc(c, value, n)
+            assert all(REG.verify_read(c.domains[value], c.roots[value], i, held[i], bytes.fromhex(path), T.V2)
+                       for i, path in zip(range(n), header["paths"], strict=True))
 
 
 def test_both_registrations_pass_the_verifiers_check_and_the_interior_follows_the_boundary(run):
@@ -168,7 +184,7 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
     bad = T.interior(bc, run["digest"], SAMPLE, salt_key=b"\x08" * 32, replayed=off)
     x = rows_bc(bad.committed, lin.port("row"), Q)[0]
     assert x != honest[0] and not REG.verify_read(bc.domains[value], port.root, SAMPLE[0], x, path, T.V2)
-    lout, egress = it.window.members[3], T.boundary_ports(bc.window)["o0"]
+    lout, egress = it.window.members[4], T.boundary_ports(bc.window)["o0"]
     y, opath = rows_bc(bad.committed, lout.port("o0"), Q)[0], bytes.fromhex(it.ports[lout.key].header(SAMPLE)["paths"][0])
     assert not REG.verify_read(bc.domains[egress], bc.roots[egress], SAMPLE[0], y, opath, T.V2)
     assert rows_bc(bad.committed, lout.port("o0"), Q)[1:] == rows_bc(it.committed, lout.port("o0"), Q)[1:]
@@ -184,12 +200,16 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
 @pytest.mark.slow
 def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     """Round 2 holds each session's public header to the reference the auditor's params give its template
-    (`toy.references`, staged before the run under a run of its own) placed in the run: the honest public files the
-    served path writes (`flock_input_files`, as a5 stages the sessions), each session checked by a verifier of record
-    (`second_stage.verified_of`), pass round 2 with the form allowed and the interior record's replay sample in S's
-    order, while without the params every one fails ``second-header``, without a verifier of record ``second-verified``,
-    and against S reversed ``second-interior-order`` fails. Slow (about 15 s): the only test that lowers the templates,
-    whose circuit SHA-512s and classes are in both headers."""
+    (`toy.references`, staged before the run under a run of its own) placed in the run, and its registered reads to the
+    reference's but for the run's fields: the honest public files the served path writes (`flock_input_files`, as a5
+    stages the sessions) and the verifier's own reads (`toy.reads`), each session checked by a verifier of record
+    (`second_stage.verified_of`), pass round 2 with the form allowed, the interior record's replay sample in S's order
+    and the wires the replay block's Definition makes (`second_stage.replay_wires`: each member's input its writer's
+    output, `toy.WRITERS`), while without the params' headers every one fails ``second-header``, without their reads or with
+    a link port's read of another boundary port ``second-values``, without a verifier of record ``second-verified``,
+    without the wires ``second-header`` and ``second-read`` (a wired port is bound and read at its writer's port), with
+    none derived ``second-wires``, and against S reversed ``second-interior-order`` fails. Slow (about 15 s): the only
+    test that lowers the templates, whose circuit SHA-512s and classes are in both headers."""
     from verity_flock.class_statement import member_stager
 
     it, irec, brec, tmp = run["it"], run["irec"], run["brec"], run["tmp"]
@@ -209,7 +229,14 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
         stmts.append({"template": m.template, "header": header, "draw": SS.own_draw(Q, parts[k], drawn),
                       "registered": reads[m.key]})
     links = SS.replay_links(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY), brec)
+    wires = SS.replay_wires(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY))
+    assert wires == tuple(SS.Wire(m.template, T.LAYOUT[t][0][0][0], win.members[w].template, "o0")
+                          for t, (m, w) in enumerate(zip(win.members, T.WRITERS)) if w is not None)
     refs = tuple((e["template"], e["header"]) for e in proofs["templates"])
+    ref_reads = tuple((e["template"], e["registered"]) for e in proofs["templates"])
+    (t0, r0), names = ref_reads[0], T.boundary_ports(T.boundary_window(N, Q))
+    assert r0["ports"]["row"]["value"] == names["ingress"] and not {"root", "reads"} & set(r0["ports"]["row"])
+    other = {**r0, "ports": {**r0["ports"], "row": {**r0["ports"]["row"], "value": names["o0"]}}}
 
     def sha512(j) -> str:
         return hashlib.sha512(canonical_json(j)).hexdigest()
@@ -220,13 +247,17 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
         "session_tables": 1, **({} if s["registered"] is None else {"registered_sha512": sha512(s["registered"])})}
         for k, s in enumerate(stmts)})
 
-    def check(sample, refs, verified=verified) -> dict:
+    def check(sample, refs, verified=verified, ref_reads=ref_reads, wires=wires) -> dict:
         own = SS.Own(tuple(sample), parts, irec, brec, tuple(drawn), links, SS.statement_reads(stmts),
-                     verified=verified, refs=refs)
+                     verified=verified, refs=refs, ref_reads=ref_reads, wires=wires)
         return SS.check(True, own, stmts).to_json()
     assert check(SAMPLE, refs) == {"ok": True, "codes": [], "detail": {}}
     assert check(SAMPLE, ())["codes"] == ["second-header"]
+    assert check(SAMPLE, refs, ref_reads=())["codes"] == ["second-values"]
+    assert check(SAMPLE, refs, ref_reads=((t0, other), *ref_reads[1:]))["codes"] == ["second-values"]
     assert check(SAMPLE, refs, ())["codes"] == ["second-verified"]
+    assert check(SAMPLE, refs, wires=())["codes"] == ["second-header", "second-read"]
+    assert check(SAMPLE, refs, wires=None)["codes"] == ["second-wires"]
     assert "second-interior-order" in check(SAMPLE[::-1], refs)["codes"]
 
 

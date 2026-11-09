@@ -311,12 +311,13 @@ def one_record(product: R.Same, cases: list[dict], windows: bool = False) -> lis
 #: names PoUB-P2's case by it, its params and its entry, under a commitment that binds it).
 GENERIC_BANDWIDTH = "verity/remote-bandwidth/v0"
 #: The binding breaks come five times: with `commitment-size` they are the breaks that leave every subprotocol's case standing,
-#: and so the way to a rejection that no subprotocol's own explains.
+#: and so the way to a rejection that no subprotocol's own explains. `generic-bandwidth` comes five times too, so that a
+#: fixed seed's thousand cases reach it whatever the subprotocols' generators draw before it.
 MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
                            "repeat-param", "repeat-case", "case-params", "commitment-size", "evidence-noncanonical",
                            "params-extra-key", "case-extra-key", "case-missing-key", "bad-hex", "garbage-evidence",
                            "garbage-params", "not-a-case", "no-blobs", "blobs-not-hex", "blobs-not-list",
-                           "blob-extra", "generic-bandwidth"] + ["binding", "binding-id"] * 5
+                           "blob-extra"] + ["binding", "binding-id", "generic-bandwidth"] * 5
 #: The breaks of the commitment alone, which leave every subprotocol's case standing.
 BINDING = ["binding", "binding-id", "commitment-size"]
 

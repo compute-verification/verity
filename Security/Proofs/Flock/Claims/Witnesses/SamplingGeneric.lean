@@ -451,9 +451,9 @@ theorem twoL_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : �
         twoOut (twoMsg H P x ω 0) (twoMsg H P x ω 1)⟩ := by
   by_cases h : [twoMsg H P x ω 0, twoMsg H P x ω 1] = [[], []]
   · simp only [twoMsg, twoHist] at h ⊢
-    simp [run, twoL, twoV, stepWith, OC.eval, Trace.seen, twoOut, h]
+    simp [run, twoL, twoV, stepWith, OC.eval, Transcript.seen, twoOut, h]
   · simp only [twoMsg, twoHist] at h ⊢
-    simp [run, twoL, twoV, stepWith, OC.eval, Trace.seen, twoOut, h]
+    simp [run, twoL, twoV, stepWith, OC.eval, Transcript.seen, twoOut, h]
 
 omit [Fintype Coin] [Nonempty Coin] in
 theorem twoA_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (u : ℕ) (xS : Msg)
@@ -463,9 +463,9 @@ theorem twoA_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : �
       (run H (twoP H P x ω u) (twoA Coin).V xS () ρ).vLog = [] := by
   by_cases h : [twoMsg H P x ω u] = [[]]
   · simp only [twoMsg] at h ⊢
-    simp [run, twoA, sesV, twoP, stepWith, OC.eval, Trace.seen, sesOut, h]
+    simp [run, twoA, sesV, twoP, stepWith, OC.eval, Transcript.seen, sesOut, h]
   · simp only [twoMsg] at h ⊢
-    simp [run, twoA, sesV, twoP, stepWith, OC.eval, Trace.seen, sesOut, h]
+    simp [run, twoA, sesV, twoP, stepWith, OC.eval, Transcript.seen, sesOut, h]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem twoL_parse {x : Msg} {s : AuditStatement} (h : (twoL Coin).parse x = some s) : s = twoStmt :=

@@ -14,7 +14,10 @@ and only where every one that does checked its session as one table (``session_t
 split across Flock tables is refused, as one split across statements is (``second-template``).
 
 The design's links are the verifier's own, derived from the replay block's Definition (`replay_links`, which the
-difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never supplied.
+difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never supplied; so are its wires (`replay_wires`,
+`SecondStage.replayWires`): a template's parameter that is another template's whole output row reads that writer's
+output port, one value the interior commits once, so ``second-read`` holds a wired port to its writer's port at its
+writer's rows and `at_run` binds it by that port (`_held_port`).
 
 Each statement's header is held to the reference header the auditor's params give its template (`Own.refs`, from
 ``proofs.templates``: `service.template_circuits`), the registered reference statement's, fixed before the run, placed
@@ -32,6 +35,16 @@ shares them only at ports its statement reads registered (``second-refs``, `_ref
 holds each instance's ref to the row at the position the read gives its unit (`Flock.Registered.check`), and
 ``second-read`` holds the read to the slot's own rows or its cell's replay block's; elsewhere it only bounds a ref by its
 table, so a ref could point a drawn unit at another unit's rows.
+
+Each statement's registered reads are its template's reference statement's (`Own.ref_reads`, the registered reads the
+auditor's params give beside its header, fixed before the run and taken as given: round 2 never verifies the reference
+statement against them), the two the same with each port's run fields blanked (`blank_reads`) (``second-values``,
+`_values_ok`). The run's fields are those ``second-read`` holds
+to the run: every port's ``root``, ``domain`` and ``leaves`` (`READ_RUN_FIELDS`), and the rows (``reads``,
+``reads_from``: `READ_ROW_FIELDS`) of a port a link names or one reading a port of the interior record (its own, or at
+a port a wire names its writer's), whose rows the run places (`_run_places_rows`). So the ports a session reads
+registered, the value each reads, and the rows at which it reads a value a registration registers are fixed before the
+run: ``second-read`` alone lets a port no link or wire names read any value either registration registers, at any rows.
 
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
@@ -66,14 +79,18 @@ REPORTED_WHY = ("the registered reads the verifiers of record report are not the
 LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other than through templates of the "
              "interior's parts, each called once and reading one parameter alone, returned alone, or returned whole as "
              "one field each")
+WIRES_WHY = ("the replay block's Definition reads a node other than as a template's parameter that is one row of another "
+             "template's one output, each called once, or a wire names a template of no part")
 INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The run's fields of a statement's header, each a path of keys: the only ones a header may differ from its template's
 #: reference placed in the run in, which other checks hold instead: ``second-population`` the first two, the session's
 #: verifier ``units.blocks``, the indices cut into blocks of ``vus_per_block`` (its header's ``units`` must be
 #: `Flock.HmRow.unitsEntry` of its indices), ``second-roots`` the next two, and ``second-read`` ``registered``, each
-#: read's root, domain and rows (`SecondStage.RUN_FIELDS`). A reference staged at other slots differs from the header
-#: only in the indices and their blocks.
+#: read's root, domain and rows, with ``second-values`` the value each port reads, and the rows at which it reads a
+#: value a registration registers, through the ``--registered`` file the session's verifier holds it to
+#: (`SecondStage.RUN_FIELDS`). A reference staged at other slots differs from the header only in the indices and their
+#: blocks.
 RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"),
               ("registered",))
 
@@ -160,13 +177,25 @@ class Link:
 
 
 @dataclass(frozen=True)
+class Wire:
+    """A wire of the two-stage design: template `template`'s session port `port` reads template `writer`'s output port
+    `wport`, one value the interior commits once, at the writer's port."""
+
+    template: str
+    port: str
+    writer: str
+    wport: str
+
+
+@dataclass(frozen=True)
 class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
     registrations' records, the second draw's units, the design's links (`replay_links`, None when the replay block's
     Definition makes none), the ``{value: root}`` the verifiers of record report the sessions read
-    (`audit.session_registered`), what they name of each session they accepted (`verified_of`), and the reference
-    header of each template's statement, ``(template, header)``, as the auditor's params give it
-    (`service.template_circuits`)."""
+    (`audit.session_registered`), what they name of each session they accepted (`verified_of`), the reference header
+    of each template's statement, ``(template, header)``, and the registered reads it reads,
+    ``(template, registered)``, None for none (`ref_reads`), as the auditor's params give them
+    (`service.template_circuits`), and the design's wires (`replay_wires`, None when the Definition makes none)."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
@@ -177,6 +206,8 @@ class Own:
     reported: Mapping[str, Any] | None = None
     verified: tuple[Checked, ...] = ()
     refs: tuple[tuple[str, Any], ...] = ()
+    ref_reads: tuple[tuple[str, Any], ...] = ()
+    wires: tuple[Wire, ...] | None = ()
 
 
 def parts(q: int, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> tuple[Part, ...] | None:
@@ -379,6 +410,71 @@ def _link_of(own: Own, t: str, port: str) -> Link | None:
     return next((x for x in own.links or () if x.template == t and x.port == port), None)
 
 
+def _node_wires(callers: Mapping[str, int], fn: Any, node: Any) -> list[Wire] | None:
+    """`SecondStage.nodeWires`: for each argument of `node` that reads a node, its template's parameter there reads that
+    node's whole output, one row of the node's template, of one output (``o0``) and so of one instance, and one row of
+    the parameter. None when such an argument reads anything else too, or part of a row, or a node no template's, or
+    `node` is no template's. An argument that reads only `fn`'s parameters is a link's (`_node_links`)."""
+    nodes, out = fn.body.nodes, []
+    for a, arg in enumerate(node.args):
+        if all(p for p, _i in _sources(arg.refs)):
+            continue
+        rs = _parts(arg.refs)
+        r = rs[0] if len(rs) == 1 else None
+        if not (isinstance(r, Affine) and r.space == "n" and r.base == 0 and r.idx < len(nodes)):
+            return None
+        tw, t = _template(callers, nodes[r.idx]), _template(callers, node)
+        params = [] if t is None else t.signature()[0]
+        if tw is None or a >= len(params) or _outputs(tw.signature()[1]) != 1 or not (
+                r.count == nodes[r.idx].out.leaves == tw.signature()[1].leaves == params[a][1].leaves):
+            return None
+        out.append(Wire(descriptor_id(t), params[a][0], descriptor_id(tw), "o0"))
+    return out
+
+
+def wires_of(defs: Mapping[str, Any], key: str) -> tuple[Wire, ...] | None:
+    """`SecondStage.wiresOf`: the design's wires, from replay block ``defs[key]``'s registered Definition: those its
+    nodes make (`_node_wires`). None when its body reads a node any other way."""
+    fn = defs.get(key)
+    if fn is None or isinstance(fn, PrimitiveDefinition):
+        return None
+    callers, out = _callers(defs), []
+    for node in fn.body.nodes:
+        wires = _node_wires(callers, fn, node)
+        if wires is None:
+            return None
+        out += wires
+    return tuple(out)
+
+
+def replay_wires(program: Any, key: str) -> tuple[Wire, ...] | None:
+    """`SecondStage.replayWires`: the wires of the replay block `program` defines under descriptor id `key` (`wires_of`
+    over the definitions its descriptor records, `codec.definitions`)."""
+    return wires_of(definitions(program), key)
+
+
+def _wires_ok(ps: Sequence[Part], wires: Sequence[Wire] | None) -> bool:
+    """`SecondStage.wiresOk`: wires are derived, each between templates the parts are of."""
+    return wires is not None and all(any(p.template == w.template for p in ps) and any(p.template == w.writer for p in ps)
+                                     for w in wires)
+
+
+def _wire_of(own: Own, t: str, port: str) -> Wire | None:
+    return next((w for w in own.wires or () if w.template == t and w.port == port), None)
+
+
+def _writer_of(own: Own, w: Wire) -> Part | None:
+    """`SecondStage.writerOf`: wire `w`'s writer's part."""
+    return next((p for p in own.parts or () if p.template == w.writer), None)
+
+
+def _held_port(own: Own, named: bool, t: str, p: str) -> str:
+    """`SecondStage.heldPort`: the interior record's port that holds template `t`'s session port `p`: at a port a wire
+    names, its writer's output port, the one tree the interior commits that value in; else its own."""
+    w = _wire_of(own, t, p)
+    return _port_of(named, t, p) if w is None else _port_of(named, w.writer, w.wport)
+
+
 def _put_at(v: Any, j: Any, path: Sequence[str]) -> Any:
     """`SecondStage.putAt`: `j` with the field at key path `path` set to `v` where its parent is an object, each key
     before the last followed only to an object; anything else unchanged."""
@@ -423,14 +519,15 @@ def port_binding(rec: Any, port: str, schema: str, run: str) -> str | None:
 def at_run(own: Own, named: bool, k: int, t: str, r: Any) -> Any:
     """`SecondStage.atRun`: template `t`'s reference header `r` placed in the run, for the session of the `k`-th part:
     its ``set`` the run's input set (`set_name`) and its ``frame_v3.bindings`` the binding of each port of
-    its ``frame_v3.schemas`` (`port_binding`), which the verifier computes. None when the interior record names no run,
-    or a port the verifier can't bind."""
+    its ``frame_v3.schemas`` (`port_binding`, the interior record's port that holds it, `_held_port`: a wired port's its
+    writer's), which the verifier computes. None when the interior record names no run, or a port the verifier can't
+    bind."""
     run = _run_of(own.interior)
     if run is None:
         return None
     bindings = {}
     for p, s in _entries(_get(_get(r, "frame_v3"), "schemas")):
-        b = port_binding(own.interior, _port_of(named, t, p), s, run) if isinstance(s, str) else None
+        b = port_binding(own.interior, _held_port(own, named, t, p), s, run) if isinstance(s, str) else None
         if b is None:
             return None
         bindings[p] = b
@@ -504,9 +601,11 @@ def _rows_ok(q: int, p: Part, e: Any, units: int, unit: Callable[[int], int | No
 
 def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
     """`SecondStage.readOk`: template ``p.template``'s session port `port` may read registered-reads entry `e`: a port a
-    link names, only the boundary port it names, each slot only its cell's replay block's rows; any other, its own port
-    of the interior record, each slot only its own rows, or a value either registration registers, never a boundary
-    port. Each at its root, domain and leaves."""
+    link names, only the boundary port it names, each slot only its cell's replay block's rows; a port a wire names,
+    only its writer's output port of the interior record, each slot only its writer's first instance's rows in its
+    cell's replay block (the writer's slot ``p.span(u)·n_w`` of its ``Q·n_w``); any other, its own port of the interior
+    record, each slot only its own rows, or a value either registration registers, never a boundary port. Each at its
+    root, domain and leaves."""
     v, q = _get(e, "value"), len(own.sample)
     if not isinstance(v, str):
         return False
@@ -518,6 +617,11 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
             i = p.span(u)
             return own.sample[i] if 0 <= i < q else None
         return v == link.value and b is not None and _nat(m) and _same_at(e, b) and _rows_ok(q, p, e, m, block)
+    wire = _wire_of(own, p.template, port)
+    if wire is not None:
+        x, pw = _by_port(own.interior).get(v), _writer_of(own, wire)
+        return (v == _port_of(named, wire.writer, wire.wport) and x is not None and pw is not None and _same_at(e, x)
+                and _rows_ok(q, p, e, q * pw.n, lambda u: p.span(u) * pw.n))
     x = _by_port(own.interior).get(v)
     if x is not None:
         return (v == _port_of(named, p.template, port) and _same_at(e, x)
@@ -533,6 +637,11 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
 def _linked_read(own: Own, t: str, reads: Sequence[tuple[str, Any]]) -> bool:
     """`SecondStage.linkedRead`: every port a link names for template `t` is one of `reads`."""
     return all(x.template != t or any(port == x.port for port, _ in reads) for x in own.links or ())
+
+
+def _wired_read(own: Own, t: str, reads: Sequence[tuple[str, Any]]) -> bool:
+    """`SecondStage.wiredRead`: every port a wire names for template `t` is one of `reads`."""
+    return all(w.template != t or any(port == w.port for port, _ in reads) for w in own.wires or ())
 
 
 def _verified_ok(own: Own, s: Stmt) -> bool:
@@ -558,6 +667,52 @@ def _refs_ok(s: Stmt) -> bool:
     return all(any(name == port for name, _ in reads) for port, _ in _entries(_get(s.header, "shared_rows")))
 
 
+#: `SecondStage.READ_RUN_FIELDS`: the run's fields of every port of a registered-reads file, which ``second-read`` holds
+#: to the run (`_same_at`)
+READ_RUN_FIELDS = ("root", "domain", "leaves")
+
+#: `SecondStage.READ_ROW_FIELDS`: the rows a port of a registered-reads file reads, slot ``reads_from + k`` its row
+#: ``reads[k]``, run fields only where the run places them (`_run_places_rows`)
+READ_ROW_FIELDS = ("reads", "reads_from")
+
+
+def _run_places_rows(own: Own, t: str, port: str, e: Any) -> bool:
+    """`SecondStage.runPlacesRows`: template `t`'s session port `port` reads registered-reads entry `e` at rows the run
+    places, which ``second-read`` holds to the run (`_rows_ok`): a port a link names, each slot at its cell's replay
+    block's rows, or one reading a port of the interior record, its own port each slot at its own rows or, at a port a
+    wire names, its writer's at its writer's rows (`_read_ok`'s first three cases). Any other port reads a value a
+    registration registers, which ``second-read`` holds only to the value's root,
+    domain and leaves (`_same_at`), so ``second-values`` holds its rows to the reference statement's, the same rows in
+    every run. A workload whose rows there depend on the sampled block (a positional table) would need a rule of its
+    own."""
+    v = _get(e, "value")
+    return _link_of(own, t, port) is not None or (isinstance(v, str) and v in _by_port(own.interior))
+
+
+def blank_reads(own: Own, t: str, r: Any) -> Any:
+    """`SecondStage.blankReads`: registered-reads file `r` of a session of template `t` with each port's run fields
+    None: `READ_RUN_FIELDS`, and `READ_ROW_FIELDS` where the run places the port's rows (`_run_places_rows`); anything
+    else unchanged."""
+    ports = _get(r, "ports")
+    if not isinstance(ports, dict):
+        return r
+
+    def blank(p: str, e: Any) -> Any:
+        if not isinstance(e, dict):
+            return e
+        return {**e, **dict.fromkeys(READ_RUN_FIELDS + (READ_ROW_FIELDS if _run_places_rows(own, t, p, e) else ()))}
+    return {**r, "ports": {p: blank(p, e) for p, e in ports.items()}}
+
+
+def _values_ok(own: Own, s: Stmt) -> bool:
+    """`SecondStage.valuesOk`: statement `s`'s registered reads are its template's reference statement's
+    (`Own.ref_reads`) but for the run's fields, the two the same with those blanked (`blank_reads`), so None only where
+    the reference's is, and each value a registration registers read at the reference's rows; False for a template the
+    params give no reference reads."""
+    ref = next(((r,) for t, r in own.ref_reads if t == s.template), None)
+    return ref is not None and _jeq(blank_reads(own, s.template, s.registered), blank_reads(own, s.template, ref[0]))
+
+
 def _stmt_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
     q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
     checks = (("second-verified", _verified_ok(own, s)),
@@ -567,8 +722,9 @@ def _stmt_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
               ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
-               and _linked_read(own, p.template, reads)),
-              ("second-refs", _refs_ok(s)))
+               and _linked_read(own, p.template, reads) and _wired_read(own, p.template, reads)),
+              ("second-refs", _refs_ok(s)),
+              ("second-values", _values_ok(own, s)))
     return [code for code, ok in checks if not ok]
 
 
@@ -652,8 +808,9 @@ def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     once, with the detail it first failed with (`SecondStage.check`), the interior record's order first."""
     if own.parts is None:
         found = [*_interior_failures(own), ("second-cells", CELLS_WHY)]
-    elif not _links_ok(own.parts, own.links):
-        found = [*_interior_failures(own), ("second-links", LINKS_WHY)]
+    elif not (_links_ok(own.parts, own.links) and _wires_ok(own.parts, own.wires)):
+        found = [*_interior_failures(own), *([] if _links_ok(own.parts, own.links) else [("second-links", LINKS_WHY)]),
+                 *([] if _wires_ok(own.parts, own.wires) else [("second-wires", WIRES_WHY)])]
     elif statements is None:
         found = [*_interior_failures(own), ("second-statements", STATEMENTS_WHY)]
     else:
@@ -671,5 +828,6 @@ def attach(rec: Mapping[str, Any], v: Verdict) -> dict[str, Any]:
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["FORM", "Checked", "Link", "Own", "Part", "at_run", "attach", "blank_run", "check", "interior_order_ok",
-           "links_of", "own_draw", "parts", "port_binding", "replay_links", "set_name", "statement_reads", "verified_of"]
+__all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "Checked", "Link", "Own", "Part", "Wire", "at_run", "attach",
+           "blank_reads", "blank_run", "check", "interior_order_ok", "links_of", "own_draw", "parts", "port_binding",
+           "replay_links", "replay_wires", "set_name", "statement_reads", "verified_of", "wires_of"]
