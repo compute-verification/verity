@@ -37,6 +37,7 @@ On the control pod it runs beside drive, from a pinned checkout of this tree, in
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import fcntl
 import hashlib
 import json
@@ -50,6 +51,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import policy, vqueue
+from .drive import JOB_OF_KIND, SLIM_STEPS, Driver, merge_thread_post
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_key, task_target
 from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, flags_at, lean_change, lowrisk,
                     priority_list, queue_commit, review_owners, rules_at, unreviewed)
@@ -77,6 +79,9 @@ EJECTOR = "ci"
 INFRA_HANDLE = "@infra"
 #: the newest first-parent commits a candidate's walk reads before it gives up on finding its base
 WALK = 64
+#: the PRs judged at once (`World._judge`): a merge onto `main` takes seconds in drive's clone, and a moved `main` judges every
+#: ready PR again
+JOBS = 8
 
 
 def stamp(t: float) -> str:
@@ -199,13 +204,14 @@ class World:
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time):
         self.q, self.labels, self.tasks, self.graph2 = q, labels, tasks, tuple(graph2)
         self.priority_file, self.now, self.repo = priority_file, now, q.workdir
-        self._post = post
+        self.post: Callable[[str, tuple[str, ...]], bool] = post or merge_thread_post
         #: graph2's subcommands it was found to lack (`_graph2`)
         self.lacks: set[str] = set()
-        #: (files, lean, conflict) by (head, `main`)
-        self._judged: dict[tuple[str, str], tuple[frozenset[str], bool, bool]] = {}
+        #: by (head, `main`): its files (`_changed`), and (lean, conflict) (`_judge`)
+        self._files: dict[tuple[str, str], frozenset[str]] = {}
+        self._judged: dict[tuple[str, str], tuple[bool, bool]] = {}
         self._prs: dict[int, PR] | None = None
-        self._driver = None
+        self._driver: Driver | None = None
         #: what the last `ready` read: {number: the PR at its ready head}
         self.prs: dict[int, PR] = {}
 
@@ -251,18 +257,19 @@ class World:
         entries = q.entries(prs, q.load_state(), base=main, landed=main, queued=main, open_numbers=set(self.open()))
         flags = flags_at(self.repo, main)
         excludes = tuple(flags.lowrisk_excludes) if flags.lowrisk_lane else ()
+        self._files = {k: v for k, v in self._files.items() if k[1] == main}
         self._judged = {k: v for k, v in self._judged.items() if k[1] == main}
-        chosen: dict[int, tuple[frozenset[str], bool, bool]] = {}
-        for n, e in entries.items():
-            if e.state != "ready":
-                continue
-            p = e.pr
-            reviews = labels.reviews(n, p.head)
-            files, lean, conflict = self._judge(main, p.head)
-            landing = unreviewed(reviews, review_owners(q, labels, n, p.head, p.owner, self.open())) is None
-            held = (unreviewed(reviews, ()) or "").startswith("held")
-            if landing or not held and lowrisk(files, excludes):
-                chosen[n] = (files, lean, conflict)
+        admitted = [n for n, e in entries.items() if e.state == "ready"]
+        with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:
+            files = dict(zip(admitted, pool.map(lambda n: self._changed(main, entries[n].pr.head), admitted)))
+            took = []
+            for n in admitted:
+                p, reviews = entries[n].pr, labels.reviews(n, entries[n].pr.head)
+                landing = unreviewed(reviews, review_owners(q, labels, n, p.head, p.owner, self.open())) is None
+                held = (unreviewed(reviews, ()) or "").startswith("held")
+                if landing or not held and lowrisk(files[n], excludes):
+                    took.append(n)
+            chosen = {n: (files[n], *j) for n, j in zip(took, pool.map(lambda n: self._judge(main, entries[n].pr.head), took))}
         first = {n: i for i, n in enumerate(priority_list(self.priority_file) if self.priority_file else ())}
         order = sorted(chosen, key=lambda n: (first.get(n, len(first)), labels.marked_at(n, entries[n].pr.head) or "", n))
         placed: list[int] = []
@@ -280,12 +287,18 @@ class World:
         self.prs = {n: entries[n].pr for n in chosen}
         return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
 
-    def _judge(self, main: str, head: str) -> tuple[frozenset[str], bool, bool]:
+    def _changed(self, main: str, head: str) -> frozenset[str]:
+        """The files ``head`` changes against its merge base with ``main``."""
+        if (key := (head, main)) not in self._files:
+            self._files[key] = frozenset(_out(self.repo, "diff", "--name-only", "--no-renames", f"{main}...{head}").splitlines())
+        return self._files[key]
+
+    def _judge(self, main: str, head: str) -> tuple[bool, bool]:
+        """(whether ``head`` is a Lean change, whether it doesn't merge onto ``main``), kept by (head, main)."""
         if (key := (head, main)) not in self._judged:
-            base = _out(self.repo, "merge-base", main, head)
-            files = frozenset(_out(self.repo, "diff", "--name-only", "--no-renames", base, head).splitlines())
             rec = self.q._recorded(main, head)
-            self._judged[key] = (files, lean_change(self.repo, head, base), not ("tree" in rec or rec.get("merged")))
+            self._judged[key] = (lean_change(self.repo, head, _out(self.repo, "merge-base", main, head)),
+                                 not ("tree" in rec or rec.get("merged")))
         return self._judged[key]
 
     def candidates(self) -> list[str]:
@@ -326,8 +339,6 @@ class World:
         if isinstance(pol := policy.at(self.repo, sha), str):
             self.log(f"research queue vqueue: {pol}: every job gates at {sha[:12]}")
             pol = policy.Policy()
-        from .drive import JOB_OF_KIND, SLIM_STEPS
-
         gating = [i for i, t in tasks.items() if JOB_OF_KIND.get(t["kind"], t["kind"]) not in (*SLIM_STEPS, *pol.off_gate)]
         if not gating:
             return Judged(Verdict(LIST_FAILED), mark=f"empty {_digest(sorted(tasks))}", note="no task on the merge gate",
@@ -468,17 +479,11 @@ class World:
 
     def say(self, text: str, to: tuple[str, ...]) -> bool:
         """``text`` posted to ``to`` in the merge thread, as drive posts."""
-        if self._post is None:
-            from .drive import merge_thread_post
+        return bool(self.post(f"{' '.join(to)} vqueue: {text}", to))
 
-            self._post = merge_thread_post
-        return bool(self._post(f"{' '.join(to)} vqueue: {text}", to))
-
-    def driver(self):
+    def driver(self) -> Driver:
         if self._driver is None:
-            from .drive import Driver
-
-            self._driver = Driver(self.q, on="", post=lambda text, to=(): self.say(text, to), now=self.now)
+            self._driver = Driver(self.q, on="", post=self.post, now=self.now)
         return self._driver
 
 
@@ -508,6 +513,8 @@ class Loop:
                  now: Callable[[], float] = time.time, out: Callable[[str], None] = print):
         self.world, self.log_path, self.decide, self.shadow, self.dry_run = world, Path(log), decide, shadow, dry_run
         self.batch, self.depth, self.now, self.out = batch, depth, now, out
+        #: the last tick this loop ran: a tick that logs nothing still counts
+        self.last = 0
 
     # -- the snapshot
 
@@ -550,10 +557,13 @@ class Loop:
     def tick(self) -> list[dict]:
         """One tick: the records it logged (with --dry-run, those it would have)."""
         past = Past.read(self.log_path, self.now() - WINDOW_S)
-        t = self.snapshot(past, past.tick + 1)
+        self.last = max(past.tick, self.last) + 1
+        t = self.snapshot(past, self.last)
+        if self.dry_run:
+            self.out(self.summary(t))
         actions = list(self.decide(t.snap))
         if self.dry_run:
-            self.out(self.summary(t, actions))
+            self.out("\n".join(f"would {_name(a)}: {a}" for a in actions) or "nothing to do")
             return []
         logged: list[dict] = []
         for a in actions:
@@ -579,15 +589,15 @@ class Loop:
         while True:
             try:
                 self.tick()
-            except (QueueError, OSError, subprocess.SubprocessError, ValueError) as e:
-                self.out(f"research queue vqueue: the tick failed, the next derives everything again: {e}")
+            except Exception as e:                          # the loop goes on: the next tick derives everything again
+                self.out(f"research queue vqueue: the tick failed ({type(e).__name__}), the next derives everything again: {e}")
             sleep(interval)
 
-    def summary(self, t: Tick, actions: list[Action]) -> str:
+    def summary(self, t: Tick) -> str:
         s = t.snap
         lines = [f"tick {t.n}: main {s.main[:12]}" + (f" (origin's {t.origin[:12]})" if t.origin != s.main else ""),
-                 f"ready {len(s.ready)}: " + " ".join(f"#{x.number}" + ("!" if x.conflict else "") + ("L" if x.lean else "")
-                                                     for x in s.ready)]
+                 f"ready {len(s.ready)} (rank order; ! doesn't merge onto main, L a Lean change): "
+                 + " ".join(f"#{x.number}" + ("!" if x.conflict else "") + ("L" if x.lean else "") for x in s.ready)]
         for c in s.candidates:
             j = t.judged[c.sha]
             lines.append(f"candidate {c.sha[:12]} on {c.base[:12]}: {' '.join(f'#{n}' for n in c.members)} {c.verdict.state}"
@@ -595,7 +605,6 @@ class Loop:
                          + "".join(f"\n  failed {f.task} {f.key[:19]}" for f in c.verdict.failed)
                          + "".join(f"\n  infra {f.task} {f.key[:19]}" for f in c.verdict.infra))
         lines.append(f"history {len(s.history)}: " + " ".join(o.state for o in s.history[-10:]))
-        lines += [f"would {_name(a)}: {a}" for a in actions] or ["nothing to do"]
         return "\n".join(lines)
 
     # -- the actions
