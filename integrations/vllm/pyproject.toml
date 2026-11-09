@@ -57,6 +57,7 @@ markers = [
 untraced = [
     "tests/lint/test_merge_allowlist.py",
     "tests/lint/test_ruff.py",
+    "tests/lint/test_ruff_vllm.py",
     "tests/migrate/test_superseded_quarantine.py",
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
@@ -226,7 +227,7 @@ tests = ["tests/lint/test_ratchet.py"]
 paths = ["integrations/vllm/tests/lint"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/lint/test_ruff.py"]
+tests = ["tests/lint/test_ruff.py", "tests/lint/test_ruff_vllm.py"]
 paths = ["integrations/vllm/tests", "integrations/vllm/tools"]
 
 [[tool.verity.tests.reads]]

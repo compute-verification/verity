@@ -622,6 +622,35 @@ def test_loosening_ruff_to_drop_its_findings_fails_naming_what_the_base_ruff_fin
     assert c["fix"] == ["ruff: verity_vllm/a.py:1 [F401] <module>: `os` imported but unused"]
 
 
+RUFF_VLLM_LINT = "integrations/vllm/tests/lint/test_ruff_vllm.py"
+RUFF_VLLM_JSON = "integrations/vllm/tests/lint/allowlists/ruff_vllm.json"
+RUFF_VLLM_TOML = '[lint]\nselect = ["T201"]\n'
+T201 = {"file": "verity_vllm/b.py", "kind": "T201", "symbol": "<module>", "detail": "`print` found"}
+
+
+@pytest.mark.parametrize("loosen", [
+    {G.RUFF_VLLM_CONFIG: RUFF_VLLM_TOML + 'ignore = ["T201"]\n'},
+    {G.RUFF_VLLM_CONFIG: RUFF_VLLM_TOML + '[lint.per-file-ignores]\n"verity_vllm/*" = ["T201"]\n'},
+], ids=["ignore", "per-file-ignore"])
+def test_loosening_the_vllm_rules_config_alone_is_judged_like_ruffs(ruffed, loosen):
+    """``ruff_vllm.toml`` sits in the lint directory but isn't Python: the gate takes it as that lint's config."""
+    assert G.lint_selection([G.RUFF_VLLM_CONFIG]) == ["ruff_vllm"] and G.lint_selection([G.RUFF_CONFIG]) == ["ruff"]
+    assert G.python_for(ruffed.pin, ["ruff_vllm"]) == [sys.executable, "-I"]
+    ruffed.git("checkout", "-q", "main")
+    ruffed.commit("ruff with vLLM's rules", {RUFF_VLLM_LINT: (REAL_LINT / "test_ruff_vllm.py").read_text(),
+                                             G.RUFF_VLLM_CONFIG: RUFF_VLLM_TOML, RUFF_VLLM_JSON: _allowlist(T201),
+                                             "integrations/vllm/verity_vllm/b.py": "print(1)\n"})
+    ruffed.git("checkout", "-q", "-B", "pr")
+    ruffed.commit("loosens it and drops its entry", {RUFF_VLLM_JSON: _allowlist(), **loosen})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("failed", ["ruff_vllm"]), c["why"]
+    assert c["fix"] == ["ruff_vllm: verity_vllm/b.py:1 [T201] <module>: `print` found"]
+    ruffed.git("checkout", "-q", "-B", "pr", "main")
+    ruffed.commit("only loosens it", loosen)
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.RUFF_VLLM_CONFIG], ["ruff_vllm"]), c["why"]
+
+
 def test_tightening_ruff_passes_once_its_findings_are_fixed_and_a_kept_pin_is_not_ruffs_change(ruffed):
     ruffed.git("checkout", "-q", "main")
     ruffed.commit("c.py", {"integrations/vllm/verity_vllm/c.py": "f = lambda: 0\n"})
