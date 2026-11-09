@@ -1806,6 +1806,31 @@ def test_a_push_to_a_pr_branch_whose_body_names_a_worker_is_its_activity(tmp_pat
     assert w.pr_branches == {W.short_id(W1_): {"cursor/lean-records-fc8d"}}, "a failed read keeps the last one"
 
 
+def test_a_worker_whose_branches_nothing_names_takes_its_lanes_pushes_as_its_activity(tmp_path):
+    """circuits' MOEFUSE (9 Nov) was archived silent 40 min after pushing #8281's `cursor/circuits-cir193-...-6f04`: a Task-launched
+    worker has no `git.branches`, the PR body named only `Lane circuits`, and the branch's suffix isn't its id's. With no branch
+    of its known, pushes to its lane's branches (`cursor/<lane>-*`, and open PRs whose body says `Lane <lane>`) count."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker MOEFUSE ({W1_})", age_s=2 * 3600)
+    sh = FakeSh({"cursor/circuits-cir193-6f04": "a" * 40, "feature/served-rows": "b" * 40, "cursor/lean-x-2222": "c" * 40})
+    prs = [{"branch": "feature/served-rows", "body": "Lane circuits\n\nServed sparse-MLA rows."}]
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh, open_prs=lambda: prs)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 60)
+    sh.heads["cursor/circuits-cir193-6f04"] = "d" * 40
+    sweeps(w, clock, 60)
+    sh.heads["feature/served-rows"] = "e" * 40
+    pushed = clock.t + 5 * 60
+    sweeps(w, clock, 60)
+    sh.heads["cursor/lean-x-2222"] = "f" * 40
+    sweeps(w, clock, 20)
+    assert silent(tmp_path) == [], "its lane's pushes are its activity; another lane's isn't"
+    sweeps(w, clock, 15)
+    (rec,) = silent(tmp_path)
+    assert rec["since"] == W.iso(pushed) and set(rec["branches"]) == {"cursor/circuits-cir193-6f04", "feature/served-rows"}
+
+
 def test_github_prs_reads_every_page_of_open_prs_with_the_token_from_its_file(tmp_path, monkeypatch):
     env = tmp_path / "relay.env"
     env.write_text("SLACK_BOT_TOKEN=x\nGH_TOKEN=ghs_dummy_for_tests\n")

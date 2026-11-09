@@ -267,6 +267,7 @@ BELLS_STALE_S = 30 * 60
 IDLE_DONE = {"FINISHED", "EXPIRED", "WAITING_FOR_BACKGROUND_WORK"}
 AGENT_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 SHORT_AGENT_RE = re.compile(r"\b(bc-[0-9a-f]{8})\b(?!-[0-9a-f]{4}-)")
+LANE_LINE_RE = re.compile(r"^Lane ([A-Za-z0-9_-]+)", re.M)
 
 
 def short_id(agent: str) -> str:
@@ -873,6 +874,7 @@ class Watch:
         self.api, self.log, self.clock, self.wake, self.publish = api, log, clock, wake, publish
         self.open_prs, self.prs_read = open_prs, -float("inf")
         self.pr_branches: dict[str, set[str]] = {}  # agent id (full or short) an open PR's body names -> that PR's branches
+        self.pr_lanes: dict[str, set[str]] = {}     # lane an open PR's `Lane NAME` line names -> that PR's branches
         self.notes, self.worker_long_s = notes, worker_long_s
         self.git_remote, self.nodes, self.sh = git_remote, nodes, sh
         self.launch_env, self.launcher, self.launch, self.launch_api = log.with_name("launch.env"), launcher, launch, launch_api
@@ -1543,11 +1545,14 @@ class Watch:
             self.say("prs", f"open PRs unreadable ({type(e).__name__}: {e}); the last read's PR branches still count", t)
             return
         named: dict[str, set[str]] = {}
+        lanes: dict[str, set[str]] = {}
         for pr in prs:
             body, branch = str(pr.get("body") or ""), str(pr.get("branch") or "")
             for agent in {*AGENT_RE.findall(body), *SHORT_AGENT_RE.findall(body)} if branch else ():
                 named.setdefault(agent, set()).add(branch)
-        self.pr_branches = named
+            for lane in LANE_LINE_RE.findall(body) if branch else ():
+                lanes.setdefault(lane, set()).add(branch)
+        self.pr_branches, self.pr_lanes = named, lanes
 
     def read_heads(self, t: float) -> None:
         """Every `HEADS_EVERY_S`, Verity's branch heads (`git ls-remote --heads`, the deploy key fixtures_export.sh fetches with):
@@ -1575,7 +1580,7 @@ class Watch:
         """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since: ACTIVE since, branches}) with no
         note of its (`note_times`), no push to its branches (its own, the ones its notes name, those of open PRs whose body names
         it, every head ending in its id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task`
-        finds for any of these) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
+        finds for any of these; with none of these, its lane's: `cursor/<lane>-*` and open PRs whose `Lane NAME` line is it) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
         the latest of those, its ACTIVE spell's start and the first heads read; again after a second window, then not until one
         of those moves. Needs
         `--notes` and heads read in the last `HEADS_STALE_S`."""
@@ -1595,6 +1600,10 @@ class Watch:
                     *self.pr_branches.get(agent, ()), *self.pr_branches.get(short_id(agent), ()),
                     *(b for b in heads if b.endswith("-" + agent[-4:]))}
             mine |= {h for h in heads if any(same_task(h, b) for b in mine)}
+            if not mine and k.get("lane"):
+                # nothing names its branches (a Task-launched worker: no `git.branches`, a PR body naming only its lane): its
+                # lane's pushes stand in, since archiving one at work loses it (circuits' MOEFUSE, 9 Nov, 40 min after a push)
+                mine = {b for b in heads if b.startswith(f"cursor/{k['lane']}-")} | self.pr_lanes.get(k["lane"], set())
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
             # a coordinator signs its notes with its lane, not its id, so its id alone rings it falsely as silent
             lane_note = max((lanes[x] for x in (k["handle"], k["lane"]) if x and x in lanes), default=None) if coord else None
