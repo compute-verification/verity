@@ -65,6 +65,8 @@
   },
   "moe_expert_cc12_probe": {"run_record": "art:1ffd20ec11f99c4ae26bed218503feb31de59c2662c81eb9b1162deb00b4f3ba"},
   "cc12_difftest": {"run_record": "art:27ed13d53fac0cf67e3e93693d9ad2b6dd75824401ca5b9f9d48acda27602066"},
+  "cc12_embedding_backward_capture": {"run_record": "art:d660f85d3a6e0e88514ca14ea84e08e2bb9b56ee23cb8388d1da4f988ae4e1fb",
+                                      "fit": "art:45cfa2b4de2594eac76420e6ca7dee6a2e0efa69733e8def136c58eaa29519e7"},
   "glm53_dsa_capture": {"run_record": "art:07412c42ca43bdd6fa2b322e9e8289d6dfe7b6f08ff7420d4499c5bcd06f3032",
                         "record": "626052b647671ba1"},
   "dsa_topk_order_probe": {"run_record": "art:9a06ae7d490464e126c5a0df1da8aa3d258855a84d56d0ce3a49bc3af6fe5c47"},
