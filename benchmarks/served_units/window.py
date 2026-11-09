@@ -7,13 +7,14 @@ stage.py's `full` and `full/D` included), then the estimates admission reads for
 
 stage  each UNIT@N its own `prove_time.sh STEPS=stage PT_DEVICE=cpu` into $FLOCK_WORK/data, started in the file's order while
        it admits: the running stagings' RSS (each the larger of its estimate and its peak) plus its estimate within
-       WIN_MEM_GB x 0.9, FLOCK_WORK's size plus the running ones' disk estimates plus its own within WIN_DISK_GB x 0.95, and its
-       estimated end (seconds x WIN_SLOW) before WIN_UNTIL. Once one waits for memory, only stagings of at most
-       WIN_BACKFILL_GB start ahead of it. One that can never fit is cut, with its reason. Every 2 s: the stagings' RSS over
-       WIN_MEM_GB x 0.95 kills the newest; FLOCK_WORK over WIN_DISK_GB x 0.97 kills the newest and starts nothing more;
-       WIN_UNTIL kills every staging. A failed or killed statement's directory is removed, and a statement whose circuit
-       equals an earlier N's has its circuit.txt hard-linked to that one. The build step (flock-circuit with its CUDA prover)
-       runs first, beside the stagings. FLOCK_WORK stays for `prove`.
+       WIN_MEM_GB x 0.9, FLOCK_WORK's size plus the running ones' disk estimates plus its own within WIN_DISK_GB x 0.95 and
+       leaving WIN_FREE_GB (default 50) free on its filesystem, and its estimated end (seconds x WIN_SLOW) before WIN_UNTIL.
+       Once one waits for memory, only stagings of at most WIN_BACKFILL_GB start ahead of it. One that can never fit is cut,
+       with its reason. Every 2 s: the stagings' RSS over WIN_MEM_GB x 0.95 kills the newest; FLOCK_WORK over WIN_DISK_GB x
+       0.97, or under WIN_FREE_GB free, kills the newest and starts nothing more; WIN_UNTIL kills every staging. A failed
+       or killed statement's directory is removed, and a statement whose circuit equals an earlier N's has its circuit.txt
+       hard-linked to that one. The build step (flock-circuit with its CUDA prover) runs first, beside the stagings.
+       FLOCK_WORK stays for `prove`.
 prove  the statements of UNITS_FILE staged under FLOCK_WORK, a unit's statements on one GPU, in WIN_GPUS groups balanced
        by estimated time, each group one `prove_time.sh STEPS=prove PT_DEVICE=gpu` on its own slice of the job's cores
        under `gpu-lease 1` (the tree's gpu_lease.sh where none is installed). Every 2 s: a group whose GPU holds more than
@@ -196,11 +197,14 @@ def stage(units: list[Unit]) -> int:
     mem, cpus = limits("600")
     disk_cap, deadline = float(env("WIN_DISK_GB")) * GB, until()
     slow, backfill = float(env("WIN_SLOW", "1.3")), float(env("WIN_BACKFILL_GB", "8")) * GB
+    reserve = float(env("WIN_FREE_GB", "50")) * GB
     fw = Path(env("FLOCK_WORK"))
     fw.mkdir(parents=True, exist_ok=True)
-    k = key()
-    log(f"stage: {len(units)} types, {len(cpus)} CPUs, niceness {os.nice(0)}, memory {mem / GB:.0f} GB, disk {disk_cap / GB:.0f} GB, "
-        f"until {env('WIN_UNTIL')}, FLOCK_WORK {fw}, key {k}")
+    k, free = key(), shutil.disk_usage(fw).free
+    if free < reserve + 20 * GB:
+        raise SystemExit(f"window.py: {free / GB:.0f} GB free under {fw}, under WIN_FREE_GB={reserve / GB:.0f} plus the build's 20")
+    log(f"stage: {len(units)} types, {len(cpus)} CPUs, niceness {os.nice(0)}, memory {mem / GB:.0f} GB, disk {disk_cap / GB:.0f} GB "
+        f"({free / GB:.0f} GB free, {reserve / GB:.0f} GB kept free), until {env('WIN_UNTIL')}, FLOCK_WORK {fw}, key {k}")
     one = {"FLOCK_WORK": str(fw), "CUDA_VISIBLE_DEVICES": "", "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
     prep = subprocess.run(["bash", str(PT), "STEPS=prep", "PT_DEVICE=cpu"], cwd=REPO, capture_output=True, text=True,
                           env={**os.environ, **one, "RESEARCH_RUN_DIR": str(OUT / "prep")})
@@ -248,13 +252,14 @@ def stage(units: list[Unit]) -> int:
             j.rss_now = sum(t[p][1] for p in tree(j.proc.pid, t))
             j.peak = max(j.peak, j.rss_now)
         if now - last_du > 10:
-            used, last_du = du(fw), now
+            used, free, last_du = du(fw), shutil.disk_usage(fw).free, now
         stagings = [j for j in running if j.unit and not j.killed]
         if sum(j.rss_now for j in running) > 0.95 * mem and stagings:
             kill(max(stagings, key=lambda j: j.started), f"host memory {sum(j.rss_now for j in running) / GB:.0f} GB over "
                  f"{0.95 * mem / GB:.0f}")
-        elif used > 0.97 * disk_cap and stagings:
-            kill(max(stagings, key=lambda j: j.started), f"FLOCK_WORK {used / GB:.0f} GB over {0.97 * disk_cap / GB:.0f}")
+        elif (used > 0.97 * disk_cap or free < reserve) and stagings:
+            kill(max(stagings, key=lambda j: j.started), f"FLOCK_WORK {used / GB:.0f} GB (cap {0.97 * disk_cap / GB:.0f}), "
+                 f"{free / GB:.0f} GB free (floor {reserve / GB:.0f})")
             closed = closed or "disk"
         if now > deadline:
             for j in stagings:
@@ -267,7 +272,7 @@ def stage(units: list[Unit]) -> int:
                 mem_in_use = sum(max(j.rss, j.peak) for j in running)
                 if now + u.secs * slow > deadline:
                     reason = "time"
-                elif used + sum(j.disk for j in running if j.unit) + u.disk * GB > 0.95 * disk_cap:
+                elif sum(j.disk for j in running if j.unit) + u.disk * GB > min(0.95 * disk_cap - used, free - reserve):
                     reason = "disk" if not any(j.unit for j in running) else "wait"
                 elif mem_in_use + u.rss * GB > 0.9 * mem or (blocked_mem and u.rss * GB > backfill):
                     reason = "memory" if not running else "wait"
