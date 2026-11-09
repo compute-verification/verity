@@ -767,7 +767,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if finish is not None:
         body, names = finish(body, net, params)
     elif wrapper == "request" and (world == 1 or dead_free):
-        body = dead_free_form(body, batched=batched)[0]
+        body = dead_free_form(body, batched=batched, consume=True)[0]
     t_body = time.time()
     src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C and dense else WRAPPERS[(wrapper, kind)]
     if world > 1:

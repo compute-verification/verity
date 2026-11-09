@@ -426,10 +426,17 @@ def _dead_free(body: Body, *, swap: bool = True) -> tuple[Body, list[int], dict[
     return form, kept, cols
 
 
-def dead_free(body: Body, *, swap: bool = True, batched: bool = False) -> tuple[Body, list[int]]:
+def dead_free(body: Body, *, swap: bool = True, batched: bool = False, consume: bool = False) -> tuple[Body, list[int]]:
     """`body` in the registered compiler's form: without its dead units, the rest `swapped` (unless not `swap`) and `narrowed`, then
-    `batched_form` where `batched`; and the index in `body` of each node kept, in order (before `batched_form`)."""
+    `batched_form` where `batched`; and the index in `body` of each node kept, in order (before `batched_form`). `consume`: the
+    caller hands `body` over, and its node and offset lists (a `Builder`'s, which `finish` shares) are emptied once the form
+    without dead units is built, before `batched_form`, so the flat body is never alive beside the batched one."""
     form, kept, _ = _dead_free(body, swap=swap)
+    if consume:
+        if form.nodes is not body.nodes:
+            body.nodes.clear()
+        if form.offsets is not body.offsets:
+            body.offsets.clear()
     return (batched_form(form)[0] if batched else form), kept
 
 
