@@ -14,13 +14,15 @@ PL = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(PL)
 
 #: what the copied files hold, by kind: declarations and namespaces under `Lib`, modules under `Mod`. What the export
-#: leaves out is under `Lib.Gone`, the modules under `Gone`, and the package `../Gone`.
+#: leaves out is under `Lib.Gone`, the modules under `Gone`, and the package `../Gone`. `Mod` and `Mod.Proofs` are
+#: prefixes with copied modules under them and no copied file of their own.
 HELD = {
     PL.DECLARATION: {"Lib.G", "Lib.G_honest", "Lib.G_nontrivial", "Lib.H", "Lib.A", "Lib.D", "Lib.O", "Lib.Claim",
                      "Lib.Claim_fails", "Lib.Claim_meets", "Lib.Entry", "Lib.Stop", "Lib.Event"},
     PL.CONSTANT: {"Lib.escape", "Lib.escape.go", "Lib.Shape.mk"},
     PL.NAMESPACE: {"Lib", "Lib.Sha"},
-    PL.MODULE: {"Mod", "Mod.Defs", "Mod.Proofs", "Mod.Run"},
+    PL.MODULE: {"Mod.Defs", "Mod.Run"},
+    PL.PREFIX: {"Mod", "Mod.Defs", "Mod.Proofs", "Mod.Run"},
     PL.IMPORT: {"Mod", "Mod.Defs", "Mathlib"},
     PL.PACKAGE: {"../Proofs"},
 }
@@ -42,7 +44,8 @@ def lock() -> dict:
         "roots": ["Mod", "Gone"],
         "proved_in": ["../Proofs", "../Gone"],
         "exempt": {"Mod.Run": "a runner", "Gone.Run": "a runner"},
-        "runs": {"Mod.Run": {"generate": "{repo}/gone/vectors.py", "why": "vectors"}, "Gone.Run": {"why": "vectors"}},
+        "runs": {"Mod.Run": {"generate": "{repo}/gone/vectors.py", "why": "vectors"}, "Gone.Run": {"why": "vectors"},
+                 "Mod.Proofs": {"why": "vectors"}},
         "axioms": ["propext"],
         "assumptions_module": "Mod.Defs",
         "assumptions": {"Lib.A": {"owner": "@lane", "digest": "01"}, "Lib.Gone.A": {"owner": "@lane", "digest": "02"}},
@@ -69,10 +72,10 @@ def lock() -> dict:
                       "Lib.Gone.G": {"honest": ["Lib.Gone.G_honest"], "nontrivial": ["Lib.Gone.G_nontrivial"]}},
         "unwitnessed": {"Lib.H": "07", "Lib.Gone.H": {"type_hash": "08", "why": "no witness yet"}},
         "witnesses_assumed": ["Lib.G_honest", "Lib.Gone.G_honest"],
-        "compile_time": ["Mod.Run", "Gone.Run"],
+        "compile_time": ["Mod.Run", "Gone.Run", "Mod.Proofs"],
         "dependency_unchecked": ["Mathlib.Tactic"],
-        "layers": {"Mod.Defs": {"imports": ["Mod.Defs", "Mathlib", "Gone.Defs"], "except": ["Mod.Run", "Gone.Run"],
-                                "why": "the spec"},
+        "layers": {"Mod.Defs": {"imports": ["Mod.Defs", "Mathlib", "Gone.Defs"],
+                                "except": ["Mod.Run", "Gone.Run", "Mod.Proofs"], "why": "the spec"},
                    "Gone.Defs": {"imports": ["Mathlib"], "why": "the spec"}},
         "reads_exempt": ["Mod.Run", "Gone.Run"],
         "trees": {"definitions": ["Mod.Defs", "Gone.Defs"], "properties": ["Mod.Defs"], "proofs": ["Mod.Proofs", "Gone.Proofs"],
@@ -95,7 +98,8 @@ def lock() -> dict:
                   "events": ["Lib.Event", "Lib.Gone.Event"],
                   "inline": {"Lib.G": {"x < 2": "a range"}, "Lib.Gone.G": {"x < 2": "a range"}}},
         "reads": {"Mod.Defs": {"digest": "0a", "definitions": {"Lib.Shape": "0b", "Lib.Shape.casesOn": "0c"}},
-                  "Gone.Defs": {"digest": "0d", "definitions": {"Lib.Gone.Shape": "0e"}}},
+                  "Gone.Defs": {"digest": "0d", "definitions": {"Lib.Gone.Shape": "0e"}},
+                  "Mod.Proofs": {"digest": "10", "definitions": {}}},
         "dependencies": {"Mathlib.Tactic": "0f"},
     }
 
@@ -112,20 +116,20 @@ def gone(node) -> bool:
 def test_an_entry_stays_only_if_the_copied_files_hold_its_name():
     out, dropped = PL.public(lock(), has)
     assert dropped == {
-        "roots": ["Gone"], "proved_in": ["../Gone"], "exempt": ["Gone.Run"], "runs": ["Gone.Run"],
+        "roots": ["Gone"], "proved_in": ["../Gone"], "exempt": ["Gone.Run"], "runs": ["Gone.Run", "Mod.Proofs"],
         "assumptions": ["Lib.Gone.A"], "domain": ["Lib.Gone.D"], "open": ["Lib.Gone.O"],
         "trust.base": ["Lib.Gone.A"], "trust.extra": ["Lib.Gone.G"], "deployed": ["Lib.Gone.G"], "trust_gap": ["Lib.Gone.G"],
         "meaning": ["Gone.Defs"], "escapes": ["Lib.Gone.escape"],
         "claims.modules": ["Gone.Defs"], "claims.witnesses": ["Lib.Gone.Claim"], "claims.not": ["Lib.Gone.A"],
         "claims.generic": ["Lib.Gone.D"],
         "witnesses": ["Lib.Gone.G"], "unwitnessed": ["Lib.Gone.H"], "witnesses_assumed": ["Lib.Gone.G_honest"],
-        "compile_time": ["Gone.Run"], "layers": ["Gone.Defs"], "layers.*.imports": ["Gone.Defs"],
-        "layers.*.except": ["Gone.Run"], "reads_exempt": ["Gone.Run"],
+        "compile_time": ["Gone.Run", "Mod.Proofs"], "layers": ["Gone.Defs"], "layers.*.imports": ["Gone.Defs"],
+        "layers.*.except": ["Gone.Run", "Mod.Proofs"], "reads_exempt": ["Gone.Run"],
         "trees.definitions": ["Gone.Defs"], "trees.proofs": ["Gone.Proofs"], "trees.except": ["Gone.Run"],
         "four_names": ["Gone"], "four_names_except": ["Lib.Gone.G"], "guarantees": ["Lib.Gone.G", "Lib.Gone.H"],
         "shape.premises": ["Gone.Defs"], "shape.statements": ["Gone.Defs"], "shape.properties": ["Lib.Gone.G"],
         "shape.frozen": ["Lib.Gone.H"], "shape.conjectures": ["Lib.Gone.O"], "shape.events": ["Lib.Gone.Event"],
-        "shape.inline": ["Lib.Gone.G"], "reads": ["Gone.Defs"],
+        "shape.inline": ["Lib.Gone.G"], "reads": ["Gone.Defs", "Mod.Proofs"],
     }
     kept = {k: v for k, v in out.items() if k != "upstream"}
     assert not gone(kept)

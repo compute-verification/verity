@@ -4,8 +4,8 @@ which loads this file by path). Stdlib only.
 A lock names Lean declarations, namespaces and modules, and Lake packages. The export copies only some of the tree, so
 the lock it ships states only what the copied files hold:
 
-* an entry stays only if the copied files have what it is named after (`ENTRIES`: a guarantee, a premise, a module's rule,
-  an item of a list of names), and goes whole otherwise, with everything its record holds;
+* an entry stays only if the copied files have what it is named after (`ENTRIES`: a guarantee, a premise, a module's
+  record, a rule over the modules under a prefix), and goes whole otherwise, with everything its record holds;
 * an entry that lists witnesses (`WITNESSES`: theorems beside the declaration it is named after, which nothing rests on)
   goes with a witness the copied files lack: it would say of the public tree what no file there shows;
 * a kept entry's record may cite other names (`CITES`: the premises a guarantee takes, a deployed guarantee's gap). Those
@@ -32,28 +32,32 @@ DECLARATION = "declaration"
 CONSTANT = "constant"
 #: a namespace declarations are under
 NAMESPACE = "namespace"
-#: a module, or a prefix of modules, of the repository's Lake packages
+#: a module of the repository's Lake packages, by its own name: the one file
 MODULE = "module"
+#: a prefix of modules: a module and those under it, of which the copied files have some
+PREFIX = "prefix"
 #: a module prefix a layer may import: the repository's, or a dependency's (Mathlib, the toolchain)
 IMPORT = "import"
 #: a Lake package, by its path from the lock's own
 PACKAGE = "package"
 
 #: where a lock holds entries, and the kind of name each is under: a dict's keys, a list's items, or the one name a
-#: section is. `*` stands for every entry of the section before it.
+#: section is. `*` stands for every entry of the section before it. A section the Lean check matches a module's name
+#: against as a prefix (`check.under`: a library's root, a layer, an exemption) is of prefixes; one it reads as the
+#: module itself (a runner, a module that runs code as it compiles, a layer's exception, a `reads` group) is of modules.
 ENTRIES = (
-    ("roots", MODULE), ("proved_in", PACKAGE), ("exempt", MODULE), ("runs", MODULE), ("assumptions_module", MODULE),
+    ("roots", PREFIX), ("proved_in", PACKAGE), ("exempt", PREFIX), ("runs", MODULE), ("assumptions_module", PREFIX),
     ("assumptions", DECLARATION), ("domain", DECLARATION), ("open", DECLARATION),
     ("trust.base", DECLARATION), ("trust.extra", DECLARATION), ("deployed", DECLARATION), ("trust_gap", DECLARATION),
-    ("meaning", MODULE), ("escapes", CONSTANT),
-    ("claims.modules", MODULE), ("claims.witnesses", DECLARATION), ("claims.not", DECLARATION),
+    ("meaning", PREFIX), ("escapes", CONSTANT),
+    ("claims.modules", PREFIX), ("claims.witnesses", DECLARATION), ("claims.not", DECLARATION),
     ("claims.generic", DECLARATION),
     ("witnesses", DECLARATION), ("unwitnessed", DECLARATION), ("witnesses_assumed", DECLARATION),
-    ("compile_time", MODULE), ("layers", MODULE), ("layers.*.imports", IMPORT), ("layers.*.except", MODULE),
-    ("reads_exempt", MODULE),
-    ("trees.definitions", MODULE), ("trees.properties", MODULE), ("trees.proofs", MODULE), ("trees.except", MODULE),
+    ("compile_time", MODULE), ("layers", PREFIX), ("layers.*.imports", IMPORT), ("layers.*.except", MODULE),
+    ("reads_exempt", PREFIX),
+    ("trees.definitions", PREFIX), ("trees.properties", PREFIX), ("trees.proofs", PREFIX), ("trees.except", PREFIX),
     ("four_names", NAMESPACE), ("four_names_except", DECLARATION), ("guarantees", DECLARATION),
-    ("shape.premises", MODULE), ("shape.statements", MODULE), ("shape.properties", DECLARATION),
+    ("shape.premises", PREFIX), ("shape.statements", PREFIX), ("shape.properties", DECLARATION),
     ("shape.frozen", DECLARATION), ("shape.conjectures", DECLARATION), ("shape.events", DECLARATION),
     ("shape.inline", DECLARATION),
     ("reads", MODULE),

@@ -12,8 +12,8 @@ groups, test paths and console scripts. A `[project] dependencies` entry stays, 
 still needs. A list's entry naming a path the export doesn't copy is dropped too (`PATH_LISTS`: the lint allowlists, and the
 dead-code census's roots and keep-list), so a file made private takes its entries with it. Each rewrite must read, as TOML
 or JSON, as the old file less exactly those entries. A Lean lock (`lean-audit.json`) states only what the copied files hold
-(`tools/verity/lean/public_lock.py`): an entry stays only if a copied file declares the name it is under, or is the module,
-and carries no owner, issue or due date; an entry goes with a witness the export doesn't copy; and the export fails, naming
+(`tools/verity/lean/public_lock.py`): an entry stays only if a copied file declares the name it is under, is the module, or
+lies under the module prefix, and carries no owner, issue or due date; an entry goes with a witness the export doesn't copy; and the export fails, naming
 them, on a kept entry that cites what it doesn't copy, and on a lock it wrote that still names something no copied file
 has. A path `require`, an extra's entry, a dependency group's and a console
 script are the edges the check counts closed by the export (`EXPORT_CUTS`), and the export fails if its rewrite kept one;
@@ -467,9 +467,9 @@ class Held:
     full, `_root_.N` declaring `N`), and a namespace when one declares a name at or under it. A constant is a held
     declaration, or a name no tracked file declares that sits right below a held one: Lean names a `where` function, a
     structure's `mk` and a type's `rec` below the declaration they come from, and no file spells them. A module is held
-    when a copied file is that module, or lies under it, in some Lake package (`Tree.lake`'s reading of module names). An
-    import is held unless it names only modules the tree tracks and the export doesn't copy, so a dependency's stays. A
-    package is held when its lakefile is copied."""
+    when a copied file is that module, in some Lake package (`Tree.lake`'s reading of module names), and a prefix when
+    one is it or lies under it. An import is held as a prefix is, and also when the tree tracks no module at or under
+    it, so a dependency's stays. A package is held when its lakefile is copied."""
 
     def __init__(self, tree, copied: set[str]):
         declared = {f: {n.removeprefix("_root_.") for n in MOVE.lean_declared(tree.text(f))}
@@ -479,8 +479,9 @@ class Held:
         self.tracked = {n for names in declared.values() for n in names}
         self.namespaces = _above(self.declared)
         modules = tree.lake[0]
-        self.modules = _above(m for m, f in modules.items() if f in copied)
-        self.tracked_modules = _above(modules)
+        self.modules = {m for m, f in modules.items() if f in copied}
+        self.prefixes = _above(self.modules)
+        self.tracked_prefixes = _above(modules)
 
     def has(self, here: str, kind: str, name: str) -> bool:
         """Whether the copied files hold ``name``, of ``kind``, for the lock of the package at ``here``."""
@@ -493,16 +494,19 @@ class Held:
             return name in self.namespaces
         if kind == L.MODULE:
             return name in self.modules
+        if kind == L.PREFIX:
+            return name in self.prefixes
         if kind == L.IMPORT:
-            return name in self.modules or name not in self.tracked_modules
+            return name in self.prefixes or name not in self.tracked_prefixes
         if kind == L.PACKAGE:
             return _norm(here, name, "lakefile.toml") in self.copied
         raise ValueError(f"public_export: a lock's name of a kind it doesn't know: {kind}")
 
     def undeclared(self, kind: str, name: str) -> bool:
         """Whether no tracked file declares ``name`` or is it: an entry the tree outgrew, or one the scanner can't find."""
-        return name not in (self.tracked_modules if kind in (PUBLIC_LOCK.MODULE, PUBLIC_LOCK.IMPORT) else self.tracked) \
-            and kind != PUBLIC_LOCK.PACKAGE
+        L = PUBLIC_LOCK
+        return kind != L.PACKAGE and name not in (self.tracked_prefixes if kind in (L.MODULE, L.PREFIX, L.IMPORT)
+                                                  else self.tracked)
 
 
 def rewrite_lock(text: str, here: str, held: Held) -> tuple[str, list[tuple[str, str]]]:
