@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Binding.Leaf
 public import Flock.HmRow
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # `hm96-sha512/row-seg/v1` leaves, with their extractor

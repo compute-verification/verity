@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.ExecParse
 public import Properties.Flock.Circuit.Keys
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 /-!
 # A typed template's Δ, and the rows it makes copies

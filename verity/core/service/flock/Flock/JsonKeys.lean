@@ -5,7 +5,6 @@ such a file by `dupKey`, on the text `JsonParse.parse` accepted.
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.JsonParse
 
 @[expose] public section

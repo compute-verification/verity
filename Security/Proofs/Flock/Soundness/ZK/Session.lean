@@ -1,6 +1,15 @@
 module
 
+public import Definitions.Core.Game
+public import Definitions.Flock.ZK.RealView
+public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Dist
 public import Proofs.Flock.Soundness.ZK.RealLeaves
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.SHVZK
 
 /-!
 # Zero knowledge of one session of `J` masked tables
@@ -38,7 +47,7 @@ open Finset Game
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **Independent components.** Tuples of independent components have equal distributions when each component's do. -/
 theorem SameDist.pi {J : ℕ} {Ω Ω' V : Fin J → Type} [∀ j, Fintype (Ω j)] [∀ j, Fintype (Ω' j)]

@@ -1,6 +1,14 @@
 module
 
+public import Aesop.BuiltinRules
+public import Flock.HmRow
 public import Proofs.Flock.Soundness.Discharge.Exec
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import VCVio.Prelude.Core
 
 /-!
 # The statement flock-verify sets up for one table, under either tag

@@ -28,8 +28,8 @@ unit `blockRow`, those with Δ applied.
 -/
 module
 
-public import Std.Data.HashSet
 public import Flock.DeriveAll
+public import Std.Data.HashSet
 
 @[expose] public section
 

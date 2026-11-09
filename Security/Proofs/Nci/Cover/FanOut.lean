@@ -1,9 +1,18 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Data.Finset.Prod
-public import Proofs.Nci.Cover.FanOutRootCost
-public import Proofs.Nci.Cover.Additive
+public import Definitions.Nci.Guarantees.CoverFanOut
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.Additive
+import Proofs.Nci.Cover.Area
+import Proofs.Nci.Cover.Charge
+import Proofs.Nci.Cover.FanOutRootCost
+import Proofs.Nci.Cover.FanOutWalk
 
 /-!
 # The fan-out bounds

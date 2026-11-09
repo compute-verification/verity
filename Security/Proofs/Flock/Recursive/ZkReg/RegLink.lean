@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The committed values against registered values, for the compiled `--zk` session

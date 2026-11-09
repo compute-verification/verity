@@ -2,6 +2,10 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.Emit
 public import Proofs.Flock.Soundness.Refine.Final
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # Ligerito's rounds, as frames (R11b; `Flock.Ligerito`)

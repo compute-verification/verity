@@ -593,7 +593,7 @@ def GumbelArgmaxBf16(B, S, logits):
 def _tempered(B, x, t_bits: int, rcp):
     """`_temperature_kernel`: `f32(x) / T` with Triton's fp32 `/` = `div.full.f32` (registry model, b1.RMSNormTriton):
     F32Mul(DivFullScaleA(f32(x), T), DivFullRcp(T)).  Verified bit-exact on 16 x 151936 lanes of the B1 temp07 capture
-    (REPORT.md: IEEE division reproduces only ~90.7% of the lanes)."""
+    (IEEE division reproduces only ~90.7% of the lanes)."""
     xf = B.call(Bf16ToF32, x)
     return B.call(F32Mul, B.call(DivFullScaleA, xf, B.call(const(32, t_bits))), rcp)
 

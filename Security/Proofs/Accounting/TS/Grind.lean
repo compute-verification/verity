@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Accounting.Guarantees.TS.Grind
 public import Proofs.Accounting.TS.Steer
 public import Mathlib.Analysis.MeanInequalitiesPow
+public import Proofs.Accounting.Lemmas.TS.Grind
 
 /-!
 # The grinding premium under hashed seeds: proofs
@@ -23,6 +23,8 @@ is Fubini over the private coins (`Grind.sum_exp_pi`). `TileLuck` takes both AM-
 -/
 
 @[expose] public section
+
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.TS
 

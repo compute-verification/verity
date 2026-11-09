@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
 from verity.core.protocols.sampled_proofs.one_stage.served import ServedTree
 from verity.ml.circuits.codec import canonical_json

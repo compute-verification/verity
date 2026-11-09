@@ -1,7 +1,24 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+public import Proofs.Flock.Soundness.Discharge.Exec.Pts
+public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The challenger's draw at every draw of the live law, at `--zk`
@@ -91,6 +108,7 @@ theorem foldl_count_filter (p : ℕ → Bool) : ∀ (l : List ℕ) (a : ℕ),
       split <;> (simp_all; try omega)
 
 
+-- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`UnitDraw.ofJson`'s per-stratum count**: a draw it decodes under a stratified law holds exactly `k_s` of its units in
 each stratum `s`'s ranges. -/

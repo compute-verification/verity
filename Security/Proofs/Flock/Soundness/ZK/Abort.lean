@@ -1,7 +1,27 @@
 module
 
-public import Proofs.Flock.Soundness.ZK.Refusal
+public import Definitions.Core.Game
+public import Definitions.Flock.ZK.Cut
+public import Definitions.Flock.ZK.RealView
+public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Dist
 public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Flock.Soundness.ZK.Refusal
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Rewinding
+import Proofs.Flock.Soundness.ZK.Adaptivity
+import Proofs.Flock.Soundness.ZK.Blocks
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.SHVZK
+import Proofs.Flock.Soundness.ZK.Session
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # Zero knowledge at a refused coin: the prover's prefix, with real leaves
@@ -30,7 +50,7 @@ open Finset Game
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 namespace Table
 

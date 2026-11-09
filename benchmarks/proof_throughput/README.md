@@ -82,7 +82,8 @@ the sweep's results, `table --baseline` renders it, and a candidate is `compare`
 
 R_native is the H200's dense peak for the workload's number format. The census has no H200 line, and the H200 has the
 H100 SXM5's tensor cores and clocks (it differs in memory), so the profiles' anchors are the H100 SXM5's dense peaks:
-`bf16-hopper-mma-draft/2026-09-22` (989.4 TFLOPS bf16) and `fp8-hopper-wgmma-draft/2026-09-22` (1978.9 TFLOPS e4m3).
+the frozen bf16 and fp8 Hopper input sets, `workloads.BF16` (989.4 TFLOPS bf16) and `workloads.FP8` (1978.9 TFLOPS
+e4m3).
 
 ## The verifier's profile
 

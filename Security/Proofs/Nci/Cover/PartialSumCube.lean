@@ -1,8 +1,11 @@
 module
 
-public import Mathlib.Analysis.Real.Sqrt
-public import Proofs.Nci.LoomisWhitneyBase
+public import Definitions.Nci.Guarantees.CoverPartialSum
 public import Proofs.Nci.Cover.PartialSumRead
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.Area
+import Proofs.Nci.Cover.Charge
+import Proofs.Nci.LoomisWhitneyBase
 
 /-!
 # The partial-sum bounds: one block's products in the cube

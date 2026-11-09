@@ -104,6 +104,7 @@ from typing import Any, Protocol
 from verity.core.protocols.profile import WINDOW_DELTA, IntegrityProfile, Subset
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
 from verity.ml.commitments import verify_opening
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.randomness import derive, frame
 
 from . import codec, coins, receipts
@@ -123,7 +124,7 @@ REGISTRATION_DOMAIN = b"verity/remote-bandwidth/registration/v0\0"
 TILE_DOMAIN = b"verity/remote-bandwidth/stub-tile/v0\0"
 PAYLOAD_SCHEMA = receipts.SCHEMA
 NONCE_BYTES = 32
-NODE_BYTES = 64
+NODE_BYTES = _DIGEST_BYTES["sha512"]
 QUERIES_LOG2 = 64
 SLACK_LOG2 = 67
 """AuditRO's slack, the bits a pass is charged beyond `named_bits`: its last term C(q, k)/2^λ is then at most 2^-67 a
