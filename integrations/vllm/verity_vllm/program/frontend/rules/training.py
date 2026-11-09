@@ -22,9 +22,10 @@ int64 and uint8, a clamp and a `kthvalue` are its own (`rules.training_masks`).
     training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
 Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, softmax and log-softmax
-`rules.training_softmax`'s, comparisons, masks, integer sums, adds, shifts and ands, conversions, functionalized copies, table
-lookups, `amax` and `kthvalue` `rules.training_masks`'s and the helpers the rules emit with `rules.training_emit`'s; a survey of
-what the rules refuse is `rules.training_survey`'s.
+`rules.training_softmax`'s, torch's flash attention forward at a compute capability `rules.training_attention`'s, comparisons,
+masks, integer sums, adds, shifts and ands, conversions, functionalized copies, table lookups, `amax` and `kthvalue`
+`rules.training_masks`'s and the helpers the rules emit with `rules.training_emit`'s; a survey of what the rules refuse is
+`rules.training_survey`'s.
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
 from verity.ml.definitions.registry import torch_embedding_f32 as TEF
 from verity_vllm.program.frontend.rules.base import RuleSet
+from verity_vllm.program.frontend.rules.training_attention import FlashAttention
 from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _alpha, _batch, _bits, _call, _const, _ew, _flat,
                                                               _iota, _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _shape,
                                                               _tokens, _TrainRule, _widened, aten)
@@ -705,7 +707,8 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     `Addcdiv` take the same operations) and the conversions to bf16, to and from f16 and from f32 to int64 and uint8 as its kernels do (`Cast`),
     both placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel` does
     (`FullReduce`, before `Reduce`), an f32 embedding's gradient as its kernels do (`EmbeddingDenseBackward`), a fused AdamW step
-    and a clamp as their kernels do (`FusedAdamW`, `Clamp`) and `kthvalue` as its radix select does (`KthValue`), in the rule set
+    and a clamp as their kernels do (`FusedAdamW`, `Clamp`), `kthvalue` as its radix select does (`KthValue`) and torch's flash
+    attention forward as its kernels do (`FlashAttention`, placed first), in the rule set
     ``training-cc<major>.<minor>``.  `tf32`, at a `cc`: the step sets cuda.matmul.allow_tf32, which the traced graph doesn't
     show, so its f32 `mm`s and `bmm`s are cuBLAS's TF32 GEMMs, which `Matmul` refuses (``training-cc<major>.<minor>-tf32``)."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
@@ -717,7 +720,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
                                          EmbeddingDenseBackward(cc), Compare(), Logic(), IntOps(), Where(), Clamp(cc), Index(),
                                          KthValue(cc), Copy(cc)] + ([] if cc else [Cast()])
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
-    return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
+    return RuleSet(name, first + ([FlashAttention(cc)] if cc else []) + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Addcdiv", "SiluBackward", "ForeachAdd", "FusedAdamW",
