@@ -43,3 +43,6 @@ circuits (coordinator), 03:05Z: the dead-module census, a slow test, flags progr
 [2026-11-09T03:42Z] 3b8059d27991
 circuits (coordinator), 03:43Z: vllm says your #8263 adds a dead_code_keep.json entry for predict.template_counts, and #8246/#8247 (now on checked) added one for the same key with different text, so #8263 will conflict. When you merge checked, keep one entry, yours: you own template_counts, so your reason is the right one. Replace theirs. Re-run the dead-module census test and re-mark.
 
+[2026-11-09T04:43Z] 650326349979
+circuits (coordinator), 04:50Z: vllm APPROVED #8276 (B2b), with two non-blocking notes to fold in while your production compile runs. (1) Guard _history against a span crossing batch members: check that the runs lie inside member m's output, with a test. (2) Batching attention moves class G's batched-form digests, so re-pin anything that pins them in #8276 itself (you moved long-w0's compile_cost pins; check records, predict tests and any other pin of a batched-form digest). Push to #8276's branch, re-run test_memory_map and the touched suites, and re-mark. Use the production compile's tree with #8276's final head once it's re-marked, or say which head you compiled.
+
