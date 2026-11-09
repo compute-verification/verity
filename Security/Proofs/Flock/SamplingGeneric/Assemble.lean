@@ -87,19 +87,19 @@ noncomputable def outerBody (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     fun inner => flatMapRP (L.innerBody x s c jo.1) ((List.finRange (L.kIn x)).zip inner)
 
 /-- The outer wait's kept runs, indexed. -/
-noncomputable def outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+noncomputable def outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (c : L.ECoins x) : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen)) :=
   (List.finRange (L.kOut x)).zip ((waitAccC (L.kOut x) ((List.finRange (L.capOut x)).map c.1) []).eval H run').1
 
 /-- **What the extractor keeps** at the outer runs `Z`: at an accepted judged run, `Z = outerList`. The list is a
 parameter so that unfolding `found` never asks the kernel to evaluate the outer wait over `List.finRange (L.kOut x)`. -/
 noncomputable def found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
-    (run' : (Fin (L.V.k x) → Coin) → Trace) (c : L.ECoins x)
+    (run' : (Fin (L.V.k x) → Coin) → Transcript) (c : L.ECoins x)
     (Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))) : List (List Msg × Opening Bool) :=
   ((flatMapRP (L.outerBody x s c) Z).eval H run').1
 
 theorem found_eq (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
-    (run' : (Fin (L.V.k x) → Coin) → Trace) (c : L.ECoins x)
+    (run' : (Fin (L.V.k x) → Coin) → Transcript) (c : L.ECoins x)
     (Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))) :
     L.found H x s run' c Z = ((flatMapRP (L.outerBody x s c) Z).eval H run').1 :=
   rfl
@@ -141,7 +141,7 @@ theorem ownLog_E (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover
   rw [ite_eq_left hacc', ownLog_bind, ownLog_bind]
   exact List.mem_append_right _ (List.mem_append_left _ ht)
 
-theorem passes_sessExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem passes_sessExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (s : AuditStatement) (us : List ℕ) (u : ℕ) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : A.EC (L.sh x u)) :
     Sampling.Passes H run' L.commit (L.sessExt x s us u r v c) := by
   unfold sessExt
@@ -151,7 +151,7 @@ theorem passes_sessExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' :
   | some w => exact Sampling.Passes.flatMapRP fun _ _ => Sampling.Passes.checkRevealed H run' L.commit _
 
 /-- What a run's extractions keep passes its opening check, with the check's calls their own. -/
-theorem passes_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem passes_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) :
     Sampling.Passes H run' L.commit (L.runExt x s r v c) := by
   unfold runExt
@@ -160,7 +160,7 @@ theorem passes_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : 
     · exact L.passes_sessExt H x run' s _ _ _ _ _
     · exact Sampling.Passes.ret_nil H run' L.commit
 
-theorem passes_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem passes_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (s : AuditStatement) (c : L.ECoins x) (Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))) :
     Sampling.Passes H run' L.commit (flatMapRP (L.outerBody x s c) Z) :=
   Sampling.Passes.flatMapRP fun _ _ => Sampling.Passes.bind _ fun _ => Sampling.Passes.flatMapRP fun li _ =>
@@ -168,7 +168,7 @@ theorem passes_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (
 
 /-- A revealed opening that passes, at one of a session's proof blocks `us`, of the witness the session's extraction
 returns, is among the session's extraction's. -/
-theorem sessExt_mem (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem sessExt_mem (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (s : AuditStatement) (us : List ℕ) (u : ℕ) (r : Fin (L.V.k x) → Coin) (c : A.EC (L.sh x u)) {xS : Msg}
     {vS : Seen} (hsess : L.session x u (run' r).seen = some (xS, vS)) (h : A.shape xS = L.sh x u) {w : A.W}
     (hw : ((serve (fun r' => viewing (L.view x u) (L.place x u xS r r'))
@@ -185,7 +185,7 @@ theorem sessExt_mem (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (F
 
 /-- The extraction of the session at its first slot of the sample, at the slot's coins, is among the run's
 extractions'. -/
-theorem mem_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem mem_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) {i : Fin (L.nPU x)} {u : ℕ}
     (hi : (L.checked x r)[i.val]? = some u) (hlt : u < L.nPU x)
     (hfirst : (L.sessSlots x (L.checked x r) i).head? = some i.val) {q : List Msg × Opening Bool}
@@ -199,7 +199,7 @@ theorem mem_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fi
   exact hq
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem mem_outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem mem_outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (c : L.ECoins x) {j : Fin (L.kOut x)} {r : Fin (L.V.k x) → Coin}
     (hj : (accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1))[j.val]? =
       some r) :
@@ -211,7 +211,7 @@ theorem mem_outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : 
 /-- **A session's extraction at its first slot of a kept inner run, under a kept outer run, is kept**, at the slot's
 coins. -/
 theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
-    (run' : (Fin (L.V.k x) → Coin) → Trace) (c : L.ECoins x)
+    (run' : (Fin (L.V.k x) → Coin) → Transcript) (c : L.ECoins x)
     {Z : List (Fin (L.kOut x) × ((Fin (L.V.k x) → Coin) × Seen))} {j : Fin (L.kOut x)} {r : Fin (L.V.k x) → Coin}
     (hj : (j, (r, (run' r).seen)) ∈ Z) {l : Fin (L.kIn x)} {d : Fin (L.V.k x) → Coin}
     (hl : (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.kIn x)
