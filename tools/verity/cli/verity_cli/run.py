@@ -7,8 +7,9 @@
     verity config hash CONFIG
 
 `verity run` checks the configuration, refusing any set of subprotocols that is no composite's (``composite``,
-`verity.core.deploy.config.COMPOSITES`: onsite and remote, whose work is Pearl+'s run verdict, the only two protocol
-soundness covers; H1's development composite is refused), then runs
+`verity.core.deploy.config.COMPOSITES`: onsite, remote, whose work is Pearl+'s run verdict, and remote with the network
+certifier, with PoUW's period or without, the only ones protocol soundness covers; H1's development composite is
+refused), then runs
 the parties it places on this machine (``--on``, default ``local``), or only the ``--party`` ones, for ``--periods``
 periods (default 1), in the shared state ``--state`` (default a new directory under the system's temporary one). The
 parties are those of the static table `REGISTRY` names: the served window's (`examples/onsite_served/served_table.py`);
