@@ -375,6 +375,38 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
         bad.close(salt_key=bytes(32))
 
 
+def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch):
+    """With no wired trees (`rows.Member.wired_trees`), a wired port commits no tree, domain or root, and the verifier's
+    window derives no port for it: its rows are its writer's output value, its writer units' leaves of its writer's tree
+    (`rows.Binding.held`, `held_leaves`), given as `rows.WIRED`, and its ``b || c`` its writer's. Given as rows it is
+    refused, and so is a wire of several members' units, which no one tree holds, and, in a member with no tables, one
+    that isn't its writer's rows in order."""
+    win = I.Window(chain(), RUN, LAW, 2)
+    ins, outs = chain_values()
+    win.record(GEMM, ins, outs, {"chain": 0})
+    given = {}
+    monkeypatch.setattr(CS, "commit", lambda window, data, **kw: given.setdefault("data", data))
+    win.close(salt_key=bytes(32))
+    monkeypatch.undo()
+    ms = tuple(replace(m, wired_trees=False) for m in win.window.members)
+    held = replace(win.window, members=ms)
+    data = [{**d, "rows": {**d["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}}} for d, m in zip(given["data"], ms)]
+    c, plain = CS.commit(held, data, salt_key=bytes(32)), win.close(salt_key=bytes(32))
+    wired = {m.port(p) for m in ms for p, _o, _ws in m.wired}
+    assert len(wired) == 3 and not wired & (set(c.roots) | set(c.domains) | set(CS.expected_ports(held)))
+    assert set(plain.roots) == set(c.roots) | wired and set(CS.expected_ports(win.window)) == set(CS.expected_ports(held)) | wired
+    assert (held.held(ms[0], "x"), held.held_leaves(ms[0], "x")) == (ms[0].port("x"), (0, 1))
+    assert [(held.held(m, "x"), held.held_leaves(m, "x")) for m in ms[1:]] == [
+        (ms[2].port("o0"), (0, 1)), (ms[0].port("o0"), (0, 1)), (ms[1].port("o0"), (0, 1))]
+    assert all(c.bc[m.port("x")] == c.bc[held.held(m, "x")] == plain.bc[m.port("x")] for m in ms[1:])
+    with pytest.raises(ValueError, match="given as"):
+        CS.commit(held, given["data"], salt_key=bytes(32))
+    with pytest.raises(ValueError, match="several members' outputs"):
+        replace(held, members=(ms[0], replace(ms[1], wired=(("x", "o0", (0, 4)),)), *ms[2:]))
+    with pytest.raises(ValueError, match="in its writer's order"):
+        replace(held, members=(ms[0], replace(ms[1], wired=(("x", "o0", (5, 4)),)), *ms[2:]))
+
+
 def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_them():
     win = I.Window(chain(), RUN, LAW, 2)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
@@ -509,11 +541,14 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
 def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once():
     """A wire's checks are per wire: its ends are its templates' ports, its reader and writer units are among theirs, it reads
     a row of its writer's words (a gathered row is refused), and no reader unit's port is wired twice. A step of 0 is a
-    fan-out."""
+    fan-out. A template's wire to its own later instances passes with no order too, and one reading the same instances
+    or later ones is refused (``order``)."""
     w = {"reader": GID, "port": "x", "writer": GID, "out": "o0", "at": 4, "radix": (2, 2), "base": 0, "step": (2, 1)}
     I.Circuit("ok", ((GEMM, 8),), wires=(I.Wire(**w),), order=((GID, 0, 4), (GID, 4, 4)))
-    with pytest.raises(ValueError, match="cycle: wire 0"):
-        I.Circuit("unordered", ((GEMM, 8),), wires=(I.Wire(**w),))
+    I.Circuit("unordered", ((GEMM, 8),), wires=(I.Wire(**w),))
+    for edit in ({"base": 4}, {"at": 0, "base": 4}, {"base": 5, "step": (0, 0)}):
+        with pytest.raises(ValueError, match="order: wire 0 "):
+            I.Circuit("self", ((GEMM, 8),), wires=(I.Wire(**{**w, **edit}),))
     for edit, why in [({"writer": TID}, "templates of the circuit"), ({"port": "o0"}, "parameters"), ({"out": "x"}, "outputs"),
                       ({"port": "w"}, "gathered from several writers"), ({"at": 5}, "reader units"),
                       ({"base": 5}, "writer units"), ({"step": (-2, 1)}, "writer units"), ({"radix": ()}, "at least one digit"),
@@ -547,13 +582,14 @@ def test_a_wires_box_bounds_the_writers_of_the_reader_indices_between_two():
 
 
 def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
-    """`chain`'s template reads itself, so with no order its wires are a cycle of templates; its order, a range each layer
-    and step (`ordered`), puts every range a wire reads in a range below that range. An order where a range reads a later
-    one is refused naming the first such wire, an order that doesn't tile each template's units by name, and a cut into
-    ranges no order can rank (layer 0's steps one range, read by layer 1's step 0 and reading it) as a cycle."""
+    """`chain`'s template reads itself, and with no order its units in unit order don't fit its wires (layer 1's step 0,
+    units 2 and 3, reads layer 0's step 1, units 4 and 5); its order, a range each layer and step (`ordered`), puts every
+    range a wire reads in a range below that range. An order where a range reads a later one is refused naming the first
+    such wire, an order that doesn't tile each template's units by name, and a cut into ranges no order can rank (layer
+    0's steps one range, read by layer 1's step 0 and reading it) as a cycle."""
     c = chain()
     assert c.order == ((GID, 0, 2), (GID, 4, 2), (GID, 2, 2), (GID, 6, 2))
-    with pytest.raises(ValueError, match="cycle: wire 0 .* is on a cycle of templates"):
+    with pytest.raises(ValueError, match="order: wire 1 "):
         I.check_order(c.units, c.wires)
     for order, why in [(((GID, 0, 4), (GID, 4, 4)), "order: wire 1 "), (((GID, 0, 2), (GID, 2, 2), (GID, 4, 2), (GID, 6, 2)),
                                                                         "order: wire 1 "),

@@ -44,7 +44,7 @@ def GateSet (C : Circuit) (S : Finset (Fin C.N)) : Prop := S ⊆ C.computed
 def inputs (C : Circuit) : Finset (Fin C.N) := univ.filter fun v => C.isInput v = true
 
 /-- `x` agrees with `y` on the values `T`. -/
-def AgreesOn (C : Circuit) (x y : C.Transcript) (T : Finset (Fin C.N)) : Prop := ∀ v ∈ T, x v = y v
+def AgreesOn (C : Circuit) (x y : C.Trace) (T : Finset (Fin C.N)) : Prop := ∀ v ∈ T, x v = y v
 
 /-- **Gate `g` depends on the value `v`**: some gate reads `v` and feeds `g`, so `g` reads `v` or reads a value computed
 by a gate that depends on `v`. -/
@@ -57,7 +57,7 @@ inductive FeedsWithin (C : Circuit) (S : Finset (Fin C.N)) : Fin C.N → Fin C.N
 
 /-- **The reconstruction of `S` from `x`**: `S`'s gates evaluated once each in increasing order, each on the values its
 predecessors left, starting from `x`; every value outside `S` keeps `x`'s. -/
-def reconstruct (C : Circuit) (S : Finset (Fin C.N)) (x : C.Transcript) : C.Transcript :=
+def reconstruct (C : Circuit) (S : Finset (Fin C.N)) (x : C.Trace) : C.Trace :=
   (S.sort (· ≤ ·)).foldl (fun y g => Function.update y g (C.op g y)) x
 
 end Nci.Formalism

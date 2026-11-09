@@ -41,7 +41,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, NamedTuple
 
-from verity.core.protocols.certifier import advice as I1
+import verity.core.protocols.certifier.advice as I1
 from verity.core.protocols.certifier.advice import (  # the advice's parts, as `predict.batch._solo` reads them
     KINDS,
     WIDTH_BITS,

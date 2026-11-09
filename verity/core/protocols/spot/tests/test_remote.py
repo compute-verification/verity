@@ -558,6 +558,172 @@ def test_a_withheld_session_releases_only_raw_coins_until_its_signed_close(tmp_p
     assert got is not None
 
 
+#: the coins of a withheld session whose release, sent as one frame, is past `MAX_HEAD`: 722 openings with paths of 10
+#: digests
+RELEASED = 722
+
+
+def _withheld(directory, signer, families) -> tuple[C.LiveChallenger, socket.socket, threading.Thread, list]:
+    """A withheld session over `families` served on one end of a socketpair (`serve`, on a clock that counts): its
+    challenger, the other end, the serving thread and how `serve` ended, once it has."""
+    directory.mkdir()
+    ch = C.LiveChallenger(SCHEME, 0, families, entropy("host"))
+    session = R.open_session(ch, pinned_key(), HOST, signer, directory, "s-1", withhold=True)
+    a, b = socket.socketpair()
+    ended: list[str | None] = []
+
+    def run() -> None:
+        with a:
+            ended.append(R.serve(a, session, itertools.count().__next__))
+    t = threading.Thread(target=run)
+    t.start()
+    return ch, b, t, ended
+
+
+def _raw(sock: socket.socket) -> tuple[int, dict] | None:
+    """The next frame on `sock`, its head's length and the head; None at the stream's end between frames."""
+    data = b""
+    while len(data) < R.HEADER.size:
+        chunk = sock.recv(R.HEADER.size - len(data))
+        if not chunk:
+            assert not data, "the stream ended inside a frame's header"
+            return None
+        data += chunk
+    nh, nb = R.HEADER.unpack(data)
+    head = b""
+    while len(head) < nh:
+        chunk = sock.recv(min(nh - len(head), 1 << 16))
+        assert chunk, "the stream ended inside a frame's head"
+        head += chunk
+    assert nb == 0
+    return nh, json.loads(head)
+
+
+def test_a_withheld_release_past_one_frame_comes_in_frames_each_under_the_head_limit(tmp_path, signer):
+    """A withheld session that opened 722 coins: its release as one frame would be past `MAX_HEAD`, which the client
+    and the certifier's coin link refuse whole, so the session could never close. `serve` releases them in frames each
+    at most `RELEASE_HEAD`, `releasing` from index 0 on, each from where the last stopped, then `released` with the
+    commitment; their openings, in order, are every coin it gave, each opening against the commitment. The client
+    (`RemoteChallenger`, `ChallengerCoins`) closes such a session and settles every coin, the segment the one an
+    in-process challenger of the same entropy gives (what the verifier, Lean's included, reads)."""
+    families = [("positions", RELEASED), ("replay", 2)]
+    ch, b, t, ended = _withheld(tmp_path / "raw", signer, families)
+    b.sendall(frame({"type": "hello"}))
+    assert _raw(b)[1]["type"] == "layout"
+    asked = [("positions", i, root(i % 256)) for i in range(RELEASED)]
+    for k in range(0, RELEASED, R.MAX_BATCH):
+        part = asked[k:k + R.MAX_BATCH]
+        b.sendall(b"".join(frame({"type": "open", "label": label, "index": index, "after": after.hex()})
+                           for label, index, after in part))
+        assert [_raw(b)[1]["type"] for _ in part] == ["coin"] * len(part)
+    b.sendall(frame({"type": "close"}))
+    frames = list(iter(lambda: _raw(b), None))
+    b.close()
+    t.join()
+    assert ended == [None]
+    want = C.LiveChallenger(SCHEME, 0, families, entropy("host")).open_many(asked)
+    one = json.dumps({"type": "released", "released": {"commitment": ch.commitment.to_json(),
+                                                       "openings": [o.to_json() for o in want]}},
+                     sort_keys=True, separators=(",", ":"))
+    assert len(one) > R.MAX_HEAD
+    kinds = [head["type"] for _, head in frames]
+    assert len(frames) >= 2 and kinds == ["releasing"] * (len(frames) - 1) + ["released"]
+    assert all(nh <= R.RELEASE_HEAD for nh, _ in frames)
+    got: list[dict] = []
+    for _, head in frames[:-1]:
+        assert sorted(head["releasing"]) == ["first", "openings"] and head["releasing"]["first"] == len(got)
+        got += head["releasing"]["openings"]
+    assert sorted(frames[-1][1]["released"]) == ["commitment", "openings"]
+    assert frames[-1][1]["released"]["commitment"] == ch.commitment.to_json()
+    got += frames[-1][1]["released"]["openings"]
+    assert got == [o.to_json() for o in want]
+    assert all(C.live_reason(ch.commitment, C.LiveOpening.from_json(o), label, index, after) is None
+               for o, (label, index, after) in zip(got, asked))
+    assert [head for _, head in frames] == R.release_frames(ch.commitment, want)
+
+    ch, b, t, ended = _withheld(tmp_path / "client", signer, families)
+    client = R.RemoteChallenger(b)
+    coins = ChallengerCoins(C.LiveRecord(client, "positions"))
+    coins.commit(root(7))
+    read = coins(RELEASED * C.COIN_BYTES)
+    client.close()
+    t.join()
+    assert ended == [None]
+    coins.settle()
+    assert client.commitment == ch.commitment and len(client.opened) == RELEASED
+    honest = ChallengerCoins(C.LiveRecord(C.LiveChallenger(SCHEME, 0, families, entropy("host")), "positions"))
+    honest.commit(root(7))
+    assert honest(RELEASED * C.COIN_BYTES) == read
+    assert coins.segments[0].to_json() == honest.segments[0].to_json()
+    assert coins.record.reason() is None
+
+
+def _releasing(tamper):
+    """A client over a socketpair to a withheld challenger that answers the hello with the layout, each open with the
+    coin's raw bytes and the close with `tamper(frames, docs)`: `frames` its honest release, one opening a frame (each
+    but the last `releasing`, the last `released`), and `docs` the openings."""
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    a, b = socket.socketpair()
+
+    def run() -> None:
+        with a:
+            reply(a)
+            a.sendall(frame({"type": "layout", "layout": R.layout_json(ch.commitment)}))
+            opened = []
+            while (head := reply(a))["type"] == "open":
+                opened.append(ch.open(head["label"], head["index"], bytes.fromhex(head["after"])))
+                a.sendall(frame({"type": "coin", "coin": R.coin_json(opened[-1])}))
+            docs = [o.to_json() for o in opened]
+            frames = [_part(i, [d]) for i, d in enumerate(docs[:-1])]
+            frames.append({"type": "released",
+                           "released": {"commitment": ch.commitment.to_json(), "openings": docs[-1:]}})
+            a.sendall(b"".join(frame(f) for f in tamper(frames, docs)))
+
+    t = threading.Thread(target=run)
+    t.start()
+    return ch, R.RemoteChallenger(b), t
+
+
+def _part(first: int, openings: list) -> dict:
+    return {"type": "releasing", "releasing": {"first": first, "openings": openings}}
+
+
+#: a release whose frames aren't the coins given in order, one each, and what the client says: frame 1 dropped,
+#: repeated, swapped with frame 0; the last frame before the others; a frame of no openings; one past the coins given;
+#: one out of form; and the release cut before its last frame
+RELEASES_REFUSED = {
+    "missing": (lambda f, d: f[:1] + f[2:], "frame from opening 2 .* not the next of the 4 coins"),
+    "repeated": (lambda f, d: f[:2] + f[1:], "frame from opening 1 .* after the 2 released"),
+    "reordered": (lambda f, d: [f[1], f[0], *f[2:]], "frame from opening 1 .* after the 0 released"),
+    "last first": (lambda f, d: [f[0], f[-1], *f[1:-1]], "released openings are not the coins it gave, in order"),
+    "empty": (lambda f, d: [f[0], _part(1, []), *f[1:]], "frame from opening 1 with 0 openings"),
+    "past the coins": (lambda f, d: [*f[:-1], _part(3, d[3:]), _part(4, d[:1]), {**f[-1], "released": {
+        **f[-1]["released"], "openings": []}}], "frame from opening 4 with 1 openings is not the next of the 4"),
+    "out of form": (lambda f, d: [{"type": "releasing", "releasing": {"openings": d[:1]}}, *f[1:]],
+                    "releasing is malformed"),
+    "cut": (lambda f, d: f[:-1], "stream closed"),
+}
+
+
+@pytest.mark.parametrize("case", ["honest", *sorted(RELEASES_REFUSED)])
+def test_the_client_takes_a_release_in_order_and_refuses_one_missing_repeated_or_reordered(case):
+    """The client takes a withheld session's release in as many frames as the challenger sends, one opening each here,
+    and settles its coins; a frame missing, repeated or out of order, the last before the others, one of no openings,
+    one past the coins it was given, one out of form or a release cut before its last frame ends the session there,
+    keeping no opening."""
+    ch, client, t = _releasing(RELEASES_REFUSED[case][0] if case != "honest" else lambda f, d: f)
+    client.open_many(BATCH)
+    client.open("replay", 1, root(1))
+    if case == "honest":
+        client.close()
+        assert client.commitment == ch.commitment and len(client.opened) == 4
+    else:
+        with pytest.raises(C.CoinError, match=RELEASES_REFUSED[case][1]):
+            client.close()
+        assert client.commitment is None and client.opened == {}
+    t.join()
+
+
 TREE_SPEC = {"block": 3, "rounds_log": 2, "scheme": CT.SCHEME, "streams": [CT.SESSION, "t/rep0", "t/rep1"]}
 NONCE = bytes(range(32))
 ROOT_F, ROOT_B = root(20), {"t": root(21)}

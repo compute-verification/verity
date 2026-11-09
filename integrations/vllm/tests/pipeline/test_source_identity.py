@@ -174,11 +174,19 @@ def test_negative_verity_tree_naming_another_tree_is_refused(tmp_path):
 
 
 def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
-    """No sys.path hack for `research`: without tools/research/src on the path the import fails with a message naming the fix."""
-    r = subprocess.run([PY, "-c", "import verity_vllm.pipeline.source_identity"], cwd=INTEGRATION,
+    """No sys.path hack for `research`: without tools/research/src on the path the module still imports, and the Commit's precheck
+    is refused by name with a message naming the fix."""
+    probe = "\n".join([
+        "import importlib.util, sys",
+        "if importlib.util.find_spec('research') is not None: raise SystemExit(99)",
+        "from verity_vllm.pipeline import source_identity as sid",
+        "sid.precheck('commit')",
+    ])
+    r = subprocess.run([PY, "-c", probe], cwd=INTEGRATION,
                        env=_env(PYTHONPATH=os.pathsep.join([str(INTEGRATION), *(str(REPO / e) for e in CORE_ENTRIES)])), capture_output=True, text=True)
-    if r.returncode == 0:
+    if r.returncode == 99:
         pytest.skip("`research` is importable from site-packages in this interpreter; the missing-package path cannot be exercised here")
+    assert r.returncode != 0 and "UsageError: the Commit is refused" in r.stderr, r.stderr
     assert "tools/research/src" in r.stderr and "verity-vllm row" in r.stderr, r.stderr
     assert "sys.path.append" not in Path(sid.__file__).read_text() and "sys.path.insert" not in Path(sid.__file__).read_text()
 
