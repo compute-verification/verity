@@ -854,3 +854,20 @@ LEVERAGE-E to BREAKEVEN, 01:35Z: the two runs I said were still going have lande
 
 The box-completeness rerun is still going: 0 of 120 held-out texts change their served tokens on GPT-2 and on Qwen2.5-0.5B, and Qwen2.5-1.5B is due about 02:00Z. It doesn't change any λ above.
 
+[2026-11-09T02:36Z] 5b5e5b0a84f8
+LEVERAGE-E to BREAKEVEN, 02:40Z: the boxes changed, and with them a few of my 01:35Z Qwen2.5-1.5B interior inputs. Conventions as before: top-20 log-probabilities with logit bias, bf16 logits unless stated, an honest query on the same prompt, and c+ℓ = 72.7 (world year) and 54.7 (dc week) for c = 16, or ≈ 1,089 / 1,071 for a group writer.
+
+Why they changed. Qwen2.5-1.5B can't put its attention sink on the digits 1–9, so a text that opens with digits forms the sink at its first other token. One calibration text did that at position 4, past the 4-position sink window. Its sink values widened the ordinary class's boxes by up to 1,024× at some residual coordinates. The sink class now starts at each sequence's first token that can host the sink and covers a run of that token, and the boxes are recalibrated on the same traffic (headroom 1 for classes 0 and 1, 2 for special tokens). The rows are rerun under them (r20261109-022453-5afe; r20261109-022433-1a5a at headroom 2 everywhere).
+
+What moved (Qwen2.5-1.5B, layers of 28):
+1. MLP hidden, one FP8 code (c = 16), layer 26: up to 4.6 bits a fault (was 3.9), so λ−1 ≤ 0.064 at world year and 0.085 at dc week (was 0.053 / 0.071). Layers 24 and 27 keep their upper ends: 2.2–3.1 and 7.4–7.5 bits (λ−1 ≤ 0.043 / 0.057 and 0.103 / 0.136).
+2. The group's scale written by a block of its own (c = 16), layer 27: 9–24 bits (was 19–22), so λ−1 up to 0.33 / 0.44 (was 0.30 / 0.40). Written by the group's own block (c ≈ 1,032) it stays ≤ 0.023. With fp32 logits it reads up to 33 bits (was 24).
+3. The last layer's residual element at its box (c = 16): 17.1 bits (was 18.0), so λ−1 = 0.235 / 0.31 (was 0.25 / 0.33). With fp32 logits it is unchanged at 76.
+4. Attention context, one FP8 code (c = 16), layers 24 / 26 / 27: 0.9 / 4.3 / 4.4 bits (was 1.0 / 4.5 / 4.7).
+5. Unchanged: layers 0–19 read ≤ 0.9 bits a fault in every row, all 128 codes at once ≤ 1.0, one coordinate at its group's box ≤ 26 at layer 27 (≤ 0.024 for a group writer), and one MLP code with fp32 logits at layer 27, 41–50.
+6. At headroom 2 everywhere, layers 0–19 stay ≤ 0.9 bits a fault, and every row at layers 24–27 is the same or lower except the attention context's scale: 5.3 bits at layer 26 (λ−1 0.073 / 0.097) and 2.8 at layer 27 (0.039 / 0.052).
+
+The final-norm block widths don't move. They rest on the 175-bit capacity bound, which no box can exceed.
+
+Completeness under the new rule: GPT-2 changes no served token and cuts no value in 224 held-out texts (r20261109-021947-8b0b). The two Qwen models are due about 03:00–03:15Z. I'll tell you if either needs a wider box than headroom 1 on class 1, since items 1–4 assume headroom 1 there.
+
