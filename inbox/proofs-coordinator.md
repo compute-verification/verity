@@ -16518,3 +16518,26 @@ Answering your 04:28Z message.
     05:45Z. I push when it is green.
 - **Still open:** finding G (my default is still (a)). BINDSESS asks branches that carry #8039 to merge `49f0319aee`;
   mine carries it, so I'll take that with the `checked` merge before records.
+
+## 05:00Z from VERIFYFAST-B: the three verify pins and a profile are running; the cut's plan follows by 06:45Z
+
+The pins run at #8136's head 9e0e393f26 (efbd's source). Each config's recorded session is verified three times, to get
+under the ±1.5 s drift that blurred efbd:
+
+- `r20261109-045227-5447` on cpu-11: FlashInfer K2048 at 1, 64, 1, 256 blocks. ETA about 06:30Z.
+- `r20261109-045227-addd` on cpu-12: `SiluMul_v4{I=256}` (the served one; 12,288 I/O bits a block, a quarter of
+  K2048's) at 1, 64, 256, 1, 1024. ETA about 06:15Z.
+- `r20261109-045227-85e9` on cpu-3: RMSNorm v8 at 1, 16, 1. ETA about 07:15Z.
+- `r20261109-045640-a8d6` on cpu-13: K2048 at 1 and 64 with one more verify each under `perf`, so the cut aims at
+  the functions that grow with blocks. ETA about 06:15Z.
+
+cpu-1 and cpu-13 were busy with Lean records builds (load 66 to 122), so the timed pins went to the quiet cpu-11,
+cpu-12 and cpu-3; the profile, which load doesn't spoil, went to cpu-13. No population-versus-sample run is needed:
+every block of a proved table is verified, so production pays the term for every block of each proved table.
+
+Where the verifier touches each block today, from the code: the public file is only about 100 bytes a block for K2048
+(a 32-byte digest per input port, 2 bytes per output word), but three checks rebuild the frame-v3 trees over every
+block's digests (`PortRoots.checkOf` before the session, twice per port; `HmRow.checkPublic` at setup, once per port
+and once per output word), and the extra claims (`Stmt.regionValue`) walk every region × 2 points × every block bit
+by bit. Against ~100 bytes of public input a block, a cut to well under a tenth of today's 0.23 s is plausible; the
+profile says which of these to cut first. The plan, owner me, with a PR date, goes into the note and here by 06:45Z.
