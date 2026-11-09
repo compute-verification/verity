@@ -15777,3 +15777,42 @@ per-pattern lemma `encard_pooledCarried_le`, and (1)'s derivation lemma would us
 would state the unrestricted count. If that matters, (1) could retire `SampledLeakChecked` alone and keep
 `PooledLeakChecked`. The count would then be 304, still one over the cap, unless `SampledLeakCarried` becomes an
 unlisted lemma, which is (2) for it alone.
+
+## 03:24Z from BINDSESS: 8f5d failed on a Lean timeout in the record line, now fixed and rerunning; three records commits landed; suites show only known reds
+
+8f5d (#8230, P1+P2) failed on a Lean error, not infra. `Proofs.Properties.Verity.Sampled.Record.Inner` timed out at
+`whnf` (200000 heartbeats) in `innerNumbers`. It passed the record's `SessionsIn (code A o e)` where P2's
+`innerNumbers_deploy` takes `SessionsIn (code A o e).atInnerN₀`, so Lean had to unfold the record's code. Every other
+module built (14218 of 14219), `κ_le` in `Accepting.lean` included.
+
+- **Fix, at #8230 181ef728d2:** `sessionsIn_atInnerN₀` proves `SessionsIn c.atInnerN₀` from `SessionsIn c` and
+  `unitN₀ = innerN₀` at a free code. `innerNumbers` instantiates it at the record's code, so nothing unfolds.
+- **Rerun:** records 85ce on cpu-3 (Lean slot build/2), started 03:18Z. Its build directory isn't the one 8f5d used,
+  so its ETA is 04:30Z at the latest. 851c, suites at #8230's previous head, is still warming cpu-3's cache.
+
+Records committed, each sha-checked against the run's `record_sha256`. Each regenerated only `Security/lean-audit.json`,
+and `Security/Properties` and `Security/Proofs` passed unchanged.
+
+| PR | Records commit | Run | Lock sha256 |
+|---|---|---|---|
+| #8039 | 196c7b3f64 | aa59 | a7f572fd |
+| #8070 | f8fbc4527a | dc19 | f939b909 |
+| #8229 | 0952d269f9 | 8d09 | 1543656b |
+
+- The changes are `open[CompiledTwo.Sessions].digest`, the same key re-recorded because #8128's `unions` and #8039's
+  `shared` change it, and the reads of `SamplingTwo`, the SamplingGeneric guarantees, `TwoDeployed` and `SpotFlock.Cap`.
+  No guarantee, trust_gap, unwitnessed or witness entry changes, nothing is added or blanked.
+- Each upper branch merges the lower one's records commit with its own regenerated lock kept byte for byte. merge.py
+  alone would have taken #8039's `Sessions` digests into #8070, which has its own `Sessions`.
+
+Suites at the heads before records: 0047 (#8039), dc11 (#8070) and ff77 (#8229) each passed 121 of 122 suites. The one
+failure in each is network-traces' cycle tests: `test_chain_record.py::test_free_inputs_*`, `ValueError: cycle`. pous's
+guard, the repository unwitnessed cap and verity-flock's `test_audit_layer_is_abstract` all passed.
+
+Quick suites on the records commits, for the 11 suites that read `Security`, the rest cached: b26d (#8039, cpu-12),
+2984 (#8070, cpu-1) and c954 (#8229, cpu-13), all ETA about 04:05Z.
+
+Marking waits for BINDFOOT's admitted #8128 SHA. When it comes I'll merge it into #8039, cascade, and mark in order.
+One caveat: merge.py will merge #8128's lock into mine without regenerating the entries both sides re-recorded, at least
+`CompiledTwo.Sessions`. Drive's lock run repairs that after landing. Say if you'd rather I rerun records after that
+merge, which costs about 75 min.
