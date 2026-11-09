@@ -1,4 +1,4 @@
-"""`verity bench rho`: the slowdown for every scenario, how it moves, and where it falls below a target.
+"""`verity bench slowdown`: the slowdown for every scenario, how it moves, and where it falls below a target.
 
     uv run python benchmarks/slowdown/run.py [--scenario NAME ...] [--target 10 --target 100] [--set KEY=VALUE ...]
                                         [--out DIR] [--figures DIR]
@@ -8,7 +8,7 @@ reference training algorithm at its MFU, with its status, where its premises sta
 it comes from; the inference overhead beside it (or that it isn't modeled); and its best known attack in a table of its
 own, a construction beside the bound rather than an end of it.
 
-Prints Markdown; with `--out DIR` (default `$OUT`) also writes `rho.md`, `rho.json` and the figures (in `figures/`)
+Prints Markdown; with `--out DIR` (default `$OUT`) also writes `slowdown.md`, `slowdown.json` and the figures (in `figures/`)
 there. `--figures DIR` writes the figures (`slowdown/figures.py`, matplotlib) to DIR. `--set` overrides any
 registry key for the whole run.
 """
@@ -312,7 +312,7 @@ def main() -> None:
     ap.add_argument("--target", action="append", type=float, help="slowdown targets for the danger scan "
                     "(default: 10, 100)")
     ap.add_argument("--set", action="append", default=[], help="KEY=VALUE registry overrides")
-    ap.add_argument("--out", default=os.environ.get("OUT"), help="write rho.md, rho.json and figures/ here ($OUT)")
+    ap.add_argument("--out", default=os.environ.get("OUT"), help="write slowdown.md, slowdown.json and figures/ here ($OUT)")
     ap.add_argument("--figures", help="write the figures (PNG and the JSON they plot) here")
     args = ap.parse_args()
 
@@ -424,8 +424,8 @@ def main() -> None:
             print(f"figures: {figures}", file=sys.stderr)
     if out:
         out.mkdir(parents=True, exist_ok=True)
-        (out / "rho.md").write_text(text + "\n")
-        (out / "rho.json").write_text(json.dumps(jsonable(record), indent=1, default=str) + "\n")
+        (out / "slowdown.md").write_text(text + "\n")
+        (out / "slowdown.json").write_text(json.dumps(jsonable(record), indent=1, default=str) + "\n")
 
 
 if __name__ == "__main__":
