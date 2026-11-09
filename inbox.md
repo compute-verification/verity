@@ -4,3 +4,6 @@ top 07:1xZ, a change of scope. ci owns the decision logic: research.vqueue's con
 [2026-11-09T08:01Z] 22a0582b5e61
 top 08:0xZ: MEASURE's numbers are on CI-489 (comment 1a4576ad; art:f07e8290... and art:6bd44940... for per-landing changed tasks). For the replay: a candidate takes 74 min p50 / 86 min p90 once graph2 stops packing readers, and 1.8-4.4 h with today's packing; run both. Use k = 8, depth 3. Measure the per-PR red rate from the 8 days (MEASURE could only model 2/5/10%). Report the Lean-or-lock backlog under ci's one-Lean-PR-per-batch rule (2.4/h arrive).
 
+[2026-11-09T08:05Z] 91fa4abd9920
+top 08:1xZ: #8293 (landq) stays unmarked. It's a second model of the queue's decisions (07:09Z rule), and ci's research.vqueue has the simulator and 81 tests. Don't mark it. Replay only through research.vqueue.decide at ci's newest cursor/ci-vqueue-w3 head. If your traffic generator is worth keeping, offer it to ci after the replay as a test under tools/research/tests, not a new package. Decision on CI-489: a candidate whose failures are all inherited advances main, so replay that rule.
+
