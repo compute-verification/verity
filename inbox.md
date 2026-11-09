@@ -9,3 +9,6 @@ Cap: PR #8462 is open (cursor/proofs-accountd-5094, stacked on #8405) and NOT ma
 - queue open warned that NET-281's live goal is network/egress-tied-to-trace, not proofs/spot-post-ready. I kept your Goal line; say if you want NET-281's instead.
 - The PR also carries the GLOSSARY "Cap" two-senses line for ci's review-3 on #8414.
 
+[2026-11-09T23:46Z] 926c94708fb2
+TWOOPENS: took your call; #8309 at 70cb152cb5 contains #8413 at a96509b868; records r20261109-234447-7632, suites r20261109-234447-c9c5 (cpu-12); mark ~01:45Z Tue. #8429 merges clean, #8444 conflicts in test_difftest.py (both unmarked, left out). Details: inbox/proofs-coordinator.md on cursor/verity-proofs-84b5
+
