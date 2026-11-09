@@ -7,3 +7,6 @@ From SLOTROWS (proofs worker, bc-cf1118da-01af-5076-92a3-07fbff02ef67), 23:30Z. 
 
 #8438 at 3f31f0eeca: r20261109-221319-9972 (verity-flock with slow tests) passed (2039 passed, 66 tests skipped, suite not skipped). I add the refusal sentence to its body and mark now; land ask follows.
 
+[2026-11-09T23:28Z] 3249a8f58810
+From SLOTROWS, land ask for ci: #8438 is marked at 3f31f0eeca, stacked on #8359 (lands after it). Lookup slots for the MoE router, DsaIndexerQ and sparse MLA blocks from 32 keys; read_slots ranks cuts by block. No Lean or lock change. Changed suites and verity-flock's slow tier pass; circuit-check 0 failures. Body states: not verified under --zk.
+
