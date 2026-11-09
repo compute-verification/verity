@@ -56,7 +56,7 @@ section Finders
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- `Be`'s pair: the first collision among the calls the two outer witnesses record. -/
-def bePick (D : Deploy Coin) (x : Msg) (_ : Trace) (w₁ : Option (List Flock.Wit)) (_ : Trace)
+def bePick (D : Deploy Coin) (x : Msg) (_ : Transcript) (w₁ : Option (List Flock.Wit)) (_ : Transcript)
     (w₂ : Option (List Flock.Wit)) : OC (Option (Msg × Msg)) :=
   .ret (findColl (D.calls x (w₁.getD []) ++ D.calls x (w₂.getD [])))
 

@@ -71,17 +71,30 @@ def readTables (args : List String) : IO (List (String × ByteArray)) := do
     if ← p.pathExists then out := out ++ [(t.name, ← IO.FS.readBinFile p)]
   return out
 
-/-- `ARCHIVE/sha512/<hex>`: the verifier's own copy of an object, by content, and its SHA-512. The file must hash to its
-key. -/
-def archiveGetSha (archive hex : String) : IO (Except String (ByteArray × ByteArray)) := do
+def archiveMismatch (hex : String) : String := s!"archive: the object held under {hex} does not hash to it"
+
+/-- Whether `b` hashes to the digest `hex`, in a task. Not inlined: the compiler sinks a `Task.spawn` bound in a body down
+to the branch that reads it. -/
+@[noinline] def hashesToTask (b : ByteArray) (hex : String) : Task Bool :=
+  Task.spawn fun _ => hexOf (Sha512.hash b) == hex
+
+/-- `ARCHIVE/sha512/<hex>`: the verifier's own copy of an object, by content, its key's bytes, and whether it hashes to its
+key, still hashing (`archiveGetSha` waits for it). -/
+def archiveGetTask (archive hex : String) : IO (Except String (ByteArray × ByteArray × Task Bool)) := do
   if hex.length != 128 || !hex.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) then
     return .error s!"archive: {hex} is not a SHA-512 digest"
   let p : System.FilePath := archive ++ s!"/sha512/{hex}"
   if !(← p.pathExists) then return .error s!"archive: {hex} is not held"
   let b ← IO.FS.readBinFile p
-  let sha := Sha512.hash b
-  if hexOf sha != hex then return .error s!"archive: the object held under {hex} does not hash to it"
-  return .ok (b, sha)
+  let .ok key := unhex hex | return .error s!"archive: {hex} is not a SHA-512 digest"
+  return .ok (b, key, hashesToTask b hex)
+
+/-- `ARCHIVE/sha512/<hex>`: the verifier's own copy of an object, by content, and its SHA-512. The file must hash to its
+key. -/
+def archiveGetSha (archive hex : String) : IO (Except String (ByteArray × ByteArray)) := do
+  match ← archiveGetTask archive hex with
+  | .ok (b, key, ok) => return if ok.get then .ok (b, key) else .error (archiveMismatch hex)
+  | .error e => return .error e
 
 /-- `ARCHIVE/sha512/<hex>`: the verifier's own copy of an object, by content (`archiveGetSha`). -/
 def archiveGet (archive hex : String) : IO (Except String ByteArray) :=
@@ -89,21 +102,24 @@ def archiveGet (archive hex : String) : IO (Except String ByteArray) :=
 
 /-- The statement's inputs: with `--archive DIR`, the circuit, public and compression files are the verifier's own objects
 named by `--circuit`, `--public`, `--comp` SHA-512 digests, and the lookup tables are those `MUFU_TABLES` pins (`flock-verify --archive`);
-without it, the files at those paths. With the circuit, its SHA-512 when the archive's check computed it. -/
-def statementInputs (args : List String) :
-    IO (Except String (ByteArray × Option ByteArray × ByteArray × ByteArray × List (String × ByteArray))) := do
+without it, the files at those paths. With the circuit, its SHA-512 as the archive holds it (its key) and, unless `await`,
+the archive's check that the circuit hashes to it, still hashing, for the caller to wait on (`awaitArchive`). -/
+def statementInputs (args : List String) (await : Bool := true) :
+    IO (Except String (ByteArray × Option ByteArray × Option (String × Task Bool) × ByteArray × ByteArray ×
+      List (String × ByteArray))) := do
   let (some circuit, some pub) := (argOf args "--circuit", argOf args "--public")
     | return .error "--circuit and --public are required"
   let comp := argOf args "--comp"
   match argOf args "--archive" with
   | none =>
     let cm ← match comp with | some f => IO.FS.readBinFile f | none => pure ByteArray.empty
-    return .ok (← IO.FS.readBinFile circuit, none, ← IO.FS.readBinFile pub, cm, ← readTables args)
+    return .ok (← IO.FS.readBinFile circuit, none, none, ← IO.FS.readBinFile pub, cm, ← readTables args)
   | some dir =>
     let get := fun hex => archiveGet dir hex
-    let (c, cSha) ← match ← archiveGetSha dir circuit with
+    let (c, cSha, ok) ← match ← archiveGetTask dir circuit with
       | .ok x => pure x
       | .error e => return .error s!"circuit: {e}"
+    if await && !ok.get then return .error s!"circuit: {archiveMismatch circuit}"
     let pb ← match ← get pub with | .ok b => pure b | .error e => return .error s!"public file: {e}"
     let cm ← match comp with
       | none => pure ByteArray.empty
@@ -113,7 +129,12 @@ def statementInputs (args : List String) :
     for t in MUFU_TABLES do
       let p : System.FilePath := dir ++ s!"/sha512/{t.sha512}"
       if ← p.pathExists then tables := tables ++ [(t.name, ← IO.FS.readBinFile p)]
-    return .ok (c, some cSha, pb, cm, tables)
+    return .ok (c, some cSha, if await then none else some (circuit, ok), pb, cm, tables)
+
+/-- `parsed`, once the archive's check of the circuit file (`statementInputs`' task) has passed; none if the copy doesn't
+hash to its key. `parsed` is an argument, so it is computed before the wait, while the check hashes. -/
+@[noinline] def awaitArchive (parsed : V Circuit) (check : Option (String × Task Bool)) : IO (Option (V Circuit)) :=
+  return if check.all (·.2.get) then some parsed else none
 
 /-- A recursive session's inner statement's registered reads (`Tags.withPlainLeaves`, a plain-leaves statement): with the verifier's own
 registered reads, a circuit that names each port once (`Registered.namesOnce`) and its description read from the
@@ -296,13 +317,13 @@ theorem stdKnowing_eq (file : ByteArray) : stdKnowing file (Sha512.hash file) = 
 /-- `ProvedScope.circuitOf` with the file's SHA-512 `sha` computed beforehand (`circuitOfKnowing_eq`). -/
 def circuitOfKnowing (sha : ByteArray) (tags : Tags) (file : ByteArray) (tables : List (String × ByteArray)) :
     V Circuit :=
-  if tags.hiddenOutputs then HmOut.parseCommitWith (stdKnowing file sha) tags file tables
+  if tags.hiddenOutputs then HmOut.parseCommitWithV (stdKnowing file sha) tags file tables
   else HmRow.parseWith (stdKnowing file sha) tags file tables
 
 theorem circuitOfKnowing_eq (tags : Tags) (file : ByteArray) (tables : List (String × ByteArray)) :
     circuitOfKnowing (Sha512.hash file) tags file tables = ProvedScope.circuitOf tags file tables := by
   unfold circuitOfKnowing ProvedScope.circuitOf
-  rw [stdKnowing_eq, With.outParseCommitWith_std, With.parseWith_std]
+  rw [HmOut.parseCommitWithV_eq, stdKnowing_eq, With.outParseCommitWith_std, With.parseWith_std]
 
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
@@ -970,7 +991,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
       else plainCoinsArg (argOf args "--coins") (tags.tableNames count)
     | IO.eprintln s!"verify: {COINS_USAGE}"; return 2
   let t0 ← IO.monoMsNow
-  let (circuitB, circuitSha, pubB, compB, tables) ← match ← statementInputs args with
+  let (circuitB, circuitSha, archived, pubB, compB, tables) ← match ← statementInputs args (await := false) with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let tags := if zk then Zk.tags tags (Zk.maskLogOf circuitB) count else tags
@@ -1050,9 +1071,12 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
   -- each session's verdict
   -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`): a templated
   -- statement's (`Tags.templated`) carries its template, which the check reads (`ProvedScope.scopeOkT`); and hashed
-  -- once, the archive's check and the parse reading one SHA-512 (`circuitOfKnowing_eq`)
+  -- once, the parse reading the archive's key as its SHA-512 (`circuitOfKnowing_eq`) while the archive's check hashes
+  -- the file to it, which the parse's result then waits for
   let sha := match circuitSha with | some d => d | none => Sha512.hash circuitB
-  let parsed := circuitOfKnowing sha tags circuitB tables
+  let parsed ← match ← awaitArchive (circuitOfKnowing sha tags circuitB tables) archived with
+    | some p => pure p
+    | none => IO.eprintln s!"statement inputs: circuit: {archiveMismatch (archived.elim "" (·.1))}"; return 2
   -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
   let scope := if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
@@ -1219,7 +1243,7 @@ def ksFormCmd (args : List String) : IO UInt32 := do
   let some tags := Tags.byName? stmtName
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
-  let (circuitB, _, pubB, _, tables) ← match ← statementInputs args with
+  let (circuitB, _, _, pubB, _, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let tags := Zk.tags tags (Zk.maskLogOf circuitB) count
@@ -1256,7 +1280,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let some coins := plainCoinsArg (argOf args "--coins") (tags.tableNames 1)
     | IO.eprintln s!"statement: {COINS_USAGE}"; return 2
-  let (circuitB, _, pubB, compB, tables) ← match ← statementInputs args with
+  let (circuitB, _, _, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let partition ← match ← partitionInput args with
@@ -1348,7 +1372,7 @@ def statementCmd (args : List String) : IO UInt32 := do
 def regionWordsCmd (args : List String) : IO UInt32 := do
   let some tags := Tags.find? ((argOf args "--statement").getD Tags.circuit.name)
     | IO.eprintln s!"unknown statement; known: {Tags.all.map (·.name)}"; return 2
-  let (circuitB, _, pubB, _, tables) ← match ← statementInputs args with
+  let (circuitB, _, _, pubB, _, tables) ← match ← statementInputs args with
     | .ok x => pure x
     | .error e => IO.eprintln s!"region-words inputs: {e}"; return 2
   let extra := (args.zip args.tail).filterMap fun (k, v) => if k != "--delta" then none else

@@ -26,8 +26,12 @@ outputs the trace commits, at its bucket, and nothing else.
   against the served function's honest answer to the outsider's query at the window's advice. It is what the layers
   below the composition give: the network certifier ties the release to the trace's outputs, and the trace differs
   from the honest run only in its incorrect proof blocks' egress cones (`Population.Dataflow.card_changed_le`);
+* `Served.Isolated C F Ou L θ r l`: through each window accepted before the first rejection, the releases change at
+  most `F` outputs per incorrect proof block of the windows so far, so a block's changes may fall in later windows,
+  through state they read;
 * `servedChannel T K`: the covert channel of such a deployment over `T` windows: each window's advice and timing bucket,
-  at most `K` of the `T · |O|` released values overwritten, and how many windows release before the halt.
+  at most `K` of the `T · |O|` released values overwritten, and how many windows release before the halt;
+* `servedBits T K`: that channel's covert capacity in bits.
 -/
 
 @[expose] public section
@@ -55,6 +59,12 @@ open Classical in
 noncomputable def count (L : ℕ) : List (Served O V Tick Adv) → ℕ
   | [] => 0
   | w :: l => if w.accepted then count L l + 1 else min l.length L + 1
+
+open Classical in
+/-- **The windows accepted before the first rejection**: how many there are. -/
+noncomputable def accLen : List (Served O V Tick Adv) → ℕ
+  | [] => 0
+  | w :: l => if w.accepted then accLen l + 1 else 0
 
 /-- **What the outsider receives in round `n`**: window `n`'s release, its values and its timing bucket, when the
 window releases, and nothing after the halt. -/
@@ -101,6 +111,20 @@ def Local [Fintype O] (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Outsider
     (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) : Prop :=
   ∀ n < count L l, ∀ w, l[n]? = some w → (changed C Ou L θ r l n).card ≤ E * w.incorrect
 
+/-- **Window `n`'s number of incorrect proof blocks**, `0` past the run. -/
+def incorrectAt (l : List (Served O V Tick Adv)) (n : ℕ) : ℕ := (l[n]?.map Served.incorrect).getD 0
+
+/-- **The accepted releases are isolated**: through each window accepted before the first rejection, the outputs the
+releases changed number at most `F` per incorrect proof block of the windows so far. A block changes outputs of its own
+window and, through state a later window reads (a carried prefix's key and value rows), of later ones, never of earlier
+ones; so a change counts against the incorrect proof blocks up to its window, and each block's changes, wherever they
+fall, number at most `F`. The windows from the first rejection to the halt are charged whole. With `O` a window's
+charge units (its requests, or each request with the requests that read its state) and `V` a unit's whole output, a
+block changes at most `F` units. `Local` at `E = F` gives it. -/
+def Isolated [Fintype O] (C : Θ → Q × Adv → O → V) (F : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
+    (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) : Prop :=
+  ∀ k ≤ accLen l, ∑ n ∈ Finset.range k, (changed C Ou L θ r l n).card ≤ F * ∑ n ∈ Finset.range k, incorrectAt l n
+
 end Served
 
 /-- **The served channel** over `T` windows. A covert string is each window's advice and timing bucket, an overwrite of
@@ -115,5 +139,12 @@ noncomputable def servedChannel (R Q Adv O V Tick : Type) [Fintype Adv] [Fintype
   tell s _ h _ y := if hn : h.length < s.2.2.2.val ∧ h.length < T then
       some (fun o => (s.2.2.1.val (⟨h.length, hn.2⟩, o)).getD (y o), s.2.1 ⟨h.length, hn.2⟩)
     else none
+
+/-- **The served channel's covert capacity in bits**: each of the `T` windows' advice and timing bucket, each of the `K`
+overwritten values with its name among the `T · |O|` released ones, and the halt. Two to its power is at least the
+channel's number of covert strings. -/
+noncomputable def servedBits (Adv O V Tick : Type) [Fintype Adv] [Fintype O] [Fintype V] [Fintype Tick] (T K : ℕ) : ℝ :=
+  T * (Real.logb 2 (Fintype.card Adv) + Real.logb 2 (Fintype.card Tick)) +
+    K * (Real.logb 2 (Fintype.card V) + Real.logb 2 (T * Fintype.card O + 1)) + Real.logb 2 (T + 1)
 
 end WeightSecurity

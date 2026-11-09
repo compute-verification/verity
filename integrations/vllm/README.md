@@ -16,7 +16,8 @@ Verity itself knows nothing of vLLM.
   idle and closes when it is idle again or after `--window-steps`. Each window is one Commit, and `--seal` seals it.
   `--protocols pouw:<scheme>` serves PoUW's H1 arm on the endpoint's own Commit, one H1 window per window, and
   `--remote-verifier` proves the engine's store to PoUB's verifier as it serves. Its module docstring documents every
-  flag and record.
+  flag and record. The public release leaves out this endpoint and the window circuit, which read the network
+  certifier's encoding, and that encoding stays private, so it ships without a runnable served window.
 - **`verity demo vllm`** (`examples/vllm/run.sh`) starts the served-verdicts launcher,
   `benchmarks/one_stage/served_verdicts.sh`, on the node `examples/vllm/placement.toml` names. It runs the Build of
   record, then the endpoint with `--seal` under a GPU lease, and a load. Then come sampled proofs on one sealed window:

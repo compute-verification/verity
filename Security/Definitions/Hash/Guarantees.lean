@@ -41,9 +41,9 @@ Each is proved by a theorem `Hash.SecurityProofs.G : Hash.Guarantees.G` in `Secu
 deterministic and assume nothing about the hash: each conclusion is the property, or a collision among
 the messages the two openings' checks themselves hashed, never an advantage bound. So no proof takes an assumption.
 
-* `RowBinding`: two openings of one root at one rank, in the hm96 bit-row leaf format the verifier holds (frame-v3-sha512
-  tree, frame leaf, hm96-sha512 leaf under the verifier's key, and a `sha512/row-seg/v1` or `sha512/row/v2` row digest),
-  carry the same row, or the checks hashed a collision. It covers row-seg and row/v2 leaves, not `hm96-sha512/row/v1`.
+* `RowBinding`: two openings of one root at one rank, in the hm96 row leaf format the verifier holds (frame-v3-sha512
+  tree, frame leaf, hm96-sha512 leaf under the verifier's key, and a `sha512/row-seg/v1`, `sha512/row/v2` or
+  `sha512/row/v1` row digest), carry the same row, or the checks hashed a collision.
 * `TreeBinding`: two openings of one frame-v3 root at one rank carry the same leaf digest, or the path checks hashed a
   collision of node messages.
 * `EmbeddingReadBinding`: when `EmbeddingRead_v1` returns ok for a token in the vocabulary, the row it returns is the
@@ -61,10 +61,11 @@ none of them discharges a constant over all provers such as `Pouw.Assumptions.Se
 namespace Hash.Guarantees
 
 /-- **Row binding, as a break tied to the run.** Two openings of one root at one rank, each accepted by the verifier of the
-hm96 bit-row leaf in its format (`RowLeaf.accepts`: a frame-v3 tree over the verifier's domain, its frame leaf binding the
+hm96 row leaf in its format (`RowLeaf.accepts`: a frame-v3 tree over the verifier's domain, its frame leaf binding the
 domain id, rank, position and the format's schema, its nodes their level and index; the hm96-sha512 leaf under the
 verifier's key, bound through `H(key)` in its prefix; the format's row digest binding the row's bit length and its bits,
-each segment's under `sha512/row-seg/v1`; every part length-framed or fixed-width), carry the same row, or two different
+each segment's under `sha512/row-seg/v1`, and under `sha512/row/v1` a row of whole words whose bytes give its length;
+every part length-framed or fixed-width), carry the same row, or two different
 messages that `H` hashed in the two checks have one digest, or two different messages that `G` hashed in the two row
 digests have one digest.
 
@@ -75,9 +76,9 @@ Scope:
 * **Leaves.** The verifier's format (`RowLeaf.Format`): `hm96-sha512/row-seg/v1` leaves (`seg`: PoUW's per-call A rows,
   the vLLM row tables, A6's `x` port, the clear sampled audit's rows) or `hm96-sha512/row/v2` leaves (`v2`: H1's tables
   and registered weights, serving's step rows, the chunked templates' `w`, `in<g>` and `o0` rows, the remote audit's
-  receipts). A row cut into several leaves (H1's chunk rows past K = 4096, n leaves a row) is bound leaf by leaf, at each
-  leaf's rank; which leaves form a row is the layout's. Leaves under `hm96-sha512/row/v1` (Flock's default ports, M0's
-  serving rows) are outside it: a row/v1 format adds role, word width and word count to the prefix.
+  receipts) or `hm96-sha512/row/v1` leaves (`v1`: Flock's default ports, the registered values, M0's serving rows,
+  each a row of 16-bit words). A row cut into several leaves (H1's chunk rows past K = 4096, n leaves a row) is bound
+  leaf by leaf, at each leaf's rank; which leaves form a row is the layout's.
 * **Domain.** `V.domain` is free, and RowBinding holds for every domain. It does not say that a root is a rows tree. The
   schema doesn't separate them: PoUW's tile-digest trees write `hm96-sha512/row-seg/v1` too, with `x` the 64-byte digest
   itself, and there a row's leaf equals the leaf of its own row-seg digest with no collision. Only the domain's binding
