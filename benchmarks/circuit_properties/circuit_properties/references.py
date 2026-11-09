@@ -38,10 +38,11 @@ def boolean_gemm(K: int, N: int) -> Program:
 
 
 def rho_models() -> dict:
-    """benchmarks/rho's models by name (`rho.instances.models`)."""
+    """benchmarks/rho's models by name (`rho.instances.models`). Its directory goes last on the path: it holds a `run.py`
+    and a `tests`, as this package's does, and must shadow neither."""
     rho = str(Path(__file__).resolve().parents[2] / "rho")
     if rho not in sys.path:
-        sys.path.insert(0, rho)
+        sys.path.append(rho)
     from rho import instances
     return instances.models()
 

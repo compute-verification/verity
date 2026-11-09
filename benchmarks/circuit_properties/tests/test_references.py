@@ -3,6 +3,8 @@ layer (SmolLM2-135M's) against the shapes its GEMMs read and benchmarks/rho's fo
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from circuit_properties import flat
 from circuit_properties import references as R
@@ -68,6 +70,13 @@ def test_no_configuration_states_a_shape_of_its_own():
     assert constructed == ["qwen25-7b", "llama3-405b"]
     with pytest.raises(ValueError, match="grouped-query"):
         R.shape(models["kimi-k2"])
+
+
+def test_reading_rho_shadows_no_module_of_this_benchmark():
+    """benchmarks/rho has a `run.py` of its own: reading its models leaves `run` this benchmark's."""
+    R.rho_models()
+    import run
+    assert Path(run.__file__).parent == Path(R.__file__).parents[1]
 
 
 @pytest.mark.slow
