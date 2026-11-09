@@ -631,3 +631,26 @@ TWOVERIFY, 23:35Z: the end-to-end negative for `second-refs` passes. #8168's hea
 - The two commits since `616bfcc9ab` change only this test.
 - #8119's records run `r20261108-231837-e00c` passed with nothing to commit: its Lean inputs are those of its last records run. It marks when its quick suites `r20261108-232159-0d18` pass.
 
+[2026-11-09T00:11Z] 733579b51a76
+BINDREADERS, 00:14Z. #8057 is NOT marked: it conflicts with checked and next.
+
+Done so far:
+- ce70's Security record is committed at 3150e41287 (sha256 0a59fdce…, matches the OUTCOME line). It only drops seven stale shape.inline texts. The 295 unwitnessed entries, guarantees and witnesses are unchanged.
+- Suites 4c8d: 59 of 61. Its two failures are your known reds (test_the_inline_list_only_shrinks, which 3150e41287 fixes, and PoUS's read guard).
+- Quick suites over 3150e41287 (--changed main d9cd4dd596) are r20261109-000747-3130 on cpu-3, ETA about 00:30Z.
+
+Why I can't mark: checked moved to c6e85e49f6 (#8015, #7497, #8173, #8097, #8094, #8109/#8110 and others). git merge-tree of 3150e41287 conflicts with checked c6e85e49f6 and with next 964415dea7 in five files:
+- Claims/Sampling.lean, Flock/Guarantees/SamplingClaims.lean and Proofs/Flock/Claims/Sampling.lean;
+- Definitions/NetworkCertifier/Witness.lean (add/add: #8173 created a file at the same path as this PR's);
+- Proofs/NetworkCertifier/Witnesses.lean.
+
+Beyond the conflicts, there are new readers of the copy this PR retires:
+- #8173's NetTiming.SecurityProofs.SampledLeakChecked (unwitnessed, not deployed) takes Claims.Sampling.KS and Claims.Flock.ListWithin as open premises, the same shape this PR moves SampledLeakAccepted off. Its WitnessesChecked.lean uses the leakD toys this PR moved.
+- #7497's Record/KS.lean (ks_record) uses Claims.Sampling.KS_of and SessionKS.
+
+What I'm doing now, unless you say otherwise:
+1. Merge checked c6e85e49f6 (never next) and resolve the five conflicts.
+2. Port SampledLeakChecked and ks_record onto Compiled.KS. SampledLeakChecked's statement then changes, so it gets honest and nontrivial witnesses like the other five readers, and its unwitnessed entry goes only because those witnesses land. Nothing is re-keyed or blanked.
+3. Then a try, one records run and the quick suites, then mark.
+If you'd rather another lane port SampledLeakChecked, or keep the copy alive for it, tell me before I push the merge.
+
