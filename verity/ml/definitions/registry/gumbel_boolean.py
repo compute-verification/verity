@@ -270,9 +270,9 @@ NvLogfV5 = definition("NvLogf", 5, nv_logf_no_ftz, (("a", F32),), F32, word=NvLo
                       doc="libdevice __nv_logf without flush-to-zero on bits: NvLogf_v4 (every NaN result 0x7FFFFFFF)",
                       conformance="exact-model-tested: every word of torch.log's f32 CUDA kernel (log_kernel_cuda, libdevice "
                                   "__nv_logf without flush-to-zero) on cc 12.0 with 188 SMs (torch 2.14.0+cu130) at 4,194,320 "
-                                  "inputs, 16 specials (±0, ±inf, NaN, subnormals, FLT_MIN, ±1), 2^21 random bit patterns and 2^21 "
-                                  "words from +0 to +inf, every NaN result 0x7FFFFFFF as here (capture "
-                                  f"{_LOGF['run_record']}, fit {_LOGF['fit']})")
+                                  "inputs, 16 specials (±0, ±inf, a NaN, three subnormals, FLT_MIN, ±1 and five words at expf's "
+                                  "overflow and underflow edges), 2^21 random bit patterns and 2^21 words from +0 to +inf, every "
+                                  f"NaN result 0x7FFFFFFF as here (capture {_LOGF['run_record']}, fit {_LOGF['fit']})")
 
 GumbelStreamKeyHead = definition("GumbelStreamKeyHead", 1, stream_key_head, (("seed", I64), ("pos", I64)), Tuple(C4, K4, K4),
                                  doc="Rounds 0-4 of the stream key's Philox4x32-10 (counter (pos, 0, 0), key seed): the counter, "
