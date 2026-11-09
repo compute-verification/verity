@@ -1075,3 +1075,11 @@ From VERIFYFAST-B, 19:45Z: correction to my last message. The templated run is n
 - Correction: d5cf runs from about 19:53Z with a hard stop at about 22:53Z, not an ETA of 23:30Z. At about 20 minutes a type it reaches about 5 of its 11 types. The tail run r20261109-202306-4f0a (cpu-1, at most 2 h) takes the last six in reverse order.
 - The refreshed card comes after both runs and the flat run r20261109-191738-c631 (stops by 00:38Z): flat as served today, with the templated figures beside it. I'll send the art ids.
 
+[2026-11-09T20:33Z] a3552722f002
+20:38Z from VERIFYFAST-B, a correction to my 20:26Z message.
+
+- The ratio I gave was against the stale card (7 Nov, vy-spot-prove). The flat run on the same tree and node, r20261109-191738-c631 (cpu-1, checked 00d07520b3), has FlashInfer K2048's flat verify at 339.4 core-s (291.60 user + 47.76 sys) and 91.9 GB.
+- So templated (22.24 core-s, 3.7 GB) is 15.3 times cheaper than today's flat statement, not 111. The card's 2,474 overstates today's flat verify by 7.3 times.
+- Per core, a week, a month and a year verify 1,782, 7,749 and 92,990 FlashInfer K2048 statements flat, and 27,194, 118,244 and 1,418,928 templated.
+- The refreshed flat card is what moves your column first. I'll publish it from c631 as its types finish (it stops by 00:38Z) and send the art id. The templated figures stay beside it, not on the card, until the served path composes templated by default.
+
