@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Types.ProgramPlaces
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The end-to-end theorem on a program of units, carried to its Boolean circuit (verified-lowering phase 1, S4d)

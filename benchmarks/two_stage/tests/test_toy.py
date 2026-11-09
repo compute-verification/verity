@@ -1,11 +1,12 @@
-"""The two-stage toy before anything is lowered or proved (`audit.py` proves it, on a node): each template and the replay
+"""The two-stage toy before anything is proved (`audit.py` proves it, on a node): each template and the replay
 block are their numpy models; the replay block is its templates' instances; the challenger's stream over the toy's design
 has its cells, its interior program and one second-stage stratum a (span, template) cell of the interior; the interior is
 template-major and wired as the replay block's edges; each link member's registered rows are the boundary record's at the replay sample's leaves, under
 its salts, and open its root there, at the boundary port the design's links name, and every other port's rows open the
 interior record's at their own leaves, as the verifier's own reads (from the two records and S alone) name them; both
-registrations pass the verifier's check; and a link
-row one bit off, a read of another leaf and a broken wire are refused."""
+registrations pass the verifier's check; a link
+row one bit off, a read of another leaf and a broken wire are refused; and each session's public header is its template's
+reference statement's, which the auditor stages before the run, placed in the run, as round 2 holds it."""
 
 from __future__ import annotations
 
@@ -16,12 +17,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.spot import challenger as Ch, coins as CC, service as S
+from verity.core.protocols.spot import challenger as Ch, coins as CC, second_stage as SS, service as S
 from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R, \
     verifier as V
+from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.program import Program
-from verity.ml.windows import wiring as WI
+from verity.ml.windows import flock_inputs as FI, wiring as WI
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import toy as T
@@ -176,6 +178,43 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
     assert set(WI.check(it.window.members, broken)) == {flip.key}
     assert set(WI.check_drawn(it.window.members, broken, [flip.base])) == {flip.key}
     assert WI.check_drawn(it.window.members, broken, [flip.base + 1]) == {}
+
+
+@pytest.mark.slow
+def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
+    """Round 2 holds each session's public header to the reference the auditor's params give its template
+    (`toy.references`, staged before the run under a run of its own) placed in the run: the honest public files the
+    served path writes (`flock_input_files`, as a5 stages the sessions) pass round 2 with the form allowed and the
+    interior record's replay sample in S's order, while without the params every one fails ``second-header`` and against
+    S reversed ``second-interior-order`` fails. Slow (about 15 s): the only test that lowers the templates, whose circuit
+    SHA-512s and classes are in both headers."""
+    from verity_flock.class_statement import member_stager
+
+    it, irec, brec, tmp = run["it"], run["irec"], run["brec"], run["tmp"]
+    win = it.window
+    proofs = T.references(Q, tmp / "references")
+    assert [e["template"] for e in proofs["templates"]] == [m.template for m in win.members]
+    S.template_circuits(proofs, T.spec(N, Q, 1).check.query)
+    bind = {"partition": win.partition_digest, "program": win.partition["program"]}
+    parts = SS.parts(Q, P.strata(win.program, win.query))
+    drawn = sorted(p.lo + i * p.n for p in parts for i in range(Q))
+    reads, stmts = T.reads(brec, irec, win, SAMPLE), []
+    for k, (m, defn) in enumerate(zip(win.members, T.TEMPLATES)):
+        got = FI.flock_input_files(tmp / "interior", k, member_stager(defn, m, bind).text, tmp / "served", write=("pub",))
+        with open(got["pub"], "rb") as f:
+            header = json.loads(f.readline())
+        assert header["circuit_sha512"] == proofs["templates"][k]["circuit"]
+        stmts.append({"template": m.template, "header": header, "draw": SS.own_draw(Q, parts[k], drawn),
+                      "registered": reads[m.key]})
+    links = SS.replay_links(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY), brec)
+    refs = tuple((e["template"], e["header"]) for e in proofs["templates"])
+
+    def check(sample, refs) -> dict:
+        own = SS.Own(tuple(sample), parts, irec, brec, tuple(drawn), links, SS.statement_reads(stmts), refs)
+        return SS.check(True, own, stmts).to_json()
+    assert check(SAMPLE, refs) == {"ok": True, "codes": [], "detail": {}}
+    assert check(SAMPLE, ())["codes"] == ["second-header"]
+    assert "second-interior-order" in check(SAMPLE[::-1], refs)["codes"]
 
 
 def test_the_link_reads_refuse_a_port_the_boundary_record_does_not_name_or_a_leaf_outside_it(run):
