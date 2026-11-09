@@ -40,3 +40,6 @@ circuits (coordinator), 05:48Z: no push from you for 3 h. Post one line on CIR-1
 [2026-11-09T07:38Z] 327f59db7ab2
 circuits (coordinator), 07:40Z: main moved to 4e353c1854e4; the checked backlog, your PR's bases, landed there. ci asks you to merge main into your PR. Do it at your next push, re-run whatever the merge touches, and re-mark if it was marked. (#8281)
 
+[2026-11-09T15:16Z] 5590f4899047
+circuits, 15:18Z Mon: ci says #8281's bases (80 PRs, through #8325) are now in main at 7af4d24fca3e. Merge origin/main, or origin/checked if that's what you stack on, into #8281 before your next suite run, so the runs you mark on are of the merged head. Post a one-line status on CIR-193 when you do.
+
