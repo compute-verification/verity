@@ -5798,13 +5798,19 @@ def test_a_two_stage_run_reaches_every_step(pieces):
 def test_each_stage_reads_its_windows_seed_salt_from_its_own_evidence(pieces):
     """A two-stage run whose two sessions each released their window's seed salt (`_two_stage_case`), Lean's the Python's
     whole: the boundary registration's salt is read from the run's evidence (`seed_salt`) and the interior
-    registration's from its own (the interior's `seed_salt`), each on its own window, and the run is accepted. The
-    interior registration is refused (`interiors`) for a record whose window names another salt than its session
+    registration's from its own (the interior's `seed_salt`), each on its own window, and the run fails only round 2's
+    refusal of the two-stage form (`two-stage-form`), which the Python allowing the form (`second_stage.FORM`) accepts.
+    The interior registration is refused (`interiors`) for a record whose window names another salt than its session
     released, or none (`R6-seed-salt`); and (`seed-salt`) for its evidence missing, as a registration on a window always
     reads its salt, and for the boundary's evidence, which reads on the boundary's window only. The boundary
     registration is refused for its evidence missing (`seed-salt` at `register`)."""
     case = _two_stage_case()
-    assert _ran(pieces, case)["symbol"] == "accept"
+    out = _ran(pieces, case)
+    inner = json.loads(out["interior"]["audit"])
+    assert out["symbol"] == "reject" and [k for k, c in inner["checks"].items() if not c["ok"]] == ["statements"], out
+    assert inner["checks"]["statements"]["codes"] == ["two-stage-form"]
+    with mock.patch.object(SS, "FORM", True):
+        assert run(copy.deepcopy(case))["symbol"] == "accept"
     window = case["interior"]["record"]["window"]
     for named in ({**window, R.SEED_SALT: OTHER_SEED_SALT}, {k: v for k, v in window.items() if k != R.SEED_SALT}):
         got = _ran(pieces, _inner_record(window=named)(case, 0))
