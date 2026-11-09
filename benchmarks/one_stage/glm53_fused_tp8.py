@@ -5,7 +5,10 @@ TP8 H200 rank serves them with) cut into fused blocks that read their rows from 
 chunk cap (`serving_rows.chunk_caps`, which builds its statement), over one layer's rows (``scope.op_path_prefix``).  The router's
 slots stay out of the window, so each fused block's key and routed weight are free ports (`expert_rows.wire`).
 
-    uv run benchmarks/one_stage/glm53_fused_tp8.py --out glm53_fused_tp8.json [--layer 40] [--steps LO HI]
+    uv run benchmarks/one_stage/glm53_fused_tp8.py --out glm53_fused_tp8.json [--layer 40] [--steps LO HI] [--max-cap C]
+
+``--max-cap C`` caps each template's members at C units below its statement's own cap: a window of more, smaller members, as a
+prover's timing reads members of several sizes.
 """
 from __future__ import annotations
 
@@ -48,11 +51,12 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--layer", type=int, default=40)
     ap.add_argument("--steps", type=int, nargs=2, default=None, metavar=("LO", "HI"))
+    ap.add_argument("--max-cap", type=int, default=None)
     a = ap.parse_args()
     tmpls = templates()
     doc = {"templates": tmpls, "law": "stratified:1",
            "scope": {"op_path_prefix": f"moe/L{a.layer}", **({"steps": a.steps} if a.steps else {})}}
-    doc["chunk_cap"] = SRW.chunk_caps(tmpls)
+    doc["chunk_cap"] = {t: min(c, a.max_cap or c) for t, c in SRW.chunk_caps(tmpls).items()}
     Path(a.out).write_text(json.dumps(doc) + "\n")
     print(json.dumps(doc["chunk_cap"], indent=1))
 
