@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SamplingGeneric.TwoAt
+public import Proofs.Flock.SamplingGeneric.TwoCount
 public import Proofs.Flock.SpotFlock.KS
 public import Proofs.Flock.SpotFlock.Frame
 
@@ -17,6 +18,11 @@ whose code facts, coins and sessions' runs are proved (`SpotFlock.ksTwo_spot`), 
 facts of a layout (`SpotFlock.sessionOpensTwo_of_frameIs`): it embeds the statement (`SpotFlock.Embeds`) and the
 frame opens as it says (`SpotFlock.FrameIs`). Its honest instance needs a built two-stage layout and frame, which
 nothing builds yet.
+
+`Flock.SecurityProofs.SpotExfilTwo : Flock.Guarantees.SpotExfilTwo` is `CompiledTwo.Exfil` at the same code and layout
+facts, by `CompiledTwo.exfil_of_ks` on `SpotKSTwo`: what an accepted run serves is in the influence set at `δ`, at
+`SpotKSTwo`'s errors, and that set has at most `Σ_{T admissible} 2^{b(T)}` members. Its nontrivial witness is
+`Claims.SamplingGeneric.compilerExfilTwo_nontrivial`; its honest instance waits on the same layout and frame.
 -/
 
 @[expose] public section
@@ -61,6 +67,16 @@ def SpotKSTwo : Prop :=
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code h)
       SpotFlock.iroots (SpotFlock.two h) (SpotFlock.rs h)).KS FlockDeploy.sha512
 
+/-- **SPOT[Flock]'s two-stage verifier bounds what an accepted run serves, at SHA-512, at a layout its statement embeds
+and its frame opens**: at `SpotKSTwo`'s registration, layout, code, interior roots, design and replay sample,
+`CompiledTwo.Exfil` holds at every `δ ≥ 0`: `Pr[acc ∧ the served outputs are outside the influence set at δ]` is at
+most `KSLinOn`'s bound at the two-stage errors and the binding finder `Bext`, and the influence set at any input values
+has at most `Σ_{T admissible} 2^{b(T)}` members. -/
+def SpotExfilTwo : Prop :=
+  ∀ (h : SpotFlock.Held) (L : SpotFlock.Layout), SpotFlock.Embeds h L → SpotFlock.FrameIs h L →
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code h)
+      SpotFlock.iroots (SpotFlock.two h) (SpotFlock.rs h)).Exfil FlockDeploy.sha512
+
 end Flock.Guarantees
 
 theorem Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo :=
@@ -69,3 +85,6 @@ theorem Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo :=
 
 theorem Flock.SecurityProofs.SpotKSTwo : Flock.Guarantees.SpotKSTwo :=
   fun h L he hF => SpotFlock.ksTwo_spot h (SpotFlock.sessionOpensTwo_of_frameIs h L he hF)
+
+theorem Flock.SecurityProofs.SpotExfilTwo : Flock.Guarantees.SpotExfilTwo :=
+  fun h L he hF => Claims.SamplingGeneric.CompiledTwo.exfil_of_ks (Flock.SecurityProofs.SpotKSTwo h L he hF)

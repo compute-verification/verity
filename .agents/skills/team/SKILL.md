@@ -76,7 +76,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick).
 - One run checks `checked`'s tip after each landing (circuit-check is off the merge gate). A red's culprit, the one landing
   touching what its failure names (never bisected), is rung to fix it forward: mark a fix (its new head, or a PR whose
-  body names it or says `fixes suite NAME`) within 2 h, or drive reverts it on `checked`, unless the red is ratchet-gate's
+  body names it or says `fixes suite NAME`) in 30 min, or drive reverts it on `checked`, unless the red is ratchet-gate's
   (fix that in your next PR); if several touch it, each is rung with @ci and @top, none reverted. A shard whose failures
   name no failing test or error line first runs again once on other machines, ringing @infra. The next run waits up to
   45 min after its mark for a marked low-risk fix of a red with no culprit to land. Until circuit-check passes on

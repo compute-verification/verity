@@ -99,8 +99,10 @@ theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplayDraws two rs) (hsd
     obtain rfl : i = j := hk
     obtain rfl : u = u' := Option.some.inj (hu.symm.trans hu')
     rfl
-  unions x := ⟨(Claims.SamplingGeneric.ofDeployAt_nPU (deployOf F c) iroots c.unitN₀ x).le,
-    (Claims.SamplingGeneric.ofDeployAt_nPU (deployOf F c) iroots c.unitN₀ x).le⟩
+  unions x s Pt d hs hPt _ _ :=
+    (compiledTwo F c iroots two rs).unions_of_nPU_le
+      (fun x => (Claims.SamplingGeneric.ofDeployAt_nPU (deployOf F c) iroots c.unitN₀ x).le)
+      (fun x => (Claims.SamplingGeneric.ofDeployAt_nPU (deployOf F c) iroots c.unitN₀ x).le) x s Pt d hs hPt
   refuses := hr
   interior := hi
   fixed := Claims.SamplingGeneric.fixed_ofDeployAt (deployOf F c) iroots c.unitN₀ hf
