@@ -132,6 +132,19 @@ def growth(qs: list[int], bs: list[float]) -> tuple[str, dict]:
     return f"grows: +{inc:.3g} over the last doubling{power}{sat}", fit
 
 
+def crossing(qs: list[int], bs: list[float], t: float) -> str:
+    """The first measured Q whose B reaches t; else where B = a Q^b, fitted over the last three doublings of Q,
+    reaches it (an extrapolation)."""
+    hit = next((q for q, b in zip(qs, bs) if b >= t), None)
+    if hit is not None:
+        return f"{hit} (measured)"
+    pts = [(q, b) for q, b in zip(qs, bs) if q >= qs[-1] / 8 and b > 0]
+    if len(pts) < 3:
+        return "-"
+    slope, icpt = np.polyfit(np.log([q for q, _ in pts]), np.log([b for _, b in pts]), 1)
+    return f"~{math.exp((math.log(t) - icpt) / slope):.3g} (Q^{slope:.2f}, extrapolated)" if slope > 0 else "never"
+
+
 def persist_config(s: dict) -> dict:
     a = s.get("args", {})
     t = s.get("temperature", 0.0)
@@ -149,15 +162,23 @@ def checkpoint_qs(f: dict) -> list[int]:
     return sorted(int(k[1:]) for k in f if k[:1] == "q" and k[1:].isdigit())
 
 
+def ctrl_max(r: dict) -> float | None:
+    """The largest of a fault's random-column tail controls (a fault's own record keeps it at its last checkpoint)."""
+    if "tail_ctrl_max_w" in r:
+        return r["tail_ctrl_max_w"]
+    qs = checkpoint_qs(r)
+    return r[f"q{qs[-1]}"].get("tail_ctrl_max_w") if qs else None
+
+
 def tail_net(r: dict) -> float | None:
-    """The decoded set's tail score less its random-column control where that control is above zero."""
+    """The decoded set's tail score less the largest of its random-column controls where that is above zero."""
     if r.get("tail_bits_w") is None:
         return None
-    return r["tail_bits_w"] - max(r.get("tail_ctrl_w") or 0.0, 0.0)
+    return r["tail_bits_w"] - max(ctrl_max(r) or 0.0, 0.0)
 
 
 def lead(r: dict) -> float:
-    """The score a lead fault is chosen by: the tail score where the output has it, else the all-in top set."""
+    """The score a lead fault is chosen by: the tail net where the output has it, else the all-in top set."""
     t = tail_net(r)
     return t if t is not None else (r.get("net_bits_w") or 0.0)
 
@@ -177,7 +198,7 @@ def with_ctrl(x, c) -> str:
     return f"{x:.3g} ({c:.3g})" if isinstance(c, (int, float)) else f"{x:.3g}"
 
 
-def persist_tables(paths: list[Path], request_bits: float) -> str:
+def persist_tables(paths: list[Path], request_bits: float, threshold: float) -> str:
     """Per output: the lead value fault (the most tail-score bits at the largest Q, else the most all-in top-set bits)
     with every score beside its random-column control, its growth against Q, and recovered over charged bits; the lead
     fault's curve; every-site outputs by site."""
@@ -211,11 +232,12 @@ def persist_tables(paths: list[Path], request_bits: float) -> str:
         pz = max(vf, key=lambda f: f.get("pairz_bits_w") or 0.0)
         pi = max(vf, key=lambda f: f.get("pair_bits_w") or 0.0)
         if s["mode"] == "decode":
-            Q, cut, verdict = c["requests"], f"decode {s['args'].get('new')} tokens", "-"
+            Q, cut, verdict, cross = c["requests"], f"decode {s['args'].get('new')} tokens", "-", "-"
         else:
             qs = checkpoint_qs(f)
             Q, cut = qs[-1], c["cut"]
             verdict, _ = growth(qs, [lead(f[f"q{q}"]) for q in qs])
+            cross = crossing(qs, [lead(f[f"q{q}"]) for q in qs], threshold)
             for q in qs:
                 r = f[f"q{q}"]
                 curves.append([label, q, r["direct"], r["decoded"],
@@ -228,25 +250,29 @@ def persist_tables(paths: list[Path], request_bits: float) -> str:
         charged = Q * c["per_request_bits"]
         largest = max(lead(f), f.get("net_bits_w") or 0.0, pz.get("pairz_bits_w") or 0.0, pi.get("pair_bits_w") or 0.0)
         flips = [x for x in (flip_tail(g, s["vocab"]) for g in vf) if x is not None]
-        nulls = [g["tail_ctrl_max_w"] for g in vf if g.get("tail_ctrl_max_w") is not None] + flips
+        ctrls = [x for x in (ctrl_max(g) for g in vf) if x is not None]
+        tail_ctrl = (f"{f['tail_bits_w']:.3g} ({f.get('tail_ctrl_w', math.nan):.3g} / {ctrl_max(f):.3g})"
+                     if f.get("tail_bits_w") is not None and ctrl_max(f) is not None else "-")
         rows.append([label, c["model"], c["boxes"], c["where"], cut, c["temp"], len(vf), Q,
-                     f"{f['layer']}:{f['coord']} {f['kind']}", with_ctrl(tail_net(f), f.get("tail_ctrl_w")),
-                     flip_tail(f, s["vocab"]) if "decoded_detail" in f else "-", max(nulls) if nulls else "-",
-                     with_ctrl(f["net_bits_w"], f.get("ctrl_bits_w")), verdict,
+                     f"{f['layer']}:{f['coord']} {f['kind']}", tail_net(f), tail_ctrl,
+                     flip_tail(f, s["vocab"]) if "decoded_detail" in f else "-",
+                     max(ctrls) if ctrls else "-", max(flips) if flips else "-",
+                     with_ctrl(f["net_bits_w"], f.get("ctrl_bits_w")), verdict, cross,
                      with_ctrl(pz.get("pairz_bits_w"), pz.get("pairz_bits_ctrl")),
                      with_ctrl(pi.get("pair_bits_w"), pi.get("pair_bits_ctrl")), charged, f.get("code_bits", "-"),
                      lead(f) / charged, largest / charged, largest / (Q * request_bits)])
-    out = ["Recovered bits about one weight column (value faults at the sink), each with its random-column control in "
-           "parentheses, and over the charged bits (Q requests times the bits each returns; 8k: Q requests of "
-           f"{request_bits:g} bits). Lead fault: the most tail bits at the largest Q.\n\n" + table(
+    out = ["Recovered bits about one weight column (value faults at the sink), each score with its random-column "
+           "control in parentheses, and over the charged bits (Q requests times the bits each returns; 8k: Q requests "
+           f"of {request_bits:g} bits). Lead fault: the largest tail net at the largest Q.\n\n" + table(
                ["output", "model", "boxes", "position", "cut", "temperature", "faults", "Q", "lead fault",
-                "tail net (random columns)", "tail, sign flipped", "largest control, any fault", "all-in net",
-                "growth (lead score)", "pairwise vs null, best fault",
+                "tail net (less its largest control)", "tail (control mean / max)", "tail, sign flipped",
+                "largest random-column control, any fault", "largest sign-flipped, any fault", "all-in net",
+                "growth (lead score)", f"Q where the lead reaches {threshold:g}", "pairwise vs null, best fault",
                 "pairwise as independent, best fault", "charged bits", "lead's served-change code bits",
                 "lead / charged", "largest / charged", "largest / charged (8k)"], rows)]
     if curves:
         out.append("The lead fault against Q:\n\n" + table(
-            ["output", "Q", "direct reads", "decoded tokens", "tail net (control)", "control max",
+            ["output", "Q", "direct reads", "decoded tokens", "tail net (control mean)", "control max",
              "all-in net (control)", "control max", "pairwise vs null (control)", "same, counted in draws",
              "pairwise as independent (control)", "charged bits", "served-change code bits", "lead / charged"],
             curves))
@@ -265,6 +291,8 @@ def main() -> None:
     ap.add_argument("--persist", type=Path, nargs="*", default=[])
     ap.add_argument("--request-bits", type=float, default=144000.0,
                     help="persist: a long request's output bits, the second charge")
+    ap.add_argument("--threshold", type=float, default=700.0,
+                    help="persist: bits a wrong block carries; the table gives the Q where the lead fault reaches it")
     ap.add_argument("--charge", type=float, nargs="+", default=[54.7, 72.7],
                     help="c + l, the table's charge per incorrect proof block, in bits")
     ap.add_argument("--ks", type=int, nargs="+", default=[20], help="the row readout's k to list")
@@ -274,7 +302,7 @@ def main() -> None:
     if a.extract:
         print(lam_tables([json.loads(p.read_text()) for p in a.extract], a.charge, tuple(a.ks)))
     if a.persist:
-        print(persist_tables(a.persist, a.request_bits))
+        print(persist_tables(a.persist, a.request_bits, a.threshold))
 
 
 if __name__ == "__main__":
