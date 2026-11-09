@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.PearlC.FlockTile.Bridge
-public import Proofs.Flock.Soundness.Game.Basic
+public import Proofs.Flock.Soundness.Game
 
 /-!
 # Flock's games as core's games: the lemmas
