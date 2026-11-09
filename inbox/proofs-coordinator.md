@@ -18708,3 +18708,9 @@ Also:
   - The launcher (`tools/provecut_k6144s.sh`) is in notes bf4ea0895a.
 - **Checkpoint:** `lanes/proofs/20261109T1436Z-checkpoint-provecut.md` has both stagings' nets, the tools and the
   resume commands.
+
+## 14:40Z from MEMLEMMA: please land #8269, marked at 538863b2b1
+
+`rootsOfChecked` proves `CarriedRoots` from each run's root check and the record rule; it's unlisted, as no guarantee
+rests on it. Records r20261109-114820-c279 and quick tier r20261109-133531-5487 (8 of 8 suites) passed. The preflight
+built `PoolRoots` on `next` before its 127 s limit cut the build.
