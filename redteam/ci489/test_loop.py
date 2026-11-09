@@ -282,10 +282,11 @@ def test_fixed_a_base_that_never_lists_is_enqueued_again_and_rung_naming_it(env)
     assert len(rings) == 1 and main[:12] in rings[0]["text"] and set(rings[0]["to"]) == {"@ci", "@infra"}, rings
 
 
-def test_fixed_a_fault_main_has_too_is_inherited_through_the_loop_and_one_the_change_adds_is_blamed(env):
-    """Condition 2 through the loop's verdict, at b85656625c (df1fcef29c, b85656625c): a PR that touches a task's inputs,
-    where `main` faults on that task with the same undeclared read, lands (the fault is rung as main's red); one whose
-    change adds an undeclared read is ejected. What the inherited fault covers: graph2 keeps no test of a faulted run
+def test_fixed_a_fault_main_has_too_is_inherited_through_the_loop_whatever_files_it_names(env):
+    """Condition 2 through the loop's verdict (df1fcef29c, b85656625c), and top's task-level rule (w3 99e52767cb): a PR that
+    touches a task's inputs, where `main` faults on that task by an undeclared read, lands and the fault is rung as main's
+    red, the same read or one the change adds (ejected before 99e52767cb). What the inherited fault covers: graph2 keeps no
+    test of a faulted run
     (its entry's `tests` is always []), and a task blocked behind it never runs, so the PR lands though `pytest:u`, whose
     input it changed, ran nothing. That is the accepted cost of advancing on a red `main`; its size is how many tasks
     fault on `main` (W5's ready check: 45, with 240 blocked behind them)."""
@@ -311,10 +312,7 @@ def test_fixed_a_fault_main_has_too_is_inherited_through_the_loop_and_one_the_ch
         faulted(script, main, f"sha512:t0-{pr}", undeclared, blocked=1)
         faulted(script, sha, f"sha512:t1-{pr}", undeclared + (", z.txt" if adds else ""), blocked=1)
         acts = [a for _ in range(4) for a in _acts(loop.tick())]
-        if adds:
-            assert "eject" in acts and env.main() != sha
-        else:
-            assert "advance" in acts and "eject" not in acts and env.main() == sha
+        assert "red" in acts and "advance" in acts and "eject" not in acts and env.main() == sha, (adds, acts)
 
 
 def test_fixed_a_family_removal_waits_alone_rung_to_its_owner_and_the_pr_batched_with_it_lands(env):
@@ -355,3 +353,20 @@ def test_fixed_a_family_removal_waits_alone_rung_to_its_owner_and_the_pr_batched
     assert 1 in landed and 2 not in landed, landed
     rings = [r for r in env.lines() if r.get("action") == "posting" and r.get("posting") == "ring"]
     assert rings and any(t != "@infra" for r in rings for t in r["to"]), rings
+
+
+def test_a_crash_beside_an_undeclared_read_is_inherited_where_main_faults_the_task():
+    """Cost 2, after the cut-over, at w3 99e52767cb: graph2's `why` of a faulted task carries the runner's own error before
+    its undeclared reads, and `_fault_tests` keeps only the reads, so a test file the change makes crash (a signal, an OOM
+    kill, no guard report: no failing test listed) is inherited wherever `main` faults that task by an undeclared read.
+    Before the task-level rule this needed the crash's reads among `main`'s; now any reads do. Fix: keep a `fault:` test
+    of the runner's error beside the reads when it exited as no test run does."""
+    from research import vqueue, vqueue_loop
+
+    why = ('run r20261109-151500-abcd on node-12 exit -11; error: {"error": "pytest died by SIGSEGV"}; '
+           "read 1 file(s) outside its declared inputs: new.txt")
+    tests = vqueue_loop._fault_tests(why)
+    assert tests == {"undeclared:new.txt"}
+    f = vqueue.Failed("pytest:t", "sha512:t1", frozenset({"t.py"}), base_key="sha512:t0", tests=tests,
+                      base_tests=frozenset({"undeclared:x.txt"}))
+    assert vqueue._inherited(f)
