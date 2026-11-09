@@ -501,11 +501,11 @@ KNOWN: dict[str, str] = {
         "homonym, a hiding commitment to a partition's rows: rename (proofs)",
     "Security/Definitions/Core/Boolean.lean::Verity.Boolean.Circuit":
         "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
-    "Security/Definitions/Core/Circuit.lean::Verity.Circuit.Transcript":
+    "Security/Definitions/Core/Circuit.lean::Verity.Circuit.Trace":
         "homonym, one run's gate values, which the Glossary calls a trace: rename, then the canonical trace (proofs)",
     "Security/Definitions/Core/Compose.lean::Claims.ZKMal.Layout":
         "homonym, a run in parts (a first part, then sessions) that RecZK reads: rename (lean)",
-    "Security/Definitions/Core/Interaction.lean::Claims.Trace":
+    "Security/Definitions/Core/Interaction.lean::Claims.Transcript":
         "homonym, a run's messages, oracle calls and decision, which the Glossary calls a transcript: rename, then the canonical transcript (proofs)",
     "Security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
         "duplicate of `Flock.Stmt`: becomes a reading of its shape (lean)",

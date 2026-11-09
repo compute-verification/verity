@@ -472,6 +472,37 @@ pub struct Composite {
     pub lookups: BTreeMap<usize, LookupNet>,
     /// a typed template's instance (`crate::typed::Instance`): the unit is its root, one slot per VU, beside its parts
     pub typed: Option<TypedBlock>,
+    /// SHA-512 of every byte [`Composite::parse_with`] read but the MUFU tables, which the build pins
+    /// (`ir_tail::TABLE_SHA256`): the circuit file's SHA-512 and a templated statement's unit rows
+    pub parsed_from: ParsedFrom,
+}
+
+/// [`Composite::parsed_from`]: set by the parse alone, and not kept by a copy, whose fields may then be edited (a selftest's
+/// forged circuit), so an edited copy is never taken for the circuit it was copied from.
+#[derive(Default)]
+pub struct ParsedFrom(Option<[u8; 64]>);
+
+impl Clone for ParsedFrom {
+    fn clone(&self) -> Self {
+        ParsedFrom(None)
+    }
+}
+
+impl ParsedFrom {
+    /// Of a circuit file by its SHA-512 and, for a templated statement, its unit's rows.
+    fn of(file_sha512: &[u8; 64], unit_rows: Option<&str>) -> Self {
+        let mut h = Sha512::new();
+        h.update(b"verity/flock-circuit/parsed-from\0");
+        h.update(file_sha512);
+        if let Some(rows) = unit_rows {
+            h.update(Sha512::digest(rows.as_bytes()));
+        }
+        ParsedFrom(Some(h.finalize().into()))
+    }
+
+    pub fn digest(&self) -> Option<&[u8; 64]> {
+        self.0.as_ref()
+    }
 }
 
 /// A typed template's block: the instance, and each part's circuit and slot among its layout's slots in the VU.
@@ -763,6 +794,7 @@ impl Composite {
         let mut nets = Vec::new();
         let parse_net = |t: &str| std::panic::catch_unwind(|| IrUnitNet::parse(t)).map_err(|_| "a derived circuit's rows do not parse".to_string());
         let mut instance = None;
+        let mut unit_rows = None;
         if typed && crate::typed::is_flat(&meta) {
             nets.push(("unit".to_string(), parse_net(&crate::typed::unit_rows(&meta, &name)?)?));
         } else if typed {
@@ -789,7 +821,9 @@ impl Composite {
             for _ in 0..n {
                 lines.next().ok_or("the template section is truncated")?;
             }
-            let unit = parse_net(tmpl_unit.ok_or("a templated statement: pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)")?)?;
+            let rows = tmpl_unit.ok_or("a templated statement: pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)")?;
+            unit_rows = Some(rows);
+            let unit = parse_net(rows)?;
             if unit.order.is_none() {
                 return Err("the templated unit's rows have no ORDER line (its position map)".into());
             }
@@ -1011,11 +1045,12 @@ impl Composite {
         {
             return Err("META: the rows' wires are not the chains and hm96 inputs the ports imply".into());
         }
+        let parsed_from = ParsedFrom::of(&sha512, unit_rows);
         let c = Composite {
             name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports, n_in,
             leaf_cuts_of: { let mut v = vec![Vec::new(); upv]; for &(u, j, l) in &leaf_cuts { if u < upv { v[u].push((j, l)); } } v },
             out_words, out_row_ports, pinned, g, upv, unit_net, leaves_in, leaves_out, public_inputs, leaves_public, rows, sha_net, hm_net, out_net, out_ports, out_slotted, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
-            lookups: lookups_fast.into_iter().collect(), typed: None,
+            lookups: lookups_fast.into_iter().collect(), typed: None, parsed_from,
         };
         let typed = instance.map(|inst| {
             let mut seen: BTreeMap<usize, usize> = BTreeMap::new();
@@ -2821,17 +2856,17 @@ fn flip_bit(w: &mut F128, t: usize) {
     if t < 64 { w.lo ^= 1 << t } else { w.hi ^= 1 << (t - 64) }
 }
 
-/// Whether a session's side reuses the drawn statements it built before ([`StmtCache`]); `FC_STMT_CACHE=0`: every session
+/// Whether a session's side reuses the sampled statements it built before ([`StmtCache`]); `FC_STMT_CACHE=0`: every session
 /// builds its own.
 pub fn stmt_cache_on() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var("FC_STMT_CACHE").as_deref() != Ok("0"))
 }
 
-/// One side's drawn statements, each built once. [`Stmt::new`] reads only its circuit, its count and its identity, all public
-/// (no value, coin or drawn unit), so a statement built again from the same three is the same statement. The key binds all
-/// three: the registered statement's digest (its circuit file's SHA-512 under its statement tag), the drawn count and the
-/// canonical identity. Each side keeps its own cache: the verifier's holds only statements it built itself.
+/// One side's sampled statements, each built once. [`Stmt::new`] reads only its circuit, its count and its identity, all
+/// public (no value, coin or sampled proof block), so a statement built again from the same three is the same statement. The
+/// key binds all three: the registered statement's digest (its circuit file's SHA-512 under its statement tag), the sampled
+/// count and the canonical identity. Each side keeps its own cache: the verifier's holds only statements it built itself.
 pub struct StmtCache(Mutex<BTreeMap<([u8; 64], usize, String), Arc<Stmt>>>);
 
 impl Default for StmtCache {
@@ -4045,6 +4080,143 @@ mod tests {
             assert_eq!(cache.len(), k + 2, "{what}: not built");
         }
         assert!(Arc::ptr_eq(&first, &cache.drawn(&bases[0], 2, json!({})).unwrap()), "the first key's statement was dropped");
+    }
+
+    /// A public file with what `proved_scope::check` reads of it: registered reads named in its header, shared rows.
+    fn scope_file(registered: bool, shared: bool) -> Instances {
+        let header = if registered { json!({"registered": "r"}) } else { json!({}) };
+        Instances { header, n: 2, rows: None, salts: None, bcs: vec![], public_sha512: [0; 64], public_file_sha512: [0; 64], population: None,
+                    tables: shared.then(|| RowTables { counts: vec![], rows: None, salts: None, refs: vec![] }), public: vec![] }
+    }
+
+    /// Sessions pairwise apart in each thing the check reads of a session: its registered reads, its shared rows, `--zk`
+    /// and its tables.
+    fn scope_sessions() -> Vec<(Instances, bool, usize)> {
+        vec![(scope_file(false, false), true, 1), (scope_file(true, false), true, 1), (scope_file(false, true), true, 1),
+             (scope_file(true, true), true, 1), (scope_file(false, false), false, 1), (scope_file(false, false), false, 2),
+             (scope_file(false, false), true, 2)]
+    }
+
+    /// The kept verdict of each test circuit's check in each session is the fresh check's, the acceptance or the refusal
+    /// word for word, at its first call and at the next; each (circuit, session) keeps one, so no two of them share a key.
+    #[test]
+    fn kept_verdicts_are_fresh_checks() {
+        let v = crate::proved_scope::Verdicts::new();
+        let (cs, ss) = (test_circuits(), scope_sessions());
+        let (mut accepted, mut refused) = (0, 0);
+        for (name, c) in &cs {
+            for (k, (inst, zk, tables)) in ss.iter().enumerate() {
+                let fresh = crate::proved_scope::check(c, inst, *zk, *tables);
+                assert_eq!(v.check(c, inst, *zk, *tables), fresh, "{name}, session {k}: a first check");
+                assert_eq!(v.check(c, inst, *zk, *tables), fresh, "{name}, session {k}: the kept verdict");
+                if fresh.is_ok() { accepted += 1 } else { refused += 1 }
+            }
+        }
+        assert!(accepted > 0 && refused > 0, "{accepted} accepted, {refused} refused: a verdict of each kind");
+        assert_eq!(v.len(), cs.len() * ss.len(), "a (circuit, session) shares another's key");
+        assert_eq!(v.seen()["lookups"], json!(2 * cs.len() * ss.len()));
+    }
+
+    /// A sampled statement's check takes its population's verdict: the session's sample, its count and its digests are not
+    /// what the check reads.
+    #[test]
+    fn a_sampled_statement_keeps_its_populations_verdict() {
+        let v = crate::proved_scope::Verdicts::new();
+        for (name, c) in test_circuits() {
+            let pop = scope_file(true, false);
+            let mut sampled = scope_file(true, false);
+            sampled.header["units"] = json!({"indices": [1]});
+            (sampled.n, sampled.public_sha512, sampled.public_file_sha512) = (1, [7; 64], [9; 64]);
+            let before = v.len();
+            let want = v.check(&c, &pop, true, 1);
+            assert_eq!(v.check(&c, &sampled, true, 1), want, "{name}");
+            assert_eq!(v.len(), before + 1, "{name}: the sampled statement checked again");
+        }
+    }
+
+    /// At Register a sampled session's server checks the sampled statement the server builds: the sample's public file, cut
+    /// from the population's file the server loaded, over the circuit the sampled statement shares with the population's
+    /// (through the statement cache). With or without registered reads, shared rows or `--zk`, that check takes the
+    /// population's kept verdict, which is a fresh check of the sample.
+    #[test]
+    fn the_register_check_takes_its_populations_verdict() {
+        let c = Composite::parse(&typed_statement(), None).unwrap();
+        let (n, np) = (2, c.ports.len());
+        let header = json!({"format": INST_FORMAT, "statement": c.statement(), "circuit_sha512": crate::hex(&c.sha512),
+                            "instances": n, "rows": false, "units": units_entry(&c, &[0, 1])});
+        let mut b = serde_json::to_vec(&header).unwrap();
+        b.push(b'\n');
+        b.extend((0..BC_BYTES * n * np + 2 * n * c.public_words()).map(|i| i as u8));
+        let p = std::env::temp_dir().join(format!("flock-register-scope-{}.bin", std::process::id()));
+        std::fs::write(&p, &b).unwrap();
+        let pop = Stmt::new(c, n, json!({})).unwrap();
+        let one = StmtCache::new().drawn(&pop, 1, json!({})).unwrap();
+        assert!(Arc::ptr_eq(&one.c, &pop.c), "the sampled statement parsed a circuit of its own");
+        for (registered, shared) in [(false, false), (true, false), (false, true), (true, true)] {
+            let mut inst = Instances::load(p.to_str().unwrap(), &pop.c).unwrap();
+            if registered {
+                inst.header["registered"] = json!("r");
+            }
+            inst.tables = shared.then(|| RowTables { counts: vec![1], rows: None, salts: None, refs: vec![0; n * np] });
+            let sample = inst.drawn(&pop.c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
+            let v = crate::proved_scope::Verdicts::new();
+            for zk in [false, true] {
+                let what = format!("registered {registered}, shared rows {shared}, zk {zk}");
+                let want = crate::proved_scope::check(&pop.c, &inst, zk, 1);
+                assert_eq!(v.check(&pop.c, &inst, zk, 1), want, "{what}: the population's");
+                assert_eq!(v.check(&one.c, &sample, zk, 1), want, "{what}: the sample's is not the population's");
+                assert_eq!(crate::proved_scope::check(&one.c, &sample, zk, 1), want, "{what}: a fresh check of the sample differs");
+            }
+            assert_eq!((v.len(), v.seen()["lookups"].clone()), (2, json!(4)),
+                       "registered {registered}, shared rows {shared}: the sample checked again");
+        }
+        std::fs::remove_file(&p).unwrap();
+    }
+
+    /// One byte more or less in the circuit file is another statement's key: its check runs again.
+    #[test]
+    fn a_circuit_a_byte_apart_misses() {
+        let text = flat_tail_statement();
+        let zeros = "0".repeat(128);
+        let edited = text.replacen(&format!("\"program_sha512\":\"{zeros}\""), &format!("\"program_sha512\":\"1{}\"", &zeros[1..]), 1);
+        assert_eq!((edited.len(), text.bytes().zip(edited.bytes()).filter(|(a, b)| a != b).count()), (text.len(), 1));
+        let (a, b) = (Composite::parse(&text, None).unwrap(), Composite::parse(&edited, None).unwrap());
+        assert_ne!(a.parsed_from.digest(), b.parsed_from.digest());
+        let (v, inst) = (crate::proved_scope::Verdicts::new(), scope_file(false, false));
+        let want = crate::proved_scope::check(&a, &inst, true, 1);
+        assert!(want.is_ok(), "{want:?}");
+        assert_eq!(v.check(&a, &inst, true, 1), want);
+        assert_eq!(v.check(&b, &inst, true, 1), crate::proved_scope::check(&b, &inst, true, 1));
+        assert_eq!(v.len(), 2, "the edited circuit took the first one's verdict");
+        // the same bytes parsed again are the same statement
+        assert_eq!(Composite::parse(&text, None).unwrap().parsed_from.digest(), a.parsed_from.digest());
+        assert_eq!(v.check(&Composite::parse(&text, None).unwrap(), &inst, true, 1), want);
+        assert_eq!(v.len(), 2);
+    }
+
+    /// A templated statement's unit rows are part of what its circuit was parsed from; a statement with none differs from one
+    /// whose rows are empty.
+    #[test]
+    fn a_templated_units_rows_are_parsed_from() {
+        let pin = [3u8; 64];
+        let of = |rows| ParsedFrom::of(&pin, rows).digest().copied();
+        assert_ne!(of(Some("CIRCUIT unit 1\n")), of(Some("CIRCUIT unit 2\n")));
+        assert_ne!(of(None), of(Some("")));
+        assert_eq!(of(Some("CIRCUIT unit 1\n")), of(Some("CIRCUIT unit 1\n")));
+    }
+
+    /// A copy of a parsed circuit, whose fields may be edited, has no parse digest: its check runs afresh each time and keeps
+    /// nothing.
+    #[test]
+    fn a_copy_keeps_no_verdict() {
+        let v = crate::proved_scope::Verdicts::new();
+        let inst = scope_file(false, false);
+        for (name, c) in test_circuits() {
+            let copy = c.clone();
+            assert!(c.parsed_from.digest().is_some() && copy.parsed_from.digest().is_none(), "{name}");
+            assert_eq!(v.check(&copy, &inst, true, 1), crate::proved_scope::check(&c, &inst, true, 1), "{name}");
+        }
+        assert!(v.is_empty());
     }
 
     /// A section's lines as one slice of the text are the lines copied out, past the text's end too.

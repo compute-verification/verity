@@ -2,9 +2,9 @@
 
 A rank's need is the coins its `service.Stream` sample reads for its sampling design over its window's counts, plus its longest stream
 once more, known before anything opens. The windows are toy templates at the counts of record. One is 38b2's step-16
-SiluMul_v2 window (675 + 3 units a rank under `stratified:4`, the stratified SiluMul partition). The other is the 18-family
-partition's rank-0 window at step 16 (`glm53_all_families_tp8_step16.json` before EmbeddingShard_v2 rejoined it: 179,552 units
-under `stratified:1`), whose sample reads more than the 16 coins a rank the old reserve held."""
+SiluMul_v2 window (675 + 3 units a rank, the stratified SiluMul partition, sampled 4 and 1 under `SILU_RULE`). The other is
+the 18-family partition's rank-0 window at step 16 (`glm53_all_families_tp8_step16.json` before EmbeddingShard_v2 rejoined it:
+179,552 units, one a template under `FAMILIES_RULE`), whose sample reads more than the 16 coins a rank the old reserve held."""
 
 from __future__ import annotations
 
@@ -32,6 +32,8 @@ XOR8 = PrimitiveDefinition("A5ReserveTestXor8", 1, (("a", Bits(8)), ("b", Bits(8
 SILU_MUL = [675, 3]
 #: the 18-family partition's rank-0 window, its templates in the partition file's order
 ALL_FAMILIES = [256, 1, 2, 1, 160, 9, 9, 1, 8, 1, 49152, 6144, 4096, 2048, 19360, 4096, 90112, 4096]
+#: the rates that sample SILU_MUL's strata 4 and 1, and each of ALL_FAMILIES' one
+SILU_RULE, FAMILIES_RULE = "stratified-rate:4/675", "stratified-rate:1/90112"
 ROOT = "ab" * 64
 AFTER = bytes.fromhex("cd" * 64)
 STUB = AC.TREE / "benchmarks" / "live_challenger" / "tests" / "stub_serve.py"
@@ -50,7 +52,8 @@ def window(counts: list[int]):
 
 def law_of(rule: str, counts: list[int]) -> dict:
     program, query, n = window(counts)
-    return D.derive(program, query, S.selection_law(S.Law(rule), n))
+    return D.derive(program, query, S.selection_law(S.Law(rule), n, D.strata_sizes(program, query)),
+                    S.selection_table(S.Law(rule), program, query, None))
 
 
 def need_of(rule: str, counts: list[int]) -> int:
@@ -88,8 +91,9 @@ def test_the_silu_mul_window_keeps_todays_reserve():
     """38b2's SiluMul window reads 226 bytes a rank (a stratum of 675 at k 4, 144 bytes, and one of 3 at its floor of 1,
     82), so its need with the margin is 6 coins. The reserve keeps the current 16 coins a rank and one more: 129 for 8
     ranks."""
-    assert reads("stratified:4", SILU_MUL, 0) == 226
-    need = need_of("stratified:4", SILU_MUL)
+    assert [s["k"] for s in law_of(SILU_RULE, SILU_MUL)["strata"]] == [4, 1]
+    assert reads(SILU_RULE, SILU_MUL, 0) == 226
+    need = need_of(SILU_RULE, SILU_MUL)
     assert need == -(-(226 + 144) // Ch.COIN_BYTES) == 6
     needs = dict.fromkeys(range(8), need)
     assert AC.families(needs) == [[AC.FAMILY, 16 * 8 + 1]]
@@ -100,10 +104,10 @@ def test_the_18_family_window_needs_more_coins_than_todays_reserve():
     """The 18-family window's sample reads 1,496 bytes, one stream of 82 to 86 bytes a stratum at k 1. That is past the
     1,024 of 16 coins, and the 25 coins it needs with the margin hold it. On seeded coins the sample reads 1,496 bytes
     (no word rejected)."""
-    assert all(s["k"] == 1 for s in law_of("stratified:1", ALL_FAMILIES)["strata"])
-    assert {reads("stratified:1", ALL_FAMILIES, seed) for seed in range(4)} == {1496}
+    assert all(s["k"] == 1 for s in law_of(FAMILIES_RULE, ALL_FAMILIES)["strata"])
+    assert {reads(FAMILIES_RULE, ALL_FAMILIES, seed) for seed in range(4)} == {1496}
     assert 1496 > AC.COINS_PER_RANK * Ch.COIN_BYTES
-    assert need_of("stratified:1", ALL_FAMILIES) == -(-(1496 + 86) // Ch.COIN_BYTES) == 25
+    assert need_of(FAMILIES_RULE, ALL_FAMILIES) == -(-(1496 + 86) // Ch.COIN_BYTES) == 25
     assert AC.families({0: 25}) == [[AC.FAMILY, 26]]
 
 
@@ -111,7 +115,7 @@ def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
     """On a challenger of one rank's old reserve (17 coins), the 18-family sample runs out of coins (`every sampling coin of the
     epoch is open`), as the 18-family run did. On its need's reserve (`families`) it samples, opening 24 coins after the
     rank's commitment."""
-    rule, law, n = "stratified:1", law_of("stratified:1", ALL_FAMILIES), sum(ALL_FAMILIES)
+    rule, law, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
     with pytest.raises(Ch.CoinError, match="every draw coin of the epoch is open"):
         S.select_draw(S.Law(rule), law, n, challenger_coins([[AC.FAMILY, 17]]))
     coins = challenger_coins(AC.families({0: need_of(rule, ALL_FAMILIES)}))
@@ -121,19 +125,22 @@ def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
 
 def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_with():
     """A window whose first template holds transfer gates (32 units at work 0 and floor 32, sampled whole) beside 8 sampled by
-    ``work:2``: its sample reads 640 bytes for the whole stratum and 100 for the rest, so the need is 22 coins, and its reserve
-    holds the sample. A work sampling design has no need without the table (`draw.derive` refuses it)."""
+    ``work-rate:1/20`` (work:2): its sample reads 640 bytes for the whole stratum and 100 for the rest, so the need is 22 coins,
+    and its reserve holds the sample. A work rate has no need without the table (`service.selection_table` refuses it)."""
     program, query, n = window([32, 8])
     t0, t1 = (P.template_id(template(i)) for i in range(2))
     table = {t0: {"work": 0, "floor": 32}, t1: {"work": 1, "floor": 1}}
-    law = D.derive(program, query, S.selection_law(S.Law("work:2"), n), table)
-    assert [s["k"] for s in law["strata"]] == [32, 2]
-    need = AC.need("work:2", program, query, n, table)
+    rule = S.Law("work-rate:1/20")
+    law = D.derive(program, query, S.selection_law(rule, n, D.strata_sizes(program, query)),
+                   S.selection_table(rule, program, query, table))
+    assert law["k"] == 2 and [s["k"] for s in law["strata"]] == [32, 2]
+    need = AC.need(rule.text, program, query, n, table)
     assert need == -(-(640 + 100 + 640) // Ch.COIN_BYTES) == 22
-    drawn = S.select_draw(S.Law("work:2"), law, n, challenger_coins(AC.families({0: need})))
+    drawn = S.select_draw(rule, law, n, challenger_coins(AC.families({0: need})))
     assert set(range(32)) <= set(drawn["units"]) and len(drawn["units"]) == 34
-    with pytest.raises(ValueError, match="work table"):
-        AC.need("work:2", program, query, n)
+    with pytest.raises(S.Refused) as e:
+        AC.need(rule.text, program, query, n)
+    assert e.value.verdict.codes == ("rate",) and "work table" in e.value.verdict.detail["rate"]["reason"]
 
 
 def test_a_reserve_that_cant_cover_the_draws_is_refused_naming_need_and_reserve():
@@ -166,7 +173,7 @@ def nothing_reserved(tmp_path: Path) -> bool:
 def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_path, monkeypatch):
     """The local challenger opens the session once the rank has planned its sample, on the layout of its need (26 coins). The
     18-family sample reads its 24 coins after the rank's commitment, and its coins' evidence holds (`coins.coins_reason`)."""
-    rule, law, n = "stratified:1", law_of("stratified:1", ALL_FAMILIES), sum(ALL_FAMILIES)
+    rule, law, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
     manager, draws, opener = local(tmp_path, monkeypatch, [0])
     try:
         coins = AC.RankCoins(draws, 0)
@@ -190,7 +197,7 @@ def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_
 def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch):
     """Rank 1's plan waits for rank 0's; then the session opens on both needs' layout (16 coins a rank and one, 33), and each
     rank samples in its turn, 4 coins for SiluMul's 226 bytes, as 38b2's gate run did on each of its 8 ranks."""
-    rule, law, n = "stratified:4", law_of("stratified:4", SILU_MUL), sum(SILU_MUL)
+    rule, law, n = SILU_RULE, law_of(SILU_RULE, SILU_MUL), sum(SILU_MUL)
     manager, draws, opener = local(tmp_path, monkeypatch, [0, 1])
     segments: dict[int, dict] = {}
 
