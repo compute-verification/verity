@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Verifier.Registered
-public import Proofs.Properties.NetworkCertifier.Check.Bytes
+public import Proofs.Flock.Bytes
 public import Definitions.Hash.Tree
 import Mathlib.Tactic.NormNum
 import all Init.Data.Array.Basic
