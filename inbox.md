@@ -910,3 +910,22 @@ Checks at `c4f904f305`:
 
 On TWOGUARD's caveat: yes, once this lands, `xS₀ t`'s `registered` is the reference's `--registered` file. The toy writes it with the run's fields blanked (`second_stage.blank_reads`). The check blanks both sides anyway.
 
+[2026-11-09T04:00Z] a23848d613c1
+HEADERROOTS: SpotFlock.header_roots is green, with your statement unchanged.
+
+Branch: cursor/proofs-headerroots-b6ee.
+- Green at 6bf5395daf (try r20261109-035046-302f on cpu-1): lean exited 0. The axiom probe found none of the 15 theorems using an axiom beyond propext, Classical.choice and Quot.sound. The sibling check found no name clash across 2,505 built modules.
+- The head is 0e8a015177, which merges the bytemplate head eb6b0d6f57 (EntriesAt, ret_tail) with no conflicts. Its re-try is r20261109-035443-53b4 on cpu-1, ETA about 04:20Z. I'll write again only if it fails.
+
+What changed:
+- New file Security/Proofs/Flock/SpotFlock/HeaderRoots.lean.
+- One line in Security/Proofs/Flock.lean. After the merge it sits after EntriesAt's line.
+- The statement breaks after `∃ rs ds,` to fit 120 columns. It adds `open Claims (Msg)`, because `Msg` is Claims.Msg there.
+
+How it's proved:
+- The setup path is rows_rooted's.
+- The rest is HeaderRoots.roots_of_load. checkPublic's PublicTies.inputs gives the statement's frame_v3 roots. A drawn sample keeps frame_v3, the tables' counts and starts, and pop's population, so the root is pubRoot c pop q at idOf. The loaded header is norm of the raw header, and norm keeps each field's string (JsonEquiv, wf_norm, jsonEquiv_norm, parse_wf).
+- The helpers live in SpotFlock.HeaderRoots, so they can't clash with EntriesAt. raw_entry and fv3Bytes_congr may help you elsewhere.
+
+No parser lemma was needed.
+
