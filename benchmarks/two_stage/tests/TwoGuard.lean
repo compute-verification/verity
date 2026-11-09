@@ -49,8 +49,8 @@ def secondDrawAt (h : Held) (s₀ s₁ : ByteArray) : Option Json :=
 /-- `SpotFlock.ownOf` at the first stage's bytes `s₀`. -/
 def ownOfAt (h : Held) (st : Roots) (rec draw : Json) (s₀ : ByteArray) : Spot.SecondStage.Own :=
   { sample := h.reg.sample s₀, parts := some (partsAt h (h.reg.sample s₀).size), interior := rec,
-    boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires, refs := refsOf h,
-    refReads := refRegisteredOf h }
+    boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
+    refs := refsOf h, refReads := refRegisteredOf h }
 
 /-- `SpotFlock.readsOk` at the stages' bytes. -/
 def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (s₀ s₁ : ByteArray) : Bool :=
@@ -235,7 +235,8 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
     | some st, some rec, some draw, some w =>
       let own : Spot.SecondStage.Own :=
         { sample := h.reg.sample s₀, parts := some (partsAt h (h.reg.sample s₀).size), interior := rec,
-          boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires, refs, refReads }
+          boundary := st.record, drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires,
+          refs, refReads }
       let _ ← timed s!"t{t} interiorOrderOk" (fun _ => Spot.SecondStage.interiorOrderOk own) b
       let (S?, _) ← timed s!"t{t} stmtJsonOf" (fun _ => stmtJsonOf h t w) (fun S => b S.isSome)
       if let some S := S? then
