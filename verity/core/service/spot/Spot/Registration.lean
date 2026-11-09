@@ -52,17 +52,20 @@ log's last, which R6 holds `previous` to (`lastDigest`): the verifier names the 
 previous window's root and domain for that port, and with no previous record it is `R7-output`.
 
 A verifier with a pool (`pool`: the registered values a window opens its pool from and leaves it in, `pin` and `pout`,
-the empty pool's root `genesis`, and three bools, `refused`, `reset` and `spent`) holds each window to open the pool the
-previous window of record left (`Pool.chains`), whatever it made of that window: its parameters give `pin` as the
-previous record's `pout`, reused (`OneStage.paramsParsed`). The chain restarts from the empty pool, `pin` filled from
-`genesis`, a fixed root, by a public rule that takes no advice, at a registration's first window, at a registration
-boundary (a previous record of another program) and after the verifier refused the window `L` windows of record before
-(`refused`, `L` the fixed public lag at which serving learns a verdict), and by serving's own reset (`reset`), which an
-engine crash needs, at most one a week. The record's window names that reset (`pool_reset`; `R6-pool-reset` otherwise),
-and R6 refuses one where an earlier window of its week reset (`spent`; `R6-pool-reset-week`). It is serving's choice, so
-it is advice: the records name, of a week's n windows, the one serving reset at or none, log₂(n + 1) bits a week (log₂
-1009, 9.98 bits, for 600-second windows), which leakage charges. R7 refuses a record whose entry for `pin` is not the
-pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
+the empty pool's root `genesis`, the public lag `lag`, its verdict log `verdicts`, serving's `reset` and the window's
+`week`) holds each window to open the pool the previous window of record left (`Pool.chains`), whatever it made of that
+window: its parameters give `pin` as the previous record's `pout`, reused (`OneStage.paramsParsed`). The chain restarts
+from the empty pool, `pin` filled from `genesis`, a fixed root, by a public rule that takes no advice, at a
+registration's first window, at a registration boundary (a previous record of another program) and after the verifier
+refused the window `lag` windows of record before (`Pool.refused`, read from its own verdict log, `lag` the fixed public
+lag at which serving learns a verdict), and by serving's own reset (`reset`), which an engine crash needs, at most one a
+week. The record's window names that reset (`pool_reset`; `R6-pool-reset` otherwise), its week (`pool_week`;
+`R6-pool-week`) and whether the week's reset is spent at it (`pool_spent`; `R6-pool-spent`): that it resets, or that
+the previous record, of its week, named it spent (`Pool.spentBefore`). R6 refuses a reset where the week's is spent
+before it (`R6-pool-reset-week`). The resets are serving's choice, so they are advice: the records name, of a week's n
+windows, the one serving reset at or none, log₂(n + 1) bits a week (log₂ 1009, 9.98 bits, for 600-second windows),
+which leakage charges; the spent marks and weeks are a function of the resets and the verifier's clock. R7 refuses a
+record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
 -/
 module
 
@@ -105,17 +108,40 @@ inductive Earlier where
   deriving Inhabited
 
 /-- The verifier's pool (Pool chain, `registration._pool`): the registered value a window opens its pool from (`pin`),
-the one it leaves the pool in (`pout`), the empty pool's root (`genesis`, lowercase hex of 64 bytes), whether the
-verifier refused the window the public lag before this one (`refused`), the reset serving chose for this window, which
-its record names (`reset`, `pool_reset`), and whether an earlier window of its week reset so (`spent`). -/
+the one it leaves the pool in (`pout`), the empty pool's root (`genesis`, lowercase hex of 64 bytes), the public lag at
+which serving learns a verdict (`lag`, positive), the verifier's verdict log (`verdicts`: each record digest it ran,
+with whether that run accepted), the reset serving chose for this window, which its record names (`reset`,
+`pool_reset`), and the window's week on the verifier's clock, which its record names too (`week`, `pool_week`). -/
 structure Pool where
   pin : String
   pout : String
   genesis : String
-  refused : Bool
+  lag : Nat
+  verdicts : Array (String × Bool)
   reset : Bool
-  spent : Bool
+  week : Nat
   deriving Inhabited
+
+/-- **Whether the verifier refused the window `lag` windows of record before this one** (`registration.pool_refused`):
+its verdict log names its run on that record of the log refused. A log shorter than the lag, or a record it holds no
+verdict for, is not refused, so where every run accepted the chain never restarts. -/
+def Pool.refused (p : Pool) (log : Array Json) : Bool :=
+  if p.lag ≤ log.size then
+    match log[log.size - p.lag]? with
+    | some e => match digestHex e with
+      | .ok d => p.verdicts.any fun (r, a) => r == d && !a
+      | .error _ => false
+    | none => false
+  else false
+
+/-- **Whether the week's one reset is spent before this window** (`registration.pool_spent_before`): the log's last
+record, the previous window of record, names it spent (`pool_spent`) in the verifier's week (`pool_week`), so a week
+starts unspent. -/
+def Pool.spentBefore (p : Pool) (log : Array Json) : Bool :=
+  match log.back? with
+  | some e => jeq (getD (getD e "window") "pool_spent") (.bool true) &&
+      jeq (getD (getD e "window") "pool_week") (Lean.toJson p.week)
+  | none => false
 
 /-- The verifier's own copies that R1–R7 hold the record to. -/
 structure Verifier where
@@ -186,8 +212,18 @@ private def optReset : Option Pool → Json
   | some p => Json.bool p.reset
   | none => Json.null
 
-private def onceOk : Option Pool → Bool
-  | some p => !(p.reset && p.spent)
+private def optWeek : Option Pool → Json
+  | some p => Lean.toJson p.week
+  | none => Json.null
+
+private def optSpent (pool : Option Pool) (log : Array Json) : Json :=
+  match pool with
+  | some p => Json.bool (p.reset || p.spentBefore log)
+  | none => Json.null
+
+private def onceOk (pool : Option Pool) (log : Array Json) : Bool :=
+  match pool with
+  | some p => !(p.reset && p.spentBefore log)
   | none => true
 
 /-- The values whose domain leaves the window's open root out: `held`, then the pinned, supplied and output values. -/
@@ -349,11 +385,11 @@ def checkOutputs (c : Array String) (got : Json) (mine : V (Array Registered.Ent
     checkRegistered c got (.ok mine) held supplied rootOf
 
 /-- **Whether a window carries the previous window's pool** (`registration.pool_chains`): neither the verifier refused
-the window the public lag back (`refused`) nor serving reset it (`reset`), and the log's last record, the previous
+the window the public lag back (`Pool.refused`) nor serving reset it (`reset`), and the log's last record, the previous
 window of record, registered its program (`program`, its digest as R2 reads it). Otherwise it opens the empty pool. -/
 def Pool.chains (p : Pool) (log : Array Json) (program : String) : Bool :=
   match log.back? with
-  | some e => !p.reset && !p.refused && jeq (getD e "program") (Json.str program)
+  | some e => !p.reset && !p.refused log && jeq (getD e "program") (Json.str program)
   | none => false
 
 /-- The domain and root of the pool the record's window opens (`registration.pool_open`): the previous record's entry
@@ -487,7 +523,9 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   -- `kept` terms, not statements: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
   c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
   c := kept (jeq (getD (get "window") "pool_reset") (optReset v.pool)) c "R6-pool-reset"
-  c := kept (onceOk v.pool) c "R6-pool-reset-week"
+  c := kept (jeq (getD (get "window") "pool_week") (optWeek v.pool)) c "R6-pool-week"
+  c := kept (jeq (getD (get "window") "pool_spent") (optSpent v.pool v.log)) c "R6-pool-spent"
+  c := kept (onceOk v.pool v.log) c "R6-pool-reset-week"
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
@@ -559,7 +597,9 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
   c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
   c := kept (jeq (getD (get "window") "pool_reset") (optReset v.pool)) c "R6-pool-reset"
-  c := kept (onceOk v.pool) c "R6-pool-reset-week"
+  c := kept (jeq (getD (get "window") "pool_week") (optWeek v.pool)) c "R6-pool-week"
+  c := kept (jeq (getD (get "window") "pool_spent") (optSpent v.pool v.log)) c "R6-pool-spent"
+  c := kept (onceOk v.pool v.log) c "R6-pool-reset-week"
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied

@@ -1161,29 +1161,36 @@ def _pooled() -> Program:
     return Program(bind(CompositeDefinition("RegisteredTestPooledProgram", 0, (), sig, body, register=False)))
 
 
-def _pool_window(prog: Program, w: G.Registered, i: int, log, pin=None, refused=False, reset=False, spent=False,
+def _pool(log, reset=False, week=0, verdicts=None, lag=1) -> tuple[dict, dict]:
+    """The verifier's pool, of the lag `lag`, the verdict log `verdicts` (none by default), the reset `reset` and the
+    week `week`, and the pool fields a window after `log` names under it: the same reset and week, and the spent mark
+    R6 holds it to."""
+    pool = {"pin": "pin", "pout": "pout", "genesis": GENESIS, "lag": lag, "verdicts": verdicts or {}, "reset": reset,
+            "week": week}
+    return pool, {R.POOL_RESET: reset, R.POOL_WEEK: week, R.POOL_SPENT: reset or R.pool_spent_before(pool, log)}
+
+
+def _pool_window(prog: Program, w: G.Registered, i: int, log, pin=None, reset=False, week=0, verdicts=None, lag=1,
                  **window):
     """Window `i`'s record of `_pooled`, the next after `log`: x and `pout` (`POOLS[i]`) afresh under its window's open
     root, the weights `w` held, `pin` the entry `pin`, the empty pool filled from `genesis` by default, and its window
-    naming the reset `reset`, then the fields `window`; with the verifier's R7 arguments, its pool holding `refused`
-    (the verifier refused the window the public lag back), the same reset, and `spent` (an earlier window of the week
-    reset)."""
+    naming the pool fields `_pool` gives, then the fields `window`; with the verifier's R7 arguments and its pool
+    (`_pool`)."""
     d = P.program_digest(prog)
     base, ports = _record(prog, w)
     x = G.Registered.commit(d, "x", X_ROWS, window=POOL_WINDOWS[i])
     pout = G.Registered.commit(d, "pout", [POOLS[i]], word_bits=32, window=POOL_WINDOWS[i])
+    pool, marks = _pool(log, reset, week, verdicts, lag)
 
     def record(pin_entry):
-        return R.record(prog, Q, LAW, SCHEME, base["roots"], {**SERVED, "row": 7 + i, R.POOL_RESET: reset, **window},
+        return R.record(prog, Q, LAW, SCHEME, base["roots"], {**SERVED, "row": 7 + i, **marks, **window},
                         previous=R.digest(log[-1]) if log else None,
                         registered=[x.entry(), w.entry(), pout.entry(), *([pin_entry] if pin_entry else [])])
 
     if pin is None:
         pin = G.supplied_value(prog, "pin", [[("bytes", GENESIS)]], record(None), ["pin"]).entry()
     kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"x": 2, "W": 2, "pin": 16, "pout": 16},
-          "log": list(log), "window_root": POOL_WINDOWS[i], "held": ["W"],
-          "pool": {"pin": "pin", "pout": "pout", "genesis": GENESIS, "refused": refused, "reset": reset,
-                   "spent": spent}}
+          "log": list(log), "window_root": POOL_WINDOWS[i], "held": ["W"], "pool": pool}
     return record(pin), kw
 
 
@@ -1224,9 +1231,11 @@ def test_a_window_opens_the_pool_the_previous_window_of_record_left():
 def test_the_public_rule_restarts_the_pool_with_no_advice():
     """The public rule opens the empty pool, `pin` filled from `genesis`, where there is no pool to carry, at a
     registration's first window and past a registration boundary (a previous record of another program), and after the
-    verifier refused the window the public lag back (`refused`), with no reset of serving's: the records name none, so
-    the rule costs no advice. Where it restarts, the previous window's pool is refused by name (`R7-pool-chain`). A
-    malformed pool refuses the verifier's own inputs."""
+    verifier refused the window the public lag back, as its own verdict log names it (`verdicts`, `pool_refused`), with
+    no reset of serving's: the records name none, so the rule costs no advice. Where it restarts, the previous window's
+    pool is refused by name (`R7-pool-chain`). Where the verdict log names that window's run accepted, or holds no
+    verdict for it, or the log is shorter than the lag, the window carries the pool. A malformed pool refuses the
+    verifier's own inputs."""
     prog = _pooled()
     w = _registered(prog)
     first, kw = _pool_window(prog, w, 0, [])
@@ -1235,17 +1244,30 @@ def test_the_public_rule_restarts_the_pool_with_no_advice():
         opened, kw2 = _pool_window(prog, w, 1, log)
         assert not R.pool_chains(kw2["pool"], log, prog)
         assert R.check(opened, prog, Q, **kw2).ok
-    after, kw3 = _pool_window(prog, w, 1, [first], refused=True)
-    assert not R.pool_chains(kw3["pool"], [first], prog)
+    refused = {R.digest(first): False}
+    after, kw3 = _pool_window(prog, w, 1, [first], verdicts=refused)
+    assert R.pool_refused(kw3["pool"], [first]) and not R.pool_chains(kw3["pool"], [first], prog)
     assert R.check(after, prog, Q, **kw3).ok
-    carried, _ = _pool_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"}, refused=True)
+    carry = {**_entry(first, "pout"), "value": "pin"}
+    carried, _ = _pool_window(prog, w, 1, [first], carry, verdicts=refused)
     assert R.check(carried, prog, Q, **kw3).codes == ("R7-domain", "R7-supplied", "R7-pool-chain")
+    for verdicts, lag in (({R.digest(first): True}, 1), ({GENESIS: False}, 1), (refused, 2)):
+        on, kw4 = _pool_window(prog, w, 1, [first], carry, verdicts=verdicts, lag=lag)
+        assert R.pool_chains(kw4["pool"], [first], prog), (verdicts, lag)
+        assert R.check(on, prog, Q, **kw4).ok, (verdicts, lag)
+    second, _ = _pool_window(prog, w, 1, [first], carry)
+    late, kw5 = _pool_window(prog, w, 2, [first, second], verdicts=refused, lag=2)
+    assert not R.pool_chains(kw5["pool"], [first, second], prog)
+    assert R.check(late, prog, Q, **kw5).ok
     pool = kw["pool"]
-    for bad, change in (*(({k: v for k, v in pool.items() if k != b}, {}) for b in ("refused", "reset", "spent")),
-                        ({**pool, "pin": "pout"}, {}), ({**pool, "pin": "V"}, {}),
+    missing = ({k: v for k, v in pool.items() if k != b} for b in ("lag", "reset", "verdicts", "week"))
+    for bad, change in (*((m, {}) for m in missing), ({**pool, "pin": "pout"}, {}), ({**pool, "pin": "V"}, {}),
                         ({**pool, "genesis": GENESIS.upper()}, {}), ({**pool, "genesis": GENESIS[:-2]}, {}),
-                        ({**pool, "refused": 0}, {}), ({**pool, "reset": 1}, {}), ({**pool, "spent": None}, {}),
-                        ({**pool, "extra": False}, {}), (pool, {"supplied": {"pin": [[{"bytes": GENESIS}]]}}),
+                        ({**pool, "lag": 0}, {}), ({**pool, "lag": True}, {}), ({**pool, "week": -1}, {}),
+                        ({**pool, "week": False}, {}), ({**pool, "verdicts": []}, {}),
+                        ({**pool, "verdicts": {GENESIS[:-2]: False}}, {}), ({**pool, "verdicts": {GENESIS: 0}}, {}),
+                        ({**pool, "reset": 1}, {}), ({**pool, "refused": False}, {}), ({**pool, "extra": False}, {}),
+                        (pool, {"supplied": {"pin": [[{"bytes": GENESIS}]]}}),
                         (pool, {"pinned": {"pout": "ab" * 64}}), (pool, {"schemas": {"pin": G.SCHEMA_SEG}})):
         with pytest.raises(ValueError):
             R.check(first, prog, Q, **{**kw, "pool": bad, **change})
@@ -1253,26 +1275,33 @@ def test_the_public_rule_restarts_the_pool_with_no_advice():
 
 def test_serving_resets_its_pool_at_most_once_a_week():
     """Serving's own reset, as an engine crash needs, opens the empty pool at any window, and the record's window names
-    it; the previous window's pool is then refused by name (`R7-pool-chain`). R6 refuses a second reset in a week, one
-    where an earlier window of the week reset (`spent`), by name (`R6-pool-reset-week`). So the records name at most
-    one window of a week's n, log2(n + 1) bits a week of advice. A window that doesn't reset carries the pool whether or
-    not the week's reset is spent."""
+    it; the previous window's pool is then refused by name (`R7-pool-chain`). The reset spends the week's: it and each
+    window after it in the week name it spent (`pool_spent`), and R6 refuses a reset where the week's is spent before
+    it, by name (`R6-pool-reset-week`), whatever the verdicts. The next week starts unspent and may reset again. So
+    the records name at most one window of a week's n, log2(n + 1) bits a week of advice. A window that doesn't reset
+    carries the pool whether or not the week's reset is spent."""
     prog = _pooled()
     w = _registered(prog)
     first, _ = _pool_window(prog, w, 0, [])
     restart, kw = _pool_window(prog, w, 1, [first], reset=True)
-    assert not R.pool_chains(kw["pool"], [first], prog)
+    assert not R.pool_chains(kw["pool"], [first], prog) and restart["window"][R.POOL_SPENT] is True
     assert R.check(restart, prog, Q, **kw).ok
-    carried = {**_entry(first, "pout"), "value": "pin"}
-    stale, _ = _pool_window(prog, w, 1, [first], carried, reset=True)
+    stale, _ = _pool_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"}, reset=True)
     assert R.check(stale, prog, Q, **kw).codes == ("R7-domain", "R7-supplied", "R7-pool-chain")
-    again, kw2 = _pool_window(prog, w, 1, [first], reset=True, spent=True)
+    log = [first, restart]
+    again, kw2 = _pool_window(prog, w, 2, log, reset=True)
     assert R.check(again, prog, Q, **kw2).codes == ("R6-pool-reset-week",)
-    after, kw3 = _pool_window(prog, w, 1, [first], reset=True, spent=True, refused=True)
+    after, kw3 = _pool_window(prog, w, 2, log, reset=True, verdicts={R.digest(restart): False})
     assert R.check(after, prog, Q, **kw3).codes == ("R6-pool-reset-week",)
-    kept, kw4 = _pool_window(prog, w, 1, [first], carried, spent=True)
-    assert R.pool_chains(kw4["pool"], [first], prog)
+    kept, kw4 = _pool_window(prog, w, 2, log, {**_entry(restart, "pout"), "value": "pin"})
+    assert R.pool_chains(kw4["pool"], log, prog) and kept["window"][R.POOL_SPENT] is True
     assert R.check(kept, prog, Q, **kw4).ok
+    next_week, kw5 = _pool_window(prog, w, 2, log, reset=True, week=1)
+    assert R.check(next_week, prog, Q, **kw5).ok
+
+
+#: the window fields a verifier with no pool holds a record to name none of
+UNPOOLED = {R.POOL_RESET: None, R.POOL_WEEK: None, R.POOL_SPENT: None}
 
 
 def test_a_window_names_its_pools_reset():
@@ -1295,11 +1324,44 @@ def test_a_window_names_its_pools_reset():
         assert R.check(rec, prog, Q, **kw3).codes == ("R6-pool-reset",), named
     fresh = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[1]], word_bits=32, window=POOL_WINDOWS[1]).entry()
     plain = {k: v for k, v in kw2.items() if k != "pool"}
-    unnamed, _ = _pool_window(prog, w, 1, [first], fresh, pool_reset=None)
+    unnamed, _ = _pool_window(prog, w, 1, [first], fresh, **UNPOOLED)
     assert R.check(unnamed, prog, Q, **plain).ok
     for named in (False, True):
-        rec, _ = _pool_window(prog, w, 1, [first], fresh, pool_reset=named)
+        rec, _ = _pool_window(prog, w, 1, [first], fresh, **{**UNPOOLED, R.POOL_RESET: named})
         assert R.check(rec, prog, Q, **plain).codes == ("R6-pool-reset",), named
+
+
+def test_a_window_names_its_week_and_whether_its_weeks_reset_is_spent():
+    """R6 holds the record's window to name its week on the verifier's clock (`pool_week`, `R6-pool-week`) and whether
+    the week's reset is spent at it (`pool_spent`, `R6-pool-spent`): that it resets, or that the previous record, of
+    its week, named it spent. So a week's windows from its reset on name it spent, the next week's first window names
+    it unspent, and a window naming another mark, another week or none is refused by name. A verifier with no pool
+    holds the window to name neither."""
+    prog = _pooled()
+    w = _registered(prog)
+    first, kw = _pool_window(prog, w, 0, [], reset=True)
+    assert first["window"][R.POOL_SPENT] is True and R.check(first, prog, Q, **kw).ok
+    carry = {**_entry(first, "pout"), "value": "pin"}
+    second, kw2 = _pool_window(prog, w, 1, [first], carry)
+    assert second["window"][R.POOL_SPENT] is True and R.check(second, prog, Q, **kw2).ok
+    carry2 = {**_entry(second, "pout"), "value": "pin"}
+    third, kw3 = _pool_window(prog, w, 2, [first, second], carry2, week=1)
+    assert third["window"][R.POOL_SPENT] is False and R.check(third, prog, Q, **kw3).ok
+    for named in (False, None, 1, "true"):
+        rec, _ = _pool_window(prog, w, 1, [first], carry, pool_spent=named)
+        assert R.check(rec, prog, Q, **kw2).codes == ("R6-pool-spent",), named
+    for named in (True, None, 0, "false"):
+        rec, _ = _pool_window(prog, w, 2, [first, second], carry2, week=1, pool_spent=named)
+        assert R.check(rec, prog, Q, **kw3).codes == ("R6-pool-spent",), named
+    for named in (1, None, False, "0"):
+        rec, _ = _pool_window(prog, w, 1, [first], carry, pool_week=named)
+        assert R.check(rec, prog, Q, **kw2).codes == ("R6-pool-week",), named
+    fresh = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[1]], word_bits=32, window=POOL_WINDOWS[1]).entry()
+    plain = {k: v for k, v in kw2.items() if k != "pool"}
+    for field, code in ((R.POOL_WEEK, "R6-pool-week"), (R.POOL_SPENT, "R6-pool-spent")):
+        for named in (0, False, True):
+            rec, _ = _pool_window(prog, w, 1, [first], fresh, **{**UNPOOLED, field: named})
+            assert R.check(rec, prog, Q, **plain).codes == (code,), (field, named)
 
 
 def test_a_hit_on_a_page_an_older_window_wrote_reads_it_through_the_carried_copies():
@@ -1380,13 +1442,14 @@ def _continued() -> Program:
     return Program(bind(CompositeDefinition("RegisteredTestContinuedProgram", 0, (), sig, body, register=False)))
 
 
-def _cut_window(prog: Program, w: G.Registered, i: int, log, pin=None, ing=None, refused=False, reset=False):
+def _cut_window(prog: Program, w: G.Registered, i: int, log, pin=None, ing=None, verdicts=None, reset=False):
     """Window `i`'s record of `_continued`, the next after `log`: x, `req` (`_cut_rows(i)`'s) and `pout` (`POOLS[i]`)
     afresh under its window's open root, the weights `w` held, `ing` the certifier's commitment of `_cut_rows(i)`'s
     arrivals (or the entry `ing`), `pin` the entry `pin`, the empty pool filled from `genesis` by default, and its
-    window naming the reset `reset`. With the verifier's R7 arguments: the certifier's root of the window's arrivals
-    pinned, and its pool holding `refused`, the same reset, and no reset earlier in the week."""
+    window naming the pool fields `_pool` gives for `verdicts` and `reset`. With the verifier's R7 arguments: the
+    certifier's root of the window's arrivals pinned, and its pool (`_pool`)."""
     d = P.program_digest(prog)
+    pool, marks = _pool(log, reset, verdicts=verdicts)
     base, ports = _record(prog, w)
     arrivals, rows = _cut_rows(i)
     stamped = G.Registered.commit(d, "ing", arrivals)
@@ -1395,7 +1458,7 @@ def _cut_window(prog: Program, w: G.Registered, i: int, log, pin=None, ing=None,
                G.Registered.commit(d, "pout", [POOLS[i]], word_bits=32, window=POOL_WINDOWS[i]).entry()]
 
     def record(pin_entry):
-        return R.record(prog, Q, LAW, SCHEME, base["roots"], {**SERVED, "row": 7 + i, R.POOL_RESET: reset},
+        return R.record(prog, Q, LAW, SCHEME, base["roots"], {**SERVED, "row": 7 + i, **marks},
                         previous=R.digest(log[-1]) if log else None,
                         registered=[*entries, *([pin_entry] if pin_entry else [])])
 
@@ -1404,8 +1467,7 @@ def _cut_window(prog: Program, w: G.Registered, i: int, log, pin=None, ing=None,
     kw = {"law": LAW, "scheme": SCHEME, "ports": ports,
           "registered": {"x": 2, "W": 2, "ing": 3, "req": 2 + VALUES, "pin": 16, "pout": 16},
           "pinned": {"ing": stamped.root.hex()}, "log": list(log), "window_root": POOL_WINDOWS[i], "held": ["W"],
-          "pool": {"pin": "pin", "pout": "pout", "genesis": GENESIS, "refused": refused, "reset": reset,
-                   "spent": False}}
+          "pool": pool}
     return record(pin), kw
 
 
@@ -1453,7 +1515,7 @@ def test_a_window_that_restarts_its_pool_still_serves_the_continuations():
     first, _ = _cut_window(prog, w, 0, [])
     second, _ = _cut_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"})
     assert _cut_rows(2)[0][:2] == [[1, 9, 4], [1, 10, 1]]
-    for how in ({"refused": True}, {"reset": True}):
+    for how in ({"verdicts": {R.digest(second): False}}, {"reset": True}):
         restart, kw = _cut_window(prog, w, 2, [first, second], **how)
         assert R.check(restart, prog, Q, **kw).ok, how
         carried, kw2 = _cut_window(prog, w, 2, [first, second], {**_entry(second, "pout"), "value": "pin"}, **how)
