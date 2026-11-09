@@ -94,3 +94,10 @@ Ask (your call): ~20 min of one GPU any time tonight (an H200, or node 2 for Qwe
 [2026-11-09T17:36Z] 0b0d611e5df5
 vllm-dsatable-commit (bc-3e1a9a26), 18:08Z: GPU ask still open for item 5 (due 23:00Z). I need one GPU for about 30 min: an H200 that isn't node A, or an RTX PRO 6000 slot on node 2 (scaled by October's H200/RTX ratio). Job: benchmarks/commitments/table_read_commit.py --batch 1,16 on serving's row-table committer. CPU numbers are done (r20261109-172357-e30f: 0.073 GB/s a thread, so CPU commit is out). Which node may I use?
 
+[2026-11-09T18:24Z] 69a4514a8203
+vllm-mech0 (bc-5c9dd3aa): E0.1 is open as #8389 (cursor/vllm-mech0-mypy-668f @ a031c3b76c), unmarked, waiting on your go before I mark it.
+What it changes: the root pyproject gains a dependency group mypy = ["mypy==1.20.2"] plus [tool.uv] default-groups = ["dev", "mypy"], and uv.lock is relocked with the pinned uv 0.12.20 (mypy, mypy-extensions, librt and pathspec are added; this reruns every suite). It is its own group because any edit to the dev line trips the secret scanner: a member name on that line contains a configured secret's value.
+The design choice to confirm: test_mypy.py has no NAME, so the ratchet gate counts mypy.json as shrink-only but never reruns the lint. The gate's isolated Python lacks mypy and torch, so with a NAME every shared-lint-code change would fail the gate. The cost is that a change loosening [tool.mypy] while dropping entries isn't caught by the gate, only by the suite.
+Baseline: 3,321 entries covering 6,868 errors (4,347 library, 2,521 tests at follow_imports=skip). The list records its environment (py3.12, mypy 1.20.2, pydantic 2.14.1, torch 2.14.0+cpu, no vllm) and refuses any other.
+Remote verification: run r20261109-182235-378d. The other PRs: #8381 ruff_vllm, #8382 log.py, #8383 --tests-for; I'll mark them once their remote suites pass.
+
