@@ -16,9 +16,10 @@ stage  each UNIT@N its own `prove_time.sh STEPS=stage PT_DEVICE=cpu` into $FLOCK
        runs first, beside the stagings. FLOCK_WORK stays for `prove`.
 prove  the statements of UNITS_FILE staged under FLOCK_WORK, a unit's statements on one GPU, in WIN_GPUS groups balanced
        by estimated time, each group one `prove_time.sh STEPS=prove PT_DEVICE=gpu` on its own slice of the job's cores
-       under `gpu-lease 1` (the tree's gpu_lease.sh where none is installed). Every 2 s: one of our processes holding more
-       than WIN_DEV_GIB on a GPU is killed, and our processes' RSS over WIN_MEM_GB x 0.97 kills the largest. Then
-       FLOCK_WORK is removed, unless WIN_KEEP=1.
+       under `gpu-lease 1` (the tree's gpu_lease.sh where none is installed). Every 2 s: a group whose GPU holds more than
+       WIN_DEV_GIB has its prover killed (every prover, once nvidia-smi goes unread for 30 s), and our processes' RSS over
+       WIN_MEM_GB x 0.97 kills the largest. If the job stops, its groups are killed. Then FLOCK_WORK is removed, unless
+       WIN_KEEP=1.
 
 Limits (env): the job's affinity at most WIN_CPUS cores and its niceness at least WIN_NICE (refused otherwise), WIN_MEM_GB,
 WIN_DISK_GB, WIN_UNTIL (UTC, e.g. 2026-11-10T01:30Z), FLOCK_WORK (under /workspace/tmp), WIN_DEV_GIB, WIN_GPUS; WIN_DEVICE=cpu
@@ -299,6 +300,9 @@ def prove(units: list[Unit]) -> int:
     mem, cpus = limits("268")
     fw, k = Path(env("FLOCK_WORK")), key()
     ngpu, dev_mib = int(env("WIN_GPUS", "8")), float(env("WIN_DEV_GIB", "45")) * 1024
+    on_gpu = env("WIN_DEVICE", "gpu") == "gpu"
+    if on_gpu and not shutil.which("nvidia-smi"):
+        raise SystemExit("window.py: no nvidia-smi on PATH, so no device-memory limit: prove on a GPU node, or WIN_DEVICE=cpu")
     binary = fw / "flock-gpu-link/flock/target/release/flock-circuit"
     if not binary.exists():
         log(f"no prover at {binary}: building it inside the window")
@@ -337,15 +341,53 @@ def prove(units: list[Unit]) -> int:
                   OUT / f"gpu{g}", {"FLOCK_WORK": str(fw), "PATH": path, "GPU_LEASE_WHO": env("GPU_LEASE_WHO", "servedcard")},
                   prefix=["taskset", "-c", cores])
         jobs.append(Job(f"gpu{g}", p, time.time()))
+    try:
+        watch(jobs, mem, dev_mib, on_gpu)
+    finally:
+        t = procs()
+        for j in jobs:
+            for p in tree(j.proc.pid, t) if j.proc.poll() is None else ():
+                try:
+                    os.kill(p, signal.SIGKILL)
+                except OSError:
+                    pass
+    rows = []
+    for j in jobs:
+        s = OUT / j.label / "out" / "summary.json"
+        log(f"{j.label} exit {j.proc.returncode}")
+        if s.exists():
+            for st, rec in json.loads(s.read_text())["statements"].items():
+                rows.append([j.label, st, str(rec.get("n")), str(rec.get("k_log")), str(rec.get("prove_total_s", "")),
+                             json.dumps({x: rec[x] for x in rec if x not in ("n", "k_log", "prove_total_s")})])
+    (OUT / "prove.tsv").write_text("group\tstatement\tn\tk_log\tprove_total_s\trecord\n" + "".join("\t".join(r) + "\n" for r in rows))
+    shutil.rmtree(scratch, ignore_errors=True)
+    if env("WIN_KEEP", "0") != "1":
+        freed = du(fw)
+        shutil.rmtree(fw, ignore_errors=True)
+        log(f"removed FLOCK_WORK {fw} ({freed / GB:.1f} GB)")
+    log(f"prove done: {len(rows)} statements with a summary")
+    return 0
+
+
+def watch(jobs: list[Job], mem: float, dev_mib: float, on_gpu: bool) -> None:
+    """Until every group exits: kill a group's prover past dev_mib on its GPU, and the largest of our processes past
+    0.97 x mem. Device memory unread for 30 s in a row kills every prover, since the limit can't be held."""
+    blind = 0
     while any(j.proc.poll() is None for j in jobs):
         t = procs()
         ours = {p for j in jobs for p in tree(j.proc.pid, t)}
-        try:
-            used = dict(ln.replace(" ", "").split(",") for ln in subprocess.run(
-                ["nvidia-smi", "--query-gpu=uuid,memory.used", "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, timeout=10).stdout.splitlines() if "," in ln)
-        except subprocess.TimeoutExpired:
-            used = {}
+        used: dict[str, str] = {}
+        if on_gpu:
+            try:
+                q = subprocess.run(["nvidia-smi", "--query-gpu=uuid,memory.used", "--format=csv,noheader,nounits"],
+                                   capture_output=True, text=True, timeout=10)
+                used = dict(ln.replace(" ", "").split(",") for ln in q.stdout.splitlines() if "," in ln)
+            except (subprocess.TimeoutExpired, OSError):
+                pass
+            blind = 0 if used else blind + 1
+            if blind == 15:
+                log("device memory unread for 30 s: killing every prover")
+                dev_mib = -1.0
         for j in jobs:
             for p in tree(j.proc.pid, t) if not j.gpu else ():
                 try:
@@ -372,22 +414,6 @@ def prove(units: list[Unit]) -> int:
                 os.kill(big, signal.SIGKILL)
                 log(f"killed pid {big} ({t[big][1] / GB:.0f} GB): our RSS {total / GB:.0f} GB over {0.97 * mem / GB:.0f}")
         time.sleep(2)
-    rows = []
-    for j in jobs:
-        s = OUT / j.label / "out" / "summary.json"
-        log(f"{j.label} exit {j.proc.returncode}")
-        if s.exists():
-            for st, rec in json.loads(s.read_text())["statements"].items():
-                rows.append([j.label, st, str(rec.get("n")), str(rec.get("k_log")), str(rec.get("prove_total_s", "")),
-                             json.dumps({x: rec[x] for x in rec if x not in ("n", "k_log", "prove_total_s")})])
-    (OUT / "prove.tsv").write_text("group\tstatement\tn\tk_log\tprove_total_s\trecord\n" + "".join("\t".join(r) + "\n" for r in rows))
-    shutil.rmtree(scratch, ignore_errors=True)
-    if env("WIN_KEEP", "0") != "1":
-        freed = du(fw)
-        shutil.rmtree(fw, ignore_errors=True)
-        log(f"removed FLOCK_WORK {fw} ({freed / GB:.1f} GB)")
-    log(f"prove done: {len(rows)} statements with a summary")
-    return 0
 
 
 def main() -> int:
