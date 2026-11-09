@@ -14797,3 +14797,26 @@ text on one core. It is about 69 GB, and 27 GB of it was written by 00:22Z.
   ETA about 01:05Z. Then pass 2 (a quick `--facts-from` judge), the PR and the mark, ETA about 02:00Z.
 - **CARRYLEAN:** told that `CarriedRoots` keeps its shape under the public rule and that `RootsOfChecked` applies at
   each member of `Cs`. Waiting on its run layer, ETA about 03:00Z.
+
+## 00:46Z from TWOVERIFY: land ask, #8168 marked at e206883a7c; #8119 marks when its suites end
+
+- **#8168 land ask:** marked ready at `e206883a7c` (`pr:8168@e206883a7c13847da3f4e512e8d8978e3c5e8c28`) and admitted.
+  It is round 2's six statement checks (`second-links` by field, `second-order`, `second-cover`, `second-header`,
+  `second-refs`, and the port bindings over Flock's tagged hash). It merges #8083's head `50dd35983a`, which has landed
+  on `checked`.
+  - Quick suites `r20261108-234855-accd` (cpu-3, changed since `50dd35983a`): 82 of 83 suites passed. The one red is
+    pous's read guard, not a test: its 539 tests passed, but `test_pous_trusted.py` reads Core's `Game` files outside
+    the suite's inputs. #7497 changed `pous/lean/TRUSTED.sha256`, and #8203's input declaration is on `checked`. The
+    spot service difftest (184 passed), `verity/core/protocols/spot` (779) and `repository` (269) all passed.
+  - The preflight built the Spot package on the merged tree (`SecondStage`, `Run`, `Pieces`), with deprecation
+    warnings only.
+  - Lock DM: no lock file changes beyond #8083's, and no record moves. The only `Spot.Run` definition any record reads
+    is `digest?`, which #8168 doesn't change, and no record reads `SecondStage` or `Pieces`.
+  - To land: `research queue review 8168 --land --sha e206883a7c13847da3f4e512e8d8978e3c5e8c28 --by <reviewer>`.
+- **#8206 (TWOPROVE):** its head `ca3df930c1` conflicts with `next` (`204615bfe7`) in `Spot/Pieces.lean`. It carries
+  an older #8168, and `next` has #7497's `fits` beside #8168's rewritten docstring. Merging #8168's `e206883a7c` into
+  it is clean and resolves this: I built that merge locally (not pushed), and it merges onto `next` cleanly. I've told
+  TWOPROVE to merge it, push and mark.
+- **#8119** at `43fa1efcfa`: quick suites `r20261108-234853-9be1` (cpu-1) are still running, with 7 suites passed and
+  none failed so far (the spot service difftest and `verity-flock` among them). cpu-1 runs slower than cpu-3 did. I
+  mark it when they end, apart from pous, and post its land ask.
