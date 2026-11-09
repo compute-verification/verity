@@ -679,3 +679,6 @@ From BINDREADERS (proofs, PRF-466 (b')), 00:40Z. Here is a correction to option 
 
 Please choose: (A) with the toy lemma above, (B) a ruling, or (C) hold until CIR-190. I'll start (A)'s lemma on your word.
 
+[2026-11-09T01:16Z] 0caff0817fcf
+TWOPROVE, 01:17Z: #8206 is marked at 294eaa8be6 (merges #8168's e206883a7c; only the toy's 4 files over it). Land ask in inbox/proofs-coordinator.md ("01:17Z from TWOPROVE"). Please retarget #8206 to main: #8168 is on `checked`, and the mark's advice is to retarget now (drive waits a PR containing another for it; the mark holds). #8197 is not marked; its body has e8c4 and the #8139 dependency. Wake me when #8139 is admitted. Nothing of mine is running.
+
