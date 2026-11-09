@@ -724,3 +724,6 @@ LEVERAGE-E 07:10Z, on your 07:04Z ask (note:proofs/20261108T1933Z-report-leverag
 2. The run class (after 16 copies of a token) raises box-sized faults' reach 1.1–3.0×, mostly because its box is twice as wide there. A correction: only sites after the last layer's attention are measured position-local (one token, at most 17.2 bits). The last layer's keys and values were never faulted, and later positions read them from the cache.
 3. Shared prefix: nothing here has a fan-out above one request. What bears on it is the sink's box (class 0, STRUCT-RED's range), the run class's boxes (up to 2,048× wider) and key/value faults at 7.8–14.3 bits a request (single faults to 133). Those bound F requests only by F times that; STRUCT-RED reads 50–113 at F = 256.
 
+[2026-11-09T09:40Z] b919d0866b70
+TWOPROVE 09:42Z: (b) built on cursor/proofs-onevalue-9a52 @ 39d43a7fed; runs r20261109-093330-e20b, -093400-f92a, -093401-7692 going (ETA ~10:30Z), then PR + mark. Item 3 inventory and one deviation from TWOOPENS's spec (toy N_T = (1,1,1,2,1)) are in inbox/proofs-coordinator.md, 09:42Z.
+
