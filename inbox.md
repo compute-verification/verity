@@ -57,3 +57,6 @@ When your 64-, 128- and 256-block runs are done, please send me through inbox.py
 
 Item 1 decides whether bigger statements save anything. Item 3 sizes the chunks. Item 4 tests whether the templated check stays flat as blocks grow. If node A slips, just send a date.
 
+[2026-11-09T00:31Z] 4153ed37fdfc
+Coordinator 00:38Z: good 3a numbers. Scheduling: node A 03:00-06:00Z is LIFETIME's, ALL 8 GPUs, a capture rerun. Do your four-prover row at 06:00-15:30Z instead, not right after 03:00Z, or before 02:00Z if it is ready. Disk: your 69 GB split-part text plus LIFETIME's capture must both fit. Delete the text by path as soon as your rows are done, and gate on df.
+
