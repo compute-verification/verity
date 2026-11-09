@@ -2700,7 +2700,7 @@ def test_the_statuses_gate_admits_a_pr_on_a_plain_ready_label_and_a_land_by_neit
     main, gh, root = hub.main(), hub.o.gh, hub.tmp / "labels"
     (cfg := hub.tmp / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{hub.tmp / "vault"}"\n')
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
-    monkeypatch.setattr(Q, "GitHub", lambda slug: gh)
+    monkeypatch.setattr(Q, "GitHub", {INFRA_REPO: gh}.__getitem__)          # the repository --remote names, no other
     monkeypatch.setattr(Q, "remote_and_repo", lambda remote, repo, cwd: (str(hub.o.origin), INFRA_REPO))
     _git(hub.tmp, "clone", "-q", str(hub.o.origin), str(clone := hub.tmp / "infra"))
 
