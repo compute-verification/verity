@@ -195,6 +195,26 @@ theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {p
         rw [recKeyAt_port, hf]; rfl
   | none =>
     rw [hlk] at hok
+    cases hw : Spot.SecondStage.wireOf own p.template port with
+    | some w =>
+      rw [hw] at hok
+      cases hfi : (Spot.Record.byPort own.interior).find? (·.1 == v) with
+      | none => simp [hfi] at hok
+      | some kx =>
+        obtain ⟨k, x⟩ := kx
+        cases hpw : Spot.SecondStage.writerOf own w with
+        | none => simp [hfi, hpw] at hok
+        | some pw =>
+          simp only [hfi, hpw, Bool.and_eq_true] at hok
+          obtain ⟨-, hsx, -⟩ := hok
+          have hRI : readsInterior own p.template port v = true := by simp [readsInterior, hlk, hfi]
+          have hRK : readKey own p.template port v = .port v := by simp [readKey, hlk, hfi]
+          rw [hRI, hRK]
+          refine ⟨entryOf (0, k, x), ?_, hs hsx⟩
+          show recKeyAt own.interior (.port v) = _
+          rw [recKeyAt_port, hfi]; rfl
+    | none =>
+    rw [hw] at hok
     cases hfi : (Spot.Record.byPort own.interior).find? (·.1 == v) with
     | some kx =>
       obtain ⟨k, x⟩ := kx
