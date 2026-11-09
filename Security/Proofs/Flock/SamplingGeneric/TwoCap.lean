@@ -25,6 +25,8 @@ block escapes with probability at most `1 − r₂`, since a cell with one incor
   They read only the boundary trace, which serving commits before any coin. Every interior's `wrongBlocks` holds them
   (`wrongAtBoundary_subset`), and some interior's are exactly them (`exists_wrongBlocks_eq`), so they are the fewest
   replay blocks any interior marks incorrect.
+* `sum_lt_of_le_prod`: the period's joint cap. Windows whose misses `≤ x^{m}` multiply to at least `δ` mark fewer than
+  `K` replay blocks incorrect in all whenever `x^K < δ`, however many windows the period has (`prod_le_pow_sum`).
 -/
 
 @[expose] public section
@@ -206,6 +208,29 @@ theorem exists_wrongBlocks_eq (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s 
   simp only [Design.Two.wrongBlocks, mem_filter, mem_range] at hρ
   obtain ⟨hlt, t, ht, hpos⟩ := hρ
   exact hι ρ hn hlt t ht (card_pos.1 hpos)
+
+/-- **The windows' misses multiply to at most `x` to the period's incorrect replay blocks**: when each window `a` of a
+period misses with probability at most `x^{m(a)}`, `0 ≤ x`, their product is at most `x^{Σ m}`. -/
+theorem prod_le_pow_sum {α : Type} (l : List α) (pa : α → ENNReal) (m : α → ℕ) {x : ℝ} (hx : 0 ≤ x)
+    (hpa : ∀ a ∈ l, pa a ≤ ENNReal.ofReal (x ^ m a)) : (l.map pa).prod ≤ ENNReal.ofReal (x ^ (l.map m).sum) := by
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+    simp only [List.map_cons, List.prod_cons, List.sum_cons, pow_add,
+      ENNReal.ofReal_mul (pow_nonneg hx _)]
+    exact mul_le_mul' (hpa a List.mem_cons_self) (ih fun b hb => hpa b (List.mem_cons_of_mem a hb))
+
+/-- **The period's joint cap**: windows whose misses `≤ x^{m}` multiply to at least `δ`, as a period's confidence set
+holds them, mark fewer than `K` replay blocks incorrect in all whenever `x^K < δ` and `x ≤ 1`, however many windows the
+period has. -/
+theorem sum_lt_of_le_prod {α : Type} (l : List α) (pa : α → ENNReal) (m : α → ℕ) {x δ : ℝ} {K : ℕ} (hx : 0 ≤ x)
+    (hx1 : x ≤ 1) (hK : x ^ K < δ) (hpa : ∀ a ∈ l, pa a ≤ ENNReal.ofReal (x ^ m a))
+    (hin : ENNReal.ofReal δ ≤ (l.map pa).prod) : (l.map m).sum < K := by
+  by_contra hS
+  have hle : x ^ (l.map m).sum ≤ x ^ K := pow_le_pow_of_le_one hx hx1 (Nat.le_of_not_lt hS)
+  have hlt : ENNReal.ofReal (x ^ (l.map m).sum) < ENNReal.ofReal δ :=
+    ENNReal.ofReal_lt_ofReal_iff'.2 ⟨hle.trans_lt hK, (pow_nonneg hx K).trans_lt hK⟩
+  exact absurd (hin.trans (prod_le_pow_sum l pa m hx hpa)) (not_le.2 hlt)
 
 end Claims.Sampling
 
