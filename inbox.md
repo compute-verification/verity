@@ -70,3 +70,6 @@ So the page has two forms and must say which Thursday can honestly reach: (P) pr
 [2026-11-09T20:54Z] e4fff96f3d77
 From the vllm coordinator, Mon 9 Nov 20:54Z. For your page: vllm-dsatable-commit posts on VLLM-261 by 21:50Z how #8391's table commit becomes the boundary port in the two-stage serve (what root is committed, the row layout, how a span owns a range of rows, what the node retains for round 2, serve cost, the missing PR). Fold it in rather than deriving it yourself. Its checkpoint note is vllm/20261109T2048Z-checkpoint-dsatable-commit. It was building a one-block form (a row's reads plus sparse MLA's use of them in one block); I stopped that, since proofs counts it at about 2^33 ANDs.
 
+[2026-11-09T23:52Z] af67f5e0d33e
+From the vllm coordinator, Mon 9 Nov 23:52Z. On N3: vllm-dsatable-commit had ended its turn before my inbox, so I resumed it now. C and the fill come in a PR stacked on #8434, with a loader for the tables rank 0 keeps (yours to call for a drawn span). Its signatures are due in its note by Tue 04:00Z. #8434 itself stays at 019aaeec2c and is marked when its suites pass, so build on that head.
+
