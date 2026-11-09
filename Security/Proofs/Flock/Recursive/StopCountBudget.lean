@@ -22,7 +22,7 @@ released. Here `B` is the stream's failure budget `b`, at every order of the rec
 * `streamStopBudget`: the stream's joint stop as a `Pattern` at its budget, which `card_streamStops` counts.
 * `Flock.SecurityProofs.UnrelLeBudget`, `UnreleasedLeBudget`, `StreamStopBudget`: the three as the lock states them
   (`UnrelWithin`, `UnreleasedWithin`, `StreamStopWithin`), each with an honest witness, a stream at budget 1 whose
-  first session runs through before its second opens, and a nontrivial one, a firewall without rule 4's refusals
+  first session runs through before its second opens, and a nontrivial one, a ZK server without rule 4's refusals
   (`Witness.openMade`), where a stream at budget 1 leaves two sessions unreleased.
 -/
 
@@ -411,7 +411,7 @@ theorem admit_error_open {evs : Events} {s part why : String} {evs' : Events}
     · exact Or.inl h'
     · exact Or.inr ⟨p, w, rfl, h'⟩
 
-/-- An open the firewall makes: its budget the stream's, and the stream's failures and unended sessions fewer than it. -/
+/-- An open the ZK server makes: its budget the stream's, and the stream's failures and unended sessions fewer than it. -/
 theorem openSession_guard (evs : Events) (stream : String) (parts : Array String) (budget : Option ℕ)
     (release : Option Core.Firewall.Schedule) :
     (openSession evs stream parts budget release).2 = evs ∨
@@ -506,7 +506,7 @@ theorem RecOk.afterOpen {evs : Events} (h : RecOk evs) (stream : String) (parts 
   · rw [he]
     exact h.pushOpen _ hb hg
 
-/-- One of the record's ops, as the firewall's server calls them: `openSession`, `finish`, `stop`, `release`, `slot`,
+/-- One of the record's ops, as the ZK server calls them: `openSession`, `finish`, `stop`, `release`, `slot`,
 `admit`, and the Loop's `wait`. -/
 inductive RecOp where
   | openRec (stream : String) (parts : Array String) (budget : Option ℕ) (release : Option Core.Firewall.Schedule)
@@ -721,13 +721,13 @@ namespace Flock.Guarantees
 `Firewall.Record` defines them) and every stream, `b` the stream's failure budget.
 
 It is about the Lean record's ops, in any order, with no model of the loop. The deployed opener is Python's
-`verity_flock.firewall.Firewall`, so for the deployment it rests on Python agreeing with the Lean, which the firewall's
+`verity_flock.firewall.Firewall`, so for the deployment it rests on Python agreeing with the Lean, which the ZK server's
 difftests check. -/
 def UnrelLeBudget : Prop :=
   ∀ (ops : List StopCount.RecOp) (t : String), StopCount.UnrelWithin (StopCount.opsRun ops) t
 
 /-- **At most `b` of a stream's sessions are left with a statement not released**, at every run (`StopCount.run`: the
-firewall's ops in any order, at each statement's message count `M s p`), of any sessions `ss i`, distinct, each opened on
+ZK server's ops in any order, at each statement's message count `M s p`), of any sessions `ss i`, distinct, each opened on
 the stream if opened at all, `b` the stream's failure budget. It is about `StopCount.run`, as `RecStopsOfRun` is. -/
 def UnreleasedLeBudget : Prop :=
   ∀ (M : String → ℕ → ℕ) (steps : List StopCount.Step) (t : String), StopCount.UnreleasedWithin (StopCount.run M steps) t
@@ -780,7 +780,7 @@ def honestStream : List Step :=
 /-- The stream's two sessions. -/
 def two : Fin 2 → String := !["r0000", "r0001"]
 
-/-- A firewall without rule 4's refusals: every open is made, whatever the stream's failures and unended sessions. -/
+/-- A ZK server without rule 4's refusals: every open is made, whatever the stream's failures and unended sessions. -/
 def openMade (evs : Events) (stream : String) (parts : Array String) (budget : Option ℕ)
     (release : Option Core.Firewall.Schedule) : Events :=
   (openSession.made evs stream parts budget release).2
@@ -820,7 +820,7 @@ theorem UnrelLeBudget_honest :
       (openOf (opsRun honestOps) "r0001").isSome = true ∧ (unrel (opsRun honestOps) "st").card = 1 := by
   decide +kernel
 
-/-- **`UnrelLeBudget` fails at a firewall without rule 4's refusals** (`openMade`): there a stream at budget 1 leaves two
+/-- **`UnrelLeBudget` fails at a ZK server without rule 4's refusals** (`openMade`): there a stream at budget 1 leaves two
 sessions unreleased. -/
 theorem UnrelLeBudget_nontrivial : ¬ UnrelWithin (opsMade twoOps) "st" := fun h =>
   absurd (h 1 (by decide +kernel)) (by decide +kernel)
@@ -839,7 +839,7 @@ theorem runMade_stream : ∀ i o, openOf (runMade one twoSteps).evs (two i) = so
   have h : ∀ i, ((openOf (runMade one twoSteps).evs (two i)).all fun o => o.stream == "st") = true := by decide +kernel
   exact fun i => stream_of_all (h i)
 
-/-- **`UnreleasedLeBudget` fails at a firewall without rule 4's refusals** (`openMade`): there a stream at budget 1
+/-- **`UnreleasedLeBudget` fails at a ZK server without rule 4's refusals** (`openMade`): there a stream at budget 1
 leaves both its sessions unreleased. -/
 theorem UnreleasedLeBudget_nontrivial : ¬ UnreleasedWithin (runMade one twoSteps) "st" := fun h =>
   absurd (h 2 two two_injective runMade_stream 1 (by decide +kernel)) (by decide +kernel)
@@ -852,7 +852,7 @@ theorem StreamStopBudget_honest :
       (streamStop ![2, 2] one (run one honestStream) two 1).isSome = true := by
   decide +kernel
 
-/-- **`StreamStopBudget` fails at a firewall without rule 4's refusals** (`openMade`): there both sessions of a stream at
+/-- **`StreamStopBudget` fails at a ZK server without rule 4's refusals** (`openMade`): there both sessions of a stream at
 budget 1 stop, which is no `Pattern` at 1. -/
 theorem StreamStopBudget_nontrivial : ¬ StreamStopWithin one (runMade one twoSteps) "st" := fun h => by
   obtain ⟨J, hJ⟩ := h 2 ![2, 2] two two_injective runMade_stream 1 (by decide +kernel)

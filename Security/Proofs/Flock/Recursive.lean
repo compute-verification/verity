@@ -108,7 +108,7 @@ public import Proofs.Flock.Recursive.LoopWitness
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`; what a stop leaks, the counting lemma
 and a recursive session's stops, in `StopLeak`, and a recursive session's view cut at the stop its run reached, from the
-firewall's rules, in `StopCount` and its proof, `StopCountProof`, with a stream's stops counted together in
+ZK server's rules, in `StopCount` and its proof, `StopCountProof`, with a stream's stops counted together in
 `StopCountStream`, at most its failure budget of them in `StopCountBudget`), its zero knowledge at the operating
 system's salts (`OsSalts`), its soundness at the compiled inner
 protocol with the compile lemma open (`Compile`), the compile premise at a class whose schedule is `fast100`'s

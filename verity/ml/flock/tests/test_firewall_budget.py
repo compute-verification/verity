@@ -3,7 +3,7 @@ drive it: `rec_live` opens a recursive session and records its inner session's f
 session (`Firewall.seat`) and records its outcome, or ends while it holds the slot. At most b of a stream's recursive
 sessions ever have a statement not released, b its budget: the bound the Lean proves at every order of the record's ops
 (`card_unrel_le_budget`), and so in its model of the loop (`StopCount.run`, `card_unreleased_le_budget`), which these
-tests check over drawn histories. It comes from the open's rule (refused while the stream's unended recursive sessions
+tests check over sampled histories. It comes from the open's rule (refused while the stream's unended recursive sessions
 and its failures reach b), and from no stop being recorded of a session not yet opened, so that each stop counts against
 its stream. The worker and the challenger are `test_firewall_release`'s, on socket pairs;
 the clock is never read."""
@@ -47,7 +47,7 @@ def _unended(record: list[dict]) -> dict[str, str]:
 
 
 def _history(fw: FW.Firewall, seed: int, steps: int, bounded: bool = True) -> tuple[dict[str, int], Counter]:
-    """At most `steps` ops on ``fw``, drawn from ``seed``, until each budgeted stream has stopped at its budget: an open on
+    """At most `steps` ops on ``fw``, sampled from ``seed``, until each budgeted stream has stopped at its budget: an open on
     one of `BUDGETS`' streams; the inner session of a recursive session opened and not yet ended finishing, or stopping;
     or an outer session, at any statement, of an unended recursive session, of any one opened, of the next one to be
     opened or of one never opened, seated by the relay: released on an accepting verdict, stopped by a rejecting one, by

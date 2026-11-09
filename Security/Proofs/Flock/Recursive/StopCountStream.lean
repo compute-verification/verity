@@ -5,7 +5,7 @@ public import Proofs.Flock.Recursive.StopCountProof
 /-!
 # A stream's stops, counted together
 
-A stream is recursive sessions `ss i`, `i < m`, session `ss i` with `N i` statements, run through one firewall. Its
+A stream is recursive sessions `ss i`, `i < m`, session `ss i` with `N i` statements, run through one ZK server. Its
 joint stop is each session's stop at its statements (`recStopAt`), and what the stream's released views leak is at most
 that tuple, by `prCoin_cut_le` at the tuples it can take. By `RecStopsOfRun` a session that stops has a statement not
 released, so where at most `B` of the stream's sessions are left with a statement not released, at most `B` of the

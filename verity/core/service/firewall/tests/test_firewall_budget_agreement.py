@@ -3,7 +3,7 @@
 on one state directory, its index (``index-py/``) carried across them as `rec_live`'s and the relay's processes carry it,
 against the Lean on the record alone, op by op; and the relay's seat of an outer session (`Firewall.seat`: its ``slot`` and
 its admission on one read of the record, appended in one write) against the Lean ZK server's (`seat`: ``slot``, then
-``admit`` on the record ``slot`` left), on `_release`'s drawn records."""
+``admit`` on the record ``slot`` left), on `_release`'s sampled records."""
 
 from __future__ import annotations
 
@@ -116,7 +116,7 @@ def _seated(value: dict, out: dict) -> str:
 
 
 def test_the_relays_seat_is_the_lean_servers(lean):
-    """`Firewall.seat` on drawn records gives the results and the record, byte for byte, of the Lean ZK server's ``seat``
+    """`Firewall.seat` on sampled records gives the results and the record, byte for byte, of the Lean ZK server's ``seat``
     (``slot``, then ``admit``), and the record's rejection where the Lean's rejects it (its last line torn, or without its
     newline, which the slot's line would join): admitted and refused, with the slot's orphan recorded as its session's
     stop and without."""

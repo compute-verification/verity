@@ -5,13 +5,13 @@ public import Proofs.Flock.Recursive.StopCount
 import all Init.Data.Repr
 
 /-!
-# A recursive session's stops, counted from the firewall's rules: the proof
+# A recursive session's stops, counted from the ZK server's rules: the proof
 
 `Flock.SecurityProofs.RecStopsOfRun`, by an invariant of `StopCount.step` (`Inv`) over the run's ops, on the record's
 rules as `Firewall.Record` writes them and as `Proofs.Properties.Firewall` proves them (`admit_ok`, `served_ok`,
 `nextOf_lt`, `stopOf_push_stop`, `afterOnTime`). What one more event does to a recursive session's open, stop, finish,
 released statements and the slot's orphan comes first. Its witnesses come last: `RecStopsOfRun_honest`, an honest run
-that runs through and releases its statement at its release time, and `RecStopsOfRun_nontrivial`, a firewall without
+that runs through and releases its statement at its release time, and `RecStopsOfRun_nontrivial`, a ZK server without
 `admit` (`Witness.stepAll`), where what reached the auditor is no cut at the run's stop.
 -/
 
@@ -1237,7 +1237,7 @@ def honest : List Step :=
   [.openRec "st" #["a"] none (some { start := 100, windows := #[50] }), .innerSend "r0000", .innerFinish "r0000",
    .seat "r0000" "a", .relay, .barrier 150 .ok .ok, .verdict (.ok true)]
 
-/-- A firewall without `admit`: an outer session that finds the slot free takes it, as statement `0`'s, whatever the
+/-- A ZK server without `admit`: an outer session that finds the slot free takes it, as statement `0`'s, whatever the
 record says. -/
 def stepAll (M : String → ℕ → ℕ) (σ : St) : Step → St
   | .seat s part =>
@@ -1266,7 +1266,7 @@ theorem RecStopsOfRun_honest :
       (run one honest).left "r0000" 1 = some 150 := by
   decide +kernel
 
-/-- **`RecStopsOfRun` fails at a firewall without `admit`**: there, statement `1`'s message reached the auditor while
+/-- **`RecStopsOfRun` fails at a ZK server without `admit`**: there, statement `1`'s message reached the auditor while
 none of the inner session's did, which is no cut at the run's stop. -/
 theorem RecStopsOfRun_nontrivial :
     ¬ (runAll one unordered).sent "r0000" 1 =

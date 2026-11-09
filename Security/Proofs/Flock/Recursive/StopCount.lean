@@ -4,10 +4,10 @@ public import Firewall.Release
 public import Proofs.Flock.Recursive.StopLeak
 
 /-!
-# A recursive session's stops, counted from the firewall's rules
+# A recursive session's stops, counted from the ZK server's rules
 
 `StopLeak`'s `prCoin_cut_le` bounds what a view released at a stop leaks by the number of stops, and `RecStops M` counts
-a recursive session's, `1 + Σ_p (M p + 1)`. This file states that the firewall's rules (`Firewall.Record`,
+a recursive session's, `1 + Σ_p (M p + 1)`. This file states that the ZK server's rules (`Firewall.Record`,
 `Firewall.Release`, run as `Firewall.Loop` and `rec_live` run them) release a recursive session's view cut at one of
 `RecStops M`: the stop `recStop` that the run reached, read off what reached the auditor.
 
@@ -23,7 +23,7 @@ last message, and `settle`'s rule makes it the release or the stop; a fault whil
 before its `Finish` was decided is its stop (`stopAt`); one that ends with nothing recorded (killed, or an op that could
 not read the record) leaves the slot, and the next `slot` records its stop.
 
-The model reads the record as its events: every op reads back the events the firewall wrote (`Record.read` refuses any
+The model reads the record as its events: every op reads back the events the ZK server wrote (`Record.read` refuses any
 line that is not `Event.line` of the event it parses to).
 
 * `RecStopsOfRun`: at every run and every recursive session `s`, what reached the auditor of each statement of `s` is
@@ -53,7 +53,7 @@ structure Holder where
   admitted : Admitted
   going : Bool
 
-/-- The firewall's state in a run: the record's events, the outer slot's holder, how many of statement `p`'s messages
+/-- The ZK server's state in a run: the record's events, the outer slot's holder, how many of statement `p`'s messages
 of recursive session `s` reached the auditor (`sent s p`, statement `0` the inner session, `j + 1` V*'s statement `j`),
 how many outer sessions of it were admitted (`adm s p`), and when its proofs left (`left s p`). -/
 structure St where
@@ -211,7 +211,7 @@ end Flock.StopCount
 
 namespace Flock.Guarantees
 
-/-- **A recursive session's view is cut at its stop.** At every run (`StopCount.run`: the firewall's ops in any order,
+/-- **A recursive session's view is cut at its stop.** At every run (`StopCount.run`: the ZK server's ops in any order,
 at each statement's message count `M s p`) and every recursive session `s`: what reached the auditor of each statement
 of `s` is what `cutAt` keeps at the stop the run reached (`recStop`), nothing of any statement past `s`'s, and each
 statement's from one outer session, admitted at most once; `s` runs through unless a statement of it was not released;
