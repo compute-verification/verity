@@ -487,9 +487,10 @@ LOCK_TREE = {
     "lean/Lib/Shown.lean": ("namespace Lib\nstructure Shape where\n  side : Nat\ntheorem Kept : True := trivial\n"
                             "theorem _root_.Lib.Rooted : True := trivial\ndef walk : Nat := go 0\n"
                             "where go (n : Nat) : Nat := n\nend Lib\n"),
-    "lean/Lib/Hidden.lean": "namespace Lib\ntheorem Withheld : True := trivial\ndef walk.aside : Nat := 0\nend Lib\n",
+    "lean/Lib/Hidden.lean": ("namespace Lib\ntheorem Withheld : True := trivial\ndef walk.aside : Nat := 0\n"
+                             "theorem Twice : True := trivial\nend Lib\n"),
     "lean/Lib/Hidden/Deep.lean": "namespace Lib.Inner\ntheorem Deep : True := trivial\nend Lib.Inner\n",
-    "lean/Lib/Hidden/Open.lean": "namespace Lib\ntheorem Open : True := trivial\nend Lib\n",
+    "lean/Lib/Hidden/Open.lean": "namespace Lib\ntheorem Open : True := trivial\ntheorem Twice : True := trivial\nend Lib\n",
 }
 
 
@@ -511,6 +512,7 @@ def _lock() -> dict:
         "layers": {"Lib": {"imports": ["Lib", "Mathlib", "Lib.Hidden", "Lib.Hidden.Deep"],
                            "why": "all of it, since #1234"}},
         "four_names": ["Lib", "Lib.Inner"],
+        "four_names_except": {"Lib.Twice": "named before the rule"},
         "guarantees": {"Lib.Rooted": _record(premises={"assumptions": [], "domain": [], "open": ["Lib.Kept"],
                                                        "reads": ["Lib.Shape.mk"]}),
                        "Lib.Withheld": _record(premises={"assumptions": [], "domain": [], "open": ["Lib.Withheld"],
@@ -554,6 +556,7 @@ def test_the_export_writes_a_lock_that_states_only_what_it_copies(tmp_path_facto
         "escapes": {"Lib.walk.go": "its loop"},
         "layers": {"Lib": {"imports": ["Lib", "Mathlib", "Lib.Hidden"], "why": "all of it, since #1234"}},
         "four_names": ["Lib"],
+        "four_names_except": {"Lib.Twice": "named before the rule"},
         "guarantees": {"Lib.Rooted": {k: v for k, v in source["guarantees"]["Lib.Rooted"].items() if k != "owner"}},
         "reads": {"Lib.Shown": source["reads"]["Lib.Shown"]},
     }
@@ -567,10 +570,12 @@ def test_the_export_writes_a_lock_that_states_only_what_it_copies(tmp_path_facto
         "reads Lib.Hidden", "reads Lib.Hidden.Deep"]
     report = got["locks"]["lean/lean-audit.json"]
     assert report["kept"] == {"roots": 1, "exempt": 1, "runs": 1, "open": 1, "escapes": 1, "layers": 1,
-                              "layers.*.imports": 3, "four_names": 1, "guarantees": 1, "reads": 1}
+                              "layers.*.imports": 3, "four_names": 1, "four_names_except": 1, "guarantees": 1,
+                              "reads": 1}
     assert report["dropped"] == {"exempt": 1, "runs": 1, "open": 1, "escapes": 1, "layers.*.imports": 1, "four_names": 1,
                                  "guarantees": 2, "reads": 2}
     assert report["undeclared"] == ["guarantees: Lib.Outgrown"] and report["witness_withheld"] == []
+    assert report["also_withheld"] == ["four_names_except: Lib.Twice"]
     assert report["lane_fields"] == 3 + 2 * 3 + 1
     assert report["sites"] == {"layers": 1} and report["site_list"] == [["layers", "Lib", "pr: #1234"]]
     assert report["bytes"] == [len(PE.LEAN_CHECK.text(source)), len(wrote)]

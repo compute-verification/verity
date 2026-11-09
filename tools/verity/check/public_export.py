@@ -32,7 +32,8 @@ The report gives:
 
 * what the export copied, rewrote, and cut, and the fetched fixtures it shipped and couldn't;
 * per Lean lock, the entries it kept and dropped by section, the dropped names no tracked file declares, the entries that
-  went with a witness it doesn't copy, and the lane-text sites left in a kept entry's prose, each with its section and entry;
+  went with a witness it doesn't copy, the kept names a file it leaves out declares too, and the lane-text sites left in a
+  kept entry's prose, each with its section and entry;
 * per area of the tree, the leftovers a reader of the public tree shouldn't meet, by kind, over whole files: the lane-text
   lint's kinds (`tests/lint/test_repo_lane_text.py`: Linear, Slack, Notion and PR ids and links, agent ids, run and `art:`
   ids, lane handles, dates, names) and agents' branches;
@@ -471,14 +472,16 @@ class Held:
     structure's `mk` and a type's `rec` below the declaration they come from, and no file spells them. A module is held
     when a copied file is that module, in some Lake package (`Tree.lake`'s reading of module names), and a prefix when
     one is it or lies under it. An import is held as a prefix is, and also when the tree tracks no module at or under
-    it, so a dependency's stays. A package is held when its lakefile is copied."""
+    it, so a dependency's stays. A package is held when its lakefile is copied. A name that a copied file and a file
+    the export leaves out both declare is held, and the report names it (`lock_report`'s `also_withheld`)."""
 
     def __init__(self, tree, copied: set[str]):
         declared = {f: {n.removeprefix("_root_.") for n in MOVE.lean_declared(tree.text(f))}
                     for f in tree.files if f.endswith(".lean")}
         self.copied = copied
         self.declared = {n for f, names in declared.items() if f in copied for n in names}
-        self.tracked = {n for names in declared.values() for n in names}
+        self.withheld = {n for f, names in declared.items() if f not in copied for n in names}
+        self.tracked = self.declared | self.withheld
         self.namespaces = _above(self.declared)
         modules = tree.lake[0]
         self.modules = {m for m, f in modules.items() if f in copied}
@@ -544,15 +547,18 @@ def lock_sites(lock: dict) -> list[tuple[str, str, str]]:
 
 def lock_report(old: dict, new: dict, dropped: list[tuple[str, str]], held: Held) -> dict:
     """What the export did to one lock: per section the entries kept and dropped, how many lane fields it removed, the
-    dropped names no tracked file declares, the entries that went with a witness the export doesn't copy, and the
-    leftovers in what it kept (`lock_sites`)."""
+    dropped names no tracked file declares, the entries that went with a witness the export doesn't copy, the kept
+    declarations a file the export leaves out declares too, and the leftovers in what it kept (`lock_sites`)."""
     kinds = dict(PUBLIC_LOCK.ENTRIES)
     sites = lock_sites(new)
+    both = {f"{where}: {name}" for where, kind, name in PUBLIC_LOCK.named(new)
+            if kind == PUBLIC_LOCK.DECLARATION and name in held.withheld}
     return {"kept": PUBLIC_LOCK.counts(new), "dropped": dict(Counter(path for path, _ in dropped)),
             "lane_fields": len(list(PUBLIC_LOCK.lane_fields(old))),
             "undeclared": sorted(f"{path}: {name}" for path, name in dropped
                                  if path in kinds and held.undeclared(kinds[path], name)),
             "witness_withheld": sorted({f"{path}: {name}" for path, name in dropped if path not in kinds}),
+            "also_withheld": sorted(both),
             "sites": dict(Counter(section for section, _, _ in sites)), "site_list": [list(s) for s in sites]}
 
 
@@ -906,7 +912,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {f}: {lock['bytes'][0]} to {lock['bytes'][1]} bytes; entries kept {sum(lock['kept'].values())}, dropped "
               f"{sum(lock['dropped'].values())} ({len(lock['undeclared'])} that no tracked file declares, "
               f"{len(lock['witness_withheld'])} with a witness the export doesn't copy); {lock['lane_fields']} lane fields "
-              f"removed; leftovers in kept entries: {lock['sites'] or 'none'}")
+              f"removed; {len(lock['also_withheld'])} kept names a file left out declares too; leftovers in kept entries: "
+              f"{lock['sites'] or 'none'}")
     lt = report["lean_targets"]
     print(f"Lake packages: {len(lt)}, {sum(len(t['modules']) for t in lt.values())} modules to build; root files the export "
           f"lacks: {[f'{p}: {r}' for p, t in lt.items() for r in t['missing_roots']]}")
