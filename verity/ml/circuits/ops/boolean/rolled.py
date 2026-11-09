@@ -190,7 +190,7 @@ def rolled(name: str, version: int, statics: Sequence[str], build: Callable, sig
             params, ret = sig(S)
             return emit(of(S)[what], [t for _, t in params], ret, B, *c)
         return CompositeDefinition(name + suffix, version, tuple(statics) + at, sig, body, register=register,
-                                   doc=f"{name}_v{version}'s {suffix}: `elementwise.roll`'s ``{what}``",
+                                   doc=f"{name}_v{version}'s {suffix}: `roll`'s ``{what}``",
                                    conformance="exact-model-tested")
 
     In = part("In", ("V",), in_sig, cls, "in")
