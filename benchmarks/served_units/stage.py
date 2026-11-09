@@ -3,6 +3,8 @@ values at the model's served statics, staged for Flock as a ``verity/flock-circu
 
     UNIT  TYPE[:S=V,...]   a type of `UNITS`, `PARTS` or `CENSUS` at its statics (each type's defaults are its model's: GLM-5.3's
                            at TP8, s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192, gq:K=384
+          census:NAME      any block type of the serving rows by its census name verbatim, staged as a `CENSUS` type, e.g.
+                           census:MoeSum_v1{TOPK=8,H=3072}
     --public-weights       a `UNITS` type's weight row ``w`` as public input ports (`UnitStager`'s ``public_inputs``, each leaf in
                            its own u16 words) instead of a row hashed in the circuit, on the same values: the price of the block
                            with its weight row's in-circuit opening removed, the in-circuit share a registered weight encoding
@@ -34,7 +36,8 @@ overhead card prices it under), one whole Definition a proof block, laid out as 
 slots, its unit cut into stage nets under the automatic caps, which keep it within the GPU prover's slot types; RMSNorm's
 and the FP8 linears' inline) under its unit name, so the statement is the served one but for its binding: its
 ``class_sha512`` is the served composer's. The circuit is streamed to circuit.txt once, every input's outputs checked against
-the Program's reference (``twin`` null).
+the Program's reference (``twin`` null). ``census:NAME`` stages any other block type of the serving rows the same way, its
+values seeded by the same rule and its seeds keyed by the name.
 
 Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, a PARTS type's partition.json, and beside a statement
 reading in slots the MUFU tables the prover reads (``tables/``, ``flock-circuit --tables``), as the served composer does.
@@ -214,7 +217,8 @@ class Census:
     fixed: str = ""
 
     def name(self, S: dict) -> str:
-        return f"{self.family}{{{','.join([*(f'{k}={v}' for k, v in S.items()), *filter(None, [self.fixed])])}}}"
+        inner = ",".join([*(f"{k}={v}" for k, v in S.items()), *filter(None, [self.fixed])])
+        return f"{self.family}{{{inner}}}" if inner else self.family
 
 
 _EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
@@ -250,6 +254,11 @@ def _static(default, v: str):
 
 def parse(spec: str) -> tuple[str, Unit | Part | Census, dict]:
     name, _, rest = spec.partition(":")
+    if name == "census":
+        family, brace, inner = rest.partition("{")
+        if not family or (brace and not inner.endswith("}")):
+            raise SystemExit(f"stage.py: census:NAME takes a census name, FAMILY or FAMILY{{STATICS}}, not {rest!r}")
+        return name, Census(family, {}, inner[:-1]), {}
     if name not in UNITS and name not in PARTS and name not in CENSUS:
         raise SystemExit(f"stage.py: unit type {name!r} is not one of {sorted(UNITS) + sorted(PARTS) + sorted(CENSUS)}")
     u = UNITS.get(name) or PARTS.get(name) or CENSUS[name]
@@ -382,6 +391,8 @@ def main() -> None:
     t0 = time.time()
     name, u, S = parse(spec)
     tag = f"{name}-" + "-".join(f"{k.lower()}{v}" for k, v in sorted(S.items()))
+    if name == "census":
+        tag += hashlib.sha256(u.name(S).encode()).hexdigest()[:16]
     if isinstance(u, (Part, Census)):
         if public:
             raise SystemExit(f"stage.py: --public-weights is for a type of UNITS, not {name}")

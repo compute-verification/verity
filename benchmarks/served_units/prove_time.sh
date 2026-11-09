@@ -2,8 +2,8 @@
 # Served proof blocks' Flock --zk prove time against the statement's size, on one GPU or on the CPU prover, for each block
 # type's proof overhead and its fixed cost a statement. Run from the tree (research run --on NODE --cwd source):
 #   1. build   flock-circuit (verity/ml/flock/pod/60-circuit.sh MODE=build; with PT_DEVICE=gpu its CUDA prover), outside any lease
-#   2. stage   each UNIT of PT_UNITS (stage.py's TYPE[:S=V,...], `+public-weights` for its --public-weights, `+packed-weights`
-#              for --public-weights --packed) at each N of
+#   2. stage   each UNIT of PT_UNITS (stage.py's TYPE[:S=V,...] or census:NAME, `+public-weights` for its --public-weights,
+#              `+packed-weights` for --public-weights --packed) at each N of
 #              PT_NS, PT_JOBS at a time, outside any lease, into $FLOCK_WORK/data/ (kept, keyed by the staging tree)
 #   3. prove   per statement, a loopback --zk session set: a verifier process on VCPUS cores, WARM + RUNS prover sessions on the
 #              rest, as benchmarks/flock_s8_block/run.sh runs its sessions (the ZK server's send check off, FC_COINS=os);
@@ -52,11 +52,15 @@ export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/tools/verity/circuit_
 KEY=$(cd $REPO && find benchmarks/served_units/stage.py verity/ml integrations/vllm/verity_vllm tools/verity/circuit_check/src \
   -name '*.py' -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 
-# name UNIT N: the statement's directory name
-name() { echo "$(echo "$1" | tr ':,=+' '----' | tr 'A-Z' 'a-z')-n$2"; }
+# name UNIT N: the statement's directory name, a census name's past 96 characters cut to 80 and its digest's first 12
+name() {
+  local s=$(echo "$1" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9.\n-' '-' | tr -s '-'); s=${s%-}
+  [ ${#s} -gt 96 ] && s="${s:0:80}-$(echo -n "$1" | sha256sum | cut -c1-12)"
+  echo "$s-n$2"
+}
 # stage UNIT N: stage.py's statement into $FW/data/NAME-KEY, its record under $O/stage/NAME
 stage() {
-  local u=${1%+*} flag= nm=$(name $1 $2)
+  local u=${1%+*} flag= nm=$(name "$1" $2)
   case $1 in *+public-weights) flag=--public-weights ;; *+packed-weights) flag="--public-weights --packed" ;; *) u=$1 ;; esac
   local d=$FW/data/$nm-$KEY o=$O/stage/$nm
   mkdir -p $o $FW/data
@@ -64,7 +68,7 @@ stage() {
     flock 9
     [ -e $d/.done ] && exit 0
     rm -rf $d && mkdir -p $d
-    /usr/bin/time -v -o $o/time-stage.txt $PY $REPO/benchmarks/served_units/stage.py $u $2 $d $flag > $o/stage.log 2>&1 \
+    /usr/bin/time -v -o $o/time-stage.txt $PY $REPO/benchmarks/served_units/stage.py "$u" $2 $d $flag > $o/stage.log 2>&1 \
       || { echo "stage $nm FAILED: $(tail -1 $o/stage.log)"; rm -rf $d; exit 1; }
     touch $d/.done
   ) 9> $d.lock || return 1
@@ -96,7 +100,7 @@ gpu_sample() {
 }
 # session UNIT N: a verifier process and WARM + RUNS prover sessions against it, into $O/$DEV/NAME
 session() {
-  local nm=$(name $1 $2) G= GS=; local d=$FW/data/$nm-$KEY o=$O/$DEV/$nm
+  local nm=$(name "$1" $2) G= GS=; local d=$FW/data/$nm-$KEY o=$O/$DEV/$nm
   [ $DEV = gpu ] && G=--gpu
   mkdir -p $o $O/stage/$nm; rm -rf $d/sessions; cp $d/stage.json $O/stage/$nm/
   local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1)
