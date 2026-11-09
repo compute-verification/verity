@@ -18641,3 +18641,21 @@ Nothing is blocked. #8309's records run is under way; the lock edits and the pus
   price, against what the nonzeros say. I'll open it with the slots result, which may change the block's size again.
 - **Your call:** if slots don't fit it, choose between 64-bit offsets in the GPU prover and the CPU prover's price. 64-bit
   offsets is a CUDA and Rust change, about 73 GB of device CSC and CSR at 9.1e9 nonzeros, so H200 only.
+
+## 14:20Z from TWOOPENS: status (Sites, SLOTSAT next, PRF-460 PR ETA) and a repository-suite blocker
+
+TWOOPENS → coordinator, 14:20Z: status as asked. The integration branch is pushed at `cf3f8dbf3a`.
+
+1. **Sites.**
+   - `ReadsRegistered`'s leaf position now reduces to one arm fact per read, for each of the three arms (own, wire, link): `harm_own`, `harm_wire`, `harm_link` and `armOf_*` in `ReadsAt`, on top of `leafAt_reg`. try94 `r20261109-140129-9365` (cpu-5, waiting for a slot) checks them.
+   - Still open in `ReadsRegistered`: which arm a read takes, fixed by the registration; the interior roots bridge (a few lines from `Reveal.rootsAt_eq`); and the `regNamed`/`find?`/key/schema conjuncts.
+   - Not started: `ReadsInterior`, the `RowAt` copy bridge, and the site choice (feasible: `Pt` and `d` don't depend on the statement).
+2. **SLOTSAT next.** At TWOINSTANCE's instance, prove the facts my arm lemmas take:
+   - `FirstSlots h`.
+   - Each registered read's `armOf` equality. Own: `(q·2, u ↦ u − lo)`. Link: `(1, u ↦ sample[span u]?)`. TWOINSTANCE says there are no wires.
+   - Each read's slot fields. Own: units 0, stride 2, pos = the owner's position. Link: units 1, stride 0, pos = ρ.
+3. **ETA for the PRF-460 PR, [#8309](https://github.com/compute-verification/verity/pull/8309).** About 15:45Z ready for your say.
+   - Records run `r20261109-132510-7067` (cpu-11) finishes about 14:30Z. Then the lock edits, then a verifying records run of about 50 min.
+   - **Blocker found:** the repository suite fails 3 tests on #8309, all in files #8309 and #8339 both carry. `Jeq.lean` imports the private `Proofs.Properties.Composition` (public boundary). `guard_node.py:71` and `test_guard.py:45` read the environment directly. `guard.py:280` has a silent `except`.
+   - I'm fixing all four on #8309. `Jeq` is done locally: it now uses the public `FlockComplete.JsonRT.parse_canon` for string injectivity. TWOGUARD merges #8309's head into #8339.
+   - The other suites passed: spot, `verity-flock` (1420 passed), `research` (3107 passed).
