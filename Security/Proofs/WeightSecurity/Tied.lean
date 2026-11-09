@@ -43,7 +43,8 @@ theorem view_counted [Fintype U] (P : Population.Dataflow U S) (f : P.Fns V)
 /-- **Tied and covered releases are faithful.** At a checked population, a run whose releases are their traces'
 outputs and whose traces hold the windows' inputs releases, counted at its traces, the faulted function's answer at each
 trace's own fault pattern (`Served.faithful_of_tie`). -/
-theorem faithful_counted [Fintype U] (P : Population.Dataflow U S) (h : P.Checked) (f : P.Fns V) (eg : O → S)
+theorem faithful_counted [Fintype U] [Fintype O] [DecidableEq O] [Fintype V] [Fintype Adv] [Inhabited Adv]
+    [Fintype Tick] [Inhabited Tick] (P : Population.Dataflow U S) (h : P.Checked) (f : P.Fns V) (eg : O → S)
     (inp : Θ → Q × Adv → S → V) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (L : ℕ) (θ : Θ) (r : R)
     (l : List (Traced O V Tick Adv S)) (ht : Tied eg L l) (hc : Covered P inp Ou L θ r l) :
     Faithful (faultedServed P f eg inp) P.faultCount Ou L θ r (l.map (counted P f)) := by
