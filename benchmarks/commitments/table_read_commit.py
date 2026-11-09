@@ -20,10 +20,12 @@ Arms, per batch: ``alone``, the kernels' time on an otherwise idle GPU (CUDA eve
 to last about as long as the hash alone) on the serving stream with the step's hash on the side stream, against the loop
 alone: ``busy_x`` the loop's time as a multiple of its time alone, ``hash_x`` the hash's, and ``added_ms`` how much later both
 end than the loop alone. ``cpu``: the CPU twin (`host_step`, ``row_table_host.cpp``) on one thread at batch 1 over
-``--cpu-layers`` layers. ``tables``: the committer's history tables on one thread (`commit.history_tables`, the tables the
-reads open): a table's creation (its 2^17-leaf tree), ``--table-rows`` rows appended at once (a prefill's), one row at a time
-(a decode step's) and a read's path. Validation: a small step's device roots and CPU twin's equal `row_tables.step_roots`, the
-Python reference, and the table's root is `history.check`'s over its strings. JSON to ``--out`` (default
+``--cpu-layers`` layers. ``tables``: the committer's history tables (`commit.history_tables`, the tables the reads open),
+as `history.HistoryTable` (``python``), the CPU twin of the device's (``twin``, one thread) and on the GPU (``device``,
+`commit.history_tables_device`): a table's creation (its 2^17-leaf tree), ``--table-rows`` rows appended at once (a
+prefill's), one row at a time (a decode step's) and 2048 reads' paths, each call through to the host. Validation: a small
+step's device roots and CPU twin's equal `row_tables.step_roots`, the Python reference; each table's root is
+`history.check`'s over its strings, and the device table's is the twin's. JSON to ``--out`` (default
 ``$RESEARCH_RUN_DIR``): ``table_read_commit.json`` and ``result.json``.
 """
 from __future__ import annotations
@@ -160,10 +162,10 @@ def cpu_twin(layers: int, reads: int, ctx: bytes, key: bytes, reps: int) -> dict
     return {"layers": layers, "bytes": b, "s": statistics.median(secs), "gb_s": b / statistics.median(secs) / 1e9}
 
 
-def tables(rows: int, reps: int) -> dict[str, Any]:
+def _table(make: Any, rows: int, reps: int) -> tuple[dict[str, Any], Any]:
     from verity_vllm.commit import history_tables as H
 
-    hs = H.Histories("ab" * 64)
+    hs = H.Histories("ab" * 64, make=make)
     t0 = time.perf_counter()
     t = hs.table("r0", 0)
     init = time.perf_counter() - t0
@@ -177,12 +179,31 @@ def tables(rows: int, reps: int) -> dict[str, Any]:
         t0 = time.perf_counter()
         hs.append("r0", 0, hs.edge("r0", 0), block[i % rows:i % rows + 1])
         one.append(time.perf_counter() - t0)
+    reads = [(97 * e) % len(t.rows) for e in range(2048)]
     t0 = time.perf_counter()
-    for e in range(2048):
-        t.path(e)
-    path = (time.perf_counter() - t0) / 2048
-    return {"rows": rows, "init_s": init, "append_us": bulk / rows * 1e6, "append_one_us": statistics.median(one) * 1e6,
-            "path_us": path * 1e6, "row_bytes": H.ROW_BYTES, "check": H.check(t, t.bcs)}
+    if hasattr(t, "paths"):
+        t.paths(reads)
+    else:
+        for e in reads:
+            t.path(e)
+    path = (time.perf_counter() - t0) / len(reads)
+    return {"init_s": init, "append_us": bulk / rows * 1e6, "append_one_us": statistics.median(one) * 1e6, "path_us": path * 1e6,
+            "check": H.check(t, t.bcs)}, t
+
+
+def tables(rows: int, reps: int, gpu: bool, key: bytes) -> dict[str, Any]:
+    from verity.ml.commitments import history as HT
+    from verity_vllm.commit import history_tables as H
+    from verity_vllm.commit import history_tables_device as HTD
+
+    makes = {"python": HT.HistoryTable, "twin": lambda p, v, w, c: HTD.Table(p, v, w, c, key=key)}
+    if gpu:
+        makes["device"] = lambda p, v, w, c: HTD.Table(p, v, w, c, key=key, device=torch.cuda.current_device())
+    got = {name: _table(make, rows, reps) for name, make in makes.items()}
+    out: dict[str, Any] = {"rows": rows, "row_bytes": H.ROW_BYTES, **{name: r for name, (r, _t) in got.items()}}
+    if gpu:
+        out["device_is_twin"] = got["device"][1].root == got["twin"][1].root
+    return out
 
 
 def cpu_name() -> str:
@@ -213,9 +234,9 @@ def main(argv: list[str] | None = None) -> int:
         del outs
         torch.cuda.empty_cache()
     cpu = cpu_twin(ns.cpu_layers, ns.reads, ctx, key, 2) if ns.cpu_layers else None
-    tab = tables(ns.table_rows, ns.reps) if ns.table_rows else None
+    tab = tables(ns.table_rows, ns.reps, gpu, key) if ns.table_rows else None
     if tab is not None:
-        gate["tables"] = tab["check"]
+        gate["tables"] = all(tab[k]["check"] for k in ("python", "twin", "device") if k in tab) and tab.get("device_is_twin", True)
     ok = all(gate.values())
     nvcc_v = subprocess.run([D.nvcc(), "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:] \
         if D.nvcc() else None
@@ -239,17 +260,17 @@ def main(argv: list[str] | None = None) -> int:
                                      "gpu": summary["gpu"], "capability": summary["capability"], "torch": torch.__version__,
                                      "cuda": torch.version.cuda, "nvcc": nvcc_v},
             "validation": {"status": "passed" if ok else "failed",
-                           "checker": "a small step's device and CPU-twin roots equal row_tables.step_roots; a history "
-                                      "table's root is history.check's over its strings",
+                           "checker": "a small step's device and CPU-twin roots equal row_tables.step_roots; each history "
+                                      "table's root is history.check's over its strings, the device table's the twin's",
                            "detail": json.dumps(gate), "evidence": []},
             "measurements": [{"name": f"b{b}.{k}", "value": r[k], "unit": u} for b, r in per_batch.items()
                              for k, u in (("kernel_ms", "ms"), ("gb_s", "GB/s"), ("bytes", "bytes"))]
             + [{"name": f"b{b}.beside.{k}", "value": r["beside"][k], "unit": u} for b, r in per_batch.items()
                for k, u in (("busy_x", "x"), ("hash_x", "x"), ("added_ms", "ms"))]
             + ([{"name": "cpu_twin.gb_s", "value": cpu["gb_s"], "unit": "GB/s"}] if cpu else [])
-            + [{"name": f"tables.{k}", "value": tab[k], "unit": u} for k, u in (("init_s", "s"), ("append_us", "us"),
-                                                                              ("append_one_us", "us"), ("path_us", "us"))
-               if tab is not None]
+            + [{"name": f"tables.{m}.{k}", "value": tab[m][k], "unit": u} for m in ("python", "twin", "device")
+               if tab is not None and m in tab
+               for k, u in (("init_s", "s"), ("append_us", "us"), ("append_one_us", "us"), ("path_us", "us"))]
             + [{"name": "workload_wall", "value": time.perf_counter() - started, "unit": "s"}],
             "measurement_files": ["table_read_commit.json"], "artifacts": [],
         }

@@ -14,7 +14,8 @@ What committing values costs under each commitment scheme, on the host and on th
 - `step_root_gpu.py`: the same hashing on the GPU, overlapped with a graphed proxy of the decode step's linears.
 - `table_read_commit.py`: the same committer over one decode step's DSA table reads (each read's opened row, salt, path and
   output row, per layer) at a batch of long-row requests: GB/s alone, beside a decode-shaped GEMM loop, and the CPU twin's;
-  and the committer's history tables those reads open, on one thread (creation, appends, a read's path).
+  and the committer's history tables those reads open (creation, appends, paths) as `history.HistoryTable`, the device
+  tables' CPU twin and on the GPU.
 
 `tool.py` declares the first three as research tools (`commit_cost`, `hiding_leaf_cost`, `serving_commit_cost`), so their runs
 are keyed by their parameters:
