@@ -88,7 +88,7 @@ class Executor:
         self.transport = transport
 
     def enqueue_graph(self, check: str, priority: int) -> None:
-        """Put ``check`` (`after-landing:SHA`) on the queue at ``priority`` with no graph, as graph/v2: the executor lists it on
+        """Put ``check`` (`ready:SHA`, the loop's) on the queue at ``priority`` with no graph, as graph/v2: the executor lists it on
         a worker, and `graph_v2` reads what it listed."""
         self.transport.enqueue(None, priority, check, GRAPH_V2)
 

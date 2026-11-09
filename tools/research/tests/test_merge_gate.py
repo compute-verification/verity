@@ -975,71 +975,34 @@ def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_ad
             raise AssertionError(f"{argv} is a usage error")
 
 
-def _deferred_lock(feat: Path, tip: str, files: dict[str, str], checked: str) -> str:
-    """Drive's lock commit on ``tip``, naming its lock run ``checked``."""
+def _lock_commit(feat: Path, tip: str, files: dict[str, str]) -> str:
+    """A lock commit on ``tip`` holding ``files``, each named in its `Regenerated:` trailer."""
     _git(feat, "reset", "-q", "--hard", tip)
     for rel, text in files.items():
         (feat / rel).parent.mkdir(parents=True, exist_ok=True)
         (feat / rel).write_text(text)
         _git(feat, "add", rel)
-    _git(feat, "commit", "-q", "-m", f"Lock records regenerated for #1\n\nChecked: {checked} (the lock run of `checked` {tip[:12]}, "
-                                     f"passed by regenerating them)\nRegenerated: {', '.join(files)}")
+    _git(feat, "commit", "-q", "-m", f"Lock records regenerated\n\nRegenerated: {', '.join(files)}")
     return _git(feat, "rev-parse", "HEAD")
 
 
-def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_running_check_regenerated(tmp_path):
-    """Drive commits a lock run's records as soon as it passed, so the gate reads them from its run dir on its node, hashing
-    the bytes it fetches; a lock commit whose records differ, that names another run, that leaves out a package the run
-    regenerated, or whose run ran on another commit is refused, and without drive's verdict (`deferred`) the run, a check of
-    lean-audit alone with no passing attempt of the whole check, vouches for nothing."""
-    from research.merge import regenerated_parent
-    from research.store.local import LocalStore
-    from test_queue_drive import _live_run
-
-    main, feat, tip = _repos(tmp_path)
-    base, store, lock = _git(main, "rev-parse", "HEAD"), LocalStore(), "pkg/lean-audit.json"
-    _, fetch, _ = _live_run(tmp_path, "r20261020-000001-0001", tip, {"pkg": '{"records": 2}\n'})
-    _, both, _ = _live_run(tmp_path, "r20261020-000002-0002", tip, {"pkg": '{"records": 2}\n', "pkg2": '{"records": 5}\n'})
-    _, elsewhere, _ = _live_run(tmp_path, "r20261020-000003-0003", base, {"pkg": '{"records": 2}\n'})
-
-    def vouched(commit: str, rid: str, f, deferred: bool = True) -> str | None:
-        return regenerated_parent(feat, commit, store, tool="check", kinds=frozenset({"check/v1"}), command=CHECKED,
-                                  deferred=rid if deferred else None, fetch=f)
-
-    ok = _deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000001-0001")
-    assert vouched(ok, "r20261020-000001-0001", fetch) == "r20261020-000001-0001"
-    assert vouched(ok, "r20261020-000001-0001", fetch, deferred=False) is None
-    assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 1}\n'}, "r20261020-000001-0001"), "r20261020-000001-0001", fetch) is None    # forged bytes
-    assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000009-0009"), "r20261020-000001-0001", fetch) is None    # another check
-    assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000002-0002"), "r20261020-000002-0002", both) is None     # pkg2's left out
-    assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n', "pkg2/lean-audit.json": '{"records": 5}\n'}, "r20261020-000002-0002"),
-                   "r20261020-000002-0002", both) == "r20261020-000002-0002"
-    assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000003-0003"), "r20261020-000003-0003", elsewhere) is None  # it checked main
-
-
-def test_a_lock_commit_carries_the_caps_its_lock_run_repaired_and_no_other_file(tmp_path):
-    """The lock run's `--bookkeeping warn` repairs files beside the locks (`REPAIRED`, its report's `repaired`): a lock commit
+def test_a_lock_commit_carries_the_caps_its_lean_check_repaired_and_no_other_file(tmp_path, monkeypatch):
+    """The Lean check's `--bookkeeping warn` repairs files beside the locks (`REPAIRED`, its report's `repaired`): a lock commit
     holding the repaired copy byte for byte is vouched for; one whose copy differs, one that leaves it out, and one changing
     any other file is refused."""
-    import json
-
     from research.merge import REPAIRED, regenerated_parent
     from research.store.local import LocalStore
-    from test_queue_drive import _live_run
 
     main, feat, tip = _repos(tmp_path)
-    store, lock, caps, rid = LocalStore(), "pkg/lean-audit.json", "tests/test_lean_packages.py", "r20261020-000005-0005"
+    lock, caps = "pkg/lean-audit.json", "tests/test_lean_packages.py"
     assert caps in REPAIRED
-    d, fetch, _ = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
-    (d / "lean-audit" / "repaired" / "tests").mkdir(parents=True)
-    (d / "lean-audit" / "repaired" / caps).write_text('UNWITNESSED = {"pkg": 3}\n')
-    audit = json.loads((d / "lean-audit" / "audit.json").read_text())
-    audit["repaired"] = {caps: f"/workspace/research/runs/{rid}/lean-audit/repaired/{caps}"}
-    (d / "lean-audit" / "audit.json").write_text(json.dumps(audit))
+    assert _checked(tmp_path, feat, monkeypatch, _REPAIRING) == 0
+    store = LocalStore()
+    (rid,), = store.index.sql("SELECT id FROM attempts WHERE source_commit = ?", (tip,))
 
     def vouched(files: dict[str, str]) -> str | None:
-        return regenerated_parent(feat, _deferred_lock(feat, tip, files, rid), store, tool="check", kinds=frozenset({"check/v1"}),
-                                  command=CHECKED, deferred=rid, fetch=fetch)
+        return regenerated_parent(feat, _lock_commit(feat, tip, files), store, tool="check", kinds=frozenset({"check/v1"}),
+                                  command=CHECKED)
 
     assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 3}\n'}) == rid
     assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 9}\n'}) is None
@@ -1074,6 +1037,17 @@ _REGENERATING = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; os.makedi
                  "'steps': [{'step': 'agree', 'status': 'passed'}], 'artifacts': ['lean-audit/']}, open(d + '/result.json', 'w'))")
 
 
+#: `_REGENERATING`, whose Lean check also repaired the caps test beside the locks (its report's `repaired`)
+_REPAIRING = _REGENERATING.replace(
+    "open(d + '/lean-audit/audit-pkg/lean-audit.json', 'w').write('{\"records\": 2}\\n'); ",
+    "open(d + '/lean-audit/audit-pkg/lean-audit.json', 'w').write('{\"records\": 2}\\n'); "
+    "os.makedirs(d + '/lean-audit/repaired/tests'); "
+    "open(d + '/lean-audit/repaired/tests/test_lean_packages.py', 'w').write('UNWITNESSED = {\"pkg\": 3}\\n'); ").replace(
+    "'regenerated': {'pkg': d + '/lean-audit/audit-pkg/lean-audit.json'}",
+    "'regenerated': {'pkg': d + '/lean-audit/audit-pkg/lean-audit.json'}, "
+    "'repaired': {'tests/test_lean_packages.py': d + '/lean-audit/repaired/tests/test_lean_packages.py'}")
+
+
 def _relock(feat: Path, text: str, trailer: str | None) -> str:
     (feat / "pkg").mkdir(exist_ok=True)
     (feat / "pkg" / "lean-audit.json").write_text(text)
@@ -1083,7 +1057,7 @@ def _relock(feat: Path, text: str, trailer: str | None) -> str:
 
 
 def test_a_commit_of_the_locks_a_passing_check_regenerated_merges_on_that_check(tmp_path, monkeypatch, capsys):
-    """A train's Lean check passes by regenerating records, and drive lands the train with
+    """A train's Lean check passes by regenerating records, and the train lands with
     those locks committed on top.  That commit's tree is the one the check audited, byte for byte, so the check vouches for it;
     other bytes, another file or no `Regenerated:` trailer don't."""
     main, feat, tip = _repos(tmp_path)

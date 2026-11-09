@@ -273,7 +273,7 @@ def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
 
 
 def test_the_priority_list_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep_their_place(world):
-    """A fix for a test that fails on `main` needn't sit behind the next train: drive's priority list restacks `next` so the
+    """A fix for a test that fails on `main` needn't sit behind the next train: the priority list restacks `next` so the
     next train starts with the fix.  A PR in the list that isn't ready is passed over, and another queue's sync without the
     list keeps the new order."""
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
@@ -381,7 +381,7 @@ def test_a_pr_of_the_priority_list_goes_to_the_bottom_and_the_members_above_it_k
 
 
 def test_a_pr_the_last_sync_left_out_is_tried_above_the_rest_so_a_sync_with_nothing_new_keeps_next(world):
-    """A PR that didn't merge, left where drive's priority list put it in the order the sync compares `next` with, would have
+    """A PR that didn't merge, left where the priority list put it in the order the sync compares `next` with, would have
     every member above it merged again (new commits) on each tick with `main` still.  Left out at a head, it (and a PR that
     contains it) is tried above the rest until that head moves."""
     world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
@@ -500,7 +500,7 @@ def test_a_sync_on_a_git_without_attr_source_raises_rather_than_merging_without_
 
 def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):
     """A sync writes no conflict handoff into the notes clone of the VM it runs on, where it would wait for that VM's next notes
-    push; drive tells each conflict in the merge thread (`Driver.refuse`)."""
+    push; the queue tells each conflict in the merge thread."""
     monkeypatch.setenv("RESEARCH_NOTES", str(world.tmp / "notes"))
     world.gh.put(1, world.change({"a.txt": "one\n"}))
     world.gh.put(2, world.change({"a.txt": "two\n", "b.txt": "b2\n"}))
@@ -639,7 +639,7 @@ def test_a_sync_admits_a_ready_pr_whose_merge_is_clean_and_runs_no_preflight(wor
     assert not [line for line in world.logs if "preflight" in line], world.logs
 
 
-def test_a_pr_of_drives_priority_list_and_those_it_contains_go_first_of_what_a_sync_merges_anew(world):
+def test_a_pr_of_the_priority_list_and_those_it_contains_go_first_of_what_a_sync_merges_anew(world):
     """Drive's priority list (`Queue.priority`), the landing order: a listed PR and the PRs it contains go first of what a sync
     merges anew, a Lean change among them too, and with no preflight.  A listed number that is no open PR changes nothing."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
@@ -649,7 +649,7 @@ def test_a_pr_of_drives_priority_list_and_those_it_contains_go_first_of_what_a_s
     assert [m.pr for m in q.sync()[0]] == [2, 3, 1] == world.on_next(q), world.logs
 
 
-def test_drives_priority_list_is_read_again_at_each_sync_in_its_order_and_one_it_cant_read_is_empty_its_error_logged_once(world):
+def test_the_priority_list_is_read_again_at_each_sync_in_its_order_and_one_it_cant_read_is_empty_its_error_logged_once(world):
     """`--priority-file` (`Queue.priority_file`): each sync reads the file again, in its order, first to land first, a number
     repeated keeping its first place, and logs the list when it changes, its order too; no file is an empty list, and so is one
     it can't read, its error logged once while it stays the same, whichever tick's queue meets it."""
@@ -665,7 +665,7 @@ def test_drives_priority_list_is_read_again_at_each_sync_in_its_order_and_one_it
         return [line for line in world.logs if "priority" in line]
 
     def listed(prs: str) -> str:
-        return f"research queue: drive's priority list ({path}), first to land first: {prs}"
+        return f"research queue: the priority list ({path}), first to land first: {prs}"
 
     assert sync() == () and said() == []
     path.write_text("12, 7\n3,")
@@ -675,7 +675,7 @@ def test_drives_priority_list_is_read_again_at_each_sync_in_its_order_and_one_it
     path.write_text("12 #7")
     assert sync() == sync() == ()
     assert said()[2:] == [f"research queue: --priority-file {path} holds '#7', which is not a PR number: write PR numbers "
-                          "separated by spaces or commas; drive's priority list is empty until the file is fixed"]
+                          "separated by spaces or commas; the priority list is empty until the file is fixed"]
     path.unlink()
     path.mkdir()
     assert sync() == sync() == () and len(said()) == 4
@@ -1009,7 +1009,7 @@ def _doc(at: int | None = None, text: str = "") -> str:
     return "".join(text if i == at else line for i, line in enumerate(LINES))
 
 
-def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_cap_joins_next_and_its_warning_is_kept_for_drive(world):
+def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_cap_joins_next_and_its_warning_is_kept(world):
     """A PR whose head alone is under a Markdown file's cap can take the file over it once merged onto `next` above the members
     that also grow it.  The caps are a warn gate: the sync gives it each PR's merge onto `next`, so the bytes the members below
     add count, keeps what it says by PR and head (the state's `warned`, which drive tells the owner) and leaves no PR out."""
@@ -1270,6 +1270,20 @@ def test_a_ready_pr_containing_one_that_conflicts_with_main_shows_waiting_naming
     assert q.status()[2].why.startswith("contains #1, which is refused: ") and q.status()[2].why.endswith("(at the last sync)")
 
 
+def test_status_shows_each_pr_as_the_verified_queue_admits_it_onto_main_and_one_on_main_as_landed(world):
+    """`research queue status` reads no `next` (``loop``): a marked PR is admitted onto `main`, and one whose head `main` holds
+    has landed, however the frozen `next` stands."""
+    world.gh.put(1, h1 := world.change({"a.txt": "one\n"}))
+    world.gh.put(2, world.change({"b.txt": "two\n"}))
+    q = world.queue()
+    got = q.status(loop=True)
+    assert got[1].state == got[2].state == "ready"
+    assert got[1].why.startswith("admitted: the verified queue builds it into a batch onto `main`")
+    _git(world.origin, "update-ref", "refs/heads/main", h1)
+    got = q.status(loop=True)
+    assert (got[1].state, got[1].why) == ("queued", "landed: its head is on `main`") and got[2].state == "ready"
+
+
 def test_status_judges_a_chain_of_contained_prs_each_after_what_it_contains(world):
     """C contains B contains A, and A conflicts with `main`: B waits naming A, and C waits too, numbered below both so a judgment
     in number order would have called it admitted."""
@@ -1295,7 +1309,7 @@ def _based_on(world: World, n: int, base: str, branch: str = "") -> None:
     world.gh.prs[n] = dataclasses.replace(world.gh.prs[n], base=base, branch=branch or f"lane-{n}/work")
 
 
-def test_status_lists_a_marked_pr_based_on_another_branch_as_waiting_and_drive_still_admits_only_main_based_ones(world):
+def test_status_lists_a_marked_pr_based_on_another_branch_as_waiting_and_the_queue_still_admits_only_main_based_ones(world):
     """A PR marked ready while based on another PR's branch isn't invisible to `status` until its parent lands and someone
     retargets it."""
     parent = world.change({"x.txt": "x = 1\n"})
@@ -1316,7 +1330,7 @@ def test_status_lists_a_marked_pr_based_on_another_branch_as_waiting_and_drive_s
     assert [m.pr for m in members] == [5] and set(entries) == {5}
 
 
-def test_ready_marks_a_pr_based_on_another_prs_branch_and_says_drive_wont_see_it(world, capsys):
+def test_ready_marks_a_pr_based_on_another_prs_branch_and_says_the_queue_wont_see_it(world, capsys):
     from research.queue import MarkOnly, StoreLabels, ready
 
     world.with_store_remote()
@@ -1326,8 +1340,8 @@ def test_ready_marks_a_pr_based_on_another_prs_branch_and_says_drive_wont_see_it
     world.gh.put(6, child := world.change({"c.txt": "stacked\n"}, base=parent), ready=False)
     _based_on(world, 6, "lane-5/parent")
     assert ready(world.gh, world.store, 6, "lane-6", MarkOnly()) == 0
-    note = ("#6 is based on lane-5/parent (#5's head), not main: drive won't see it until #5 lands, one stack level per landing. "
-            "Retarget it to main (drive orders stacked PRs itself: a PR containing another waits for it)")
+    note = ("#6 is based on lane-5/parent (#5's head), not main: the verified queue won't see it until #5 lands, one stack level per landing. "
+            "Retarget it to main (the queue orders stacked PRs itself: a PR containing another waits for it)")
     assert note in capsys.readouterr().err
     assert StoreLabels(world.store, log=world.logs.append).ready(6, child) is True
 
@@ -1336,7 +1350,7 @@ def test_ready_marks_a_pr_based_on_another_prs_branch_and_says_drive_wont_see_it
     out = capsys.readouterr()
     got = json.loads(out.out)
     assert got["pr"] == 6 and got["head"] == child and got["base"] == "some/branch" and got["exit"] == 0
-    assert got["warning"].startswith("#6 is based on some/branch, not main: drive won't see it until it is. Retarget it to main")
+    assert got["warning"].startswith("#6 is based on some/branch, not main: the verified queue won't see it until it is. Retarget it to main")
     assert "marked on lane-6's word" in out.err
 
     assert ready(world.gh, world.store, 5, "lane-5", MarkOnly()) == 0
@@ -1862,7 +1876,7 @@ def test_status_merges_each_head_onto_main_once_until_main_or_the_clones_head_mo
         assert sorted(merged) == ([] if again else sorted([h1, h2]))
 
 
-def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypatch, capsys):
+def test_status_on_any_vm_applies_the_rules_cutoff_as_the_loop_does(world, monkeypatch, capsys):
     """`research queue status` on any VM, run without `--marked-after`, doesn't list as admitted old marks drive, with its
     cutoff, never takes.  The cutoff is `marked_after` in the rules on `main`, and a PR whose mark it ignores says so, so its
     owner re-marks it or closes it rather than it sitting unseen."""
@@ -2007,7 +2021,7 @@ def test_an_ejection_naming_a_head_refuses_once_its_owner_pushed_another(world):
 def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_so_when_no_one_was_told(world, monkeypatch, capsys):
     """A hand eject's notice isn't only a handoff note on the ejecting VM, which syncs no notes, and the eject doesn't log that
     it told the owner when it didn't."""
-    import research.drive as D
+    import research.landing as D
     import research.queue as Qm
 
     cfg = world.tmp / "store.toml"
@@ -2030,7 +2044,7 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
     assert research_main(argv) == 0
     ((text, to, sender),) = posts
     assert (to, sender) == (("@ci", "@lane-1"), "ci")
-    assert text.startswith(f"@ci @lane-1 queue: #1 at {head[:8]} is ejected from `next` by ci: breaks suite `verity`")
+    assert text.startswith(f"@ci @lane-1 queue: #1 at {head[:8]} is ejected by ci: breaks suite `verity`")
     ok[0] = False
     assert research_main(argv) == 1
     err = capsys.readouterr().err
@@ -2038,10 +2052,10 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
     assert "research msg send --as HANDLE --thread" in err and "--to @ci @lane-1" in err
 
 
-def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, capsys):
-    """GitHub's rulesets let only drive's App move `main` and `next`, yet don't stop verity-agents[bot] force-pushing `next` from a
-    VM's `research queue eject` that syncs. Off drive an eject only withdraws the mark; sync refuses."""
-    import research.drive as D
+def test_an_eject_off_the_control_pod_only_withdraws_the_mark(world, monkeypatch, capsys):
+    """GitHub's rulesets don't stop verity-agents[bot] pushing a branch from a VM's `research queue eject`: off the control pod
+    an eject only withdraws the mark, and moves no branch."""
+    import research.landing as D
     import research.queue as Qm
 
     monkeypatch.delenv("RESEARCH_DRIVE")
@@ -2050,15 +2064,13 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     base = ["--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
             "--store", str(world.tmp / "queue-store")]
-    for verb in ("sync",):
-        assert research_main(["queue", verb, *base]) == 1
-        assert f"/data/infra/drive.sh queue {verb}" in capsys.readouterr().err
+
     def refs() -> str:
         return _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
 
     before = refs()
     research_main(["queue", "eject", "1", "--reason", "x", "--by", "ci", *base])
-    assert refs() == before and "drive's next tick rebuilds `next` without it" in capsys.readouterr().out
+    assert refs() == before and "the verified queue builds no candidate of it until it is marked again" in capsys.readouterr().out
 
 
 def test_a_ready_mark_written_after_an_ejection_re_admits_the_same_head(world):
@@ -2751,7 +2763,7 @@ def test_the_preflights_fetch_keeps_what_it_fetched_in_this_machines_store_for_t
 
 
 def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_and_the_pr_that_touched_them(world, capsys):
-    """A conflict with a PR already on `next` is found at mark time, not only by drive's sync, which would take the PR off
+    """A conflict with a PR already on `next` is found at mark time, not only by the sync, which would take the PR off
     `next`."""
     from research.queue import MarkOnly, StoreLabels, ready
 
@@ -2981,8 +2993,8 @@ def test_the_preflight_prints_what_a_warn_gate_at_main_says_as_a_warning_and_tak
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
     assert [s for s in world.logs if "warning" in s] == [
         f"research queue: preflight: warning: #2 at {h2[:12]}: the warn gate gates/g.py at `main` {main[:12]}: touches bad.txt; "
-        "delete bad.txt (`python3 gates/g.py origin/main HEAD` in the branch runs it). A warn gate refuses nothing: drive lands "
-        "the PR and tells its owner, who fixes it in their next PR"], world.logs
+        "delete bad.txt (`python3 gates/g.py origin/main HEAD` in the branch runs it). A warn gate refuses nothing: the PR lands, "
+        "and its owner fixes what it says in their next PR"], world.logs
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
@@ -3010,7 +3022,7 @@ def test_the_preflight_refuses_what_the_sync_holds_a_marked_pr_waiting_on_one_it
     world.gh.put(4, four := world.change({"z.txt": "z\n"}, base=five), ready=False)
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=_preflight(world)) == 1
     err = capsys.readouterr().err
-    assert (f"it contains #5's head {five[:12]}, and #5 isn't admitted (contains #6, which isn't admitted), so drive holds "
+    assert (f"it contains #5's head {five[:12]}, and #5 isn't admitted (contains #6, which isn't admitted), so the queue holds "
             f"this PR behind it") in err and "#6's head" not in err
     assert StoreLabels(world.store, log=world.logs.append).ready(4, four) is False
     world.gh.ready |= {(5, five), (4, four)}                                                  # as the sync judges it
@@ -3083,7 +3095,7 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
     pre = _preflight(world)
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
     err = capsys.readouterr().err
-    assert (f"it contains #5's head {parent[:12]}, and #5 isn't admitted (not marked ready at {parent[:8]}), so drive holds "
+    assert (f"it contains #5's head {parent[:12]}, and #5 isn't admitted (not marked ready at {parent[:8]}), so the queue holds "
             f"this PR behind it: mark #5 ready first, so it lands first, or drop #5's commits from this branch (if this PR "
             f"carries #5's change, #5's owner withdraws its mark: `research data label pr:5@{parent[:12]} ready false "
             f"--by OWNER`)") in err

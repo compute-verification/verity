@@ -16,7 +16,7 @@ import research.merge as M
 import research.queue as Q
 import research.vqueue_loop as L
 from research import vqueue, vqueue_slim
-from research.drive import PREFLIGHT
+from research.landing import PREFLIGHT
 from research.executor import GRAPH_V2, Executor, FileTransport
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, Red, Rerun, Retry,
                              Ring, Snapshot, Verdict)
@@ -200,7 +200,7 @@ def test_a_candidate_that_passed_fast_forwards_main_to_itself_and_its_branch_is_
     env.result(keys["pytest:a"], "pytest:a", "pass")
     assert loop.tick() == []                                    # pytest:b pending
     env.result(keys["pytest:b"], "pytest:b", "pass")
-    assert _acts(loop.tick()) == ["advance", "on_main"]                     # drive's steps once it is on `main`, logged after
+    assert _acts(loop.tick()) == ["advance", "on_main"]                     # the steps once its members are on `main`, logged after
     assert env.main() == sha and _git(env.o.origin, "rev-parse", f"{sha}^1^1") == main      # fast-forwarded to it, only
     (drop,) = loop.tick()
     assert drop["action"] == "drop" and drop["outcome"] == {"members": [1, 2], "heads": built["heads"], "state": PASS,
@@ -412,7 +412,7 @@ def test_a_failure_at_its_bases_key_reds_the_base_once_and_the_candidate_lands_p
     env.result("sha512:red", "pytest:r", "fail")
     assert loop.tick() == []                                            # `pytest:a` still runs: the fail hasn't ended
     env.result(keys["pytest:a"], "pytest:a", "pass")
-    moved = [] if shadow else ["on_main"]                               # drive's steps after a real advance only
+    moved = [] if shadow else ["on_main"]                               # the steps after a real advance only
     told, advance, *on_main, landed = loop.tick()                       # nobody blamed: `main`'s reds only shrink
     assert _acts(on_main) == moved
     assert (told["action"], told["base"], told["failed"], told["to"], told["shadow"]) == ("red", main, failed, ["@ci"], shadow)
@@ -452,7 +452,7 @@ def test_a_shadow_under_the_policy_itself_builds_on_the_main_it_advanced_to_unti
     (on,) = loop.tick()
     assert (on["action"], on["members"], on["base"], on["main"], on["origin_main"]) == ("build", [2], built["sha"],
                                                                                          built["sha"], main), on
-    moved = env.o.change({"z.txt": "z\n"})                          # drive lands something else on origin's `main`
+    moved = env.o.change({"z.txt": "z\n"})                          # something else lands on origin's `main`
     _git(env.o.origin, "update-ref", "refs/heads/main", moved)
     dropped, again = loop.tick()
     assert (dropped["action"], dropped["sha"], dropped["main"]) == ("drop", on["sha"], moved) and "not on main" in dropped["why"]
@@ -466,7 +466,7 @@ def test_an_action_that_fails_stops_the_tick_with_its_error_logged_and_a_torn_li
     env.log.write_text('{"at": "2030-03-17T17:46:40Z", "tick": 4, "act')        # a crash mid-write
     loop = env.loop(lambda s: [Eject(1, one, "its change fails the check"), Build((1,), s.main, 0)])
     loop.world.withdraw = lambda n, h, why: World.withdraw(loop.world, n, h, why)   # the real one, under the clone's lock
-    held = Q._lock(loop.world.repo)                                 # a drive tick in the clone
+    held = Q._lock(loop.world.repo)                                 # another queue command in the clone
     try:
         (rec,) = loop.tick()
     finally:
@@ -484,7 +484,7 @@ def test_a_build_whose_enqueue_failed_is_logged_stops_the_tick_and_is_enqueued_b
     env.put(1, {"a.txt": "1\n"})
     env.put(2, {"b.txt": "2\n"})
     loop = env.loop(lambda s: policy(s) + ([] if s.candidates else [Build((2,), s.main, 0)]), slim=Slim() if slim else None)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     real, calls = loop.world.enqueue, []
 
     def enqueue(sha: str, priority: int) -> None:
@@ -847,9 +847,9 @@ def test_a_pr_the_priority_file_names_ahead_of_prs_its_head_holds_lands_them_wit
 
 
 def test_a_head_landed_on_the_old_paths_checked_holds_its_holders_back_from_nothing_but_still_lands_first(env):
-    """`checked`, frozen since the switch, holds heads that landed under drive's rules and reach `main` only in an aggregate
-    of it.  A PR holding one doesn't wait for the PR that landed it, though that PR moved on unmarked since, but still goes
-    after an open PR whose landed head it holds, and an aggregate the priority file ranks lands those with it.  Without
+    """`checked`, frozen since the switch, holds heads that landed there before the verified queue and reach `main` only in an
+    aggregate of it.  A PR holding one doesn't wait for the PR that landed it, though that PR moved on unmarked since, but still
+    goes after an open PR whose landed head it holds, and an aggregate the priority file ranks lands those with it.  Without
     `checked` it waits; once `main` holds `checked`, those heads are on `main`."""
     one, four = env.o.change({"a.txt": "1\n"}), env.o.change({"d.txt": "4\n"})
     _git(env.o.dev, "checkout", "-q", "--detach", "origin/main")
@@ -877,7 +877,7 @@ def test_a_head_landed_on_the_old_paths_checked_holds_its_holders_back_from_noth
     assert [r.number for r in w.ready(env.main())] == [2]
 
 
-def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
+def test_each_tick_reads_the_labels_afresh(env):
     made: list[Labels] = []
     loop = env.loop(lambda s: [])
     loop.world.labels_at = lambda: made.append(Labels(env.o.gh)) or made[-1]
@@ -1070,7 +1070,7 @@ def test_a_test_graph2_says_flaked_rings_its_file_s_owner_once_a_key_and_the_sha
     env.result(z, "pytest:z", "pass")                               # what a rerun replaced it with
     env.graph2_script(loop, {"state": "pass", "check": f"ready:{sha}",
                              "flaky": [{"task": "pytest:z", "key": z, "inputs": ["z.txt"], "reads": []}]})
-    loop.world.driver()._reg = {"handles": [{"handle": "zz", "owns": ["tools/zz/tests/test_z.py"]}]}
+    loop.world.landing()._reg = {"handles": [{"handle": "zz", "owns": ["tools/zz/tests/test_z.py"]}]}
     (flaky,) = loop.tick()
     assert (flaky["action"], flaky["key"], flaky["tests"], flaky["to"], flaky["done"]) == (
         "flaky", z, ["tests/test_z.py::test_once"], ["@zz", "@ci"], not shadow), flaky
@@ -1346,7 +1346,7 @@ def test_a_failure_waits_for_its_task_s_result_at_the_base_whatever_else_there_e
 
 
 def test_a_graph_lacking_a_job_main_waits_for_is_list_failed_marked_with_it_so_it_is_retried_and_rung(env):
-    """drive's `executor = "on"` path promotes nothing whose graph lacks a job `main` waits for (`drive.gating`): a candidate
+    """`main` takes nothing whose graph lacks a job `main` waits for (`landing.gating`): a candidate
     whose every task passed is list-failed then, its mark naming the jobs, and the policy retries and rings it."""
     env.gates = ["pytest", "lean-audit"]
     env.put(1, {"a.txt": "1\n"})
@@ -1477,9 +1477,9 @@ reason = "red until its fix lands"
 '''
 
 
-def test_a_failure_an_allowance_of_the_candidate_s_policy_covers_is_passed_as_drive_reads_it_until_it_expires(env):
-    """drive's `executor = "on"` path takes a failed task whose every red record an unexpired allowance of the checked commit's
-    policy covers as passed (`Driver._task_units`, `Driver._task_allowed`), and so does the verdict."""
+def test_a_failure_an_allowance_of_the_candidate_s_policy_covers_is_passed_until_it_expires(env):
+    """A failed task whose every red record an unexpired allowance of the checked commit's policy covers is passed
+    (`Landing._task_units`, `Landing._task_allowed`), and so is the verdict."""
     env.put(1, {"a.txt": "1\n", "tools/verity/check/policy.toml": ALLOWED})
     loop = env.loop(vqueue.decide)
     (built,) = loop.tick()
@@ -1495,7 +1495,7 @@ def test_a_failure_an_allowance_of_the_candidate_s_policy_covers_is_passed_as_dr
     assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and env.main() == sha
 
 
-def test_an_advance_is_logged_once_pushed_and_drive_s_steps_after_it_are_a_step_of_their_own_run_again_until_done(env):
+def test_an_advance_is_logged_once_pushed_and_the_steps_after_it_are_a_step_of_their_own_run_again_until_done(env):
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy)
     (built,) = loop.tick()
@@ -1551,16 +1551,16 @@ class Slim:
         self.judged: list = []
         self.launching, self.registered = False, {}
 
-    def start(self, driver, sha: str, base: str) -> dict:
+    def start(self, landing, sha: str, base: str) -> dict:
         if sha == base:
-            self.below.append((driver, sha))
+            self.below.append((landing, sha))
             return {"ids": [f"main-{len(self.below)}"], "tip": sha, "base": base}
-        self.started.append((driver, sha, base))
+        self.started.append((landing, sha, base))
         if self.launching:
             return {"ids": [], "launch": {"dir": f"train-{len(self.started)}", "pid": 1}, "tip": sha, "base": base}
         return {"ids": [f"run-{len(self.started)}"], "tip": sha, "base": base}
 
-    def judge(self, driver, rec: dict | None) -> Verdict:
+    def judge(self, landing, rec: dict | None) -> Verdict:
         self.judged.append(rec)
         if rec is None:
             return Verdict(INFRA, (), (vqueue.Failed("the run beside its check registered no run", ":no run", frozenset()),))
@@ -1602,7 +1602,7 @@ def test_the_run_beside_a_check_starts_with_its_build_its_record_is_kept_and_bot
     env.put(1, {"a.txt": "1\n"})
     slim = Slim()
     loop = env.loop(vqueue.decide, slim=slim)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     below, built, started = loop.tick()
     sha = built["sha"]
     assert (below["action"], below["sha"], below["why"], below["record"]) == (
@@ -1611,7 +1611,7 @@ def test_the_run_beside_a_check_starts_with_its_build_its_record_is_kept_and_bot
         "slim", sha, "started", {"ids": ["run-1"], "tip": sha, "base": main})
     keys = env.listed(sha, {"pytest:a": ["a.txt"]})
     env.result(keys["pytest:a"], "pytest:a", "pass")
-    assert loop.tick() == [] and slim.started == [("drive", sha, main)]      # graph2's passed, the run beside still runs
+    assert loop.tick() == [] and slim.started == [("landing", sha, main)]      # graph2's passed, the run beside still runs
     slim.verdicts["run-1"] = INFRA
     judged, retry, again = loop.tick()
     assert (judged["action"], judged["record"]["verdict"], retry["action"]) == ("slim", INFRA, "retry")
@@ -1623,8 +1623,8 @@ def test_the_run_beside_a_check_starts_with_its_build_its_record_is_kept_and_bot
         PASS, "advance", "on_main", "drop") and env.main() == sha
     assert len(slim.started) == 2 and loop.tick() == []             # `main`'s run beside is the candidate's
     started_again = env.loop(vqueue.decide, clone="again", slim=slim)         # a restart reads its records from the log
-    started_again.world.slim_driver = lambda: "drive"
-    assert started_again.tick() == [] and len(slim.started) == 2 and slim.below == [("drive", main)]
+    started_again.world.beside = lambda: "landing"
+    assert started_again.tick() == [] and len(slim.started) == 2 and slim.below == [("landing", main)]
 
 
 def test_the_run_beside_starts_with_each_candidate_s_build_up_to_depth_once_across_a_restart_and_a_dry_run_starts_none(env):
@@ -1632,10 +1632,10 @@ def test_the_run_beside_starts_with_each_candidate_s_build_up_to_depth_once_acro
     for n in range(1, 5):
         env.put(n, {f"{n}.txt": f"{n}\n"})
     slim = Slim()
-    dry = env.loop(vqueue.decide, slim=slim, batch=1, depth=3, dry_run=True)    # its world has no Driver: a start raises
+    dry = env.loop(vqueue.decide, slim=slim, batch=1, depth=3, dry_run=True)    # its world has no Landing: a start raises
     assert dry.tick() == [] and slim.started == [] and any(x.startswith("would build") for x in env.out)
     loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=3)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     built = []
     for i in range(3):                                              # each with its check pending, the one below's too
         *below, build, started = loop.tick()
@@ -1644,10 +1644,10 @@ def test_the_run_beside_starts_with_each_candidate_s_build_up_to_depth_once_acro
         assert [(b["sha"], b["why"]) for b in below] == ([(main, "started beside `main`")] if i == 0 else [])
         built.append(build)
     assert [b["base"] for b in built] == [main, built[0]["sha"], built[1]["sha"]]
-    assert loop.tick() == [] and slim.started == [("drive", b["sha"], b["base"]) for b in built]     # three at depth 3
+    assert loop.tick() == [] and slim.started == [("landing", b["sha"], b["base"]) for b in built]     # three at depth 3
     again = env.loop(vqueue.decide, clone="again", slim=slim, batch=1, depth=3)   # a restart reads their records from the log
-    again.world.slim_driver = lambda: "drive"
-    assert again.tick() == [] and len(slim.started) == 3 and slim.below == [("drive", main)]
+    again.world.beside = lambda: "landing"
+    assert again.tick() == [] and len(slim.started) == 3 and slim.below == [("landing", main)]
 
 
 def test_a_candidate_on_main_s_chain_the_log_holds_no_start_of_starts_its_run_beside_once_and_one_off_it_none(env):
@@ -1657,23 +1657,23 @@ def test_a_candidate_on_main_s_chain_the_log_holds_no_start_of_starts_its_run_be
     env.put(2, {"b.txt": "2\n"})
     slim = Slim()
     plain, loop = env.loop(vqueue.decide, batch=1), env.loop(vqueue.decide, slim=slim, batch=1)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     (old,) = plain.tick()
     _git(env.o.origin, "update-ref", "refs/heads/main", env.o.change({"m.txt": "m\n"}))     # `main` moved past its base
     main = env.main()
     below, drop, one, started = loop.tick()
     assert (drop["action"], drop["sha"], one["action"], one["base"], started["sha"]) == ("drop", old["sha"], "build", main,
                                                                                            one["sha"])
-    assert slim.started == [("drive", one["sha"], main)] and env.cancelled == [] and below["sha"] == main
+    assert slim.started == [("landing", one["sha"], main)] and env.cancelled == [] and below["sha"] == main
     (two,) = plain.tick()                                           # on `one`, with no run beside its check
     assert two["base"] == one["sha"]
     judged = len(slim.judged)
-    dry = env.loop(vqueue.decide, slim=slim, batch=1, dry_run=True)        # its world has no Driver: a start or judge raises
+    dry = env.loop(vqueue.decide, slim=slim, batch=1, dry_run=True)        # its world has no Landing: a start or judge raises
     assert dry.tick() == [] and len(slim.started) == 1 and len(slim.judged) == judged
     assert "beside: pending" in "\n".join(env.out)
     (started,) = loop.tick()
     assert (started["action"], started["sha"], started["why"]) == ("slim", two["sha"], "started")
-    assert slim.started[-1] == ("drive", two["sha"], one["sha"]) and loop.tick() == [] and len(slim.started) == 2
+    assert slim.started[-1] == ("landing", two["sha"], one["sha"]) and loop.tick() == [] and len(slim.started) == 2
 
 
 def test_a_failed_candidate_s_run_beside_and_those_of_the_candidates_above_it_are_cancelled_with_their_drops(env):
@@ -1681,7 +1681,7 @@ def test_a_failed_candidate_s_run_beside_and_those_of_the_candidates_above_it_ar
     env.put(2, {"b.txt": "2\n"})
     slim = Slim()
     loop = env.loop(vqueue.decide, slim=slim, batch=1)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     _, one, _ = loop.tick()
     two, _ = loop.tick()
     keys = env.listed(one["sha"], {"pytest:a": ["a.txt"]})
@@ -1702,7 +1702,7 @@ def test_a_run_beside_still_launching_when_its_candidate_is_dropped_is_cancelled
     slim = Slim()
     slim.launching = True
     loop = env.loop(vqueue.decide, slim=slim)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     _, built, started = loop.tick()
     sha = built["sha"]
     env.o.gh.ready.discard((1, built["heads"][0]))                  # its ready mark withdrawn: dropped
@@ -1717,7 +1717,7 @@ def test_a_run_beside_still_launching_when_its_candidate_is_dropped_is_cancelled
                              if registered else [])
     assert settled.get("beside_cancelled") == (registered or None) and loop.tick() == []
     again = env.loop(vqueue.decide, clone="again", slim=slim)
-    again.world.slim_driver = lambda: "drive"
+    again.world.beside = lambda: "landing"
     assert again.tick() == [] and len(slim.started) == 1                                          # settled, once
 
 
@@ -1725,7 +1725,7 @@ def test_a_dropped_candidate_s_run_beside_its_check_is_cancelled_while_it_runs_a
     env.put(1, {"a.txt": "1\n"})
     slim = Slim()
     loop = env.loop(vqueue.decide, slim=slim)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     _, built, started = loop.tick()
     env.o.gh.ready.discard((1, built["heads"][0]))                  # its ready mark withdrawn: dropped
     (drop,) = loop.tick()
@@ -1746,7 +1746,7 @@ def test_a_candidate_older_than_the_log_s_window_keeps_its_tries_first_enqueue_r
     env.put(1, {"a.txt": "1\n"})
     slim, seen = Slim(), []
     loop = env.loop(lambda s: seen.append(s) or vqueue.decide(s), slim=slim, pending_s=200 * 3600)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     _, built, started = loop.tick()
     keys = env.listed(sha := built["sha"], {"pytest:a": ["a.txt"]})
     env.result(keys["pytest:a"], "pytest:a", "error", infra=True)
@@ -1850,7 +1850,7 @@ def test_a_fail_whose_every_failure_is_inherited_lands_once_the_run_beside_it_pa
     slim = Slim()
     slim.combine = vqueue_slim.combine                              # it keeps no `ended`: the loop carries it
     loop = env.loop(vqueue.decide, slim=slim)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     _, built, _ = loop.tick()
     red = {"pytest:r": "sha512:red"}
     env.listed(main, {"pytest:r": ["red.txt"]}, keys=red)
@@ -1887,7 +1887,7 @@ def test_a_red_main_on_a_step_read_whole_is_inherited_from_the_run_beside_main_a
         env.put(n, {f"{n}.txt": f"{n}\n"})
     slim = Slim()
     loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=1)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     logged = _ticks(env, slim, loop, 3, "preflight-lints")
     assert _acts(logged) == ["slim", "build", "slim", "slim"] and logged[0]["why"] == "started beside `main`"
     assert logged[3]["record"]["verdict"]["state"] == FAIL and env.main() == main     # waiting for the run beside `main`
@@ -1895,7 +1895,7 @@ def test_a_red_main_on_a_step_read_whole_is_inherited_from_the_run_beside_main_a
     logged = _ticks(env, slim, loop, 8, "preflight-lints")
     assert _acts(logged).count("advance") == 3 and env.main() == [r for r in logged if r["action"] == "advance"][-1]["sha"]
     assert [r["action"] for r in logged if r["action"] in ("red", "eject", "rerun", "retry")] == ["red"]
-    assert len(env.posts) == 1 and env.withdrawn == [] and slim.below == [("drive", main)]
+    assert len(env.posts) == 1 and env.withdrawn == [] and slim.below == [("landing", main)]
     assert sorted(m for r in logged if r["action"] == "advance" for m in r["members"]) == [1, 2, 3]
 
 
@@ -1906,7 +1906,7 @@ def test_a_candidate_s_own_failure_of_a_step_read_whole_that_the_run_beside_main
     slim = Slim()
     slim.inputs = frozenset({"*.txt"})
     loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=1)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     slim.end("main-1")
     logged = _ticks(env, slim, loop, 2, "preflight-lints")
     assert _acts(logged) == ["slim", "build", "slim", "slim", "slim", "eject", "drop"]
@@ -1921,13 +1921,13 @@ def test_a_fail_waits_for_the_run_beside_main_while_it_runs_but_no_longer_than_p
     slim = Slim()
     slim.inputs = frozenset({"*.txt"})
     loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=1, pending_s=3600)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     logged = _ticks(env, slim, loop, 2, "preflight-lints")
     assert _acts(logged) == ["slim", "build", "slim", "slim"]
     env.clock += 3600
     assert loop.tick() == [] and env.withdrawn == []
     env.clock += 1
-    assert _acts(loop.tick()) == ["eject", "drop"] and len(env.withdrawn) == 1 and slim.below == [("drive", env.main())]
+    assert _acts(loop.tick()) == ["eject", "drop"] and len(env.withdrawn) == 1 and slim.below == [("landing", env.main())]
 
 
 @pytest.mark.parametrize("why", ["graph2 fails it too", "the run beside `main` ended in infra"])
@@ -1938,7 +1938,7 @@ def test_a_fail_waits_for_no_run_beside_main_when_it_fails_by_its_own_or_that_ru
     slim = Slim()
     slim.inputs = frozenset({"*.txt"})
     loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=1)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     if why == "graph2 fails it too":
         logged = loop.tick()
         keys = env.listed(logged[1]["sha"], {"pytest:x": ["1.txt"]})
@@ -1957,10 +1957,10 @@ def test_the_run_beside_main_starts_once_a_main_again_once_after_infra_and_with_
     dry = env.loop(vqueue.decide, slim=slim, dry_run=True)
     assert dry.tick() == [] and slim.below == []
     loop = env.loop(vqueue.decide, slim=slim)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     (started,) = loop.tick()
     assert (started["sha"], started["base"], started["why"], slim.below) == (main, main, "started beside `main`",
-                                                                           [("drive", main)])
+                                                                           [("landing", main)])
     assert loop.tick() == []
     slim.verdicts["main-1"] = INFRA
     judged, again = loop.tick()
@@ -1968,9 +1968,9 @@ def test_the_run_beside_main_starts_once_a_main_again_once_after_infra_and_with_
                                                                       ["main-2"])
     slim.verdicts["main-2"] = INFRA
     assert _acts(loop.tick()) == ["slim"] and loop.tick() == [] and len(slim.below) == 2
-    _git(env.o.origin, "update-ref", "refs/heads/main", env.o.change({"m.txt": "m\n"}))     # `main` moved by drive
+    _git(env.o.origin, "update-ref", "refs/heads/main", env.o.change({"m.txt": "m\n"}))     # `main` moved by another
     (moved,) = loop.tick()
-    assert (moved["sha"], moved["why"], slim.below[-1]) == (env.main(), "started beside `main`", ("drive", env.main()))
+    assert (moved["sha"], moved["why"], slim.below[-1]) == (env.main(), "started beside `main`", ("landing", env.main()))
     assert env.loop(vqueue.decide, clone="again", slim=slim, dry_run=True).tick() == [] and len(slim.below) == 3
 
 

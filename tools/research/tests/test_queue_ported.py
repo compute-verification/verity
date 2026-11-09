@@ -306,7 +306,7 @@ def test_a_codemod_that_fails_refuses_the_merge(world, tmp_path):
 
 @pytest.mark.parametrize("then", ["", "if Path('pkg/New.lean').exists():\n    sys.exit(1)\n"], ids=["ports", "fails"])
 def test_the_preflight_judges_the_merge_with_its_lean_ported_as_the_sync_ports_it(world, tmp_path, capsys, then):
-    """A head marked after the port is checked, its Lean build included, on the tree drive's sync would merge, and a codemod
+    """A head marked after the port is checked, its Lean build included, on the tree the sync would merge, and a codemod
     that fails refuses the mark with its reason."""
     from research.queue import MarkOnly, StoreLabels, ready
 

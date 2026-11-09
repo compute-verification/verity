@@ -462,8 +462,8 @@ def _under_run(path: str) -> str:
 
 #: the Lean check's report among a check's run files (`lean_audit.py`): its `regenerated` names each package's regenerated lock
 AUDIT = "lean-audit/audit.json"
-#: the files beside the locks that drive's lock run repairs (`lean_audit.py --bookkeeping warn`: its `UNREAD_CAPS` and
-#: `CAPS_TEST`), which the report's `repaired` names by their repository paths and drive commits with the locks
+#: the files beside the locks that a Lean check repairs (`lean_audit.py --bookkeeping warn`: its `UNREAD_CAPS` and
+#: `CAPS_TEST`), which the report's `repaired` names by their repository paths and a lock commit carries with the locks
 REPAIRED = frozenset({"tools/verity/lean/unread-caps.json", "tests/test_lean_packages.py"})
 
 
@@ -525,45 +525,8 @@ def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool
         return None
 
 
-def live_records(rid: str, fetch=fetch_run) -> dict[str, tuple[str, Path | None]] | None:
-    """`regenerated_records` of a check whose files aren't in the store yet (a lock run drive commits the records of: `Driver._locks`),
-    read from its run dir on its node with ``fetch`` (`fetch_run`), each record's sha256 taken of the bytes fetched; None when
-    its run can't be read or holds no report of its Lean check.  `Unreadable` when the report can't be parsed, or names a
-    record the run dir doesn't hold."""
-    if (got := fetch(rid, [AUDIT])) is None:
-        return None
-    try:
-        audit = json.loads((got[0] / AUDIT).read_text())
-    except OSError:
-        return None
-    except ValueError as e:
-        raise Unreadable(f"{rid}'s {AUDIT} on its node can't be parsed ({e})") from e
-    if not (want := _regenerated_in(rid, audit)):
-        return {}
-    got = fetch(rid, sorted(set(want.values())))
-    if missing := sorted(pkg for pkg, p in want.items() if got is None or not (got[0] / p).is_file()):
-        raise Unreadable(f"{rid}'s {AUDIT} says it regenerated {', '.join(missing)}'s lock, which can't be fetched from its "
-                         "run dir on its node")
-    return {pkg: (hashlib.sha256((got[0] / p).read_bytes()).hexdigest(), got[0] / p) for pkg, p in want.items()}
 
 
-def bookkeeping_warnings(store, rid: str, fetch=fetch_run) -> list[str]:
-    """The warnings of lock run ``rid``'s bookkeeping repairs (its Lean report's `bookkeeping`), read from its files in the
-    store, else from its run dir on its node (``fetch``); empty when it has none or its report can't be read: drive tells
-    them and puts them in the lock commit, and nothing waits on them."""
-    try:
-        audit = None
-        if (art := _run_files(store, rid)) and AUDIT in {f["path"] for f in store.listing(art)}:
-            with tempfile.TemporaryDirectory() as d:
-                audit = json.loads((store.fetch(art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
-        elif (got := fetch(rid, [AUDIT])) is not None:
-            audit = json.loads((got[0] / AUDIT).read_text())
-        warned = audit.get("bookkeeping") if isinstance(audit, dict) else None
-        return [str(w) for w in warned] if isinstance(warned, list) else []
-    except Exception as e:  # noqa: BLE001  (warnings only: no report, no warnings)
-        print(f"research merge: lock run {rid}'s bookkeeping warnings unread ({type(e).__name__}: {e}); its lock commit "
-              f"lists none", file=sys.stderr)
-        return []
 
 
 def _blob_sha256(repo: Path, commit: str, path: str) -> str:
@@ -571,27 +534,14 @@ def _blob_sha256(repo: Path, commit: str, path: str) -> str:
     return hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else ""
 
 
-def _ran_on(store, rid: str, commit: str, fetch) -> bool:
-    """Whether run ``rid`` checked ``commit``: its attempt's clean source in the store, else its run record's `tree_sha`."""
-    rows = store.index.sql("SELECT source_commit, source_dirty FROM attempts WHERE id = ?", (rid,))
-    if rows:
-        return rows[0][0] == commit and not rows[0][1]
-    got = fetch(rid, []) if fetch is not None else None
-    return got is not None and got[1].get("tree_sha") == commit
 
 
 def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: frozenset[str], command: tuple[str, ...],
-                       maps=None, deferred: str | None = None, fetch=None) -> str | None:
+                       maps=None) -> str | None:
     """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
     regenerated, one for each package it regenerated, so the tree that lands is the one that check audited.  A file of
-    `REPAIRED` it changes is held the same way, to the copy the lock run repaired (`--bookkeeping warn`).
-
-    ``deferred`` is the lock run drive commits ``commit`` for on the parent (`Driver._unvouched`), a check of lean-audit
-    alone, so no passing attempt of the whole check: it vouches when ``commit``'s `Checked:` trailer names it, it ran on the
-    parent, and its records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed
-    here, never digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard
-    never do."""
+    `REPAIRED` it changes is held the same way, to the copy the Lean check repaired (`--bookkeeping warn`)."""
     parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
     if len(parents) != 1:
         return None
@@ -601,18 +551,12 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
                                      commit).stdout.replace("\n", ",").split(",") if f.strip()}
     if not files or set(files) != said or not all(os.path.basename(f) == LOCK or f in REPAIRED for f in files):
         return None
-    if deferred is not None:
-        checked = re.findall(r"^Checked: (\S+)", _git(repo, "log", "-1", "--format=%B", commit).stdout, re.M)
-        ids = [deferred] if checked == [deferred] and _ran_on(store, deferred, parent, fetch) else []
-    else:
-        tree = _git(repo, "rev-parse", f"{parent}^{{tree}}").stdout.strip()
-        ids = passing(store, parent, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
+    tree = _git(repo, "rev-parse", f"{parent}^{{tree}}").stdout.strip()
+    ids = passing(store, parent, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
     lock = {f if f in REPAIRED else os.path.dirname(f) or ".": _blob_sha256(repo, commit, f) for f in files}
     for rid in ids:
         try:
             recs = regenerated_records(store, rid)
-            if recs is None and fetch is not None:
-                recs = live_records(rid, fetch)
         except Exception:  # noqa: BLE001  (`Unreadable`, or the store failing: nothing to vouch with)
             continue
         if recs and {(pkg or "."): sha for pkg, (sha, _) in recs.items()} == lock:
@@ -1461,7 +1405,7 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     open pull request uses.  Then the head branch of each pull request GitHub has as merged (its head on ``into``) or closed
     unmerged goes too, while it is still at that PR's head: never a fork's, one of `KEEP_BRANCHES`, one an open pull request
     uses as its head or base, a closed one's that is a lead's run branch (`RUN_BRANCH_RE`), or ``keep`` (the heads of PRs
-    drive closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`); GitHub
+    closed as stale or unlandable, which stay to be reopened: the queue state's `stale_closed`); GitHub
     keeps each one's commits under
     `refs/pull/N/head`.  Idempotent: what it closed is no longer open, and what it retargeted is based on ``into``.  Returns
     (closed, retargeted) PR numbers, ascending."""
@@ -1545,10 +1489,9 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     return [p["number"] for p in done], [p["number"] for p in moved]
 
 
-#: the branch drive's review landing fast-forwards when drive.toml's `land_into` names it, and `main` follows to each commit whose
-#: after-landing run passed every step on the merge gate (`drive.Driver._promote`)
+#: the old landing branch, frozen while drive.toml's `land_into` names it: the verified queue lands on `main`
 CHECKED = "checked"
-#: branches no sweep touches: the trunk, drive's landing branch, its train branch and its shadow
+#: branches no sweep touches: the trunk, the old landing and train branches, and the queue's shadow
 KEEP_BRANCHES = frozenset({"main", CHECKED, "next", "queue-shadow"})
 #: a lead's run branch (`cursor/verity-<lead>-XXXX`), which its agent pushes to again
 RUN_BRANCH_RE = re.compile(r"cursor/verity-[a-z0-9-]+-[0-9a-f]{4}")
@@ -1562,8 +1505,8 @@ def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: 
     """The branch sweep: delete each branch whose tip
     is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
-    run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
-    closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`).  At most
+    run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs
+    closed as stale or unlandable, which stay to be reopened: the queue state's `stale_closed`).  At most
     ``limit`` of each, the longest idle first, each
     logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
@@ -2024,8 +1967,8 @@ def spec_alert_lag(repo: Path, remote: str) -> str:
             "hasn't been sent")
 
 
-#: set by the control pod's drive.sh for all it runs with the verity-drive App's token: GitHub's rulesets "main is append-only"
-#: and "only drive moves main and next" let only that App move `main` and `next`; neither covers `checked`
+#: set on the control pod for the verified queue's loop, which runs with the verity-drive App's token: GitHub's rulesets "main
+#: is append-only" and "only drive moves main and next" let only that App move `main` and `next`; neither covers `checked`
 DRIVE_ENV = "RESEARCH_DRIVE"
 DRIVE_ONLY = ("main", "next", CHECKED)
 
@@ -2035,9 +1978,10 @@ def on_drive() -> bool:
 
 
 def off_drive(ref: str, verb: str) -> str:
-    """Why a push of ``ref`` from here is refused: only drive's App may move `main`, `checked` and `next`."""
-    return (f"`{ref}` is moved only by drive's App, and this isn't drive (no {DRIVE_ENV}=1): run it on the control pod, "
-            f"`/data/infra/drive.sh {verb}`")
+    """Why a push of ``ref`` from here is refused: only the verity-drive App, the verified queue's loop on the control pod,
+    may move `main`, `checked` and `next`."""
+    return (f"`{ref}` is moved only by the verified queue's loop on the control pod (with {DRIVE_ENV}=1), and this isn't it: "
+            f"mark the PR ready and let the queue land it (`{verb}` here pushes nothing)")
 
 
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:

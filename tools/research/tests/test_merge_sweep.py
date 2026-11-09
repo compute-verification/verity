@@ -161,7 +161,7 @@ def test_the_sweep_reads_the_remote_branch_not_the_checkout(tmp_path):
 
 
 def test_a_sweep_in_a_partial_clone_fetches_no_head_it_lacks_and_keeps_that_pr_open(tmp_path):
-    """drive.sh's code checkout is a `blob:none` clone of main alone: the heads of open PRs not on main aren't in it, and a lazy
+    """The control pod's code checkout is a `blob:none` clone of main alone: the heads of open PRs not on main aren't in it, and a lazy
     fetch of each (its whole history, with no negotiation, in a pack git never repacks there) filled the pod's disk.  The sweep
     closes what landed and retargets onto main as in a full clone, and keeps the rest open with no object fetched."""
     _repo, gh, tips, _merge = _world(tmp_path)
@@ -236,14 +236,14 @@ def _checked_c(tmp_path, monkeypatch, gh, repo):
     _git(repo, "checkout", "-q", "main")
 
 
-def test_a_merge_push_of_main_off_drive_is_refused_and_pushes_nothing(tmp_path, monkeypatch, capsys):
-    """GitHub's rulesets let only drive's App move `main`; the lander's push runs on the control pod (`drive.sh merge`)."""
+def test_a_merge_push_of_main_off_the_control_pod_is_refused_and_pushes_nothing(tmp_path, monkeypatch, capsys):
+    """GitHub's rulesets let only the verity-drive App, the verified queue's loop on the control pod, move `main`."""
     repo, gh, _tips, _merge = _world(tmp_path)
     _checked_c(tmp_path, monkeypatch, gh, repo)
     monkeypatch.delenv("RESEARCH_DRIVE")
     before = _git(repo, "ls-remote", "origin", "refs/heads/main")
     assert M.main(["C", "--push", "-m", "Merge train TC (c)"]) == 1
-    assert "/data/infra/drive.sh merge" in capsys.readouterr().err
+    assert "mark the PR ready and let the queue land it" in capsys.readouterr().err
     assert _git(repo, "ls-remote", "origin", "refs/heads/main") == before
 
 
@@ -280,7 +280,7 @@ def test_after_a_landing_the_declarations_command_starts_detached_on_the_commit(
     assert M.after_land(tmp_path, "mytools.decl:U", "abc", spawn=spawn) is None
     assert M.after_land(tmp_path, "nothere.decl:T", "abc", spawn=spawn) is None and len(started) == 1
     assert M.after_land(tmp_path, "mytools.decl:T", "abc", spawn=spawn, attempt="r20261019-010000-0001") == [
-        "python", "post.py", "--x", "abc", "--attempt", "r20261019-010000-0001"], "drive's landing names the check it landed on"
+        "python", "post.py", "--x", "abc", "--attempt", "r20261019-010000-0001"], "a landing names the check it landed on"
 
 
 def test_the_after_landing_command_runs_in_a_worktree_of_the_landed_commit_that_goes_when_it_ends(tmp_path):
@@ -377,9 +377,9 @@ def test_a_landing_pushed_another_way_gets_its_after_landing_steps_on_the_next_m
     assert M.main(["--sweep"]) == 0 and len(ran) == 5, "caught up once"
 
 
-def test_the_after_landing_command_gets_the_attempt_drive_landed_the_tip_on(tmp_path, monkeypatch):
-    """`post_train.py` would refuse every landing drive makes with deferred steps, since none has a passed check in the store
-    yet; drive's `runs` names the attempt of the tip it pushed, and `after_land` gets it.  A tip it doesn't name gets none."""
+def test_the_after_landing_command_gets_the_attempt_the_tip_landed_on(tmp_path, monkeypatch):
+    """`post_train.py` would refuse every landing made with deferred steps, since none has a passed check in the store yet;
+    the lander's `runs` names the attempt of the tip it pushed, and `after_land` gets it.  A tip it doesn't name gets none."""
     origin, repo = tmp_path / "origin.git", tmp_path / "repo"
     _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
     _git(tmp_path, "clone", "-q", str(origin), str(repo))
@@ -810,7 +810,7 @@ def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(t
 
 def test_the_sweep_deletes_the_head_branch_of_a_pr_closed_unmerged_unless_something_still_needs_it(tmp_path):
     """A closed PR's branch goes while it is at the PR's head (its commits stay under `refs/pull/N/head`), but not a stale
-    PR's that drive closed to be reopened (``keep``), a lead's run branch, a fork's, one an open PR uses, or one pushed to
+    PR's closed to be reopened (``keep``), a lead's run branch, a fork's, one an open PR uses, or one pushed to
     since the close."""
     repo, gh, tips, _merge = _world(tmp_path)
     for name in ("gone", "stale", "cursor/verity-lead-ab12", "fork", "moved"):
@@ -866,7 +866,7 @@ def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_wor
     log = []
     assert M.sweep_branches(repo, now=now, gh=gh, log=log.append, limit=0) == (0, 0), "at its limit, it pushes nothing more"
     assert "delete 0 of 1 branch(es)" in log[0] and "archive 0 of 1 unmerged" in log[0] and len(log) == 1, log
-    # old-landed deleted, by name; old-work, the head of a PR drive closed as stale, kept
+    # old-landed deleted, by name; old-work, the head of a PR closed as stale, kept
     log = []
     assert M.sweep_branches(repo, now=now, gh=gh, log=log.append, keep=["old-work"]) == (1, 0)
     assert "old-work" in _heads(repo) and "old-landed" not in _heads(repo)
