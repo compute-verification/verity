@@ -174,7 +174,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_dc.py"]
-paths = ["benchmarks/pouw/opcode_probe"]
+paths = ["benchmarks/pouw/opcode_probe", "verity/hardware"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -185,6 +185,10 @@ tests = [
     "tests/test_served_h1_producer.py",
 ]
 paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_dither_j10r_form.py"]
+paths = ["integrations/vllm/verity_vllm"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_facet_break.py"]

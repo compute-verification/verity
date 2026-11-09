@@ -296,6 +296,7 @@ tests = [
     "tests/program/predict/test_window_circuit.py",
     "tests/program/predict/test_window_circuit_fa3.py",
     "tests/program/predict/test_window_circuit_int8.py",
+    "tests/program/test_fp8_moe_per_expert.py",
 ]
 paths = ["verity/ml/circuits/ops"]
 
@@ -306,6 +307,14 @@ paths = ["verity/core/protocols/certifier"]
 [[tool.verity.tests.reads]]
 tests = ["tests/program/test_compiled_relations_warm_vml.py"]
 paths = ["integrations/vllm/verity_vllm/check"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/test_inputs.py"]
+paths = ["integrations/vllm/tests/program/predict/test_steps.py", "integrations/vllm/tests/program/test_dsa_topk.py"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/test_jit_build_dir.py"]
+paths = ["verity/ml/definitions/numerics"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/test_moe_fp8_definition_imports.py"]
