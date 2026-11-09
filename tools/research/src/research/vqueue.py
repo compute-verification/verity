@@ -11,9 +11,10 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
              several are bisected; none meeting them makes every member a suspect, and a lone member's failed keys are rerun
              once, afresh, before it is ejected.  The candidates above it are dropped, and the rest go into the next batch.
              A fail that names no failed task is rung, and nothing else happens
-    infra    nothing is blamed and `main` stays: the check is enqueued again.  An infra or listing error that outlasts that
-             retry is bisected like a fail, on the members whose files meet the erring tasks' inputs, else on every member,
-             and ejects a lone member.  Infra is rung once the check has been enqueued `rings` times
+    infra    nothing is blamed and `main` stays: the check is enqueued again once, then infra is rung and the candidate waits,
+             as it does when its listing fails.  Only infra errors graph2 saw on two or more nodes (`tree`) follow the tree:
+             they are bisected like a fail, on the members whose files meet their inputs, else on every member, and eject a
+             lone member
     pending  wait; a check still pending `pending_s` after its first enqueue is enqueued again, and rung at twice that
 
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
@@ -58,6 +59,7 @@ class Failed:
     base_key: str | None = None    # the same task id's key in the base's listed graph, None when unknown
     tests: frozenset[str] = frozenset()       # its failing test ids, empty when unknown
     base_tests: frozenset[str] | None = None  # the base's failing tests of the same task id: None when it passed or is unknown
+    tree: bool = False             # infra: graph2 saw it err on two or more nodes, so the tree breaks the machines
 
 
 @dataclass(frozen=True)
@@ -88,7 +90,7 @@ class Outcome:
     members: tuple[int, ...]
     heads: tuple[str, ...]
     state: str                     # pass | fail
-    suspects: tuple[int, ...] = () # fail: the members its own failures (or its infra errors) suspect; () for a pass
+    suspects: tuple[int, ...] = () # fail: the members its own failures (or its infra errors that follow the tree) suspect
     base: str | None = None        # the candidate's base: of a fail, and of a pass with inherited failures
     inherited: tuple[Failed, ...] = ()  # its inherited failures, which its base fails too
 
@@ -101,7 +103,7 @@ class Snapshot:
     history: tuple[Outcome, ...] = ()   # oldest first
     batch: int = 6                 # the most members a candidate takes
     depth: int = 2                 # the most candidates checked at once, each on the one below
-    rings: int = 2                 # infra verdicts on one candidate before infra is rung
+    rings: int = 2                 # infra verdicts on one candidate before infra is rung; 2 at most, as it is enqueued twice
     lean: int = 1                  # the most members of a batch that change Lean, a lock or a spec
     now: float | None = None       # when the snapshot was taken, in seconds since the epoch; None: nothing times out
     pending_s: float = 4 * 3600    # how long the lowest candidate is pending after its first enqueue before it is retried
@@ -157,7 +159,8 @@ class Rerun:
 
 @dataclass(frozen=True)
 class Ring:
-    """Tell infra that ``sha``'s check keeps ending in infra errors, or stays pending, or that its verdict is malformed."""
+    """Tell infra that ``sha``'s check keeps ending in infra errors or failing to list, or stays pending, or that its verdict is
+    malformed."""
     sha: str
     why: str
 
@@ -204,15 +207,14 @@ def decide(s: Snapshot) -> list[Action]:
             main, landed, chain = c1.sha, landed | set(c1.members), chain[1:]
         elif reading == FAIL and (rerun := _rerun(c1, ready)) is not None:
             acts.append(rerun)
-        elif reading == FAIL or (reading == INFRA and c1.tries >= 2):
-            if reading == INFRA and c1.tries >= s.rings:
-                acts.append(Ring(c1.sha, _ring_why(c1)))
+        elif reading == FAIL or (reading == INFRA and _tree(c1.verdict)):
             ejected = _failed(c1, ready, _outcomes(s, acts), acts)
             acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
             chain = []
         elif reading == INFRA:
-            acts.append(Retry(c1.sha))
-            if c1.tries >= s.rings:
+            if c1.tries < 2:
+                acts.append(Retry(c1.sha))
+            if c1.tries >= min(s.rings, 2):
                 acts.append(Ring(c1.sha, _ring_why(c1)))
         elif reading == PENDING and s.now is not None and c1.enqueued is not None:
             if s.now - c1.enqueued > s.pending_s and c1.tries == 1:
@@ -352,6 +354,11 @@ def _reading(v: Verdict) -> str:
     return INFRA if v.infra else PASS if v.ended else PENDING
 
 
+def _tree(v: Verdict) -> tuple[Failed, ...]:
+    """``v``'s infra errors that follow the tree: graph2 saw each on two or more nodes."""
+    return tuple(f for f in v.infra if f.tree)
+
+
 def _passed(c: Candidate) -> Outcome:
     if inherited := tuple(f for f in c.verdict.failed if _inherited(f)):
         return Outcome(c.members, c.heads, PASS, base=c.base, inherited=inherited)
@@ -386,10 +393,10 @@ def _rerun(c1: Candidate, ready: dict[int, Ready]) -> Rerun | None:
 
 def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], acts: list[Action]) -> set[int]:
     """What a failed lowest candidate calls for: the ring of the reds it shows, the ejection its own failures make (or, with
-    none, the infra errors that outlasted its retry), if any, and its drop; the PRs it ejects.  Only those suspect anyone."""
+    none, its infra errors that follow the tree), if any, and its drop; the PRs it ejects.  Only those suspect anyone."""
     v, heads = c1.verdict, dict(zip(c1.members, c1.heads))
     own = tuple(f for f in v.failed if not _inherited(f))
-    by_inputs = [m for m in c1.members if any(meets(ready[m].files, f.inputs) for f in own or v.infra)]
+    by_inputs = [m for m in c1.members if any(meets(ready[m].files, f.inputs) for f in own or _tree(v))]
     eject = None
     if own and len(by_inputs) == 1:
         n = by_inputs[0]
@@ -404,7 +411,7 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
     elif len(c1.members) == 1:
         n = c1.members[0]
         eject = Eject(n, heads[n], f"{_ring_why(c1)}, with only it merged on {c1.base[:12]}: a check that keeps erring on a "
-                                   "change (an undeclared read, a hang, an untraced program) is the change's to fix", v.infra)
+                                   "change (an undeclared read, a hang, an untraced program) is the change's to fix", _tree(v))
     suspects = (eject.number,) if eject is not None else tuple(by_inputs) if by_inputs else c1.members
     acts += _red(c1, outcomes)
     if eject is not None:
@@ -418,6 +425,9 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
 def _ring_why(c: Candidate) -> str:
     if c.verdict.state == LIST_FAILED:
         return f"{c.sha[:12]}'s check failed to list, {c.tries} times enqueued"
+    if tree := _tree(c.verdict):
+        return f"{c.sha[:12]}'s check ended in infra errors on two or more nodes, which follow its tree: " + ", ".join(
+            f.task for f in tree)
     tasks = ", ".join(f.task for f in c.verdict.infra)
     return f"{c.sha[:12]}'s check ended in infra errors, {c.tries} times enqueued" + (f": {tasks}" if tasks else "")
 
