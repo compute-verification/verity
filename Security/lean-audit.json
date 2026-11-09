@@ -3943,9 +3943,7 @@
    "Claims.Encodings.CodeScheme.Distance": "a helper the claims read: an encoding's distance, which `CodeBinds` reads",
    "Claims.Encodings.CodeScheme.ColBinds": "a helper the claims read: an encoding's column check binds, as a collision reduction, which `CodeBinds` reads",
    "Claims.Encodings.Linked": "a helper the claims read: pairs that link positions, which `RegLink.Opens`, `RelinkR` and `LinkBinds` read",
-   "Claims.Encodings.RegLink.Opens": "a helper the claims read: a registration link's contract, the code fact the linked compiler's statements take of a link",
-   "Claims.Encodings.CompilerKSLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved",
-   "Claims.Encodings.CompilerKSRegLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved",
+   "Claims.Encodings.RegLink.Opens": "a registration link's contract, the code fact the linked compiler's statements take of a link (`Claims.Encodings.CompilerKSLinked`, `Claims.Encodings.CompilerKSRegLinked`, closed and unproved, stated in Proofs.Flock.Encodings), no claim",
    "Claims.Sampling.BextAtCostLe": "a helper the claims read: `B_ext` at a time budget costs at most a bound in expectation, which `Compiled.KSAt` reads",
    "Claims.Sampling.Design.Two.FirstRate": "a helper the claims read: a first stage that catches each replay block at a rate, which `CapTwo` reads",
    "Claims.Sampling.Design.Two.SecondRate": "a helper the claims read: a second stage that samples each cell at a rate, which `CapTwo` reads"
