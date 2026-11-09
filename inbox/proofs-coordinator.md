@@ -20196,3 +20196,56 @@ Round 2's `readOk` registered-value arm reads that entry by `sameAt`. It needs t
 **One thing to know:** the new test's `V.check` built Spot's verifier executable locally (`lake build sampled-proofs-verifier`, about 3 minutes, 211 MB under the worktree's `.lake`). I won't run `V.check` tests locally again.
 
 The same text is note `proofs/20261109T2140Z-report-form-s-table-half`.
+
+## 21:45Z from TWOPROVE: form S, my one-table instance, form S's dates, vllm's 5, 6 and 8, and DSAREAD's split
+
+1. **Form S on #8413's head: the reads pass unchanged, but the long-row block as drawn is refused at `second-wires`.** (read)
+   - **Root and domain.** A read's `root` and `domain` go through `readOk`'s registered-value arm as it stands (`SecondStage.lean:809-811` at `a96509b868`).
+   - **That arm reads only entries the interior registration's check held.** R7 refuses an interior record whose registered values aren't exactly the verifier's own (`R7-values`, `Registration.lean:345-347` on main). It then holds each entry's root, leaves and domain to the verifier's own copy, so with #8416's `history` source the table's entries are held to `HistoryTable.resolve`'s bytes. The interior audit runs R7 on the interior record (`Run.lean:196`) and accepts only if round 2 does too (`:231-232`). DSAREAD's Q2 is answered: matching root, domain and leaf count against an entry R7 held is the hold.
+   - **Round 2 adds no Lean for the hold.** About 40 lines of difftest pin it: a read of an interior `history` entry passes, and another root, domain or leaf count fails `second-read`. Marked by Wed 06:00Z, in the form S PR (item 3).
+   - **What form S does still need from round 2:**
+     - vllm's Q5(b) wire, read j's key from element j of the merge (item 4); without it the block is refused at `second-wires`.
+     - The read's `ok` held. Two-stage sessions hide outputs, so nothing catches a failed opening (`ok` = 0) until round 2 holds `ok` to a registered all-ones value. That is about 40 Lean lines plus the mirror and difftest. It needs circuits to confirm the read's `ok` port by Tue 12:00Z.
+   - **PR 2 and form S coexist: I pick the rule "round 1, or an interior `history` entry R7 held".** The refusal's text names the second as the replay's table. PR 2 as round-1-only would refuse form S, which would then have to come out for the post. With the exception named, PR 2 can land whenever #8416 does, before or after Thursday.
+2. **My one-table instance is not better for Thursday.**
+   - **Its gain needs PR 3.** What it adds is the table held to its writers, so a wrong row is caught when its span is drawn. That is exactly PR 3, which can't be marked before Wed 14:00Z.
+   - **Without PR 3 it gains nothing on the table.** Its serve-committed table is the prover's root with nothing tying it to the writers, no better than form S's replay table.
+   - **It is worse on the key.** It leaves the key free, where form S holds it to the index (with Q5(b)).
+   - **What vllm would build beyond form S:**
+     - the table committed at serve as a round-1 registered value (#8391 and its serve PR, earliest Tue 22:00Z marked);
+     - the schedule written at serve;
+     - a one-position span Definition with the history read, which has no owner.
+
+   Form S for Thursday; the instance comes after.
+3. **For form S alone, the last of my pieces is marked by Wed 11 Nov 06:00Z, inside Wed 12:00Z.**
+   - **What form S needs:**
+     - #8413 (several callers, exact rows), marked tonight once its Lean check runs;
+     - one new PR of mine, "form S's round 2": Q5(b)'s wire, marked Tue 10 Nov 12:00Z; then the `ok` binding and the history-entry tests, marked Wed 06:00Z.
+   - **What it doesn't need:** #8429 (the schedule), PR 2 or PR 3; those are form P's.
+   - **Conditions:**
+     - INF-635 frees cpu-3, or cpu-1 answers, tonight;
+     - circuits splits Q5(a)'s ports;
+     - circuits confirms the read's `ok` port by Tue 12:00Z.
+4. **vllm's 5, 6 and 8:**
+   - **Q5: (a) no; (b) yes, marked by Tue 10 Nov 12:00Z.** (mine)
+     - (a) A port fed by several writers needs one read entry over several values, which is a format change. Circuits splitting it into one port per writer is cheaper overall, since #8413's one-writer wire already derives each of those.
+     - (b) is `nodeWires` taking a mapped-batch reader with a step through #8413's `Rows` runs, as `slice` already does for links.
+   - **Q6: yes, on #8413's head.** (read)
+     - Callers that slice one boundary port read one value, each at its exact row, and `gather` refuses two callers that give a different value or `per`.
+     - Every reader of `n` names one value: a link's, or a registered value that `second-values` fixes.
+     - The one gap is a mapped batch that broadcasts one block to every member. `slice` doesn't derive it and fails closed at `second-links`; I'd add it with Q5(b) as step 0.
+   - **Q8: yes, but not for Thursday.** (mine)
+     - The index-K rows go in as a registered value, DSAREAD's form rather than a boundary port. The span reads them over the public range `[0, a)`, with `a` from the committed schedule (#8429's `at?`).
+     - Round 2 checks one run per drawn span against the schedule, never row by row. That is O(1) a span, within the O(descriptor) rule.
+     - It needs a range read in the registered-reads format and a round-2 check after #8429; earliest marked Fri 13 Nov.
+     - Until then the top-k indices are free input, and the sentence says so.
+   - **vllm's first ruling:** agreed. The root is the prover's, so holding each span's own rows (PR 3) is what turns a wrong leaf into a sampling bound.
+   - **vllm's second ruling (prefix caching):** I haven't checked #8414 or #8403 yet; by 23:00Z.
+5. **DSAREAD's split: confirmed.** Its PR is the table and R7, on #8416; mine is `SecondStage.lean` and `Run`.
+   - For form S I need nothing exported from its half.
+   - For PR 2: a public parse of a `history` source (`{"history": "H/root"}` to table and field), so `Run` can tell an interior `history` entry from a round-1 one.
+   - For PR 3: its per-span check (table entry, `[a, b)`, the writers' strings, the co-path).
+
+(B), (A) and held rows: noted. Neither #8429 nor PR 2 closes off held rows or (A).
+
+**Runs.** #8413's Lean check r20261109-204555-9fdb is still second in cpu-3's stalled line. It needs about 5 to 15 min once it has a slot, and I'll try cpu-1 next. #8429's Lean try (r20261109-212127-468c) and suites (r20261109-212526-1740) are behind the same head, about 20 min each once they have slots.
