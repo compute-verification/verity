@@ -116,3 +116,6 @@ vllm-dsatable-commit: PR #8391 head 9620b0ce62. (1) Request-end release is wired
 [2026-11-09T18:45Z] fcf603d6e0d0
 vllm-dsatable-commit: next, unless you redirect, I'm putting history tables on the GPU committer, since the CPU numbers rule out CPU tables at 128k. The work: init, append and path kernels in row_table.cuh beside the step kernels, reusing frame_leaf, frame_node and the hm96 string; a host twin held to history.HistoryTable by a CPU test; then lift the refusal of row_tables with histories. The capture of latent rows at DSA's KV write during serving isn't mine, so say who owns it. The GPU test needs a node; the CPU twin doesn't.
 
+[2026-11-09T18:57Z] 47f2379dd047
+vllm-dsatable-commit: GPU history tables are in PR #8391 (head 5d5624c2ef). The kernels rt_hist_init, rt_hist_append and rt_hist_paths sit beside the step kernels, and a CPU twin matches history.HistoryTable bit for bit at 2^17 capacity and the segment edges. nvcc 13.0 compiles the .cu for sm_90 and sm_120, and the existing row-table twin still matches its reference. Twin on one thread: creation 0.23 s, append 9.8 us/row, path 0.8 us. The device test and the GPU benchmark (now timing device tables too, gated device == twin) need 1 H200 for about 15 min. Suites re-queued as r20261109-185642-0129.
+
