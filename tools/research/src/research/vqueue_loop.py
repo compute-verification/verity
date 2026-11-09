@@ -566,8 +566,9 @@ class World:
                 held = (unreviewed(reviews, ()) or "").startswith("held")
                 if landing or not held and lowrisk(files[n], excludes):
                     took.append(n)
-            if specs := self._frozen():
-                took = [n for n in took if not self._frozen_out(main, entries[n].pr, specs)]
+            if specs := self._frozen():                     # a PR's own change: above `checked` while `main` doesn't hold it
+                below = old if old and not self._ancestor(old, main) else main
+                took = [n for n in took if not self._frozen_out(below, entries[n].pr, specs)]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
                 chosen = {n: (files[n], *j)
@@ -605,9 +606,10 @@ class World:
             return []
         return [s for line in self.frozen_file.read_text().splitlines() if (s := line.strip()) and not s.startswith("#")]
 
-    def _frozen_out(self, main: str, p: PR, specs: list[str]) -> bool:
-        """Whether ``p``'s change renames or deletes a file under ``specs``, said once a head in the log."""
-        hits = _out(self.repo, "diff", "--name-status", "-M", "--diff-filter=RD", f"{main}...{p.head}", "--", *specs).splitlines()
+    def _frozen_out(self, below: str, p: PR, specs: list[str]) -> bool:
+        """Whether ``p``'s own change, above ``below``, renames or deletes a file under ``specs``, said once a head in the log."""
+        hits = _out(self.repo, "diff", "--name-status", "-M", "--diff-filter=RD", f"{below}...{p.head}", "--",
+                    *specs).splitlines()
         if hits and p.head not in self._frozen_told:
             self._frozen_told.add(p.head)
             self.log(f"research queue vqueue: #{p.number} at {p.head[:12]} waits for the freeze to end ({self.frozen_file}): it "

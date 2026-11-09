@@ -910,6 +910,24 @@ def test_a_pr_renaming_or_deleting_under_a_frozen_path_waits_while_the_freeze_la
     assert [r.number for r in w.ready(env.main())] == [1, 2, 3]
 
 
+def test_a_freeze_reads_a_pr_s_own_change_above_the_old_paths_checked_not_the_landings_it_carries(env):
+    """A PR that merged `checked` carries its old-path landings, renames and deletions included, which land as built: while
+    `main` doesn't hold `checked`, the freeze reads only what the PR changes above it."""
+    gone = env.o.change({"a.txt": None})
+    _git(env.o.dev, "checkout", "-q", "--detach", "origin/main")
+    _git(env.o.dev, "merge", "-q", "--no-ff", "-m", "Queue: #9 landed on checked", gone)
+    checked = _git(env.o.dev, "rev-parse", "HEAD")
+    _git(env.o.dev, "push", "-q", "origin", f"{checked}:refs/heads/checked")
+    env.o.gh.put(4, env.o.change({"c.txt": "4\n"}, base=checked))           # merged `checked`, edits only
+    env.o.gh.put(5, env.o.change({"b.txt": None}, base=checked))            # merged `checked`, deletes b.txt itself
+    loop = env.loop(lambda s: [])
+    w = loop.world
+    loop.tick()
+    (frozen := env.tmp / "frozen").write_text("a.txt\nb.txt\n")
+    w.frozen_file = frozen
+    assert [r.number for r in w.ready(env.main())] == [4]
+
+
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
     made: list[Labels] = []
     loop = env.loop(lambda s: [])
