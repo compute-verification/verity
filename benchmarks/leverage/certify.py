@@ -16,7 +16,8 @@ At each of the --reach positions from t (t's own logits, then the next positions
   cert  interval bound propagation (IBP) from the range to the logits through the same layers, with the range split
         into P equal parts for each P of --pieces (a part's bound holds for every value in it, and a fault's bound is
         its worst part's): bounds on the same three that hold for every value in the range. Under --iv-clamp each
-        site's interval is also cut to its box, as the readers' clamps cut its values.
+        site's interval is also cut to its box, as the readers' clamps cut its values; without (`raw`) it bounds the
+        circuit without clamps, and its check runs the grid through that circuit.
 
 eps bounds every served token's log-likelihood ratio at temperature 1 (at T it scales about as 1/T). Over the reach a
 fault's zCDP charge is log2(e) * sum_n eps_n^2 / 2 bits (`rho_bits`), its pure-DP charge log2(e) * sum_n eps_n
@@ -539,22 +540,29 @@ def main() -> int:
                         if not len(vals):
                             vals = x_site[coord].view(1)
                         G = len(vals)
-                        if site == "final":
-                            f = Fault.of(t, [("final", L, coord, float(v)) for v in vals])
-                            zg_all = lm.forward(sid.expand(G, R_all), Cache(dict(pre.kv), pre.sink).expand(G),
-                                                fault=f, x_in=taps[("resid", L - 1)].expand(G, -1, -1),
-                                                first_layer=L, pos0=t)
-                        elif site == "mlph":
-                            f = Fault.of(t, [("mlph", layer, coord, float(v)) for v in vals])
-                            zg_all = lm.forward(sid.expand(G, R_all), Cache(dict(pre.kv), pre.sink).expand(G),
-                                                fault=f, x_in=x_in.expand(G, -1, -1), first_layer=layer, pos0=t)
-                        else:
-                            xg = taps[("resid", layer)].expand(G, -1, -1).clone()
+
+                        def grid(n: int) -> torch.Tensor:
+                            """The faulted logits at the first n suffix positions, for every value of the grid."""
+                            ids_g, c_g = sid[:, :n].expand(G, n), Cache(dict(pre.kv), pre.sink).expand(G)
+                            if site == "final":
+                                f = Fault.of(t, [("final", L, coord, float(v)) for v in vals])
+                                return lm.forward(ids_g, c_g, fault=f, first_layer=L, pos0=t,
+                                                  x_in=taps[("resid", L - 1)][:, :n].expand(G, -1, -1)).float()
+                            if site == "mlph":
+                                f = Fault.of(t, [("mlph", layer, coord, float(v)) for v in vals])
+                                return lm.forward(ids_g, c_g, fault=f, x_in=x_in[:, :n].expand(G, -1, -1),
+                                                  first_layer=layer, pos0=t).float()
+                            xg = taps[("resid", layer)][:, :n].expand(G, -1, -1).clone()
                             xg[:, 0, coord] = vals
-                            zg_all = lm.forward(sid.expand(G, R_all), Cache(dict(pre.kv), pre.sink).expand(G),
-                                                x_in=xg, first_layer=layer + 1, pos0=t)
-                        zg_all = zg_all.float()
+                            return lm.forward(ids_g, c_g, x_in=xg, first_layer=layer + 1, pos0=t).float()
+
+                        zg_all = grid(R_all)
                         zg = zg_all[:, :R]
+                        zg_raw = None
+                        if False in clamps:
+                            boxes, lm.boxes = lm.boxes, None
+                            zg_raw = grid(R)
+                            lm.boxes = boxes
                         dz = (zg - zh).double()
                         lp_h = torch.log_softmax(zh_all.double(), -1)
                         lp_g = torch.log_softmax(zg_all.double(), -1)
@@ -592,8 +600,9 @@ def main() -> int:
                                     rec["trace"] = ctx.trace
                                 m = metrics(zh, lo, hi)
                                 idx = torch.bucketize(vals, parts[1:-1].contiguous())
-                                viol = torch.maximum(lo[idx] - zg, zg - hi[idx])
-                                tol = 1e-4 * (1 + zg.abs())
+                                zref = zg if clamp_on else zg_raw
+                                viol = torch.maximum(lo[idx] - zref, zref - hi[idx])
+                                tol = 1e-4 * (1 + zref.abs())
                                 eps_parts = m["eps"]
                                 rec["cert"][f"{'clamp' if clamp_on else 'raw'}:{P}"] = {
                                     "delta": m["delta"].amax(0).tolist(),
