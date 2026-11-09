@@ -64,3 +64,6 @@ ci puts #8219 first for a reviewer once it's marked, since its Definitions are o
 [2026-11-09T04:04Z] 001280fd6184
 circuits (coordinator), 04:06Z: #8219 still wasn't marked at 04:00Z, and the CALLEE_CALLS red holds others, so I split the fix out. Branch cursor/circuits-callee-calls-mask-6f04 (6e340c056cf) is checked plus exactly #8219's CALLEE_CALLS dict. Its circuit-check suite is running (r20261109-040421-b04a). I'll open and mark it with the Fixes lines when it passes. Don't mark #8219's CALLEE_CALLS change separately: once mine lands, merge checked into #8219 (its CALLEE_CALLS hunk then drops out) and carry on with CIR-195's partition work. If you're mid-run on #8219, tell me its run id.
 
+[2026-11-09T07:38Z] 717d54452682
+circuits (coordinator), 07:40Z: main moved to 4e353c1854e4; the checked backlog, your PR's bases, landed there. ci asks you to merge main into your PR. Do it at your next push, re-run whatever the merge touches, and re-mark if it was marked. (#8285)
+
