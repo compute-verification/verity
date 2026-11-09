@@ -15615,3 +15615,90 @@ The four-prover row stays off until PROVECUT's fix lands.
   - r20261109-021948-a4ed (the served compose), ETA about 03:15Z;
   - r20261109-021925-e946 (the 64-key census statement), ETA 03:15–03:30Z;
   - node A, r20261109-022103-0873: it stages at 06:10Z and holds the GPU 07:00–09:30Z.
+
+## 02:58Z from TWOOPENS: EntriesAt's fixed try is running; the guard needs the honest run regenerated (brief below)
+
+- **Fact 1 (EntriesAt) is written in full.** `frameIs_of` gives `FrameIs h L` from four inputs:
+  - the frame's shape, `h.frame = frameAt slot c`;
+  - `SlotsAt`, from helper 1;
+  - `HeaderRootsAt`, helper 2's `header_roots` statement, a hypothesis until that branch lands;
+  - `DepthsAt`, the depth conjuncts, a hypothesis until a ruling on finding A.
+- **Try 62 failed on four lemmas, now fixed.** The costly one was `portsOf_entries`:
+  - `dsimp` inlined the per-port `do` block's join points, the term grew exponentially and the walk timed out.
+  - It now walks with `ret_walk`, which keeps join points. That needed one addition to `Soundness/Refine/Walk.lean`:
+    `ret_walk` also stops at a kept computation in tail position (`ret_tail`) and keeps its equation.
+  - The addition changes no existing step, but every importer of `Walk.lean` rebuilds.
+- **Try 64:** r20261109-024011-01c6 on cpu-1, started 02:40Z, ETA about 03:15Z. It's slower than the last one because
+  the `Walk.lean` importers rebuild.
+- **The guard (decision 3) can't run on `r20261108-221524-314a` as it is.** That run keeps the records, the coins and
+  the round-2 statements (`statements.json`), but not the session statements' full files:
+  - `audit.sh` drops the circuit, the `inst-*` files and the archives, and `references/` holds only public files.
+  - The model's `stmtOk` reads the full statements: `pinOk` compares each with `xS₀ t`, and `sessionOk` sets it up.
+  - So the run must be regenerated with them kept, and exported in the model's encoding.
+- **The guard can go to a helper.** It touches only new files: an export step in `benchmarks/two_stage/audit.py`, a
+  Lean script and a Python test. The brief below is self-contained. Launch it if you agree; otherwise I take it after
+  the discharge.
+- **P1+P2:** its head is still `5560adb708`, with no records commit yet. I'll merge it once that commit lands, and run
+  records once, at the end of the discharge.
+
+**Brief for a helper: the two-stage model's completeness guard (decision 3)**
+
+What it shows: SPOT[Flock]'s two-stage Lean model accepts a real honest two-stage run with a fake challenger, at a `Held`
+built only from what the auditor registers before the run, never from the run's messages or coins. Without it, a
+`two h` or `stmtOk` that refuses everything would make `SpotKSTwo` vacuous.
+
+Start from `cursor/proofs-sessions-bytemplate-3e7a` at `8f09f1f66e`, on a new branch. Everything is new files: don't
+edit `Security/Proofs/Flock/SpotFlock/Code.lean` (tell TWOOPENS if it needs a change). TWOOPENS merges the branch into
+PRF-460's PR before landing.
+
+The model is `Security/Proofs/Flock/SpotFlock/Code.lean`:
+- `h : Held`, every field from the registration and the references, none from the run:
+  - `desc`, `vus`, `query`, `k`, `names` and `links`.
+  - `reg : RegTwo`: `first` is the boundary registration's `Spot.Registration.Verifier` (program, query, workTable),
+    with its `rule` and `closure`. `ns` and `ks` come from the two-stage registration. `blockOf` must equal
+    `filesBlockOf h.ms ns` (`filesOk` checks it), and `always` is what the deployed sample of record treats as always
+    checked.
+  - `xS₀ t` is template `t`'s reference session statement, encoded as `FlockDeploy.Raw` bytes (the format `Raw.read`
+    and `decode` read) and made before the run. Clamp it so every `t` has one: `refs[min t (refs.size - 1)]`.
+  - `xS₀_ok` comes from a run-time `zkOk` check over `refs`: build `h` behind `if hz : …`.
+  - `frame := toyCode` (`SamplingGeneric/TwoAt.lean`); `V` never reads it.
+- The run's messages:
+  - `x` is the boundary record's bytes and `m₁` the interior record's bytes.
+  - `m₂` is `FlockDeploy.encList (fun r => FlockDeploy.encBytes ⟨r.toArray⟩)` of the four session statements' `Raw`
+    bytes, in template order. `stmtsOf` keeps the list only where it re-encodes byte for byte.
+  - `c₀` and `c₁` are the challenger's first- and second-stage coins; the model reads their first `2^20` bytes.
+- The check is `SpotFlock.stmtOk h x m₁ m₂ c₀ c₁ = true`. To localize a failure, evaluate its conjuncts one at a time:
+  `parse`, `partition`, `two` (`scopeOk`, `filesOk`, `templateOk`), the statement count, `k₀`, `sessionOk` and
+  `readsOk`. Inside `readsOk`, try `interiorOrderOk`, `stmtJsonOf`, `codesOk` (print `SecondStage.stmtCodes`'s codes)
+  and `pinOk`.
+- Stretch: `(SpotFlock.V h)` accepts the whole transcript. Its sessions are `FlockDeploy.next true`, the Lean that
+  `flock-verify` runs, so this only needs the sessions' messages and coins in round order. Do it if the interpreter
+  finishes in minutes. Otherwise, check that each `stmtAt h m₂ t` is, byte for byte, the statement `flock-verify`
+  accepted that session at, and say so.
+
+Data: TWOPROVE's honest run `r20261108-221524-314a` keeps the records, the coins and the round-2 statements
+(`statements.json`: draw, header, registered, template). It does not keep the session statements' full files. Its
+`audit.sh` copy step drops the circuit, the `inst-*` files and the archives, and `references/` holds only public
+files. So regenerate the run with what the model reads kept:
+- Run `TWO_CASES=honest bash benchmarks/two_stage/audit.sh`, with the `research run` line from its header, on cpu-1
+  or cpu-3 with `--pool research`.
+- Add an export step to `audit.py` that writes `x`, `m₁`, `m₂`, `c₀`, `c₁` and the `Held`'s inputs. Agree the export
+  with TWOPROVE, who own `benchmarks/two_stage/`.
+
+Where it runs: `Security` has no executables, and a native exe that imports Mathlib is slow to build.
+- Use a Lean script run with `lake env lean --run`, called from a Python test. It is an opt-in heavy check (the testing
+  skill), and its fixture is the export.
+- If the fixture is large, register it in `fixtures/artifacts.json`. A small one can sit beside its generator.
+- An inline `#guard` won't do: the coins alone are 1 MiB.
+- Report the interpreter's time for `stmtOk`, and for the whole `V` if you try it.
+
+Done when:
+- The check passes on the regenerated honest run.
+- Two negatives fail it: the altered run, and one byte flipped in a session statement's registered reads.
+- The test's docstring says what the check shows: the model accepts an honest run at an `h` fixed before the run. It
+  also says what it doesn't show: if the sessions aren't evaluated, their acceptance is `flock-verify`'s.
+
+Rules:
+- Use CPU nodes cpu-12, cpu-1, cpu-13, cpu-3 and cpu-11 only, with a `.lake` of your own.
+- No run ids, PR numbers or dates in tree text.
+- Tests follow the testing skill: no wall clock, and declared inputs.
