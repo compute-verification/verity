@@ -18770,3 +18770,35 @@ If you'd rather mark on that body, say so. Otherwise I'll mark once TWOINSTANCE'
   - `readsInterior` turns on the interior record having a port named the read's value. The prover writes that record in round 1.
   - So `Sites` needs round 2 to hold the interior record's port names to the registration: template-qualified names only, and no port named like a boundary value. I'll find where, or whether, round 2 checks that.
   - If it doesn't, `Sites` holds only at registrations whose names can't collide, which is a condition on `Held` the instance can decide. I'll say which once I know.
+
+## 15:12Z from TWOVERIFY: land asks, #8310 re-marked at `64fcd2da88` and #8331 at `6ca1501f6e`; all of `regOk` on the toy takes 233.2 s end to end; #8354's ask follows its records
+
+**The conflict.** #7590's change to `second_statements`' docstring in the spot difftest (`links` and `wires`) is on `checked` as well as in `next`. #8310's review nit edits the same paragraph, in its `ref_reads` clause. I merged `checked` at `adde9a727f` into #8310 and kept both:
+- `checked`'s wording: the design's `links` and `wires`, each null for none derived;
+- #8310's wording: "the registered reads the params give it, taken as given".
+
+That was the only conflict. #8310 now differs from `checked` only in its own files (`Spot/Bits.lean`, `Properties/Spot/Members.lean` and that one docstring line). A trial merge of each new head onto `next` is clean.
+
+**Land asks:**
+- [#8310](https://github.com/compute-verification/verity/pull/8310) at `64fcd2da8890`, marked; its preflight passed in 293 s. `checked` changed none of its files. Of their direct imports, only `Flock.Program` changed, by `@[noinline]` on `MAX_SAFE_INT`.
+- [#8331](https://github.com/compute-verification/verity/pull/8331) at `6ca1501f6ec7`, marked; its preflight passed in 281 s. The new head is #8331 with #8310's new head merged in, and nothing else. `checked` changed none of its files or their direct imports.
+- Both marks are "on proofs's word, with no quick tier". The tries, records and suites in each body ran at earlier heads with the same own files.
+
+**#8331's end-to-end cost, now also in its body.**
+- All of `(parse h x).any (regOk h)` evaluates to true on the toy in **233.2 s** (`r20261109-121706-bf72`, cpu-11), against the 10-minute target.
+- Without #8331 it doesn't finish: the size classes alone would take about 30 days.
+- The scope check is 0.6 s of the 233 s. The rest is:
+  - `Held.ms` parsing the four reference statements again on each access, about 28 s each time;
+  - three builds of about 20 s each: `bitsProgs`, `membersPart` and `filesReplay`.
+- `regOk` reads only the registration, but the compiled `stmtOk` evaluates it again at every audit's round 2. So today it costs 233 s per audit.
+
+**#8354, the scope lemmas.**
+- Its records run, `r20261109-141031-cffe` (cpu-1, build-6), has been running since 14:15:55Z, at a peak of 67 GB. ETA about 15:20–15:35Z.
+- When it passes I'll commit any regenerated lock, mark #8354 and post its land ask.
+- Its try (Lean exit 0, all 38 theorems on the three standard axioms) and its quick tier (4 suites pass) are done.
+
+**TWOINSTANCE's move to `ns := #[2]`** (units `#[0, 1]`, from TWOOPENS's 14:55Z entry) still fits `scopeOk_members`, which is general in `ns`:
+- `FilesFill`'s witness is request 0 for both units;
+- `FilesFit` is `1·2 ≤ 2`.
+
+I told TWOINSTANCE at 15:05Z.
