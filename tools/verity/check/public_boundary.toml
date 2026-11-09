@@ -45,7 +45,9 @@ firewall = [
     "Security/**/RecGeneric*",
     "verity/core/service/vstar",
 ]
-vllm = ["integrations/vllm"]
+# the vLLM integration, and its advice format (advice v0: vLLM's serving decisions as one canonical bit string), which the
+# certifier's package still holds
+vllm = ["integrations/vllm", "verity/core/protocols/certifier/advice.py"]
 # what the public side shares: the one challenge derivation, the one signature scheme, the Python held to each Lean, the
 # deployment's configuration, and what public proofs import from private areas: two lemmas, and Bits' layout as the
 # claims' program, which the bridge reads
@@ -95,7 +97,13 @@ pouw_tests = [
     "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py",
 ]
 protocols = [
-    "verity/core/protocols/{pous,bandwidth,remote_bandwidth,certifier,network}",
+    "verity/core/protocols/{pous,bandwidth,remote_bandwidth,network}",
+    # the network certifier: all but the advice format (`advice.py`, public with the integration) and its package's files
+    "verity/core/protocols/certifier/{lean,protocol,tests,README.md,PROTOCOL.md}",
+    "verity/core/protocols/certifier/{active,arith_encode,audit,blocks,boundary,cache_step,calibration,capacity,certificate}*",
+    "verity/core/protocols/certifier/{charge_chain,coin_link,commitment,compile_slice,grid,head_check,io_request,io_tie}*",
+    "verity/core/protocols/certifier/{lean_audit,online,out_commit,pacer,release,replay_chain,replay_step,schedule}*",
+    "verity/core/protocols/certifier/{served,service,tie_service,transfer_rows,warden}*",
     "verity/ml/protocols/{pous,certifier}",
     "Security/*/{Nci,NciDesc}{,.lean}",
     "Security/Proofs/Properties/Nci{,.lean}",
@@ -120,6 +128,18 @@ protocol_tests = [
     "integrations/vllm/tests/protocols/{remote_bandwidth,test_pous_option.py,pous_gpu.sh,pous_gpu.py}",
     "integrations/vllm/tests/pipeline/test_serve_remote.py",
     "integrations/vllm/tests/engine/int8_store_gpu.py",
+]
+# the served window: vLLM's server and the window circuit, which read the network certifier's encoding (its ingress scan,
+# blocks, compile slice, served rows and ids protocol), and the tests that import them
+served_window = [
+    "integrations/vllm/verity_vllm/pipeline/serve_{commit,learn,loop,openai,protocol}.py",
+    "integrations/vllm/verity_vllm/program/predict/{scan_state,window_circuit,window_class,window_rows,window_weights}.py",
+    "integrations/vllm/tests/pipeline/test_serve_{admit,admit_tick,async,h1,learn,offloop,openai,release,row,seal,tie}.py",
+    "integrations/vllm/tests/pipeline/test_serving_rows_weights.py",
+    "integrations/vllm/tests/program/predict/test_{inference_blocks,window_rows}.py",
+    "integrations/vllm/tests/program/predict/test_window_circuit{,_fa3,_int8,_tables}.py",
+    "integrations/vllm/tests/program/test_{dead_free,fa3_check_inf}.py",
+    "integrations/vllm/tests/protocols/test_pouw_h1_drawn.py",
 ]
 # vLLM's test of its int8 attention kernels' PTX and SASS, which runs the PoUW kernels' SASS gate (`benchmarks/pouw/harness`)
 kernel_gates = ["integrations/vllm/tests/engine/{int8_attention_sass,test_int8_attention_sass}.py"]
