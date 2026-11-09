@@ -3,8 +3,8 @@
 * a block's `DsaMaskPositions_v1` is its twin (`values`: `dsa_topk_mask.butterfly_apply` at the block's settings over its
   positions) on masks of no member to every key, and its first count slots are the members' positions, ascending, whenever it
   has at most K; `DsaPositionsMerge_v1` is `merge` on lists with words past their counts, counts past K and lists that fill K;
-* `DsaPositionsMerge_v1`, each block's list and count its own port and each slot a field of its return, is gate for gate the
-  merge over one port of the lists and one of the counts to one array, at small statics and at the served one (M 8, K 2,048);
+* `DsaPositionsMerge_v1`, each block's list and count its own port, is gate for gate the merge over one port of the lists
+  and one of the counts, at small statics and at the served one (M 8, K 2,048);
 * the units composed over a row's blocks (each on the outputs before it) give the rows network's order over the whole row
   (`DsaTopKRow_v2`'s construction), then 0, on masks of at most K members;
 * `DsaTopKReadRows_v1` over a table that holds a history gives today's long row's kv (`DsaButterflyRowsPad_v1` at the counted
@@ -25,7 +25,7 @@ from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.boolean.trace import Traced, trace
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.types import Array
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as EM
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -113,16 +113,15 @@ def test_the_merge_is_merge(M_, K) -> None:
 
 @pytest.mark.parametrize("M_,K", [(1, 4), (3, 4), (4, 3), (8, 16),
                                   pytest.param(8, SERVED_TOPK, marks=pytest.mark.slow, id="served")])
-def test_the_merge_with_a_port_a_block_and_a_field_a_slot_is_the_one_port_merge_gate_for_gate(M_, K) -> None:
-    """Against the merge over one port of the M blocks' lists and one of their counts, returning one Array<K, I32>.  The
-    served binding (8 blocks, 2,048 slots, 12-bit shifts) is about 6M ANDs; it is the one the long row calls, and no smaller
-    binding's trace is its trace."""
+def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K) -> None:
+    """Against the merge over one port of the M blocks' lists and one of their counts.  The served binding (8 blocks, 2,048
+    slots, 12-bit shifts) is about 6M ANDs; it is the one the long row calls, and no smaller binding's trace is its trace."""
     S = SimpleNamespace(M=M_, K=K)
     params, ret = R._merge_sig(S)
     assert [n for n, _ in params] == [f"pos_{b}" for b in range(M_)] + [f"count_{b}" for b in range(M_)]
-    assert [t for _, t in params] == [Array(K, R.I32)] * M_ + [R.I32] * M_ and ret == Tuple(*[R.I32] * K)
+    assert [t for _, t in params] == [Array(K, R.I32)] * M_ + [R.I32] * M_ and ret == Array(K, R.I32)
     split = _digest(trace(R._merge(S), [t for _, t in params], ret))
-    one = _digest(trace(R._merge(S), [Array(M_, Array(K, R.I32)), Array(M_, R.I32)], Array(K, R.I32)))
+    one = _digest(trace(R._merge(S), [Array(M_, Array(K, R.I32)), Array(M_, R.I32)], ret))
     assert split == one
 
 
