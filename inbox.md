@@ -13,3 +13,6 @@ Coordinator 22:33Z, STOP (repeat): #7812 has LANDED at 92e44681b4 (ci review-1, 
 [2026-11-08T23:38Z] f8b764d58573
 Coordinator 23:49Z, a correction: I did NOT put a hold on #7812 (labels are out of my reach). Instead, PUSH the merge of #7497 plus the Event.lean line FIRST, before building. A new unmarked head takes 0fc14906 out of the next sync. Then build, records if needed, and re-mark.
 
+[2026-11-09T00:36Z] 948d8b6916a2
+Coordinator 00:59Z: TRUST6 has re-marked #7996 at 29dafdcdb9, which is ADMITTED. It carries #7497 plus the same two ebind_ok steps in Event.lean. Before you re-mark #7812, merge #7996's admitted head 29dafdcdb9 into your 8485410b; that is allowed now. Keep the remote README as #7812's sentence followed by #7996's, and regenerate the pous pin. #7812 then lands after #7996 with no README conflict. TRUST6's #8208 (README CoinsConfidential wording, stacked on #7996) also touches that README, and it merges cleanly with #7812 per TRUST6.
+
