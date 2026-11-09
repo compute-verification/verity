@@ -65,8 +65,9 @@ Advance pushes `main` to the candidate with a lease on its base and logs it; the
 Regenerate starts the candidate's records run (`vqueue_records.start`: drive's lock run, on drive's machines, on its tree) on
 the packages graph2 found stale, and logs it (`regenerate`).  Commit commits the records its records run regenerated on top
 of it in drive's lock commit's form, which the merge gate vouches for (`vqueue_records.commit`), pushes it, and builds it as a
-build is: a candidate on the same base with the same members, which `repairs` the one beneath it; a records commit that can't
-be made or vouched for is held, logged (`commit`) and rung to `CI` once.
+build is: a candidate on the same base with the same members, which `repairs` the one beneath it; the bookkeeping its records
+run repaired is told as drive tells it, to `lean` and each owner a warning names, once a records commit (`bookkeeping`); a
+records commit that can't be made or vouched for is held, logged (`commit`) and rung to `CI` once.
 Drop cancels the check (graph2's `cancel`, where it has one), and the run beside it and its records run while they run (one
 still launching once it printed its run ids, a later tick), deletes the branch and logs its outcome, with its base and its
 inherited failures, their inputs whole, which `history` reads back.  Eject withdraws the PR's ready mark at its head
@@ -1714,7 +1715,7 @@ class Loop:
         and check it in ``c``'s place: a candidate on ``c``'s base with ``c``'s members, which it `repairs` (`vqueue.decide`
         drops ``c`` for it), built as a build is, the run beside its check with it.  One pushed before, with no line in the log
         (`World.recommitted`), is adopted.  A records commit that can't be made, or that the merge gate won't vouch for, is held:
-        logged, and rung to `CI` once."""
+        logged, and rung to `CI` once.  The bookkeeping its records run repaired is told as drive tells it (`_bookkeeping`)."""
         w = self.world
         rid = ((t.records.get(c.sha) or {}).get("verdict") or {}).get("run")
         got = self.records.commit(w.slim_driver(), c.sha, rid, c.members) if self.records is not None and rid else \
@@ -1723,17 +1724,30 @@ class Loop:
             return [self.record(t, "commit", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=got, run=rid,
                                 done=False),
                     *self._ring(Ring(c.sha, f"{c.sha[:12]}'s records commit is held: {got}", to=(CI,)), c, t)]
-        tip, files = got
+        tip, files, told = got
         if adopted := next((sha for name, sha in sorted(t.foreign.items())
                             if name == sha[:12] and w.recommitted(sha, tip, c.sha)), None):
             tip = adopted
         else:
             w.push(tip, branch(tip))
         built = t.past.built(c.sha) or {}
-        return self._enqueue(t, [], {"sha": tip, "base": c.base, "members": list(c.members), "heads": list(c.heads),
-                                     "priority": built.get("priority") if isinstance(built.get("priority"), int) else 0,
-                                     "why": f"{c.sha[:12]}'s records, which {rid} regenerated, committed on it",
-                                     "repairs": c.sha, "run": rid, "files": files, **({"adopted": True} if adopted else {})})
+        return self._enqueue(t, self._bookkeeping(t, c, tip, told),
+                             {"sha": tip, "base": c.base, "members": list(c.members), "heads": list(c.heads),
+                              "priority": built.get("priority") if isinstance(built.get("priority"), int) else 0,
+                              "why": f"{c.sha[:12]}'s records, which {rid} regenerated, committed on it",
+                              "repairs": c.sha, "run": rid, "files": files, **({"adopted": True} if adopted else {})})
+
+    def _bookkeeping(self, t: Tick, c: Candidate, tip: str, told: tuple[str, tuple[str, ...]] | None) -> list[dict]:
+        """Tell what drive tells of the bookkeeping ``c``'s records run repaired in its records commit ``tip`` (``told``:
+        `drive.bookkeeping_told`'s text and handles), once a records commit: logged, and only logged with --shadow."""
+        if told is None or any(r.get("posting") == "bookkeeping" and r.get("sha") == tip for r in t.past.of("posting")):
+            return []
+        text, to = told[0], tuple(f"@{h}" for h in told[1])
+        line = dict(sha=tip, base=c.base, members=c.members, heads=c.heads, why=f"{tip[:12]}'s records run repaired bookkeeping",
+                    text=text, to=list(to))
+        if self.shadow:
+            return [self.record(t, "bookkeeping", **line, done=False)]
+        return [self.record(t, "bookkeeping", **line, posted=self._say(t, "bookkeeping", text, to, sha=tip), done=True)]
 
     def _start(self, t: Tick, sha: str, base: str, line: dict, why: str = "started") -> list[dict]:
         """The run beside candidate ``sha``'s check started (`vqueue_slim.start`), its record logged; a start that fails is

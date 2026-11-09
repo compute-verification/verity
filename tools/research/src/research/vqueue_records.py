@@ -17,10 +17,11 @@ store, else from its run dir on its node), each at its path in the tree (`drive.
 with drive's message (`drive.lock_message`: `Lock records regenerated for #N...`, the bookkeeping the run repaired,
 `Checked:` the run of `queue/<sha12>` and `Regenerated:` the files) as `queue.IDENTITY`, and vouched for by the merge gate
 against the run (`Driver._unvouched`, `merge.regenerated_parent`), so post_train reads it as drive's and drive reverts it with
-the PRs it names (`Driver._lock_commits`).  It is made in a scratch index, without a checkout or a ref: drive's clone stays as
-drive keeps it.  Under a dry run or the queue's shadow nothing launches (`start`), as `vqueue_slim.start`.  The loop's
-Driver outlives its ticks, so `judge` reads the runs' states afresh each call, never through `Driver._states`.  Nothing here
-writes drive's state."""
+the PRs it names (`Driver._lock_commits`); the loop tells the bookkeeping the run repaired as drive tells it
+(`drive.bookkeeping_told`: to `lean` and each owner a warning names).  It is made in a scratch index, without a checkout or a
+ref: drive's clone stays as drive keeps it.  Under a dry run or the queue's shadow nothing launches (`start`), as
+`vqueue_slim.start`.  The loop's Driver outlives its ticks, so `judge` reads the runs' states afresh each call, never through
+`Driver._states`.  Nothing here writes drive's state."""
 from __future__ import annotations
 
 import json
@@ -30,13 +31,15 @@ import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 
-from .drive import ACTIVE, CI, LEAN_STEP, Driver, lock_message, lock_path
+from .drive import ACTIVE, CI, LEAN_STEP, Driver, bookkeeping_told, lock_message, lock_path
 from .merge import AUDIT, bookkeeping_warnings, lean_report
 from .queue import IDENTITY, QueueError, _git, _out
 from .vqueue import FAIL, INFRA, PASS, PENDING, RecordsRun
 
 #: the most review lines a refusal names; the run's Lean report has them all (review.txt in each package's reports)
 SHOWN = 8
+#: what is told of the bookkeeping a records run repaired, and to whom (`drive.bookkeeping_told`)
+Told = tuple[str, tuple[str, ...]]
 #: a review line naming a guarantee or a listed premise (`check.py`'s `review` and `assumption_changes`), by the lock's
 #: section that records its owner
 NAMED = (("guarantees", re.compile(r"^guarantee (\S+): ")), ("assumptions", re.compile(r"^assumption (\S+): ")),
@@ -162,8 +165,9 @@ def _owners(repo: Path, tip: str, reports: dict[str, dict]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(out)) or (CI,)
 
 
-def commit(driver: Driver, sha: str, rid: str, prs: Iterable[int]) -> tuple[str, list[str]] | str:
-    """Candidate ``sha``'s records commit of passed records run ``rid``, its members ``prs``: (the commit, its files), the
+def commit(driver: Driver, sha: str, rid: str, prs: Iterable[int]) -> tuple[str, list[str], Told | None] | str:
+    """Candidate ``sha``'s records commit of passed records run ``rid``, its members ``prs``: (the commit, its files, what
+    drive tells of the bookkeeping the run repaired and to whom, `drive.bookkeeping_told`, None when it repaired none), the
     records the run regenerated committed on top of ``sha`` in drive's lock commit's form and vouched for by the merge gate;
     why not, instead, while its records can't be read (`Driver._locks`), it regenerated none, they are the records ``sha``
     holds, or the gate refuses the commit."""
@@ -190,10 +194,11 @@ def commit(driver: Driver, sha: str, rid: str, prs: Iterable[int]) -> tuple[str,
     if tree == _out(repo, "rev-parse", f"{sha}^{{tree}}"):
         return f"the records {rid} regenerated are those {sha[:12]} holds"
     prs = " ".join(f"#{n}" for n in prs) or f"`{into}` {sha[:12]}"
-    message = lock_message(prs, rid, into, sha, bookkeeping_warnings(driver.q.store, rid, driver.fetch), files)
+    warned = bookkeeping_warnings(driver.q.store, rid, driver.fetch)
+    message = lock_message(prs, rid, into, sha, warned, files)
     made = _git(repo, "commit-tree", tree, "-p", sha, "-m", message, env=IDENTITY).stdout.strip()
     if not made:
         raise QueueError(f"git commit-tree of {sha[:12]}'s records commit printed no commit")
     if why := driver._unvouched(rid, made):
         return why
-    return made, files
+    return made, files, bookkeeping_told(rid, into, sha, prs, made, warned) if warned else None

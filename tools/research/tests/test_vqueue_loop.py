@@ -2036,8 +2036,9 @@ class Records:
     """`research.vqueue_records`'s functions, faked: each start registers a records run on its candidate (``regen-N``), judged
     as ``verdicts`` says (pending unless it names it), a verdict other than pending kept in its record, with the run that
     passed, as `judge` keeps it; a commit commits ``files`` on top of the candidate in the clone ``repo`` in drive's lock
-    commit's form (`drive.lock_message`), at ``dated`` if set (else now), kept in ``made``, or says why not (``held``).  With
-    ``launching``, a start is a detached launch, pending until ``registered`` names the run ids it printed for its sha."""
+    commit's form (`drive.lock_message`), at ``dated`` if set (else now), kept in ``made``, with ``told`` (what is told of the
+    bookkeeping its run repaired), or says why not (``held``).  With ``launching``, a start is a detached launch, pending until
+    ``registered`` names the run ids it printed for its sha."""
 
     def __init__(self, repo: Path):
         self.repo, self.files = repo, {"pkg/lean-audit.json": '{"records": 2}\n'}
@@ -2047,6 +2048,7 @@ class Records:
         self.verdicts: dict[str, RecordsRun] = {}
         self.held: str | None = None
         self.dated: str | None = None
+        self.told: tuple[str, tuple[str, ...]] | None = None
         self.launching, self.registered = False, {}
 
     def start(self, driver, sha: str, packages) -> dict:
@@ -2073,7 +2075,7 @@ class Records:
             rec["verdict"] = {"state": r.state, "why": r.why, "owners": list(r.owners), **({"run": run} if r.state == PASS else {})}
         return r
 
-    def commit(self, driver, sha: str, rid: str, prs) -> tuple[str, list[str]] | str:
+    def commit(self, driver, sha: str, rid: str, prs) -> tuple[str, list[str], tuple | None] | str:
         self.committed.append((driver, sha, rid, tuple(prs)))
         if self.held is not None:
             return self.held
@@ -2087,7 +2089,7 @@ class Records:
         message = lock_message(" ".join(f"#{n}" for n in prs), rid, f"queue/{sha[:12]}", sha, [], files)
         when = Q.IDENTITY if self.dated is None else {**Q.IDENTITY, **dict.fromkeys(Q.DATES, self.dated)}
         self.made.append(Q._git(self.repo, "commit-tree", tree, "-p", sha, "-m", message, env=when).stdout.strip())
-        return self.made[-1], files
+        return self.made[-1], files, self.told
 
 
 #: graph2's lean-lock result of a package whose lock records alone are stale (`lean_lock.run`)
@@ -2230,11 +2232,29 @@ def test_a_records_commit_the_gate_wont_vouch_for_is_held_rung_to_ci_once_and_ma
     assert (fixed["action"], fixed["repairs"]) == ("build", sha) and len(records.committed) == 3
 
 
+def test_the_bookkeeping_a_records_run_repaired_is_told_as_drive_tells_it_once_a_records_commit(env):
+    """Drive tells `lean` and each owner a warning names of the bookkeeping its lock run repaired (`drive.bookkeeping_told`), so
+    the loop does of a records run's: once, even when a tick cut off before its build line leaves the commit to adopt."""
+    loop, records, sha, _ = _records_loop(env)
+    loop.tick()
+    records.verdicts["regen-1"], records.dated = RecordsRun(PASS), "2026-01-01T00:00:00+0000"
+    records.told = ("the lock run regen-1 repaired bookkeeping that #1 brought: H (@proofs)", ("lean", "proofs"))
+    judged, told, fixed = loop.tick()
+    assert (told["action"], told["sha"], told["to"], told["posted"]) == ("bookkeeping", fixed["sha"], ["@lean", "@proofs"], True)
+    assert env.posts == [f"@lean @proofs vqueue: {records.told[0]}"] and fixed["action"] == "build"
+    kept = [x for x in env.log.read_text().splitlines() if json.loads(x).get("action") != "build" or json.loads(x)["sha"] == sha]
+    env.log.write_text("".join(f"{x}\n" for x in kept))              # the tick cut off before its build line
+    records.dated = None
+    ignored, again = loop.tick()
+    assert (ignored["action"], again["action"], again["sha"], again["adopted"]) == ("ignore", "build", fixed["sha"], True)
+    assert len(env.posts) == 1
+
+
 def test_a_records_commit_pushed_with_no_line_in_the_log_is_adopted_and_a_restart_starts_no_second_records_run(env):
     loop, records, sha, _ = _records_loop(env)
     loop.tick()
     records.verdicts["regen-1"], records.dated = RecordsRun(PASS), "2026-01-01T00:00:00+0000"
-    made, _ = records.commit("drive", sha, "regen-1", (1,))
+    made, *_ = records.commit("drive", sha, "regen-1", (1,))
     _git(env.tmp / "clone", "push", "-q", "origin", f"{made}:refs/heads/queue/{made[:12]}")  # a tick cut off before its line
     again = env.loop(vqueue.decide, clone="again", records=records)
     again.world.slim_driver, records.repo, records.dated = lambda: "drive", again.world.repo, None   # in its loop's clone

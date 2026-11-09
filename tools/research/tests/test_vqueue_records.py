@@ -239,8 +239,8 @@ def test_the_records_commit_is_drives_lock_commit_on_the_candidate_which_the_mer
     _passes(h, rid, sha)
     wd = h.q.workdir
     head, status, refs = (_git(wd, *a) for a in (("rev-parse", "HEAD"), ("status", "--porcelain"), ("for-each-ref",)))
-    made, files = commit(h.d, sha, rid, (1, 2))
-    assert files == ["pkg/lean-audit.json"] and _git(wd, "rev-parse", f"{made}^@") == sha
+    made, files, told = commit(h.d, sha, rid, (1, 2))
+    assert files == ["pkg/lean-audit.json"] and _git(wd, "rev-parse", f"{made}^@") == sha and told is None
     assert _git(wd, "show", f"{made}:pkg/lean-audit.json") == REGENERATED.strip()
     assert _git(wd, "diff", "--name-only", sha, made) == "pkg/lean-audit.json"
     body = _git(wd, "log", "-1", "--format=%B", made)
@@ -266,11 +266,13 @@ def test_a_records_commit_carries_the_bookkeeping_its_records_run_repaired_as_dr
     doc = json.loads((d / merge.AUDIT).read_text())
     (d / merge.AUDIT).write_text(json.dumps(doc | {"bookkeeping": warned, "repaired": {
         "tests/test_lean_packages.py": f"/workspace/research/runs/{rid}/lean-audit/repaired/tests/test_lean_packages.py"}}))
-    made, files = commit(h.d, sha, rid, (1,))
+    made, files, told = commit(h.d, sha, rid, (1,))
     assert files == ["pkg/lean-audit.json", "tests/test_lean_packages.py"]
     body = _git(h.q.workdir, "log", "-1", "--format=%B", made)
     assert body == lock_message("#1", rid, f"queue/{sha[:12]}", sha, warned, files).strip(), body
     assert f"  {warned[0]}\n" in body and _vouched(h, made, rid) == rid
+    assert told == (f"the lock run {rid} of `queue/{sha[:12]}` {sha[:12]} repaired bookkeeping that #1 brought, in "
+                    f"{made[:12]}, each a warning for the next PR to fix: {warned[0]}", ("lean",))      # as drive tells it
 
 
 def test_a_records_commit_is_refused_when_its_records_cant_be_read_are_the_candidates_or_the_gate_wont_vouch(world,
