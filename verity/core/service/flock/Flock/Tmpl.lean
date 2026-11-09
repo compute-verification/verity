@@ -401,12 +401,6 @@ theorem parseAt_checked {n : Nat} {line : Nat → String} {nums : Nat → Option
   cases h
   exact ⟨by simpa using hord, by simpa using hwf⟩
 
-/-- A template `parse` returns passed its last two checks (`TmplUnit.readParsed` reads them). -/
-theorem parse_checked {lines : Array String} {t : Tmpl} (h : parse lines = .ok t) :
-    t.ordered = true ∧ t.wellFormed = true := by
-  rw [parse_eq_fast] at h
-  exact parseAt_checked h
-
 /-- A sorted list with each run of equal columns cut to its length mod 2. -/
 def dropPairs : List Nat → List Nat
   | [] => []
