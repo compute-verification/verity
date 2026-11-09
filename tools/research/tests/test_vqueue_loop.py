@@ -2248,6 +2248,8 @@ def test_a_records_run_that_ends_in_infra_is_started_once_more_and_then_refuses_
     assert eject["why"] == "its records run ended in infra twice: it never ran or was stopped (regen-1)", eject["why"]
     assert env.posts[0].startswith("@infra vqueue: ") and ring["why"] == f"{sha[:12]}'s records run ended in infra twice: " \
                                                                        "it never ran or was stopped (regen-1)"
+    assert ring["text"] == (f"the verified queue's candidate queue/{sha[:12]} (#1), whose check waits for its records run: "
+                            f"{ring['why']}"), ring["text"]
     assert loop.tick() == [] and len(records.started) == 1 and env.queued() == {} and _checks(env) == []
 
 
@@ -2274,7 +2276,8 @@ def test_a_records_commit_the_gate_wont_vouch_for_is_held_rung_to_ci_once_and_ma
     assert (held["action"], held["done"], held["why"], held["run"]) == ("commit", False, records.held, "regen-1")
     assert (ring["action"], ring["why"]) == ("ring", f"{sha[:12]}'s records commit is held: {records.held}; it is dropped, its "
                                                      "members built again, once it is held 4 h after it was first")
-    assert env.posts == [f"@ci vqueue: {ring['text']}"] and env.queued() == {branch(sha): sha} and _checks(env) == []
+    assert env.posts == [f"@ci vqueue: the verified queue's candidate queue/{sha[:12]} (#1), whose check waits for its records "
+                         f"run: {ring['why']}"] and env.queued() == {branch(sha): sha} and _checks(env) == []
     (again,) = loop.tick()
     assert again["action"] == "commit" and len(env.posts) == 1 and env.withdrawn == []
     records.held = None
