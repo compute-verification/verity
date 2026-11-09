@@ -375,9 +375,9 @@ theorem offs_fold (kp : KeyProg) (n : Nat) :
     rw [offsStep, Array.getD_eq_getD_getElem?, Array.getElem?_push, hs]
     by_cases h : i = n + 1
     · subst h
-      rw [if_pos rfl, Option.getD_some, hg n (Nat.le_refl n), List.range_succ, List.map_append, List.sum_append]
+      rw [ite_eq_left rfl, Option.getD_some, hg n (Nat.le_refl n), List.range_succ, List.map_append, List.sum_append]
       simp
-    · rw [if_neg h, ← Array.getD_eq_getD_getElem?]
+    · rw [ite_eq_right h, ← Array.getD_eq_getD_getElem?]
       exact hg i (by omega)
 
 /-- **The table is `off`**: entry `g` of `offs kp` is `off kp g`, at every `g`. -/
