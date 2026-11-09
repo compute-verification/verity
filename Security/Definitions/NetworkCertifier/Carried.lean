@@ -29,6 +29,8 @@ hashed. So a period's count charges no bit of an opened row, and its escape boun
   outputs, both certified.
 * `CarriedRoots`: accepted runs open the root of the row the record rule names, which each run's check of its roots and
   the record rule give, with no probability.
+* `ResetsIn`: where every audit accepts, the restarts serving picks are among registered patterns, whose number a
+  period's count charges.
 * `PeriodLeaksCarried`: a period's input at each run's extracted rows. `PoolColl`: a collision at an opening.
 * `AccSeqsCarried`, `OpensAtInputs` and `RLeakCarried`: one run. The sequences accepted from an opened row, and the leak
   relation at the rows the trace gives, which the extractor's witness fixes.
@@ -123,6 +125,15 @@ def CarriedRoots {L K S m : ℕ} (G : Hash.Msg → Hash.Digest) (lay : AuditStat
     (∀ i, LeakAtCarried lay k reg valid prow nrow Dj (sw i) (Pw i) (ρ i) (op i (runsBefore o i)) (rin i) (rout i) (W i)
       (o i)) →
     ∀ i, Hash.RowSeg.digest G (rin i) = Hash.RowSeg.digest G (poolOpen chains genesis rout i)
+
+/-- **The restarts serving picks are registered patterns**: at each secret in `Zs` and draw of the coins at which every
+run's audit accepts, the restarts `chains z ω` and opened rows `genesis z ω` serving picked are one of the patterns of
+`Cs`. Under the public restart rule a run restarts there only at the registration's first run or at a chosen reset, of
+which the record rule refuses a second in a week. -/
+def ResetsIn {m : ℕ} {Ω Z : Type} (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
+    (Cs : Finset ((Fin m → Bool) × (Fin m → Hash.Row))) (chains : Z → (Fin m → Ω) → Fin m → Bool)
+    (genesis : Z → (Fin m → Ω) → Fin m → Hash.Row) : Prop :=
+  ∀ z ∈ Zs, ∀ ω, (∀ i, acc z i ω (ω i)) → (chains z ω, genesis z ω) ∈ Cs
 
 /-- **The sequences a sampled audit accepts at `δ` from the row `rin`**: `AccSeqsChecked`, with the run reading `rin` at its
 opening gates `prow` and leaving any row at its closing gates `nrow`. -/

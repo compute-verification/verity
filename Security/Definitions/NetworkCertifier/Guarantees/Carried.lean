@@ -74,7 +74,7 @@ the registered inputs, operator `op i`, which reads the runs before it), with `n
 its checked inputs (`CheckedUnique`) and its closing row at `nrow` (`CheckedClosing`); the record rule's restarts
 `chains` and opened rows `genesis` (at run 0 the previous period's closing row or the empty pool's, and the empty pool's
 at a restart), serving's choice at each secret and sample of the coins, which where every audit accepts lie in a
-registered finite set `Cs` and have the runs open the root of the row the rule names (`CarriedRoots`, at the
+registered finite set `Cs` (`ResetsIn`) and have the runs open the root of the row the rule names (`CarriedRoots`, at the
 `sha512/row-seg/v1` digest over `G`); with the network certifier running its code by `trusted-host`, its one run giving
 the cells the client receives and its record of them, the runs' observations; a covert sender's channel
 (`PeriodChannel`), each run's acceptance and incorrect set reading only the earlier runs' coins (`PeriodAdaptive`), the
@@ -110,7 +110,7 @@ def PooledLeakCarried : Prop :=
     (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
     (Cs : Finset ((Fin m → Bool) × (Fin m → Hash.Row))) (chains : Z → (Fin m → Ω) → Fin m → Bool)
     (genesis : Z → (Fin m → Ω) → Fin m → Hash.Row) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
-    (hcs : ∀ z ∈ Zs, ∀ ω, (∀ i, acc z i ω (ω i)) → (chains z ω, genesis z ω) ∈ Cs)
+    (hcs : ResetsIn Zs acc Cs chains genesis)
     (hroot : ∀ z ∈ Zs, ∀ ω, (∀ i, acc z i ω (ω i)) →
       CarriedRoots G lay k reg valid prow nrow Dj sw Pw ρ op (chains z ω) (genesis z ω))
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)

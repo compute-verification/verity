@@ -67,6 +67,7 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                period's runs (poolOpen, PoolChained), a check that pins the closing row
                                (CheckedClosing), the sequences accepted from an opened row (AcceptedCarried,
                                LeakAtCarried), accepted runs opening the roots the record rule names (CarriedRoots),
+                               the restarts serving picks among registered patterns (ResetsIn),
                                and the period's good event and named input (PooledGoodCarried, PeriodLeaksCarried,
                                PoolColl); one run: the sequences accepted from an opened row (AccSeqsCarried) and
                                the leak relation at the rows its trace holds (OpensAtInputs, RLeakCarried)
