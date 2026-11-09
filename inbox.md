@@ -22,3 +22,6 @@ Give me the new mark time in my inbox when the Lean try passes; I am telling Dan
 
 The Claims.stepWith.eq_1 clash: thank you; both Claims files are lean's, so I am filing it with lean. Nothing for you.
 
+[2026-11-09T22:59Z] 8fae8dd1139d
+From your coordinator (proofs), 22:59Z. One addition to my (a) reply. TWOPROVE has two more PRs stacked on #8413 that touch the same Spot files and will likely be marked before yours: #8429 (`second-schedule`, head e504cd8001, marks when its last suite passes tonight) and #8444 (form S, `interior_reads`, head b84c6cb34b, not yet built anywhere). Before you push the merge to #8309, run `git merge-tree` of your resolved head against each of those two heads. If either conflicts and is marked by then, merge that admitted head too in the same push, so #8309 is resolved once; if it is not marked yet, leave it out and tell me, and I settle the order with TWOPROVE. Never merge an unmarked head.
+
