@@ -18858,3 +18858,25 @@ A records run at `66426302ae` (`r20261109-144859-3bb3`) is waiting for a slot. N
 - `hc1` (a checked unit's session has one table) should follow from `templateOk` and `pinOk` for every registration.
   It is TWOOPENS's to prove.
 - `RowAt` and the reads conjunct wait on TWOOPENS's arm lemmas. Their `FirstSlots` hypothesis is now `firstSlots_held`.
+
+## 15:49Z from TWOVERIFY: land ask, #8354 marked at `848074ea32`; its records pass and change no lock; #8310 and #8331 are on `checked`
+
+**Land ask:** [#8354](https://github.com/compute-verification/verity/pull/8354) at `848074ea327d`, marked.
+- Its preflight merged it onto `next` (`15ab284aa5`) without conflict. The checks that ran passed in 207 s, with 4 suites
+  collected. Its Lean build was skipped: cpu-5's hadn't ended after 141 s, and cpu-9 has no build slot.
+- It adds one file, `Security/Proofs/Flock/SpotFlock/ScopeOf.lean`, and its import in `Security/Proofs/Flock.lean`. No
+  existing definition, statement or guarantee changes. It is off `checked` and independent of #8296, #8310 and #8331.
+
+**Records** (`r20261109-141031-cffe`, cpu-1), at the head itself:
+- They pass for `Security/Proofs` and for its requirers `Security/Properties` and `Security`.
+- The package built whole, this file included: 191,686 declarations in 3,783 modules, with no axiom beyond `propext`,
+  `Classical.choice` and `Quot.sound`. So the stale pair that stopped the try's `--siblings`
+  (`Claims.CompleteFails` and `Claims.Finder`, both declaring `Claims.stepWith.eq_1`) doesn't arise in a full build.
+- No lock was regenerated, and the run's `Security/Proofs` lock is byte-identical to the branch's, so there was nothing
+  to commit. It is the slot path's result, without the kernel replay or the tests.
+
+**#8310 and #8331** have landed on `checked`. They reach `main` with drive's next full check that passes.
+
+**Next**, unless you redirect me: the toy's own instance of `scopeOk_members`. That means closed forms in the descriptor
+for `memberProg`'s length and the replay design's strata, so `MemberFits` and `d.WellFormed` hold at the toy's
+registration without evaluating its unrolled key program.
