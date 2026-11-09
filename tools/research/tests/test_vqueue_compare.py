@@ -293,18 +293,22 @@ def test_the_window_picks_what_is_reported_from_everything_logged_before_its_end
 
 
 def test_agreement_exits_zero(tmp_path, monkeypatch, capsys):
-    """The shadow advances what the old path lands and `main` reaches: no disagreement, a sound advance, exit 0.  Without
-    `--since` and `--until` the window runs from the log's first decision to the injected clock."""
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    git(repo, "init", "-q")
-    tree = git(repo, "mktree")
-    m0 = git(repo, "commit-tree", tree, "-m", "the base", stamp="13:00")
-    head = git(repo, "commit-tree", tree, "-p", m0, "-m", "change 1", stamp="13:10")
-    q1 = git(repo, "commit-tree", tree, "-p", m0, "-p", head, "-m", f"Queue: #1 change\n\nPR: #1\nHead: {head}\nOwner: o",
+    """The shadow advances what the old path lands and `main` reaches: no disagreement, a sound advance, exit 0.  `--fetch`
+    reads origin's `main` and `checked` as they are now, not as the clone last fetched them; without `--since` and `--until`
+    the window runs from the log's first decision to the injected clock."""
+    origin, repo = tmp_path / "origin", tmp_path / "repo"
+    origin.mkdir()
+    git(origin, "init", "-q")
+    tree = git(origin, "mktree")
+    m0 = git(origin, "commit-tree", tree, "-m", "the base", stamp="13:00")
+    head = git(origin, "commit-tree", tree, "-p", m0, "-m", "change 1", stamp="13:10")
+    q1 = git(origin, "commit-tree", tree, "-p", m0, "-p", head, "-m", f"Queue: #1 change\n\nPR: #1\nHead: {head}\nOwner: o",
              stamp="14:20")
     for ref in ("checked", "main"):
-        git(repo, "update-ref", f"refs/remotes/origin/{ref}", q1)
+        git(origin, "update-ref", f"refs/heads/{ref}", m0)
+    git(tmp_path, "clone", "-q", "--no-checkout", str(origin), str(repo))
+    for ref in ("checked", "main"):
+        git(origin, "update-ref", f"refs/heads/{ref}", q1)
     log = tmp_path / "log.jsonl"
     log.write_text("\n".join(json.dumps(d) for d in (
         decision("14:05", 1, "build", m0, sha=C1, base=m0, members=[1], heads=[head]),
@@ -313,7 +317,9 @@ def test_agreement_exits_zero(tmp_path, monkeypatch, capsys):
     labels = {(1, head): [Label(label_target(1, head), vocab.READY, True, "o", at("14:00"))]}
     monkeypatch.setattr(vc, "store_labels", lambda root: lambda heads: {k: labels.get(k, []) for k in heads})
     monkeypatch.setattr(vc, "clock", lambda: vc.when(at("15:00")))
-    assert vc.main(["--repo", str(repo), "--log", str(log)]) == 0
+    assert vc.main(["--repo", str(repo), "--log", str(log)]) == 0          # the clone's `main` and `checked` are the base
+    assert "on main by the shadow only: 1 (#1); by the old path only: 0" in capsys.readouterr().out
+    assert vc.main(["--repo", str(repo), "--log", str(log), "--fetch"]) == 0
     text = capsys.readouterr().out
     assert text.startswith(f"vqueue compare {hm('14:05')} to {hm('15:00')}: 3 decision(s) in 2 tick(s)")
     assert "disagreements: 0\n" in text and "on main by the shadow only: 0; by the old path only: 0" in text
@@ -363,6 +369,19 @@ def test_an_advance_off_the_logged_main_or_of_a_failed_candidate_is_unsound():
     assert f"warning: {rep['warnings'][0]}" in text.splitlines()
     assert rep["liveness"]["longest_pending"]["sha"] == X3 and rep["liveness"]["longest_pending"]["hours"] == 0.25
     assert rep["liveness"]["dropped_stale"] == []                      # a drop `on main` isn't stale
+
+
+def test_an_advance_that_lists_no_heads_holds_its_members_at_the_heads_built():
+    """The old path landed 1 at one head and reverted it; the shadow built and advanced 1 at another, its advance listing
+    members but no heads: no disagreement.  At the reverted head it is (b)."""
+    chain = vc.parse_chain(_chain_text((A, "", "10:00", "root"), (Q1, f"{A} {HEAD[1]}", "10:01", _queue(1)),
+                                       (R1, Q1, "10:02", f'Revert "Queue: #1 change"\n\nThis reverts commit {Q1}.')))
+    for built, kinds in ((HEAD[2], []), (HEAD[1], [("b", 1)])):
+        entries, _ = vc.parse_log("\n".join(json.dumps(d) for d in (
+            decision("10:05", 1, "build", A, sha=X1, base=A, members=[1], heads=[built]),
+            decision("10:10", 2, "advance", A, sha=X1, base=A, members=[1]))))
+        rep = vc.compare(entries, chain, [A], None, {}, lambda heads: {}, vc.when(at("10:00")), vc.when(at("11:00")))
+        assert [(d["kind"], d["pr"]) for d in rep["disagreements"]] == kinds
 
 
 def test_unread_labels_and_an_empty_window_are_warned():

@@ -1,4 +1,4 @@
-"""`python3 -m research.vqueue_compare`: where the verified queue's shadow and drive's old path agree and disagree, over a
+r"""`python3 -m research.vqueue_compare`: where the verified queue's shadow and drive's old path agree and disagree, over a
 window (`--since`, `--until`, UTC ISO; by default from the log's first decision to now).
 
 It reads the shadow's decision log (`--log`: one JSON object a line, `research.vqueue`'s actions as its loop applied them;
@@ -8,12 +8,16 @@ its landing's, since drive merges a member again as it lifts it and lands it in 
 one (an odd chain of `This reverts commit C`; a `Revert "Queue: #N` subject naming no commit undoes #N's newest landing), and
 `origin/main`'s first-parent line.  When `main` reached each commit isn't in git: `--main-moves` gives it, `<UTC ISO> <commit>`
 lines (a hex prefix of `PREFIX` digits or more names the one commit of `main`'s line it starts, and a commit off that line
-counts as the newest commit of the line it holds); the earliest line is where `main` was then, and each later one reaches
-the commits above every line before it.  Without it `main`'s arrival is unknown,
-and the old path's `main` is `main` now.  Each PR's ready mark is the newest `ready = true` label at a head at or before the
-event measured from it (`research queue stats` reads the same labels; a head with no label of its own has no mark here), and an
-old-path ejection is a head whose newest `ready` label is `false` (`research queue eject`'s, its reason in `ref`).
-`--old-reds` names the old path's after-landing reds, JSON `{tip: [step, ...]}`.
+counts as the newest commit of the line it holds); the earliest line is where `main` was then, and each later one reaches the
+commits above every line before it.  GitHub's push activity on `main` is such a file:
+
+    gh api 'repos/OWNER/REPO/activity?ref=refs/heads/main&activity_type=push&per_page=100' --paginate \
+        --jq '.[] | "\(.timestamp) \(.after)"'
+
+Without it `main`'s arrival is unknown, and the old path's `main` is `main` now.  Each PR's ready mark is the newest `ready =
+true` label at a head at or before the event measured from it (`research queue stats` reads the same labels; a head with no
+label of its own has no mark here), and an old-path ejection is a head whose newest `ready` label is `false` (`research queue
+eject`'s, its reason in `ref`).  `--old-reds` names the old path's after-landing reds, JSON `{tip: [step, ...]}`.
 
 The report (`--json` for the whole of it):
 
@@ -530,7 +534,10 @@ def compare(entries: list[Entry], chain: Chain, line: list[str], arrived: dict[s
     flagged: set[tuple[int, str | None]] = set()
     for e in advances:
         held = holds(s, e.sha or "")[0] if e.sha in s.cands else {}
-        for pr, h in {**held, **{pr: e.head(pr) for pr in e.members}}.items():
+        for pr in e.members:
+            if (h := e.head(pr)) is not None or pr not in held:
+                held[pr] = h
+        for pr, h in held.items():
             if (pr, h) in flagged:
                 continue
             seen = {"advance": iso(e.at), "sha": e.sha}
