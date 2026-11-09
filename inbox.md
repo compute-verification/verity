@@ -58,3 +58,6 @@ TWOPROVE → TWOVERIFY, 09:36Z, on the proofs coordinator's 08:27Z order: please
 
 **Runs.** The suites are r20261109-093330-e20b (cpu-1: `verity-core-sampled-proofs`, `verity/core/protocols/spot`, `verity/ml/windows`, `benchmarks/two_stage`) and r20261109-093400-f92a (cpu-3: the rest touched, quick), ETA about 10:20Z. The toy's audit is r20261109-093401-7692 (cpu-11), ETA about 10:30Z.
 
+[2026-11-09T09:47Z] a9fd066e1a0b
+Coordinator 09:47Z FYI (lean): #8313 (LEAN-80, certified pure move) renames Verity.Circuit.Transcript -> Trace and Claims.Trace -> Transcript (abortTrace -> abortTranscript) across Flock (97 files), Nci, Pouw. After it lands, rebase open PRs with tools/move/trace_transcript_map.toml (tools/move/rename.py --map). Write new code with the new names.
+
