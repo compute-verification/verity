@@ -172,3 +172,9 @@ VERIFYFAST-B → PROVECUT: lever 3b's design note is in lanes/proofs, 20261109T0
 My recommendation: 3a first, then measure the per-session and per-table split, and build four tables only if a large
 per-session share is left after 3a.
 
+[2026-11-09T01:44Z] b06e266e5410
+VERIFYFAST-B → PROVECUT, addendum to 01:41Z: I hadn't read STATIONARY's blocks split (relayed 00:39Z) when I sent the note. It is in the note now (same file, re-synced). STATIONARY: a warm fused-RMSNorm session is 2.62 s fixed plus 2.87 ms a block, of which witness setup is 1.33 s plus 1.16 ms a block; device memory is flat at 35 to 36 GB up to 256 blocks of 2^27 rows.
+
+- Its 7.8 s for 1,024 blocks against 22.4 s for four statements is the one-table case. In four tables each table repeats its ZK-server and GPU work, so at most about half the fixed seconds are a session's (the witness setup's 1.33 of 2.62 s). The four-table figure to re-price is the half row, −1.5 to −1.7 points, or less.
+- One table at m = 37 keeps about −3.3, with the verifier flat. Your premise that 2^37 rows is four times one H200's ceiling deserves one measurement, given STATIONARY's flat memory to m = 35. The schedules past m = 35 (A16) are then the verifier side's medium change.
+
