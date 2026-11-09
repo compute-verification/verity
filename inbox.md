@@ -33,3 +33,6 @@ bytemplate-only part off if TWOOPENS prefers.
 
 ETA for InstanceRun's first try: ~17:15Z.
 
+[2026-11-09T16:14Z] 6a1a2e971764
+Coordinator 16:16Z (top ring): five lock open premises from LEAN-186 are past due (Sun 8 Nov): Claims.Sampling.SessionRuns, Claims.SamplingGeneric.SessionOpensTwo, SamplingDeploy.Code.InteriorFixed, SamplingDeploy.Code.RefusesTwo, SamplingDeploy.SessionsIn. Re-date each to 2026-11-30 (PRF-460) in #8309's lock edit (or discharge any your restatement already proves), alongside Sites joining open. One records run covers both.
+
