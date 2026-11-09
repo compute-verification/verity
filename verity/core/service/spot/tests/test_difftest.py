@@ -4419,10 +4419,14 @@ DUO = bind(CompositeDefinition("CoreSpotDuo", 0, (),
                                lambda S: ((("x", Array(2, Value(8))),), Tuple(Value(8), Value(8))),
                                lambda B, S, x: tuple_of(B.call(XOR8, x[0], x[1]), B.call(XOR8, x[1], x[0])),
                                register=False))
+SWAP = bind(CompositeDefinition("CoreSpotSwap", 0, (), lambda S: ((("x", Array(2, Value(8))),), Array(2, Value(8))),
+                                lambda B, S, x: array_of([B.call(ID8, x[1]), B.call(ID8, x[0])]), register=False))
 #: Replay blocks of templates with several callers, to derive round 2's rows from (`second_stage.replay_rows`): PAIR
 #: over each of two rows, in order and the other way round, its outputs returned in order; that, and ID8 over the
 #: second's output, returned beside them; ID8 over the second output of DUO, a template of two; and, deriving none, PAIR
-#: over two parameters, PAIR over a slice not one of its rows, and an ID8 batch mapped over a PAIR batch's outputs.
+#: over two parameters, PAIR over a slice not one of its rows, an ID8 batch mapped over a PAIR batch's outputs, PAIR
+#: over the parameter and over SWAP's output (a port one caller links and another wires), and PAIR over two ID8 outputs
+#: (a port gathered from two writers).
 MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, body, register=False))
                  for name, sig, body in (
     ("Pairs", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
@@ -4436,7 +4440,11 @@ MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, b
      lambda B, S, x, w: array_of([B.call(PAIR, x), B.call(PAIR, w)])),
     ("Askew", lambda S: ((("x", Array(4, Value(8))),), Value(8)), lambda B, S, x: B.call(PAIR, x[1:3])),
     ("Members", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
-     lambda B, S, x: B.batch(ID8, B.batch(PAIR, x, axes=(0,)), axes=(0,))))]
+     lambda B, S, x: B.batch(ID8, B.batch(PAIR, x, axes=(0,)), axes=(0,))),
+    ("Kinds", lambda S: ((("x", Array(2, Value(8))),), Array(2, Value(8))),
+     lambda B, S, x: array_of([B.call(PAIR, x), B.call(PAIR, B.call(SWAP, x))])),
+    ("Gathered", lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+     lambda B, S, x: B.call(PAIR, array_of([B.call(ID8, x[0]), B.call(ID8, x[1])]))))]
 REPLAY_PROGRAMS = [(P.population_program(r, 2), codec.descriptor_id(r)) for r in REPLAYS] + [
     (P.mixed_population_program([(BLOCK, 2), (PAIR, 3)]), codec.descriptor_id(BLOCK))] + [
     (P.population_program(r, 2), codec.descriptor_id(r)) for r in WIRE_REPLAYS + MULTI_REPLAYS]
@@ -6195,10 +6203,11 @@ def test_the_designs_rows_place_each_callers_units(pieces):
     writes its row of `o0`, three a block; PAIR called over each of two rows reads row `j` at unit `j`, or row `1 - j`
     the other way round, and writes row `j` of the output; ID8 over the second PAIR's output reads PAIR's unit 1 of two,
     its own output a field of one row; ID8 over DUO's second output reads it at DUO's `o1`. PAIR's callers reading two
-    parameters, or a slice not one of its rows, make no links, and an ID8 batch mapped over a PAIR batch's outputs no
+    parameters, or a slice not one of its rows, or one the parameter and the other SWAP's output, make no links, and
+    the last no wires either; an ID8 batch mapped over a PAIR batch's outputs, or PAIR over two ID8 outputs, makes no
     wires; the rows are then only those of the others."""
     pair, id8, duo = (codec.descriptor_id(d) for d in (PAIR, ID8, DUO))
-    pairs, crossed, fan, field, apart, askew, members = MULTI_REPLAYS
+    pairs, crossed, fan, field, apart, askew, members, kinds, gathered = MULTI_REPLAYS
 
     def link(t, port, value):
         return {"port": port, "template": t, "value": value}
@@ -6221,6 +6230,8 @@ def test_the_designs_rows_place_each_callers_units(pieces):
         (apart, None, [], []),
         (askew, None, [], []),
         (members, [link(pair, "x", "x"), link(id8, "o0", "o0")], None, rows((pair, "x", 2, two), (id8, "o0", 2, two))),
+        (kinds, None, None, []),
+        (gathered, [link(id8, "y", "x"), link(pair, "o0", "o0")], None, rows((id8, "y", 2, two), (pair, "o0", 1, one))),
     ]
     for r, links, wires, want in cases:
         c = {"program": _json(codec.encode_program(P.population_program(r, 2))), "replay": codec.descriptor_id(r),
