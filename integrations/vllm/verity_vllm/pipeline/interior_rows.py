@@ -32,6 +32,12 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
   ports from what it holds (`interior_ports`). The spans must share one Program, as a size class's spans share its
   replay Definition. A commitment made on the replayed rows' device (`DeviceCommit`: a GPU commit's roots, every row's
   b || c and its salts) registers in place of committing the rows on the host (`committed`).
+* `Table`, `interior_tables`, `supplied`: a replay block whose template reads a history table (`EmbeddingRead_v1{V, H}`)
+  brings one `Table` a sampled span, its rows and salts as its builder salted them. The interior commits each once, in
+  `one_stage.history`'s format at V leaves under `table_name` (bound to its run), and registers it. Each read's ``root`` and
+  ``domain`` rows are rows of the two values `supplied` makes from the tables' entries alone at public salts, given by
+  reference, so the challenger makes the same values and no read takes a root of its choosing. Every read must open its
+  span's table at its key (`gates.embedding.reference`) before anything is committed; `table_reads` makes such reads.
 * `register`: the record on the two-stage stream after its first stage.
 
 A `span` reads one template's units, one member of word rows; a chunked or shared-row template's span is refused by name.
@@ -49,11 +55,16 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.spot.one_stage import history as HT, partition as P, registered as RG, registration as R
+from verity.ml.commitments import hm96
+from verity.ml.commitments.gates import embedding as EMB
+from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
+from verity.ml.commitments.rowleaf import sha512_row_seg_digest
 from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.ml.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.ml.definitions.registry.dead_free import CHUNK
 from verity.ml.windows import rows as CS
+from verity.ml.windows.interface import digest_words
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.compare import _tp_member_alias
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex, node_runs
@@ -480,15 +491,164 @@ def interior_ports(members: Members, n_rho: Cells, boundary: str, sample: Sequen
     return CS.expected_ports(interior_window(members, n_rho, boundary, sample, wires))
 
 
+#: a table read's parameters (`gates.embedding`'s `EmbeddingRead_v1`): its key, its table's root and domain id, its opening
+READ = ("tok", "root", "domain", "row", "salt", "path")
+_HM = hm96.SHA512
+
+
+@dataclass(frozen=True)
+class Table:
+    """A sampled span's history table: ``rows``, (n, H) u16 words a position, and ``salts``, one 192-byte salt a row
+    concatenated, as its builder salted them, no salt on two rows. It commits in `one_stage.history`'s format at
+    ``capacity`` leaves, the zero row under the zero salt past its n rows."""
+    rows: np.ndarray
+    salts: bytes = field(repr=False)
+    capacity: int = HT.CAPACITY
+
+
+@dataclass(frozen=True)
+class TableCommit:
+    """A `Table` committed under ``name``: its domain (`one_stage.history.domain`), every row's b || c, its tree's levels."""
+    name: str
+    words: int
+    domain: CommitmentDomain
+    bcs: tuple[bytes, ...] = field(repr=False)
+    levels: tuple[tuple[bytes, ...], ...] = field(repr=False)
+
+    @property
+    def root(self) -> bytes:
+        return self.levels[-1][0]
+
+    def path(self, position: int) -> list[bytes]:
+        out, i = [], int(position)
+        for level in self.levels[:-1]:
+            out.append(level[i ^ 1])
+            i >>= 1
+        return out
+
+    def entry(self) -> dict[str, Any]:
+        """Its registered entry (`registered.ENTRY_KEYS`)."""
+        return {"value": self.name, "root": self.root.hex(), "leaves": self.domain.count, "words": self.words,
+                "domain": self.domain.domain_id.hex()}
+
+
+def table_name(run: str, s: int) -> str:
+    """Sampled span ``s``'s table in the interior of run ``run``: its registered value and its domain's table."""
+    return f"interior/{run}/history/{int(s)}"
+
+
+def commit_table(t: Table, program: str, name: str) -> TableCommit:
+    """``t`` committed as the table ``name`` of ``program`` (a digest, hex), its root the one `one_stage.history.check`
+    holds a table's root to."""
+    rows = np.asarray(t.rows)
+    n, words = rows.shape if rows.ndim == 2 else (0, 0)
+    salts = [bytes(t.salts[i * _HM.salt_bytes:(i + 1) * _HM.salt_bytes]) for i in range(n)]
+    why = [w for w, bad in ((f"a capacity of {t.capacity}, not a power of two of at least 2", not HT.cap_ok(t.capacity)),
+                            (f"rows {rows.shape} of {rows.dtype}, not 1 to {t.capacity} rows of u16 words",
+                             rows.dtype != np.uint16 or not 1 <= n <= t.capacity or not HT.words_ok(words)),
+                            (f"{len(t.salts)} bytes of salts, not one {_HM.salt_bytes}-byte salt a row",
+                             len(t.salts) != n * _HM.salt_bytes),
+                            ("one salt on two rows", len(set(salts)) != n)) if bad]
+    if why:
+        raise ValueError(f"table {name}: {'; '.join(why)}")
+    dom = HT.domain(program, name, words, t.capacity)
+    bcs = tuple(_HM.commit_string(_HM.default_key, sha512_row_seg_digest(r.astype("<u2").tobytes(), 16 * words), s)
+                for r, s in zip(rows, salts, strict=True))
+    levels = tree_levels(dom, HT.leaves(dom, bcs, HT.placeholder(words)))
+    return TableCommit(name, words, dom, bcs, tuple(tuple(lv) for lv in levels))
+
+
+def interior_tables(members: Members, n_rho: Cells, boundary: str, sample: Sequence[int], tables: Sequence[Table],
+                    wires: Sequence[Any] = ()) -> list[TableCommit]:
+    """The sampled spans' tables committed as `interior` commits them (``tables[s]`` sampled span s's), under the interior
+    window's program digest and `table_name`: what a read's opening is made against (`table_reads`)."""
+    return _tables(interior_window(members, n_rho, boundary, sample, wires), tables)
+
+
+def _tables(window: CS.Binding, tables: Sequence[Table]) -> list[TableCommit]:
+    program = P.program_digest(window.program)
+    return [commit_table(t, program, table_name(window.run, s)) for s, t in enumerate(tables)]
+
+
+def supplied(program: str, run: str, entries: Sequence[Mapping[str, Any]]) -> tuple[Any, Any]:
+    """The values a table read's ``root`` and ``domain`` take, from the tables' registered entries alone (``entries[s]``
+    sampled span s's): row s its table's root, and its domain id, as a `Digest` port's 32 words (`interface.digest_words`),
+    each value committed as core's `Registered` under ``program`` at its public salts (`registered.supplied_salts`), as
+    `interface.supplied` fills a served window's table reads."""
+    out = []
+    for of in ("root", "domain"):
+        name = f"interior/{run}/history/{of}"
+        rows = [digest_words(bytes.fromhex(e[of])) for e in entries]
+        out.append(RG.Registered.commit(program, name, rows, RG.supplied_salts(program, name, len(rows)),
+                                        schema=RG.SCHEMA_V2))
+    return out[0], out[1]
+
+
+def _reader(m: CS.Member) -> tuple[int, int] | None:
+    """(V, H) of a member of table reads (`EmbeddingRead_v1{V, H}`), None for any other."""
+    fn = SRW.template(m.template).fn
+    if tuple(p for p, _t in fn.signature()[0]) != READ:
+        return None
+    b = getattr(fn, "bindings", {})
+    return int(b["V"]), int(b["H"])
+
+
+def _digests(words: np.ndarray) -> bytes:
+    """`interface.digest_words`' inverse over consecutive 32-word digests: their bytes."""
+    return np.asarray(words, dtype="<u2").view("<u8").astype(">u8").tobytes()
+
+
+def table_reads(tc: TableCommit, t: Table, toks: Sequence[int]) -> dict[str, dict[str, np.ndarray]]:
+    """Reads of committed table ``t`` (``tc``) at keys ``toks``, each in [0, capacity), as `interior` takes a read member's
+    rows and outputs: each key, the table's root and domain id, the key's row and salt (the zero row under the zero salt
+    past the table's rows) and its path; h the row, ok 1."""
+    n, H = t.rows.shape
+    cols: dict[str, list[np.ndarray]] = {p: [] for p in (*READ, "o0", "o1")}
+    for k in (int(x) for x in toks):
+        if not 0 <= k < tc.domain.count:
+            raise ValueError(f"a read of {tc.name} at key {k}, outside its {tc.domain.count} leaves")
+        row = t.rows[k] if k < n else np.zeros(H, np.uint16)
+        salt = bytes(t.salts[k * _HM.salt_bytes:(k + 1) * _HM.salt_bytes]) if k < n else bytes(_HM.salt_bytes)
+        for p, v in (("tok", np.asarray([k & 0xFFFF, k >> 16])), ("root", digest_words(tc.root)),
+                     ("domain", digest_words(tc.domain.domain_id)), ("row", row),
+                     ("salt", np.concatenate([digest_words(salt[i:i + 64]) for i in range(0, len(salt), 64)])),
+                     ("path", np.concatenate([digest_words(s) for s in tc.path(k)])), ("o0", row), ("o1", np.ones(1))):
+            cols[p].append(np.asarray(v, dtype=np.uint16))
+    rows = {p: np.stack(cols[p]) for p in READ}
+    return {"rows": rows, "outs": {"o0": np.stack(cols["o0"]), "o1": np.stack(cols["o1"])}}
+
+
+def _opened(m: CS.Member, d: Mapping[str, Mapping[str, np.ndarray]], cell: int, tcs: Sequence[TableCommit],
+            V: int) -> None:
+    """Every read of member ``m`` (``d``, its Q·n_t units, unit u of sampled span u // n_t) opens its span's table at its
+    key: its root and domain id are the table's, and `gates.embedding.reference` gives its h with ok = 1."""
+    r, o = d["rows"], d["outs"]
+    for u in range(len(r["tok"])):
+        tc = tcs[u // cell]
+        tok = int(r["tok"][u][0]) | int(r["tok"][u][1]) << 16
+        what = f"{m.template}: read {u} (sampled span {u // cell}, key {tok})"
+        root, dom = _digests(r["root"][u]), _digests(r["domain"][u])
+        if root != tc.root or dom != tc.domain.domain_id:
+            raise ValueError(f"{what} takes a root or domain id other than its table's, {tc.name}'s")
+        path = _digests(r["path"][u])
+        h, ok = EMB.reference(V, tok, root, dom, [int(w) for w in r["row"][u]], _digests(r["salt"][u]),
+                              [path[i:i + 64] for i in range(0, len(path), 64)])
+        if ok != 1 or int(o["o1"][u][0]) != 1 or [int(w) for w in o["o0"][u]] != list(h):
+            raise ValueError(f"{what} does not open its table there: its row, salt and path are no opening of {tc.name}'s "
+                             "root at its key, or its h and ok are not the read's")
+
+
 @dataclass(frozen=True)
 class Interior:
     """An interior registration: its record, its ports and leaf layer as the challenger derives them from the released
-    public bodies, the commitment it opens from, and each span's index entries, a list a template."""
+    public bodies, the commitment it opens from, each span's index entries, a list a template, and the sampled spans'
+    tables (`interior_tables`), none where no template reads one."""
     record: dict[str, Any]
     ports: dict[str, dict[str, Any]]
     leaf_layer: str
     committed: CS.Committed
     entries: list[list[list[list[Any]]]]
+    tables: tuple[TableCommit, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -533,7 +693,8 @@ def _layout(m: CS.Member) -> tuple[Any, ...]:
 
 def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str, sample: Sequence[int], *, row: str,
              replay: str | None = None, previous: str | None = None, kind: str = "served",
-             salt_key: bytes | None = None, device: DeviceCommit | None = None, wires: Sequence[Any] = ()) -> Interior:
+             salt_key: bytes | None = None, device: DeviceCommit | None = None, wires: Sequence[Any] = (),
+             tables: Sequence[Table] = ()) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s: one template's span, or one a template in the
     check's order, as `pieces` gives a token select's), template t's each padded to its n_t units (``n_rho``, as
     `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after
@@ -543,7 +704,9 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     ``salt_key``: tests only, the salts derived from it (`ml.windows.rows.commit`). ``device``: the commitment made on the
     rows' device (`committed`), registered in place of committing the spans' rows, which it never reads. ``wires``: the
     replay block's, as `interior_window` takes them; a wired port's replayed rows must be its writers' output rows, which
-    are what the interior commits."""
+    are what the interior commits. ``tables``: ``tables[i]`` sampled span i's, one a span exactly when a template reads a
+    table (`Table`); each is committed and registered, every read must open it (`table_reads`), and each read's ``root``
+    and ``domain`` rows are committed as the `supplied` values' rows, on the host."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
@@ -555,6 +718,18 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         raise ValueError("the spans' units are not the same templates' in one layout and one order")
     window = interior_window([s.member for s in per[0]], n_rho, boundary, sample, wires)
     ports, cells = CS.expected_ports(window), _cells(window.members, n_rho)[1]
+    readers = [(k, vh) for k, m in enumerate(window.members) if (vh := _reader(m)) is not None]
+    if (bool(readers) or bool(tables)) and len(tables) != len(sample) * bool(readers):
+        raise ValueError(f"{len(tables)} tables for a replay sample of {len(sample)} and {len(readers)} templates of table "
+                         "reads: each sampled span brings its table exactly when a template reads one")
+    if tables and device is not None:
+        raise ValueError("a commitment on the rows' device holds no table: a replay block of table reads commits on the host")
+    tcs = _tables(window, tables)
+    for k, (V, H) in readers:
+        if any(t.capacity != V or tc.words != H for t, tc in zip(tables, tcs, strict=True)):
+            raise ValueError(f"{window.members[k].template} reads a table of {V} rows of {H} words, not the spans' "
+                             f"{[(t.capacity, tc.words) for t, tc in zip(tables, tcs, strict=True)]}")
+    given = supplied(P.program_digest(window.program), window.run, [tc.entry() for tc in tcs]) if tcs else ()
     if device is not None:
         c = committed(window, device)
     else:
@@ -573,13 +748,18 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                     raise ValueError(f"{m.template}: its replayed {p!r} rows are not the {o!r} rows of the "
                                      f"{window.members[j].template} units that write them, which the interior commits")
                 d["rows"][p] = CS.WIRED
+        for k, (V, _H) in readers:
+            _opened(window.members[k], data[k], cells[k], tcs, V)
+            at = tuple(u // cells[k] for u in range(len(sample) * cells[k]))
+            data[k]["rows"]["root"], data[k]["rows"]["domain"] = (CS.ValueRows(v, at) for v in given)
         fresh = None if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()}
         c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh)
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
                   **({"replay": replay} if replay is not None else {})}
-    rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=R)
+    rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=R,
+                          entries=[*(tc.entry() for tc in tcs), *(v.entry() for v in given)])
     layer = CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
-    return Interior(rec, ports, layer, c, [[s.entries for s in p] for p in per])
+    return Interior(rec, ports, layer, c, [[s.entries for s in p] for p in per], tuple(tcs))
 
 
 def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
@@ -589,5 +769,6 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
                                      leaf_layer=copies.pop("leaf_layer", it.leaf_layer), **copies)
 
 
-__all__ = ["MOVED", "DeviceCommit", "Interior", "Replay", "Span", "captured", "committed", "gather", "interior", "interior_ports",
-           "interior_run", "interior_window", "named", "pieces", "port_map", "register", "span"]
+__all__ = ["MOVED", "READ", "DeviceCommit", "Interior", "Replay", "Span", "Table", "TableCommit", "captured", "commit_table",
+           "committed", "gather", "interior", "interior_ports", "interior_run", "interior_tables", "interior_window", "named",
+           "pieces", "port_map", "register", "span", "supplied", "table_name", "table_reads"]
