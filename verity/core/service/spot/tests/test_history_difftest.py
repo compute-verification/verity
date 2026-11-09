@@ -11,6 +11,7 @@ import json
 import math
 import re
 import shutil
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,8 @@ import verity_difftest as D
 from verity.ml.commitments import history as H
 
 PACKAGE = Path(__file__).resolve().parents[1]
-PIECES = "sampled-proofs-difftest"
+PIECES = next(e["name"] for e in tomllib.loads((PACKAGE / "lakefile.toml").read_text())["lean_exe"]
+              if e["root"] == "Spot.DifftestMain")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 #: `Flock.unhex`'s domain: pairs of lowercase hex digits

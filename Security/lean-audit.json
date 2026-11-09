@@ -4411,6 +4411,10 @@
   "NetTiming.SecurityProofs.PooledLeakChecked": {
    "nontrivial": "NetTiming.Witness.PooledLeakChecked_nontrivial"
   },
+  "Hash.SecurityProofs.HistoryReadBinding": {
+   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
+   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
+  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledAuditAccepted_nontrivial"
@@ -16241,6 +16245,140 @@
    "type_hash": "c0490a64c93269da77a51fd49be5835792c0659fce6b3962e9750167c044c221",
    "unfolded_hash": "96666a07570ac2ae12b5b5301fe6c9411fc7b9a14cb77edd240b11f38924b984"
   },
+  "Hash.SecurityProofs.HistoryReadBinding": {
+   "owner": "@proofs",
+   "signature": ["Hash.SecurityProofs.HistoryReadBinding : Hash.Guarantees.HistoryReadBinding"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Hash.EmbeddingRead.ok"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "59d76697df4ac365960948abe6f80f64e5b9f9c0995092d467afaac234736871",
+   "unfolded_hash": "6f48b6e3009dc0f3ae758fd091b709a77858b823e7936d009160493b897cd19d"
+  },
+  "Hash.SecurityProofs.HistoryReadBinding_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Hash.SecurityProofs.HistoryReadBinding_honest :",
+    "  And",
+    "    (Hash.EmbeddingRead.ok (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "      (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "      { id := fun x => 4, count := instHPow.hPow 2 17, position := fun r => r } (List.replicate 64 0)",
+    "      (Hash.HistoryTable.root (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "        { id := fun x => 4, count := instHPow.hPow 2 17, position := fun r => r } (List.replicate 64 0)",
+    "        (Hash.HistoryTable.string 1",
+    "          (fun x =>",
+    "            Hash.Hm96.commitString",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              (List.replicate 64 0)",
+    "              (Hash.RowLeaf.Format.digest",
+    "                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                Hash.RowLeaf.Format.seg (List.replicate 16 Bool.true))",
+    "              (List.replicate 192 2))",
+    "          (Hash.HistoryTable.placeholder",
+    "            (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "            (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "            (List.replicate 64 0) 1)))",
+    "      { id := fun x => 4, count := instHPow.hPow 2 17, position := fun r => r }.count 0",
+    "      (Hash.HistoryTable.opening",
+    "        (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "        { id := fun x => 4, count := instHPow.hPow 2 17, position := fun r => r } (List.replicate 64 0)",
+    "        (Hash.HistoryTable.string 1",
+    "          (fun x =>",
+    "            Hash.Hm96.commitString",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              (List.replicate 64 0)",
+    "              (Hash.RowLeaf.Format.digest",
+    "                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                Hash.RowLeaf.Format.seg (List.replicate 16 Bool.true))",
+    "              (List.replicate 192 2))",
+    "          (Hash.HistoryTable.placeholder",
+    "            (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "            (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "            (List.replicate 64 0) 1))",
+    "        (List.replicate 16 Bool.true) (List.replicate 192 2) 0))",
+    "    (Eq",
+    "      (Hash.Hm96.commitString (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "        (List.replicate 64 0)",
+    "        (Hash.RowLeaf.Format.digest",
+    "          (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "          Hash.RowLeaf.Format.seg (List.replicate 16 Bool.true))",
+    "        (List.replicate 192 2))",
+    "      (Hash.HistoryTable.string 1",
+    "        (fun x =>",
+    "          Hash.Hm96.commitString",
+    "            (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "            (List.replicate 64 0)",
+    "            (Hash.RowLeaf.Format.digest",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              Hash.RowLeaf.Format.seg (List.replicate 16 Bool.true))",
+    "            (List.replicate 192 2))",
+    "        (Hash.HistoryTable.placeholder",
+    "          (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "          (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) (List.replicate 64 0)",
+    "          1)",
+    "        0))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "c34d44d970df1eaea23ad640c4eda567901878e35770d40c0c4ff3a66cbccf91"
+  },
+  "Hash.SecurityProofs.HistoryReadBinding_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Hash.SecurityProofs.HistoryReadBinding_nontrivial :",
+    "  Not",
+    "    (Or",
+    "      (Eq",
+    "        (Hash.EmbeddingRead.h { id := fun x => 4, count := 1, position := fun r => r }.count 1 0",
+    "          { row := List.cons Bool.false List.nil, salt := List.nil, sibs := List.nil })",
+    "        (List.cons Bool.true List.nil))",
+    "      (Or",
+    "        (Hash.CollisionIn (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "          (instHAppendOfAppend.hAppend",
+    "            (Hash.RowLeaf.outerHashed",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              (Hash.EmbeddingRead.verifier { id := fun x => 4, count := 1, position := fun r => r } List.nil) 0",
+    "              { row := List.cons Bool.false List.nil, salt := List.nil, sibs := List.nil })",
+    "            (Hash.RowLeaf.outerHashed",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              (Hash.EmbeddingRead.verifier { id := fun x => 4, count := 1, position := fun r => r } List.nil) 0",
+    "              (Hash.HistoryTable.opening",
+    "                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                { id := fun x => 4, count := 1, position := fun r => r } List.nil (fun x => List.nil)",
+    "                (List.cons Bool.true List.nil) (List.cons 0 List.nil) 0))))",
+    "        (Hash.CollisionIn (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "          (instHAppendOfAppend.hAppend",
+    "            (Hash.RowLeaf.innerHashed",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              (Hash.EmbeddingRead.verifier { id := fun x => 4, count := 1, position := fun r => r } List.nil)",
+    "              { row := List.cons Bool.false List.nil, salt := List.nil, sibs := List.nil })",
+    "            (Hash.RowLeaf.innerHashed",
+    "              (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "              (Hash.EmbeddingRead.verifier { id := fun x => 4, count := 1, position := fun r => r } List.nil)",
+    "              (Hash.HistoryTable.opening",
+    "                (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
+    "                { id := fun x => 4, count := 1, position := fun r => r } List.nil (fun x => List.nil)",
+    "                (List.cons Bool.true List.nil) (List.cons 0 List.nil) 0))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "9f99d7c18011ab06123a5583e4a560c0a628ce64eb34f903d971072d5e1868f2"
+  },
   "Hash.SecurityProofs.RowBinding": {
    "owner": "@kernels",
    "signature": ["Hash.SecurityProofs.RowBinding : Hash.Guarantees.RowBinding"],
@@ -25950,6 +26088,10 @@
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
+   "Hash.SecurityProofs.HistoryReadBinding": {
+    "function": "Hash.EmbeddingRead.ok",
+    "outcome": "accept"
+   },
    "Pouw.Salt.keyed_leaf_hides": {
     "function": "Hash.Keyed.digest",
     "outcome": "none"
@@ -26836,12 +26978,12 @@
     "Real.instLE.le c.Q (instHSub.hSub (instHSub.hSub (instHSub.hSub (instHSub.hSub (instHMul.hMul k b).cast d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) r.win.len).cast) (instHMul.hMul G b).cast) lam.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (D.κ δ (R.stmt ξ i)) δ) (instHMul.hMul (D.γ (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V D.E (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V D.E D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (Claims.Sampling.κ D δ (R.stmt ξ i)) δ) (instHMul.hMul (Claims.Sampling.γ D (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V (Claims.Sampling.E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V (Claims.Sampling.E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V (Claims.Sampling.E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (D.κ δ (R.stmt ξ i)) δ) (instHMul.hMul (D.γ (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V D.E (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V D.E D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": {
     "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -34630,11 +34772,24 @@
    }
   },
   "Definitions.Hash.Guarantees": {
-   "digest": "57cb6101f00e8e53ea88567e376d0319b8a89247ab1209d7c6ff7bf8932c2ac4",
+   "digest": "5b73a53b9fdc0f02f37ffcba419efab950237f1a3a6480e795db4da058d8becf",
    "definitions": {
     "Hash.Guarantees.EmbeddingReadBinding": "e2578edc453eac230762093f886178b5653f0566d806385e94abbc85e59aebec",
+    "Hash.Guarantees.HistoryReadBinding": "e2f290228c44cbddcdb5a528840d348868a193ac093bc1e6493753d76c975c2b",
     "Hash.Guarantees.RowBinding": "a6c3d575c6964dda73e35def58c71ac95a2117e6554c17a710a3c6de660da41f",
     "Hash.Guarantees.TreeBinding": "f4f7579a5a51c91494a258254756809a445e8522008cc314dab45b61cfd6fea8"
+   }
+  },
+  "Definitions.Hash.HistoryTable": {
+   "digest": "f8cb880c2ef29beda47361d876df31b4eb93515f94f681ec21e3fadd93144188",
+   "definitions": {
+    "Hash.HistoryTable.leaf": "82cec979ebee69fcafabf2e8398fcd5174a4c92bc5b3cb60d8b89b2eae1530ed",
+    "Hash.HistoryTable.opening": "77fac09501744bed94cd46decbd003e3678e3a87451f7fc730be60fd37928067",
+    "Hash.HistoryTable.placeholder": "d246179933a432d10f8197c3a0be279646e227c444a149143f0aab711ad59b06",
+    "Hash.HistoryTable.root": "0f12dfc1dc8d5e0de8387ea1f01a72da172e8b023773cdf7e381cf4a060569fc",
+    "Hash.HistoryTable.string": "bc121098672100e4d912b1d10669e3368c7b3e3add3dfde940a1ee4fdb03a568",
+    "Hash.HistoryTable.zeroRow": "50f9d112192f2a0575c0eb80b4958d5ef9e60e21c6a05a9d2c751e01efbc668b",
+    "Hash.HistoryTable.zeroSalt": "82af63395d296affca536a911f48661e497aecc0e0e79175ffd4da191f634c8b"
    }
   },
   "Definitions.Hash.Hm96": {
@@ -34733,7 +34888,7 @@
    }
   },
   "Definitions.Hash.Tree": {
-   "digest": "aa33e4cbcf66257c4e4590e2978cf9ac2d4c7d34769d49a0c58c4a746f851f9d",
+   "digest": "e7b6286b90a93e10e0eb87cc8dce24dbc21a5d989676c79b3125eba63d1f5287",
    "definitions": {
     "Hash.Tree.Domain": "c2c79d8570596b033121c42768e11af8fd3ddb0e656b558424aac662adddff74",
     "Hash.Tree.Domain.count": "c7812871a6e03a1a9b88abf30238ba383cab05ec0dd67f385b4c35790c066f53",
@@ -34746,7 +34901,11 @@
     "Hash.Tree.frame": "13959de8be69faa822b6eea50bee86deef490427851d98c9f0d68743a83d0ec1",
     "Hash.Tree.hashed": "371d639307471c887542c15ecfbd15ca5989fad57232980260e1da6c8543b971",
     "Hash.Tree.leafMsg": "6a99db444e670c04751199804ecb785dc5e3b5844936bb6f45be04ebc7d0afd5",
-    "Hash.Tree.nodeMsg": "eac379afe30c0f23fdb1cb331a144809e9367083bbbc7dc760d44938041bcee2"
+    "Hash.Tree.nodeAt": "2c49706be72b6d66cdfde6358fea9566b73490bbec909bfff3a687aa18600641",
+    "Hash.Tree.nodeMsg": "eac379afe30c0f23fdb1cb331a144809e9367083bbbc7dc760d44938041bcee2",
+    "Hash.Tree.rootOf": "9faf95296bc3c312925c56c555d470a1e1d5d6870c2e56937eff2e73fdc064e5",
+    "Hash.Tree.sib": "5311d59fe262c9eeee0043b114a9700d67de2e1c69f841b65100e6158b4e2c2c",
+    "Hash.Tree.sibsAt": "8793c49a287237d97db4cd04bca9c799ae45120af84ccdcbc3555b0294181f4f"
    }
   },
   "Definitions.Nci": {

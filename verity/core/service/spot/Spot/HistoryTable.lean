@@ -24,6 +24,10 @@ can't register rows of its choosing.
 * `checkAt cap program table words bcs registered`: the refusals, in order: a capacity that is not a power of two of at
   least 2, a row of no words or of `2^64` bits or more, more rows than the capacity, a `b ‖ c` that is not 128 bytes, a
   registered root that is not 64 bytes, then a registered root other than `rootAt`'s. `check` is it at `CAPACITY`.
+
+What a read that opens against this root returns is stated by `Hash.Guarantees.HistoryReadBinding`: the row behind
+the `b ‖ c` at its index, or SHA-512 collides. That guarantee is stated over `Hash.HistoryTable.root`, and
+`Properties.Spot.HistoryRootIsModel` says a root `checkAt` accepts is that root, at SHA-512 under the table's domain.
 -/
 module
 
