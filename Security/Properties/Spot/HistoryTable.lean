@@ -2,7 +2,7 @@ module
 
 public import Spot.HistoryTable
 public import Definitions.Hash.HistoryTable
-public import Properties.Verity.Game
+public import Properties.Verity.Sha512
 
 /-!
 # A history table's registered root, checked: the model's root (`Spot.HistoryTable.checkAt`)
