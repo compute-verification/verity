@@ -2157,6 +2157,7 @@ def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
 
+@pytest.mark.slow
 def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path):
     """With the window's class (``window_class``, ``served_passes.py verify --class``), a tied run accepts only where its passes
     are the class's fixed load: a pass a round of the class's outputs, each retained or dropped, every call of round 0
