@@ -16620,3 +16620,37 @@ research queue review 8119 --land --sha 6a0dd4f0c475065b780bfaf2a0a8ac2301a3c68e
 loopback session accepts the embedding gather's class statement whenever `FLOCK_CIRCUIT` names a proving build. Both
 the base and this head refuse that statement, with `a shared-row public file (header shared_rows)`, because it has
 shared rows and is not registered. So that opt-in branch fails wherever it runs, and the default suite never reaches it.
+
+## 05:07Z from VERIFYFAST-B: SiluMul's per-block verify cost is 0.8 ms a block, not 0.23 s; the K2048 pin is due about 06:30Z.
+
+`SiluMul_v4{I=256}` (`r20261109-045227-addd`, cpu-12): every session was accepted. Each config was verified three
+times, and the repeats agree to within 0.03 s. A verify here means the one real session: `inputs` plus that session's
+line. "Checks" is the session's line less its setup. Medians:
+
+| blocks | m | verify | inputs | setup | checks |
+| --- | --- | --- | --- | --- | --- |
+| 1 (first) | 25 | 3.29 s | 1.58 s | 0.11 s | 1.60 s |
+| 1 (last) | 25 | 2.94 s | 1.46 s | 0.09 s | 1.39 s |
+| 64 | 28 | 3.43 s | 1.48 s | 0.14 s | 1.81 s |
+| 256 | 30 | 3.73 s | 1.50 s | 0.30 s | 1.91 s |
+| 1,024 | 32 | 4.28 s | 1.53 s | 0.96 s | 1.79 s |
+
+- 1,023 more blocks cost 1.16 s: 1.1 ms a block overall, and 0.7 ms a block at the margin from 256 to 1,024 blocks.
+  All of it is in setup, at 0.86 ms a block. `inputs` doesn't move (1.52 s ± 0.06), and the checks don't move from
+  m = 28 to m = 32.
+- Against the readings: the flat reading predicted +235 s at 1,024 blocks (0.23 s a block), and the I/O-scaled one
+  +58 s (0.057 s a block). The pin measured +1.2 s, so for this type both readings are 50 to 200 times too high.
+- K2048: efbd's 0.13 to 0.34 was a bracket set by noise, since its two one-block verifies differed by 3.2 s. The K2048
+  pin (64 and 256 blocks, three verifies each) decides whether anything specific to K2048 grows with blocks. cpu-11 is
+  at load 138, so I'll go by medians.
+- RMSNorm v8 (large I/O) is due about 07:15Z. The `perf` profile of K2048 at 1 and 64 blocks is due about 06:15Z.
+- A harness quirk that changes no earlier conclusion: `tables_prof.sh` appends `--session-tables J` after
+  `--session DIR`, so `verify` also takes `--session-tables` and `J` as two more session directories. It refuses
+  both and spends one population setup on them. The real session's verdict and phases are unaffected, and the flag
+  itself is still read (`argOf` finds it anywhere), so 0158's multi-table results stand. From now on I report
+  `inputs` plus the session's line, never the wall time.
+
+If K2048 confirms this, the planner's per-block verify term drops to about 1 ms a block. What's left of the verify is
+per statement: the parse in `inputs` (1.5 s for SiluMul, 10 s for K2048, 47 to 70 s for RMSNorm v1) and the template
+fold in the checks (1.6 s, 17 s, 33 to 60 s). My lever then becomes that per-statement cost, and I'll send the plan
+and its PR date once K2048 lands.
