@@ -1,7 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Json.Canon
+public import Proofs.Flock.Claims.Complete.Json.RoundTrip
 public import Proofs.Flock.SpotFlock.Code
-public import Proofs.Properties.Composition
 public import Std.Data.String.ToInt
 import all Init.Data.Int.Repr
 
@@ -10,9 +11,10 @@ import all Init.Data.Int.Repr
 
 Round 2 holds a registered read's root, domain and leaf count to a record's (`SecondStage.sameAt`) by `jeq`, which
 compares canonical texts. A canonical text's first character tells a string, a quote, from a number, a digit or a minus
-sign, and from every other value (`canon_head`); a string's text tells the string (`Esc.canonStr_split`), and a
-number's the number. So a value `jeq` holds to a string is that string (`str_of_jeq`), one it holds to a natural
-number is that number (`nat?_of_jeq`), and `jeq` keeps the bytes a value's hex names (`hexMsg_of_jeq`).
+sign, and from every other value (`canon_head`); a string's text tells the string, which the verifier's parser reads
+back (`FlockComplete.JsonRT.parse_canon`), and a number's the number. So a value `jeq` holds to a string is that string
+(`str_of_jeq`), one it holds to a natural number is that number (`nat?_of_jeq`), and `jeq` keeps the bytes a value's
+hex names (`hexMsg_of_jeq`).
 -/
 
 @[expose] public section
@@ -70,7 +72,7 @@ theorem canon_head {b : Json} {t : String} (h : Flock.canon b = .ok t) :
     rw [Flock.canon] at h
     obtain rfl := (Except.ok.inj h).symm
     refine ⟨'"', ?_, fun _ => ⟨s, rfl⟩, fun hc => absurd hc (by decide)⟩
-    rw [Properties.Composition.Esc.canonStr_toList]
+    rw [FlockComplete.JsonRT.Ascii.canonStr_toList]
     rfl
   | arr a =>
     rw [Flock.canon] at h
@@ -93,14 +95,18 @@ theorem str_of_jeq {s : String} {b : Json} (h : Spot.jeq (.str s) b = true) : b 
     have ht : Flock.canonStr s = t := by simpa using h
     obtain ⟨c, hcr, hq, -⟩ := canon_head hb
     have hc : c = '"' := by
-      rw [← ht, Properties.Composition.Esc.canonStr_toList, List.cons_append, List.head?_cons] at hcr
+      rw [← ht, FlockComplete.JsonRT.Ascii.canonStr_toList, List.cons_append, List.head?_cons] at hcr
       exact (Option.some.inj hcr).symm
     obtain ⟨s', rfl⟩ := hq hc
     have hs' : Flock.canon (.str s') = .ok (Flock.canonStr s') := by rw [Flock.canon]; rfl
+    obtain ⟨j, hj, hsj⟩ := FlockComplete.JsonRT.parse_canon (.str s) _ (.str s) hs
+    obtain ⟨j', hj', hsj'⟩ := FlockComplete.JsonRT.parse_canon (.str s') _ (.str s') hs'
     rw [hs', Except.ok.injEq] at hb
-    obtain ⟨he, -⟩ := Properties.Composition.Esc.canonStr_split (s := s') (s' := s) (r := []) (r' := [])
-      (by rw [hb, ← ht])
-    rw [he]
+    rw [hb, ← ht, hj] at hj'
+    cases Except.ok.inj hj'
+    cases hsj
+    cases hsj'
+    rfl
 
 /-- **A value `jeq` holds to a natural number is that number.** -/
 theorem nat?_of_jeq {n : ℕ} {b : Json} (h : Spot.jeq (.num ⟨Int.ofNat n, 0⟩) b = true) : Spot.nat? b = some n := by
