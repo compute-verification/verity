@@ -319,5 +319,5 @@ tests = ["tests/query/test_word.py"]
 paths = ["integrations/vllm/verity_vllm/pipeline", "verity/ml/circuits"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_imports_resolve.py", "tests/test_no_dead_modules.py"]
+tests = ["tests/test_dead_code_tests_for.py", "tests/test_imports_resolve.py", "tests/test_no_dead_modules.py"]
 paths = ["integrations/vllm/tests", "integrations/vllm/verity_vllm"]
