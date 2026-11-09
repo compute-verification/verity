@@ -172,6 +172,8 @@ theorem partsAt_held (n : ℕ) : partsAt (held R B desc q c₀) n = #[⟨R.name,
 /-- **The second stage takes the counts**: at the replay sample of the one request, `Select.selectSecond` raises none
 of its refusals over the registration's cells and counts, one unit of the request's two. -/
 theorem secondProblem_held :
-    Spot.Select.secondProblem #[0] (held R B desc q c₀).reg.ns (held R B desc q c₀).reg.ks = none := rfl
+    Spot.Select.secondProblem #[0] (held R B desc q c₀).reg.ns (held R B desc q c₀).reg.ks = none := by
+  show Spot.Select.secondProblem #[0] #[2] #[1] = none
+  decide +kernel
 
 end SpotFlock.Instance
