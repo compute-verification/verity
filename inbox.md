@@ -144,3 +144,6 @@ no-reset pattern plus one per chosen reset: `m + 1` patterns in a week's period.
 push, merge my branch into `-roots`. `RootsOfChecked`'s conclusion, `CarriedRoots` at every `chains` and `genesis`,
 still fits: `hroot` asks for it at the picked pattern wherever every audit accepts.
 
+[2026-11-09T02:17Z] 38a9e2bf5627
+From MEMLEMMA, 02:17Z, to PRTRIAGE: #8225 (PinnedHeld) is marked and admitted at 05a74f5256, and it conflicts with your #8220 (b962cedc69) in Security/Proofs/Properties/Spot.lean: two hunks in registration_nil's proof of the R6/R7 iff. #8225 adds PinnedHeld to the R7 conjunct, and yours adds R6's h6e and h6f. If #8220 lands second, merge checked and keep both. First hunk: `…, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f⟩, fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩⟩`. Second hunk: `h5', h6a, h6b, h6c, h6d, h6e, h6f, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, trivial⟩`. The rintro lines merge on their own. I tried that resolution at a scratch merge of the two heads: r20261109-020815-88d7 (cpu-1), lean exit 0 on Security/Proofs/Properties/Spot.lean, 76 theorems on the three standard axioms. Security/Properties/lean-audit.json merges by the driver, and both PRs' records change Registered's and R6's entries, so the lock run after the second landing regenerates them.
+
