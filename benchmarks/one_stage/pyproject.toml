@@ -23,6 +23,7 @@ untraced = [
     "tests/test_a0_archive_once.py",
     "tests/test_a0_challenger_draw.py",
     "tests/test_a0_session_challenger.py",
+    "tests/test_a0_templated.py",
     "tests/test_a5_coins.py",
     "tests/test_a5_memo.py",
     "tests/test_a5_outputs.py",

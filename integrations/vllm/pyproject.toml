@@ -78,7 +78,11 @@ untraced = [
     "tests/protocols/test_credit_gate.py",
     "tests/protocols/test_pouw_h1.py",
     "tests/protocols/test_pouw_h1_commit.py",
+    "tests/protocols/test_pouw_h1_drawn.py",
     "tests/protocols/test_pouw_h1_live.py",
+    "tests/protocols/test_pouw_h1_ranks.py",
+    "tests/protocols/test_pouw_h1_ranks_commit.py",
+    "tests/protocols/test_pouw_lead.py",
     "tests/protocols/test_pouw_pearl_c_served.py",
     "tests/protocols/test_rt4_h1_challenger.py",
     "tests/tools/test_ratchet_gate.py",
@@ -236,7 +240,12 @@ tests = [
 paths = ["integrations/vllm", "verity"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/pipeline/test_circuit_db.py"]
+tests = [
+    "tests/pipeline/test_circuit_db.py",
+    "tests/program/test_sampling_rows.py",
+    "tests/regression/test_step_segmentation.py",
+    "tests/regression/test_store_io.py",
+]
 paths = ["tools/research/src/research"]
 
 [[tool.verity.tests.reads]]
@@ -311,12 +320,12 @@ tests = ["tests/protocols/test_pous_option.py"]
 paths = ["benchmarks/pous/p2_v1"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/query/test_word.py"]
-paths = ["integrations/vllm/verity_vllm/pipeline", "verity/ml/circuits", "verity/ml/definitions/encoding.py"]
+tests = ["tests/protocols/test_pouw.py", "tests/protocols/test_protocol_options.py"]
+paths = ["integrations/vllm/verity_vllm/commit/scheme.py", "integrations/vllm/verity_vllm/protocols", "verity/ml/commitments"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/regression/test_step_segmentation.py", "tests/regression/test_store_io.py"]
-paths = ["tools/research/src/research"]
+tests = ["tests/query/test_word.py"]
+paths = ["integrations/vllm/verity_vllm/pipeline", "verity/ml/circuits", "verity/ml/definitions/encoding.py"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_imports_resolve.py", "tests/test_no_dead_modules.py"]

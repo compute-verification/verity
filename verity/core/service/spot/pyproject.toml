@@ -21,6 +21,7 @@ untraced = [
     "tests/test_challenger_inner_trees.py",
     "tests/test_difftest.py",
     "tests/test_harm_bound.py",
+    "tests/test_site_difftest.py",
     "tests/test_wires_difftest.py",
 ]
 # Test-only: `lake` builds this package and, through its path requires, the core protocol interface, the difftest
