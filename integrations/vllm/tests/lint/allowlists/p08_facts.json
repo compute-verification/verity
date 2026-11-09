@@ -205,7 +205,6 @@
     {"file": "verity/ml/definitions/registry/lifted.py", "kind": "layer-class", "symbol": "<module>", "detail": "OLMoE"},
     {"file": "verity/ml/definitions/registry/lifted.py", "kind": "model", "symbol": "<module>", "detail": "olmoe"},
     {"file": "verity/ml/definitions/registry/moe.py", "kind": "layer-class", "symbol": "<module>", "detail": "FusedMoE"},
-    {"file": "verity_vllm/program/rmsnorm_fused_sweep.py", "kind": "model", "symbol": "<module>", "detail": "smollm"},
     {"file": "verity/ml/definitions/registry/spec.py", "kind": "model", "symbol": "<module>", "detail": "qwen"},
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "gpu", "symbol": "<module>", "detail": "a100", "count": 2},
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "gpu", "symbol": "<module>", "detail": "h100", "count": 2},

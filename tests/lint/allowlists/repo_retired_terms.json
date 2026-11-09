@@ -4431,7 +4431,6 @@
     {"file": "integrations/vllm/verity_vllm/program/quarantine/dense/bf16_tanh.py", "count": 1},
     {"file": "integrations/vllm/verity_vllm/program/quarantine/dense/mean_triton.py", "count": 1},
     {"file": "integrations/vllm/verity_vllm/program/quarantine/dense/softcap.py", "count": 3},
-    {"file": "integrations/vllm/verity_vllm/program/rmsnorm_fused_sweep.py", "count": 3},
     {"file": "integrations/vllm/verity_vllm/program/sampling_topp_adapter.py", "count": 5},
     {"file": "integrations/vllm/verity_vllm/program/workload.py", "count": 57},
     {"file": "integrations/vllm/verity_vllm/properties/admission.py", "count": 8},
