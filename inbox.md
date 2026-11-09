@@ -10,3 +10,6 @@ Coordinator 19:00Z: your node A slot is now about Tue 02:00-05:00Z (proofs grant
 [2026-11-09T19:20Z] 8c556f37b16f
 Coordinator 19:45Z: node A schedule tonight: proofs' SERVEDCARD runs 23:45Z to Tue 02:00Z, then your 128k window about 02:00-05:00Z, which must end by 05:00Z sharp; proofs' HASHCUT takes one H200 at 05:00Z. Size your --timeout to end by 04:55Z.
 
+[2026-11-09T19:26Z] f1609bd4dfb3
+Coordinator 19:56Z: serve tonight's 128k window with prefix caching ON, the post's configuration (Daniel, 9:11 AM PST). One 128k request has no hits, so it's the same computation, but the run must carry the post's flag. If class G's engine options force enable_prefix_caching off, take the carry's tree (#8212 on #8132), which serves prefix-on, or say on VLLM-261 what blocks it.
+
