@@ -570,7 +570,7 @@ def test_the_export_writes_a_lock_that_states_only_what_it_copies(tmp_path_facto
                               "layers.*.imports": 3, "four_names": 1, "guarantees": 1, "reads": 1}
     assert report["dropped"] == {"exempt": 1, "runs": 1, "open": 1, "escapes": 1, "layers.*.imports": 1, "four_names": 1,
                                  "guarantees": 2, "reads": 2}
-    assert report["undeclared"] == ["guarantees: Lib.Outgrown"]
+    assert report["undeclared"] == ["guarantees: Lib.Outgrown"] and report["witness_withheld"] == []
     assert report["lane_fields"] == 3 + 2 * 3 + 1
     assert report["sites"] == {"layers": 1} and report["site_list"] == [["layers", "Lib", "pr: #1234"]]
     assert report["bytes"] == [len(PE.LEAN_CHECK.text(source)), len(wrote)]
@@ -620,6 +620,7 @@ def test_the_export_drops_a_witness_entry_whose_witness_it_does_not_copy(tmp_pat
     assert wrote["witnesses"] == {} and "Lib.Rooted" in wrote["guarantees"]
     assert "witnesses.*.nontrivial Lib.Rooted" in got["rewrites"]["lean/lean-audit.json"]
     assert got["locks"]["lean/lean-audit.json"]["dropped"]["witnesses.*.nontrivial"] == 1
+    assert got["locks"]["lean/lean-audit.json"]["witness_withheld"] == ["witnesses.*.nontrivial: Lib.Rooted"]
 
 
 def test_what_the_copied_files_hold_of_the_trees_lean(tmp_path_factory) -> None:

@@ -11,14 +11,16 @@ manifest's entry that names what the export doesn't copy is dropped: a lakefile'
 groups, test paths and console scripts. A `[project] dependencies` entry stays, and so does the source of a distribution one
 still needs. A list's entry naming a path the export doesn't copy is dropped too (`PATH_LISTS`: the lint allowlists, and the
 dead-code census's roots and keep-list), so a file made private takes its entries with it. Each rewrite must read, as TOML
-or JSON, as the old file less exactly those entries. A Lean lock (`lean-audit.json`) states only what the copied files hold
-(`tools/verity/lean/public_lock.py`): an entry stays only if a copied file declares the name it is under, is the module, or
-lies under the module prefix, and carries no owner, issue or due date; an entry goes with a witness the export doesn't copy; and the export fails, naming
-them, on a kept entry that cites what it doesn't copy, and on a lock it wrote that still names something no copied file
-has. A path `require`, an extra's entry, a dependency group's and a console
+or JSON, as the old file less exactly those entries. A path `require`, an extra's entry, a dependency group's and a console
 script are the edges the check counts closed by the export (`EXPORT_CUTS`), and the export fails if its rewrite kept one;
 every other edge it copies as it stands, so a build of DEST fails where a file imports, runs or reads one the export doesn't
 copy.
+
+A Lean lock (`lean-audit.json`) states only what the copied files hold (`tools/verity/lean/public_lock.py`): an entry stays
+only if a copied file declares the name it is under, is its module, or lies under its module prefix, and none carries an
+owner, an issue or a due date. An entry that lists witnesses goes with a witness the export doesn't copy. The export fails,
+naming them, on a kept entry that cites what it doesn't copy (a guarantee's premise), and on a lock it wrote that still
+names what no copied file has.
 
 A fetched fixture (an entry of `fixtures/artifacts.json` git doesn't track) that `public_boundary.toml`'s `fixtures` names
 ships as tracked files: the export fetches it into the checkout (`research data fetch-fixtures`) and copies its bytes, so the
@@ -29,8 +31,8 @@ can't read in DEST.
 The report gives:
 
 * what the export copied, rewrote, and cut, and the fetched fixtures it shipped and couldn't;
-* per Lean lock, the entries it kept and dropped by section, the dropped names no tracked file declares, and the lane-text
-  sites left in a kept entry's prose, each with its section and entry;
+* per Lean lock, the entries it kept and dropped by section, the dropped names no tracked file declares, the entries that
+  went with a witness it doesn't copy, and the lane-text sites left in a kept entry's prose, each with its section and entry;
 * per area of the tree, the leftovers a reader of the public tree shouldn't meet, by kind, over whole files: the lane-text
   lint's kinds (`tests/lint/test_repo_lane_text.py`: Linear, Slack, Notion and PR ids and links, agent ids, run and `art:`
   ids, lane handles, dates, names) and agents' branches;
@@ -542,13 +544,15 @@ def lock_sites(lock: dict) -> list[tuple[str, str, str]]:
 
 def lock_report(old: dict, new: dict, dropped: list[tuple[str, str]], held: Held) -> dict:
     """What the export did to one lock: per section the entries kept and dropped, how many lane fields it removed, the
-    dropped names no tracked file declares, and the leftovers in what it kept (`lock_sites`)."""
+    dropped names no tracked file declares, the entries that went with a witness the export doesn't copy, and the
+    leftovers in what it kept (`lock_sites`)."""
     kinds = dict(PUBLIC_LOCK.ENTRIES)
     sites = lock_sites(new)
     return {"kept": PUBLIC_LOCK.counts(new), "dropped": dict(Counter(path for path, _ in dropped)),
             "lane_fields": len(list(PUBLIC_LOCK.lane_fields(old))),
             "undeclared": sorted(f"{path}: {name}" for path, name in dropped
                                  if path in kinds and held.undeclared(kinds[path], name)),
+            "witness_withheld": sorted({f"{path}: {name}" for path, name in dropped if path not in kinds}),
             "sites": dict(Counter(section for section, _, _ in sites)), "site_list": [list(s) for s in sites]}
 
 
@@ -900,8 +904,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Lean locks: {len(report['locks'])}, each stating only what the export holds:")
     for f, lock in report["locks"].items():
         print(f"  {f}: {lock['bytes'][0]} to {lock['bytes'][1]} bytes; entries kept {sum(lock['kept'].values())}, dropped "
-              f"{sum(lock['dropped'].values())} ({len(lock['undeclared'])} that no tracked file declares); "
-              f"{lock['lane_fields']} lane fields removed; leftovers in kept entries: {lock['sites'] or 'none'}")
+              f"{sum(lock['dropped'].values())} ({len(lock['undeclared'])} that no tracked file declares, "
+              f"{len(lock['witness_withheld'])} with a witness the export doesn't copy); {lock['lane_fields']} lane fields "
+              f"removed; leftovers in kept entries: {lock['sites'] or 'none'}")
     lt = report["lean_targets"]
     print(f"Lake packages: {len(lt)}, {sum(len(t['modules']) for t in lt.values())} modules to build; root files the export "
           f"lacks: {[f'{p}: {r}' for p, t in lt.items() for r in t['missing_roots']]}")

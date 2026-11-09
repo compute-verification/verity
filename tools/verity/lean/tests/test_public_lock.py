@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-spec = importlib.util.spec_from_file_location("lean_public_lock_under_test", Path(__file__).resolve().parent.parent / "public_lock.py")
+spec = importlib.util.spec_from_file_location("lean_public_lock_under_test",
+                                              Path(__file__).resolve().parent.parent / "public_lock.py")
 PL = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(PL)
 
