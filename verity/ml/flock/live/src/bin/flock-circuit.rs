@@ -581,7 +581,8 @@ struct CircuitVerifier {
     lincheck: sverify::Lincheck,
     /// the last `verify` call's phase timers
     phases: Mutex<Option<Value>>,
-    /// `proved_scope::check` of the statement: the refusal of a form the soundness proof does not cover
+    /// `proved_scope::check` of the statement, kept per statement (`proved_scope::VERDICTS`): the refusal of a form the
+    /// soundness proof does not cover
     scope: Result<(), String>,
 }
 
@@ -615,7 +616,7 @@ impl StatementVerifier for CircuitVerifier {
 impl CircuitVerifier {
     fn new(tabs: Tables) -> Self {
         let t0 = &tabs.list[0];
-        let scope = proved_scope::check(&t0.st.c, &t0.inst, is_zk(&t0.st), tabs.list.len());
+        let scope = proved_scope::VERDICTS.check(&t0.st.c, &t0.inst, is_zk(&t0.st), tabs.list.len());
         CircuitVerifier { tabs, lincheck: sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e)), phases: Mutex::new(None), scope }
     }
 
@@ -6898,7 +6899,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         let mut line = json!({"session": id, "accepted": rec["verdict"]["accepted"], "why": rec["verdict"]["why"], "aborted": rec["aborted"],
                           "link_mode": rec["link_mode"], "link_sha256": rec["link_sha256"], "require_link": rec["config"]["require_link"],
                           "verify_s": rec["verdict"]["verify_s"], "handle_s": rec["verdict"]["handle_s"], "rounds": rec["verdict"]["rounds"],
-                          "stmt_cache": stmt_cache_seen(Side::Verifier)});
+                          "stmt_cache": stmt_cache_seen(Side::Verifier), "scope_cache": proved_scope::VERDICTS.seen()});
         if let (Value::Object(line), Value::Object(tag)) = (&mut line, tag) {
             line.extend(tag);
         }
