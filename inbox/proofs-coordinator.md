@@ -16905,3 +16905,18 @@ I have the derivation at the empty pool. I'm not doing it in this PR, since #805
 **Waiting on:** records r20261109-053054-6339 on that tree, which I expect at about 06:35Z.
 - If it gives `SampledLeakCarried_honest`'s record, I commit that after checking its tree matches.
 - Then the quick tier (`research queue ready 8284 --on cpu-3,cpu-11`) and the mark, then the land ask here, at about 07:15Z.
+
+[2026-11-09T06:33Z] TWOOPENS (bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa) checkpoint, resumed after the 05:52Z idle
+
+- **Pushed** `1899d21f6c` at 05:52Z: the fix for try72's only errors, all in `Depths.lean` (12398 of 12399 modules elaborated). try73 (r20261109-054903-897f, cpu-13, cold slot build/4) is checking it; ETA about 07:00Z.
+- **Done before the idle:** HEADERROOTS merged and `HeaderRootsAt` discharged (`ea5fd3764b`, `6c963e7ba1`). SLOTSAT has my head and the restated `SlotsAt` shape.
+- **Merged #8230's head `f2fedfc8eb`, which carries #8229** (`b5d5cde854`). `FrameIs` now states the program's opening, `Reveal.openAt … (Reveal.frameAt h.frame) … g`. I restated `SlotsAt` the same way, and `frameIs_frameAt` follows (`Reveal.frameAt (frameAt slot c)` is `Reveal.frameAt c` by `rfl`). Own locks kept.
+- **Merged `checked` `204e59da60`** (`7206dc0ce4`). It forced one model decision, which I made; please check it:
+  - `checked`'s round 2 adds `second-verified` and `second-tables`, both read off `Own.verified`. Our `ownOf` leaves that empty, so round 2 would refuse every statement and `SpotKSTwo` would hold vacuously.
+  - `codesOk` now holds each statement to the code's own verdict, `{ own with verified := S.checked.toArray }`. The code checks each session itself, so it is the verifier of record.
+  - What that means: `second-verified` asks only that the header and registered reads canonicalize. `second-tables` holds by construction, so the model is looser than the deployed check on table count; that's the safe direction for soundness. The PR body will say so.
+  - Every branch that carries `ownOf` (SLOTSAT, HEADERROOTS, TWOGUARD) needs this when it merges `checked`. I've told SLOTSAT and TWOGUARD.
+- **Running:** try74 (r20261109-063041-18dd, cpu-1) elaborates `Security/Proofs/Flock.lean --siblings` at `7206dc0ce4`. When it's green I push and send SLOTSAT the head; ETA about 07:30Z, depending on the slot.
+- **TWOGUARD's question on `regOk h`:** the model's `parse` and `two` unroll the members' circuits; `parse` ran 27 min at 26.6 GB without finishing. My call: the guard evaluates `runOkAt` and `two`'s inexpensive conjuncts, and says that `regOk h` is not evaluated. Proving `regOk h` for the toy's `h` from Bridge.Members, without evaluating, is a follow-up outside PRF-460. I asked TWOGUARD to file it with you.
+- **Next:** when SLOTSAT restates against my head, I merge it and assemble `FrameIs h (layoutFor h)` from `frameIs_of`, `slotsAt_slotMap` and `depth_revealCode`. Then `SpotKSTwo` and `SpotExfilTwo` take `Sites h` and the frame equation in place of `FrameIs`.
+- **Needs your yes:** `--update` never adds to `open`, so the records run can't swap `SpotFlock.FrameIs` for `SpotFlock.Sites` in those two guarantees' `open` lists. I'll edit the lock by hand at records time: `Sites` under PRF-460, due 2026-11-30, and `FrameIs` removed. Tell me if it belongs somewhere else.
