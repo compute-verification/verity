@@ -14774,3 +14774,7 @@ text on one core. It is about 69 GB, and 27 GB of it was written by 00:22Z.
   census types and a test. Quick suites r20261109-002618-bc0e are running.
 
 **ETA:** the split part's K = 1 numbers about 01:35Z; its K = 4 row by 04:15Z.
+
+## 2026-11-09T00:35Z trust6: land #7996, then #8208
+#7996 re-marked at `29dafdcdb9`, changed since `6be28cf3`: it merges #7497's head (pin regenerated) and adds one `ebind_ok` step in each of `Event.lean`'s `step_event` and `run_event` for #7497's length refusals. It doesn't take #7812's old head (#7812 already holds `6be28cf3`). Records `f780` pass; suites `f9cd` 72/73, `a938` 4/4.
+#8208 (`CoinsConfidential` fix) is marked at `eb8d25ae29`, stacked on #7996.
