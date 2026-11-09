@@ -160,15 +160,12 @@ def parse_run(j: Any) -> dict[str, Any]:
     raise ValueError("a run is {start, count, writer, out, radix, base, step} or {start, count, held, row}")
 
 
-def order(runs: Sequence[Mapping[str, Any]], length: int, writer: str, out: str, units: int,
-          held: Mapping[str, int]) -> list[tuple]:
-    """Each position's source, ``("unit", u)`` or ``("held", value, row)``, from runs that tile ``[0, length)``: refuses
-    an empty run, a gap or an overlap, a run of another writer or output, a run past its writer's units or its value's
-    rows, and runs that end before or after ``length`` (`Spot.HistoryTable.order`)."""
-    runs = [parse_run(r) for r in runs]
-    srcs: list[tuple] = []
+def tile(runs: Sequence[Mapping[str, Any]], length: int, writer: str, out: str, units: int,
+         held: Mapping[str, int]) -> list[dict[str, Any]]:
+    """The runs in position order, refused as `order` refuses them, run by run and never position by position."""
+    parsed = sorted((parse_run(r) for r in runs), key=lambda r: r["start"])
     at = 0
-    for r in sorted(runs, key=lambda r: r["start"]):
+    for r in parsed:
         if r["count"] == 0:
             raise ValueError(f"a run at {r['start']} covers no position")
         if r["start"] != at:
@@ -176,13 +173,23 @@ def order(runs: Sequence[Mapping[str, Any]], length: int, writer: str, out: str,
         why = _run_why(r, writer, out, units, held)
         if why is not None:
             raise ValueError(why)
+        at += r["count"]
+    if at != length:
+        raise ValueError(f"the runs cover {at} positions, not the table's {length}")
+    return parsed
+
+
+def order(runs: Sequence[Mapping[str, Any]], length: int, writer: str, out: str, units: int,
+          held: Mapping[str, int]) -> list[tuple]:
+    """Each position's source, ``("unit", u)`` or ``("held", value, row)``, from runs that tile ``[0, length)``: refuses
+    an empty run, a gap or an overlap, a run of another writer or output, a run past its writer's units or its value's
+    rows, and runs that end before or after ``length`` (`Spot.HistoryTable.order`)."""
+    srcs: list[tuple] = []
+    for r in tile(runs, length, writer, out, units, held):
         if "held" in r:
             srcs += [("held", r["held"], r["row"] + i) for i in range(r["count"])]
         else:
             srcs += [("unit", unit_at(r["radix"], r["base"], r["step"], i)) for i in range(r["count"])]
-        at += r["count"]
-    if at != length:
-        raise ValueError(f"the runs cover {at} positions, not the table's {length}")
     return srcs
 
 
