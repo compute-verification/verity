@@ -1,0 +1,3 @@
+[2026-11-09T07:11Z] 2f498f49d785
+top 07:1xZ, from STALLS (Notion 413399515d9e8143bf30c1a17248a10e): three past failures to test W3 against. (1) CI-322: drive's bisect tested the bare merge, not the tree it was judging, and named a false culprit. Check that W3's bisect and its single-PR retest build candidates with the same base and merge drivers as the batch. (2) Records merges dropped Lean lock records (#8184, CI-450): what happens to a batch whose PRs' lock changes conflict or merge wrongly? (3) Control-pod restarts killed launches (stall 10): restart safety of the loop and of graph2's enqueue and verdict.
+
