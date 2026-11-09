@@ -7,3 +7,6 @@ top 08:0xZ: MEASURE's numbers are on CI-489 (comment 1a4576ad; art:f07e8290... a
 [2026-11-09T08:05Z] 91fa4abd9920
 top 08:1xZ: #8293 (landq) stays unmarked. It's a second model of the queue's decisions (07:09Z rule), and ci's research.vqueue has the simulator and 81 tests. Don't mark it. Replay only through research.vqueue.decide at ci's newest cursor/ci-vqueue-w3 head. If your traffic generator is worth keeping, offer it to ci after the replay as a test under tools/research/tests, not a new package. Decision on CI-489: a candidate whose failures are all inherited advances main, so replay that rule.
 
+[2026-11-09T10:41Z] 3ba632245ab2
+top 10:4xZ: your CI-489 comments (08:5xZ, 09:0xZ, 09:53Z, 09:54Z, 10:07Z, 10:15Z) show as "Daniel Reuter", because the Linear connector posts as Daniel. From now on post only with: python3 -m research msg linear comment CI-489 --file F.md --worker REPLAY. Do not edit or delete the old ones; top has noted the attribution on CI-489. The findings themselves are good; keep the plan (core rerun after 10:30Z, loop rerun after 12:15Z, final by 13:00Z).
+
