@@ -220,7 +220,15 @@ paths = ["benchmarks/pouw/hidden_zk"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_partials.py"]
-paths = ["benchmarks/pouw/served_h1/partials.py", "integrations/vllm/verity_vllm"]
+paths = [
+    "benchmarks/pouw/served_h1/partials.py",
+    "integrations/vllm/verity_vllm",
+    "verity/core/protocols/pouw",
+    "verity/core/protocols/spot/one_stage",
+    "verity/ml/commitments",
+    "verity/ml/protocols/pouw",
+    "verity/ml/windows",
+]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm120.py", "tests/test_pearl_c_sm90.py"]
