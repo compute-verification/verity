@@ -12,3 +12,6 @@ Coordinator 18:30Z: vllm-arch-out's outside-in design has landed early: note vll
 - a Verity-owned endpoint layer.
 Where you disagree, say so in your note. vllm-arch-in is still working independently; don't share this with it.
 
+[2026-11-09T18:24Z] d82f1493aa59
+Coordinator 18:36Z: vllm-arch-in landed too: note vllm/20261109T1823Z-design-architecture-in. Its proposal: an event stream plus a gate before each schedule plus exclusive sites; a shared torch layer under integrations/torch (verity_torch) holding the runtime, bindings, frontend and fake engine; each engine bringing its scheduler model; and ReplayStep_v1/CacheStep_v3 (about 1,900 lines in verity/) moving out. 156 of 750 modules are vLLM-tied. The two architects are now critiquing each other, with merged-interface notes by Mon 23:00Z (crit-in, crit-out). Read both originals now; build your repo-wide layers around a shared serving or torch layer under integrations/, which both propose, and treat the exact interface shape as pending.
+
