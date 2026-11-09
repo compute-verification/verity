@@ -182,13 +182,19 @@ impl LeafSalts {
 
     /// The level-0 tree's salts sampled elsewhere (the Lean session loop's, `Flock.Firewall.Level0`), before anything reads them:
     /// every later [`Self::level0`] answers these bytes.
-    pub fn set_level0(&self, s: Vec<u8>) -> Result<(), String> {
+    pub fn set_level0(&self, s: impl Into<std::sync::Arc<Vec<u8>>>) -> Result<(), String> {
         let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if k.level0.is_some() {
             return Err("level 0's salts were read before the Lean loop drew them".into());
         }
-        k.level0 = Some(std::sync::Arc::new(s));
+        k.level0 = Some(s.into());
         Ok(())
+    }
+
+    /// Writes tree `id`'s salts into `b`, whole leaves, from the source its sample reads, on the current rayon pool: a tree
+    /// read before its session samples it (level 0's, for [`Self::set_level0`]).
+    pub fn fill(&self, id: u64, b: &mut [u8]) {
+        fill_salts(self.key.as_deref(), id, b)
     }
 
     /// The salts of the next trees from here, sampled elsewhere (the Lean finish's for a firewalled rep's levels ≥ 1,
@@ -311,6 +317,11 @@ static OS_SOURCE: std::sync::OnceLock<std::sync::Mutex<Box<dyn FnMut(&mut [u8]) 
 /// Makes `source` the OS bytes of every later sample of this process; `Err` when a source is already set.
 pub fn set_os_source(source: Box<dyn FnMut(&mut [u8]) + Send>) -> Result<(), String> {
     OS_SOURCE.set(std::sync::Mutex::new(source)).map_err(|_| "the prover's OS source is already set".to_string())
+}
+
+/// Whether [`set_os_source`] set the OS bytes' source: then nothing is read ahead of its sample.
+pub fn os_source_set() -> bool {
+    OS_SOURCE.get().is_some()
 }
 
 /// `out` read from the OS: from [`set_os_source`]'s source if one is set, else `getrandom` in [`OS_PIECE`]-byte pieces on

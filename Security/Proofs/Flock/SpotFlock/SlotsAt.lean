@@ -50,8 +50,9 @@ can't hold:
 * the entry (`ReadsRegistered`): round 2 holds a session's registered reads to its template's reference statement's but
   for the run's fields, and which entry it reads a value off (`readKeyAt`) still reads the round-1 record's port names;
 * one tree a gate: a gate one unit writes and another reads is needed by both, and the frame checks both openings at
-  the gate's one slot under the same roots, so both units' reads of its row must have one root. A registration that
-  commits a wired input as a tree of its own, under a domain of its own, as the two-stage toy does, has two.
+  the gate's one slot under the same roots, so both units' reads of its row must have one root. Round 2 reads a wired
+  input at its writer's output port (`SecondStage.wireOf`), one commitment per value; a registration that commits a
+  wired input as a tree of its own, under a domain of its own, has two.
 -/
 
 @[expose] public section

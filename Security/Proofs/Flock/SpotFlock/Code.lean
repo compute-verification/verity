@@ -104,8 +104,8 @@ def zkOk (xS : Msg) : Bool :=
 
 /-- **A two-stage registration's copies, as the auditor holds them**: the descriptor (`desc`), each template's units
 (`vus`), the statement's partition query (`query`), the two-stage registration (`reg`), the second
-stage's count per stratum (`k`), the templates' names (`names`) and the design's links (`links`) round 2's statement
-check reads, template `t`'s reference session statement
+stage's count per stratum (`k`), the templates' names (`names`) and the design's links (`links`) and wires (`wires`)
+round 2's statement check reads, template `t`'s reference session statement
 (`xS₀ t`) in Flock's masked scope (`xS₀_ok`), template `t`'s reference registered reads as round 2 reads a statement's,
 null for none (`refReads t`), and the commitment's layout and the reference prover's framing
 (`frame`). Template `t`'s circuit is its reference statement's (`Held.ms`). The reference reads are a copy of their own,
@@ -119,6 +119,7 @@ structure Held where
   k : List ℕ
   names : List String
   links : Option (Array Spot.SecondStage.Link)
+  wires : Option (Array Spot.SecondStage.Wire)
   xS₀ : ℕ → Msg
   xS₀_ok : ∀ t, zkOk (xS₀ t) = true
   refReads : ℕ → Json
@@ -379,11 +380,12 @@ def refRegisteredOf : Array (String × Json) :=
 
 /-- **What the verifier holds of the run** as round 2's statement check reads it (`SecondStage.Own`), at the run's
 statement `st`, round 1's record `rec`, the second stage's draw and round 0's coin: the replay sample, the interior and
-boundary registrations' records, the second draw's units, the design's links and the templates' reference headers and
-registered reads, which the registration fixes before the run. -/
+boundary registrations' records, the second draw's units, the design's links and wires and the templates' reference
+headers and registered reads, which the registration fixes before the run. -/
 def ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) : Spot.SecondStage.Own :=
   { sample := h.reg.sample (src c₀), parts := none, interior := rec, boundary := st.record,
-    drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, refs := refsOf h, refReads := refRegisteredOf h }
+    drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, wires := h.wires, refs := refsOf h,
+    refReads := refRegisteredOf h }
 
 /-- **The second stage's parts** in a replay sample of `q` blocks, one per template in template order (`partAt`). -/
 def partsAt (q : ℕ) : Array Spot.SecondStage.Part := ((List.range h.ms.length).map (partAt h q)).toArray

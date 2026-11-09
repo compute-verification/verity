@@ -1,8 +1,23 @@
-"""The Flock bench's view of the backend: the frozen sets' digests against the bench contract's, and registration's
-patch of a bench result."""
+"""The Flock bench's view of the backend: a frozen set's instance file and statement, the frozen sets' digests against the
+bench contract's, and registration's patch of a bench result."""
 from __future__ import annotations
 
+import json
+
+import pytest
+
 from verity_flock import instances
+
+
+@pytest.mark.parametrize("relation", ["bf16-hopper", "fp8-ada"])
+def test_instance_file_and_statement(tmp_path, relation):
+    h = instances.write(tmp_path / "i.bin", relation, 4)
+    assert h["instances"]["manifest_sha256"] == instances.instances_digest(relation, 4)
+    blob = (tmp_path / "i.bin").read_bytes()
+    head = json.loads(blob.split(b"\n", 1)[0])
+    body = len(blob) - len(blob.split(b"\n", 1)[0]) - 1
+    assert body == 4 * (2 * head["row_bytes"] + 4 * head["units"] + 8)
+    assert head["roots"] == instances.statement(relation, *instances.draw(relation, 4))["roots"]
 
 
 def test_frozen_set_digests_match_the_contract():
