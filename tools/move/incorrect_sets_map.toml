@@ -1,0 +1,244 @@
+# The sets of incorrect proof blocks in the Glossary's word: what `tools/move/rename.py --map
+# tools/move/incorrect_sets_map.toml` renames (a proof block that doesn't compute its outputs is incorrect; "wrong unit" is
+# the older name). Core's `Verity.Partition.wrong`, Flock's `FlockSoundness.Audit.Partition.wrong` and the population's
+# `Population.Dataflow.wrong` and `Population.DynPopulation.wrong` become `incorrect`, `Population.Dataflow.optWrong`
+# becomes `optIncorrect`, and their lemmas follow. Declarations keep their place in the locks' records: `rename.py --moves`
+# prints the renames that `check.py --update --moved` takes.
+#
+# Every other declaration spelled `wrong` keeps it: a Flock audit's own `wrong` field (`OneStage`'s and `Extraction`'s,
+# which its constructions set to a partition's set), `Flock.Guarantees.WindowRec.wrong` (a window's count), Pouw's
+# `UnitStmts.wrong` and `StageGame.wrong`, the sampled trace's and the pooled law's sets, Nci's certificates and the
+# end-to-end statements' fields. So `wrong` is renamed only in the files where each use the build resolves is one of the
+# five sets (a build with the five marked deprecated names every such use), and [keep] holds the audit field and
+# `WindowRec.wrong` where those files name them beside a partition's set. `move_check.py` scopes no word to a file that
+# already spells its new name, so Flock's `mem_wrong` is renamed by its full name in the two files that also name Core's
+# `mem_incorrect`, and `wrong_eq`, also a field of Accounting's joint bridge, only where Spot declares it. Prose keeps "a
+# wrong", which "incorrect" would leave without its article.
+[words]
+"Audit.Partition.mem_wrong" = "Audit.Partition.mem_incorrect"
+
+[[words_in]]
+files = [
+    "Security/Definitions/Accounting/JointPeriod.lean",
+    "Security/Definitions/Core/Guarantees/Circuit.lean",
+    "Security/Definitions/Core/Partition.lean",
+    "Security/Definitions/Flock/Circuit.lean",
+    "Security/Definitions/Spot/Dataflow.lean",
+    "Security/Definitions/Spot/LongValue.lean",
+    "Security/Definitions/Spot/Necessity.lean",
+    "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
+    "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean",
+    "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityBlock.lean",
+    "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityPeriod.lean",
+    "Security/Proofs/Core/Circuit.lean",
+    "Security/Proofs/Flock/Bridge/CircuitOf.lean",
+    "Security/Proofs/Flock/Recursive/Flock.lean",
+    "Security/Proofs/Flock/Recursive/Transfer.lean",
+    "Security/Proofs/Flock/Recursive/ZkReg/DrawnRefines.lean",
+    "Security/Proofs/Flock/Recursive/ZkReg/RegLink.lean",
+    "Security/Proofs/Flock/Recursive/ZkReg/Vals.lean",
+    "Security/Proofs/Flock/Soundness/Audit/Circuit.lean",
+    "Security/Proofs/Flock/Soundness/Audit/Flock.lean",
+    "Security/Proofs/Flock/Soundness/Audit/FlockBatched.lean",
+    "Security/Proofs/Flock/Soundness/Audit/FlockBatchedAcc.lean",
+    "Security/Proofs/Flock/Soundness/Audit/FlockCompiled.lean",
+    "Security/Proofs/Flock/Soundness/Audit/FlockLinked.lean",
+    "Security/Proofs/Flock/Soundness/Audit/FlockPublic.lean",
+    "Security/Proofs/Flock/Soundness/Audit/Influence.lean",
+    "Security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean",
+    "Security/Proofs/Flock/Soundness/Audit/OneStage.lean",
+    "Security/Proofs/Flock/Soundness/Binding/E2E.lean",
+    "Security/Proofs/Flock/Soundness/CROnly/E2E.lean",
+    "Security/Proofs/Flock/Soundness/CROnly/E2EMore.lean",
+    "Security/Proofs/Flock/Soundness/CROnly/Registered.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Composed/Custody.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Composed/CustodyJ.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Composed/CustodyJJson.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Composed/Headline.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Composed/Sound.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Composed/SoundJ.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/BindingE2EL.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/E2EL.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedAccL.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedL.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/FlockLinkedL.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/FlockPublicL.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/Headline.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/HeadlineL.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/Live.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/LiveOn.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/FailClosed/Composed.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/FailClosed/Design.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/FailClosed/Exec.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/FailClosed/General.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/FailClosed/Numeric.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/FailClosed/PlainRegistered.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkHidden.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/FailClosed/ZkRegistered.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/General/Hidden.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/HdecCor/Headlines.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/HiddenExec/Headline.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExec.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExecP.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineInst.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/HiddenExec/LiveOnP.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Integrate/Headline.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/PlainHJ/Sound.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/PlainJ/Sound.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Tables/Headline.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Tables/Statements.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkBind/At.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkBind/AtM1.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkBind/BindX.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkBind/Headline.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkExec/Coin.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkExec/Compiled.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/BindInst.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/Count.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJ.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJJson.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyStmt.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/Sound.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundBind.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundCustody.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundInst.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundJ.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/SoundStmt.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/View.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkLink/Count.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkLink/Link.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkLink/Public.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkLink/StrictZ.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkReg/Bind.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkReg/BindH.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJ.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJCustody.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkReg/SoundHJSt.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkSession/Numbers.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkSession/Session.lean",
+    "Security/Proofs/Flock/Soundness/E2E.lean",
+    "Security/Proofs/Flock/Soundness/ExecStratified.lean",
+    "Security/Proofs/Flock/Soundness/Headline.lean",
+    "Security/Proofs/Flock/Soundness/Registered/E2E.lean",
+    "Security/Proofs/Flock/Soundness/Types/ProgramE2E.lean",
+    "Security/Proofs/Flock/VBridge/Keyed.lean",
+    "Security/Proofs/Pouw/PearlC/RowCircuit.lean",
+    "Security/Proofs/Pouw/PearlC/Tile4Circuit.lean",
+    "Security/Proofs/Pouw/PearlC/TileCircuit.lean",
+    "Security/Proofs/Properties/Verity/Sampled/UnboundBridge.lean",
+    "Security/Proofs/Spot/Determinacy.lean",
+    "Security/Proofs/Spot/Egress.lean",
+    "Security/Proofs/Spot/ExfiltrationBound.lean",
+    "Security/Proofs/Spot/HonestCone.lean",
+    "Security/Proofs/Spot/Instance.lean",
+    "Security/Proofs/Spot/Leakage.lean",
+    "Security/Proofs/Spot/LongValue.lean",
+    "Security/Proofs/Spot/NecessityMatrix.lean",
+    "Security/Proofs/Spot/NecessitySkeleton.lean",
+    "Security/Proofs/Spot/Oblivious.lean",
+    "Security/Proofs/Spot/Pointer.lean",
+    "Security/Proofs/Spot/Transfer.lean",
+    "Security/Proofs/Spot/Work.lean",
+]
+words = { "wrong" = "incorrect" }
+
+[[words_in]]
+files = [
+    "Security/Proofs/Flock/Recursive/Transfer.lean",
+    "Security/Proofs/Flock/Recursive/ZkReg/RegLink.lean",
+    "Security/Proofs/Flock/Soundness/Audit/Circuit.lean",
+    "Security/Proofs/Flock/Soundness/Audit/FlockBatched.lean",
+    "Security/Proofs/Flock/Soundness/Audit/FlockBatchedAcc.lean",
+    "Security/Proofs/Flock/Soundness/Audit/FlockCompiled.lean",
+    "Security/Proofs/Flock/Soundness/Audit/Influence.lean",
+    "Security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean",
+    "Security/Proofs/Flock/Soundness/Audit/OneStage.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedAccL.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedL.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkLink/Public.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkSession/Session.lean",
+    "Security/Proofs/Flock/Soundness/Types/Units.lean",
+    "Security/Proofs/Flock/VBridge/Keyed.lean",
+]
+words = { "mem_wrong" = "mem_incorrect" }
+
+[[words_in]]
+files = [
+    "Security/Proofs/Flock/Bridge/CircuitOf.lean",
+    "Security/Proofs/Flock/Soundness/Audit/Circuit.lean",
+    "Security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Composed/PublicJ.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkLink/Public.lean",
+    "Security/Proofs/Properties/Verity/Sampled/UnboundBridge.lean",
+]
+[words_in.words]
+"exists_wrong_fine" = "exists_incorrect_fine"
+"card_wrong_le" = "card_incorrect_le"
+"wrong0" = "incorrect0"
+"wrong_sub" = "incorrect_sub"
+"wrong_ofAudit" = "incorrect_ofAudit"
+"wrong_subset_faulty" = "incorrect_subset_faulty"
+"card_wrong_le_faulty" = "card_incorrect_le_faulty"
+"card_wrong_lt_of_relS" = "card_incorrect_lt_of_relS"
+"partsOf_wrong" = "partsOf_incorrect"
+"card_wrong_partsOf_lt" = "card_incorrect_partsOf_lt"
+"wrong_subset_wrongRegZ" = "incorrect_subset_wrongRegZ"
+
+[[words_in]]
+files = [
+    "Security/Definitions/Spot/LongValue.lean",
+    "Security/Proofs/Spot/Determinacy.lean",
+    "Security/Proofs/Spot/Egress.lean",
+    "Security/Proofs/Spot/ExfiltrationBound.lean",
+    "Security/Proofs/Spot/ExfiltrationExamples.lean",
+    "Security/Proofs/Spot/Instance.lean",
+    "Security/Proofs/Spot/Leakage.lean",
+    "Security/Proofs/Spot/LongValue.lean",
+    "Security/Proofs/Spot/NecessityMatrix.lean",
+    "Security/Proofs/Spot/NecessitySkeleton.lean",
+    "Security/Proofs/Spot/Oblivious.lean",
+    "Security/Proofs/Spot/Pointer.lean",
+    "Security/Proofs/Spot/Transfer.lean",
+    "Security/Proofs/Spot/Work.lean",
+]
+[words_in.words]
+"optWrong" = "optIncorrect"
+"optWrong_some" = "optIncorrect_some"
+"mem_optWrong_of_write_none" = "mem_optIncorrect_of_write_none"
+"mem_optWrong_of_read_none" = "mem_optIncorrect_of_read_none"
+"wrong_eq" = "incorrect_eq"
+"wrong_eq_empty" = "incorrect_eq_empty"
+"wrong_lift_subset" = "incorrect_lift_subset"
+"wrong_fill_subset" = "incorrect_fill_subset"
+"long_value_wrong" = "long_value_incorrect"
+"mem_wrong_iff" = "mem_incorrect_iff"
+"correct_of_not_mem_wrong" = "correct_of_not_mem_incorrect"
+"wrong_pad" = "incorrect_pad"
+"wrong_pad_of_mem" = "incorrect_pad_of_mem"
+"wrong_padOver" = "incorrect_padOver"
+"wrong_padOver_of_mem" = "incorrect_padOver_of_mem"
+"wrong_freeze" = "incorrect_freeze"
+"wrong_freeze_of_off_downAt" = "incorrect_freeze_of_off_downAt"
+"wrong_freeze_of_off_padDown" = "incorrect_freeze_of_off_padDown"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+# A Flock audit's `wrong` field: declared, read in its own `cover` and as `A.wrong`, set as `wrong := P.wrong` (or at
+# `t`, `Xt`), read off `analysisC`, and by its full name `FlockSoundness.Audit.Analysis.wrong`, which `--moves` reads
+# without its file; a window's `WindowRec.wrong`; "a wrong", and the field in `OneStage`'s prose.
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '(?m)^  wrong(?= : Tr → )', '(?<=u ∈ )wrong(?= X → ksFail)', '(?<![\w.])A\.wrong(?!\w)',
+            '(?<!\w)Analysis\.wrong(?!\w)',
+            '(?m)^  wrong(?=(?: \w+)? := )', '(?<=Kr hlow\)\.)wrong', 'WindowRec\.wrong(?!\w)',
+            '(?<!\w)[Aa]\s+wrong(?!\w)', '`Tr`, `wrong`', 'wrong\(X\) ∈ 𝓑']
+strings = []
+
+[keep_in]
