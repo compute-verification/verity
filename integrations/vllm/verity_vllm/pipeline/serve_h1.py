@@ -69,7 +69,7 @@ Commit serves on. ``serve.json``'s ``protocols`` is `H1Windows.describe`, ``summ
 ``--protocols-config`` is the pouw settings the server doesn't set itself, ``{"pouw": {...}}`` (`config_of`). Its ``unit``
 and ``ks`` shape the declared Program: ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` declares J10-R's tile unit
 (`pouw_h1_served.unit_of`) over the linears at K 2,048 alone, the form a period's guarantee covers (core's
-`period_check.form`), and the linears at any other K serve on their arm unrecorded, uncredited as attention is. Unset,
+`PouwCheck.Credit.periodCredit`, mirrored in `credit.py`), and the linears at any other K serve on their arm unrecorded, uncredited as attention is. Unset,
 the Program is v1's over every linear."""
 from __future__ import annotations
 
