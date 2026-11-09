@@ -262,7 +262,7 @@ BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
 RULES = "ci/queue.toml"
 #: where the rules are until the repository move puts `tools/verity/check/` at `ci/`
 RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
-#: drive's flags of record (`DriveFlags`, `--config`)
+#: the landing flags of record (`DriveFlags`), which the verified queue's loop reads at `main`
 DRIVE_FLAGS = "tools/verity/check/drive.toml"
 #: the pins tool, whose `PINS` names the generated files a merge rebuilds (`repinned`): after the repository move, and before it
 PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
@@ -337,7 +337,7 @@ RESTACK_JOB = f'd=$1; shift; exec timeout -s INT -k 60 {RESTACK_WAIT_S} "$@" > "
 #: `RESTACK_WAIT_S`, nor SIGKILL's 137, which the OOM killer and `timeout -k` send too
 RESTACK_INTERRUPTED = ("130", "143")
 #: why a PR waits off `next` while it is restacked in the background (`Restacking`): it refuses nothing, so nothing caches it and
-#: drive tells no one (`drive.Driver.tell_out`)
+#: no one is told
 RESTACKING = "restacking across the move"
 #: how many first-parent commits of the landing branch a sync reads for the queue's landings (`queue_log`): the heads it
 #: landed, and the moves a PR based before them is restacked through
@@ -825,8 +825,8 @@ def gates_at(repo: Path, ref: str, key: str = "landing_gates") -> tuple[str, ...
 
 
 def into_at(repo: Path, ref: str) -> str:
-    """drive.toml's `land_into` at ``ref``, "main" when it has none.  Only that key is read, as `gates_at` reads its own: drive's
-    config read names a bad key, and every `Queue` reads this one."""
+    """drive.toml's `land_into` at ``ref``, "main" when it has none.  Only that key is read, as `gates_at` reads its own: `flags_at`
+    names a bad key, and every `Queue` reads this one."""
     r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
     if r.returncode:
         return "main"
@@ -1343,14 +1343,14 @@ class Queue:
                  prefetch: Callable[[list[tuple[int, str]]], None] | None = None, verdict_first: bool | None = None,
                  land_into: str | None = None):
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
-        #: the branch drive lands on and `next` is built on (`into`); None: drive.toml's `land_into` at `main`
+        #: the branch `sync` lands on and `next` is built on (`into`); None: drive.toml's `land_into` at `main`
         self.land_into, self._into = land_into, None
         #: whether the last `fetch` found `into` on origin, not `main` read in its place
         self.into_fetched = False
         self.shadow, self.log, self._rules, self.auth = shadow, log, rules, auth
         self.before_cutoff, self.marked_by, self.marked_at, self.prefetch = before_cutoff, marked_by, marked_at, prefetch
-        #: whether drive's lift puts members with a land verdict below those without (`Driver._lift`); None: drive.toml's
-        #: `verdict_first` at `main`
+        #: whether a sync's lift puts members with a land verdict below those without; None: drive.toml's `verdict_first` at
+        #: `main`
         self.verdict_first = verdict_first
         #: members `next` keeps that this sync moves below the rest, in this order, at the heads it holds (those with a
         #: land verdict, above the priority list's); what `order` moved of them
@@ -1886,8 +1886,8 @@ class Queue:
     def _recorded(self, tip: str, head: str) -> dict:
         """``head`` merged onto ``tip`` as `_merged` tells it, from the record of that merge onto ``tip``'s tree (`_merge_key`)
         when there is one and the clone still holds its tree (a fresh clone or a prune drops it), else made and recorded;
-        stamped with this sync's count (`_merge_serial`).  The sync's merges (`_merge`) and the low-risk lane's
-        (`drive.Driver._clean_merge`) are one merge, and share the records."""
+        stamped with this sync's count (`_merge_serial`).  The sync's merges and the verified queue's (`_merge`) are one
+        merge, and share the records."""
         key = self._merge_key(tip, head)
         rec = self._merge_records.get(key)
         if rec is not None and "tree" in rec and not self._has_tree(rec["tree"]):
@@ -2606,8 +2606,8 @@ def forces_cold(files: Iterable[str]) -> bool:
 def merged_tree(repo: Path, base: str, head: str, *, plain: bool = True,
                 config: tuple[str, ...] | None = None) -> tuple[str | None, list[str], subprocess.CompletedProcess]:
     """``head`` merged onto ``base`` by `git merge-tree` (no worktree touched), with ``base``'s merge drivers (`--attr-source`)
-    run from ``base``'s tools (`base_drivers`, unless ``config`` gives git's `-c` options; drive's clone sits at `checked`'s
-    tip, whose own `merge.py` predates one a member of `next` brings): (the merged tree, the conflicted files, `git
+    run from ``base``'s tools (`base_drivers`, unless ``config`` gives git's `-c` options; the queue's clone can sit at an
+    old tip, whose own `merge.py` predates one a member brings): (the merged tree, the conflicted files, `git
     merge-tree`'s result).  A merge whose every conflict is in a pin `repinned` rebuilds, or in a `.lean` file one side
     deleted that the other changed only by porting it (`port_deletions`), gives the tree with each pin rebuilt and each such
     file deleted, and those files (`taken` tells them apart); one that doesn't merge gives None.  A git without `--attr-source`
@@ -4151,7 +4151,7 @@ def lock_drop_refusal(drops: list[str], onto: str = BRANCH) -> str:
 
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
-    (a) conflicts with `next` outside the pins (`merged_tree`, as drive's sync merges, no worktree, with the merge drivers of the
+    (a) conflicts with `next` outside the pins (`merged_tree`, as a sync merges, no worktree, with the merge drivers of the
     commit it merges onto, `base_drivers`, never the caller's checkout's), naming the paths and the PRs on `next` that touched them;
     (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, a lint of `PREFLIGHT_LINTS` the change
     reaches, or `pytest --collect-only` in a suite whose inputs

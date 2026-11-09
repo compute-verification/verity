@@ -2244,7 +2244,7 @@ def _count(r: Result) -> str:
 
 def failing_path(out: Path) -> Path:
     """Beside `--json`'s ``out``: the suites failed so far, rewritten as each one fails, so a check that keeps going is known to
-    have failed while it runs (`research queue drive` reads it through `research status --also`)."""
+    have failed while it runs (the verified queue reads it through `research status --also`: `research.landing.failing`)."""
     return out.with_name(f"{out.stem}.failed.json")
 
 

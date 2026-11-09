@@ -183,9 +183,9 @@ sha256, so the store and its client are no input. Those fetches and ci.py's read
 environment names: a `research run` job on a node with no store config of its own gets one with `--store-read`, and without
 one the task is an error that says so. Each runner reports a fail only for the tree's fault and an error for the
 machine's: a toolchain that didn't set up, a pin that didn't fetch, check.py's `cannot run here`, a command a signal killed,
-and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. Drive counts no
-lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a train.sh run beside
-the executor's check (`research.drive.SLIM_STEPS`).
+and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. The verified
+queue counts no lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a train.sh
+run beside the executor's check (`research.vqueue_slim`).
 
 ## Writing a family
 

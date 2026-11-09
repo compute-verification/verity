@@ -33,12 +33,12 @@ Waiters take slots in the order they came: each holds a locked ticket in LINE be
 live one may take a slot (a ticket nobody holds is a waiter that died, and is removed). The lander's own `flock` of a slot's
 lock is not in the line: it takes that slot whenever it frees.
 
-`python3 tools/verity/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
+`python3 tools/verity/check/slot.py --priority -- CMD...`: the verified queue's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
 running check, and priority waiters keep their own arrival order. Merges unblock everyone. With `--rank N`
-(drive's after-landing run and lock run, rank 0: `research.drive.POSTLAND_SLOT_RANK`), priority waiters go by rank, then
-arrival, and a priority waiter without a rank (a `train.sh` launched by hand) goes after the ranked: the runs `main` waits on
-take the next slot, ahead of priority checks that came first.
+(the run beside each of the verified queue's candidates, rank 0: `research.landing.SLOT_RANK`), priority waiters go by rank,
+then arrival, and a priority waiter without a rank (a `train.sh` launched by hand) goes after the ranked: the runs `main` waits
+on take the next slot, ahead of priority checks that came first.
 
 `--wait-max SECONDS`: a waiter that has no slot after SECONDS leaves the line and exits NOT_STARTED (75) without running CMD, so
 its caller can tell a check that never started from one that failed. `--run-max SECONDS`: CMD's time limit, counted from the slot

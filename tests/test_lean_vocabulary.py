@@ -797,7 +797,7 @@ KNOWN: dict[str, str] = {
         "homonym, one distribution's settings from the environment: rename (ci)",
     "tools/move/layout.py::Layout": "homonym, a layout move's directory map: rename (ci)",
     "tools/research/src/research/compare.py::Verdict": "homonym, a run comparison's result: rename (infra)",
-    "tools/research/src/research/drive.py::Verdict": "homonym, a queue train's land verdict: rename (ci)",
+    "tools/research/src/research/vqueue.py::Verdict": "homonym, graph2's results for a queue candidate: rename (ci)",
     "tools/verity/cli/verity_cli/run.py::Registry": "homonym, what `verity run` reads off step 0's table: rename (ci)",
     # verity/core/
     "verity/core/attest/__init__.py::Period":

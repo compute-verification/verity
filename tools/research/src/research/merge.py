@@ -20,9 +20,9 @@ the verdict passed and no step listed twice.  A sharded check (`check.py --shard
 `check-shard/v1`) passes only through the Attempt of `check.py --combine RUN...` on the same commit, and only when the gate,
 reading the shards itself (`shard_set`), finds them a passing check of that clean commit (one plan, K = 1..N once each, the
 commit's own `tools/verity/check/`, every part once, every job its `ci.toml` puts on the gate, no step failed) and the combine's
-steps theirs; a shard alone passes nothing.  A job off the gate (drive's policy, policy.toml's `off_gate`: circuit-check,
-ratchet-gate) is required of no check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
-there names its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
+steps theirs; a shard alone passes nothing.  A job off the gate (policy.toml's `off_gate`: circuit-check,
+ratchet-gate) is required of no check, whole or sharded, and a recorded check doesn't run it: the verified queue runs
+circuit-check in graph2 and ratchet-gate in the run beside each candidate (`research.vqueue_slim`), and neither gates.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
 ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
@@ -35,8 +35,8 @@ the diff from its tip either way.  The merge commit carries a `Check: <attempt i
 With --verdicts (opt-in) the same refusals hold before any verdict, and in place of a passing attempt of REF, REF is
 admitted when the target's `check.py --plan REF --packs-only --base HEAD` (`PLAN`, `verdict_gate`) shows every part it
 requires passed under its key at REF, each by a pass that a recorded check's verdict pack holds: an attempt of the tool that
-ended, ran the declared command whole or as a shard, and lists that pack, by sha256, among its run files (`pack_refusal`); or an
-after-landing run's (`check.py --deferred`, the declared command with `--deferred STEPS`, recorded as no tool: `post_landing`).
+ended, ran the declared command whole or as a shard, and lists that pack, by sha256, among its run files (`pack_refusal`); or a
+deferred run's (`check.py --deferred`, the declared command with `--deferred STEPS`, recorded as no tool: `post_landing`).
 Every Lake package's audit and every step the change requires (`required_steps`) is among those parts, so a skip passes
 nothing; a part with no key is never passed, a build step (`plan.IMPLIED`) is `implied` only by the cited passes of the parts
 that read what it builds (its `implied_by`), and a pass kept only in a machine's cache is cited by nothing.
@@ -56,7 +56,8 @@ head that landed (GitHub's "delete head branch" fires only on merges made on Git
 The remote's branch, fetched first, is the truth, never the checkout. With --push, a merge that lands is pushed to the remote
 (never forced), what the tool's declaration runs after a landing (`Tool.after_land`) is started, detached, on the landed commit,
 and then it is swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
-`research merge --sweep` after the push does it. Whoever lands a train passes --push. Once origin has main, the
+`research merge --sweep` after the push does it. On `main`, `checked` and `next` only the verified queue's loop on the
+control pod pushes (`off_drive`), and it pushes `main` itself and runs the steps below through `caught_up`. Once origin has main, the
 same commit goes to vy-nebius-cpu-4's bare repository, whose main its builds check out (`vy-lean-sandbox checkout`): a plain
 push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
 it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
@@ -168,8 +169,8 @@ def invocation(argv, command) -> tuple[str, object]:
 
 
 def post_landing(argv, command) -> str | None:
-    """The steps of an after-landing run (`check.py --record --deferred STEP,...`, which drive launches through `train.sh
-    --deferred` and records without `--tool check`) when ``argv`` is the declared ``command`` run whole (`invocation`) but for
+    """The steps of a deferred run (`check.py --record --deferred STEP,...`, which the verified queue launches beside each
+    candidate through `train.sh --deferred` and records without `--tool check`) when ``argv`` is the declared ``command`` run whole (`invocation`) but for
     `--deferred STEPS` once; else None.  No gate takes it as a check of its commit; `--verdicts` cites its packs part by part."""
     if not (isinstance(argv, list) and argv.count("--deferred") == 1) or (i := argv.index("--deferred")) + 1 >= len(argv):
         return None
@@ -215,9 +216,9 @@ def declared(repo: Path, commit: str) -> list[dict] | None:
 
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
     """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` declares that are on the merge gate (every job but
-    those ``commit``'s drive policy, `policy.toml`, names in `off_gate`, or its ci.toml marks `gate = false`), or why they
-    can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's after-landing run, whose red
-    names its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
+    those ``commit``'s policy, `policy.toml`, names in `off_gate`, or its ci.toml marks `gate = false`), or why they can't be
+    read.  A job off the gate (circuit-check, ratchet-gate) no check needs to pass a merge, and a recorded check doesn't run
+    it."""
     from . import policy
 
     pol = policy.at(repo, commit)
@@ -513,7 +514,7 @@ def _regenerated_in(run_id: str, audit) -> dict[str, str]:
 
 def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
     """(run ``rid``'s local dir, its `research status --json` row) with ``names``, paths under its run dir, fetched from its node
-    (`research status RID --json --also NAME...`, as `drive.evidence` reads a running check), or None when it can't be read.
+    (`research status RID --json --also NAME...`, as `landing.evidence` reads a running check), or None when it can't be read.
     ``refresh`` fetches them for a run that has ended too (`--refresh`), which a plain read answers from what is kept here."""
     also = [x for n in names for x in ("--also", n)]
     r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *(["--refresh"] if refresh else []), *also],
@@ -651,8 +652,8 @@ def run_plan(repo: Path, commit: str, base: str, also: tuple[str, ...] = (), on:
 
 def pack_refusal(store, rid: str, sha256: str, tool: str, command: tuple[str, ...]) -> str | None:
     """Why the verdict pack of sha256 ``sha256`` can't be cited as attempt ``rid``'s, or None: the attempt's record says it is
-    a ``tool`` attempt that ended (`PACK_STATES`), ran the declared ``command`` whole or as a shard (`invocation`), or is an
-    after-landing run of it, whatever tool it was recorded as (`post_landing`), and lists one of `PACKS` of that sha256 among its
+    a ``tool`` attempt that ended (`PACK_STATES`), ran the declared ``command`` whole or as a shard (`invocation`), or is a
+    deferred run of it, whatever tool it was recorded as (`post_landing`), and lists one of `PACKS` of that sha256 among its
     run files."""
     try:
         doc = store.get_attempt(rid)
@@ -936,7 +937,7 @@ def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
 def step_status(store, run_id: str, step: str) -> str:
     """The status ``step`` has in the attempt's result.json ``steps`` ("absent" when it has none).  A job a shard plan splits
     (lean-audit, by Lake package): in a `--combine` check, its parts' (`STEP:PART`), passed only when each is; in a shard
-    (`SHARD_KIND`, or a deferred run's shard: drive's after-landing shards), "partial" unless that shard ran every part of it,
+    (`SHARD_KIND`, or a deferred run's shard), "partial" unless that shard ran every part of it,
     since a shard alone checks only its own."""
     try:
         art = (store.get_attempt(run_id) or {}).get("outputs", {}).get("result")
@@ -1364,7 +1365,7 @@ def train(repo: Path, refs: list[str], into: str, store, tool: str, command: lis
         _git(repo, "branch", "-D", branch, check=False)
 
 
-#: gh has no timeout of its own: a call on a dead connection can hold a drive tick for minutes
+#: gh has no timeout of its own: a call on a dead connection can hold a queue tick for minutes
 GH_TIMEOUT_S = 120
 
 
@@ -1463,7 +1464,7 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
                      check=False)
             if r.returncode:
                 log(f"research merge: kept {head}: {(r.stderr or r.stdout).strip()[-200:]}")
-    # a PR GitHub marked merged itself (its head reached `into` by drive's landing) leaves its branch too (most branches
+    # a PR GitHub marked merged itself (its head reached `into` by the queue's landing) leaves its branch too (most branches
     # are already on main), and so does one closed unmerged; the most recently updated, not created, first (`gh pr list`'s
     # newest 200 by number leave out PRs that waited in the queue, whose branches would stay)
     ended = json.loads(gh("api", "graphql", "-F", "owner={owner}", "-F", "name={repo}", "-f", f"query={ENDED_QUERY}",
@@ -1654,7 +1655,7 @@ AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree 
 
 def _own_tree(repo: Path, commit: str) -> Path | None:
     """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
-    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).
+    (the queue's clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).
     None when ``repo`` can't make one."""
     import shutil
 
@@ -1669,7 +1670,7 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
     """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
     does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  With
-    ``attempt``, the check the landing was admitted on, it gets `--attempt RID` after the commit: drive's landings carry no
+    ``attempt``, the check the landing was admitted on, it gets `--attempt RID` after the commit: the queue's landings carry no
     `Check:` trailer.  Returns the argv started, None when the declaration names none."""
     from .store import tools_registry
 
@@ -1799,7 +1800,7 @@ def landing_lines(repo: Path, start: str, tip: str, prs: dict[str, int] | None =
                   runs: dict[str, str] | None = None) -> list[str]:
     """One line per commit on ``tip``'s first-parent line after ``start``: what it merged (pull requests, or the branches and
     commits ``prs``, head branch or head sha to number, doesn't map to one) and the runs its `Check:` or `Checked:` trailer
-    names, else the run ``runs`` gives for it (a queue commit `research queue drive` fast-forwarded has no trailer).  Read from main's log, since a pull request's state can't stand in: a stacked member can read closed on
+    names, else the run ``runs`` gives for it (a candidate the verified queue fast-forwarded main to has no trailer).  Read from main's log, since a pull request's state can't stand in: a stacked member can read closed on
     GitHub without having landed on its own."""
     prs = prs or {}
     lines = []

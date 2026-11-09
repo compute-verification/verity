@@ -84,9 +84,9 @@ SETTINGS: dict[str, Setting] = _declare(
       "pod_setup.sh)", "placement: which slots a check may take"),
     S("CHECK_SLOT_MEM_GB", str, "", WHERE, "the GB the check slot gives the run it holds (slot.py sets it): circuit-check's "
       "budget and the suites' jobs", "it sizes how much runs at once, never what a step computes"),
-    S("CHECK_SLOT_RANK", str, "", WHERE, "the rank `slot.py --rank` orders priority waiters by: drive's after-landing run's "
-      "and lock run's (`research.drive.POSTLAND_SLOT_RANK`), none for a hand `train.sh`", "placement: the order drive's checks "
-      "take slots in"),
+    S("CHECK_SLOT_RANK", str, "", WHERE, "the rank `slot.py --rank` orders priority waiters by: the run beside each of the "
+      "verified queue's candidates (`research.landing.SLOT_RANK`), none for a hand `train.sh`", "placement: the order the "
+      "queue's checks take slots in"),
     S("CHECK_STORE_CUSTODY", str, None, WHERE, "the recording run's custody dir, which check gives its steps in place of the "
       "RESEARCH_* that named the store (`store_io`)", "where the store's key is, not what a step computes"),
     S("RESEARCH_STORE_CONFIG", str, None, WHERE, "the evidence store's config: set, the suites' fixture fetch uses it, not the "

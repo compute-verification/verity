@@ -96,7 +96,7 @@ if [[ $shard == auto:* ]]; then [ -n "$plan" ]; else [ -z "$plan" ]; fi \
 [ -z "$noregen" ] || pass+=(--no-regenerate)
 [ -z "$shard" ] || pass+=(--shard "$shard")
 [ -z "$plan" ] || pass+=(--shard-plan-file "$plan")
-# the tree's settings.py first: drive runs a copy of this script from outside the tree (`drive.detach`)
+# the tree's settings.py first: the verified queue runs a copy of this script from outside the tree (`landing.detach`)
 settings=tools/verity/check/settings.py; [ -f "$settings" ] || settings="$(dirname "$0")/settings.py"
 python3 "$settings" --of-record || { echo "train: a recorded train takes no debug or unknown check setting" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }

@@ -1,4 +1,4 @@
-"""`check.py --deferred STEP,...`, the after-landing run `research queue drive` launches on `main` (`train.sh --deferred`): only
+"""`check.py --deferred STEP,...`, the run the verified queue launches beside each candidate (`train.sh --deferred`): only
 those ci.toml jobs and what they need, inside a recorded run that is no check, so no gate reads it."""
 from __future__ import annotations
 

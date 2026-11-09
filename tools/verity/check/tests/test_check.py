@@ -1664,8 +1664,9 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
 
 
 def test_train_sh_copied_out_of_the_tree_finds_the_trees_settings(tmp_path):
-    """Drive launches a copy of train.sh from its own directory (`drive.detach`) with the tree as its working directory: the
-    settings check reads the tree's settings.py, so the copy reaches the store-key check rather than refusing every launch."""
+    """The verified queue launches a copy of train.sh from its own directory (`landing.detach`) with the tree as its working
+    directory: the settings check reads the tree's settings.py, so the copy reaches the store-key check rather than refusing
+    every launch."""
     import shutil
     import subprocess
 

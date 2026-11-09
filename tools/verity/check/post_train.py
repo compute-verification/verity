@@ -4,11 +4,12 @@ reference regression's manifest rebuilds on a landing of main.
 
 `check` blocks on the regression's cheap T0 tier; the checks that recompute from a row's Programs (marked `rebuild`: the manifest
 rebuilds, `manifest_digest` on every row it applies to and the #57 refusal, and `step_segmentation`'s decode of every component;
-about an hour of CPU in one process) run here instead, once per landing.  `research merge --push` starts
-this, detached, after each push it lands (`after_land` in `tool.py`); run it by hand for a landing pushed another way, or to redo one.
+about an hour of CPU in one process) run here instead, once per landing.  The verified queue starts
+this, detached, after each advance of main (`merge.caught_up` runs `after_land` in `tool.py`); run it by hand for a landing pushed
+another way, or to redo one.
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
-`research queue drive` fast-forwarded main to, the store's passing check of that commit does.  Drive passes the check it landed
+the queue fast-forwarded main to, the store's passing check of that commit does.  The queue passes the check it landed
 on as `--attempt RID`, taken when RID ran on COMMIT or on the train COMMIT merges onto a moved main (its second parent): a landing
 with deferred steps has no passing check in the store when this starts.  Its tree is checked
 out in a worktree of its own and the rebuilds run there through `research run --on MACHINE`, pinned to --cores, under
@@ -72,8 +73,8 @@ POLLS = (TIMEOUT_S + 1800) // POLL_S
 SLEEP = time.sleep
 ENDED = ("done", "failed", "cancelled")
 CHECK_RE = re.compile(r"^Check: (r20\d{6}-\d{6}-[0-9a-f]{4})$", re.M)
-#: the trailer of drive's lock commit (`Driver._commit_locks`: `Lock records regenerated for ...`), which names the files it
-#: regenerated
+#: the trailer of a lock commit (`Lock records regenerated for ...`, which landed a lock run's records on main before the
+#: verified queue), which names the files it regenerated
 LOCKS_RE = re.compile(r"^Regenerated: \S", re.M)
 ROW_RE = re.compile(r"-(r\d+)\]$")
 
@@ -100,10 +101,10 @@ def git(*args: str, cwd: Path = ROOT, check: bool = True) -> str:
 def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> str | None:
     """The attempt a landing of main was admitted on: its `Check:` line (`research merge`; a paragraph of its own, which git's
     `%(trailers)` doesn't read), else, for a commit on origin/main, the newest check that passed on its clean tree (`passed`): a
-    train `research queue drive` fast-forwards main to was checked as it is, so it has no trailer.  None for any other commit.
+    train the queue fast-forwards main to was checked as it is, so it has no trailer.  None for any other commit.
 
-    With ``attempt`` (`--attempt`, the check drive landed on), that attempt, when it ran on the commit (a fast-forward) or on the
-    commit's second parent, the train drive merged onto a moved main, whose body records it (`Checked: RID (full check of ...`;
+    With ``attempt`` (`--attempt`, the check the queue landed on), that attempt, when it ran on the commit (a fast-forward) or on
+    the commit's second parent, a train merged onto a moved main, whose body records it (`Checked: RID (full check of ...`;
     a train commit's own second parent is a PR's head, which no check of the train ran on): a landing made with `--defer` lands
     while its check runs, or cancels it then, so no passed attempt is in the store to find."""
     body = git("log", "-1", "--format=%B", commit, cwd=cwd)
@@ -119,7 +120,7 @@ def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> 
     src = source_of(attempt)
     checked = re.search(rf"^Checked: {re.escape(attempt)} ", body, re.M)
     merged = checked and git("rev-parse", "--verify", "-q", f"{sha}^2", cwd=cwd, check=False)
-    # drive's lock commit (`Lock records regenerated for ...`) names the lock run, which ran on its parent
+    # a lock commit (`Lock records regenerated for ...`) names the lock run, which ran on its parent
     locked = checked and LOCKS_RE.search(body) and git("rev-parse", "--verify", "-q", f"{sha}^1", cwd=cwd, check=False)
     if src and src in (sha, merged, locked):
         return attempt
@@ -228,14 +229,14 @@ def carried(sha: str, tree: Path) -> dict | None:
 
 
 def queued_path() -> Path:
-    """Beside LOCK: each job's landing and the check drive landed it on (`--attempt`), so a job that waited finds the tip's."""
+    """Beside LOCK: each job's landing and the check the queue landed it on (`--attempt`), so a job that waited finds the
+    tip's."""
     return LOCK.with_name(LOCK.stem + ".attempts.json")
 
 
 def note_attempt(sha: str, attempt: str, keep: int = 200) -> None:
-    """Record ``sha``'s attempt for `later_landing`: drive's landings carry no `Check:` line, and drive cancels a train's check
-    once it lands, so `check_attempt` finds no attempt for main's tip, and without this record no queued job is ever
-    superseded."""
+    """Record ``sha``'s attempt for `later_landing`: the queue's landings carry no `Check:` line, so `check_attempt` finds no
+    attempt for main's tip, and without this record no queued job is ever superseded."""
     p = queued_path()
     with open(p.with_suffix(".lock"), "a") as guard:
         fcntl.flock(guard, fcntl.LOCK_EX)
@@ -290,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="run, and print the label instead of writing it (any commit: a branch's too)")
     ap.add_argument("--run", metavar="RID", help="a run this job launched for the commit before (its caller ended first): wait for "
                                                   "it and label from it instead of launching another")
-    ap.add_argument("--attempt", metavar="RID", help="the check the landing was admitted on (drive's `landed ... (check RID)`): "
+    ap.add_argument("--attempt", metavar="RID", help="the check the landing was admitted on (the queue's `--attempt`): "
                                                      "labelled when it ran on COMMIT or on the train COMMIT merged onto main")
     a = ap.parse_args(argv)
     git("fetch", "-q", "origin", "main")
