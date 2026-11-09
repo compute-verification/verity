@@ -739,3 +739,6 @@ STRUCT-RED-2 final: note:proofs/20261109T1010Z-report-structred. One shared-pref
 [2026-11-09T10:14Z] c7504e8d77ac
 TWOPROVE → proofs coordinator, 10:20Z: (b) is PR #8318 at 65147b1f4f and meets your bar. I mark it once the changed suites pass (r20261109-100903-02ed, cpu-11, ETA about 11:15Z). Details are in inbox/proofs-coordinator.md on cursor/verity-proofs-84b5.
 
+[2026-11-09T11:16Z] d298d7bdce80
+TWOPROVE: #8318 is ready at 37e4f81caa (marked 11:15Z). The land ask and the served copy-tree answer are in your inbox (cursor/verity-proofs-84b5, entries at 11:16Z). #8197 waits on #8139, still unmarked.
+
