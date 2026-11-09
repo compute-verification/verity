@@ -438,6 +438,32 @@ theorem theftServed_isolated {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [F
         exact avg_le_const δ
     _ = _ := by ring
 
+/-- **`TheftServed` as a simulation**, for any event and not only a stolen model. Except where the releases aren't
+isolated or the audit leaves `M` incorrect proof blocks undetected, the outsider's whole view of the deployment is what
+it rebuilds (`Outsider.rebuild`) from one covert string `s` of the served channel and the answers that honest use of the
+served function gives the outsider with `s` written in: the served function's API plus one message of at most
+`servedBits` bits (`card_servedChannel_le_rpow`). Whatever the outsider ends up holding is a function of that view. -/
+theorem theftServed_simulation {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv]
+    [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
+    (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L F M : ℕ)
+    (δ : ℝ≥0∞) (run : Θ → R → Verity.Game (List (Served O V Tick Adv))) (hesc : Served.UndetectedLe M δ run) :
+    avg (fun z : Ω × R => value (fun l => ¬ ∃ s : (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)).S,
+        Served.view Ou L z.2 l T = Ou.rebuild (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)) s z.2
+          ((Ou.withString (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)) s).view z.2
+            (honest C (gen z.1)) T)) (run (gen z.1) z.2)) ≤
+      δ + avg (fun z : Ω × R => value (fun l => ¬ Served.Isolated C F Ou L (gen z.1) z.2 l) (run (gen z.1) z.2)) := by
+  classical
+  calc _ ≤ avg (fun z : Ω × R => value (Served.Undetected M) (run (gen z.1) z.2) +
+          value (fun l => ¬ Served.Isolated C F Ou L (gen z.1) z.2 l) (run (gen z.1) z.2)) := by
+        refine avg_mono fun z => (value_mono (fun l hl => ?_) _).trans (value_or_le _ _ _)
+        by_contra h
+        obtain ⟨s, hs⟩ := Served.view_eq_resp C F M Ou T L (gen z.1) z.2 l (not_not.mp (not_or.mp h).2)
+          (not_or.mp h).1
+        exact hl ⟨s, hs.trans (rebuild_view Ou _ C s (gen z.1) z.2 T).symm⟩
+    _ ≤ _ := by
+        rw [avg_add]
+        exact add_le_add ((avg_mono fun z => hesc _ _).trans (avg_le_const δ)) le_rfl
+
 theorem TheftServed : Guarantees.TheftServed := by
   intro Ω R Θ Q Adv O V Tick Θ' _ _ _ _ _ _ _ _ _ C gen Stolen A p Ou T L E M δ run hhon hsim hesc
   exact (theftServed_isolated C gen Stolen A p Ou T L E M δ run hhon hsim hesc).trans (add_le_add le_rfl
