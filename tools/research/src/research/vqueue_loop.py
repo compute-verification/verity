@@ -82,6 +82,8 @@ import sys
 import time
 from dataclasses import dataclass, field, fields, replace
 from datetime import UTC, datetime
+from functools import reduce
+from operator import or_
 from pathlib import Path
 from typing import Callable, Iterable
 
@@ -558,34 +560,19 @@ class World:
             return Judged(Verdict(LIST_FAILED), mark=f"empty {_digest(sorted(tasks))}", note="no task on the merge gate",
                           graph2=said, theirs=theirs)
         states, keys, seen = self._settled(graph, since, _faulted(theirs))
-        inputs: dict[str, frozenset[str]] = {}
-
-        def reach(i: str) -> frozenset[str]:
-            """``i``'s inputs, its env's spec files and those of each task it reads, transitively."""
-            if i not in inputs:
-                inputs[i] = frozenset()
-                t = tasks[i]
-                inputs[i] = frozenset(t["inputs"]).union((envs.get(t["env"]) or {}).get("spec") or (),
-                                                         *(reach(r["task"]) for r in t["reads"]))
-            return inputs[i]
-
-        def under(i: str, seen_: set[str]) -> list[str]:
-            """The tasks ``i`` reads, transitively, ``i`` first."""
-            if i in seen_:
-                return []
-            seen_.add(i)
-            return [i, *(j for r in tasks[i]["reads"] for j in under(r["task"], seen_))]
-
-        needed = list(dict.fromkeys(j for i in gates for j in under(i, set())))
+        closure = _Closure(tasks, envs)
+        needed = _walk(tasks, gates)
         allowed = self._allowed(sha, tasks, states, needed)
+        failed = frozenset(i for i in needed if states[i][0] == FAIL and i not in allowed)
         bad: list[str] = []
         for i in gates:
-            if states[i][0] == FAIL and i not in allowed:
+            if i in failed:
                 bad.append(i)
             elif states[i][0] == BLOCKED:
-                bad += [j for j in under(i, set()) if states[j][0] == FAIL and j not in allowed] or [i]
+                bad += closure.fails(i, failed) or [i]
         infra = [i for i in needed if states[i][0] == PENDING and _infra(seen.got.get(keys[i]) or (), keys[i])]
-        ended = all(states[i][0] != PENDING or set(under(i, set())) & set(infra) for i in gates)
+        erred = frozenset(infra)
+        ended = all(states[i][0] != PENDING or closure.meets(i, erred) for i in gates)
         jobs = {JOB_OF_KIND.get(t["kind"], t["kind"]) for t in tasks.values()}
         lacks = tuple(s for s in gating(self.repo, sha) if s not in jobs and s not in SLIM_STEPS)
         based = self._base(base, set(bad), base_since) if bad else {}
@@ -593,9 +580,9 @@ class World:
         based = {} if waits is not None else based
         tree = {e.get("task"): bool(e.get("tree")) for e in (theirs or {}).get("infra") or () if isinstance(e, dict)}
         fail = () if waits is not None else tuple(
-            _failure(i, keys[i], reach(i), base_key=based.get(i, (None, None))[0], tests=_tests(states[i][1]),
+            _failure(i, keys[i], closure.inputs(i), base_key=based.get(i, (None, None))[0], tests=_tests(states[i][1]),
                      base_tests=based.get(i, (None, None))[1]) for i in dict.fromkeys(bad))
-        down = tuple(_failure(i, keys[i], reach(i), tree=tree.get(i, False)) for i in infra)
+        down = tuple(_failure(i, keys[i], closure.inputs(i), tree=tree.get(i, False)) for i in infra)
         if fail:
             mine = Verdict(FAIL, fail, down, ended=ended)
         elif lacks:
@@ -873,6 +860,81 @@ def _infra(docs: Iterable[object], key: str) -> bool:
     """Whether ``key``'s newest result is graph2's infra error, its attempts run out."""
     mine = [d for d in docs if isinstance(d, dict) and d.get("key") == key]
     return bool(mine) and mine[-1].get("status") == "error" and (mine[-1].get("detail") or {}).get("infra") is True
+
+
+def _walk(tasks: dict[str, dict], roots: Iterable[str]) -> list[str]:
+    """The tasks ``roots`` read, transitively, each once, as a walk from each root in turn lists those it hasn't yet: a task,
+    then what each of its reads reads, in order.  One walk for all roots: a Lean graph reads each module's transitive
+    imports, millions of reads, so a walk per root is out of reach."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for root in roots:
+        stack = [root]
+        while stack:
+            if (i := stack.pop()) in seen:
+                continue
+            seen.add(i)
+            out.append(i)
+            stack.extend(r["task"] for r in reversed(tasks[i]["reads"]))
+    return out
+
+
+def _fold(tasks: dict[str, dict], i: str, own: Callable[[str], object], join: Callable[[object, list], object],
+          memo: dict[str, object]) -> object:
+    """``join`` of task ``i``'s ``own`` and the values of the tasks it reads, in order, each task's worked out once (in
+    ``memo``) after those it reads, so the tasks a graph reads, transitively, cost its reads once, not once per task asked
+    about.  A read that closes a cycle counts for nothing."""
+    if i in memo:
+        return memo[i]
+    stack, on = [(i, iter(tasks[i]["reads"]))], {i}
+    while stack:
+        j, reads = stack[-1]
+        for r in reads:
+            if (k := r["task"]) not in memo and k not in on:
+                on.add(k)
+                stack.append((k, iter(tasks[k]["reads"])))
+                break
+        else:
+            stack.pop()
+            on.discard(j)
+            memo[j] = join(own(j), [memo[r["task"]] for r in tasks[j]["reads"] if r["task"] in memo])
+    return memo[i]
+
+
+class _Closure:
+    """What each task of a graph reads, transitively, worked out once per task (`_fold`): the failed tasks among them, in the
+    order a walk from it lists them (`_walk`); whether a task of some set is among them; and the inputs of all, as bit masks
+    over the graph's paths."""
+
+    def __init__(self, tasks: dict[str, dict], envs: dict):
+        self.tasks, self.envs = tasks, envs
+        self._memo: dict[object, dict[str, object]] = {}
+        self._bit: dict[str, int] = {}
+
+    def fails(self, i: str, failed: frozenset[str]) -> tuple[str, ...]:
+        """The tasks of ``failed`` that ``i`` is or reads, transitively, in the order `_walk` from ``i`` lists them."""
+        return _fold(self.tasks, i, lambda j: (j,) if j in failed else (),
+                     lambda mine, theirs: tuple(dict.fromkeys(x for t in (mine, *theirs) for x in t)),
+                     self._memo.setdefault(("fails", failed), {}))
+
+    def meets(self, i: str, these: frozenset[str]) -> bool:
+        """Whether ``i`` is or reads, transitively, a task of ``these``."""
+        return _fold(self.tasks, i, lambda j: j in these, lambda mine, theirs: mine or any(theirs),
+                     self._memo.setdefault(("meets", these), {}))
+
+    def inputs(self, i: str) -> frozenset[str]:
+        """``i``'s inputs, its env's spec files and those of each task it reads, transitively."""
+        mask = _fold(self.tasks, i, self._mask, lambda mine, theirs: reduce(or_, theirs, mine),
+                     self._memo.setdefault("inputs", {}))
+        paths = list(self._bit)
+        return frozenset(paths[n] for n, c in enumerate(reversed(bin(mask)[2:])) if c == "1")
+
+    def _mask(self, j: str) -> int:
+        """Task ``j``'s own inputs and its env's spec files, as a bit mask."""
+        t, mask = self.tasks[j], 0
+        for p in (*t["inputs"], *((self.envs.get(t["env"]) or {}).get("spec") or ())):
+            mask |= 1 << self._bit.setdefault(p, len(self._bit))
+        return mask
 
 
 @dataclass

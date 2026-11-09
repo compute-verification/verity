@@ -1131,3 +1131,55 @@ def test_research_queue_vqueue_is_its_own_command_and_runs_the_run_beside_each_c
     said = capsys.readouterr().out
     assert e.value.code == 0 and all(o in said for o in ("--shadow", "--lean", "--pending-hours", "--no-slim"))
     assert vqueue_loop._slim() is vqueue_slim
+
+
+def _under(tasks: dict[str, dict], i: str, seen: set[str]) -> list[str]:
+    """The walk the verdict made per gate: the tasks ``i`` reads, transitively, ``i`` first, as a recursive walk lists them."""
+    if i in seen:
+        return []
+    seen.add(i)
+    return [i, *(j for r in tasks[i]["reads"] for j in _under(tasks, r["task"], seen))]
+
+
+def _reach(tasks: dict[str, dict], envs: dict, i: str, memo: dict[str, frozenset[str]]) -> frozenset[str]:
+    """The verdict's inputs of a task as unions of frozensets: its own, its env's spec files and those of each task it reads."""
+    if i not in memo:
+        memo[i] = frozenset()
+        t = tasks[i]
+        memo[i] = frozenset(t["inputs"]).union((envs.get(t["env"]) or {}).get("spec") or (),
+                                               *(_reach(tasks, envs, r["task"], memo) for r in t["reads"]))
+    return memo[i]
+
+
+@pytest.mark.parametrize("seed", range(200))
+def test_the_closure_of_what_tasks_read_is_the_walks_per_task(seed):
+    """`_walk` and `_Closure` work out once per task what the verdict's walk per gate and union per task did (a Lean graph's
+    5 million reads over chains 241 long took either past eight minutes): on random graphs whose tasks read each other in
+    either order, a task twice, and inputs and env spec files shared, the same tasks needed in the same order, the same
+    failed tasks behind each in the same order, the same reach of the erred, and the same inputs."""
+    import random
+
+    rng = random.Random(seed)
+    n = rng.randrange(1, 40)
+    rank = rng.sample(range(n), n)
+    envs = {"py": {"spec": ["uv.lock"]}, "lean": {"spec": ["lean-toolchain", "lake-manifest.json"]}, "bare": {}}
+    tasks = {}
+    for k in range(n):
+        below = [j for j in range(n) if rank[j] < rank[k]]
+        reads = [f"t{j}" for j in rng.sample(below, rng.randrange(min(len(below), 5) + 1))]
+        if reads and rng.random() < 0.2:
+            reads.append(reads[0])
+        tasks[f"t{k}"] = {"id": f"t{k}", "env": rng.choice(sorted(envs)), "reads": [{"task": r, "output": "o"} for r in reads],
+                          "inputs": [f"src/{rng.randrange(n)}.py" for _ in range(rng.randrange(3))]}
+    ids = list(tasks)
+    gates = rng.sample(ids, rng.randrange(1, n + 1))
+    failed = frozenset(rng.sample(ids, rng.randrange(n // 3 + 1)))
+    erred = frozenset(rng.sample(ids, rng.randrange(n // 4 + 1)))
+    closure = L._Closure(tasks, envs)
+    assert L._walk(tasks, gates) == list(dict.fromkeys(j for g in gates for j in _under(tasks, g, set())))
+    memo: dict[str, frozenset[str]] = {}
+    for i in rng.sample(ids, n):
+        walked = _under(tasks, i, set())
+        assert closure.fails(i, failed) == tuple(j for j in walked if j in failed)
+        assert closure.meets(i, erred) == bool(set(walked) & erred)
+        assert closure.inputs(i) == _reach(tasks, envs, i, memo)
