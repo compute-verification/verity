@@ -44,10 +44,9 @@ import Proofs.Flock.Claims.Sampling.Extract
 /-!
 # The sampled compiler: the extraction's failure event and its probability
 
-`Claims.Sampling`'s failure event and its bound (`Proofs.Flock.Claims.Sampling.KS`), for a compiled sampled verifier `L`
-over any proof system for proof blocks `A` (`Claims.SamplingGeneric.Compiled`). The extractor's coins at an accepted
-inner run are one `Compiled.BlockEC` per slot of the sample (`Compiled.SlotEC`), as `Claims.Sampling`'s are, of which a
-session reads its first slot's.
+The extraction's failure event and its bound, for a compiled sampled verifier `L` over any proof system for proof
+blocks `A` (`Claims.SamplingGeneric.Compiled`). The extractor's coins at an accepted inner run are one
+`Compiled.BlockEC` per slot of the sample (`Compiled.SlotEC`), of which a session reads its first slot's.
 
 * `first_of_slot`, `leadOf`, `card_first_le`, `sum_first_le`: **a sample's sessions**. A slot holding a block below
   `n_PU` is in a session whose first slot (`leadOf`) holds one too; first slots have distinct keys, so a sample has at

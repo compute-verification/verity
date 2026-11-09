@@ -16,7 +16,7 @@ at the block's session, each of its reruns the compiled verifier's run with the 
 seen as the session's view
 (`serve`, `viewing`). Here its success (`Compiled.Found`) is bounded from `A`'s knowledge soundness (`Arg.KS`), its
 rounds (`Arg.wf`) and the contract's `runs` and `fixed` (`RunsFixed`, which `Compiled.Sessions` and
-`CompiledTwo.Sessions` both give): `Claims.Sampling`'s `SessionKS_of` with Flock's `E^rep` replaced by `A`'s extractor.
+`CompiledTwo.Sessions` both give).
 
 * `served_eval`, `found_of`: under `runs`, the served extraction is `A`'s extractor against the session's prover `P'`
   at the session's coins, since the session's coins of the placed coins are the placed ones (`coinsOf_place`, `A`
