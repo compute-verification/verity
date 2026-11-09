@@ -60,10 +60,10 @@ def _first():
               *(S.Public(f"{k}:{p}", "structure", f"{p}'s layout") for p in sorted(names) for k in ("leaves", "domain")))
     spec = S.Spec(tuple(S.Value(p, s, phase) for p, (s, phase) in sorted(names.items())),
                   S.TwoStage(P.template_instance_query(BLOCK), f"rate:{Q}/{SPANS}", 1),
-                  S.Check((P.program_digest(Program(RD)),), P.template_instances_query((RD,)), proof_deadline=60.0), public,
+                  S.Check(P.program_digest(Program(RD)), P.template_instance_query(RD), proof_deadline=60.0), public,
                   b"interior-table-test")
     draws = iter([[0, 2]])
-    stream = S.Stream(spec, (RD,), replay=BLOCK, budget=1, delta=DELTA, challenger="challenger-test", clock=lambda: 0.0,
+    stream = S.Stream(spec, RD, replay=BLOCK, budget=1, delta=DELTA, challenger="challenger-test", clock=lambda: 0.0,
                       sampler=lambda law, n: next(draws) if law["law"] == "subset" else [0] * len(law["strata"]))
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
@@ -71,6 +71,13 @@ def _first():
     reg = stream.register(CS.registration(c, {"stand_in": "boundary"}, None, registrar=R), CS.expected_ports(window),
                           leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)}))
     return stream, reg, stream.select(reg)
+
+
+@pytest.fixture(scope="module")
+def staged():
+    """`_first`'s stream once for the module: only the first test registers on it, and the others read its digest and
+    drawn units."""
+    return _first()
 
 
 def _spans(digest: str, units, tables) -> list[IR.Span]:
@@ -85,16 +92,15 @@ def _with(span: IR.Span, kind: str, port: str, unit: int, value) -> IR.Span:
     return replace(span, data={**span.data, kind: {**span.data[kind], port: a}})
 
 
-def test_a_table_read_interior_registers_each_spans_table_once_and_its_reads_roots_as_supplied_values():
+def test_a_table_read_interior_registers_each_spans_table_once_and_its_reads_roots_as_supplied_values(staged):
     """The record registers the two sampled spans' tables, each at 8 leaves under `one_stage.history`'s domain, and two
     supplied values. `history.check`, the verifier's mirror, reopens each table's root from the rows' b || c the interior
     publishes, read through the table's held run, and the supplied values made from the registered table entries alone
     are the record's, each row's source naming its table. The reads' ``root`` and ``domain``
     rows are given by reference, rows (0, 0, 1, 1) of those values, and the commitment is the one the same rows given in
-    full under the values' salts makes. The stream refuses it after its first stage, since its challenger holds no
-    registered values for an interior: R7 takes a registered value only as a parameter of the interior program, and the
-    tables and supplied values aren't parameters of it yet."""
-    stream, reg, first = _first()
+    full under the values' salts makes. The stream refuses it after its first stage by the public-items rule (`roots`):
+    a Spec declares its registered values by name before any run, and these names carry the interior's run."""
+    stream, reg, first = staged
     tables = _tables()
     it = IR.interior(_spans(reg.digest, first.units, tables), CELLS, reg.digest, first.units, row=ROW, salt_key=SALT,
                      tables=tables)
@@ -126,8 +132,9 @@ def test_a_table_read_interior_registers_each_spans_table_once_and_its_reads_roo
     full = CS.commit(w, data, salt_key=SALT, salts_of={m.port(p): CS.value_salts(v.value, v.positions)
                                                        for p, v in by_ref.items()})
     assert full.roots == c.roots
-    with pytest.raises(S.Refused, match="keys"):
+    with pytest.raises(S.Refused) as refused:
         IR.register(stream, first, it)
+    assert refused.value.verdict.codes == ("roots",)
 
 
 @pytest.mark.parametrize("bad, why", [
@@ -137,11 +144,11 @@ def test_a_table_read_interior_registers_each_spans_table_once_and_its_reads_roo
     ("another key", "does not open its table there"),
     ("verdict", "does not open its table there"),
 ])
-def test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed(bad, why):
+def test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed(staged, bad, why):
     """After its table's row 1 is flipped, the reads made against the table as it was take another root; a read whose row
     isn't the table's at its key, one at the other span's table's root, one at key 2 with key 1's opening and one whose
     verdict is 0 open nothing."""
-    _stream, reg, first = _first()
+    _stream, reg, first = staged
     tables = _tables()
     spans = _spans(reg.digest, first.units, tables)
     other = _spans(reg.digest, first.units, tables)[1].data["rows"]["root"][0]
@@ -159,10 +166,10 @@ def test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_commi
         IR.interior(spans, CELLS, reg.digest, first.units, row=ROW, tables=tables)
 
 
-def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read():
+def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read(staged):
     """Each sampled span brings its table exactly when a template reads one; a table of another capacity, a salt on two
     rows and a commitment made on the rows' device are refused by name."""
-    _stream, reg, first = _first()
+    _stream, reg, first = staged
     tables = _tables()
     spans = _spans(reg.digest, first.units, tables)
     with pytest.raises(ValueError, match="each sampled span brings its table"):
