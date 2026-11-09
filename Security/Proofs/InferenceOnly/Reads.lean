@@ -4,10 +4,10 @@ import Definitions.InferenceOnly.Guarantees.Reads
 /-!
 # Updated matrix multiplications are throttled, in reads form
 
-The proof of `UpdatedMatMul` (`Throttling.lean`) before it divides by `α`: the same per-IU counts (`card_products_le`,
+The proof of `UpdatedMatMul` (`Throttling.lean`) before it divides by `α`: the same per-inference-block counts (`card_products_le`,
 `iu_reads`), the same charge for split entries (`sum_card_outputsOther_le`) and the same total (`sum_card_products`),
-with the IUs' total reads in place of `α size(D)`. A compliant division at `(Γ, α)` reads at most `α size(D)` in total
-and each of its IUs at most `K = αΓ`, which gives back `F · 2G ≤ size(D)` through `F = f(K) / (2α)` (`F_eq_readFactor`,
+with the inference blocks' total reads in place of `α size(D)`. A compliant division at `(Γ, α)` reads at most `α size(D)` in total
+and each of its inference blocks at most `K = αΓ`, which gives back `F · 2G ≤ size(D)` through `F = f(K) / (2α)` (`F_eq_readFactor`,
 `updatedMatMul_of_reads`).
 -/
 
@@ -100,7 +100,7 @@ theorem UpdatedMatMulReads : Guarantees.UpdatedMatMulReads := by
   rw [le_div_iff₀ hGr] at hsup
   linarith
 
-/-- The reads form gives back `UpdatedMatMul`: a division that witnesses compliance at `(Γ, α)` has IUs of at most `Γ`
+/-- The reads form gives back `UpdatedMatMul`: a division that witnesses compliance at `(Γ, α)` has inference blocks of at most `Γ`
 gates, each reading at most `K = αΓ`, and reads at most `α size(D)` in total. -/
 theorem updatedMatMul_of_reads (h : Guarantees.UpdatedMatMulReads) : Guarantees.UpdatedMatMul := by
   intro Γ α b_w b_a D c d hα hw ha hd ⟨n, P, hP⟩ hA hPS

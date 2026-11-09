@@ -36,7 +36,7 @@ def Inference : Prop :=
 /-- **Updated matrix multiplications are throttled** (the draft's theorem, "Throttling updated matrix
 multiplications"): under compute-bounded incompressibility, every declared circuit `D ⊨ 𝒫` that runs updated matrix
 multiplications is larger than those multiplications by a factor of at least `F`. The multiplications have about `2G`
-gates: `G` products, and about as many additions. `K = αΓ` is the most an IU reads, `b_w` and `b_a` are the widths of a
+gates: `G` products, and about as many additions. `K = αΓ` is the most an inference block reads, `b_w` and `b_a` are the widths of a
 weight entry and an activation entry, and `d` is the smallest inner dimension (a smaller `d` gives a smaller `F`). -/
 def UpdatedMatMul : Prop :=
   ∀ (Γ : ℕ) (α b_w b_a : ℝ) (D : Declaration) (c : Chain D.D) (d : ℕ),
@@ -83,8 +83,8 @@ namespace InferenceOnly.SecurityProofs
 open Verity Finset
 
 open Classical in
-/-- **What an IU reads** (the draft's proof of its theorem, "Throttling updated matrix multiplications"): "By the lemmas
-and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", for an IU `R` of at most `Γ` computed
+/-- **What an inference block reads** (the draft's proof of its theorem, "Throttling updated matrix multiplications"): "By the lemmas
+and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", for an inference block `R` of at most `Γ` computed
 gates that reads at most `K` bits of novel information, under `Assumptions.ActivationsSupport` at cap `K + b_w + b_a`
 for some committed values `θv` of θ. `p_R` is the number of weight entries `R` uses, `τ_R` its number of full
 positions, `Q_R` the number of input entries it uses at positions that are not full, and `d` the smallest inner
@@ -114,7 +114,7 @@ open Verity Finset
 
 /-- **Lemma 2 (other positions)** (the draft, "Throttling updated matrix multiplications"): "At positions that are not
 full positions of `R`, every entry of `x^{(ℓ-1)}` that `R` uses costs `R` a read of at least `b_a` bits, and every entry
-of `y^{(ℓ)}` that `R` contributes products to is split." `R` is an IU of a division `P`; the read is the one
+of `y^{(ℓ)}` that `R` contributes products to is split." `R` is an inference block of a division `P`; the read is the one
 `Assumptions.ActivationsIncompressible` charges, since such an entry is not linked to an entry whole in `R`. -/
 def _root_.InferenceOnly.Guarantees.OtherPositions : Prop :=
   ∀ {D : Circuit} (c : Chain D) {n : ℕ} (P : Partition D n) (u : Fin n),

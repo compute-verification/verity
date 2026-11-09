@@ -3,7 +3,7 @@
 Each rank's run of the node's body is its rank Program's body node for node, every operand leaf the same leaf of the node's
 parameters or of the rank's own nodes, except that a peer Input's leaf is a node of the peer rank: every rank's collective k reads
 one operand where its rank Program reads its peers, each rank's rows its own (its other operands, a fused norm's residual and
-weight, stay its own). So no peer Input is left, and an isolation block over the node reads only its prompt besides
+weight, stay its own). So no peer Input is left, and an inference block over the node reads only its prompt besides
 θ (`inference_only_reference.check_desc`, `InferenceOnlyCheck.Desc`'s reference)."""
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def test_check_ranks_holds_each_ranks_run_of_the_body_to_its_own_program():
 
 @pytest.mark.slow
 def test_the_node_reads_only_its_prompt_besides_theta():
-    """One IU over the node's computation: its novel reads are the prompt's 4 x 32 bits; the rank Programs' are their peers' too."""
+    """One inference block over the node's computation: its novel reads are the prompt's 4 x 32 bits; the rank Programs' are their peers' too."""
     node = build_node_program(_phi(TINY, tp={"world": 2, "rank": 0}), "request", LP=4, T=2)
     text = canonical_json(node.desc).decode()
     inp, reg, spans = NCI.root_nodes(text)

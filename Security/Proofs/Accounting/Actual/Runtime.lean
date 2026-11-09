@@ -5,7 +5,7 @@ import Proofs.InferenceOnly.Reads
 # The runtime corollary
 
 At a `t'` at or before `t` by which the developer holds `P`'s outputs at fixed positions in every run, the run's windows
-divide its region over `[0, t')` into `n ⌈t'/ω⌉` isolation blocks of at most `Γ` gates, each reading at most `K`
+divide its region over `[0, t')` into `n ⌈t'/ω⌉` inference blocks of at most `Γ` gates, each reading at most `K`
 (`Windows`), so B5 (`InferenceOnly.SecurityProofs.UpdatedMatMulReads`) gives `G f(K) ≤ n ⌈t'/ω⌉ K`, and `⌈t'/ω⌉ ω ≤ t' + ω`.
 -/
 

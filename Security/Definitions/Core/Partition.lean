@@ -4,7 +4,7 @@ import Definitions.Core.Circuit
 # Partitions, committed wires, and the correctness of a unit
 
 A partition puts every computed gate of a circuit in exactly one of `n` units; input gates are in none. Proof blocks,
-replay blocks and isolation blocks are partitions in three roles, and `Refines` nests them (proof blocks inside replay
+replay blocks and inference blocks are partitions in three roles, and `Refines` nests them (proof blocks inside replay
 blocks). The committed wires are derived, never stored: the inputs, the outputs, and every gate that a gate of another
 unit reads (`committed`). Unit `u`'s committed gates are `out(R)` for its gates `R` (`gates u`).
 

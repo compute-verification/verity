@@ -10,7 +10,7 @@ refuses the instance or its provenance is not one entry per θ entry; and `pytho
 results. The Lean audit runs `InferenceOnlyCheck/BaselineDifftestMain.lean` on the three (`runs` in `lean-audit.json`).
 
 Case `seed`'s declaration, for the first `COUNT`, is one of `difftest_vectors`' shapes with each parameter bound at
-registration with probability 0.6, divided into one IU, with `Γ` and `α` large enough that the policy check gives a
+registration with probability 0.6, divided into one inference block, with `Γ` and `α` large enough that the policy check gives a
 verdict. θ is a random set of its registered input nodes. Its trusted input is a deployment's log in R6's chain: up to
 three records before the run's own, so the run is the deployment's first in a quarter of the cases, and up to one after.
 Each parameter holding a θ node is registered in the run's record under the root its provenance cites: the log's first

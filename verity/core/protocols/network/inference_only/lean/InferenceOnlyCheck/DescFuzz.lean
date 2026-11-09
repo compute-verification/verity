@@ -27,7 +27,7 @@ the fuzzer decides the statements as a cross-check of those proofs. Each is a `�
   `circuitOf` runs only where `s1prim`'s walk resolved every operand under the step cap, so it never runs `Steps.FUEL`
   steps.
 * `agree`, `DescAgrees` itself, on instances of the Program (`instanceOf`) and on any its line gives (`θ`, owners, `Γ`
-  and `α` chosen with the Program, as the shared family chooses its IUs): wherever `Desc.evaluate` gives a verdict,
+  and `α` chosen with the Program, as the shared family chooses its inference blocks): wherever `Desc.evaluate` gives a verdict,
   `InferenceOnlyCheck.evaluate` gives the same one on the instance expanded gate by gate (`expand`, `InferenceOnlyDesc.Expands`).
 
 Each `∀` over members, leaves or references enumerates all of them up to `Caps.enum`, else endpoints (every bound in
@@ -294,7 +294,7 @@ def readsExact (P : Prog) (reads : Array (Array Desc.Seg)) (c : GateTable) (cap 
 def lcg (s : UInt64) : UInt64 := s * 6364136223846793005 + 1442695040888963407
 
 /-- Instance `v` of a Program whose root nodes are input nodes (`inp`), registered (`reg`) and hold gates (`held`): θ all
-registered input nodes (`v = 0`) or some, and the computed nodes holding gates in IUs numbered from 0: each its own
+registered input nodes (`v = 0`) or some, and the computed nodes holding gates in inference blocks numbered from 0: each its own
 (`v = 0`), all in one (`v = 1`), else at random among at most three. -/
 def instanceOf (text : String) (gates : Nat) (inp reg held : Array Bool) (seed : UInt64) (v : Nat) : Json := Id.run do
   let mut s := seed + v.toUInt64

@@ -5,14 +5,14 @@ import Proofs.InferenceOnly.LoomisWhitney
 /-!
 # Updated matrix multiplications are throttled
 
-The draft's proof of its theorem ("Throttling updated matrix multiplications"), over the IUs of a division `P` that
-witnesses compliance, each of at most `Γ` gates and so reading at most `K = αΓ`. An IU `R` that uses `p` weight entries
+The draft's proof of its theorem ("Throttling updated matrix multiplications"), over the inference blocks of a division `P` that
+witnesses compliance, each of at most `Γ` gates and so reading at most `K = αΓ`. An inference block `R` that uses `p` weight entries
 and has `τ` full positions computes at most `p τ + √(p Q Y)` products (`card_products_le`): at most `p τ` at its full
 positions (Lemma 1) and, by Loomis–Whitney at each multiplication and Cauchy–Schwarz over them, at most `√(p Q Y)` at
 its other positions, where it uses `Q` input entries and contributes to `Y` output entries (`outputsOther`). Each of
-those output entries is split (Lemma 2), so the IUs' `Y`s add up to at most twice the partial sums that
+those output entries is split (Lemma 2), so the inference blocks' `Y`s add up to at most twice the partial sums that
 incompressibility charges (`sum_card_outputsOther_le`). The two read counts, weighted by `μ`, give
-`min{c₁, c₂} G ≤ α size(D)` for every `μ`, since the IUs' products add up to `G` (`sum_card_products`), and so
+`min{c₁, c₂} G ≤ α size(D)` for every `μ`, since the inference blocks' products add up to `G` (`sum_card_products`), and so
 `F · 2G ≤ size(D)`.
 -/
 
@@ -37,7 +37,7 @@ theorem sum_card_filter_comm {α β : Type*} [Fintype α] [Fintype β] (r : α �
   exact sum_comm
 
 open Classical in
-/-- **The products of an IU** (the draft's proof of its theorem): `R` computes at most `p τ + √(p Q Y)` products, at most
+/-- **The products of an inference block** (the draft's proof of its theorem): `R` computes at most `p τ + √(p Q Y)` products, at most
 `p τ` at its full positions (Lemma 1) and at most `√(p Q Y)` at the others, by Loomis–Whitney at each multiplication
 and Cauchy–Schwarz over them. -/
 theorem card_products_le (R : Finset (Fin D.N)) :
@@ -92,7 +92,7 @@ theorem card_products_le (R : Finset (Fin D.N)) :
   exact h
 
 open Classical in
-/-- **The products of an IU, by columns**: `R` computes at most `p τ` products at its full positions (Lemma 1) and, at
+/-- **The products of an inference block, by columns**: `R` computes at most `p τ` products at its full positions (Lemma 1) and, at
 the others, at most `E` for each input entry it uses there, one for each row of its multiplication, when every output
 dimension is at most `E`. -/
 theorem card_products_le_columns (R : Finset (Fin D.N)) {E : ℕ} (hE : ∀ ℓ, c.e ℓ ≤ E) :
@@ -120,8 +120,8 @@ theorem card_products_le_columns (R : Finset (Fin D.N)) {E : ℕ} (hE : ∀ ℓ,
     rfl
 
 open Classical in
-/-- **The split entries' contributions** (the draft's proof of its theorem): every output entry an IU contributes to at a
-position that is not full for it is split (Lemma 2), so its products lie in at least two IUs, and the IUs' `Y`s add up
+/-- **The split entries' contributions** (the draft's proof of its theorem): every output entry an inference block contributes to at a
+position that is not full for it is split (Lemma 2), so its products lie in at least two inference blocks, and the inference blocks' `Y`s add up
 to at most `2 ∑ (spread − 1)`. -/
 theorem sum_card_outputsOther_le {n : ℕ} (P : Partition D n) :
     ∑ u, #(outputsOther c (P.gates u)) ≤
@@ -157,7 +157,7 @@ theorem sum_card_outputsOther_le {n : ℕ} (P : Partition D n) :
     rw [P.mem_gates, hu', huu]
   omega
 
-/-- **The products add up to `G`**: each product is a computed gate, in exactly one IU. -/
+/-- **The products add up to `G`**: each product is a computed gate, in exactly one inference block. -/
 theorem sum_card_products {n : ℕ} (P : Partition D n) :
     ∑ u, #(univ.filter fun g : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ) × Fin (c.d ℓ) =>
       c.prod g.1 g.2.1 g.2.2.1 g.2.2.2 ∈ P.gates u) = c.G := by

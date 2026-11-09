@@ -3,7 +3,7 @@
     python scripts/desc_fuzz_programs.py <verity checkout> --out DIR
 
 Writes `DIR/desc_fuzz/programs.jsonl`, one `{"id", "family", "program", "agree"}` object per line, from fixed seeds
-(`FAMILIES`), with `"instances"` (IU assignments, each `{"theta", "owner", "gamma", "alpha"}`) on the shared families'
+(`FAMILIES`), with `"instances"` (inference-block assignments, each `{"theta", "owner", "gamma", "alpha"}`) on the shared families'
 (`agree`: how many instances of its own `InferenceOnlyCheck.DescFuzz.agrees` checks beside them).
 The Lean audit runs `InferenceOnlyCheck/DescFuzzMain.lean` on it (`runs` in `lean-audit.json`, which pins its SHA-256), which
 decides the statements behind `DescAgrees` on each Program (`InferenceOnlyCheck.DescFuzz`'s docstring) and fails if one fails;
@@ -34,7 +34,7 @@ composite of two gates, one member of a batch of primitives, or the input itself
 members' return, each argument's leaves in any order and repeated, now and then with a gate of the member's own; two to
 four members, with a mapped argument or none; the reader (a primitive, a composite's primitive, or either reading a
 composite that makes the batch) and what it reads (every member, a run of whole members, or a run cut inside them), now
-and then a second primitive reading another run. Each comes with up to `ASSIGNMENTS` IU assignments of its root nodes
+and then a second primitive reading another run. Each comes with up to `ASSIGNMENTS` inference-block assignments of its root nodes
 that hold gates (all of them when there are no more, else drawn without repeats), θ the registered inputs, `Γ` all the
 gates and `α` 1.
 """
@@ -848,7 +848,7 @@ def draw(rng: random.Random, seed: int) -> Spec:
 
 
 def _partitions(c: int):
-    """Every assignment of `c` nodes to IUs numbered from 0 in order of first use."""
+    """Every assignment of `c` nodes to inference blocks numbered from 0 in order of first use."""
     if c == 0:
         yield ()
         return
@@ -858,7 +858,7 @@ def _partitions(c: int):
 
 
 def instances(rng: random.Random, text: str) -> list[dict]:
-    """Up to `ASSIGNMENTS` IU assignments of the root nodes that hold gates (all of them when there are no more, else
+    """Up to `ASSIGNMENTS` inference-block assignments of the root nodes that hold gates (all of them when there are no more, else
     drawn without repeats), θ the registered inputs, `Γ` all the gates and `α` 1."""
     inp, reg, spans = reference.root_nodes(text)
     held = [k for k in range(len(inp)) if not inp[k] and spans[k][1] > spans[k][0]]
@@ -893,7 +893,7 @@ def seeds() -> list[dict]:
 
 
 def shared(seed: int) -> tuple[str, list[dict]]:
-    """Seed `seed`'s declaration, `decl` on parameters sampled at random (`draw`), and its IU assignments (`instances`)."""
+    """Seed `seed`'s declaration, `decl` on parameters sampled at random (`draw`), and its inference block assignments (`instances`)."""
     rng = random.Random(seed)
     text = decl(draw(rng, seed))
     return text, instances(rng, text)

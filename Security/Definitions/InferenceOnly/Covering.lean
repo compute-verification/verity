@@ -11,7 +11,7 @@ baseline). The statement counts gates; in the Boolean profile (`w = 1`) a gate i
 * A **subcircuit** `S` (`Subcircuit`) is a set of gates with inputs `in(S) ⊆ S`, every gate of `S \ in(S)` having all its
   predecessors in `S`: `S` computes `S \ in(S)` (`inner`) from `in(S)`. A gate of `in(C)` in `S` is one of its inputs,
   since a gate with no predecessors is given, not computed: otherwise a block could hold a prompt's bits, or an
-  unregistered weight, as gates it computes and read them for nothing. An IU `R` of a division is the subcircuit
+  unregistered weight, as gates it computes and read them for nothing. An inference block `R` of a division is the subcircuit
   `R ∪ into R` with inputs `into R` and the input gates of `C` in `R`.
 * An **`(s, k)`-inference block** (`InferenceBlock`) is a subcircuit with `|S| ≤ s` and `|in(S) \ θ| ≤ k`. An
   **`(s, k)`-covering** (`Covers`) is a family of them that together compute `C \ in(C)`: every gate with a predecessor

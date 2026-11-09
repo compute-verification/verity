@@ -14,16 +14,16 @@ open Verity
 
 open Classical in
 /-- **Training is incompressible, at most `k` products to a gate** (`TrainingIncompressible` on a `PackedChain`): in
-every division `P` of the reference training circuit `c` into IUs, the partial sums passed between IUs can be charged to
-the IUs that receive them, `s u` to IU `u`, with an entry of `ch` whose products' gates lie in `m` IUs charged at least
-`m − 1` in total, so that every small IU reads at least `b_w` bits for each weight entry of `ch` it uses and `b_a` for
+every division `P` of the reference training circuit `c` into inference blocks, the partial sums passed between inference blocks can be charged to
+the inference blocks that receive them, `s u` to inference block `u`, with an entry of `ch` whose products' gates lie in `m` inference blocks charged at least
+`m − 1` in total, so that every small inference block reads at least `b_w` bits for each weight entry of `ch` it uses and `b_a` for
 each input entry it uses or partial sum charged to it, whichever count is larger, and `b_w` bits for each weight of the
-threading `T` it uses in addition to the `b_a` bits for each novel thread value it reads. "Uses" means that the IU holds
+threading `T` it uses in addition to the `b_a` bits for each novel thread value it reads. "Uses" means that the inference block holds
 the gate of a product of the entry.
 
 On an honest `Dot16` circuit the partial sums are the accumulators: the step gates of one entry form a sequence, each
-reading the one before, so an entry whose step gates lie in `m` IUs passes its accumulator between IUs at least `m − 1`
-times, each read by the IU it enters.
+reading the one before, so an entry whose step gates lie in `m` inference blocks passes its accumulator between inference blocks at least `m − 1`
+times, each read by the inference block it enters.
 
 It is adopted, with `PackedActivationsIncompressible`, as the `k`-generalization of the per-product premises
 `ActivationsIncompressible` and `TrainingIncompressible`.

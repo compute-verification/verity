@@ -14,17 +14,17 @@ parameter-hardness at weight cost `c_w` (`InferenceOnly.Assumptions.ParameterHar
 declaration (`bitDecl c`), so a block's size, what it is handed and every cut are counted in bits, the unit of the inference-only
 policy's novel reads.
 
-Why bits and not `c`'s gates: on the gates, `|in(S) \ θ|` counts gates while an IU's novel reads count bits, so a block
+Why bits and not `c`'s gates: on the gates, `|in(S) \ θ|` counts gates while an inference block's novel reads count bits, so a block
 handed `k` bits is handed up to `k / w_min` gates, and the bound would lose up to `w_max / w_min` unless every gate had
 one width; and a constant gate (computed, reading nothing) is a source outside `θ`, so every block of gates holding it
-is handed it, while an IU holding it computes it for free. On the bits every gate is one bit wide and a constant's bits
+is handed it, while an inference block holding it computes it for free. On the bits every gate is one bit wide and a constant's bits
 are free, so neither needs a hypothesis.
 
 The route is `CoverTraining`'s. A compliant division of the declared circuit `d`, pulled back through the containment,
 divides `c` into pieces. Piece `u`'s block, the bits of the piece and of what it reads, is a subcircuit of `bitDecl c`
 with at most `s ≥ w₀ Γ + α Γ + width(θ)` bits that is handed `k_u ≤ α σ_u` bits outside the free bits, where `σ_u ≤ Γ`
-is its IU's size; the blocks compute every bit that reads something. The covering bound's per-block count gives each
-block at most `(k_u / c_w)(k_u / c_a) + k_u` chained blocks whose output bit it computes, and summed over the IUs
+is its inference block's size; the blocks compute every bit that reads something. The covering bound's per-block count gives each
+block at most `(k_u / c_w)(k_u / c_a) + k_u` chained blocks whose output bit it computes, and summed over the inference blocks
 `c_w c_a |𝓜*| ≤ (α² Γ + c_w c_a α) size(d)`.
 
 In the covering bound's form, with `k = α Γ`: `|𝓜*| ≤ (size(d) / Γ) · ((k / c_w)(k / c_a) + k)`, as if `d` were covered

@@ -9,7 +9,7 @@ One reference circuit, one declaration that contains it and one division, where 
 is the two-cost covering bound's witness (`Proofs.InferenceOnly.CoveringTwoCostsWitness`, `tcDecl`), whose gates are one bit
 wide, so its bits (`bitDecl tcDecl`) are its gates (`bt`) with nothing registered, and its multiplication blocks
 (`tcBlocks`) carry over as `bBlocks`: parameter-hard at `c_w = 1/2` at every `s`, with `p₅` chained at
-`(D, c_a) = (5, 1)`. The declaration is the circuit itself (`selfContainment`), divided into one IU per computed gate
+`(D, c_a) = (5, 1)`. The declaration is the circuit itself (`selfContainment`), divided into one inference block per computed gate
 (`onePerGate`): each has one gate and reads two bits, so it complies at `Γ = 1`, `α = 2`, and `α Γ = 2 < c_w D = 5/2`.
 The block size is `s = w₀ Γ + α Γ + width(θ) = 3`.
 -/
@@ -110,7 +110,7 @@ def selfContainment : Containment tcDecl.D tcDecl.D where
   op_emb _ _ _ := rfl
   outputs_emb _ h := h
 
-/-- One IU per computed gate. -/
+/-- One inference block per computed gate. -/
 def onePerGate : Partition tcDecl.D 10 where
   unit g := if h : g.val < 4 then none else some ⟨g.val - 4, by have : g.val < 14 := g.isLt; omega⟩
   input_iff g := by revert g; decide
@@ -122,7 +122,7 @@ theorem complies : Complies 1 2 tcDecl := by
   norm_num
 
 /-- **`CoverTrainingChained` is not vacuous, at `c_w ≠ c_a`**: the two-cost covering bound's witness
-(`Proofs.InferenceOnly.CoveringTwoCostsWitness`), read bit by bit (`bitDecl`), contained in itself and divided into one IU per
+(`Proofs.InferenceOnly.CoveringTwoCostsWitness`), read bit by bit (`bitDecl`), contained in itself and divided into one inference block per
 gate, meets every hypothesis of `InferenceOnly.Cover.Guarantees.CoverTrainingChained` at `Γ = 1`, `α = 2`, `c_w = 1/2`,
 `c_a = 1`, `D = 5` and `s = 3`, with a chained multiplication block. -/
 theorem coverTrainingChained_nonvacuous :
