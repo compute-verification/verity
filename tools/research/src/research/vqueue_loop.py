@@ -1034,7 +1034,7 @@ def _named(theirs: dict | None) -> dict[tuple[str, str], frozenset[str]]:
         if isinstance(e, dict) and isinstance(i := e.get("task"), str) and isinstance(k := e.get("key"), str):
             tests = frozenset(x for x in e.get("tests") or () if isinstance(x, str))
             why, error = e.get("why"), e.get("error")
-            out[i, k] = tests or (_fault_tests(why, k, error if isinstance(error, str) else None)
+            out[i, k] = tests or (_fault_tests(why, k, error if isinstance(error, dict) else None)
                                   if isinstance(why, str) and why else frozenset())
     return out
 
@@ -1049,50 +1049,65 @@ RUN_ON_RE, RUN_ID_RE = re.compile(r"\brun \S+ on [^\s:;,]+"), re.compile(r"\br\d
 ERROR_RE = re.compile(r"; error: (.*?); read \d+ file\(s\) outside its declared inputs: ")
 #: the message of a runner's `{"error": ...}` detail, whole or as far as graph2 keeps it
 ERROR_HEAD_RE = re.compile(r'^\{"error": "((?:[^"\\]|\\.)*)')
+#: how much of a runner's error message counts: a `why` keeps the first 200 characters of its detail's JSON, so a message is
+#: compared by a head that a `why` and a verdict's whole `error` both hold
+MESSAGE_KEEP = 120
 
 
-def _fault_tests(why: str, key: str, error: str | None = None) -> frozenset[str]:
+def _fault_tests(why: str, key: str, error: dict | None = None) -> frozenset[str]:
     """The tests a task failed by its own fault fails, from graph2's `why` of it, so the same fault at its base is the same
     tests (`vqueue.Failed.base_tests`): each file it read outside its declared inputs (`undeclared:<path>`) and what its run
     failed beside them (`_run_tests`), else one test of the fault (`fault:<it>`), from its runner's race on, else the whole
     `why` without the runs and nodes it names.  graph2's verdict keeps a `why`'s last 300 characters, where its fault ends it;
-    ``error``, the runner's detail where the verdict gives it apart, else the `why`'s."""
+    ``error``, the run's whole result (its `detail` and `undeclared_reads`), where the verdict gives it, else the `why`'s."""
     if m := UNDECLARED_RE.search(why):
-        # graph2 names only the first three files of its sorted reads: one the change adds past them goes unseen, and one it
-        # removes from them brings the next into view, as if added
-        reads = frozenset(f"{vqueue.UNDECLARED}{p}" for p in m.group(2).split(", ") if p)
-        if error is None and (d := ERROR_RE.search(why)):
-            error = d.group(1)
-        return reads | _run_tests(error, key)
+        paths = error.get("undeclared_reads") if error is not None else None
+        if not (isinstance(paths, list) and paths):
+            # a `why` names only the first three files of its sorted reads: one the change adds past them goes unseen, and
+            # one it removes from them brings the next into view, as if added
+            paths = m.group(2).split(", ")
+        reads = frozenset(f"{vqueue.UNDECLARED}{p}" for p in paths if isinstance(p, str) and p)
+        if error is not None and isinstance(error.get("detail"), dict):
+            return reads | _run_tests(error["detail"], key)
+        d = ERROR_RE.search(why)
+        return reads | _run_tests(d.group(1) if d else None, key)
     if (i := why.find(RACE)) >= 0:
         return frozenset({f"fault:{why[i:]}"})
     return frozenset({"fault:" + " ".join(RUN_ID_RE.sub("", RUN_ON_RE.sub("run", why)).split())})
 
 
-def _run_tests(error: str | None, key: str) -> frozenset[str]:
-    """What a run that read files outside its task's declared inputs failed beside that, from its runner's detail ``error``:
-    nothing for a clean run (exit 0, no error, no failure), else its failing tests (pytest node ids) and its runner's error
-    (`fault:<it>`, as far as graph2 keeps it), else its exit and counts.  A detail graph2's verdict cut off, or a list of
-    failing tests it cut, is a test of ``key`` alone, which no base fails: a crash beside the reads (a signal, an OOM kill)
-    is never taken for the base's fault."""
+def _message(text: str) -> str:
+    """A runner's error message as it counts: its run ids out, and its head of `MESSAGE_KEEP` characters."""
+    return RUN_ID_RE.sub("", text)[:MESSAGE_KEEP]
+
+
+def _run_tests(detail: dict | str | None, key: str) -> frozenset[str]:
+    """What a run that read files outside its task's declared inputs failed beside that, from its runner's ``detail`` (whole,
+    or the JSON a `why` keeps): nothing for a clean run (exit 0, no error, no failure), else its failing tests (pytest node
+    ids) and its runner's error (`fault:<its head>`), else its exit and counts.  A detail cut off, or a list of failing tests
+    cut, is a test of ``key`` alone, which no base fails: a crash beside the reads (a signal, an OOM kill) is never taken for
+    the base's fault."""
     unseen = frozenset({f"fault:the run's detail graph2 cut, at {key}"})
-    if error is None:
+    if isinstance(detail, str):
+        try:
+            detail = json.loads(detail)
+        except ValueError:
+            if not (head := ERROR_HEAD_RE.match(detail)):
+                return unseen
+            try:
+                message = json.loads(f'"{head.group(1)}"')
+            except ValueError:
+                message = head.group(1)
+            return frozenset({f"fault:{_message(message)}"})
+    if not isinstance(detail, dict):
         return unseen
-    text = RUN_ID_RE.sub("", error)
-    try:
-        d = json.loads(text)
-    except ValueError:
-        head = ERROR_HEAD_RE.match(text)
-        return frozenset({f"fault:{head.group(1)}"}) if head else unseen
-    if not isinstance(d, dict):
-        return unseen
-    failed = frozenset(t for t in d.get("failed_tests") or () if isinstance(t, str))
-    fault = frozenset({f"fault:{d['error']}"}) if isinstance(d.get("error"), str) else frozenset()
+    failed = frozenset(t for t in detail.get("failed_tests") or () if isinstance(t, str))
+    fault = frozenset({f"fault:{_message(detail['error'])}"}) if isinstance(detail.get("error"), str) else frozenset()
     if failed or fault:
         return failed | fault
-    if d.get("exit") == 0 and not d.get("errors") and not d.get("failed"):
+    if detail.get("exit") == 0 and not detail.get("errors") and not detail.get("failed"):
         return frozenset()
-    return frozenset({f"fault:exit {d.get('exit')}, {d.get('errors')} error(s), {d.get('failed')} failed"})
+    return frozenset({f"fault:exit {detail.get('exit')}, {detail.get('errors')} error(s), {detail.get('failed')} failed"})
 
 
 def _failure(task: str, key: str, inputs: frozenset[str], **kw) -> Failed:

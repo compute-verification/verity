@@ -711,10 +711,10 @@ def test_what_a_run_failed_beside_its_undeclared_reads_is_inherited_only_where_m
     env.listed(main, {"pytest:t": ["t.txt"]}, keys={"pytest:t": "sha512:t0"})
     env.listed(sha, {"pytest:t": ["t.txt"]}, keys={"pytest:t": "sha512:t1"})
 
-    def faulted(at: str, key: str, detail: str | None, paths: str = "x.txt, y.txt", apart: str | None = None) -> None:
+    def faulted(at: str, key: str, detail: str | None, paths: str = "x.txt, y.txt", whole: dict | None = None) -> None:
         reads = f"read 2 file(s) outside its declared inputs: {paths}"
         why = f"run r20260101-000000-aaaa on n1 exit 1; error: {detail}; {reads}" if detail else f'b"]}}; {reads}'
-        entry = {"task": "pytest:t", "key": key, "tests": [], "why": why[-300:], **({"error": apart} if apart else {})}
+        entry = {"task": "pytest:t", "key": key, "tests": [], "why": why[-300:], **({"error": whole} if whole else {})}
         Path(f"{script}.verdict.ready:{at}").write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [entry]}))
 
     faulted(main, "sha512:t0", theirs)
@@ -725,15 +725,23 @@ def test_what_a_run_failed_beside_its_undeclared_reads_is_inherited_only_where_m
     message = ("its tests started programs the read guard can't trace (g++, git): name the file under its suite's "
                "`[tool.verity.tests] untraced`, which keys it on the suite's whole tree, or give the test an untraced mark")
     detail = json.dumps({"error": message})
-    paths = ", ".join(f"integrations/vllm/verity_vllm/pipeline/{n * 'x'}.py" for n in (30, 40, 50))
-    for at, key in ((main, "sha512:t0"), (sha, "sha512:t1")):   # a `why` cut before its detail, which the verdict gives apart
+    files = [f"integrations/vllm/verity_vllm/pipeline/{n * 'x'}.py" for n in (30, 40, 50, 60)]
+    paths = ", ".join(files[:3])
+    for at, key in ((main, "sha512:t0"), (sha, "sha512:t1")):   # a `why` cut before its detail
         faulted(at, key, detail[:200], paths)
     (f,) = loop.world.verdict(sha, main).verdict.failed
     assert not vqueue._inherited(f) and "fault:the run's detail graph2 cut, at sha512:t1" in f.tests
-    for at, key in ((main, "sha512:t0"), (sha, "sha512:t1")):
-        faulted(at, key, detail[:200], paths, apart=detail)
+    whole = {"detail": {"error": message}, "undeclared_reads": files, "status": "error"}   # graph2's run result, whole
+    faulted(main, "sha512:t0", detail[:200], paths, whole)
+    faulted(sha, "sha512:t1", detail[:200], paths, whole)
     (f,) = loop.world.verdict(sha, main).verdict.failed
-    assert vqueue._inherited(f) and f"fault:{message}" in f.tests and f.tests == f.base_tests
+    assert vqueue._inherited(f) and f.tests == f.base_tests and f"fault:{message[:L.MESSAGE_KEEP]}" in f.tests
+    assert f"undeclared:{files[3]}" in f.tests                  # every read, past the three a `why` names
+    faulted(main, "sha512:t0", f"{detail[:200]}", "x.txt, y.txt")   # a base faulted before graph2 gave its result whole
+    (f,) = loop.world.verdict(sha, main).verdict.failed
+    assert vqueue._inherited(f), (f.tests, f.base_tests)
+    faulted(sha, "sha512:t1", None, paths, {**whole, "detail": {"errors": 1, "exit": -9, "failed": 0}})
+    assert not vqueue._inherited(loop.world.verdict(sha, main).verdict.failed[0])   # killed: never main's fault
 
 
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
