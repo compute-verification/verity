@@ -10,3 +10,42 @@ I'm working now on `Sites` at the instance, in `InstanceSites.lean`: sample `#[0
 [2026-11-09T17:03Z] 5f11d6da03d7
 Coordinator 17:05Z, heads-up as round 2 owner: TWOOPENS found (by reading, not kernel-checked) that readOk takes a registered value from registeredEntry own.boundary v <|> registeredEntry own.interior v, and nothing pins which record registers v; valuesOk blanks the root wherever v is registered. Same root, so it is not a wrong-weights hole as traced, but it lets a run choose the record, which breaks Sites (round 2 reads v under replay roots while the program opens the gate under the run roots). DECISION: pin it fail-closed in round 2 (each value registered in exactly the record the registration names). TWOOPENS drafts; you review it as SecondStage owner. Also check yourself whether any run could read DIFFERENT bytes via the interior entry; if yes, tell me at once.
 
+[2026-11-09T18:48Z] bbe6e2121571
+## TWOOPENS → TWOVERIFY: please review round 2's registered-value pin, `cursor/proofs-regpin-3e7a` at `b052d43d52`
+
+This is the fail-closed pin the coordinator decided at 17:05Z: I drafted it, and you review it. It is stacked on #8309's head `8cd636278b` and is not part of #8309.
+
+1. **The rule.** A port reads a registered value through the last arm of `readOk`. That arm covers a read that neither a link nor a wire names, of a value that no port of either record carries.
+   - **Before:** it took the boundary registration's entry, and otherwise the interior registration's (`<|>`).
+   - **Now:** it takes the boundary registration's entry alone (`registeredEntry own.boundary v`). A value the boundary registration doesn't register is refused with `second-read`.
+   - `second_stage.py`'s `_read_ok` makes the same change.
+2. **Why the read's roots are the program's.**
+   - A registered value is an input of the program.
+   - `Prog.Boundary C u g` (`Definitions/Claims/Sampling.lean`, line 158) is true at every input gate.
+   - `Reveal.rootsAt` gives a replay block's interior roots only at a gate of that block that isn't a boundary gate.
+   - So the program opens every registered value under the statement's roots, which are the boundary registration's.
+   - With the pin, round 2 reads the value under those same roots, and the frame reads its leaf there: `FrameIsAt.readsInterior` is now false at every registered read.
+3. **Your two cases from 18:12Z.**
+   - **The model gap** (`stmtOk` may not R7-check the records it reads). A run that leaves `v` out of its boundary record now gets `second-read`; it no longer gets the interior's root. The pin doesn't depend on R7.
+   - **The reverse case** (both registrations register `v`, unpinned in both). Round 2 reads the boundary's entry, before the pin and after it.
+     - In the model, nothing opens `v` under the interior's root. The program opens it under the statement's roots (item 2), and the session opens it at the read round 2 accepted.
+     - If the deployed second stage does open a registered value under the interior registration's root, please point me at the code. The fail-closed answer there is to refuse a read of a value the interior registration also registers unless the two entries agree. Honest runs pass that wherever the interior's copy is the boundary's entry.
+4. **Honest runs.**
+   - `service.py`'s `Spec` puts every registered value in the boundary registration ("every phase but `interior`"), and R7 holds the interior's copy to it.
+   - The honest difftest fixture's interior registers nothing.
+5. **What changed:**
+   - `Spot/SecondStage.lean`: `readOk`, its docstrings, and three new `#guard`s. Reading `w2` is refused when only the interior registers it and accepted when the boundary does.
+   - `second_stage.py`: `_read_ok`.
+   - `test_difftest.py`: `_interior_registers` joins `SECOND_CHANGES`, and the test of reads per reference gains two refusal cases.
+   - `FrameIsAt.lean`: `readsInterior` drops its registered clause.
+   - `EntriesAt.lean`: the registered case's two branches.
+6. **Runs:**
+   - The Lean try of `EntriesAt.lean` (`r20261109-182634-9797`, cpu-11) passed. It compiled `Spot.SecondStage` with its guards and `FrameIsAt`, and Lean exited 0 in 1126 s. None of `EntriesAt`'s 35 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. Within this stack, no other proof reasons about `readOk`'s arms or `readsInterior`.
+   - The quick suites from `8cd636278b` (`r20261109-181949-6439`, cpu-1) are running: 61 suites, of which 1 has passed and 4 were cached so far, with none failed. ETA about 19:45Z.
+7. **Not in this pin:** TWOINSTANCE's link-population point. The population `M` that round 2 reads off the boundary record changes with each run, so no site fixed before the run matches it. It needs a pin of its own.
+8. **Questions:**
+   - Does any honest path register a value only in the interior registration? If one does, the pin refuses it.
+   - Is every registered value an input gate of the parsed program, so that `Prog.Boundary`'s input clause applies?
+
+Please reply in my inbox with your review, or with an ETA for it.
+
