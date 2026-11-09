@@ -3,7 +3,8 @@
 for `prove_time.sh`'s ``PT_STATEMENTS``: the verifier's circuit for the member's template (`chunk_rows.statement` by
 `UnitStager`, as ``benchmarks/one_stage/compose_circuit.py --template`` composes it) bound to the window's partition and program
 digests, and the member's public and prover files made from the window's own bodies (`flock_inputs.flock_input_files`): its
-served values under the committer's salts, nothing drawn.
+served values under the committer's salts, nothing drawn; the public body must be the one the window's member record states
+(``public_sha512``).
 
 ``--pick P N``: the first member of N units of the per-expert cut's fused block of projection P (``w13`` or ``w2``,
 `expert_rows`' ``fused`` layout), on the kernel ``--swap`` names when given, or of its scale read (``s13`` or ``s2``: the read
@@ -14,6 +15,7 @@ Writes circuit.txt, pub.bin, inst.bin (the prover's: keep OUT off custody), pin.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -82,12 +84,17 @@ def main() -> None:
     got = FI.flock_input_files(d, k, FI.flock_circuit((out / "circuit.txt").read_bytes()), out)
     os.replace(got["pub"], out / "pub.bin")
     os.replace(got["inst"], out / "inst.bin")
+    body = (out / "pub.bin").read_bytes().split(b"\n", 1)[1]
+    public = hashlib.sha512(body).hexdigest()
+    want = json.loads((d / "window.json").read_text())["members"][k].get("public_sha512")
+    if body != (d / f"m{k}-public.bin").read_bytes() or public != want:
+        raise SystemExit(f"stage_window.py: member {k}'s public body {public[:16]} is not the window's ({str(want)[:16]})")
     (out / "pin.txt").write_text(got["circuit_sha512"])
     S = spec_statics(t)
     meta, layers = st.meta, nets(st.low)
     tag = f"window-{spec_base(t)}" + (f"-swap{str(S['SWAP']).lower()}" if "SWAP" in S else "")
     stage = {"unit": "window", "tag": tag, "n": n, "member": k, "template": t,
-             "run": rec["window"]["run"], "partition_digest": part["partition_digest"], "statics": {"K": int(S.get("K", 0))},
+             "run": rec["window"]["run"], "partition_digest": part["partition_digest"], "public_sha512": public, "statics": {"K": int(S.get("K", 0))},
              "macs": int(S.get("N", 0)) * int(S.get("K", 0)), "definition": tp.fn.id, "statement": stmt,
              "ands": sum(x["ands"] for x in layers), "nets": layers, "public_inputs": [], "k_log": meta["k_log"],
              "unit_log": meta.get("unit_log"), "vus_per_block": meta.get("vus_per_block"), "circuit_sha512": got["circuit_sha512"],
