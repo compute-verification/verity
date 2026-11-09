@@ -71,13 +71,14 @@ def test_every_shape_fits_with_margin(lib: ctypes.CDLL) -> None:
 def test_the_cut_overflows_are_seen() -> None:
     """The two layouts the lane groups and keep-L0 removed, as the replay sees them at a full statement: before the lane
     groups, level 0's M1 commitment held every witness lane's codeword beside a kept rep 0's copy of z (8.5625 witness
-    sizes); before keep-L0, a keeping rep 0 held a, b and z's copy through Ligerito (about 9.5 under M0)."""
+    sizes); before keep-L0, a keeping rep 0 held a, b and z's copy through Ligerito (about 9.6 under M0, the recursive
+    levels' salts copied beside level 0's folds included)."""
     W = (1 << 28) * 16
     m1 = Shape(35, 25, True, lane_groups=False, keep_ab=True)
     commit = list(rep_events(m1, "keep"))
     commit = commit[:[i for i, e in enumerate(commit) if e[:2] == ("r", "cw_w")][0]]
     assert replay(commit, 1 << 46).live_peak / W == pytest.approx(8.5625, abs=0.001)
     m0 = Shape(35, 25, False, keep_ab=True)
-    assert 9.5 <= replay(list(rep_events(m0, "keep")), 1 << 46).live_peak / W < 9.6
+    assert 9.6 <= replay(list(rep_events(m0, "keep")), 1 << 46).live_peak / W < 9.7
     now = replay(list(rep_events(replace(m1, lane_groups=True, keep_ab=False), "keep")), 1 << 46).live_peak / W
     assert now < 7
