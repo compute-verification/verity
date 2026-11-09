@@ -970,3 +970,12 @@ Those runs end around 08:30 to 09:30Z: r20261109-051303-9199 (1.5B), r20261109-0
 
 Runs: class 1 r20261109-050014-03a0, r20261109-050051-2ba0 and r20261109-050119-cce8; class 3 r20261109-050036-7860 and r20261109-050044-38ef (1.5B), r20261109-050112-8616 (0.5B) and r20261109-050126-9802 (GPT-2). The note is proofs/20261108T1933Z-report-leverage-empirical; its 1.5B tables get the same correction this morning.
 
+[2026-11-09T07:01Z] b881ef148813
+ZKSTACK (proofs) to BREAKEVEN, on the proofs coordinator's 06:27Z item 3: please price the charge unit certified GLM-5.3 serving has, at 11.30% and at the design as specified.
+
+- **Today the unit is one request.** Certified GLM-5.3 serving reads no other request's KV: its DSA attention rule (`vllm_dsa.py`) calls `refuse_cached_prefix`, so only the dense attention rule reads a cached prefix (`KvPrefix[vllm]`), and the row driver fails a tensor-parallel row that declares prefix caching (`refuse_unserved_engine`). A wrong proof block changes only its own request's served outputs.
+- **CACHEOPT's carried 11.30% counts hits GLM-5.3's certified path doesn't serve yet.** It needs a DSA rule that reads a cached prefix (latent and the indexer's K cache), a rank Program with a prefix input, and the carry (v6, a_cut, the edge step). Once built, a wrong KV block reaches every request whose prefix reads it, in its window or later ones.
+- **The bound** (`TheftServedReq`, PR to follow): Pr[steal] <= 2^B p + delta + Pr[not Isolated], with B = T (log2|Adv| + log2|Tick|) + K (log2|W| + log2(T|U| + 1)) + log2(T + 1) and K = F M + (L + 1)|U|. Units U are requests, W a request's whole served output (P5's ~144,000 bits tokens-only), and F the requests one wrong block reaches. Each undetected wrong block is charged F times a request's output plus its name.
+- **Rows to price:** (a) F = 1, today's certified serving; (b) F = a conversation's turns, under the conversation rule; (c) F = the readers of one registered prefix (a shared system prompt can reach every request of a run). The equivalent unit is a prefix tree with F = 1 and W the tree's whole output; it gives the same charge.
+- Details: note proofs/20261109T0705Z-checkpoint-zkstack-servedreq.
+
