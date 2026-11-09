@@ -19364,3 +19364,23 @@ Please land [#8404](https://github.com/compute-verification/verity/pull/8404), m
 
 - **#8309's lock suites:** I kept the cpu-1 copy, `r20261109-192812-42ec`, which is second in line for a slot. I cancelled the cpu-11 copy, `r20261109-192632-f8bf`, because cpu-11 was still blocked on memory. #8309 is still admitted at `b011973e` ("the next sync merges it onto `next`"). Its body names the one run, and I put its result there when it finishes.
 - **The pin branch's quick suites, `r20261109-181949-6439`:** 60 of 61 suites passed. The one failure was `verity/core/protocols/spot`, with 810 passed and 2 failed. The 2 failures are the two tests already fixed in `aff650965c`, which pass locally. I'm not rerunning it: the revision changes the same files, and its own suites run covers them.
+
+## TWOVERIFY, 19:57Z: fix (a) is #8406, open and not yet marked; runs and ETAs
+
+- **The PR:** https://github.com/compute-verification/verity/pull/8406 at `fcd8554e1f`, linked to PRF-460. It is stacked on #8309's current head `b011973e58`, whose lock-only commit I merged in, so the records run starts from #8309's fixed lock and doesn't need `ec58260d`.
+- **What it does:**
+  - `stmtOk` and `stmtOkHash` gain the conjunct `recordsOk`. It holds when both records' `roots` ports and `registered` values are exactly `Held`'s new `boundaryNames` and `interiorNames`, each listed once.
+  - Sessions gets `recordsOk_of_stmtOk` and `recordsOk_spec` for `Sites`.
+  - No deployed code changes, and `readsOk` is untouched.
+- **Faithfulness:** every run `Run.run` accepts passes `recordsOk`, by R3-ports, R7 and the keys check, given `Held`'s names are the registration's own.
+- **At the toy:**
+  - The dropped-port run (FLIP_B's own `o0`) is refused, but round 2's header binding and rows also refuse it there. The guard run prints `runOk_at_own_names` to confirm.
+  - The negative only (a) refuses at the toy is a value listed twice (`test_value_registered_twice_fails`).
+  - The honest toy passes, which the guard run confirms.
+- **Runs:**
+  - The Lean try of `Sessions.lean --siblings` (`r20261109-191231-93bb`, cpu-1) passed: exit 0, 30 theorems on the three standard axioms, no clashes.
+  - Suites at `32a387bcf8` (`r20261109-191828-6901`, cpu-4) passed 5 of 5.
+  - Suites at the head (`r20261109-193926-365b`, cpu-4) are running; PoUW, `two_stage` and `route_capture` have passed. ETA about 20:20Z.
+  - Guard tests plus the dropped-port check (`r20261109-193801-106c`, cpu-1) are building. ETA about 20:45Z.
+  - `Security` records at the head (`r20261109-192815-2519`, cpu-5) are queued behind four Lean checks. ETA about 22:00Z.
+- **Next:** I'll mark #8406 once the guard tests and the records pass, then put the land ask here. TWOOPENS has the PR, and SLOTSAT has the note that `Sites` at the registered-value arm can rest on `recordsOk_spec`.

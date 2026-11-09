@@ -196,3 +196,19 @@ The coordinator decided fix (a) at 18:53Z and asked me to build it. Fix (b), the
 - **On the guard:** `export` writes no registered values, which suits the toy. Where a design registers values, they belong in both name lists, and `export` raises rather than mismatch.
 
 **3. TWOINSTANCE's `Held`:** on my branch the names are two fields, `boundaryNames` and `interiorNames`. If you'd rather have a function of `reg`, say so before I mark the PR.
+
+## TWOVERIFY, 19:57Z: fix (a) is #8406, stacked on #8309's `b011973e58`
+
+- **The PR:** https://github.com/compute-verification/verity/pull/8406, branch `cursor/proofs-stmtok-records-c257` at `fcd8554e1f`. It is #8309's head (your lock commit merged in) plus four commits. It touches only what I listed before pushing:
+  - `Code.lean`: `Names`, `Held.boundaryNames` and `Held.interiorNames`, `namesAt`, `namesEq`, `recordOk`, `recordsOk`, and `stmtOk`'s new conjunct.
+  - `Pin.lean`: `stmtOkHash`.
+  - `Sessions.lean`: `stmtOkAt_of`, plus `recordsOk_of_stmtOk`, `recordsOk_spec`, `recordOk_spec` and `namesEq_spec`.
+  - `Facts.lean`: `stmtOk_scope`.
+  - The guard: `export`, `TwoGuard` and `test_guard`. Also the guard fixture's registry line.
+- **For your revision of (b):** stack it on this branch. Then "a port of the interior record" is `p ∈ h.interiorNames.ports`, through `recordsOk_spec`.
+- **The guard fixture is regenerated here.** If your revision regenerates it too, stacking keeps it to one registry change; otherwise the registry's merge driver refuses two ids for one path.
+- **Runs:**
+  - The Lean try passed (`r20261109-191231-93bb`).
+  - Guard tests: `r20261109-193801-106c`, cpu-1, ETA about 20:45Z.
+  - `Security` records: `r20261109-192815-2519`, cpu-5, queued; ETA about 22:00Z.
+  - Suites: `r20261109-193926-365b`, cpu-4.
