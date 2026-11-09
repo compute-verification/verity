@@ -26,12 +26,17 @@ import math
 import statistics
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import exactlin as X
 import kgate
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from contextlib import AbstractContextManager
 
 ITEM_MS = 10.0
 ARMS = ("exact", "stock", "fused")
@@ -40,7 +45,7 @@ PARTS = ("stock_quant", "stock_mm", "stock_mm_notd", "stock_mm_td", "fused_quant
 WORK = X.Workspace("cuda") if torch.cuda.is_available() else None
 
 
-def nvml():
+def nvml() -> Callable[[], int | None]:
     try:
         import pynvml
         pynvml.nvmlInit()
@@ -53,7 +58,8 @@ def nvml():
         return lambda: None
 
 
-def arm_fn(arm: str, x, ws, xq, s, y):
+def arm_fn(arm: str, x: torch.Tensor, ws: list[tuple[torch.Tensor, torch.Tensor]], xq: torch.Tensor, s: torch.Tensor,
+           y: torch.Tensor) -> Callable[[], None] | None:
     """The arm's linear over every weight copy, or None where it doesn't apply to this M."""
     from verity_vllm.engine import int8_exact as E
     if arm == "exact":
@@ -129,7 +135,8 @@ def copies_for(n: int, k: int) -> int:
     return max(2, math.ceil(3 * torch.cuda.get_device_properties(0).L2_cache_size / (n * k)))
 
 
-def timed(fns: dict, reps: int, clock, calls: int, around=None) -> tuple[dict, dict, dict]:
+def timed(fns: dict, reps: int, clock: Callable[[], int | None], calls: int,
+          around: Callable[[], AbstractContextManager] | None = None) -> tuple[dict, dict, dict]:
     """Each fn captured in a CUDA graph and replayed in items of about ITEM_MS, the fns alternating item by item (order
     rotated each rep); median microseconds a call (`calls` calls a graph), every item's, and the SM clocks around each.
     `around`: a context manager factory each timed item runs inside (its exit before the item's device sync)."""
@@ -176,8 +183,8 @@ def timed(fns: dict, reps: int, clock, calls: int, around=None) -> tuple[dict, d
     return {arm: statistics.median(v) for arm, v in us.items()}, us, {"clocks": clocks, "replays_per_item": per}
 
 
-def shape_row(n: int, k: int, m: int, reps: int, clock, arms=ARMS, names: list[str] | None = None,
-              special: bool = False) -> dict:
+def shape_row(n: int, k: int, m: int, reps: int, clock: Callable[[], int | None], arms: tuple[str, ...] = ARMS,
+              names: list[str] | None = None, special: bool = False) -> dict:
     name = ",".join(names or [])
     copies = copies_for(n, k)
     x = kgate.activations(m, k, 7 + m, special=special)
