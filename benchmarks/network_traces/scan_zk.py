@@ -66,7 +66,8 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   its rows aren't the scan's own. The honest round's ``scan/state`` and ``scan/prog<j>`` are then V3c's roots and
   domains, which the consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's
   audit at any sample of it, and there is no block round: V3c's audit proves the anchored Programs' slot entries, and
-  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`).
+  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`, which
+  refuses an audit of another registration than the one ``summary.json``'s ``v3c`` names, whose trees the scan read).
 * **The honest round, one registration**: one Program of three templates (`TEMPLATES`) in the generator form
   (`scan_root`, the form `NetworkCheck.Period`'s `scanOf` reads): the first unit (`IngressScanFirst`, bucket 0), G·T − 1
   ingress units (buckets 1 … G·T − 1) and G·T egress units, each template one batch with its row, state and egress
@@ -86,7 +87,10 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   last unit's o1, S_{G·T−1}, which no state leaf holds, is a member's own rows (`Frame`), committed and never opened.
   Leaf 0 is opened by
   no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
-  which no slot is live, so none is due. Accepted: every o0 opens to 1. The registration's roots also name, as
+  which no slot is live, so none is due. The registration's window states those reads, one run a port (``reads``,
+  `state_reads`: ``sin`` units 1 … G·T − 1 and ``o1`` units 0 … G·T − 2, each from leaf 1, as `NetworkCheck.Period`'s
+  `stateRead` holds them), and opens leaf 0 to the empty state, zero words under its salt (``empty``, `state_empty`,
+  its `stateEmpty`), public as that state is. Accepted: every o0 opens to 1. The registration's roots also name, as
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **Every port registered**: the verifier's registered reads name every port of every member's circuit, inputs and
@@ -102,8 +106,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   for every W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
   certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit drawn, the bound 0); refused, a
   reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose lanes'
-  o0 are the scan's ``prog<j>`` (its registration and answer, its Program's descriptor, its free inputs NR·nb·NE, every bit of every
-  slot entry, which the rows form's K charges to each link-window tied to it, and no steps).
+  o0 are the scan's ``prog<j>`` (its registration and answer, its Program's descriptor, and no steps): the rows form
+  counts its free inputs off that descriptor, NR·nb·NE, every bit of every slot entry, and its K charges them to each
+  link-window tied to it.
 * **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
   reason in the ``fails`` record): the scan renders the connection's end where the warden wrote `FAIL`, and that bucket
   alone differs from the warden's row. Its block round and its honest round are proved, the honest one expected
@@ -149,8 +154,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   prover's instance file, which holds them all, is the control. The instance holds each row's u16 words followed by
   the next row's, so a row's zero-padded last chunk isn't one the control holds; its last 16 bytes, which cover the
   same tail, are (`leak_scan.public_pieces`' ``fields``). A row shorter than a piece (w63k4's slot entries, 14 bytes)
-  is found whole, raw or as hex (`received`, `leak_scan.find_whole`), and held to the same: none found, the control
-  holding each.
+  is found whole, raw or as hex (`received`, `leak_scan.find_whole`), and held to the same. Every find is judged and
+  placed by the zero-knowledge drivers' one rule (`leak_scan.scan`): a round passes when none is ``leaked`` and the
+  control holds each.
 """
 from __future__ import annotations
 
@@ -167,7 +173,7 @@ from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
-from typing import NamedTuple, Sequence
+from typing import Mapping, NamedTuple, Sequence
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -179,7 +185,7 @@ from verity.ml.circuits.boolean import trace as TR  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
-from verity.ml.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
+from verity.ml.circuits.refs import Coll  # noqa: E402
 from verity.ml.circuits.types import Array, Tuple  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf, FrameV3, Port  # noqa: E402
@@ -192,6 +198,7 @@ from verity.ml.crypto import lms  # noqa: E402
 from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, id_request  # noqa: E402
+from verity.core.protocols.certifier.scan_service import scan_root  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
@@ -516,6 +523,34 @@ def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
             "paths": [b"".join(reg.open(p).path).hex() for p in positions]}
 
 
+def state_reads(ports: Sequence[Mapping[str, dict]]) -> dict:
+    """The scan's state reads as its registration's `window` states them (``reads``, `NetworkCheck.Period`'s
+    `stateRead`), from each member's ``--registered`` ports (`tree_port`: unit ``reads_from + i`` at leaf ``reads[i]``):
+    its ``sin`` and ``o1`` of the state's value, each one run ``{"leaf": l, "units": [lo, hi]}``, unit lo + i at leaf
+    l + i. SystemExit when a port's reads are no one run."""
+    at: dict[str, dict[int, int]] = {}
+    for ps in ports:
+        for p in ("sin", "o1"):
+            if p in ps and ps[p]["value"] == value("state"):
+                at.setdefault(p, {}).update({ps[p].get(REG.READS_FROM, 0) + i: r for i, r in enumerate(ps[p]["reads"])})
+    runs = {}
+    for p, got in sorted(at.items()):
+        lo, hi = min(got), max(got) + 1
+        if got != {u: got[lo] + u - lo for u in range(lo, hi)}:
+            raise SystemExit(f"the scan's {p} reads {got} are no one run, unit lo + i at leaf l + i, as its "
+                             "registration states them")
+        runs[p] = {"leaf": got[lo], "units": [lo, hi]}
+    return runs
+
+
+def state_empty(reg: ADV.Committed | Held) -> dict:
+    """Row 0's opening as the scan's registration's `window` gives it (``empty``, `NetworkCheck.Period`'s
+    `stateEmpty`): the empty state, its ``words`` zero u16 words, under leaf 0's salt through its path. The row is
+    public, and no unit reads leaf 0, so its salt opens no row a proof hides."""
+    o = reg.open(0)
+    return {"words": reg.n_bits // 16, "salt": o.salt.hex(), "path": b"".join(o.path).hex()}
+
+
 def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | None],
                  refs: list[int] | None = None) -> str | None:
     """The host's read of a statement's entry on a scan registration, as Lean's registered reads make it (in
@@ -798,25 +833,30 @@ def v3c_entries(window: Path, rec: dict, win: dict, cls: IS.Class, entries: list
 
 
 def v3c_trees(window: Path, cls: IS.Class, states: list[list[int]],
-              entries: list[list[list[int]]]) -> dict[str, Held]:
-    """``--v3c``: the trees the scan reads of V3c's window ``window`` (`prove_path.py window-commit`'s directory), in
-    place of its own: ``state`` its `SCAN_STATE` (`v3c_state`) and each ``prog<j>`` chunk j's o0 of its
-    `SELECT_ENTRY` template (`v3c_entries`), each refused by name where it isn't the scan's."""
+              entries: list[list[list[int]]]) -> tuple[str, dict[str, Held]]:
+    """``--v3c``: the digest of V3c's window ``window``'s registration (`prove_path.py window-commit`'s directory) and
+    the trees the scan reads of it, in place of its own: ``state`` its `SCAN_STATE` (`v3c_state`) and each ``prog<j>``
+    chunk j's o0 of its `SELECT_ENTRY` template (`v3c_entries`), each refused by name where it isn't the scan's."""
     try:
         rec = json.loads((window / "registration.json").read_text())
         win = json.loads((window / "window.json").read_text())
-        return {"state": v3c_state(window, rec, states), **v3c_entries(window, rec, win, cls, entries)}
+        return RG.digest(rec), {"state": v3c_state(window, rec, states), **v3c_entries(window, rec, win, cls, entries)}
     except (OSError, ValueError, KeyError, TypeError) as e:
         raise _v3c_refused(window, f"{type(e).__name__}: {e}") from None
 
 
 def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0,
-         v3c: Path | None = None) -> SimpleNamespace:
+         v3c: Path | None = None, outputs: dict[int, Sequence[int]] | None = None) -> SimpleNamespace:
     """The run (`synthetic`, or `warden_run`'s of a warden_serve run), link-windows start … start + group − 1 of each
     link registered by the warden and read back by the verifier, the scan's chain over their rows from the empty state
     (`scan_traffic.chain`), the prover's three registrations (the state tree the group's `ingress_scan.window_state`),
     the chain round's state tree, the unread round's unit and slot entries' tree (`_unread`) and the tampered round's
-    egress link-window (`_tamper`). With ``v3c`` the state and slot entries' trees are V3c's (`v3c_trees`)."""
+    egress execution phase (`_tamper`). With ``v3c`` the state and slot entries' trees are V3c's (`v3c_trees`).
+
+    The chain's outputs are each connection's ids as the network certifier's egress carries them, or with ``outputs``
+    the compute's committed ones by the connection's stream ordinal (the ingress order `warden_chain.io` numbers its
+    records by; none for a connection it lacks): ``unrendered`` is then the egress buckets whose rendering of those
+    outputs isn't the network certifier's row, where an egress tie on them is refused."""
     t0 = time.time()
     if group < 1 or start < 0:
         raise SystemExit(f"a group is 1 or more link-windows from link-window 0 on, not {group} from {start}")
@@ -826,14 +866,16 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     got = synthetic(out, setup, windows) if run is None else warden_run(run, setup, windows, out)
     cls, T = setup.cls, got.params.window
     ingress, egress = ([x for w in got.sides[s] for x in w.cells.rows] for s in ("ingress", "egress"))
+    committed = got.outputs if outputs is None else {q: tuple(xs) for q, xs in outputs.items()}
     try:
-        ch = traffic.chain(cls, ingress, egress, got.outputs)
+        ch = traffic.chain(cls, ingress, egress, committed)
     except (ValueError, KeyError) as e:
         raise SystemExit(f"the scan refuses link-windows {windows}' rows: {e!r} (the scan reads warden-form id "
                          "requests at its class, answered id-form: warden_serve.py rehearse --ids)")
     bad = [t for t in range(group * T) if EG.outputs(cls.egress, ch.view(t)) != (EG.ACCEPT, ch.egress[t])]
     void = [t for t, row in enumerate(ch.egress) if any(row[s * cls.B] == W.FAIL for s in range(cls.egress.R))]
-    if bad != void:
+    unrendered = [] if outputs is None else [t for t in bad if t not in void]
+    if [t for t in bad if t not in unrendered] != void:
         raise SystemExit(f"egress buckets {bad} don't compute the warden's rows from the views their ingress buckets "
                          f"wrote, and the warden failed a connection in buckets {void}")
     if void != got.fail_buckets:
@@ -847,8 +889,10 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     states, entries = IS.window_state(cls, ch.states[1:], 0, group * T), slot_entries(cls, ch.progs)
     trees = {k: tree(k, rows, heads, got.session) for k, rows in (("state", states), *zip(lane_kinds(cls), entries),
                                                                  ("view", ch.views))}
+    v3c_registration = None
     if v3c is not None:
-        trees.update(v3c_trees(v3c, cls, states, entries))
+        v3c_registration, held = v3c_trees(v3c, cls, states, entries)
+        trees.update(held)
     swapped = list(states)
     swapped[setup.A + 1], swapped[setup.A + 2] = swapped[setup.A + 2], swapped[setup.A + 1]
     admitted: dict[int, int] = {}
@@ -857,13 +901,14 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
             if s.live:
                 admitted.setdefault(s.q, s.admitted)
     return SimpleNamespace(setup=setup, chain=ch, T=T, G=group, windows=windows, params=got.params,
-                           session=got.session, source=got.source, run_id=got.run_id, outputs=got.outputs,
-                           sides=got.sides, trees=trees, swapped=tree("state", swapped, heads, got.session),
+                           session=got.session, source=got.source, run_id=got.run_id, outputs=committed,
+                           unrendered=unrendered, sides=got.sides, trees=trees, swapped=tree("state", swapped, heads, got.session),
                            block_sets=[block_set(heads, got.session, j) for j in range(cls.NR)],
                            unread=_unread(cls, ch, heads, got.session),
                            tampered=None if void else _tamper(got, ch.egress, T, cls.B, cls.egress.R),
                            ordinals=sorted(admitted), admitted=dict(sorted(admitted.items())), void=void,
-                           failed=got.failed, failed_why=got.failed_why, v3c=v3c, run_s=round(time.time() - t0, 1))
+                           failed=got.failed, failed_why=got.failed_why, v3c=v3c, v3c_registration=v3c_registration,
+                           run_s=round(time.time() - t0, 1))
 
 
 def _bits(reg: ADV.Committed, i: int) -> list[int]:
@@ -1075,37 +1120,6 @@ def _defs(cls: IS.Class) -> dict[str, object]:
     return {"first": bind(IS.IngressScanFirst, **st), "ingress": bind(IS.IngressScanBucket, **st),
             "egress": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D),
             "block": bind(SlotEntry, KO=cls.KO, IDB=cls.IDB)}
-
-
-def scan_root(members: list[tuple[object, int, int]], nb: int, every: int) -> Program:
-    """The scan's root in the generator form (`NetworkCheck.Period`'s `scanOf`): each `(template, n, fixed)` of
-    `members` one batch over its n units, in order, its first `fixed` parameters inputs of its own (``<i>.<name>``),
-    and each later one, lane j's ``prog<j>``, at bucket t (the first template's first unit bucket 0, each next unit the
-    next bucket) row ⌊t / every⌋ (`entry_at`) of lane j's input ``prog<j>``, its slot entries of nb boundaries."""
-    sigs = [t.signature() for t, _, _ in members]
-    lanes = [len(ps) - fixed for (ps, _), (_, _, fixed) in zip(sigs, members)]
-    entry = next(ps[fixed][1] for (ps, _), (_, _, fixed), L in zip(sigs, members, lanes) if L)
-    L = max(lanes)
-
-    def signature(S):
-        params = tuple((f"{i}.{name}", Array(n, ty)) for i, ((ps, _), (_, n, fixed)) in enumerate(zip(sigs, members))
-                       for name, ty in ps[:fixed])
-        return (*params, *((f"prog{j}", Array(nb, entry)) for j in range(L))), \
-            Tuple(*(Array(n, ret) for (_, ret), (_, n, _) in zip(sigs, members)))
-
-    def body(B, S, *args):
-        entries, outs, at, start = args[len(args) - L:], [], 0, 0
-        for (t, n, fixed), (ps, _) in zip(members, sigs):
-            gathered = [array_of([entries[j][(start + m) // every] for m in range(n)])
-                        for j in range(len(ps) - fixed)]
-            outs.append(B.batch(t, *args[at:at + fixed], *gathered, axes=(0,) * len(ps)))
-            at, start = at + fixed, start + n
-        return coll_concat(signature(S)[1], outs)
-
-    defn = CompositeDefinition("ScanZkRoot", 1, ("templates", "counts", "nb", "every"), signature, body,
-                               register=False)
-    return Program(bind(defn, templates=tuple(PA.template_id(t) for t, _, _ in members),
-                        counts=tuple(n for _, n, _ in members), nb=nb, every=every))
 
 
 def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls: IS.Class, nb: int) -> dict:
@@ -1401,8 +1415,9 @@ def _free_port() -> int:
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
-    instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
-    warden ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified k`
+    instance or a shared port's table row; the scan's registrations' roots; the warden's row registrations its
+    warden ports read, `warden_roots`; and in its window the state reads its members' registered files hold their units
+    to, `state_reads`, and row 0's opening, `state_empty`, before any coin), its units drawn by the verifier's Lean (`draw --stratified k`
     on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's `service.Stream`
     on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the firewall and
     held by Lean with the verifier's own registered reads; then each held unit's public ``o0`` (none of the slot
@@ -1441,6 +1456,9 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
            "link": "registered: each warden row port, input or output, at the warden's signed root of its "
                    "link-window, unit base + k row k of the member's rows; the scan's state, each lane's prog<j> and "
                    "view, inputs and outputs, at the prover's registered roots (scan/*)"}
+    reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
+    win |= ({"reads": {"scan/state": reads}} if reads else {}) | (
+        {"empty": {"scan/state": state_empty(trees["state"])}} if "state" in trees else {})
     rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
@@ -1647,13 +1665,13 @@ def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: d
     (`window_answer`: accepted where the round's outputs all open to 1), since its registration holds each W's rows
     (`warden_roots`). A refused round's (a void run's) names the members Lean refused. With the block round's audit
     (``block``), the compute audit whose lanes' o0 are the scan's ``prog<j>`` (``audits``): its registration and
-    answer, and the terms a period's parameters give it, its Program's descriptor, its free inputs (every bit of every
-    slot entry, the stand-in's ``x``: it copies its input) and no steps."""
+    answer, and the terms a period's parameters give it, its Program's descriptor and no steps; the period counts its
+    free inputs off the descriptor (every bit of every slot entry, the stand-in's ``x``: it copies its input)."""
     reg, answer = _answer(out, "honest", res, delta, f"the scan's audit of link-windows {at.windows}")
     audits = []
     if block is not None:
         breg, banswer = _answer(out, "block", block, delta, "the block's audit")
-        audits.append({"answer": banswer, "free": entries_of(at.setup.cls, at.G, at.T) * IS.entry_bits(at.setup.cls),
+        audits.append({"answer": banswer,
                        "program": json.loads((out / PROGRAMS[BLOCK] / "program.json").read_text()),
                        "registration": breg, "steps": 0})
     doc = {"format": ANSWERS, "delta": str(delta), "registration": reg, "audits": audits,
@@ -1736,7 +1754,8 @@ def sparse(pieces: dict[str, bytes], held: set[str]) -> tuple[dict[str, bytes], 
 def received(a8, vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str], public: bytes) -> dict:
     """What the verifier received (`vdir`) scanned for the witness `blobs`, less the sparse pieces: each row of at least
     a piece cut whole less what `public` holds (`leak_scan.public_pieces`, found by `a8.received`), and each shorter
-    row (a slot entry at a small KO) found whole (`leak_scan.find_whole`, as ``whole_rows``); the `control` (the
+    row (a slot entry at a small KO) found whole (`leak_scan.find_whole`, as ``whole_rows``), every find judged and
+    placed by the drivers' one rule (`leak_scan.scan`: ``leaked``, ``structured``, ``placed``); the `control` (the
     instances) is to hold every one in `held`."""
     short = {k: x for k, x in blobs.items() if len(x) < a8.PIECE}
     pieces, kept, out = LS.public_pieces(a8, {k: x for k, x in blobs.items() if k not in short}, held, public,
@@ -1744,14 +1763,27 @@ def received(a8, vdir: Path, control: Path, blobs: dict[str, bytes], held: set[s
     pieces, kept, nsparse = sparse(pieces, kept)
     short, short_held, nshort = sparse(short, held & set(short))
     rec = {**a8.received(vdir, control, pieces, kept), "public_pieces": len(out), "sparse_pieces": nsparse + nshort}
+    rec |= LS.scan(rec, pieces, vdir)
     if short:
         rec["whole_rows"] = LS.find_whole(rec, short, vdir, control, short_held)
     return rec
 
 
 def unseen(rec: dict) -> bool:
-    """No witness piece nor short row in what the verifier received (`received`), and the control holds them all."""
-    return all(not r["verifier_found"] and r["control"]["holds_all"] for r in (rec, rec.get("whole_rows")) if r)
+    """No witness piece nor short row that `leak_scan.scan` reads as leaked in what the verifier received (`received`),
+    and the control holds them all."""
+    return all(not r["leaked"] and r["control"]["holds_all"] for r in (rec, rec.get("whole_rows")) if r)
+
+
+def finds(rec: dict) -> str:
+    """`received`'s finds as a round's log line gives them: each found piece and short row, those leaked, and where each
+    found one lies (``placed``)."""
+    whole = rec.get("whole_rows") or {"rows": 0, "verifier_found": [], "leaked": [], "placed": {}}
+    placed = {**rec.get("placed", {}), **whole.get("placed", {})}
+    return (f"witness pieces found there: {rec['verifier_found'] or 'none'}, leaked {rec['leaked'] or 'none'} (of "
+            f"{rec['blobs']}; {rec['public_pieces']} public, {rec['sparse_pieces']} sparse left out), rows shorter than a "
+            f"piece found whole there: {whole['verifier_found'] or 'none'}, leaked {whole['leaked'] or 'none'} (of "
+            f"{whole['rows']})" + (f", placed {placed}" if placed else ""))
 
 
 def prove(a) -> int:
@@ -1784,8 +1816,8 @@ def prove(a) -> int:
                                       "end": sum(r[s * cls.B] == W.END for r in rows for s in range(sh.R))}
                                for side, rows in (("ingress", ch.ingress), ("egress", ch.egress))},
                      "roots": {k: r.root.hex() for k, r in at.trees.items()},
-                     "v3c": at.v3c and {"window": str(at.v3c), "trees": sorted(k for k, r in at.trees.items()
-                                                                               if isinstance(r, Held))},
+                     "v3c": at.v3c and {"window": str(at.v3c), "registration": at.v3c_registration,
+                                        "trees": sorted(k for k, r in at.trees.items() if isinstance(r, Held))},
                      "host": {name: [{"member": m.name, "refused": m.refused, "outputs": m.outputs} for m in ms]
                               for name, ms in h.rounds.items()}}
     void = (f" but its FAIL buckets {at.void} (void: the honest round alone, refused at {targets(at, 'honest')})"
@@ -1846,15 +1878,12 @@ def prove(a) -> int:
                 good = good and bool(res.get("coin_negatives")) and all(res["coin_negatives"].values())
             ok &= good
             summary["rounds"][name]["audit"] = res
-            whole = rec.get("whole_rows") or {"rows": 0, "verifier_found": []}
             log(f"round {name}: drawn {len(res.get('draw', {}).get('units') or [])} of {pg.units}, "
                 f"charge {res.get('charge')}, per unit {res.get('per_unit')}; proofs {res['verdicts']}, audit "
                 f"{res.get('audit')}, opened "
                 f"{ {k: v for k, v in res.get('opened', {}).items()} }, Lean {res['why']}, verifier received "
-                f"{rec['verifier_bytes']} bytes, witness pieces found there: {rec['verifier_found'] or 'none'} (of "
-                f"{rec['blobs']}; {rec['public_pieces']} public, {rec['sparse_pieces']} sparse left out), rows "
-                f"shorter than a piece found whole there: {whole['verifier_found'] or 'none'} (of {whole['rows']}), "
-                f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+                f"{rec['verifier_bytes']} bytes, {finds(rec)}, control {rec['control']['blobs_found']}; "
+                f"{'as expected' if good else 'UNEXPECTED'}")
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if coins is not None:
         pub = coins.published or {}

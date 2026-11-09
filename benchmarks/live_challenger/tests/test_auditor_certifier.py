@@ -188,8 +188,9 @@ def test_a_rehearsal_runs_through_the_tunnel_and_its_end_is_status_and_fetch(hos
 
 @pytest.mark.parametrize("tamper", ["late", "extra", "drop", "token"])
 def test_each_tampering_shim_is_recorded_rehearsed_alone_and_its_verdict_ends_the_run(host, tmp_path, tamper):
-    """late, extra and drop are runs the rehearsal's check refuses and token one it accepts (only the I/O tie refuses
-    it), each the one strategy of its rehearsal, whose shim `certifier_serve.py` derives from the gate's own plan."""
+    """late, extra and drop are runs the rehearsal's check refuses and token one it accepts (only the egress tie
+    refuses it), each the one strategy of its rehearsal, whose shim `certifier_serve.py` derives from the gate's own
+    plan."""
     verdict = "accepted" if tamper == "token" else "refused"
     run = started_run(host, "--tamper", tamper)
     request = json.loads((host.certifier / run / "request.json").read_text())

@@ -108,8 +108,8 @@ that name its ordinal, with each frame's canonical position and egress bucket. A
 request whose `user` (the request's id) no other request has, every egress frame is an id event of a request released
 by its bucket, and every response keeps the finish rule: at most `max_tokens` tokens, ending at its first EOS token
 (the plan's `eos_token_ids`) or at `max_tokens`. `extra`'s token after a response's last breaks it. The check writes
-the I/O to `io.json` for the I/O tie, and compares it with the ids the shim wrote and the
-requests the plan sent.
+the I/O to `io.json`, whose requests network-e2e's advice bits read (`chain.bits`), and compares it with the ids the
+shim wrote and the requests the plan sent.
 On the advice profile each execution phase is registered by its one-stage registration record (its salted root, chained)
 with the check's own receipt, which no proof stream issues since N2 gives no outcome, and its certified records are
 held to the certifier's key and session by the Lean's audit (`_certified`). The verdict is `accepted` when every
@@ -176,10 +176,10 @@ window's records are certified, the I/O, the audit and the salt accept.
   `--tamper drop` leaves out the first event of the first session's response (F − 1), on time and logged, so only N2's
   counts refuse it, and
   `--tamper token` writes every token of window 0's responses carrying other bytes (`active_replay.other_token`), so
-  its frame counts are honest's and `check` accepts it: only the I/O tie, which `check` doesn't run, refuses certified
-  tokens that aren't the committed sampled ones. `--tamper byte` changes one hex digit of the first session's response
-  (`active_replay.other_hex`): one output byte of a response whose text is its outputs' hex, which `check` accepts and
-  only the output tie refuses.
+  its frame counts are honest's and `check` accepts it: only the egress tie (`scan_service.EgressTie`), which `check`
+  doesn't run, refuses certified tokens that aren't the committed trace's. `--tamper byte` changes one hex digit of the
+  first session's response (`active_replay.other_hex`): one output byte of a response whose text is its outputs' hex,
+  which `check` accepts and only the egress tie refuses.
 
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
@@ -260,7 +260,7 @@ PROOF_DEADLINE_S = 600.0
 DELTA = 2.0 ** -40
 STRATEGIES = ("honest", "late", "extra")
 TAMPERS = ("late", *ar.LIVE_TAMPERS)
-# `check`'s verdict on each run it expects to accept: honest, and token and byte, whose frames only the I/O tie reads
+# `check`'s verdict on each run it expects to accept: honest, and token and byte, whose frames only the egress tie reads
 ACCEPTED = ("honest", "token", "byte")
 PROFILES = ("planned", "served")
 TRAFFIC = ("fixed", "varied")
@@ -1247,8 +1247,8 @@ def certified_io(plan: dict, setup: ar.Setup, in_records, out_records, aborted: 
     the finish rule: at most `max_tokens` tokens, ending at its first EOS (`eos_token_ids`) or at `max_tokens`. On a
     compact plan each egress frame is a compact cell (`active.compact_record_data`), and the finish is the records'
     too: only the last is marked, a stop on an EOS id, `COMPACT_LAST` alone at `max_tokens` exactly, and no other
-    record carries an EOS id. Where a response stops is the server's word here, as an EOS id event's is: only the I/O
-    tie holds it to the ids the model sampled (`active.compact_finish_violations`). `aborted` are the users whose
+    record carries an EOS id. Where a response stops is the server's word here, as an EOS id event's is: only a tie
+    holds it to the ids the model sampled (`active.compact_finish_violations`). `aborted` are the users whose
     finish in the Commit is a client's abort, which nothing on the link says: one of theirs ends instead short of
     `max_tokens`, unmarked and on no EOS id (finish `abort`), and its marked finish is refused. `check` reads no Commit,
     so it gives none."""

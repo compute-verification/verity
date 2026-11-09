@@ -6,7 +6,7 @@ head checks on their pinned gate ids) proved by Flock `prove --zk` behind the Le
 verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
 comparison to each verdict, which decides nothing.
 
-    python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
+    python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4] [--profile planned|served]
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
       --lean flock-verify --out DIR [--jobs 1] [--gpu] [--debug-clear] [--dry]
     python benchmarks/network_traces/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
@@ -19,7 +19,9 @@ comparison to each verdict, which decides nothing.
   ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
   certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
   declared or charged), a certifier rehearsal's run refused by name; its members are honest and tampered, the tampered
-  head failing its signed digest alone.
+  head failing its signed digest alone. N2 holds a network certifier link's counts and nothing of its egress, which
+  only the egress tie (`scan_service`, proved by `scan_zk.py`) holds to the committed trace, so the network verdict
+  here takes none and refuses every member by name (``egress``): an honest member is one whose windows N2 all accepts.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
   with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
   still the certifier's; with ``--extra``, certifier-serve's ``extra`` run (the shim wrote one event more and the
@@ -185,11 +187,13 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
         word = lw.outputs(opening, root, syncs) if args is not None else None
         others = lw.certified(w, certificates) and (lw.warden is not None
                                                     or (w < len(syncs) and syncs[w] in lw.sync_set))
+        failed = {e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
+                  for e, i in zip(ENDS, insts)}
+        if lw.served_key() is not None and failed["egress"] is not None and not lw.served_check(opening, syncs):
+            failed["egress"].append("served")
         out.append(SimpleNamespace(
             window=w, opening=opening, root=root, insts=insts, args=args, word=word, certificates=certificates,
-            failed={e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
-                    for e, i in zip(ENDS, insts)},
-            expect=int(word == 0b11 and others), statement=None))
+            failed=failed, expect=int(word == 0b11 and others), statement=None))
     rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
     if clock is not None:
         st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins, clock=clock)
@@ -228,8 +232,10 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every proof block takes an instance, and its verdict bit is 1
     exactly where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
     (every window's, ``rd.every``) fails its counts and its signed digest only (its signed digest alone on the advice
-    profile, whose egress counts no N2 unit holds, and on a warden link, whose counts are its schedule's);
-    extra, egress heads fail their counts alone, on one window or more; late, no link-window at all, since the certifier
+    profile, whose egress counts no N2 unit holds, and on a warden link, whose counts are its schedule's; its signed
+    digest and the served counts, ``served``, on a served link, which holds them to the ingress head's instead of a
+    profile); extra, egress heads fail their counts alone (the served counts alone on a served link), on one window or
+    more; late, no link-window at all, since the certifier
     faults window 0 and certifies no record whose status isn't complete (`certificate.Issuer` lists it in
     `refused`), so the link stops before its first window. The ingress heads fail nothing, and every negative member
     refuses one window or more."""
@@ -244,11 +250,12 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     eg = [x.failed["egress"] for x in xs]
     if name in ("honest", OTHER):
         return all(x.expect for x in xs)
+    served = rd.lw.served_key() is not None
     if name == "tampered":
         signed = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE or rd.lw.warden is not None
-        want = ["signed"] if signed else ["counts", "signed"]
+        want = ["signed", "served"] if served else ["signed"] if signed else ["counts", "signed"]
         return eg[0] == want and all(f == (want if getattr(rd, "every", False) else []) for f in eg[1:])
-    allowed = {"extra": ([], ["counts"])}[name]
+    allowed = {"extra": ([], ["served"] if served else ["counts"])}[name]
     return all(f in allowed for f in eg) and allowed[1] in eg
 
 
@@ -311,9 +318,10 @@ def _virtual_run(run: Path, plan: dict, report: dict, url: str, upstream: tuple,
 
 
 def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest", "extra", "late"),
-            height: int = 6) -> dict:
+            height: int = 6, profile: str = "planned") -> dict:
     """certifier-serve's run on an injected clock against `_endpoint`, one per strategy under `out`, with fresh LMS keys
-    of `height` in a scratch directory that is removed. Returns the plan."""
+    of `height` in a scratch directory that is removed, on N2's `profile` (`certifier_serve.PROFILES`: the served one
+    makes each execution phase's proof block `NetworkServedLinkWindow`). Returns the plan."""
     keys = Path(tempfile.mkdtemp(prefix="n2-zk-keys-"))
     challenger = cs.signer(keys / "challenger", height)
     session = secrets.token_bytes(32)
@@ -323,7 +331,7 @@ def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest"
         upstream = endpoint.sockets[0].getsockname()[:2]
         url = "http://%s:%d" % upstream
         probed = await asyncio.to_thread(cs.probe, url, cs.request_body("stub", tokens), 2, clock=lambda: 0.0)
-        report, plan = cs.served_plan(probed, requests)
+        report, plan = cs.served_plan(probed, requests, profile=profile)
         for strategy in strategies:
             certifier = cs.signer(keys / strategy, height)
             try:
@@ -489,7 +497,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
                        coins=cs._no_coins, clock=time.monotonic)
     gpu = getattr(a, "gpu", False)
-    # the ZK server rechecks a witness the host computed, so a device prover takes the host's, as n2_tie_zk's does
+    # the ZK server rechecks a witness the host computed, so a device prover takes the host's
     env = {**zk_server_env(M, sg), **({"FC_HOST_WITNESS": "1"} if gpu else {})}
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=gpu)
     vdir = out / "verifier"
@@ -625,7 +633,9 @@ def prove(a) -> int:
         summary["warden_run"] = members["honest"].plan["warden_run"]
         summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the "
                                       "link's charge is 0",
-                             "counts": "the warden's schedule's (service.WardenProfile), not a profile's"}
+                             "counts": "the active warden's schedule's (service.WardenProfile), not a profile's",
+                             "egress": "not held here: the network verdict takes no egress tie and refuses by name "
+                                       f"({SVC.EGRESS_TIED!r}); scan_service's egress tie, scan_zk.py's, holds it"}
     for name in ("extra", "late"):
         if getattr(a, name):
             members[name] = link_windows(Path(getattr(a, name)))
@@ -678,8 +688,10 @@ def prove(a) -> int:
     ok = True
     for name, res in done.items():
         rec, net = res["received"], res["network"]
-        good = (all(r["as_expected"] for r in res["windows"]) and net["accepted"] == (name == "honest")
-                and set(net.get("why") or ()) == ({SVC.PERIOD_DRAWN} if name == OTHER else set())
+        why = set(net.get("why") or ())
+        counts = not net["refused"] and not why - {SVC.EGRESS_TIED}
+        good = (all(r["as_expected"] for r in res["windows"]) and counts == (name == "honest")
+                and why == ({SVC.PERIOD_DRAWN} if name == OTHER else set()) | ({SVC.EGRESS_TIED} if warden else set())
                 and not rec["leaked"] and rec["control"]["holds_all"])
         ok &= good
         summary["members"][name].update(res, ok=good)
@@ -715,6 +727,8 @@ def main(argv=None) -> int:
     v.add_argument("--out", required=True, type=Path)
     v.add_argument("--requests", type=int, default=40)
     v.add_argument("--tokens", type=int, default=4)
+    v.add_argument("--profile", choices=cs.PROFILES, default="planned",
+                   help="N2's profile: planned (NetworkLinkWindow) or served (NetworkServedLinkWindow)")
     p = sub.add_parser("prove", help="each execution phase's proof block proved --zk and decided by N2's verifier of "
                                      "record")
     run = p.add_mutually_exclusive_group(required=True)
@@ -741,7 +755,7 @@ def main(argv=None) -> int:
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
     a = ap.parse_args(argv)
     if a.command == "virtual":
-        plan = virtual(a.out, a.requests, a.tokens)
+        plan = virtual(a.out, a.requests, a.tokens, profile=a.profile)
         log(f"virtual: {plan['windows']} windows, served {plan['served']}, under {a.out}")
         return 0
     one_session(a.jobs)

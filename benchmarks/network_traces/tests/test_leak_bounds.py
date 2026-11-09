@@ -3,15 +3,19 @@ run's files, and `datacenter` is links × `per_link` for identical links, each l
 
 K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lean (`clog2`, `capsTerm`, `rowsTerms`,
 `eps`) rather than from the calculator:
-- the registered free inputs are the tied audit's slot entries, NR·T / EVERY entries of `ingress_scan.entry_bits`;
-- a request's caps are charged twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉;
+- the registered free inputs are the tied audit's slot entries, NR·T / EVERY entries of `ingress_scan.entry_bits`,
+  and at the anchors those entries' unpadded `entry_layout`, whatever the requests served;
+- the caps of every connection a sampling block's schedule can carry, lanes·T of them (`Schedule.caps`), are charged
+  twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉, whatever the requests served;
 - a sampling block's jitter term is ⌈log2 D_j^T⌉ over its scan's T steps (`Scan.terms`), at D_j = 2;
 - the datacenter's links are the census's reference datacenter's machines, and the world's are the adversary resource
   model's compute in machines of the datacenter's GPUs;
-- a share is of one copy of the weights, labelled with what it is;
+- a share is of one copy of the weights, the deployment's (the adversary resource model's as published) unless a
+  caller names another, labelled with what it is;
 - ε is the scans' δ summed, m·δ_scan over the period's sampling blocks and the links.
 
-At δ = 1% for the whole datacenter, the pooled form's incorrect proof blocks alone pass the weights. A window class
+At δ = 1% for the whole datacenter, the pooled form's incorrect proof blocks alone pass the demo's served model's
+weights, though not the deployment's. A window class
 stands in for its scan class and its T, and the calculator refuses what it can't count."""
 
 from __future__ import annotations
@@ -115,26 +119,45 @@ def test_the_registered_free_inputs_are_the_tied_audits_slot_entries():
     for cls, entry, block in ((W63, 1_136, 9_088), (replace(W63, KO=4), 112, 896)):
         link = LB.link(cls, RATE, T=32)
         assert IS.entry_bits(cls) == entry and link.entries == cls.NR * 32 // cls.EVERY == 8
-        assert link.free("registered") == {"block": block, "request": 0} == {"block": 8 * entry, "request": 0}
-        assert link.free("registered")["block"] < 32 * IS.prog_bits(cls)
-        assert link.free("anchors") == {"block": 0, "request": 33 + cls.KO * cls.IDB}
+        assert link.free("registered") == block == 8 * entry
+        assert link.free("registered") < 32 * IS.prog_bits(cls)
+        assert link.free("anchors") == 8 * (33 + cls.KO * cls.IDB) <= block
         assert link.widths == {"NS": IS.state_bits(cls), "NE": entry, "NV": IS.view_bits(cls)}
-    assert LB.link(W63, RATE, T=64).free("registered")["block"] == 2 * 9_088
+    assert LB.link(W63, RATE, T=64).free("registered") == 2 * 9_088
 
 
 def test_the_caps_are_charged_twice_at_lean_s_ceilings():
     for cells in range(1, W63.KO + 2):
         link = LB.link(W63, RATE, T=32, egress_cells=cells)
-        assert link.cell == clog2(cells + 1) and link.cap == 2 * clog2(cells + 1)
-    assert [LB.link(W63, RATE, T=32, egress_cells=c).cap for c in (1, 2, 3, 63, 64, 65)] == [2, 4, 4, 12, 14, 14]
+        assert link.connections == 4 * 32 and link.cell == clog2(cells + 1)
+        assert link.cap == 2 * 128 * clog2(cells + 1)
+    assert [LB.link(W63, RATE, T=32, egress_cells=c).cap // 128 for c in (1, 2, 3, 63, 64, 65)] == [2, 4, 4, 12, 14, 14]
+    assert LB.link(W63, RATE, T=64).connections == 256 and LB.link(KO1, RATE, T=32).connections == 128
     assert LB.JITTER_BOUND == 2
     steps = (16, 32, 48)
     assert [LB.link(W63, RATE, T=t).jitter for t in steps] == [clog2(2 ** t) for t in steps] == list(steps)
     tau = Fraction(4)
     four = LB.link(W63, Fraction(4) / (32 * tau), T=32, tau=tau, egress_cells=65)
-    schedules = cells = clog2(65 + 1) * 4
+    schedules = cells = clog2(65 + 1) * 128
     jitter = clog2(LB.JITTER_BOUND ** 32)
-    assert four.bits(four.block_s, "registered") == schedules + cells + 9_088 + jitter == 9_176
+    assert four.bits(four.block_s, "registered") == schedules + cells + 9_088 + jitter == 10_912
+
+
+def test_the_caps_and_the_anchored_entries_are_charged_whatever_the_requests_served():
+    """w63k4 (4 lanes, a 32-bucket window, 5 egress cells) charges 384 bits a sampling block for the schedules and 384
+    for the fail cells, as `NetworkCheck.Period`'s `#guard` on `capsTerm (s.caps 1)` does, and at its anchors every
+    slot entry's 33 + KO·IDB bits, at any request rate: the sender picks how many requests it opens."""
+    from verity.core.protocols.certifier import warden as W
+    w63k4 = W.WardenParams(lanes=4, window=32, every=16, egress_cells=5)
+    each = sum(clog2(c + 1) for c in w63k4.caps(1))
+    assert len(w63k4.caps(1)) == 128 and each == 384
+    for rate in (0, RATE, 1_000):
+        link = LB.link(W63, rate, T=32, egress_cells=5)
+        assert link.connections * link.cell == each and link.cap == 2 * 384
+        assert link.bits(link.block_s, "registered") == 2 * 384 + 9_088 + 32
+        assert link.bits(link.block_s, "anchors") == 2 * 384 + 8 * 1_121 + 32
+    for reading, free in (("registered", 9_088), ("anchors", 8 * 1_121)):
+        assert LB.per_link(W63, 0, "week", reading, T=32, egress_cells=5).bits == 189_000 * (768 + free + 32)
 
 
 def test_the_census_sets_the_datacenter_and_the_world():
@@ -152,15 +175,20 @@ def test_the_census_sets_the_datacenter_and_the_world():
         18_550_229 * LB.per_link(W63, RATE, "week", "anchors", T=32).bits, rel=1e-12)
 
 
-def test_a_share_is_of_one_bf16_copy_and_says_so():
-    assert LB.WEIGHTS == LB.Weights(1_235_814_400 * 16, "Llama-3.2-1B in BF16")
+def test_a_share_is_of_one_copy_of_the_weights_a_deployment_protects_and_says_so():
+    """By default a share is of the adversary resource model's weights as published (the census's ``weights_bytes``),
+    labelled with the model and its datatypes; the demo's served model is a copy a caller names, labelled as that."""
+    world = next(d for d in json.loads((LB.CENSUS / "adversary.json").read_text()) if d["role"] == "reference")
+    assert LB.WEIGHTS == LB.protected() and LB.WEIGHTS.bits == 8 * world["weights_bytes"] == 8 * 864_704_792_696
+    assert LB.WEIGHTS.label.startswith("DeepSeek-V4-Pro as published, 1.6T parameters (FP4 + FP8 mixed")
+    assert LB.SERVED == LB.Weights(1_235_814_400 * 16, "the demo's served model (Llama-3.2-1B) in BF16")
     one = LB.link(W63, RATE, T=32)
     for got in (LB.per_link(W63, RATE, "week", "registered", T=32), LB.datacenter([one] * 3, "week", "registered"),
                 LB.world(one, "week", "registered", Fraction(1, 100))):
         assert got.weights == LB.WEIGHTS.label and got.share == got.bits / LB.WEIGHTS.bits
-    int8 = LB.Weights(1_235_814_400 * 8, "an int8 copy")
-    got = LB.per_link(W63, RATE, "week", "registered", T=32, weights=int8)
-    assert got.weights == "an int8 copy" and got.share == 2 * LB.per_link(W63, RATE, "week", "registered", T=32).share
+    got = LB.per_link(W63, RATE, "week", "registered", T=32, weights=LB.SERVED)
+    assert got.weights == LB.SERVED.label and got.share == pytest.approx(
+        LB.WEIGHTS.bits / LB.SERVED.bits * LB.per_link(W63, RATE, "week", "registered", T=32).share, rel=1e-15)
 
 
 def test_eps_is_the_scans_delta_summed():
@@ -179,14 +207,16 @@ def test_eps_is_the_scans_delta_summed():
     assert LB.world(one, "week", "registered").eps == 18_550_229 * Fraction(189_000, 2 ** 20)
 
 
-def test_the_pooled_datacenters_incorrect_blocks_alone_pass_the_weights():
+def test_the_pooled_datacenters_incorrect_blocks_alone_pass_the_served_models_weights():
     n, one = LB.datacenter_links(), Fraction(1, 100)
     floor = LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", one)
     faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1))
     jitter = n * 189_000 * clog2(LB.JITTER_BOUND ** 32)
-    assert LB.fmax(one / n) == 15 and faulty > LB.WEIGHTS.bits
-    assert floor.bits == pytest.approx(faulty + jitter)
-    assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == jitter
+    caps = n * 189_000 * 2 * 128 * clog2(KO1.KO + 2)
+    anchors = n * 189_000 * LB.link(KO1, 0, T=32).entries * (33 + KO1.KO * KO1.IDB)
+    assert LB.fmax(one / n) == 15 and LB.SERVED.bits < faulty < LB.WEIGHTS.bits
+    assert floor.bits == pytest.approx(faulty + jitter + caps + anchors)
+    assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == jitter + caps + anchors
 
 
 def test_a_window_class_and_refusals():

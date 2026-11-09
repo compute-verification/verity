@@ -108,7 +108,7 @@ def test_n2_zk_publishes_the_runs_public_files_and_none_of_their_request_values(
     runs, out = tmp_path / "runs", tmp_path / "OUT"
     put(runs, REHEARSAL)
     (out / "runs").mkdir(parents=True)
-    got = run(block("n2_zk.sh", '(cd "$RUNS" && find', "  -print0"), RUNS=runs, OUT=out)
+    got = run(block("n2_zk.sh", '  (cd "$RUNS" && find', "    -print0"), RUNS=runs, OUT=out)
     assert got.returncode == 0, got.stderr
     assert published(out) == sorted(f"runs/{f}" for f in (
         "calibration.json", "honest/deployment.json", "honest/certified.jsonl", "honest/check.json"))

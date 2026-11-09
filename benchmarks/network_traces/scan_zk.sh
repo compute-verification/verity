@@ -22,6 +22,8 @@
 #      max_child_rss_gb is the largest of every session's so far)
 #      SC_PORT (`prove --port`, the sessions' first loopback port: by default 7811 + 16 × the lowest core the slot
 #      pins the job to, so that runs in two slots of one machine never share a session's port)
+#      SC_TIE=1 (the egress tie instead, `scan_tie.py prove`: execution phase 0 through `scan_service.EgressTie`,
+#      its honest and tampered rounds; SC_CLASS, SC_WARDEN_RUN, SC_DRY and SC_PORT as above, the others unread)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
 # nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's). A
 # rehearsal's public files go in $OUT/warden; its records and salts (the prover's) and its request values (traffic.json's
@@ -85,6 +87,18 @@ if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-pa
   esac
 fi
 SC_PORT=${SC_PORT:-$("$PY" -c 'import os; print(7811 + 16 * min(os.sched_getaffinity(0)))')}
+if [ -n "${SC_TIE:-}" ]; then
+  log "sctie: the egress tie of record${SC_CLASS:+ at $SC_CLASS}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, active-warden run $SC_WARDEN_RUN}, sessions from port $SC_PORT"
+  "$PY" benchmarks/network_traces/scan_tie.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sctie" --port "$SC_PORT" \
+    ${SC_DRY:+--dry} ${SC_CLASS:+--class "$SC_CLASS"} ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} 2>&1 \
+    | tee -a "$OUT/sctie.log" | cut -c1-4000
+  rc=${PIPESTATUS[0]}
+  mkdir -p "$OUT/sctie"
+  (cd "$W/sctie" && find . -type f ! -name '*circuit.txt' ! -name 'inst-*' ! -path '*/archive/*' \
+    ! -name '*signer-state.json*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/sctie/")
+  log "sctie: done, rc $rc"
+  exit "$rc"
+fi
 log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}, sessions from port $SC_PORT"
 "$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
   ${SC_CLASS:+--class "$SC_CLASS"} ${SC_GROUP:+--group "$SC_GROUP"} \

@@ -16,6 +16,7 @@ outside every zone, and `two_sites` joins two leaf-spines by a WAN between their
   declaration's `Cadence`; `datacenter.check_records` audits them.
 - `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each zone's uplink, both
   audits, and the account's charge for each zone.
+- `onsite.py`: the onsite demo's network certifier path at each zone's boundary, and its record, simulated (below).
 - `workload/`: what runs on the zones, with its own suite (its modules are listed in `workload/__init__.py`).
   `python -m workload.lab_run run --out DIR`, from this directory in a Python with torch, serves verity_vllm's serving
   Program on the lab, each zone in its namespace behind its certifier's proxy and the client on the outside host, then
@@ -23,7 +24,7 @@ outside every zone, and `two_sites` joins two leaf-spines by a WAN between their
 - `run.py`: the whole night on the lab host, `verity bench network_sim --out DIR` (below), checked against its expected
   verdicts.
 - `tests/`: the exports' tests, the declared tensor-core rates pinned to the census, the records adapter's tests on an
-  injected clock, and `run.py`'s summary and expected verdicts
+  injected clock, `run.py`'s summary and expected verdicts, and `onsite.py`'s record
   (`uv run tools/verity/check/suites.py verity-network-sim`). The mock datacenter is a script, not a test: it runs in
   real time.
 
@@ -173,6 +174,43 @@ execution phase declares the calibration's envelope, δ = 12 buckets of 100 ms. 
 Every zone's link is served (the certifier's `PROTOCOL.md`, "A served link"): responses padded with empty events to F,
 requests to F_in frames, and a proxy that admits a request only while its execution phase still ends idle. The proxy
 signs nothing: a stand-in LMS key (`lab_run.n2_verdicts`) signs N2's heads after the run.
+
+## The onsite path
+
+`onsite.py` runs the onsite demo's network certifier path (`benchmarks/network_traces/certifier_piece.py`, the
+active-warden path) at every zone's boundary, the same code unforked, and records each zone's verdict and charge, labelled simulated
+and never served (`onsite.SIMULATED` lists what the lab leaves unmet). In each zone, the stand-in endpoint
+(`demo_stub.py serve`) runs in the zone's namespace on its uplink's address; a relay in the certifier's namespace
+(`certifier_piece.relay`, the `tunnel` role) stands in for the gate's ssh tunnel to the node's port; and the front
+(`certifier_piece.py front --gate local`) runs in the certifier's namespace, so its network certifier and the gate's
+client are on the zone's boundary and every answer crosses the zone's uplink. The serve dirs, which hold the gate's
+fetch and its witness, stay under `--keep`, private and outside `--out`. The piece (`certifier_piece.py piece`:
+`network-rows` on the network certifier's records, the chain, then `network-period`) runs on each zone's serve dir at
+the endpoint's one Commit period, with the chain's scan at the class the front's gate ran (w63k4 by default), under
+the lab's own record of the run's deployment, its local gate's copy (`--certifier-key`: the lab is its own auditor,
+`onsite.auditor_record`). With no
+compute audit of the window (V3c), the period check refuses the honest case at the wiring. `record` writes `record.json` and `record.md`: each zone's verdicts (the gate's check,
+the chain's, the period check's) and its K in `PeriodLeakAccepted`'s terms (k_sched, k_fail, and ℓ_a,j, k_skip,j and
+T_j·log2 d_jit over m execution phases, ℓ_a,j being the period check's `scans[j].free`), per week, month and year,
+for each zone, the lab's zones summed, the census's datacenter and the world, each marked with what it rests on
+(`onsite.BASIS`). Beside each bound is δ_net term by term: the period check's eps, its δ part, and ε_ks, ε_bind and
+ε_tap once a phase, which no check computes, so δ_net has no number. K is established only for a zone whose period
+check accepted, since `PeriodLeakAccepted` bounds only such a period; every other zone's figures are the bound
+its run's load would have had. Every K is conditional (`onsite.OPEN_CHECKS`): it charges ℓ_a,j as the tied audit's
+counted free inputs, which holds only once the period check computes `free` off the tied audit's registered descriptor
+and holds each phase's window circuit to the registered class circuit, both in Lean; until then a tied audit is charged
+its advice's cap ℓ_a + 1 bits.
+
+As two recorded runs on the lab host: the front with the lab up and idle (it needs sudo), then the piece from a clone in
+the network slots (its chain needs hidden_zk's builds), given the front's published outputs (`--front`, the front run's
+`out/`), which ends by writing the record. `record` alone rewrites it from a directory holding both runs' outputs.
+
+~~~sh
+M=benchmarks/network_sim; python3 -B $M/mockdc.py down && python3 -B $M/mockdc.py up \
+  && uv run --no-sync python -B $M/onsite.py front --out "$OUT" --keep KEEP
+uv run --no-sync python -B benchmarks/network_sim/onsite.py piece --out "$OUT" --keep KEEP --front FRONT_RUN/out
+uv run --no-sync python -B benchmarks/network_sim/onsite.py record --out DIR
+~~~
 
 ## The whole night
 

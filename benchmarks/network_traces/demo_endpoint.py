@@ -1,6 +1,6 @@
 """demo-endpoint: an OpenAI endpoint in front of a decoder that isn't vLLM (the H200 demo's serving loop), for
 the network certifier's rehearsal (`certifier_serve.py rehearse --upstream URL --traffic varied`), writing the records a
-`verity-vllm serve-openai` endpoint writes, so network-e2e's endpoint binding and I/O tie read it unchanged.
+`verity-vllm serve-openai` endpoint writes, so network-e2e's endpoint binding reads it unchanged.
 
     python demo_endpoint.py --out DIR [--engine hash|seeded:SHAPE|MODULE:FACTORY] [--seed 0] [--host 127.0.0.1]
         [--port 0] [--eos 0] [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--window-steps 16]
@@ -170,8 +170,9 @@ class Request:
     finish: dict | None = None
     windows: set = field(default_factory=set)
     queue: asyncio.Queue | None = None
-    release: list | None = None                 # the network certifier's release headers on it (N, run hex), when it has them
-    times: dict = field(default_factory=dict)   # the clock's readings at its arrive record, first token and finish
+    release: list | None = None                 # the network certifier's release headers on it (run hex, N), when it has them
+    times: dict = field(default_factory=dict)   # the clock's readings at its arrive record (serve-openai's received),
+                                                # first token and finish
 
     @property
     def known(self) -> int:
@@ -232,7 +233,7 @@ class Scheduler:
         rec = {"kind": "arrive", "request": q.rid, "before_step": self.scheduled, "prompt_len": len(q.prompt),
                "eos_token_id": min(self.eos) if self.eos else None, "sampling": q.sampling}
         self.emit(rec)
-        q.times["arrived"] = rec["t"]
+        q.times["received"] = rec["t"]
         return q
 
     def busy(self) -> bool:

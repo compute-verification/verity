@@ -18,7 +18,7 @@
 #      --eos-ids, 0)  DC_UPSTREAM (an endpoint already serving)  DC_REQUESTS (24)  DC_TOKENS (16)  DC_PROMPTS (1:16, the
 #      prompt lengths: the demo's context is 32)  DC_RATE (2)  DC_TRAFFIC_SEED (0)  DC_HEIGHT (the LMS keys' height, 20)
 #      DC_STRATEGIES (honest,late,extra,token: late and extra the rehearsal's check refuses, token's changed bytes the
-#      I/O tie)
+#      egress tie, scan_service.EgressTie, which needs the network certifier's cells)
 set -uo pipefail
 SRC=$(pwd)
 OUT=${RESEARCH_RUN_DIR:?}/out

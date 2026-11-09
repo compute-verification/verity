@@ -6,7 +6,8 @@
 # K of them, scan_zk.sh's); then scan_period.py's
 # cases (honest, late, the honest run's tampered and chain rounds, and its forged certificate) through the period's
 # mirror and network-period, both from the tree when it has them, else from SC_PERIOD_REF (the rows form's branch) in a
-# worktree. From a clone, in one of the network slots, as a job of at most 180 minutes:
+# worktree. Each case's record of its run's deployment is the job's own (scan_period.py's own): these rehearsals run
+# here, so the job is their auditor. From a clone, in one of the network slots, as a job of at most 180 minutes:
 #   env SC_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/scan_period.sh
 # env: SC_MEM_GB (scan_zk.sh's)  SC_LATE_MS (default 800)  SC_PERIOD_REF (default cursor/allp-cert-warden-form-061a)
@@ -47,9 +48,9 @@ done
 NP=$P/verity/core/protocols/network/lean/.lake/build/bin/network-period
 PYTHONPATH=$PYTHONPATH:$SRC/verity/core/difftest/python "$PY" benchmarks/network_traces/scan_period.py \
   --mirror "$P/verity/core/protocols/network/tests/period_case.py" --lean "$NP" --out "$OUT/period" \
-  "honest=$OUT/honest/warden,$OUT/honest/sczk" "late=$OUT/late/warden,$OUT/late/sczk" \
-  "tampered=$OUT/honest/warden,$OUT/honest/sczk,tampered" "chain=$OUT/honest/warden,$OUT/honest/sczk,chain" \
-  "forged=$OUT/honest/warden,$OUT/honest/sczk,forged" 2>&1 | tee -a "$OUT/period.log"
+  "honest=$OUT/honest/warden,$OUT/honest/sczk,own" "late=$OUT/late/warden,$OUT/late/sczk,own" \
+  "tampered=$OUT/honest/warden,$OUT/honest/sczk,own,tampered" "chain=$OUT/honest/warden,$OUT/honest/sczk,own,chain" \
+  "forged=$OUT/honest/warden,$OUT/honest/sczk,own,forged" 2>&1 | tee -a "$OUT/period.log"
 p=${PIPESTATUS[0]}
 log "period: scans ${rc[honest]} ${rc[late]}, period check $p"
 [ "${rc[honest]}" = 0 ] && [ "${rc[late]}" = 0 ] && exit "$p"

@@ -10,10 +10,7 @@ answered greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS
     python served_session.py plan [FLAGS]
     python served_session.py session --out DIR [FLAGS] [--gate USER@HOST | --gate local] [--key KEY] [--keep DIR]
         [--at UTC]
-    python served_session.py io --run RUN [--keep DIR]
-    python served_session.py endpoint --from SERVE_DIR --io FILE|- --out DIR [--eos-ids 128001] [--port 18782]
-        [--keep DIR]
-    python served_session.py chain --run RUN [--keep DIR] [--endpoint DIR|ART] [--eos-ids IDS] [--draw K]
+    python served_session.py chain --run RUN [--keep DIR] [--draw K]
         [--coins verifier | --coins gate --challenger-key RECORD [--coin-peer NAME] [--main FILE]] [CR_K=V ...]
 
 FLAGS: [--peer PEER] [--port 18782] [--prompts 64] [--requests 113] [--height 12] [--minutes M]
@@ -21,7 +18,8 @@ FLAGS: [--peer PEER] [--port 18782] [--prompts 64] [--requests 113] [--height 12
 
 ``--requests`` is by default `REQUESTS`, what h200-2's free disk seals by the endpoint's sizing; ``--tokens`` is each
 request's max_tokens, at most KO. ``--scan-class`` asks the gate for another class's schedule (`auditor.SCAN_CLASSES`:
-w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bound ``--prompt-ids`` and ``--tokens``.
+w63k4, the window circuit's class 8,32,4,4,16, at 5 egress cells), whose KI and KO then bound ``--prompt-ids`` and
+``--tokens``.
 
 * **plan** prints the request's words, the minutes it takes (``--minutes`` by default `auditor.warden_minutes` of its
   requests and height plus `MARGIN`), the prompts' size, the endpoint's flags and each run's command. The request and
@@ -30,16 +28,17 @@ w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bou
   400 requests at most.
 * **session** sends the request, waiting until ``--at`` (a UTC time) when given; launched more than `LATE_S` after it,
   it sends nothing (exit 3). The prompts are ``--prompts`` prompts of ``--prompt-ids`` ids below ``--vocab`` (Llama 3's
-  128,000 regular ids by default), sampled from a fresh secret seed this process alone holds: they are the prover's,
-  which the gate writes to its run's ``witness/`` alone, so they are written nowhere here.
+  128,000 regular ids by default), ``--prompt-ids LO:HI`` drawing each prompt's length in LO … HI (`prompts`),
+  sampled from a fresh secret seed this process alone holds: they are the prover's, which the gate writes to its run's
+  ``witness/`` alone, so they are written nowhere here.
   - ``--gate USER@HOST`` (the challenger's gate, `GATE`, under the lane's gate key ``--key``): the request with the
     prompts on its stdin, whose reply goes to KEEP/RUN/start.json alone (0600), ``status`` every `POLL_S` seconds
     until the run ends (``status.json``), then ``fetch``. The reply is the request's public fields and the run's
     systemd unit, ``vy-certifier@RUN.service``, which the warden's witness also records (stalls.json's cgroup paths)
     and no public file holds: published, the leak guard would hold it as a piece of the witness.
   - ``--gate local``, the dry rehearsal: this tree's gate on a scratch host under KEEP, its rehearsal run in this
-    process (`auditor.certifier_run`), where the tunnel is the stand-in endpoint itself (`demo_stub.py serve --out`,
-    the endpoint's records to KEEP/RUN/endpoint) listening on the port the run picks. The stand-in serves byte ids:
+    process (`auditor.certifier_run`), where the tunnel is the stand-in endpoint itself (`demo_stub.py serve`)
+    listening on the port the run picks. The stand-in serves byte ids:
     give ``--vocab`` at most 256.
 
   The lane's own fetch, with ``witness/``, goes to KEEP/RUN/fetch.tar.gz (KEEP and KEEP/RUN 0700, refused inside the
@@ -52,29 +51,12 @@ w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bou
   the rest (exit 4 when either found one). A guard that fails or runs past its budget releases nothing (exit 5), nor
   does SIGTERM (exit 143): the files stay in the hold, out of the record. Exit 0 when the gate's check accepted the run,
   its rc (or 1) when it didn't, 2 when the gate refused the request.
-* **io** writes the kept warden run's certified I/O (`warden_chain.io`: each request's prompt and streamed ids as the
-  network certifier's cells carry them) and its deployment.json to KEEP/RUN/certified-io.json (0600), on `AUDITOR`, and
-  prints only its path and counts.
-* **endpoint** is the chain's endpoint step on the served node, where the endpoint's records stay: serve-openai's serve
-  dir (``--from``, its ``--out``) holds requests.jsonl and advice_trace.jsonl, whose arrive, step and finish records
-  carry each request's prompt length, sampling (its seed), rows and emitted ids. It copies the trace, windows.jsonl,
-  serve.json and `USERS` to ``--keep`` (0700, by default SERVE_DIR.endpoint beside the serve dir) with requests.jsonl
-  rebuilt there from `USERS` and the certified I/O (``--io``: ``io``'s file, or ``-`` for stdin; a file under the run
-  dir, ``--out``'s directory as research run's ``$OUT`` is, is moved to ``--keep`` first, since custody publishes the
-  run dir), runs `chain_record.served_endpoint` on that
-  copy (`verity-vllm advice`, then the advice bound to the certified I/O and rebuilt from it), and writes to ``--out``
-  its report.json and `RECORDS`. It writes nothing unless serve.json shows the endpoint served with `ENDPOINT`'s flags
-  and no published file holds a request's prompt ids, a trace's arrive, step or finish record, or a request-valued
-  field (`valued`).
 * **chain** runs chain_record.sh's network certifier path on the kept fetch (CR_PATH=warden,
-  CR_GATES=KEEP/RUN/fetch.tar.gz), with
-  the endpoint's report (``--endpoint``, ``endpoint``'s art), or a dry rehearsal's endpoint records (KEEP/RUN/endpoint
-  by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period drawn
-  on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
-  at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every proof block, or ``--draw K`` of them, on the
-  verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
-  refused unless the tree has the record's leak guard (``leak_guard.py``), which chain_record.sh runs on its
-  way out, whatever the exit.
+  CR_GATES=KEEP/RUN/fetch.tar.gz), which opens no endpoint records or advice, N2's period drawn on the verifier's
+  coins (CR_N2_DRAW 8) at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every proof block, or
+  ``--draw K`` of them, on the verifier's own coins (``--coins verifier``, the default and the fallback) or on the
+  gate's (``--coins gate``). It is refused unless the tree has the record's leak guard (``leak_guard.py``), which
+  chain_record.sh runs on its way out, whatever the exit.
 
 **The coin link.** A sample on the gate's coins (``--coins gate``: ``scan_zk.py prove --draw K --challenger gate:GATE
 --main FILE --peer P --challenger-key RECORD --gate-key KEY``, in CR_SCAN_ARGS) runs on the auditor's side: P
@@ -92,35 +74,22 @@ CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--pee
 **The endpoint.** It is started by hand on `PEER` (`HAND_START`) ahead of the session's ``--at``, and it
 listens within about 35 s. Its records stay in its serve dir on h200-2: requests.jsonl (prompt and streamed ids) and
 advice_trace.jsonl (prompt lengths, sampling, rows, emitted ids) are request values, and this runbook neither fetches
-nor publishes them. The endpoint step's advice (`verity-vllm advice`) needs both, so ``endpoint`` runs it there, on a
-copy whose requests.jsonl is rebuilt from `USERS` (each engine request's id and its network certifier user,
-``{"engine_id", "user"}`` a line, in requests.jsonl's order) and the certified I/O, each request's prompt and streamed
-ids as the network certifier's cells carry them and its finish (`finish`): the endpoint's trace is checked against the
-certified I/O, not the prover's record of it. The certified I/O is ``io``'s file, written in KEEP on `AUDITOR`: it
-reaches the served node over a private route (``endpoint --io -`` on an ssh stdin, or a ``--send`` the step moves out of
-the run dir), never through a run's custody, and the served node already holds its values. The check then runs on the
-prover's node, and the chain's report says so (`chain_record.WARDEN_SERVED_STUBBED`). Its art (``--endpoint ART``,
-``endpoint``'s ``$OUT``) is report.json, windows.jsonl and serve.json.
+nor publishes them: the chain opens no endpoint records or advice (the window's compute audit is V3c's class
+window, whose circuit is the class's and reads no advice).
 
 The runs (the lane's gate key is on `AUDITOR`, a CPU node; KEEP is the lane's gate directory there):
 
     research run --on AUDITOR --source . --project verity --as network-accounting --cwd source --timeout 90m \\
       -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at UTC'
-    research run --on AUDITOR --source . --project verity --as network-accounting --cwd source --timeout 30m \\
-      -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --no-sync python \\
-      benchmarks/network_traces/served_session.py io --run RUN'
-    research run --on PEER --source . --project verity --as network-accounting --cwd source --timeout 30m \\
-      --send certified-io.json -- bash -lc 'python3 benchmarks/network_traces/served_session.py endpoint \\
-      --from SERVE_DIR --io "$RESEARCH_RUN_DIR/inputs/certified-io.json" --out "$OUT"'
     research run --on AUDITOR --source . --project verity --as network-accounting --cwd clone --timeout 270m \\
-      --store-read --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
+      --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
       tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
-      'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
+      'python3 benchmarks/network_traces/served_session.py chain --run RUN \\
       --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
-(``--store-read`` gives the job the read-only store key its fetch of the endpoint's art needs; ``--run-max`` leaves room
-over a dry chain of 16 requests on the gate's coins, which held its slot about 9,500 s, an hour of it the challenger's
-session; ``--coins verifier``, without ``--send`` and ``--challenger-key``, is the fallback);
+(``--run-max`` leaves room over a dry chain of 16 requests on the gate's coins, which held its slot about 9,500 s, an
+hour of it the challenger's session; ``--coins verifier``, without ``--send`` and ``--challenger-key``, is the
+fallback);
 
 and the dry rehearsal, on `AUDITOR`, whose KEEP its dry chain reads:
 
@@ -138,7 +107,6 @@ import json
 import os
 import secrets
 import shlex
-import shutil
 import signal
 import subprocess
 import sys
@@ -172,6 +140,8 @@ KEEP = Path(SITE["keep"])
 VOCAB = 128_000
 #: the minutes past `auditor.warden_minutes` a session asks for
 MARGIN = 3
+#: the dry rehearsal's gate (`local`): this tree's gate on a scratch host in this directory of the session's keep
+LOCAL_GATE = "local-gate"
 LATE_S, POLL_S = 60, 15
 SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ServerAliveInterval=15")
 #: the flags the endpoint serves the session with: the network certifier's id form, in its release order, each window
@@ -184,16 +154,6 @@ CONTEXT = 512
 #: engine_id and its network certifier user (null for a body that sent none), a line in requests.jsonl's order:
 #: requests.jsonl less its values
 USERS = "request_users.jsonl"
-#: the endpoint's records its art publishes beside the endpoint step's report.json, from the serve dir
-RECORDS = ("windows.jsonl", "serve.json")
-#: what the endpoint step reads in the serve dir, which stays there
-SERVED = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json", USERS)
-#: the certified I/O file `io` writes in KEEP/RUN and the endpoint step reads
-CERTIFIED = "certified-io.json"
-#: a record that holds a request's values: a scheduler trace's record of these kinds (`verity_vllm.engine.step_trace`)
-TRACED = ("arrive", "step", "finish")
-#: or a record with one of these fields: the trace's, requests.jsonl's and the certified I/O's request values
-VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
 HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
@@ -202,8 +162,7 @@ HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's
               "and sends its own smoke and load requests into the records. VERITY_STAGING_BOUNDED stays unset: bounded "
               "staging, on by default under windowed staging, is what --retain-exclude needs, and the collector refuses "
               "VERITY_STAGING_BOUNDED=0 beside it. Its --copy-records-to copies requests.jsonl and advice_trace.jsonl "
-              "too, so it is left off or points at a private dir on h200-2: the serve dir's records stay there, and "
-              "the endpoint's art is `endpoint`'s $OUT, its report.json, windows.jsonl and serve.json")
+              "too, so it is left off or points at a private dir on h200-2: the serve dir's records stay there")
 
 
 class Refused(Exception):
@@ -216,11 +175,40 @@ class Late(Refused):
     code = 3
 
 
-def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
-    """`n` prompts of `ids` token ids below `vocab`: prompt j's id i is SHA-512(seed ‖ u32be j ‖ u32be i)'s first 8
-    bytes, mod `vocab`."""
-    return [[int.from_bytes(hashlib.sha512(seed + j.to_bytes(4, "big") + i.to_bytes(4, "big")).digest()[:8], "big")
-             % vocab for i in range(ids)] for j in range(n)]
+def span(text: str) -> int | tuple[int, int]:
+    """``--prompt-ids``: N, every prompt N ids, or LO:HI, each prompt's length drawn in LO … HI (`prompts`); N:N is
+    N."""
+    lo, colon, hi = text.partition(":")
+    try:
+        got = (int(lo), int(hi)) if colon else int(lo)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"N or LO:HI prompt ids, not {text!r}") from None
+    if colon and not 1 <= got[0] <= got[1]:
+        raise argparse.ArgumentTypeError(f"LO:HI with 1 <= LO <= HI, not {text!r}")
+    return got[0] if colon and got[0] == got[1] else got
+
+
+def bounds(ids: int | tuple[int, int]) -> tuple[int, int]:
+    """A prompt's least and most ids under ``--prompt-ids``."""
+    return ids if isinstance(ids, tuple) else (ids, ids)
+
+
+def label(ids: int | tuple[int, int]) -> str:
+    """``--prompt-ids``' words for `ids`."""
+    return f"{ids[0]}:{ids[1]}" if isinstance(ids, tuple) else str(ids)
+
+
+def _draw(seed: bytes, *at: int) -> int:
+    return int.from_bytes(hashlib.sha512(seed + b"".join(x.to_bytes(4, "big") for x in at)).digest()[:8], "big")
+
+
+def prompts(n: int, ids: int | tuple[int, int], vocab: int, seed: bytes) -> list[list[int]]:
+    """`n` prompts of token ids below `vocab`, of `ids` ids or, for ``(LO, HI)``, prompt j's length LO +
+    (SHA-512(seed ‖ "len" ‖ u32be j)'s first 8 bytes mod HI − LO + 1): prompt j's id i is SHA-512(seed ‖ u32be j ‖
+    u32be i)'s first 8 bytes, mod `vocab`."""
+    lo, hi = bounds(ids)
+    lens = [lo + _draw(seed + b"len", j) % (hi - lo + 1) if hi > lo else lo for j in range(n)]
+    return [[_draw(seed, j, i) % vocab for i in range(lens[j])] for j in range(n)]
 
 
 def words(a: argparse.Namespace) -> list[str]:
@@ -241,8 +229,9 @@ def scratch_host(d: Path, peer: str) -> A.Host:
 def check(a: argparse.Namespace, data: bytes) -> dict:
     """The request as this tree's gate records it, or Refused with the gate's reason or the scan class's."""
     (_, ki), (_, ko) = A.scan_bounds(getattr(a, "scan_class", None))
-    if not 1 <= a.prompt_ids <= ki:
-        raise Refused(f"--prompt-ids {a.prompt_ids}: the scan's class takes 1 to KI = {ki} prompt ids a request")
+    lo, hi = bounds(a.prompt_ids)
+    if not 1 <= lo <= hi <= ki:
+        raise Refused(f"--prompt-ids {label(a.prompt_ids)}: the scan's class takes 1 to KI = {ki} prompt ids a request")
     if not 1 <= a.tokens <= ko:
         raise Refused(f"--tokens {a.tokens}: the scan's class answers 1 to KO = {ko} ids a request")
     if not 2 <= a.vocab <= 1 << A.WARDEN_PROMPT_ID_BITS:
@@ -260,9 +249,9 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
     req = check(a, data)
     session = (f"python3 benchmarks/network_traces/served_session.py session --out \"$OUT\" --peer {a.peer} "
                f"--port {a.port} --prompts {a.prompts} --requests {a.requests} --height {a.height} "
-               f"--minutes {a.minutes} --prompt-ids {a.prompt_ids} --tokens {a.tokens} --vocab {a.vocab}"
+               f"--minutes {a.minutes} --prompt-ids {label(a.prompt_ids)} --tokens {a.tokens} --vocab {a.vocab}"
                + (f" --at {a.at}" if a.at else "") + (f" --scan-class {a.scan_class}" if a.scan_class else ""))
-    ctx = a.prompt_ids + a.tokens
+    ctx = bounds(a.prompt_ids)[1] + a.tokens
     return {"request": shlex.join(words(a)), "minutes": a.minutes,
             "least_minutes": A.warden_minutes(a.requests, a.height),
             "prompts": req["prompts"], "prompts_bytes": len(data),
@@ -271,19 +260,12 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
             "runs": {
                 "session": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
                            f"--cwd source --timeout {a.minutes + 60}m -- bash -lc '{session}'",
-                "io": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
-                      "--cwd source --timeout 30m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run "
-                      "--no-sync python benchmarks/network_traces/served_session.py io --run RUN'",
-                "endpoint": f"research run --on {a.peer} --source . --project verity --as network-accounting "
-                            f"--cwd source --timeout 30m --send {CERTIFIED} -- bash -lc 'python3 "
-                            "benchmarks/network_traces/served_session.py endpoint --from SERVE_DIR --io "
-                            f"\"$RESEARCH_RUN_DIR/inputs/{CERTIFIED}\" --out \"$OUT\" --port {a.port}'",
                 "chain": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
-                         "--cwd clone --timeout 270m --store-read --send challenger-key.json -- "
+                         "--cwd clone --timeout 270m --send challenger-key.json -- "
                          "env CHECK_SLOTS=/workspace/research/locks/network/slots "
                          "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
                          "-- nice -n 19 bash -c 'python3 benchmarks/network_traces/served_session.py chain --run RUN "
-                         "--endpoint ART --draw 8 --coins gate "
+                         "--draw 8 --coins gate "
                          "--challenger-key \"$RESEARCH_RUN_DIR/inputs/challenger-key.json\"'"}}
 
 
@@ -384,7 +366,7 @@ def pinned() -> str:
 def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
     """The dry rehearsal: this tree's gate on a scratch host under `keep`, the stand-in as its tunnel, or ``a.tunnel``
     (``(ssh, port) -> argv``, a process listening on ``port``) when given."""
-    host = scratch_host(keep / "local-gate", a.peer)
+    host = scratch_host(keep / LOCAL_GATE, a.peer)
     rc, start = A.gate(["--ssh", shlex.join(words(a)), "--key", LANE], host, now=datetime.now(UTC),
                        token=secrets.token_hex(2), own=lambda p: None, certifier_active=lambda r: False,
                        start_certifier=lambda r: None, read=lambda n: data[:n])
@@ -392,10 +374,8 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
         raise Refused(f"the gate didn't start the session (exit {rc}): {start[:400]!r}")
     run = json.loads(start)["run"]
     print(f"gate run {run} (local)", flush=True)
-    endpoint = keep / run / "endpoint"
-    endpoint.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", str(a.prompt_ids), "--tokens",
-            str(a.tokens), "--vocab", str(a.vocab), "--out", str(endpoint)]
+    stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", label(a.prompt_ids), "--tokens",
+            str(a.tokens), "--vocab", str(a.vocab)]
     A.certifier_run(host, run, pinned=pinned(), now=lambda: datetime.now(UTC),
                     tunnel_argv=getattr(a, "tunnel", None) or (lambda ssh, port: [*stub, "--port", str(port)]))
     return A.certifier_fetch(run, host, witness=True)
@@ -533,157 +513,6 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
             "--challenger-key", str(key), "--gate-key", str(a.key)]
 
 
-def certified_io(fetch: Path) -> tuple[dict, dict]:
-    """The kept network certifier run's deployment.json and certified I/O (`warden_chain.io`), read in a scratch
-    directory beside the fetch."""
-    sys.path[:0] = [str(TREE), str(HERE)]
-    import warden_chain as WC
-    with tempfile.TemporaryDirectory(dir=fetch.parent) as d:
-        with tarfile.open(fetch, "r:gz") as tar:
-            tar.extractall(d, filter="data")
-        try:
-            run = next(p for p in Path(d).iterdir() if p.is_dir())
-            return WC.deployment(run)[0], WC.io(run)
-        except SystemExit as e:
-            raise Refused(f"{fetch}: {e}") from None
-
-
-def certified(a: argparse.Namespace) -> int:
-    fetch = a.keep / a.run / "fetch.tar.gz"
-    if not fetch.is_file():
-        raise Refused(f"no kept fetch {fetch}: the session's run writes it")
-    dep, io = certified_io(fetch)
-    if not io["accepted"]:
-        raise Refused(f"the kept warden run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
-    dest = a.keep / a.run / CERTIFIED
-    fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        json.dump({"deployment": dep, "io": io}, f)
-    dest.chmod(0o600)
-    print(json.dumps({"io": str(dest), "warden_run": dep["run_id"], "requests": io["requests"],
-                      "tokens": io["tokens"]}), flush=True)
-    return 0
-
-
-def finish(out: list[int], max_tokens: int, eos: set[int]) -> dict:
-    """serve-openai's finish of an answer `out`: the model's EOS when it ends at one or short of its max_tokens, else
-    its length."""
-    stop = (bool(out) and out[-1] in eos) or len(out) < max_tokens
-    return {"reason": "stop" if stop else "length", "stop_reason": None}
-
-
-def rebuild(src: Path, dest: Path, records: list[dict], eos: list[int]) -> Path:
-    """The endpoint's records as its step reads them: `dest` (0700, made afresh) with `src`'s `SERVED` records but
-    requests.jsonl, rebuilt from `USERS` and the certified I/O's ``records``."""
-    if dest.exists():
-        shutil.rmtree(dest)
-    dest.mkdir(mode=0o700, parents=True)
-    for f in SERVED:
-        if f != "requests.jsonl":
-            shutil.copyfile(src / f, dest / f)
-    by, lines = {r["user"]: r for r in records}, []
-    for m in map(json.loads, filter(str.strip, (src / USERS).read_text().splitlines())):
-        if (r := by.pop(m["user"], None)) is None:
-            raise Refused(f"{USERS}: engine request {m['engine_id']}'s user {m['user']!r} is no certified request left "
-                          "(none sent, not the warden's, or an earlier line's)")
-        lines.append(json.dumps({"engine_id": m["engine_id"], "user": m["user"], "prompt_ids": r["prompt"],
-                                 "streamed_ids": r["output"], "finish": finish(r["output"], r["max_tokens"], set(eos))}))
-    fd = os.open(dest / "requests.jsonl", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write("".join(line + "\n" for line in lines))
-    return dest
-
-
-def served_as(serve: dict, port: int) -> list[str]:
-    """Each of `ENDPOINT`'s flags that serve.json shows the endpoint didn't serve with, beside what it recorded."""
-    words, off = shlex.split(ENDPOINT.format(port=port))[2:], []
-    host, at = (serve.get("address") or [None, None])[:2]
-    for i, w in enumerate(words):
-        if not w.startswith("--"):
-            continue
-        v = words[i + 1] if i + 1 < len(words) and not words[i + 1].startswith("--") else None
-        flag = w[2:]
-        have = {"host": host, "port": at, "seal": serve.get("sealed")}.get(flag, serve.get(flag.replace("-", "_")))
-        if (have is None) if v is None else str(have) != v:
-            off.append(f"{w}{' ' + v if v else ''} (serve.json: {have!r})")
-    return off
-
-
-def valued(data: bytes, marks: list[bytes]) -> str | None:
-    """Why `data`, a JSON document or JSON lines, isn't published: it holds one of ``marks`` (a request's prompt ids,
-    or a request-valued field's name at any depth), or a record (the document, or one of its lines) that is a trace's
-    `TRACED` record or has a `VALUED` field; None when it holds none."""
-    if any(m in data for m in marks):
-        return "a request's prompt ids or a request-valued field"
-    try:
-        docs = [json.loads(data)]
-    except ValueError:
-        try:
-            docs = [json.loads(x) for x in data.splitlines() if x.strip()]
-        except ValueError:
-            return "a line that isn't JSON, so it isn't read for request values"
-    for d in docs:
-        if isinstance(d, dict) and d.get("kind") in TRACED:
-            return f"a scheduler trace's {d['kind']} record"
-        if isinstance(d, dict) and (fields := sorted(set(d) & set(VALUED))):
-            return f"a record with {', '.join(fields)}"
-    return None
-
-
-def endpoint(a: argparse.Namespace) -> int:
-    src, out = a.src.resolve(), a.out.resolve()
-    keep = (a.keep or src.with_name(src.name + ".endpoint")).resolve()
-    run = out.parent
-    given = None if a.io == "-" else Path(a.io).resolve()
-
-    def within(p: Path, d: Path | None) -> bool:
-        return d is not None and (p == d or d in p.parents)
-
-    for d, what in ((out, "--out"), (run, "--out's directory, the run dir"), (TREE, "the tree")):
-        if within(keep, d):
-            if given is not None and within(given, run):
-                given.unlink()
-            raise Refused(f"--keep {keep} is inside {what}, which is published or shared: give a private directory on "
-                          "the served node")
-    keep.mkdir(mode=0o700, parents=True, exist_ok=True)
-    keep.chmod(0o700)
-    if given is not None and within(given, run):
-        given = Path(shutil.move(given, keep / CERTIFIED))
-        given.chmod(0o600)
-    if within(out, TREE):
-        raise Refused(f"--out {out} is in the tree: give the run's $OUT, expanded on the node (inside bash -lc '...')")
-    if missing := [f for f in SERVED if not (src / f).is_file()]:
-        raise Refused(f"--from {src}: no {', '.join(missing)}: give the endpoint's serve dir, its --out")
-    if off := served_as(json.loads((src / "serve.json").read_text()), a.port):
-        raise Refused(f"the endpoint didn't serve with the session's flags: {'; '.join(off)}. Start it again with the "
-                      "plan's endpoint and hand_start")
-    doc = json.load(sys.stdin) if given is None else json.loads(given.read_text())
-    dep, io = doc["deployment"], doc["io"]
-    if not io.get("accepted"):
-        raise Refused(f"--io: the warden run's I/O doesn't read whole off its cells: {io.get('violations', [])[:3]}")
-    eos = [int(t) for t in a.eos_ids.split(",")]
-    ep = rebuild(src, keep / "records", io["records"], eos)
-    sys.path[:0] = [str(TREE), str(TREE / "integrations" / "vllm"), str(HERE)]
-    os.environ["PYTHONPATH"] = os.pathsep.join(filter(None, sys.path))
-    import chain_record as CR
-    rep = CR.served_endpoint(dep, io, ep, eos) | {"at": CR.SERVED_NODE}
-    step = CR.warden_endpoint_step(rep)
-    rep["verdict"] = step["verdict"]
-    publish = {"report.json": (json.dumps(rep, indent=1, sort_keys=True, default=str) + "\n").encode(),
-               **{f: (src / f).read_bytes() for f in RECORDS}}
-    ps = [json.loads(x).get("prompt_ids") or [] for x in (src / "requests.jsonl").read_text().splitlines() if x.strip()]
-    marks = [*needles(ps + [r["prompt"] for r in io["records"]]),
-             *(f'"{k}"'.encode() for k in ("prompt_len", "sampling", "emitted", "prompt_ids", "streamed_ids"))]
-    if held := [f"{f}: {why}" for f, d in publish.items() if (why := valued(d, marks))]:
-        raise Refused(f"{'; '.join(held)}, which the endpoint's art never publishes: nothing written")
-    out.mkdir(parents=True, exist_ok=True)
-    for f, d in publish.items():
-        (out / f).write_bytes(d)
-    print(json.dumps({"verdict": rep["verdict"], "why": step["why"], "warden_run": rep["warden_run"],
-                      "advice": step["advice"], "published": sorted(publish), "kept": str(keep)}), flush=True)
-    return 0 if rep["verdict"] == "accepted" else 1
-
-
 def chain(a: argparse.Namespace) -> int:
     if not (HERE / "leak_guard.py").is_file():
         raise Refused("this tree has no record leak guard (leak_guard.py), which chain_record.sh runs on its "
@@ -691,12 +520,8 @@ def chain(a: argparse.Namespace) -> int:
     fetch = a.keep / a.run / "fetch.tar.gz"
     if not fetch.is_file():
         raise Refused(f"no kept fetch {fetch}: the session's run writes it")
-    endpoint = a.endpoint or (str(a.keep / a.run / "endpoint") if (a.keep / a.run / "endpoint").is_dir() else None)
-    if endpoint and Path(endpoint).is_dir() and any(Path(endpoint).rglob("advice_trace.jsonl")) and not a.eos_ids:
-        raise Refused("--endpoint's records need --eos-ids, the model's EOS ids (the stand-in's is its --vocab)")
     env = dict(os.environ)
-    env.update({"CR_PATH": "warden", "CR_GATES": str(fetch), "CR_MEM_GB": "96", "CR_N2_DRAW": "8",
-                "CR_TIE_WINDOWS": "8"})
+    env.update({"CR_PATH": "warden", "CR_GATES": str(fetch), "CR_MEM_GB": "96", "CR_N2_DRAW": "8"})
     for kv in a.set:
         k, eq, v = kv.partition("=")
         if not (eq and k.startswith("CR_")):
@@ -710,8 +535,6 @@ def chain(a: argparse.Namespace) -> int:
         raise Refused(f"{coins}: chain_record.sh splits CR_SCAN_ARGS on whitespace, so give paths without it")
     if scan := " ".join(coins):
         env["CR_SCAN_ARGS"] = f"{scan} {env.get('CR_SCAN_ARGS', '')}".strip()
-    if endpoint:
-        env.update({"CR_ENDPOINT": endpoint, **({"CR_EOS_IDS": a.eos_ids} if a.eos_ids else {})})
     return subprocess.run(["bash", str(HERE / "chain_record.sh")], cwd=TREE, env=env).returncode
 
 
@@ -726,7 +549,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--requests", type=int, default=REQUESTS)
         q.add_argument("--height", type=int, default=12)
         q.add_argument("--minutes", type=int)
-        q.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
+        q.add_argument("--prompt-ids", type=span, default=PROMPT_IDS, help="N, or LO:HI each prompt's length drawn in")
         q.add_argument("--tokens", type=int, default=KO)
         q.add_argument("--vocab", type=int, default=VOCAB)
         q.add_argument("--scan-class", choices=sorted(A.SCAN_CLASSES),
@@ -737,23 +560,9 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--gate", default=GATE, help="USER@HOST, the gate's; or local, the dry rehearsal")
     q.add_argument("--key", type=Path, default=KEY)
     q.add_argument("--keep", type=Path, default=KEEP)
-    q = sub.add_parser("io")
-    q.add_argument("--run", required=True)
-    q.add_argument("--keep", type=Path, default=KEEP)
-    q = sub.add_parser("endpoint")
-    q.add_argument("--from", dest="src", type=Path, required=True, help="the endpoint's serve dir, serve-openai's --out")
-    q.add_argument("--io", required=True, help=f"io's {CERTIFIED}, or - for stdin")
-    q.add_argument("--out", type=Path, required=True,
-                   help="the run's $OUT: its directory, the run dir, is published, so --keep and an --io in it are refused "
-                        "and moved out")
-    q.add_argument("--eos-ids", default="128001")
-    q.add_argument("--port", type=int, default=PORT)
-    q.add_argument("--keep", type=Path, help="private, 0700: by default SERVE_DIR.endpoint beside the serve dir")
     q = sub.add_parser("chain")
     q.add_argument("--run", required=True)
     q.add_argument("--keep", type=Path, default=KEEP)
-    q.add_argument("--endpoint", help="endpoint's art (its report.json), or a dry rehearsal's endpoint records")
-    q.add_argument("--eos-ids")
     q.add_argument("--draw", type=int, help="the scan's K sampled proof blocks (every proof block by default)")
     q.add_argument("--coins", choices=("verifier", "gate"), default="verifier")
     q.add_argument("--coin-peer", default=AUDITOR, help="with --coins gate: this node, as the gate's peers file names it")
@@ -770,14 +579,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if a.cmd == "chain":
             return chain(a)
-        if a.cmd == "io":
-            return certified(a)
-        if a.cmd == "endpoint":
-            return endpoint(a)
         if a.minutes is None:
             a.minutes = A.warden_minutes(a.requests, a.height) + MARGIN
         if a.cmd == "session" and a.gate == "local" and a.vocab > 256:
             raise Refused(f"--gate local: the stand-in serves byte ids, --vocab at most 256, not {a.vocab}")
+        if a.cmd == "session" and a.gate == "local" and isinstance(a.prompt_ids, tuple):
+            raise Refused(f"--gate local: the stand-in serves prompts of one length, not --prompt-ids "
+                          f"{label(a.prompt_ids)}")
         ps = prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32))
         data = json.dumps(ps, separators=(",", ":")).encode()
         doc = plan(a, data)

@@ -2,13 +2,18 @@
 here the synthetic run published as `warden_serve.Publisher` publishes a served one, in the gate's layout (its witness
 under ``witness/``, its public files under ``out/``, ``certificates.jsonl`` as `auditor.warden_outcome` writes it): the
 certificates step reruns the network certifier's own check and holds the public certificates to the certified lines,
-refusing a changed one and a changed cell; the certified I/O read off the cells is the requests and responses served;
-N2's link is the network certifier's (both heads at its digest, no sync, charge 0) and its references expect honest
-accepted and tampered refused on its signed digest alone. A certifier rehearsal's run (its records through active.Proxy)
-is refused by name (`warden_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in an active
-network certifier's run. The report on the network certifier path requires the certificates, the endpoint, the tie, N2
-and the scan, names its stubs, and refuses a step whose input is a certifier rehearsal's or another network certifier
-run's."""
+refusing a changed one and a changed cell; the run's deployment is the auditor's record's (`warden_chain.deployment_of`),
+and a copy of it re-signed, rewritten or in other bytes is refused; the certified I/O read off the cells is the requests
+and responses served; N2's link is the network certifier's (both heads at its digest, no sync, charge 0) and its
+references expect honest accepted and tampered refused on its signed digest alone. A certifier rehearsal's run (its
+records through active.Proxy) is refused by name (`warden_chain.PROXY`) by every reader: its files, or a certifier's
+deployment.json in an active network certifier's run. The report on the network certifier path requires the
+certificates, N2 and the scan, names its stubs, leaves d1's K open with no advice term (it opens no endpoint records or
+advice, and refuses an endpoint report), and refuses a step whose input is a certifier rehearsal's or another network
+certifier run's. N2's network verdicts, as its driver writes them there (no egress tie, so each member refused by name
+for its egress), count a member accepted when that is its only refusal and no window is refused: an honest chain is
+accepted and a negative refused or escaped the draw, never an honest member with a refused window or another refusal
+by name."""
 
 from __future__ import annotations
 
@@ -42,10 +47,11 @@ cr, n2 = _load("chain_record"), _load("n2_zk")
 PUBLIC = ("deployment.json", "cells.jsonl")
 
 
-def gate_run(d: Path) -> Path:
-    """The synthetic network certifier run in the gate's layout: its files under ``witness/``, its public ones copied to
-    ``out/`` with ``certificates.jsonl``, each certified line's certificate or refusal (`auditor.warden_outcome`)."""
-    run = published(d / "flat")
+def gate_run(d: Path, seed: bytes = b"warden-run") -> Path:
+    """The synthetic network certifier run in the gate's layout, under the network certifier key ``seed`` makes: its
+    files under ``witness/``, its public ones copied to ``out/`` with ``certificates.jsonl``, each certified line's
+    certificate or refusal (`auditor.warden_outcome`)."""
+    run = published(d / "flat", seed=seed)
     (d / "gate" / "out").mkdir(parents=True)
     shutil.copytree(run, d / "gate" / "witness")
     for name in PUBLIC:
@@ -92,6 +98,35 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
         WC.WS.ar.write_blobs(path, b)
     got = WC.certificates(run)
     assert got["verdict"] == "refused" and "responses window 0 isn't certified" in got["why"]
+
+
+def test_a_runs_deployment_is_the_auditors_record_or_refused_naming_its_copy_and_field(tmp_path):
+    """`deployment_of`: a run whose every deployment.json (its witness/'s and out/'s, the gate's layout) is the
+    auditor's record's deployment, in the bytes the record hashes, gives the record's deployment and schedule. A run
+    re-signed under another key, one copy of it rewritten, or the same deployment in other bytes is refused naming the
+    copy and the field; a record that isn't a `RECORD` whose key and session are its deployment's is refused."""
+    run = gate_run(tmp_path / "honest")
+    record = WC.own_record(run)
+    assert (record["schema"], record["key"], record["session"]) == (WC.RECORD, *map(WC.deployment(run)[0].get,
+                                                                                    ("key", "session")))
+    assert WC.deployment_of(run, record) == WC.deployment(run)
+    other = gate_run(tmp_path / "other", seed=b"another network certifier")
+    with pytest.raises(SystemExit, match="witness/deployment.json names another key than the auditor's record's$"):
+        WC.deployment_of(other, record)
+    out = run / "out" / "deployment.json"
+    kept = out.read_bytes()
+    shutil.copyfile(other / "out" / "deployment.json", out)
+    with pytest.raises(SystemExit, match="out/deployment.json names another key than the auditor's record's$"):
+        WC.deployment_of(run, record)
+    out.write_text(json.dumps(json.loads(kept), indent=2))
+    with pytest.raises(SystemExit, match="out/deployment.json isn't the bytes the auditor's record hashes$"):
+        WC.deployment_of(run, record)
+    out.write_bytes(kept)
+    for bad in ({**record, "schema": "challenger-key/v1"}, {**record, "session": "00" * 32}, {**record, "key": {}},
+                {k: v for k, v in record.items() if k != "deployment"}, None):
+        with pytest.raises(SystemExit, match=f"the auditor's record isn't a {WC.RECORD} whose key and session are its "
+                                             "deployment's$"):
+            WC.deployment_of(run, bad)
 
 
 @pytest.fixture(scope="module")
@@ -149,9 +184,17 @@ def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_s
         n2.main(["prove", "--warden-run", str(run), "--draw", "3", "--dry", "--out", str(tmp_path / "n2x")])
 
 
+def warden_network(*refused: int, **why: str) -> dict:
+    """A member's network verdict as `n2_zk` writes it on a network certifier link, `LinkWindows.network_verdict` given
+    no egress tie: it accepts none, refuses the link by name for its egress (`service.EGRESS_TIED`) and by ``why``'s
+    names, and refuses the windows ``refused``."""
+    return {"accepted": False, "refused": list(refused), "egress": None,
+            "why": {n2.SVC.EGRESS_TIED: "no egress tie was given"} | why}
+
+
 def _steps(tmp_path, run: Path) -> SimpleNamespace:
-    """The network certifier path's step outputs on `run`: its real certificates, and the endpoint, the tie, N2 and the
-    scan as their drivers write them."""
+    """The network certifier path's step outputs on `run`: its real certificates, and N2 and the scan as their drivers
+    write them."""
     def put(name, doc):
         (tmp_path / name).write_text(json.dumps(doc))
         return str(tmp_path / name)
@@ -161,17 +204,14 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
     return SimpleNamespace(
         custody=put("custody.json", {"verdict": "accepted"}),
         certs=put("certs.json", WC.certificates(run)),
-        endpoint=put("endpoint.json", {"warden_run": rid, "io": {"accepted": True, "requests": 5}, "chain": {
-            "bits": {"bound": True, "rebuilt": True, "commit_windows": [{"bound": True, "rebuilt": True}]}}}),
-        tie=put("tie.json", {"class": "warden", "warden_run": rid, "ok": True, "link": {"T": 32, "unit": "u"},
-                             "tie": {"honest": [True, True], "forged": [False, True]}}),
+        endpoint=None,
         n2=put("n2.json", {"ok": True, "warden_run": rid, "members": {
-            "honest": {"windows": [window, window], "network": {"accepted": True}, "ok": True},
-            "tampered": {"windows": [window | {"accepted": False}, window], "network": {"accepted": False},
+            "honest": {"windows": [window, window], "network": warden_network(), "ok": True},
+            "tampered": {"windows": [window | {"accepted": False}, window], "network": warden_network(0),
                          "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 32, "warden_run": rid, "rounds": {
             "honest": {"audit": {"window_accepted": True}}, "forged": {"audit": {"window_accepted": False}}}}),
-        job=put("job.json", {"path": cr.WARDEN, "rc": {"n2": "0", "scan": "0", "tie": "0"}}), warden_run=str(run))
+        job=put("job.json", {"path": cr.WARDEN, "rc": {"n2": "0", "scan": "0"}}), warden_run=str(run))
 
 
 def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_certifier_rehearsals(tmp_path,
@@ -179,17 +219,19 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
     steps = _steps(tmp_path, gate_run(tmp_path / "run"))
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.WARDEN_STUBBED)
-    assert got["negatives_refused"] == {"tie/forged": True, "n2/tampered": True, "scan/forged": True}
+    assert got["negatives_refused"] == {"n2/tampered": True, "scan/forged": True}
+    assert set(got["steps"]) == {"custody", "certificates", "n2", "scan", "lean"}
     assert got["steps"]["certificates"]["clock_certificates"] == 0 and got["d1"]["acc"] == [True] * sz.W63.windows
+    assert got["d1"]["K"]["open"] == cr.WARDEN_K and got["d1"]["K"]["network"]["advice"] is None
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
     md = cr.markdown(got)
-    assert "on the warden path" in md and "| tie | accepted |" in md and "certified I/O" in md
-    ep = json.loads(Path(steps.endpoint).read_text())
-    Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
-    served = cr.report(steps)
-    assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.WARDEN_SERVED_STUBBED)
-    assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["warden_endpoint_served"]
-    Path(steps.endpoint).write_text(json.dumps(ep))
+    assert "on the warden path" in md and "| scan | accepted |" in md and "| endpoint |" not in md
+    assert all(f"- {x}" in md for x in cr.WARDEN_STUBBED)
+    steps.endpoint = str(tmp_path / "endpoint.json")
+    Path(steps.endpoint).write_text(json.dumps({"warden_run": "00" * 32, "io": {"accepted": True}}))
+    with pytest.raises(SystemExit, match="the network certifier path opens no endpoint records or advice"):
+        cr.report(steps)
+    steps.endpoint = None
 
     def refused(name: str, edit, why: str) -> None:
         doc = json.loads(Path(getattr(steps, name)).read_text())
@@ -202,15 +244,35 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
     proxy = WC.PROXY
     refused("n2", lambda d: {k: v for k, v in d.items() if k != "warden_run"} | {"run": str(certifier_run)},
             f"N2's summary names no warden run: {proxy}")
-    refused("tie", lambda d: d | {"warden_run": "11" * 32}, "the tie's summary is on warden run " + "11" * 32)
-    refused("tie", lambda d: d | {"tie": {"honest": [True, True], "forged": [True, True]}}, "forged's refused")
+    refused("scan", lambda d: d | {"warden_run": "11" * 32}, "the scan's summary is on warden run " + "11" * 32)
     refused("scan", lambda d: d | {"warden_run": None}, "the scan's summary names no warden run")
-    refused("endpoint", lambda d: d | {"io": {"accepted": False, "violations": [[3, "x"]]}}, "read whole off its cells")
-    refused("endpoint", lambda d: {k: v for k, v in d.items() if k != "warden_run"},
-            f"the endpoint's report names no warden run: {proxy}")
     certifier_certs = cr.certs(certifier_run, certifier_run)
     refused("certs", lambda d: certifier_certs, f"the certificates step's input names no warden run: {proxy}")
-    steps.endpoint = steps.tie = None
-    r = cr.report(steps)
-    assert r["verdict"] == "refused" and r["steps"]["endpoint"]["verdict"] == "not run"
-    assert r["steps"]["tie"]["verdict"] == "failed"
+
+
+def test_n2_counts_a_network_verdict_refused_by_name_only_for_its_egress():
+    """N2's step on the network certifier path accepts the honest member's verdict that refuses only by name for the
+    egress, and refuses a negative on its refused window; an honest member with a refused window or another refusal by
+    name fails the step, and a sampled negative whose verdict refuses only for the egress escapes the draw when none of
+    its incorrect windows was drawn and fails the step when one was."""
+    window = {"accepted": True, "proof": {"proved": True}, "as_expected": True}
+
+    def step(ok=True, **members):
+        return cr.n2_step({"ok": ok, "members": {k: {"windows": [window]} | v for k, v in members.items()}}, {},
+                          {"path": cr.WARDEN, "rc": {"n2": "0"}})
+
+    got = step(honest={"network": warden_network()}, tampered={"network": warden_network(0)})
+    assert (got["verdict"], got["why"], got["negatives"]) == ("accepted", None, {"tampered": True}), got
+    for honest in (warden_network(0), warden_network(**{n2.SVC.PERIOD_DRAWN: "not the draw of record"})):
+        got = step(honest={"network": honest}, tampered={"network": warden_network(0)})
+        assert (got["verdict"], got["why"]) == ("failed", "honest: network refused"), got
+    reference = [{"window": w, "expect": int(w != 0)} for w in range(4)]
+
+    def moved(units):
+        return step(False, honest={"network": warden_network()},
+                    moved={"network": warden_network(), "reference": reference, "period": {"units": units}})
+
+    got = moved([1, 2])
+    assert (got["verdict"], got["negatives"]) == ("accepted", {"moved": "escaped the draw"}), got
+    got = moved([0, 1])
+    assert (got["verdict"], got["why"]) == ("failed", "moved: network accepted"), got

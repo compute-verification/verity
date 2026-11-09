@@ -10,7 +10,8 @@ network certifier in front of a served endpoint, `benchmarks/network_traces/cert
 - the negatives, each refused: `late`, `extra` and a tampered head (the honest run's execution phase 0 egress head, one
   count off);
 - the chain's steps after N2 and the proofs (`chain.py`): the advice and its bits per execution phase, the prove path's
-  audit, the registry of negatives and, on the advice profile, the I/O tie.
+  audit and the registry of negatives. Token, whose certified egress alone differs from the committed trace, is pending
+  the egress tie (`scan_service.EgressTie`), which reads the network certifier's cells, which a rehearsal doesn't have.
 
 `e2e.py` is the driver and `chain.py` holds the chain's steps; their docstrings have each option and each check. It
 reuses the rehearsal and `n2_zk.py`'s driver and re-implements neither. `encodings/` measures the advice's encodings, and
@@ -62,8 +63,8 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   `--prove-path-registered FILE` says who registered each audited Commit window's advice and where its serving record
   is; when it was registered is read off the record and the endpoint's trace (`chain.serve_record`, `chain.closes`).
 - The registry of negatives (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless
-  `--no-negatives`; each row that ran must be refused by the code it names. On the advice profile the I/O tie
-  (`chain.tie`) runs instead and is required (`chain.tie_gate`).
+  `--no-negatives` (not on the advice profile, whose rows take N2's verdict); each row that ran must be refused by the
+  code it names.
 
 The report's `stubbed` list says what each run still stands on that isn't the chain's own: the advice of another run, a
 given serving config, a prove path of a declared workload, pending negatives, the certifier off the gate.

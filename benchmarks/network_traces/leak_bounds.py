@@ -1,7 +1,8 @@
 """leak-bounds: K, the bits a covert sender in the server can move through the network certifier's accepted transcripts
 over a monitoring period, for one link (`per_link`), summed over a datacenter's links (`datacenter`; the census's
 reference datacenter has `datacenter_links`) and over the world's (`world`, the adversary resource model's), each beside
-its share of one copy of the weights (`WEIGHTS`) and ε, the union of its scans' δ. It is the one calculator of K:
+its share of one copy of the weights a deployment protects (`WEIGHTS`, the adversary resource model's, `protected`;
+the demo's served model is `SERVED`) and ε, the union of its scans' δ. It is the one calculator of K:
 `chain_record.py leak` reads it on a warden run, and the slowdown ρ is derived from both bounds.
 
 A link is one network certifier on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
@@ -10,12 +11,15 @@ blocks, T buckets of τ seconds each way, every one proved as its own proof bloc
 block's scan at δ_scan. K's terms are those of `NetworkCheck.Period`'s rows form (`rowsTerms`) in the generator reading
 of the scan's statement:
 
-* the schedules and the fail cells, ⌈log2(cap + 1)⌉ each a request (`capsTerm`, charged twice as `#Ss ≤ ∏_c (cap_c +
-  1)`), a connection's cap its lane's egress_cells;
+* the schedules and the fail cells, ⌈log2(cap + 1)⌉ for each of the lanes·T connections a sampling block's schedule
+  can carry, a connection's cap its lane's egress_cells (`Schedule.caps`, the only caps the rows form takes;
+  `capsTerm`, charged twice as `#Ss ≤ ∏_c (cap_c + 1)`). They are charged whatever the requests served: the sender
+  picks how many connections it opens;
 * the sampling block's free inputs (`READINGS`). As registered, the scan's ``prog`` is its tied compute audit's
   outputs, NR·T / EVERY slot entries of NE bits (`ingress_scan.entry_bits`), so they are that audit's free inputs,
   which the rows form charges to the sampling block (`tiedAudits`). If ``prog`` is an input only at its anchored
-  entries, they are an entry's 33 + KO·IDB bits a request (`ingress_scan.entry_layout`);
+  entries, they are an entry's 33 + KO·IDB bits (`ingress_scan.entry_layout`) for each of those slot entries, any of
+  which a request the sender opens may anchor, whatever the requests served;
 * no faulty proof block, every one being drawn;
 * the jitter term at D_j = `JITTER_BOUND`, ⌈log2 D_j^T⌉ = T bits a sampling block, one a bucket (`JITTER`).
 
@@ -66,13 +70,14 @@ class Weights(NamedTuple):
     label: str
 
 
-#: Llama-3.2-1B's parameters (128,256 × 2,048 tied embedding, 16 layers of 60,821,504, the final norm) in BF16. The
-#: served checkpoint is int8, so a share is of this BF16 copy, as its label says.
-WEIGHTS = Weights(1_235_814_400 * 16, "Llama-3.2-1B in BF16")
+#: the demo's served model, Llama-3.2-1B's parameters (128,256 × 2,048 tied embedding, 16 layers of 60,821,504, the
+#: final norm) in BF16. The served checkpoint is int8, so its share is of this BF16 copy, as its label says.
+SERVED = Weights(1_235_814_400 * 16, "the demo's served model (Llama-3.2-1B) in BF16")
 #: each reading of the sampling block's free inputs (the scan's `prog`, the tied audit's free inputs), as a report
 #: labels it
 READINGS = {"registered": "`prog` as registered, the tied audit's slot entries (the record's K)",
-            "anchors": "`prog` only at its anchored entries (conditional on the generator-form lowering)"}
+            "anchors": "`prog` only at its anchored entries, every slot entry anchored (conditional on the "
+                       "generator-form lowering)"}
 STATEMENTS = {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted",
               "pooled": "PooledLeakAccepted, conditional: hesc and hleak await SampledKSLive and P2",
               "datacenter": "the sum over links of each link's statement, each at δ / links: our composition, which no "
@@ -122,9 +127,15 @@ class LinkLoad:
         return self.egress_cells.bit_length()
 
     @property
+    def connections(self) -> int:
+        """The connections a sampling block's schedule can carry, lanes·T (`Schedule.caps` over one, its size)."""
+        return self.scan.lanes * self.T
+
+    @property
     def cap(self) -> int:
-        """A request's schedules and fail-cell terms, one `cell` each (`rowsTerms`'s `schedules` and `cells`)."""
-        return 2 * self.cell
+        """A sampling block's schedules and fail-cell terms, `cell` for each of its `connections` in each
+        (`rowsTerms`'s `schedules` and `cells`, each `capsTerm (Schedule.caps s 1)`)."""
+        return 2 * self.connections * self.cell
 
     @property
     def jitter(self) -> int:
@@ -136,13 +147,14 @@ class LinkLoad:
         """A sampling block's seconds."""
         return self.T * self.tau
 
-    def free(self, reading: str) -> dict[str, int]:
-        """The free inputs' bits a sampling block and a request in ``reading`` (`READINGS`)."""
+    def free(self, reading: str) -> int:
+        """The free inputs' bits a sampling block in ``reading`` (`READINGS`): its `entries` slot entries, each of
+        `ingress_scan.entry_bits` as registered and of its unpadded `entry_layout` at its anchors."""
         if reading not in READINGS:
             raise ValueError(f"a reading is one of {', '.join(READINGS)}, not {reading!r}")
         if reading == "registered":
-            return {"block": self.entries * IS.entry_bits(self.scan), "request": 0}
-        return {"block": 0, "request": sum(w for _, w in IS.entry_layout(self.scan))}
+            return self.entries * IS.entry_bits(self.scan)
+        return self.entries * sum(w for _, w in IS.entry_layout(self.scan))
 
     def blocks(self, period: str | float | Fraction) -> float | Fraction:
         """m, the sampling blocks over ``period``: exact unless ``period`` or τ is a float."""
@@ -158,9 +170,7 @@ class LinkLoad:
         """K over ``period`` (a `PERIODS` name, or its seconds) in ``reading``: the per-period form, or with ``delta``
         the pooled form."""
         blocks = self.blocks(period)
-        requests = self.rate * seconds(period)
-        free = self.free(reading)
-        k = float(requests * self.cap + blocks * (free["block"] + self.jitter) + requests * free["request"])
+        k = float(blocks * (self.cap + self.free(reading) + self.jitter))
         if delta is None:
             return k
         f = fmax(delta)
@@ -206,6 +216,18 @@ def world_links() -> int:
     world, dc = _reference("adversary.json"), _reference("deployments.json")
     return math.ceil(world["total_flop"] / (world["flop_per_s_per_h100"] * world["monitoring_period_s"]
                                             * dc["gpus_per_machine"]))
+
+
+def protected() -> Weights:
+    """One copy of the weights a deployment protects: the adversary resource model's (`adversary.json`), its
+    ``weights_bytes`` as published, at ``weights_datatype``."""
+    d = _reference("adversary.json")
+    return Weights(8 * d["weights_bytes"], f"{d['model']} as published, {d['total_params'] / 1e12:g}T parameters "
+                                           f"({d['weights_datatype']})")
+
+
+#: the copy every share is of unless a caller names another: the deployment's (`protected`), never the served model's
+WEIGHTS = protected()
 
 
 def link(cls: Any, rate: float | Fraction, *, T: int | None = None, tau: float | Fraction = TAU,

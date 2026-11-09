@@ -94,7 +94,8 @@ def test_the_scan_reads_v3cs_trees_at_its_roots_and_proves_no_block_round(tmp_pa
     out = tmp_path / "dry"
     assert sz.main(["prove", "--dry", "--out", str(out), "--class", S.name, "--v3c", str(window)]) == 0
     summary = json.loads((out / "summary.json").read_text())
-    assert summary["v3c"] == {"window": str(window), "trees": sorted(["state", *sz.lane_kinds(S.cls)])}
+    assert summary["v3c"] == {"window": str(window), "registration": sz.RG.digest(rec),
+                              "trees": sorted(["state", *sz.lane_kinds(S.cls)])}
     assert summary["roots"]["state"] == state["root"] and "block" not in summary["members"]
 
 
@@ -130,6 +131,30 @@ def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, 
     with pytest.raises(SystemExit) as e:
         sz.v3c_trees(w, S.cls, scanned["states"], scanned["entries"])
     assert str(e.value).startswith(f"--v3c {w}: ") and why in str(e.value), str(e.value)
+
+
+@pytest.mark.parametrize("read", ["another", "none"])
+def test_the_period_refuses_a_compute_audit_of_another_registration_than_the_one_the_scan_read(tmp_path, read):
+    """`scan_period.rows_case` with V3c's ``period.json``: an audit whose registration isn't the one whose trees the
+    scan read (its ``summary.json``'s ``v3c``), or a scan that read no V3c window, is a foreign audit, refused by name
+    before the case is built; the audit of that registration gets past it."""
+    import scan_period as SP
+
+    ours, theirs = ({"format": sz.RG.FORMAT_V2, "program": p * 64, "roots": []} for p in ("ab", "cd"))
+    scan = tmp_path / "scan"
+    scan.mkdir()
+    (scan / "summary.json").write_text(json.dumps({"v3c": read == "another" and {"registration": sz.RG.digest(ours)}}))
+    (period := tmp_path / "period.json").write_text(json.dumps({"registration": theirs}))
+    with pytest.raises(SystemExit) as e:
+        SP.rows_case(tmp_path / "run", scan, v3c=period, circuit=ours["program"], record={})
+    want = f"{sz.RG.digest(ours)[:16]}…" if read == "another" else "no V3c registration"
+    assert str(e.value) == (f"{period}: a foreign audit: it registers {sz.RG.digest(theirs)[:16]}…, and the scan read "
+                            f"the trees of {want}")
+    if read == "another":
+        period.write_text(json.dumps({"registration": ours}))
+        with pytest.raises(SystemExit) as e:
+            SP.rows_case(tmp_path / "run", scan, v3c=period, circuit=ours["program"], record={})
+        assert "foreign audit" not in str(e.value) and "deployment.json" in str(e.value), str(e.value)
 
 
 def test_v3c_is_one_link_window_from_link_window_0(tmp_path, scanned):

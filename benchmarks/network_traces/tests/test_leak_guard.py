@@ -316,18 +316,18 @@ def test_a_record_that_declares_what_is_public_holds_nothing_else(tmp_path):
     run, out, hold = tmp_path / "run", tmp_path / "run" / "out", tmp_path / "hold"
     _put(run, {"out/piece.log": b"started\n", "out/certs.json": counts})
     _put(hold, {"answer.json": b'{"verdict": "accept"}', "chain/report/report.json": b'{"verdict": "accepted"}',
-                "chain/endpoint/report.json": counts, "chain/scan/answers.json": piece})
+                "chain/n2/summary.json": counts, "chain/scan/answers.json": piece})
     rc, report, _ = _guard(tmp_path, run, "--hold", str(hold), "--dry")
     assert rc == 3 and [d["path"] for d in report["found"]] == ["out/chain/scan/answers.json"]
     declared = ("out/answer.json", "out/piece.log", "out/chain/report/*", "out/chain/scan/answers.json")
     rc, report, _ = _guard(tmp_path, run, "--hold", str(hold), *(x for g in declared for x in ("--public", g)))
     assert rc == 3 and {d["path"]: d["why"] for d in report["found"]} == {
         "out/certs.json": ["not declared public (--public)"],
-        "out/chain/endpoint/report.json": ["not declared public (--public)"],
+        "out/chain/n2/summary.json": ["not declared public (--public)"],
         "out/chain/scan/answers.json": ["1 witness pieces"]}
     assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()) == [
         "answer.json", "chain/report/report.json", "piece.log"]
-    assert (tmp_path / "q" / "files" / "out" / "chain" / "endpoint" / "report.json").read_bytes() == counts
+    assert (tmp_path / "q" / "files" / "out" / "chain" / "n2" / "summary.json").read_bytes() == counts
     assert not any(p.is_file() for p in hold.rglob("*"))
 
 

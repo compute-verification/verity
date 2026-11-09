@@ -78,6 +78,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import pwd
 import random
 import re
 import shutil
@@ -191,11 +192,24 @@ def up(args) -> None:
     status(args)
 
 
+def terminate(ns: str) -> None:
+    """SIGTERM to every process in namespace ``ns``."""
+    for pid in sudo(["ip", "netns", "pids", ns]).stdout.split():
+        sudo(["kill", "-TERM", pid], check=False)
+
+
+def netns_exec(ns: str, argv: list[str]) -> list[str]:
+    """``argv`` in namespace ``ns`` as the invoking user, with `PATHS` on its Python path and the user's home as HOME
+    (sudo resets the environment)."""
+    return ["sudo", "-n", "ip", "netns", "exec", ns, "setpriv", f"--reuid={os.getuid()}", f"--regid={os.getgid()}",
+            "--clear-groups", "--", "env", f"PYTHONPATH={os.pathsep.join(PATHS)}",
+            f"HOME={pwd.getpwuid(os.getuid()).pw_dir}", *argv]
+
+
 def down(args) -> None:
     names = namespaces()
     for ns in names:
-        for pid in sudo(["ip", "netns", "pids", ns]).stdout.split():
-            sudo(["kill", "-TERM", pid], check=False)
+        terminate(ns)
     for ns in names:
         sudo(["ip", "netns", "del", ns])
     if left := namespaces():
@@ -349,9 +363,7 @@ class Process:
         config = out / f"{name}.json"
         config.write_text(json.dumps(cfg))
         self.name, self.log = f"{ns}/{name}", out / f"{name}.log"
-        cmd = ["sudo", "-n", "ip", "netns", "exec", ns, "setpriv", f"--reuid={os.getuid()}", f"--regid={os.getgid()}",
-               "--clear-groups", "--", "env", f"PYTHONPATH={os.pathsep.join(PATHS)}", sys.executable, "-B", "-u",
-               str(Path(__file__).resolve()), "role", name, str(config)]
+        cmd = netns_exec(ns, [sys.executable, "-B", "-u", str(Path(__file__).resolve()), "role", name, str(config)])
         with open(self.log, "w") as err:
             self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, text=True)
 
@@ -731,26 +743,31 @@ def seal(args) -> None:
     print(f"openssl sha512: {doc['openssl']}; cpu: {doc['cpu']}")
 
 
+def shape_options(p: argparse.ArgumentParser) -> None:
+    """The lab's shape, which every command that reads the lab takes."""
+    p.add_argument("--declaration", metavar="FILE.py:NAME", help="a Datacenter or Fleet, or a function returning "
+                   "one, instead of datacenter.examples.leaf_spine's (which --blocks, --leaves, --spines and "
+                   "--fabric-latency-us shape)")
+    p.add_argument("--fleet", action="store_true", help="datacenter.examples.two_sites' fleet instead, with "
+                   "--blocks, --leaves and --spines a site's, and --wan-latency-us its WAN's")
+    p.add_argument("--blocks", type=int, default=4)
+    p.add_argument("--leaves", type=int, default=2)
+    p.add_argument("--spines", type=int, default=1)
+    p.add_argument("--fabric-latency-us", type=int, default=2_000, help="each fabric hop's latency")
+    p.add_argument("--fabric-jitter-us", type=int, default=500, help="each fabric hop's delay jitter")
+    p.add_argument("--wan-latency-us", type=int, default=FLEET_OPTIONS["wan_latency_us"],
+                   help="the WAN's one-way latency, with --fleet")
+    p.add_argument("--wan-jitter-us", type=int, default=FLEET_OPTIONS["wan_jitter_us"],
+                   help="a WAN link's delay jitter")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, fn in (("up", up), ("down", down), ("status", status), ("run", run), ("seal", seal)):
         p = sub.add_parser(name)
         p.set_defaults(fn=fn)
-        p.add_argument("--declaration", metavar="FILE.py:NAME", help="a Datacenter or Fleet, or a function returning "
-                       "one, instead of datacenter.examples.leaf_spine's (which --blocks, --leaves, --spines and "
-                       "--fabric-latency-us shape)")
-        p.add_argument("--fleet", action="store_true", help="datacenter.examples.two_sites' fleet instead, with "
-                       "--blocks, --leaves and --spines a site's, and --wan-latency-us its WAN's")
-        p.add_argument("--blocks", type=int, default=4)
-        p.add_argument("--leaves", type=int, default=2)
-        p.add_argument("--spines", type=int, default=1)
-        p.add_argument("--fabric-latency-us", type=int, default=2_000, help="each fabric hop's latency")
-        p.add_argument("--fabric-jitter-us", type=int, default=500, help="each fabric hop's delay jitter")
-        p.add_argument("--wan-latency-us", type=int, default=FLEET_OPTIONS["wan_latency_us"],
-                       help="the WAN's one-way latency, with --fleet")
-        p.add_argument("--wan-jitter-us", type=int, default=FLEET_OPTIONS["wan_jitter_us"],
-                       help="a WAN link's delay jitter")
+        shape_options(p)
         if name == "run":
             p.add_argument("--out", required=True)
             p.add_argument("--block", action="append", default=[], metavar="BLOCK=STRATEGY",

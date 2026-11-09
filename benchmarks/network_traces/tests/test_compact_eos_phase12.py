@@ -10,8 +10,8 @@
   - the old cell is a stop on id 2^30 − 1, and `certified_io` refuses a stop on an id that isn't EOS at every position;
   - a stop on an EOS id the model never sampled there is `certified_io`'s to accept, as it accepts the same id events
     (the server writes what it likes): the ids of record are the Commit's, and `active.compact_finish_violations`,
-    which the I/O tie requires, holds each response's ids, length and finish to them, refusing the cut at every
-    position.
+    the rule a compact run's tie requires, holds each response's ids, length and finish to them, refusing the cut at
+    every position.
 """
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ def _cut(outs, stream: int, k: int, record: bytes):
 
 def test_the_honest_compact_run_is_accepted_and_its_cells_are_the_commits_sampled_ids(run):
     """The honest run's certified I/O is the model's sampled ids, each stop carrying its EOS id, and its cells are
-    `compact_records_of` them, so the I/O tie's finish rule finds nothing."""
+    `compact_records_of` them, so the tie's finish rule finds nothing."""
     assert run.honest["accepted"] and run.check["verdict"] == "accepted"
     sampled = _sampled(run.honest)
     assert {r["stream"]: r["output"] for r in run.honest["records"]} == sampled
@@ -114,7 +114,7 @@ def test_the_hidden_stop_is_refused_at_every_length(run):
 def test_a_stop_the_model_never_sampled_is_refused_by_the_tie_at_every_length(run):
     """A server that cuts the response at output k now has to write an EOS id there, which the model didn't sample.
     `certified_io` accepts it as `eos`, as it accepts the same records as id events: where a response stops is the
-    server's word on the link. The I/O tie's rule, `compact_finish_violations` against the Commit's sampled ids,
+    server's word on the link. The tie's rule, `compact_finish_violations` against the Commit's sampled ids,
     refuses it at every k: output k is the EOS id where the Commit sampled another."""
     stream, full = run.target["stream"], len(run.target["output"])
     sampled, eos_id = _sampled(run.honest), min(run.eos)
