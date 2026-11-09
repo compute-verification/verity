@@ -64,6 +64,13 @@ The lock's `meets` witnesses of these claims are Flock's decoder bounds at its d
 * `twoL`: a compiled verifier over `twoA` that samples both proof blocks of a two-input statement (`twoStmt`, partition
   `twoPart`), block `u`'s session at round `u`, under a commitment whose openings of `true` pass (`trueCm`). It meets
   `Compiled.Sessions` at every hash, its commitment binds, and the silent prover is accepted: `twoSessions_meets`.
+
+The network certifier's leak guarantees fail at two more compiled verifiers that accept everything, whose lemmas are
+`NetTiming.Witness`'s:
+
+* `leakL`: `sksL` at a statement whose program negates its input (`notStmt`, its partition `notPart` one proof block
+  `{0, 1}`, sampled `all`);
+* `certL`: `leakL` under `trueCm`.
 -/
 
 @[expose] public section
@@ -629,6 +636,25 @@ theorem twoSessions_meets {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabite
     (twoA Coin).KS H ∧ (twoL Coin).commit.Binds H ∧ (twoL Coin).Sessions H ∧ (twoL Coin).Scope [] ∧
       ∀ r, (twoL Coin).checked [] r = [0, 1] ∧ (run H silentP (twoL Coin).V [] () r).out = .acc :=
   ⟨twoA_KS H, trueCm_binds H, twoL_sessions H, twoL_scope [], fun r => ⟨rfl, twoL_silent H r⟩⟩
+
+/-! ## A statement whose program negates its input -/
+
+/-- One input gate and its negation, the negation returned. -/
+def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
+
+/-- The program, sampled `all`. -/
+def notStmt : AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
+
+/-- One class of one stratum of one proof block, `{0, 1}`. -/
+def notPart : Claims.Sampling.Partition := ⟨[[[[0, 1]]]]⟩
+
+/-- `sksL` at `notStmt`: the verifier accepts, no opening passes, and no unit has a session. -/
+noncomputable def leakL (Coin : Type) : Compiled Coin (toyA Coin) :=
+  { sksL Coin with parse := fun _ => some notStmt, partition := fun _ => some notPart }
+
+/-- `leakL` under `trueCm`: the verifier accepts, the openings of `true` pass, and no unit has a session. -/
+noncomputable def certL (Coin : Type) : Compiled Coin (toyA Coin) :=
+  { leakL Coin with commit := trueCm }
 
 end Claims.Witness.SamplingGeneric
 

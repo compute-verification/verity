@@ -9,10 +9,12 @@ public import Proofs.Flock.Claims.Bridge.Transports
 `FrameRows h L` (`SpotFlock.RowsOpen`), from which `reveals_of_frameRows` gives `Reveals`, asks the reveal to hold, for
 each value a checked unit needs, an opening of the witness's bit at the layout's wire that passes wherever the
 registered read of the session row holding it passes. `FrameIs h L` says what the auditor's frame (`h.frame`: its
-`reveal`, how the code reads openings out of a Flock witness, and its `at_`, `ownAt`, `place`, `bits`, `salt` and `π`,
-the deployed check's) does to that end, one opening at a time. At the statements and layout data `FrameRows` reads, the
-opening at gate `g`, of the witness's bit at the wire's column, under the roots `Reveals` names:
+`reveal`, from which the code's opening at each gate takes its value and data (`Reveal.frameAt`), and its `at_`,
+`ownAt`, `place`, `bits`, `salt` and `π`, the deployed check's) does to that end, one opening at a time. At the
+statements and layout data `FrameRows` reads, the code's opening at gate `g` (`Reveal.openAt`, at `g` and under the
+roots `Reveals` names):
 
+* holds the witness's bit at the wire's column;
 * has as row and salt row `q` of unit `n` of table `j` as the witness holds it (`InnerRows.rowBytes`,
   `InnerRows.salt`);
 * is checked either at a port `P` with the root, leaf count, domain and schema of the registered read `reg` that the
@@ -23,9 +25,10 @@ opening at gate `g`, of the witness's bit at the wire's column, under the roots 
   path from that row (`pubPath`). Either port is the frame's own, read off the roots, so it need agree with `reg` or
   `pubPort` only on the four fields a registered read reads.
 
-`frameRows_of_frameIs`: `FrameIs` gives `FrameRows`. Such an opening passes the deployed check wherever its row's
-`b ‖ c` opens the port it is checked at there (`opens_frame`; a port is read only through its root, leaf count, domain
-and schema), and its `b ‖ c` is the commit string `FrameRows` reads (`InnerRows.commitString_data`).
+`frameRows_of_frameIs`: `FrameIs` gives `FrameRows`. The code's reveal holds that opening at each gate the unit needs
+(`Reveal.openAt_mem`, `Reveal.rootsAt_eq`), and it passes the deployed check wherever its row's `b ‖ c` opens the port
+it is checked at there (`opens_frame`; a port is read only through its root, leaf count, domain and schema), and its
+`b ‖ c` is the commit string `FrameRows` reads (`InnerRows.commitString_data`).
 `leaf_commitString`: the deployed check's hm96 leaf is Flock's tree leaf of `b ‖ c`.
 
 `sessionOpensTwo_of_frameIs`: so `SessionOpensTwo` at SPOT[Flock]'s two-stage code follows from two premises on the
@@ -67,8 +70,9 @@ theorem opens_frame {roots : List Msg} {o : Opening Bool} {reg : _root_.Flock.Re
 
 /-- **The frame opens the session's rows**, at a session layout `L`: at the statements `Reveals` reads and the session's
 setup, for each gate `g` the unit's correctness reads, the layout's wire for `g` is column `y` of table `j` in the
-unit's block `β`, and the reveal holds an opening at `g` of the witness's bit there, under the roots `Reveals` names,
-whose row and salt are row `q` of a unit `n` of the table as the witness holds it, and which the frame checks either
+unit's block `β`, and the code's opening at `g` (`Reveal.openAt`, under the roots `Reveals` names, holding the frame's
+opening there) holds the witness's bit there, has as row and salt row `q` of a unit `n` of the table as the witness
+holds it, and is checked by the frame either
 
 * at a port `P` with the root, leaf count, domain and schema of the registered read `reg` of the session's registered
   ports `own` that the table's port `q` is named like: at `P`'s root and the position the session header gives for the
@@ -88,10 +92,9 @@ def FrameIs (L : Layout) : Prop :=
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) →
     ∀ g, s.prog.Needs b g → ∃ β j y n q, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∃ hj : j < sts.size,
       y < 2 ^ sts[j].c.kLog ∧ L.wire x m₁ (unitStmt h m₂ u) u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧
-      ∃ o ∈ h.frame.reveal s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF, o.2.pos = g ∧
-        o.2.val = _root_.Flock.InnerRows.bitAt { ins.read with sts } wF j β y ∧
-        o.1 = (if g ∈ rb ∧ s.prog.Boundary rb g = false then iroots x (seenAt m₀ m₁ m₂ c₀ c₁ rest) ρ
-          else s.roots) ∧
+      let o := Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt h.frame) s u
+        (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g
+      o.2.val = _root_.Flock.InnerRows.bitAt { ins.read with sts } wF j β y ∧
         SamplingDeploy.row h.frame.place h.frame.bits o.2 =
           _root_.Flock.InnerRows.rowBytes { ins.read with sts } wF j n q ∧
         h.frame.salt o.2 = (_root_.Flock.InnerRows.salt { ins.read with sts } wF j n q).data.toList ∧
@@ -115,27 +118,32 @@ def FrameIs (L : Layout) : Prop :=
             (h.frame.ownAt o.1 g).find? (fun P' => decide (bs P'.root = bs P.root)) = some P ∧
             bytes (h.frame.π o.2) = pubPath sts[j].c pop q (rowAt sts[j].c pop q (unitOf ins.read.draw n))))
 
-/-- **`FrameRows` from `FrameIs`**: an opening whose row and salt are the session row's, which the frame checks at the
-row's registered read or at its population's published tree, passes the deployed check wherever that read or tree
-opens the row's commit string. -/
+/-- **`FrameRows` from `FrameIs`**: the code's reveal holds its opening at each gate the unit needs, at that gate and
+under the roots `Reveals` names (`Reveal.openAt_mem`, `Reveal.rootsAt_eq`); an opening whose row and salt are the
+session row's, which the frame checks at the row's registered read or at its population's published tree, passes the
+deployed check wherever that read or tree opens the row's commit string. -/
 theorem frameRows_of_frameIs (L : Layout) (hF : FrameIs h L) : FrameRows h L := by
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset g hg
-  obtain ⟨β, j, y, n, q, hβ, hj, hy, hw, hn, o, ho, hpos, hval, hroot, hrow, hsalt, hchk⟩ :=
+  obtain ⟨β, j, y, n, q, hβ, hj, hy, hw, hn, hval, hrow, hsalt, hchk⟩ :=
     hF x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset g hg
-  refine ⟨β, j, y, n, q, hβ, hj, hy, hw, hn, o, ho, hpos, hval, hroot, ?_⟩
-  subst hpos
+  refine ⟨β, j, y, n, q, hβ, hj, hy, hw, hn,
+    Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt h.frame) s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g,
+    Reveal.openAt_mem (partition h) (two h) (iroots []) (Reveal.frameAt h.frame) hP hb hg, rfl, hval,
+    Reveal.rootsAt_eq (partition h) (two h) (iroots []) hP h2 hρ hrb, ?_⟩
   have hb : ∀ B : ByteArray, bytes B.data.toList = B := fun B => bytes_bs B
   rcases hchk with ⟨own, reg, hown, hreg, hq, hread⟩ | ⟨hc1, hq, hrooted⟩
   · refine Or.inl ⟨own, reg, hown, hreg, hq, fun t positions paths ht hent hop => ?_⟩
     obtain ⟨P, hPr, hPl, hPd, hPs, hat, hfind, hπ⟩ := hread t positions paths ht hent
-    refine opens_frame h hat hfind ?_
+    refine opens_frame h (o := (Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt h.frame) s u
+      (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g).2) hat hfind ?_
     rw [hrow, hsalt, _root_.Flock.InnerRows.commitString_data, hb, hπ]
     unfold _root_.Flock.Registered.opens _root_.Flock.Registered.opensLeaf at hop ⊢
     rw [hPr, hPl, hPd, hPs]
     exact hop
   · refine Or.inr ⟨hc1, hq, fun pop hpop hop => ?_⟩
     obtain ⟨P, hPr, hPl, hPd, hPs, hat, hfind, hπ⟩ := hrooted pop hpop
-    refine opens_frame h hat hfind ?_
+    refine opens_frame h (o := (Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt h.frame) s u
+      (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g).2) hat hfind ?_
     rw [hrow, hsalt, _root_.Flock.InnerRows.commitString_data, hb, hπ]
     unfold _root_.Flock.Registered.opens _root_.Flock.Registered.opensLeaf at hop ⊢
     rw [hPr, hPl, hPd, hPs]

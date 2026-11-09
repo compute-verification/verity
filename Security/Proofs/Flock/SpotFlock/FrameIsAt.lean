@@ -8,14 +8,15 @@ public import Proofs.Flock.SpotFlock.FrameAt
 `frameIs_frameAt`: at a registration whose frame is `frameAt slot c` (`FrameAt.lean`), `FrameIs` at a layout `L`
 follows from two facts, one about `c` and the slots, one about the run's records.
 
-* `SlotsAt slot c L`: at each gate a checked unit needs, `c`'s reveal holds an opening of the witness's bit at the
-  layout's column, whose row and salt are row `q` of unit `n` of the session's table, and the gate's slot names where
-  the frame finds that row. At a port the session reads registered (`reg`): the entry round 2 reads the read's value
-  off (`readKeyAt`), under the roots it reads it under (`readRoots`), at the read's schema, not sized, its leaf under
-  those roots (`leafAt`), at an entry of the read's leaf count, the position the session header gives the row, the
-  opening's path being the header's. At a one-table session's other ports: template `t`'s port of the interior record
-  (`SlotKey.interior`), under the replay block's roots, at the published tree's schema, sized to its leaf count, its
-  leaf the drawn unit's row, the opening's path being the published tree's (`pubPath`).
+* `SlotsAt slot c L`: at each gate a checked unit needs, the code's opening there, whose value and data are `c`'s first
+  opening at the gate under its roots (`Reveal.frameAt`), holds the witness's bit at the layout's column, its row and
+  salt are row `q` of unit `n` of the session's table, and the gate's slot names where the frame finds that row. At a
+  port the session reads registered (`reg`): the entry round 2 reads the read's value off (`readKeyAt`), under the roots
+  it reads it under (`readRoots`), at the read's schema, not sized, its leaf under those roots (`leafAt`), at an entry
+  of the read's leaf count, the position the session header gives the row, the opening's path being the header's. At a
+  one-table session's other ports: template `t`'s port of the interior record (`SlotKey.interior`), under the replay
+  block's roots, at the published tree's schema, sized to its leaf count, its leaf the drawn unit's row, the opening's
+  path being the published tree's (`pubPath`).
 * `EntriesAt c`: in an accepted run, the entry round 2 reads each registered read's value off has the read's root,
   leaf count and domain id, and template `t`'s port of the interior record at a port a one-table session doesn't read
   registered has its published tree's root and domain id; each port at most `c`'s own depth.
@@ -66,10 +67,11 @@ def readKeyAt (x m₁ : Msg) (c₀ c₁ : FlockDeploy.Coin) (t : ℕ) (port v : 
   | _, _, _ => .reg v
 
 /-- **The reveal opens the session's rows, and each gate's slot names where they are** (the module's docstring), at
-`FrameIs`'s statements and setup: the layout's facts and the reveal's opening as `FrameIs` states them, and then, for
-the row's port `q`, either the registered read it is named like, the roots round 2 reads its value under, the gate's
-slot and the header's path, or, at a one-table session's port read from no registered read, the replay block's roots,
-the gate's slot and the published tree's path. -/
+`FrameIs`'s statements and setup: the layout's facts and the code's opening at the gate as `FrameIs` states them, its
+value and data `c`'s first opening there (`Reveal.frameAt`), and then, for the row's port `q`, either the registered
+read it is named like, the roots round 2 reads its value under, the gate's slot and the header's path, or, at a
+one-table session's port read from no registered read, the replay block's roots, the gate's slot and the published
+tree's path. -/
 def SlotsAt (slot : ℕ → Option Slot) (c : Code) (L : Layout) : Prop :=
   ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
@@ -79,10 +81,9 @@ def SlotsAt (slot : ℕ → Option Slot) (c : Code) (L : Layout) : Prop :=
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) →
     ∀ g, s.prog.Needs b g → ∃ β j y n q, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∃ hj : j < sts.size,
       y < 2 ^ sts[j].c.kLog ∧ L.wire x m₁ (unitStmt h m₂ u) u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧
-      ∃ o ∈ c.reveal s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF, o.2.pos = g ∧
-        o.2.val = _root_.Flock.InnerRows.bitAt { ins.read with sts } wF j β y ∧
-        o.1 = (if g ∈ rb ∧ s.prog.Boundary rb g = false then iroots x (seenAt m₀ m₁ m₂ c₀ c₁ rest) ρ
-          else s.roots) ∧
+      let o := Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt c) s u
+        (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g
+      o.2.val = _root_.Flock.InnerRows.bitAt { ins.read with sts } wF j β y ∧
         SamplingDeploy.row c.place c.bits o.2 = _root_.Flock.InnerRows.rowBytes { ins.read with sts } wF j n q ∧
         c.salt o.2 = (_root_.Flock.InnerRows.salt { ins.read with sts } wF j n q).data.toList ∧
         ((∃ own reg, ins.registered = some own ∧ reg ∈ own ∧
@@ -135,12 +136,14 @@ leaf (`port_frameAt`), with the reveal's path. -/
 theorem frameIs_frameAt {slot : ℕ → Option Slot} {c : Code} {L : Layout} (hf : h.frame = frameAt slot c)
     (hS : SlotsAt h slot c L) (hE : EntriesAt h c) : FrameIs h L := by
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset g hg
-  obtain ⟨β, j, y, n, q, hβ, hj, hy, hw, hn, o, ho, hpos, hval, hroot, hrow, hsalt, hbr⟩ :=
+  obtain ⟨β, j, y, n, q, hβ, hj, hy, hw, hn, hval, hrow, hsalt, hbr⟩ :=
     hS x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset g hg
   obtain ⟨hEr, hEp⟩ :=
     hE x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset
-  rw [hf]
-  refine ⟨β, j, y, n, q, hβ, hj, hy, hw, hn, o, ho, hpos, hval, hroot, hrow, hsalt, ?_⟩
+  rw [hf, show Reveal.frameAt (frameAt slot c) = Reveal.frameAt c from rfl]
+  generalize Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt c) s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g
+    = o at hval hrow hsalt hbr ⊢
+  refine ⟨β, j, y, n, q, hβ, hj, hy, hw, hn, hval, hrow, hsalt, ?_⟩
   rcases hbr with ⟨own, reg, hown, hreg, hq, hR, hslot⟩ | ⟨hc1, hq, hR, hnr, hslot⟩
   · refine Or.inl ⟨own, reg, hown, hreg, hq, fun t positions paths ht hent => ?_⟩
     obtain ⟨sl, hs, hk, hsc, hsz, hleaf, hπ⟩ := hslot t positions paths ht hent

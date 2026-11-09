@@ -34,7 +34,7 @@ so `rows_open` and `rows_rooted` apply at every session statement the check pass
 
 `reveals_of_frameRows`: `Reveals` (`SpotFlock.Opens`) at a layout's decoder from one premise on the registration,
 `FrameRows`: for each value a checked unit needs, the layout's wire is a column of a table in the unit's block, and the
-frame's reveal holds an opening of the witness's bit there that passes wherever the row holding it opens either the
+code's reveal holds an opening of the witness's bit there that passes wherever the row holding it opens either the
 registered read of its port (the session has registered reads) or its population's published tree (a one-table
 session). So `sessionOpensTwo_of_rows`: `SessionOpensTwo` from `Embeds` and `FrameRows`.
 -/

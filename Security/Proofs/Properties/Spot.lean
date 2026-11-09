@@ -3,6 +3,7 @@ module
 public import Properties.Spot
 public import Proofs.Properties.Challenger
 public import Proofs.Properties.Spot.FilePart
+public import Proofs.Properties.Spot.Pinned
 public import Proofs.Core.QSort
 import all Init.Data.Array.QSort.Basic
 
@@ -1017,12 +1018,13 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
       h7', h4', h5', h6a, h6b, h6c, h6d, h7r, _⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
     exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop, hdecl⟩,
-      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d⟩, h7r⟩
+      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d⟩,
+      fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩⟩
   · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop, hdecl⟩,
       ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d⟩, h7r⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4',
-      h5', h6a, h6b, h6c, h6d, h7r, trivial⟩
+      h5', h6a, h6b, h6c, h6d, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, trivial⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3
@@ -1551,5 +1553,13 @@ theorem history_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Pu
           int? (getD x "leaves") = int? (getD r "leaves") := by
   obtain ⟨law, -, -, hr, -⟩ := acceptMeans p c e pub prof h
   exact history_of_R7 c.record p.verifier (hr.2.2.2.2.2.2 hv).1 u q hreg hu honly hs
+
+/-- `PinnedHeld` at what the check accepts (`acceptMeans`): the record's entry for each value the verifier pinned and
+takes from no earlier run, the window's arrivals at the root the network certifier signed among them, has its pinned
+root. -/
+theorem pinnedHeld_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
+    (h : OneStage.check p c e = .accept pub prof) (hv : ExpectsV2 p.verifier) : PinnedHeld c.record p.verifier := by
+  obtain ⟨law, -, -, hr, -⟩ := acceptMeans p c e pub prof h
+  exact (hr.2.2.2.2.2.2 hv).2.2
 
 end Properties.Spot
