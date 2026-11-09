@@ -27,6 +27,11 @@ def test_a_pr_lands_after_its_build_its_listing_and_the_tasks_it_touches() -> No
     assert sim.summary(r)["p50_h"] == pytest.approx(0.25)
 
 
+def test_ready_to_main_counts_from_the_ready_mark_and_from_the_review() -> None:
+    s = sim.summary(sim.simulate([arrive(1, 0.0, "a/x.py", reviewed=60.0)], W, ONE))
+    assert (s["p50_h"], s["review_p50_h"]) == pytest.approx((1.25, 0.25))
+
+
 def test_a_new_head_ends_the_hold_on_the_head_it_replaced() -> None:
     trace = [sim.Arrival(1, "h1", 0.0, frozenset({"a/x.py"})), sim.Arrival(1, "h2", 5.0, frozenset({"a/x.py"}))]
     r = sim.simulate(trace, W, ONE)

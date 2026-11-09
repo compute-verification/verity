@@ -238,7 +238,8 @@ def old_path(doc: dict, within: float = 120.0, lag: float = 180.0, every: float 
     s = sim.summary(sim.Report(tuple(rows), tuple(held), end, 1), within=within, lag=lag, every=every)
     first = min((a["checked"] for a in doc["arrivals"]), default=doc["since"])
     c = sim.summary(sim.Report((), tuple(landed), end, 1), lag=lag, every=every, start=_minutes(first, t0))
-    return {**{k: s[k] for k in ("prs", "landed", "p50_h", "p90_h", "within", "lag_max_h", "lag_ok")},
+    return {**{k: s[k] for k in ("prs", "landed", "p50_h", "p90_h", "review_p50_h", "review_p90_h", "within", "lag_max_h",
+                                 "lag_ok")},
             "checked_lag_max_h": c["lag_max_h"], "checked_lag_ok": c["lag_ok"], "checked_from": first}
 
 
@@ -291,12 +292,15 @@ def _mean(rows: list[dict]) -> dict:
 
 
 def _table(old: dict, rows: list[dict]) -> str:
-    head = "k  d  nodes   p50 h   p90 h  on main ≤2 h  lag max h  lag ≤3 h  ejects  false  bisect  cands  node use"
-    lines = [head, f"old path       {old['p50_h']:6.2f}  {old['p90_h']:6.2f}  {old['within']:12.0%}  {old['lag_max_h']:9.1f}  "
-                   f"{old['lag_ok']:8.0%}   (the oldest landing on checked not yet on main, from {old['checked_from'][:16]}: "
-                   f"max {old['checked_lag_max_h']:.1f} h, ≤3 h {old['checked_lag_ok']:.0%})"]
+    head = ("k  d  nodes   p50 h   p90 h  from review: p50 h   p90 h  on main ≤2 h  lag max h  lag ≤3 h  ejects  false  "
+            "bisect  cands  node use")
+    lines = [head, f"old path       {old['p50_h']:6.2f}  {old['p90_h']:6.2f}  {old['review_p50_h']:19.2f}  "
+                   f"{old['review_p90_h']:6.2f}  {old['within']:12.0%}  {old['lag_max_h']:9.1f}  {old['lag_ok']:8.0%}   (the "
+                   f"oldest landing on checked not yet on main, from {old['checked_from'][:16]}: max "
+                   f"{old['checked_lag_max_h']:.1f} h, ≤3 h {old['checked_lag_ok']:.0%})"]
     for r in rows:
         lines.append(f"{r['batch']:<2d} {r['depth']:<2d} {r['nodes']:<5d}  {r['p50_h']:6.2f}  {r['p90_h']:6.2f}  "
+                     f"{r['review_p50_h']:19.2f}  {r['review_p90_h']:6.2f}  "
                      f"{r['within']:12.0%}  {r['lag_max_h']:9.1f}  {r['lag_ok']:8.0%}  {r['ejects']:6.1f}  "
                      f"{r['false_ejects']:5.1f}  {r['bisections']:6.1f}  {r['candidates']:5.0f}  {r['utilization']:8.0%}")
     return "\n".join(lines)

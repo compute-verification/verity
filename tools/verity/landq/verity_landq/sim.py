@@ -131,13 +131,16 @@ def quantile(xs: list[float], f: float) -> float:
 
 
 def summary(r: Report, *, within: float = 120.0, lag: float = 180.0, every: float = 10.0, start: float = 0.0) -> dict:
-    """Ready-to-main quantiles (hours) over the arrivals that reached `main`, the share of all arrivals on `main` within
-    ``within`` minutes of their ready mark, main's lag (its worst, and the share of samples every ``every`` minutes from
-    ``start`` at most ``lag``), and what the queue spent: candidates, bisections, ejects, retries, runs and node use."""
+    """Ready-to-main quantiles (hours) over the arrivals that reached `main`, from the ready mark and from the review
+    (``review_*``, which leaves out the wait for a review), the share of all arrivals on `main` within ``within`` minutes of
+    their ready mark, main's lag (its worst, and the share of samples every ``every`` minutes from ``start`` at most
+    ``lag``), and what the queue spent: candidates, bisections, ejects, retries, runs and node use."""
     rows = [x for x in r.landings if x.ready >= start]
     hours = [(x.main - x.ready) / 60 for x in rows if x.main is not None]
+    reviewed = [(x.main - x.batchable) / 60 for x in rows if x.main is not None]
     samples = _lag(r.held, start, r.end, every)
     return {"prs": len(rows), "landed": len(hours), "p50_h": quantile(hours, .5), "p90_h": quantile(hours, .9),
+            "review_p50_h": quantile(reviewed, .5), "review_p90_h": quantile(reviewed, .9),
             "within": sum(x.main is not None and x.main - x.ready <= within for x in rows) / len(rows) if rows else 0.0,
             "lag_max_h": max(samples, default=0.0) / 60, "lag_ok": sum(s <= lag for s in samples) / len(samples) if samples else 1.0,
             "ejects": sum(x.ejects for x in rows), "false_ejects": sum(x.false_ejects for x in rows),
