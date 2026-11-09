@@ -366,6 +366,26 @@
    "digest": "8bc2d5170ca9e1848fc8e9cfa283d048b98ed61ec44e401861ed89b9bb01bb19",
    "why": "The width rule per Definition (`PrivateFitsOfLocal`)."
   },
+  "Verity.Rec.Compiled.ByShape": {
+   "owner": "@lean",
+   "digest": "9058b27233b113ee4da0797648e143426d27e2ca7351624f269317f23b21eeca",
+   "why": "The recursion's interface: each session's shape is public (its rounds, its bound's terms, its coins in bijection with the slot's), which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
+  },
+  "Verity.Rec.Compiled.Commits": {
+   "owner": "@lean",
+   "digest": "dec783db9eeb84e400318887e8ec8b62611cf21f887502ef8c6ce9668e3618bd",
+   "why": "The recursion's interface: the prover's prefix commits: its inner and stage rounds are strings of messages under their salts, which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
+  },
+  "Verity.Rec.Compiled.GoesOnAt": {
+   "owner": "@lean",
+   "digest": "413cb03ac88414ce3a6ccda013172152dabe620cdf8be85b3c3c0c207cc5aef4",
+   "why": "The recursion's interface: the continuation test agrees with `goesOn` at every real run, which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
+  },
+  "Verity.Rec.Compiled.WitnessIn": {
+   "owner": "@lean",
+   "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205",
+   "why": "The recursion's interface: each session's witness is in the outer system's relation unless the stop fired, which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
+  },
   "Verity.Sound": {
    "owner": "@proofs",
    "digest": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7",
@@ -390,6 +410,11 @@
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e",
    "why": "The final pack's relation holds."
+  },
+  "Verity.ZkSystem.ZK": {
+   "owner": "@lean",
+   "digest": "930ff1b2c507f083a7872be8f15f4e78eaa15f4a1cc287304b1376da022be53c",
+   "why": "The recursion's interface: the outer proof system is zero knowledge at δ₁ against a malicious verifier (`ZKmalRx`), which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
   },
   "WeightSecurity.Served.UndetectedLe": {
    "owner": "@proofs",
@@ -3242,30 +3267,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Rec.Compiled.ByShape": {
-   "owner": "@lean",
-   "digest": "9058b27233b113ee4da0797648e143426d27e2ca7351624f269317f23b21eeca",
-   "issue": "LEAN-186",
-   "due": "2026-11-07"
-  },
-  "Verity.Rec.Compiled.Commits": {
-   "owner": "@lean",
-   "digest": "dec783db9eeb84e400318887e8ec8b62611cf21f887502ef8c6ce9668e3618bd",
-   "issue": "LEAN-186",
-   "due": "2026-11-07"
-  },
-  "Verity.Rec.Compiled.GoesOnAt": {
-   "owner": "@lean",
-   "digest": "413cb03ac88414ce3a6ccda013172152dabe620cdf8be85b3c3c0c207cc5aef4",
-   "issue": "LEAN-186",
-   "due": "2026-11-07"
-  },
-  "Verity.Rec.Compiled.WitnessIn": {
-   "owner": "@lean",
-   "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205",
-   "issue": "LEAN-186",
-   "due": "2026-11-07"
-  },
   "Verity.Recursive.LiveCoins": {
    "owner": "@proofs",
    "digest": "8546e06c806d9823031c662a2c463f83113cfaf39894ef4f03cf02912d4933ba",
@@ -3295,12 +3296,6 @@
    "digest": "59c32110ad37a324988ebec3721ddbed31555090ee2b008b734c1651b3387da1",
    "issue": "LEAN-186",
    "due": "2026-11-30"
-  },
-  "Verity.ZkSystem.ZK": {
-   "owner": "@lean",
-   "digest": "930ff1b2c507f083a7872be8f15f4e78eaa15f4a1cc287304b1376da022be53c",
-   "issue": "LEAN-186",
-   "due": "2026-11-07"
   },
   "WeightSecurity.Assumptions.HonestUseHard": {
    "owner": "@proofs",
