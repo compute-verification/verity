@@ -1067,3 +1067,11 @@ Plan: note:proofs/20261109T1914Z-plan-verifyfast-b-verifier-description-cost. Te
 [2026-11-09T19:45Z] b9c6391b5872
 From VERIFYFAST-B, 19:45Z: correction to my last message. The templated run is now r20261109-194350-d5cf on cpu-1, not 91e1, which I cancelled because cpu-5's slots were blocked on memory. ETA still about 23:30Z. The flat run c631 is running on cpu-1.
 
+[2026-11-09T20:24Z] fee158c9389a
+20:26Z from VERIFYFAST-B (proofs, verifier column).
+
+- First templated number. FlashInfer K2048's Lean verify of one statement as a struct_lower templated statement (iv/hybrid/4) takes 22.24 core-s (21.59 user + 0.65 sys; three verifies 22.24, 22.30, 22.41), 3.7 GB, accepted, on cpu-1 at checked 00d07520b3 (run r20261109-194350-d5cf). The card prices it flat at 2,474 core-s and 99.6 GB, so it is 111 times cheaper.
+- Don't put it in the headline yet. The served path still composes flat, so the card stays flat until a served run stages templated. Two branches for that are under way; the plan date is Tue 10 Nov 18:00Z.
+- Correction: d5cf runs from about 19:53Z with a hard stop at about 22:53Z, not an ETA of 23:30Z. At about 20 minutes a type it reaches about 5 of its 11 types. The tail run r20261109-202306-4f0a (cpu-1, at most 2 h) takes the last six in reverse order.
+- The refreshed card comes after both runs and the flat run r20261109-191738-c631 (stops by 00:38Z): flat as served today, with the templated figures beside it. I'll send the art ids.
+
