@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -870,11 +871,16 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
         m.setattr(TG, "boolean_call_candidates", lambda words: set())
         assert UN.call_families([], nothing, {}) == {"Const32[0x00000001]_v1", "GatherI32x16_v1",
                                                     "Const32[0x00000001]_v2", "GatherI32x16_v2", *TG.CALLEE_CALLS}
+    from circuit_check import sidecars as SC
+
+    syn = types.ModuleType("syn.circuit-check")
+    vars(syn).update(__file__="syn.circuit-check.py", _vocabulary_roots=lambda: [],
+                     _vocabulary_bindings=lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
     monkeypatch.setattr(TG, "_SHORT", {})
     monkeypatch.setattr(TG, "_BOUND", {})
     monkeypatch.setattr(TG, "load_registries", lambda: None)
     monkeypatch.setattr(TG, "templates", lambda: [])
-    monkeypatch.setattr(TG, "_vocabulary_bindings", lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
+    monkeypatch.setattr(SC, "binding_modules", lambda: [("syn", syn)])
     with pytest.raises(RuntimeError, match=r"b1-eager-v3/dsv4_indexer_compress: KeyError: 'ROPE'"):
         UN.call_families([], nothing, {})
 

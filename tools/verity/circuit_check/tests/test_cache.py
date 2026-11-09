@@ -1350,7 +1350,7 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     assert {f"_model_roots:{label}" for label in labels} <= every and len(labels) > 50
     assert {f"TEMPLATE_PARAMS:{tid}" for tid in TG.template_params()} <= every
     assert {"_core_roots", "_boolean_roots", "_pouw_roots", "_kernel_roots", "_vocabulary_bindings", "common"} <= every
-    assert {"_kernel_roots", "_vocabulary_bindings", "common"} <= set(units[CC.TARGETS])
+    assert {"_kernel_roots", "common"} <= set(units[CC.TARGETS])
     src = srcs[CC.TARGETS]
     assert CC._units_of(src.replace("\ndef catalog(", "\n# a comment\ndef catalog(", 1))[0] == units[CC.TARGETS]
     b1 = SC.path_of("verity.ml.definitions.registry.b1", "py")
@@ -1359,9 +1359,9 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     assert {u for u in units[b1] if edited.get(u) != units[b1][u]} == {"_model_roots:ResidualAdd_v1"}
 
 
-#: `targets.py`'s own binding units: what no one module owns (every kernel's and vocabulary kind's self-check bindings), its
-#: module body, and `_root_bindings`, a helper whose name reads as a binding's
-TARGETS_UNITS = {"_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots", "_root_bindings", "common"}
+#: `targets.py`'s own binding units: what no one module owns (every kernel's self-check bindings), its module body, and
+#: `_root_bindings`, a helper whose name reads as a binding's
+TARGETS_UNITS = {"_kernel_roots", "_root_bindings", "common"}
 
 
 def test_every_binding_and_pin_is_in_the_module_it_binds():

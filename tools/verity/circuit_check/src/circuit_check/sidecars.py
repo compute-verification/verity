@@ -4,7 +4,9 @@
     fp8.circuit-check.py      its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
                               `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries; a Program
                               root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`);
-                              a family registered over a range of statics, ``RANGES``: each rule and its spots (`ranges`)
+                              a family registered over a range of statics, ``RANGES``: each rule and its spots (`ranges`);
+                              a root function whose bindings may fail one by one, ``_X_bindings`` beside it: each as (label,
+                              the bound Definition, or the error), so one that doesn't bind is named (`targets._root_function`)
     fp8.circuit-check.json    its pins (`checks`' lowering counts and circuit digest, ``type``, by kind: ``definitions``,
                               ``pieces``, ``units``; and the circuit digest of a gated Definition or of one bound at
                               served statics over `targets.MAX_GATES`, ``digests``, which keeps it in ``--all``; and a
@@ -17,8 +19,9 @@ that define Definitions or templates (`PACKAGES`, and each package of another di
 none is named here) and loads a binding file by its path: its name is no module name, so no
 registry enumeration imports it, and a Definition module imports nothing of circuit-check; the registries import every module
 with a sidecar (`targets.load_registries`).  A sidecar whose module is gone is an error.  What circuit-check needs of another
-distribution it reads the same way, from a sidecar that distribution owns, and never by importing it: the reader of a served
-workload's request Program (``request_program(path)``, `targets.request_program`).  `targets.py` keeps what no one module
+distribution it reads the same way, from a sidecar that distribution owns, and never by importing it: the frontend vocabularies'
+kinds (``_vocabulary_roots``, the word Call families) and the reader of a served workload's request Program
+(``request_program(path)``, `targets.request_program`).  `targets.py` keeps what no one module
 owns, and ``pins/`` the pins of Definitions no key names alone (made only inside another's body) or no module defines, one file
 per pin (`entries`): ``pins/<kind>/<entries.name(key)>.json``, in a pins file's form (``{kind: {key: counts}}``).
 """
