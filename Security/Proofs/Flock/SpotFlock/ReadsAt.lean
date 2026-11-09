@@ -36,7 +36,9 @@ The unit's instance is the first slot of its session's sample whose proof block 
 slot `i·n_t + p` of its template's part, with the unit's replay block the sample's `i`-th and the unit that block's
 `p`-th proof block of the template (`CheckedRun.slot_cell`). So a slot of stride `n_t` at position `p` places the
 instance under its replay block's roots, which is the arm fact `leafAt_reg` takes where the read is the template's own
-port (`CheckedRun.harm_own`, `CheckedRun.leafAt_own`).
+port (`CheckedRun.harm_own`, `CheckedRun.leafAt_own`). A wired read's slot is its writer's first instance in the cell,
+of stride `n_w` at position `0` (`CheckedRun.harm_wire`), and a linked read's is the replay block's slot of the
+boundary's population (`CheckedRun.harm_link`).
 -/
 
 namespace SpotFlock.ReadsAt
@@ -407,6 +409,28 @@ theorem armOf_own {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {port
   rw [hv, hl, hw]
   simp [hx]
 
+/-- **`armOf` at a wired port**: an entry whose value names a port that no link of the part's template names, but a
+wire does, reads its writer's part's rows, `q·n_w` units, each slot its writer's first in the cell. -/
+theorem armOf_wire {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {port : String} {e : Json} {v : String}
+    {w : Spot.SecondStage.Wire} {pw : Spot.SecondStage.Part} (hv : Spot.getD e "value" = .str v)
+    (hl : Spot.SecondStage.linkOf own p.template port = none)
+    (hw : Spot.SecondStage.wireOf own p.template port = some w) (hpw : Spot.SecondStage.writerOf own w = some pw) :
+    armOf own p port e = some (own.sample.size * pw.n, fun u => some (p.span u * pw.n)) := by
+  unfold armOf
+  rw [hv, hl, hw]
+  simp [hpw]
+
+/-- **`armOf` at a linked port**: an entry whose value names a port that a link of the part's template names reads the
+boundary's population, its `M` units, each slot its cell's replay block. -/
+theorem armOf_link {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {port : String} {e : Json} {v : String}
+    {l : Spot.SecondStage.Link} {M : ℕ} (hv : Spot.getD e "value" = .str v)
+    (hl : Spot.SecondStage.linkOf own p.template port = some l)
+    (hM : Spot.nat? (Spot.getD own.boundary "population") = some M) :
+    armOf own p port e = some (M, fun u => own.sample[p.span u]?) := by
+  unfold armOf
+  rw [hv, hl]
+  simp [hM]
+
 /-- **A slot at a registered read's unit opens the read's position**: where `rowsOk` accepts the read's entry, a slot
 not sized, counting the arm's units under the roots and placing its unit at the arm's unit for slot `j`, opens at an
 entry of the read's leaf count the position the read reads at `j` (`pos_of_rowsOk`). -/
@@ -719,21 +743,13 @@ theorem slot_cell {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1
       exact hinj
   · simp [hbu] at hnone
 
-/-- **The own arm's slot**: a slot with no units of its own, stride `n_t` and position `p` where the unit is its replay
-block's `p`-th proof block of its template counts, under that replay block's roots (`irootsOf`), the `q·n_t` units of
-the template's part, and places the unit's counted instance's slot (`slot_cell`): the sample's `i`-th replay block is
-at place `i` of round 1's record, which lists the sample, each block once (`selectSecond_sample`). -/
-theorem ownSlot {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) (hS : FirstSlots h)
-    {D : _root_.Flock.Draw.UnitDraw}
-    (hdr : drawnOf ((FlockDeploy.readOf true (r.xS h)).bind (·.draw)) = D.proved.toList) (hn : r.n h < D.proved.size)
-    (hlt : D.proved[r.n h] < (h.reg.sample (src r.c₀)).size * (r.drawnPart h).n) {s : Slot} (hs0 : s.units = 0)
-    (hst : s.stride = (r.drawnPart h).n) (hpos : s.pos < (r.drawnPart h).n)
-    (hu : h.reg.blockOf r.ρ (templateOf h.ms r.u) s.pos = r.u) :
-    unitsAt (irootsOf r.m₁ r.ρ) s = (h.reg.sample (src r.c₀)).size * (r.drawnPart h).n ∧
-      s.pos + placeOf (irootsOf r.m₁ r.ρ) * s.stride = D.proved[r.n h] := by
+/-- **The unit's replay block's roots place it at its cell**: where the sample's `i`-th replay block is the unit's,
+`r.ρ`, the replay block's roots (`irootsOf`) state place `i` among the sample's `q` replay blocks, since round 1's
+record lists the sample (`drawnAt`), each block once (`selectSecond_sample`). -/
+theorem placeOf_cell {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) {i : ℕ}
+    (hi : i < (h.reg.sample (src r.c₀)).size) (hρi : (h.reg.sample (src r.c₀)).getD i 0 = r.ρ) :
+    placeOf (irootsOf r.m₁ r.ρ) = i ∧ qOf (irootsOf r.m₁ r.ρ) = (h.reg.sample (src r.c₀)).size := by
   obtain ⟨draw, rec, _, hdraw, hrec, hbl, _⟩ := drawnAt h hr hc1
-  obtain ⟨i, p, hi, hp, hdec, hρi, hup, hinj⟩ := slot_cell h hr hc1 hS hdr hn hlt
-  have hps : p = s.pos := hinj (Set.mem_Iio.2 hp) (Set.mem_Iio.2 hpos) (hup.trans hu.symm)
   obtain ⟨_, hsel⟩ := secondDraw_ok h hdraw
   have hnd := (selectSecond_sample hsel).2
   have hi' : i < (h.reg.sample (src r.c₀)).toList.length := by
@@ -742,8 +758,48 @@ theorem ownSlot {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) 
   have hρ' : r.ρ = (h.reg.sample (src r.c₀)).toList[i] := by
     rw [← hρi, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some, Array.getElem_toList]
   refine ⟨?_, ?_⟩
-  · rw [unitsAt, qOf_irootsOf hrec, hbl, Array.length_toList, hs0, hst, Nat.zero_add]
-  · rw [placeOf_irootsOf hrec, hbl, hρ', List.Nodup.idxOf_getElem hnd i hi', hst, hdec, ← hps, Nat.add_comm]
+  · rw [placeOf_irootsOf hrec, hbl, hρ', List.Nodup.idxOf_getElem hnd i hi']
+  · rw [qOf_irootsOf hrec, hbl, Array.length_toList]
+
+/-- Slot `i·n + k` of a part, `k < n`, is in its cell `i` (`Part.span`). -/
+theorem span_cell {p : Spot.SecondStage.Part} {i k : ℕ} (hk : k < p.n) : p.span (p.lo + (i * p.n + k)) = i := by
+  rw [Spot.SecondStage.Part.span, Nat.add_sub_cancel_left, Nat.add_comm, Nat.add_mul_div_right _ _ (by omega),
+    Nat.div_eq_of_lt hk, Nat.zero_add]
+
+/-- **The own arm's slot**: a slot with no units of its own, stride `n_t` and position `p` where the unit is its replay
+block's `p`-th proof block of its template counts, under that replay block's roots (`irootsOf`), the `q·n_t` units of
+the template's part, and places the unit's counted instance's slot (`slot_cell`, `placeOf_cell`). -/
+theorem ownSlot {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) (hS : FirstSlots h)
+    {D : _root_.Flock.Draw.UnitDraw}
+    (hdr : drawnOf ((FlockDeploy.readOf true (r.xS h)).bind (·.draw)) = D.proved.toList) (hn : r.n h < D.proved.size)
+    (hlt : D.proved[r.n h] < (h.reg.sample (src r.c₀)).size * (r.drawnPart h).n) {s : Slot} (hs0 : s.units = 0)
+    (hst : s.stride = (r.drawnPart h).n) (hpos : s.pos < (r.drawnPart h).n)
+    (hu : h.reg.blockOf r.ρ (templateOf h.ms r.u) s.pos = r.u) :
+    unitsAt (irootsOf r.m₁ r.ρ) s = (h.reg.sample (src r.c₀)).size * (r.drawnPart h).n ∧
+      s.pos + placeOf (irootsOf r.m₁ r.ρ) * s.stride = D.proved[r.n h] := by
+  obtain ⟨i, p, hi, hp, hdec, hρi, hup, hinj⟩ := slot_cell h hr hc1 hS hdr hn hlt
+  have hps : p = s.pos := hinj (Set.mem_Iio.2 hp) (Set.mem_Iio.2 hpos) (hup.trans hu.symm)
+  obtain ⟨hpl, hq⟩ := placeOf_cell h hr hc1 hi hρi
+  refine ⟨?_, ?_⟩
+  · rw [unitsAt, hq, hs0, hst, Nat.zero_add]
+  · rw [hpl, hst, hdec, ← hps, Nat.add_comm]
+
+/-- **The wire arm's slot**: a slot with no units of its own, stride `n_w` and position `0` counts, under the unit's
+replay block's roots, the `q·n_w` units of the writer's part, and places at the unit's counted instance's slot its
+writer's first instance in the same cell (`span_cell`), the row round 2 holds a wired read to. -/
+theorem wireSlot {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) (hS : FirstSlots h)
+    {D : _root_.Flock.Draw.UnitDraw}
+    (hdr : drawnOf ((FlockDeploy.readOf true (r.xS h)).bind (·.draw)) = D.proved.toList) (hn : r.n h < D.proved.size)
+    (hlt : D.proved[r.n h] < (h.reg.sample (src r.c₀)).size * (r.drawnPart h).n) {s : Slot} {nw : ℕ}
+    (hs0 : s.units = 0) (hst : s.stride = nw) (hpos : s.pos = 0) :
+    unitsAt (irootsOf r.m₁ r.ρ) s = (h.reg.sample (src r.c₀)).size * nw ∧
+      s.pos + placeOf (irootsOf r.m₁ r.ρ) * s.stride =
+        (r.drawnPart h).span ((r.drawnPart h).lo + D.proved[r.n h]) * nw := by
+  obtain ⟨i, p, hi, hp, hdec, hρi, _, _⟩ := slot_cell h hr hc1 hS hdr hn hlt
+  obtain ⟨hpl, hq⟩ := placeOf_cell h hr hc1 hi hρi
+  refine ⟨?_, ?_⟩
+  · rw [unitsAt, hq, hs0, hst, Nat.zero_add]
+  · rw [hpl, hst, hpos, hdec, span_cell hp, Nat.zero_add]
 
 /-- **`leafAt_reg`'s arm fact at the template's own port**: where the read takes the own arm in the accepted run
 (`ReadsAt.armOf_own`), a slot with no units of its own, stride `n_t` and position the unit's in its replay block's
@@ -770,6 +826,59 @@ theorem harm_own {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1)
   rw [hP]
   simp only [Nat.add_sub_cancel_left, Option.some.injEq] at hb
   exact hb
+
+/-- **`leafAt_reg`'s arm fact at a wired port**: where the read takes the wire arm in the accepted run, over its
+writer's part of `n_w` slots a cell (`ReadsAt.armOf_wire`), a slot with no units of its own, stride `n_w` and position
+`0` has it under the unit's replay block's roots (`wireSlot`). -/
+theorem harm_wire {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) (hS : FirstSlots h)
+    {reg : _root_.Flock.Registered.Port} {s : Slot} {nw : ℕ} (hs0 : s.units = 0) (hst : s.stride = nw)
+    (hpos : s.pos = 0)
+    (harm : ∀ st rec draw e, decode r.x = some st → jsonMsg r.m₁ = some rec → secondDraw h r.c₀ r.c₁ = some draw →
+      ReadsAt.ReadFields e reg → ReadsAt.armOf (ownOf h st rec draw r.c₀) (r.drawnPart h) reg.name e =
+        some ((h.reg.sample (src r.c₀)).size * nw, fun u => some ((r.drawnPart h).span u * nw))) :
+    ∀ st rec draw e (D : _root_.Flock.Draw.UnitDraw) (hn : r.n h < D.proved.size), decode r.x = some st →
+      jsonMsg r.m₁ = some rec → secondDraw h r.c₀ r.c₁ = some draw →
+      drawnOf ((FlockDeploy.readOf true (r.xS h)).bind (·.draw)) = D.proved.toList → ReadsAt.ReadFields e reg →
+      ∃ units unit, ReadsAt.armOf (ownOf h st rec draw r.c₀) (r.drawnPart h) reg.name e = some (units, unit) ∧
+        unitsAt (irootsOf r.m₁ r.ρ) s = units ∧
+        ∀ b, unit ((r.drawnPart h).lo + D.proved[r.n h]) = some b →
+          s.pos + placeOf (irootsOf r.m₁ r.ρ) * s.stride = b := by
+  intro st rec draw e D hn hx hrec hdraw hdr hf
+  obtain ⟨D', hdr', _, hlt', _⟩ := labelAt h hr hc1
+  have hDD : D'.proved = D.proved := Array.toList_inj.1 (hdr'.symm.trans hdr)
+  rw [hDD] at hlt'
+  obtain ⟨hU, hP⟩ := wireSlot h hr hc1 hS hdr hn (hlt' _ (Array.getElem_mem hn)) hs0 hst hpos
+  refine ⟨_, _, harm st rec draw e hx hrec hdraw hf, hU, fun b hb => ?_⟩
+  rw [hP]
+  simp only [Option.some.injEq] at hb
+  exact hb
+
+/-- **`leafAt_reg`'s arm fact at a linked port**: where the read takes the link arm in the accepted run, over a
+boundary population of `M` (`ReadsAt.armOf_link`), a slot of `M` units, stride `0` and position the unit's replay
+block has it under any roots: round 2 holds a linked read to the replay block's slot of the boundary's population,
+and a slot of the sample's cell `i` reads the sample's `i`-th entry (`span_cell`, `slot_cell`). -/
+theorem harm_link {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) (hS : FirstSlots h)
+    {reg : _root_.Flock.Registered.Port} {roots : List Msg} {s : Slot} {M : ℕ} (hsu : s.units = M)
+    (hst : s.stride = 0) (hpos : s.pos = r.ρ)
+    (harm : ∀ st rec draw e, decode r.x = some st → jsonMsg r.m₁ = some rec → secondDraw h r.c₀ r.c₁ = some draw →
+      ReadsAt.ReadFields e reg → ReadsAt.armOf (ownOf h st rec draw r.c₀) (r.drawnPart h) reg.name e =
+        some (M, fun u => (h.reg.sample (src r.c₀))[(r.drawnPart h).span u]?)) :
+    ∀ st rec draw e (D : _root_.Flock.Draw.UnitDraw) (hn : r.n h < D.proved.size), decode r.x = some st →
+      jsonMsg r.m₁ = some rec → secondDraw h r.c₀ r.c₁ = some draw →
+      drawnOf ((FlockDeploy.readOf true (r.xS h)).bind (·.draw)) = D.proved.toList → ReadsAt.ReadFields e reg →
+      ∃ units unit, ReadsAt.armOf (ownOf h st rec draw r.c₀) (r.drawnPart h) reg.name e = some (units, unit) ∧
+        unitsAt roots s = units ∧
+        ∀ b, unit ((r.drawnPart h).lo + D.proved[r.n h]) = some b → s.pos + placeOf roots * s.stride = b := by
+  intro st rec draw e D hn hx hrec hdraw hdr hf
+  obtain ⟨D', hdr', _, hlt', _⟩ := labelAt h hr hc1
+  have hDD : D'.proved = D.proved := Array.toList_inj.1 (hdr'.symm.trans hdr)
+  rw [hDD] at hlt'
+  obtain ⟨i, p, hi, hp, hdec, hρi, _, _⟩ := slot_cell h hr hc1 hS hdr hn (hlt' _ (Array.getElem_mem hn))
+  refine ⟨_, _, harm st rec draw e hx hrec hdraw hf, by rw [unitsAt, hsu, hst, Nat.mul_zero, Nat.add_zero],
+    fun b hb => ?_⟩
+  simp only [hdec, span_cell hp, Array.getElem?_eq_getElem hi, Option.some.injEq] at hb
+  rw [hpos, hst, Nat.mul_zero, Nat.add_zero, ← hρi, ← hb, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi,
+    Option.getD_some]
 
 /-- **A registered read at the template's own port opens the header's position** for the unit's instance, at a slot
 with no units of its own, stride `n_t` and position the unit's in its replay block's cell, under that replay block's
