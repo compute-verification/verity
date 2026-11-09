@@ -8,8 +8,12 @@ directory's: a rerun checks only the targets whose reads changed.  circuit-check
 
 A pass is circuit-check's exit 0; a fail its exit 1 (a target's failure), its refusal of a name no catalog binding has
 (`NO_BINDING`) or the catalog task's marker that it made no slice of that name (`absent`); anything else is an error: another
-refusal (a slice not of this tree), a kill, no report.  `detail`: the binding's targets, how many passed, failed and were
-reused, and the failures' names, as the report's summary names them (``failure_names``, `circuit_check.checks.summarize`'s).
+refusal (a slice not of this tree), a kill, no report, a report with no read set.  What the run read beyond what
+circuit-check's ``reads/`` declares of its binding, the paths its report's ``undeclared`` names (`undeclared`), are its
+undeclared reads, so the task is an error: the task's ``lookups`` holds only what ``reads/`` declares.  `detail`: the
+binding's targets, how many passed, failed and were reused, the failures' names, as the report's summary names them
+(``failure_names``, `circuit_check.checks.summarize`'s), and its targets with no entry to take their reads from
+(``unrecorded``).
 Its one output is every failure of its Definition targets, each by its check, code and Definition (`FIELDS`).  `checker`,
 `pack` and `unpack` are the circuit-catalog and circuit-coverage runners' too."""
 from __future__ import annotations
@@ -36,6 +40,13 @@ TOP = "cache"
 NAMED = 100
 #: what the ``failures`` output keeps of a failure
 FIELDS = ("check", "code", "definition")
+#: what a binding's ``undeclared`` (`circuit_check.cli._read_sets`) names by path: each kind of a read set
+#: (`circuit_check.cache.DECLARED`), a library git doesn't have and a module whose source was looked for beyond ``loaded``, its
+#: own and, under ``registries``, the registries'
+PATHS = ("files", "listed", "probes", "untracked", "loaded")
+#: how a read beyond ``reads/`` is declared, as the binding runs circuit-check
+DECLARE = ("python -m circuit_check --all --catalog-units --cache DIR --update-reads from the root, and commit "
+           "tools/verity/circuit_check/reads")
 
 
 def cache() -> Path:
@@ -107,6 +118,15 @@ def absent(name: str) -> dict:
 REFUSED = "circuit-check: refused: "
 
 
+def undeclared(rep: dict, name: str) -> list[str] | None:
+    """The paths binding ``name``'s run read beyond what ``reads/`` declares of it, as its report ``rep`` says (`PATHS` of its
+    ``undeclared``), or None when the report holds no read set (``reads``)."""
+    if "reads" not in rep:
+        return None
+    u = rep.get("undeclared", {}).get(name, {})
+    return sorted({p for d in (u, u.get("registries") or {}) for k in PATHS for p in d.get(k, ())})
+
+
 def run(task: dict, work: Path) -> dict:
     name, c = task["vars"]["binding"], cache()
     piece, shared = work / task["vars"]["slice"], work / task["vars"]["shared"]
@@ -122,6 +142,9 @@ def run(task: dict, work: Path) -> dict:
         return {"status": "error", "detail": {"error": f"circuit-check --binding exited {rc}"
                                               + ("" if rep is not None else " and wrote no report")
                                               + (f": {why[:500]}" if why else "")}}
+    if (beyond := undeclared(rep, name)) is None:
+        return {"status": "error", "detail": {"error": "circuit-check --binding wrote a report with no read set (reads), so what "
+                                                       "it read beyond reads/ is unknown"}}
     facts = sorted({tuple(f[k] for k in FIELDS) for t in rep["targets"] if t["kind"] == "definition"
                     for f in t.get("failures", [])})
     out = work / task["outputs"][0]["path"]
@@ -133,4 +156,8 @@ def run(task: dict, work: Path) -> dict:
               "reused": (rep.get("cache") or {}).get("hits", 0)}
     if named:
         detail["failures"] = sorted(named)[:NAMED]
-    return {"status": "fail" if rc else "pass", "detail": detail}
+    if unrecorded := rep.get("undeclared", {}).get(name, {}).get("unrecorded"):
+        detail["unrecorded"] = sorted(unrecorded)[:NAMED]
+    if beyond:
+        detail["error"] = f"read {len(beyond)} path(s) beyond what reads/ declares of {name}: {DECLARE}"
+    return {"status": "fail" if rc else "pass", "detail": detail, "undeclared_reads": beyond}
