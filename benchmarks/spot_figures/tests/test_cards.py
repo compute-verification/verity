@@ -62,7 +62,7 @@ def test_a_workload_serves_at_least_its_proof_blocks_macs():
 
 
 def headline() -> dict:
-    cells = {"875-token cap": {"without m = 37": {"world year": 0.18}, "with m = 37": {"world year": 0.135}}}
+    cells = {"trace S": {"without m = 37": {"world year": 0.18}, "with m = 37": {"world year": 0.135}}}
     row = {"row": "(ii)", "label": "(ii) a fused cut", "pricing": "on its own premises", "basis": "design",
            "basis_from": ["a cut no serving path commits"], "rests_on": ["λ = 1.05"], "cells": cells,
            "runs": ["r20261109-192926-0dd9"]}
@@ -82,8 +82,8 @@ def test_a_headline_card_is_measured_only_when_every_row_is_served_and_measured(
 @pytest.mark.parametrize("change,message", [
     (lambda r: r.update(basis="served"), "basis: 'served', but it is one of"),
     (lambda r: r.update(basis_from=[]), "empty basis_from; name what sets it"),
-    (lambda r: r["cells"]["875-token cap"]["with m = 37"].update({"world year": -0.1}), "a number at least 0"),
-    (lambda r: r["cells"]["875-token cap"].update({"with m = 37": 0.1}), "an object of scopes"),
+    (lambda r: r["cells"]["trace S"]["with m = 37"].update({"world year": -0.1}), "a number at least 0"),
+    (lambda r: r["cells"]["trace S"].update({"with m = 37": 0.1}), "an object of scopes"),
     (lambda r: r["cells"].update({"census S": [0.2]}), "an object of verifier steps"),
 ])
 def test_a_headline_row_names_what_breaks(change, message):

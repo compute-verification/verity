@@ -84,7 +84,7 @@ def test_the_caption_calls_no_design_today_and_names_where_the_path_turns_to_one
 
 def test_the_headline_cards_rows_are_stated_with_their_basis():
     import cards
-    cells = {"875-token cap": {"without m = 37": {f1.PRIMARY: 0.1806}, "with m = 37": {f1.PRIMARY: 0.1347}}}
+    cells = {"trace S": {"without m = 37": {f1.PRIMARY: 0.1806}, "with m = 37": {f1.PRIMARY: 0.1347}}}
     row = {"row": "(ii)", "label": "(ii) a fused cut", "pricing": "on its own premises", "basis": "design",
            "basis_from": ["a cut no serving path commits"], "rests_on": [], "cells": cells,
            "runs": ["r20261109-192926-0dd9"]}
@@ -93,7 +93,7 @@ def test_the_headline_cards_rows_are_stated_with_their_basis():
             "value": {"bases": list(cards.BASES), "rows": [row], "quote": "none"}}
     out = f.run([SURFACE, LATER], PATH, card)
     assert out["headline"][0]["basis"] == "design"
-    assert ("(ii) a fused cut, on its own premises (a design not served): 875-token cap 18.1% without m = 37 and "
+    assert ("(ii) a fused cut, on its own premises (a design not served): trace S 18.1% without m = 37 and "
             "13.5% with m = 37. No row is served and measured.") in f.caption(out)
     with pytest.raises(ValueError, match="a measured headline card holds only served-measured rows"):
         f.run([SURFACE], PATH, card | {"status": "measured"})
