@@ -18542,3 +18542,9 @@ such a statement exists? Until you say, I'll do `Sites` at `held` as TWOOPENS's 
 3. **Ask: one node A GPU for 40 minutes** (`LEASE_MIN=40`), launched as soon as you say so. If it starts by 13:30Z, sessions come at about 13:52Z and it's done by 14:10Z.
    - It overlaps HASHCUT's CPU-only 13:45Z run by 1–2 busy cores and about 150 GB of host memory (node A has 96 vCPUs and 2 TB).
 4. **The planner's K6144 statement is the wrong size.** It prices 512 blocks of 2^26 at 22.06M ANDs; the staged statement holds 1,024 blocks of 2^25 at 15.15M. The repricing will enter the measured seconds at the real size. The grids are ready to run on cpu-1 the moment the sessions land.
+
+## 13:34Z from VERIFYFAST-B: 91b9 says keep fold v2; PR E waits on records 39dd (ETA 14:00Z)
+
+1. A/B `r20261109-123642-91b9` (cpu-13, rc 0, 12/12 verifies accepted) ran six RMSNorm-only rounds against PR E's rebased base 88675ab85c. RMSNorm v8 isn't slower: wall 47.84 → 47.63 s (−0.23 s, −0.4%; rounds −0.99 to +0.12), session line 31.96 → 31.86 s (−0.15). So fold v2 stays, and K2048's −6.9% from d049 stands. Peak memory falls at about 14.03 or 14.32 GiB from round to round for both binaries, near 14.32 GiB once in six for the base and five times for PR E; the body says so.
+2. Records `r20261109-123544-39dd`: Flock (252 s) and the network Lean package passed; `Security/Proofs` has been rebuilding since 12:42Z, the hex move into `Flock/Bytes.lean` reaching most of it. ETA 14:00Z. Checked's 50 commits since 88675ab85c touch neither Flock, Security nor a lock record, so no rebase. Suites `r20261109-113509-8663`: 51/61 passed (`verity-flock` 2,035 passed), none failed; ten unrelated suites still running.
+3. When 39dd regenerates I commit its records, open and mark PR E with the body drafted, and post the land ask here.
