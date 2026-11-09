@@ -164,6 +164,11 @@ oracle_tests = [
     "integrations/vllm/tests/protocols/test_pouw_h1{,_circuits,_commit,_drawn,_gpu_args,_handoff,_live,_ranks_commit}.py",
     "integrations/vllm/tests/protocols/test_{credit_gate,pouw_pearl_c_served,rt4_h1_challenger}.py",
 ]
+# vLLM's tests of the code identity and the code version, which read the run store's closure and code directories: the public
+# release refuses them by name (`config.run_store`), and `test_run_store_absent.py` holds it to that
+run_store_tests = [
+    "integrations/vllm/tests/pipeline/test_{boundary_plan,commit_tree_of_record,experiment_index,hot_commit}.py",
+]
 team = [
     "infra",
     "tools/{research,agent-guard}",
@@ -179,7 +184,7 @@ team = [
     "integrations/vllm/tests/lint/test_merge_allowlist.py",
     "integrations/vllm/tests/pipeline/test_{circuit_db,source_identity,research_tools,workload_fetch}.py",
     "integrations/vllm/tests/regression/test_attempt_resolution.py",
-    # a row's stages as research Attempts (`row stage|chain|shed`), which `row_driver.research` loads by name, and its test
+    # a row's stages as research Attempts (`row stage|chain|shed`), which `config.run_store` loads by name, and its test
     "integrations/vllm/verity_vllm/pipeline/research.py",
     "integrations/vllm/tests/pipeline/test_row_chain.py",
 ]
