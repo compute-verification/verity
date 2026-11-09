@@ -3137,8 +3137,9 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
 
 def test_a_claim_a_guarantee_takes_as_a_premise_keeps_its_claims_entry():
     """A predicate under `claims.modules` that is also a named assumption (a claim a guarantee takes as a premise, as
-    `SampledLeakAccepted` takes `Claims.Sampling.KS`) keeps its `claims.witnesses` or `claims.not` entry, whose witnesses are
-    still checked, and needs none; an entry naming no predicate is stale, and a claim that is no assumption needs one."""
+    `SampledLeakAccepted` takes `Claims.SamplingGeneric.Compiled.KS`) keeps its `claims.witnesses` or `claims.not`
+    entry, whose witnesses are still checked, and needs none; an entry naming no predicate is stale, and a claim that is
+    no assumption needs one."""
     defs = [{"name": n, "module": "P.Claims", "kind": "def", "statement": False, "predicate": True}
             for n in ["P.KS", "P.Within", "P.Other"]]
     within = {"head": "P.Within", "defs": ["P.Within"], "refl": False, "assumed": False}

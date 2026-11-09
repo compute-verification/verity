@@ -17,10 +17,10 @@ the sampling extractor at the step `runExt` (`E_eq_Esamp`).
   on its coins cast along the statement's rounds), and makes no SHA-512 call of its own.
 
 * `Esamp`: the sampling extractor with what it does at each accepted inner run a parameter (`step`), and its three
-  bounds from the step's (`Esamp_runs_le`, `Esamp_runs_exp`, `Esamp_own_le`): `Claims.Sampling`'s `E_runs_le`,
-  `E_runs_exp` and `E_own_le` with Flock's unit waits replaced by the step. In expectation the step's reruns average at
-  most `W` of the inner run, and acceptance times `W` averages at most `B` over the second stage, against which the
-  inner wait amortizes (`level_ex`, `level_amortized`).
+  bounds from the step's (`Esamp_runs_le`, `Esamp_runs_exp`, `Esamp_own_le`): the replay, the outer wait over
+  `K_out` samples and the inner wait over `K_in` at each kept run, then the step. In expectation the step's reruns
+  average at most `W` of the inner run, and acceptance times `W` averages at most `B` over the second stage, against
+  which the inner wait amortizes (`level_ex`, `level_amortized`).
 * `unitExt_runs_eq`, `unitExt_own_le`: under `runs`, a sampled proof block's extraction reruns exactly as `A`'s extractor
   against the session's prover at the session's coins (each served rerun is one rerun, seen as the session's view), and
   its own SHA-512 calls are `A`'s extractor's and its reveal's checks.
@@ -124,6 +124,20 @@ theorem Ex_restrict_shape {Coin : Type} [Fintype Coin] [Nonempty Coin] {A : Arg 
   exact Ex_comp_inj emb hemb fun a => Ex (F a)
 
 /-! ## Every proof system's extractor's strict reruns and own calls -/
+
+section NoHash
+
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin]
+
+/-- **A proof system's `E^rep` makes no SHA-512 call of its own**: it replays the run, then its waits rerun. -/
+theorem noHash_ext (A : Arg Coin) (x : Msg) (r₀ : Fin (A.V.k x) → Coin) (c : A.EC (A.shape x)) :
+    Claims.Sampling.NoHash (A.ext x r₀ c) := by
+  refine Claims.Sampling.NoHash.rerun _ _ fun v => ?_
+  split
+  · exact Claims.Sampling.NoHash.firstWait _ _ _ _ _
+  · exact Claims.Sampling.NoHash.ret _
+
+end NoHash
 
 namespace Arg
 
