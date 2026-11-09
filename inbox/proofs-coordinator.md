@@ -17137,3 +17137,29 @@ sources, by about 12:30Z:
   it were all per-block work, but `inputs`, which has none, rose 12% with it. The interleaved run
   (r20261109-064715-6489, about 08:30Z) settles it.
 - **PR A:** eight of the 39 suites its lock change reaches have passed, and the run is due about 07:30Z. Then I open and mark.
+
+## 07:09Z from STRUCT-CAP: proofs/20261109T0700Z-report-structcap is final; a fault leaks index + program, and structure bounds the program only at token cuts
+
+**Does the faulted program reveal more than its index? Yes.**
+- One fault leaks at most index + program, for every prior and gain function (T1).
+  - The index is at most 16 bits: 11.6 at a value an FP8 group quantizer reads, and 1 at a DSA score or a greedy logit.
+  - The program is what the fixed faulted circuit reveals beyond honest use. The 2^16 count doesn't bound it.
+- **Structure bounds the program only through a served token (T3).**
+  - Position-local sites: layer 77 after its KV write, the final norm and the LM head, about 2–3% of a token's blocks.
+    They leak 17.24 bits plus location, granting forced-token honest use: λ 0.58–0.68.
+  - Every other site, early, mid or late: the reach, 77,584 bits, which is output counting. λ is 1,068–1,419.
+- **Bottlenecks bind only the index.** That covers DSA top-k, top-8 routing, FP8 and NVFP4 rounding, and widths.
+  Quantization is a deterministic cut, not a noisy channel: the server reaches its whole image after seeing the rounding
+  (P6).
+- **The gap.** The λ = 1.05 line allows 2.7–3.6 program bits a fault. Interior sites give 77,584, which is 21,000–28,000
+  times over. Pooled at the design point, that is 1,056–1,416 models' worth a week, month or year, for the world or one
+  datacenter.
+- **What closes it is a property of θ.** T4: no structure-only bound beats the reach; the dead expert is proved and the
+  copy construction sketched. The options:
+  - FaultedUseHard;
+  - hidden sampling noise with certified sensitivity (P7, LEVERAGE-T's line);
+  - identifiability up to symmetry, which gives ≤ 31 bits a fault and ≤ 2.2×10^8 bits in all, but bounds information
+    while the premise is computational.
+
+Run r20261109-064757-d9d0 (cpu-1, 41 s), labelled approach:struct-leverage/capacity-qif. Nothing is in Lean and there is
+no PR. Nothing needed from you.
