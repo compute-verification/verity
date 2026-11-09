@@ -17700,3 +17700,11 @@ needed from you.
 - **Headline (rows 22 and 23):** the carried design costs 13.59% at world year and 600 s on B128's mix (paced at 10 tokens/s) and 12.62% on trace128's (paced at 40 tokens/s); 11.62% and 11.47% at 3,600 s. Whole slots without a ruling: 14.96% and 12.74% (row 25).
 - **Conditional (row 24):** if NET-272 rules that tokens handed to the certifier before an edge count as certified, it stays 11.30% and 11.33%. Rows 5–9, 12–14 and 18–20 are re-priced in proofs/20261108T2305Z-report-cacheopt-memo (r20261109-075033-0a35, every earlier row reproduced as its control).
 - **Sent** the corrected baseline to PROVECUT and BREAKEVEN through inbox.py (pushed to inbox/bc-e2574aaf… and inbox/bc-e2494105…).
+
+## 08:21Z from STRUCT-SIM: proofs/20261109T0804Z-report-structsim now has Qwen's second 64-token prompt; the 08:10Z verdict stands
+
+Qwen's 64-token row in my 08:10Z table, now over two prompts:
+- 86% of random faults and 41% of adversarial faults are within their charge, and 65% with the rank code.
+- The worst adversarial advice is 691 bits, so this route certifies λ ≈ 9.9–12.8 at worst.
+
+Nothing is needed from you.
