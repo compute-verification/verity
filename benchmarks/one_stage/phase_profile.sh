@@ -12,12 +12,18 @@
 #   tl     one warm process (warm 1 + RUNS M1 dev sessions) under nsys, CUDA and OS calls traced; phase_profile.py splits each
 #          rep's PHASE (default t.ligerito) window, anchored at ANCHOR's launch (default lf_fold_base_pair)
 #   an     phase_profile.py again on AS's newest trace (KW/traces; PROVE_OUT: its session records, where they aren't beside it)
+#   session  session_profile.py on AS's newest trace (the tl step's): every phase of a session's prove time, ranked in ms a
+#          session
+#   peak   for each build (base and new) and each of PEAK_UNITS (default moe-w13's and gq's statements, `;` between them) at full,
+#          each staged once per KW (gq's stage takes about 50 min): a prover_is_deterministic selftest under M1 and under M0, and
+#          one M1 dev session, with the GPU's processes sampled every 100 ms; the largest process's device peak in MiB
 #   ab     ROUNDS rounds, order rotating, of one warm process (warm 1 + 3 M1 dev sessions) per build, base and new
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run under research run}; O=$D/out; mkdir -p $O
 REPO=$(pwd); W=${KW:-/workspace/jobs/phase}; mkdir -p $W; AS=${AS:-new}; STEPS=${STEPS:-setup,build,stage,ident,tl}
 END=${END:-$(( $(date +%s) + 6 * 3600 ))}; ROUNDS=${ROUNDS:-3}; RUNS=${RUNS:-2}; UNITS=${UNITS:-moe-w13:N=1,SWAP=False}
 PHASE=${PHASE:-t.ligerito}; ANCHOR=${ANCHOR:-lf_fold_base_pair}
+PEAK_UNITS=${PEAK_UNITS:-moe-w13:N=1,SWAP=False;gq}
 MAIN_ZK=493e51d79e3d5c9dc0457e7670245e84218a3cb360b133cd3a35206a7ce7106fce3db0bf2db19d7f158f7994bd16f1b03f3bb056b257c0a2ccd6082aa36eaae6
 MAIN_M0=0f0dfa3c0bb8a743e1b40ded2b8813ca27758061f1fb194e68be62435dd521dec815920b33ad22ec3a4b6a7f68b4c5d3a4fc2cdbc80e3501b4088eaba53f2337
 export CUDA_DEVICE_ORDER=PCI_BUS_ID PYTHONDONTWRITEBYTECODE=1 CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
@@ -136,6 +142,51 @@ if has tl || has an; then
       --segments 2 --json $O/tl-$AS-phase.json > $O/tl-$AS-phase.txt 2>&1
     head -40 $O/tl-$AS-phase.txt | sed "s/^/tl-$AS /" | tee -a $O/job.log
   else log "no trace of $AS under $W/traces"; fi
+fi
+if has session; then
+  T=$(ls -t $W/traces/tl-$AS-*.sqlite 2>/dev/null | head -1); T=${T%.sqlite}
+  if [ -n "$T" ]; then
+    $PY benchmarks/one_stage/session_profile.py --sqlite $T.sqlite --prove-out ${PROVE_OUT:-$T.prove.out} --skip 1 \
+      --json $O/session-$AS.json > $O/session-$AS.txt 2>&1
+    sed "s/^/session-$AS /" $O/session-$AS.txt | tee -a $O/job.log
+  else log "no trace of $AS under $W/traces"; fail=1; fi
+fi
+if has peak; then
+  peak_run() {  # peak_run NAME CMD...: CMD with the GPU's processes sampled every 100 ms; logs the largest one's peak MiB
+    local name=$1; shift
+    nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits -lms 100 > $O/peak-$name.apps 2> /dev/null &
+    local sp=$!
+    "$@"; local rc=$?
+    kill $sp 2> /dev/null; wait $sp 2> /dev/null
+    local mib; mib=$(awk -F', *' '$2 ~ /^[0-9]+$/ && $2 + 0 > m {m = $2 + 0} END {print m + 0}' $O/peak-$name.apps)
+    log "peak $name rc=$rc device peak $mib MiB"
+    echo "{\"case\": \"$name\", \"rc\": $rc, \"peak_mib\": $mib}" >> $O/peak.jsonl
+  }
+  IFS=';' read -ra PU <<< "$PEAK_UNITS"
+  for U in "${PU[@]}"; do
+    ZU=$W/zk-$(echo "$U" | tr -c "a-zA-Z0-9\n" -); tag=$(echo "$U" | cut -d: -f1)
+    if [ ! -s $ZU/plan.json ]; then
+      fits 90 "stage $U" || continue
+      nice -n 5 $PY benchmarks/one_stage/zk_cost.py stage --out $ZU --units "$U" --sizes full --draws c:dev > $O/stage-$tag.txt 2>&1
+      log "stage $U rc=$?: $(grep ZKCOST $O/stage-$tag.txt | tail -1)"
+    fi
+    [ -s $ZU/plan.json ] || { log "peak $U: no plan"; fail=1; continue; }
+    read -r UP UI UC < <($PY -c 'import json, sys
+p = json.load(open(sys.argv[1])); d = next(i for i, x in enumerate(p) if x["k"] == x["c"])
+print(d, p[d]["inst"], p[d]["stage_dir"] + "/circuit.txt")' $ZU/plan.json)
+    for v in base new; do
+      read -r VB VSB < $W/$v.env || { log "peak: no $v build"; fail=1; continue; }
+      fits 20 "peak $v $tag" || continue
+      peak_run $v-$tag-m1-selftest $VSB selftest --zk --gpu --only prover_is_deterministic --instances $UI --circuit $UC \
+        > $O/peak-$v-$tag-m1.txt 2>&1
+      peak_run $v-$tag-m0-selftest $VSB selftest --gpu --only prover_is_deterministic --instances $UI --circuit $UC \
+        > $O/peak-$v-$tag-m0.txt 2>&1
+      z=$S/peak-$v-$tag; rm -rf $z; mkdir -p $z/records; cp $ZU/plan.json $z/; cp $ZU/records/stage.jsonl $z/records/ 2>/dev/null
+      peak_run $v-$tag-m1-dev timeout -k 20 1800 $PY benchmarks/one_stage/zk_cost.py prove --bin $VB --out $z --points $UP --arms dev \
+        --cold 0 --warm 1 --runs 1 > $O/peak-$v-$tag-dev.txt 2>&1
+      grep ZKCOST $O/peak-$v-$tag-dev.txt | cut -c1-300 | sed "s/^/peak-$v-$tag /" | tee -a $O/job.log
+    done
+  done
 fi
 if has ab; then
   read -r BB _ < $W/base.env || { log "no base build"; exit 1; }
