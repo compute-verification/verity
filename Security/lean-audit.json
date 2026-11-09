@@ -1559,8 +1559,8 @@
   "Claims.Sampling.SessionRuns": {
    "owner": "@proofs",
    "digest": "430f40a915e9222d4bee74b54e6db70d7d6095a1ea4d6e460fc2976e1dc50b6d",
-   "issue": "LEAN-186",
-   "due": "2026-11-08"
+   "issue": "PRF-460",
+   "due": "2026-11-30"
   },
   "Claims.SamplingGeneric.Arg.KS": {
    "owner": "@proofs",
@@ -1607,8 +1607,8 @@
   "Claims.SamplingGeneric.SessionOpensTwo": {
    "owner": "@proofs",
    "digest": "9b1b9bc7b9d5915277d92a99a9543464d7132f21a88708a6c121802fe0a6bda3",
-   "issue": "LEAN-186",
-   "due": "2026-11-08"
+   "issue": "PRF-460",
+   "due": "2026-11-30"
   },
   "Claims.SamplingGeneric.ZkArg.ZK": {
    "owner": "@proofs",
@@ -3131,14 +3131,14 @@
   "SamplingDeploy.Code.InteriorFixed": {
    "owner": "@proofs",
    "digest": "0b8250d29054b05673152d2c9364319792a6f1e62fd462ba73488e4d2bad3d8f",
-   "issue": "LEAN-186",
-   "due": "2026-11-08"
+   "issue": "PRF-460",
+   "due": "2026-11-30"
   },
   "SamplingDeploy.Code.RefusesTwo": {
    "owner": "@proofs",
    "digest": "bcd70ea7d934ac148f3aa248899a5218f1c081e26cea863f79bdd479bba2bda3",
-   "issue": "LEAN-186",
-   "due": "2026-11-08"
+   "issue": "PRF-460",
+   "due": "2026-11-30"
   },
   "SamplingDeploy.Code.ReplayCap": {
    "owner": "@proofs",
@@ -3155,8 +3155,8 @@
   "SamplingDeploy.SessionsIn": {
    "owner": "@proofs",
    "digest": "99857991deb3c674327c159100265d18964d94aaa1e2e9fb073990566e81bcc0",
-   "issue": "LEAN-186",
-   "due": "2026-11-08"
+   "issue": "PRF-460",
+   "due": "2026-11-30"
   },
   "SpotFlock.Sites": {
    "owner": "@proofs",
