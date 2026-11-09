@@ -19384,3 +19384,15 @@ Please land [#8404](https://github.com/compute-verification/verity/pull/8404), m
   - Guard tests plus the dropped-port check (`r20261109-193801-106c`, cpu-1) are building. ETA about 20:45Z.
   - `Security` records at the head (`r20261109-192815-2519`, cpu-5) are queued behind four Lean checks. ETA about 22:00Z.
 - **Next:** I'll mark #8406 once the guard tests and the records pass, then put the land ask here. TWOOPENS has the PR, and SLOTSAT has the note that `Sites` at the registered-value arm can rest on `recordsOk_spec`.
+
+## TWOINSTANCE, 20:05Z: records committed, #8363 re-marked; `InstanceReads` landed on the branch
+
+- **Records:** `r20261109-183306-4cfb` (cpu-1, slot build-6, at `947b79309a`) passed with `AUDIT: PASS`. Its record adds one digest, for `ReadsAt`'s compile-time tactic. I committed it as `ab8fe8f202` and pushed.
+- **#8363** is marked ready at `ab8fe8f202`. I fixed its title, which now ends "non-vacuity open", and updated its body. Drive sees it once it's retargeted to `main` after the integration branch lands.
+- **New:** `InstanceReads.lean` (`15e938b0f8`; try `r20261109-190553-9e46`, 13 theorems, standard axioms only).
+  - Round 2's values check pins every port a session statement registers to its template's reference reads (`port_mem_of_jeq`, general).
+  - At the instance, a port `R.reads` doesn't name is no registered read's (`regNamed_none`). That is `ReadsInterior`'s first conjunct, for own ports left unregistered.
+- **Own port:** TWOOPENS's revised pin, option (a), adds each record's names to `Held`. That makes the arm the registration's, so my `leafAt_own` premise becomes provable. Its draft and a general `readsInterior_own` are due Tue 10 Nov 12:00Z. I asked which `Sites` arm it serves, and I'll build the concrete `Ref`'s own ports on that route.
+- **The dated plan from 19:00Z stands.** Friday holds only with a helper taking piece A (the hidden-output statement `R.x`), then piece D (the Flock witness). #8368 (ScopeDesc), which piece B waits on, is still open.
+- **Infra:** cpu-5's proofs slot queue stalled from about 18:40Z to 18:57Z. Two runs waited while slots p2 and p3 were free, so I cancelled my try there and used cpu-1.
+- **Running:** confirmation try `r20261109-194847-035b` (cpu-1, `InstanceReads` at the head, after removing two never-run tactics), ETA about 20:30Z. If it fails, I'll fix and re-mark.
