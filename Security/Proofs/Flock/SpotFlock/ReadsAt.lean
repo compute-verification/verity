@@ -484,6 +484,34 @@ theorem n_pop {j : Json} (hw : Claims.Json.Wf j) {k : ℕ}
     exact hmq
   · cases hok
 
+/-- **At a port a link names, round 2 reads the linked boundary port**, under the statement's roots, whatever the
+value. -/
+theorem readsInterior_linked {own : Spot.SecondStage.Own} {t port v : String} {l : Spot.SecondStage.Link}
+    (hl : Spot.SecondStage.linkOf own t port = some l) :
+    readsInterior own t port v = false ∧ readKey own t port v = .port l.value := by
+  simp [readsInterior, readKey, hl]
+
+/-- **At a port no link names, a value the interior record has a port for is read off that port**, under the replay
+block's roots. -/
+theorem readsInterior_held {own : Spot.SecondStage.Own} {t port v : String}
+    (hl : Spot.SecondStage.linkOf own t port = none)
+    (hv : ((Spot.Record.byPort own.interior).find? (·.1 == v)).isSome = true) :
+    readsInterior own t port v = true ∧ readKey own t port v = .port v := by
+  simp [readsInterior, readKey, hl, hv]
+
+/-- **A wired read round 2 accepts is read off the interior record**, at its writer's output port
+(`SecondStage.readOk_wired`), under the replay block's roots. -/
+theorem readsInterior_wired {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.SecondStage.Part} {port v : String}
+    {e : Json} {w : Spot.SecondStage.Wire} (hl : Spot.SecondStage.linkOf own p.template port = none)
+    (hw : Spot.SecondStage.wireOf own p.template port = some w)
+    (hr : Spot.SecondStage.readOk own named p port e = true) (hv : Spot.getD e "value" = .str v) :
+    readsInterior own p.template port v = true ∧ readKey own p.template port v = .port v := by
+  obtain ⟨x, -, he, hm, -⟩ := Spot.SecondStage.readOk_wired hl hw hr
+  rw [hv] at he
+  injection he with he
+  subst he
+  exact readsInterior_held hl (Array.find?_isSome.2 ⟨_, hm, by simp⟩)
+
 variable (h : Held)
 
 /-- **A checked unit's registered read as round 2 reads it**: in an accepted run, each registered read of a checked
