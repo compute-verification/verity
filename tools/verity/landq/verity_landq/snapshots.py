@@ -19,10 +19,13 @@ errors beside its failures, a candidate's reruns and when its check was enqueued
 simulator's minutes, as seconds).  The policy gives the snapshot's batch and depth; keyword arguments set its other
 fields, such as `lean` or `rings`, which otherwise keep the queue's own defaults (the model's `page_after` doesn't reach
 them).  A `Ring` pages once a candidate and why, and a `Red` once a base and task, as the loop rings them; a `Rerun` runs
-the failed keys' tasks afresh.  The module is a parameter, so nothing here imports it.
+the failed keys' tasks afresh.  A task named in `deferred` (`sim.Task.deferred`) starts once, as the loop starts the run
+beside a check: on the lowest candidate, while it is on `main`, once the queue's reading of its other tasks' verdict (the
+module's `_reading` where it has one) is pass.  The module is a parameter, so nothing here imports it.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from types import ModuleType
 
@@ -47,6 +50,7 @@ class Cand:
     tries: int = 1
     reruns: int = 0
     enqueued: float | None = None
+    started: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -70,12 +74,13 @@ def _fields(cls) -> frozenset[str]:
 
 
 class Driver:
-    def __init__(self, vq: ModuleType, **snapshot: object) -> None:
+    def __init__(self, vq: ModuleType, *, deferred: Iterable[str] = (), **snapshot: object) -> None:
         unknown = sorted(set(snapshot) - _fields(vq.Snapshot))
         if unknown:
             raise TypeError(f"{getattr(vq, '__name__', 'the queue')}.Snapshot has no field {', '.join(unknown)}")
-        self.vq, self.extra = vq, snapshot
+        self.vq, self.extra, self.deferred = vq, snapshot, frozenset(deferred)
         self.has = {name: _fields(getattr(vq, name)) for name in ("Failed", "Verdict", "Candidate", "Snapshot")}
+        self.reading = getattr(vq, "_reading", lambda v: v.state)
 
     def start(self, main: str) -> QState:
         return QState(main)
@@ -97,7 +102,18 @@ class Driver:
             last = actions
             for a in actions:
                 out += getattr(self, "do_" + type(a).__name__)(s, a)
-        return s, tuple(out)
+        return s, tuple(out + self.begin(s))
+
+    def begin(self, s: QState) -> list[lq.Decision]:
+        """`Start` the deferred tasks of the lowest candidate, on `main`, once the queue reads its other tasks as passed."""
+        c = s.stack[0] if s.stack else None
+        if c is None or c.tree is None or c.tasks is None or c.base != s.main:
+            return []
+        todo = sorted((self.deferred & c.tasks) - c.started)
+        if not todo or self.reading(self.verdict(c, skip=self.deferred)) != self.vq.PASS:
+            return []
+        c.started.update(todo)
+        return [lq.Start(c.tree, t) for t in todo]
 
     # the snapshot ---------------------------------------------------------------------------------------------------------
 
@@ -123,11 +139,11 @@ class Driver:
     def key(c: Cand, task: str, r: lq.Result) -> str:
         return r.key if r.key is not None else f"{task}@{c.tree}"
 
-    def verdict(self, c: Cand):
+    def verdict(self, c: Cand, skip: frozenset[str] = frozenset()):
         vq, has = self.vq, self.has
         if c.tree is None or c.tasks is None:
             return vq.Verdict()
-        got = {t: c.results.get(t) for t in sorted(c.tasks)}
+        got = {t: c.results.get(t) for t in sorted(c.tasks - skip)}
 
         def entry(t: str, r: lq.Result):
             inputs = frozenset(WHOLE if i in lq.ROOTS else i for i in r.inputs)

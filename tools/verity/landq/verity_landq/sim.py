@@ -15,7 +15,8 @@ that run them, and the faults.  The queue is `model.step`, or any function of it
   runs only the tasks its own members touch and reads the rest from the cache, as an executor keyed by content does.  A key
   already running or queued is not run twice.
 - A run takes one of `World.nodes` nodes for its task's `minutes`, lower candidates first; a `Task.off_pool` task runs on
-  capacity of its own, at once.
+  capacity of its own, at once.  A `Task.deferred` task is listed with the others but runs only when the queue decides
+  `Start` for it, never from the cache.
 - A run fails when its tree fails the task, else falsely with probability `World.flaky`; either fail is cached, as a pass
   is.  A tree fails the tasks its start's tree is red on (`World.red`, cached as failed at the start) and those a PR head
   in its history breaks, less those a later head in it fixes.  With probability `World.infra` a run ends in an infra error
@@ -50,6 +51,7 @@ class Task:
     inputs: frozenset[str]
     minutes: float
     off_pool: bool = False
+    deferred: bool = False
 
 
 @dataclass(frozen=True)
@@ -339,6 +341,8 @@ class _Sim:
         for i, name in enumerate(self.names):
             if tree not in self.live:
                 return
+            if self.tasks[i].deferred:
+                continue
             got = self.cache.get((i, keys[i]))
             if got is not None:
                 self.counts["cached"] += 1
@@ -459,6 +463,10 @@ class _Sim:
             i = self.index[d.task]
             self.cache.pop((i, self.trees[d.tree][0][i]), None)
             self.want(i, d.tree)
+
+    def do_Start(self, d: lq.Start) -> None:
+        if d.tree in self.live:
+            self.want(self.index[d.task], d.tree)
 
     def do_Page(self, d: lq.Page) -> None:
         self.counts["pages"] += 1

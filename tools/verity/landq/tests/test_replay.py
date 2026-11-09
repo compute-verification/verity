@@ -64,3 +64,5 @@ def test_set_reads_snapshot_fields_and_the_model_refuses_them() -> None:
         ("lean", 3), ("pending_s", 15000.0), ("now", 0.5), ("x", "a")]
     with pytest.raises(SystemExit, match="snapshot queue"):
         replay.queue("model", {"lean": 3})
+    with pytest.raises(SystemExit, match="starts no deferred task"):
+        replay.queue("model", {}, frozenset({"slim"}))

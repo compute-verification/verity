@@ -237,6 +237,33 @@ def test_the_snapshot_holds_the_reviewed_prs_by_first_mark_with_their_lean_flag(
     assert (snap.main, snap.batch, snap.depth) == ("m", 5, 2)
 
 
+def test_a_deferred_task_starts_once_on_the_lowest_candidate_on_main_once_the_rest_passed() -> None:
+    d, tasks = snapshots.Driver(vq, deferred=("slim",)), frozenset({"unit:a", "slim"})
+    s = snapshots.QState("m")
+    s.stack += [lone({}, tasks), snapshots.Cand(2, "T1", (lq.Member(2, "h2", frozenset({"a/y.py"})),), tree="T2", tasks=tasks,
+                                                results={"unit:a": lq.Result("T2", "unit:a", lq.PASS, frozenset({"a/"}))})]
+    assert d.begin(s) == []
+    s.stack[0].results["unit:a"] = lq.Result("T1", "unit:a", lq.PASS, frozenset({"a/"}))
+    assert [d.begin(s), d.begin(s), d.verdict(s.stack[0]).state] == [[lq.Start("T1", "slim")], [], vq.PENDING]
+
+
+def test_the_queues_reading_says_when_a_deferred_task_starts() -> None:
+    q = types.SimpleNamespace(**vars(FULL))
+    q._reading = lambda v: vq.PASS
+    s = snapshots.QState("m")
+    s.stack.append(lone({"unit:a": lq.Result("T1", "unit:a", lq.FAIL, frozenset({"a/"}), "1")}, frozenset({"unit:a", "slim"})))
+    assert snapshots.Driver(q, deferred=("slim",)).begin(s) == [lq.Start("T1", "slim")]
+    assert snapshots.Driver(FULL, deferred=("slim",)).begin(s) == []
+
+
+def test_a_pr_lands_once_its_check_and_then_the_run_beside_it_passed() -> None:
+    slim = sim.Task("slim", frozenset({"."}), 20.0, off_pool=True, deferred=True)
+    d = snapshots.Driver(vq, deferred=("slim",))
+    r = sim.simulate([arrive(1, 0.0, "a/x.py")], sim.World(tasks=(A, slim), nodes=1), TWO, step=d.step,
+                     state=d.start("main"))
+    assert {x.pr: x.main for x in r.landings} == {1: 2.0 + 3.0 + 10.0 + 20.0}
+
+
 def test_rings_are_the_queues_own_unless_set() -> None:
     s = D.start("m")
     assert D.snapshot(s, lq.Policy(page_after=1)).rings == vq.Snapshot("m", (), (), ()).rings

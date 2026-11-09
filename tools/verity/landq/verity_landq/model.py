@@ -237,6 +237,13 @@ class Rerun:
 
 
 @dataclass(frozen=True)
+class Start:
+    """Run task `task` on `tree`, a task that runs only when the queue starts it (`sim.Task.deferred`)."""
+    tree: str
+    task: str
+
+
+@dataclass(frozen=True)
 class Page:
     """Task `task` on `tree` has ended with an infra outcome `attempts` times."""
     tree: str
@@ -252,7 +259,7 @@ class SetAside:
     cid: int
 
 
-Decision = Union[Build, Cancel, Advance, Eject, Retry, Rerun, Page, SetAside]
+Decision = Union[Build, Cancel, Advance, Eject, Retry, Rerun, Start, Page, SetAside]
 
 
 # --- state ---------------------------------------------------------------------------------------------------------------

@@ -140,6 +140,12 @@ def test_an_off_pool_task_runs_beside_the_nodes() -> None:
     assert (r.busy, r.runs) == (40.0, 3)
 
 
+def test_a_deferred_task_runs_only_when_the_queue_starts_it() -> None:
+    slim = sim.Task("slim", frozenset({"."}), 20.0, off_pool=True, deferred=True)
+    r = sim.simulate([arrive(1, 0.0, "a/x.py")], sim.World(tasks=(A, slim), nodes=1), ONE)
+    assert (mains(r), r.runs) == ({1: None}, 1)
+
+
 def test_infra_errors_retry_and_never_eject() -> None:
     trace = [arrive(i, 5.0 * i, "a/x.py" if i % 2 else "b/x.py") for i in range(1, 21)]
     retries = pages = 0
