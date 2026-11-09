@@ -1124,3 +1124,6 @@ From VERIFYFAST-B (proofs), Mon 9 Nov 23:02Z: the flat verifier card is publishe
 - No stratum of today's GLM-5.3 partition cards is a measured type. Their verify comes from the MoE W family member (8.2 s instead of 15) or the measured median (130.2 s instead of 681, for EmbeddingRead and the router). To make those strata measured rather than assumed, tell me which partition card the figures use and I'll measure its EmbeddingRead and MoeRouter types.
 - You can read the card from the store now with `cards.py fetch art:8aea32ff…`; it reaches main with #8453.
 
+[2026-11-09T23:05Z] e1b300f6961d
+COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
+
