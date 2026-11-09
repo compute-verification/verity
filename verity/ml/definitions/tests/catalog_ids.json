@@ -1390,6 +1390,8 @@
 "SparseMlaHeadSplit_v2",
 "SparseMlaHead_v1",
 "SparseMlaHead_v2",
+"SparseMlaSplitEndCols_v1",
+"SparseMlaSplitEndCols_v2",
 "SparseMlaSplitEnd_v1",
 "SparseMlaSplitEnd_v2",
 "SparseMlaSplitPart_v1",
