@@ -614,6 +614,11 @@ class World:
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
                 chosen = {n: (files[n], *j)
                           for n, j in zip(took, pool.map(lambda n: self._judge(main, entries[n].pr.head, cfg), took))}
+        # a land verdict covers its PR's own change: a PR holding the head of an admitted PR that isn't taken (no land verdict
+        # there, or held) would carry that change unreviewed, unless the head landed on `checked` under drive's rules
+        while out := {n for n in chosen for a in entries[n].after if a in entries and entries[a].state == "ready"
+                      and a not in chosen and not (old and self._ancestor(entries[n].held[a], old))}:
+            chosen = {n: v for n, v in chosen.items() if n not in out}
         first = {n: i for i, n in enumerate(priority_list(self.priority_file) if self.priority_file else ())}
         # a PR the priority file names ahead of PRs whose heads its own holds (an aggregate, such as a commit of `checked`'s
         # chain) lands them with it, so they don't build first; a stack the file doesn't rank still lands its bases first
@@ -1512,9 +1517,10 @@ class Loop:
             return replace(j, slim=v, record=rec)
         v = self.slim.based(v, below[0])
         both = self.slim.combine(j.verdict, v)
-        if both.state == FAIL:              # `combine` keeps no `ended`: a fail has ended once both checks stopped running
-            g = j.verdict
-            both = replace(both, ended=(g.state != PENDING and (g.state != FAIL or g.ended)) and v.state != PENDING)
+        if both.state == FAIL:              # `combine` keeps no `ended`: a fail has ended once both checks stopped running,
+            g = j.verdict                   # and never while graph2's check failed to list: none of its gating tasks ran
+            both = replace(both, ended=(g.state not in (PENDING, LIST_FAILED) and (g.state != FAIL or g.ended))
+                           and v.state != PENDING)
             if waits := self._waits(both, v, *below):
                 return replace(j, verdict=Verdict(PENDING), slim=v, record=rec, note="; ".join(
                     [*filter(None, [j.note]), f"waiting for the run beside {base[:12]}'s check: {', '.join(waits)}"]))
