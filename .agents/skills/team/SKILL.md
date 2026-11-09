@@ -24,7 +24,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
   ~~~text
   research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # --quick: no slow tests
-  research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'
+  uv run python tools/verity/check/check.py --record --on auto --pool research  # the whole check, recorded (the testing skill)
   research status RUN  # check back on a run; --wait only for one under 20 min
   ~~~
 
