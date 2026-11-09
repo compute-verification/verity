@@ -36,12 +36,6 @@ open Finset
 
 variable {U S : Type} (P : Dataflow U S) {V : Type}
 
-/-- **A run with faults**: `σ` holds the inputs `a`, each unit the pattern `φ` names writes `φ`'s values, and every
-other unit is correct. -/
-def RunOf (f : P.Fns V) (a : S → V) (φ : (u : U) → Option (P.writes u → V)) (σ : S → V) : Prop :=
-  (∀ s ∈ P.input, σ s = a s) ∧ (∀ u w, φ u = some w → ∀ t : P.writes u, σ t = w t) ∧
-    ∀ u, φ u = none → P.Correct f σ u
-
 /-- The unit functions with each unit the pattern `φ` names writing `φ`'s values whatever it reads. -/
 def fixFns (f : P.Fns V) (φ : (u : U) → Option (P.writes u → V)) : P.Fns V :=
   fun u x => (φ u).getD (f u x)
@@ -84,11 +78,6 @@ theorem runOf_faultsOf (f : P.Fns V) (σ : S → V) : P.RunOf f σ (P.faultsOf f
     split_ifs at hu with hc
     exact hc
 
-open Classical in
-/-- The units a fault pattern names. -/
-noncomputable def faultSet [Fintype U] (φ : (u : U) → Option (P.writes u → V)) : Finset U :=
-  univ.filter fun u => (φ u).isSome
-
 /-- **An assignment's fault pattern names exactly its incorrect units.** -/
 theorem faultSet_faultsOf [Fintype U] (f : P.Fns V) (σ : S → V) : P.faultSet (P.faultsOf f σ) = P.wrong f σ := by
   ext u
@@ -97,18 +86,15 @@ theorem faultSet_faultsOf [Fintype U] (f : P.Fns V) (σ : S → V) : P.faultSet 
     split_ifs with hc <;> simp [hc]
   simpa [faultSet, wrong] using key
 
-/-- **A checked population's faulted function**: the values on the slots `eg` of its run at the inputs `a` with the
-fault pattern `φ`. -/
-noncomputable def faultedOut [Finite U] (h : P.Checked) (f : P.Fns V) {O : Type} (eg : O → S) (a : S → V)
-    (φ : (u : U) → Option (P.writes u → V)) : O → V :=
-  fun o => Classical.choose (P.runOf_exists h f a φ) (eg o)
-
+/-- **A checked population's faulted function is its run's egress**, at any run with the inputs and the pattern. -/
 theorem faultedOut_eq [Finite U] (h : P.Checked) (f : P.Fns V) {O : Type} (eg : O → S) {a : S → V}
     {φ : (u : U) → Option (P.writes u → V)} {σ : S → V} (hσ : P.RunOf f a φ σ) :
-    P.faultedOut h f eg a φ = fun o => σ (eg o) := by
+    P.faultedOut f eg a φ = fun o => σ (eg o) := by
   funext o
   unfold faultedOut
-  rw [P.runOf_unique h (Classical.choose_spec (P.runOf_exists h f a φ)) hσ]
+  split
+  · next hr => rw [P.runOf_unique h (Classical.choose_spec hr) hσ]
+  · next hr => exact absurd ⟨σ, hσ⟩ hr
 
 /-- **Readers that clamp**: the unit functions `f` with every read slot `t` read through `κ t`. -/
 def clampFns (f : P.Fns V) (κ : S → V → V) : P.Fns V := fun u x => f u fun t => κ t (x t)
@@ -169,7 +155,7 @@ names the same units (`faultSet_clampFaults`) and writes only clamped values: a 
 need only cover in-range faults. -/
 theorem faultedOut_clamp [Finite U] (h : P.Checked) (f : P.Fns V) (κ : S → V → V) (hκ : ∀ t v, κ t (κ t v) = κ t v)
     {O : Type} (eg : O → S) (heg : ∀ o v, κ (eg o) v = v) (a : S → V) (φ : (u : U) → Option (P.writes u → V)) :
-    P.faultedOut h (P.clampFns f κ) eg a φ = P.faultedOut h (P.clampFns f κ) eg a (P.clampFaults κ φ) := by
+    P.faultedOut (P.clampFns f κ) eg a φ = P.faultedOut (P.clampFns f κ) eg a (P.clampFaults κ φ) := by
   obtain ⟨σ, hσ⟩ := P.runOf_exists h (P.clampFns f κ) a φ
   obtain ⟨τ, hτ⟩ := P.runOf_exists h (P.clampFns f κ) a (P.clampFaults κ φ)
   rw [P.faultedOut_eq h _ eg hσ, P.faultedOut_eq h _ eg hτ]
@@ -400,7 +386,7 @@ theorem faithful_of_tie {U S : Type} [Fintype U] (P : Population.Dataflow U S) (
     (htie : ∀ n < count L l, ∀ w, l[n]? = some w → w.accepted → ∃ σ : S → V,
       (∀ s ∈ P.input, σ s = inp θ ((Ou.query r (view Ou L r l n)).1, w.adv) s) ∧
         (P.wrong f σ).card ≤ w.incorrect ∧ w.egress = fun o => σ (eg o)) :
-    Faithful (fun θ x => P.faultedOut h f eg (inp θ x.1) x.2) (fun φ => (P.faultSet φ).card) Ou L θ r l := by
+    Faithful (faultedServed P f eg inp) P.faultCount Ou L θ r l := by
   intro n hn w hw ha
   obtain ⟨σ, hin, hcard, heg⟩ := htie n hn w hw ha
   refine ⟨P.faultsOf f σ, ?_, ?_⟩
@@ -477,21 +463,20 @@ namespace ToyFaulted
 
 open WeightSecurity.ToyServed
 
-theorem honest_Cf (θ : W) : honest Cf θ = honest Cf (0, 0) := rfl
-
-/-- Faulted use of the toy reveals nothing: the faulted function reads no weight, so every party's output is one fixed
-guess. -/
-theorem guess_le (P : Outsider Unit ((Unit × Unit) × Fault) (Unit → Fin 16) W) :
-    Claims.Pr (fun z : W × Unit => gen z.1 ∈ Set.univ ∧ Stolen (gen z.1) (P.model z.2 (honest Cf (gen z.1)) 2)) ≤
+/-- Faulted use of the toy reveals nothing: a faulted function `Cf'` that reads no weight leaves every party's output
+one fixed guess. -/
+theorem guess_le {X : Type} (Cf' : W → X → Unit → Fin 16) (hc : ∀ θ, honest Cf' θ = honest Cf' (0, 0))
+    (P : Outsider Unit X (Unit → Fin 16) W) :
+    Claims.Pr (fun z : W × Unit => gen z.1 ∈ Set.univ ∧ Stolen (gen z.1) (P.model z.2 (honest Cf' (gen z.1)) 2)) ≤
       1 / 256 := by
-  calc Claims.Pr (fun z : W × Unit => gen z.1 ∈ Set.univ ∧ Stolen (gen z.1) (P.model z.2 (honest Cf (gen z.1)) 2))
-      ≤ Pouw.pr (fun z : W × Unit => z.1 = P.model () (honest Cf (0, 0)) 2) := Pouw.pr_mono fun z h => by
+  calc Claims.Pr (fun z : W × Unit => gen z.1 ∈ Set.univ ∧ Stolen (gen z.1) (P.model z.2 (honest Cf' (gen z.1)) 2))
+      ≤ Pouw.pr (fun z : W × Unit => z.1 = P.model () (honest Cf' (0, 0)) 2) := Pouw.pr_mono fun z h => by
         obtain ⟨θ, ⟨⟩⟩ := z
-        have h' : P.model () (honest Cf θ) 2 = θ := h.2
-        rw [honest_Cf] at h'
+        have h' : P.model () (honest Cf' θ) 2 = θ := h.2
+        rw [hc] at h'
         exact h'.symm
     _ = 1 / 256 := by
-        rw [Pouw.pr_eq_card _ {(P.model () (honest Cf (0, 0)) 2, ())} fun z => by simp [Prod.ext_iff],
+        rw [Pouw.pr_eq_card _ {(P.model () (honest Cf' (0, 0)) 2, ())} fun z => by simp [Prod.ext_iff],
           card_singleton, ToyServed.card_W]
         norm_num
 
@@ -548,7 +533,7 @@ theorem TheftFaultedHonest : Guarantees.TheftFaultedHonest := by
           Pouw.pr_mono fun _ h => h.2
       _ ≤ 1 / 256 := ToyServed.guess_le P
   · rw [sub_self, Real.rpow_zero, one_mul]
-    exact (ToyFaulted.guess_le P).trans (ToyFaulted.le_of_hard hp)
+    exact (ToyFaulted.guess_le WeightSecurity.ToyServed.Cf (fun _ => rfl) P).trans (ToyFaulted.le_of_hard hp)
 
 theorem TheftFaultedNontrivial : Guarantees.TheftFaultedNontrivial := by
   classical

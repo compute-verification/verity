@@ -5,6 +5,7 @@ public import Definitions.WeightSecurity.Faulted
 public import Definitions.WeightSecurity.Toy
 public import Definitions.WeightSecurity.ToyFaulted
 public import Definitions.WeightSecurity.ToyServed
+public import Definitions.WeightSecurity.ToyTied
 
 /-!
 # Model weight security
@@ -35,6 +36,12 @@ sizes summing to at most `M`, and the reach of a fault drops out. What faults do
 claim `FaultedUseHard` (λ), on a typical set of weights. `TheftServed` stays as the bound that takes no claim about
 the model. Its witnesses `TheftFaultedHonest` and `TheftFaultedNontrivial` are at the toy deployment with faults
 (`Definitions.WeightSecurity.ToyFaulted`).
+
+`TheftTied` is `TheftFaulted` at a served circuit that is a checked population, its run recording each window's
+extracted trace (`Definitions.WeightSecurity.Tied`). The probability that a release isn't faithful gives way to the
+failure probabilities of the two premises that make it faithful: the releases are their traces' outputs (`EgressTied`)
+and the traces hold the windows' inputs (`AdviceCovered`). Its witnesses `TheftTiedHonest` and `TheftTiedNontrivial`
+are at the toy deployment as a population (`Definitions.WeightSecurity.ToyTied`).
 -/
 
 @[expose] public section
@@ -207,5 +214,73 @@ def TheftFaultedNontrivial : Prop :=
         Verity.Game.avg (fun z : ToyServed.W × Unit => Verity.Game.value
           (fun l => ¬ Served.Faithful ToyServed.Cf ToyServed.size ToyServed.thief 0 (ToyServed.gen z.1) z.2 l)
           (ToyServed.leakRun (ToyServed.gen z.1) z.2))
+
+open scoped ENNReal in
+/-- **Model weight security under SPOT's fault model, the releases tied to their traces.** `TheftFaulted` where the
+served circuit is a checked population `P` (`Population.Dataflow.Checked`) with unit functions `f`, egress slots `eg`,
+and inputs `inp θ x` at the weights `θ` and a query served with an advice `x`. The faulted function is the population's
+(`faultedServed`), a fault pattern's size is how many units it names, `fun _ => none` is the empty pattern, and the run
+records each window's extracted trace (`Served.Traced`). Where `TheftFaulted`'s bound adds the probability that a
+release isn't faithful, this one adds the failure probabilities of the two premises that make every release faithful:
+`ηe` that a release isn't its trace's outputs (`EgressTied`), and `ηa` that a trace holds inputs other than the
+weights', the query's and the advice's (`AdviceCovered`). The audit's `δ` is at the run counted at its traces
+(`Served.Traced.countRun`), whose incorrect proof blocks are each trace's wrong units. -/
+def TheftTied : Prop :=
+  ∀ {Ω R Θ Q Adv O V Tick Θ' U S : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv] [Fintype O]
+    [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick] [Fintype U] [DecidableEq U] [DecidableEq S]
+    (P : Population.Dataflow U S) (f : P.Fns V) (eg : O → S) (inp : Θ → Q × Adv → S → V)
+    (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Typ : Set Θ) (Stolen : Θ → Θ' → Prop)
+    (A : Set (Outsider R (Q × Adv) (O → V) Θ')) (Af : Set (Outsider R ((Q × Adv) × P.Faults V) (O → V) Θ'))
+    (p lam : ℝ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L M : ℕ) (δ ηe ηa : ℝ≥0∞)
+    (run : Θ → R → Verity.Game (List (Served.Traced O V Tick Adv S))),
+    P.Checked →
+    HonestUseHard C gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T A p →
+    FaultedUseHard C (faultedServed P f eg inp) P.faultCount gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T M A Af lam →
+    Simulable Af (Ou.withFaults (fun _ => none : P.Faults V))
+      (faultChannel R Q Adv O V Tick (P.Faults V) P.faultCount T M ((L + 1) * Fintype.card O)) →
+    Served.UndetectedLe M δ (Served.Traced.countRun P f run) →
+    EgressTied eg L ηe run →
+    AdviceCovered P inp Ou L ηa run →
+      Verity.Game.avg (fun z : Ω × R => Verity.Game.value (fun l => Stolen (gen z.1)
+          (Ou.out z.2 (Served.view Ou L z.2 (l.map Served.Traced.toServed) T))) (run (gen z.1) z.2)) ≤
+        ENNReal.ofReal (Claims.Pr fun z : Ω × R => gen z.1 ∉ Typ) +
+          ENNReal.ofReal (Fintype.card (faultChannel R Q Adv O V Tick (P.Faults V) P.faultCount T M
+              ((L + 1) * Fintype.card O)).S * ((patternCount P.faultCount T M : ℝ) ^ (lam - 1) * p)) +
+          δ + ηe + ηa
+
+/-- **`TheftTied`'s premises hold together at the honest toy deployment as a population**, with every weight typical,
+no halt lag, the budget `1` and `λ = 1`. The population's one unit reads nothing, so it is checked, and its faulted
+function reads no weight, so faults hand out the weights no faster than honest use. Every class holds the user with
+each covert string written in. The honest run's traces are the honest assignment, so its audit leaves no incorrect
+proof block undetected, its releases are their traces' outputs, and there is no input slot to hold. -/
+def TheftTiedHonest : Prop :=
+  ToyServed.pop.Checked ∧
+    HonestUseHard ToyServed.C ToyServed.gen (fun θ θ' => θ ∈ Set.univ ∧ ToyServed.Stolen θ θ') 2 ToyServed.anyone
+      (1 / 256) ∧
+    FaultedUseHard ToyServed.C (faultedServed ToyServed.pop ToyServed.fns ToyServed.eg ToyServed.inp)
+      ToyServed.pop.faultCount ToyServed.gen (fun θ θ' => θ ∈ Set.univ ∧ ToyServed.Stolen θ θ') 2 1
+      ToyServed.anyone ToyServed.anyoneP 1 ∧
+    Simulable ToyServed.anyoneP (ToyServed.user.withFaults (fun _ => none : ToyServed.pop.Faults (Fin 16)))
+      (faultChannel Unit Unit Unit Unit (Fin 16) Unit (ToyServed.pop.Faults (Fin 16)) ToyServed.pop.faultCount 2 1
+        ((0 + 1) * Fintype.card Unit)) ∧
+    Served.UndetectedLe 1 0 (Served.Traced.countRun ToyServed.pop ToyServed.fns ToyServed.honestTraced) ∧
+    EgressTied ToyServed.eg 0 0 ToyServed.honestTraced ∧
+    AdviceCovered ToyServed.pop ToyServed.inp ToyServed.user 0 0 ToyServed.honestTraced
+
+open scoped ENNReal in
+/-- **`TheftTied`'s bound fails at the verifier that accepts everything.** The leaking toy deployment's window `i`
+carries the weights' `i`-th value in the population's one slot and releases it, and its audit accepts on an empty
+sample. The thief then steals the weights on every coin, with every weight typical, every release its trace's outputs
+and no input slot to hold. At the budget `0`, `p = 1/256`, `λ = 1` and `δ = ηe = ηa = 0` the bound is below `1`, so it
+fails. -/
+def TheftTiedNontrivial : Prop :=
+  ¬ Verity.Game.avg (fun z : ToyServed.W × Unit => Verity.Game.value
+        (fun l => ToyServed.Stolen (ToyServed.gen z.1)
+          (ToyServed.thief.out z.2 (Served.view ToyServed.thief 0 z.2 (l.map Served.Traced.toServed) 2)))
+        (ToyServed.leakTraced (ToyServed.gen z.1) z.2)) ≤
+      ENNReal.ofReal (Claims.Pr fun z : ToyServed.W × Unit => ToyServed.gen z.1 ∉ (Set.univ : Set ToyServed.W)) +
+        ENNReal.ofReal (Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit (ToyServed.pop.Faults (Fin 16))
+            ToyServed.pop.faultCount 2 0 ((0 + 1) * Fintype.card Unit)).S *
+          ((patternCount ToyServed.pop.faultCount 2 0 : ℝ) ^ ((1 : ℝ) - 1) * (1 / 256))) + 0 + 0 + 0
 
 end WeightSecurity.Guarantees

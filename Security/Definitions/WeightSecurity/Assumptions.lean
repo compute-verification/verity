@@ -1,6 +1,7 @@
 module
 
 public import Definitions.WeightSecurity
+public import Definitions.WeightSecurity.Tied
 
 /-!
 # Model weight security: what it rests on
@@ -19,6 +20,13 @@ deployment's guarantees are to discharge, taken as hypotheses until they do:
 served circuit, beside honest queries, hands out the weights at most `N^(λ - 1)` times faster than honest use, `N` the
 number of fault pattern sequences of total size at most `M` (`patternCount`), so `log₂ N` is the faults' arbitrary-data
 capacity and the factor is `2^((λ - 1) · log₂ N)`. It is about the served function alone, as `HonestUseHard` is.
+
+Two premises tie a run's releases to the traces the audit extracts (`Definitions.WeightSecurity.Tied`), each the
+probability of its failure on every run, until the layers below discharge it:
+
+* `EgressTied`: a release is its trace's outputs, the network certifier's egress tie;
+* `AdviceCovered`: a trace holds the weights', the query's and the advice's inputs, so every input the prover chooses
+  is advice, which is charged.
 -/
 
 @[expose] public section
@@ -89,5 +97,26 @@ def FaultedUseHard [Fintype Ω] [Fintype R] [Fintype F] (C : Θ → X → Y) (Cf
     (Af : Set (Outsider R (X × F) Y Θ')) (lam : ℝ) : Prop :=
   ∀ p, HonestUseHard C gen Stolen q A p →
     HonestUseHard Cf gen Stolen q (Af ∩ FaultBudget size q M) ((patternCount size q M : ℝ) ^ (lam - 1) * p)
+
+variable {O V Tick Adv S Q : Type}
+
+open scoped ENNReal in
+/-- PREMISE, the network certifier's to discharge. **The releases are their traces' outputs**, except with probability
+`η`: on every run `run θ r`, some accepted window that releases released something other than its extracted trace's
+values on the egress slots `eg` (`Served.Traced.Tied`) with probability at most `η`. The certifier's egress tie gives it
+at `η = 0`: the released bytes are the extracted trace's outputs. -/
+def EgressTied (eg : O → S) (L : ℕ) (η : ℝ≥0∞) (run : Θ → R → Verity.Game (List (Served.Traced O V Tick Adv S))) :
+    Prop :=
+  ∀ θ r, Verity.Game.value (fun l => ¬ Served.Traced.Tied eg L l) (run θ r) ≤ η
+
+open scoped ENNReal in
+/-- PREMISE, the advice charge's to discharge. **The traces hold the windows' inputs**, except with probability `η`: on
+every run `run θ r`, some accepted window that releases holds, on the population `P`'s input slots, something other than
+the inputs of the weights `θ` and of the outsider's query served with the window's advice (`Served.Traced.Covered`),
+with probability at most `η`. It holds at `η = 0` when every input the prover chooses is advice, which is charged. -/
+def AdviceCovered {U : Type} (P : Population.Dataflow U S) (inp : Θ → Q × Adv → S → V)
+    (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (L : ℕ) (η : ℝ≥0∞)
+    (run : Θ → R → Verity.Game (List (Served.Traced O V Tick Adv S))) : Prop :=
+  ∀ θ r, Verity.Game.value (fun l => ¬ Served.Traced.Covered P inp Ou L θ r l) (run θ r) ≤ η
 
 end WeightSecurity.Assumptions

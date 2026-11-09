@@ -6,6 +6,7 @@ public import Proofs.WeightSecurity.Pressure
 public import Proofs.WeightSecurity.Served
 public import Proofs.WeightSecurity.Stop
 public import Proofs.WeightSecurity.Theft
+public import Proofs.WeightSecurity.Tied
 public import Proofs.WeightSecurity.Two
 
 /-!
@@ -18,5 +19,7 @@ deployment. `Stop`: the incorrect proof blocks a period leaves undetected, over 
 pressure `TheftServedDeployed` takes. `Two`: `TheftServed` at a two-stage audit (`TheftServedTwo`), its budget
 `T·(K − 1) + 1` from the cap `WindowCap`. `Faulted`: the leakage lemma with the audit's incorrect proof blocks as inputs
 to a faulted circuit rather than overwrites of releases, `WeightSecurity.Guarantees.TheftFaulted`, with its witnesses at
-the toy deployment, the releases' faithfulness from a checked dataflow, and the range clamp.
+the toy deployment, the releases' faithfulness from a checked dataflow, and the range clamp. `Tied`: `TheftFaulted` at a
+checked population whose run records each window's trace, `WeightSecurity.Guarantees.TheftTied`, its bound ending in the
+probabilities that a release isn't its trace's outputs or a trace doesn't hold its window's inputs.
 -/
