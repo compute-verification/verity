@@ -157,7 +157,7 @@ theorem entryOf_sameAt {k : UInt8} {nm : String} {e x : Json} {rs ds : String} {
     exact hexMsg_str hdu
 
 /-- **A read `readOk` passes has its fields at the entry `readKey` names** in the record `readsInterior` picks: the
-boundary port a link names, template `t`'s port of the interior record, or the registered value either record
+boundary port a link names, the interior record's port the read names, or the registered value either record
 registers, each of which `sameAt` holds to the read's root, domain and leaves, of at most `MAX_LEAVES`. -/
 theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {port v rs ds : String} {e : Json}
     {r d : ByteArray} {n : ℕ}
@@ -199,13 +199,13 @@ theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {p
     | some kx =>
       obtain ⟨k, x⟩ := kx
       simp only [hfi, Bool.and_eq_true, beq_iff_eq] at hok
-      obtain ⟨⟨hvp, hsx⟩, -⟩ := hok
+      obtain ⟨⟨-, hsx⟩, -⟩ := hok
       have hRI : readsInterior own p.template port v = true := by simp [readsInterior, hlk, hfi]
-      have hRK : readKey own p.template port v = .interior p.template port := by simp [readKey, hlk, hfi]
+      have hRK : readKey own p.template port v = .port v := by simp [readKey, hlk, hfi]
       rw [hRI, hRK]
       refine ⟨entryOf (0, k, x), ?_, hs hsx⟩
-      show recKeyAt own.interior (.interior p.template port) = _
-      rw [recKeyAt_interior, ← hvp, hfi]; rfl
+      show recKeyAt own.interior (.port v) = _
+      rw [recKeyAt_port, hfi]; rfl
     | none =>
       cases hfb : (Spot.Record.byPort own.boundary).find? (·.1 == v) with
       | some kb => simp [hfi, hfb] at hok

@@ -29,7 +29,8 @@ frame fixed before the run checks each opening at the port, and the row, the run
   domain id, at most the frame's own depth, the frame checks gate `g`'s opening at a port with `T`'s root, leaf count,
   domain id and schema, at the slot's leaf, the first with that root: either branch of `FrameIs` at `T` (the registered
   read, or the published tree's port), but for the position and the path. `entryAt_irootsOf` and `entryAt_decode` read
-  the entry off the record.
+  the entry off the record; `unitsAt_irootsOf`, `leafAt_irootsOf` and `leafAt_decode` the row, which moves with the
+  replay block's place under its roots and is `pos` under the statement's.
 -/
 
 @[expose] public section
@@ -355,5 +356,25 @@ theorem entryAt_decode {x : Msg} {st : Roots} (hx : decode x = some st) (s : Slo
     entryAt st.roots s =
       (recEntries st.record).find? fun e => decide (e.name = keyOf (Spot.SecondStage.byTemplate st.record) s.key) := by
   rw [entryAt, keyAt, entryNamed, entriesOf_decode hx, namedOf_decode hx]
+
+/-- **A slot's units under a replay block's roots**: `units + q·stride`, at the round-1 record's `q` replay blocks. -/
+theorem unitsAt_irootsOf {m₁ : Msg} {rec : Json} (hm : jsonMsg m₁ = some rec) (ρ : ℕ) (s : Slot) :
+    unitsAt (irootsOf m₁ ρ) s = s.units + (blocksOf rec).length * s.stride := by
+  rw [unitsAt, qOf_irootsOf hm]
+
+/-- **A sized slot's leaf under a replay block's roots** is its unit `pos + i·stride`, at the replay block's place `i`
+among the round-1 record's, where it counts any units. -/
+theorem leafAt_irootsOf {m₁ : Msg} {rec : Json} (hm : jsonMsg m₁ = some rec) (ρ : ℕ) {s : Slot} (hs : s.sized = true)
+    (hu : 0 < unitsAt (irootsOf m₁ ρ) s) (e : Entry) :
+    leafAt (irootsOf m₁ ρ) s e = s.pos + (blocksOf rec).idxOf ρ * s.stride := by
+  rw [leafAt, if_neg (Nat.pos_iff_ne_zero.1 hu), leavesAt, if_pos hs, Nat.div_self hu, Nat.mul_one,
+    placeOf_irootsOf hm]
+
+/-- **A slot's leaf under the statement's roots** is `pos`, where it counts no units of its own: the statement's roots
+count no replay blocks. -/
+theorem leafAt_decode {x : Msg} {st : Roots} (hx : decode x = some st) {s : Slot} (hu : s.units = 0) (e : Entry) :
+    leafAt st.roots s e = s.pos := by
+  have h0 : unitsAt st.roots s = 0 := by rw [unitsAt, hu, qOf_decode hx, Nat.zero_mul, Nat.add_zero]
+  rw [leafAt, if_pos h0]
 
 end SpotFlock

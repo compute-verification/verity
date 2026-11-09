@@ -8,15 +8,15 @@ public import Proofs.Flock.SpotFlock.FrameAt
 `frameIs_frameAt`: at a registration whose frame is `frameAt slot c` (`FrameAt.lean`), `FrameIs` at a layout `L`
 follows from two facts, one about `c` and the slots, one about the run's records.
 
-* `SlotsAt slot c L`: at each gate a checked unit needs, the code's opening there, whose value and data are `c`'s first
-  opening at the gate under its roots (`Reveal.frameAt`), holds the witness's bit at the layout's column, its row and
-  salt are row `q` of unit `n` of the session's table, and the gate's slot names where the frame finds that row. At a
-  port the session reads registered (`reg`): the entry round 2 reads the read's value off (`readKeyAt`), under the roots
-  it reads it under (`readRoots`), at the read's schema, not sized, its leaf under those roots (`leafAt`), at an entry
-  of the read's leaf count, the position the session header gives the row, the opening's path being the header's. At a
-  one-table session's other ports: template `t`'s port of the interior record (`SlotKey.interior`), under the replay
-  block's roots, at the published tree's schema, sized to its leaf count, its leaf the drawn unit's row, the opening's
-  path being the published tree's (`pubPath`).
+* `SlotsAt slot c L` (`SlotsAtGate` at one gate): at each gate a checked unit needs, the code's opening there, whose
+  value and data are `c`'s first opening at the gate under its roots (`Reveal.frameAt`), holds the witness's bit at the
+  layout's column, its row and salt are row `q` of unit `n` of the session's table, and the gate's slot names where the
+  frame finds that row. At a port the session reads registered (`reg`): the entry round 2 reads the read's value off
+  (`readKeyAt`), under the roots it reads it under (`readRoots`), at the read's schema, not sized, its leaf under those
+  roots (`leafAt`), at an entry of the read's leaf count, the position the session header gives the row, the opening's
+  path being the header's. At a one-table session's other ports: template `t`'s port of the interior record
+  (`SlotKey.interior`), under the replay block's roots, at the published tree's schema, sized to its leaf count, its
+  leaf the drawn unit's row, the opening's path being the published tree's (`pubPath`).
 * `EntriesAt c`: in an accepted run, the entry round 2 reads each registered read's value off has the read's root,
   leaf count and domain id, and template `t`'s port of the interior record at a port a one-table session doesn't read
   registered has its published tree's root and domain id; each port at most `c`'s own depth.
@@ -41,12 +41,13 @@ def readsInterior (own : Spot.SecondStage.Own) (t port v : String) : Bool :=
         (Spot.SecondStage.registeredEntry own.boundary v).isNone)
 
 /-- **The entry round 2 reads a registered read's value `v` at template `t`'s port `port` off**
-(`SecondStage.readOk`): the boundary port a link names; else template `t`'s port of the interior record, where the
-interior record has a port named `v`, which round 2 holds to be that one; else the registered value `v`. -/
+(`SecondStage.readOk`): the boundary port a link names; else the interior record's port named `v`, where it has one;
+else the registered value `v`. The entry is the value's, not the reading port's, so every session that reads one value
+names one entry. -/
 def readKey (own : Spot.SecondStage.Own) (t port v : String) : SlotKey :=
   match Spot.SecondStage.linkOf own t port with
   | some l => .port l.value
-  | none => if ((Spot.Record.byPort own.interior).find? (·.1 == v)).isSome then .interior t port else .reg v
+  | none => if ((Spot.Record.byPort own.interior).find? (·.1 == v)).isSome then .port v else .reg v
 
 variable (h : Held)
 
@@ -66,12 +67,44 @@ def readKeyAt (x m₁ : Msg) (c₀ c₁ : FlockDeploy.Coin) (t : ℕ) (port v : 
   | some st, some rec, some draw => readKey (ownOf h st rec draw c₀) (h.names.getD t "") port v
   | _, _, _ => .reg v
 
-/-- **The reveal opens the session's rows, and each gate's slot names where they are** (the module's docstring), at
-`FrameIs`'s statements and setup: the layout's facts and the code's opening at the gate as `FrameIs` states them, its
-value and data `c`'s first opening there (`Reveal.frameAt`), and then, for the row's port `q`, either the registered
-read it is named like, the roots round 2 reads its value under, the gate's slot and the header's path, or, at a
-one-table session's port read from no registered read, the replay block's roots, the gate's slot and the published
-tree's path. -/
+/-- **The reveal opens the session's rows, and gate `g`'s slot names where they are** (the module's docstring), at a
+checked unit `u` of the run at statement `x` (parsed `s`), round messages `m₀`, `m₁`, `m₂`, coins `c₀` and `c₁` and the
+rest `rest`, at the session witness `wF`, the unit's replay block `ρ` and its session's setup: the layout's facts and
+the code's opening at the gate as `FrameIs` states them, its value and data `c`'s first opening there
+(`Reveal.frameAt`), and then, for the row's port `q`, either the registered read it is named like, the roots round 2
+reads its value under, the gate's slot and the header's path, or, at a one-table session's port read from no registered
+read, the replay block's roots, the gate's slot and the published tree's path. -/
+def SlotsAtGate (slot : ℕ → Option Slot) (c : Code) (L : Layout) (x : Msg) (s : AuditStatement) (m₀ m₁ m₂ : Msg)
+    (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) (wF : Claims.Flock.Wit) (u ρ : ℕ) (ins : FlockDeploy.Ins)
+    (sts : Array _root_.Flock.Stmt) (g : ℕ) : Prop :=
+  ∃ β j y n q, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∃ hj : j < sts.size,
+    y < 2 ^ sts[j].c.kLog ∧ L.wire x m₁ (unitStmt h m₂ u) u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧
+    let o := Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt c) s u
+      (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g
+    o.2.val = _root_.Flock.InnerRows.bitAt { ins.read with sts } wF j β y ∧
+      SamplingDeploy.row c.place c.bits o.2 = _root_.Flock.InnerRows.rowBytes { ins.read with sts } wF j n q ∧
+      c.salt o.2 = (_root_.Flock.InnerRows.salt { ins.read with sts } wF j n q).data.toList ∧
+      ((∃ own reg, ins.registered = some own ∧ reg ∈ own ∧
+        (List.range sts[j].c.ports.size).find? (fun q => sts[j].c.ports[q]!.name == reg.name) = some q ∧
+        o.1 = readRoots h x m₁ c₀ c₁ ρ (templateOf h.ms u) reg.name reg.value ∧
+        ∀ t positions paths, sts[j].pub.tables = some t →
+          _root_.Flock.Registered.entry sts[j].pub reg = .ok (positions, paths) →
+          ∃ sl, slot g = some sl ∧ sl.key = readKeyAt h x m₁ c₀ c₁ (templateOf h.ms u) reg.name reg.value ∧
+            sl.schema = reg.schema ∧ sl.sized = false ∧
+            (∀ e, entryAt o.1 sl = some e → e.leaves = reg.leaves →
+              leafAt o.1 sl e = positions.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) 0) ∧
+            bytes (c.π o.2) = paths.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) ByteArray.empty) ∨
+      (ins.read.I.count ≤ 1 ∧ q < sts[j].c.ports.size ∧ o.1 = iroots x (seenAt m₀ m₁ m₂ c₀ c₁ rest) ρ ∧
+        (∀ own, ins.registered = some own → ∀ reg ∈ own, reg.name ≠ sts[j].c.ports[q]!.name) ∧ ∀ pop,
+        _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop →
+        ∃ sl, slot g = some sl ∧ sl.key = .interior (h.names.getD (templateOf h.ms u) "") sts[j].c.ports[q]!.name ∧
+          sl.schema = (pubPort sts[j].c pop q).schema ∧ sl.sized = true ∧
+          unitsAt o.1 sl = (pubPort sts[j].c pop q).leaves ∧
+          (∀ e, entryAt o.1 sl = some e → leafAt o.1 sl e = rowAt sts[j].c pop q (unitOf ins.read.draw n)) ∧
+          bytes (c.π o.2) = pubPath sts[j].c pop q (rowAt sts[j].c pop q (unitOf ins.read.draw n))))
+
+/-- **`SlotsAtGate` at every gate each checked unit of an accepted run needs**, at `FrameIs`'s statements and
+setup. -/
 def SlotsAt (slot : ℕ → Option Slot) (c : Code) (L : Layout) : Prop :=
   ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
@@ -79,31 +112,7 @@ def SlotsAt (slot : ℕ → Option Slot) (c : Code) (L : Layout) : Prop :=
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) →
-    ∀ g, s.prog.Needs b g → ∃ β j y n q, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∃ hj : j < sts.size,
-      y < 2 ^ sts[j].c.kLog ∧ L.wire x m₁ (unitStmt h m₂ u) u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧
-      let o := Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt c) s u
-        (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF g
-      o.2.val = _root_.Flock.InnerRows.bitAt { ins.read with sts } wF j β y ∧
-        SamplingDeploy.row c.place c.bits o.2 = _root_.Flock.InnerRows.rowBytes { ins.read with sts } wF j n q ∧
-        c.salt o.2 = (_root_.Flock.InnerRows.salt { ins.read with sts } wF j n q).data.toList ∧
-        ((∃ own reg, ins.registered = some own ∧ reg ∈ own ∧
-          (List.range sts[j].c.ports.size).find? (fun q => sts[j].c.ports[q]!.name == reg.name) = some q ∧
-          o.1 = readRoots h x m₁ c₀ c₁ ρ (templateOf h.ms u) reg.name reg.value ∧
-          ∀ t positions paths, sts[j].pub.tables = some t →
-            _root_.Flock.Registered.entry sts[j].pub reg = .ok (positions, paths) →
-            ∃ sl, slot g = some sl ∧ sl.key = readKeyAt h x m₁ c₀ c₁ (templateOf h.ms u) reg.name reg.value ∧
-              sl.schema = reg.schema ∧ sl.sized = false ∧
-              (∀ e, entryAt o.1 sl = some e → e.leaves = reg.leaves →
-                leafAt o.1 sl e = positions.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) 0) ∧
-              bytes (c.π o.2) = paths.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) ByteArray.empty) ∨
-        (ins.read.I.count ≤ 1 ∧ q < sts[j].c.ports.size ∧ o.1 = iroots x (seenAt m₀ m₁ m₂ c₀ c₁ rest) ρ ∧
-          (∀ own, ins.registered = some own → ∀ reg ∈ own, reg.name ≠ sts[j].c.ports[q]!.name) ∧ ∀ pop,
-          _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop →
-          ∃ sl, slot g = some sl ∧ sl.key = .interior (h.names.getD (templateOf h.ms u) "") sts[j].c.ports[q]!.name ∧
-            sl.schema = (pubPort sts[j].c pop q).schema ∧ sl.sized = true ∧
-            unitsAt o.1 sl = (pubPort sts[j].c pop q).leaves ∧
-            (∀ e, entryAt o.1 sl = some e → leafAt o.1 sl e = rowAt sts[j].c pop q (unitOf ins.read.draw n)) ∧
-            bytes (c.π o.2) = pubPath sts[j].c pop q (rowAt sts[j].c pop q (unitOf ins.read.draw n))))
+    ∀ g, s.prog.Needs b g → SlotsAtGate h slot c L x s m₀ m₁ m₂ c₀ c₁ rest wF u ρ ins sts g
 
 /-- **The entries the slots name have their ports' fields** (the module's docstring), at `FrameIs`'s statements and
 setup: under the roots round 2 reads each of the session's registered reads under, the entry it reads the read's value
