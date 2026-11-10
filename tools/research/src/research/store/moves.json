@@ -2244,6 +2244,12 @@
         "security/Proofs/Accounting/Actual/Dampener.lean": "security/Proofs/Accounting/Actual/Slowdown.lean",
         "security/Proofs/InferenceOnly/Dampener.lean": "security/Proofs/InferenceOnly/Slowdown.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/inference_only/rho/": "verity/protocols/inference_only/slowdown/",
+        "verity/protocols/inference_only/rho/rho/": "verity/protocols/inference_only/slowdown/slowdown/"
+      }
     }
   ]
 }
