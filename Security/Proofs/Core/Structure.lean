@@ -35,7 +35,7 @@ theorem isPrefix_computed (C : Circuit) : IsPrefix C C.computed := by
   | false => exact absurd (show a ∈ C.computed from Finset.mem_filter.2 ⟨Finset.mem_univ _, hi⟩) h
 
 /-- Fresh input is external plus produced reads, in wire bits. -/
-theorem fresh_eq_external_add_produced (d : Declaration) (B : Finset (Fin d.D.N)) :
+theorem fresh_eq_external_add_produced (d : RegisteredCircuit) (B : Finset (Fin d.D.N)) :
     d.D.width (d.unregistered B) = d.D.width (externalIn d B) + d.D.width (producedIn d B) :=
   (Finset.sum_filter_add_sum_filter_not (d.unregistered B) (fun a => d.D.isInput a = true) d.D.w).symm
 
@@ -117,7 +117,7 @@ theorem fewestBlocks_le {𝓡 : Set Resources} {r : Resources} {k : ℕ} (h : r 
   iInf₂_le_of_le r h (iInf_le _ hk)
 
 /-- Each evaluation is at most its method's worst case. -/
-theorem le_worst (q : Evaluation → ℕ∞) (M : Method) (x ω : M.d.D.Transcript) : q ⟨M, x, ω⟩ ≤ worst q M :=
-  le_iSup₂ (f := fun (x ω : M.d.D.Transcript) => q ⟨M, x, ω⟩) x ω
+theorem le_worst (q : Evaluation → ℕ∞) (M : Method) (x ω : M.d.D.Trace) : q ⟨M, x, ω⟩ ≤ worst q M :=
+  le_iSup₂ (f := fun (x ω : M.d.D.Trace) => q ⟨M, x, ω⟩) x ω
 
 end Verity.Structure

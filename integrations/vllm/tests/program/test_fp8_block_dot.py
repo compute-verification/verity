@@ -82,10 +82,10 @@ def test_at_blackwells_step_the_block_gemm_is_another_function() -> None:
 
 
 def test_block_gemm_picks_the_form_by_its_step() -> None:
-    for scale, v1, v3 in (("per-coordinate", F.ScaledMmFp8Block, F.ScaledMmFp8BlockV3),
-                          ("shared-per-block", F.ScaledMmFp8BlockSharedScale, F.ScaledMmFp8BlockSharedScaleV3)):
-        assert fp8_vocab.block_gemm(256, 384, 128, scale) == bind(v1, K=256, N=384, G=128)
-        assert fp8_vocab.block_gemm(256, 384, 128, scale, BlackwellE4m3QmmaDot32) == bind(v3, K=256, N=384, G=128, DOT=BlackwellE4m3QmmaDot32)
+    scale = "shared-per-block"
+    assert fp8_vocab.block_gemm(256, 384, 128, scale) == bind(F.ScaledMmFp8BlockSharedScale, K=256, N=384, G=128)
+    assert fp8_vocab.block_gemm(256, 384, 128, scale, BlackwellE4m3QmmaDot32) == \
+        bind(F.ScaledMmFp8BlockSharedScaleV3, K=256, N=384, G=128, DOT=BlackwellE4m3QmmaDot32)
     assert fp8_vocab.SHARED_SCALE == {"ScaledMmFp8Block_v1": F.ScaledMmFp8BlockSharedScale}
 
 
@@ -122,13 +122,12 @@ def test_the_switch_maps_its_word_view_to_it(target) -> None:
 # ---------------------------------------------------------------- the registry
 
 
-@pytest.mark.parametrize("scale", [None, "shared-per-block", "per-coordinate"])
+@pytest.mark.parametrize("scale", [None, "shared-per-block"])
 def test_hopper_binds_the_version_1_forms(scale) -> None:
     tp = HOPPER.with_overrides(fp8_scale_construction=scale)
     assert TG.fp8_block_dot(tp) is None
-    v1 = F.ScaledMmFp8Block if scale == "per-coordinate" else F.ScaledMmFp8BlockSharedScale
     for K, N in ((2560, 6144), (6144, 2624)):
-        assert TG.scaled_mm_fp8_block_spec(tp, K, N, 128) == bind(v1, K=K, N=N, G=128)
+        assert TG.scaled_mm_fp8_block_spec(tp, K, N, 128) == bind(F.ScaledMmFp8BlockSharedScale, K=K, N=N, G=128)
 
 
 @pytest.mark.parametrize("cc", [(8, 9), (10, 0)])
@@ -164,22 +163,20 @@ def test_the_blockwise_step_is_keyed_on_its_own_field(monkeypatch) -> None:
         TG.scaled_mm_fp8_block_spec(SM120, 6144, 2624, 128)
 
 
-@pytest.mark.parametrize("scale", ["shared-per-block", "per-coordinate"])
-def test_blackwell_consumer_binds_the_version_3_forms_over_its_step(scale) -> None:
+def test_blackwell_consumer_binds_the_version_3_forms_over_its_step() -> None:
     assert TG.fp8_block_dot(SM120) is BlackwellE4m3QmmaDot32
-    v3 = F.ScaledMmFp8BlockV3 if scale == "per-coordinate" else F.ScaledMmFp8BlockSharedScaleV3
-    spec = TG.scaled_mm_fp8_block_spec(SM120, 6144, 2624, 128, scale)
-    assert spec == bind(v3, K=6144, N=2624, G=128, DOT=BlackwellE4m3QmmaDot32) and "BlackwellE4m3QmmaDot32_v1" in spec.id
+    spec = TG.scaled_mm_fp8_block_spec(SM120, 6144, 2624, 128, "shared-per-block")
+    assert spec == bind(F.ScaledMmFp8BlockSharedScaleV3, K=6144, N=2624, G=128, DOT=BlackwellE4m3QmmaDot32)
+    assert "BlackwellE4m3QmmaDot32_v1" in spec.id
 
 
 def test_the_vocabulary_binds_the_step_it_is_given() -> None:
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
 
-    for scale, v1, v3 in (("per-coordinate", F.ScaledMmFp8Block, F.ScaledMmFp8BlockV3),
-                          ("shared-per-block", F.ScaledMmFp8BlockSharedScale, F.ScaledMmFp8BlockSharedScaleV3)):
-        assert V.kind("scaled_mm_fp8_block", K=256, N=384, G=128, SCALE=scale) == bind(v1, K=256, N=384, G=128)
-        got = V.kind("scaled_mm_fp8_block", K=256, N=384, G=128, SCALE=scale, FP8_DOT=BlackwellE4m3QmmaDot32)
-        assert got == bind(v3, K=256, N=384, G=128, DOT=BlackwellE4m3QmmaDot32)
+    scale = "shared-per-block"
+    assert V.kind("scaled_mm_fp8_block", K=256, N=384, G=128, SCALE=scale) == bind(F.ScaledMmFp8BlockSharedScale, K=256, N=384, G=128)
+    got = V.kind("scaled_mm_fp8_block", K=256, N=384, G=128, SCALE=scale, FP8_DOT=BlackwellE4m3QmmaDot32)
+    assert got == bind(F.ScaledMmFp8BlockSharedScaleV3, K=256, N=384, G=128, DOT=BlackwellE4m3QmmaDot32)
 
 
 # ---------------------------------------------------------------- the frontend rule
@@ -212,7 +209,7 @@ def test_the_rule_passes_the_gate_where_a_step_is_recorded() -> None:
     assert _gate(DEFAULT_TARGET.with_overrides(compute_capability=(12, 0))) == "unexpected operator arity"
 
 
-@pytest.mark.parametrize("scale", [None, "per-coordinate"])
+@pytest.mark.parametrize("scale", [None, "shared-per-block"])
 def test_the_rule_binds_the_targets_step(monkeypatch, scale) -> None:
     from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
     from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
@@ -250,7 +247,7 @@ def test_the_fold_refuses_a_target_without_a_blockwise_step() -> None:
     assert r.reason == "blockwise FP8 linear on ada (8.9): this target's _C.cutlass_scaled_mm blockwise kernel has no registered Definition"
 
 
-@pytest.mark.parametrize("scale", [None, "per-coordinate"])
+@pytest.mark.parametrize("scale", [None, "shared-per-block"])
 def test_the_fold_binds_the_targets_step(scale) -> None:
     K, N, G = FP.K, FP.N, FP.G
     for tp, dot in ((HOPPER, None), (SM120, BlackwellE4m3QmmaDot32)):

@@ -409,16 +409,36 @@ def test_openings_of_subtrees_and_the_tail_verify_as_the_drivers():
 def test_an_opening_inside_a_subtree_is_refused_by_the_drivers_leaf_check():
     """Position 19, in leaf 1 of w's aligned subtree: a wrong salt, a position in another leaf, a path a sibling short
     or long, and a leaf a receipt short are refused by `rb.verify_leaf` and `rb.leaf_receipt`, and the leaf's
+<<<<<<< 0941037006
     `merkle.Opening` of another leaf by the check that it is the position's."""
+||||||| merged common ancestors
+    or long, and a leaf a receipt short are refused by `rb.verify_leaf` and `rb.leaf_receipt`."""
+=======
+    `merkle.Opening` of another leaf, or hiding another value, by the check that it is the position's."""
+>>>>>>> 7af4d24fca3e
     s, _ = _aligned_store()
     (pc,), _ = _window(s, SIGMA, [([0, 1, 2, 3], None)])
     (o,), plan, salt = s.open([(0, 19)]), s.plan(0), bytes(rb.SALT_BYTES)
     p, leaf, path = rb.Plan.of(plan.tolist(), s.layout().blocks), b"".join(o.leaf_receipts), o.leaf.path
+<<<<<<< 0941037006
     assert o.leaf.position == 1 and rb.verify_leaf(pc.seed, p, pc.root, 19, leaf, o.salt, path)
+||||||| merged common ancestors
+    p, leaf, path = rb.Plan.of(plan.tolist(), s.layout().blocks), b"".join(o.leaf_receipts), o.leaf_path + o.segment_path
+    assert o.leaf_path and rb.verify_leaf(pc.seed, p, pc.root, 19, leaf, o.salt, path)
+=======
+    assert o.leaf.position == 1 and o.leaf.value == rb.hidden(leaf, o.salt) and rb.verify_leaf(pc.seed, p, pc.root, 19, leaf,
+                                                                                               o.salt, path)
+>>>>>>> 7af4d24fca3e
     for q, sl, x in [(3, o.salt, path), (19, salt, path), (19, o.salt, path[1:]), (19, o.salt, (*path, path[0]))]:
         assert not rb.verify_leaf(pc.seed, p, pc.root, q, leaf, sl, x)
     for edge in ({"salt": salt}, {"leaf": Opening(1, o.leaf.value, path[1:])}, {"leaf": Opening(0, o.leaf.value, path)},
+<<<<<<< 0941037006
                  {"leaf_receipts": o.leaf_receipts[:-1]}):
+||||||| merged common ancestors
+    for edge in ({"salt": salt}, {"leaf_path": ()}, {"leaf_receipts": o.leaf_receipts[:-1]}):
+=======
+                 {"leaf": Opening(1, rb.hidden(leaf, salt), path)}, {"leaf_receipts": o.leaf_receipts[:-1]}):
+>>>>>>> 7af4d24fca3e
         bad = o.__class__(**{**o.__dict__, **edge})
         assert not verify_opening(s.region("w"), pc, plan, bad, RECEIPT, CODEC.decode, None)
 

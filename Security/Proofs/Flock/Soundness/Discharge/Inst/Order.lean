@@ -1,8 +1,16 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Inst.Place
-public import Proofs.Flock.Soundness.ExecLookup
 public import Flock.ProvedScope
+import all Init.Data.Nat.Fold
+public import Proofs.Flock.Soundness.Discharge.Inst.Rows
+public import Proofs.Flock.Soundness.ExecCheck
+public import Proofs.Flock.Soundness.ExecCircuit
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Level3.LookupRows
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.Discharge.Inst.Place
+import Proofs.Flock.Soundness.ExecLookup
+import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # Every column with a row is in the order, once the wires are acyclic

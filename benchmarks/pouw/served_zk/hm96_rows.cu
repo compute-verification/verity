@@ -1,6 +1,6 @@
 // The ZK statement's row commitment on the serving GPU, for served_zk's cost measurement (rows_bench.py): a call's rows as
 // hm96-sha512 row leaves of a frame-v3-sha512 tree (verity.ml.commitments: rowleaf's sha512/row-seg/v1 and
-// sha512/row/v2, hm96's SHA512 instance, merkle's frame-v3 leaf and node), the hashing being C-Flock's (verity/ml/flock/cuda/
+// sha512/row/v2, hm96's SHA512 instance, merkle's frame-v3 leaf and node), the hashing being Flock's (verity/ml/flock/cuda/
 // sha512.cuh: s512_compress) and the frame messages, the mask, the salt digest and the hm96 leaf's value
 // verity/ml/kernels/row_commit.cuh's over it.  Every launch takes rows_bench.py's Args (16 pointers, 16 ints).
 //   sz_mid       the SHA-512 state after each of `count` 128-byte first blocks (the segment prefixes S(j, s, m_j), Q, P,
@@ -21,13 +21,13 @@ struct Args { unsigned long long p[16]; int i[16]; };
 
 #define SLOT 256   // bytes a leaf or node message head takes in its buffer; its length is the slot's first u32
 
-// C-Flock's compression as row_commit.cuh's policy; compress_kw takes the block back from its schedule's first 16 words
+// Flock's compression as row_commit.cuh's policy; compress_kw takes the block back from its schedule's first 16 words
 struct SzC {
     static __device__ __forceinline__ void compress(uint64_t* st, uint64_t* w) { s512_compress(st, w); }
     static __device__ __forceinline__ void compress_kw(uint64_t* st, const uint64_t* kw) {
         uint64_t w[16];
 #pragma unroll
-        for (int j = 0; j < 16; j++) w[j] = kw[j] - SHA512_K[j];
+        for (int j = 0; j < 16; j++) w[j] = kw[j] - sx::K_DEV[j];
         s512_compress(st, w);
     }
 };

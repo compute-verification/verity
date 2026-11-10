@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Pouw.Basic.Prob
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Mathlib.Algebra.Order.Archimedean.Real.Basic
 public import Mathlib.Order.Interval.Finset.Nat
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
 /-!
 # What a remote audit shows held: the node's memory as a trace (trusted)
@@ -97,7 +97,7 @@ def entered (ω : Ω) (t : ℕ) : ℕ := (T.present ω (t + 1) \ T.present ω t)
 def planned (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.plan ω p).card
 
 /-- The credited passes' wrong receipts of registered blocks. -/
-def wrong (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.plan ω p \ T.correct ω p).card
+def incorrect (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.plan ω p \ T.correct ω p).card
 
 /-- The registered blocks pass `p` read on the node: those of its plan whose receipts are correct, each in node memory
 or on a chip at a tick of the pass. -/

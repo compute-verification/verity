@@ -2,6 +2,11 @@ module
 
 public import Definitions.Pouw.Assumptions.Dimension.Embed
 public import Proofs.Pouw.Dimension.OpenPipeProofs
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.ForestProofs
+import Proofs.Pouw.Dimension.PipeProofs
 
 /-!
 # M4090 and the embedding theorem: proofs

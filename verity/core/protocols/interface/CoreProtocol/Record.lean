@@ -13,13 +13,13 @@ text of the entry.
 
 `Record.ofJson` reads the form: the seven keys, each of its type. Everything a protocol accepts beyond the form (its
 schemas, kinds and bodies, which key signs, its sessions) is its own check; the auditor's ledger
-(`SampledProofs.Challenger.ledgerEntry?`) reads its entries through this. `verity/core/protocols/record.py` mirrors it.
+(`Spot.Challenger.ledgerEntry?`) reads its entries through this. `verity/core/protocols/record.py` mirrors it.
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Bytes
 public import Flock.Hash
+public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 

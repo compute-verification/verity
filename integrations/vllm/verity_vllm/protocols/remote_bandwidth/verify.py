@@ -14,9 +14,20 @@ from verity_vllm.protocols.remote_bandwidth.registry import canonical, plan_of, 
 def verify_opening(info: RegionInfo, pc: PassCommitment, plan: Sequence[int], o: BlockOpening, receipt: Receipt,
                    decode: Callable[[bytes, int], bytes], payload: bytes | None, z: bytes | None = None) -> bool:
     """The verifier's side of one opening (the reference): the plan's block at the position, its digest, the receipt
+<<<<<<< 0941037006
     recomputed from the block and found at the position in its leaf (`rb.leaf_receipt`), the leaf's `merkle.Opening`
     that of the position's leaf hiding those receipts under the opened salt, and its path to the pass's root
     (`rb.verify_leaf`), and, with ``payload`` (what the block's registration source names), the block decoding to it."""
+||||||| merged common ancestors
+    recomputed from the block and found at the position in its leaf (`rb.leaf_receipt`), the leaf under the opened
+    salt and its two paths together to the pass's root (`rb.verify_leaf`), and, with ``payload`` (what the block's
+    registration source names), the block decoding to it."""
+=======
+    recomputed from the block and found at the position in its leaf (`rb.leaf_receipt`), the leaf's `merkle.Opening` at
+    the position's leaf with those receipts hidden under the opened salt (`rb.hidden`) as its value and its path to the
+    pass's root (`rb.verify_leaf`), and, with ``payload`` (what the block's registration source names), the block
+    decoding to it."""
+>>>>>>> 7af4d24fca3e
     seg = pc.segments[bisect.bisect_right([s.position for s in pc.segments], o.position) - 1]
     if int(plan[o.position]) != o.block or seg.region != o.region or not info.first <= o.block < info.first + info.blocks:
         return False

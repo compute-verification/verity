@@ -1,9 +1,24 @@
 module
 
-public import Proofs.Flock.VBridge.Family.Rep
 public import Proofs.Flock.VBridge.Family.Openings
 public import Proofs.Flock.VBridge.Family.Files
-public import Proofs.Flock.Soundness.Refine.Regions
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.VBridge.Pinned
 
 /-!
 # The structure facts at V*'s shape
@@ -11,7 +26,7 @@ public import Proofs.Flock.Soundness.Refine.Regions
 The family's shape facts, by evaluating V*'s and the verifier's Lean at `hsh` and `hstmts`:
 
 * the shape: `RecResiduals.shape?` (`RecResiduals.lean:60`) holds only at a `fast100` schedule (`Schedule.lean:47`,
-  `m ∈ [22, 35]`, `fast100_range`), whose level 0 draws queries (`fast100_q0`), so `0 < F.nOpen` (`nOpen_pos`);
+  `m ∈ [22, 35]`, `fast100_range`), whose level 0 samples queries (`fast100_q0`), so `0 < F.nOpen` (`nOpen_pos`);
 * the statements: `VStar.statements` (`Stage.lean:49-60`) is the levels' `RecOpen` statements, then one `InnerRepCheck`
   per part of `parts (spec vsh)` (`statements_eq`), so level `ℓ`'s openings are statement `ℓ` (`statements_recOpen`)
   and part `p` is a statement when V* has it (`statements_inner`): `HOpenUnits` (`hOpenUnits_of`), `HCover`
@@ -49,7 +64,7 @@ theorem fast100_range {m : ℕ} {s : Flock.Schedule} (h : Flock.fast100 m = some
     cases h
   omega
 
-/-- **Every `fast100` schedule's level 0 draws queries** (`queriesAt[0] = 218`, `Schedule.lean:44,55`), by evaluating
+/-- **Every `fast100` schedule's level 0 samples queries** (`queriesAt[0] = 218`, `Schedule.lean:44,55`), by evaluating
 `fast100` at each `m ∈ [22, 35]`. -/
 theorem fast100_q0 {m : ℕ} {s : Flock.Schedule} (h : Flock.fast100 m = some s) :
     0 < s.levels.size ∧ 0 < (s.levels[0]!).q := by
@@ -481,7 +496,7 @@ theorem sched_eq {s : Flock.Schedule} (hs : F.vsh.sched = .ok s) : s = F.sh.sche
   rw [sched_fast100 hs] at h
   exact Option.some.inj h
 
-/-- **Each rep opens at least one row**: level 0 of `fast100`'s schedule draws 218 queries. -/
+/-- **Each rep opens at least one row**: level 0 of `fast100`'s schedule samples 218 queries. -/
 theorem nOpen_pos : 0 < F.nOpen := by
   obtain ⟨hsz, hq⟩ := fast100_q0 (shape?_eq F.hsh).1
   unfold nOpen

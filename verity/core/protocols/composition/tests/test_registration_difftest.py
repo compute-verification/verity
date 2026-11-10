@@ -310,7 +310,12 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
     view = G.check(AUDITOR, "onsite", chain("onsite", EXAMPLE)).view()
     assert view.value("weights") == WEIGHTS and view.theta == ITEMS[:2] and view.builder == ITEMS[2]
     assert view.site.locs == LOCS
+<<<<<<< 0941037006
     assert view.declared(0) == DAY0.declared() and view.declared(1) is None
+||||||| merged common ancestors
+=======
+    assert view.declared(0) == DAY0 and view.declared(1) is None
+>>>>>>> 7af4d24fca3e
     malformed = {**chain("onsite", EXAMPLE)[2].to_json(), "program": "1"}
     with pytest.raises(G.Malformed, match="program"):
         G.entry_of(malformed)
@@ -322,7 +327,7 @@ def test_registration_difftest() -> None:
 
 
 def test_a_reference_without_the_challengers_reach_is_caught() -> None:
-    """A Python that skips onsite's `challenger-reach` disagrees with the Lean on some drawn log."""
+    """A Python that skips onsite's `challenger-reach` disagrees with the Lean on some sampled log."""
     real = G.site_refusal
 
     def lax(auditor, composite, s, head, e):
@@ -338,7 +343,7 @@ def test_a_reference_without_the_challengers_reach_is_caught() -> None:
 
 
 def test_a_reference_that_takes_a_second_declaration_of_a_day_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A Python that takes a second declaration of a day disagrees with the Lean on some drawn log."""
+    """A Python that takes a second declaration of a day disagrees with the Lean on some sampled log."""
     real = G.State.refusal
 
     def lax(self, auditor, composite, e):

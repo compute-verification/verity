@@ -14,7 +14,7 @@ Every reference verifier an arm names today is a replay that opens the run's row
 the clear, so an accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck).
 The records and `panel.py append`'s arguments keep the name ``verifier``.
 
-  python verify.py RESULT_JSON [--run-id ID] [--commit SHA] [--out FILE]
+  python verify.py RESULT_JSON [--run-id ID] [--commit SHA] [--out FILE] [--every-row]
       [--tier 2a|2b] [--hypothesis TEXT] [--parent ART|VARIANT] [--outcome O --reason TEXT] [--by LANE]
       [--publish [--push] [--store ROOT]] [--no-ledger]
 
@@ -82,10 +82,17 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def panel_rows(result: dict) -> list[tuple[str, str, dict]]:
-    """(arm, shape label, panel block) of every arm row the run reported a panel block for."""
-    return [(name, s["label"], r["panel"]) for s in result.get("shapes", [])
-            for name, r in (s.get("arms") or {}).items() if "panel" in r]
+def panel_rows(result: dict, every: bool = False) -> list[tuple[str, str, dict]]:
+    """(arm, shape label, panel block) of every arm row the run reported a panel block for; with `every`, of every arm row,
+    one without a panel block verified into a ``verified`` block of its own (`verity bench overhead`'s rows)."""
+    out = []
+    for s in result.get("shapes", []):
+        for name, r in (s.get("arms") or {}).items():
+            if "panel" in r:
+                out.append((name, s["label"], r["panel"]))
+            elif every:
+                out.append((name, s["label"], r.setdefault("verified", {})))
+    return out
 
 
 class Runner:
@@ -185,11 +192,12 @@ def harness_control(result: dict, name: str, label: str, v: dict | None) -> dict
     return v | {"control": "negative/" + v["transcript"][len("transcripts/"):]} if dumped else v
 
 
-def verify(result: dict, run_dir: Path, run_id: str, commit: str | None, log) -> dict:
-    """Runs every arm's verifier and writes each panel row's verdict into it; returns the step's record."""
+def verify(result: dict, run_dir: Path, run_id: str, commit: str | None, log, every: bool = False) -> dict:
+    """Runs every arm's verifier and writes each panel row's verdict into it (`every`: each arm row's); returns the step's
+    record."""
     runner = Runner(run_dir, log)
     rows = []
-    for name, label, p in panel_rows(result):
+    for name, label, p in panel_rows(result, every):
         arm = (result.get("arms") or {}).get(name) or {}
         v = harness_control(result, name, label, arm.get("verifier"))
         for k in ("verifier_commit", "verifier_accept", "transcript", "negative_control", "panel_args", "verification"):
@@ -280,6 +288,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--run-id", default=settings.RESEARCH_RUN_ID)
     p.add_argument("--commit", default=settings.RESEARCH_SOURCE_SHA)
     p.add_argument("--out", type=Path, help="write the result here instead of rewriting RESULT_JSON")
+    p.add_argument("--every-row", action="store_true",
+                   help="verify every arm row, not only the panel's (verity bench overhead: a scheme at every shape)")
     g = p.add_argument_group("the attempt records (ledger.py)")
     g.add_argument("--tier", choices=L.TIERS, default=settings.POUW_TIER,
                    help="2a: a one-GPU screen (the default); 2b: a timed whole-node window, the panel's measurements")
@@ -310,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:
         L.one_line(a.reason, "--reason")
         result = json.loads(a.result.read_text())
         started = now()
-        rec = verify(result, a.result.resolve().parent, a.run_id, a.commit, log)
+        rec = verify(result, a.result.resolve().parent, a.run_id, a.commit, log, a.every_row)
     except (UsageError, A.ArmError, L.LedgerError, OSError, ValueError, KeyError, TypeError) as ex:
         log(f"verify: {type(ex).__name__}: {ex}")
         return EXIT_USAGE
@@ -322,7 +332,7 @@ def main(argv: list[str] | None = None) -> int:
     tmp.write_text(json.dumps(result, indent=1, default=str))
     os.replace(tmp, out)
     for r in rec["rows"]:
-        row = next(pb for n, lb, pb in panel_rows(result) if n == r["arm"] and lb == r["shape"])
+        row = next(pb for n, lb, pb in panel_rows(result, a.every_row) if n == r["arm"] and lb == r["shape"])
         if r["accepted"] and "panel_args" in row:
             print(f"{r['arm']} {r['shape']}: python panel.py append --line LINE --version VERSION --change CHANGE "
                   f"--description DESCRIPTION {shlex.join(row['panel_args'])}")

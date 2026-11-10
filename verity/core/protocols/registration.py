@@ -13,10 +13,19 @@ An entry is one of three kinds:
   and its public cap ℓ on one declaration's advice, in bits). Registration registers the site, θ and B, not the circuit
   B builds; a subprotocol's Program and parameters, and the proof system, are that protocol's public verifier
   parameters;
+<<<<<<< 0941037006
 * a declaration (`Declaration`, `verity/registration/declaration/v1`): a day's circuit, the day by its index among the
   monitoring period's days, its program's digest and its block Definitions by descriptor key. The prover declares one
   circuit a day, before the day's first coin, so a second declaration of a day is refused (`duplicate-declaration`), and
   each window's program is its day's (`View.declared`; the sampled-proofs registration record's R2).
+||||||| merged common ancestors
+  parameters.
+=======
+* a declaration (`Declaration`, `verity/registration/declaration/v1`): a day's circuit: the day, by its index among
+  the monitoring period's days, its program's digest and its block Definitions by descriptor key. The prover declares
+  one circuit a day, before the day's first coin, so a second declaration of a day is refused (`duplicate-declaration`),
+  and each window's program is its day's (`View.declared`; the sampled-proofs registration record's R2).
+>>>>>>> 7af4d24fca3e
 
 ~~~text
 entry digest   SHA-512(format ‖ 0 ‖ canon(entry))                          the entry's format and previous among its keys
@@ -26,8 +35,16 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
 fails (`REFUSALS`): a site entry by the Site's (`verity.core.site.entry_refusal`), an information entry by `previous`
+<<<<<<< 0941037006
 and then `duplicate-information`, a declaration by `previous` and then `duplicate-declaration`. A component reads its
 view of an accepted log (`View`): the Site, θ's values (`View.value`), the builder and the days' declared circuits
+||||||| merged common ancestors
+and then `duplicate-information`. A component reads its view of an accepted log (`View`): the Site, θ's values
+(`View.value`) and the builder, at the head. Decoding takes exactly what the encoders write and raises `Malformed`
+=======
+and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`. A component reads
+its view of an accepted log (`View`): the Site, θ's values (`View.value`), the builder and the days' declared circuits
+>>>>>>> 7af4d24fca3e
 (`View.declared`), at the head. Decoding takes exactly what the encoders write and raises `Malformed`
 otherwise; a log or parameters holding a character outside ASCII without DEL are `Malformed` (`ascii`), in
 `Core.canonicalJson`'s words.
@@ -76,6 +93,7 @@ class Information:
 
 @dataclass(frozen=True)
 class Declaration:
+<<<<<<< 0941037006
     """A day's declared circuit (`Core.Registration.Declared`): the day, by its index among the monitoring period's days,
     its program's SHA-512 as hex, its block Definitions by descriptor key, and the head of the log it follows
     (`previous`, set by `chain`)."""
@@ -99,6 +117,32 @@ class Declaration:
 
 Entry = S.Entry | Information | Declaration
 """An entry of the registration log: the Site's site entry, an information entry or a declaration."""
+||||||| merged common ancestors
+Entry = S.Entry | Information
+"""An entry of the registration log: the Site's site entry, or an information entry."""
+=======
+    """A day's declared circuit (`Core.Registration.Declared`): the day, by its index among the monitoring period's
+    days, its program's SHA-512 as hex, and its block Definitions by descriptor key; and the head of the log it follows
+    (`previous`, set by `chain`)."""
+
+    day: int
+    program: str
+    blocks: tuple[str, ...] = ()
+    previous: str = ""
+
+    def body(self) -> dict[str, Any]:
+        return {"blocks": list(self.blocks), "day": self.day, "program": self.program}
+
+    def to_json(self) -> dict[str, Any]:
+        return {**self.body(), "format": DECLARATION, "previous": self.previous}
+
+    def digest(self) -> str:
+        return S.tagged(DECLARATION, self.to_json())
+
+
+Entry = S.Entry | Information | Declaration
+"""An entry of the registration log: the Site's site entry, an information entry, or a declaration."""
+>>>>>>> 7af4d24fca3e
 
 
 def item_key(item: Mapping[str, Any]) -> str:
@@ -215,9 +259,17 @@ def entry_of(j: Any) -> Entry:
         return Information(tuple(item_of(i) for i in _list(j["items"], "items")), _str(j["previous"], "previous"))
     if fmt == DECLARATION:
         _exactly(j, ["blocks", "day", "format", "previous", "program"], "a declaration")
+<<<<<<< 0941037006
         previous, day, program = _str(j["previous"], "previous"), _nat(j["day"], "day"), _hex64(j["program"], "program")
         blocks = tuple(_str(b, "a declaration's block") for b in _list(j["blocks"], "blocks"))
         return Declaration(day, program, blocks, previous)
+||||||| merged common ancestors
+    raise Malformed(f"an entry: format {fmt} is not one of [{S.SITE}, {INFORMATION}]")
+=======
+        previous = _hex64(j["previous"], "previous")
+        blocks = tuple(_str(b, "a declaration's block") for b in _list(j["blocks"], "blocks"))
+        return Declaration(_nat(j["day"], "day"), _hex64(j["program"], "program"), blocks, previous)
+>>>>>>> 7af4d24fca3e
     raise Malformed(f"an entry: format {fmt} is not one of [{S.SITE}, {INFORMATION}, {DECLARATION}]")
 
 
@@ -264,13 +316,25 @@ class State:
         if isinstance(e, S.Entry):
             return replace(self, site=self.site.add(e), head=e.digest(), entries=self.entries + 1)
         if isinstance(e, Declaration):
+<<<<<<< 0941037006
             return replace(self, declared=self.declared + (e,), head=e.digest(), entries=self.entries + 1)
+||||||| merged common ancestors
+=======
+            return replace(self, declared=self.declared + (replace(e, previous=""),), head=e.digest(),
+                           entries=self.entries + 1)
+>>>>>>> 7af4d24fca3e
         return replace(self, items=self.items + e.items, head=e.digest(), entries=self.entries + 1)
 
     def view(self) -> View:
         return View(self.site, tuple(dict(i) for i in self.items if i["kind"] == "theta"),
+<<<<<<< 0941037006
                     next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head,
                     tuple(d.declared() for d in self.declared))
+||||||| merged common ancestors
+                    next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head)
+=======
+                    next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head, self.declared)
+>>>>>>> 7af4d24fca3e
 
 
 def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
@@ -286,25 +350,50 @@ def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
 @dataclass(frozen=True)
 class View:
     """What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder,
+<<<<<<< 0941037006
     and the days' declared circuits in order (`{"blocks", "day", "program"}` each)."""
+||||||| merged common ancestors
+    """What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder."""
+=======
+    and the days' declared circuits in order."""
+>>>>>>> 7af4d24fca3e
 
     site: S.Site
     theta: tuple[dict[str, Any], ...]
     builder: dict[str, Any] | None
     head: str
+<<<<<<< 0941037006
     declarations: tuple[dict[str, Any], ...] = ()
+||||||| merged common ancestors
+=======
+    declarations: tuple[Declaration, ...] = ()
+>>>>>>> 7af4d24fca3e
 
     def value(self, name: str) -> dict[str, Any] | None:
         """θ's registered value `name`."""
         return next((t for t in self.theta if t["value"] == name), None)
 
+<<<<<<< 0941037006
     def declared(self, day: int) -> dict[str, Any] | None:
         """Day `day`'s declared circuit, the one declaration of the day in an accepted log; None when it declares none.
         A window of that day runs its program."""
         return next((d for d in self.declarations if d["day"] == day), None)
+||||||| merged common ancestors
+=======
+    def declared(self, day: int) -> Declaration | None:
+        """Day `day`'s declared circuit, the one declaration of the day in an accepted log; None when it declares none.
+        A window of that day runs its program."""
+        return next((d for d in self.declarations if d.day == day), None)
+>>>>>>> 7af4d24fca3e
 
     def to_json(self) -> dict[str, Any]:
+<<<<<<< 0941037006
         return {"builder": self.builder, "declarations": list(self.declarations), "head": self.head,
+||||||| merged common ancestors
+        return {"builder": self.builder, "head": self.head, "site": self.site.to_json(), "theta": list(self.theta)}
+=======
+        return {"builder": self.builder, "declarations": [d.body() for d in self.declarations], "head": self.head,
+>>>>>>> 7af4d24fca3e
                 "site": self.site.to_json(), "theta": list(self.theta)}
 
 

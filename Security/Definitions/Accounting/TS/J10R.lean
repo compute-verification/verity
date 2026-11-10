@@ -7,7 +7,7 @@ public import Definitions.Pouw.PearlC.Sha512
 
 One SHA-512 stream per call row (its dither bits b and digit coins z) and one per call column (its coin bits c and `U`),
 seeded once a call; a unit reads its rows' and its columns' slices, and its fold keys stay its own. These are the
-bits, op for op, of `verity/core/protocols/pouw/circuit/seeds.py` (`call_seed`, `receipt_seed`, `noise_block`, `leaves`)
+bits, op for op, of `verity/ml/protocols/pouw/circuit/seeds.py` (`call_seed`, `receipt_seed`, `noise_block`, `leaves`)
 and `h1tile.py` (`Layout`, `_noise_at`, `j10r_blocks`, `j10r_noise`, `fold_keys`, `unit_compressions`,
 `j10r_compressions`); the units that compute them are `PouwH1Tile_v5` and `_v6`, beside today's per-unit form, which no
 scheme replaces.
@@ -16,7 +16,7 @@ scheme replaces.
   the position's eight cyclically (`seeds._tagged`). `seed` and `receiptSeed` are today's seed_j and σ_R; `callSeed` is
   J10-R's seed_c, at the position of the call's first unit and under the call's registered roots, root(a/<K>@<s>) and
   root(b/<K>).
-- `noiseBlock s t`: block `t` of seed `s`'s stream, `SHA-512(NOISE_TAG ‖ s ‖ u64 t)`; `bits` a digest's bits as a unit
+- `noiseChunk s t`: block `t` of seed `s`'s stream, `SHA-512(NOISE_TAG ‖ s ‖ u64 t)`; `bits` a digest's bits as a unit
   reads them (16 big-endian halves, each least significant bit first); `stream s first n` the first `n` bits from block
   `first` on.
 - `rowAt s k first`, `colAt s k first`: a row's (dither bits, digit coins) and a column's (coin bits, `U` as int8 codes,
@@ -66,7 +66,7 @@ and `rootB` (root(b/<K>)). -/
 def callSeed (salt : List ℕ) (call : ℕ) (rootA rootB : List ℕ) : List ℕ := tagged callSeedTag salt call rootA rootB
 
 /-- Block `t` of seed `s`'s noise stream. -/
-def noiseBlock (s : List ℕ) (t : ℕ) : List ℕ := digest (noiseTag ++ s ++ u64 t)
+def noiseChunk (s : List ℕ) (t : ℕ) : List ℕ := digest (noiseTag ++ s ++ u64 t)
 
 /-- A digest's 512 bits as a unit reads them: its 16 big-endian 32-bit halves, each least significant bit first. -/
 def bits (d : List ℕ) : List ℕ :=
@@ -76,7 +76,7 @@ def bits (d : List ℕ) : List ℕ :=
 
 /-- The first `n` bits of seed `s`'s stream from block `first` on. -/
 def stream (s : List ℕ) (first n : ℕ) : List ℕ :=
-  ((List.range ((n + 511) / 512)).flatMap fun t => bits (noiseBlock s (first + t))).take n
+  ((List.range ((n + 511) / 512)).flatMap fun t => bits (noiseChunk s (first + t))).take n
 
 /-- The number of bits least significant first. -/
 def value (bs : List ℕ) : ℕ := bs.foldr (fun b acc => b % 2 + 2 * acc) 0

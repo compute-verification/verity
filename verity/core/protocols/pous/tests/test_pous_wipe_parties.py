@@ -53,8 +53,16 @@ def verify(public: bytes, message: bytes, signature: bytes) -> bool:
     return lms.verify(KEY, public, message, lms.Signature.decode(KEY, signature))
 
 
+<<<<<<< 0941037006
 def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.WipeMemoryChallenger:
     """`wipe_party.serve` over a socket pair, its OS draws taken in order from `SEED`'s seeded coins."""
+||||||| merged common ancestors
+def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.Challenger:
+    """`wipe_party.serve` over a socket pair, its OS draws taken in order from `SEED`'s seeded coins."""
+=======
+def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.Challenger:
+    """`wipe_party.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins."""
+>>>>>>> 7af4d24fca3e
     coins = S.SeededCoins(SEED)
     monkeypatch.setattr(WP, "secrets", types.SimpleNamespace(token_bytes=coins.draw))
     monkeypatch.setattr(sw, "os", types.SimpleNamespace(urandom=coins.draw))

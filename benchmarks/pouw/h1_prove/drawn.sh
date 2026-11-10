@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# PoUW's piece of a served H1 window with its drawn units proved (served_verdicts.sh's POUW_CMD): drawn.py (the CLI of
+# PoUW's piece of a served H1 window with its sampled proof blocks proved (served_verdicts.sh's POUW_CMD): drawn.py (the CLI of
 # verity_vllm.protocols.pouw.h1.drawn, reading --checkpoint with the live challenger's model registry) stages each
+<<<<<<< 0941037006
 # drawn call's J10-R units on the window's own registered values, and each drawn unit of a lanes-form K as its lanes and
 # combine; each staged statement is proved by one C-Flock --zk session drawing all its instances (hidden_zk/job.sh's
 # `session`, at the slot its circuit file's META names), one session at a time, its prover under the ZK server
@@ -8,13 +9,28 @@
 # on the statement's own program.json and partition.json, the Program and partition credit verifies it under, so what
 # leaves for the live verifier is the loop's), as h1_prove/job.sh, live.sh and h1_lanes/served.sh prove theirs; the
 # live verifier (`serve --zk --operator loopback`) listens on 127.0.0.1 beside it. drawn.py writes the statements file and
+||||||| merged common ancestors
+# drawn call's J10-R units on the window's own registered values, and each drawn unit of a lanes-form K as its lanes and
+# combine; each staged statement is proved by one loopback C-Flock --zk session drawing all its instances
+# (hidden_zk/job.sh's `session`, at the slot its circuit file's META names), drawn.py writes the statements file and
+=======
+# sampled call's J10-R units on the window's own registered values, and each sampled proof block of a lanes-form K as its lanes and
+# combine; each staged statement is proved by one loopback Flock --zk session sampling all its instances
+# (hidden_zk/job.sh's `session`, at the slot its circuit file's META names), drawn.py writes the statements file and
+>>>>>>> 7af4d24fca3e
 # checks it as credit does, and then `served_verdicts.py pouw` judges the window with it as --statements (the Lean verdict
 # of record refuses the lanes form until its mirror: H1_DRAWN_ONLY=1 stops at drawn.py's check).
 #   POUW_CMD='bash benchmarks/pouw/h1_prove/drawn.sh "$1" "$2" "$3"'      (served_verdicts.sh runs it in the tree)
 #   bash benchmarks/pouw/h1_prove/drawn.sh SERVE_DIR WINDOW PIECE_DIR
+<<<<<<< 0941037006
 # The window must be served with its receipts (serve-openai --h1-receipts, served_verdicts.sh's H1_RECEIPTS=1): a J10-R
 # call statement's o0 is opened at its call's receipt table receipt@<c>, and staging refuses a window without it.
 # env: H1_CIRCUITS (pouw_h1_circuits' --out, with the drawn K's k<K> file, --strata K, or its lane<K> and combine<K>
+||||||| merged common ancestors
+# env: H1_CIRCUITS (pouw_h1_circuits' --out, with the drawn K's k<K> file, --strata K, or its lane<K> and combine<K>
+=======
+# env: H1_CIRCUITS (pouw_h1_circuits' --out, with the sampled K's k<K> file, --strata K, or its lane<K> and combine<K>
+>>>>>>> 7af4d24fca3e
 #      files, --lanes K)  H1_CHECKPOINT (the served model's
 #      safetensors dir, b/<K>'s rows) or H1_WEIGHTS (an npz of w<i>, s<i>)  H1_GATE and H1_MODEL (the auditor's model-key
 #      for b/<K>, the server's --h1-model; or H1_WEIGHTS_KEY, a key file)  H1_DRAW_K (else period.json's)
@@ -27,6 +43,7 @@
 #      H1_DRAWN_CHECK=0: no drawn.py check, for a caller whose credit verifies the statements itself
 #      H1_DRAWN_WORK (a private directory on the node: the scratch directory goes in it and is kept, so the proof files
 #      statements.json names outlive drawn.sh for that caller; it holds the staged witness)
+<<<<<<< 0941037006
 #      H1_DRAWN_STAGED (a work dir `drawn.py stage` already wrote, its plan.json: proved and checked as it is, no staging;
 #      drawn_cost.sh's DC_REAL=0 fixture, whose stand-in tile the CLI's word reference can't restage)
 # Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's live verifier and prover then run side by side, each
@@ -47,6 +64,31 @@
 # LIVE verdict lines, both sides' wall seconds, peak RSS and CPU seconds, and the job cgroup's CPU seconds over the
 # session (cgroup.json, the ZK server's Lean processes among them), kept whether the session passed or failed;
 # serve is the verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
+||||||| merged common ancestors
+# Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's ZK server and prover then run side by side, each under
+# an address-space cap (job.sh's vlimit): the server gets H1_ZK_SERVER_GB and the prover the rest of H1_DRAWN_MEM_GB. The
+# default is sized to a K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223 ANDs), which peaked
+# at 65.4 GiB resident in the server and 61.3 GiB in the prover, 238 s to prove at 8 threads (r20261102-160857-5d19):
+# each side's cap is its peak plus ~35%, since an address space outgrows resident memory by the allocator's arenas and
+# the threads' stacks. So a K 2048 window wants H1_DRAWN_MEM_GB >= 88 + 83 = 171 (a ~195 GB H200 host's 90% is ~174),
+# and drawn.sh refuses before staging only when the prover's share is below its 62 GB resident peak. A larger K's lane
+# is measured again before it runs.
+# Out: PIECE_DIR/drawn/ (statements.json and job.log, and sessions/<statement>/: the ZK server's log, the prover's LIVE
+# verdict lines and both sides' wall seconds and peak RSS, kept whether the session passed or failed; the server is the
+# verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
+=======
+# Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's ZK server and prover then run side by side, each under
+# an address-space cap (job.sh's vlimit): the server gets H1_ZK_SERVER_GB and the prover the rest of H1_DRAWN_MEM_GB. The
+# default is sized to a K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223 ANDs), which peaked
+# at 65.4 GiB resident in the server and 61.3 GiB in the prover:
+# each side's cap is its peak plus ~35%, since an address space outgrows resident memory by the allocator's arenas and
+# the threads' stacks. So a K 2048 window wants H1_DRAWN_MEM_GB >= 88 + 83 = 171 (a ~195 GB H200 host's 90% is ~174),
+# and drawn.sh refuses before staging only when the prover's share is below its 62 GB resident peak. A larger K's lane
+# is measured again before it runs.
+# Out: PIECE_DIR/drawn/ (statements.json and job.log, and sessions/<statement>/: the ZK server's log, the prover's LIVE
+# verdict lines and both sides' wall seconds and peak RSS, kept whether the session passed or failed; the server is the
+# verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
+>>>>>>> 7af4d24fca3e
 # and each statement's witness files and session) and job.sh's other logs, the prover's stderr among them, go to a
 # `mktemp -d` scratch directory removed on exit (kept with H1_DRAWN_WORK): PIECE_DIR is under the run's $OUT, and a staged
 # witness never goes there.

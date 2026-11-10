@@ -55,7 +55,7 @@ open FlockSoundness.Discharge.Exec (weave)
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
 /-- `unitWeave`'s shape at `S`, `nX` extra claims and `sch₀`. -/
-def unitShape (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) : List Discharge.Exec.Kind :=
+def unitShape (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (nX : ℕ) : List Discharge.Exec.Kind :=
   holoRepShape 𝔽 𝕂 Dig S.m S.kLog nX sch₀
 
 /-- `unitWeave`'s messages at `nX` extra claims. -/
@@ -1097,7 +1097,7 @@ theorem hb_of_shape {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} {b
   fun Lb i => ⟨(h Lb i).1.1.symm.trans h₀.1, (h Lb i).1.2.1.symm.trans h₀.2.1, (h Lb i).1.2.2.symm.trans h₀.2.2,
     (h Lb i).2⟩
 
-/-! ## The cap and the reps' draws at `ValsSrc`'s values -/
+/-! ## The cap and the reps' samples at `ValsSrc`'s values -/
 
 /-- **`CapRead` where the source's cap is one constant** at every accepted outer proof: it reads no layer. -/
 theorem capRead_of_const {cap : Array ByteArray} (hcs : AtSrc zs dg N k Rw stp fun _ u => u.cap₀ = capDig cap) :
@@ -1121,7 +1121,7 @@ def repIdxB (S₀ : Model.Statement) (b : ValsSrc) : List ℕ :=
     List.range' (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6) + 1) (b.t₄.k - (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6) + 1))
 
 /-- **`RepsDrawn` on `b` alone**: at every layers, the history's round `repStart c₀ i + p` (`c₀` rep 0's consumed
-rounds) draws round `q` of stream `s i`, `q` the `p`-th of rep `i`'s (`repIdxB`), and those rounds are below `r`. -/
+rounds) samples round `q` of stream `s i`, `q` the `p`-th of rep `i`'s (`repIdxB`), and those rounds are below `r`. -/
 def DrawnOf (S₀ : Model.Statement) (r : ℕ) (b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc)
     (selC : ℕ → String → ℕ → Prop) (s : Fin 2 → String) : Prop :=
   ∀ Lb i, repStart (repIdxB S₀ (b Lb 0)).length i + (repIdxB S₀ (b Lb i)).length ≤ r ∧

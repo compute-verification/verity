@@ -2,7 +2,10 @@ module
 
 public import Definitions.Accounting.Assumptions.RemoteOutside
 public import Definitions.Accounting.Assumptions.RemoteSketch
-public import Proofs.Accounting.RemoteHeld
+public import Definitions.Accounting.Assumptions.RemoteHeld
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.RemoteHeld
 
 /-!
 # The certifiers' observation against the receipts' sketch bound and its derivation

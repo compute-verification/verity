@@ -1,14 +1,15 @@
 """serve-openai's draw-gated release (``--retain device --release-after P,Q``): a window's device-held values
-(`commit.committer.device_pool`) are released only once every named subprotocol's draw of the window is in, keeping the union of
-the leaves the drawn blocks open.
+(`commit.committer.device_pool`) are released only once every named subprotocol's sample of the window is in, keeping the union of
+the leaves the sampled blocks open.
 
-* **What a draw is.** A subprotocol's draw of window k is the reads its drawn blocks make of the window's committed values:
+* **What a sample is.** A subprotocol's sample of window k is the reads its sampled blocks make of the window's committed values:
   ``(step, member name, byte lo, byte hi)``, as `commit.opened.OpenedReader` reads them (a shared member's k-th invocation
-  ``name#ord<ordinal>``, `opened.meta_by_name`). It names every value a drawn block opens, its inputs too, even when an unsampled
-  block wrote them (the KV a drawn attention block attends to), so the kept set is the union of those leaves, not the drawn
+  ``name#ord<ordinal>``, `opened.meta_by_name`). It names every value a sampled block opens, its inputs too, even when an unsampled
+  block wrote them (the KV a sampled attention block attends to), so the kept set is the union of those leaves, not the sampled
   blocks' own rows. `leaves_of` takes them to the step's leaves (`leaf_span`); a read of a member the window didn't commit is
   refused by name.
 * **When.** `Draws.release` runs on the sealer's thread before the window's seal: it waits, on a condition and never a clock,
+<<<<<<< 0941037006
   until every protocol of ``--release-after`` has drawn window k, then hands the union to the device pool's `release` (the
   window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. The step-input port's
   committed positions, which the seal holds to the rows the window ran (`serve_seal.positions_off_of`), are read just before
@@ -19,10 +20,29 @@ the leaves the drawn blocks open.
   last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
 * **Where draws come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's draw coin is
   open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a draw,
+||||||| merged common ancestors
+  until every protocol of ``--release-after`` has drawn window k, then hands the union to the device pool's `release` (the
+  window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. A
+  release can't come before the last draw, and a window is released once: a second draw of a window by the same protocol is
+  refused (a draw is never redrawn), as is any draw once the window was released. The sealed bundle then holds the kept set,
+  and the commitment over every leaf with every step's levels and salt key, so each kept leaf's opening path stays whole until
+  the last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
+* **Where draws come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's draw coin is
+  open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a draw,
+=======
+  until every protocol of ``--release-after`` has sampled window k, then hands the union to the device pool's `release` (the
+  window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. A
+  release can't come before the last sample, and a window is released once: a second sample of a window by the same protocol is
+  refused (a sample is never redrawn), as is any sample once the window was released. The sealed bundle then holds the kept set,
+  and the commitment over every leaf with every step's levels and salt key, so each kept leaf's opening path stays whole until
+  the last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
+* **Where samples come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's sampling coin is
+  open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a sample,
+>>>>>>> 7af4d24fca3e
   ``w<k>.<protocol>.json`` = ``{"window": k, "protocol": P, "reads": [[step, name, lo, hi], ...]}``, written whole (to a temporary
   name, then renamed) once the window's ``windows.jsonl`` line, its commitment, is out. A file that doesn't parse, or names
   another window or protocol, fails that window's release by name; the server serves on.
-* **At the stop** the pending seals wait for their windows' draws as they wait for their sealer: a drawer must draw every window
+* **At the stop** the pending seals wait for their windows' samples as they wait for their sealer: a drawer must sample every window
   whose line was written before it stops the server, or the stop waits on it.
 * **Failures.** A window that reaches no release (its draws fail, or its close or seal job does) is discarded (`Draws.discard`):
   its device-held values dropped and its pool pieces freed, so later windows' steps don't wait on it; any later draw or read of it
@@ -60,7 +80,7 @@ def protocols_of(spec: str) -> tuple[str, ...]:
 
 
 def reads_of(rows: Iterable[Sequence[Any]]) -> list[Read]:
-    """A draw's reads as tuples, each ``(step, name, lo, hi)`` with 0 <= lo < hi."""
+    """A sample's reads as tuples, each ``(step, name, lo, hi)`` with 0 <= lo < hi."""
     out = []
     for r in rows:
         step, name, lo, hi = r
@@ -71,7 +91,7 @@ def reads_of(rows: Iterable[Sequence[Any]]) -> list[Read]:
 
 
 def leaves_of(com: Any, reads: Iterable[Read]) -> dict[int, set[int]]:
-    """By step, the leaves holding the bytes ``reads`` name (each clamped to its member): what a drawn block opens."""
+    """By step, the leaves holding the bytes ``reads`` name (each clamped to its member): what a sampled block opens."""
     out: dict[int, set[int]] = {}
     layouts = getattr(com, "_layouts", None) or {}
     for step, name, lo, hi in reads:
@@ -90,7 +110,7 @@ def leaves_of(com: Any, reads: Iterable[Read]) -> dict[int, set[int]]:
 
 
 class Draws:
-    """Each window's draws by protocol, as they come in, and each window's release once all of ``protocols`` have drawn it."""
+    """Each window's samples by protocol, as they come in, and each window's release once all of ``protocols`` have sampled it."""
 
     def __init__(self, protocols: Sequence[str], pool: Any = None) -> None:
         if not protocols:
@@ -106,7 +126,7 @@ class Draws:
         self.releases: list[dict[str, Any]] = []
 
     def put(self, window: int, protocol: str, reads: Iterable[Read]) -> None:
-        """``protocol``'s draw of ``window``: the reads its drawn blocks make."""
+        """``protocol``'s sample of ``window``: the reads its sampled blocks make."""
         if protocol not in self.protocols:
             raise Refused(f"window {window}: {protocol!r} is not a protocol the release waits for ({', '.join(self.protocols)})")
         reads = reads_of(reads)
@@ -122,14 +142,20 @@ class Draws:
             self._cv.notify_all()
 
     def refuse(self, window: int, why: str) -> None:
-        """Window ``window``'s release fails with ``why`` (a draw that couldn't be read): its seal is refused by name."""
+        """Window ``window``'s release fails with ``why`` (a sample that couldn't be read): its seal is refused by name."""
         with self._cv:
             self._refused.setdefault(window, why)
             self._cv.notify_all()
 
     def fail(self, why: str) -> None:
+<<<<<<< 0941037006
         """Every waiting release fails with ``why``: no draw is coming. So does every step waiting on the device pool for an earlier
         window's release (`DevicePool.fail`): it ends by name, uncommitted, rather than waiting on a release that won't come."""
+||||||| merged common ancestors
+        """Every waiting release fails with ``why``: no draw is coming."""
+=======
+        """Every waiting release fails with ``why``: no sample is coming."""
+>>>>>>> 7af4d24fca3e
         with self._cv:
             self.failure = why
             self._cv.notify_all()
@@ -149,7 +175,7 @@ class Draws:
         return rec
 
     def wait(self, window: int) -> dict[str, list[Read]]:
-        """Every protocol's draw of ``window``, once all are in."""
+        """Every protocol's sample of ``window``, once all are in."""
         with self._cv:
             while True:
                 if self.failure:
@@ -162,7 +188,7 @@ class Draws:
                 self._cv.wait()
 
     def release(self, window: int, com: Any, clock: Callable[[], float] = time.perf_counter) -> dict[str, Any]:
-        """Window ``window``'s release over its committer ``com``, after every protocol's draw: the union of the leaves the draws
+        """Window ``window``'s release over its committer ``com``, after every protocol's sample: the union of the leaves the samples
         open kept on host, the rest dropped and the window's pool pieces freed (`release_drawn`); the record of it."""
         from verity_vllm.commit.committer import device_pool as DP
 
@@ -229,7 +255,7 @@ class DrawDir:
         self.thread = threading.Thread(target=self._run, name="draws-dir", daemon=True)
 
     def scan(self) -> int:
-        """Put every draw file not yet seen; how many."""
+        """Put every sample file not yet seen; how many."""
         n = 0
         for f in sorted(self.path.iterdir()):
             m = FILE.fullmatch(f.name)

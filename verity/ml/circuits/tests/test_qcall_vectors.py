@@ -3,8 +3,8 @@ every rule of `verity.ml.circuits.cut`'s "Q_call v1" -- a Call that fits, one th
 and passed through), a pass-through output, a constant read by two units, a constant-derived gate read across units, former wiring,
 a dead gate, a recompute across units and one within a unit, a gate of more than 4096 inputs, a 64-bit input -- at X = 32 and 64,
 and every refusal (`gate-too-wide`, `root-form`, not topological, another program, served commits, malformed objects).  Programs
-are descriptor bytes; the evaluation is from the bytes.  `python verity/ml/circuits/tests/test_qcall_vectors.py --write` rewrites
-the file."""
+are descriptor bytes; the evaluation is from the bytes.  Its `--write` rewrites the file; `REWRITE` names the command that runs
+it."""
 from __future__ import annotations
 
 import copy
@@ -26,6 +26,8 @@ from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.ops.scalar import I32Add
 
 PATH = Path(__file__).parent / "qcall_vectors.json"
+REWRITE = ("the vectors differ from the tree's; a change meant to move them rewrites them with "
+           "`uv run python tools/verity/check/pins.py --write verity/ml/circuits/tests/qcall_vectors.json`")
 BIT, V32, V64 = BL.BIT, Value(32), Value(64)
 
 TLo32 = PrimitiveDefinition("TLo32", 1, (("a", V64),), V32, lambda a: a & 0xFFFFFFFF, register=False)
@@ -280,16 +282,17 @@ def live() -> dict:
 
 
 def test_the_constants_of_the_version(live):
-    assert live["constants"] == VECTORS["constants"] == {"x": 32, "param_max": 65536, "query": {"name": "Q_call", "version": 1, "params": {"X": 32}}}
+    assert live["constants"] == VECTORS["constants"], REWRITE
+    assert VECTORS["constants"] == {"x": 32, "param_max": 65536, "query": {"name": "Q_call", "version": 1, "params": {"X": 32}}}
 
 
 def test_the_descriptors(live):
-    assert live["descriptors"] == VECTORS["descriptors"]
+    assert live["descriptors"] == VECTORS["descriptors"], REWRITE
 
 
 @pytest.mark.parametrize("n", range(len(EVALUATED)), ids=[e[0] for e in EVALUATED])
 def test_the_evaluations(live, n):
-    assert live["evaluations"][n] == VECTORS["evaluations"][n]
+    assert live["evaluations"][n] == VECTORS["evaluations"][n], REWRITE
     for e in VECTORS["evaluations"][n][1]:
         assert e["verify"]["ok"]
 
@@ -378,7 +381,7 @@ def test_x_matters():
 
 
 def test_verify_refuses(live):
-    assert live["verify_refusals"] == VECTORS["verify_refusals"]
+    assert live["verify_refusals"] == VECTORS["verify_refusals"], REWRITE
     got = {label: v for label, _n, _x, v in VECTORS["verify_refusals"]}
     assert all(not v["ok"] for v in got.values())
     assert got["a 32-bit gate at X = 16"]["inapplicable"][0]["why"] == "gate-too-wide"
@@ -389,13 +392,13 @@ def test_verify_refuses(live):
 
 
 def test_every_query_refuses_a_program_that_is_not_topological(live):
-    assert live["order_refusals"] == VECTORS["order_refusals"]
+    assert live["order_refusals"] == VECTORS["order_refusals"], REWRITE
     for *_x, v in VECTORS["order_refusals"]:
         assert v["codes"] == ["query-inapplicable"] and v["detail"][0]["why"] == "not topological"
 
 
 def test_served(live):
-    assert live["served"] == VECTORS["served"]
+    assert live["served"] == VECTORS["served"], REWRITE
     got = {label: (v["codes"], [c for _k, cs in v["cut"] for c in cs]) for label, _s, v in VECTORS["served"]}
     assert got["the derived sets"] == ([], []) and got["nothing"][0] == ["served-missing"]
     assert got["a gate that is not an integer"][0] == got["a gate listed twice"][0] == ["served-malformed"]
@@ -412,7 +415,7 @@ def test_recomputes_are_reported_never_refused():
 
 
 def test_validate_refuses(live):
-    assert live["object_refusals"] == VECTORS["object_refusals"]
+    assert live["object_refusals"] == VECTORS["object_refusals"], REWRITE
     assert [codes for _l, _o, codes in VECTORS["object_refusals"]] == [["query-params"]] * 5 + [["query-unknown"]]
 
 

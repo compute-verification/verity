@@ -18,12 +18,17 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py pearlplus-period rule DIR --gate CMD --lane L --coin COIN_RECORD
     served_verdicts.py coin DIR --record FILE [--run RUN_ID] [--run-dir DIR]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
+<<<<<<< 0941037006
                               [--product P] [--deferred WHY] [--steps LO,HI] [--off-node]
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
                               [--tree SHA [--tree-on BRANCH]] [--served-compare FILE]
     served_verdicts.py witness < PATHS
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
+||||||| merged common ancestors
+=======
+                              [--product P] [--deferred WHY]
+>>>>>>> 7af4d24fca3e
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
@@ -36,10 +41,10 @@ count its blocks. ``public-lines`` prints each line of stdin in its published fo
 appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and ``publish`` holds each file of OUT, once the run
 is done, in full under DIR where it names or counts a window or holds a load's own field (`publish`), its public form in
 its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
-verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
+verifier's coins and samples are public. ``public-registration`` prints what the run publishes of a window's advice
 registration (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice or count of the
+(`sampled_line`: the partition the sample was over, the members it drew, and no length of the advice or count of the
 scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
@@ -76,8 +81,8 @@ reserves (a window opens at its first engine step): its circuit is the Program d
 (serve.json's ``protocols.program``, ``h1/window-program.meta.json``), its rows and rounds the server's T and S, and its
 circuit files those of ``--circuits`` (``pouw_h1_circuits --program SERVE_DIR/h1 --out DIR --live T,S``'s manifest),
 held to that digest, T and S (`period_open_argv`). The live template's file is required. A stratum whose ``k<K>`` file
-isn't built yet is left out and named: core's credit refuses a drawn statement at that K (``circuit``), nothing else.
-Its fixed length is ``--slots`` requests of ``--max-tokens`` (`credit.LENGTH_FIELD`); its draw K ``--draw-k``, else
+isn't built yet is left out and named: core's credit refuses a sampled statement at that K (``circuit``), nothing else.
+Its fixed length is ``--slots`` requests of ``--max-tokens`` (`credit.LENGTH_FIELD`); its sample K ``--draw-k``, else
 `pouw_h1_challenger.draw_k` over the declared layout; its weights the auditor's registration of ``--model`` under the
 digest, else none (the gate refuses a root its registry lacks, and serve-openai's own is a local key's, so core's credit
 then refuses the window at its weights). The open's answer goes
@@ -97,9 +102,17 @@ checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``-
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
 is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`). Credit reads the
 declared Program serve-openai wrote (``h1/window-program.json.gz``), the period ``period open`` opened, and, when given,
+<<<<<<< 0941037006
 the drawn calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
 ``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`); with ``--lean-answers`` its
 verifier runs take the answers another step kept there by key (`answers.Answers`). The verdict says whether the
+||||||| merged common ancestors
+the drawn calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
+``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`). The verdict says whether the
+=======
+the sampled calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
+``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`). The verdict says whether the
+>>>>>>> 7af4d24fca3e
 window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
 
@@ -149,12 +162,13 @@ with each one's server) and from it the block record (``block-record.json``, `bl
 `block_record.check`), which composes only the answers about the record's node and carries the others as ``elsewhere``;
 an answer that names no server isn't carried. An accepted answer whose outputs are not its leg's certificate
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
-where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
-``accept`` only when every subprotocol accepted here.
-Those are the subprotocols of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
-product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and composed into no
-verdict, so remote's verdict is ``accept`` when sampled proofs and PoUW accepted here, whatever the onsite pieces.
-The report's ``composed`` and the block record's ``composed.onsite`` give that verdict with its reason (`said`), one clause
+where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written. Otherwise
+the verdict is the block record's, which is the Lean ``onsite check`` or ``remote check``'s answer; no Lean check runs
+here, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line name ``pending``.
+The subprotocols are those of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
+product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and in no block record's
+``missing``, so remote's is ``pending`` with nothing missing when sampled proofs and PoUW accepted here, whatever the
+onsite pieces. The report's ``composed`` gives that verdict with its reason (`said`), one clause
 a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
 (`terms`: when its weights were held and their share of the checkpoint, where its profile says, and each δ of the block
 record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
@@ -214,6 +228,8 @@ for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interf
 
 #: the window report's format, kept from the all-protocols runner whose report it was
 REPORT_FORMAT = "verity/all-protocols-window/v1"
+#: the block record's verdict by the window report's name for it: ``-window/v1`` calls an undecided window pending
+WINDOW_VERDICT = {"undecided": "pending"}
 #: sampled proofs' owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
@@ -473,6 +489,10 @@ _AT_FIELD = re.compile("|".join(r'\\?"%s\\?":.*?\\?"(?:%s)\\?":' % (re.escape(p)
 CUT = "{…} (cut short; in full in the serve dir's private/verdicts.txt)"
 #: a file `publish` reads larger than this is held whole
 PUBLISH_MAX = 256 << 20
+#: The files under the published dir that `publish` leaves as they are, unread: the serve dir's declared Program, the
+#: window's class Program, which is public structure. Its JSON runs to hundreds of MB, beyond what `PUBLISH_MAX` lets
+#: `publish` read.
+PUBLIC_FILES = frozenset({"serve/h1/window-program.json.gz"})
 
 
 def _numbered(v: Any) -> bool:
@@ -586,14 +606,25 @@ def public_doc(text: str) -> str:
 def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
     `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window or holds a load's own
+<<<<<<< 0941037006
     field (`public_doc`) held in
     full, under ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text
     stays. The paths held, in order."""
+||||||| merged common ancestors
+    `PUBLISH_MAX` or its encoding keeps from being read as text, held whole, and one whose text names or counts a window
+    (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. Binary
+    files stay. The paths held, in order."""
+=======
+    field (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
+    file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+>>>>>>> 7af4d24fca3e
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
             continue
         rel = p.relative_to(out).as_posix()
+        if rel in PUBLIC_FILES:
+            continue
         dst = private / rel
         private.mkdir(mode=0o700, parents=True, exist_ok=True)
         dst.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -604,6 +635,15 @@ def publish(out: Path, private: Path) -> list[str]:
             continue
         text = data.decode(errors="replace")
         if text.encode() != data:
+<<<<<<< 0941037006
+||||||| merged common ancestors
+        try:
+            text = data.decode()
+        except UnicodeDecodeError:
+=======
+            shutil.move(p, dst)
+            held.append(rel)
+>>>>>>> 7af4d24fca3e
             continue
         pub = public_doc(text)
         if pub != text:
@@ -629,7 +669,7 @@ def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
-    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
+    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
     templates, its scope's op path and law), which members it drew, and the row with no length of the advice
     (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
     scope's ``steps``, the window's engine steps, stay on the node too."""
@@ -1049,7 +1089,7 @@ def pearlplus_period_rule(piece_dir: Path, gate: str, lane: str, record: Path) -
 def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | None = None) -> dict[str, str]:
     """What core's credit reads of the window beyond its record and session, as ``--check-challenger``'s flags: the
     declared Program serve-openai wrote (``--descriptor``, `pouw_h1.PROGRAM`), the period ``period open`` opened
-    (``--period``, `PERIOD`), the drawn calls' statements (``--statements``) and the live evidence (``--live-evidence``,
+    (``--period``, `PERIOD`), the sampled calls' statements (``--statements``) and the live evidence (``--live-evidence``,
     ``h1_prove/live.py evidence``'s), each where it exists."""
     got: dict[str, str] = {}
     if (p := serve_dir / "h1" / "window-program.json.gz").is_file():
@@ -1124,9 +1164,17 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
          check: Check, statements: Path | None = None, live: Path | None = None,
          lean_answers: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece on window `window` (module docstring), its document written to ``out/development.json``;
+<<<<<<< 0941037006
     `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the drawn
     calls' `statements` and the `live` evidence), its document's ``credit_inputs``, and `lean_answers`, the verifier's
     memo of its runs' answers (``--lean-answers``, `answers.Answers`), whose counts are its ``lean_answers``."""
+||||||| merged common ancestors
+    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the drawn
+    calls' `statements` and the `live` evidence), its document's ``credit_inputs``."""
+=======
+    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the sampled
+    calls' `statements` and the `live` evidence), its document's ``credit_inputs``."""
+>>>>>>> 7af4d24fca3e
     out.mkdir(parents=True, exist_ok=True)
     inputs = credit_inputs(serve_dir, statements, live)
     line = next((w for w in _lines(serve_dir / "windows.jsonl") if int(w["window"]) == window), {})
@@ -1533,7 +1581,7 @@ def check_answer(a: Any) -> dict[str, Any]:
 
 
 def epsilon(a: Mapping[str, Any]) -> str | None:
-    """A sampled protocol's bound on wrong units (``public.bound``) over its checked level's size (`Core.Integrity`), or
+    """A sampled protocol's bound on incorrect proof blocks (``public.bound``) over its checked level's size (`Core.Integrity`), or
     None for an answer that has no such bound."""
     public, profile = a.get("public"), a.get("profile")
     levels = profile.get("levels") if isinstance(profile, Mapping) else None
@@ -1554,7 +1602,7 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
             "epsilon": epsilon(a) if accepted else None, "runs": [*([run] if run else []), *runs], "answer": a}
 
 
-def sampled_proofs_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
+def spot_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
     """Sampled proofs' row from the records audit kept under ``audit_dir`` (module docstring)."""
     import served_integrity as SI
 
@@ -2053,9 +2101,15 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
     rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+<<<<<<< 0941037006
     for k, r in rows.items():
         if k not in drops and "answer_from" not in r and (r.get("verdict") != "missing" or "development" in r):
             r["answer_from"] = f"{AS_WRITTEN} ({WRITTEN.get(k) or f'its piece files in {PIECES.get(k, WIPE)[1]}/'})"
+||||||| merged common ancestors
+    at = {k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
+    rows = {k: dict(r) for k, r in rows.items()}
+=======
+>>>>>>> 7af4d24fca3e
     built: dict[str, dict[str, Any]] = {}
     for k, r in rows.items():
         if r.get("verdict") == "accept" and at[k][0] is not None:
@@ -2095,9 +2149,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
     rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra, product=product)
-    report["composed"] = rec["composed"]["onsite"] = {"protocol": REPORT_FORMAT, "verdict": rec["composed"]["verdict"],
-                                                      "reason": said(rows, at, node, built)}
-    line = {"composed": rec["composed"]["verdict"], **named, "reason": report["composed"]["reason"],
+    verdict = WINDOW_VERDICT.get(rec["composed"]["verdict"], rec["composed"]["verdict"])
+    report["composed"] = {"protocol": REPORT_FORMAT, "verdict": verdict, "reason": said(rows, at, node, built)}
+    line = {"composed": verdict, **named, "reason": report["composed"]["reason"],
             "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
@@ -2407,6 +2461,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
+<<<<<<< 0941037006
     got = {k: piece(k, a.pieces, run, sampled_proofs=a.window_tie or a.sampled_proofs, key_sha512=a.key_sha512, lane=a.lane)
            for k in keys}
     if a.sampled_exe is not None and not a.sampled_lean:
@@ -2416,6 +2471,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     integrity = (lean_sampled_row(a.sampled_proofs, a.serve_run / "private" / "scratch", a.sampled_exe, run)
                  if a.sampled_lean else sampled_proofs_row(a.sampled_proofs, run))
     rows = {"integrity": integrity, **{k: row for k, (row, _) in got.items()}}
+||||||| merged common ancestors
+    got = {k: piece(k, a.pieces, run) for k in keys}
+    rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
+=======
+    got = {k: piece(k, a.pieces, run) for k in keys}
+    rows = {"integrity": spot_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
+>>>>>>> 7af4d24fca3e
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
                                servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred,
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}

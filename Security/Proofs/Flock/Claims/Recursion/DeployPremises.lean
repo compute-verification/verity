@@ -1,8 +1,45 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.Deploy
 public import Proofs.Flock.Claims.Recursion.DeployMargin
-public import Proofs.Flock.Claims.Recursion.FlockKSRecord
 public import Proofs.Flock.Claims.Recursion.DeployScopeRuns
+public import Proofs.Flock.Claims.Recursion.FlockKSAcc
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployFacts
+import Proofs.Flock.Claims.Recursion.DeploySessions
+import Proofs.Flock.Claims.Recursion.KSStated
 
 /-!
 # The recursion's premises at `deployRec`
@@ -70,11 +107,11 @@ def callsOf (rd : Readers) (x : Msg) (ws : List Claims.Flock.Wit) : List (Msg ×
 
 /-- **The inner verifier's run on the inner messages the outer witnesses give**, at the inner coins `cs`. -/
 def innerRunAt (H : Msg → Msg) (IV : Claims.Verifier Coin) (rd : Readers) (x : Msg) (ws : List Claims.Flock.Wit)
-    (cs : List Coin) : Claims.Trace :=
+    (cs : List Coin) : Claims.Transcript :=
   run H (replay (rd.msgs x ws)) IV (xIOf x) () fun i => cs.getD i.val default
 
 /-- A run's inner and staging messages. -/
-def runAs (n : ℕ) (t : Claims.Trace) : List Msg := (t.msgs.take n).map Prod.fst
+def runAs (n : ℕ) (t : Claims.Transcript) : List Msg := (t.msgs.take n).map Prod.fst
 
 /-- A run's inner and staging coins. -/
 def runCs {k : ℕ} (n : ℕ) (r : Fin k → Coin) : List Coin := (List.range n).map (coinSeq r)

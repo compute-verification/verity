@@ -1,22 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.CharP.Defs
-public import Mathlib.Algebra.Group.Basic
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Basic.Finite.Prod
-public import Mathlib.Data.Finset.Card
-public import Mathlib.Data.Fintype.Card
-public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Data.Fin.VecNotation
 public import Mathlib.Data.ZMod.Basic
-public import Mathlib.Logic.Function.Basic
-public import Mathlib.Logic.Function.Iterate
-public import Mathlib.Tactic.Abel
-public import Mathlib.Tactic.FinCases
-public import Mathlib.Tactic.Ring
+public import Mathlib.Algebra.Field.Defs
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # Zero knowledge: one masked table, its reference prover and `S_shvzk`, at fixed verifier coins
@@ -112,8 +100,10 @@ structure Table (F K W Salt Seed D Hi VL : Type) [Field F] [Field K] where
   /-- `eq(r̄^r, l)`, and rep `r`'s extra-lane coins `ρ^r₀`, `ρ^r₁`. -/
   rbar : Fin 2 → Fin nL → K
   ρ : Fin 2 → Fin 2 → K
-  /-- The clear values under rep `r`'s exposed pads, from `z = (w, u)` and the extra lanes (`e^r` reads them). -/
-  vals : Fin 2 → W → (Fin nMask → Fin 128 → ZMod 2) → (Fin 2 → Fin 2 → Fin L → F) → Fin nE → F
+  /-- The clear values under rep `r`'s exposed pads, from `z = (w, u)` and level 0's hiding (`Vis`): the lanes'
+  paddings, the extra lanes (`e^r` reads them) and theirs. -/
+  vals : Fin 2 → W → (Fin nMask → Fin 128 → ZMod 2) →
+    (Fin nL → Fin tpad → F) × (Fin 2 → Fin 2 → Fin L → F) × (Fin 2 → Fin 2 → Fin tpad → F) → Fin nE → F
   /-- The exposed indices of `final_a`, `final_b`, which the triple multiplies. -/
   ia : Fin nE
   ib : Fin nE
@@ -149,6 +139,11 @@ abbrev Mask := Fin T.nMask → Fin 128 → ZMod 2
 abbrev XLanes := Fin 2 → Fin 2 → Fin T.L → F
 abbrev XPad := Fin 2 → Fin 2 → Fin T.tpad → F
 
+/-- **Level 0's hiding**, which the clear values may read besides the mask slot: the lanes' paddings, the extra lanes
+and theirs. It is `Rand`'s second block, sampled before the pads, so the masked values stay a function of the blocks
+before the pads plus the pads (`realCore`). -/
+abbrev Vis := (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad
+
 /-- Every hm96 salt and ideal-leaf seed, and the salts of levels ≥ 1: level 0's salts at the opened positions, its ideal
 seeds there (world `W₀`) and elsewhere; the pads trees' likewise; `y_τ` and an ideal seed for `τ`'s commitment (`W₀`);
 levels ≥ 1. -/
@@ -159,6 +154,9 @@ abbrev Seeds := (Fin T.nS → Salt) × (Fin T.nS → Seed) × (Fin T.nU → Seed
 theirs; each rep's free pads (exposed ones, `h_tx`, `h_ty`); each rep's `pad_h`, `pad_μ`, `μ`, with every salt. -/
 abbrev Rand := T.Mask × ((Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad) × (Fin 2 → (Fin T.nE → F) × F × F)
   × ((Fin 2 → Fin T.nPad → F) × (Fin 2 → Fin T.nPad → F) × (Fin 2 → PadIdx T.nE → F) × T.Seeds)
+
+/-- The part of the randomness `ω` the clear values read besides the mask slot (`Vis`). -/
+abbrev visOf (ω : T.Rand) : T.Vis := ω.2.1
 
 /-! ## The prover's computations -/
 
@@ -266,7 +264,7 @@ noncomputable def view (w : W) (ω : T.Rand) : T.View :=
   let μ := ω.2.2.2.2.2.1
   let s := ω.2.2.2.2.2.2
   let sHat : Fin T.nC → Fin 128 → F := T.nu w + T.maskHom u
-  let masked : Fin 2 → Fin T.nE → F := fun r i => T.vals r w u R i + (h r).1 i
+  let masked : Fin 2 → Fin T.nE → F := fun r i => T.vals r w u (T.visOf ω) i + (h r).1 i
   let y1 := T.y1' w u R
   let yb := T.ybar μ0 μR
   let lig := fun r => T.lig r (y1 r) (s.2.2.2.2.2.2.2.2 r)
@@ -332,7 +330,7 @@ def xTarget (rows : Fin T.nS → Fin T.nL → F) (y1 : Fin 2 → Fin T.L → K) 
   ∑ c, y1 r c * T.embed (T.E q c) + ∑ j, yb r j * T.embed (T.Gp q j) - ∑ l, T.rbar r l * T.embed (rows q l)
 
 /-- The level-0 padding reaches every vector of values at the opened positions (T4: at most `t_pad` distinct positions,
-where `X_L + κ` vanishes at none; `pad_onto_M1` for C-Flock ZK's code). -/
+where `X_L + κ` vanishes at none; `pad_onto_M1` for Flock ZK's code). -/
 def PadOnto : Prop := Function.Surjective fun μ : Fin T.tpad → F => fun q => ∑ j, μ j * T.Gp q j
 
 /-- Rep `r`'s pads-code padding reaches every vector of values at its opened positions (T4 with the monomials: at most

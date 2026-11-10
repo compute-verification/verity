@@ -239,7 +239,21 @@ def _one_stage():
     import a0
     import a7
     import a8
+<<<<<<< 0941037006
     from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R, verifier as V
+||||||| merged common ancestors
+    import numpy as np
+    from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V
+    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity_flock import class_statement as CS
+=======
+    import numpy as np
+    from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
+    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity_flock import class_statement as CS
+>>>>>>> 7af4d24fca3e
 
     return SimpleNamespace(**vars(_statement()), a0=a0, a7=a7, a8=a8, D=D, R=R, V=V)
 
@@ -359,7 +373,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
         want[f"{name}/{p_}"] = w
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
+    law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the warden's "
                                       f"egress link-window {at.window} (warden_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},

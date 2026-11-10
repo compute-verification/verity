@@ -1,4 +1,4 @@
-"""`verity.core.protocols.pouw.window` held to the window's Lean, PoUW's verifier of record (`pouw.verifier`), on the
+"""`verity.core.protocols.pouw.window` held to the execution phase's Lean, PoUW's verifier (`pouw.verifier`), on the
 shared harness (`verity_difftest`, `of_record="lean"`): one `Port` per function of `window.py` the Lean states, served by
 `pouw-window-difftest` (`PouwWindow/Difftest.lean`).
 
@@ -9,11 +9,11 @@ exactly, and every way out of its domain.
 
 The advice's functions run on entries of the layout and every way off it (`_layout_entry`), rows and words mutated off
 the row format, records that are their entries' and each way they are not, small side domains of up to 2^8 positions
-(the side trees' code is the same at 2^13 and 2^17, which the pinned window exercises), and windows built honestly
+(the side trees' code is the same at 2^13 and 2^17, which the pinned execution phase exercises), and execution phases built honestly
 (`_window`: one to four calls, the filler, empty entries, records and side indices) and then broken in one of the ways
 `window_problem` names. Each problem-returning function must reach every one of its reasons (`REACHES`). The pinned
-window of `tests/vectors/window.json` (`window_vectors.py`) and the windows of served runs (`SERVED`, from the evidence
-store) are fixed vectors on top of the drawn ones.
+execution phase of `tests/vectors/window.json` (`window_vectors.py`) and the execution phases of served runs (`SERVED`, from the evidence
+store) are fixed vectors on top of the sampled ones.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from hypothesis import strategies as st
 
 from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 
@@ -450,7 +450,7 @@ def side_path_in(rng: random.Random) -> dict:
 
 
 def _window(rng: random.Random, broken: bool = True) -> dict:
-    """An honest window (rows, work, bound, root_h3, bits, records, indices) and, when `broken`, one break of it."""
+    """An honest execution phase (rows, work, bound, root_h3, bits, records, indices) and, when `broken`, one break of it."""
     bits = rng.choice((3, 3, 3, rng.randint(0, 6)))
     root_h3 = rng.randbytes(64)
     entries, records, indices, at, in_pass = [], [], [], 0, rng.randint(0, 5)
@@ -723,7 +723,7 @@ def public_inputs(v: dict) -> str:
     return Wd.public_inputs(v["registration"], v["drawn"], v["sigma"], v["cap"], bytes.fromhex(v["domain_h3"])).hex()
 
 
-#: layouts a live window's coin commitment may have, PoUW's and ones it isn't
+#: layouts a live execution phase's coin commitment may have, PoUW's and ones it isn't
 _LIVE_LAYOUTS = [None, None, None, Wd.DRAW_FAMILIES, Wd.DRAW_FAMILIES, ((Wd.ROUND, 2), (Wd.SALT, 1)),
                  ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 3)), ((Wd.SALT, 1), ("pouw/rounds", 2)),
                  ((Wd.SALT, 2), (Wd.ROUND, 2)), ((Wd.SALT, 1), (Wd.ROUND, 2), ("x", 1)), ((Wd.DRAW, 2),),
@@ -879,7 +879,7 @@ PORTS = {
 server = D.server_fixture(PORTS["constants"][0])
 
 
-#: What six recorded served windows of the current registration registered: a name for the window, the work item, the
+#: What six recorded served execution phases of the current registration registered: a name for the execution phase, the work item, the
 #: law's K′ and the entries root's domain, each at ε 1/2, δ 1/10, 3 grid bits and w = 4096
 SERVED = [
     ("e5f4", {"credited": 33554432, "credited_tiles": 8192, "level": 87, "n": 9216}, 4,
@@ -899,7 +899,7 @@ SERVED = [
 
 @pytest.mark.parametrize("run,work,k,domain", SERVED, ids=[s[0] for s in SERVED])
 def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -> None:
-    """Lean and Python agree on each recorded window's level, work, sampling and side domains, and give what it
+    """Lean and Python agree on each recorded execution phase's level, work, sampling and side domains, and give what it
     registered."""
     tw, eps, delta = 4096, [1, 2], [1, 10]
     at = json.loads(D.replay(PORTS["work_at"][0], {"ell": work["level"], "bits": 3}, server)[1])
@@ -913,18 +913,18 @@ def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -
         D.replay(PORTS["side_domain"][0], {"window": domain, "side": side}, server)
 
 
-#: A served 8B window (Llama-3.1-8B int8): 1,548,288 units, 16 of its 18 steps filled, so
+#: A served 8B execution phase (Llama-3.1-8B int8): 1,548,288 units, 16 of its 18 steps filled, so
 #: u = 8/9 of them credited (1,376,256), every unit's work `tile_work`. At ε = 1/1000 and δ = 2^-40, its grid level
 #: (`bucket` of the credited tiles: 1,310,720 of n = 1,441,792, u = 10/11) has K′ = 30,485, and its units themselves
 #: K′ = 31,178. Each row: name, the credited units, the units, K′, and the ε `eps_at` gives at K′ in the credit's form
-#: (C, W, 1), C the credited work and W the window's, then at C = W (the 11/10- or 9/8-optimistic inputs).
+#: (C, W, 1), C the credited work and W the execution phase's, then at C = W (the 11/10- or 9/8-optimistic inputs).
 SERVE_REG = [("grid", 1_310_720, 1_441_792, 30_485, "4294913/4294967296", "1952233/2147483648"),
              ("units", 1_376_256, 1_548_288, 31_178, "2147467/2147483648", "477215/536870912")]
 
 
 @pytest.mark.parametrize("name,credited,n,k,eps,at_w", SERVE_REG, ids=[s[0] for s in SERVE_REG])
 def test_eps_at_serve_reg(name: str, credited: int, n: int, k: int, eps: str, at_w: str, server) -> None:
-    """Lean and Python give the served 8B window its K′ at ε = 0.1% and δ = 2^-40 in the credit's form
+    """Lean and Python give the served 8B execution phase its K′ at ε = 0.1% and δ = 2^-40 in the credit's form
     `eps_at(K, δ, C, W, 1)`, and invert it to an ε at most 0.1%, one grid point below which K′ exceeds K; taking C = W
     instead reports ε too small by W/C."""
     tw, delta, grid = 4096, [1, 1 << 40], Fraction(1, 1 << Wd.EPS_BITS)

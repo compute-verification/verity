@@ -1,7 +1,17 @@
+<<<<<<< 0941037006
 """a5's case for the audit on the proofs themselves, `SampledProofs.OneStageZk`'s: v1's case with the evidence's verdicts
 replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest (per member, every
 member's units, circuit digest and registered file), and blobs the paths of those files and the pinned tables; and the
 audits v2 can't verify say why."""
+||||||| merged common ancestors
+"""a5's case for the audit on the proofs themselves, `SampledProofs.OneStageZk`'s: v1's case with the evidence's verdicts
+replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest, and blobs the paths of
+those files and the pinned tables; and the audits v2 can't verify say why."""
+=======
+"""a5's case for the audit on the proofs themselves, `Spot.OneStageZk`'s: v1's case with the evidence's verdicts
+replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit and public files' digests, and
+blobs the paths of those files and the pinned tables; and the audits v2 can't verify say why."""
+>>>>>>> 7af4d24fca3e
 
 from __future__ import annotations
 
@@ -10,6 +20,7 @@ import importlib.util
 import json
 import os
 import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,7 +29,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import a5  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF  # noqa: E402
+from verity.core.protocols.spot.one_stage import proofs as PF  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("one_stage_replay", HERE.parent / "replay.py")
 REPLAY = importlib.util.module_from_spec(_spec)
@@ -50,14 +61,22 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
     table.write_bytes(b"table")
     evidence = {"draw": {"units": [1]}, "sessions": [sha(s / "session.json")], "verdicts": {"m0": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
+<<<<<<< 0941037006
     got = a5.case_v2(case, evidence["sessions"], proofs={"circuit": "cc" * 64, "registered": None},
                      statements=[(None, PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)))], tables=[table])
+||||||| merged common ancestors
+    got = a5.case_v2(case, evidence["sessions"], proof=PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)),
+                     circuit="cc" * 64, registered=None, tables=[table])
+=======
+    got = a5.case_v2(case, evidence["sessions"], proof=PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)),
+                     circuit="cc" * 64, public=sha(tmp_path / "pub-4.bin"), registered=None, tables=[table])
+>>>>>>> 7af4d24fca3e
     assert got["commitment"] == "ab"
-    assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "registered": None}}
+    assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "public": sha(tmp_path / "pub-4.bin"),
+                                                          "registered": None}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["draw"] == evidence["draw"] and e["sessions"] == evidence["sessions"]
-    assert e["proofs"] == {"public": sha(tmp_path / "pub-4.bin"),
-                           "sessions": [{"name": evidence["sessions"][0], "record": sha(s / "session.json"),
+    assert e["proofs"] == {"sessions": [{"name": evidence["sessions"][0], "record": sha(s / "session.json"),
                                          "reps": {"rep-0.bin": sha(s / "rep-0.bin")}}]}
     assert got["evidence"] == RP.DT.canonical(e).encode().hex()
     assert got["blobs"] == [str(p) for p in (tmp_path / "circuit.txt", tmp_path / "pub-4.bin", s / "session.json",
@@ -140,12 +159,25 @@ def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
     assert got["interfaces"] == [iface]
 
 
+def test_v2_names_the_public_file_as_it_was_staged_before_the_draw(tmp_path):
+    """The case's public digest is the one a5 took when it staged the member, before the sample, never the file's digest
+    read after it: a public file changed since names another file, which v2 finds in no blob."""
+    (tmp_path / "pub-4.bin").write_bytes(b"public, changed after the draw")
+    s = tmp_path / "sessions" / "a"
+    s.mkdir(parents=True)
+    (s / "session.json").write_bytes(b"{}")
+    mm = {"st": {"dir": tmp_path, "public": "ee" * 64}, "m": types.SimpleNamespace(n=4), "pin": "cc" * 64}
+    got = a5.v2_proof([{"mm": mm, "sdir": tmp_path}], zk=True)
+    assert got["public"] == "ee" * 64 and got["proof"].public == tmp_path / "pub-4.bin" and got["proof"].sessions == (s,)
+
+
 def test_v2_says_why_an_audit_has_no_case():
     assert "plain" in a5.v2_proof([{}], zk=False, members=[{}])
     assert "drew none" in a5.v2_proof([], zk=True, members=[{}])
 
 
-def test_a_v2_refusal_is_written_beside_the_v1_case(tmp_path, monkeypatch, RP):
+@pytest.fixture
+def stub_case(monkeypatch, RP):
     class C:
         def __init__(self, *a):
             pass
@@ -157,13 +189,23 @@ def test_a_v2_refusal_is_written_beside_the_v1_case(tmp_path, monkeypatch, RP):
     monkeypatch.setattr(RP, "evidence", lambda *a, **k: {})
     monkeypatch.setattr(RP, "Case", C)
     monkeypatch.setattr(RP, "python", lambda c: {"verdict": "accept"})
-    a5.write_case(tmp_path, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
-                  session_roots={}, served=[], v2="v2 verifies --zk sessions; this audit's are plain")
+    return RP
+
+
+def write(out: Path, v2) -> None:
+    a5.write_case(out, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
+                  session_roots={}, served=[], v2=v2)
+
+
+def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_spot_no_case(tmp_path, stub_case):
+    write(tmp_path, "v2 verifies --zk sessions; this audit's are plain")
     assert json.loads((tmp_path / "case.json").read_text())["commitment"] == "ab"
     assert not (tmp_path / "case-v2.json").exists()
+    assert not (tmp_path / "case-sampled.json").exists()
     assert (tmp_path / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
 
 
+<<<<<<< 0941037006
 def test_a_tied_case_names_its_values_parameters_and_row_formats_as_the_lean_reads_them(tmp_path, monkeypatch, RP):
     """`OneStage.paramsOfJson` takes exactly its keys: a case tied to W (a5's ``tie``) names the program function's
     ``parameters`` beside its registered values and their row formats as ``row_schemas``."""
@@ -183,6 +225,21 @@ def test_a_tied_case_names_its_values_parameters_and_row_formats_as_the_lean_rea
     assert sorted(p) == ["anchors", "delta", "law", "leaf_layer", "log", "outputs", "parameters", "partition", "ports",
                          "program", "query", "registered", "row_schemas", "scheme", "work_table"]
     assert (p["parameters"], p["row_schemas"]) == ([["v", {"bits": 32}]], {"v": "row-seg/v1"})
+||||||| merged common ancestors
+=======
+def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
+    """Sampled proofs refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
+    zk = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
+          "params": {"proofs": {"circuit": "cc" * 64, "registered": None}}}
+    monkeypatch.setattr(a5, "case_v2", lambda case, sessions, **k: zk)
+    write(tmp_path, {})
+    assert json.loads((tmp_path / "case-v2.json").read_text()) == zk
+    got = json.loads((tmp_path / "case-sampled.json").read_text())
+    assert got == a5.case_with_form(zk)
+    assert got["params"]["form"] == "one-stage" and got["params"]["proofs"] == zk["params"]["proofs"]
+    assert json.loads(bytes.fromhex(got["evidence"])) == {"form": "one-stage", "proofs": {}}
+    assert not (tmp_path / "case-v2-error.txt").exists()
+>>>>>>> 7af4d24fca3e
 
 
 def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions_against(tmp_path, monkeypatch, RP):

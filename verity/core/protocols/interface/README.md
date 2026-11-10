@@ -81,13 +81,13 @@ kind under `schema` (the protocol's entry schema and version), `session` its ses
 `seq = i` and `prev` the SHA-512 of entry `i - 1`'s line (`Record.ZERO` first). `sig` signs `Record.message role I d`,
 SHA-512 of the protocol's role, the signer's LMS identifier and `d`, the schema's tagged SHA-512 of the entry without its
 sig (`Record.unsigned`). `Record.ofJson` reads the form; what a protocol accepts beyond it (its schemas, kinds, bodies,
-signer and sessions) is its own check. The auditor's ledger (`SampledProofs.Challenger.ledgerEntry?`, schemas
+signer and sessions) is its own check. The auditor's ledger (`Spot.Challenger.ledgerEntry?`, schemas
 `verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/core/protocols/record.py` is its Python.
 
 ## The profile (`CoreProtocol/Profile.lean`)
 
 `Core.Integrity` is `verity.core.protocols.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
-`linked`, `covered`, the `levels` coarse to fine (name, query, size, and draw: `{"bernoulli":"p"}`, `{"subset":k}` or
+`linked`, `covered`, the `levels` coarse to fine (name, query, size, and sample: `{"bernoulli":"p"}`, `{"subset":k}` or
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
@@ -110,21 +110,40 @@ format:
 | format | what it registers |
 | --- | --- |
 | `verity/registration/site/v1` | the Site's own site entry (`Core.Site.Registration.Entry`, `CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON, digest and check |
-| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the builder `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
+| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the registered compiler `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
 | `verity/registration/declaration/v1` | a day's circuit (`day`, the day's index among the monitoring period's days; `program`, its program's SHA-512; `blocks`, its block Definitions by descriptor key); one a day, before the day's first coin |
 
+<<<<<<< 0941037006
 Registration registers the site, θ, `B` and each day's declared circuit, not the circuit `B` builds. A subprotocol's
 Program and parameters, and the proof system, are that protocol's public verifier parameters, not entries of the log;
 each window's program is held to its day's declared one (the sampled-proofs registration record's R2, `day` and
 `declarations`). A window's day is the UTC day of its open's `started_utc`, which the auditor's challenger signs
 (`challenger.declared_day`): a window that opens before UTC midnight and closes after is a window of its open's day.
+||||||| merged common ancestors
+Registration registers the site, θ and `B`, not the circuit `B` builds. A subprotocol's Program and parameters, and
+the proof system, are that protocol's public verifier parameters, not entries of the log.
+=======
+Registration registers the site, θ, `B` and each day's registered circuit, not the circuit `B` builds. A subprotocol's
+Program and parameters, and the proof system, are that protocol's public verifier parameters, not entries of the log;
+each window's program is held to its day's registered one (the sampled-proofs registration record's R2, `day` and
+`declarations`).
+>>>>>>> 7af4d24fca3e
 
 An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, and the genesis is the Site's, so a log of site entries alone
 has the Site's head. `check` holds each entry to the log before it and refuses the first that fails by name: a site
 entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), an information entry by
+<<<<<<< 0941037006
 `previous` and then `duplicate-information`, a declaration by `previous` and then `duplicate-declaration`. A component
 reads its view of an accepted log by projection (`View`: the Site, θ's values, the builder and the days' declared
 circuits, `View.declared?`, at the head). As a core protocol, `protocol` (`verity/registration/log/v1`, the
+||||||| merged common ancestors
+`previous` and then `duplicate-information`. A component reads its view of an accepted log by projection (`View`: the
+Site, θ's values and the builder, at the head). As a core protocol, `protocol` (`verity/registration/log/v1`, the
+=======
+`previous` and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`, a second
+declaration of a day. A subprotocol reads its view of an accepted log by projection (`View`: the Site, θ's values, the
+registered compiler and the days' registered circuits, at the head). As a core protocol, `protocol` (`verity/registration/log/v1`, the
+>>>>>>> 7af4d24fca3e
 `core-registration` executable) takes the auditor's parameters (`{"auditor", "composite"}`, the auditor the Site's
 `Core.Site.Registration.Auditor`), the log as commitment (`{"composite", "entries"}`, its head the digest) and `{}` as
 evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside
@@ -137,7 +156,7 @@ A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated agai
 actual parameters, every input covered and assumptions as named `Prop`s. They, not the
 port, are what makes a verifier proven. All protocols share one Lake package for them, `security_properties`, with the statements in
 `Properties.<Protocol>` and the proofs in `Proofs.Properties.<Protocol>`:
-- It requires `security` (Definitions and Models) and, by path, the code it states properties of. It never requires
+- It requires `security` (the spec, Definitions) and, by path, the code it states properties of. It never requires
   `security_proofs`, so code requires nothing, `security` requires no code, and nothing pulls in ArkLib.
 - A result whose proof needs `security_proofs` keeps its statement in `Properties.<Protocol>`, and its proof goes in
   `security_proofs` as `Proofs.<Protocol>`, which may require `security_properties`. Sampled proofs' `audit_profile`

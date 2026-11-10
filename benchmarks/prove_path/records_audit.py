@@ -19,7 +19,7 @@ opens the registered root under the registered compiler, and that compiler, run 
 names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the sample on live coins read after
-the receipt, Flock ``--zk`` behind the Lean ZK server on the drawn members, Lean's verdicts and the audit record. Then the
+the receipt, Flock ``--zk`` behind the Lean ZK server on the sampled members, Lean's verdicts and the audit record. Then the
 advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) would be
 proved whole beside the sample only on a closure map, which the stream refuses, so a5 refuses such a window before the
@@ -30,10 +30,11 @@ its window's ingress the window figure beside it, with the premise it rests on n
 
 A circuit that reads registered values at public positions (`interface.Read`) is audited against the entries the verifier
 pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}`` or a list of them, each entry core's
-``registered.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each drawn
+``registered.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each sampled
 member's ``--registered`` file comes from the record and those entries alone (`interface.registered_reads`), and Lean's
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
-(a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row). The reads
+(a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row, a port
+committed afresh); a5 adds the member's other ports at the registration's roots (`rows.own_reads`). The reads
 of a pinned parameter leave the free inputs where the window's root for it is the pinned root: `declared_count` counts
 them registered, its pins the ``--registered`` file's roots and the window's roots those its registration records
 (`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries). A record that
@@ -168,11 +169,20 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
+<<<<<<< 0941037006
 from verity.core import site as ST  # noqa: E402
 from verity.core.protocols import registration as G  # noqa: E402
 from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+||||||| merged common ancestors
+from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+=======
+from verity.core.protocols.certifier.blocks import SCAN_STATE  # noqa: E402
+from verity.core.protocols.pouw import credit as CR  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+>>>>>>> 7af4d24fca3e
 from verity.ml.circuits.codec import program_digest  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 
@@ -332,7 +342,7 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
 
 #: what the window figure rests on and the run figure doesn't (`declared_count`), named beside it wherever it is printed
 WINDOW_PREMISE = ("the earlier rows' committed activations the window reads (its window ingress) are its writers' outputs: "
-                  "the link checks bind them (sampled proofs' wiring; the binding error ε_bind)")
+                  "the link checks bind them (SPOT's wiring; the binding error ε_bind)")
 
 
 def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> dict[str, Any]:
@@ -671,7 +681,7 @@ def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[str, Any], scratch: Path) -> dict[str, dict]:
-    """What the audit refuses before any draw about the records: a registration naming another circuit or another run root,
+    """What the audit refuses before any sample about the records: a registration naming another circuit or another run root,
     one binding a compiler for a circuit registered with none; for a compiled circuit, a registration naming another
     compiler, another commit of it, another advice root or another length, or binding neither (a circuit passed off as the
     compiler's), the advice's opening under another salt (which opens no registered root), and a circuit record other than
@@ -736,15 +746,18 @@ def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping
 
 def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[str, Any]]:
     """A template's circuit from its Definition and its statement in the circuit record (Flock's `UnitStager` on the record's
-    ``in_rows``, ``out_rows`` and ``reads``), bound to the window's partition and program: a5's composer for its members."""
+    ``in_rows``, ``out_rows`` and a flat statement's ``reads`` or a templated one's ``layout`` and ``structural``), bound to the
+    window's partition and program: a5's composer for its members."""
+    form = {"layout": st["layout"], "structural": bool(st["structural"])} if st.get("layout") else {"reads": st["reads"]}
+
     def compose(out: Path, partition: str, program: str) -> dict[str, Any]:
         from verity_flock import circuit as FC
         from verity_flock.class_statement import UnitStager
 
         s = UnitStager(fn, "unit/window", [(p, sc, int(b), list(ps)) for p, sc, b, ps in st["in_rows"]],
                        [(sc, tuple(ix)) for sc, ix in st["out_rows"]], circuit=Path(out),
-                       bind={"partition": partition, "program": program}, reads=st["reads"])
-        if st["reads"] == "slots":
+                       bind={"partition": partition, "program": program}, **form)
+        if form.get("reads") == "slots":
             FC.IL.write_tables(Path(out).parent / "tables")
         return {"subcircuit": s.meta.get("subcircuit"), "pin": s.pin, "class_sha512": s.class_sha512, "k_log": s.meta["k_log"]}
     compose.inputs = ["unit/window", st]  # a5's compose cache keys a composer by these (a5.compose_key), else never caches it
@@ -835,9 +848,9 @@ def _code(fn: Any) -> str | None:
 
 
 def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> dict:
-    """At most ``most`` of `zk_mutants.py`'s one-bit edits of the first drawn session's proof (a prover that sent the edited
+    """At most ``most`` of `zk_mutants.py`'s one-bit edits of the first sampled session's proof (a prover that sent the edited
     proof, the round messages that carried it rebuilt and the coins kept), each verified by Lean `verify --zk` on the honest
-    member's circuit and public file: what the verifier of record refuses, not the prover. Then that public file with one
+    member's circuit and public file: what the verifier refuses, not the prover. Then that public file with one
     bit flipped (``public-bit-*``) under the honest proof."""
     import a0
     sys.path.insert(0, str(HERE.parents[1] / "verity" / "ml" / "flock" / "verifier"))
@@ -881,7 +894,7 @@ def audit(a: argparse.Namespace) -> int:
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    law = D.parse_law(a.law)
+    law = D.parse_design(a.law)
     try:
         mine, doc, sets = verifier_window(wdir, law, Path(a.template_sets) if a.template_sets else None)
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
@@ -935,11 +948,17 @@ def audit(a: argparse.Namespace) -> int:
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
                              own=set(ties) | set(untied) | set(tie_pins))
+<<<<<<< 0941037006
     a.tie, a.declared = tied, day
     if tied:
         named = {**tie_row(tied), "previous": rec.get("previous"), "chained": rec.get("previous") == R.digest(tied["log"][0])}
         (out / "tie.json").write_text(json.dumps(named, indent=1, sort_keys=True))
         print("TIE " + json.dumps(named, sort_keys=True), flush=True)
+||||||| merged common ancestors
+    a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (), own=set(ties) | set(untied))
+=======
+    a.tie = tied
+>>>>>>> 7af4d24fca3e
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
@@ -1022,7 +1041,7 @@ def warm(a: argparse.Namespace) -> int:
     import a5 as A5
 
     t0 = time.time()
-    mine, _doc, sets = verifier_window(Path(a.window), D.parse_law(a.law), Path(a.template_sets) if a.template_sets else None)
+    mine, _doc, sets = verifier_window(Path(a.window), D.parse_design(a.law), Path(a.template_sets) if a.template_sets else None)
     window_s = round(time.time() - t0, 1)
     got = A5.warm(a, sets, mine, a.jobs)
     for g in got:

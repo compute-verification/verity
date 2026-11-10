@@ -40,11 +40,11 @@ deadline `Δ_late` plus the round trip. The memory challenger's arrival times `a
    challenge but the open one and `run_continuous` drops a reply naming any other.
 3. It waits at most `D_late` units. The round closes at the answer, or after `D_late` units with no answer
    (`contNext`). A round with no answer by then, or whose answer took more than `Q_late` queries, is **rejected**
-   (`contVerdict`): past the hard deadline, its block never checked (`Answer.rejected`, past `Δ_late + RTT`, closed by
-   `respond()`, `expire()` or the next `challenge()`).
+   (`contVerdict`): past the hard deadline, its block never checked (`ChallengeReply.rejected`, past `Δ_late + RTT`,
+   closed by `respond()`, `expire()` or the next `challenge()`).
 4. Any other answer that took more than `D` units or `Q` queries is **late**, whatever its block: past `Δ`
-   (`Answer.on_time` is false past `Δ + RTT`). An answer within `(D, Q)` is a **hit** if it is the block `C i_j`
-   (`Answer.correct`), and **wrong** otherwise.
+   (`ChallengeReply.on_time` is false past `Δ + RTT`). An answer within `(D, Q)` is a **hit** if it is the block
+   `C i_j` (`ChallengeReply.correct`), and **wrong** otherwise.
 5. With tolerance `f₀` it accepts iff at most `f₀` rounds are not hits: rejected, late or wrong (`contAccepts`), as
    `ContinuousMemoryChallenger.accepted` compares `AuditResult.misses` with `max_misses`.
 
@@ -82,7 +82,7 @@ machine did before. No cap like the graded audit's `D_late ≤ 12` (`audit.LATE_
   fixed schedule `arr`, so they hold conditional on the arrivals. Per challenge, normalize by the realized `N`, never by
   `λT`. The responder may know every arrival time in advance, and a queued challenge is sent when the last round
   closes, which the responder controls. Both only help it, and those statements hold for every machine.
-  `ContinuousTimeAverage` (the last section) draws the arrivals in the game instead: the responder does not know them
+  `ContinuousTimeAverage` (the last section) samples the arrivals in the game instead: the responder does not know them
   in advance, and the bound normalizes by `λT`.
 * **Storage at send times, not a time average,** in `PerAnswer` and `ContinuousAudit`. `ε_j` is read at the send
   times. Between them a machine may hold less, down to nothing, and rebuild before the next send (`rest` sees `C` and
@@ -225,22 +225,22 @@ noncomputable def contFreed (sch : Scheme M) (held : ℕ) : ℝ :=
 noncomputable def epsProof (sch : Scheme M) (β : ℕ) : ℝ :=
   1 - ((β : ℝ) - sch.B) / (sch.B * sch.ℓ)
 
-/-! ## Arrivals drawn by the memory challenger, and the memory at every time
+/-! ## Arrivals sampled by the memory challenger, and the memory at every time
 
 Its statement is `Pous.Guarantees.ContinuousTimeAverage`. Red team: needed.
 
-The memory challenger draws the arrivals itself. Time is cut into `T` slots of one unit each, the unit of `OracleAlgorithm.depth`
-and of `arr` above. At slot `t` the memory challenger draws `x t = (c, i) ∈ Fin b × Fin B`, uniform and independent of
+The memory challenger samples the arrivals itself. Time is cut into `T` slots of one unit each, the unit of `OracleAlgorithm.depth`
+and of `arr` above. At slot `t` the memory challenger samples `x t = (c, i) ∈ Fin b × Fin B`, uniform and independent of
 everything else. A challenge arrives at `t` iff `c < a` (probability `a/b`): a Bernoulli process, at most one arrival
 per slot, standing in for a Poisson process at `λ = (a/b)/call_ns`. A deployment is inside the statements only if it
-draws its arrivals this way, one coin per slot from its own randomness. The `j`-th arrival's index is the `i` drawn at
+samples its arrivals this way, one coin per slot from its own randomness. The `j`-th arrival's index is the `i` sampled at
 its slot (`histAt`), and its arrival time is
 `arrAt a x j`. Rules 1–5 are unchanged: `contRecords` with `arr := arrAt a x` runs the memory challenger on these
 arrivals.
 
 **Arrivals queue.** Rule 1 sends challenge `j` at `max(arrAt a x j, c_{j−1})`, so a challenge that arrives while a
 round is open waits for it to close. None is dropped. This is load-bearing: at an idle slot (below) the indices sent
-so far are `histAt a x t`, a function of the memory challenger's draws alone. A memory challenger that dropped arrivals
+so far are `histAt a x t`, a function of the memory challenger's samples alone. A memory challenger that dropped arrivals
 during an open round would send a history that depends on the rounds' depths, and so on the primitive.
 
 **Idle slots.** Slot `t` is idle (`contIdle`) when every challenge that arrived before `t` has closed by `t`, so a

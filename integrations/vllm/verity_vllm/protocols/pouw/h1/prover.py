@@ -175,12 +175,27 @@ class _Job:
 class Writer:
     """`keep_call` off the serving thread: `keep` copies a call's rows, scales and records into a ring of ``bound`` bytes of
     host memory (pinned when CUDA is up, so a CUDA tensor's copy is queued on its device's current stream, behind what the
+<<<<<<< 0941037006
     stream has enqueued, and the caller never waits on the device), and ``threads`` threads of the writer's own write the
     calls' files from the ring, the bytes `keep_call` writes, each taking the next call in the order kept (a file's CRC and
     write release the GIL, so they overlap). A call's bytes stay in the ring until it and every call kept before it are
     written. The caller waits only while the ring is full: at most ``bound`` bytes are in flight (serve-openai's is a
     window's, `kept_bytes` of each of its calls). A window's directory is `open` on the writer until `wait` returns: once
     every call kept there is written, raising OSError when any wasn't."""
+||||||| merged common ancestors
+    stream has enqueued, and the caller never waits on the device), and one thread of the writer's own writes each call's
+    file from the ring, in the order kept, the bytes `keep_call` writes. The caller waits only while the ring is full: at
+    most ``bound`` bytes are in flight (serve-openai's is a window's, `kept_bytes` of each of its calls). A window's
+    directory is `open` on the writer until `wait` returns: once every call kept there is written, raising OSError when
+    any wasn't."""
+=======
+    stream has enqueued, and the caller never waits on the device), and one thread of the writer's own writes each call's
+    file from the ring, in the order kept, the bytes `keep_call` writes. The caller waits only while the ring is full: at
+    most ``bound`` bytes are in flight (serve-openai's is a window's, `kept_bytes` of each of its calls). A window's
+    directory is `open` on the writer until `wait` returns: once every call kept there is written, raising OSError when
+    any wasn't. A failure the writer doesn't expect stops it, raised on its thread: that call and each call queued or kept
+    after it fail their windows, so no `wait` waits on a call the writer won't write."""
+>>>>>>> 7af4d24fca3e
 
     def __init__(self, bound: int, threads: int = 2) -> None:
         import torch
@@ -195,6 +210,8 @@ class Writer:
         self._jobs: deque[_Job] = deque()
         self._taken, self._seq, self._written = 0, 0, set()
         self._head, self._closed = 0, False
+        #: the failure that stopped the writer's thread (None while it runs)
+        self._stopped: str | None = None
         self._dirs: dict[str, dict[str, Any]] = {}
         self._threads = [threading.Thread(target=self._run, name=f"h1-keep-{i}", daemon=True) for i in range(threads)]
         for t in self._threads:
@@ -233,10 +250,14 @@ class Writer:
             if self._closed:
                 raise RuntimeError(f"call {index}: the writer is closed")
             st = self._dirs[key]
-            while (lo := self._fit(n)) is None:
+            while self._stopped is None and (lo := self._fit(n)) is None:
                 st["waits"] += 1
                 self._cv.notify_all()
                 self._cv.wait()
+            if self._stopped is not None:
+                st["calls"] += 1
+                st["failed"].append(f"call {index}: the writer stopped at {self._stopped}")
+                return
             at, spans, stream = lo, [], None
             for b, dtype, shape in parts:
                 size = int(b.shape[0])
@@ -280,8 +301,21 @@ class Writer:
                     job.copied.synchronize()
                 a, s_a, *records = (self._ring[at:at + n].view(dtype).reshape(shape) for at, n, dtype, shape in job.spans)
                 _savez(private(Path(job.directory) / CALLS) / f"{job.index}.npz", a, s_a, records[0] if records else None)
-            except Exception as e:  # noqa: BLE001 - any failure is the window's, raised by its `wait`
+            except (OSError, RuntimeError) as e:
+                # the file system's failures and the device's (torch raises a CUDA error as a RuntimeError) are the
+                # window's, raised by its `wait`
                 failed = f"call {job.index}: {type(e).__name__}: {e}"
+            except BaseException as e:
+                with self._cv:
+                    self._stopped = f"call {job.index}: {type(e).__name__}: {e}"
+                    for queued in self._jobs:
+                        st = self._dirs[queued.directory]
+                        st["pending"] -= 1
+                        st["failed"].append(self._stopped if queued is job else
+                                            f"call {queued.index}: the writer stopped at {self._stopped}")
+                    self._jobs.clear()
+                    self._cv.notify_all()
+                raise
             with self._cv:
                 self._written.add(job.seq)
                 while self._jobs and self._jobs[0].seq in self._written:

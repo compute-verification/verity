@@ -2,13 +2,14 @@ module
 
 public import Definitions.Accounting.Guarantees.Compose
 public import Proofs.Accounting.TS.Drawn
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # `ServiceCovers`: the service's share covers every tile that isn't good
 
-`Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone` at the tiles' words reduces `Covers` to the unpaid tiles'
+`Accounting.SecurityProofs.TS.SampledLayer.covers_of_cone` at the tiles' words reduces `Covers` to the unpaid tiles'
 layer cones against the game's deficiency, `Σ_{t unpaid} tileCone t`. A layer late edge into tile `v` at slot `k`
-(`DrawnLayer.Late`) has its position written by `u` (`Declared.Writes`, `u` its unit) and in `v`'s slots: either one
+(`SampledLayer.Late`) has its position written by `u` (`Declared.Writes`, `u` its unit) and in `v`'s slots: either one
 of `v`'s own gates, so `u = v`, or an operand of a gate `j` of `v`'s, whose round is `v`'s (`Declared.Wf`). Under
 `LayerCommitted` the position is committed by its IR cut, so the layer's cut is the IR's and `j`'s round is before it,
 `Declared.Late` and a `Declared.UnitLate` edge; or it is a computed value that only gates of its own unit read, so `j`'s
@@ -129,7 +130,7 @@ theorem coneWt_le {K : Type} (Sc : Scheme K) (hw : Cd.Wf) (hc : LayerCommitted C
     (Cd.layer hr hK pr).coneWt (fun _ t => (tileWords Sc Cd Np t : ℝ)) (0, t) ≤
       tileCone Sc Cd Np t * (wordsOf Sc Cd : ℝ) := by
   classical
-  simp only [DrawnLayer.coneWt, tileCone, Fintype.sum_prod_type, Fin.sum_univ_one, Finset.sum_mul]
+  simp only [SampledLayer.coneWt, tileCone, Fintype.sum_prod_type, Fin.sum_univ_one, Finset.sum_mul]
   refine Finset.sum_le_sum fun t' _ => ?_
   by_cases hR : Relation.ReflTransGen (Cd.layer hr hK pr).Late (0, t) (0, t')
   · rw [ite_eq_left hR, ite_eq_left (reaches_of_rtg Cd hr hK pr hw hc hR)]
@@ -150,7 +151,7 @@ end Layer
 `tileCone` (`coneWt_le`), and the game's deficiency the unpaid tiles' `tileCone`. -/
 theorem serviceCovers : Accounting.Guarantees.Compose.ServiceCovers := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ Sc Cd Np Kd hr hK R Pl pr hw hc hG
-  refine Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone (Cd.layer hr hK pr) Pl (jointMode R)
+  refine Accounting.SecurityProofs.TS.SampledLayer.covers_of_cone (Cd.layer hr hK pr) Pl (jointMode R)
     (fun _ t => (tileWords Sc Cd Np t : ℝ)) (wordsOf Sc Cd : ℝ) (fun _ _ => Nat.cast_nonneg _) fun x _ => ?_
   rw [hG]
   simp only [jointGame, RoundGame.deficiency, JointRun.share, one_mul, add_zero, Fintype.sum_prod_type,

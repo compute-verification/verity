@@ -84,10 +84,13 @@ SETTINGS: dict[str, Setting] = _declare(
       "pod_setup.sh)", "placement: which slots a check may take"),
     S("CHECK_SLOT_MEM_GB", str, "", WHERE, "the GB the check slot gives the run it holds (slot.py sets it): circuit-check's "
       "budget and the suites' jobs", "it sizes how much runs at once, never what a step computes"),
-    S("CHECK_SLOT_RANK", str, "", WHERE, "drive's train position, which `slot.py --rank` orders priority waiters by",
-      "placement: the order trains take slots in"),
+    S("CHECK_SLOT_RANK", str, "", WHERE, "the rank `slot.py --rank` orders priority waiters by: drive's after-landing run's "
+      "and lock run's (`research.drive.POSTLAND_SLOT_RANK`), none for a hand `train.sh`", "placement: the order drive's checks "
+      "take slots in"),
     S("CHECK_STORE_CUSTODY", str, None, WHERE, "the recording run's custody dir, which check gives its steps in place of the "
       "RESEARCH_* that named the store (`store_io`)", "where the store's key is, not what a step computes"),
+    S("RESEARCH_STORE_CONFIG", str, None, WHERE, "the evidence store's config: set, the suites' fixture fetch uses it, not the "
+      "run's custody key (`suites.fetch_env`)", "which store serves a fetch; every byte is checked against its id"),
     # ---- the Lean slots (lean_slot.py)
     S("LEAN_SLOT", str, None, WHERE, "the Lean audit slot this process holds, POOL/I (lean_slot.py sets it)",
       "placement: the slot held"),
@@ -116,6 +119,8 @@ SETTINGS: dict[str, Setting] = _declare(
       "`suites.py` refuses another checkout's environment"),
     S("XDG_CACHE_HOME", str, None, WHERE, "the cache root under which VERITY_TEST_CACHE defaults", "as VERITY_TEST_CACHE"),
     S("TMPDIR", str, None, WHERE, "scratch: train.sh's worktrees and logs; unset, /tmp", "scratch space"),
+    S("LD_LIBRARY_PATH", str, None, WHERE, "where the loader looks first: neutrality_tier.sh puts the driver's libcuda it "
+      "unpacks there, on a node with none", "vLLM only loads it at import; neutrality hides every device"),
     # ---- the run this one is part of (`research run` sets them)
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of: a check inside one is recorded, a run of "
       "record", "it names the run"),

@@ -314,13 +314,14 @@ def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names
     """`--pous-record DIR --pous-session SID`: the registration of the setup the memory challenger kept for PoUS session
     SID (`challenger_party.keep`), its whole store the plan; refused for an id out of form, a record of another session,
     or one without a setup."""
-    from verity.core.protocols.pous import challenger_party as CP
+    from verity.core.devices.memory_challenger import challenger_party as CP
+    from verity.core.protocols.pous import challenger_session as CS
     from verity.core.protocols.pous import run as R
 
     reg = store.registration
     q = reg.params
     point = R.Point(q, 1, 1)
-    request = CP.request_of(NODE.decode(), point, reg.root, audit=hashlib.sha512(b"a window's binding").digest(),
+    request = CS.request_of(NODE.decode(), point, reg.root, audit=hashlib.sha512(b"a window's binding").digest(),
                             published=R.Setup(q.blocks, reg.commitment, reg.root, reg.salt))
     sid = hashlib.sha512(b"a PoUS session").digest()[:32]
     CP.keep(tmp_path, sid, request)
@@ -330,10 +331,10 @@ def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names
     with pytest.raises(ValueError, match="64 lowercase hex"):
         p2_party.pous_record(tmp_path, "../" + sid.hex()[3:])
     other = bytes(32)
-    (tmp_path / CP.SETUPS / f"{other.hex()}.json").write_text(json.dumps({"request": request, "session_id": sid.hex()}))
+    (tmp_path / CS.SETUPS / f"{other.hex()}.json").write_text(json.dumps({"request": request, "session_id": sid.hex()}))
     with pytest.raises(ValueError, match="names the session"):
         p2_party.pous_record(tmp_path, other.hex())
     bare = b"\x01" * 32
-    CP.keep(tmp_path, bare, CP.request_of(NODE.decode(), point, reg.root))
+    CP.keep(tmp_path, bare, CS.request_of(NODE.decode(), point, reg.root))
     with pytest.raises(ValueError, match="has no setup"):
         p2_party.pous_record(tmp_path, bare.hex())

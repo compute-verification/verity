@@ -1,6 +1,37 @@
 module
 
 public import Definitions.Pouw.RelativeSecurity
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Relative security at call scope under J10-R: the call design its floors read (trusted)
@@ -22,7 +53,7 @@ computes it:
   call, not `n n' / L²` independent `⟨L, L, L⟩` ones;
 * cell-block `(i, l, t)`'s frame (`jFrame`): its `x` bits are row `i`'s dither bits of segment `t`, its `y` bits column
   `l`'s coin bits of segment `t`, so mod 2 its target is `⟨x, y⟩` plus terms blind to one side, with no plane weight;
-* charging purity at those frames (`SlpG.ChargePureJ`; across draws, `SlpG.ChargePureAtJ`), one-sided products per draw
+* charging purity at those frames (`SlpG.ChargePureJ`; across samples, `SlpG.ChargePureAtJ`), one-sided products per sample
   (`OneSidedAtJ`), a round's coins (`JStage`; overlapped, `OJBits`, `OJDraws`, `OJSpot`) and an adversary's window run
   on the call design (`JStagedRun`, `JRunMap`; `JOverlapRun`, `JORunMap`).
 
@@ -94,7 +125,7 @@ end J10R
 abbrev JStage (St n L B n' : ℕ) : Type := Paths (Finset (JBits n L B n')) St × (Fin St × DCells n n' B)
 
 /-- **An adversary's window run on the call design**, as the analysis reads it: its staged play (per round and call,
-the error table fixed by the call's operand commitment before its draw), the per-round binding and zero-knowledge break
+the error table fixed by the call's operand commitment before its sample), the per-round binding and zero-knowledge break
 events, the noise reads `V`, and along every play `x` each round's calls as straight-line programs over `Ar` on the
 call's bits (`prog x w s`), on the committed `A` (`aq x w s`) and the registered `W` (`wq x w s`), with the slot of
 each cell's committed prefix word (`word x w s`). -/
@@ -116,11 +147,11 @@ abbrev JRunMap (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (Ar : Type) [C
 /-- A round's bits with overlapping calls: call `t`'s bits, of shape `(n t, L, B t, n' t)`. -/
 abbrev OJBits (St : ℕ) (n : Fin St → ℕ) (L : ℕ) (B n' : Fin St → ℕ) : Type := Σ t, JBits (n t) L (B t) (n' t)
 
-/-- A round's draws with overlapping calls: call `t`'s bits. -/
+/-- A round's samples with overlapping calls: call `t`'s bits. -/
 abbrev OJDraws (St : ℕ) (n : Fin St → ℕ) (L : ℕ) (B n' : Fin St → ℕ) : Type :=
   ∀ t, Finset (JBits (n t) L (B t) (n' t))
 
-/-- A round's coins with overlapping calls: the check's cell-block, among every call's, and every call's draw. -/
+/-- A round's coins with overlapping calls: the check's cell-block, among every call's, and every call's sample. -/
 abbrev OJSpot (St : ℕ) (n : Fin St → ℕ) (L : ℕ) (B n' : Fin St → ℕ) : Type :=
   OCells St n n' B × OJDraws St n L B n'
 
@@ -133,7 +164,7 @@ against its columns'), for every call `t`. -/
 def OneSidedAtJ (π : (OJBits St n L B n' → Ar) → Ar) : Prop :=
   ∀ (W : OJDraws St n L B n') (t : Fin St), OneSided fun z => π (mergeAt W t z)
 
-/-- **Charging purity across calls**: at every bit point of the draws, no product is two-sided at the frames
+/-- **Charging purity across calls**: at every bit point of the samples, no product is two-sided at the frames
 (`jFrame`) of two cell-blocks, of any calls, whose words read it with odd coefficients (mod 2 through `φ`). -/
 def SlpG.ChargePureAtJ (φ : Ar →+* ZMod 2) {N : ℕ} (P : SlpG (OJBits St n L B n') Ar N)
     (word : OCells St n n' B → Fin N) : Prop :=
@@ -143,8 +174,8 @@ def SlpG.ChargePureAtJ (φ : Ar →+* ZMod 2) {N : ℕ} (P : SlpG (OJBits St n L
 
 end J10ROverlap
 
-/-- **An adversary's window run with overlapping calls**, as the analysis reads it: its play over the round's draws
-(per round, the error tables of every call fixed before the round's first draw), the per-round binding and
+/-- **An adversary's window run with overlapping calls**, as the analysis reads it: its play over the round's samples
+(per round, the error tables of every call fixed before the round's first sample), the per-round binding and
 zero-knowledge break events, the noise reads `V`, and along every play `x` each round's run as one straight-line
 program over `Ar` on every call's bits (`prog x w`), on each call's committed `A` and registered `W` (`aq x w t`,
 `wq x w t`), with the slot of each cell's committed prefix word (`word x w`). -/

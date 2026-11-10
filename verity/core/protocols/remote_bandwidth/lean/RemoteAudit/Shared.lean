@@ -5,10 +5,10 @@ public import RemoteAudit.Session
 /-!
 # One openings coin over several windows: `audit.Params.groups_per_coin`
 
-At `groups_per_coin` g, windows cg … min((c + 1)g, W) − 1 are draw c, drawn from one openings coin released after the
+At `groups_per_coin` g, windows cg … min((c + 1)g, W) − 1 are draw c, sampled from one openings coin released after the
 last root of the draw's last window: the session's coins are its W challenges, then ⌈W/g⌉ openings coins, coin c at
 W + c. `close` is `Session.close` for a draw: only the draw's last window closes, once its roots are final, which makes
-every window of the draw final; each is rejected `few` in order; and the draw's `s` receipts are drawn over its passes
+every window of the draw final; each is rejected `few` in order; and the draw's `s` receipts are sampled over its passes
 in order (`draws`, under the key of window c), numbered across its windows, each window keeping its own share,
 (pass, position) in it, which `Session.verify` checks. A window whose share is none has nothing to open: the close
 accepts it, and `Session.verify` refuses it, as it refuses any window with a verdict.
@@ -17,7 +17,7 @@ accepts it, and `Session.verify` refuses it, as it refuses any window with a ver
 `Session.run` (`step_one`, `run_one`): the properties of the code stated on `Session.run` are about the
 one-coin-a-window session, and `Properties.RemoteAudit.Shared` states the draw's for every g. The difftest's `session`
 and the registry run `run g` and `step g` (`Flight`, `Registry.step`), the verifier's process takes a draw's openings
-coin with its last window's close only (`Verifier.withCoin`), and the line of record reads a record drawn g > 1 a coin
+coin with its last window's close only (`Verifier.withCoin`), and the line of record reads a record sampled g > 1 a coin
 by its draws (`Line.ofSummaryAt`), at two windows in flight only (`Line.SHARED`).
 -/
 
@@ -46,7 +46,7 @@ def close (g : Nat) (s : State) (t : Int) (now : Nat) : Except String (Result ×
   if let some u := group.find? (s.windows[·]!.roots.size < s.params.minPasses) then return s.fail u .few
   if t + 1 == s.params.windows && s.joined.size < s.appends.size then return s.fail t .coin
   let lengths := group.foldl (fun acc u => acc ++ s.windows[u]!.plans.map (·.length)) #[]
-  let some drawn := draws s.digest (t / g) s.coins[s.params.windows + t / g]! s.params.samples lengths
+  let some drawn := receiptSample s.digest (t / g) s.coins[s.params.windows + t / g]! s.params.samples lengths
     | throw "the openings' draw ran past its reads"
   let share := fun (base n : Nat) => drawn.filterMap fun (i, p) =>
     if base ≤ i && i < base + n then some (i - base, p) else none

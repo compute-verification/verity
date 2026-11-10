@@ -22,7 +22,7 @@
 # going last; the rest wait for the next. A failure no retry can mend is held, with the Job's line, for a person to decide: node 1
 # holds the run's attempt without a run record (the stopgap published it), R2 holds another attempt for its id (its runner's own;
 # node 1's vy-custody --reconcile takes it), or its attempt's run record lacks what the run dir holds now.
-# Only run dirs go home, never a row directory (3 Oct: the stopgap's row sync mirrored 1.2M files to node 1 and overran its window),
+# Only run dirs go home, never a row directory (a row's millions of files would overrun the round's window),
 # and a run dir over VY_CUSTODY_MAX_FILES files or VY_CUSTODY_MAX_GB GiB is held instead of mirrored: STATE/held/RUN says why, and the
 # round exits 1 while it is there. Move the bulk out of the run dir (or declare it elsewhere), then remove STATE/held/RUN.
 # The stopgap this replaces, STATE/push.sh in a tmux loop, shares STATE/pushed/ and the Jobs' names but takes no lock: while it runs,

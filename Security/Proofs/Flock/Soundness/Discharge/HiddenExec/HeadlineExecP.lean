@@ -42,12 +42,13 @@ variable {n : ℕ} {I : Inputs} {own : Option ByteArray} {mPts : ℕ} (ht : I.ta
 /-- **The headline at the executable over hidden-output sessions at the verifier's public inputs.** Let `I` be a
 verify command's inputs (one table) under a tag with hidden outputs, whose statement circuit is an untyped circuit `c`
 in `rs`'s scope (`hcS`, `ht`, `hscope`; a templated file's committed circuit unrolled) with public input ports `pi` (`hpi`), whose public file loads to `pub` at them
-(`hpub`), and let the verifier pass its own public input words `own`. Let the challenger write draw `S` as the JSON
-`dj S` (`x₀` one draw it sets up with `Stmt.setupHidden … own`), the verifier draw the units with `Flock.Draw.drawOS`'s
-stratified law on a byte source A3 makes uniform, and each draw's session be the live coin server's one table
-(`liveTable`, A6), written out by `wr`. Against any live prover `τ`, flock-verify accepts at `own` with at least `K`
-wrong units of `Placed.keyProgP c pi hU n`, at the simulated prover's committed values (1 on the constant's gate, 0 on
-the zero's, the plurality of its openings elsewhere), with probability at most `miss(K) + ε_ks + δ_link`. -/
+(`hpub`), and let the verifier pass its own public input words `own`. Let the challenger write sample `S` as the JSON
+`dj S` (`x₀` one sample it sets up with `Stmt.setupHidden … own`), the units be sampled with `Flock.Draw.drawWith`'s
+stratified sampling design on the challenger's coins, a byte source A3 makes uniform, and each sample's session be the live-coin
+part's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, flock-verify accepts at `own`
+with at least `K` incorrect proof blocks of `Placed.keyProgP c pi hU n`, at the simulated prover's committed values (1 on the
+constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability at most
+`miss(K) + ε_ks + δ_link`. -/
 theorem flock_headline_exec_hiddenP {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)

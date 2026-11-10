@@ -6,7 +6,6 @@ roots are checked here; the input ports' roots depend on the row leaf's schema a
 module
 
 public import Flock.Circuit
-public import Flock.JsonParse
 public import Flock.FV3
 
 @[expose] public section
@@ -33,7 +32,7 @@ structure Public where
   /-- SHA-256 of the header (`rows = false`, in `canonUtf8`'s form, as upstream's `serde_json` writes it) and every byte
   after it: what Σ binds -/
   sha : ByteArray
-  /-- a drawn statement's registered population (its size, `b ‖ c` and outputs): the frame-v3 roots are over it -/
+  /-- a sampled statement's registered population (its size, `b ‖ c` and outputs): the frame-v3 roots are over it -/
   population : Option (Nat × Array ByteArray × Array Nat) := none
   tables : Option Tables := none
   deriving Inhabited

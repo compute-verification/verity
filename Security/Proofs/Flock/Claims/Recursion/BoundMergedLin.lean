@@ -1,25 +1,58 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.BoundMerged
-public import Proofs.Flock.Claims.Recursion.KSLin
+public import Proofs.Flock.Claims.Recursion.PlurLin
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.KSLin
 
 /-!
 # Route 2B, linearly: `KSLin` from (P1) at `DE` through one plurality
 
 `Bound.innerKS_of_plainKSAbort_binds` reaches the inner stage from (P1) at `DE` with no bridge, but charges `P_O`'s bad
-draws a root: `Pr[BadO] ≤ √(k_I·Σ_j Pr[forkColl j])` (`Bound.Pr_badO_le_fork`, through `Pr_plur_fork`). Here that root
+samples a root: `Pr[BadO] ≤ √(k_I·Σ_j Pr[forkColl j])` (`Bound.Pr_badO_le_fork`, through `Pr_plur_fork`). Here that root
 goes, as `Pr_bad_le_lin` takes `Pr_bad_le`'s:
 
-* At inner round `j`, a draw misses `P_O`'s plurality at most as often as `Fdev`'s link at the fork at `j` succeeds,
+* At inner round `j`, a sample misses `P_O`'s plurality at most as often as `Fdev`'s link at the fork at `j` succeeds,
   plus `1/(M+1)` (`Pr_plur_fork_lin` at `P_O`'s reading, `Bound.oMsg`). `Fdev` itself reads only whether `E_O` gives
   witnesses, never the opening, so it is the same finder at either plurality.
-* Where the link succeeds, the first draw and the loop's first good draw are forked at `j`, give witnesses, and open
+* Where the link succeeds, the first sample and the loop's first good sample are forked at `j`, give witnesses, and open
   round `j` differently, so their calls collide (`Bound.fork_collO`, `Bound.linkOut_collO`).
 
 So `Pr[BadO] ≤ k_I·(Pr[Fdev] + 1/(M+1))` (`Bound.Pr_badO_le_PrFdev`), and the inner stage is at most
 `κ_I + √(γ_BI·Pr[B_I]) + β·(Pr[Fdev] + 1/(M+1))` (`Bound.innerLin_of_plainKSAbort_binds`): `E^rep` at `DE` against
 `P_O`'s aborting runs by (P1), with `B` there at most `B_I` (`Bound.PrBAbort_le_merged`) and `γ_DE ≤ γ_I` where
-`DE`'s weight is at most the bound record's; a rejecting judged draw at most `Pr[B_I]` (`Pr_innerRejects_le_PrBI`).
+`DE`'s weight is at most the bound record's; a rejecting judged sample at most `Pr[B_I]` (`Pr_innerRejects_le_PrBI`).
 `Bound.KSLin_of_plainKSAbort_binds` is `KSLin` at the bound record from it, on `Bound.KS_of_plainKSAbort_binds`'
 premises: no bridge and no `WeightCovers`.
 -/
@@ -36,8 +69,8 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
   {Bd : Bound Coin Col T} {decI : List (ℕ × Col) → List T} {H : Msg → Msg} {D : Deploy Coin}
   {DO : Flock.Deploy Coin Col' T'} {decO : List (ℕ × Col') → List T'} {Ω : Type} {P : Prover Ω} {x : Msg}
 
-/-- **A link that succeeds at `P_O`'s reading names a collision**: the first draw and the loop's first where `E_O`
-gives witnesses open round `j` differently, at two draws forked at `j` (`fork_fork`), which `fork_collO` makes a
+/-- **A link that succeeds at `P_O`'s reading names a collision**: the first sample and the loop's first where `E_O`
+gives witnesses open round `j` differently, at two samples forked at `j` (`fork_fork`), which `fork_collO` makes a
 collision among their recorded calls, the pair `linkOut` outputs. -/
 theorem Bound.linkOut_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
@@ -60,10 +93,11 @@ theorem Bound.linkOut_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFloc
     ⟨hg, by simp only [fork_fork]; exact hgv, by simp only [fork_fork]; exact Ne.symm hfv⟩
   simp only [forkColl, fork_fork] at hfc
   have hv' : firstPick (linkG H D (Inner.ofFlock Bd.deploy decI) DO decO P x j ω r) M us = some v := hv
-  simp only [linkOut, hv', Option.getD_some]
+  have hg' : linkG H D (Inner.ofFlock Bd.deploy decI) DO decO P x j ω r u := hg
+  simp only [linkOut, hg', hv', ↓reduceIte, Option.getD_some]
   exact hfc
 
-/-- **`P_O`'s bad draws, linearly**: at most `k_I` times `Fdev`'s success, plus `k_I/(M+1)`, where
+/-- **`P_O`'s bad samples, linearly**: at most `k_I` times `Fdev`'s success, plus `k_I/(M+1)`, where
 `Pr_badO_le_fork` is `√(k_I·Σ_j Pr[forkColl j])`. -/
 theorem Bound.Pr_badO_le_lin (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
@@ -137,7 +171,7 @@ theorem Bound.Pr_badO_le_lin (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlo
         rw [Finset.sum_add_distrib, ← hF, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
           mul_one_div]
 
-/-- **`P_O`'s bad draws at most `k_I·(Pr[Fdev] + 1/(M+1))`**: `Pr_badO_le_lin`, and no bad draw where the inner
+/-- **`P_O`'s bad samples at most `k_I·(Pr[Fdev] + 1/(M+1))`**: `Pr_badO_le_lin`, and no bad sample where the inner
 protocol takes no rounds. -/
 theorem Bound.Pr_badO_le_PrFdev (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
@@ -163,8 +197,8 @@ theorem Bound.Pr_badO_le_PrFdev (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.of
 /-- **The inner stage at the bound record from (P1) at `DE`, linearly**: at most
 `κ_I + √(γ_BI·Pr[B_I]) + β·(Pr[Fdev] + 1/(M+1))`, at every `M`. `E^rep` at `DE` against `P_O`'s aborting runs is (P1)'s
 `κ + √(γ_DE·Pr[B at P_O's aborting runs])`, with that `B` at most `B_I` (`PrBAbort_le_merged`) and `γ_DE ≤ γ_I` where
-`DE`'s weight is at most the bound record's (`hw`); `P_O`'s bad draws are `Pr_badO_le_PrFdev`'s; a rejecting judged
-draw is at most `Pr[B_I]`, which `γ_BI` holds under `B_I`'s root (`sqrt_add_le_γBI`). -/
+`DE`'s weight is at most the bound record's (`hw`); `P_O`'s bad samples are `Pr_badO_le_PrFdev`'s; a rejecting judged
+sample is at most `Pr[B_I]`, which `γ_BI` holds under `B_I`'s root (`sqrt_add_le_γBI`). -/
 theorem Bound.innerLin_of_plainKSAbort_binds [DecidableEq Col'] [Zero Col'] (decC : Msg → Msg → Coin)
     (hKS : (Inner.ofFlock Bd.DE decI).KSAbort H) (hw : ∀ x, Bd.DE.weight x ≤ Bd.weight x)
     (hdec : ∀ x c, decC x (Bd.ans c) = c) (hB : Bd.Binds) (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI))

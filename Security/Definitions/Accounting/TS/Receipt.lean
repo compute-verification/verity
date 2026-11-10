@@ -3,6 +3,38 @@ module
 public import Definitions.Accounting.TS.Play
 public import Definitions.Pouw.Receipt.Fx1
 public import Definitions.Pouw.Receipt.Li
+public import Definitions.Pouw.RelativeSecurity
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The ideal game split at the receipt (trusted)
@@ -29,9 +61,9 @@ then carries two more events on its coins:
   window of segments from a start the proof pins, one checkpoint a segment (the XOR of every chain's full state `(y, z)`
   across the warp), and the run's words honest but for one position a segment.
   `ReceiptGame.CaseA`: every round's split is that of duo, fx1, li or duo and fx1 checkpoint units.
-* `ReceiptGame.CubeOperands R`: every round draws uniform cube bits after fixing its share and a degree-2 operand
+* `ReceiptGame.CubeOperands R`: every round samples uniform cube bits after fixing its share and a degree-2 operand
   error, nonzero when the round is deficient (`luck_quad`'s rounds).
-* `ReceiptGame.WrongWords`: every round's share lies in `[0, 1]` and is positive only where a deficient word is wrong
+* `ReceiptGame.IncorrectWords`: every round's share lies in `[0, 1]` and is positive only where a deficient word is wrong
   (the keyed rounds' share).
 -/
 
@@ -285,7 +317,7 @@ def CaseA : {n : ℕ} → ReceiptGame Ω n → Prop
 /-- **Degree-2 operands on cube bits** (`luck_quad`'s rounds, full checking): a round's coins are other coins `a`
 and uniform cube bits `S`; at every round, whatever the past, its share lies in `[0, 1]` and is fixed before the bits
 (`δ a`), the prover's operand error `e a` is a function of the bits of degree at most 2 (`CubeQuad`), a deficient
-share means a nonzero error, and the deficient words are all right only where the error vanishes at the drawn bits. -/
+share means a nonzero error, and the deficient words are all right only where the error vanishes at the sampled bits. -/
 def CubeOperands (R : Type) [CommRing R] {α V : Type} [Fintype V] [DecidableEq V] :
     {n : ℕ} → ReceiptGame (α × Finset V) n → Prop
   | _, .done => True
@@ -298,9 +330,9 @@ def CubeOperands (R : Type) [CommRing R] {α V : Type} [Fintype V] [DecidableEq 
 /-- **A share of wrong words** (the keyed rounds' share): at every round, whatever the past, its share lies in `[0, 1]`
 and is positive only where some deficient word is wrong. For keyed rounds, a deficient word is a round whose state the
 run did not compute, and FOLD-OPT prices a right one at the round's work, so the share counts the wrong ones. -/
-def WrongWords : {n : ℕ} → ReceiptGame Ω n → Prop
+def IncorrectWords : {n : ℕ} → ReceiptGame Ω n → Prop
   | _, .done => True
-  | _, .round d _ right _ next => (∀ ω, 0 ≤ d ω ∧ d ω ≤ 1) ∧ (∀ ω, 0 < d ω → ¬right ω) ∧ ∀ ω, (next ω).WrongWords
+  | _, .round d _ right _ next => (∀ ω, 0 ≤ d ω ∧ d ω ≤ 1) ∧ (∀ ω, 0 < d ω → ¬right ω) ∧ ∀ ω, (next ω).IncorrectWords
 
 end ReceiptGame
 

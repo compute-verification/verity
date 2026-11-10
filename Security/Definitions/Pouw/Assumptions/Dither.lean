@@ -16,8 +16,12 @@ commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAd
 * `OutsourceWithinEgress`: an exchanged bit replaces at most `β` of priced work, the one premise that prices outside
   machines;
 * `ProofSystemSound`: the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`
-  (C-Flock sound and zero knowledge, live coins from the auditor's challenger);
+  (Flock sound and zero knowledge, live coins from the auditor's challenger);
 * `ImportWithinCertifier`: an accepted period exchanged at most `K` bits, the network certifier's count (class L).
+
+`CertifierSeesImports`, the network certifier's counts take in every exchanged bit (class L, the auditor's devices), is
+the device premise under it: a verdict that refuses counts past `K` (`CountedWithin`) accepts only periods that
+exchanged at most `K` bits. `Definitions.Pouw.Guarantees.OnsiteFreed.OnsiteFreed` and the card instance read it.
 
 `Definitions.Pouw.Guarantees.Dither.FleetSound` adds two on the challenger's coins across a fleet's replicas:
 
@@ -39,6 +43,8 @@ public best; it enters `κ` once a round.
 
 @[expose] public section
 
+open Claims renaming Ex → avg
+
 namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Pouw.Dither
@@ -52,7 +58,7 @@ priced cost `pub a`, outside a set `Deg` of the round's dithers of probability a
 
 `pub a` is the public best matmul method's priced cost of the instance's words at the period's dual
 prices: no program computes the noised products' segment prefix sums (or all but a small fraction of the words the
-check could draw) more cheaply at `μ` than the best public method. Exchanged bits are priced by
+check could sample) more cheaply at `μ` than the best public method. Exchanged bits are priced by
 `OutsourceWithinEgress`, not here.
 
 **What the advice holds.** Anything computed before the round within (G1)'s memory, so `pub` must hold against that
@@ -80,8 +86,9 @@ structured), so the premise needs `η · pub ≤ π s (1 − p)`, `π` the sampl
 and `s` its checked cells. That is necessary only against small skipped fractions: for `s ≥ 2`,
 skipping the whole sampling block binds first. The sufficient condition is `η · pub ≤ π` (`Pouw.SakLb.rate_bern`),
 sharp at `−log(1 − π (1 − p^s))` (`rate_bern_sharp`, at `p = 0`: past `−log(1 − π)` a program that skips the block
-wins). On the served block, selected or not (`ditherSelected`), the premise follows from `Pouw.SakLb.SAKResidual` at
-that rate (`Pouw.SakLb.sakMatmul_of_residual_bern`). -/
+wins). On the round that checks on every coin the premise follows from `Pouw.SakLb.SAKResidual`
+(`Pouw.SakLb.sakMatmul_of_residual`); on the served block, selected or not (`ditherSelected`), no theorem derives it,
+and it is taken as stated. -/
 def SAKMatmul (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (Reg : Set P.Inst) (pub η : P.Inst → ℝ)
     (κdeg : ℕ → ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ a ∈ Reg, ∀ (B : ℕ) (St : Type), (∃ e : St → Fin (2 ^ B), Function.Injective e) →
@@ -142,10 +149,10 @@ def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
     G.Mc.eval f' i = G.Mc.eval f i ∧ G.ext f' i = 0 ∧ G.cost μ f' i ≤ G.cost μ f i + β * G.ext f i
 
 /-- `pouw-nofold-service` (proposed; `pouw-rs-staged-service`'s form, per prover, on a period of rounds). **The proof
-service's verdict accepts only periods whose sampling blocks' checks pass** at the registrable instances `Reg`, but
+system's verdict accepts only periods whose sampling blocks' checks pass** at the registrable instances `Reg`, but
 with probability `κ_S` over the oracle and the verifier's coins, for every prover: every block's committed instance is
-one of its registrable ones and its check passes (`Prover.Accepted`). The checks run inside C-Flock's zero-knowledge
-proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each block's commitments
+one of its registrable ones and its check passes (`Prover.Accepted`). The checks run inside Flock's zero-knowledge
+proofs (sound and zero knowledge), on live coins flipped by the auditor's challenger after each block's commitments
 (`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
 code. It assumes nothing of the prover's algorithms. -/
 def ProofSystemSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) {Obs : Type}
@@ -153,18 +160,45 @@ def ProofSystemSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
     A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted Reg ox.1 ox.2) ≤ κS
 
+/-- `pouw-certifier-sees-imports` (proposed; class L, the auditor's devices, trust base item 3). **The network
+certifier counts every exchanged bit**: it watches the replica's boundary, every link of the period's devices, on a
+machine the prover doesn't control, so the bits a prover's sampling blocks' work and answers exchange with outside
+machines (`Prover.ext`, in either direction, other than the challenger's coin stream) are at most the bits it signs
+as entering (`cin`) and leaving (`cout`) the devices, as the verdict reads them from its readings `dev`.
+
+**The coin stream is the coins and nothing else**, the one thing `Accel.ext` leaves out: a sampling
+block's dither and check coins are its `Draw` and `Chk`, inputs of its programs, not exchanged bits.
+* Under the MVP the challenger is the replica's certifier device (`CoinsConfidential`), which makes
+  each coin at the boundary, so no bit that crosses a link from outside is left out.
+* A challenger on a device of its own is left out message by message: only a coin message that verifies under its key
+  and carries its expected (period, replica, sampling block, kind, sequence number), once, at its expected length.
+  Every other byte counts: a malformed, unverifiable, duplicate, replayed or late message as entering, and the
+  stream's reverse traffic (acknowledgements, flow control) as leaving. A stream told apart by its addresses or headers
+  would let forged packets on it carry imports uncounted.
+
+**A replica on several nodes has one boundary**: a certifier on each node's links, the traffic between
+its nodes carried certifier to certifier on the auditor's private links, never through the prover's network, and one
+count `cin`, `cout` that the replica's certifiers keep together. Everything else crossing between its nodes counts.
+Its cards are one pool (`poolCard`), so the traffic between them is the devices' own and not exchanged. Counting it
+would fail honest replicas, and leaving it out by address would let an outside machine join as a node. -/
+def CertifierSeesImports (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (dev : Readings G P k Obs)
+    (cin cout : Obs → ℝ) : Prop :=
+  ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.ext o x ≤ cin (dev A o x) + cout (dev A o x)
+
 /-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-host`). **An accepted period
 exchanged at most `K` bits**: the network certifier sits on the period's devices' links, on a machine the prover doesn't
 control, and signs the bits that cross them in either direction (its readings `dev`); the period's verdict reads its
 signed count and refuses a period past `K`. The challenger's coin stream isn't counted, and nothing else is left out
-(`CertifierSeesImports`). Open: the per-period form from the certifier's counts with `n_max · E_out`. -/
+(`CertifierSeesImports`, which gives it at the verdict `CountedWithin verdict cin cout K`). Open: the per-period form
+from the certifier's counts with `n_max · E_out`; the fold into `CertifierSeesImports` waits on `WorkSoundNoFold`'s
+witnesses, since it changes that guarantee's statement. -/
 def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
     (dev : Readings G P k Obs) (K : ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x → A.ext o x ≤ K
 
 /-- `pouw-own-dither` (proposed; the challenger on `trusted-host`). **Each
 replica's coins are its own**: the challenger issues every replica of a fleet of `N` its own dither and check coins,
-drawn fresh for it, so its randomness `Ω` gives every replica's coins together the uniform distribution (`coin`
+flipped fresh for it, so its randomness `Ω` gives every replica's coins together the uniform distribution (`coin`
 carries the uniform measure on `Ω` to the uniform measure on `Fin N → Fin k → Draw × Chk`). With each replica's own
 coins uniform, as `MomentSound`'s sample space has them, this makes the replicas' coins independent across the fleet.
 

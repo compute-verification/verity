@@ -1,13 +1,25 @@
 module
 
-public import Proofs.Flock.VBridge.Family.Rep
 public import Proofs.Flock.VBridge.Family.Openings
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # VBridge G at V*'s family: what a session's acceptance says of its registered reads
 
 A session's acceptance (`Accepted`: `LiveAcceptsZKR` and a `Good` layer) constrains its registered reads `zo.rd` in one
-direction only: every registered read is a row of a port `own` names, at a drawn unit (`ZkOuter.hown`, `OwnReads`), and
+direction only: every registered read is a row of a port `own` names, at a sampled proof block (`ZkOuter.hown`, `OwnReads`), and
 the layer agrees with the registrant there (`RegAgree`). It never says that a row is read, and `rd` is a field of the
 session the family builds, so which rows are registered reads, and what the registrant's value there is, are the
 family's choice.

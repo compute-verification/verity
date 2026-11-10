@@ -1,13 +1,13 @@
-"""A served H1 window's drawn units staged as C-Flock statements (a J10-R K's a statement a call, a lanes-form K's each
+"""A served H1 window's sampled proof blocks staged as Flock statements (a J10-R K's a statement a call, a lanes-form K's each
 unit's lanes and combine), and the statements file core's credit verifies
 (``--statements``, `credit.STATEMENT_KEYS`), from the serve dir and the prover's own state. ``benchmarks/pouw/h1_prove/drawn.py``
 is its CLI, which reads ``--checkpoint`` with the live challenger's model registry (``checkpoint_weights``) and binds
 ``check`` to credit's own verification (``verified``), running `run` on its arguments.
 
-    drawn stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
+    sampled stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
                 [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
-    drawn statements --work W --out FILE
-    drawn check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY
+    sampled statements --work W --out FILE
+    sampled check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY
 
 SERVE_DIR is serve-openai's ``--out`` (`served_verdicts.sh`'s D): the window's record ``h1/w<WINDOW>/pouw-h1-calls.json``,
 the declared Program ``h1/window-program.json.gz`` and the period ``period.json`` (its ``draw_k``, else ``--k``); the
@@ -16,9 +16,9 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
 
 ``stage``:
 
-1. The draw is core's (`challenger.drawn_of`: `credit.drawn` of the record's draw coin over the descriptor's layout at the
-   period's K), grouped by call: a call's drawn units are one statement (a ``--registered`` port holds one root).
-2. Each drawn call's ``--registered`` file is credit's own (`credit.registered_file` of the record's entries, the
+1. The sample is core's (`challenger.drawn_of`: `credit.drawn` of the record's sampling coin over the descriptor's layout at the
+   period's K), grouped by call: a call's sampled proof blocks are one statement (a ``--registered`` port holds one root).
+2. Each sampled call's ``--registered`` file is credit's own (`credit.registered_file` of the record's entries, the
    window's root, its rounds and its Program salt, `challenger.program_salt_of`), so the statement opens every row where
    credit's verifier reads it. Every port of the statement's circuit must be one of its ports (`complete`, the Lean
    verifier's ``registered reads (complete)``), o0 the unit's receipt among them: the window must register each call's
@@ -42,12 +42,12 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
    W/plan.json lists them.
 
 **The lanes form** (`credit`'s, `leaf_lanes`): at a K --circuits' manifest commits as ``lane<K>`` and ``combine<K>``
-(`credit.form_of`; `pouw_h1_circuits --lanes K`), each drawn unit is a leaf proved as its (R/4)(C/8) lanes and the combine
+(`credit.form_of`; `pouw_h1_circuits --lanes K`), each sampled proof block is a leaf proved as its (R/4)(C/8) lanes and the combine
 (`leaf_lanes.statements`, their rows `drawn_rows`'), each a statement of one instance on its committed file, so a K
-whose tile statement is past C-Flock's block (K 2048 on the 32 × 32 tile) is proved in pieces each within it. The leaf is
+whose tile statement is past Flock's block (K 2048 on the 32 × 32 tile) is proved in pieces each within it. The leaf is
 v1's (`credit.lanes_shape` refuses any other, J10-R's among them). Its partials (`h1zy.lane_partial` of each lane's
-rows) are committed after the draw, ``<prefix>partials@<u>`` under the window's draw root (`produced.commit`), all of them one produced record
-(`produced.record`, the draw coin's); its call's receipts ``receipt@<c>`` are rebuilt as the word reference computes them
+rows) are committed after the sample, ``<prefix>partials@<u>`` under the window's sample root (`produced.commit`), all of them one produced record
+(`produced.record`, the sampling coin's); its call's receipts ``receipt@<c>`` are rebuilt as the word reference computes them
 (`receipt_value`, `h1zy.reference` of each of the call's units) and held to the root the window registered; each
 statement's ``--registered`` file is credit's own (`credit.leaf_registered_file`), its known rows (``pub``, ``admit`` and
 ``o0``) committed under `leaf_lanes.known_salt`, and its ok the word reference's (`h1zy.lane_reference`,
@@ -57,12 +57,18 @@ under ``leaves`` beside the record (``produced``) and each leaf Program's descri
 ``<file>.program.json``).
 
 ``statements``: after each W/c<call>/ and W/u<unit>-<statement>/ is proved (`hidden_zk/job.sh`'s ``session``: exactly
+<<<<<<< 0941037006
 one session, all its instances drawn, its prover under the ZK server on those two files, ``h1_prove/drawn.sh``), the
 statements file: each call's `challenger.statement` (circuit, pub.bin, its
+||||||| merged common ancestors
+one session, all its instances drawn), the statements file: each call's `challenger.statement` (circuit, pub.bin, its
+=======
+one session, all its instances sampled), the statements file: each call's `challenger.statement` (circuit, pub.bin, its
+>>>>>>> 7af4d24fca3e
 session), and with leaves the lanes evidence (`credit.LANES_KEYS`: ``leaf_programs``, ``produced`` and those statements
 with each leaf statement's ``unit`` and ``statement``).
 
-``check``: credit's own verification of those statements over the window's drawn units under its draw (``verified``:
+``check``: credit's own verification of those statements over the window's sampled proof blocks under its sample (``verified``:
 the CLI's is `credit._verified` with the Lean ``flock-verify`` at FLOCK_VERIFY, then `credit._proved`), the prover's look
 before it hands them over: ``PROVED`` or ``REFUSED``. Credit's verdict of record (`verifier.RECORD_VERDICT` ``lean``,
 `PouwCheck.Verified`, the lanes form among it) is the Lean's; this is the Python reference's. Each verifier run is
@@ -88,12 +94,26 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw import weights as Wt
+<<<<<<< 0941037006
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+||||||| merged common ancestors
+from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.one_stage import produced as PR
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
+=======
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot.one_stage import produced as PR
+from verity.core.protocols.spot.one_stage import registered as G
+>>>>>>> 7af4d24fca3e
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.pouw.h1.drawn_rows import (LEAF_NAMES, LEAF_OUT_ROWS, LEAF_PROGRAM, complete, held,
                                                      leaf_rows, leaf_statement, operands, outputs_held, partials,
@@ -114,8 +134,8 @@ _random = os.urandom
 #: (n, K) and f32 s_w (n,), in the window's order
 CheckpointWeights = Callable[[Path, Sequence[tuple[str, int, int]], int], list[tuple[np.ndarray, np.ndarray]]]
 #: ``check``'s verifier: (the statements, --circuits' manifest's ``files`` (``k<K>``, or ``lane<K>``, ``combine<K>`` and
-#: ``leaf_programs``), the window (`window_of`, its ``draw`` among it), its drawn units, the Lean ``flock-verify``) -> each
-#: drawn unit's proof outcomes and None, or None and credit's refusal
+#: ``leaf_programs``), the window (`window_of`, its ``draw`` among it), its sampled proof blocks, the Lean ``flock-verify``) -> each
+#: sampled proof block's proof outcomes and None, or None and credit's refusal
 Verified = Callable[[Any, dict, dict, list[int], Path], tuple[Any, tuple[str, str] | None]]
 
 
@@ -224,7 +244,7 @@ def draw_k(serve_dir: Path, k: int | None) -> int:
 
 
 def drawn_calls(win: dict, k: int) -> dict[int, list[int]]:
-    """Core's draw of the window at K, by call: ``{call: [global unit, ...]}``, ascending."""
+    """Core's sample of the window at K, by call: ``{call: [global unit, ...]}``, ascending."""
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     units, why = PHC.drawn_of(win["record"], {"root": win["root"]}, k, win["raw"])
     if why is not None:
@@ -347,7 +367,7 @@ def weights_key(a: Any, win: dict) -> tuple[bytes, str]:
 
 def call_rows(win: dict, call: int, units: list[int], reg: dict, values: dict[str, G.Registered], pub: G.Registered,
               ok: G.Registered) -> dict[str, np.ndarray]:
-    """The statement's rows of call `call`'s drawn `units` as `statement_tables` takes them (``w_``, ``s_``, and for a
+    """The statement's rows of call `call`'s sampled `units` as `statement_tables` takes them (``w_``, ``s_``, and for a
     registered port ``r_``, ``v_``, ``p_``): each port of credit's file `reg` at the row it reads, from `values` (each
     value's rebuilt tree, the call's receipt table among them for o0), the public table `pub` and the ok rows `ok`."""
     ports = reg["ports"]
@@ -371,7 +391,7 @@ def unit_outputs(z: dict, win: dict, k: int, roots: tuple[bytes, bytes]) -> dict
     """Each staged unit's outputs as J10-R's word reference computes them (`h1zy.reference`, chunked by
     `chunks_reference`) on its rows, the window's Program salt, its position, its call's roots and (u0, blocks): ``o0``
     its receipt's u16 words, ``o1`` its ok. Refused when a unit's ok is not 1 (its record is not its rows' product)."""
-    from verity.core.protocols.pouw.circuit import h1zy as Z
+    from verity.ml.protocols.pouw.circuit import h1zy as Z
     lay, (r, c), x = win["layout"], tuple(win["layout"]["tile"]), Wt.chunks(k)
     u0, salt = int(z["u0"]), bytes.fromhex(win["salt"])
     n = next(nn for name, kk, nn in lay["linears"] if name == lay["calls"][int(z["call"])][0])
@@ -518,7 +538,7 @@ def leaf_stagers(k: int, tile: Sequence[int], circuits: Path, manifest: dict) ->
 
 def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, G.Registered], rebuild: Callable,
                  work: Path, circuits: Path, manifest: dict, plan: dict) -> list[G.Registered]:
-    """K's drawn lanes-form leaves `units`, each staged as its lanes and the combine on K's committed files
+    """K's sampled lanes-form leaves `units`, each staged as its lanes and the combine on K's committed files
     (`leaf_stagers`), into ``plan``'s ``leaves`` and ``leaf_programs``; their partials' trees, which the plan's produced
     record holds (`stage`). ``values``: the window's rebuilt values so far, which `rebuild` (value, call) adds to."""
     lay = win["layout"]

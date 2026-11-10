@@ -1,6 +1,5 @@
 module
 
-public import Flock.Canon
 public import RemoteAudit.Flight
 
 /-!
@@ -8,7 +7,7 @@ public import RemoteAudit.Flight
 
 At most one live registration a node (the red team's KB-4). `register` draws a codec seed (`Registration.register`) only
 for a node with none live: a second while one is live is refused and counted (`refused`), and draws nothing, so a retry
-never redraws. A session runs over its node's live registration, drawn by this registry, as its k-th, k its sessions so
+never resamples. A session runs over its node's live registration, sampled by this registry, as its k-th, k its sessions so
 far: the epoch its coins are committed under (`coins.SessionCoins`, epoch k of the one challenger). A registration ends only
 when the verifier closes it (`close`), which counts each of its sessions as it stands: "accepted", the failure that
 rejected it, or `UNENDED`, counted as failed. `drawn` is R, the registrations a node has had, closed and live.
@@ -76,7 +75,7 @@ def liveDigest (r : Registry) (node : ByteArray) : Except String (Option ByteArr
   pure ((r.live.find? (·.node == node)).map (·.digest))
 
 /-- R: the registrations the node has had, closed and live, each under a codec seed of its own. -/
-def drawn (r : Registry) (node : ByteArray) : Except String Nat := do
+def sampled (r : Registry) (node : ByteArray) : Except String Nat := do
   let node ← node? node
   pure ((r.closed.filter (·.node == node)).size + if r.live.any (·.node == node) then 1 else 0)
 
@@ -96,7 +95,7 @@ def register (r : Registry) (source node : ByteArray) (blocks : Nat) (payloadRoo
 
 /-- The next session over the node's live registration, `Session.State.init` on its parameters and coins, as its k-th
 (`index`, if given, must be k), at `inFlight` windows in flight (`Flight`) and `perCoin` windows a draw's openings coin
-(`Shared`); refused for a registration that isn't its node's live one, drawn here. -/
+(`Shared`); refused for a registration that isn't its node's live one, sampled here. -/
 def session (r : Registry) (reg : Registration) (params : Session.Params) (coins appendCoins : Array ByteArray)
     (notBeforeNs : Nat) (index : Option Int) (inFlight : Nat := 2) (perCoin : Nat := 1) : Option (Nat × Registry) := do
   let x ← r.live.find? (·.node == reg.node)

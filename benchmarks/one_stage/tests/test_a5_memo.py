@@ -1,6 +1,6 @@
 """a5's memo (`a5_memo.memo`), each of the one-stage verifier's pure checks asked once per input. Under it a5's negatives
-on the challenger's coins, each its own `service.Stream` on the honest draw's bytes (`a5_coins.Replay`) registering the
-same record, reuse the registration's checks and draw, and each outcome is the one it has without the memo, refused at
+on the challenger's coins, each its own `service.Stream` on the honest sample's bytes (`a5_coins.Replay`) registering the
+same record, reuse the registration's checks and sample, and each outcome is the one it has without the memo, refused at
 the Lean run's select (`coins`); a changed registration or copy (a root, a root's domain, the ports bound to another run,
 a program of one proof block fewer) is checked again and refused as before; a verdict the Lean refused is never kept, and
 a hit is a copy. A toy window of two templates."""
@@ -14,8 +14,8 @@ from pathlib import Path
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R, verifier as V
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -40,7 +40,9 @@ PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
     ("population", "N, the draw's range"), ("window", "provenance"), ("leaves:x", "x's leaf count"),
     ("domain:x", "x's served domain"), ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain"),
     *((f"population:{P.template_id(t)}", "a template's stratum") for t in WINDOW)))
-SPEC = S.Spec(VALUES, S.Law("stratified:3"),
+#: one of the PAIR and three of the 9 TRIPLEs
+RULE = S.Law("stratified-rate:1/3")
+SPEC = S.Spec(VALUES, RULE,
               S.Check(tuple(P.program_digest(Program(t)) for t in WINDOW), QUERY, proof_deadline=60.0), PUBLIC,
               bytes.fromhex(ROOT))
 VERDICTS = {"lean": {"of_record": True, "accepted": True, "digest": "dd" * 64, "sessions": [SESSION]}}
@@ -61,16 +63,23 @@ def _ports(run: str = RUN) -> dict:
             for p, leaves in (("x", n), ("out", 2 * n))}
 
 
+def _table(program: Program | None = None) -> dict:
+    return S.selection_table(RULE, program or _program(), QUERY, None)
+
+
 def _record() -> dict:
     ports = _ports()
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
-    return R.record(_program(), QUERY, {"law": "stratified", "k": 3}, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0})
+    law = S.selection_law(RULE, sum(COUNTS.values()), D.strata_sizes(_program(), QUERY))
+    return R.record(_program(), QUERY, law, S.SCHEME, roots,
+                    {"kind": "served", "run": RUN, "row": 0}, work_table=_table())
 
 
 def _check(rec: dict | None = None, program: Program | None = None, ports: dict | None = None):
     """R1-R7 by the verifier on the toy window's registration and the verifier's copies, each a new object each call."""
-    law = S.selection_law(SPEC.selection, sum(COUNTS.values()))
-    return V.check(rec or _record(), program or _program(), QUERY, law, S.SCHEME, ports or _ports())
+    program = program or _program()
+    law = S.selection_law(SPEC.selection, sum(COUNTS.values()), D.strata_sizes(program, QUERY))
+    return V.check(rec or _record(), program, QUERY, law, S.SCHEME, ports or _ports(), work_table=_table(program))
 
 
 def _asked(monkeypatch) -> Counter:
@@ -85,8 +94,8 @@ def _asked(monkeypatch) -> Counter:
 
 
 def _negatives() -> dict[str, dict]:
-    """a5's negatives on the challenger's coins: each its own stream on the honest draw's bytes, registering the same record
-    (in its window), drawing, and its outcome with its evidence. -> by name: accepted, the Lean run's side, the record."""
+    """a5's negatives on the challenger's coins: each its own stream on the honest sample's bytes, registering the same record
+    (in its window), sampling, and its outcome with its evidence. -> by name: accepted, the Lean run's side, the record."""
     out = {}
     for name, (coins, window) in NEGATIVES.items():
         s = S.Stream(SPEC, WINDOW, budget=1, delta=0.5, challenger="a5 memo test, challenger", coins=AC.Replay(READ),

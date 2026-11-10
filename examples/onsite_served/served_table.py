@@ -38,8 +38,8 @@ from verity.core.deploy import config as K
 from verity.core.deploy.config import Component, Workload
 from verity.core.deploy.manifest import Channel, Role
 from verity.core.protocols.pous import wipe_parties as WP
-from verity.core.protocols.sampled_proofs import parties as SP
-from verity.core.protocols.sampled_proofs.one_stage.draw import parse_law
+from verity.core.protocols.spot import parties as SP
+from verity.core.protocols.spot.one_stage.draw import parse_design
 from verity.core.wire import Refused
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -65,7 +65,7 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 
 def _law(law: str, params: Mapping[str, Any]) -> None:
     try:
-        parse_law(law)
+        parse_design(law)
     except ValueError as e:
         raise Refused("law", str(e)) from None
 
@@ -233,11 +233,19 @@ def _serve(cfg, params, bound):
 _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "gate-key": "PP_GATE_KEY"}
 
 
+<<<<<<< 0941037006
 def _sampled_proofs_challenger(cfg, params, bound):
     """The live challenger's bindings; with no gate bound the sample's coins are a local development session's, which
     served_verdicts.sh takes only in a development run."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
     return hooks if "gate" in bound else {**hooks, "DEVELOPMENT": "1"}
+||||||| merged common ancestors
+def _sampled_proofs_challenger(cfg, params, bound):
+    return {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
+=======
+def _spot_challenger(cfg, params, bound):
+    return {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
+>>>>>>> 7af4d24fca3e
 
 
 def _pouw(cfg, params, bound):
@@ -267,7 +275,7 @@ def _certifier_piece(cfg, params, bound):
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
-              "requests, every closed window sealed and the audited window picked; then sampled proofs' records audit "
+              "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
               "(C-Flock --zk behind the Lean firewall, the Lean verifier) and each listed component's piece",
               scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
 #: each listed component's party -> its piece
@@ -279,9 +287,17 @@ PARTIES: dict[str, dict[str, Piece]] = {
                         "one at a time, in the records audit"),
         WORKERS: Piece("sampled-proofs", WORKERS, SERVED_WINDOW, "the window's values committed under hiding leaves "
                        "and sealed, its registration before the draw, and the drawn proof blocks proved in C-Flock --zk; "
+<<<<<<< 0941037006
                        "the draw on the live challenger when its gate is bound, else on a local development session's "
                        "coins in a development run", reaches=CHALLENGER, optional=tuple(_PP),
                        hooks=_sampled_proofs_challenger),
+||||||| merged common ancestors
+                       "the draw on the live challenger when its gate is bound, else on the records audit's own live "
+                       "coins", reaches=CHALLENGER, optional=tuple(_PP), hooks=_sampled_proofs_challenger),
+=======
+                       "the draw on the live challenger when its gate is bound, else on the records audit's own live "
+                       "coins", reaches=CHALLENGER, optional=tuple(_PP), hooks=_spot_challenger),
+>>>>>>> 7af4d24fca3e
         VERIFIER: Piece("sampled-proofs", VERIFIER, CHECK, "the onsite check: served_verdicts.py record over the "
                         "window's rows (the records audit's verdict the integrity row), the composed verdict and the "
                         "block record", scripts=(VERDICTS_SCRIPT,)),

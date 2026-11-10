@@ -20,7 +20,7 @@ meta import PousCheck.Run
   the verifier's list of memory-challenger keys, which never comes from the run's record;
 * the commitment: the setup's public outputs (`SetupProtocol.Public.toJson`), which the prover published before any
   challenge; its digest SHA-512 of those bytes;
-* the evidence: `{"digests": hex, "session": Run.ChallengerRecord.toJson, "setup": {"commitment": hex,
+* the evidence: `{"digests": hex, "session": Run.ChallengePhaseRecord.toJson, "setup": {"commitment": hex,
   "evidence": hex}}`, the memory challenger's table of `C*`, the session it signed, and the setup's own commitment and
   evidence as its case carries them (`SetupProtocol`'s `w_commitment ‖ salt` and `C*` framed);
 * the check: `accepts`, the verifier's whole decision, its first refusal the reason: setup accepts `C*` against the
@@ -109,7 +109,13 @@ def SetupEvidence.ofJson (j : Json) : V SetupEvidence := do
 
 structure Evidence where
   digests : ByteArray
+<<<<<<< ours
   session : Run.ChallengerRecord
+||||||| base
+  session : Run.Session
+=======
+  session : Run.ChallengePhaseRecord
+>>>>>>> theirs
   setup : SetupEvidence
 
 def Evidence.toJson (e : Evidence) : Json :=
@@ -119,8 +125,17 @@ def Evidence.toJson (e : Evidence) : Json :=
 `C*`'s hex inside it, so its text is kept to compare the evidence's encoding against rather than written again. -/
 def decodeEvidence (b : ByteArray) : V Evidence := do
   let (j, s) ← Core.Canonical.read b
+<<<<<<< ours
   let e : Evidence := ⟨← hexAt j "digests" "evidence",
     ← Run.ChallengerRecord.ofJson (← J.get j "session" "evidence"), ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩
+||||||| base
+  let e : Evidence := ⟨← hexAt j "digests" "evidence", ← Run.Session.ofJson (← J.get j "session" "evidence"),
+    ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩
+=======
+  let e : Evidence := ⟨← hexAt j "digests" "evidence",
+    ← Run.ChallengePhaseRecord.ofJson (← J.get j "session" "evidence"),
+    ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩
+>>>>>>> theirs
   if !(← Core.Canonical.writes e.toJson s) then
     throw "not the canonical JSON of what it holds (a field extra, or a constant not the protocol's)"
   pure e
@@ -141,9 +156,9 @@ def familyCertificate (w c0 blocks : Nat) : Option Certificate.CapacityBound :=
   else none
 
 /-- `p2.WIDE_CLAIMS`: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks
-(`P2RingRoundSecureWide`, `RingDeviceAt`). -/
+(`P2RingRoundSecureWide`, `RingDeviceAt`, `CoinCommitHides (coinViewAt N)`). -/
 def WIDE_CLAIMS : List String :=
-  Certificate.P2_CLAIMS ++ ["p2-ring-round-secure-wide", "pous-ring-device-at"]
+  Certificate.P2_CLAIMS ++ ["p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding"]
 
 /-- `p2.wide_certificate`: `Pous.Period.SecurityProofs.periodHeldAt` for a store at the registered width and prime of
 any block count from `2^19` to `2^27` (`p2.CERT_WIDE_BLOCKS`), in any number of segments: an accepted period with no
@@ -235,7 +250,7 @@ def tie (pt : Run.Point) (c : SetupProtocol.Commitment) (C : Array (Array ByteAr
 
 /-- The verifier's whole decision on a run at `pt` under `schemes`: the setup tie, then the composed check. -/
 def accepts (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Commitment)
-    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord)
+    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord)
     (sid : ByteArray) : Except String Unit := do
   tie pt c C pub
   Run.checkAt schemes pt trusted pub digests r sid
@@ -247,7 +262,7 @@ def check (schemes : Schemes) (p : Params) (pub : SetupProtocol.Public) (e : Evi
   | .error reason => .reject reason
 
 theorem accepts_iff (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Commitment)
-    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord)
+    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord)
     (sid : ByteArray) :
     accepts schemes pt trusted c C pub digests r sid = .ok () ↔
       SetupProtocol.protocol.check pt.params c C = .accept pub () ∧
@@ -278,7 +293,7 @@ theorem accepts_iff (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArr
 and publishes `pub`, and `Run.check` accepts the run against `pub`, word for word that definition's body
 (`q = P2.Params.deployed`). -/
 theorem accepts_deployed (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord) (sid : ByteArray) :
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray) :
     accepts SCHEMES Run.DEPLOYED trusted c C pub digests r sid = .ok () ↔
       SetupProtocol.protocol.check P2.Params.deployed c C = .accept pub () ∧
         Run.check trusted pub digests r sid = .ok () :=

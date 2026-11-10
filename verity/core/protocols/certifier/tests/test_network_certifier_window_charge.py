@@ -11,9 +11,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.certifier import arith_encode as AE, window_charge as WC
+from verity.core.protocols.certifier import arith_encode as AE
+from verity.ml.protocols.certifier import window_charge as WC
 from verity.core.protocols.certifier.head_check import ands
-from verity.core.protocols.sampled_proofs.one_stage import produced
+from verity.core.protocols.spot.one_stage import produced
 from verity.ml.commitments import hm96
 
 FIXTURE = Path(__file__).parent / "fixtures" / "arith_encode_vectors.json"

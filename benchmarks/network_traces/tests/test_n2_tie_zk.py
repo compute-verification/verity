@@ -51,7 +51,7 @@ def test_each_members_references_give_its_verdicts():
 
 
 def test_the_provers_known_rows_are_the_verifiers_exactly_where_the_reference_accepts():
-    """Every port of the statement is one of the verifier's registered reads (C-Flock's `Registered.checkComplete`): its
+    """Every port of the statement is one of the verifier's registered reads (Flock's `Registered.checkComplete`): its
     file names ``wit`` at the warden's root and ``pub`` and ``o0`` at known content, and the prover's rows of those
     (`n2_tie_zk.known`) have the verifier's roots exactly where its ``pub`` rows are the verifier's and every output
     word is 1, so Lean's registered reads refuse each window the reference refuses: carried's window 1 at ``pub``,

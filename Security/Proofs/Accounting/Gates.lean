@@ -1,18 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Fin
-public import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
-public import Mathlib.Algebra.BigOperators.Group.Finset.Sigma
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.Ring.GeomSum
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Data.Int.Interval
-public import Mathlib.Data.List.GetD
-public import Mathlib.NumberTheory.LegendreSymbol.Basic
-public import Mathlib.Tactic.IntervalCases
-public import Mathlib.Tactic.NormNum.Basic
-public import Mathlib.Tactic.Ring
 public import Definitions.Accounting.Guarantees.Gates
+public import Mathlib.Algebra.Field.ZMod
+import Mathlib.Data.Int.Interval
+import Mathlib.Data.List.GetD
+import Mathlib.NumberTheory.LegendreSymbol.Basic
 
 /-!
 # The circuit model's window and lower bounds, proved
@@ -969,7 +961,7 @@ theorem p1024_squarings : p1024.squarings = 1021 := by
 `p ≡ 3 mod 4`). `2^n − c` with `n ≥ 68` and `c ≡ 1 mod 4`, `c ≤ 2^66`, is inside it, p1024 among them. Outside it the
 premises claim nothing, so the counterexamples outside it don't refute them: at `ε = 0`, at `k = 0` and at a field
 narrower than a byte `ChainSum` holds, and the one-draw circuit behind the `ε = 0` counterexample is right on more than
-`ε` of the draws at no `ε` and field the floor admits. -/
+`ε` of the samples at no `ε` and field the floor admits. -/
 
 /-- A field `2^n − c` with `n ≥ 68`, `c ≡ 1 mod 4` and `c ≤ 2^66` is inside the premises' floor on `p`. -/
 theorem floor_of_pow_sub (n c : ℕ) (hn : 68 ≤ n) (hc : c % 4 = 1) (hc' : c ≤ 2 ^ 66) :
@@ -1006,25 +998,25 @@ example (F : Field) (B e εnum εden : ℕ) : ChainSum F 0 B e εnum εden := by
   intro _ hk
   exact absurd hk (lt_irrefl 0)
 
-/-- Inside the floor one draw is never more than `ε` of the draws, so the circuit behind
-`encodeChainHardness_false_eps0`, right on one draw, computes no word at any `ε` and field the floor admits. -/
-example (F : Field) (k εnum εden : ℕ) (d : Draw k) (hε : εden ≤ 2 ^ 64 * εnum) (hk : 0 < k)
-    (hp : 2 ^ 66 ≤ F.p) : ¬ MoreThan (draws F k) {d} εnum εden := by
+/-- Inside the floor one sample is never more than `ε` of the samples, so the circuit behind
+`encodeChainHardness_false_eps0`, right on one sample, computes no word at any `ε` and field the floor admits. -/
+example (F : Field) (k εnum εden : ℕ) (d : Sample k) (hε : εden ≤ 2 ^ 64 * εnum) (hk : 0 < k)
+    (hp : 2 ^ 66 ≤ F.p) : ¬ MoreThan (samples F k) {d} εnum εden := by
   intro h
   unfold MoreThan at h
   rw [Finset.card_singleton, Nat.mul_one] at h
   have hp2 : 2 ≤ F.p := le_trans (by norm_num) hp
-  have hc : F.p ≤ (draws F k).card := by
-    simp only [draws, Finset.card_product, Fintype.card_piFinset, Finset.card_range, Finset.prod_const,
+  have hc : F.p ≤ (samples F k).card := by
+    simp only [samples, Finset.card_product, Fintype.card_piFinset, Finset.card_range, Finset.prod_const,
       Finset.card_univ, Fintype.card_fin, Nat.card_Ico]
     have h1 : 1 ≤ 2 ^ F.n * (F.p - 1) := Nat.mul_pos (Nat.two_pow_pos _) (by omega)
     calc F.p ≤ F.p ^ k := Nat.le_self_pow hk.ne' _
       _ = F.p ^ k * 1 := (Nat.mul_one _).symm
       _ ≤ _ := Nat.mul_le_mul_left _ h1
-  have h3 : 2 ^ 64 * εnum ≤ εnum * (draws F k).card :=
+  have h3 : 2 ^ 64 * εnum ≤ εnum * (samples F k).card :=
     calc 2 ^ 64 * εnum ≤ 2 ^ 66 * εnum := Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by norm_num) (by norm_num))
-      _ ≤ (draws F k).card * εnum := Nat.mul_le_mul_right _ (hp.trans hc)
-      _ = εnum * (draws F k).card := Nat.mul_comm _ _
+      _ ≤ (samples F k).card * εnum := Nat.mul_le_mul_right _ (hp.trans hc)
+      _ = εnum * (samples F k).card := Nat.mul_comm _ _
   exact lt_irrefl _ (h.trans_le (hε.trans h3))
 
 /-! ## The fooling bound in units -/
@@ -1641,7 +1633,7 @@ def codecRows : List (ℕ × ℕ × List ℕ × ℕ × ℕ × ℕ × ℕ × ℕ)
 theorem encodeWord_codecRows :
     codecRows.all (fun (n, c, cs, K, τ, i, m, y) =>
       let F : Field := ⟨n, c⟩
-      let d : Draw cs.length := (fun r => cs.getD r 0, K, τ)
+      let d : Sample cs.length := (fun r => cs.getD r 0, K, τ)
       encodeWord F.p d.key (d.tweak F i) m == y) := by
   decide +kernel
 

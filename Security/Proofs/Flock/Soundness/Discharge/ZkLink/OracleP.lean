@@ -1,6 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkLink.Push
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The `--zk` table with every committed object an oracle

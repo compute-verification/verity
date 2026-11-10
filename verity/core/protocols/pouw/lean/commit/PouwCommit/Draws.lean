@@ -1,11 +1,10 @@
 module
 
-public import Randomness
 public import PouwCommit.Coins
-public import Identity.Domains
+public import Identity.Domains.Pouw
 
 /-!
-# The salts and draws PoUW derives (`verity.core.protocols.pouw.audit`; the clear audit's draws, `benchmarks/pouw/clear`)
+# The salts and samples PoUW derives (`verity.core.protocols.pouw.audit`; the clear audit's samples, `benchmarks/pouw/clear`)
 
 Each is `verity.ml.randomness.derive` (`FlockSoundness.Randomness.derive`) under PoUW's domains:
 
@@ -16,13 +15,13 @@ Each is `verity.ml.randomness.derive` (`FlockSoundness.Randomness.derive`) under
     replay_key     derive(value, "verity/pouw/pearl-c-draw/v1", {round, transcript, records, salt})
     draw_after     tagged("verity/pouw/pearl-c/draw-after/v1", transcript, records)
 
-`epochSalt` is `Epoch.start`'s salt: the opening must be the epoch's salt coin, opened after the weights' root, and is
+`epochSalt` is `Epoch.start`'s salt: the opening must be the execution phase's salt coin, opened after the weights' root, and is
 refused in `coin_reason`'s words, "the salt's …", as `Epoch.start` refuses it. `drawCoin` is `draw_coin`'s check of the
-epoch's draw coin. A key's source is nonempty bytes, which `derive` refuses otherwise.
+execution phase's sampling coin. A key's source is nonempty bytes, which `derive` refuses otherwise.
 
-`weightedDraw` is the work-weighted draw with replacement of `Sampled.select` and `clear_work.draw`: draw `j` is
+`weightedDraw` is the work-weighted sample with replacement of `Sampled.select` and `clear_work.draw`: sample `j` is
 `bisect_right(cumulative, key.uniform(total, j))` over the tickets' running sums. Python reads `uniform`'s stream for as long
-as it needs; the port reads `DRAW_WORDS` words of it and throws past them, which an exact draw reaches with probability
+as it needs; the port reads `DRAW_WORDS` words of it and throws past them, which an exact sample reaches with probability
 below `2^(-64·DRAW_WORDS)`.
 -/
 
@@ -45,7 +44,7 @@ def key? (source : ByteArray) (domain : String) (context : List (String × Part)
   if source.size = 0 then throw "source must be nonempty bytes: a key holder's secret"
   else pure (derive source domain context)
 
-/-- `salt_of`: the epoch's 32-byte salt from its opened salt coin. -/
+/-- `salt_of`: the execution phase's 32-byte salt from its opened salt coin. -/
 def saltOf (c : CoinCommitment) (coin weightsRoot : ByteArray) : Except String ByteArray := do
   let k ← key? coin EPOCH_SALT_DOMAIN [("epoch", .int c.epoch), ("coins", .bytes c.root), ("weights", .bytes weightsRoot)]
   pure (stream k [.str "salt"] SALT_BYTES)
@@ -55,14 +54,14 @@ def unverifiedSalt (seed weightsRoot : ByteArray) : Except String ByteArray := d
   let k ← key? seed SALT_DOMAIN [("weights", .bytes weightsRoot)]
   pure (stream k [.str "salt"] SALT_BYTES)
 
-/-- `Epoch.start`'s salt: `.ok salt`, or `.error` with `Epoch.start`'s refusal when `o` is not epoch `c.epoch`'s salt coin
+/-- `Epoch.start`'s salt: `.ok salt`, or `.error` with `Epoch.start`'s refusal when `o` is not execution phase `c.epoch`'s salt coin
 opened after `weightsRoot`. It throws where `coin_reason` raises. -/
 def epochSalt (c : CoinCommitment) (o : CoinOpening) (weightsRoot : ByteArray) : Except String (Except String ByteArray) := do
   match ← coinReason c o "salt" weightsRoot with
   | some r => pure (.error s!"the salt's {r}")
   | none => pure (.ok (← saltOf c o.coin weightsRoot))
 
-/-- `draw_coin`'s check: `.ok coin` when `o` is the epoch's draw coin opened after `after`, else `.error` with its words. -/
+/-- `draw_coin`'s check: `.ok coin` when `o` is the execution phase's sampling coin opened after `after`, else `.error` with its words. -/
 def drawCoin (c : Option CoinCommitment) (o : CoinOpening) (after : ByteArray) :
     Except String (Except String ByteArray) := do
   let some c := c | pure (.error "the epoch has no coin commitment for its draw coin to open against")
@@ -74,27 +73,27 @@ def drawCoin (c : Option CoinCommitment) (o : CoinOpening) (after : ByteArray) :
 def auditKey (source transcriptRoot salt : ByteArray) : Except String ByteArray :=
   key? source AUDIT_DOMAIN [("transcript", .bytes transcriptRoot), ("salt", .bytes salt)]
 
-/-- `draw_key`: the Pearl-C draws' key from the epoch's draw coin. -/
+/-- `draw_key`: the Pearl-C samples' key from the execution phase's sampling coin. -/
 def drawKey (coin transcriptRoot recordsDigest salt : ByteArray) : Except String ByteArray :=
   key? coin DRAW_DOMAIN [("transcript", .bytes transcriptRoot), ("records", .bytes recordsDigest), ("salt", .bytes salt)]
 
-/-- `replay_key`: a recorded run's draws' key. -/
+/-- `replay_key`: a recorded run's samples' key. -/
 def replayKey (round : Nat) (value transcriptRoot recordsDigest salt : ByteArray) : Except String ByteArray :=
   key? value DRAW_DOMAIN
     [("round", .int round), ("transcript", .bytes transcriptRoot), ("records", .bytes recordsDigest), ("salt", .bytes salt)]
 
-/-- `draw_after`: what the verifier records before the challenger opens the draw coin. -/
+/-- `draw_after`: what the verifier records before the challenger opens the sampling coin. -/
 def drawAfter (transcriptRoot recordsDigest : ByteArray) : ByteArray :=
   tagged DRAW_AFTER_TAG [.bytes transcriptRoot, .bytes recordsDigest]
 
 /-- `bisect_right(cumulative, x)` on a nondecreasing list. -/
 def bisectRight (cumulative : List Nat) (x : Nat) : Nat := (cumulative.takeWhile (· ≤ x)).length
 
-/-- The words of `uniform`'s stream the port reads per draw. -/
+/-- The words of `uniform`'s stream the port reads per sample. -/
 def DRAW_WORDS : Nat := 16
 
-/-- `t` work-weighted draws with replacement over `tickets` under `key`: draw `j` is the ticket whose running sum first
-passes `key.uniform(total, j)`. Like Python, no draw reads the tickets when `t = 0`, and one throws when they sum to 0. -/
+/-- `t` work-weighted samples with replacement over `tickets` under `key`: sample `j` is the ticket whose running sum first
+passes `key.uniform(total, j)`. Like Python, no sample reads the tickets when `t = 0`, and one throws when they sum to 0. -/
 def weightedDraw (key : ByteArray) (tickets : List Nat) (t : Nat) : Except String (List Nat) := do
   if t = 0 then return []
   let cumulative := (tickets.foldl (fun (acc : Array Nat × Nat) w => (acc.1.push (acc.2 + w), acc.2 + w)) (#[], 0)).1.toList
@@ -107,7 +106,7 @@ def weightedDraw (key : ByteArray) (tickets : List Nat) (t : Nat) : Except Strin
     | some r => pure (bisectRight cumulative r)
     | none => throw s!"draw {j} read {DRAW_WORDS} words of its stream without one below the limit"
 
-/-- `clear_work.draw` over tickets numbered by position: the draws among the tickets above 0, by their positions, and none
+/-- `clear_work.draw` over tickets numbered by position: the samples among the tickets above 0, by their positions, and none
 when no ticket is above 0. -/
 def pearlDraw (key : ByteArray) (tickets : List Nat) (t : Nat) : Except String (List Nat) := do
   let tk := tickets.zipIdx.filter (·.1 > 0)

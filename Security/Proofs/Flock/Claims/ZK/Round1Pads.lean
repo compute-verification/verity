@@ -1,14 +1,49 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Round1
+public import Proofs.Flock.Claims.ZK.MaskedTables
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
+import Proofs.Flock.Claims.ZK.Round0
+import Proofs.Flock.Soundness.Discharge.Composed.Setup
 public import Proofs.Flock.Claims.Complete.ZkTables.Round1
+public import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 public import Proofs.Flock.Claims.ZK.Sent
 
 /-!
 # Round `1` of the masked session: the pads trees by tree position
 
-The masked session's second body binds table `0`'s rep `0` pads root (`Masked.liveRun_round1`). On the model's side a
-rep's pads leaf at tree position `p` commits `colPAt w b r p`. Here, at every coin vector of a `--zk` table:
+The masked session's second body absorbs table `0`'s rep `0` pads root (`FlockComplete.sessionPZk_go_round1`). On the
+model's side a rep's pads leaf at tree position `p` commits `colPAt w b r p`. Here, at every coin vector of a `--zk` table:
 
 * `Composed.coinedOf_sP_val`: each rep's pads tree places its opened positions and the others at their indices, where
   `Q ≤ n ≤ 2^63` for the pads code's length `n`.

@@ -4,21 +4,21 @@ public import Proofs.Flock.Soundness.Discharge.Tables.Sim
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 
 /-!
-# R11 for sessions of `J` tables: the live audit simulated in the salted audit
+# The refinement for sessions of `J` tables: the live audit simulated in the salted audit
 
-`execRefines_on` (`Exec/LiveOn.lean`) is R11 for one-table plans. This file is R11 for any plan: at each draw the live
-session is `liveSession` over the plan's `J` tables, written out as a session directory by `wr`, and the audit's
-session is `batchedSessionL` on the plan.
+`execRefines_on` (`Exec/LiveOn.lean`) is the refinement for one-table plans. This file is the refinement for any plan:
+at each sample the live session is `liveSession` over the plan's `J` tables, written out as a session directory by `wr`,
+and the audit's session is `batchedSessionL` on the plan.
 
 * `sessionBL_eq_modelSession`: the salted session on the tables `ts` is `modelSession`'s, with table `j`'s reps
   `repsOf A (ts.get j)` and output `tableOutL`.
 * `live_le_sessionBLJ`: against any live prover of `liveSession`, the live verdict is no likelier than the salted
   session's acceptance (every table's) against the simulated prover (`live_le_session` at `sessionBL_eq_modelSession`).
-* `DecodesOnJ`: the decoder is right on the sessions flock-verify accepts, at the law's draws, table by table: on every
+* `DecodesOnJ`: the decoder is right on the sessions flock-verify accepts, at the sampling design's samples, table by table: on every
   live outcome flock-verify accepts, table `j`'s reps run on the tapes decoded from its streams `(j, 0)`, `(j, 1)` and
-  its proof files, and the salted table's verdict on those runs holds. One `DecodesTable` per draw, registration and
+  its proof files, and the salted table's verdict on those runs holds. One `DecodesTable` per sample, registration and
   table; at one table it is `DecodesOn`'s.
-* `simAuditJ`, `execRefines_tables`: the audit strategy built from a live one, and R11 at it with `bad = ⊥`.
+* `simAuditJ`, `execRefines_tables`: the audit strategy built from a live one, and the refinement at it with `bad = ⊥`.
 -/
 
 @[expose] public section
@@ -86,7 +86,7 @@ theorem live_le_sessionBLJ (A : Arith 𝔽 K) (H : List UInt8 → D) (E : Merkle
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The live audit's session at a draw**: `liveSession` over the plan's tables, its outcome written out as the
+/-- **The live audit's session at a sample**: `liveSession` over the plan's tables, its outcome written out as the
 session directory by `wr` (the record the challenger writes, and the proof files). -/
 def liveOfJ (dg : ByteArray → ByteArray) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (N : ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (plan S R).length mPts → Transcript)
@@ -103,8 +103,8 @@ variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (plan S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (plan S R).length → Cap D) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify accepts, at the law's draws, table by table** (R11b, named):
-at every draw `L.draw ω`, registration `R` and table `j` of the plan, on every live outcome whose session directory
+/-- **The decoder is right on the sessions flock-verify accepts, at the sampling design's samples, table by table** (the decoder premise, named):
+at every sample `L.draw ω`, registration `R` and table `j` of the plan, on every live outcome whose session directory
 flock-verify accepts, table `j`'s reps run on the tapes decoded from its streams and its proof files, and the salted
 table's verdict on those runs, with the cap `root_B` decodes to and the openings and salts the proof files decode to,
 holds. -/
@@ -116,8 +116,8 @@ def DecodesOnJ (L : Law n) : Prop :=
 
 variable {L : Law n}
 
-/-- **The simulated audit strategy**, from the decoder at the law's draws: the live prover's registration, and at each
-draw the simulated session strategy against its live session. -/
+/-- **The simulated audit strategy**, from the decoder at the sampling design's samples: the live prover's registration, and at each
+sample the simulated session strategy against its live session. -/
 noncomputable def simAuditJ (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfJ dg plan N wr))) :
     Strategy (audit L Reg (batchedSessionL H E Lf plan)) :=
@@ -127,10 +127,10 @@ noncomputable def simAuditJ (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin 
       (Strategy.ofMap (wr (L.draw ω) τ.1) _
         (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
-/-- **R11 for sessions of `J` tables.** Against any live prover `τ` of the live audit whose session at each draw is
-`liveSession` over the plan's tables, written out by `wr`, flock-verify's acceptance is no likelier than the salted
-audit's acceptance against the simulated prover `simAuditJ … τ`, with no live event added (`bad = ⊥`), whenever the
-decoder is right on accepted sessions at the law's draws, table by table (`DecodesOnJ`). -/
+/-- **The refinement for sessions of `J` tables.** Against any live prover `τ` of the live audit whose session at each
+sample is `liveSession` over the plan's tables, written out by `wr`, flock-verify's acceptance is no likelier than the
+salted audit's acceptance against the simulated prover `simAuditJ … τ`, with no live event added (`bad = ⊥`), whenever
+the decoder is right on accepted sessions at the sampling design's samples, table by table (`DecodesOnJ`). -/
 theorem execRefines_tables (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfJ dg plan N wr))) :
     ExecRefines (auditLive L Reg (liveOfJ dg plan N wr)) τ (LiveAccepts I) (fun _ => False)

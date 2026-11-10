@@ -8,13 +8,19 @@ owned by window (the committer view the step committed into): a take that doesn'
 and that wait is the worker's, so the serving thread's next slot wait (in its step) carries it; a take that the open window's own
 bytes leave no room for is refused by name, since no release can come before that window closes.
 
-`gather` is the release's: given the drawn leaves of a step it copies exactly their bytes to host as a `DrawnRanges` and the
+`gather` is the release's: given the sampled leaves of a step it copies exactly their bytes to host as a `DrawnRanges` and the
 step's device views are dropped; a read of any other leaf of the step is refused by name (`DrawnRanges.dropped`), never answered
+<<<<<<< 0941037006
 from a recomputation. The step's tree levels and salt key stay, so a drawn leaf's opening path is whole.
 
 A failed run ends every take waiting on the pool by name (`DevicePool.fail`, from `serve_release.Draws.fail`): the step fails
 uncommitted rather than wait on a release that won't come. A window that reaches no release (its draws or its close failed) is
 `discard`ed: every byte it retained dropped, its pieces freed, any read of it refused by name.
+||||||| merged common ancestors
+from a recomputation. The step's tree levels and salt key stay, so a drawn leaf's opening path is whole.
+=======
+from a recomputation. The step's tree levels and salt key stay, so a sampled leaf's opening path is whole.
+>>>>>>> 7af4d24fca3e
 """
 from __future__ import annotations
 
@@ -118,7 +124,7 @@ class DevicePool:
 
 
 class DrawnRanges(_HostRanges):
-    """A released step's retained bytes: exactly its drawn leaves' (``drawn``, leaf indices), on host. Any other byte was dropped at
+    """A released step's retained bytes: exactly its sampled leaves' (``drawn``, leaf indices), on host. Any other byte was dropped at
     the release, and a read of it is refused by name (`DROPPED`), never routed to a replay."""
 
     dropped = True
@@ -155,7 +161,7 @@ def pool_key(com: Any) -> Any:
 
 def release(com: Any, drawn: Mapping[int, Iterable[int]]) -> dict[str, Any]:
     """`NativeCollectCommitter.release_drawn` over ``com`` (a window view, or a committer whose steps are one window): by step, its
-    drawn leaves `gather`ed, the rest dropped, its pool pieces freed; the record of what was kept and dropped."""
+    sampled leaves `gather`ed, the rest dropped, its pool pieces freed; the record of what was kept and dropped."""
     if getattr(com, "released", None) is not None:
         raise RuntimeError("release_drawn: this window was released already")
     waited = com.wait_absorbed() if callable(getattr(com, "wait_absorbed", None)) else 0.0
@@ -203,7 +209,7 @@ def discard(com: Any, why: str) -> dict[str, Any] | None:
 
 
 def gather(blk: Any, used: int, leaves: Iterable[int], chunk: int) -> DrawnRanges:
-    """The drawn ``leaves`` of a step whose retained block is ``blk`` (any of the committer's retainers), copied to host."""
+    """The sampled ``leaves`` of a step whose retained block is ``blk`` (any of the committer's retainers), copied to host."""
     leaves = list(leaves)
     padded = -(-int(used) // chunk) * chunk
     pin = torch.cuda.is_available()

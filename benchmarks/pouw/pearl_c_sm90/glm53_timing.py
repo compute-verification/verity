@@ -28,11 +28,23 @@ Arms, each one linear's call on a BF16 x of M rows:
   eager arm's bound (`replay_error`); ``slowdowns_graphed`` gives each pearlc arm over the fastest stock one, and a call
   torch can't capture, or whose replay misses x·Wᵀ, is recorded.
 
+<<<<<<< 0941037006
 A stock or plain arm that can't be built (not importable, refused, or outside 0.08 rel RMS of x·Wᵀ), or fails at an M, is
 recorded with its error and left out there.  Each rep times every arm once, in an order rotated each rep, each sample
 `INNER` calls back to back between CUDA events on the current stream, so a host-bound call's gaps count.  The slowdown is
 ``pearlc`` over the fastest stock arm's median, at each (n, k, M), beside γ at both FADD readings (`glm53.gamma`);
 ``slowdowns`` gives each pearlc arm's, and ``slowdowns_plain`` each's over the fastest plain arm, eager or graphed.  Every
+||||||| merged common ancestors
+A stock arm that can't be built (not importable, refused, or outside 0.08 rel RMS of x·Wᵀ) is recorded with its error and
+left out.  Each rep times every arm once, in an order rotated each rep, each sample `INNER` calls back to back between CUDA
+events on the current stream, so a host-bound call's gaps count.  The slowdown is ``pearlc`` over the fastest stock arm's
+median, at each (n, k, M), beside γ at both FADD readings (`glm53.gamma`); ``slowdowns`` gives each pearlc arm's.  Every
+=======
+A stock arm that can't be built (not importable, refused, or outside 0.08 rel RMS of x·Wᵀ) is recorded with its error and
+left out.  Each rep times every arm once, in an order rotated each rep, each sample `INNER` calls back to back between CUDA
+events on the current stream, so a host-bound call's gaps count.  The slowdown is ``pearlc`` over the fastest stock arm's
+median, at each (n, k, M), beside the gap at both FADD readings (`glm53.gamma`); ``slowdowns`` gives each pearlc arm's.  Every
+>>>>>>> 7af4d24fca3e
 hashing pearlc arm's passes must commit what ``pearlc``'s commit (`COMMITMENT`) and serve y's bytes, and so must one pass of
 each from poisoned outputs (``agree``).  Writes ``timing.json`` in DIR, one row a point; exits non-zero when any arm differs.
 

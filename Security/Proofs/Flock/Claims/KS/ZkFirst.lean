@@ -1,6 +1,40 @@
 module
 
+public import Proofs.Flock.Claims.KS.LiveMix
+public import Proofs.Flock.Claims.KS.ZkDecodeW
 public import Proofs.Flock.Claims.KS.ZkEvent
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.ConflictRun
 public import Proofs.Flock.Claims.KS.PlainFirst
 
 /-!
@@ -9,10 +43,10 @@ public import Proofs.Flock.Claims.KS.PlainFirst
 `PlainFirst` and `PlainThird` under `--zk`, at the live session at `J` tables and the witness-lane verdict at table
 `j` (`AccTxJ`). `zk_first_of_sim` bounds `V true`'s accepting runs whose reader looks up no column of table `j` off
 `C` by the average over a tape of the live session's `AccTxJ`, from a simulation alone (`ZkSim`): coins `Φ (u, r')` of
-`V true` with the law of uniform coins, and a prover `P'` of the live session whose live outcome at the tape `(ω, u)`
+`V true` with the sampling design of uniform coins, and a prover `P'` of the live session whose live outcome at the tape `(ω, u)`
 is the run's wherever `V true` accepts at `Φ (u, r')` (`ZkSimRun`, `viewOf`). Unlike the plain bound it reads no
-draw in the record: `accTxJ_of_run` reads the setup at the statement's draw. At `zkCoins`, where each deployed coin
-takes a live coin's first entries and the rest from the tape, the law holds (`zkSim_of_run`), so `zk_first_of_run`
+sample in the record: `accTxJ_of_run` reads the setup at the statement's sample. At `zkCoins`, where each deployed coin
+takes a live coin's first entries and the rest from the tape, the sampling design holds (`zkSim_of_run`), so `zk_first_of_run`
 asks only for `ZkSimRun`, deterministic; and at those coins a deployed event that a live event implies bounds the
 mixture, the third bound's form (`zkMix_le_of_run`).
 -/
@@ -59,7 +93,7 @@ def ZkSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (J : 
 
 end Gen
 
-/-- **A prover of the live session at `J` tables simulates `P`**, under `--zk`: the coins `Φ (u, r')` have the law of
+/-- **A prover of the live session at `J` tables simulates `P`**, under `--zk`: the coins `Φ (u, r')` have the sampling design of
 uniform coins, and `P'` simulates `P` on them (`ZkSimRun`). -/
 def ZkSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (J : Claims.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
     (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire nMax (J x) mPts) {τ : Type}
@@ -72,7 +106,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A prover of the live session at `J` tables simulates `P`**, under `--zk`: the coins `Φ (u, r')` have the law of
+/-- **A prover of the live session at `J` tables simulates `P`**, under `--zk`: the coins `Φ (u, r')` have the sampling design of
 uniform coins, and `P'` simulates `P` on them (`ZkSimRun`). -/
 def ZkSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (J : Claims.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
     (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire nMax (J x) mPts) {τ : Type}
@@ -103,7 +137,7 @@ variable [S : ZkSetup]
 
 open Classical in
 /-- **The masked mixture's first bound, from a simulation**: at a masked statement `x` that sets up at `s₀` with inputs
-`I` and draw `d`, at `J x ≤` its tables above `j`, if a prover `P'` of the live session at `J` tables simulates `P`
+`I` and sample `d`, at `J x ≤` its tables above `j`, if a prover `P'` of the live session at `J` tables simulates `P`
 (`ZkSim`), then the accepting runs whose reader looks up no column of table `j` off `C` are no likelier than the
 average over `u` of `AccTxJ` at table `j` against `P'`'s strategies, at the root of `P`'s first message
 (`Pr_le_liveMix`, `accTxJ_of_run`). -/
@@ -148,7 +182,7 @@ end Gen
 
 open Classical in
 /-- **The masked mixture's first bound, from a simulation**: at a masked statement `x` that sets up at `s₀` with inputs
-`I` and draw `d`, at `J x ≤` its tables above `j`, if a prover `P'` of the live session at `J` tables simulates `P`
+`I` and sample `d`, at `J x ≤` its tables above `j`, if a prover `P'` of the live session at `J` tables simulates `P`
 (`ZkSim`), then the accepting runs whose reader looks up no column of table `j` off `C` are no likelier than the
 average over `u` of `AccTxJ` at table `j` against `P'`'s strategies, at the root of `P`'s first message
 (`Pr_le_liveMix`, `accTxJ_of_run`). -/
@@ -171,7 +205,7 @@ theorem zk_first_of_sim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω 
 
 open Classical in
 /-- **The masked mixture's first bound, from a simulation of the runs**: `zk_first_of_sim` with the deployed coins as
-the tape and `zkCoins` as the coins, whose law is uniform (`zkSim_of_run`), so it asks only for `ZkSimRun`,
+the tape and `zkCoins` as the coins, whose sampling design is uniform (`zkSim_of_run`), so it asks only for `ZkSimRun`,
 deterministic. -/
 theorem zk_first_of_run {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {M : ℕ}
     (C : Fin M → List 𝔽) (j : ℕ) (J : Claims.Msg → ℕ) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec}

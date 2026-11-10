@@ -1,7 +1,7 @@
 """warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
 the offline check of a run whose network certifier is driven tick by tick on a `VirtualClock`, its records certified by
-an LMS key: the check accepts the run, whose server got each request with its release order under the run id
-`deployment.json` names, and refuses a record that isn't what was certified, a cell that reached its client in
+an LMS key: the check accepts the run, whose server got each request with its release order and bucket under the run
+id `deployment.json` names, and refuses a record that isn't what was certified, a cell that reached its client in
 another bucket, and a response that isn't the record's; a window in which the network certifier refused a connection is
 certified and signed nowhere; and a window's slow commit, which faults the next window when it runs in the network
 certifier's process, moves no tick in `serve`'s publisher process."""
@@ -22,13 +22,14 @@ import pytest
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, VirtualClock
 from verity.core.protocols.certifier.grid import Reason
-from verity.core.protocols.certifier.release import with_release
+from verity.core.protocols.certifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
 from verity.core.protocols.certifier.warden import (END, REFUSED, Shim, Warden, WardenParams, cells, read_cell,
                                                     reason_frame)
 
 HERE = Path(__file__).resolve().parents[1]
+#: a text rehearsal's schedule: its responses are vLLM's stock framing, so its egress form is bytes
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
-                      ingress_buckets=30, egress_cells=128)
+                      ingress_buckets=30, egress_cells=128, egress="bytes")
 SESSION = bytes(range(32))
 #: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
 PROCESS_CLOCK: list[VirtualClock] = []
@@ -456,6 +457,60 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
     assert ws.dechunk(b"3\r\nabc\r\n2\r\nd") == (b"abcd", False)
 
 
+def test_the_fake_endpoint_reads_the_watermark_stream_to_its_end_and_answers_nothing():
+    """`rehearse --fake --watermark`: the network certifier's watermark stream (`release`'s `POST /verity/watermark`)
+    isn't a completion request, so the fake endpoint takes all of it, answers nothing and closes; `serve --watermark`
+    and `rehearse --watermark` both take the flag."""
+    stream = watermark_head(bytes(32)) + b"".join(watermark_chunk(t, n) for t, n in ((0, 0), (1, 2), (2, 2))) + \
+        watermark_chunk(3, 4, [2]) + WATERMARK_END
+
+    async def main() -> bytes:
+        server = await asyncio.start_server(lambda r, w: ws.fake_endpoint(r, w, sleep=_no_sleep), "127.0.0.1", 0)
+        reader, writer = await asyncio.open_connection("127.0.0.1", server.sockets[0].getsockname()[1])
+        writer.write(stream)
+        writer.write_eof()
+        data = await reader.read()
+        writer.close()
+        server.close()
+        return data
+
+    assert asyncio.run(main()) == b""
+    serve = ["serve", "--upstream", "h:1", "--listen", "h:0", "--out", "o", "--key", "k", "--session", "00",
+             "--windows", "1"]
+    assert [ws.parser().parse_args(serve + extra).watermark for extra in ([], ["--watermark"])] == [False, True]
+    assert ws.parser().parse_args(["rehearse", "--fake", "--out", "o", "--watermark"]).watermark
+
+
+def test_serve_releases_the_id_form_unless_told_and_rehearse_names_its_traffics_form(tmp_path):
+    """`serve` is the deployed network certifier, so its egress form is the egress record's id form unless `--egress`
+    names another; `rehearse` names its traffic's, id with `--ids` and bytes for its text, and passes it to its
+    `serve`, whose deployment's digest binds it. A text response through the id form fails its connection at its first
+    cell (format), and the check names it."""
+    serve = ["serve", "--upstream", "h:1", "--listen", "h:0", "--out", "o", "--key", "k", "--session", "00",
+             "--windows", "1"]
+    rehearse = ["rehearse", "--fake", "--out", "o"]
+    forms = [ws._params(ws.parser().parse_args(argv)).egress for argv in
+             (serve, serve + ["--egress", "bytes"], rehearse, rehearse + ["--ids"], rehearse + ["--egress", "id"])]
+    assert forms == ["id", "bytes", "bytes", "id", "id"]
+    for argv, form in ((rehearse, "bytes"), (rehearse + ["--ids"], "id")):
+        flags = ws._flags(ws.parser().parse_args(argv))
+        assert flags[flags.index("--egress") + 1] == form
+        assert ws._params(ws.parser().parse_args(serve + flags)) == ws._params(ws.parser().parse_args(argv))
+    with pytest.raises(SystemExit):
+        ws.parser().parse_args(serve + ["--egress", "text"])
+
+    out = tmp_path / "run"
+    out.mkdir()
+    gated = dataclasses.replace(PARAMS, egress="id")
+    requests = [ws.http_request({"prompt": "x"}, "h:1")]
+    warden = _run(out, tmp_path / "key", requests, [_response([" a"])], params=gated)
+    assert [(c["failed"], c["failed_at"]) for c in warden.log] == [("format", 0)]
+    deployment = json.loads((out / "deployment.json").read_text())
+    assert deployment["params"]["egress"] == "id" and deployment["digest"] == gated.digest.hex() != PARAMS.digest.hex()
+    problems = ws.check(out)["problems"]
+    assert any("connection 1 failed closed (format) at egress cell 0" in p for p in problems), problems
+
+
 def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():
     """`rehearse --ids`: an `id_traffic` request, sent network-certifier-form (`active.id_request`), is answered with
     its `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
@@ -616,10 +671,10 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
     servers: list[_Writer] = []
     warden = _run(out, key, requests, responses, servers=servers)
-    release = {e["ordinal"]: e["release"] for e in warden.log}
-    assert sorted(release.values()) == [0, 1, 2]
+    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in warden.log}
+    assert sorted(n for n, _ in release.values()) == [0, 1, 2]
     assert [b"".join(d for _, d in s.writes) for s in servers] == \
-        [with_release(r, release[k + 1], warden.run_id) for k, r in enumerate(requests)]
+        [with_release(r, release[k + 1][0], warden.run_id, release[k + 1][1]) for k, r in enumerate(requests)]
     assert json.loads((out / "deployment.json").read_text())["run_id"] == warden.run_id.hex()
     result = ws.check(out)
     assert result["accepted"], result["problems"]

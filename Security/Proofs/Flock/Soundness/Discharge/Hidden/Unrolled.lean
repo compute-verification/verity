@@ -1,11 +1,32 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 public import Proofs.Flock.Soundness.Discharge.Zero.Stack
-public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
-public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 public import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
+import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+import Proofs.Flock.Soundness.ParseStmt
+import Proofs.Flock.Soundness.TmplNetOK
+import Proofs.Flock.Soundness.TmplUnitAt
+import Proofs.Flock.Soundness.TmplUnitNet
+import Proofs.Flock.Soundness.TmplUnrollAt
 
 /-!
 # The committed circuit's keys from the statement circuit's

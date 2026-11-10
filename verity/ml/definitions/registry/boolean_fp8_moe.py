@@ -8,10 +8,13 @@ one's word view is its `_v1` composite at the same statics (`elementwise.on_bits
 
     MoeExpertFp8BlockCoordinate(W)_v4{K,G,KB,SWAP,DOT}, MoeExpertFp8BlockGemm(W)_v4{K,N,G,KB,SWAP,DOT}
                     word view `_v3`, `DOT` a Boolean e4m3 k32 step read as its word view (`BlackwellE4m3QmmaDot32_v2`)
+    MoeExpertFp8ReadGemm(W)_v1{READ,K,N,G,KB,SWAP,DOT}
+                    the `_v4` GEMM over the N rows `READ` opens: (tok, root, domain, row, salt, path, xq, sx, [g,] ws) -> (y, ok)
     GatherE4m3x{E}_v2, GatherF32x{E}_v2, MoeExpertFp8Row_v2{E,K}, MoeExpertFp8ScaleRow_v2{E,K},
     MoeExpertFp8Coordinate(W)_v2{E,K,G,KB,SWAP,DOT}, MoeExpertFp8Gemm(W)_v2{E,K,N,G,KB,SWAP,DOT},
     MoeExpertFp8CoordinateChunk_v2{E,K,G,KB,SWAP,DOT,FIRST,LAST}
-                    word view `fp8_moe_experts`' `_v1`; each gather `boolean_gather`'s multiplexer tree over the id's 32 bits (E <= 1024)
+                    word view `fp8_moe_experts`' `_v1`; each gather `boolean_gather`'s multiplexer tree over the id's 32 bits
+                    (`GatherE4m3x{E}_v2` for E <= 1024; `GatherF32x{E}_v2` is `boolean_gather.gather_f32`'s at every E)
 
 The callees are `verity.ml.circuits.ops.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` and `F2fpBf16_v2`, `verity.ml.circuits.ops.boolean.scalar`'s FP32 pieces,
 `boolean_moe.NvExpf_v2` and `boolean_fp8.Fp8RowScale_v2`; the constant words are constant bits and `-g` is one NOT gate on g's sign bit
@@ -22,7 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.boolean import elementwise as EW
@@ -136,6 +139,58 @@ MoeExpertFp8BlockGemmWV4 = EW.on_bits("MoeExpertFp8BlockGemmW", 4, ["K", "N", "G
                                       _gemm_w_dot, M.MoeExpertFp8BlockGemmWV3, lifted=["DOT"])
 
 
+# --- a pair's GEMM over the weight rows it reads itself: one proof block opens a block of its expert's rows from a table
+# registered one expert a row and multiplies by them, so the rows are no block's input or output.  `READ` is the read,
+# `commitments.gates.embedding`'s `EmbeddingRead_v1{V, N K / 2}` where served: a static, as `DOT` is, so this module imports
+# no commitment code.
+
+#: a read's ports: its hidden key, the table's root and domain id, and the opening (the row, its salt, its path)
+READ_PORTS = ("tok", "root", "domain", "row", "salt", "path")
+
+
+def _read_ports(S) -> tuple:
+    """`READ`'s parameters, refused (ValueError) unless it is a read of the block's N K / 2 u16 words: `READ_PORTS` in, (h, ok)
+    out, h the block's N rows of K e4m3 bytes (a word's low byte first) and ok its verdict."""
+    if (S.N * S.K) % 2:
+        raise ValueError(f"a block of N = {S.N} rows of K = {S.K} e4m3 bytes is no whole number of u16 words")
+    params, ret = S.READ.signature()
+    want = Tuple(Array(S.N * S.K // 2, BF16), BL.BIT)
+    if tuple(n for n, _ in params) != READ_PORTS or ret != want:
+        raise ValueError(f"READ = {S.READ.id} is not a read of N K / 2 = {S.N * S.K // 2} u16 words: it takes "
+                         f"{[n for n, _ in params]} and returns {ret!r}; bind EmbeddingRead_v1{{V, H = N K / 2}}")
+    return tuple(params)
+
+
+def _read_gemm_sig(routed: bool):
+    def sig(S):
+        gemm = tuple(p for p in M.gemm_sig(routed, E4M3, F32, BF16)(S)[0] if p[0] != "w")
+        return _read_ports(S) + gemm, Tuple(Array(S.N, BF16), BL.BIT)
+    return sig
+
+
+def _read_gemm(routed: bool):
+    def body(B, S, tok, root, domain, row, salt, path, *operands):
+        h, ok = B.call(S.READ, tok, root, domain, row, salt, path)
+        *lead, ws = operands
+        gemm = bind(MoeExpertFp8BlockGemmWV4 if routed else MoeExpertFp8BlockGemmV4, K=S.K, N=S.N, G=S.G, KB=S.KB, SWAP=S.SWAP,
+                    DOT=S.DOT)
+        return tuple_of(B.call(gemm, *lead, h.reshape(Array(S.N, Array(S.K, E4M3))), ws), ok)
+    return body
+
+
+_READ_CONF = ("exact-model-tested as its two parts, whose composition it is (the vLLM tests' program/test_fp8_moe_per_expert.py): "
+              "READ (EmbeddingRead_v1: Embedding_v1's row on a registered table) and MoeExpertFp8BlockGemm(W)_v4")
+_READ_GEMM = ["READ", "K", "N", "G", "KB", "SWAP", "DOT"]
+MoeExpertFp8ReadGemmV1 = CompositeDefinition(
+    "MoeExpertFp8ReadGemm", 1, _READ_GEMM, _read_gemm_sig(False), _read_gemm(False), conformance=_READ_CONF,
+    doc="MoeExpertFp8BlockGemm_v4{K, N, G, KB, SWAP, DOT} over the N rows READ opens at tok: (y, ok), ok READ's verdict; the "
+        "ports READ's (tok, root, domain, row, salt, path), then xq, sx, ws")
+MoeExpertFp8ReadGemmWV1 = CompositeDefinition(
+    "MoeExpertFp8ReadGemmW", 1, _READ_GEMM, _read_gemm_sig(True), _read_gemm(True), conformance=_READ_CONF,
+    doc="MoeExpertFp8BlockGemmW_v4{K, N, G, KB, SWAP, DOT} over the N rows READ opens at tok: (y, ok), ok READ's verdict; the "
+        "ports READ's (tok, root, domain, row, salt, path), then xq, sx, g, ws")
+
+
 # --- the expert-indexed pair forms (`fp8_moe_experts`) on bits: version 2 of each, the gathers the multiplexer tree over the id's bits
 
 _GATHERS: dict[tuple[str, int], Any] = {}
@@ -159,8 +214,8 @@ def gather_e4m3(vocab: int) -> Any:
 
 
 def gather_f32(vocab: int) -> Any:
-    """`GatherF32x{V}_v2`: `GatherF32x{V}_v1` on bits."""
-    return _gather("GatherF32", vocab, F32, X.F32_NAN_FILL, X.gather_f32(vocab))
+    """`GatherF32x{V}_v2`: `GatherF32x{V}_v1` on bits, `boolean_gather`'s one Definition at every V."""
+    return BGA.gather_f32(vocab)
 
 
 def _row(B, S, e, slab):

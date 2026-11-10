@@ -25,7 +25,7 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
 - ``L3b``, one state row. A key block's running state (max, lane sums, O) is three rows, each hashed and re-leafed by its
   reader; as one row it is one.
 - ``W`` and ``R``, ports by reference: a reader's wired or registered port is the writer's or the pinned weight's leaves
-  (a drawn member's port tree is derived at the audit), so no input row is re-leafed.
+  (a sampled member's port tree is derived at the audit), so no input row is re-leafed.
 - ``P``, shared output rows (`commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
   fresh row's fixed cost is paid a KiB, not a unit's few bytes (its readers re-leaf as many rows as before, and a unit reads
   its segment for a few thousand ANDs, which this doesn't price).
@@ -55,8 +55,16 @@ from pathlib import Path
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import WindowClass
 
+<<<<<<< 0941037006
 from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.sampled_proofs.optimize import SHA512_ROWS
+||||||| merged common ancestors
+from verity.core.protocols.pous import wipe_monitoring
+from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
+=======
+from verity.core.protocols import reporting
+from verity.core.protocols.spot.optimize import SHA512_ANDS
+>>>>>>> 7af4d24fca3e
 from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
@@ -82,11 +90,23 @@ CAP = 64
 ROOT_JSON_BYTES = 360
 #: the H200's rates, compressions a second: a measured step and commit_gpu's peak (`commit_slots`)
 RATES = {"3.1 G/s": 3.1e9, "4.79 G/s": 4.79e9}
+<<<<<<< 0941037006
 #: the reference datacenter's GPUs: the census deployment whose role is reference (`benchmarks/census/deployments.json`)
 _REF = next(d for d in json.loads((HERE.parent / "census" / "deployments.json").read_text()) if d["role"] == "reference")
 GPUS = _REF["machines"] * _REF["gpus_per_machine"]
 #: core's monitoring periods (`wipe_monitoring`), seconds by name
 PERIODS = dict(wipe_monitoring.PERIODS)
+||||||| merged common ancestors
+#: the reference datacenter (`benchmarks/census/deployments.json`, dc-12500-machines-600s)
+GPUS = 12_500 * 8
+#: core's monitoring periods (`wipe_monitoring`), seconds by name
+PERIODS = dict(wipe_monitoring.PERIODS)
+=======
+#: the reference datacenter (`benchmarks/census/deployments.json`, dc-12500-machines-600s)
+GPUS = 12_500 * 8
+#: core's monitoring periods (`reporting`), seconds by name
+PERIODS = dict(reporting.PERIODS)
+>>>>>>> 7af4d24fca3e
 
 
 @dataclass(frozen=True)

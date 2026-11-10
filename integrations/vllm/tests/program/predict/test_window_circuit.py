@@ -32,10 +32,10 @@ from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit, window_circuit
 from verity_vllm.records import weights_registration as WRG
 
-from verity.core.protocols.certifier import ingress_scan as IS
+from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.pouw import audit as AU
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
@@ -185,16 +185,17 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     """Each allocation's slots sit side by side in its template, so every slot's copy of a wire or read pattern is one: the
-    class of record's slots at 2 and at 8 Programs have the same 118 wires besides the scan's, 88 registered reads (87
-    of the weights, one of the scan state), root reads, openings and 59 inference entries, the 8 Programs 4 times the units.
+    class of record's slots at 2 and at 8 Programs have the same 118 wires besides the scan's, the same 159 ranges in
+    their order (`interface.ordered`), 88 registered reads (87 of the weights, one of the scan state), root reads,
+    openings and 59 inference entries, the 8 Programs 4 times the units.
     The scan's wires are a lane's outputs (lane-major, so a lane's slots follow on), each output named for its lane: its
     token, slot, head and the entry's occupancy word (4 at 2 Programs, both lane 0's, and 4 a lane at 8), whatever the
     boundaries."""
     reg = S._registered()
     two, eight = (class_circuit(reg, SLOTS, n, GRAIN, provable=False) for n in (2, None))
     shape = [(len(c.wires), len(c.registered.reads), len(c.registered.roots), len(c.registered.openings),
-              len(c.blocks.inference)) for c in (two, eight)]
-    assert shape == [(122, 88, 2, 1, 59), (134, 88, 2, 1, 59)] and two.ids == eight.ids
+              len(c.blocks.inference), len(c.order)) for c in (two, eight)]
+    assert shape == [(122, 88, 2, 1, 59, 159), (134, 88, 2, 1, 59, 159)] and two.ids == eight.ids
     scan = IF.descriptor_id(next(fn for fn, _ in eight.templates if fn.name == "ScanSlots"))
     assert [sum(w.writer == scan for w in c.wires) for c in (two, eight)] == [4, 4 * SLOTS.lanes]
     assert sum(n for _, n in eight.templates) == 4 * sum(n for _, n in two.templates) == 5552
@@ -290,9 +291,10 @@ def test_a_slots_outputs_are_its_selects_collected_into_its_entry(window):
 
 def test_a_slots_entry_stops_at_the_registered_models_stop_ids(window):
     """The entry's ``STOP`` is `stop_ids`, the registered model's config's ``eos_token_id`` (an id, a list of them or none):
-    TINY declares none, Llama-3.2-1B one (128001), and a list is its set in order."""
+    TINY declares one (255), Llama-3.2-1B one (128001), and a list is its set in order."""
     circuit, ids = window
-    assert circuit.template(ids[ENTRY]).bindings["STOP"] == WC.stop_ids(S._registered()) == ()
+    assert circuit.template(ids[ENTRY]).bindings["STOP"] == WC.stop_ids(S._registered()) == (255,)
+    assert WC.stop_ids(S._registered({k: v for k, v in S.TINY.items() if k != "eos_token_id"})) == ()
     assert WC.stop_ids(S._registered({**S.TINY, "eos_token_id": 128001})) == (128001,)
     assert WC.stop_ids(S._registered({**S.TINY, "eos_token_id": [9, 3, 9]})) == (3, 9)
 
@@ -745,7 +747,7 @@ def test_the_verifier_holds_the_committers_registration_to_its_weights_records_s
     the verifier pins its roots only where it registers exactly the record's parameters at their shapes, but those it
     names unrooted (`registration_pins`), and a window
     records only a registration (`advice.registered_weights`): never a weights record, nor one of another model than the
-    run served. A key that isn't 32 bytes draws no salt; a committer registers no checkpoint its manifest pins as another
+    run served. A key that isn't 32 bytes samples no salt; a committer registers no checkpoint its manifest pins as another
     model, and a shard the manifest doesn't pin leaves the checkpoint not of record, which no committer registers."""
     reg = S._registered()
     d, man = _checkpoint(tmp_path)
@@ -856,7 +858,7 @@ def test_a_window_its_slots_dont_place_is_refused_by_name():
 
 
 def _unit_rows(circuit) -> dict[str, int]:
-    """Each template's rows in and out under the circuit's cuts, as C-Flock's `UnitStager` takes them
+    """Each template's rows in and out under the circuit's cuts, as Flock's `UnitStager` takes them
     (`interface.unit_rows`)."""
     return {_label(fn): sum(map(len, IF.unit_rows(fn, circuit.cuts.get(IF.descriptor_id(fn))))) for fn, _ in circuit.templates}
 
@@ -880,7 +882,7 @@ def test_no_unit_holds_more_rows_in_and_out_than_the_grain(window):
 
 
 def _widest_row(circuit) -> dict[str, int]:
-    """Each template's widest row in or out under the circuit's cuts, in bytes, as C-Flock's `UnitStager` frames them (bit
+    """Each template's widest row in or out under the circuit's cuts, in bytes, as Flock's `UnitStager` frames them (bit
     rows of exactly their words, `interface.unit_rows`)."""
     out = {}
     for fn, _ in circuit.templates:
@@ -909,7 +911,7 @@ def test_a_class_too_small_to_prove_is_refused_naming_each_template_c_flock_woul
     assert named == set(short)
 
 
-#: the smallest test class C-Flock proves every unit of: a head of 64 values (one of 16 has no row past 111 bytes at any
+#: the smallest test class Flock proves every unit of: a head of 64 values (one of 16 has no row past 111 bytes at any
 #: class), prompts of 27 ids (the feed's slot 112 bytes) and one output, GEMM slices of 64 columns (a key's value one row)
 #: and a token select of one unit of 512 logits (32 groups: its indices a row of 128 bytes, which its collector and the
 #: entry share its unit with)
@@ -920,7 +922,7 @@ PROVABLE_CLASS, PROVABLE_GRAIN = WindowClass(2, 27, 1), Grain(gemm_words=8192, r
 
 def test_the_smallest_provable_test_class_lowers_every_unit_to_a_proof_block():
     """At `PROVABLE`'s model, class and grain the class builder's check passes (`interface.check_proof_block`): its 3,996
-    units of 43 templates each have a row past 111 bytes and are proof blocks C-Flock's composer takes, its token selects
+    units of 43 templates each have a row past 111 bytes and are proof blocks Flock's composer takes, its token selects
     a `TokenSelectGroups_v1{512, 16}` unit and a combine with the position's collector a position a slot, the last
     position's with the entry."""
     circuit = class_circuit(S._registered(PROVABLE), PROVABLE_CLASS, None, PROVABLE_GRAIN)

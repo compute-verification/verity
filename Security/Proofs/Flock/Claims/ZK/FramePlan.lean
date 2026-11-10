@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.ZK.FrameAsks
 public import Proofs.Flock.Claims.ZK.FrameSched
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # A rep's scheduled rounds against its plan
@@ -75,7 +77,7 @@ def naLift (coins : Got) : Sched.Lift (M := OpenM) (stepAsks coins false) where
 two more. -/
 theorem piop_na (coins : Got) (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap root : ByteArray)
     (extras : Array _root_.Flock.Claim) (mk : ℕ → F128) (hd : st.digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64)
-    (hr : root.size < 2 ^ 64) (hm : st.m < 2 ^ 64) (t : Transcript) (ht : Sched.TrAlike t t) (got : Got) :
+    (hr : root.size < 2 ^ 64) (hm : st.m < 2 ^ 64) (t : Flock.Transcript) (ht : Sched.TrAlike t t) (got : Got) :
     NA (fun r => r.1.1.2.2.size = extras.size + 2)
       (((_root_.Flock.Firewall.Finish.repPiop (stepAsks coins false) st lay cap root extras mk).run t).run got) :=
   na_mono (fun _ ⟨_, ⟨_, hs⟩, _⟩ => hs) _
@@ -87,11 +89,11 @@ theorem sp_na_bind {α β : Type} {Q : α → Prop} {R : β → List ℕ → Pro
   | .fail _, _ => trivial
   | .ask .., h => h.elim
 
-theorem sp_run' {α : Type} {p : TMW OpenM α} {t : Transcript} {s : Got} {ns : List ℕ}
+theorem sp_run' {α : Type} {p : TMW OpenM α} {t : Flock.Transcript} {s : Got} {ns : List ℕ}
     (h : SP (fun _ _ => True) ((p.run t).run s) ns) : SP (fun _ _ => True) ((p.run' t).run' s) ns := by
   refine sp_bind (Q := fun _ _ => True) (fun _ _ _ => ?_) _ _ (sp_bind (fun _ _ _ => ?_) _ _ h) <;> exact trivial
 
-theorem sp_getThe_bind {β : Type} {R : β × Transcript × Got → List ℕ → Prop} {f : Got → TMW OpenM β} {t : Transcript}
+theorem sp_getThe_bind {β : Type} {R : β × Flock.Transcript × Got → List ℕ → Prop} {f : Got → TMW OpenM β} {t : Flock.Transcript}
     {got : Got} {ns : List ℕ} (h : SP (fun r => R (r.1.1, r.1.2, r.2)) (((f got).run t).run got) ns) :
     SP (fun r => R (r.1.1, r.1.2, r.2)) (((getThe Got >>= f).run t).run got) ns := h
 

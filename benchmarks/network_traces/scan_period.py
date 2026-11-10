@@ -6,7 +6,8 @@ and its Lean.
         [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
+  and one schedule, its integer fields: the period check reads the id egress form, and a run in another is refused),
+  the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
   the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
@@ -51,7 +52,8 @@ sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
 import warden_serve as WS  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
+from verity.core.protocols.certifier.warden import INTEGER_FIELDS  # noqa: E402
+from verity.core.protocols.spot.one_stage import registration as RG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
 CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
@@ -79,6 +81,8 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
     in place of ``answers.json``'s."""
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
+    if dep["params"].get("egress", "id") != "id":
+        raise SystemExit(f"{run}: the period check's schedule is the id egress form's, not {dep['params']['egress']!r}'s")
     doc = json.loads((scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [json.loads(v3c.read_text())]
@@ -101,7 +105,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": [],
               "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
-              "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
+              "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": {k: dep["params"][k] for k in INTEGER_FIELDS},
               "session": dep["session"], "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
     evidence = canonical_json({"audits": [a["answer"] for a in audits], "windows": [

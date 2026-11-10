@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.LigeritoPhases
+public import Proofs.Flock.Soundness.LigeritoOOD
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.LigeritoQueries
 
 /-!
 # From one level to the next (`Flock.Ligerito` steps 5–8)

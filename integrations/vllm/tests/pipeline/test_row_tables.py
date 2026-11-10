@@ -20,7 +20,7 @@ from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as OG
 from verity.ml.commitments import row_table as RT
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
 from verity_vllm.commit import index as IX, row_tables as RTB
 from verity.ml.windows import rows as CS, tables as TB
 from verity_vllm.pipeline import serving_rows as SRW
@@ -95,19 +95,19 @@ class Served:
         return {op: (ids, np.stack(xs), np.array(ss, dtype=np.float32)) for op, (ids, xs, ss) in out.items()}
 
 
-def window(row_tables: bool = True) -> tuple[CS.Binding, Served, list]:
+def window(row_tables: bool = True, law=None, work_table=None) -> tuple[CS.Binding, Served, list]:
     s = Served()
     ms = SRW.members([COORD], [s.rows], [UNITS], {COORD: CAP})
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
-    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms), tables,
-                  CTX.hex() if row_tables else "")
+    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), law or D.parse_design("stratified:2"), RUN, tuple(ms),
+                   tables, CTX.hex() if row_tables else "", work_table)
     return w, s, ms
 
 
-def committed(monkeypatch, row_tables: bool = True, **kw) -> tuple[CS.Committed, Served, list]:
-    w, s, ms = window(row_tables)
+def committed(monkeypatch, row_tables: bool = True, law=None, work_table=None, **kw) -> tuple[CS.Committed, Served, list]:
+    w, s, ms = window(row_tables, law, work_table)
     monkeypatch.setattr(SRW, "_operand", s.operand)
     got = SRW._read_s8(ms, s.rows, s, None, ARRIVALS)
     return CS.commit(w, [g[0] for g in got], salt_key=bytes(32), row_salt_key=ROW_KEY, **kw), s, got
@@ -281,7 +281,7 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
 
 
 def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_reports(monkeypatch, tmp_path):
-    """`reported_reads`: each drawn chunk's table and root from the verifier's own reads file beside Lean's `registered`
+    """`reported_reads`: each sampled chunk's table and root from the verifier's own reads file beside Lean's `registered`
     finding, held only when every verdict accepted and reports exactly its file's port, value and root."""
     c, _s, got = committed(monkeypatch)
     CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)

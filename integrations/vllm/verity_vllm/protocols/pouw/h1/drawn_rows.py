@@ -1,9 +1,23 @@
+<<<<<<< 0941037006
 """A drawn H1 unit's rows rebuilt from a served window's values, as `drawn` stages them: the word formats both of its forms
 read (`split_row`, `split_record`, `receipt_words`), the check that a rebuilt value is the tree the window registered
 (`held`), that a statement's every port is a registered read (`complete`) and that its outputs are the rows the window
 registered (`outputs_held`); and the lanes form's leaf statements (`leaf_lanes`): their rows (`leaf_rows`), a leaf's
 operands at its place (`operands`), its partials (`partials`), its call's receipts (`receipt_value`) and each
 statement's rows, salts and ``--registered`` reads on credit's own file (`leaf_statement`)."""
+||||||| merged common ancestors
+"""A drawn H1 unit's rows rebuilt from a served window's values, as `drawn` stages them: the word formats both of its forms
+read (`split_row`, `split_record`, `receipt_words`) and the check that a rebuilt value is the tree the window registered
+(`held`); and the lanes form's leaf statements (`leaf_lanes`): their rows (`leaf_rows`), a leaf's operands at its place
+(`operands`), its partials (`partials`), its call's receipts (`receipt_value`) and each statement's rows, salts and
+``--registered`` reads on credit's own file (`leaf_statement`)."""
+=======
+"""A sampled H1 unit's rows rebuilt from a served window's values, as `drawn` stages them: the word formats both of its forms
+read (`split_row`, `split_record`, `receipt_words`) and the check that a rebuilt value is the tree the window registered
+(`held`); and the lanes form's leaf statements (`leaf_lanes`): their rows (`leaf_rows`), a leaf's operands at its place
+(`operands`), its partials (`partials`), its call's receipts (`receipt_value`) and each statement's rows, salts and
+``--registered`` reads on credit's own file (`leaf_statement`)."""
+>>>>>>> 7af4d24fca3e
 from __future__ import annotations
 
 from typing import Any, Sequence
@@ -12,8 +26,8 @@ import numpy as np
 
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import produced as PR
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_vllm.errors import Refused
 
@@ -81,7 +95,7 @@ def outputs_held(z: dict, outs: dict) -> None:
 
 
 def leaf_rows(kind: str, k: int, tile: Sequence[int]) -> list[tuple]:
-    """A drawn leaf's ``kind`` statement's input rows at K over the R × C ``tile``, ``(port, schema, bits, params)`` as
+    """A sampled leaf's ``kind`` statement's input rows at K over the R × C ``tile``, ``(port, schema, bits, params)`` as
     `UnitStager` takes them: a lane's ``a0`` .. ``a3`` and ``b0`` .. ``b7`` (its A and B rows, each K codes and a scale),
     ``admit`` (the leaf's R admit bits), ``zy`` (the leaf's record), ``partials`` (its row of the leaf's partials) and
     ``pub`` (`leaf_lanes.PUBLIC`); the combine's ``p0`` .. (each lane's partial) and ``receipt``. Its output row is
@@ -134,7 +148,7 @@ def lane_operands(x: dict, ln: int) -> tuple[list, list, list, list]:
 
 def partials(x: dict) -> np.ndarray:
     """The leaf's partials, a row a lane: `h1zy.lane_partial` of each lane's rows, its u16 words."""
-    from verity.core.protocols.pouw.circuit import h1zy as Z
+    from verity.ml.protocols.pouw.circuit import h1zy as Z
     out = []
     for ln in range(LL.lanes(*x["tile"])):
         a, b, _sa, _sw = lane_operands(x, ln)
@@ -146,7 +160,7 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registere
     """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
     receipt's u16 words (`receipt_words`), here the word reference's (`h1zy.reference` of the unit's rows, salt, position
     and roots), at ``RECEIPT_NONCE`` + c under the prover's key, bound to the window's root."""
-    from verity.core.protocols.pouw.circuit import h1zy as Z
+    from verity.ml.protocols.pouw.circuit import h1zy as Z
     from verity_vllm.protocols.pouw.h1 import registered as NR
     from verity_vllm.protocols.pouw.h1 import served as SV
     sizes = [size for size, _w in CR.call_work(win["layout"])]
@@ -161,7 +175,7 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registere
 
 def leaf_ok(kind: str, ln: int | None, x: dict, rows: dict[str, np.ndarray]) -> int:
     """The statement's ok on its rows, the word reference's (`h1zy.lane_reference`, `h1zy.combine_reference`)."""
-    from verity.core.protocols.pouw.circuit import h1zy as Z
+    from verity.ml.protocols.pouw.circuit import h1zy as Z
     if kind == LL.LANE:
         a, b, sa, sw = lane_operands(x, ln)
         return Z.lane_reference(a, b, sa, sw, x["admit"], x["zy"], u32_words(rows[LL.PARTIALS][0]), x["salt"],
@@ -172,11 +186,11 @@ def leaf_ok(kind: str, ln: int | None, x: dict, rows: dict[str, np.ndarray]) -> 
 
 def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Registered], tree: G.Registered,
                    produced: dict[str, str], draw_root: str) -> tuple[dict, dict, dict, dict]:
-    """Drawn leaf u's statement `st` as `FileStager.stage` takes it, on credit's own ``--registered`` file
+    """Sampled leaf u's statement `st` as `FileStager.stage` takes it, on credit's own ``--registered`` file
     (`credit.leaf_registered_file`): each port's one row, salt and registered read (value, position, path), from the
     window's rebuilt values ``trees`` (each held to the file's root and domain), the leaf's partials ``tree`` (at the
     produced record's root ``produced``) or the known row (`leaf_lanes.known_rows`, committed under
-    `leaf_lanes.known_salt` of the draw root), ``o0`` among those; and the file. Refused when a row opens at no root of the
+    `leaf_lanes.known_salt` of the sample root), ``o0`` among those; and the file. Refused when a row opens at no root of the
     file, or the statement's ok (`leaf_ok`) is not 1."""
     lay, shape = win["layout"], win["shape"]
     kind, ln = st

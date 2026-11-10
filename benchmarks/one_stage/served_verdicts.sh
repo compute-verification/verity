@@ -54,7 +54,7 @@
 #     and at the class of record, a measurement within WC_RECORD_TIMEOUT (default 45m), run after the record (step 5),
 #     since nothing reads it, whose timeout or refusal is said and never fails the run (unless CLASSES names `record`, which
 #     then gates here instead); then the window audited from its records alone
-#     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the sampled proof blocks behind the Lean
+#     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): Flock `--zk` on the sampled proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
 #     Every unit of a template the served model's compiler of record lists as a transfer gate (prove_path.GATES_OF_RECORD)
@@ -67,17 +67,13 @@
 #     6's period check wrote, V3c having run before this step), each within <COMPONENT>_TIMEOUT
 #     (else PIECE_TIMEOUT, default 60m), else names it MISSING with the command it lacks and its owner. No verdict is made
 #     for a piece that didn't run or refused to; one that ran and wrote no answer errs. A piece that needs a GPU takes its
-#     own `gpu-lease`, the serve's being over. POUS_CMD defaults to 'bash benchmarks/pous/served_piece.sh "$@"' where the
-#     tree has it and this node holds the memory challenger's key (~/.ssh/vy-auditor2-pous). That piece runs the bandwidth
-#     session over the store it holds and writes its answer where the bandwidth piece's goes, which BANDWIDTH_CMD collects:
-#     by default, once POUS_CMD is set, '"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window
-#     "$2" --out "$3"'; with no PoUS piece, 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where the tree has
-#     it and this node holds the bandwidth verifier's key (~/.ssh/vy-auditor2-bw) and its registered store (BW_STORE's
-#     setup.json). Set empty, a command is MISSING.
+#     own `gpu-lease`, the serve's being over. Under PRODUCT=onsite, WIPE_CMD's, POUS_CMD's and BANDWIDTH_CMD's defaults
+#     come from `onsite_piece_commands` in the file ONSITE_PIECES names (a path from TREE, or absolute), sourced before
+#     the preflight, each kept where its variable is set; with ONSITE_PIECES unset there are none, and a file that isn't
+#     there is refused. The file also gives `served_composite.sh` onsite's own cases. Set empty, a command is MISSING.
 #     A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`) goes in SERVE_ARGS, serve-openai's
 #     further arguments, and its piece reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with
-#     WIPE_CMD set (by default 'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it;
-#     empty, none), serve() calls it in TREE, under the serve's lease and before serve-openai starts, within WIPE_TIMEOUT
+#     WIPE_CMD set (empty, none), serve() calls it in TREE, under the serve's lease and before serve-openai starts, within WIPE_TIMEOUT
 #     (default 20m), with (the serve dir D, `all`, $OUT/pieces/wipe), since the window isn't picked yet, and says its last
 #     line as WIPE. The record reads its pieces/wipe/answer.json and composes the wipe only when that answer accepts and
 #     pieces/wipe/served.json names this node as the server it ran on. A wipe that wrote no answer (refused, or failed
@@ -90,6 +86,7 @@
 #     unless COMPOSITE is set empty,
 #     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
+<<<<<<< 0941037006
 #     Under COMPOSE_OFF_NODE=1, the default, neither is of record here: the served node is the prover's, so this record
 #     says (its `deferred`) that the final record and the composite are composed off it, and in the composite's place
 #     the run's last step, after V3c, writes the compose hand-off they are composed from (below, at `handoff`).
@@ -105,6 +102,12 @@
 #     with `nci-check --count` where the build built it, into $OUT/record/inference-only.json (the judgment against n and
 #     no count, n judged on the exact count) and its INFERENCE-ONLY line, in full with the exact counts in the serve dir's
 #     private/inference-only.json. It gates nothing.
+||||||| merged common ancestors
+=======
+#     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
+#     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
+#     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
+>>>>>>> 7af4d24fca3e
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
@@ -209,13 +212,14 @@
 # [--lanes H1_LANES]` builds its circuit files (the live file, only the strata H1_STRATA lists, default none, and each K
 # of H1_LANES, default none, in credit's lanes form: lane<K> and combine<K>; a file already there under the same bind is
 # reused), then `served_verdicts.py period open` opens period H1_PERIOD (default served-RUN_ID) on its
-# digest, its draw K H1_DRAW_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's registration (default
-# none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS (`--cap 2`: one window and its draw session);
+# digest, its sample K H1_DRAW_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's registration (default
+# none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS (`--cap 2`: one window and its sample session);
 # `period served`
 # holds the Program serve-openai then declared to it, and `period close` closes it once the windows are sealed, or
 # when the endpoint never listens. The PERIOD lines say what it committed; $OUT/serve keeps period.json, the Program
 # (h1/window-program.json.gz and its meta) and H1_CIRCUITS' circuit-files.json. H1_STATEMENTS and
 # H1_LIVE_EVIDENCE (files) go to PoUW's piece as its --statements and --live-evidence, the evidence core's credit reads.
+<<<<<<< 0941037006
 # H1_RECEIPTS=1 serves with --h1-receipts: each window registers each call's receipt table receipt@<c>, which a drawn
 # J10-R call statement's o0 and a lanes-form K's combine read (drawn refuses to stage either without it).
 # POUW_CMD='bash benchmarks/one_stage/served_pouw.sh "$1" "$2" "$3"' makes both on the node (the window's live rounds and
@@ -330,6 +334,40 @@
 # carried to a follow-on and the compose hand-off), and NOT EQUAL fails the run.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
+||||||| merged common ancestors
+# A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
+# tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
+=======
+# POUW_CMD='bash benchmarks/one_stage/served_pouw.sh "$1" "$2" "$3"' makes both on the node (the window's live rounds and
+# sampled proof blocks proved) and writes the period's case beside the piece, the one remote's composite reads.
+# With H1_TIE set too (and H1_CIRCUITS, V3C_CLASS not empty), V3c's window commit moves into the serve's close: at each H1
+# window's close, once it is sealed and before its sample coin, serve-openai's `--h1-window-commit` runs
+# `served_verdicts.sh tie` on the served node, under the serve's lease (LEASE_MIN then defaults to 150 and LEASE_MEM_GB to
+# 160, the serve's 128 and window-commit's peak): the window's advice, the one step 3 then reads, and `prove_path.py window-commit --window-registration W --h1-key
+# PROVER/key --law V3C_LAW` within V3C_TIMEOUT (then default 60m, at most 90m), whose registration R, chained right after
+# H1's W, H1 names as the window's Commit record (`serve_tie`). Its output stays in the serve dir's h1/w<k>/. H1's sessions
+# are reserved for the gate's default 120 minutes, the window's sample session at the serve's start, and the sample coin
+# waits for R. Step 6 then audits that commit and makes none of its own: a window H1 bound no R for has no V3c. It runs
+# before the composite, which hands no product SERVE_DIR/private/pouw's period case, untied to R (`served_composite.sh`).
+# The preflight refuses H1_TIE on a tree whose window-commit takes no --window-registration.
+# Under H1_TIE on a node with less memory than V3c's audit needs (its MemTotal, NODE_MEM_GB, under V3C_AUDIT_MEM_GB, default
+# 290), step 6 holds the tie (WINDOW-COMMIT, WINDOW-CIRCUIT-HELD) and defers the audit and the composite (`defer`), for
+# PRODUCT=remote alone (onsite's composite reads PoUS's case, which needs this node's card: the preflight refuses it).
+# Step 5's record says what was deferred and why (its `deferred`), a DEFERRED line says so, and the serve dir's
+# private/deferred gets the pieces the record read, the settings the follow-on runs at (deferred.env: the window, the
+# product, V3c's class and law, H1_TIE, COMPOSITE, ALPHA, GAMMA, the served node and the tree's commit), and the
+# follow-on's every input relative to the serve dir (`deferred_inputs`), listed (inputs.txt, which names inputs.sha256
+# too) and hashed (inputs.sha256). The copy is the prover's: those files alone, to the same path on a node with the
+# memory, outside any run dir. There `served_verdicts.sh v3c` with D alone (deferred.env names the window, and an
+# environment that sets one of its settings to another value is refused) holds the copy to its sums, runs at the served
+# node's tree (another only with FOLLOW_ANY_TREE=1, which its WINDOW-CIRCUIT line names, since it reads that tree's
+# window-circuit record), needs no row dir, vLLM venv, card or gpu-lease, and after V3c's audit composes the final record
+# (`record --node` the served node, so its composed_on names the host it composed on, served_node false, and that it read
+# a prover-side copy) and the
+# composite (`served_composite.sh`, SERVED_NODE the served node); its $OUT is published as every run's is.
+# A step that can't run says why, and the chain stops there. Flock, Lean's flock-verify and sampled-proofs-verifier and the
+# tree's venv are built while the endpoint serves, Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
+>>>>>>> 7af4d24fca3e
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
 #     bash benchmarks/one_stage/served_verdicts.sh
 # SETTINGS=PATH names a file of NAME=VALUE lines on the node, read before every default below: the run's job record
@@ -339,6 +377,7 @@
 # PEARLPLUS_TIE, the front's flags, H1_TIE's and a follow-on's checks), says what the run would do (PREFLIGHT passed: its lease, or its deferral) and exits 0 before the
 # serve dir is made, kept or anything built.
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
+<<<<<<< 0941037006
 # `served_verdicts.sh inference-policy`, in TREE with D and OUT, writes the inference-only policy at IO_CLASS alone, to
 # IO_POLICY (default $OUT/inference-only-policy.json), before a serve; `served_verdicts.sh inference-only K` judges window
 # K's circuit record at IO_CLASS alone against it.
@@ -347,9 +386,16 @@
 # `served_verdicts.sh defer WHY`, in TREE with D, K and OUT, makes step 6's deferral alone.
 # `served_verdicts.sh served-compare K`, in TREE with D and OUT, runs the served compare alone on serve dir D's window K.
 # Defaults are vy-dc-h200's: the int8 B4 row's traced Build (r20261030-210701-a20f's, traced after the required manifest stopped
+||||||| merged common ancestors
+# Defaults are vy-dc-h200's: the int8 B4 row's traced Build (r20261030-210701-a20f's, traced after the required manifest stopped
+=======
+# `served_verdicts.sh defer WHY`, in TREE with D, K and OUT, makes step 6's deferral alone.
+# Defaults are vy-dc-h200's: the int8 B4 row's traced Build (ROW, traced after the required manifest stopped
+>>>>>>> 7af4d24fca3e
 # naming the FlashAttention M1 stream, as `predict row` doesn't) and taps under $H, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
-# The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
-# public records and every log, each in its public form.
+# The serve dir D (row dirs, advice, the window circuits' records) stays on the node, under KEEP_CMD where it is set (run as
+# `bash -c KEEP_CMD _ ROOT` in TREE, before anything is built: the node's retention of ROOT, SERVE_ROOT's default
+# /workspace/research/vllm-served-verdicts); $OUT keeps the public records and every log, each in its public form.
 set -uo pipefail
 if [ -n "${SETTINGS:-}" ]; then
   [ -f "$SETTINGS" ] && [ -r "$SETTINGS" ] || { echo "PREFLIGHT: SETTINGS=$SETTINGS is not a readable file" >&2; exit 3; }
@@ -420,6 +466,7 @@ T=${T:-${H1_T:-512}}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
 PEARLPLUS_INODES=${PEARLPLUS_INODES:-772388}  # two commits of the tied window at the class of record, three files a member
 H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
+<<<<<<< 0941037006
 POUW=${POUW:-h1}
 H1_PEER=${H1_PEER:-vy-dc-h200}
 LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84"
@@ -433,7 +480,36 @@ if [ "$POUW" = pearlplus ]; then
     || export PEARLPLUS_TIE_CMD="cd $(printf %q "$TREE") && bash benchmarks/one_stage/served_verdicts.sh pearl-tie \"\$@\""
 else
   H1_GATE=${H1_GATE-$LANE_GATE}
+||||||| merged common ancestors
+H1_GATE=${H1_GATE-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84} H1_PEER=${H1_PEER:-vy-dc-h200}
+if [ -n "$H1_GATE" ]; then WINDOW_STEPS=${WINDOW_STEPS:-16}; else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
+MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
+# shellcheck disable=SC2016
+[ -f "$TREE/benchmarks/pous/streamed_wipe/served_wipe.sh" ] \
+  && WIPE_CMD=${WIPE_CMD-'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'}
+# shellcheck disable=SC2016
+[ -f "$TREE/benchmarks/pous/served_piece.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-pous" ] \
+  && POUS_CMD=${POUS_CMD-'bash benchmarks/pous/served_piece.sh "$@"'}
+# shellcheck disable=SC2016
+if [ -n "${POUS_CMD:-}" ]; then
+  BANDWIDTH_CMD=${BANDWIDTH_CMD-'"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'}
+elif [ -f "$TREE/benchmarks/one_stage/served_bandwidth.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-bw" ] \
+  && [ -f "${BW_STORE:-/workspace/research/pous-store/mem69-v2}/setup.json" ]; then
+  BANDWIDTH_CMD=${BANDWIDTH_CMD-'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'}
+=======
+H1_GATE=${H1_GATE-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84} H1_PEER=${H1_PEER:-vy-dc-h200}
+if [ -n "$H1_GATE" ]; then WINDOW_STEPS=${WINDOW_STEPS:-16}; else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
+MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
+PRODUCT=${PRODUCT:-onsite}
+if [ -n "${ONSITE_PIECES:-}" ]; then
+  case $ONSITE_PIECES in /*) ;; *) ONSITE_PIECES=$TREE/$ONSITE_PIECES ;; esac
+  [ -f "$ONSITE_PIECES" ] || { echo "PREFLIGHT: ONSITE_PIECES=$ONSITE_PIECES is not a file" >&2; exit 3; }
+  # shellcheck source=/dev/null
+  . "$ONSITE_PIECES"
+  [ "$PRODUCT" != onsite ] || onsite_piece_commands
+>>>>>>> 7af4d24fca3e
 fi
+<<<<<<< 0941037006
 if [ -n "$H1_GATE" ]; then WINDOW_STEPS=${WINDOW_STEPS:-16}
 elif [ -n "$PEARLPLUS_TIE" ]; then WINDOW_STEPS=${WINDOW_STEPS:-$(cut -d, -f3 <<< "${V3C_CLASS-4,32,4}")}  # round s the window's s-th step
 else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
@@ -458,13 +534,20 @@ if [ "$PRODUCT" = onsite ]; then
   fi
 fi
 export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT POUW
+||||||| merged common ancestors
+export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD
+ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
+D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
+=======
+export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT ONSITE_PIECES
+>>>>>>> 7af4d24fca3e
 PRED=${PRED:-$D/predicted}
 SERVED_COMPARE=$D/served-compare/served_compare.json
 FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
-export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
+export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 # Every verdict line goes out in its published form, naming no window and counting none of a window's own, and in full to
 # the serve dir's private/verdicts.txt (`served_verdicts.py public-lines`), under the node's python3, the venv's absent
@@ -475,6 +558,7 @@ keep() { [ -d "$D" ] && (umask 077; mkdir -p "$D/private" && printf '%s\n' "$*" 
 count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
 case ${LOAD:=varied} in varied | fixed | front) ;; *) say "PREFLIGHT: LOAD is varied, fixed or front, not $LOAD"; exit 3 ;; esac
+<<<<<<< 0941037006
 case $POUW in h1 | pearlplus) ;; *) say "PREFLIGHT: POUW is h1 or pearlplus, not $POUW"; exit 3 ;; esac
 [ "$POUW" = h1 ] || [ -z "$H1_GATE" ] \
   || { say "PREFLIGHT: POUW=pearlplus is PoUW's piece, so the endpoint serves no H1, and H1_GATE is set: set it empty"; exit 3; }
@@ -487,6 +571,17 @@ case $PRODUCT in
   *) say "PREFLIGHT: PRODUCT is onsite or remote, not $PRODUCT"; exit 3 ;;
 esac
 case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default) or 0, not $COMPOSE_OFF_NODE"; exit 3 ;; esac
+||||||| merged common ancestors
+=======
+case $PRODUCT in
+  onsite) ;;
+  remote)
+    for v in WIPE_CMD POUS_CMD BANDWIDTH_CMD CERTIFIER_CMD CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD CERTIFIER_FRONT; do
+      [ -z "${!v:-}" ] || { say "PREFLIGHT: PRODUCT=remote runs no onsite piece, and $v is set: unset it"; exit 3; }
+    done ;;
+  *) say "PREFLIGHT: PRODUCT is onsite or remote, not $PRODUCT"; exit 3 ;;
+esac
+>>>>>>> 7af4d24fca3e
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
@@ -523,6 +618,7 @@ short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, s
   [ "$NODE_MEM_GB" -lt "$V3C_AUDIT_MEM_GB" ] || return 1
   echo "this node has $NODE_MEM_GB GB, under the $V3C_AUDIT_MEM_GB GB V3c's audit needs (V3C_AUDIT_MEM_GB)"
 }
+<<<<<<< 0941037006
 # V3c's audit's coins (`v3c_audit`, records_audit's --challenger): V3C_CHALLENGER, by default sampled proofs' PP_CHALLENGER,
 # on the gate with its peer V3C_PEER (default PP_PEER: the node the audit runs on, as the gate's /etc/vy/peers names it,
 # in a follow-on not the served node) under PP_CHALLENGER_KEY and PP_GATE_KEY. A local or loopback session's coins are a
@@ -545,6 +641,14 @@ v3c_gate() {  # V3C_CHALLENGER's gate as the command `served_verdicts.py gate` r
   [ -z "${PP_GATE_KEY:-}" ] || g+=(-o IdentitiesOnly=yes -i "$PP_GATE_KEY")
   printf '%q ' "${g[@]}" "${V3C_CHALLENGER#gate:}"
 }
+||||||| merged common ancestors
+v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its circuit held to the verifier's window-circuit record
+  VW=$D/v3c-w$K-$vtag
+  [ -f "$D/window-circuit-w$K-$vtag.json" ] || { say "WINDOW-COMMIT class $V3C: no window-circuit record at it (CLASSES '$CLASSES')"; return 1; }
+  [ -f "$WREG" ] || { say "WINDOW-COMMIT class $V3C: $NO_WEIGHTS"; return 1; }
+  # off the GPU (it isn't leased here): the weights hashed by h1.registered's NumPy path, the reference
+=======
+>>>>>>> 7af4d24fca3e
 tree_sha() { git -C "$TREE" rev-parse HEAD 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-}"; }
 window_commit() {  # window K of $D committed as V3C's class circuit's units in $VW/window, its answer in $1 and its errors
   # in $2, the rest window-commit's further arguments: 0, else why on stdout
@@ -563,6 +667,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
 tied() {  # under H1_TIE: 0 iff H1 bound window K's R at its close (the serve dir's h1/log.jsonl) and R is $VW's registration
   "$PY" - "$D/h1/log.jsonl" "$K" "$VW/window/registration.json" <<'EOF' 2>&1
 import json, sys
+<<<<<<< 0941037006
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 log, k, mine = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 try:
@@ -667,6 +772,46 @@ v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its c
   else
     why=$(window_commit "$json" "$OUT/window-commit-$vtag.err" --law "${V3C_LAW:-subset:1}") \
       || { say "WINDOW-COMMIT class $V3C $why"; return 1; }
+||||||| merged common ancestors
+    --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --out "$VW/window") \
+    > "$D/window-commit-$vtag.json" 2> "$OUT/window-commit-$vtag.err"
+  local rc=$?
+  if   [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
+    say "WINDOW-COMMIT class $V3C timed out after V3C_TIMEOUT=$V3C_TIMEOUT (exit $rc)"
+    return 1
+  elif [ "$rc" != 0 ]; then
+    say "WINDOW-COMMIT class $V3C refused (exit $rc): $(grep -v '^ ' "$OUT/window-commit-$vtag.err" | tail -2 | cut -c1-800)"
+    return 1
+=======
+from verity.core.protocols.spot.one_stage import registration as REG
+log, k, mine = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+try:
+    bound = [x["digest"] for x in (json.loads(s) for s in open(log) if s.strip()) if x["window"] == k and x["kind"] == "record"]
+except OSError:
+    bound = []
+if not bound:
+    sys.exit("H1 bound no record R at the window's close, so V3c has no commit of it (the serve dir's h1/w<k>/window-commit.log)")
+try:
+    r = REG.digest(json.load(open(mine)))
+except (OSError, ValueError):
+    sys.exit("H1 bound a record R, and window-commit left no registration beside it")
+if r != bound[-1]:
+    sys.exit("H1 bound a record R other than window-commit's registration")
+print(f"R {r[:16]}…")
+EOF
+}
+v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its circuit held to the verifier's window-circuit record
+  VW=$D/v3c-w$K-$vtag
+  local json=$D/window-commit-$vtag.json why at=
+  [ -f "$D/window-circuit-w$K-$vtag.json" ] || { say "WINDOW-COMMIT class $V3C: no window-circuit record at it (CLASSES '$CLASSES')"; return 1; }
+  [ -f "$WREG" ] || { say "WINDOW-COMMIT class $V3C: $NO_WEIGHTS"; return 1; }
+  if [ -n "${H1_TIE:-}" ]; then  # committed at H1's close (`tie`) and never again: the window's one commit, the one H1 bound
+    json=$D/h1/w$K/window-commit.json
+    why=$(tied) || { say "WINDOW-COMMIT class $V3C: $why"; return 1; }
+    at=" at H1's close, its registration the Commit record H1 bound before the sample coin ($why)"
+  else
+    why=$(window_commit "$json" "$OUT/window-commit-$vtag.err") || { say "WINDOW-COMMIT class $V3C $why"; return 1; }
+>>>>>>> 7af4d24fca3e
   fi
   # the commit's population and sources count the window's own values: they stay in the serve dir
   say "WINDOW-COMMIT class $V3C$at: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1])); print(json.dumps({k: c[k] for k in ("run", "circuit", "registration") if k in c}, sort_keys=True))' \
@@ -682,8 +827,8 @@ sys.exit(0 if ok else 1)
 EOF
   [ "${PIPESTATUS[0]}" = 0 ] && v3c_ok=1
 }
-# The audit's sessions listen on V3C_PORTS ports (default 16, a5's RANK_PORTS), a draw needing more refused before any
-# listens: a subset:K draw opens one for each of at most K members, and records_audit's own default, a port for every
+# The audit's sessions listen on V3C_PORTS ports (default 16, a5's RANK_PORTS), a sample needing more refused before any
+# listens: a subset:K sample opens one for each of at most K members, and records_audit's own default, a port for every
 # member, finds no free span in `records_audit.PORTS` at a class window. Under H1_TIE the audit is tied to H1's W
 # (records_audit's --tie W --tie-prefix h1/, `tie_of`): the tables the circuit reads are W's, R registers them as its
 # outputs, and each sampled reader proves its rows at W's roots. Its sampling design is then stratified:K (V3C_LAW,
@@ -734,6 +879,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     v3c_warm
     cache=(--compose-cache "$VW/compose-cache")
   fi
+<<<<<<< 0941037006
   if v3c_live; then  # the gate opens the run root once, ever, and a reserve joins the lane's open period: neither, first
     gl=$("$PY" "$SV" gate --gate "$(v3c_gate)" --lane "${H1_LANE:-vllm}" --main "$main" --root "$run" 2>&1); rc=$?
     say "V3C-$(tail -1 <<< "$gl" | cut -c1-1200) (checked $(date -u +%Y-%m-%dT%H:%M:%SZ))"
@@ -741,6 +887,10 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     ch+=(--peer "$V3C_PEER" --challenger-key "$PP_CHALLENGER_KEY" ${PP_GATE_KEY:+--gate-key "$PP_GATE_KEY"})
   fi
   V3C_AUDITED=$(hostname -s)
+||||||| merged common ancestors
+  mkdir -p "$OUT/v3c-audit"
+=======
+>>>>>>> 7af4d24fca3e
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" \
@@ -1085,8 +1235,9 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
   case " ${SERVE_ARGS:-} " in *" --protocol ids "*) ;; *)
     say "PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under" \
         "SERVE_ARGS='--protocol ids --id-payload 503'"; return 3 ;; esac
-  local help f
-  help=$(cd "$TREE" && "$PY" benchmarks/network_traces/certifier_piece.py front --help 2>&1) \
+  local help f script
+  script=$(grep -oE "[^[:space:]\"']*certifier_piece\.py front" <<< "$CERTIFIER_FRONT" | head -1)
+  help=$(cd "$TREE" && "$PY" "${script% front}" front --help 2>&1) \
     || { say "PREFLIGHT: this tree's certifier front doesn't start: $(echo "$help" | tail -1 | cut -c1-300)"; return 3; }
   for f in $(grep -oE -- '--[a-z][a-z0-9-]*' <<< "$CERTIFIER_FRONT" | sort -u); do
     grep -qE "(^|[^a-z0-9-])$f([^a-z0-9-]|$)" <<< "$help" \
@@ -1458,6 +1609,7 @@ if [ -n "$FOLLOW" ]; then  # a deferral's follow-on: no serve, its venv the tree
   sha=$(tree_sha)
   [ -n "$DEFERRED_TREE" ] && { [ "$sha" = "$DEFERRED_TREE" ] || [ -n "${FOLLOW_ANY_TREE:-}" ]; } \
     || { say "PREFLIGHT: the follow-on reads the served node's window-circuit record, which its tree ${DEFERRED_TREE:-(unknown)} wrote, and this tree is ${sha:-(unknown)}: run it at that commit, or set FOLLOW_ANY_TREE=1"; exit 3; }
+<<<<<<< 0941037006
   [ -z "${DAY:-}" ] || grep -q -- '"--day"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: the deferral declared day $DAY, whose audit runs R2 with records_audit's --day, which this tree's records_audit.py doesn't take"; exit 3; }
 elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or gpu-lease, and never the served node
@@ -1487,6 +1639,14 @@ else
   fi
   [ "$COMPOSE_OFF_NODE" = 0 ] || [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
     || { say "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, or COMPOSE_OFF_NODE=0 for a development composite here"; exit 3; }
+||||||| merged common ancestors
+for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
+command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
+=======
+else
+  for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
+  command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
+>>>>>>> 7af4d24fca3e
 fi
 front_ok || exit 3
 SPLIT= DEFER=
@@ -1616,9 +1776,17 @@ if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, b
 fi
 mkdir -p "$D" "$ROOT/cache" "$FW"
 (umask 077; mkdir -p "$D/private")
+<<<<<<< 0941037006
 KEEP_WHY="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"
 [ -n "$COMPOSE" ] || { "$PY" -m research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY" \
   || research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY"; } 2>&1 | tail -2
+||||||| merged common ancestors
+KEEP_WHY="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"
+{ "$PY" -m research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY" \
+  || research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY"; } 2>&1 | tail -2
+=======
+[ -z "${KEEP_CMD:-}" ] || (cd "$TREE" && bash -c "$KEEP_CMD" _ "$ROOT") 2>&1 | tail -2
+>>>>>>> 7af4d24fca3e
 # H1's every window open runs its Lean verifier of record; without lake each is refused and serving goes on uncredited
 if [ -z "$FOLLOW$COMPOSE" ] && { [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; }; then
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
@@ -1632,7 +1800,7 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
   (cd verity/core/service/flock && lake build flock-verify flock-firewall) || return 7
-  (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) || return 7
+  (cd verity/core/service/spot && lake build sampled-proofs-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
   RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/ml/flock/pod/60-circuit.sh || return 6

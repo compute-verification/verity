@@ -1,27 +1,63 @@
 module
 
-public import Properties.Pouw.Credit
+public import Definitions.Core.Game
+public import Proofs.Flock.Claims.Sampling.Select.Misses
+public import Proofs.Pouw.Credit.Lanes
 public import Proofs.Properties.Pouw
 public import Proofs.Properties.Pouw.Strata
-public import Proofs.Flock.Soundness.ExecStratified
-public import Proofs.Flock.Soundness.Audit.Work
-public import Proofs.Flock.VBridge.Full
-public import Proofs.Flock.Claims.Sampling.Draws
-public import Proofs.Flock.Claims.Sampling.Select.Misses
-public import Proofs.Accounting.Served
-public import Proofs.Pouw.Period.Accept
+public import Properties.Pouw.Credit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.Order.Interval.Finset.Box
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.Served
+import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.VBridge.Full
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # Proofs: the ε a served window's credit reports (`WorkDrawMisses`, `EpsAtSound`, `EstablishedSound`)
 
-The draw `drawnOn` runs over the strata `law` gives misses a set `B` only if every stratum's own `subset` draw misses
+The sample `drawnOn` runs over the strata `law` gives misses a set `B` only if every stratum's own `subset` sample misses
 `B`'s units in it, and the streams are independent (`miss_le_prod`, the first steps of
 `Law.stratified_exec_escape_le`): the miss probability is at most `∏_s C(n_s − m_s, k_s)/C(n_s, k_s)`, `m_s` the units
-of stratum `s` in `B` (`localOf`). The work law's sizes make that product at most `((W − Σ_s w_s m_s)/W)^K`
+of stratum `s` in `B` (`localOf`). The work sampling design's sizes make that product at most `((W − Σ_s w_s m_s)/W)^K`
 (`prod_le_pow`, `Law.work_escape_le`'s weighted AM-GM over the strata, here with strata that may overlap and floors
 that may be zero), and `B`'s work (`unitWork`) is at most `Σ_s w_s m_s` (`unitWork_le`). So a set of work `ε·C`
 escapes with at most `(1 − εC/W)^K ≤ (1 − εC/W)^K′ ≤ δ` (`kPrimeLeast`) when `K′ < W`; at `K′ = W ≤ K` every stratum
-doing work draws all its units, and a set of positive work escapes never.
+doing work samples all its units, and a set of positive work escapes never.
 -/
 
 @[expose] public section
@@ -41,7 +77,7 @@ theorem card_localOf_le (S : Array Flock.Draw.Stratum) (B : Finset ℕ) (s : Fin
     (localOf S B s).card ≤ S[s].size :=
   (Finset.card_filter_le _ _).trans (by rw [Finset.card_univ, Fintype.card_fin])
 
-/-- **The draw misses `B` no more often than each stratum's `subset` draw misses `B`'s units in it, independently.** -/
+/-- **The sample misses `B` no more often than each stratum's `subset` sample misses `B`'s units in it, independently.** -/
 theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k ≤ S[s].size) (B : Finset ℕ) :
     prCoin (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
       ∏ s : Fin S.size, ((S[s].size - (localOf S B s).card).choose S[s].k : ℝ≥0∞) /
@@ -53,12 +89,12 @@ theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[
             ∃ D, Flock.Draw.subset S[s].k S[s].size (Law.streamOf f) = some D ∧
             ∀ j ∈ localOf S B s, j.val ∉ D) s (g s)) := by
         refine prCoin_mono fun g ⟨D, hD, hmiss⟩ s _ => ?_
-        have hD' : Flock.Draw.stratified S (Array.ofFn fun i => Properties.SampledProofs.bytesOf (g i)) = some D := hD
+        have hD' : Flock.Draw.stratified S (Array.ofFn fun i => Properties.Spot.bytesOf (g i)) = some D := hD
         obtain ⟨li, hli, hmem⟩ := Law.stratified_units _ _ D hD' s.val s.isLt
         have hSs : S[s.val]! = S[s] := getElem!_pos S s.val s.isLt
-        have hfs : (Array.ofFn fun i => Properties.SampledProofs.bytesOf (g i)).getD s.val ByteArray.empty =
+        have hfs : (Array.ofFn fun i => Properties.Spot.bytesOf (g i)).getD s.val ByteArray.empty =
             Law.streamOf (g s) := by
-          simp [Array.getD_eq_getD_getElem?, Properties.SampledProofs.bytesOf, Law.streamOf]
+          simp [Array.getD_eq_getD_getElem?, Properties.Spot.bytesOf, Law.streamOf]
         rw [hSs, hfs] at hli
         rw [hSs] at hmem
         exact ⟨li, hli, fun j hj hjli => hmiss _ (Finset.mem_filter.1 hj).2 (hmem _ hjli)⟩
@@ -92,8 +128,8 @@ theorem prob_le (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k 
   rw [heq] at h
   exact (ENNReal.toReal_mono ENNReal.coe_ne_top h).trans_eq (ENNReal.coe_toReal _)
 
-/-- **The work law's weighted AM-GM**: strata of `N s` units, `k s` drawn and `M s` in the set, each unit doing `w s`,
-draw sizes at least `K w_s N_s / W` (or all), escape with at most `((W − Σ_s w_s M_s)/W)^K`. -/
+/-- **The work sampling design's weighted AM-GM**: strata of `N s` units, `k s` sampled and `M s` in the set, each unit doing `w s`,
+sample sizes at least `K w_s N_s / W` (or all), escape with at most `((W − Σ_s w_s M_s)/W)^K`. -/
 theorem prod_le_pow {ι : Type} [Fintype ι] (N M k w : ι → ℕ) (K W : ℕ) (hMN : ∀ s, M s ≤ N s) (hkN : ∀ s, k s ≤ N s)
     (hW : 0 < W) (hWsum : ∑ s, w s * N s = W) (hge : ∀ s, k s = N s ∨ K * w s * N s ≤ W * k s)
     (hk1 : ∀ s, 0 < w s → 0 < N s → 1 ≤ k s) :
@@ -164,7 +200,7 @@ theorem prod_le_pow {ι : Type} [Fintype ι] (N M k w : ι → ℕ) (K W : ℕ) 
         pow_le_pow_left₀ zero_le (NNReal.geom_mean_le_arith_mean_weighted univ a x ha1) K
     _ = _ := by rw [hax]
 
-/-- **The work bound over executable strata**: the draw over strata `S` sized by the work law at `K` (`hge`, `hk1`),
+/-- **The work bound over executable strata**: the sample over strata `S` sized by the work sampling design at `K` (`hge`, `hk1`),
 units of stratum `s` doing `w s` and all of them `W`, misses a set `B` with at most `((W − T)/W)^K` for any `T` at most
 `Σ_s w_s m_s`. -/
 theorem prob_le_pow (S : Array Flock.Draw.Stratum) (w : Fin S.size → ℕ) (K W T : ℕ) (hW : 0 < W)
@@ -230,10 +266,10 @@ theorem unitWork_le (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.St
               Finset.card_le_card fun x hx => (Finset.mem_filter.1 hx).2
           _ ≤ (localOf S B s).card := Finset.card_image_le
 
-/-- The strata's work, read stratum by stratum over the law's strata `S` (as many as `ss`). -/
+/-- The strata's work, read stratum by stratum over the sampling design's strata `S` (as many as `ss`). -/
 theorem sum_work (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.Stratum) (hsz : S.size = ss.size) :
     ∑ s : Fin S.size, ss[s.val]!.work * ss[s.val]!.size = Flock.Draw.totalWork ss := by
-  rw [Properties.SampledProofs.SecurityProofs.totalWork_eq, ← Fin.sum_univ_fun_getElem]
+  rw [Properties.Spot.SecurityProofs.totalWork_eq, ← Fin.sum_univ_fun_getElem]
   refine Fintype.sum_equiv (finCongr (hsz.trans Array.length_toList.symm)) _ _ fun s => ?_
   have hs : s.val < ss.size := by omega
   simp only [finCongr_apply_coe, Array.getElem_toList, getElem!_pos ss s.val hs]
@@ -360,11 +396,11 @@ theorem establishedSound_of (htile : Properties.Pouw.Strata.StrataTile) : Establ
 (`Properties.Pouw.Strata.strataTile`), so the total work `established` passes `epsAt` is the strata's. -/
 theorem establishedSound : EstablishedSound := establishedSound_of Properties.Pouw.Strata.strataTile
 
-/-! ## The draw coin's session is withheld (`DrawWithheld`) -/
+/-! ## The sampling coin's session is withheld (`DrawWithheld`) -/
 
 section Withheld
 
-open SampledProofs.Challenger (ChallengerKey trustedSessionOf withheldOn)
+open Spot.Challenger (ChallengerKey trustedSessionOf withheldOn)
 
 theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {v : β} (h : (x >>= f) = .ok v) :
     ∃ a, x = .ok a ∧ f a = .ok v := by
@@ -401,22 +437,22 @@ theorem drawWithheld : DrawWithheld := by
   cases u
   exact creditedDraw_withheld hu
 
-/-- The draw session's step (`drawSession`) accepts every session the ledger opens withheld on the draw root and
+/-- The sample session's step (`drawSession`) accepts every session the ledger opens withheld on the sample root and
 `trustedSessionOf` trusts, as a withheld deployment's is. -/
 theorem drawSession_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
     (ht : trustedSessionOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
     (hw : withheldOn ledger root = true) : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x := by
   simp [PouwCheck.Credit.drawSession, ht, hw, Except.mapError]
 
-/-- **`DrawWithheld`'s nontrivial lemma**: its conclusion fails at the empty ledger, which opens no session, and the draw
-`{root: ""}`, for every root `r`: the empty ledger withholds no draw root. -/
+/-- **`DrawWithheld`'s nontrivial lemma**: its conclusion fails at the empty ledger, which opens no session, and the sample
+`{root: ""}`, for every root `r`: the empty ledger withholds no sample root. -/
 theorem drawWithheld_nontrivial :
     ∀ r : String, ¬ (PouwCheck.get (Json.mkObj [("root", Json.str "")]) "root" = .str r ∧
       withheldOn (.arr #[]) r = true) := by
   rintro r ⟨-, hw⟩
   simp [withheldOn] at hw
 
-/-- **`DrawWithheld` fails at a verifier that accepts everything**: such a verifier credits the empty ledger and the draw
+/-- **`DrawWithheld` fails at a verifier that accepts everything**: such a verifier credits the empty ledger and the sample
 `{root: ""}`, where the conclusion fails (`drawWithheld_nontrivial`). -/
 theorem drawWithheld_acceptAll
     (f : Json → Json → Json → Json → Json → Json → Json → Json → Json → Json → Except (String × String) (List Nat))
@@ -432,8 +468,8 @@ theorem drawWithheld_acceptAll
 
 end Withheld
 
-/-- **The grouped draw misses a set of blocks of work `ε·C` with probability at most `δ`** (`GroupedDrawMisses`): the
-blocks of `Bb` miss every drawn group exactly when their leaves `Bb.image leafOf` are all missed, and those leaves do at
+/-- **The grouped sample misses a set of blocks of work `ε·C` with probability at most `δ`** (`GroupedDrawMisses`): the
+blocks of `Bb` miss every sampled group exactly when their leaves `Bb.image leafOf` are all missed, and those leaves do at
 least the blocks' work, so `workDrawMisses` at `B = Bb.image leafOf`. -/
 theorem groupedDrawMisses : GroupedDrawMisses := by
   intro layout ss K strata eps δ C k' hss hlaw hk' β leafOf w Bb hk'K hw hB
@@ -452,27 +488,8 @@ theorem groupedDrawMisses : GroupedDrawMisses := by
 
 /-! ## `GroupedDrawMisses`'s witnesses
 
-The compiled `strata` and `law` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the
-draw's structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as
-`Proofs.Pouw.Period.Accept` reads H1's items); `kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
-
-deriving instance DecidableEq for Flock.Draw.Stratum
-deriving instance DecidableEq for Flock.Draw.WorkStratum
-
-theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
-  cases x <;> simp_all [Except.toOption]
-
-theorem keys_lanes : PouwCheck.keys lanesLayout = some PouwCheck.Credit.LAYOUT_KEYS :=
-  Properties.Pouw.Period.SecurityProofs.Accept.keys_of (by decide) (by decide +kernel)
-
-theorem strata_lanes : PouwCheck.Credit.strata lanesLayout = .ok lanesStrata := by
-  apply ok_of_toOption
-  unfold PouwCheck.Credit.strata
-  rw [keys_lanes]
-  decide +kernel
-
-theorem law_lanes : PouwCheck.Credit.law lanesStrata (toJson lanesK) = .ok lanesLaw :=
-  ok_of_toOption (by decide +kernel)
+The compiled `strata` and `law` on the lanes window are `Proofs.Pouw.Credit.Lanes`'s (`strata_lanes`, `law_lanes`);
+`kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
 
 /-- **`K′ ≤ 8` at ε = 1/2 and δ = 1/256 over the whole window's work**: `q = 1/2`, and `q^8 = δ`. -/
 theorem kPrime_lanes : ∃ k', PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata)
@@ -518,8 +535,8 @@ theorem groupedDrawMisses_honest :
   have : (0 : ℚ) ≤ (Flock.Draw.totalWork lanesStrata : ℚ) := Nat.cast_nonneg _
   linarith
 
-/-- **`GroupedDrawMisses`'s nontrivial lemma**: its conclusion fails under the strata a law that accepts everything may
-give, none (`idleLaw`): the draw is empty whatever the streams, so the lanes window's blocks all escape, with
+/-- **`GroupedDrawMisses`'s nontrivial lemma**: its conclusion fails under the strata a sampling design that accepts everything may
+give, none (`idleLaw`): the sample is empty whatever the streams, so the lanes window's blocks all escape, with
 probability 1 > 1/256. -/
 theorem groupedDrawMisses_nontrivial :
     ¬ Pouw.RelativeSecurity.prob (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) ≤
@@ -535,7 +552,7 @@ theorem groupedDrawMisses_nontrivial :
     rfl
   have h1 : Pouw.RelativeSecurity.prob
       (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) = 1 := by
-    unfold Pouw.RelativeSecurity.prob
+    unfold Pouw.RelativeSecurity.prob Claims.prUniform
     have hf : ∀ inst : DecidablePred (fun g : (i : Fin idleLaw.size) → Fin idleLaw[i].need → Fin 256 =>
         ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d),
         @Finset.filter _ _ inst Finset.univ = Finset.univ := fun _ => Finset.filter_true_of_mem fun g _ => hall g

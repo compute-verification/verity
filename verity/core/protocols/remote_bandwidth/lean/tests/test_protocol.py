@@ -6,7 +6,7 @@ window in flight, which no property of the Lean covers.
 
 The cases are a small period on one node (`period.run` on a clock the test sets): honest, its prover reading a store
 that dropped every other chunk, and stopped before its last window is verified; every recorded scenario
-(`ra_cases.SCENARIOS`) as a case; drawn honest sessions of drawn shapes; and recorded ones with one or two edits
+(`ra_cases.SCENARIOS`) as a case; sampled honest sessions of sampled shapes; and recorded ones with one or two edits
 (`test_drawn.edited`) or one edit of the case's framing."""
 
 from __future__ import annotations

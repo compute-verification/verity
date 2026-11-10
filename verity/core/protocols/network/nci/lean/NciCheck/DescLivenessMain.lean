@@ -1,6 +1,7 @@
 module
 
 public import NciCheck.DescLiveness
+meta import NciCheck.DescLiveness
 
 /-! The description-sized check's liveness run (`runs` in `lean-audit.json`): `NciCheck.DescLiveness.main`, audited under
 `NciCheck`. It holds `NciCheck.Desc.check` to the unrolled check, `NciCheck.check`, on Program shapes it once walked member

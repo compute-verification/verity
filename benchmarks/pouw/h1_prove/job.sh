@@ -6,14 +6,14 @@
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving and selftest builds, the Lean flock-verify, a venv)
 #   2. layer.py records the window's int8 codes and their f32 scales from the checkpoint (layer L's q/k/v/gate/up at H1's
 #      quantizers; a second window from other tokens) and run.py prepare commits (each call's A table and z table of its
-#      tiles' z/y records, and the weights' B rows), serves, draws, opens, checks the openings and has the sampled proof blocks
-#      staged, one statement a drawn call, while stage.py builds the unit's circuit (the long step at K = 4096), bound to
+#      tiles' z/y records, and the weights' B rows), serves, samples, opens, checks the openings and has the sampled proof blocks
+#      staged, one statement a sampled call, while stage.py builds the unit's circuit (the long step at K = 4096), bound to
 #      the window's Program once the commitment gives its shape
-#   3. one loopback --zk session per statement (each drawn call's units, honest the first sampled proof block's call; the other
+#   3. one loopback --zk session per statement (each sampled call's units, honest the first sampled proof block's call; the other
 #      window's unit; honest's units on a tampered A row, with their ok rows committed afresh, and on in-z's window
 #      computing ok = 0; the in-proof negatives on honest's units, each also as
-#      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn, each prover under the ZK server (FC_FIREWALL=1:
-#      the Lean session loop, its level-0 draw and Lean finish) unless H1_FIREWALL=0
+#      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance sampled, each prover under the ZK server (FC_FIREWALL=1:
+#      the Lean session loop, its level-0 sample and Lean finish) unless H1_FIREWALL=0
 #   4. the Lean checks of run.py's plan, each with the verifier's own window Program, partition and its call's registered
 #      reads, the ok port among them (--program, --partition, --registered: honest and each honest-c<c> ACCEPT with their
 #      units derived; flipped-zy, wrong-receipt, other-window
@@ -30,9 +30,9 @@
 #      checks' Lean findings under the window's open root, which every per-window registered value binds
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
-#      H1_FIREWALL (1)  H1_WIRE (0; 1: the selftest's zk_worker_wire, zk_worker_finish and zk_worker_level0 on honest's
-#      statement, under the ZK server, after the proofs, thirteen firewalled sessions, about 34 min at K = 64; a failure
-#      fails the job)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
+#      H1_FIREWALL (1)  H1_WIRE (0; 1: the selftest's zk_worker_wire, zk_worker_finish, zk_worker_level0, zk_worker_inner and
+#      zk_worker_pads on honest's statement, under the ZK server, after the proofs, twenty ZK server sessions; a failure fails
+#      the job)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
 #      HZ_RUNS (1): sessions a statement, all verified by one Lean process, which reads the circuit once
 #      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (36) and H1_PROVE_PCT (32):
 #      a session's serve and prove caps, % of H1_MEM_GB (they run side by side, the stager gone; at K = 4096 with 8
@@ -41,11 +41,10 @@
 #      H1_QUANT (h1: H1's ±110/[-126, 125] quantizers; vllm: vLLM's per-row absmax → ±127, over the first H1_K entries
 #      below K = 4096, so a smoke's tiles hold A = 127)
 set -uo pipefail
-# its checks expect the Lean verifier's ACCEPT, which a templated statement with --registered never gets
-# (h1unit.layout), so this job stages only the flat statement; h1_lanes/job.sh proves the structural one end to end
+# this job stages only the flat statement (h1unit.layout); h1_lanes/job.sh proves the structural one end to end
 case "${H1_TMPL:-flat}" in
   flat) ;;
-  *) echo "H1_TMPL=$H1_TMPL: this job's checks expect ACCEPT, so it proves only the flat statement (H1_TMPL unset or flat); h1_lanes/job.sh proves the structural one" >&2; exit 2 ;;
+  *) echo "H1_TMPL=$H1_TMPL: this job proves only the flat statement (H1_TMPL unset or flat); h1_lanes/job.sh proves the structural one" >&2; exit 2 ;;
 esac
 export HZ_CONFIGS=h1 HZ_MEM_GB=${H1_MEM_GB:?} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ_WARM:-0}
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -113,7 +112,7 @@ if [ "$FW" = 1 ]; then
   export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
   export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
   # the ZK server's Lean processes are the prover's children, and under an address-space cap (ulimit -v) their runtime
-  # can't create its threads: a firewalled session is bounded by the run's cgroup (--mem-gb) alone
+  # can't create its threads: a ZK server session is bounded by the run's cgroup (--mem-gb) alone
   vlimit() { :; }
 fi
 log "prove: firewall $FW"
@@ -129,17 +128,19 @@ while IFS=$'\t' read -r kind tag D n; do
   log "prove $tag: $(cat "$OUT/$tag/prove.time" 2>/dev/null)"
 done < "$WK/plan.tsv"
 # the wire's controls, under the same ZK server: the prover's frames doctored on the wire to the session loop, each dropped
-# or refused, the host's rep requests to the loop's finish doctored, each refused, and a second level-0 draw for a table,
-# refused (flock-circuit's zk_worker_wire, zk_worker_finish and zk_worker_level0, live PROTOCOL.md §10.4)
+# or refused, the host's rep requests to the loop's finish doctored, each refused, a second level-0 sample for a table,
+# refused, each inner proof's round relayed doctored, the rep stopped, and a worker's own word in a masked value, which
+# never leaves (flock-circuit's zk_worker_wire, zk_worker_finish, zk_worker_level0, zk_worker_inner and zk_worker_pads, live
+# PROTOCOL.md §10.4)
 WIRE=ok
 if [ "$FW" = 1 ] && [ "${H1_WIRE:-0}" = 1 ]; then
   HD=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $3}' "$WK/plan.tsv")
   HN=$(awk -F'\t' '$1 == "S" && $2 == "honest" {print $4}' "$WK/plan.tsv")
-  for c in zk_worker_wire zk_worker_finish zk_worker_level0; do
+  for c in zk_worker_wire zk_worker_finish zk_worker_level0 zk_worker_inner zk_worker_pads; do
     FC_FIREWALL_STATEMENT=verity/flock-circuit+seed-injection \
       $TIME "$OUT/honest/selftest-$c.time" bash -c "exec $SBIN selftest --zk --instances $HD/inst.bin \
       --circuit $HD/circuit.txt --draw subset:$HN --only $c" > "$OUT/honest/selftest-$c.out" 2> "$OUT/honest/selftest-$c.err"
-    grep -q '^NEG.*"pass":true}$' "$OUT/honest/selftest-$c.out" || WIRE=FAIL
+    grep -Eq '^NEG.*"pass":true([,}]|$)' "$OUT/honest/selftest-$c.out" || WIRE=FAIL
     log "$c controls: $(grep -E '^NEG' "$OUT/honest/selftest-$c.out" | cut -c1-300)"
   done
 fi

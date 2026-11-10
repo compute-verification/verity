@@ -1,21 +1,43 @@
-"""The block's draw sized to a CPU proving budget: `h200.py`'s windows, one a template, each drawing a uniform
-`subset:k` of its n units, priced by C-Flock `prove --zk` on the CPU nodes instead of the GPU fit, and the share of
+"""The block's sample sized to a CPU proving budget: `h200.py`'s windows, one a template, each sampling a uniform
+`subset:k` of its n units, priced by Flock `prove --zk` on the CPU nodes instead of the GPU fit, and the share of
 each template's units the budget certifies.
 
     uv run python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 [--out DIR]
 
+<<<<<<< 0941037006
 * **A statement** holds up to `UNITS` drawn units of one template, at no more cost than one, since C-Flock pads a
   statement to 8 instance slots. Its m is k_log + 3, with k_log the one C-Flock's composer gives the unit
   (`proof_block_k_log` of its ANDs and its rows, `h200.py`'s ``ands`` and ``rows``, its return's row last). C-Flock
   proves no instance past k_log `K_MAX`, so a unit past it is drawn whole and proved as its least number of parts
   under it, each its share of the ANDs and of every row's bytes, a template of its own (a row cut where a partial sum
   is committed).
+||||||| merged common ancestors
+* **A statement** holds up to `UNITS` drawn units of one template, at no more cost than one, since C-Flock pads a
+  statement to 8 instance slots. Its m is k_log + 3, with k_log = ceil(log2(proved ANDs)), the unit's ANDs with its
+  rows' openings (`h200.py`'s ``proved_ands``). C-Flock proves no instance past k_log `K_MAX`, so a unit with more
+  ANDs is drawn whole and proved as its least number of parts under it, each part a template of its own (a row cut
+  where a partial sum is committed).
+=======
+* **A statement** holds up to `UNITS` sampled proof blocks of one template, at no more cost than one, since Flock pads a
+  statement to 8 instance slots. Its m is k_log + 3, with k_log = ceil(log2(proved ANDs)), the unit's ANDs with its
+  rows' openings (`h200.py`'s ``proved_ands``). Flock proves no instance past k_log `K_MAX`, so a unit with more
+  ANDs is sampled whole and proved as its least number of parts under it, each part a template of its own (a row cut
+  where a partial sum is committed).
+>>>>>>> 7af4d24fca3e
 * **Its cost** comes from `CALIBRATION`: firewalled `--zk` cold sessions on Genoa proofs slots, every one accepted by
   the live verifier and by Lean. Prove wall time is scaled to a 42-core slot by thread count, with the peak summed
-  over the prover, the live verifier and the firewall. Lean `verify --zk` (one core) and staging are counted apart.
+  over the prover, the live verifier and the ZK server. Lean `verify --zk` (one core) and staging are counted apart.
   Past m = 30 time is extrapolated at 2.2x and memory at 2x per m, and a statement takes as many 120 GB slots as its
+<<<<<<< 0941037006
   memory needs. No statement is smaller than k_log `PACK_LOG` (m = 25), so a smaller unit costs the m = 25 point.
 * **The plan**: every template draws k = ceil(ln(S/1%)/share), rounded up to fill its last statement and at most n.
+||||||| merged common ancestors
+  memory needs. No statement is smaller than k_log `K_LOG_MIN` (m = 25), so a smaller unit costs the m = 25 point.
+* **The plan**: every template draws k = ceil(ln(S/1%)/share), rounded up to fill its last statement and at most n.
+=======
+  memory needs. No statement is smaller than k_log `K_LOG_MIN` (m = 25), so a smaller unit costs the m = 25 point.
+* **The plan**: every template samples k = ceil(ln(S/1%)/share), rounded up to fill its last statement and at most n.
+>>>>>>> 7af4d24fca3e
   The share is the least whose statements fit `slots` x `hours` of slot time. Each window then has fewer than
   K0 = ln(S/delta) n/k units incorrect outside delta (`IntegrityPeriodLog`, delta split over the S windows), and its
   windows over any period fewer than that in all (`IntegrityHorizon`), as in `h200.py`.
@@ -28,12 +50,20 @@ from collections.abc import Sequence
 from math import ceil, log
 from pathlib import Path
 
+<<<<<<< 0941037006
 from verity.core.protocols.pous import wipe_monitoring
 from verity.ml.windows.interface import K_MAX, MAX_ROWS, proof_block_k_log
+||||||| merged common ancestors
+from verity.core.protocols.pous import wipe_monitoring
+from verity.ml.windows.interface import K_MAX
+=======
+from verity.core.protocols import reporting
+from verity.ml.windows.interface import K_MAX
+>>>>>>> 7af4d24fca3e
 
-#: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`wipe_monitoring`)
-DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
-PERIODS = dict(wipe_monitoring.PERIODS)
+#: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`reporting`)
+DELTAS = tuple(map(float, reporting.DELTAS))
+PERIODS = dict(reporting.PERIODS)
 SERVERS = 10_000
 UNITS = 8
 SLOT_CORES, SLOT_GB = 42, 120

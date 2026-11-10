@@ -22,16 +22,25 @@ the difftest's `session` reads (`Difftest.sessionFn`):
 * the commitment: the registration (`Difftest.registrationOf`: node, blocks, payload root, codec seed, codec, receipt
   kind, `bind`, layout, rows), which the prover's payload root fixed before any coin; its digest `Registration.digest`;
 * the evidence `{"append_coins": [hex, …], "coins": [hex, …], "events": [...]}`: the verifier's log of the session, its
-  coins (W challenges and W openings coins, then the append coins in the order drawn) and every event it took with
+  coins (W challenges and W openings coins, then the append coins in the order sampled) and every event it took with
   its clock's reading. The log is the verifier's own, as PoUS's `trusted` keys are: it never comes from the prover;
 * the check: the session replayed through the verifier. It rejects with the failure that rejected the session, or
   when the parameters or the log don't decode, as the difftest's port refuses; it is undecided while the session runs
+<<<<<<< ours
   (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Component.AcceptIsVerified`
   states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at the
   session's parameters and g.
+||||||| base
+  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Component.AcceptIsVerified`
+  states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at g.
+=======
+  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Subprotocol.AcceptIsVerified`
+  states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at g.
+>>>>>>> theirs
 
 On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
 session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each draw's receipts and
+<<<<<<< ours
 draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉`
 openings coins at its `samples` s each (the per-draw term of `Accounting.Guarantees.Remote.PooledDraw`; its PRF
 advantages are a named assumption, not a number, and it has no hiding term, since the prover is sent the coin
@@ -40,6 +49,19 @@ proves at `Node.delta = DELTA` (`PublishedEps`). It is a constant of the paramet
 (`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
 not taken off: `q_bytes` is the reads the session's openings certify. When the pooled bound refuses the windows,
 `q_bytes` and `eps` are 0 and the profile says why.
+||||||| base
+draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + S/2^64 for S the draws (the per-draw term of
+`Accounting.Guarantees.Remote.PooledDraw`; its PRF advantages are a named assumption, not a number, and it has no
+hiding term, since the prover is sent the coin commitment only at the session's end). The ledger's γ terms, which need the node's measured rates, are not taken off: `q_bytes` is the reads the
+session's openings certify. When the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says
+why.
+=======
+draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + S/2^64 for S the draws (the per-draw term of
+`Accounting.Guarantees.Remote.PooledSample`; its PRF advantages are a named assumption, not a number, and it has no
+hiding term, since the prover is sent the coin commitment only at the session's end). The ledger's γ terms, which need the node's measured rates, are not taken off: `q_bytes` is the reads the
+session's openings certify. When the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says
+why.
+>>>>>>> theirs
 -/
 
 @[expose] public section

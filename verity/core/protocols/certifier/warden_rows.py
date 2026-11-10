@@ -103,8 +103,8 @@ from verity.core.protocols.certifier.certificate import (DIGEST_BYTES, Certifica
                                                          _u)
 from verity.core.protocols.certifier.grid import BlockGrid
 from verity.core.protocols.certifier.warden import WardenParams
-from verity.core.protocols.sampled_proofs.one_stage import produced
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import produced
+from verity.core.protocols.spot.one_stage import registered as G
 
 DOMAIN_TAG = "verity-network-warden/cells-domain/v2"
 CELLS_TAG = "verity-network-warden/cells/v2"

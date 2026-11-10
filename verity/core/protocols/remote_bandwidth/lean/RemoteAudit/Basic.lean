@@ -1,14 +1,41 @@
 module
 
-public import Flock.Hash
 public import Randomness
 
 /-!
 # Bytes and SHA-512
 
+<<<<<<< ours
 The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_bytes`) and C-Flock's SHA-512. Its trees
 are frame-v3-sha512 (`Flock.FV3.Sha512`): a receipt tree and the payload tree start at 0, an append's tree at its first
 index.
+||||||| base
+The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_bytes`), C-Flock's SHA-512, and
+`verity.ml.commitments.merkle.verify_opening` over a `CommitmentDomain` with `hash = "sha512"` and positions
+`RangeIndexedDomain(start, stop)`: a receipt tree and the payload tree start at 0, an append's tree at its first index.
+
+* domain id: `H(frame "domain" [binding, uint(owner + 2), identity_sha512(range), uint count])`, the range's identity
+  `tagged_sha512("veritor/indexed-domain/range/v1", {"start":start,"step":1,"stop":stop})`;
+* leaf `H(frame "leaf" [id, uint rank, uint position, schema, value])` with `rank = position − start`, node
+  `H(frame "node" [id, uint level, uint index, left, right])`;
+* a path is `merkle_depth(count)` siblings, `depth = bit_length(count − 1)` (0 for one leaf).
+
+`frame` is the merkle frame v3, `FRAME ‖ u32be |tag| ‖ tag ‖ (u64be |part| ‖ part)*`, and `uint` `_uint`'s minimal
+big-endian bytes (`FlockSoundness.Randomness.natBytes`).
+=======
+The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_bytes`), Flock's SHA-512, and
+`verity.ml.commitments.merkle.verify_opening` over a `CommitmentDomain` with `hash = "sha512"` and positions
+`RangeIndexedDomain(start, stop)`: a receipt tree and the payload tree start at 0, an append's tree at its first index.
+
+* domain id: `H(frame "domain" [binding, uint(owner + 2), identity_sha512(range), uint count])`, the range's identity
+  `tagged_sha512("veritor/indexed-domain/range/v1", {"start":start,"step":1,"stop":stop})`;
+* leaf `H(frame "leaf" [id, uint rank, uint position, schema, value])` with `rank = position − start`, node
+  `H(frame "node" [id, uint level, uint index, left, right])`;
+* a path is `merkle_depth(count)` siblings, `depth = bit_length(count − 1)` (0 for one leaf).
+
+`frame` is the merkle frame v3, `FRAME ‖ u32be |tag| ‖ tag ‖ (u64be |part| ‖ part)*`, and `uint` `_uint`'s minimal
+big-endian bytes (`FlockSoundness.Randomness.natBytes`).
+>>>>>>> theirs
 -/
 
 @[expose] public section

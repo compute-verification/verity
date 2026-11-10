@@ -4,7 +4,7 @@ Every lane's points are artifacts of kind `codec-frontier-points/v0`: a JSON lis
 with the metadata `{"schema": "verity/codec-frontier-point/v0", "lane": LANE, "run": RUN_ID}`. This script selects them
 all from the store, or reads `--art` ids and
 `--file` paths, adds the tensor-core codec's runs as points (`--tensor`, its `codec-tensor.json`: `tensor_points`), and
-draws:
+samples:
 - x, the encode time of one pass's data in native passes, on a log scale, with μ_rebuild = (d − τ)/x on a secondary
   axis (at d = 1 and `--tau`, default the median τ of the points); μ_rebuild's numerator is d − τ, d the step's time in
   passes of E (the red team's F1: the adversary's spare compute is the whole step), so x* = (d − τ)/μ_budget is a
@@ -20,7 +20,7 @@ draws:
   horizontal line at 2×; `--idle` defaults to the model's;
 - measured points filled, modelled points hollow, reference points (P2) as stars;
 - one bar per configuration, the lowest y_total of each (lane, b, k, batch, measured) over runs and kernel variants
-  (`--all` draws every point);
+  (`--all` samples every point);
 and prints the frontier, the lowest y_total at x ≥ x* at each batch (d = the point's y_total + idle unless `--d`
 fixes it). Never commit the image or the table.
 

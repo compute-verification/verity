@@ -1,4 +1,4 @@
-# The machine model
+# machine_model: the ACCEL model of each measured card
 
 `machine-model` prices PoUW's designs on the ACCEL model 𝓜 of each measured card. For a card it holds, as data, the rows
 (the measured ceilings: a pipe, a port, or a joint frontier of several classes), the census that places every warp
@@ -17,7 +17,7 @@ What it computes:
   the Lean headline guarantees are exported from ("The headline is per node").
 - **The card table** (`theta`, `sheet`): each card's rates, capacities and clocks with their sources, and its data-sheet
   lines.
-- **The opcode table** (`cover`): the evidence for the card premise ("The opcode table").
+- **The opcode table** (`cover`): the evidence for the card assumption ("The opcode table").
 
 This file holds no table of the data. `machine-model render` prints every one as Markdown from a data directory alone:
 the vectors, the epochs and their census, the rows, the floors, the designs, the honest kernels, the proof blocks, the
@@ -292,7 +292,7 @@ record, never to compare designs. `solve` prints τ, the price vectors' real-tim
 - **ε_mand**: the fold or the filler done in fewer instructions than honest's. The design's `[mand.PART]`: 0 for duo.
 - **ε_machine = ε_cert + ε_route**: the cheater's best mix over Π at q*, from the LP below. ε_cert = 1 − π*·n(H)/B(H) is
   honest's own free compute at the certificate π*; ε_route is what the cheater's routes add.
-- **ε_luck**: the sampling bound inside the same LP. Every check is one draw, so an accepted cheater leaves d̄ =
+- **ε_luck**: the sampling bound inside the same LP. Every check is one sample, so an accepted cheater leaves d̄ =
   ln(1/δ)/((1 − p)·S) of the words wrong over S spot checks, still folded, each filler's blocks at their own p. The
   design's `[luck]`.
 - **ε_sched**: honest's measured time above its model time; 0 unmeasured. `[measured]` in `data/honest/NAME.toml`.
@@ -305,7 +305,7 @@ record, never to compare designs. `solve` prints τ, the price vectors' real-tim
 - **γ**: honest's time a useful MMA over the plain GEMM's model time: measured when the design runs the profile's
   kernel, else the measured kernel's time plus the model's difference between the design and that kernel, else the
   model's alone.
-- **q***: the fewest lane instructions, past the fold, of a right fresh committed word whose production reads no
+- **q***: the fewest lane instructions, past the fold, of a right fresh committed word whose computation reads no
   data-dependent address. Assumed, never measured (`ScalarRoute`, `Accounting.Assumptions.TS`). `--q`, default 8.
 - **q*_T, b_T**: a table word's lane instructions, and the bytes it reads from its memory level. `data/table.toml`,
   `--lookup-q`, `--lookup-bytes`.
@@ -414,7 +414,7 @@ tcgen05.ld.32x32b.x32 that brings each committed word to registers, 1024/L a MMA
 
 ## The opcode table
 
-The card premise (`CardWithinAccel`) is that every instruction a card executes is dominated by an ACCEL op (`Accel.Op`)
+The card assumption (`CardWithinAccel`) is that every instruction a card executes is dominated by an ACCEL op (`Accel.Op`)
 at no fewer units of the same resource. `data/cover/` is its evidence on the H200 (sm_90) and the RTX PRO 6000 (sm_120):
 evidence, not trusted base, since no verifier and no Lean reads it. `machine-model cover` prints it as Markdown, a table
 a card, with the counts by mark and every hole.
@@ -432,7 +432,7 @@ a card, with the counts by mark and every hole.
   gitignored): `suites.py` fetches them before the tests, and `uv run research data fetch-fixtures
   benchmarks/pouw/machine_model/data/cover benchmarks/pouw/sass_census/data` brings them into a checkout. `rows.toml`,
   the reviewed table, stays in Git.
-- **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, envelope op with its pipe, stores or formats,
+- **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, ACCEL op (`envelope`) with its pipe, stores or formats,
   units a warp instruction, register words, rate (card-table keys, or `rate_value` with its unit), argument and source.
   A row with `forms` (regexes over the dotted form) covers those forms; the opcode's plain row covers the rest. A unit
   outside the SM pipes is a `[[unit]]` with the same marks.

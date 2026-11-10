@@ -19,7 +19,7 @@ the weights' root (its coin commitment is published as ``coins.json``, where `ve
 - ``control``: decode's calls again, retained, with every commitment write omitted (`e2e.CONTROL_OMITS`), so the transcript is
   whatever the poison left.
 
-``--shapes`` names the weights' (n, k) in place of the in-domain ones; one shape alone makes every tile verify draws that
+``--shapes`` names the weights' (n, k) in place of the in-domain ones; one shape alone makes every tile verify samples that
 shape's (a pass calls every weight the epoch commits, `audit.Epoch`'s rule).
 
 ``volunteer`` is the prover's step between the capture and the sampling coin (`volunteer_pass.volunteer`, V-EX's remedy): it

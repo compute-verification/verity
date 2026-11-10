@@ -1,7 +1,7 @@
 module
 
 /-!
-# What the window makes public (`window.py`, "Public items")
+# What the execution phase makes public (`window.py`, "Public items")
 
 `PUBLIC`, the draft's list and the rows' fixed length, in the service's `Public` form, `REGISTERED`, the items
 a registration carries, `LEGACY_REGISTERED`, what one made before the fixed-length rule carries, and `KINDS`, the kinds
@@ -34,7 +34,7 @@ def publicItems : List PublicItem := [
   ⟨"drawn", "coins", "outcome", "the verifier's own draw, after the receipt"⟩,
   ⟨"root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"⟩]
 
-/-- `REGISTERED`: the items a registration carries; the verdict and the draw come after it. -/
+/-- `REGISTERED`: the items a registration carries; the verdict and the sample come after it. -/
 def registered : List String := ["work", "check", "sampling", "length", "root_W"]
 
 /-- `LEGACY_REGISTERED`: what a registration made before the fixed-length rule carries, `registered` without `length`,

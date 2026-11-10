@@ -35,8 +35,8 @@ from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Workload, salt_of, weights_root
 from verity.core.protocols.pouw.coins import Challenger
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.sampled_proofs import challenger as LC
-from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.spot import challenger as LC
+from verity.core.protocols.spot import remote as R
 from verity.ml.crypto import lms
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
@@ -224,7 +224,7 @@ def test_a_served_install_takes_the_sessions_salt_coin_after_its_epochs_root(tmp
 
 def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one_weights_root_the_next_k(
         tmp_path, monkeypatch):
-    """Each install's `commit_weights` draws its own hm96 key, so a reinstall's weights' root W is its own. A reinstall
+    """Each install's `commit_weights` samples its own hm96 key, so a reinstall's weights' root W is its own. A reinstall
     committing a W this process already had an epoch over (the stand-in's fixed roots: the same key over the same weights)
     is that W's next epoch: k = 1, its challenge phase opened on its own epoch root, never epoch 0's."""
     keys = []

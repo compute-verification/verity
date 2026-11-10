@@ -4,7 +4,7 @@ twice, the dead-unit second pass, the separable branches, primitive Calls, all t
 and `verify`, and the seeded random corpus of the Lean port's conformance run (`verity/ml/flock/verifier/qword_agree.py`, same
 generator and seed), as digests of its cases and of core's answers.  Programs are descriptor bytes; the evaluation is from the bytes.
 `v2`: `Q_word` v2 on the same programs (v1's evaluation; a value computed in two units reported, not refused).
-`python verity/ml/circuits/tests/test_qword_vectors.py --write` rewrites the file."""
+Its `--write` rewrites the file; `REWRITE` names the command that runs it."""
 from __future__ import annotations
 
 import copy
@@ -27,6 +27,8 @@ from verity.ml.circuits.ops.prims import Bf16ToF32, F32ToBf16Rn, const
 from verity.ml.circuits.ops.scalar import BitAnd, Bf16GtStrict, F32BitsShl23, F32Fabs, F32Fmaxf, I32Add
 
 PATH = Path(__file__).parent / "qword_vectors.json"
+REWRITE = ("the vectors differ from the tree's; a change meant to move them rewrites them with "
+           "`uv run python tools/verity/check/pins.py --write verity/ml/circuits/tests/qword_vectors.json`")
 BIT, BF16, V32, V64 = Value(1), Value(16), Value(32), Value(64)
 
 TWide = PrimitiveDefinition("TWide", 1, (("x", Array(cut.WIDE_FAN_IN, V32)), ("a", V32)), V32, lambda *a: sum(a) & 0xFFFFFFFF, register=False)
@@ -400,17 +402,18 @@ def live() -> dict:
 
 
 def test_the_constants_of_the_version(live):
-    assert live["constants"] == VECTORS["constants"] == {"wiring": ["Bf16ToF32_v1", "F32BitsShl23_v1", "F32Fabs_v1"], "wide_fan_in": 4096,
-                                                         "width_rule": [16, 32, 0], "param_max": 65536}
+    assert live["constants"] == VECTORS["constants"], REWRITE
+    assert VECTORS["constants"] == {"wiring": ["Bf16ToF32_v1", "F32BitsShl23_v1", "F32Fabs_v1"], "wide_fan_in": 4096,
+                                    "width_rule": [16, 32, 0], "param_max": 65536}
 
 
 def test_the_descriptors(live):
-    assert live["descriptors"] == VECTORS["descriptors"]
+    assert live["descriptors"] == VECTORS["descriptors"], REWRITE
 
 
 @pytest.mark.parametrize("n", range(len(EVALUATED)), ids=[e[0] for e in EVALUATED])
 def test_the_evaluations(live, n):
-    assert live["evaluations"][n] == VECTORS["evaluations"][n]
+    assert live["evaluations"][n] == VECTORS["evaluations"][n], REWRITE
     for e in VECTORS["evaluations"][n][1]:
         assert e["verify"]["ok"]
 
@@ -441,11 +444,12 @@ def test_every_wiring_primitive_is_in_a_vector():
 
 @pytest.mark.parametrize("n", range(len(REFUSED) + 1), ids=[r[0] for r in REFUSED] + ["another program"])
 def test_verify_refuses(live, n):
-    assert live["verify_refusals"][n] == VECTORS["verify_refusals"][n] and not VECTORS["verify_refusals"][n][4]["ok"]
+    assert live["verify_refusals"][n] == VECTORS["verify_refusals"][n], REWRITE
+    assert not VECTORS["verify_refusals"][n][4]["ok"]
 
 
 def test_every_query_refuses_a_program_that_is_not_topological(live):
-    assert live["order_refusals"] == VECTORS["order_refusals"]
+    assert live["order_refusals"] == VECTORS["order_refusals"], REWRITE
     for _l, _n, _k, _node, _a, _r, v in VECTORS["order_refusals"]:
         assert v["codes"] == ["query-inapplicable"] and v["detail"][0]["why"] == "not topological"
     reg = registry()
@@ -454,7 +458,7 @@ def test_every_query_refuses_a_program_that_is_not_topological(live):
 
 
 def test_served(live):
-    assert live["served"] == VECTORS["served"]
+    assert live["served"] == VECTORS["served"], REWRITE
     got = {label: (v["codes"], [c for _k, cs in v["cut"] for c in cs]) for label, _s, v in VECTORS["served"]}
     assert got["the derived sets"] == ([], []) and got["nothing"][0] == ["served-missing"]
     assert got["a gate that is not an integer"][0] == got["a gate listed twice"][0] == ["served-malformed"]
@@ -464,17 +468,17 @@ def test_served(live):
 
 
 def test_validate_refuses(live):
-    assert live["object_refusals"] == VECTORS["object_refusals"]
+    assert live["object_refusals"] == VECTORS["object_refusals"], REWRITE
     assert all(codes for _l, _o, codes in VECTORS["object_refusals"])
 
 
 @pytest.mark.parametrize("n", range(len(CORPORA)), ids=[f"seed{s}-n{n}-g{g}" for s, n, g in CORPORA])
 def test_the_random_corpus(live, n):
-    assert live["corpora"][n] == VECTORS["corpora"][n]
+    assert live["corpora"][n] == VECTORS["corpora"][n], REWRITE
 
 
 def test_the_v2_vectors(live):
-    assert live["v2"] == VECTORS["v2"]
+    assert live["v2"] == VECTORS["v2"], REWRITE
 
 
 def _without_report(c: dict) -> dict:

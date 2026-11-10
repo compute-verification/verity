@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The ingress tie in zero knowledge (n2_tie_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
-# C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the sampled-proofs verifier
+# Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the sampled-proofs verifier
 # built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in one of the network slots, as a job of at most 180
 # minutes:
 #   env N2_MEM_GB=56 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
@@ -38,7 +38,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \

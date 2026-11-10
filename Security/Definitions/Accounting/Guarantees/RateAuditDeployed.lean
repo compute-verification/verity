@@ -11,12 +11,12 @@ public import Definitions.Accounting.Assumptions.RateAuditDeployed
 One guarantee from "the verifier accepts a session of `n` chained windows" to "the session conserves its words, at
 `γ` no more than the sum of its named terms", over the deployed game (`Definitions/Accounting/RateAuditDeployed.lean`):
 partial completion, interactive side sources, memory tiers, chained passes whose roots the prover grinds, and one
-pooled draw a window. Proofs are in `Security/Proofs/Accounting/RateAudit/Deployed.lean`.
+pooled sample a window. Proofs are in `Security/Proofs/Accounting/RateAudit/Deployed.lean`.
 
 * `RemoteSessionConservation`: at every `d̄`, `d_w` and every parameter.
 * `RemoteSessionConservationDeployed`: at the deployed parameters (masked `p = 2^1024 − 105` at `k = 3` rounds, 4 KiB
   blocks, SHA-512 receipts, 2,773 openings a window, `d̄ = 0.15%`, `d_w = 1%`, at most `2^55` compressions), where
-  the draw's two terms are each at most `2^-40` from seven windows on.
+  the sample's two terms are each at most `2^-40` from seven windows on.
 * `RemoteSessionRoutes`: the session as a run of the remote audit (`Accounting.Remote.Run.ofDeployed`) meets its routes
   `Sampled d̄` and `Paid`, at the errors above.
 * `RemoteSessionRunConservation`: `Accounting.SecurityProofs.Remote.Conservation` at those routes, read at the node: the
@@ -46,12 +46,26 @@ open Accounting Accounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 
+<<<<<<< ours
 /-- **The remote bandwidth audit as deployed: an accepted session conserves its words, over the monitoring period and
 in every window.** For every deployed session of `n` windows on one store (`Rate.DeployedSession`: in each window `P`
 chained passes whose `G` candidate roots the prover grinds, pass devices with partial completion, interactive side
 sources that ignore the oracle, at most `S` bits on chip, `L` over the link and `q` oracle queries a pass, and one
 pooled draw of `d` of the window's `P·N` receipts), every split of device memory into `τ` tiers, and every `d̄` and
 `d_w ≤ 1`: if
+||||||| base
+/-- **The remote bandwidth audit as deployed: an accepted session conserves its words, over the horizon and in every
+window.** For every deployed session of `n` windows on one store (`Rate.DeployedSession`: in each window `P` chained
+passes whose `G` candidate roots the prover grinds, pass devices with partial completion, interactive side sources that
+ignore the oracle, at most `S` bits on chip, `L` over the link and `q` oracle queries a pass, and one pooled draw of `d`
+of the window's `P·N` receipts), every split of device memory into `τ` tiers, and every `d̄` and `d_w ≤ 1`: if
+=======
+/-- **The remote bandwidth audit as deployed: an accepted session conserves its words, over the horizon and in every
+window.** For every deployed session of `n` windows on one store (`Rate.DeployedSession`: in each window `P` chained
+passes whose `G` candidate roots the prover grinds, pass devices with partial completion, interactive side sources that
+ignore the oracle, at most `S` bits on chip, `L` over the link and `q` oracle queries a pass, and one pooled sample of `d`
+of the window's `P·N` receipts), every split of device memory into `τ` tiers, and every `d̄` and `d_w ≤ 1`: if
+>>>>>>> theirs
 completions are as hard as `WorkHardness b rounds c_root cost` says and every pass's completions fit the squaring
 ceiling `F` (`SquaringCeiling cost F`), then the probability that every opening of every window passes while either the
 session's tier reads fall short of `(1 − γ̄)` of its `n·P·N·b` bits,
@@ -71,16 +85,34 @@ The terms of `γ` are fractions of a pass's `N·b` bits (`Rate.Deployed`): `μ_c
 pass can complete within its ceiling, and `μ_λ = λ/(N·b)` the compression slack.
 
 **The reading.** Every way to a receipt's block other than reading it from a tier in the pass is one term: holding it
+<<<<<<< ours
 on chip, taking it over the link, completing it (whole or in part), or the slack the compression leaves; the draw's
 shortfall is `d̄` over the monitoring period and `d_w` in each window. The prover is one resource: nothing here says
 which device, machine or party reads, completes or holds a word. Reads are counted over the tiers, so `R·T` is their
 sum's capacity; the term `G` is the grinding the Fiat–Shamir seed allows (`fiat-shamir`).
+||||||| base
+on chip, taking it over the link, completing it (whole or in part), or the slack the compression leaves; the draw's
+shortfall is `d̄` over the horizon and `d_w` in each window. The prover is one resource: nothing here says which
+device, machine or party reads, completes or holds a word. Reads are counted over the tiers, so `R·T` is their sum's
+capacity; the term `G` is the grinding the Fiat–Shamir seed allows (`fiat-shamir`).
+=======
+on chip, taking it over the link, completing it (whole or in part), or the slack the compression leaves; the sample's
+shortfall is `d̄` over the horizon and `d_w` in each window. The prover is one resource: nothing here says which
+device, machine or party reads, completes or holds a word. Reads are counted over the tiers, so `R·T` is their sum's
+capacity; the term `G` is the grinding the Fiat–Shamir seed allows (`fiat-shamir`).
+>>>>>>> theirs
 
 **The proof** (`Accounting.SecurityProofs.RemoteSessionConservation`): each pass device is simulated by an interactive
 device of `RatePaidNamedRO`'s class whose side sources also answer the completed bits, so its link carries
 `L + b·F/(rounds·c_root)` (`WorkHardness` and `SquaringCeiling`), with the same tier reads, receipts and oracle-free
 side sources and nothing rebuilt; `RatePaidNamedRO` bounds each pass at each candidate root (a union over the `G`
+<<<<<<< ours
 candidates, `GrindChain`), the pooled draws are `RateSessionDraw`'s causal rounds, and the two readings are its
+||||||| base
+candidates, `GrindChain`), the pooled draws are `RateSessionDraw`'s causal horizon, and the two readings are its
+=======
+candidates, `GrindChain`), the pooled samples are `RateSessionSample`'s causal horizon, and the two readings are its
+>>>>>>> theirs
 `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋`.
 
 Frozen (no-function, hash): a bound in the random-oracle model over a session of abstract chip programs, which no Lean
@@ -141,7 +173,7 @@ declared capacity over `a`'s interval is the session's `n·P·N·b` bits, with `
 `b` and its slack `λ` (`Accounting.Remote.Run.ofDeployed`, at `b·F/(rounds·c_root)` bits completed a pass), every
 deployed session under `RemoteSessionConservation`'s hypotheses meets
 
-* `Sampled d̄` (μ_sample) except with probability `(1 − d̄)^(d·n)`: the pooled draws pass while the correct receipts
+* `Sampled d̄` (μ_sample) except with probability `(1 − d̄)^(d·n)`: the pooled samples pass while the correct receipts
   cover less than `(1 − d̄)·C`; and
 * `Paid` except with probability `n·P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`: the correct receipts' words exceed what the
   run paid for them (its tier reads, its on-chip state, the side link beyond the stream, its completed bits) and its
@@ -199,13 +231,13 @@ Window `w` read as a run of the remote audit (`Accounting.Remote.Run.ofDeployedW
 capacity over `a`'s interval is the window's `P·N·b` bits, with `a`'s passes the window's `P`: under
 `RemoteSessionConservation`'s hypotheses and `d_w ≤ 1`, the run meets `Sampled d_w` except with probability
 `(1 − d_w/n)^(d·n)` and `Paid` except with `P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`, and
-`Accounting.SecurityProofs.Remote.Conservation` at them gives: the probability that every window's draw passes while
+`Accounting.SecurityProofs.Remote.Conservation` at them gives: the probability that every window's sample passes while
 window `w`'s correct receipts cover less than `(1 − d_w)·C`, or its tier reads are less than `(1 − γ_w)·C`,
 `γ_w = d_w + μ_chip + μ_link + μ_rebuild + μ_λ`, is at most
 
   `(1 − d_w/n)^(d·n) + P·G·(N/2^h + C(q, 2)/2^h + 2^N/2^λ)`.
 
-**The reading.** `RemoteSessionConservation`'s per-window reading, one window at a time: the draw's term is the same
+**The reading.** `RemoteSessionConservation`'s per-window reading, one window at a time: the sample's term is the same
 (it bounds the event that some window holds at most `⌊(1 − d_w)·P·N⌋`), and the unpaid term is one window's.
 
 Frozen (no-function, hash): as `RemoteSessionConservation`. -/
@@ -297,7 +329,7 @@ def RemoteSessionRunConservationRelay : Prop :=
 
 /-- **Each window of the deployed session with relaying side sources conserves its words as a run of the remote
 audit.** `RemoteWindowRunConservation` without the hypothesis that the side sources ignore the oracle, for every `m`,
-with the run's slack `a.λ = λ + m·b` a pass: the probability that every window's draw passes while window `w`'s correct
+with the run's slack `a.λ = λ + m·b` a pass: the probability that every window's sample passes while window `w`'s correct
 receipts cover less than `(1 − d_w)·C`, or its tier reads are less than `(1 − γ_w)·C`, with
 `γ_w = d_w + μ_chip + μ_link + μ_rebuild + (λ + m·b)/(N·b)`, is at most
 
@@ -322,9 +354,9 @@ def RemoteWindowRunConservationRelay : Prop :=
             ((Remote.Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).reads x : ℝ)
 
 /-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class.** A session of `n`
-windows draws one `ks × (32·m)` signs matrix per window, runs `P` causal passes with `G` candidate oracles per pass (the
-grinding its Fiat–Shamir pass seed allows, `fiat-shamir`), then draws `d` of the window's `P·N` receipts. Every pass is
-a `RateSketch.Device`: it obtains 32-byte sectors only whole and verbatim. If each pass rebuilds at most `X` bits, and
+windows samples one `ks × (32·m)` signs matrix per window, runs `P` causal passes with `G` candidate oracles per pass (the
+grinding its Fiat–Shamir pass seed allows, `fiat-shamir`), then samples `d` of the window's `P·N` receipts. Every pass is
+a `RateSketch.Prover`: it obtains 32-byte sectors only whole and verbatim. If each pass rebuilds at most `X` bits, and
 the signs' rank tail is `Assumptions.SketchRank ks m r ε`, then the probability that every opening passes while the
 session or some window falls below its reading is at most
 
@@ -368,7 +400,7 @@ def RemoteSessionConservationSketch : Prop :=
 rank `r = 12`, 2,773 pooled openings per window, `d̄ = 0.15%` and `d_w = 1%`, with one added named assumption: across
 each pass's `G` grinding candidates the oracle queries total at most `qtot`
 (`Accounting.Assumptions.SketchHashBudget`). The receipt term is the sum form — queries add across a pass's
-candidates, and grinding multiplies only the tag-guess term. From seven windows on, the two draw terms are at most
+candidates, and grinding multiplies only the tag-guess term. From seven windows on, the two sample terms are at most
 `2^-40` each:
 
   `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96`.
@@ -376,7 +408,7 @@ candidates, and grinding multiplies only the tag-guess term. From seven windows 
 **The reading.** `qtot` is the node's hash budget for one pass, so the deployed cap of at most `2^55` compressions a
 pass reads `qtot = 2^55`, where the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`) and the guess term
 `n·P·G·N/2^512` stays negligible at `G ≤ 2^55`. The multiplicative bound `n·P·G·(N/2^512 + q/2^96)` is the special
-case `qtot = G·q` that the per-candidate caps alone give (`Device.budget_of_bounded`;
+case `qtot = G·q` that the per-candidate caps alone give (`Prover.budget_of_bounded`;
 `Accounting.SecurityProofs.RemoteSessionConservationSketchDeployedProduct` keeps it stated), which at those caps was
 vacuous: its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`).
 

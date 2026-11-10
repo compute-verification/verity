@@ -42,8 +42,9 @@ With `RESEARCH_NOTES_TOKEN` set, every fetch, pull and push of a github.com note
 steward's pull, budgets.toml's fetch) goes to its explicit-user URL `https://x-access-token@github.com/<owner>/<repo>.git` with a
 credential helper that reads the token from the environment.  A cloud VM's global `url.<cursor[bot] token>.insteadOf
 https://github.com/` matches only the plain URL, so it no longer turns the request into the bot's, which the notes repo refuses;
-the token itself is never in a URL, an argument or a message.  Unset, nothing changes.  With the token set, a notes command (and
-machine resolution, which reads `<notes>/machines.d`) on a machine without the notes clone clones `NOTES_URL` there first
+the token itself is never in a URL, an argument or a message.  Unset, a Cursor agent gets one from the agents' GitHub broker
+(`notes_token`), so a cloud VM needs no secret; elsewhere nothing changes.  With a token, a notes command (and machine
+resolution, which reads `<notes>/machines.d`) on a machine without the notes clone clones `NOTES_URL` there first
 (`ensure_clone`).
 """
 from __future__ import annotations
@@ -60,12 +61,17 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.request
 from pathlib import Path
 
 from .secret_hint import FRESH_SHELL, lost
 
 SYNC_ENV = "RESEARCH_NOTES_SYNC"
 TOKEN_ENV = "RESEARCH_NOTES_TOKEN"
+SOURCE_ENV, EXPIRES_ENV = "RESEARCH_NOTES_TOKEN_SOURCE", "RESEARCH_NOTES_TOKEN_EXPIRES"
+#: the agents' GitHub broker: a Cursor agent's identity buys an hour's token for the notes repository
+GITHUB_BROKER = "https://website-docs-sage.vercel.app/api/agent-github/token"
+REFRESH_S, BROKER_RETRY_S = 300, 60
 NOTES_URL = "https://github.com/compute-verification/research-notes.git"
 #: a clone made before the notes moved into the organization still names the old address; the token is the organization's
 MOVED = {"danielreuter/research-notes": "compute-verification/research-notes"}
@@ -112,7 +118,7 @@ CITE_HINTS = {"run": "a run is in the store once its attempt is on the remote: `
 def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None) -> subprocess.CompletedProcess:
     """git in `root`; output that is not UTF-8 (a diff of a binary or Latin-1 file) is decoded with replacement characters.
     Commits are unsigned: the notes repo needs no signatures, and an agent VM's signing key is often missing from its agent,
-    which made every commit and rebase here fail (TOP-90 row 27)."""
+    which would make every commit and rebase here fail."""
     return subprocess.run(["git", "-C", str(root), "-c", "commit.gpgsign=false", *args], capture_output=True, text=True,
                           errors="replace", timeout=timeout, input=input)
 
@@ -122,11 +128,43 @@ def _out(root: Path, *args: str) -> str | None:
     return r.stdout if r.returncode == 0 else None
 
 
+_BROKER_REFUSED: list[float] = []
+
+
+def notes_token(now: float | None = None) -> str | None:
+    """RESEARCH_NOTES_TOKEN when it was set by hand (a laptop, the control pod); else, on a Cursor agent, an hour's token for the
+    notes repository from the agents' GitHub broker (`GITHUB_BROKER`, scope `notes`), which this puts in the environment with its
+    source and expiry, so git's credential helper and child processes read it, and mints again REFRESH_S before it expires.  None
+    when there is neither; a broker that refused is asked again only after BROKER_RETRY_S."""
+    now = time.time() if now is None else now
+    tok = os.environ.get(TOKEN_ENV)
+    if tok and (os.environ.get(SOURCE_ENV) != "broker" or float(os.environ.get(EXPIRES_ENV) or 0) > now + REFRESH_S):
+        return tok
+    if _BROKER_REFUSED and now < _BROKER_REFUSED[-1] + BROKER_RETRY_S:
+        return tok or None
+    try:
+        from .slack import _NoRedirect, oidc_token
+        req = urllib.request.Request(GITHUB_BROKER, data=json.dumps({"scope": "notes"}).encode(), method="POST",
+                                     headers={"Authorization": f"Bearer {oidc_token(GITHUB_BROKER)}",
+                                              "Content-Type": "application/json"})
+        with urllib.request.build_opener(_NoRedirect).open(req, timeout=25) as r:
+            d = json.loads(r.read(32768))
+        new = d["token"]
+        expires = dt.datetime.fromisoformat(d["expires_at"].replace("Z", "+00:00")).timestamp()
+        if not isinstance(new, str) or not new or any(c.isspace() for c in new):
+            raise ValueError("malformed token")
+    except Exception:  # noqa: BLE001  (no Cursor identity, a refusal or an outage: the caller goes on without a token)
+        _BROKER_REFUSED.append(now)
+        return tok or None
+    os.environ.update({TOKEN_ENV: new, SOURCE_ENV: "broker", EXPIRES_ENV: f"{expires:.0f}"})
+    return new
+
+
 def token_url(url: str) -> tuple[list[str], str] | None:
-    """(git options, explicit-user URL) that reach the github.com repository `url` names with RESEARCH_NOTES_TOKEN (module
-    docstring); None when the token is unset or `url` is not github.com's."""
+    """(git options, explicit-user URL) that reach the github.com repository `url` names with the notes token (`notes_token`,
+    module docstring); None when there is none or `url` is not github.com's."""
     m = GITHUB_URL_RE.match(url.strip())
-    if not (os.environ.get(TOKEN_ENV) and m):
+    if not (m and notes_token()):
         return None
     repo = MOVED.get(m["repo"], m["repo"])
     return ["-c", "credential.helper=", "-c", f"credential.helper={CREDENTIAL_HELPER}"], f"https://x-access-token@github.com/{repo}.git"
@@ -146,7 +184,7 @@ REFUSED = ("Authentication failed", "could not read Username", "Permission denie
 
 def refused(stderr: str) -> bool:
     """Whether a failed fetch or push was refused (credentials, permissions, no such repository), which no retry changes. Anything
-    else, a lost push race or a lock or transfer error two machines' syncs under load hit (6 Oct, load 156), is retried."""
+    else, a lost push race or a lock or transfer error two machines' syncs hit under heavy load, is retried."""
     return any(k in stderr for k in REFUSED)
 
 
@@ -154,7 +192,7 @@ def token_hint(root: Path, remote: str = "origin") -> str:
     """'' unless RESEARCH_NOTES_TOKEN is empty here and `remote` is github.com's; then why git failed and what to do, for the end of
     a fetch or push failure (a laptop's own credentials need no token, so an empty one is no refusal by itself)."""
     url = _out(root, "config", "--get", f"remote.{remote}.url") or ""
-    if os.environ.get(TOKEN_ENV) or not GITHUB_URL_RE.match(url.strip()):
+    if not GITHUB_URL_RE.match(url.strip()) or notes_token():
         return ""
     return (f" -> {TOKEN_ENV} is empty in this shell, so git used the VM's own credentials, which the notes repo refuses: "
             + (lost(TOKEN_ENV) or f"set it (a Cursor secret, Cloud Agents > Secrets) or {FRESH_SHELL}"))
@@ -174,9 +212,9 @@ _CLONE_LOCK = threading.Lock()
 
 
 def ensure_clone(root: Path) -> str | None:
-    """Clone NOTES_URL to `root` when `root` is missing and RESEARCH_NOTES_TOKEN is set (a fresh cloud VM), its `origin` the plain
+    """Clone NOTES_URL to `root` when `root` is missing and there is a notes token (a fresh cloud VM), its `origin` the plain
     URL: a line saying it did, or why it failed; None when there was nothing to do.  One thread of a process clones at a time
-    (`research run`'s machine probes run in parallel: a clone directory named by pid alone was each other's, 26 Oct), and each
+    (`research run`'s machine probes run in parallel, so a clone directory named by pid alone would be each other's), and each
     clones into a directory of its own, so another process cloning beside it never touches it."""
     root = Path(root).expanduser()
     if root.exists() or not (t := token_url(NOTES_URL)):
@@ -488,8 +526,7 @@ def citation_warnings(cites: dict[str, list[str]], remote=None) -> list[str]:
 
 def clear_stale_lock(root: Path, now: float | None = None, procs: Path = Path("/proc")) -> bool:
     """Remove the repository's index.lock when it is over STALE_LOCK_S old and no git process works in the repository; whether it
-    did.  A git killed mid-write leaves it, and every later sync then fails at its rebase (the control pod's steward, 19 Oct: three
-    times in three hours, each cleared by hand)."""
+    did.  A git killed mid-write leaves it, and every later sync then fails at its rebase until someone clears it by hand."""
     gitdir = (_out(root, "rev-parse", "--absolute-git-dir") or "").strip()
     if not gitdir:
         return False
@@ -554,7 +591,7 @@ def sync(root: Path, paths: list[str] | None = None, message: str | None = None,
                 conflict = [x for x in (_out(root, "diff", "--name-only", "--diff-filter=U") or "").splitlines() if x]
                 _run(root, "rebase", "--abort")
                 if not _out(root, "symbolic-ref", "-q", "HEAD"):
-                    # an abort that lost its rebase-merge directory (NFS, 3 and 6 Oct) leaves HEAD detached at the remote branch
+                    # an abort that lost its rebase-merge directory (as on NFS) leaves HEAD detached at the remote branch
                     _run(root, "checkout", "-q", branch)
                 return {**rep, "rc": 3, "conflict": conflict,
                         "error": "rebase conflict; nothing was dropped (the local commit is kept, the rebase aborted): resolve "

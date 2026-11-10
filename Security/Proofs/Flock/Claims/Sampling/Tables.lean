@@ -229,12 +229,9 @@ set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record, with zero knowledge of the sampled masked protocol at the sessions'
 tables**: `sampling_deployed` at the record masked at `tapeOf` and `S_GK` of `withTabSim`, its `hZK` from
 `zk_sampled_tables_mask`. -/
-theorem sampling_deployed_tables (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
-    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c)
-    (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
-    (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
-    (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
-    (hComplete : Complete H (deploy rel c)) (S : Sampled c) (hR : HelloRounds c) (t : ℕ) (ht : 0 < t)
+theorem sampling_deployed_tables (H : Msg → Msg) (hslots : DrawSlots (deploy rel c))
+    (hprog : ProgramScope (deploy rel c)) (hComplete : Complete H (deploy rel c)) (S : Sampled c) (hR : HelloRounds c)
+    (t : ℕ) (ht : 0 < t)
     (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → Reference.Tape) (hP : Honest c H S.leaky.G tapeOf)
     (Mp : ∀ lx x, S.leaky.G.Nonce → (S.leaky.proto lx).TPreModel x)
     (Mc : ∀ lx x, S.leaky.G.Nonce → (Fin (S.leaky.G.K x) → S.leaky.G.Coin) → (S.leaky.proto lx).TCoinModel x)
@@ -243,15 +240,13 @@ theorem sampling_deployed_tables (H : Msg → Msg) (hKS : Claims.Flock.KS H (Flo
     (hL : ∀ lx, (S.leaky.proto lx).TMsgLink H (RAt H (deploy rel c) lx) (Mp lx) (Mc lx))
     (hOK : ∀ lx, (S.leaky.proto lx).TablesOK (Mp lx) (Mc lx)) :
     ScopeMatches (deploy rel c) ∧ Binding (deploy rel c) ∧ Universal (deploy rel c) ∧ FaultyBoundary ∧
-      KS H (deploy rel c) ∧ KSCount H (deploy rel c) ∧ Bits H (deploy rel c) ∧
-      Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) ∧
+      Complete H (deploy rel c) ∧
       ZK H ((deploy rel c).mask S.leaky.G.Nonce S.leaky.G.Rand tapeOf
           ((S.leaky.withTabSim Mc nS).simLeakE t (t * 3 ^ t)))
         (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
           8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
           2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
-  sampling_deployed rel c H hKS hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hreveals hComplete
-    tapeOf ((S.leaky.withTabSim Mc nS).simLeakE t (t * 3 ^ t)) _ _
+  sampling_deployed rel c H hslots hprog hComplete tapeOf ((S.leaky.withTabSim Mc nS).simLeakE t (t * 3 ^ t)) _ _
     (zk_sampled_tables_mask rel c H S hR t ht tapeOf hP Mp Mc nL nB nS hnL hnB hnS hL hOK)
 
 end SamplingDeploy

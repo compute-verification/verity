@@ -5,17 +5,15 @@ circuit's META), candidate 3's check 5 inputs (`c3`), candidate 3's checks befor
 (`checkInner`), and the V* checks both run on every statement (`checks`). Both call sites call these, so a statement
 about them is one about what either accepts. `verify`'s setup also refuses a V* session that is not one table holding
 its whole population (`oneFull`). `verify` also refuses, last in each verdict, a recursive session without
-the verifier's inner shape, a V* session whose draw is not every unit of its population (`fullDraw`), a session over
-an inner session whose record holds no draw (`innerDrawn`), and a session at a holo or sparse inner shape or a
+the verifier's inner shape, a V* session whose sample is not every unit of its population (`fullDraw`), a session over
+an inner session whose record holds no sample (`innerDrawn`), and a session at a holo or sparse inner shape or a
 recursive one without `--zk`, neither of which `RecursiveKS` covers (`denseOnly`, `zkOnly`).
 -/
 module
 
 public import Flock.RecBudget
-public import Flock.RecCoins
 public import Flock.RecRecord
 public import Flock.Witness
-public import Flock.JsonParse
 
 @[expose] public section
 
@@ -38,13 +36,13 @@ with its round. -/
 def repCommits (r : RecRecord.Record) (s : List UInt8) : List (Nat × List (List UInt8)) :=
   (r.rounds.filter (·.stream == s)).filterMap fun x => if x.commits.isEmpty then none else some (x.k, x.commits)
 
-/-- The refusal of a coin server's record that is not in its own format. -/
+/-- The refusal of a live-coin part's record that is not in its own format. -/
 def notOwnFormat : String :=
   "rec inner transcript: the coin server's record does not read in its own format (RecRecord.readFull: " ++
     "rec_live.record_bytes, its rounds first, then its kind, tops, Hello in its keys' order and the link's roots " ++
     "and points, at json.dumps' indent=1)"
 
-/-- Each round of the coin server's record as its JSON reads it (`tr`, its parse), in the record's round order: its
+/-- Each round of the challenger's live-coin part's record as its JSON reads it (`tr`, its parse), in the record's round order: its
 stream, its round number, and its coins hex-parsed (`f128OfHex`, as `Record.decode` parses the inner session record's). -/
 def jsonRounds (tr : Json) : V (List (Option (List UInt8) × Option Nat × List F128)) :=
   ((tr.getObjValAs? (Array Json) "rounds").toOption.getD #[]).toList.mapM fun x => do
@@ -52,7 +50,7 @@ def jsonRounds (tr : Json) : V (List (Option (List UInt8) × Option Nat × List 
     pure ((x.getObjValAs? String "stream").toOption.map (·.toUTF8.toList), (x.getObjValAs? Nat "k").toOption, coins)
 
 /-- **The record read in its own format is the record its JSON readers read**: at the verifier's inner shape `i`, the
-inner transcript's bytes `tt` read in the coin server's format (`RecRecord.readFull`, the reader the recursion's
+inner transcript's bytes `tt` read in the challenger's live-coin part's format (`RecRecord.readFull`, the reader the recursion's
 transcript model reads back), and they hold what the JSON readers took of them (`tr`, its parse): Hello's one table, the
 table's `root_B` and the link points (`RecVStar.innerLink`), the rounds the schedule's in its order, each with its
 stream, round, coin count and counts (`RecVStar.checkSchedule`'s), each rep's salted tops and `c_k` with their
@@ -125,7 +123,7 @@ def commits (inner : Option RecVStar.Inner) (t : V String) (r : V (Option String
   | .error e => throw s!"rec inner transcript: not JSON: {e}"
 
 /-- Candidate 3's check 5 inputs: the verifier's RecSparse shape (`rec-inner --sparse`) and R's, its own inner shape's
-or else the shape the inner transcript held R's stream to, and the coin server's record of the inner session. -/
+or else the shape the inner transcript held R's stream to, and the challenger's live-coin part's record of the inner session. -/
 def c3 (inner : Option RecVStar.Inner) (commits : Option RecVStar.InnerCommits) : Option RecCoins.C3 := do
   let i ← inner
   let cs ← commits
@@ -148,18 +146,15 @@ def checkMeta (cf : ByteArray) (bound : V (Option String × Option RecVStar.Stac
     throw "rec inner circuit: the registration and R's shape its header's META binds are not its circuit's META's"
 
 /-- **The inner statement is set up as its files set it up**: how Flock's plain verifier is told to set the inner
-statement up (`form`) is how `RecCoins.Files.stmt` sets it up from its files, `st`: as a
-`Tags.circuitPlainLeaves` statement (`--rec-inner-statement`) on the coin server's coins
-(`--rec-inner-statement-coins os`), with no lookup table (`--rec-inner-tables`), at a draw (`--rec-inner-draw`) that
+statement up (`form`) is how `RecCoins.Files.stmt` sets it up from its files, `st`: as a `Tags.circuitPlainLeaves`
+statement (`--rec-inner-statement`), with no lookup table (`--rec-inner-tables`), at a sample (`--rec-inner-draw`) that
 proves every one of `st`'s units in order, so its `m` and regions are `st`'s. A session without `form` is refused. -/
 def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
   let some fm := form
     | throw ("rec-inner: the verifier holds no setup of the inner statement (--rec-inner-statement, " ++
-        "--rec-inner-statement-coins, --rec-inner-draw) to hold to its files' setup")
+        "--rec-inner-draw) to hold to its files' setup")
   if fm.statement != Tags.circuitPlainLeaves.name then
     throw s!"rec-inner: the inner statement is a {fm.statement} statement, not {Tags.circuitPlainLeaves.name}, as its files set it up"
-  if !fm.os then
-    throw "rec-inner: the inner statement's coins are not the coin server's (--rec-inner-statement-coins os), as its files set it up"
   if !fm.tables.isEmpty then
     throw "rec-inner: the inner statement names lookup tables (--rec-inner-tables), and its files set it up with none"
   let some b := fm.draw | throw "rec-inner: the inner statement has no draw (--rec-inner-draw)"
@@ -172,8 +167,8 @@ def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
 /-- **The verifier's inner shape is the inner statement's**: where it holds the inner statement's files, the `m`,
 `k_log`, regions and claims of its inner shape (`--rec-inner`) are the ones the inner statement sets up at from them
 (`RecCoins.Files.stmt`; claims two and the session's points per region, as `RecVStar.innerOf` writes them), so the V*
-list and the rep schedule the shape fixes are the inner session's; its public file's shared-row tables are within
-`RecBudget.innerRows`; and the inner statement is set up as its files set it up (`checkForm`). -/
+list and the rep schedule the shape fixes are the inner session's; its public file's instances and shared-row tables are
+within `RecBudget.innerRows`; and the inner statement is set up as its files set it up (`checkForm`). -/
 def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : V Unit := do
   let (some i, some (.files f)) := (inner, src) | return
   let (spec, st) ← f.stmt "the inner session"
@@ -211,8 +206,8 @@ def checks (inner : Option RecVStar.Inner) (commits : Option RecVStar.InnerCommi
 
 /-- **A V* session sets up one table holding its whole population**: under the verifier's inner shape (`inner`), the
 setup's statements `sts` must be one table (as an honest V* session's are), whose instances are its population's
-(`RecVStar.population`, which `checkStmt` makes V*'s count): a drawn table short of its population is refused here, at
-setup, as `fullDraw` refuses its draw in the verdict. The recursion's proof covers no other form: V*'s slots are read at
+(`RecVStar.population`, which `checkStmt` makes V*'s count): a sampled table short of its population is refused here, at
+setup, as `fullDraw` refuses its sample in the verdict. The recursion's proof covers no other form: V*'s slots are read at
 the one table's addresses, and RecCap reads every instance's. Without an inner shape it passes. -/
 def oneFull (inner : Option RecVStar.Inner) (sts : Array Stmt) : V Unit :=
   match inner with
@@ -233,13 +228,13 @@ def noInner : String :=
     "(--rec-inner F): V*'s checks and its full-draw refusal run under that shape, and the recursion's proof covers no " ++
     "session without it"
 
-/-- **A V* session draws every unit of its population**: under the verifier's inner shape (`inner`), the session's
-record (`record`, whose draw is `draw`) must hold the `subset` draw of every unit of the draw's population with no
-closure (`Witness.fullDraw`, the draw `RecordCustody` reads, `fullDraw_ok`). The draw's population is the registered
+/-- **A V* session samples every unit of its population**: under the verifier's inner shape (`inner`), the session's
+record (`record`, whose sample is `draw`) must hold the `subset` sample of every unit of the sample's population with no
+closure (`Witness.fullDraw`, the sample `RecordCustody` reads, `fullDraw_ok`). The sample's population is the registered
 population's (`HmRow.drawn` refuses another at setup), and `checkStmt` pins the circuit, so the part's numbers (its
-rounds, table error, `N₀` and weight) are the ones its circuit and population fix, never a smaller draw's. A recursive
+rounds, table error, `N₀` and weight) are the ones its circuit and population fix, never a smaller sample's. A recursive
 session (`rec`: the verifier holds `--rec-part`, `--rec-bindings` or `--rec-rows`) without an inner shape is refused
-(`noInner`), since the V* checks and this refusal run under that shape. Without a draw (which `ProvedScope.drawLaw`
+(`noInner`), since the V* checks and this refusal run under that shape. Without a sample (which `ProvedScope.drawLaw`
 refuses), or outside a recursive session without an inner shape, it passes. -/
 def fullDraw (inner : Option RecVStar.Inner) (rec : Bool) (draw : Option Json) (record : String) : V Unit := do
   if rec && inner.isNone then throw noInner
@@ -247,13 +242,13 @@ def fullDraw (inner : Option RecVStar.Inner) (rec : Bool) (draw : Option Json) (
   (Witness.fullDraw (← Draw.UnitDraw.ofJson d).population record).mapError
     (s!"refused: {·}: a V* session draws every unit of its population, the only draw the recursion's proof covers")
 
-/-- The refusal of a session over an inner session whose record holds no draw. -/
+/-- The refusal of a session over an inner session whose record holds no sample. -/
 def noInnerDraw : String :=
   "refused: the inner session's record (--rec-inner-session) holds no draw (unit_draw): the recursion's inner session " ++
     "is drawn (the coin server's full draw, rec_live.full_draw), the only inner session the recursion's proof covers"
 
-/-- **The recursion's inner session is drawn**: where the verifier holds the inner session's record (`src`, check 5's
-source: `--rec-inner-session` with the inner statement's files), the record holds a draw
+/-- **The recursion's inner session is sampled**: where the verifier holds the inner session's record (`src`, check 5's
+source: `--rec-inner-session` with the inner statement's files), the record holds a sample
 (`RecCoins.recordDraw`: a `unit_draw` neither absent nor null), which check 5 decodes the record at
 (`RecCoins.drawnSpec`); a session over a record without one is refused (`noInnerDraw`). Without the record it passes. -/
 def innerDrawn (src : Option RecCoins.Source) : V Unit := do

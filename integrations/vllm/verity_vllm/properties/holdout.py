@@ -29,7 +29,7 @@ from verity_vllm.check.gates import HOLDOUT_GATES
 from verity_vllm.properties.record import seal
 
 #: prompt lengths that straddle the kernel-specialization boundaries of the pinned profile (FA2 kBlockN 64 / 128, the
-#: persistent matmul's 64/128-row tiles) plus a short and a long one; the generator draws from this pool.
+#: persistent matmul's 64/128-row tiles) plus a short and a long one; the generator samples from this pool.
 LENGTH_POOL = (7, 31, 33, 63, 64, 65, 96, 127, 128, 129, 200)
 DECODE_POOL = (5, 9, 16, 24)
 
@@ -127,4 +127,3 @@ def main(a: Options) -> int:
         print(f"[holdout] seed {seed}: {len(paths)} workloads", file=sys.stderr)
         return 0
     raise UsageError("one of --generate / --assemble")
-    return 2

@@ -84,9 +84,8 @@ def _commit(com: Any, steps: dict[int, list[tuple[str, bytes]]]) -> Any:
 
 def _window_a() -> tuple[Any, Any, dict[str, Any]]:
     from tests.check.opened import committer
-    from verity_vllm.commit import step_rows
 
-    com = committer(commit_scheme=step_rows.NAME)
+    com = committer()
     com.pool = PP.PinnedPool(1 << 14, exact=False, populate_threads=0)
     rc = _commit(com, A)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
@@ -428,6 +427,7 @@ def test_an_arm_hears_each_windows_seal_line_while_the_windows_line_waits_for_it
         return {"row_dir": str(d)}
 
     monkeypatch.setattr(sc, "seal_window", seal)
+<<<<<<< 0941037006
     sealer, arm, out = st.Sealer(1 << 40), SealWaits(), tmp_path / "serve"
     out.mkdir()
     s = Sealed(out, sealer=sealer)
@@ -439,6 +439,33 @@ def test_an_arm_hears_each_windows_seal_line_while_the_windows_line_waits_for_it
     seals = records(out, "seals.jsonl")
     assert [x["window"] for x in seals] == [0, 1, 2] and arm.heard == seals and seals[1]["error"] == "RuntimeError: store"
     assert [w["pouw_h1"] for w in records(out, "windows.jsonl")] == [{"window": w, "sealed": w != 1} for w in range(3)]
+||||||| merged common ancestors
+=======
+    sealer, arm, out = ss.Sealer(1 << 40), SealWaits(), tmp_path / "serve"
+    out.mkdir()
+    s = Sealed(out, sealer=sealer)
+    s.windows.arm = arm
+    with s:
+        for i in range(3):
+            s.post("/v1/completions", _body(i))
+    sealer.close()
+    seals = records(out, "seals.jsonl")
+    assert [x["window"] for x in seals] == [0, 1, 2] and arm.heard == seals and seals[1]["error"] == "RuntimeError: store"
+    assert [w["pouw_h1"] for w in records(out, "windows.jsonl")] == [{"window": w, "sealed": w != 1} for w in range(3)]
+
+
+def test_an_arm_hears_why_a_window_has_no_seal():
+    heard: list[tuple[int, dict[str, Any]]] = []
+    w = SimpleNamespace(arm=SimpleNamespace(sealed=lambda k, line: heard.append((k, line))))
+    w._sealed = lambda line: sc.CommitWindows._sealed(w, line)
+    sc.CommitWindows._no_seal(w, {"window": 4, "error": "RuntimeError: finalize failed"}, None)
+    sc.CommitWindows._no_seal(w, {"window": 5}, {"error": "under the disk floor"})
+    sc.CommitWindows._no_seal(w, {"window": 6, "empty": True}, None)
+    assert heard == [(4, {"window": 4, "error": "not sealed: RuntimeError: finalize failed"}),
+                     (5, {"window": 5, "error": "not sealed: under the disk floor"}),
+                     (6, {"window": 6, "error": "not sealed: the window has no seal"})]
+    sc.CommitWindows._sealed(SimpleNamespace(arm=None), {"window": 7})       # an arm without ``sealed`` hears nothing
+>>>>>>> 7af4d24fca3e
 
 
 def test_while_a_windows_finalize_blocks_the_loop_opens_the_next_window_and_serves_a_request_there(tmp_path, monkeypatch):

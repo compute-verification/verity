@@ -1,12 +1,48 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainDrawJCols
-public import Proofs.Flock.Claims.KS.Width
-public import Proofs.Flock.Claims.Recursion.NextR
 public import Proofs.Flock.Claims.KS.PlainDrawJRun
+public import Proofs.Flock.Claims.Recursion.NextR
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.KS.PlainDrawJMove
+import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
-# The plain verdict at the draw from an accepting `nextR` step, at its reader's columns
+# The plain verdict at the sample from an accepting `nextR` step, at its reader's columns
 
 `plainVerdictAtJK_of_nextJ_cols` at the deployed reader's last step (`FlockDeploy.nextR`, decision `decisionSF`).
 `nextR` decides on what `decR` reads: the last message's statement and value (`rd`), and the reps' proofs read from
@@ -18,7 +54,7 @@ the `nextJ` final `finalOfR H spec sts c₁ f`, and differs from `nextJ`'s at `f
   `hOf H`, for `coinSubJ` of the message's value.
 
 The checks after the verdict read `⟨f.stmt, f.j, #[]⟩`, which is `checksAtJ` at `finalOfR` (`checksAtJ_finalOfR`):
-they read the statement and the draw, and `shaSubJ` keeps the draw. So `nextJ`'s lemmas at a parsed value apply at
+they read the statement and the sample, and `shaSubJ` keeps the sample. So `nextJ`'s lemmas at a parsed value apply at
 that value and those files unchanged (`checksAtJ_ok`, `decodeJWithK_live`, `liveOfJ_points`,
 `recordsLiveAtDJK_of_checksJ`, `txNoOffAtJK_of_records`):
 
@@ -190,7 +226,7 @@ theorem colsR_plain {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : L
     FlockDeploy.plainProofShape_eq hsched, hx, List.flatMap_cons, List.flatMap_nil, List.append_nil]
 
 /-- **The step's reader gives the reader's premise at its parsed session** (`txNoOffAtJK_of_colsJ` at `nextR`): on an
-accepting `nextR` step at SHA-512 whose statement carries the draw `d`, if the step's reader looks up no column off
+accepting `nextR` step at SHA-512 whose statement carries the sample `d`, if the step's reader looks up no column off
 `C` at table 0 (`colsR … 0`), the deployed plain reader looks up none in the session the verdict reads, `jAt sha512`
 with the read proofs' files, at the setup at `d` (`TxNoOffAtJK id`). -/
 theorem txNoOffAtJK_of_colsR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg}
@@ -232,8 +268,8 @@ theorem txNoOffAtJK_of_colsR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg
     ← getD_empty, ← getD_empty, ← hcols]
   exact hno
 
-/-- **An accepting `nextR` step gives the verdict at the draw, at its reader's columns** (`plainVerdictAtJK_of_nextJ`
-and `plainVerdictAtJK_of_nextJ_cols` at `nextR`): at SHA-512, on a step whose statement carries the draw `d`, if the
+/-- **An accepting `nextR` step gives the verdict at the sample, at its reader's columns** (`plainVerdictAtJK_of_nextJ`
+and `plainVerdictAtJK_of_nextJ_cols` at `nextR`): at SHA-512, on a step whose statement carries the sample `d`, if the
 step's reader looks up no column off `C` at table 0 (`colsR … 0`), `plainVerdictAtJK id` holds at the step's live
 outcome (`viewOfJ` at `jAt sha512` and the read proofs' files, at any `mPts`) and its link's root. `verifyJWithMK id`
 accepts that session at the setup at `d` (`decideR_sha512`), which records the outcome (`recordsLiveAtDJK_of_checksJ`
@@ -261,9 +297,9 @@ theorem plainVerdictAtJK_of_nextR_cols (mPts : ℕ) {rd : Claims.Msg → Option 
   exact ⟨hA, rfl, txNoOffAtJK_of_records hA₀ hR₀ hA (recordsLiveAtDJK_wrPDJK _ _ _ _)
     (txNoOffAtJK_of_colsR C ha hacc hd hno)⟩
 
-/-- **An accepted run of the deployed reader decides, and gives the verdict at the draw at its reader's columns**: a
+/-- **An accepted run of the deployed reader decides, and gives the verdict at the sample at its reader's columns**: a
 run of `VR rd` that accepts at SHA-512 decides on its messages and coins (`actR`), and wherever the decided statement
-carries the draw `d` and the step's reader looks up no column off `C` at table 0, `plainVerdictAtJK id` holds at the
+carries the sample `d` and the step's reader looks up no column off `C` at table 0, `plainVerdictAtJK id` holds at the
 step's live outcome (`plainVerdictAtJK_of_nextR_cols`). -/
 theorem plainVerdictAtJK_of_runR (mPts : ℕ) (rd : Claims.Msg → Option FinalP) {Ω : Type} {P : Claims.Prover Ω}
     {x : Claims.Msg} {ω : Ω} {r : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :

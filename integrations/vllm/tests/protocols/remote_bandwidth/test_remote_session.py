@@ -1,7 +1,8 @@
 """The remote bandwidth audit run over the node's `NodeMemory` end to end on the CPU: `remote.prove` (the prover's side, the
-Commit's hook) connects over localhost TCP to `benchmarks/remote_session`'s verifier, registers the store, records its
-memory map against the registration, and runs each pass after an engine step of a serving-like trace (pages written
-over two steps, held, freed and reused, and one long-lived page re-keyed under L = 2 windows).  The honest audit run is
+Commit's hook) connects over localhost TCP to PoUB's verifier (`verity/core/protocols/remote_bandwidth/session`),
+registers the store, records its memory map against the registration, and runs each pass after an engine step of a
+serving-like trace (pages written over two steps, held, freed and reused, and one long-lived page re-keyed under L = 2
+windows).  The honest audit run is
 accepted with the appends, releases, re-keys and steps the verifier saw, each pass's seed chaining the appends sent
 before its root, each append encoded under its own coin, and each chunk resident only once its encode has landed
 (deferred residency: read as plaintext and uncredited until then); one whose prover seeds without them, encodes under
@@ -27,6 +28,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, memory_map, receipts as rb
+from verity.core.protocols.remote_bandwidth.session import verifier, wire
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map, remote
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
 from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
@@ -35,7 +37,6 @@ from .test_memory_map import BLOCK, PAGES, SLOT_BYTES, SLOTS, kv_payload
 from .test_registry import CODEC, RECEIPT
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
-verifier, wire = remote.session_module("verifier"), remote.session_module("wire")
 VLLM = Path(__file__).resolve().parents[3]
 
 

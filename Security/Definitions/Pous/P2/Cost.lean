@@ -11,7 +11,7 @@ P2's maps are ring operations mod `p` (`sq`, its root `ρ`) mixed with operation
 (parity, and the mask `σ_K(r) = r ⊕ K`). This file models them so that the encoder's two roots can be charged in
 sequential multiplications, not in oracle queries.
 
-**The model `ringRO B w p`.** Setup draws, uniformly:
+**The model `ringRO B w p`.** Setup samples, uniformly:
 
 * an *odd labeling* `φ : Z/p ≃ [0, p)` with `φ(−x) = −φ(x)` (that is, `p − φ(x)` for `x ≠ 0`); every element is
   seen only as its label, a `w`-bit string below `p`;
@@ -135,12 +135,14 @@ end OracleAlgorithm
 /-! ## The audit game over the ring bound -/
 
 /-- `SimResponder` with `RingBounded D Q L` in place of `Bounded D Q`. -/
-abbrev SimResponderOn (sch : Scheme (ringRO B w p)) (S D Q L k : ℕ) : Type :=
-  SimResponderBy sch S k (OracleAlgorithm.RingBounded D Q L)
+structure SimResponderOn (sch : Scheme (ringRO B w p)) (S D Q L k : ℕ) : Type where
+  prog : Bits sch.n → Bits sch.t → Bits S → (Fin k → Fin sch.B) → OracleAlgorithm (ringRO B w p) (Fin k → Bits sch.ℓ)
+  bounded : ∀ W pp σ I, (prog W pp σ I).RingBounded D Q L
 
 /-- `SeqResponder` with `RingBounded D Q L` in place of `Bounded D Q`. -/
-abbrev SeqResponderOn (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type :=
-  SeqResponderBy sch (fun _ => S) (OracleAlgorithm.RingBounded D Q L)
+structure SeqResponderOn (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type where
+  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B → OracleAlgorithm (ringRO B w p) (Bits sch.ℓ × Bits S)
+  bounded : ∀ W pp j σ i, (step W pp j σ i).RingBounded D Q L
 
 /-- `simAccepts` for a `SimResponderOn`. -/
 def simAcceptsOn (sch : Scheme (ringRO B w p)) {S D Q L k : ℕ} (W : Bits sch.n) (A₁ : Preprocessor sch S)

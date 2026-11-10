@@ -1,11 +1,56 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.HonestRepR
 public import Proofs.Flock.Claims.Recursion.HonestIVStarR
 public import Proofs.Flock.Claims.Recursion.HonestVerdictR
-public import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
-public import Proofs.Flock.Claims.Recursion.RestLive
-public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+public import Proofs.Flock.Claims.JsonNorm
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Stmt
+import Proofs.Flock.Claims.JsonNorm
+import Proofs.Flock.Claims.Recursion.HonestRepR
+import Proofs.Flock.Claims.Recursion.HonestStreams
+import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
+import Proofs.Flock.Claims.Recursion.NextRCoins
+import Proofs.Flock.Claims.Recursion.NextRRows
+import Proofs.Flock.Claims.Recursion.NextRSetup
+import Proofs.Flock.Claims.Recursion.RestLive
+import Proofs.Flock.Claims.Recursion.RestVerdictCustody
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # The deployed verifier accepts the honest recursive prover (non-vacuity, the honest half)
@@ -17,7 +62,7 @@ run's own coins (`Run.recCoins`) and the honest prover's messages (`Run.recMsgs`
 
 * **The reading and the five checks** (`ReadOkR`, `holdsR` at every `VerdictR`): the setup, the shapes, the names
   (`honestSetup`, `honestShaped`, `honestNames`), the verdict (`honestVerdict`), the checks after it (`checksAtJ`:
-  the statement, the draw `honest_drawJ`, custody `custodyRecJ`, the scope check) and custody's read (`decLive`).
+  the statement, the sample `honest_drawJ`, custody `custodyRecJ`, the scope check) and custody's read (`decLive`).
 * **`nextR rdR` accepts** (`nextR_sound`).
 * **`IVStar` at `DeployedR.bdR` accepts the honest committed run** (`ivstar_honest_filesR`), at any salts `ys`.
 * **Row D's `hlev`** at every decision on the honest messages (`hlev_honest_deployed`), with the rep streams' names
@@ -32,7 +77,7 @@ What the run must fix and where it is fixed here:
   registered scheme's (`scheme_bounds`).
 * **As many coins as messages** (`honest_len`): round 0, the reps' rounds (`honestRounds_nAt`) and the last message,
   against `(V false).k x` coins (`repLens_sum`).
-* **The record's draw is the statement's** (`honest_drawTied`): the session's `unitDraw` is the statement's draw
+* **The record's sample is the statement's** (`honest_drawTied`): the session's `unitDraw` is the statement's sample
   (`stmtOk`), not `null` (`DrawOk`), and rebuilt (`Raw.ins_read`), so rebuilding it again changes nothing (`norm_norm`).
 -/
 
@@ -252,9 +297,9 @@ theorem honest_len (o : Run sha512 Readable.relation) {cs : List Coin} (hcs : o.
   simp only [V, hx]
   omega
 
-/-! ## The record's draw -/
+/-! ## The record's sample -/
 
-/-- **The session's draw is the statement's** at a plain completeness run. -/
+/-- **The session's sample is the statement's** at a plain completeness run. -/
 theorem honest_drawTied (o : Run sha512 Readable.relation) :
     drawEq (RecDeploy.drawOfU o.spec.unitDraw) o.s.read.draw = true := by
   obtain ⟨-, -, hDO, hU⟩ := JsonRT.stmtOk (H := sha512) (rel := Readable.relation) o.toCase
@@ -282,7 +327,7 @@ theorem honest_drawTied (o : Run sha512 Readable.relation) :
     rw [e]
     exact drawEq_refl _
 
-/-- **The reader's record carries the statement's draw** at the honest decision. -/
+/-- **The reader's record carries the statement's sample** at the honest decision. -/
 theorem honest_drawJ (o : Run sha512 Readable.relation)
     (cs : List Coin) : drawEq (drawOfJ (o.recDec cs).f.j) o.s.read.draw = true := by
   show drawEq (drawOfJ (recJ o.spec o.sts o.recLink o.recC₁ (o.recFrames cs) cs.tail.dropLast o.recPs))

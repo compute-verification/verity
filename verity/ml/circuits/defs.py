@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import bisect
 import math
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
@@ -64,6 +65,37 @@ class FunctionDefinition:
 #: ``registered`` input of the program, which the primitive still holds while it declares it
 TABLE_KINDS = ("library", "registered")
 
+#: a Definition's conformance label, the word its ``conformance`` text starts with (`conformance_label`), and what it says: how
+#: far the Definition is known to compute what the model computes (completeness, checked empirically and never proved). The
+#: rest of the text qualifies it (the capture, the tested domain, the replacement) and starts with a character that isn't a
+#: lower-case letter or a hyphen, as in ``"exact-model-tested: ..."``.
+CONFORMANCE = {
+    "exact-model-tested": "gives the model's outputs exactly on every input its tests compare (captures of the served kernel, "
+                          "or the model run), which the text names",
+    "model-untested": "read from the model's sources (its kernels, their PTX, a spec) and not yet held to a capture; the text "
+                      "names the check that would",
+    "not-yet-established": "nothing established either way (the default)",
+    "reference-defined": "its evaluator is its definition (a reference operation, an index into its operand), held to another "
+                         "implementation only on the domain the text names",
+    "protocol-defined": "a protocol's own function, with no model to match: the Definition is the specification",
+    "quarantine": "held only to op-level evidence (a difftest against one operation), not to a capture of the served kernel",
+    "superseded": "a later version replaces it, which the text names, with why",
+    "derived": "built from other Definitions by a tool (a difftest, the derive frontend, a prediction, a capture fold): what is "
+               "established is its callees' labels",
+}
+_LABEL = re.compile(r"[a-z][a-z-]*")
+
+
+def conformance_label(text: str, of: str = "a Definition") -> str:
+    """The label of `CONFORMANCE` that the conformance ``text`` starts with; a ValueError, naming ``of`` and the fix, for any
+    other text."""
+    m = _LABEL.match(text) if isinstance(text, str) else None
+    if m is None or m.group(0) not in CONFORMANCE:
+        raise ValueError(f"{of}: conformance {str(text)[:80]!r} doesn't start with a label of "
+                         f"verity.ml.circuits.defs.CONFORMANCE ({', '.join(CONFORMANCE)}): start it with the label that "
+                         "holds, then ': ' and the qualification, or add a new label to CONFORMANCE with what it says")
+    return m.group(0)
+
 
 @dataclass(eq=False)
 class PrimitiveDefinition(FunctionDefinition):
@@ -77,7 +109,7 @@ class PrimitiveDefinition(FunctionDefinition):
     ret: Value
     evaluate: Callable[..., int] = field(repr=False)
     doc: str = ""
-    conformance: str = "not-yet-established"  # exact-model-tested | model-untested | not-yet-established
+    conformance: str = "not-yet-established"  # starts with a label of `CONFORMANCE`
     register: bool = True
     tables: tuple[tuple[str, str], ...] = ()
     ports: Any = None
@@ -85,6 +117,7 @@ class PrimitiveDefinition(FunctionDefinition):
     def __post_init__(self) -> None:
         if not isinstance(self.ret, Value):
             raise TypeError(f"a primitive returns exactly one Value<w>; {self.id} declares {self.ret!r}")
+        conformance_label(self.conformance, self.id)
         self.params = tuple((n, t) for n, t in self.params)
         self.tables = tuple((n, k) for n, k in self.tables)
         bad = [k for _n, k in self.tables if k not in TABLE_KINDS]
@@ -130,12 +163,13 @@ class CompositeDefinition(FunctionDefinition):
     signature: Callable[[Any], tuple[Sequence[tuple[str, Type]], Type]] = field(repr=False)
     body: Callable[..., Coll] = field(repr=False)
     doc: str = ""
-    conformance: str = "not-yet-established"
+    conformance: str = "not-yet-established"  # starts with a label of `CONFORMANCE`
     register: bool = True
     refuse: Callable[[dict], str | None] | None = field(default=None, repr=False)
     ports: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        conformance_label(self.conformance, self.id)
         self.statics = tuple(self.statics)
         self._cache: dict[tuple, "SpecializedDefinition"] = {}
         if self.register:
@@ -497,6 +531,16 @@ def _cover(t: Type, lo: int, hi: int) -> tuple[Type, int]:
             return t, off
 
 
+def _cyclic_widths(E: Type, r: int, n: int) -> frozenset:
+    """The widths of `n` consecutive leaves of an array of `E`s, from leaf `r` of an element on."""
+    L = E.leaves
+    if n >= L:
+        return E.width_set()
+    if r + n <= L:
+        return range_widths(E, r, r + n)
+    return range_widths(E, r, L) | range_widths(E, 0, r + n - L)
+
+
 def _residues(stride: int, count: int, L: int, cap: int = 4096) -> set[int] | None:
     """{k * stride mod L : k < count}, or None when it has more than `cap` members."""
     g = math.gcd(stride, L)
@@ -569,10 +613,14 @@ class _Widths:
             return False
         L = node.elem.leaves
         A = _residues(p.outer_stride, -(-p.count // p.inner), L)
+        r0 = (p.base - off) % L
+        if A is not None and p.inner_stride == 1 and len(A) <= 4096:
+            # each outer step reads `inner` consecutive leaves (fewer at a short last step), so a superset of the leaves `p`
+            # names is the window of `inner` leaves from each step's first, cyclically within an element
+            return all(_cyclic_widths(node.elem, (r0 + a) % L, min(p.inner, p.count)) == {w} for a in A)
         B = _residues(p.inner_stride, p.inner, L)
         if A is None or B is None or len(A) * len(B) > 4096:
             return False
-        r0 = (p.base - off) % L
         return all(range_widths(node.elem, r, r + 1) == {w} for r in {(r0 + a + b) % L for a in A for b in B})
 
     def misread(self, t: Type, pos: int, p: Refs) -> int | None:
@@ -629,36 +677,36 @@ class _Widths:
     def first(self, c: Coll) -> tuple[int, tuple[str, int, int]] | None:
         """(position, reference) of the first leaf of `c` that names a leaf of another width than `c.type` gives it, None when
         there is none. A `Concat` cut from a `PartLog` costs only its parts past the longest cut checked at that width."""
-        t = c.type
+        return self._first(c.type, c.refs, 0) if c.refs.count else None
 
-        def walk(r: Refs, pos: int) -> tuple[int, tuple[str, int, int]] | None:
-            if not isinstance(r, Concat):
-                k = self.misread(t, pos, r)
-                return None if k is None else (pos + k, r[k])
-            first = 0
-            if r.prefix is not None and not self.forward:
-                log, j = r.prefix
-                ws = range_widths(t, pos, pos + log.starts[j])
-                if len(ws) == 1:
-                    (w,) = ws
-                    owner, done = log.memo.get("defs.widths", (None, None))
-                    if owner is not self.token:
-                        done = {}
-                        log.memo["defs.widths"] = (self.token, done)
-                    for k in range(done.get(w, 0), j):
-                        hit = walk(log.parts[k], pos + log.starts[k])
-                        if hit is not None:
-                            return hit
-                    if not self.forward:
-                        done[w] = max(done.get(w, 0), j)
-                    first = j
-            for k in range(first, len(r.parts)):
-                hit = walk(r.parts[k], pos + r.starts[k])
-                if hit is not None:
-                    return hit
-            return None
-
-        return walk(c.refs, 0) if c.refs.count else None
+    def _first(self, t: Type, r: Refs, pos: int) -> tuple[int, tuple[str, int, int]] | None:
+        # A method, not a closure: a recursive closure is a reference cycle, which only the cyclic collector frees, and this
+        # runs for every argument of every node.
+        if not isinstance(r, Concat):
+            k = self.misread(t, pos, r)
+            return None if k is None else (pos + k, r[k])
+        first = 0
+        if r.prefix is not None and not self.forward:
+            log, j = r.prefix
+            ws = range_widths(t, pos, pos + log.starts[j])
+            if len(ws) == 1:
+                (w,) = ws
+                owner, done = log.memo.get("defs.widths", (None, None))
+                if owner is not self.token:
+                    done = {}
+                    log.memo["defs.widths"] = (self.token, done)
+                for k in range(done.get(w, 0), j):
+                    hit = self._first(t, log.parts[k], pos + log.starts[k])
+                    if hit is not None:
+                        return hit
+                if not self.forward:
+                    done[w] = max(done.get(w, 0), j)
+                first = j
+        for k in range(first, len(r.parts)):
+            hit = self._first(t, r.parts[k], pos + r.starts[k])
+            if hit is not None:
+                return hit
+        return None
 
     def refuse(self, what: str, t: Type, hit: tuple[int, tuple[str, int, int]]) -> TypeError:
         pos, (s, i, j) = hit
@@ -823,5 +871,13 @@ def composite(name: str, version: int, statics: Sequence[str], signature, doc: s
     return deco
 
 
+<<<<<<< 0941037006
 __all__ = ["DefinitionTable", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "BodyNode",
            "Body", "Builder", "TABLE_KINDS", "primitive", "composite", "Explicit", "concat"]
+||||||| merged common ancestors
+__all__ = ["Registry", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "Node",
+           "Body", "Builder", "TABLE_KINDS", "primitive", "composite", "Explicit", "concat"]
+=======
+__all__ = ["Registry", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "Node",
+           "Body", "Builder", "TABLE_KINDS", "CONFORMANCE", "conformance_label", "primitive", "composite", "Explicit", "concat"]
+>>>>>>> 7af4d24fca3e

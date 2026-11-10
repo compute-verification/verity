@@ -10,11 +10,21 @@ codec       a region's encoding: payload words in, stored words out, `encode(pay
 receipt     a keyed hash of one block read in a pass, `keyed(seed)(j, block, z)`; `z` is the input a receipt bound to the
             prior tile's output reads (None for receipts that bind only the block)
 registration  putting a block into the store: its bytes are the codec's encoding of a payload a `Source` names; every
+<<<<<<< 0941037006
             registration is a record in the store's chain, and `ChainHead.root` commits the chain
 window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`, which the verifier's boundary
             message ends (the next window's challenge, or the close after the last)
+||||||| merged common ancestors
+            registration is a record in the log, and `Registration.root` commits the log
+window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`, which the verifier's boundary
+            message ends (the next window's challenge, or the close after the last)
+=======
+            registration is a record in the log, and `Registration.root` commits the log
+window      the interval of one challenge chal_t: `begin_window(chal_t)` ... `end_window()`, which the verifier's
+            boundary message ends (the next window's challenge, or the close after the last)
+>>>>>>> 7af4d24fca3e
 pass        one read of the live store: weights, the batch's written KV, and filler to top up, no block twice; its seed
-            is chained, seed_j = H(σ, j, commitment before it) across windows (the verifier's registration digest
+            is chained, seed_j = H(chal_t, j, commitment before it) across windows (the verifier's registration digest
             before the session's first), so pass j's receipts can't start before the pass before it is committed
 segment     some of one region's blocks read in a pass, in read order; one reader (a fused GEMM, attention, the filler
             sweep) receipts it.  The store lays a pass's segments out as subtrees of its tree (whole leaves, a power
@@ -23,8 +33,8 @@ commitment  a pass's root, the PoUB driver's: frame-v3-sha512 over leaves of 16 
             hidden as an hm96-sha512/row/v2 leaf under a salt, bound to the pass's seed and the plan's digest (over
             the plan's runs of store indices)
 opening     for a sampled (pass, position): the block's bytes as read, its receipt, its leaf's receipts and salt, the
-            leaf's path to the pass's root and its registration record, from which the verifier recomputes the
-            receipt and checks the decoding
+            leaf's `merkle.Opening` in the pass's tree and its registration record, from which the verifier recomputes
+            the receipt and checks the decoding
 ~~~
 """
 from __future__ import annotations
@@ -204,8 +214,17 @@ class BlockOpening:
     """Block ``block`` (region ``region``, tier and kind as read) at position ``position`` of pass ``pass_index``: the
     bytes read, the receipt, the leaf's receipts (up to 16, in plan order) and ``salt``, the registration ``source`` the
     decoding is checked against, and ``leaf``, the leaf's opening in the pass's tree (`merkle.Opening`: the leaf's
+<<<<<<< 0941037006
     index, its hidden value `receipts.hidden` of its receipts under its salt, and the driver's path, the leaf's path to
     its segment's node and then the node's to the pass's root)."""
+||||||| merged common ancestors
+    bytes read, the receipt, the leaf's receipts (up to 16, in plan order), the leaf's path to its segment's node and
+    the node's path to the pass's root (together the driver's path), the registration ``source`` the decoding is
+    checked against, and the leaf's ``salt``."""
+=======
+    index, its receipts hidden under its salt, `receipts.hidden`, and the driver's path, the leaf's path to its
+    segment's node and then the node's to the pass's root)."""
+>>>>>>> 7af4d24fca3e
 
     pass_index: int
     position: int

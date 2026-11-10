@@ -2,28 +2,31 @@
 
     check(instance) -> {"gates", "ius", "complies", "failure"} | {"error": code}
 
-`Nci.Complies Γ α` (`Security/Definitions/Nci.lean`): the computed gates of `D` divide into isolation units of at most `Γ`
-gates, each with `novelReads R = width(into(R) \\ θ) ≤ α · size R`, where `into(R)` is the gates outside `R` with a wire
-into `R` (`Security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones `NciCheck.Check`'s
-docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program (`verity.ml.circuits`),
-gate `g` of width `Value<w>` bits, an input gate when its primitive is an input (`program.is_input`, with no operands),
-reading the gates its operands name; θ is a list of ids of input gates bound at registration (`program.is_registered`;
-one bound per run is refused, `theta-not-registered`); the division is one owner per gate, `"input"` or an IU index.
-A primitive is taken as the descriptor declares it, as Flock's decoder takes it, so no registry is needed.
+`Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`): the computed gates of `D` divide into isolation units of at
+most `Γ` gates, each with `novelReads R = width(into(R) \\ θ) ≤ α · size R`, where `into(R)` is the gates outside `R`
+with a wire into `R` (`Security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones
+`NciCheck.Check`'s docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program
+(`verity.ml.circuits`), gate `g` of width `Value<w>` bits, an input gate when its primitive is an input
+(`program.is_input`, with no operands), reading the gates its operands name; θ is a list of ids of input gates bound at
+registration (`program.is_registered`; one bound per run is refused, `theta-not-registered`); the division is one owner
+per gate, `"input"` or an IU index. A primitive is taken as the descriptor declares it, as Flock's decoder takes it, so
+no registry is needed.
 
     check_desc(instance) -> the same, for `NciCheck.Desc`'s instance: θ and the owners per root node
 
 `check_desc` refuses as `NciCheck.Desc` does, in its order, and otherwise is `check` on the instance expanded gate by gate
 (`expand`), so the two checks are held to one reference.
 
-    check_count(instance) -> {"blocks", "total", "complies", "failure"} | {"error": code}
+    check_count(instance) -> {"complies"} | {"error": code}
+    check_count_detail(instance) -> {"blocks", "total", "complies", "failure"} | {"error": code}
 
-`check_count` is `NciCheck.Count`'s count of `(c, k)`-inference blocks, with its refusals in its order, activation by
-activation where `NciCheck.Count` reads one summary per Definition: from the root down through the Definitions outside
-every block, each activation of a block Definition is a block (`walk_blocks`), and a block Definition's Boolean gates
-and fresh bits are read off one activation of it on its own, gate by gate (`block_row`): the table's gates of each of
-its primitive gates, and the widths of the parameter leaves its gates read (each reference resolved up to the
-activation's parameters, `source`) over the parameters that are not θ at every one of its blocks.
+`check_count_detail` is `NciCheck.Count`'s count of `(c, k)`-inference blocks, with its refusals in its order,
+activation by activation where `NciCheck.Count` reads one summary per Definition: from the root down through the
+Definitions outside every block, each activation of a block Definition is a block (`walk_blocks`), and a block
+Definition's Boolean gates and fresh bits are read off one activation of it on its own, gate by gate (`block_row`): the
+table's gates of each of its primitive gates, and the widths of the parameter leaves its gates read (each reference
+resolved up to the activation's parameters, `source`) over the parameters that are not θ at every one of its blocks. It
+is the private record's, never published; `check_count` is what the count publishes, the judgment against n alone.
 
     check_baseline(instance, trusted) -> the same, then θ's provenance (`NciCheck.Baseline`)
 
@@ -468,11 +471,18 @@ def evaluate_count(inst) -> dict:
     return {"blocks": rows, "total": total, "complies": failure is None, "failure": failure}
 
 
-def check_count(inst) -> dict:
+def check_count_detail(inst) -> dict:
+    """`NciCheck.Count.checkDetail`: the whole verdict, or the refusal, for the private record only, never published."""
     try:
         return evaluate_count(inst)
     except Malformed as e:
         return {"error": e.code}
+
+
+def check_count(inst) -> dict:
+    """`NciCheck.Count.check`, what the count publishes: the judgment against n, or the refusal."""
+    res = check_count_detail(inst)
+    return res if "error" in res else {"complies": res["complies"]}
 
 
 # θ's provenance (`NciCheck.Baseline`): after the policy check, each θ entry against the trusted input
@@ -489,7 +499,7 @@ def record_digest(rec: dict) -> str:
 
 
 def lower(t) -> list[tuple[int, int]]:
-    """§5.1: the input nodes a parameter of type `t` lowers to, (width, n) each (`SampledProofs.Registered.lower`)."""
+    """§5.1: the input nodes a parameter of type `t` lowers to, (width, n) each (`Spot.Registered.lower`)."""
     from verity.ml.circuits.types import Array, RecordType, Tuple
     ws = t.width_set()
     if len(ws) == 1:
