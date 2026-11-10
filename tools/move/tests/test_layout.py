@@ -609,6 +609,57 @@ def test_a_path_below_a_split_directory_that_names_no_tracked_file_follows_the_t
     assert bare.returncode != 0 and "job.sh: lib/flock (" in bare.stderr and "tests/test_gate.py: lib/flock (" in bare.stderr
 
 
+PART = {**BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n",
+        "suites.py": 'AFTER = ("lib/flock", "other-suite")\n', "run.sh": '#!/bin/sh\nexe "lib/flock/$x"\n',
+        "doc.md": "The prover is `lib/flock/`.\n"}
+
+
+def test_a_split_row_that_names_the_part_its_file_means_sends_the_files_references_there(tmp_path):
+    """`lib/flock/` goes three ways. A `[split]` row acknowledges one file's reference to it, which then follows the
+    `[tokens]` row (`doc.md`); a row with `to` names the part that file means instead, and its references go there: an
+    entry of a list, which is then no cover, and the start of a path a variable ends. A row that names a directory no
+    file of `lib/flock/` goes to is refused, by its key."""
+    rows = ('\n[split]\n"doc.md: lib/flock" = "the prover"\n"run.sh: lib/flock" = { to = "verity/flock/agreement", why = "its packages" }\n'
+            '"suites.py: lib/flock" = { to = "TO", why = "the suite is the verifier\'s" }\n')
+    r, p = _run(tmp_path / "part", PART, BELOW_MAP + rows.replace("TO", "verity/flock/agreement"))
+    assert p.returncode == 0, p.stderr
+    assert (r / "suites.py").read_text() == 'AFTER = ("verity/flock/agreement", "other-suite")\n'
+    assert (r / "run.sh").read_text() == '#!/bin/sh\nexe "verity/flock/agreement/$x"\n'
+    assert (r / "doc.md").read_text() == "The prover is `verity/flock/prover/`.\n"
+    _, bad = _run(tmp_path / "elsewhere", PART, BELOW_MAP + rows.replace("TO", "verity/flock/agreement/lean"))
+    assert bad.returncode != 0 and '[split] "suites.py: lib/flock" names verity/flock/agreement/lean' in bad.stderr
+
+
+def test_a_path_after_a_prefix_the_map_lists_for_the_root_is_rewritten(tmp_path):
+    """A pod's unit names a file by where the pod installs the tree. The map lists that prefix as standing for the root
+    (`[rewrite] root_prefixes`), and the path after it is rewritten; after a prefix the map does not list it stays. A
+    prefix that does not end in `/` is refused."""
+    unit = ("ExecStart=/usr/bin/python3 -I /opt/pod/current/lib/flock/tool.py run %i\n"
+            "ExecStart=/usr/bin/python3 -I /opt/other/current/lib/flock/tool.py run %i\n")
+    files = {**BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n", "pod/unit@.service": unit}
+    listed = BELOW_MAP + '\n[rewrite]\nroot_prefixes = ["/opt/pod/current/"]\n'
+    r, p = _run(tmp_path / "listed", files, listed)
+    assert p.returncode == 0, p.stderr
+    assert (r / "pod/unit@.service").read_text() == unit.replace("/opt/pod/current/lib/flock/", "/opt/pod/current/verity/flock/prover/")
+    r, p = _run(tmp_path / "bare", files, BELOW_MAP)
+    assert p.returncode == 0 and (r / "pod/unit@.service").read_text() == unit
+    _, bad = _run(tmp_path / "bad", files, listed.replace("current/", "current"))
+    assert bad.returncode != 0 and "[rewrite] root_prefixes" in bad.stderr
+
+
+def test_a_directorys_name_alone_between_quotes_is_rewritten_in_the_files_the_map_lists_it_for(tmp_path):
+    """`examples/` goes to `workloads/`, and `"examples"` is the directory in the command line's code and a key
+    elsewhere. `[rewrite] words_in` lists the name for the files where it is the directory: there it is rewritten, alone
+    between quotes; in a Python file its glob does not match it stays, as every lone quoted word does."""
+    layout = ('[roots]\nold = { lib = "lib" }\nnew = { verity = "verity" }\n\n[paths]\n"examples/" = "workloads/"\n\n'
+              '[modules]\n"examples" = "workloads"\n\n[rewrite]\nwords_in = { "cli/*.py" = ["examples/"] }\n')
+    r, p = _run(tmp_path, {"examples/demo/config.toml": "", "cli/main.py": 'CONFIG = ROOT / "examples" / NAME / "config.toml"\n',
+                           "bench/keys.py": 'KEYS = {"examples": 1}\n'}, layout)
+    assert p.returncode == 0, p.stderr
+    assert (r / "cli/main.py").read_text() == 'CONFIG = ROOT / "workloads" / NAME / "config.toml"\n'
+    assert (r / "bench/keys.py").read_text() == 'KEYS = {"examples": 1}\n'
+
+
 def test_an_import_split_in_two_keeps_its_lines_comment_and_the_lines_it_went_on_over(tmp_path):
     """`lib.spot` goes two ways, so one `from lib.spot import` becomes two. Each keeps the comment that ended the line. An
     import that went on over more lines, in brackets or after a backslash, keeps those lines as they were, under the

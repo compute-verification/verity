@@ -11,7 +11,8 @@ rewritten, and what is already moved is left alone. It refuses a dirty worktree,
 retired directory has no destination, so a file that lands on main later gets a row in the map rather than a guess.
 
 What it rewrites, in every tracked text file the map doesn't exclude:
-- paths: root-relative ones (`packages/verity/src/verity/ir/cut.py`, also after `{ROOT}/`, `$ROOT/` or `~/verity/`),
+- paths: root-relative ones (`packages/verity/src/verity/ir/cut.py`, also after `{ROOT}/`, `$ROOT/` or `~/verity/`, and
+  after each prefix the map lists as standing for the root: [rewrite] root_prefixes, `/opt/vy-verifier/current/`),
   ones relative to the file (`../../packages/verity/lean` in a lakefile, `include_str!`), ones relative to an old package
   root (`verity/ir/cut.py`, `verity_pouw/schemes/ncp.py`) when that file exists, Python joins (`ROOT / "census"`), the
   `Path(__file__).parents[N]` anchors of a moved file, and a shell script's paths from its own directory
@@ -26,7 +27,9 @@ and neither is a dotted name that only looks like a module ([rewrite] keep_dotte
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
 no dotted name and no lone quoted word in one is rewritten. In Python too a lone quoted word is a name (`"census"`: a key),
 unless the map lists the directory under [rewrite] words (`"Security"`: no key and no run's directory has that name): then
-its name alone between quotes or backticks is rewritten in every file but Rust and Lean. Where a key is made of another
+its name alone between quotes or backticks is rewritten in every file but Rust and Lean; a name that is a key in some
+file and the directory in another is listed for the files where it is the directory ([rewrite] words_in:
+`{glob = [directories]}`). Where a key is made of another
 word and a package's path (`"INLINE Security"`), [rewrite] word_ends lists the file (`{glob = [directories]}`): there the
 name is rewritten also as the last word of a double-quoted string. A tracked file that a `.gitignore` matches stays tracked where
 it moves. A `.py` file moved below a package root from a package, or from outside every package to a directory that is
@@ -37,7 +40,9 @@ left where a package held more and now holds only such files is deleted with the
 It fails on a rewritten reference to a directory the map splits across destinations (`backends/flock/` to `verity/ml/flock/`
 with its `verifier/lean/` to `verity/core/service/flock/`): the rewrite follows the larger part, so a gate that named the
 whole would no longer cover the part that left. [split] acknowledges each one it may let through, by file and directory,
-with the reason; one that no longer occurs is an error too.
+with the reason; one that no longer occurs is an error too. Where the file means another part, the row names it
+(`"old file: old directory" = { to = "verity/core/service/flock", why = "..." }`), and the file's references to the
+directory go there.
 """
 from __future__ import annotations
 
@@ -91,6 +96,17 @@ SH_DEFAULT = re.compile(r"\$\{\w+:?-\Z")
 #: what stands for the root before a path from it: what closes a placeholder or a command (`{ROOT}/`, `<tree>/`,
 #: `$(pwd)/`), a shell variable, the home's checkout, a pod's. `tools/verity/check/move_check.py` reads a path as this does.
 ROOT_PREFIX = r"[})>]/|\$\{?\w+\}?/|~/(?:verity/)?|/workspace/"
+
+
+def root_prefix_ok(x) -> bool:
+    """Whether a map may list `x` as standing for the root before a path ([rewrite] root_prefixes)."""
+    return isinstance(x, str) and x.endswith("/") and x.strip("/") != ""
+
+
+def root_prefix(more=()) -> str:
+    """The pattern of what stands for the root before a path: `ROOT_PREFIX`, and each prefix of `more` as it is written,
+    where no longer path holds it."""
+    return "|".join([ROOT_PREFIX, *(rf"(?<![\w.\-/]){re.escape(x)}" for x in more)])
 #: an entry of a list that is one path: a git revision before it (`HEAD:`), `/` or all below it (`/**`) after it
 ENTRY = re.compile(r"(?P<pre>(?:HEAD:)?)(?P<p>[\w\-][\w.\-]*(?:/[\w.\-]+)*)(?P<post>/\*\*|/)?")
 _STRING = r'"(?:[^"\\\n]|\\.)*"|\'[^\'\\\n]*\''
@@ -163,6 +179,8 @@ class Layout:
         self.keep_dotted = tuple(rw.get("keep_dotted", []))
         #: moved directories whose name alone, between quotes or backticks, is ours wherever it is written ([rewrite] words)
         self.words = {w.rstrip("/") for w in rw.get("words", [])}
+        #: per file glob, more such directories, each a name that is ours in those files and a key in others ([rewrite] words_in)
+        self.words_in = {g: {w.rstrip("/") for w in ws} for g, ws in rw.get("words_in", {}).items()}
         #: per file glob, moved directories whose name is ours there also as the last word of a double-quoted string
         #: ([rewrite] word_ends: `"INLINE Security"`, a key made of another word and the package's path)
         self.word_ends = {g: {w.rstrip("/") for w in ws} for g, ws in rw.get("word_ends", {}).items()}
@@ -171,6 +189,12 @@ class Layout:
         self.drop = set(data.get("drop", {}).get("paths", []))
         #: "old file: old directory" -> why the file's reference to a directory the map splits may follow the larger part
         self.split = dict(data.get("split", {}))
+        #: of those rows, the ones that name the part the file means by the directory (`{ to = "new directory", why = "..." }`)
+        self.split_to = {k: v["to"].rstrip("/") for k, v in self.split.items() if isinstance(v, dict)}
+        #: what stands for the root before a path, beyond `ROOT_PREFIX` ([rewrite] root_prefixes: a pod's install directory)
+        self.root_prefixes = rw.get("root_prefixes", [])
+        if bad := [x for x in self.root_prefixes if not root_prefix_ok(x)]:
+            raise SystemExit(f"[rewrite] root_prefixes: each is what a path is written after, ending in `/`: {bad}")
 
     # paths
     def file(self, p: str) -> str | None:
@@ -236,6 +260,10 @@ class Layout:
     def ends(self, word: str, where: str) -> bool:
         """Whether file `where` is one in which `word`, a moved directory's name, is ours as a string's last word too."""
         return any(word in ws and fnmatch.fnmatchcase(where, g) for g, ws in self.word_ends.items())
+
+    def ours(self, word: str, where: str) -> bool:
+        """Whether `word`, a moved directory's name alone between quotes, is the directory in file `where`."""
+        return word in self.words or any(word in ws and fnmatch.fnmatchcase(where, g) for g, ws in self.words_in.items())
 
     def excluded(self, *paths: str) -> bool:
         def hit(pats, p):
@@ -390,6 +418,18 @@ class Run:
         """File `path` (new) refers to old `directory`, which the map splits, by a reference the rewrite changes (`what`)."""
         self.note("approximate directory paths", what)
         self.splits.setdefault(f"{self.old_of.get(path, path)}: {directory.strip('/')}", what)
+
+    def _part(self, path: str, directory: str, new: str | None = None, approx: bool = False) -> tuple[str | None, bool]:
+        """Where file `path`'s (new) reference to old `directory` goes, and whether [split] must acknowledge it: `new` and
+        `approx` as the map's rows give them, unless the file's [split] row names the part the file means by the
+        directory (`to`), a directory that a file of `directory` goes to or below."""
+        key = f"{self.old_of.get(path, path)}: {directory}"
+        to = self.L.split_to.get(key)
+        if to is None:
+            return new, approx
+        if not any(self.new_of[f].startswith(to + "/") for f in self._under(directory)):
+            raise SystemExit(f"[split] \"{key}\" names {to}, where no file of {directory} goes: name a directory one goes to or below")
+        return to, True
 
     def unacknowledged_splits(self) -> tuple[list[str], list[str]]:
         """The split references [split] doesn't acknowledge, and the acknowledgements no reference needs any more."""
@@ -705,13 +745,14 @@ class Run:
                      and (m["p"] in self.old_dirs or m["p"] in self.tracked_old) and not self.L.kept(m["p"], path)]
             names = {m["p"] for _, _, m in named}
             # entries one above the other name levels, not the files below them: those are left to the other rewrites
-            todo = {p for p in names if self._parts(p) and not (p in self.old_dirs and any(
+            # and one whose [split] row names the part the file means is that part
+            todo = {p for p in names if self._parts(p) and not self._part(path, p)[0] and not (p in self.old_dirs and any(
                 q.startswith(p + "/") or p.startswith(q + "/") for q in names))}
             if not todo:
                 continue
             files = {p: self._under(p) for p in names}
             cover = self.cover({f for fs in files.values() for f in fs})
-            held = [self.L.path(p, p in self.old_dirs)[0] or p for p in names - todo]
+            held = [self._part(path, p, *self.L.path(p, p in self.old_dirs))[0] or p for p in names - todo]
             for a, b, m in named:
                 if m["p"] not in todo:
                     continue
@@ -756,7 +797,8 @@ class Run:
     def _paths(self, path: str, old: str, text: str) -> str:
         if not hasattr(self, "_path_re"):
             alts = alternation(self.L.prefixes())
-            self._path_re = re.compile(rf"(?P<pre>{ROOT_PREFIX})?(?P<p>{alts})(?![\w\-]|\.\w)(?P<rest>(?:/[\w.\-*{{}},]*)*)")
+            self._path_re = re.compile(rf"(?P<pre>{root_prefix(self.L.root_prefixes)})?(?P<p>{alts})(?![\w\-]|\.\w)"
+                                       rf"(?P<rest>(?:/[\w.\-*{{}},]*)*)")
             self._rel_re = re.compile(r"(?<![\w.\-/$}])(?P<v>)(?P<p>(?:\.\.?/)+[\w.\-]+(?:/[\w.\-]+)*/?)"
                                       r"|(?P<v2>\$\{?\w+\}?/)(?P<p2>(?:\.\./)+[\w.\-]+(?:/[\w.\-]+)*/?)")
             roots = "|".join(re.escape(n) for n in sorted(self.L.old_roots, key=len, reverse=True))
@@ -775,7 +817,7 @@ class Run:
                 token, trail = token[:-1], token[-1] + trail    # a `}` no `{` of the token opens closes what holds the path
             if "/" not in token:
                 after = text[m.end("p"):m.end("p") + 1]
-                ours = token in self.L.words            # [rewrite] words: a name no key or run directory shares
+                ours = self.L.ours(token, path)         # [rewrite] words: a name no key or run directory shares
                 lone = before in ("\"'`" if ours else "\"'") and after == before
                 last = before == " " and after == '"' and self.L.ends(token, path)      # [rewrite] word_ends
                 if not last and (not lone or path.endswith((".rs", ".lean")) or path.endswith(".py") and not ours):
@@ -807,7 +849,7 @@ class Run:
             full = f"{self.L.old_roots[name]}/{rest}".rstrip("/")
             if self.L.kept(full, path) or not (full in self.known_old or full in self.old_dirs):
                 return token
-            new, approx = self.L.path(full, full in self.old_dirs)
+            new, approx = self._part(path, full, *self.L.path(full, full in self.old_dirs))
             if new is None:
                 return token
             out = self._short_form(new)
@@ -856,7 +898,7 @@ class Run:
             head, tail = "/".join(parts[:i]), "/".join(parts[i:])
             if not head:
                 return None
-            new, approx = self.L.path(head, True)
+            new, approx = self._part(path, head, *self.L.path(head, True))
             if "{" in tail and "*" not in t and (each := self._brace_list(t, tail, new, path)):
                 return each + ("/" if slash else "")
             if new is None:
@@ -869,9 +911,9 @@ class Run:
                 self.note("approximate directory paths", f"{path}: {token} -> {new}/{tail}")
             return f"{new}/{tail}" + ("/" if slash else "")
         is_dir = t in self.old_dirs or slash or (t not in self.known_old and self.L.file(t) is None)
-        new, approx = self.L.path(t, is_dir)
+        new, approx = self._part(path, t, *self.L.path(t, is_dir))
         if new is None and (k := self._below_split(t)):
-            new = self.L.tokens[k] + t[len(k):]
+            new = self._part(path, k, self.L.tokens[k])[0] + t[len(k):]
             self.split_reference(path, k, f"{path}: {token} -> {new}")
             self.note("paths that name no tracked file, below a directory the map splits, sent where its [tokens] row goes",
                       f"{path}: {token} -> {new}")
@@ -937,7 +979,7 @@ class Run:
         if not (target in self.known_old or is_dir):
             return None
         if is_dir:
-            new_target, approx = self.L.directory(target)
+            new_target, approx = self._part(path, target, *self.L.directory(target))
             if new_target is None:
                 new_target = target            # it stays, though part of it may move
                 if approx and path != old:

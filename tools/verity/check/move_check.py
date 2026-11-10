@@ -74,12 +74,13 @@ Every path git sees changed must be one of:
   relative path), a pattern below it, and a path below it that names nothing at BASE; a path below it that BASE has
   follows only its own move. On such a line a moved path, or such a reference, is also read after each prefix
   `tools/move/layout.py` reads as the root (its `ROOT_PREFIX`: `<tree>/`, `{r}/`, `$T/wt-$c/`, `~/verity/`, a pod's
-  `/workspace/`; and as a shell variable's default, `${TESTS:-verity/x.py}`), one pattern for both. A file the map lists
+  `/workspace/`; and as a shell variable's default, `${TESTS:-verity/x.py}`), one pattern for both, and after each prefix
+  the map lists for the root (`[rewrite] root_prefixes`: a pod's install directory). A file the map lists
   under `[drop] paths` may be deleted. And a path the line names from its file's directory, or else from its package's
   root (the directory of the nearest `pyproject.toml` above the file), may be based again: written from where that
   directory went (the file's new directory, the directory the `pyproject.toml` moved to) to where the path went
   (`ops/README.md` to `../definitions/ops/README.md`); a plain path the root also has is a path from the root. `--json`
-  lists under `rules` the paths each of these took (`tokens`, `prefixes`, `drop`, `relative`);
+  lists under `rules` the paths each of these took (`tokens`, `prefixes`, `root_prefixes`, `drop`, `relative`);
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise; or a Lean declaration of a `.lean` file the range edits, to a name
@@ -1068,6 +1069,9 @@ class Rows:
 
     `[drop] paths`: the files the move deletes.
 
+    `[rewrite] root_prefixes`: what stands for the root before a path, beyond what the mover reads so in every tree (a
+    pod's install directory, `/opt/vy-verifier/current/`), each as it is written.
+
     A relative path based again (`relative`): a path the line names from its file's directory, else from its package's
     root (the nearest `pyproject.toml` above the file at BASE), written from where that directory went (the file's new
     directory; where the package's `pyproject.toml` moved) to where the path went. A plain path the root also has is a
@@ -1075,6 +1079,8 @@ class Rows:
 
     def __init__(self, maps: list[dict], pmap: dict[str, str], base: Tree, head: Tree):
         self.pmap, self.base, self.head, self.tokens, self._went = pmap, base, head, {}, {}
+        self.roots = sorted({p for data in maps if isinstance(rw := data.get("rewrite"), dict)
+                             and isinstance(ps := rw.get("root_prefixes"), list) for p in ps if _rename().L.root_prefix_ok(p)})
         self.drop = {p for data in maps if isinstance(d := data.get("drop"), dict) and isinstance(ps := d.get("paths"), list)
                      for p in ps if isinstance(p, str)}
         bad = set()
@@ -1092,10 +1098,10 @@ class Rows:
     @functools.cached_property
     def pattern(self) -> re.Pattern:
         """`_paths_pattern` over the moved paths and the split directories, after whatever `tools/move/layout.py` reads as
-        the root (its `ROOT_PREFIX`, the `<root>/` of a relative path `resolve_relative` read among them, and a shell
-        variable's default, `${DEFS:-verity/x.json}`)."""
+        the root (its `ROOT_PREFIX`, the `<root>/` of a relative path `resolve_relative` read among them, each prefix the
+        maps list for the root, and a shell variable's default, `${DEFS:-verity/x.json}`)."""
         L = _rename().L
-        root = "|".join((L.ROOT_PREFIX, L.SH_DEFAULT.pattern.removesuffix(r"\Z")))
+        root = "|".join((L.root_prefix(self.roots), L.SH_DEFAULT.pattern.removesuffix(r"\Z")))
         keys = sorted({*self.pmap, *self.tokens}, key=len, reverse=True)
         return re.compile(rf"(?:(?<![\w.\-/])|(?<=^/)|({root}))(" + "|".join(map(re.escape, keys)) + r")(?![\w.\-])", re.M)
 
@@ -1107,7 +1113,7 @@ class Rows:
         for m in self.pattern.finditer(text):
             key, must = m[2], resolved and text.endswith("<root>/", 0, m.start(2))
             plain = m[1] is None or must or ((c := CHECKOUT.match(text, m.start(1))) is not None and c.end() == m.end(1))
-            rules = () if plain else ("prefixes",)
+            rules = () if plain else ("root_prefixes",) if m[1] in self.roots else ("prefixes",)
             if key in self.pmap:
                 out.append((m.start(2), m.end(2), self.pmap[key], rules, must))
                 continue

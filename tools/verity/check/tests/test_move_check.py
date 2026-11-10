@@ -1702,6 +1702,30 @@ def test_a_moved_path_after_what_the_mover_reads_as_the_root_is_certified(tmp_pa
                 "protocols/pous", "security_proofs/pous")] and r["rules"] == {}, case
 
 
+def test_a_moved_path_after_a_prefix_the_map_lists_for_the_root_is_certified(tmp_path):
+    """A pod's unit names a file by where the pod installs the tree, which no pattern knows for the root. The move's map
+    lists the prefix (`[rewrite] root_prefixes`), the mover rewrites the path after it, and the check reads it there.
+    Refused as before: the same line when the map does not list the prefix, or lists it and no commit names the map, and
+    a path after another directory."""
+    unit = "ExecStart=/usr/bin/python3 -I /opt/pod/current/verity/ml/flock/tool.py run %i\n"
+    listed = FLOCK[LAYOUT_MAP] + '\n[rewrite]\nroot_prefixes = ["/opt/pod/current/"]\n'
+    for case, layout, message, line in (("taken", listed, LAYOUT_MSG, unit), ("unlisted", FLOCK[LAYOUT_MAP], LAYOUT_MSG, unit),
+                                        ("unnamed", listed, "move", unit),
+                                        ("elsewhere", listed, LAYOUT_MSG, unit.replace("/opt/pod/current/", "/opt/other/current/"))):
+        repo, base = _repo(tmp_path / case, {**FLOCK, LAYOUT_MAP: layout, "pod/unit@.service": line})
+        _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
+        _move(repo, "verity/ml/flock/pod", "verity/flock/pod")
+        _write(repo, {**FLOCK_MOVED, "pod/unit@.service": line.replace("verity/ml/flock/tool.py", "verity/flock/prover/tool.py")})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", message)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        if case == "taken":
+            assert r["certified"], r["refusals"]
+            assert r["rules"]["root_prefixes"] == ["pod/unit@.service"] and "prefixes" not in r["rules"]
+        else:
+            assert "pod/unit@.service" in {f["path"] for f in r["refusals"]} and "root_prefixes" not in r["rules"], case
+
+
 def test_a_rule_lists_only_the_paths_whose_lines_it_rewrote(tmp_path):
     """A line with a moved path after a root prefix, rewritten, and a reference to the split directory left as written
     is the prefix rule's alone."""
