@@ -384,11 +384,8 @@ def _early(driver: Driver, rec: dict, states: dict) -> Verdict:
 
 
 def _written(path: Path, otherwise: float) -> float:
-    """When ``path`` was last written (a fetched file keeps its node's time), ``otherwise`` when it can't be read."""
-    try:
-        return path.stat().st_mtime
-    except OSError:
-        return otherwise
+    """When ``path`` was last written (a fetched file keeps its node's time), ``otherwise`` when it wasn't fetched."""
+    return path.stat().st_mtime if path.is_file() else otherwise
 
 
 def unnamed(key: str) -> str:
