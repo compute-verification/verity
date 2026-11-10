@@ -15,7 +15,7 @@ What code outside this directory may use. Everything else here is internal.
 
 | Entry point | What it is |
 |---|---|
-| `uv run tools/verity/check/suites.py benchmarks/word_codec` | The suite, on the CPU: the references against their vectors and the twins against the references. It keeps nothing. |
+| `uv run tools/verity/check/suites.py benchmarks/word_codec` | The suite, on the CPU: the references against their vectors and the twins against the references. It writes no result. |
 | `bash benchmarks/word_codec/run.sh`, with `KV_FIELDS`, `KV_SCRIPT` and `KV_ARGS` as its header lists them | `kv.cu` built at each width, its tests, then its benchmark on one GPU (`kv_bench.py` unless `KV_SCRIPT` names another). It writes the gates, timings and profiles as JSON to `$RESEARCH_RUN_DIR/out`. |
 | `bash benchmarks/word_codec/encode_rate.sh` | `kv.cu`'s encode throughput on one GPU (`encode_rate.py`), beside `benchmarks/rate_squaring/sq.cu` gated and timed on the same GPU. It writes to `$RESEARCH_RUN_DIR/out`. |
 
