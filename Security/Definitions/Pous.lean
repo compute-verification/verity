@@ -88,9 +88,9 @@ assumption, guarantee or proof (the lock's `layers`).
 
 * `Game`: bit strings, uniform probability and the idealized computational model.
 * `Model`: encoding schemes, the timed audit game and `INC`, the model of independent ideal permutations and that model
-  on P2's domain `[0, p)`, and pebbling and data-carrying labels. It also holds the band and dense schemes over the overwrite
-  chain, P3's two-layer labels and column game, the sampled, graded and continuous audits, the public-encoder check
-  and the streamed-label wipe's game.
+  on P2's domain `[0, p)`, and pebbling and data-carrying labels. It also holds the band and dense schemes over the
+  overwrite chain, P3's two-layer labels and column game, the sampled, graded and continuous audits, the
+  public-encoder check and the streamed-label wipe's game.
 * `Accounting`: the requirement at the problem statement's parameters (`Meets`), with a public encoder (`PubMeets`) and
   with late answers (`GradedMeets`); Lemma A's bound; and the background-rebuild budget.
 * `P2`: P2's cost model in a generic ring over `Z/p`, its sequential audit's rounds, the mutable store, and what a
