@@ -20,7 +20,7 @@ first; any other `queue/*` branch is no candidate, and is logged once (`ignore`)
 the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
-no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`drive.RATCHET_STEP`: it judges
+no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`reds.RATCHET_STEP`: it judges
 each merge against its first parent, which a task keyed by its inputs can't) or off the gate in policy.toml at the candidate,
 so graph2's lean-agreement gates as the run beside the check's does: a failed task an unexpired
 allowance of that policy covers passed, as drive reads it (`Driver._task_allowed`); else a failed or blocked task is fail,
@@ -64,7 +64,10 @@ is inherited by its failing tests, those the run beside its base's check failed 
 retried with the check and cancelled at a drop as before, in shadow: its verdict (`Judged.shadow`) holds, ejects and
 advances nothing, no candidate is held or rung for a task the loop and graph2 dispute or a base graph2 hasn't listed, and
 once it and the check have both ended they are compared in one logged line, `agree` or `disagree` with the tasks graph2
-failed or erred on and the steps the check failed (`Loop._compare`).
+failed or erred on and the steps the check failed (`Loop._compare`).  The steps the check leaves out (policy.toml's
+`off_gate`, drive.toml's `warn_steps`) still run: once a candidate's verdict is pass or fail, what it failed of one that the
+run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the lane of each member whose merge
+ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`); a red its base shares rings nobody.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
 owner told once per head and base), pushes `queue/<sha12>` (or takes as its own one no line names that is the same build made
@@ -127,11 +130,13 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from . import policy, vqueue
-from .drive import CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Driver, cancel_runs, gating, merge_thread_post
+from .drive import CI, JOB_OF_KIND, SLIM_STEPS, SUITES_KIND, Driver, cancel_runs, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
-from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, flags_at, label_verifier,
-                    lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at, unreviewed)
+from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, flags_at, forces_cold,
+                    label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at,
+                    unreviewed)
+from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
                      Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
 
@@ -193,6 +198,8 @@ FAILED_FIELDS = frozenset(f.name for f in fields(Failed))
 #: the PRs judged at once (`World._judge`): a merge onto `main` takes seconds in drive's clone, and a moved `main` judges every
 #: ready PR again
 JOBS = 8
+#: the most failures of a step off the gate a ring quotes (`Loop._off_gate`)
+OFF_SAID = 10
 
 
 def stamp(t: float) -> str:
@@ -707,6 +714,19 @@ class World:
                                  merged_tree(self.repo, main, head, config=config)[0] is None)
         return self._judged[key]
 
+    def pins(self, sha: str, targets: Iterable[str]) -> dict[str, list[str]]:
+        """The circuit-check sidecars' pins files in ``sha``'s tree (`*.circuit-check.json`) that pin each of ``targets``, a
+        key of theirs, by target; a target none pins has none."""
+        if not (want := sorted(set(targets))):
+            return {}
+        r = _git(self.repo, "grep", "-F", "-o", *(a for x in want for a in ("-e", f'"{x}"')), sha, "--", "*.circuit-check.json",
+                 check=False)
+        out: dict[str, set[str]] = {}
+        for line in r.stdout.splitlines():
+            path, _, hit = line.removeprefix(f"{sha}:").partition(':"')
+            out.setdefault(hit.removesuffix('"'), set()).add(path)
+        return {x: sorted(ps) for x, ps in out.items()}
+
     def refs(self) -> dict[str, str]:
         """origin's `queue/*` branches as fetched: {name under `queue/`: sha}."""
         out = _out(self.repo, "for-each-ref", "--format=%(refname) %(objectname)", f"{NS}/queue/")
@@ -1168,6 +1188,12 @@ class World:
         return self._slim
 
 
+def _target(key: str) -> str:
+    """What the failure `vqueue_slim.failures` keys ``key`` failed: circuit-check's target (its key `CHECK/CODE TARGET`), else
+    the key itself (a merge's name, the step's)."""
+    return key.split(" ", 1)[-1]
+
+
 def _suite(t: dict) -> str | None:
     """A test file task's suite, the directory its result's test ids are relative to."""
     return s if t.get("kind") == "test-file" and isinstance(s := (t.get("vars") or {}).get("suite"), str) else None
@@ -1624,7 +1650,7 @@ class Loop:
             return []
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
                for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._flaky(t) + self._bases(t) \
-            + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t))
+            + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t) + self._off_gate(t))
         new += self._launched(t)
         new += [self._on_main(t, adv, told) for adv, told in t.past.moved()]
         for rec in new:
@@ -2071,6 +2097,75 @@ class Loop:
             recs.append(self.record(t, "compare", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=why,
                                     graph2=theirs, check=mine, done=True))
         return recs
+
+    def _off_gate(self, t: Tick) -> list[dict]:
+        """Where the check gates (`CHECK_GATE`): ring who acts on what a candidate's check failed of each step `vqueue_slim.judge`
+        leaves out (policy.toml's `off_gate` at its base, drive.toml's `warn_steps`), once its verdict is pass or fail, and that
+        the run beside its base's check (`Tick.below` beside `main`, else the base candidate's) didn't fail too (`_off_new`):
+        whom `_off_owners` names, with each failure's line, once a candidate and step (`Past.rung`, by why).  Nothing is held or
+        ejected for it.  A post that fails is rung again by the next tick; with --shadow it is only logged."""
+        recs, rung, d = [], t.past.rung(), self.world.slim_driver()
+        for c in t.snap.candidates:
+            rec = t.judged[c.sha].record
+            if rec is None or rec.get("gate") != CHECK_GATE or (rec.get("verdict") or {}).get("state") not in (PASS, FAIL):
+                continue
+            base = t.below if c.base == t.main else t.past.slim(c.base)[1]
+            for step in sorted({*d._policy(c.base).off_gate, *d.warn_steps}):
+                if (c.sha, why := f"off the gate: {step} failed") in rung or not (new := self._off_new(d, c, rec, base, step)):
+                    continue
+                to, said = self._off_owners(c, step, new), [f"`{x[:200]}`" for x in new.values()]
+                text = (f"the verified queue's candidate ready:{c.sha} ({' '.join(f'#{n}' for n in c.members)}) failed {step}, "
+                        f"off the merge gate, where its base {c.base[:12]} doesn't: {'; '.join(said[:OFF_SAID])}"
+                        + (f"; and {len(said) - OFF_SAID} more" if len(said) > OFF_SAID else "")
+                        + ". Nothing is held or ejected for it: fix it forward")
+                line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=why, step=step, failures=sorted(new),
+                            text=text, to=list(to))
+                if self.shadow:
+                    recs.append(self.record(t, "ring", **line, done=False))
+                elif not self._say(t, "ring", text, to, sha=c.sha, why=why):
+                    recs.append(self.record(t, "ring", **line, done=False, posted=False,
+                                            error=f"ringing {', '.join(to)} about {c.sha[:12]}'s {step} failed: the next tick "
+                                                  "rings again"))
+                else:
+                    recs.append(self.record(t, "ring", **line, done=True, posted=True))
+        return recs
+
+    def _off_new(self, d: Driver, c: Candidate, rec: dict, base: dict | None, step: str) -> dict[str, str]:
+        """What ``c``'s check (``rec``) failed of ``step``, off the gate, that the run beside its base's check (``base``) didn't,
+        by its key with its line (`vqueue_slim.failures`): of a ratchet gate that names what it fails, each merge of ``c``'s
+        members it fails, which no run of its base holds; else each failure whose target (`_target`) the base's run failed in
+        no way, but a circuit-check target whose process died (`reds.CIRCUIT_KILLED`) and a failure an unexpired allowance at
+        ``c`` covers, none of it while the base's run hasn't ended or when either run didn't run the step to its end.  A red
+        the base shares, as `main`'s own, rings nobody."""
+        if not (mine := self.slim.failures(d, rec, step)):
+            return {}
+        if step == RATCHET_STEP and step not in mine:
+            return {k: x for k, x in mine.items() if k in {f"#{n}" for n in c.members}}
+        if (theirs := self.slim.failures(d, base, step)) is None:
+            return {}
+        pol, was = d._policy(c.sha), {_target(k) for k in theirs}
+        return {k: x for k, x in mine.items() if _target(k) not in was and not k.startswith(CIRCUIT_KILLED)
+                and not (step == CIRCUIT_STEP and pol.circuit(f"FAIL {x}", self.now()).covered)}
+
+    def _off_owners(self, c: Candidate, step: str, new: dict[str, str]) -> tuple[str, ...]:
+        """Who acts on what ``c`` failed of ``step`` off the gate (``new``, `_off_new`), first who acts (`reds.red_owners`): of
+        ratchet-gate, the lane of each member whose merge it fails, then the step's owner in ci.toml at ``c``; of circuit-check,
+        the owner in `main`'s registry of each sidecar's pins file at ``c`` pinning a failed target (`World.pins`), and for a
+        target none owns, the lane of each member whose change meets circuit-check's inputs (`queue.forces_cold`), else the
+        step's owner; of another, the step's owner.  `CI` when none is known."""
+        w, d = self.world, self.world.driver()
+        job, lanes, owners = d._step_owner(step, c.sha), [], []
+        if step == RATCHET_STEP:
+            lanes = [w.handle(int(k[1:])) for k in new if k != step]
+        elif step == CIRCUIT_STEP:
+            pins = w.pins(c.sha, (_target(k) for k in new))
+            by = {x: [h for p in pins.get(x, ()) if (h := d._path_owner(p))] for x in map(_target, new)}
+            owners = [h for hs in by.values() for h in hs]
+            if all(by.values()):
+                job = None
+            elif lanes := [w.handle(n) for n, h in zip(c.members, c.heads) if forces_cold(w._changed(c.base, h))]:
+                job = None if all(lanes) else job
+        return tuple(f"@{h}" if h else CI for h in red_owners(lanes, [*owners, job]))
 
     def _ring(self, a: Ring, c: Candidate, t: Tick) -> list[dict]:
         if (c.sha, a.why) in t.past.rung():

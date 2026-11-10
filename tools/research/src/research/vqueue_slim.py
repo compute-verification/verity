@@ -35,7 +35,9 @@ its own machines (`shard_machines`), with the keywords drive's own gets (`Driver
 preflights and a lean-agreement that ran, less policy.toml's `off_gate` and drive.toml's `warn_steps`), a step a shard holds
 passed only once every shard holding it passed (`shard_passed`).  A failed step's tests are what its failure names
 (`failing`), so `vqueue.decide` takes as inherited only a failure whose every failing test the run beside the base fails
-too; what a failure doesn't name is one test no other key has (`unnamed`), so it is never inherited."""
+too; what a failure doesn't name is one test no other key has (`unnamed`), so it is never inherited.  A step it leaves out
+still runs: `failures` reads what it failed, which the loop rings to who acts on it, but what the run beside the base's
+check failed too (`Loop._off_gate`)."""
 from __future__ import annotations
 
 import ast
@@ -46,10 +48,11 @@ import re
 from dataclasses import replace
 from pathlib import Path
 
-from .drive import (ACTIVE, AFTER_LANDING, LAUNCH_LOST_S, LEAN_AUDIT_RE, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS,
-                    SUITE_STEPS, Driver, _step_log, implicated, killed, not_run, shard_machines, shard_passed, shard_steps,
-                    step_paths, step_records, suite_paths, suite_rows)
+from .drive import (ACTIVE, AFTER_LANDING, KILLED_RC, LAUNCH_LOST_S, LEAN_AUDIT_RE, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED,
+                    SLIM_STEPS, SUITE_STEPS, Driver, _step_log, implicated, killed, not_run, shard_machines, shard_passed,
+                    shard_steps, step_paths, step_records, suite_paths, suite_rows)
 from .queue import CHECK_STEPS, _git
+from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
 from .vqueue import FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Failed, Verdict, meets
 
@@ -236,6 +239,29 @@ def unnamed(key: str) -> str:
     """The one test of what a failure keyed ``key`` doesn't name: no failure under another key has it, so
     `vqueue.decide` never takes it as inherited by its tests."""
     return f"unnamed:{key}"
+
+
+def failures(driver: Driver, rec: dict | None, step: str) -> dict[str, str] | None:
+    """What the run ``rec`` records failed of ``step``, a step `judge` leaves out (policy.toml's `off_gate`, drive.toml's
+    `warn_steps`), once its verdict is kept: each failure the step's logs name (`reds.named`: ratchet-gate's merges,
+    circuit-check's failures), by its key with its line, else the step itself; {} when it passed.  A shard's twin that passed
+    it answers for the shard (`shard_steps`).  None while the run runs, and when it didn't run the step to its end: no shard
+    holds it, one skipped or stopped it, or a kill ended it (`KILLED_RC`, a signal)."""
+    if rec is None or "verdict" not in rec or not rec.get("ids"):
+        return None
+    groups = driver._shards(rec)
+    view = shard_steps(groups, [True] * len(groups)) or []
+    if not (held := [k for k, v in enumerate(view) if step in v]) or any(view[k][step] not in ("passed", "failed") for k in held):
+        return None
+    out: dict[str, str] = {}
+    for d in (d for k in held if view[k][step] == "failed" for d in groups[k]):
+        for st in step_records(d):
+            if st.get("step") != step or st.get("status") != "failed" or not_run(st):
+                continue
+            if st.get("rc") in KILLED_RC or isinstance(st.get("rc"), int) and st["rc"] < 0:
+                return None
+            out.update(named(step, _step_log(d, st)) or {step: f"{step} failed, its log naming no failure"})
+    return out
 
 
 def failing(driver: Driver, tip: str, d: Path, st: dict, rest: str) -> tuple[set[str], set[str]]:

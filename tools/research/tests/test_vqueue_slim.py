@@ -18,8 +18,8 @@ from research.drive import (ACTIVE, AFTER_LANDING, LAUNCH_LOST_S, LOST_AFTER_S, 
                             step_paths, step_records, touches)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
-from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, audit_failures, based, combine, judge, key, reads, start,
-                                  step_test, unnamed)
+from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, audit_failures, based, combine, failures, judge, key, reads,
+                                  start, step_test, unnamed)
 from test_drive_executor import PREFLIGHTS, _slim
 from test_drive_policy import _policy
 from test_drive_review import GATED_TREE, _main, _move_main
@@ -473,6 +473,49 @@ def test_a_lean_audit_failure_is_inherited_only_while_it_prints_no_more_than_the
     assert f.key != f.base_key and f.inputs == {"Security/Proofs/A.lean"} and _inherited(f) is (not more)
     assert f.tests - f.base_tests == ({"Security/Proofs::record: the statement of G changed"} if more else set())
     assert unnamed(f.key) not in f.tests
+
+
+def test_failures_are_what_an_ended_run_failed_of_a_step_by_what_its_log_names_once_its_verdict_is_kept(
+        world, monkeypatch, tmp_path):
+    """`failures` reads a step `judge` leaves out (circuit-check, ratchet-gate), once the run's verdict is kept: each failure
+    its log names, the step itself where it names none, none where it passed; None while the run runs, of a record with no
+    run, and where the step didn't run to its end (skipped, stopped, killed, or absent from every shard)."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=1)
+    assert failures(h.d, rec, "circuit-check") is None and failures(h.d, None, "circuit-check") is None
+    d = _slim(h, tmp_path, circuit_check="FAIL lowering/dead Callee_v1\n", ratchet_gate="  #4 (000000000004): failed: grows\n",
+              lean_build="error: it failed\n")
+    assert failures(h.d, rec, "circuit-check") is None                    # its verdict isn't kept yet
+    assert judge(h.d, rec).state == FAIL
+    assert failures(h.d, rec, "circuit-check") == {"lowering/dead Callee_v1": "lowering/dead Callee_v1"}
+    assert failures(h.d, rec, "ratchet-gate") == {"#4": "#4 (000000000004): grows"}
+    assert failures(h.d, rec, "lean-build") == {"lean-build": "lean-build failed, its log naming no failure"}
+    assert failures(h.d, rec, "pytest") == {} and failures(h.d, {**rec, "ids": []}, "pytest") is None
+    for how in ({"rc": 137}, {"rc": -9}, {"rc": SIGTERM_RC}, {"status": "skipped"}, {"status": "stopped"}, None):
+        _rewrite(d, circuit_check=how)
+        assert failures(h.d, rec, "circuit-check") is None, how
+    assert failures(h.d, rec, "ratchet-gate") == {"#4": "#4 (000000000004): grows"}
+
+
+def test_failures_of_a_sharded_run_are_those_of_each_shard_that_failed_the_step_which_a_twin_s_pass_answers_for(
+        world, monkeypatch, tmp_path):
+    """Of the check that gates, a step is failed in a shard where no twin passed it; with no live record a shard's steps are
+    those its steps.jsonl names, every shard having ended."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.evidence = []
+    for rid, target in (("r-1", "A_v1"), ("r-1b", None), ("r-2", "B_v1")):
+        (d := tmp_path / rid).mkdir()
+        st = {"step": "circuit-check", "status": "passed"} if target is None else {
+            "step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"}
+        (d / "steps.jsonl").write_text(json.dumps(st) + "\n")
+        (d / "circuit-check.log").write_text(f"FAIL lowering/dead {target}\n" if target else "")
+        h.evidence.append(d)
+    rec = {"ids": ["r-1", "r-1b", "r-2"], "groups": [["r-1", "r-1b"], ["r-2"]], "tip": sha, "base": base, "gate": CHECK,
+           "verdict": {"state": PASS}}
+    assert failures(h.d, rec, "circuit-check") == {"lowering/dead B_v1": "lowering/dead B_v1"}
+    rec = {**rec, "ids": ["r-1", "r-2"], "groups": [["r-1"], ["r-2"]]}
+    assert failures(h.d, rec, "circuit-check") == {"lowering/dead A_v1": "lowering/dead A_v1",
+                                                   "lowering/dead B_v1": "lowering/dead B_v1"}
 
 
 # -- content keys
