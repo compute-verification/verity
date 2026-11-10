@@ -21,6 +21,12 @@ SRC = str(Path(remote.__file__).resolve().parents[1])
 RUN = "/workspace/research/runs/r1"
 
 
+@pytest.fixture(autouse=True)
+def no_helper(monkeypatch, tmp_path):
+    """Whether this machine has the lock-out's vy-sudo decides how a job asks for root: every test starts on one without it."""
+    monkeypatch.setattr(jobuser, "VY_SUDO", str(tmp_path / "no-vy-sudo"))
+
+
 def passwd(name="vyjob", uid=990, gid=990):
     return SimpleNamespace(pw_name=name, pw_uid=uid, pw_gid=gid, pw_dir="/nonexistent", pw_shell="/usr/sbin/nologin")
 
@@ -31,14 +37,14 @@ class Group:
 
 
 class Runner:
-    """subprocess.run as the unit's commands see it: every argv recorded, `find`'s stdout given."""
+    """subprocess.run as the unit's commands see it: every argv recorded, `find`'s stdout (or vy-sudo job-reclaim's) given."""
 
     def __init__(self, find_out=""):
         self.calls, self.find_out = [], find_out
 
     def __call__(self, argv, **kw):
         self.calls.append(list(argv))
-        out = self.find_out if argv[2:3] == ["find"] else ""
+        out = self.find_out if argv[2:3] == ["find"] or argv[3:4] == ["job-reclaim"] else ""
         return type("R", (), {"returncode": 0, "stdout": out, "stderr": ""})()
 
 
@@ -203,6 +209,36 @@ def test_the_runner_reads_nothing_until_the_unit_is_gone_and_what_the_job_left_i
     (d / "left").write_text("")
     assert sorted(jobuser.finish(str(d), "u", "vyjob", os.getuid(), 0o750, run=Runner())[1]) == ["control", "left", "out"], \
         "what the chown didn't give back is reported"
+
+
+def test_where_the_nodes_vy_sudo_has_the_jobs_forms_every_root_command_goes_through_it(tmp_path, monkeypatch):
+    """A locked-out node gives the runner no other root, so a job must already ask this way before the node's sudo is cut down."""
+    vy_sudo = tmp_path / "vy-sudo"
+    monkeypatch.setattr(jobuser, "VY_SUDO", str(vy_sudo))
+    assert not jobuser.helper() and jobuser.root() == ("sudo", "-n"), "a node without the lock-out's files"
+    vy_sudo.write_text('FORMS = ("renice", "systemd-run", "systemctl")\n')
+    assert not jobuser.helper() and jobuser.root() == ("sudo", "-n"), "a helper from before the job's forms"
+    vy_sudo.write_text('FORMS = ("renice", "systemd-run", "systemctl", "job-reclaim")\n')
+    assert jobuser.helper() and jobuser.root() == ("sudo", "-n", str(vy_sudo))
+    d = run_dir(tmp_path)
+    u = jobuser.Unit(name="research-job-r1", user="vyjob", run_dir=str(d), cwd=str(d), env_file=f"{d}/control/job.env")
+    plain = jobuser.unit_argv(u, via=False)
+    assert jobuser.unit_argv(u) == ["sudo", "-n", str(vy_sudo), *plain[2:]], "the same unit, asked for through the helper"
+    monkeypatch.chdir(d)
+    runs = Runner()
+    rc = jobuser.main(["--user", "vyjob", "--unit", "research-job-r1", "--", "python", "-c", "x"], run=runs, check=lambda u: passwd(),
+                      popen=lambda argv, **kw: Proc(1, lambda: os.kill(os.getpid(), signal.SIGTERM)),
+                      environ={"RESEARCH_RUN_DIR": str(d)})
+    assert rc == 128 + signal.SIGTERM
+    assert runs.calls == [["sudo", "-n", str(vy_sudo), "systemctl", "stop", "--no-block", "research-job-r1"],
+                          ["sudo", "-n", str(vy_sudo), "systemctl", "stop", "research-job-r1"]]
+    jobuser.prepare(str(d))
+    runs = Runner(find_out=f"{d}/out/link\n{d}/fifo\n")
+    removed, still = jobuser.finish(str(d), "research-job-r1", "vyjob", 2**31 - 2, 0o750, run=runs)
+    assert runs.calls == [["sudo", "-n", str(vy_sudo), "systemctl", "stop", "research-job-r1"],
+                          ["sudo", "-n", str(vy_sudo), "job-reclaim", str(d), "vyjob"]], "no find or chown of its own as root"
+    assert removed == ["out/link", "fifo"] and still == []
+    assert stat.S_IMODE(d.stat().st_mode) == stat.S_IMODE((d / "out").stat().st_mode) == 0o750
 
 
 def _request(tmp_path, job_user):
