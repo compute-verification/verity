@@ -23,13 +23,13 @@ SRC=$(pwd)
 export HZ_CONFIGS=${SU_UNITS:?} HZ_N=${SU_N:-4} HZ_MEM_GB=${SU_MEM_GB:?} HZ_RUNS=${SU_RUNS:-1} HZ_WARM=${SU_WARM:-0}
 export HZ_CASES=${SU_CASES:-honest output_row_committed_false output_claim_false unit_internal_bit_flipped}
 [ -n "${SU_CACHE:-}" ] && export HZ_CACHE=$SU_CACHE
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src${PYTHONPATH:+:$PYTHONPATH}
 source benchmarks/pouw/hidden_zk/job.sh
 SU=$SRC/benchmarks/served_units
 
 stage_one() {   # stage_one SPEC D O: D holds the proof block's staged files, from the stage cache or staged now
   local spec=$1 D=$2 O=$3 key S rc=0
-  key=$(tree_key benchmarks/served_units/stage.py verity/ml/flock/python verity integrations/vllm/verity_vllm/program \
+  key=$(tree_key benchmarks/served_units/stage.py verity/ml/flock/python verity adapters/vllm/verity_vllm/program \
     tools/verity/circuit_check/src)
   S=${HZ_CACHE:-$W/cache}/stage/$(basename "$D")-n$N-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"

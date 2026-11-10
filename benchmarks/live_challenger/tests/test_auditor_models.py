@@ -240,10 +240,10 @@ def test_a_role_listed_twice_or_not_at_all_is_refused(mlp):
 
 def test_an_unreadable_or_missing_manifest_is_refused(mlp):
     (mlp["tree"] / M.MANIFEST).write_text("{")
-    with pytest.raises(M.Refused, match="integrations/vllm/manifests/checkpoints-int8.json is not readable JSON"):
+    with pytest.raises(M.Refused, match="adapters/vllm/manifests/checkpoints-int8.json is not readable JSON"):
         M.manifest_entry(mlp["tree"], MLP_ROLE)
     (mlp["tree"] / M.MANIFEST).unlink()
-    with pytest.raises(M.Refused, match="the pinned tree has no integrations/vllm"):
+    with pytest.raises(M.Refused, match="the pinned tree has no adapters/vllm"):
         M.manifest_entry(mlp["tree"], MLP_ROLE)
 
 

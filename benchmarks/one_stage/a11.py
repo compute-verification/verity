@@ -3,7 +3,7 @@ the one-stage audit A6 ran on stand-in coordinates: each Definition kind (family
 is a template, its units staged from the step's own values, sampled by the stratified law in one audit, proved by M0 under
 ``--zk`` and held by the Lean verifier of record.
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a11.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
       --lean flock-verify --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
 

@@ -793,7 +793,7 @@ def fetched_fixtures(tree: str, paths: set[str]) -> dict[str, str]:
 def fetch_env() -> dict[str, str]:
     """The fixture fetch's environment, with the store the tests reach: a recorded check's steps and a `research run` carry no
     store config, only the run's custody key (`$CHECK_STORE_CUSTODY`, `store_custody`), which goes into this subprocess's
-    environment as the tests' own store helpers hand it to theirs (integrations/vllm's `store_io`, Flock's `verifier/ci.py`),
+    environment as the tests' own store helpers hand it to theirs (adapters/vllm's `store_io`, Flock's `verifier/ci.py`),
     when no store config is set here.  Without it the fetch read the public export alone, so a fixture registered since failed
     its suite before any test, though the tests that read it would have fetched it."""
     env = SETTINGS.environ()

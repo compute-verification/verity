@@ -659,7 +659,7 @@ def endpoint(a: argparse.Namespace) -> int:
         raise Refused(f"--io: the warden run's I/O doesn't read whole off its cells: {io.get('violations', [])[:3]}")
     eos = [int(t) for t in a.eos_ids.split(",")]
     ep = rebuild(src, keep / "records", io["records"], eos)
-    sys.path[:0] = [str(TREE), str(TREE / "integrations" / "vllm"), str(HERE)]
+    sys.path[:0] = [str(TREE), str(TREE / "adapters" / "vllm"), str(HERE)]
     os.environ["PYTHONPATH"] = os.pathsep.join(filter(None, sys.path))
     import chain_record as CR
     rep = CR.served_endpoint(dep, io, ep, eos) | {"at": CR.SERVED_NODE}

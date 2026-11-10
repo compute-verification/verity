@@ -1,6 +1,6 @@
 """``vllm-v1``: the reference reproduces its conformance vectors, and its verifier accepts exactly the
 vector openings and rejects the rejection vectors.  That vLLM's own code produces the same bytes is checked in
-``integrations/vllm/tests/commit/test_production_vectors.py``."""
+``adapters/vllm/tests/commit/test_production_vectors.py``."""
 
 from __future__ import annotations
 

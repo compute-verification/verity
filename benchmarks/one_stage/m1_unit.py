@@ -24,7 +24,7 @@ A V-chunk of greedy token selection (`b1.TokenSelectChunk_v1`) or its combine (`
 stages the ``--units`` chunks, or the combine, of a synthetic logits row of V (`vchunk_call`), the combine's token held to
 `TokenSelect_v1{V}` on the whole row and each staged output to its word Definition's.
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v1{N=6144,EPS=...,BLOCK=256}' --out DIR \\
       [--structural iv/hybrid/4 | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 

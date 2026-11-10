@@ -66,8 +66,8 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
-    "integrations/vllm/manifests/checkpoints.json": 320 * 1024,
-    "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
+    "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
+    "adapters/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "verity/ml/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
@@ -122,7 +122,7 @@ def test_generated_output_patterns() -> None:
     assert generated_output("renders/daily/20260927T0857Z-tables.json") == "under renders/"
     assert generated_output("lanes/x/evidence/run.log") == "under evidence/"
     assert generated_output("benchmarks/numerical/plot_overhead.png") == "a .png render"
-    assert generated_output("integrations/vllm/20260929T0300Z-tables.json") == "a stamped render or note"
+    assert generated_output("adapters/vllm/20260929T0300Z-tables.json") == "a stamped render or note"
     assert generated_output("benchmarks/numerical/python/verity_numerical/bench/contract.py") is None
     assert generated_output("tools/research/tests/fixtures/run_v0.2/out/result.json") is None
 

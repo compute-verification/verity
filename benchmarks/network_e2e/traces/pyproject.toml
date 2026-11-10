@@ -12,13 +12,13 @@ untraced = ["tests/test_tick_job.py"]
 # (`serve_admit`, `tick_plugin`), whose release headers, watermark and feed the stand-in network certifier speaks, and
 # the modules they import
 inputs = [
-    "integrations/vllm/verity_vllm/__init__.py",
-    "integrations/vllm/verity_vllm/engine/__init__.py",
-    "integrations/vllm/verity_vllm/engine/hooks.py",
-    "integrations/vllm/verity_vllm/pipeline/__init__.py",
-    "integrations/vllm/verity_vllm/pipeline/serve_admit.py",
-    "integrations/vllm/verity_vllm/pipeline/tick_plugin.py",
-    "integrations/vllm/verity_vllm/settings.py",
+    "adapters/vllm/verity_vllm/__init__.py",
+    "adapters/vllm/verity_vllm/engine/__init__.py",
+    "adapters/vllm/verity_vllm/engine/hooks.py",
+    "adapters/vllm/verity_vllm/pipeline/__init__.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
+    "adapters/vllm/verity_vllm/pipeline/tick_plugin.py",
+    "adapters/vllm/verity_vllm/settings.py",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

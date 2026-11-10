@@ -2,7 +2,7 @@
 (``pearl-c-h100-v1-h3``): its linears as one TP8 rank serves them, each with the sm_90a kernels' domain verdict, and γ
 at the H100 record.
 
-The linears are the pinned vLLM's (integrations/vllm's ``manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json``: each tap's
+The linears are the pinned vLLM's (adapters/vllm's ``manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json``: each tap's
 output shape and program), from the checkpoint's config (`CONFIG`).  Every FP8 linear is a 128 x 128 block-scaled weight, served
 by FlashInfer below 32 tokens and DeepGEMM ``fp8_gemm_nt`` from 32 (ue8m0 activation scales, weight scales requantized to ue8m0 at
 load); the routed experts are vLLM's fused-MoE Triton kernel over (expert, row block); the indexer's ``wk_weights_proj`` is a

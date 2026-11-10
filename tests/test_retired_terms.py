@@ -187,9 +187,9 @@ ALLOWED: dict[str, str] = {
 PENDING: dict[str, str] = {
     "verity/core/protocols/pouw/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
     "verity/core/protocols/pouw/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
-    "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
-    "integrations/vllm/verity_vllm/pipeline/serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
-    "integrations/vllm/tests/pipeline/test_serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
+    "adapters/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
+    "adapters/vllm/verity_vllm/pipeline/serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
+    "adapters/vllm/tests/pipeline/test_serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
     "verity/ml/commitments/domains.py": "queued PRs add the term here; the proof-service rename follows them",
     "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
@@ -201,7 +201,7 @@ PENDING: dict[str, str] = {
     "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
     "examples/h200/README.md": "#4680 rewrites its lines",
     "benchmarks/stacked_share/README.md": "#4514 rewrites its lines",
-    "integrations/vllm/README.md": "#4773 adds lines",
+    "adapters/vllm/README.md": "#4773 adds lines",
     "README.md": "main rewrote its demos' rows, naming verity example, after the demos' words were generated; they follow",
     "tools/verity/cli/README.md": "main added it, naming verity example, after the demos' words were generated; they follow",
     "benchmarks/remote_session/README.md": "main rewrote its opening, naming verity example, after the demos' words were "

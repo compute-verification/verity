@@ -229,7 +229,7 @@ if [ "${DITHER_NSYS:-}" = 1 ] || [ "${DITHER_NSYS:-}" = prof ]; then
   NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none
         --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/gate" --force-overwrite true)
 fi
-cd integrations/vllm
+cd adapters/vllm
 SCRIPT=$HB/hb_sbench.py
 [ -n "${HB_SCRIPT:-}" ] && SCRIPT=$ROOT/$DITHER/$HB_SCRIPT
 printf '%s\n' "$PY $SCRIPT --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"

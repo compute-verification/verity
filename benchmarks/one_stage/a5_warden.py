@@ -53,7 +53,7 @@ The run exits 0 when it is as expected: accepted with every negative refused, or
 Lean's registered reads by its reason. ``--out`` holds the window as committed (``window/``, its private files too) and
 a5's records (``rank0/``, ``challenger/``, ``summary.json``); the warden's rows and salts stay in ``--run``.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5_warden.py --run WARDEN_RUN --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
         --firewall flock-firewall --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """

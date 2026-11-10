@@ -41,7 +41,7 @@ firewall = [
     "Security/**/RecGeneric*",
     "verity/core/service/vstar",
 ]
-vllm = ["integrations/vllm"]
+vllm = ["adapters/vllm"]
 # what the public side shares: the one challenge derivation, the one signature scheme, the Python held to each Lean, the
 # deployment's configuration, and the two lemmas public proofs import from private areas
 shared = [
@@ -72,7 +72,7 @@ protocols = [
     "Security/Proofs/Properties/Nci{,.lean}",
     "verity/core/primitives/identity",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
-    "integrations/vllm/tests/pipeline/test_registration_log.py",
+    "adapters/vllm/tests/pipeline/test_registration_log.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
     "Security/Proofs/Pouw/PeriodJ10R/Binding.lean",
 ]
@@ -126,7 +126,7 @@ paths = [
     "verity/core/service/sampled_proofs",
     "Security/*/Pouw",
     "Security/Proofs/Properties/Pouw",
-    "integrations/vllm",
+    "adapters/vllm",
     "benchmarks/one_stage",
 ]
 until = "PRF-285: the v3 ledger names a period's prover `prover`"

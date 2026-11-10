@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fixture as F
 from stage import Stage
 
-sys.path.insert(0, str(F.ROOT / "integrations" / "vllm"))
+sys.path.insert(0, str(F.ROOT / "adapters" / "vllm"))
 from p2_v1.gpu import Kernels
 from verity_vllm.engine import int8_exact as X
 from verity_vllm.engine import int8_fused as T
