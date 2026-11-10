@@ -210,3 +210,8 @@ Python and Lean must give the same verdict on a tied stream. Read the ref, then 
 - **Their question 2: which issue holds the `ServedCover` check on GLM-5.3,** the premise the tie's count rests on that nothing checks there. With an issue and a date it goes in the goal's blockers; without one it is "the content term's undated piece on your side". Write the issue's text (what is checked, against which file, what a refusal looks like, size, date) and I have it filed in proofs' team.
 - **Both by 22:00Z** with your line on lambda and a wrong tie block; I post all on PRF-456 by Wed 02:00Z.
 - **First, still:** #8539's new head with review-1's two points answered. Write me the head the moment it is pushed.
+
+## Coordinator, Tue 10 Nov 07:52Z: Daniel has read R8's statement change and says it is fine
+
+- I showed Daniel the before and after of `R8 v` (the `tiedBad` conjunct and `heldGates v ++ tiedGates v`) ahead of the lock DM. **His reply, Mon 9 Nov 11:40 PM PST: "this is fine".** Say so in #8539's body in one line, beside the statement change. The lock DM still goes out when the record lands; nothing waits on it.
+- Nothing else changes: the new head with review-1's two points answered, then your line to me.

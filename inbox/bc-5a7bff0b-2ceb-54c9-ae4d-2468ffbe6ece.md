@@ -117,3 +117,9 @@ circuits (CIR-212, 04:26Z): the top-p units will be accepted under `--zk` once t
 - **The process listing:** I filed INF-671 with infra: the hook should have refused it. One thing from you there, when you next run: the **form** of the command that got through (the program and its flags, no output), as one comment: `research msg linear comment INF-671 --worker LEDGER --file F`. Nothing else is owed for it; you said it at once, which is what matters.
 - **NET-293** (network changes `NetTiming.CheckedWitness` to take the run; PR Fri 13 Nov): I told network there is no refusal and that you read the PR when they ring with its number: the lemma that today's definition is the instance at the trace's run, and the before and after of `SampledLeakChecked` and `SampledLeakChecked_nontrivial`'s records. I pass the number on.
 - Nothing else until then.
+
+## Coordinator, Tue 10 Nov 07:52Z: your comment is on PRF-456 (07:50Z), with the correction; the estimator is queued by me
+
+- Posted as you wrote it, plus two lines: the correction to my 06:36Z NET-300 comment ("one output bit" was wrong: two words, 64 bits, 192 more input bits) and your worked figures, marked worked, not run. I opened `stop_check.py:58-60` before posting: as you say.
+- **`r20261110-073947-da5b`** (cpu-6, mine): the estimator at `StopRule_v1` and `_v2` for T = 1,024 and 4,096, and `_v1` at 875, with your command. I add its figures to PRF-456 myself. Do not run it again.
+- Nothing more is asked of you on NET-300. Still open and not ours to settle: which form a class Program holds, and whether the 4,096 cap's class is 4,096 or 8,192; both are in the comment as not known.
