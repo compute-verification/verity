@@ -21,6 +21,9 @@ benchmark directory), and that name is left out where the new directory, less it
 `.../verifier/pouw/audit.py`). So a component keeps its own subpath, nothing is renamed, and no new path keeps a `core`
 or `ml` segment. An archived file goes to `archive/` under its whole path today.
 
+A module's circuit-check sidecar and its pins (`X.circuit-check.py`, `X.circuit-check.json`) go where `X.py` goes,
+whichever component they are in: circuit-check finds a module's bindings beside it.
+
 EXCEPTIONS, each a row of `EXCEPT` or `KEEP` with its reason: where the rule gives two files one path, puts a file
 nobody trusts in a trusted directory, takes a module out of its import package, or gives a path nobody would look for.
 A row the rule itself now gives is reported as doing nothing.
@@ -224,6 +227,7 @@ INCLUDE = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
            "integrations/vllm/manifests/definitions.json"]
 NAMESAKE = ("pyproject.toml", "__init__.py", "lakefile.toml")
 MAP_NAME = re.compile(r"layout_\d\d_\w+_map\.toml")
+SIDECAR = re.compile(r"(.+)\.circuit-check\.(?:py|json)")
 
 
 def die(msg):
@@ -395,6 +399,16 @@ def plan(data, owner, say):
             out[p] = (new, key, mv or move)
         elif rule is not None and p not in LEFT:
             out[p] = (rule, key, move)
+    for p in sorted(owner):                           # a module's circuit-check sidecar and its pins go where the module goes
+        if (m := SIDECAR.fullmatch(p)) and (mod := m.group(1) + ".py") in owner and p not in LEFT and excepted(p)[0] is None:
+            there = out.get(mod)
+            new = None if there is None else f"{posixpath.dirname(there[0])}/{posixpath.basename(p)}"
+            if (out.get(p) or (None,))[0] != new:
+                say(f"with its module: {p} goes to {new or 'nowhere (its module stays)'}, not {(out.get(p) or ('nowhere',))[0]}")
+                if new is None:
+                    del out[p]
+                else:
+                    out[p] = (new, owner[p], there[2])
     for old, new, _ in EXCEPT:
         if old not in plain:
             say(f"dropped, EXCEPT's row {old} holds no tracked file")
@@ -531,6 +545,7 @@ def main():
     ap.add_argument("--data", default=os.path.join(HERE, "layout_maps.json"))
     ap.add_argument("--out", default=HERE, help="where the maps go (default: tools/move)")
     ap.add_argument("--targets", help="write the table of where each moved component goes here, tab-separated")
+    ap.add_argument("--created", help="write here the `__init__.py`s `layout.py` creates over all the maps, one a line")
     a = ap.parse_args()
     repo = os.path.dirname(os.path.dirname(HERE))
     data = json.load(open(a.data))
@@ -687,6 +702,21 @@ def main():
                 f.write("\t".join([fname[m], key, name.replace("\t", " "), str(len(pairs)), common_dir([p for p, _ in pairs]) or ".",
                                    common_dir([n for _, n in pairs]) or ".",
                                    "; ".join(f"{o} -> {n} ({k})" for (o, n), k in sorted(by.items()))]) + "\n")
+    after_all = (tracked - set(dest)) | set(by_new)
+    created = set()                                    # as `layout.py`'s `create` does, over all the maps
+    for move in order:
+        v = maps[move]
+        for p, n in v["mine"].items():
+            if n.endswith(".py") and f"{posixpath.dirname(p)}/__init__.py" in tracked:
+                root = next((d for d in sorted(v["roots_new"].values(), key=len, reverse=True) if n.startswith(d + "/")), None)
+                d = posixpath.dirname(n)
+                while root is not None and d and (d == root or d.startswith(root + "/")):
+                    if f"{d}/__init__.py" not in after_all:
+                        created.add(f"{d}/__init__.py")
+                    d = posixpath.dirname(d)
+    if a.created:
+        with open(a.created, "w") as f:
+            f.write("".join(p + "\n" for p in sorted(created)))
     moved = {key for _, key, _ in dest.values() if key in comps}
     print(f"{len(order)} maps at {a.ref} {head[:12]} (the data's cut: {data['commit'][:12]}): {len(dest)} files "
           f"({sum(1 for _, k, _ in dest.values() if k in comps)} in {len(moved)} components that move, "
@@ -699,7 +729,8 @@ def main():
               f"split rows, {len(v['modules'])} module renames" + (f"; after {', '.join(sorted(after[move]))}" if after[move] else ""))
     for key, v in sorted(untrusted.items()):
         print(f"  untrusted under a trusted directory, allowed by UNTRUSTED: {key}, {len(v)} files ({v[0]})")
-    for p, why in LEFT.items():
+    print(f"  `layout.py` creates {len(created)} `__init__.py` over the maps (--created FILE lists them)")
+    for p in LEFT:
         print(f"  left in place: {p}")
     for n in notes:
         print("  " + n)

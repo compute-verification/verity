@@ -1,5 +1,5 @@
 # The layout move of the circuit language, to `verity/circuits`: what `tools/move/layout.py --map
-# tools/move/layout_02_circuits_map.toml` moves and rewrites. 94 files in 89 rows. Written by
+# tools/move/layout_02_circuits_map.toml` moves and rewrites. 90 files in 85 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -27,8 +27,6 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/ml/circuits/boolean/forms.py" = "verity/circuits/boolean/forms.py"
 "verity/ml/circuits/boolean/gather.py" = "verity/circuits/boolean/gather.py"
 "verity/ml/circuits/boolean/gf128.py" = "verity/circuits/boolean/gf128.py"
-"verity/ml/circuits/boolean/memcheck.circuit-check.json" = "verity/circuits/boolean/memcheck.circuit-check.json"
-"verity/ml/circuits/boolean/memcheck.circuit-check.py" = "verity/circuits/boolean/memcheck.circuit-check.py"
 "verity/ml/circuits/boolean/table.py" = "verity/circuits/boolean/table.py"
 "verity/ml/circuits/boolean/trace.py" = "verity/circuits/boolean/trace.py"
 "verity/ml/circuits/boundary.py" = "verity/circuits/boundary.py"
@@ -53,8 +51,6 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/ml/circuits/query_ast.py" = "verity/circuits/query_ast.py"
 "verity/ml/circuits/query_codec.py" = "verity/circuits/query_codec.py"
 "verity/ml/circuits/refs.py" = "verity/circuits/refs.py"
-"verity/ml/circuits/requirement_units.circuit-check.json" = "verity/circuits/requirement_units.circuit-check.json"
-"verity/ml/circuits/requirement_units.circuit-check.py" = "verity/circuits/requirement_units.circuit-check.py"
 "verity/ml/circuits/tests/boolean_vectors.json" = "verity/circuits/tests/boolean_vectors.json"
 "verity/ml/circuits/tests/conftest.py" = "verity/circuits/tests/conftest.py"
 "verity/ml/circuits/tests/evaluation/" = "verity/circuits/tests/evaluation/"

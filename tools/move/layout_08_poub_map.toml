@@ -1,5 +1,5 @@
 # The layout move of PoUB, to `verity/protocols/poub`: what `tools/move/layout.py --map
-# tools/move/layout_08_poub_map.toml` moves and rewrites. 123 files in 5 rows. Written by
+# tools/move/layout_08_poub_map.toml` moves and rewrites. 125 files in 7 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -16,6 +16,8 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "benchmarks/live_verifier/" = "verity/protocols/poub/device/live_verifier/"
 "benchmarks/remote_session/verifier_process.py" = "verity/protocols/poub/verifier/remote_session/verifier_process.py"
 "verity/core/protocols/remote_bandwidth/" = "verity/protocols/poub/verifier/remote_bandwidth/"
+"verity/ml/commitments/gates/block_check.circuit-check.json" = "verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.json"
+"verity/ml/commitments/gates/block_check.circuit-check.py" = "verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.py"
 "verity/ml/commitments/gates/block_check.py" = "verity/protocols/poub/verifier/commitments/gates/block_check.py"
 "verity/ml/commitments/tests/test_block_check.py" = "verity/protocols/poub/verifier/commitments/tests/test_block_check.py"
 

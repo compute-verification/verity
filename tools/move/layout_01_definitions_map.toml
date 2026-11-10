@@ -1,5 +1,5 @@
 # The layout move of the Definitions and their host kernels, to `verity/definitions`: what `tools/move/layout.py
-# --map tools/move/layout_01_definitions_map.toml` moves and rewrites. 707 files in 107 rows. Written by
+# --map tools/move/layout_01_definitions_map.toml` moves and rewrites. 714 files in 114 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -15,6 +15,8 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 [paths]
 "verity/core/primitives/evaluate/" = "verity/definitions/evaluate/"
 "verity/core/primitives/requirement/" = "verity/definitions/requirement/"
+"verity/ml/circuits/boolean/memcheck.circuit-check.json" = "verity/definitions/circuits/boolean/memcheck.circuit-check.json"
+"verity/ml/circuits/boolean/memcheck.circuit-check.py" = "verity/definitions/circuits/boolean/memcheck.circuit-check.py"
 "verity/ml/circuits/boolean/memcheck.py" = "verity/definitions/circuits/boolean/memcheck.py"
 "verity/ml/circuits/census.py" = "verity/definitions/circuits/census.py"
 "verity/ml/circuits/constants.py" = "verity/definitions/circuits/constants.py"
@@ -22,6 +24,8 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/ml/circuits/operations.py" = "verity/definitions/circuits/operations.py"
 "verity/ml/circuits/ops/" = "verity/definitions/ops/"
 "verity/ml/circuits/requirement.py" = "verity/definitions/circuits/requirement.py"
+"verity/ml/circuits/requirement_units.circuit-check.json" = "verity/definitions/circuits/requirement_units.circuit-check.json"
+"verity/ml/circuits/requirement_units.circuit-check.py" = "verity/definitions/circuits/requirement_units.circuit-check.py"
 "verity/ml/circuits/requirement_units.py" = "verity/definitions/circuits/requirement_units.py"
 "verity/ml/circuits/silicon/" = "verity/definitions/silicon/"
 "verity/ml/circuits/stacking.py" = "verity/definitions/circuits/stacking.py"
@@ -37,7 +41,10 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/ml/circuits/tests/test_requirement_units.py" = "verity/definitions/circuits/tests/test_requirement_units.py"
 "verity/ml/circuits/tests/test_stacking.py" = "verity/definitions/circuits/tests/test_stacking.py"
 "verity/ml/circuits/tests/test_targets_frozen_families.py" = "verity/definitions/circuits/tests/test_targets_frozen_families.py"
+"verity/ml/commitments/gates/attest.circuit-check.py" = "verity/definitions/commitments/gates/attest.circuit-check.py"
 "verity/ml/commitments/gates/attest.py" = "verity/definitions/commitments/gates/attest.py"
+"verity/ml/commitments/gates/block_key.circuit-check.json" = "verity/definitions/commitments/gates/block_key.circuit-check.json"
+"verity/ml/commitments/gates/block_key.circuit-check.py" = "verity/definitions/commitments/gates/block_key.circuit-check.py"
 "verity/ml/commitments/gates/block_key.py" = "verity/definitions/commitments/gates/block_key.py"
 "verity/ml/commitments/tests/test_block_key.py" = "verity/definitions/commitments/tests/test_block_key.py"
 "verity/ml/commitments/tests/test_boolean_attest.py" = "verity/definitions/commitments/tests/test_boolean_attest.py"

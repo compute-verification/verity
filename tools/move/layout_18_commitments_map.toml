@@ -1,5 +1,5 @@
 # The layout move of commitments, hashes, signatures and the challenge derivation, to `verity/commitments`: what
-# `tools/move/layout.py --map tools/move/layout_18_commitments_map.toml` moves and rewrites. 140 files in 80 rows.
+# `tools/move/layout.py --map tools/move/layout_18_commitments_map.toml` moves and rewrites. 135 files in 75 rows.
 # Written by `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -24,11 +24,6 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "verity/ml/commitments/domains.py" = "verity/commitments/domains.py"
 "verity/ml/commitments/frame_v3/" = "verity/commitments/frame_v3/"
 "verity/ml/commitments/gates/__init__.py" = "verity/commitments/gates/__init__.py"
-"verity/ml/commitments/gates/attest.circuit-check.py" = "verity/commitments/gates/attest.circuit-check.py"
-"verity/ml/commitments/gates/block_check.circuit-check.json" = "verity/commitments/gates/block_check.circuit-check.json"
-"verity/ml/commitments/gates/block_check.circuit-check.py" = "verity/commitments/gates/block_check.circuit-check.py"
-"verity/ml/commitments/gates/block_key.circuit-check.json" = "verity/commitments/gates/block_key.circuit-check.json"
-"verity/ml/commitments/gates/block_key.circuit-check.py" = "verity/commitments/gates/block_key.circuit-check.py"
 "verity/ml/commitments/gates/embedding.circuit-check.json" = "verity/commitments/gates/embedding.circuit-check.json"
 "verity/ml/commitments/gates/embedding.circuit-check.py" = "verity/commitments/gates/embedding.circuit-check.py"
 "verity/ml/commitments/gates/embedding.py" = "verity/commitments/gates/embedding.py"
