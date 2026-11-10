@@ -51,7 +51,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "examples" / "h200" / "interfaces"),
+sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "examples/h200/interfaces"),
                 str(REPO / "verity" / "ml" / "flock" / "verifier")]
 
 import a0  # noqa: E402

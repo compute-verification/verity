@@ -21,7 +21,7 @@ pytest.importorskip("torch")
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "one_stage"))
 sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
-sys.path.insert(0, str(ROOT / "examples" / "h200" / "interfaces"))
+sys.path.insert(0, str(ROOT / "examples/h200/interfaces"))
 import served_bandwidth as SB  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from p2_v1 import bandwidth as B  # noqa: E402
