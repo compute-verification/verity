@@ -911,6 +911,7 @@
    "Accounting.Remote.Draw.Assumptions.Refused",
    "Accounting.Remote.Held.Assumptions.Covered",
    "Accounting.Remote.Held.Assumptions.Covers",
+   "Accounting.Remote.Held.Assumptions.IngressCounted",
    "Accounting.Remote.Held.Assumptions.Paced",
    "Accounting.Remote.Held.Assumptions.SketchBoundAt"
   ],
