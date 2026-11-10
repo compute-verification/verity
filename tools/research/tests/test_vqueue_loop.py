@@ -2590,15 +2590,17 @@ def test_under_gate_check_a_ratchet_gate_naming_no_merge_it_fails_rings_its_owne
     assert rings == ([(["@vllm"], ["ratchet-gate"])] if base == "passed" else [])
 
 
-@pytest.mark.parametrize("who", ["pins", "own pins", "members", "stranger", "job"])
+@pytest.mark.parametrize("who", ["pins", "own pins", "unowned pins", "members", "stranger", "job"])
 def test_under_gate_check_a_circuit_check_target_its_base_passed_rings_its_pins_owner_else_the_members_meeting_its_inputs(
         env, monkeypatch, who):
     """circuit-check is off the merge gate.  Of what the candidate's check fails of it, a target the base's check fails too
     (`main`'s own red), one whose process died and a failure an allowance at the candidate covers ring nobody.  A target the
     base passed rings the owner of each sidecar's pins file at the candidate pinning it (heads, the candidate's own sidecar
-    too); one no pins file pins rings the lane of each member whose change meets circuit-check's inputs (#2's, not #1's), and
-    the step's owner in ci.toml (circuits) where one such member has no lane in the registry (#3) or none meets them."""
+    too); one no pins file pins, or only one the registry gives no owner, rings the lane of each member whose change meets
+    circuit-check's inputs (#2's, not #1's), and the step's owner in ci.toml (circuits) where one such member has no lane in
+    the registry (#3) or none meets them."""
     second = {"own pins": {"verity/core/protocols/certifier/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
+              "unowned pins": {"verity/ml/circuits/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
               "job": {"b.txt": "2\n"}}.get(who, CIRCUITS)
     prs = [OTHER, second, *([{"verity/ml/circuits/x.py": "# x\n"}] * (who == "stranger"))]
     loop, runs, main, sha = _off(env, monkeypatch, *prs)
@@ -2608,8 +2610,8 @@ def test_under_gate_check_a_circuit_check_target_its_base_passed_rings_its_pins_
                                                   f"lowering/dead {DEAD}", f"circuit-check/killed {BIG}")})
     logged = loop.tick()
     assert _acts(logged) == ["slim", "slim", "ring"] and logged[1]["record"]["verdict"]["state"] == PASS
-    to = {"pins": ["@heads"], "own pins": ["@heads"], "members": ["@lane-2"], "stranger": ["@lane-2", "@circuits"],
-          "job": ["@circuits"]}[who]
+    to = {"pins": ["@heads"], "own pins": ["@heads"], "unowned pins": ["@lane-2"], "members": ["@lane-2"],
+          "stranger": ["@lane-2", "@circuits"], "job": ["@circuits"]}[who]
     assert (logged[2]["step"], logged[2]["failures"], logged[2]["to"]) == (
         "circuit-check", [f"lowering/pin-mismatch {target}"], to)
     members = " ".join(f"#{n}" for n in range(1, len(prs) + 1))
@@ -2633,6 +2635,20 @@ def test_under_gate_check_what_a_candidate_fails_off_the_gate_waits_for_its_base
     logged = loop.tick()
     assert _acts(logged) == ["slim", *(["ring"] if base == "passed" else [])]
     assert len(env.posts) == (base == "passed") and loop.tick() == []
+
+
+def test_under_gate_check_a_red_off_the_gate_waits_for_the_run_beside_main_s_check_started_again_after_infra(env, monkeypatch):
+    """The run beside `main`'s check that ended in infra errors runs again, and what a candidate fails off the gate is compared
+    with that run once it ends, not with the one that ended so."""
+    loop, runs, main, sha = _off(env, monkeypatch, CIRCUITS)
+    runs.end(main, 3, "pytest", "error: no\n")
+    runs.state["c-3"] = ("done", 137, None)
+    runs.end(sha, also={"circuit-check": _circuit(f"lowering/pin-mismatch {HEAD}")})
+    logged = loop.tick()
+    assert [r["why"] for r in logged if r["sha"] == main] == ["judged infra beside `main`", "started again beside `main`"]
+    assert "ring" not in _acts(logged)
+    runs.end(main)
+    assert [r["to"] for r in loop.tick() if r["action"] == "ring"] == [["@heads"]]
 
 
 @pytest.mark.parametrize("verdict", [FAIL, INFRA])
