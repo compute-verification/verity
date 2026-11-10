@@ -254,7 +254,7 @@ def test_a_local_open_whose_challenger_signed_nothing_is_refused_without_the_ses
     session = AC.Local(tmp_path, [AC.on_main([])])
     monkeypatch.setattr(AC.Local, "_serve", lambda self, s: None)  # the session's unit stops before it signs
     with pytest.raises(Ch.CoinError, match="the local gate refused the open, or its challenger signed no commitment: ") as e:
-        session.open(ROOT, [[AC.FAMILY, 2]], minutes=1)
+        session.open(ROOT, [[AC.FAMILY, 2]])
     secret = (session.host.sessions / session.session / session.A.SECRET).read_text().strip()
     assert len(secret) == 64 and secret not in str(e.value)
     assert f'"session": "{session.session}"' in str(e.value) and '"commitment": null' in str(e.value)
