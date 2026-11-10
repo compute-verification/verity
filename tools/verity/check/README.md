@@ -215,8 +215,9 @@ isn't public, which no public file of its own distribution uses (the export drop
 commit of fresh history, its manifests pruned to what it copies, each Lean lock stating only what it copies
 (`tools/verity/lean/public_lock.py`), the leftovers a public reader shouldn't meet counted by area, and the third-party pins. A
 Lean library's root file it doesn't copy, an aggregate importing what isn't public, it writes as the imports of the modules
-below it that it does copy, so the library builds whole. The Lean check itself is public (`check.py` and what a run of it
-loads, with its controls' fixtures), and a lock the export ships is one it reads as unowned
+below it that it does copy, so the library builds whole, and a module only files it leaves out import it lists as a
+root of the package's lock, so the Lean check builds it. The Lean check itself is public (`check.py` and what a run of
+it loads, with its controls' fixtures), and a lock the export ships is one it reads as unowned
 (`tools/verity/lean/README.md`). It
 never rewords a lock: one whose kept text holds lane text, or names a declaration, a module or a path it leaves out, refuses
 the export by file, section and entry until the lock is reworded, unless the boundary lists it as known residue

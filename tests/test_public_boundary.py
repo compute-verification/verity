@@ -431,6 +431,45 @@ def test_a_root_file_the_export_lacks_is_the_imports_of_the_modules_below_it() -
         "p/src/Agg.lean", "p/src/Mixed/In.lean"}, "without the lock, no root is the lock's"
 
 
+def test_a_module_only_files_the_export_leaves_out_import_is_a_root_of_the_lock_it_writes() -> None:
+    """The Lean check seals the modules under a lock's roots and builds only what the roots import, so a copied module
+    that only files the export leaves out import would have no build: the export lists it as a root. A module the lock
+    exempts, one outside its roots, one a root reaches, one a listed module imports and one no file imports are not
+    listed, and a lock with none is left as it is."""
+    files = {
+        "p/lakefile.toml": 'name = "p"\nsrcDir = "src"\n[[lean_lib]]\nname = "Lib"\n',
+        "p/src/Lib.lean": "module\n\npublic import Lib.A\n",
+        "p/src/Lib/A.lean": "module\n\npublic import Lib.B\npublic import Other.X\n",
+        "p/src/Lib/B.lean": "module\n",
+        "p/src/Lib/Leaf.lean": "module\n\npublic import Lib.Leaf.Below\n",
+        "p/src/Lib/Leaf/Below.lean": "module\n",
+        "p/src/Lib/Alone.lean": "module\n",
+        "p/src/Lib/Probe/Run.lean": "def main : IO Unit := pure ()\n",
+        "p/src/Other/X.lean": "module\n",
+        "p/src/Lib/Hidden.lean": "module\n\npublic import Lib.Leaf\npublic import Lib.Leaf.Below\npublic import Lib.Probe.Run\n",
+        "q/Lib/Elsewhere.lean": "module\n",
+    }
+    tracked, lock = set(files), {"roots": ["Lib"], "exempt": {"Lib.Probe": "a probe"}}
+    copied = tracked - {"p/src/Lib/Hidden.lean"}
+    assert PE.unreached(files.get, copied, "p", lock, tracked) == ["Lib.Leaf"]
+    assert PE.unreached(files.get, copied, "p", lock | {"roots": ["Lib", "Lib.Leaf"]}, tracked) == []
+    assert PE.unreached(files.get, copied - {"p/src/Lib/A.lean"}, "p", lock, tracked) == ["Lib.B", "Lib.Leaf"]
+    assert PE.unreached(files.get, tracked, "p", lock, tracked) == [], "nothing is left out, so nothing is cut off"
+    assert PE.unreached(files.get, copied, "q", lock, tracked) == [], "no lakefile, so no package to read"
+
+    class Has:
+        def has(self, here, kind, name):
+            return True
+
+    def more(out):
+        return PE.unreached(files.get, copied, "p", out, tracked)
+
+    text = PE.LEAN_CHECK.text(lock)
+    new, dropped = PE.rewrite_lock(text, "p", Has(), more)
+    assert json.loads(new) == lock | {"roots": ["Lib", "Lib.Leaf"]} and dropped == []
+    assert PE.rewrite_lock(new, "p", Has(), more) == (new, [])
+
+
 def test_a_manifest_loses_the_path_packages_the_export_does_not_copy() -> None:
     doc = {"version": "1.1.0", "packages": [
         {"type": "path", "name": "kept", "dir": "../kept", "configFile": "lakefile.toml"},
@@ -756,6 +795,18 @@ def test_the_export_leaves_a_lock_that_is_public_as_it_stands(tmp_path_factory) 
     got = PE.export(tree, boundary, j, dest, {})
     assert (dest / "lean/lean-audit.json").read_bytes() == (tree.root / "lean/lean-audit.json").read_bytes()
     assert "lean/lean-audit.json" not in got["rewrites"]
+    assert got["locks"]["lean/lean-audit.json"]["dropped"] == {} and got["locks"]["lean/lean-audit.json"]["roots_added"] == []
+
+
+def test_the_export_lists_a_module_only_a_file_it_leaves_out_imports_as_a_root(tmp_path_factory, monkeypatch) -> None:
+    hidden = "import Lib.Hidden.Open\n" + LOCK_TREE["lean/Lib/Hidden.lean"]
+    monkeypatch.setitem(LOCK_TREE, "lean/Lib/Hidden.lean", hidden)
+    lock = {"format": 3, "roots": ["Lib"], "layers": {"Lib": {"imports": ["Lib", "Mathlib"], "why": "all of it"}}}
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    assert json.loads((dest / "lean/lean-audit.json").read_text(encoding="utf-8")) == lock | {"roots": ["Lib", "Lib.Hidden.Open"]}
+    assert got["locks"]["lean/lean-audit.json"]["roots_added"] == ["Lib.Hidden.Open"]
     assert got["locks"]["lean/lean-audit.json"]["dropped"] == {}
 
 
@@ -763,7 +814,7 @@ def test_the_export_refuses_a_lock_it_wrote_that_names_what_no_copied_file_has(t
     """The export reads back each lock it wrote: one that still names a declaration or a module no copied file has, or
     carries an owner, fails by name rather than ship."""
     tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
-    monkeypatch.setattr(PE, "rewrite_lock", lambda text, here, held: (text, []))
+    monkeypatch.setattr(PE, "rewrite_lock", lambda text, here, held, more=None: (text, []))
     with pytest.raises(ValueError) as e:
         PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
     said = str(e.value)
