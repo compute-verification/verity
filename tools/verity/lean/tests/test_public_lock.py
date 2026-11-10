@@ -434,3 +434,46 @@ def test_a_lock_reworded_at_source_has_nothing_to_refuse() -> None:
     assert [(kind, text) for *_, kind, text in PL.leftovers(lock, find)] == [("pr", "#1234"), ("declaration", "Lib.Gone.G")]
     lock["layers"]["Mod"]["why"] = "trusted text, as the guarantee over it reads it"
     assert PL.leftovers(lock, find) == []
+
+
+def test_a_lock_the_check_wrote_anew_states_each_guarantee_as_its_source_does() -> None:
+    """After the Lean check writes the exported lock's records on the exported tree, each guarantee and premise it lists
+    is one the source lock lists, with the same record but for the lane's fields. One planted difference is named with
+    the field that differs; an entry the source lacks is named too; the records of other sections may differ."""
+    source = {"guarantees": {"Lib.G": {"owner": "@lane", "signature": ["Lib.G : S"], "type_hash": "1" * 64,
+                                       "premises": {"open": ["Lib.O"], "reads": []}},
+                             "Lib.Gone.G": {"owner": "@lane", "type_hash": "2" * 64}},
+              "open": {"Lib.O": {"owner": "@lane", "issue": "X-1", "digest": "3" * 64}},
+              "reads": {"Mod.Defs": {"definitions": {"Lib.f": "4" * 64}}}}
+    wrote = {"guarantees": {"Lib.G": {"signature": ["Lib.G : S"], "type_hash": "1" * 64,
+                                      "premises": {"open": ["Lib.O"], "reads": []}}},
+             "open": {"Lib.O": {"digest": "3" * 64}},
+             "reads": {"Mod.Defs": {"definitions": {}}}}
+    assert PL.restated(source, wrote) == []
+    planted = copy.deepcopy(wrote)
+    planted["guarantees"]["Lib.G"]["type_hash"] = "5" * 64
+    assert PL.restated(source, planted) == ["guarantees[Lib.G]: its record differs in type_hash"]
+    planted = copy.deepcopy(wrote)
+    planted["guarantees"]["Lib.G"]["premises"]["open"] = []
+    planted["open"]["Lib.O"]["digest"] = "6" * 64
+    planted["guarantees"]["Lib.New"] = {"type_hash": "7" * 64}
+    assert PL.restated(source, planted) == [
+        "guarantees[Lib.G]: its record differs in premises",
+        "guarantees[Lib.New]: the lock it was exported from doesn't list it",
+        "open[Lib.O]: its record differs in digest"]
+
+
+def test_a_public_statement_whose_theorem_stays_behind_is_listed_as_unstated() -> None:
+    """The entry says what the public tree shows and no more, the Lean check reads its category as `unstated`, and a
+    name `shape.frozen` already holds is no statement the export may list."""
+    lock = {"shape": {"frozen": {"Lib.G": "frozen (hash): why"}, "events": ["Lib.Event"]}}
+    got = PL.unstated(lock, ["Lib.S.Two", "Lib.S.One", "Lib.S.One"])
+    assert got == {"shape": {"frozen": {"Lib.G": "frozen (hash): why", "Lib.S.One": PL.UNSTATED, "Lib.S.Two": PL.UNSTATED},
+                             "events": ["Lib.Event"]}}
+    assert lock == {"shape": {"frozen": {"Lib.G": "frozen (hash): why"}, "events": ["Lib.Event"]}}
+    assert PL.unstated(lock, []) is lock
+    assert PL.unstated({}, ["Lib.S.One"]) == {"shape": {"frozen": {"Lib.S.One": PL.UNSTATED}}}
+    assert _check().category(PL.UNSTATED) == "unstated"
+    assert PL.UNSTATED == "unstated: no theorem in this tree proves it"
+    with pytest.raises(ValueError, match="Lib.G: `shape.frozen` already holds an entry"):
+        PL.unstated(lock, ["Lib.G"])

@@ -101,6 +101,8 @@ PREMISES = ("assumptions", "domain", "open", "witnesses_assumed")
 TAKES = ("assumptions", "premises.assumptions", "premises.domain", "premises.open")
 #: the rule, in what `public` reports it dropped, of a premise only dropped guarantees took: `UNTAKEN.<section>`
 UNTAKEN = "untaken"
+#: the reason of the entry the export lists a public statement under when its theorem stays behind (`unstated`)
+UNSTATED = "unstated: no theorem in this tree proves it"
 #: the sections that name nothing of the repository's Lean: the schema's version, the allowed axioms, and what the
 #: dependencies hold (their digests, their modules that may name a bypass, the statements watched in them, their
 #: constants the verifier may reach)
@@ -287,6 +289,44 @@ def missing(lock: dict, has: Callable[[str, str], bool]) -> list[str]:
     A lock `public` returned has none, and the export refuses one it wrote that does."""
     return [f"{where}: {name}" for where, kind, name in named(lock) if not has(kind, name)] + \
         [f"{where}: a lane field" for where in lane_fields(lock)]
+
+
+def restated(source: dict, public: dict) -> list[str]:
+    """What ``public`` states otherwise than ``source``, the lock it was exported from, once the Lean check has written
+    ``public``'s records anew on the exported tree (`check.py --update`, which settles every difference by recording
+    it): `NAME: why` for each guarantee and each premise (`PREMISES`' sections that hold records) ``public`` lists
+    that ``source`` doesn't, or whose record differs from ``source``'s in anything but `LANE_FIELDS`, naming the fields.
+    A guarantee's record is its statement's digest and what it takes, so a public lock with none of these states each
+    guarantee as the lock it came from does."""
+    def record(value):
+        return {k: v for k, v in value.items() if k not in LANE_FIELDS} if isinstance(value, dict) else value
+
+    out = []
+    for section in ("guarantees", *PREMISES):
+        theirs, ours = source.get(section), public.get(section)
+        for name, mine in sorted(ours.items()) if isinstance(ours, dict) else ():
+            if not isinstance(theirs, dict) or name not in theirs:
+                out.append(f"{section}[{name}]: the lock it was exported from doesn't list it")
+            elif (a := record(theirs[name])) != (b := record(mine)):
+                both = isinstance(a, dict) and isinstance(b, dict)
+                fields = sorted(k for k in {*a, *b} if a.get(k) != b.get(k)) if both else []
+                out.append(f"{section}[{name}]: its record differs" + (f" in {', '.join(fields)}" if fields else ""))
+    return out
+
+
+def unstated(lock: dict, names: Iterable[str]) -> dict:
+    """``lock`` with each of ``names``, a statement of the public spec that no guarantee of the public tree states (the
+    Lean check's `shape.unstated`: its theorem is in a file the export leaves out), listed as one (`shape.frozen`, the
+    category `unstated`, the reason `UNSTATED`). The reason says only what the public tree shows: the public check
+    claims what it replays, so it never says the statement is proved elsewhere."""
+    if not (names := sorted(set(names))):
+        return lock
+    shape = dict(lock.get("shape") or {})
+    frozen = dict(shape.get("frozen") or {})
+    if held := [n for n in names if n in frozen]:
+        raise ValueError(f"public_lock: {', '.join(held)}: `shape.frozen` already holds an entry, so it is no unstated "
+                         f"statement the export may list")
+    return {**lock, "shape": {**shape, "frozen": {**frozen, **{n: UNSTATED for n in names}}}}
 
 
 def taken(lock: dict) -> set[str]:
