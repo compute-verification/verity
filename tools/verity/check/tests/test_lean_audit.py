@@ -966,12 +966,13 @@ def test_explain_names_the_inputs_a_miss_changed(tmp_path, monkeypatch):
     assert rc == 0 and "audited at pkg/b) differs in 3 input(s):" in lines[0] and "  changed: elsewhere/b/B.lean" in lines
 
 
-def test_every_file_the_step_loads_is_in_its_key():
+def test_every_file_the_step_loads_is_in_its_key(monkeypatch):
     """What `lean_audit.py` loads by path is in `inputs`, and `common.py` and the task graph's contract, which `module_keys`
     loads, import only the standard library, so a key covers everything the step runs. Loading `check.py` again would need
     it back in the key."""
     import ast
 
+    monkeypatch.setattr(LA, "read_files", LA.own_files)  # reading the real sources would make the Security tree an input
     files = LA.COMMON.tracked_files()
     got = LA.inputs("Security/Proofs", files)
     loaded = re.findall(r'_module\(ROOT / "tools" / "verity" / "check" / "([a-z_]+\.py)"', (ROOT / "tools/verity/lean/lean_audit.py").read_text())
@@ -1120,7 +1121,8 @@ def test_a_spec_reads_the_packages_proving_its_guarantees_and_misses_with_them(t
     assert LA.provers("pkg/a") == []
 
 
-def test_the_real_packages_and_their_inputs():
+def test_the_real_packages_and_their_inputs(monkeypatch):
+    monkeypatch.setattr(LA, "read_files", LA.own_files)  # reading the real sources would make the Security tree an input
     files = LA.COMMON.tracked_files()
     pkgs = LA.packages(files)
     assert "Security/Proofs" in pkgs and not [p for p in pkgs if p.startswith("tools/verity/lean")]
