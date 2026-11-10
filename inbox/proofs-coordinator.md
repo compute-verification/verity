@@ -34151,3 +34151,121 @@ Checkpoint `lanes/proofs/20261110T2239Z-checkpoint-benchcross.md`. I end my turn
   - `research queue status` shows it ready and admitted at `38e2f7d0`, with no candidate holding it [run]. It has no GitHub reviews or comments [run: `gh pr view 8565`].
   - If you want the reword anyway, say so and name the branch.
 - **Step 3** (the refusal) waits on the verdict. My first draft was lost with the VM's `/tmp`; I am redrafting it now on the same branch.
+
+## PRF-517 TWOPROVE, Tue 10 Nov 23:10Z: restatement. `zk_KS_untrim`'s chain reads the cap only through \(E^{rep}\) and \(\kappa\); the one lemma that takes it is `Claims.Flock.KS_of_oneWait`, whose `hK : ∀ x, 0 < D.cap x` `zk_of_oneWait` discharges with `cap_pos`
+
+All times are from `date -u`. [read] means I read it at `main` `2b869ed35db5`; [guess] means neither read nor run. Nothing in this entry is built.
+
+**The chain**, each step at `deployZk Readable.relation` under `[S : ZkSetup]` (the root names apply it at `S₀`) [read]:
+
+1. `Gen.zk_KS_untrim` (`KS/ZkExtend.lean:174`) is `zk_KS_untrim_of_extendJ (zk_extendJ _)`.
+2. `Gen.zk_KS_untrim_of_extendJ` (`KS/ZkUntrim.lean:82`) is `TrimBridge.zk_KS_untrim_of_kinds` at the three per-message premises `zkSimForkLeCapTau`, `zkSimForkLePads` and `zkViewClashQP`.
+3. `Gen.TrimBridge.zk_KS_untrim_of_kinds` (`KS/TrimBridge.lean:286`) goes through `zk_KS_both_of_kinds` (274) and `zk_KS_both_of_xferWJ` (265).
+4. It then goes through `zk_KS_of_xferWJ` (`KS/ZkXferW.lean:345`), `zk_KS_of_liveAccWJ` (`KS/JointR.lean:264`) and `zk_KS_of_tableBoundJR` (`KS/JointR.lean:205`), which builds `OneWait` inline by `oneWait_of_tableBoundJR`.
+5. Last come `zk_of_oneWait_sha512` (`KS/Range.lean:279`) and `zk_of_oneWait` (`KS/Deploy.lean:145`), whose body (line 149) is `Claims.Flock.KS_of_oneWait H (deployZk rel) (fun _ => cap_pos) hk (fun x => εtable_nonneg true x) h`.
+
+**Where the cap is read** [read]:
+
+- `KS`'s statement reads it in two places. The extractor `E` is `ERep D.V D.waits D.k D.cap …` (`Definitions/Claims.lean:319`), and \(\kappa\)'s term is `2 * D.k x / D.cap x` (line 323). `KS_of_oneWait` (`KS/Flock.lean:155`) proves `KS` at any record with `0 < D.cap x`.
+- Inside the chain, only that positivity is read, given by `cap_pos` (`KS/Deploy.lean:56`, \(0 < 2^{256}\)).
+- These read no cap:
+  - `OneWait` (`KS/Flock.lean:133`: `V`, `k`, `weight`, `εtable`, `N₀`);
+  - `TableBoundJR` (`KS/JointR.lean:139`) and `ExtendJ`;
+  - the three premises, stated at `x` and `V true` alone;
+  - `k_range_zk` (`KS/Range.lean:232`), since `k = ⌈4·N₀/e⌉` (`Definitions/Claims.lean:314`);
+  - `εtable_nonneg` and `zk_splits`.
+- `IsCapTauZ`'s "cap" is the query kind of a Merkle cap, not the extractor's.
+
+**So route 3 is a restatement** [guess: the definitional steps are not elaborated]:
+
+- The record: `deployZkAt K0 rel`, which is `deployZk rel` with `cap _ := K0`.
+- `KS sha512 (deployZkAt K0 Readable.relation)` is `KS_of_oneWait` at `fun _ => hK0`, with `hK0 : 0 < K0`. Its other arguments are the chain's `k` range, `εtable_nonneg` and `OneWait`. Each is the same proposition at both records, since no field it reads differs.
+- The one new lemma the chain needs: `OneWait sha512 (deployZk Readable.relation)` as a named theorem. Today it is built inline (step 4). It is the same `oneWait_of_tableBoundJR` call at the same `TableBoundJR`, so no lemma of the chain is reproved.
+- **Outside the chain, the numbers read the value.**
+  - `κ_le_sum` takes `hK : D.cap x = cap` (`Claims/Numbers.lean:127` to `141`) for its \(2^{-231}\) term. At `K0` that term is \(2k/K_0\), so route 3 needs its own \(\kappa\) bound, which is arithmetic.
+  - `κ_pos` (`Claims/Bits.lean:175`) holds at any cap.
+  - The deployed shape facts restate at `K0` by `rfl` [guess]: `(Numbers.waits, Numbers.cap, …)` (`SamplingGeneric/Deployed.lean:372`, `387`) and `ofDeploy_capOut` and `ofDeploy_capIn` (139, 142).
+
+## PRF-517 TWOPROVE, Tue 10 Nov 23:11Z: C1–C6 and C8 are pushed at `4dde11f42640`; the try has built `Efficient` and `RegAt` with no error, and the witness file is next. Part 2 reads two finders, `BconfX` and `BconfTwo`, unless a mixture makes them one. #8730's two runs are still running on cpu-7
+
+All times are from `date -u`. [run] means I ran it, [read] that I read it, [guess] neither. Every number names its \(n_{sess}\).
+
+**The branch** [run]
+
+- `cursor/proofs-bconf-cost-5987`, from `main` `2b869ed35db5`.
+- Head `4dde11f4264a95819939b00c35a7ade8bfd03478`, pushed. No PR yet.
+- PRF-517's PRs will carry `Goal proofs/spot-bind-term` under `Lane proofs`.
+
+**What is stated** [run: the commit]
+
+| | Lean | Where |
+|---|---|---|
+| C1 | `slot_exp_le_un`, slot `i`'s expected reruns without the acceptance factor. `slot_exp_le` is now its corollary, statement unchanged | `SamplingGeneric/Efficient.lean` |
+| C2 | `runExt_runs_exp`: over a run's coins and the extractor's, its extractions' reruns are at most \(n_{sess}\cdot e_s\) in expectation | `SamplingGeneric/Efficient.lean` |
+| C3 | `Compiled.BconfAt H L T`. Its docstring says `T` caps both parties' calls in every run the finder makes (`pLog.length + vLog.length ≤ T`), the prover's own hashing included | `Definitions/Claims/SamplingGeneric.lean` |
+| C4 | `BconfAt_pr`: the same probability as `Bconf` | new `SamplingGeneric/RegAt.lean` |
+| C5 | `BconfAt_cost_le`: expected cost at most \(c_T = 2T(1 + n_{sess} e_s) + 2\,n_{PU}\cdot\)`openCalls` (`bconfCost`) | `RegAt.lean` |
+| C6 | `BconfAt_cost_strict`: on every coin at most \(2T(1 + n_{sess}\rho_s) + 2\,n_{PU}\cdot\)`openCalls` | `RegAt.lean` |
+| C8 | `εregAt`, `Compiled.KSRegAt` and `CompilerKSRegAt`, with `ExpectedCR` taken at `BconfAt T` inside the statement | `Definitions/Claims/SamplingGeneric.lean` |
+
+- **C8's proof:** `compilerKSRegAt`, from `compilerKSReg` (`compilerKSRegAt_of`, `Compiled.ksRegAt_of_ksReg`).
+- **C8's witnesses:** `Compiled.KSRegAt_fails` and `compilerKSRegAt_nontrivial`, both at `sksL` at \(T = 0\), where \(c_0 = 0\) and `ExpectedCR` holds since nothing is found. They are in the new `Witnesses/SamplingGenericKSRegAt.lean`.
+- **The lock:** entries added by hand, with owners only. `CompilerKSRegAt` is in `claims.generic`, `Compiled.KSRegAt` in `claims.witnesses` with `KSAt`'s four `meets`, and `compilerKSRegAt`'s honest lemmas are `CompilerKSAt`'s. The records are not run yet.
+- **Expected premises** [guess, until the records run]: domain `Binds`; open `Arg.KS`, `OpenCallsLe`, `Scope`, `Sessions` and `Claims.ExpectedCR`, every one of which already has an `open` entry. So nothing new is assumed, as your 22:25Z said.
+
+**What is proved:** none in the lock's sense yet. Every one of the seven elaborates except the witness file, which is still building.
+
+- **The try** is `r20261110-225919-98e3`, `lean_changed.py --try Witnesses/SamplingGenericKSRegAt.lean --siblings` [run]. It runs on vy-nebius-cpu-1 in Lean slot `build/1`, held since 23:04Z.
+- At 23:11Z lake had built these with no error [run: its `stdout.log`]: `Definitions.Claims.SamplingGeneric`, `Proofs.Flock.SamplingGeneric.Reg`, `Proofs.Flock.SamplingGeneric.Efficient` and `Proofs.Flock.SamplingGeneric.RegAt`. So C1–C6 and C8's proof elaborate.
+- `RegAt` has one linter warning (unused section variables in `bconfCost_nonneg`). It is fixed locally with `omit … in` and not yet pushed.
+- The witness file and the sibling check come next. The try's ETA is about 23:30Z [guess: it is at job 10,310 of 10,771].
+- Then, on its pass: the records run and the quick tier, and the PR, unmarked.
+
+**Your 22:59Z: one finder for part 2** [read: #8512's `Definitions/Claims/SamplingTwoReg.lean:128` to `160`; REGX's 22:41Z entry]
+
+- **Not by REGX's argument.** Its argument works at one stage because a two-way opening inside one run's extractions is in `BconfX`'s first run's own log.
+  - At two stages, the term `N·√Pr[B_conf,2]` is about two runs sharing the tape and the first stage's coins. They show one interior root per replay block (`Sessions.interior`), so two extractions that open one interior gate two ways give a collision.
+  - `BconfX`'s two runs are at independent tapes and coins, show different interior roots and give none.
+  - The boundary terms need two tapes, since `regValX` averages over the tape, and `BconfTwo` has one.
+  - So `εregTwoX` reads `BconfX` and `BconfTwo`.
+- **One family is possible as a mixture** [guess: on paper]: a new finder that picks one of the two by a fair bit.
+  - Then \(\Pr[\mathrm{mix}] = (\Pr[B_X] + \Pr[B_2])/2\).
+  - So \(N\sqrt{\Pr[B_X]} + N\sqrt{\Pr[B_2]} \le 2N\sqrt{\Pr[\mathrm{mix}]}\), and \(\Pr[B_X] \le 2\Pr[\mathrm{mix}]\).
+  - Its expected cost is the mean of the two, so at equal costs it loses nothing.
+  - It is one definition and two lemmas. I'd leave the two families unless one finder is wanted for the trust base's list.
+- **Is PRF-517's `Bconf` cost lemma then needed at `BconfX` only?**
+  - For the X forms, yes: they read `BconfX`, and `BconfTwo` at two stages (C7), never `Bconf`. C8 as pushed reads `Bconf` because it reads today's `KSReg`, so it states today's number as a theorem.
+  - `BconfX`'s cost at a budget follows from C5's per-run lemma, `runCostAt_exp`, which holds at any tape. A `BconfXAt` whose halves are each one tape, one run and one extraction has expected cost at most \(2(T + n_{PU}\cdot\mathrm{openCalls} + T\, n_{sess} e_s) = c_T\), the same \(c_T\), by `Ex_prod` [guess: not written; about 30 lines].
+  - **My recommendation:** keep C8 at today's `KSReg` (done), and add `BconfXAt` and `KSRegXAt` once REGX's definitions land on `main`. Its `Definitions/Claims/SamplingGenericX.lean` is on `cursor/proofs-regx-efe1`.
+
+**Your 22:59Z: part 2's witnesses, with sizes** [read: #8512's head `a4916e014237`]
+
+- Each of `CompiledTwo.KSRegTwoX`, `MissTwoX` and `HeadlineTwoX` needs a `claims.witnesses` entry: a new `fails`, and `meets` as `KSRegTwo`'s.
+- Each of `compilerKSRegTwoX`, `compilerMissTwoX` and `compilerHeadlineTwoX` needs a `witnesses` entry.
+  - `honest`: `compilerKSTwo_honest`, `compilerMissTwo_honest` and `compilerHeadlineTwo_honest`, reused.
+  - `nontrivial`: new.
+- **The models** are #8512's `Witnesses/SamplingTwoReg.lean` and `Witnesses/SamplingTwoRegMiss.lean`, at `sksLTwo`.
+  - `SamplingTwoReg.lean`, 136 lines: `KSRegTwo_fails`, `HeadlineTwo_fails` and their nontrivial lemmas.
+  - `SamplingTwoRegMiss.lean`, 135 lines: `MissTwo_fails`, its nontrivial lemma and the two honest lemmas.
+- **The X copies** read `regValX`, which at the silent prover's `Unit` tape is the plurality over coins alone. That makes six new theorems in about 260 lines over two files [guess].
+
+**Your 22:53Z three:** in one entry by Wed 11 Nov 17:00Z, each with its Lean lines. The two answers I already have from the Lean [read], restated there:
+
+- **Session count.**
+  - At `compiledTwo` (`TwoDeployed.lean:138` to `140`), where `ksTwo_spot` is stated (`SpotFlock/KS.lean:71`), the cost bound's \(n_{sess}\) is \(n_{PU}\): `ofDeployAt_nSess` (`SamplingGeneric/Deployed.lean:124`) is `rfl`.
+  - `SpotFlock.base`'s `sessions := fun _ => h.ms.length` (`SpotFlock/Code.lean:612`) is read only by the reference prover's completeness error (`Claims/Sampling/Reference/Deployed.lean`, lines 10 and 96 to 160). It never reaches `Compiled.nSess`.
+  - **One session a template** is a new instance beside `compiledTwo`, as `compiledTwoOne` is (`TwoDeployed.lean:159`), and changes no locked statement. Its `keys` at a template key is a count of templates; its `shared` I have not read.
+  - **The sample's size** is not possible as the code stands. At a coin whose second draw is refused, `RegTwo.checked` is every unit, `List.range N` (`Claims/Sampling/Reg.lean:94`), so `keys` at one key a slot needs \(n_{PU}\) there.
+- **The budget.**
+  - In C5, `T` caps each run's calls, both parties'. Each rerun is charged `T`, so the reruns cost \(T\cdot n_{sess} e_s\) in expectation, not \(e_s\) times a run's expected calls.
+  - A finder is charged only its own audit's two runs and their extractions.
+  - Their period form needs each audit's cap \(T_i\) fixed before the audits, with \(\sum T_i \le T_P\), and then Cauchy–Schwarz over the audits' C8 terms. C5 gives each term, not the sum [guess on the sum: no Lean].
+- **Route 3b's scoping** is the third, still to do.
+
+**#8730** [run: `research status … --on vy-nebius-cpu-7` at 23:11Z]
+
+- `r20261110-215702-c92e` (records) and `r20261110-215702-514b` (quick tier) are both running. The records run has held Lean slot `build/0` since 22:35Z.
+- Neither is rc 0, so no "ready to mark" line yet.
+- ETA from my 22:06Z entry [guess]: records about 23:15Z, quick tier about 00:10Z, 01:05Z at the latest.
+
+**Next:** the try's verdict; then the records run, the quick tier and the PR. Then route 3's R3.1, the named `OneWait` and `deployZkAt K0`, and S1 beside `StrictBirthday`.
