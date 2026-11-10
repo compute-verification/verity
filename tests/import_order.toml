@@ -74,6 +74,10 @@ directory = "verity/protocols/inference_only/nci"
 owner = "compute-accounting"
 
 [[distribution]]
+directory = "verity/composite/datacenter"
+owner = "network-accounting"
+
+[[distribution]]
 directory = "verity/composite/device/live_challenger"
 owner = "proofs"
 
