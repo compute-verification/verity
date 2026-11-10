@@ -22984,3 +22984,105 @@ My 01:32Z sizing estimated k_log 23 to 25 for a word unit at k = 8,192, so one t
 2. The `zk_verify_passed` PR, next turn.
 3. Wed from 03:30Z, the Lean leg on the staging node of SERVEDCARD's final run: `verify --zk` and `ks-form` per statement, with `--tables` where present.
 4. By Wed 12:00Z, the scope and date of the proofs PR in (2).
+
+## BREAKEVEN 03:52Z: PRF-456, the world both cuts read, and a correction to item 1 (a block to paste)
+
+Part 1 of your 03:28Z ask. The paste block is between the rules; the notes for you follow it. Items 2, 4 and 5, with the
+end-to-end gap and the goal's 49 TB, follow in a second entry by 14:00Z.
+
+---
+
+proofs, Tue 10 Nov. **The world the one definition reads, and a correction to item 1.**
+
+**Correction to item 1: today's figure is 8,456 GB, not 8,053 GB.**
+- The rows on their own premises ("each lever measured or approved") take λ = 1.05, the approved `FaultedUseHard`
+  factor: a wrong block leaks at most 1.05 times the bits the planner counts. The planner applies λ to its target: it
+  solves for the weights ÷ 1.05.
+- With β pinned at the 10% point, the planner's bound is in λ = 1 bits, so those cells need ×1.05. The rows as the
+  planner prices them take λ = 1 and don't change.
+- So today's figure is 22 times GLM-5.3's FP4 weights and 28 times the 300 GB target.
+- Item 1's bracket of 8.05 TB to 8.46 TB was this factor, not a drift. Bound × β is constant across the 22-fold change
+  in β: the stored row gives 8,460 GB, and 1.05 × 8,053 GB = 8,456 GB.
+
+The corrected cells: GB that can leave over the world's year at 10% total cost, at the 875-token cap, with the verifier
+as measured (modeled; r20261110-030541-6d13, r20261110-033213-4d4e):
+
+| cut | each lever measured or approved (λ = 1.05) | as the planner prices it (λ = 1) |
+|---|---:|---:|
+| **today's served cut** | **8,456 GB** (was 8,053) | 6,163 GB |
+| the fused per-expert cut | 1,446 GB (was 1,378) | 364 GB |
+| the fused cut with the warm estimate | 543 GB (was 517) | 219 GB |
+
+The other cells on own premises, in the same row order:
+- **census S:** 9,660, 1,999 and 854 GB (were 9,200, 1,904 and 813);
+- **one table at m = 37:** 5,814, 865 and 368 GB (were 5,538, 824 and 351);
+- **one datacenter's year:** 7,819, 1,433 and 529 GB (were 7,447, 1,364 and 503).
+
+On TOP-394, P1's "Today: 8,053 GB" and P4's "moves 8,053 GB to 1,378 GB" read 8,456 and 1,446 GB.
+
+**The world: ours, 375 M H200s, which network-accounting has taken** (its 7:26 PM PST comments here and on TOP-394).
+
+**Recommendation.** The definition should take `fleet.world-h200`: the census's 9.36e30 FLOP a year, served on 46.87 M
+eight-GPU H200 machines at the assumed 40% serving MFU, with its range of 0.2 to 0.6 stated beside the number. The
+148 M GPUs are the same FLOP at full utilization, which no served fleet reaches. Taking them would make the compute cut
+2.5 times larger and give the network 2.5 times fewer links.
+
+GB that can leave over the world's year at 10% total cost, in each world: the six rows at the cap, with the verifier as
+measured (modeled; r20261110-033213-4d4e):
+
+| cut | priced | ours: 375 M H200s at 40% MFU | 148 M GPUs at full utilization | ratio |
+|---|---|---:|---:|---:|
+| **today's served cut** | each lever measured or approved | **8,456 GB** | 21,137 GB | 2.50 |
+| | as the planner prices it | 6,163 GB | 15,405 GB | 2.50 |
+| the fused per-expert cut | each lever measured or approved | 1,446 GB | 3,616 GB | 2.50 |
+| | as the planner prices it | 364 GB | 909 GB | 2.50 |
+| the fused cut with the warm estimate | each lever measured or approved | 543 GB | 1,357 GB | 2.50 |
+| | as the planner prices it | 219 GB | 547 GB | 2.50 |
+
+Today's figure in each monitoring period (modeled; r20261110-034537-ff25 for the weeks, the months and the datacenter;
+r20261110-033213-4d4e for the world's year):
+
+| scope | world, week | world, month | world, year | datacenter, week | datacenter, month | datacenter, year |
+|---|---:|---:|---:|---:|---:|---:|
+| ours | 8,151 GB | 8,263 GB | 8,456 GB | 7,511 GB | 7,624 GB | 7,819 GB |
+| 148 M GPUs at full utilization | 20,374 GB | 20,655 GB | 21,137 GB | 18,956 GB | 19,240 GB | 19,726 GB |
+
+The other five rows go the same way: 2.50 times ours in every world period, and 2.50 to 2.54 times over a datacenter.
+
+**Why the factor is 2.5:**
+- **The audit's cost doesn't depend on the world.** It is a share of compute. In all five worlds run, β at the 10%
+  point is 5.53% to 5.65%, and each part of the total agrees to within 0.002 points. Those parts are the serve tax
+  (4.22 to 4.34 points, the wait at e's 2.29 included), the pool (0.07) and the phase edges (0.04).
+- **The bound grows with the tokens a GPU-second serves.** It is the number of wrong blocks the sample can miss at δ,
+  times their bits. At a fixed share of GPU time, a world that serves m times the tokens a GPU-second samples each block
+  m times less often, so its bound is m times larger. From 40% to full utilization, m = 2.5.
+- **The GPU count alone barely moves it.** 148 M GPUs at 40% MFU, which serve 40% of the census's FLOP, give 0.99 to
+  1.00 times ours.
+- **Across the card's MFU range,** the census's FLOP at 0.2 (750 M GPUs) gives 0.50 times ours and at 0.6 (250 M GPUs)
+  1.50 times: 4,228 GB and 12,684 GB for today's figure.
+- **network-accounting's term goes the other way.** It is per link and summed over links. At 148 M GPUs there are
+  18.6 M links; ours is 46.87 M machines.
+
+**Labels:**
+- **Modeled:** every GB here, from the planner at `a5e4e56a11` on `cursor/proofs-breakeven-be7a`, with β pinned by the
+  lane's wrapper. Each world is set by editing `fleet.world-h200`'s `count` and `mfu_serve` in the run's own clone.
+- **Sourced:** the census's FLOP (`world-inference-2027` in `benchmarks/census/adversary.json`) and the datasheet peak,
+  1.979e15 FLOP/s dense FP8.
+- **Assumed:** the serving MFU, 0.4, with a range of 0.2 to 0.6.
+- Our world's run reproduces item 1's cells to the digit before λ.
+
+**What I could not verify:**
+- **The 40% MFU is assumed.** Nothing measures GLM-5.3's serving MFU at 128k; vllm's serving-cost benchmark would.
+- **The factor of 2.5 rests on the planner's model of proving:** a fixed number of H200-seconds a block, whatever the
+  served GPUs' utilization.
+
+---
+
+Notes for you, not for the paste:
+- **network-accounting had already taken our world** at 03:26Z, two minutes before your ask. So this part records what
+  the other world would have meant rather than settling anything.
+- **The λ correction changes the number you posted at 03:22Z,** and P1 and P4 on TOP-394. The rows as priced, the
+  ratios and β are unchanged.
+- The note is `lanes/proofs/20261110T0333Z-report-prf456-number`. It has every cell of both worlds, six rows by six
+  scopes by both steps.
+- The wrapper (`headline_world.py`, its job script and its reader) is in the lane's notes tools.
