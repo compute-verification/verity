@@ -15,9 +15,9 @@ table, of
 * the public file (`pubOf`): two instances reading `i0`'s one shared row, each its own `o0` row, every value and salt
   zero, with the run's input set and its ports' bindings to the run;
 * the partition (`partObj`): `Q_template_instance` v0 at `T_v1`, over the program `progText`, whose root is a batch of
-  two members of the primitive `T_v1`. The statement carries no program, so the verifier takes the partition's units
-  as stated, as it does for any session without `--program`: `Program.decode`, which derives them, keys its tables by
-  `String.hash`, which the kernel does not evaluate;
+  two members of the primitive `T_v1`. The statement carries no program, as a session without `--program` doesn't,
+  so its units come from its header, and Flock's links check (`HmLinks.check`) never runs in this witness. A program
+  is read by `Program.decode`, whose tables are keyed by `String.hash`, which the kernel does not evaluate;
 * the draw (`drawJ`): unit 0 of the two, and the header the verifier writes for the drawn statement (`hdrD`);
 * the registered reads (`regJ`): `i0` and `o0` at one leaf each, which both units read.
 

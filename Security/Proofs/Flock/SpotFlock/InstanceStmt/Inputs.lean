@@ -42,9 +42,10 @@ import all Init.Data.Repr
 
 `ins_x` walks `Raw.ins` on `rawOf r ls lh H C` to `insX r ls lh H C`: the tags `Tags.circuit`, tree coins for one table,
 the sample `drawJ` (rebuilt by `norm`, which leaves it as it is), the partition `partObj`, no program, and the
-registered reads `regPorts` (`Registered.ofJson regJ`). At the fixed nets' layouts and a run whose strings are plain,
-`x r` decodes to that `Raw` (`decode_x`), so the verifier reads it as `rX` (`readOf_x`), under the masked tags `tz`
-(`tags_rX`), whose outputs are hidden (`hiddenOf_x`).
+registered reads `regPorts` (`Registered.ofJson regJ`). With no program, the statement's units come from its header,
+and Flock's links check (`HmLinks.check`) never runs in this witness. At the fixed nets' layouts and a run whose
+strings are plain, `x r` decodes to that `Raw` (`decode_x`), so the verifier reads it as `rX` (`readOf_x`), under the
+masked tags `tz` (`tags_rX`), whose outputs are hidden (`hiddenOf_x`).
 -/
 
 @[expose] public section

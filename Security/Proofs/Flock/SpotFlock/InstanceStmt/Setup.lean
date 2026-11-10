@@ -65,7 +65,8 @@ and the header itself are as `canon` and `canonUtf8` write them, which it takes 
 `setup_stX` walks `Stmt.setupHidden` on the circuit and public files, the sample `drawJ` and the partition `partObj` to
 the statement `stX`: the partition checks (`cpo_part`, `canon_part`), the sample's header is `hdrD`, whose text it
 takes as a hypothesis (`hd2`), and Δ is kept as `oA` and `oB`, as `FlockDeploy.Concrete.setup_stW` keeps
-`HmRow.delta`'s. `setupTables_X` is `Stmt.setupTables` at one table, `tabX`.
+`HmRow.delta`'s. `setupTables_X` is `Stmt.setupTables` at one table, `tabX`. With no program, the statement's units
+come from its header, and Flock's links check (`HmLinks.check`) never runs in this witness.
 -/
 
 @[expose] public section
