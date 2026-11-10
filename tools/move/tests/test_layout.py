@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -101,6 +102,22 @@ def test_a_string_literal_in_rust_or_lean_keeps_its_text_and_only_a_path_in_one_
 def test_a_tracked_file_a_gitignore_matches_stays_tracked_where_it_moves(moved):
     tracked = set(git(moved, "ls-files").split())
     assert "data/runs/r1/out/session.txt" in tracked and "runs/r1/out/session.txt" not in tracked
+
+
+def test_the_maps_paths_as_a_trie_match_what_the_list_of_them_longest_first_matches():
+    """`_paths` finds the map's old paths with one regex over every file. Written as a list, `re` tries each path at every
+    character: nine of a run's ten minutes on a draft of the one map (LEAN-258). `alternation` writes the same set as a
+    trie, and a branch crosses a move only if both find the same spans: the longest path that matches, or a shorter one
+    where what follows refuses the longer (`a/b/c.py` before `a/b/c`, and `a/b` in `a/b/c-d`)."""
+    words = ["a/b", "a/b/c", "a/b/c.py", "a/bc", "a.b", "a", "x-y", "x-y/z", "tools/x+y", "tools/x", "census", "(odd)/[p]"]
+    assert L.alternation([]) == "" and re.fullmatch(L.alternation(["a.b"]), "a.b") and not re.fullmatch(L.alternation(["a.b"]), "axb")
+    after = r"(?![\w\-]|\.\w)(/\w*)*"
+    listed = re.compile("(" + "|".join(re.escape(w) for w in sorted(words, key=len, reverse=True)) + ")" + after)
+    trie = re.compile("(" + L.alternation(words) + ")" + after)
+    follows = ["", "/", ".", ".py", ".p y", "x", "-d", "/c", "/c.py", "/c-d", "c", ".b", "+y", "+", "/z", "/[p]"]
+    cases = [f"{w}{f}" for w in words for f in follows] + [w[:i] for w in words for i in range(1, len(w))]
+    for text in [*cases, " ".join(cases), "".join(cases)]:
+        assert [(m.span(), m.groups()) for m in trie.finditer(text)] == [(m.span(), m.groups()) for m in listed.finditer(text)], text
 
 
 SPLIT_MAP = """[roots]
