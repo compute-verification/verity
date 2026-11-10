@@ -23,6 +23,7 @@
   "Proofs.Properties.Pouw.PearlPlus.Open",
   "Proofs.Properties.Pouw.PearlPlus.Witnesses",
   "Proofs.Properties.Pouw.PearlPlus.Verdict",
+  "Proofs.Properties.Pouw.PearlPlus.Draw",
   "Proofs.Pouw.PearlPlus.Numerics",
   "Proofs.Properties.Nci",
   "Proofs.Properties.Nci.DescAgree",
