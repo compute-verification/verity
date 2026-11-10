@@ -1,8 +1,9 @@
-"""A stand-in for N2's proof of an execution phase and for the egress tie's of one member of an execution phase's scan
-(`prove_scan`), for tests: what Flock's prover behind the ZK server would deliver, and a stand-in for the verifier's own
-run of Flock's Lean verifier (`proofs.verify`), which reads each session's verdict from the session file the stand-in
-prover writes. The proof's outputs are the proof block's on the prover's rows by each gate's reference
-(`LinkWindows.outputs`, `ingress_scan.reference`, `egress.outputs`), which the tests hold to the circuits: a
+"""A stand-in for N2's proof of an execution phase, for the ingress tie's of an ingress execution phase (`prove_tie`)
+and for the egress tie's of one member of an execution phase's scan (`prove_scan`), for tests: what Flock's prover
+behind the ZK server would deliver, and a stand-in for the verifier's own run of Flock's Lean verifier
+(`proofs.verify`), which reads each session's verdict from the session file the stand-in prover writes. The proof's
+outputs are the proof block's on the prover's rows by each gate's reference (`LinkWindows.outputs`,
+`IngressTie.outputs`, `ingress_scan.reference`, `egress.outputs`), which the tests hold to the circuits: a
 Lean-accepted proof can't claim others. So the tests check everything the verifier does around the proof: its run's findings, the public row
 opened to the verifier's own copy, the output rows its registered reads open, the certificates and the sync."""
 
@@ -17,7 +18,7 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity.core.protocols.certifier import scan_service as SC
-from verity.core.protocols.certifier import service as SVC, warden_rows as WR
+from verity.core.protocols.certifier import service as SVC, tie_service as TS, warden_rows as WR
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import partition as P, proofs as PF, registered as G
 from verity.core.protocols.spot.one_stage.proofs import Finding
@@ -48,7 +49,7 @@ def prove(lw: SVC.LinkWindows, opening: SVC.Hidden, draw: S.Draw, syncs: Sequenc
 
 def _deliver(unit: Any, rows: dict[str, bytes], draw: S.Draw, out: Path, *, program: str | None, accepted: bool,
              word: int | None, salts: dict[str, bytes] | None, units: Sequence[int] | None) -> SVC.Delivered:
-    """The statement's files for `rows` on `unit` (a `LinkWindows`) and what the prover delivers."""
+    """The statement's files for `rows` on `unit` (a `LinkWindows` or an `IngressTie`) and what the prover delivers."""
     out.mkdir(parents=True, exist_ok=True)
     public = out / "public.bin"
     header = {"units": {"indices": list(draw.units if units is None else units)}, "instances": 1}
@@ -65,10 +66,57 @@ def _deliver(unit: Any, rows: dict[str, bytes], draw: S.Draw, out: Path, *, prog
     return SVC.Delivered(PF.Proof(circuit, public, (session,)), delivered, output)
 
 
-#: the domains by id, as `prove_scan` commits under them (the network certifier's, the committed trace's and the known
-#: values'): the stand-in Lean's registered reads climb each port's rows under the domain its id names, which the real
-#: verifier derives from the port
+#: the domains by id, as `prove_tie` and `prove_scan` commit under them (the network certifier's, the committed trace's
+#: and the known values'): the stand-in Lean's registered reads climb each port's rows under the domain its id names,
+#: which the real verifier derives from the port
 DOMAINS: dict[str, Any] = {}
+
+
+def prove_tie(tie: Any, cells: Any, draw: S.Draw, lanes: Any, out: Path, *, program: str | None = None,
+              accepted: bool = True, words: dict[int, int] | None = None,
+              salts: dict[int, dict[str, bytes]] | None = None, units: Sequence[int] | None = None,
+              rows: Sequence[bytes] | None = None) -> TS.Delivered:
+    """The delivered proof of the sampled ingress-tie proof blocks (`tie_service.IngressTie`) on the network certifier's
+    opening `cells` (`warden_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: proof
+    block t's ``wit`` row its
+    bucket row under the warden's salt and its header's registered read of the warden's root (`Cells.statement`), its
+    ``pub`` row its lanes and its ``o0`` row its output bit by IoTieRequest's reference (`io_request.reference`),
+    which the tests hold to the circuit, each read off the root of the prover's rows of the port as the verifier
+    registers its own (`IngressTie.known_tree`, under their public salts). `rows` are the rows the prover proves on
+    instead, under the warden's salts and paths; where a unit takes no instance of its lanes, its public row is zero
+    and its output 0. `words` forges output words, `salts` the salts delivered for ``pub`` and ``o0``, and `units`
+    the public file's unit indices. The public file is a shared-row file as `verity_flock.circuit.write` lays one out:
+    each port's table, one row an instance, port-major, then the instances' refs."""
+    rows = list(cells.rows if rows is None else rows)
+    indices = list(draw.units if units is None else units)
+    got, outputs = [], {}
+    for u in range(tie.T):
+        args = None if lanes is None else tie.arguments(rows[u], lanes[u])
+        word = tie.outputs(rows[u], lanes[u]) if args is not None else 0
+        outputs[u] = word if words is None or u not in words else words[u]
+        got.append({"pub": tie.row(args, "pub") if args is not None else bytes(tie.bits("pub") // 8), "wit": rows[u],
+                    "o0": SVC.output_row(word)})
+    known = {p: tie.known_tree(cells.head, p, [g[p] for g in got]) for p in TS.KNOWN}
+    DOMAINS.update({d.domain_id.hex(): d for d in (cells.domain, *(v.domain for v in known.values()))})
+    row_salts = {"wit": cells.salts, **{p: v.salts for p, v in known.items()}}
+    entries = {TS.REGISTERED: cells.statement(indices)[2], **{p: v.statement(indices)[2] for p, v in known.items()}}
+    tables = {p: [_bc(got[u][p], 8 * len(got[u][p]), row_salts[p][u]) for u in indices] for p in SVC.PORTS}
+    outputs = {u: outputs[u] for u in indices}
+    out.mkdir(parents=True, exist_ok=True)
+    public, n = out / "public.bin", len(indices)
+    header = {"units": {"indices": indices}, "instances": n, "registered": entries,
+              "shared_rows": {p: n for p in SVC.PORTS}}
+    refs = b"".join(i.to_bytes(4, "little") for i in range(n) for _ in SVC.PORTS)
+    public.write_bytes(json.dumps(header).encode() + b"\n" + b"".join(b"".join(tables[p]) for p in SVC.PORTS) + refs)
+    session = out / "session-0"
+    session.mkdir(exist_ok=True)
+    (session / "session.json").write_text(json.dumps({"accepted": accepted, "units": list(range(len(indices))),
+                                                      "program": program or tie.partition["program"]}))
+    circuit = out / "circuit.txt"
+    circuit.write_text(f"stand-in circuit of {tie.unit.id}\n")
+    delivered = {u: {"pub": row_salts["pub"][u], "o0": row_salts["o0"][u], **((salts or {}).get(u) or {})}
+                 for u in indices}
+    return TS.Delivered(PF.Proof(circuit, public, (session,)), delivered, outputs)
 
 
 def _bits(row: Sequence[int]) -> list[int]:

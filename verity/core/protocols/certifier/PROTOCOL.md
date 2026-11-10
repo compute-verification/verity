@@ -623,7 +623,36 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   cell, whether it ends the request, the bytes left after it and its prompt fields. The step keeps (left, fields,
   over, padded, ok); the count's carry past 2^32 is kept, so a sum that wraps is refused. Public: the lanes, each
   (q, left, fields, left_out, fields_out). Witness: the row.
-- **The scan's refusals.** The phase-6 split and the phase-9 attack's carried count, which the lanes' chain refused,
+- **The verdict** (`tie_service.IoTieVerdict`) is `IoTieVerdict(link, registrations, advice, accepted)`: the link,
+  its ingress windows' registrations (each one's `registration.digest`, in order), the advice's digest
+  (`tie_service.digest`) and one bit a registration, set when every bucket row of that execution phase is accepted. It
+  is built only from IoTieRequest proofs the verifier verified on its own lanes (`lanes` from that advice's prompt
+  lengths and order and the network certifier's release) and given only by the verifier's own tie source
+  (`tie_service.Ties`), which gives none on another link or another stream than its own. An accepted verdict on every
+  window says that connection order[i] + 1 is an id request of `prompt_lens[i]` prompt ids. The advice carries no
+  tie, and none the prover states or delivers is taken: the phase-7 attack stated the swapped split, and the phase-10
+  attack delivered a verdict built for the forged advice's digest, every window accepted.
+- **Through the proof system** (`tie_service.IngressTie`). A registration is one ingress execution phase, the
+  network certifier's salted root of its T bucket rows, held to the window's order, and T proof blocks, unit t bucket
+  row t. The unit is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
+  (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the network certifier's root by
+  the verifier's own registered read (`warden_rows.bucket_port`). The statement is a shared-row file every port of
+  which is one of the verifier's registered reads (Flock's `Registered.checkComplete`): `wit` at the network
+  certifier's root, and `pub` and `o0` at known content the verifier registers itself (`IngressTie.known`), each
+  unit's lanes (`io_request.lanes`, from the advice it holds and the network certifier's release, taken in the clear)
+  and the output word 1, under public salts, which hide nothing since both rows are public. The verifier
+  decides each window on the proof alone, each unit's `pub` row opened to its own lanes, and reports the advice's
+  digest. `IngressTie.tie` reads the verdict from the stream's outcomes of record
+  alone, on the link and the stream's registrations. Window w is accepted when its outcome is, decided on the proof
+  for the advice's digest. Every window is refused unless the stream registers exactly the advice's windows in order,
+  the release is the network certifier's schedule for the advice and puts `received`'s request cells in each window,
+  and the profile's framing is the network certifier's cut (`tie_service.framing`) with no own frame. A connection's
+  lanes chain from (0, 0) into its first bucket to (0, n) out of its `END`'s, so the units together hold each
+  request's count across the buckets it spans. A size class with no pinned digest has no accepted proof.
+  `tests/test_network_certifier_tie_service.py` holds the phase-9 attack's carried field count, its forged advice and
+  phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`), and
+  `benchmarks/network_traces/n2_tie_zk.py` proves them live, its `warden` class the network certifier path's tie.
+- **The scan's refusals.** The phase-6 split and the phase-9 attack's carried count, which the lanes' chain refuses,
   are other scan states: the scan reads each prompt off its slot's cells, so a split reads the swapped prompts and a
   carried count leaves a state the scan's step doesn't output
   (`tests/test_network_certifier_ingress_scan.py`).

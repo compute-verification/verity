@@ -11,6 +11,7 @@ untraced = [
     "tests/test_network_certifier_scan_service.py",
     "tests/test_network_certifier_served.py",
     "tests/test_network_certifier_service.py",
+    "tests/test_network_certifier_tie_service.py",
 ]
 inputs = ["verity"]
 
@@ -26,6 +27,7 @@ tests = [
     "tests/test_network_certifier_issuer_lean_difftest.py",
     "tests/test_network_certifier_lean_difftest.py",
     "tests/test_network_certifier_scan_service.py",
+    "tests/test_network_certifier_tie_service.py",
     "tests/test_network_check_lean_difftest.py",
 ]
 paths = ["verity"]

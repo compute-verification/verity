@@ -47,13 +47,13 @@ A spec-level reference for network accounting's timing channel:
   proof block a registered bucket row (`warden_rows.bucket_port`), each live connection's lane of r slots read as the
   network certifier's cells (a `PAD` on its ordinal, a `DATA` of exactly B − 9 bytes, its `END`), each request cell a
   cell of CERT-VARLEN's id
-  request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out. It has
-  the reference, the lanes built from advice prompt lengths and the warden's release (`lanes`, `Release`), and the
-  proof block's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and `IoTieRequestStep` a cell,
-  `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the Commit's `c00.input/ids` rows
-  to the same scan and holds every prompt id to them. No verifier computes lanes, which would publish the advice's
-  prompt lengths: the step-indexed scan's ingress units read each request's prompt off the cells into the scan's
-  state (`ingress_scan`, below);
+  request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out, which
+  hold each request's prompt_len to the advice's and which the ingress tie's verdict (`tie_service.IoTieVerdict`) is
+  built from. It has the reference, the lanes the verifier computes from the advice and the network certifier's release
+  (`lanes`, `Release`), and the proof block's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and
+  `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the
+  Commit's `c00.input/ids` rows to the same scan and holds every prompt id to them. The step-indexed scan's ingress units read each
+  request's prompt off the cells into the scan's state (`ingress_scan`, below);
 - the capacity counts;
 - the egress side of the step-indexed scan (`egress`, N2): one proof block a link and
   bucket t (`EgressBucket`) that reads the scan's slot state S_t, a registered read, and computes the bucket's row of
@@ -293,7 +293,16 @@ A spec-level reference for network accounting's timing channel:
   window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
   (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
   sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
-  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed.
+  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed;
+- the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress execution phase's `IoTieRequest`
+  proof blocks, one a bucket row of the network certifier's registered ingress cells, proved as
+  `NetworkIngressTieBucket` (one gate
+  naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the network certifier's root
+  (`warden_rows.bucket_port`) and its lanes and output row off values the verifier registers at known content
+  (`IngressTie.known`), decided by the verifier on its own lanes from the advice and the network certifier's
+  release, and `IngressTie.tie`, which builds `IoTieVerdict` on the link and the stream's registrations from the
+  stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the verifier's own tie source,
+  which gives the verdict only on its own link. A size class no sidecar pins has no accepted proof.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha512` and
 `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
@@ -397,6 +406,8 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
+
+`tie_service.IngressTie.verify`, the ingress tie's verifier, is not ported and stays Python.
 
 A proof of the proof block is held to its circuit. Each gate names its Definition's circuit digest
 (`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`, `served.gate` likewise), as `head_check.circuit-check.json` and
