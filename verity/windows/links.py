@@ -27,7 +27,7 @@ import numpy as np
 
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import row_leaf
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 
 __all__ = ["Port", "reads", "reads_file"]
 

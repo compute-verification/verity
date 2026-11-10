@@ -626,7 +626,7 @@ def _gemm_window(external: bool = True) -> dict:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
     from verity.definitions.ops import gemm as G
-    from verity.ml.windows import interface as I
+    from verity.windows import interface as I
 
     gemm = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
     gid = descriptor_id(gemm)
@@ -639,7 +639,7 @@ def _gemm_window(external: bool = True) -> dict:
 def _record(c) -> dict:
     """``c``'s stated record as `chain_record` reads a window's ``circuit.json``: its description, external ports and
     each template's input rows, a cut port's rows ``p#j``."""
-    from verity.ml.windows import interface as I
+    from verity.windows import interface as I
 
     return {**c.description(), "external": list(c.external),
             "statements": {tid: {"in_rows": [list(r) for r in I.unit_rows(fn, c.cuts.get(tid))[0]]}
@@ -655,7 +655,7 @@ def test_free_inputs_take_out_a_cut_ports_wired_rows_as_the_period_counts_them()
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
     from verity.definitions.ops import gemm as G
-    from verity.ml.windows import interface as I
+    from verity.windows import interface as I
 
     gemm, g8 = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE), bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
     gid, g8id = descriptor_id(gemm), descriptor_id(g8)
@@ -678,7 +678,7 @@ def test_free_inputs_take_out_a_cut_ports_wired_rows_as_the_period_counts_them()
 
 def test_free_inputs_hold_to_the_period_count_on_wires_and_registered_reads():
     """On the uncut window too, `input_terms` is `interface.input_count`, pinned or not, an external port free."""
-    from verity.ml.windows import interface as I
+    from verity.windows import interface as I
 
     for doc in (_gemm_window(external=False), _gemm_window()):
         for pins in (None, PIN):

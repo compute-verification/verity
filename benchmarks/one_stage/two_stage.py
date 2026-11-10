@@ -49,7 +49,7 @@ from verity.core.protocols.spot import challenger as Ch, coins as CC, service as
 from verity.core.protocols.spot.one_stage import draw as D, partition as P
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.pipeline import boundary_rows as BR
 
 FORMAT = "verity-vllm/two-stage/stage1/v0"

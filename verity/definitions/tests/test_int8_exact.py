@@ -20,7 +20,7 @@ from verity.definitions.boolean import boolean_version
 from verity.definitions.registry import boolean_int8 as BX
 from verity.definitions.registry import int8_exact as X
 from verity.definitions.registry.prims import BF16
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 
 K = 2048
 

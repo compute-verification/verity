@@ -343,7 +343,7 @@ v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its c
     "$json" 2>&1 | cut -c1-1500)"
   "$PY" - "$D/window-circuit-w$K-$vtag.json" "$VW/window/circuit.json" "$V3C" <<'EOF' 2>&1 | publish_lines
 import json, sys
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 mine, theirs = (json.load(open(f)) for f in sys.argv[1:3])
 ok = IF.circuit_of(theirs) == mine
 print(f"WINDOW-CIRCUIT-HELD class {sys.argv[3]}: the committed circuit.json less its run fields is the verifier's own "

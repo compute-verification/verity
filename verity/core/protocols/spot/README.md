@@ -238,7 +238,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with Flock's circuit prover and the Lean
   verifier.
 - **The users.** Flock samples and checks the sample in its Lean verifier and proves the sampled proof blocks. The vLLM integration
-  commits serving rows with the registration and served domains of `one_stage` (`verity.ml.windows.rows`, in the
+  commits serving rows with the registration and served domains of `one_stage` (`verity.windows.rows`, in the
   Commit or from a deferred Commit's bundle by `verity_vllm.pipeline.deferred_rows`); its replay challenge is its own
   (`verity_vllm.commit.challenge`).
 

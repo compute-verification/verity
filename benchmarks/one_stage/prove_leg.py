@@ -948,7 +948,7 @@ def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -
     hidden, values seeded by ``seed``, its table reads laid out by ``reads`` (`Member`), by default its template's own
     (`chunk_rows.reads`)."""
     from verity.circuits.codec import descriptor_id
-    from verity.ml.windows import interface as IF
+    from verity.windows import interface as IF
     from verity_vllm.pipeline import chunk_rows as CR, serving_rows as SRW
 
     fn, gen = served(shape)

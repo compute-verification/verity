@@ -26,7 +26,7 @@ from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit, window_circuit
 
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 
 #: the H200's declared target (its device pin, `bf16_gemm_check.device_pin`): FA3, so `Attention_v4` at D = 16's kBlockN of 128
 H200 = {"compute_capability": [9, 0], "num_sms": 132}

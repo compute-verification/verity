@@ -26,7 +26,7 @@ from verity_vllm.program.predict.common import _arr
 from verity_vllm.program.predict.scan_state import SCAN_STATE
 from verity_vllm.program.predict.window_circuit import Grain, window_circuit
 
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 
 #: 512 weight words a slice, so an s8 slice at K = 64 is one of TINY's 16-word heads
 GRAIN = Grain(gemm_words=512, rows=256, select=64)

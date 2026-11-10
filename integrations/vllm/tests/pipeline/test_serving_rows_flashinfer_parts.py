@@ -25,9 +25,9 @@ from verity.definitions.registry import boolean_fp8 as BF8
 from verity.definitions.registry import deepgemm as DG
 from verity.definitions.registry import fp8 as F8
 from verity.definitions.registry.fp8 import FP8_BLOCK
-from verity.ml.windows import interface as IF
-from verity.ml.windows import rows as CS
-from verity.ml.windows import wiring as WI
+from verity.windows import interface as IF
+from verity.windows import rows as CS
+from verity.windows import wiring as WI
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW

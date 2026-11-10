@@ -1,4 +1,4 @@
-"""I2's served window as one Circuit (`verity.ml.windows.interface`): the window *class's* circuit, every
+"""I2's served window as one Circuit (`verity.windows.interface`): the window *class's* circuit, every
 unit's output a committed row and every input row wired or registered.
 
 A window class (`WindowClass`, N1's scan class) has a fixed number of slots a network timestep: ``lanes`` slots at each
@@ -143,7 +143,7 @@ from verity.definitions.registry import int8_exact as IX
 from verity.definitions.registry import io_shell as IO
 from verity.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
 from verity.definitions.registry.fa3_check_inf import AttentionV20
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 from verity_vllm.pipeline.tp.grain import GROUP
 
 from . import scan_state as SS

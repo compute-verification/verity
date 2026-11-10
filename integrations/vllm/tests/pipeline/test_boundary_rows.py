@@ -18,7 +18,7 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.population import population
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR
 

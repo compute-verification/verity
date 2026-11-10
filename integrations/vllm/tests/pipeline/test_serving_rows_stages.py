@@ -18,7 +18,7 @@ import re
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
-from verity.ml.windows import wiring as WI
+from verity.windows import wiring as WI
 from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW

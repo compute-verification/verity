@@ -246,7 +246,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   still to keep, its record, or a counter of its state). Its negatives run beside the audit's. `serve-standin`
   lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its windows.
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
-  what an integration hands Verity (`verity.ml.windows.interface`): the window's `circuit.json`, which its registration binds
+  what an integration hands Verity (`verity.windows.interface`): the window's `circuit.json`, which its registration binds
   by SHA-512; the registered compiler and the advice's root and length; the registration and the committed values; and the
   advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition from Verity's
   catalog or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's

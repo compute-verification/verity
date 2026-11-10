@@ -197,8 +197,8 @@ from verity.commitments import row_table as RT  # noqa: E402
 from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.core.protocols.spot.one_stage import registered as REG  # noqa: E402
-from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
-from verity.ml.windows import wiring as WI  # noqa: E402
+from verity.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
+from verity.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
 #: what a plain audit covers until proofs' multi-table coverage lands (`Flock.ProvedScope`, `ProvedScope.drawLaw`)

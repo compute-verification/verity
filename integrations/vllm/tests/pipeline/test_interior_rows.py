@@ -23,7 +23,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.pipeline import interior_rows as IR, serving_rows as SRW

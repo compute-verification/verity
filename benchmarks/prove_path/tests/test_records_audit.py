@@ -1,5 +1,5 @@
 """The audit from a window's records alone (`records_audit`), without proving, on a window written through the interface
-(`verity.ml.windows.interface`) under core's registration:
+(`verity.windows.interface`) under core's registration:
 
 * the verifier's window is the circuit record's, each template resolved in Verity's catalog, and the record must be the one
   the registration binds; a window with row tables is refused until its records carry their segment roots;
@@ -45,7 +45,7 @@ from verity.circuits.codec import canonical_json, descriptor_id, encode_program,
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
 from verity.definitions.ops import gemm as G
-from verity.ml.windows import interface as IF, rows as CS
+from verity.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

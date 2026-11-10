@@ -29,7 +29,7 @@ from types import ModuleType, SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import serving_rows as SRT
 from verity_vllm.pipeline.tp import run_root as RT

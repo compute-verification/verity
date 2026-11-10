@@ -13,7 +13,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
 from verity.circuits.program import Program
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 from verity_flock import circuit as FC, class_statement as CS, ir_lower as IL
 from verity_flock.gf2 import Circuit
 from verity.definitions.registry import b1, dead_free as DF, fa2_check_inf as F2, hopper, prims as P, sampling as SA, topp_words as TW
@@ -514,7 +514,7 @@ def test_attn_block_first_v2_reads_a_value_slice_a_row_at_4_32_4():
     grain, 64 / n a key.  v2's v cut once an element is those rows, n words each, where v1's v has only NVIS elements to cut; with
     its 3 outputs a unit is 5·NVIS + 4 rows in and out, within the grain's cap.  q's row and each k row (128 B) hash past one
     SHA-512 block, which Flock's compose needs of some row of a unit; the value slices (32 B) don't."""
-    from verity.ml.windows import interface as IF
+    from verity.windows import interface as IF
     from verity_flock.circuit import Port
     from verity_vllm.program.predict.window_builder import Grain
     from verity_vllm.program.predict.window_circuit import WindowClass

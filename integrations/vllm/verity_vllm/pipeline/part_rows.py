@@ -4,7 +4,7 @@
 (``packed``, `serving_rows._packed`).  A part's intermediate (``("mid", name)``: FlashInfer's q and s) is a value serving never
 stores: the readers compute it with its twin (``MIDS``), the coordinates' reader holds the twin of the row's output on it to the
 served output, and the window wires each unit's row of it to the output row of the part unit that returned it (:func:`wire`,
-`verity.ml.windows.wiring`), so a sampled coordinate's q and s are the committed outputs of its row's quantisation."""
+`verity.windows.wiring`), so a sampled coordinate's q and s are the committed outputs of its row's quantisation."""
 from __future__ import annotations
 
 import json
@@ -15,7 +15,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import COORDS, PART_STATICS, PARTS, coord_width, part, template
 

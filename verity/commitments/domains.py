@@ -393,7 +393,7 @@ PERIOD_CIRCUIT = "verity/window-circuit/v1"
 ONSITE_PROTOCOL = "verity/onsite/v0"
 REMOTE_PROTOCOL = "verity/remote/v0"
 
-# Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)
+# Not yet read from here: served periods (`verity.windows`, the bytes say window)
 VLLM_ADVICE_WINDOWS_ADVICE = "verity-vllm/advice-windows/advice/v1"
 VLLM_SERVING_ROWS_ORDER = "verity-vllm/serving-rows/order/v0"
 VLLM_SERVING_ROWS_BLOCKS = "verity-vllm/serving-rows/units/v0"

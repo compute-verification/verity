@@ -31,7 +31,7 @@ from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array
 from verity.definitions.registry import moe, tp_allreduce as TA
 from verity.definitions.registry.prims import BF16
-from verity.ml.windows import interface as I, wiring as WI
+from verity.windows import interface as I, wiring as WI
 
 RUN, LAW, CAP, W = "ab" * 64, {"law": "stratified", "k": 2}, 4, 2
 #: the fused bodies' hidden row: four chunks of 64 (`grain.chunk`)

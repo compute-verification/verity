@@ -586,7 +586,7 @@ def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = No
 
     Refused (ValueError): a record that lists its members, a statement row of no one port, a wire or declaration outside
     its port's units or rows, two filling one row (Lean's ``apart``), and a pin of `SCAN_STATE`."""
-    from verity.ml.windows import interface as IF
+    from verity.windows import interface as IF
 
     if "members" in circuit or "wires" not in circuit:
         raise ValueError("a window circuit is counted from its stated record (its templates, statements and wires), as "
@@ -666,7 +666,7 @@ def audit_of(d: Path, pins: dict | None = None) -> dict:
     exactly, and J the offsets within a bucket. A window holding a pin must bind ``circuit.json`` by its SHA-512
     (``window.circuit``), as `NetworkCheck.Period.auditCheck` refuses a count on a circuit its registration doesn't
     bind."""
-    from verity.ml.windows import interface as IF
+    from verity.windows import interface as IF
 
     reg = json.loads((d / "registration.json").read_text())
     body = (d / "circuit.json").read_bytes()
