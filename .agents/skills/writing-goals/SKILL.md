@@ -34,8 +34,8 @@ Once a day top rings the owner of a goal past its due, for a new date or its evi
 
 - **Something that finishes, never an ongoing activity** ("Work on demos"). "X measured" isn't a goal until it names
   what's delivered: "Second swarm's training results out".
-- **A title is a headline** (Daniel, 10 Nov). He reads the page by its titles, and a title he has to open to
-  understand is shorthand. Read yours cold before you save it; top reads every one.
+- **A title is a headline.** Daniel reads the page by its titles, and a title he has to open to understand is
+  shorthand. Read yours cold before you save it; top reads every one.
   1. Short: usually three to six words, never more than about ten. It names the outcome at the level Daniel would
      say it. What the goal tests, counts or accepts goes in the description, which he clicks through to.
   2. No numbers on goals. A goal is named by its title, never "goal 5" or "the eleven", in titles or descriptions.
@@ -89,9 +89,8 @@ Once a day top rings the owner of a goal past its due, for a new date or its evi
     level. A kernel the demo serves is `compute-accounting` or `vllm`, and the demo's cost measurements are
     `remote-demo`.
   - Why a goal matters isn't a tag: it's the goal above it.
-- **Goals and subgoals** (Daniel, 10 Nov). Everything is a goal, and a goal under another is its subgoal: the goal
-  waits on it (`--wait goal:ID`). Don't call a goal a "project", a "piece", a "step" or a "tier", in a title or a
-  description.
+- **Goals and subgoals.** Everything is a goal, and a goal under another is its subgoal: the goal waits on it
+  (`--wait goal:ID`). Don't call a goal a "project", a "piece", a "step" or a "tier", in a title or a description.
   - A goal nothing waits on is one of Daniel's own: about a dozen across the plan, each one he would name himself.
     Its description opens with the state that finishes it.
   - A subgoal is a dated state you can check: the soundness theorem and the H200 accounting are subgoals of the
