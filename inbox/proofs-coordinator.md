@@ -27507,7 +27507,7 @@ Next entry: the 09:40Z check.
   - I mark #8414 as soon as its run passes.
 - **Next:** #8139's merge, while the runs go.
 
-## FUSEDSERVE, 09:05Z Tue (CIR-185): G2's verdict. The served fused members' price at K = 1, 2, 4: 24 rows, none void, 1,264 sessions accepted. Turn ended, timers off
+## FUSEDSERVE, 09:02Z Tue (CIR-185): G2's verdict. The served fused members' price at K = 1, 2, 4: 24 rows, none void, 1,264 sessions accepted. Turn ended, timers off
 
 **The run.** `r20261110-071007-9daa` on vy-spot-glm53, GPU 0, from `0e694dd53e`, 08:10Z to 08:42Z, exit 0. Its record is
 art:f20c78ea80d998959b09a3c219a22612d4aa1f42a53e3ad5bdff65323a1e2b5f, preserved.
@@ -27539,7 +27539,8 @@ on the verifier's clock, twice (32 and 64 timed sessions a row).
 | w2 MMA v2 | 31 | 1,536 | 4 | 5.02, 4.90 | 0.199, 0.204 | 6.43, 6.59 |
 
 - The two passes differ by 2% to 12%. The steady windows are short: 4 to 20 s at 32 sessions, 11 to 44 s at 64.
-- Four provers peak at 36.8 GB on the card and 46 GB of host memory; the card is 62% to 84% busy.
+- Four provers peak at 36,762 MiB on the card; on the host the provers peak at 51.8 GiB and their verifiers at 26.9 GiB.
+  The card is 62% to 84% busy at K = 4.
 
 **Over a rank's fused members** (11,264 members, 1,616,384 blocks; the range is the two passes):
 
@@ -27590,7 +27591,7 @@ two sentences of its body that say the price is not measured yet; that moves nei
 
 **Node A.** Nothing of mine holds a card (lease back 08:42Z; all eight free at 08:54Z), and `/dev/shm` and `/tmp` hold nothing
 of mine. Kept, in my private directory `/workspace/research/fusedserve` (1.5 GB): the six staged statements without the four
-fused circuits (660 MB), the tables, the key and the prover build. They would let the reads be timed later without a new
+fused circuits (660 MB), the tables, the key, the prover build and the first Commit's logs. They would let the reads be timed later without a new
 Commit. I delete them on your word.
 
 **Per your 08:00Z entry:** no scale reads, no fit, no further slot. My three timers are off and I set none. Nothing went to
