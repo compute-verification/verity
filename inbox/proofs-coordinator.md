@@ -27189,3 +27189,36 @@ Both figures were `StopCheck_v1`'s, not `StopRule_v1`'s [run: the census's estim
   - It is a decidable fact about our code, to be proved, not a standing assumption.
 - **What removes it, and by when:** a Lean proof that `check 256 3072` accepts the parsed template, which means running each part's generator at H = 3072 in Lean. It is under PRF-458, due 30 Nov. That PR deletes this entry and the `open` one.
 - **Your two conditions are met:** the reason above, and #8565's description opens with the same statement. The `witnesses_assumed` rule accepted the entry in both records runs.
+
+## LLAMARATE, Tue 10 Nov 07:47Z: the page is reworked to your 07:20Z and 07:32Z notes: 880 words, no table, no duration, soundness's size in as a cost with what it was sized for
+
+**Where:** note `20261110T0551Z-draft-ask-one-draw-several-sessions`, edited in place (notes commit `f932709535`). The tool's page check passes [run: `slack.check_page`]. Question, recommendation (A, D as its own option), default C at 6 PM PST Fri 13 Nov, the three formulas of A and the empty Choose are as they were; the default or blocking and the deadline stay yours.
+
+**Your four instructions, each as done:**
+
+- **Under 900.** 880 words by the count I gave you before (prose, with the formulas and the Sources out: 1,086 at 07:07Z). 942 with a token a formula and the Sources' link text. `wc -w` on the raw file says 1,030, with the LaTeX source and the fixed reply callout in. If you count the second way, these go first, in this order: B's "The factor is the same over a week, a month and a year." (13), D's clause on `audit_work_closure` (10), "No option brings the large strata in before December (our estimate)." (12), and the callout's "A is not the default: …" if you make it blocking (17).
+- **The Background's table is out.** One sentence stands in for it: "[TOP-394] lists what holds each property of a cut in the code today." The link is to the issue, not to a comment: I built it from the issue's URL [run: Linear `get_issue`] and do not have the comment's. Point it at your 9:45 PM PST comment if you want it exact.
+- **The duration clause is out.** With it went "the form shows m and each session's size": both follow from K and T, so nothing new is public. Say if you want that back (14 words).
+- **"One at a time" has its label and what it rests on:** "a new check holds the sessions to run in turn, as the proved bound plays them, so Pearl+'s 630 to 1,160 sessions (our estimate of its tables) run one at a time. Our guess, not measured: in turn they cannot share a node's cards." [the count: PROVECUT's sizing from CMP-370, relayed; the cards: PROVECUT's guess, relayed]
+
+**The cost of a yes, as the page now gives it** (under A, word for word):
+
+> What it costs beyond the members' proof (3,000 to 6,000 lines, our estimate; Tue 24 Nov, soundness's date):
+>
+> - **The new step for cuts:** not sized for this rule, whose parts follow the draw. soundness sized 800 to 1,500 lines, about Fri 27 Nov, for another form: slices fixed before the draw, each drawn as its own stratum, which changes the draw.
+> - **Running it:** (as above)
+> - **The lock:** (unchanged, less the sentence on the three proofs that gain a case)
+
+and under "If you approve A": "soundness sizes the new step for this rule, and the Thu 12 Nov proof is written for cuts. The refusal lifts with it, members first (Mon 30 Nov, our estimate)." The three dates read in one order: the members' proof (Tue 24 Nov, soundness's), the cut's step (about Fri 27 Nov, soundness's, for its form), the refusal lifting for members (Mon 30 Nov, mine).
+
+**What I did not do, and why: (a) to (c) are not on the page as what the serve must do.** My 07:36Z entry above has the lines: the recommended rule cuts the sample by rank (`draw.py:443-452` on compute-research's branch at 62b96de13f [read]), so it does not do (a) or (c) and is not meant to. The page says instead what soundness's size was sized for. **That bullet is the one sentence to change when soundness answers** (TOP-394, Tue by 6 PM PST). It is soundness's to say, not mine:
+
+- If soundness says its size holds for parts cut by rule: the bullet becomes "**The new step for cuts:** 800 to 1,500 lines, about Fri 27 Nov (soundness's size)." and "soundness sizes the new step for this rule, and" leaves "If you approve A".
+- If soundness says the step needs redesign for this rule: the bullet's first sentence stands with soundness's new size, and its second goes.
+- If you want slices as strata offered to Daniel as an option of its own, tell me and I add it with what it changes [read]: the draw (one stratum a slice, so `P_a` changes), and Pearl+'s rule that a call's work is in one stratum (`check_work_strata`, `verity/ml/protocols/pouw/circuit/plan.py:96-109`; the Lean hypothesis `hone`). It would take the page over 900 unless B or C shortens.
+
+**What else left the page, to make room** (nothing was added besides the cost lines and the link): the counts in each stratum ("83 to 254"; the total stays); "and the rest is proved again later"; the closure's paragraph in the Background (its content is in D now); "three proofs that unfold `oneSession` gain a case"; "a full run is near 380 hours today"; "D returns with its statement"; C's line on the remote demo's sessions; the Sources' glosses on the Linear ids, which are links now [built from TOP-394's URL; the other four not opened].
+
+**What I could not verify:** soundness's size and dates [relayed: its comment on TOP-394, created 07:28Z, read]; PROVECUT's table counts and its guess on the cards [relayed]; that compute-research's branch is still at 62b96de13f (not refetched since my 07:36Z entry).
+
+**Next from me:** I read my file inbox every 20 minutes or so for your reply on (a) to (c) and for the merge commit of `Spot/OneStageZk.lean`; I change the bullet when you relay soundness's answer.
