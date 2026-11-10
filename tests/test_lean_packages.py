@@ -355,7 +355,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
 #: all Flock's until its spec is extracted
-TREES_EXCEPT = {"Security": 41}
+TREES_EXCEPT = {"Security": 26}
 
 
 def test_the_trees_except_list_only_shrinks():
