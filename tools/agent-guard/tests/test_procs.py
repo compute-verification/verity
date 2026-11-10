@@ -95,7 +95,7 @@ KEPT = [
     ["python3", "/workspace/research/src/tools/verity/check/slot.py", "--status"],
     ["git", "fetch", "https://notes@github.com/o/r.git"],
     ["git", "show", "0123abc"],
-    ["sleep", "3600"],
+    ["tail", "-f", "/var/log/syslog"],
 ]
 
 
@@ -112,8 +112,8 @@ def test_a_command_line_with_no_credential_shows_whole(procs, argv):
 def test_a_printed_line_is_masked_by_its_words_alone_and_keeps_its_columns(procs):
     """What the filter in front of `ps` sees: a line, not arguments. The value is then the word after its flag."""
     assert procs.masked_line(" ".join(DAEMON)) == DAEMON_MASKED
-    line = f"   1234 Tue Nov 10 06:45:00 2026 node daemon.js --auth-token {HEX} --pty-auth-token={HEX} serve\n"
-    assert procs.masked_line(line) == f"   1234 Tue Nov 10 06:45:00 2026 node daemon.js --auth-token {MASK} --pty-auth-token={MASK} serve\n"
+    line = f"   1234 Thu Jan  1 00:00:00 1970 node daemon.js --auth-token {HEX} --pty-auth-token={HEX} serve\n"
+    assert procs.masked_line(line) == f"   1234 Thu Jan  1 00:00:00 1970 node daemon.js --auth-token {MASK} --pty-auth-token={MASK} serve\n"
     assert procs.masked_line("1234 curl -H Authorization: Basic dummy http://127.0.0.1:9/\n") == f"1234 curl -H Authorization: {MASK} {MASK} {MASK}\n"
     for plain in ("    PID STAT ELAPSED COMMAND\n", "   1234 Ssl     3600 python3\n", "1234\n", "\n"):
         assert procs.masked_line(plain) == plain
