@@ -1091,8 +1091,9 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         print(f"research run --on auto: refused: {closed}, and a GPU or quiet job runs on no other node", file=sys.stderr)
         return None
     if why is None:
+        lean = auto.lean_pool(command, ns.env)
         try:
-            target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem, lean_pool=auto.lean_pool(command))
+            target, why = auto.choose(auto.read(Path(ns.source), cpus, **({"lean": True} if lean else {})), cpus, mem, lean_pool=lean)
         except auto.Unplaceable as e:
             print(f"research run --on auto: refused: {e}", file=sys.stderr)
             return None

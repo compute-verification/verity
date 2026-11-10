@@ -3,6 +3,7 @@ small runs never wait behind two that hold all 48 of the share's cores for hours
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import pytest
 from research import auto, cores, remote
 from research.cli import main
 
+REPO = Path(__file__).resolve().parents[3]
 N2, CPU1, CPU5 = auto.AUTO_NODE, "vy-nebius-cpu-1", "vy-nebius-cpu-5"
 #: node 2's answer as `auto.read` gives it while the node is stopped
 DOWN = f"{auto.NO_SSH} (Connection timed out)"
@@ -30,6 +32,13 @@ def slot(name: str, cpus: str = "8-19", mem: int = 40, held: bool = False, block
 def pool(*slots: dict, waiters: int = 0, minutes: int = 0) -> dict:
     return {"research": {"file": "/workspace/research/locks/research/slots", "slots": list(slots),
                          "waiters": [{"pid": i, "minutes": minutes} for i in range(waiters)]}}
+
+
+def lean(**pools: tuple[int, int, int]) -> dict:
+    """A machine's Lean slots as lean_slot.py's status document gives them: each pool as (slots, held, waiting)."""
+    return {"lean": {"file": auto.LEAN_SLOTS, "pools": {
+        name: {"n": n, "slots": [{"index": i, "past_n": False, "holder": {"pid": 1} if i < held else None} for i in range(n)],
+               "waiters": [{"pid": i, "minutes": 1} for i in range(waiting)]} for name, (n, held, waiting) in pools.items()}}}
 
 
 def test_a_pool_slot_free_now_wins_even_when_node_2_could_start_the_job():
@@ -57,17 +66,110 @@ def test_a_run_that_takes_a_lean_build_slot_goes_only_where_the_machines_lean_sl
     0 s, again and again. A machine whose Lean slots give `build` none is skipped for them; one with no Lean slots file, or
     whose file couldn't be read, isn't."""
     cpu9 = "vy-nebius-cpu-9"
-    drives = {**pool(slot("r0", cpus="12-33")), "lean": {"check": 2}}
-    lanes = {**pool(slot("r0", held=True), waiters=3), "lean": {"build": 8, "audit": 2}}
+    drives = {**pool(slot("r0", cpus="12-33")), **lean(check=(2, 0, 0), build=(0, 0, 0))}
+    lanes = {**pool(slot("r0", held=True), waiters=3), **lean(build=(8, 0, 0), audit=(2, 0, 0))}
     docs = {N2: share(waiters=5), cpu9: drives, CPU5: lanes}
     assert auto.choose(docs, 4, 16)[0] == (cpu9, "research"), "any other run takes cpu-9's free slot"
     target, why = auto.choose(docs, 4, 16, lean_pool="build")
     assert target == (CPU5, "research") and f"{cpu9}'s research pool skipped: its Lean slots give `build` none" in why
-    for lean in (None, {"error": "OSError: denied"}):
-        assert auto.choose({N2: share(waiters=5), cpu9: {**drives, "lean": lean}}, 4, 16, lean_pool="build")[0] == (cpu9, "research")
-    assert auto.lean_pool(["python3", "tools/verity/lean/lean_changed.py", "--no-wait", "--build", "X.lean"]) == "build"
+    for unread in ({"file": auto.LEAN_SLOTS, "pools": None}, {"error": "OSError: denied"}, None):
+        assert auto.choose({N2: share(waiters=5), cpu9: {**drives, "lean": unread}}, 4, 16, lean_pool="build")[0] == (cpu9, "research")
+
+
+def test_the_lean_pool_a_command_takes_a_slot_of():
+    """A records run, the commonest Lean run, went unrecognised, so nothing placed it by its Lean slot."""
+    changed = ["python3", "tools/verity/lean/lean_changed.py"]
+    assert auto.lean_pool([*changed, "--no-wait", "--build", "X.lean"]) == "build"
     assert auto.lean_pool(["uv", "run", "verity", "lean", "try", "X.lean"]) == "build"
-    assert auto.lean_pool(["uv", "run", "pytest", "tools/verity/lean/tests/test_lean_changed.py"]) is None
+    assert auto.lean_pool([*changed, "--records", "Security", "--update"]) == "build"
+    assert auto.lean_pool([*changed, "--records=Security"]) == "build"
+    assert auto.lean_pool(["bash", "-lc", "uv sync -q && python3 tools/verity/lean/lean_changed.py --records Security"]) == "build"
+    assert auto.lean_pool([*changed, "--records", "Security"], ["A=1", "LEAN_RECORDS_POOL=proofs"]) == "proofs", "the run's --env"
+    assert auto.lean_pool(["env", "LEAN_RECORDS_POOL=proofs", *changed, "--try", "X.lean"]) == "proofs"
+    assert auto.lean_pool(["bash", "-c", "LEAN_RECORDS_POOL=proofs python3 tools/verity/lean/lean_changed.py --records P"]) == "proofs"
+    assert auto.lean_pool([*changed, "--records", "Security", "--dev-cache"]) == "audit", "check.py --dev-cache --build takes it"
+    audit = ["python3", "tools/verity/lean/check.py", "--build", "--update", "Security"]
+    assert auto.lean_pool(audit) == "audit" and auto.lean_pool(audit, ["LEAN_SLOT_POOL=check"]) == "check"
+    assert auto.lean_pool(["python3", "tools/verity/lean/check.py", "Security"]) is None, "without --build it takes no slot"
+    assert auto.lean_pool(["python3", "tools/verity/check/check.py", "--build"]) is None, "the whole check is not the Lean check"
+    assert auto.lean_pool([*changed, "--inputs-key", "Security"]) is None
+    assert auto.lean_pool(["uv", "run", "pytest", "tools/verity/lean/tests/test_lean_changed.py", "-k", "records"]) is None
+    assert auto.lean_pool(["bash", "-c", "echo 'an unclosed quote"]) is None
+
+
+def test_a_free_lean_slot_wins_over_a_shorter_line_for_a_cpu_slot_where_the_lean_pool_is_full():
+    """A records run placed by the CPU line alone took a check slot and then waited inside it for a Lean slot, the slot's cores
+    and memory idle, while another machine's Lean pool had slots free."""
+    short = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=1)                     # (1 + 1) / 4
+    long = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=7)                      # (7 + 1) / 4
+    docs = {N2: share(waiters=5), CPU1: {**short, **lean(build=(8, 8, 0))}, CPU5: {**long, **lean(build=(3, 1, 0), audit=(2, 2, 0))}}
+    target, why = auto.choose(docs, 4, 16, lean_pool="build")
+    assert target == (CPU5, "research")
+    assert f"{CPU1}'s research pool: slots r0 held, r1 held, r2 held, r3 held; 1 waiting; Lean `build`: 0 of 8 free, 0 waiting; " in why
+    assert "; 7 waiting; Lean `build`: 2 of 3 free, 0 waiting; " in why, "each machine's Lean pool is shown beside its line"
+    assert why.endswith(f": {CPU5}'s research pool, the shortest line per run that fits where a slot of Lean pool `build` is free")
+    target, why = auto.choose(docs, 4, 16, lean_pool="audit")
+    assert target == (CPU5, "research") and f"{CPU1}'s research pool skipped: its Lean slots give `audit` none; " in why
+    assert why.endswith(f": no machine has a slot of Lean pool `audit` free, so the shortest line for one, per slot: {CPU5}'s research pool")
+    idle = {**pool(slot("r0")), **lean(build=(8, 8, 0))}
+    target, why = auto.choose({**docs, CPU1: idle}, 4, 16, lean_pool="build")
+    assert target == (CPU5, "research"), "a check slot free now, where the run would hold it idle in the Lean line, is no start"
+    for full in ((8, 8, 0), (8, 7, 1)):                                    # the free slot is the waiter's, within a poll
+        assert auto.choose({**docs, CPU5: {**long, **lean(build=full)}}, 4, 16, lean_pool="build")[0] == (CPU1, "research")
+    both = {**pool(slot("r0", held=True), slot("r1")), **lean(build=(3, 2, 0))}
+    target, why = auto.choose({**docs, "vy-nebius-cpu-3": both}, 4, 16, lean_pool="build")
+    assert target == ("vy-nebius-cpu-3", "research") and why.endswith(": a slot is free there now, and one of Lean pool `build` with it")
+    node = {N2: {**share(free=8), **lean(build=(2, 0, 0))}}
+    target, why = auto.choose({**docs, **node}, 4, 16, lean_pool="build")
+    assert target is None and why.endswith(f": no pool has a slot and one of Lean pool `build` free, and it starts on {N2} now")
+    for theirs in (lean(build=(2, 2, 0)), lean(audit=(2, 0, 0)), {"lean": {"error": "Refused: not `POOL N`"}}, {}):
+        held = {N2: {**share(free=8), **theirs}}
+        assert auto.choose({**docs, **held}, 4, 16, lean_pool="build")[0] == (CPU5, "research"), "node 2 starts it only with a Lean slot"
+
+
+def test_a_run_that_takes_no_lean_slot_is_placed_as_before_whatever_the_lean_slots():
+    full, some = lean(build=(8, 8, 3), audit=(2, 2, 2)), lean(build=(3, 1, 0), audit=(2, 0, 0))
+    for cpu1, cpu5 in ((pool(slot("r0", held=True), waiters=1), pool(slot("r0", held=True), waiters=7)),      # the shortest line
+                       (pool(slot("r0")), pool(slot("r0"))),                                                    # the first free slot
+                       (pool(slot("r0", held=True), waiters=3), pool(slot("r0", held=True), slot("r1")))):
+        for n2 in (share(waiters=5), share(free=8)):
+            plain = auto.choose({N2: n2, CPU1: cpu1, CPU5: cpu5}, 4, 16)
+            assert auto.choose({N2: {**n2, **full}, CPU1: {**cpu1, **full}, CPU5: {**cpu5, **some}}, 4, 16) == plain
+            assert "Lean" not in plain[1]
+            free = {N2: {**n2, **some}, CPU1: {**cpu1, **some}, CPU5: {**cpu5, **some}}
+            assert auto.choose(free, 4, 16, lean_pool="build")[0] == plain[0], "and a Lean run where every machine has a Lean slot free"
+
+
+def test_with_no_lean_slot_free_anywhere_the_shortest_line_for_one_per_slot_wins():
+    free = pool(slot("r0"))
+    busy = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=1)
+    docs = {N2: share(waiters=5), CPU1: {**busy, **lean(build=(8, 8, 3))},      # (3 + 1) / 8 of a Lean line, behind a check line
+            CPU5: {**free, **lean(build=(2, 2, 1))}}                              # (1 + 1) / 2, and a check slot free now
+    assert auto.choose(docs, 4, 16)[0] == (CPU5, "research")
+    target, why = auto.choose(docs, 4, 16, lean_pool="build")
+    assert target == (CPU1, "research")
+    assert why.endswith(f": no machine has a slot of Lean pool `build` free, so the shortest line for one, per slot: {CPU1}'s research pool")
+    even = {**docs, CPU5: {**free, **lean(build=(4, 4, 1))}}
+    assert auto.choose(even, 4, 16, lean_pool="build")[0] == (CPU5, "research"), "the same Lean line: the shorter line for a check slot"
+    assert auto.choose({**even, CPU5: {**busy, **lean(build=(4, 4, 1))}}, 4, 16, lean_pool="build")[0] == (CPU1, "research"), "then SPILL's order"
+
+
+def test_a_machine_whose_lean_slots_cant_be_read_is_not_preferred():
+    free = pool(slot("r0"))
+    busy = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=7)
+    for unread, said in (({"lean": {"error": "Refused: /w/lean-slots: 'build two' is not `POOL N`"}}, "Refused: /w/lean-slots: 'build two' is not `POOL N`"),
+                         ({}, "no answer")):
+        docs = {N2: share(waiters=5), CPU1: {**free, **unread}, CPU5: {**busy, **lean(build=(2, 2, 3))}}
+        target, why = auto.choose(docs, 4, 16, lean_pool="build")
+        assert target == (CPU5, "research"), "a line for a Lean slot that was read beats a free check slot beside Lean slots that weren't"
+        assert f"{CPU1}'s research pool: slots r0 free; 0 waiting; its Lean slots weren't read ({said}); " in why
+        target, why = auto.choose({**docs, CPU5: {**busy, **unread}}, 4, 16, lean_pool="build")
+        assert target == (CPU1, "research"), "it is still a machine: with none read, the run goes where any run would"
+        assert why.endswith(f": no machine's Lean slots were read, so the shortest line per run that fits, {CPU1}'s research pool")
+        assert auto.choose({**docs, CPU5: "no answer in 30 s"}, 4, 16, lean_pool="build")[0] == (CPU1, "research")
+    uncapped = {"lean": {"file": auto.LEAN_SLOTS, "pools": None}}
+    target, why = auto.choose({N2: share(waiters=5), CPU1: {**free, **uncapped}}, 4, 16, lean_pool="build")
+    assert target == (CPU1, "research") and "; no Lean slots to wait for there: a slot is free there now, and one of Lean pool" in why
 
 
 def test_slots_blocked_on_memory_are_not_capacity_when_ranking_lines():
@@ -178,7 +280,6 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")          # each CPU its own core
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))         # no such directory: the probe skips the disk check
     monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))   # a slot-only host (cpu-1) carries the real one
-    monkeypatch.setattr(auto, "LEAN_SLOTS", str(tmp_path / "no-lean-slots"))
     held = [cores.locked(claims / "r1.cpus", "48-91\n"), cores.locked(claims / "wait.01.r2", "4\n")]
     (claims / "gone.cpus").write_text("92-95\n")                               # nobody holds it: a run that ended
     src = tmp_path / "src"
@@ -191,12 +292,9 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     finally:
         for fd in held:
             os.close(fd)
-    assert docs[N2] == {"share": {"share": 48, "claims": 1, "waiters": 1, "free": 4, "fits": True}, "lean": None}
-    assert docs[CPU1] == {"research": {"file": "/workspace/research/locks/research/slots", "slots": [], "waiters": []}, "lean": None}
-    (tmp_path / "lean-slots").write_text("# NAME N\ncheck 2   # drive's\n# drive-only: build 10\naudit 0\n")
-    monkeypatch.setattr(auto, "LEAN_SLOTS", str(tmp_path / "lean-slots"))
-    assert auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[CPU1]["lean"] == {"check": 2, "audit": 0}, \
-        "a commented-out pool is no pool"
+    assert docs[N2] == {"share": {"share": 48, "claims": 1, "waiters": 1, "free": 4, "fits": True}}
+    assert docs[CPU1] == {"research": {"file": "/workspace/research/locks/research/slots", "slots": [], "waiters": []}}, \
+        "a run that takes no Lean slot asks for none"
     assert (claims / "gone.cpus").exists(), "the probe only reads: a leftover is the next taker's to remove"
     assert auto.read(src, 8, reach=lambda name: [sys.executable, "-"])[N2]["share"]["fits"] is True, "nothing holds them now"
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path))
@@ -207,6 +305,51 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert target is None and "disk:" in why, "a pool on a full disk is skipped like one that can't be read"
     failing = auto.read(src, 4, reach=lambda name: [sys.executable, "-c", "import sys; sys.exit('no python here')"])
     assert failing == {m: "exit 1: no python here" for m in (N2, *(machine for machine, _ in auto.SPILL))}
+
+
+def test_the_probe_reads_a_machines_lean_slots_with_the_trees_lean_slot_py(tmp_path, monkeypatch, node_2):
+    """For a run that takes a Lean slot the probe runs the tree's own lean_slot.py on the machine's Lean slots, as
+    `lean_slot.py --status --json` does: here the repository's, on a slots file and a line this test keeps."""
+    src, slots = tmp_path / "src", tmp_path / "locks" / "lean-slots"
+    for f in (auto.SLOT_PY, auto.LEAN_SLOT_PY):
+        (src / f).parent.mkdir(parents=True, exist_ok=True)
+        (src / f).write_text((REPO / f).read_text())
+    monkeypatch.setattr(auto, "LEAN_SLOTS", str(slots))
+
+    def read(**kw) -> dict:
+        """Node 2's answer, the one machine asked."""
+        with monkeypatch.context() as m:
+            m.setattr(auto, "SPILL", ())
+            return auto.read(src, 4, reach=lambda name: [sys.executable, "-"], **kw)[N2]
+
+    assert "lean" not in read() and read()["share"]["free"] == 48
+    none = read(lean=True)
+    assert none["share"]["free"] == 48 and none["lean"]["file"] == str(slots) and none["lean"]["pools"] is None
+    assert auto._lean(none, "build") == (0, "; no Lean slots to wait for there"), "a machine with no slots file caps no Lean"
+    slots.parent.mkdir()
+    slots.write_text("# NAME N\nbuild 2   # the records runs'\n# audit 4\ncheck 0\n")
+    doc = read(lean=True)
+    assert doc["lean"]["pools"]["build"] == {"n": 2, "slots": [{"index": i, "past_n": False, "holder": None} for i in range(2)], "waiters": []}
+    assert auto._lean(doc, "build") == (0, "; Lean `build`: 2 of 2 free, 0 waiting")
+    for absent in ("audit", "check"):                                   # commented out, and listed with no slot
+        with pytest.raises(LookupError, match=f"its Lean slots give `{absent}` none"):
+            auto._lean(doc, absent)
+    line = slots.parent / "lean-line-build"
+    line.mkdir()
+    waiters = [cores.locked(line / f"{10**18 + i:020d}-{7 + i}", "{}\n") for i in range(2)]
+    try:
+        doc = read(lean=True)
+    finally:
+        for fd in waiters:
+            os.close(fd)
+    assert [w["pid"] for w in doc["lean"]["pools"]["build"]["waiters"]] == [7, 8]
+    assert auto._lean(doc, "build") == (1.5, "; Lean `build`: 2 of 2 free, 2 waiting"), "the free slots are the waiters' ahead"
+    assert auto._lean(read(lean=True), "build")[0] == 0, "a ticket nobody holds is a waiter that died"
+    target, why = auto.choose({N2: share(waiters=5), CPU1: {**pool(slot("r0")), "lean": doc["lean"]},
+                               CPU5: {**pool(slot("r0", held=True)), "lean": read(lean=True)["lean"]}}, 4, 16, lean_pool="build")
+    assert target == (CPU5, "research") and "Lean `build`: 2 of 2 free, 2 waiting; " in why, "the documents as the probe gives them"
+    slots.write_text("build two\n")
+    assert auto._lean(read(lean=True), "build") == (math.inf, f"; its Lean slots weren't read (Refused: {slots}: 'build two' is not `POOL N`)")
 
 
 def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_path, monkeypatch):
@@ -261,6 +404,32 @@ def test_on_auto_spills_to_the_pool_as_a_pool_run_with_the_kinds_time(tmp_path, 
     err = capsys.readouterr().err
     assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in err and "a slot is free there now" in err
     assert kw["env"]["CHECK_RUN_MEM_GB"] == "16", "the slot reserves the larger of its mem= and the sized run's"
+
+
+def test_on_auto_places_a_records_run_by_its_lean_pool_and_says_which(tmp_path, monkeypatch, capsys):
+    """The launcher asks for the machines' Lean slots only for a run that takes one, places it by the pool it takes (the
+    run's --env names another than `build`), and its one line of reason names that pool."""
+    asked, launched = [], []
+    docs = {N2: share(waiters=56), CPU1: {**pool(slot("r0")), **lean(build=(8, 8, 2), proofs=(6, 2, 0))},
+            CPU5: {**pool(slot("r0", held=True), waiters=2), **lean(build=(3, 1, 0))}}
+    monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: asked.append(kw) or docs)
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing([]))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    records = ["python3", "tools/verity/lean/lean_changed.py", "--records", "Security", "--update"]
+    assert main([*runs, "--", "pytest", "-q"]) == 3
+    assert f"spilled to {CPU1}'s research pool" in (err := capsys.readouterr().err) and "Lean" not in err
+    assert main([*runs, "--", *records]) == 3
+    err = capsys.readouterr().err
+    assert f"research run --on auto: spilled to {CPU5}'s research pool, from " in err
+    assert f"{CPU5}'s research pool, the shortest line per run that fits where a slot of Lean pool `build` is free)" in err
+    assert main([*runs, "--env", "LEAN_RECORDS_POOL=proofs", "--", *records]) == 3
+    err = capsys.readouterr().err
+    assert f"spilled to {CPU1}'s research pool" in err and "a slot is free there now, and one of Lean pool `proofs` with it)" in err
+    assert asked == [{}, {"lean": True}, {"lean": True}]
+    assert [kw["machine_name"] for kw in launched] == [CPU1, CPU5, CPU1]
+    assert launched[1]["command"][-6:] == ["19", *records], "the run itself is unchanged"
 
 
 def test_on_auto_spilled_to_a_pool_keeps_its_mem_gb_for_the_slot(tmp_path, monkeypatch, capsys):
