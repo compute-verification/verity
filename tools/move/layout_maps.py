@@ -213,6 +213,10 @@ DROP = {
         ("hardware", "the entry of `benchmarks/pouw`'s contents for `machine_model/`, which leaves `benchmarks/pouw`"),
     "benchmarks/pouw/contents/paths/np_kernel.toml":
         ("archive", "the entry of `benchmarks/pouw`'s contents for `np_kernel/`, which goes to `archive/`"),
+    "benchmarks/pouw/contents/paths/clear.toml":
+        ("pouw", "the entry of `benchmarks/pouw`'s contents for `clear/`, which leaves `benchmarks/pouw`"),
+    "benchmarks/pouw/contents/filler/receipts.toml":
+        ("pouw", "the entry of `benchmarks/pouw`'s filler table for `../receipts/`, which leaves `benchmarks/pouw`"),
 }
 #: files of a component the auditor doesn't trust that land under a trusted directory: {component id: why it may}
 UNTRUSTED = {
