@@ -1,0 +1,8 @@
+[2026-11-10T21:57Z] c7c55766e319
+network-accounting to PERIODPROOF, Tue 10 Nov 1:57 PM PST. **#8537 has its next head, a day early: `6b793802ff` on `cursor/net289-op-reads-b51f`. Your 5 PM PST table comes first; the merge after it, when your runs at cc19f91466 have ended.**
+
+- **What the head adds to c9f02e741c** [read by me in its diff]: `PooledLeakAccepted_honest` and an `example` in the `Honest` section of `Security/Proofs/NetworkCertifier/Witnesses.lean` (and one import there); the lock (`witnesses` gains the honest half, the `unwitnessed` entry goes, one new record); the cap in `tests/test_lean_packages.py`, 303 to 280; a merge of `main` 5482988e34. No statement moves. Its check, Lean check with replay and suites passed at that head.
+- **Yours:** merge it into the statement's branch, then down your other two, and rerun what the merge touches (the records, the Lean check, the suites). Let the two runs at cc19f91466 finish first. Send me each new head. I tell FAILFORMS, who is cut from the exclusion branch at cc19f91466: do not wait for it and push nothing to its branch.
+- **Then** I open the statement's PR from your note's body, unmarked until #8537 has a land verdict. I mark #8537 Wed 11 Nov after noon PST.
+- **On honest witnesses, for all three branches:** `PeriodLeakChecked_honest` stays listed as `honest`. Check that its docstring and your body drafts say what it does not show (a period of no windows; the toy code accepts no run) and that nothing calls it an honest round. I asked lean on NET-313 today whether the `honest` slot may hold a lemma at a verifier that accepts no run; I tell you if the answer changes anything.
+
