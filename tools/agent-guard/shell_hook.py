@@ -347,6 +347,8 @@ CMP_BYTES = {"l", "b", "verbose", "print-bytes"}
 ON_OUTPUT = re.compile(r"-$|/(dev|proc)/(?!null$)")
 TAR_SHOWS = {"O", "to-stdout", "to-command", "I", "use-compress-program", "checkpoint-action", "F", "info-script",
              "new-volume-script", "rsh-command"}
+#: `tar`'s long options this rule reads, each of which `tar` also takes cut short (`--extr`, `--to-stdo`)
+TAR_READ = {"create", "extract", "get", "file", "files-from", "directory"} | {name for name in TAR_SHOWS if len(name) > 1}
 #: what the far side of a copy may run beside the `tar` that unpacks it
 SETUP = {"umask", "mkdir", "chmod", "chown", "cd"}
 #: the openssl commands that write out the private key they read, unless `-pubout` or `-noout` is given; `enc` writes out
@@ -456,14 +458,19 @@ def files_printed(reader: str, args: list[str], inputs: list[str]) -> list[str] 
 
 
 def tar_options(args: list[str]) -> tuple[dict[str, list[str]], list[str]]:
-    """`operands` of `tar ARGS`, whose first word may be its options without a dash, their values after it (`tar czf OUT DIR`)."""
+    """`operands` of `tar ARGS`, whose first word may be its options without a dash, their values after it (`tar czf OUT DIR`).
+    A long option cut short counts as every name of TAR_READ it starts: `tar` takes it for one of them or refuses it."""
     if args and not args[0].startswith("-"):
         spelled, values = [], args[1:]
         for letter in args[0]:
             spelled += ["-" + letter, *values[:letter in VALUED["tar"][0]]]
             values = values[letter in VALUED["tar"][0]:]
         args = spelled + values
-    return operands("tar", args)
+    given, rest = operands("tar", args)
+    for short in [g for g in given if len(g) > 1 and g not in TAR_READ | VALUED["tar"][1]]:
+        for name in [n for n in TAR_READ if n.startswith(short)]:
+            given.setdefault(name, []).extend(given[short])
+    return given, rest
 
 
 def packed(tool: str, args: list[str], inputs: list[str], piped: list[str], sunk: bool) -> list[str] | None:
@@ -587,11 +594,11 @@ def secret_read(text: str, where: str | None = None, sunk: bool = False) -> tupl
     command that runs nothing (no `--`) are prose and are not read. `where` is the directory the commands run in when they
     run on this machine, None on another or once a `cd` can't be followed: there a command that reads a file itself (behind
     nothing but `sudo`, `timeout` and the like without options, or in such a `bash -c`) reads one git has committed freely
-    (`tracked`). `sunk` says the output of `text` as a whole goes to a command
-    that only unpacks it. Inside `text` a command's does when a `|` hands it to one (`unpacks`) that shares the pipe with no
-    other command (no subshell or group), or `text`'s own does and the command is piped nowhere, and it is redirected nowhere
-    but to `/dev/null`; so then does the output of the command it has another machine run (`far_words`). Only a `tar` that
-    is the command itself, here or there, is let through on it."""
+    (`tracked`). `sunk` says the output of `text` as a whole goes to a command that only unpacks it. Inside `text` a
+    command's does when a `|` hands it to one (`unpacks`) that shares the pipe with no other command (no subshell or group),
+    or `text`'s own does and the command is piped nowhere, and it is redirected nowhere but to `/dev/null`; so then does the
+    output of the command it has another machine run (`far_words`). Only a `tar` that is the command itself, here or there,
+    is let through on it."""
     try:
         commands = words_of(text)
     except ValueError:                                   # unbalanced quotes: the words between the shell's operators, unquoted
@@ -661,9 +668,10 @@ def secret_file_reason(command: str, cwd: str = "") -> str | None:
     if found is None:
         return None
     reader, path, kind = found
-    why = ("An archive, a compressed or an encoded copy on the output is the file itself, and only a terminal stops `tar`. Write "
-           "it to a file (`tar -cf OUT.tar FILE...`, `gzip -k FILE`), or copy it to another machine with `tar -cf - FILE... | ssh "
-           "HOST tar -xf - -C DIR`: a `tar` that only unpacks its input is the one place such an archive may go. "
+    why = ("An archive, a compressed or an encoded copy on the output is the file itself: `tar` and `gzip` stop only at a "
+           "terminal, and an agent's shell has none. Write it to a file (`tar -cf OUT.tar FILE...`, `gzip -k FILE`, `openssl enc "
+           "-out OUT`), or copy it to another machine with `tar -cf - FILE... | ssh HOST tar -xf - -C DIR`: a `tar` that only "
+           "unpacks its input is the one place such an archive may go. "
            if reader.split()[0] in PACKERS or reader == "openssl enc"
            else "`openssl` writes out the private key it reads: add `-pubout` for its public half or `-noout` to only check it, and "
            "never `-text`, which prints the private numbers (`-text_pub` prints the public ones). " if reader.startswith("openssl")

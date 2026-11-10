@@ -236,6 +236,9 @@ REFUSED = PLAIN_READS + [
     "tar -xf backup.tar --to-stdout etc/vy/env/root.env",
     "tar xOzf secrets/backup.tgz",
     "ssh n1 cat /srv/backup/home.tar | tar -xOf - home/research/.ssh/id_ed25519",
+    "tar --cre --fil=- x.env",                            # tar takes a long option cut short
+    "tar --extr --to-stdo -f backup.tar .ssh/id_rsa",
+    "tar --creat x.env | ssh n1 tar -xf - -C /etc/vy/env --to-c cat",
     # the archive piped anywhere but straight into a tar that only unpacks it
     "tar -cf - key.pem | cat",
     "tar -cf - key.pem | base64",
@@ -448,6 +451,7 @@ ALLOWED = [
     "ssh -p 2222 n1 sudo tar -C /root/.ssh -cf - id_rsa | ssh n2 sudo tar -C /root/.ssh -xf -",
     "research pods ssh vy-nebius-2 -- sudo tar -C /etc/verity -cf - lean-cache.env | research pods ssh vy-nebius-3 -- sudo tar -C /etc/verity -xf -",
     "tar -cf - key.pem | ssh n1 tar -xf - -C /etc/keys && echo copied",
+    "tar --creat --direc ~/.ssh id_ed25519 | ssh n1 tar --extr --no-same-o --direc=/root/.ssh",
     # an archive or a compressed copy written to a file, an archive unpacked or listed, and the same of other files
     "tar -czf backup.tgz ~/.ssh",
     "tar -cf /tmp/k.tar key.pem",
@@ -588,7 +592,8 @@ def test_an_archive_of_a_secret_file_passes_only_into_a_tar_that_unpacks_it(hook
               "ssh n1 'cd /dst; tar xf -; chown root /dst/k'"]
     show = ["cat", "base64", "xxd", "gzip", "tee /tmp/k.tar", "ssh n1 cat", "ssh n1 'tar -xf - -C /dst; ls /dst'", "tar -xOf -",
             "tar -tf -", "ssh n1 'tar -xf - | cat'", "ssh n1 'echo start; tar -xf -'", "research pods ssh vy-nebius-3 -- 'cat > /tmp/k'",
-            "bash -c 'tar -xf -'", "xargs tar -xf -", "tar -xf - --checkpoint-action=exec=cat"]
+            "bash -c 'tar -xf -'", "xargs tar -xf -", "tar -xf - --checkpoint-action=exec=cat", "tar -xf - --to-stdo",
+            "tar -xf - --to-comm=cat", "ssh n1 tar --extr --use-compress=cat -f -"]
     assert hook.secret_file_reason(producer) and "a `tar` that only unpacks its input" in hook.secret_file_reason(producer)
     for consumer in unpack:
         assert hook.secret_file_reason(f"{producer} | {consumer}") is None, consumer
