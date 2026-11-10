@@ -344,7 +344,7 @@ theorem portBinding_o0 (schema : String) :
 
 variable (R : Ref) (desc : Msg) (q : Query) (c₀ : Code)
 
-/-- Round 2's interior order holds at the instance's run, whatever its boundary record and draw. -/
+/-- Round 2's interior order holds at the instance's run, whatever its boundary record and second sample. -/
 theorem interiorOrderOk_interior0 (st : Roots) (draw : Json) :
     Spot.SecondStage.interiorOrderOk (ownOf (held R bnd0 desc q c₀) st interior0 draw coin0) = true :=
   interiorOrderOk_held R desc q c₀ interior0_sample

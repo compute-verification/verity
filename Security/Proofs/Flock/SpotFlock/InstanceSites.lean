@@ -8,8 +8,8 @@ public import Proofs.Flock.Claims.Sampling.Select.Second
 # Where every accepted run of the two-stage instance stands
 
 At `SpotFlock.Instance.held R B desc q c₀`, for every `R` and `B`, every accepted run (`CheckedRun.Ok`) has:
-* the replay sample `#[0]` (`sample_ok`): round 2 drew the second stage (`secondDraw`), which `Select.secondProblem`
-  lets draw only over a nonempty, ascending sample, and the first stage samples unit slots (`firstSlots_held`) of a
+* the replay sample `#[0]` (`sample_ok`): round 2 sampled the second stage (`secondDraw`), which `Select.secondProblem`
+  lets sample only over a nonempty, ascending sample, and the first stage samples unit slots (`firstSlots_held`) of a
   layout of one proof block (`sample_getD`);
 * replay block `0` (`rho_ok`), the replay partition's one, and a unit below two (`u_lt_two`);
 * its unit in template `0`, whose part is two units from unit `0` (`drawnPart_ok`);

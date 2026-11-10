@@ -11,8 +11,8 @@ public import Proofs.Flock.Claims.Complete.Json.Canon
 check of a session statement that is the reference statement itself (`xS = R.x`, `readsOk`) passes wherever the checks
 that read its bytes do. What the registration and the zero coins decide holds for every `R`:
 * what the verifier holds of the run (`ownOf`): the replay sample `#[0]` (`ownOf_sample`), the one part
-  `⟨R.name, 0, 2⟩` (`ownOf_parts`, `partAt_held`) at position `0` (`posOf_held`), and the drawn units `#[0]`
-  (`ownOf_drawn`, at the draw `secondDraw_coin0` gives);
+  `⟨R.name, 0, 2⟩` (`ownOf_parts`, `partAt_held`) at position `0` (`posOf_held`), and the sampled units `#[0]`
+  (`ownOf_drawn`, at the sample `secondDraw_coin0` gives);
 * the interior record's order, where it lists the replay sample `[0]` (`interiorOrderOk_held`);
 * the statement is the reference one (`pinOk_self`), and in scope where Flock's scope check and hidden outputs hold of
   it (`sessionOk_self`);
@@ -81,7 +81,7 @@ theorem codesOk_of {h : Held} {own : Spot.SecondStage.Own} {t : ℕ} {S : Spot.S
   rw [hc]
   rfl
 
-/-- **`readsOk` passes** where its parts do: the run's records decode, the second stage draws, the session statement
+/-- **`readsOk` passes** where its parts do: the run's records decode, the second stage samples, the session statement
 reads as round 2's, the interior record's order, the statement checks, and the pin to the reference statement. -/
 theorem readsOk_of {h : Held} {t : ℕ} {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {st : Roots} {rec draw : Json}
     {w : FlockDeploy.Raw} {S : Spot.SecondStage.Stmt}
@@ -135,7 +135,7 @@ theorem tablesOk_self {own : Spot.SecondStage.Own} {S : Spot.SecondStage.Stmt} {
 
 variable (R : Ref) (desc : Msg) (q : Query) (c₀ : Code)
 
-/-- **The second draw at the zero coins** proves unit `0`. -/
+/-- **The second stage's sample at the zero coins** proves unit `0`. -/
 theorem secondDraw_coin0 :
     ∃ d, secondDraw (held R bnd0 desc q c₀) coin0 coin0 = some d ∧ Spot.Draw.proved d = #[0] := by
   obtain ⟨d, rd, hs, hp⟩ := selectSecond_coin0
@@ -194,8 +194,9 @@ theorem sessionOk_self (hs : FlockDeploy.scopeCheck true R.x = true) (hh : hidde
 
 /-- **Round 2's check passes the reference statement at the zero coins** wherever the checks that read its bytes do:
 the run's records `x` and `m₁` decode, the interior record lists the replay sample `[0]`, the statement reads as round
-2's (`stmtJsonOf`) with a sample that prints and a verdict of record, and at every draw that proves unit `0` its header,
-population, roots, sample and registered reads pass against the template's part `⟨R.name, 0, 2⟩` at position `0`. -/
+2's (`stmtJsonOf`) with a sample that prints and a verdict of record, and at every sample that proves unit `0` its
+header, population, roots, sample and registered reads pass against the template's part `⟨R.name, 0, 2⟩` at position
+`0`. -/
 theorem readsOk_held {x m₁ : Msg} {st : Roots} {rec : Json} {w : FlockDeploy.Raw} {S : Spot.SecondStage.Stmt}
     {c : Spot.SecondStage.Checked}
     (hx : decode x = some st) (hm : jsonMsg m₁ = some rec)

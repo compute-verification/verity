@@ -27,7 +27,7 @@ wherever `S : Session R desc q c₀`, the facts about the run that read `R`'s Fl
 What the registration decides of the run holds for every `R`, at the zero coin `coin0` (every element `0`) in rounds 0
 and 1:
 * the first stage samples replay block `0` (`sample_coin0`), the boundary's one unit;
-* the second stage draws unit `0` of its two (`selectSecond_coin0`), so the second draw is some (`secondDraw_held`) and
+* the second stage samples unit `0` of its two (`selectSecond_coin0`), so its sample is some (`secondDraw_held`) and
   unit `0` is checked (`checked_coin0`).
 
 Each stage reads 82 bytes of its coin (`2·k·width + 64`, a width of 9 bytes). The kernel evaluates each on 82 zero bytes
@@ -44,7 +44,7 @@ statement `xS` and its witness `wF`; `xS` has `R.x`'s rounds, is in scope (`sess
 ## What this does not show
 
 That a `Session` exists. Each of its facts is about `R`'s Flock statement or about round 2's statement check against
-it, and none is proved for any statement: a concrete `Ref` would supply them, the honest prover's session at the draw
+it, and none is proved for any statement: a concrete `Ref` would supply them, the honest prover's session at the sample
 `selectSecond_coin0` fixes. Until then the two-stage guarantee's non-vacuity at this instance is not proved.
 -/
 
@@ -107,7 +107,7 @@ theorem toOption_eq {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption =
 
 /-! ## The two stages at the zero coin -/
 
-/-- **The first stage's draw on 82 zero bytes**: `subset:1` over one unit draws it, reading the 82 bytes. -/
+/-- **The first stage's sample on 82 zero bytes**: `subset:1` over one unit samples it, reading the 82 bytes. -/
 theorem drawFirst_zeros :
     (Spot.Draw.drawUnits (.subset 1) 1 ⟨Array.replicate 82 0⟩).toOption = some (#[0], 82) := by
   unfold Spot.Draw.drawUnits _root_.Flock.Draw.drawWith
@@ -122,20 +122,20 @@ theorem drawFirst_coin0 : Spot.Draw.drawUnits (.subset 1) 1 (SpotFlock.src coin0
 theorem select_zeros :
     (Spot.Select.select (.law "subset:1") program0 query0 none none ⟨Array.replicate 82 0⟩).toOption.map (·.2.1) =
       some #[0] := by
-  simp only [Spot.Select.select, units0, bind, Except.bind, lawOver0, deriveLaw0, Option.map_none, Option.getD_none,
-    flockLaw0, toOption_eq drawFirst_zeros]
+  simp only [Spot.Select.select, units0, bind, Except.bind, designOver0, deriveDesign0, Option.map_none,
+    Option.getD_none, flockDesign0, toOption_eq drawFirst_zeros]
   unfold Spot.Draw.checkDraw Spot.Draw.checkDrawFull Spot.Draw.sameLaw Spot.Draw.lawOf Spot.Draw.lawKeys Spot.keys?
     Spot.sortStrings Spot.jeq
   simp only [canon_fuel 16, qsort_fuel]
   decide +kernel
 
-/-- **The boundary's first stage reads only the bytes its draw reads.** -/
+/-- **The boundary's first stage reads only the bytes its sample reads.** -/
 theorem select_append_subset {ξ t : ByteArray} {r : Array ℕ × ℕ}
     (h : Spot.Draw.drawUnits (.subset 1) 1 ξ = .ok r) :
     Spot.Select.select (.law "subset:1") program0 query0 none none (ξ ++ t) =
       Spot.Select.select (.law "subset:1") program0 query0 none none ξ := by
-  simp only [Spot.Select.select, units0, bind, Except.bind, lawOver0, deriveLaw0, Option.map_none, Option.getD_none,
-    flockLaw0, h, Properties.Spot.SecurityProofs.drawUnits_append h]
+  simp only [Spot.Select.select, units0, bind, Except.bind, designOver0, deriveDesign0, Option.map_none,
+    Option.getD_none, flockDesign0, h, Properties.Spot.SecurityProofs.drawUnits_append h]
 
 /-- **The boundary's first stage at the zero coin** proves its one unit. -/
 theorem select_coin0 :

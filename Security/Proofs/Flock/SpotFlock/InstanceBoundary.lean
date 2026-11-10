@@ -56,7 +56,7 @@ Its layout is one proof block, unit `0` at the gates `[0, 1)` (`layout0`), its p
 Each fact is the verifier's own function at these values, which the kernel decides once the functions it can't unfold
 are rewritten to ones it can: `Array.qsort` to `QK.qsortK` (`QK.qsort_eq`) and `Ty.widths` to `widthsK` (`widths_eq`),
 each by fuel; `String.all` to a list's (`String.all_bool_eq`); the program's order check by its three steps
-(`orderViolation_prog0`); and the law's text by `simp` (`split0`, `toNat_one`).
+(`orderViolation_prog0`); and the sampling design's text by `simp` (`split0`, `toNat_one`).
 -/
 
 namespace SpotFlock.Instance
@@ -308,26 +308,26 @@ theorem popOk0 : Spot.Slots.popOk program0 query0 1 = true := by
   simp (config := {iota := false}) only [layout0]
   kernel_rfl
 
-/-- **The law** `subset:1` as Spot's design object. -/
+/-- **The sampling design** `subset:1` as Spot's design object. -/
 def subsetJ : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson (1 : ℕ))]
 
 open private digits from Spot.Select in
-theorem lawOver0 : (Spot.Select.Rule.law "subset:1").lawOver 1 = .ok subsetJ := by
+theorem designOver0 : (Spot.Select.Rule.law "subset:1").lawOver 1 = .ok subsetJ := by
   unfold Spot.Select.Rule.lawOver Spot.Select.parseDesign digits
   simp only [split0, toNat_one, String.all_bool_eq]
   kernel_rfl
 
-theorem deriveLaw0 : Spot.Draw.deriveLaw program0 query0 subsetJ none = .ok none := by kernel_rfl
+theorem deriveDesign0 : Spot.Draw.deriveLaw program0 query0 subsetJ none = .ok none := by kernel_rfl
 
-theorem flockLaw0 : Spot.Draw.flockLaw subsetJ 1 = .ok (.subset 1) := by
+theorem flockDesign0 : Spot.Draw.flockLaw subsetJ 1 = .ok (.subset 1) := by
   unfold Spot.Draw.flockLaw
   simp (config := {iota := false}) only [Spot.keys?, Spot.sortStrings, QK.qsort_eq]
   kernel_rfl
 
 open Claims Claims.Sampling SamplingDeploy Properties.Spot
 
-/-- **The verifier's copies**: `program0`, `query0` and the law `subset:1`, with no work table, ports, anchors or
-earlier records. -/
+/-- **The verifier's copies**: `program0`, `query0` and the sampling design `subset:1`, with no work table, ports,
+anchors or earlier records. -/
 def verifier0 : Spot.Registration.Verifier :=
   { program := program0, query := query0, law := subsetJ, workTable := none, scheme := "", ports := #[],
     leafLayer := none, anchors := #[], log := #[], partition := none }
@@ -337,12 +337,13 @@ def reg0 : Reg := { verifier := verifier0, rule := .law "subset:1", closure := n
 
 theorem design_reg0 : slotDesign reg0.rule reg0.program reg0.query reg0.table = .ok design1 := by
   show slotDesign (.law "subset:1") program0 query0 none = .ok design1
-  simp only [slotDesign, units0, bind, Except.bind, lawOver0, deriveLaw0, Option.map_none, Option.getD_none, flockLaw0]
+  simp only [slotDesign, units0, bind, Except.bind, designOver0, deriveDesign0, Option.map_none, Option.getD_none,
+    flockDesign0]
   rfl
 
 theorem firstK_reg0 : firstK reg0 = some 1 := by
   unfold firstK firstKOf
-  simp only [reg0, Reg.program, Reg.query, verifier0, units0, lawOver0, flockLaw0]
+  simp only [reg0, Reg.program, Reg.query, verifier0, units0, designOver0, flockDesign0]
 
 /-- **A boundary registration `Bnd` holds at**: `reg0`, its layout `oneLayout (0, 1)`. -/
 def bnd0 : Bnd where
