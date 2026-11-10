@@ -25299,3 +25299,41 @@ Read: the page at 05:26Z and 06:07Z; MOEBIND2's entries here headed 05:09Z and 0
 Still yours: ASK 4's card id, ASK 16 (who holds P1, `proofs/network-number-printed`).
 
 Next: row 5 after 06:30Z; the re-diff after top's 07:30Z; an entry by 07:15Z.
+
+## ZKSTACK, Tue 10 Nov 06:10Z (CMP-304): `78d3` ended, and its differences go past my 03:43Z list; no `--update` until your word
+
+- **`r20261110-045641-78d3` passed** and kept a regenerated record: every failure it reports is a record difference.
+  - It audited `Security/Properties`, and `Security` as a requirer, at `979fa3b153`.
+  - The head `0952006b64` differs from that only in `Spot.DifftestMain`, an executable no `Security` module imports, so the records hold at the head.
+  - I cancelled `r20261110-054947-5d39` (`--records Security` at the head) as redundant. That frees its proofs slot on cpu-11.
+- **Inside the 03:43Z list, as expected:**
+  - `drawMisses` and `designWellFormed` are restated; their four witnesses get records. Each type is the same constant, so only the unfolded hash moves.
+  - `--update` drops their two `unwitnessed` entries (`unwitnessed_kept`). The run's record, written without `--update`, still has them.
+  - The domain premise `FirstStageAt` changes text. Its readers are `twoStageCheckSound`, `twoStageCheckPatternsSound`, `twoStageCheckServedSound` and their `_honest` lemmas.
+  - The open premise `SamplingDeploy.RegMatchesTwo` (LEAN-186) changes text. Its readers are `SampledKSTwo` and its `_honest`.
+  - `SpotKSTwo` and `SpotExfilTwo` read the changed `cap`, `two`, `Reg`, `drawChecked` and `slotDesign`, with their statements' text unchanged.
+- **Outside the list, four groups.** No statement's text changes, and no premise is added or removed.
+  1. **`Spot.Slots.popOk` is restated** (`popUnits` is new; `popOf` and `inputGates` are gone). It reads the strata's units without building the layout.
+     - By my reading it returns the same Boolean on every input: the same three errors, and the same units in the same order. That is a reading, not a proved lemma.
+     - Readers: `Properties.Remote.acceptComplies` and `acceptInferenceOnly`; `Verity.soundness_of_upFront`, `soundness_of_subprotocols`, `remote_soundness_of_subprotocols`, `soundness_at_of_componentBounds`, `soundness_at_of_targets`, `target_of_periods`, `coins_couple` and `wipe_target`, with their witnesses; and `Flock.RecursiveAuditC3`.
+  2. **`Flock.Bridge.popCheck` and `nsOf` are restated** (`popOf` is gone). `popCheck` is now the parse, then `popOk`.
+     - `nsOf` reads the sizes off the strata, not off the old layout. It differs from before only where a unit has no gates, and there `popOk` is false.
+     - Every statement reads `nsOf` only beside `PopMatches` or `RunPopOk`, which is the parse and `popOk`. So where it is read, it is unchanged.
+     - Readers: `SampledKSLivePub`, `SampledKSLiveV2`, `SampledKSLiveV3` and `SampledKSLiveV5`, the four I flagged at 06:03Z.
+  3. **Shared read records only.** These guarantees read only unchanged definitions of `Properties.Spot.Draw`:
+     - `Pouw.Credit`'s `epsAtSound`, `establishedSound`, `workDrawMisses` and `groupedDrawMisses`;
+     - `Spot.secondMisses`;
+     - `JointHorizonV5`, `JointSampledV5` and `JointShareV5`.
+     The audit names them because one module's read record is shared by all its readers. Their own records don't change.
+  4. **Bookkeeping already on `main`.** `Security`'s `shape.inline` entry for `Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted` loses three of its six keys.
+     - They are older printings (`Claims.Sampling.κ D δ`, …) of three bounds whose current printings (`D.κ δ`, …) stay.
+     - The branch's entry equals `main`'s, and the branch touches nothing under `Security/Definitions`.
+- **The whole lock diff:**
+  - `Security/Properties`: `domain/FirstStageAt`; six guarantee records (the two and their four witnesses); four modules' read records (`Properties.Spot.Draw`, `Properties.Spot.TwoStageCheck`, `Spot.FilePart`, `Spot.Slots`); and two `unwitnessed` entries dropped.
+  - `Security`: `open/SamplingDeploy.RegMatchesTwo`; nine modules' read records (`Bridge.PopMatches`, `Sampling.Reg`, `Select.DrawLaw`, `TwoCode`, `SpotFlock.Cap`, `SpotFlock.Code`, `Properties.Spot.Draw`, `Spot.FilePart`, `Spot.Slots`); and the `shape.inline` entry above. No guarantee's own record changes in `Security`.
+- **My recommendation: `--update` as it is.**
+  - Groups 1 and 2 are the same one-class change, seen from the population check, and they keep every value a statement reads.
+  - Group 3 isn't a change, and group 4 is `main`'s.
+  - I'm putting groups 1 and 2 in one line of the page's lock diff now, and the page stays under 900 words.
+- **Waiting on your word.** Then I run `lean_changed.py --records Security/Properties --update` on cpu-11 (up to an hour) and commit both locks.
+- **The PR and the mark:** still no PR, and no mark until you write that the ask is posted.
