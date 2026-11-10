@@ -416,7 +416,7 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
 #: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
 #: only=trains)
 AUTO = ("vy-nebius-2",)
-#: the pool a lane's own recorded check takes when it names none (`nested_record`): any lane's, research.auto's SPILL pool, on
+#: the pool a lane's own recorded check takes when it names none (`nested_record`): any lane's, research.auto's SPILL_POOL, on
 #: the machine `lane_machine` picks
 LANE_POOL = "research"
 #: how long reading one machine's slots may take, ssh included
@@ -1047,13 +1047,12 @@ def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
 
 def lane_machine(pool: str) -> str:
     """The machine a `--record --on auto --pool NAME` check waits on: the one whose NAME pool `research run --on auto` would
-    spill a run to now (`research.auto.choose` on the SPILL machines' lines, read as it reads them).  ValueError when NAME is
-    no SPILL pool (a node's own pool takes --on MACHINE) or no SPILL machine's pool can take it."""
+    spill a run to now (`research.auto.choose` on the CPU nodes' lines, read as it reads them).  ValueError when NAME is
+    not its pool (a node's own pool takes --on MACHINE) or no machine's pool can take it."""
     from research import auto
 
-    spill = sorted({p for _, p in auto.SPILL})
-    if pool not in spill:
-        raise ValueError(f"{pool}: --on auto takes only research.auto's pools ({', '.join(spill)}); a node's own pool takes "
+    if pool != auto.SPILL_POOL:
+        raise ValueError(f"{pool}: --on auto takes only research.auto's pools ({auto.SPILL_POOL}); a node's own pool takes "
                          f"--on MACHINE, the machine that keeps it")
     try:
         target, why = auto.choose(auto.read(ROOT, 1), 1, 0)

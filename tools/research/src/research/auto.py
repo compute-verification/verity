@@ -1,11 +1,11 @@
-"""`research run --on auto`'s placement: a free slot of a CPU node's pool (`SPILL`) first, then node 2's Verity share (the queue,
+"""`research run --on auto`'s placement: a free slot of a CPU node's pool (`spill`) first, then node 2's Verity share (the queue,
 `AUTO_NODE`) when it can start the job now, then the shortest pool line, and node 2's line for a job no pool fits.
 
 Node 2's share is 48 cores that queued runs claim whole (research.cores) in one first-come line, so two large runs (a 16-job
 quick tier and a 32-core Lean check) can hold all 48 for hours while dozens of small runs wait behind them, with cpu-1's idle
 cores unused. So before queueing, `read` asks each machine at once, over the ssh `research run
 --on` uses, as `python3 -` with research.cores and the source tree's tools/verity/check/slot.py inlined (both stdlib only):
-node 2 for its share's live claims and waiters, and each SPILL machine for its pool's `slot.py --status --json` and the
+node 2 for its share's live claims and waiters, and each CPU node (`spill`) for its pool's `slot.py --status --json` and the
 memory slot.py finds free there (`free_gb`, read once a pool). `choose` then takes, in order:
 
   - a pool where a slot that fits the job (not trains-only, at least its CPUs) is free and unblocked for every waiter ahead
@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import shlex
 import subprocess
 import tomllib
@@ -55,12 +56,10 @@ from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
-#: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5, 6, 7, 8, 9 and 11 are any lane's
-#: (slot_only.POOLS on cpu-1). A pool left out sits idle while the listed ones queue: cpu-7, 8, 9 and 11 sat near load 0 while
-#: cpu-1, 5 and 6 queued 20 or more runs each. cpu-4's cores are the train slot's, proofs' and soundness's.
-SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"),
-         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"), ("vy-nebius-cpu-7", "research"),
-         ("vy-nebius-cpu-8", "research"), ("vy-nebius-cpu-9", "research"), ("vy-nebius-cpu-11", "research"))
+#: the pool `--on auto` spills to on a CPU node that has one: any lane's research runs (slot_only.POOLS)
+SPILL_POOL = "research"
+#: a CPU node's name in the launcher's registry of machines; `spill` takes them by number
+CPU_NODE = re.compile(r"vy-nebius-cpu-([0-9]+)")
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
@@ -239,6 +238,30 @@ def cpulist(text: str) -> int:
     return n
 
 
+def spill(machines: dict[str, dict] | None = None) -> tuple[tuple[str, str], ...]:
+    """(machine, pool) where `--on auto` may spill: SPILL_POOL on every CPU node (CPU_NODE) of AUTO_PROJECT in the launcher's
+    registry of machines (remote.load_machines; ``machines`` stands in for it), by number. No node is listed here, so one
+    registered today is asked today, and a pool left out can't sit idle while the others queue. Which nodes keep the pool
+    is the probe's to say: one with no slots file for it, or a file that lists no slot, is skipped (`_pool`) at the cost of
+    its probe, which runs beside the others'."""
+    if machines is None:
+        from . import remote
+
+        machines = remote.load_machines()
+    nodes = sorted((int(m.group(1)), name) for name, entry in machines.items()
+                   if (m := CPU_NODE.fullmatch(name)) and AUTO_PROJECT in (entry.get("projects") or [entry.get("project")]))
+    return tuple((name, SPILL_POOL) for _, name in nodes)
+
+
+def _pools(docs: dict[str, dict | str]) -> list[tuple[str, str]]:
+    """(machine, pool) for each machine `read` asked for its pool: ``docs``' machines but node 2, in `spill`'s order."""
+    def number(machine: str) -> tuple[float, str]:
+        m = CPU_NODE.fullmatch(machine)
+        return (int(m.group(1)) if m else math.inf, machine)
+
+    return [(machine, SPILL_POOL) for machine in sorted((m for m in docs if m != AUTO_NODE), key=number)]
+
+
 def share_cpus(source: Path) -> str | None:
     """The CPUs of AUTO_PROJECT's share on AUTO_NODE in the source tree's cluster description, None when it says none."""
     try:
@@ -314,7 +337,7 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
     reach, run = reach or _reach, run or _ssh
     share = share_cpus(source)
     asks: dict[str, list[str]] = {AUTO_NODE: []}
-    for machine, pool in () if node_only else SPILL:
+    for machine, pool in () if node_only else spill():
         asks.setdefault(machine, []).append(pool)
 
     def one(item: tuple[str, list[str]]) -> dict | str:
@@ -367,7 +390,9 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     CPUs: slot.py gives a job any slot and raises its memory to the job's ask, so a slot's mem= rules none out (`_blocked`)."""
     if not isinstance(doc, dict) or "error" in doc:
         raise ValueError(doc.get("error") if isinstance(doc, dict) else doc or "not read")
-    fit = [{**s, "blocked": _blocked(s, doc.get("free_gb"), mem_gb)} for s in doc.get("slots") or []
+    if not doc.get("slots"):
+        raise ValueError(f"{doc.get('file')} lists no slot")
+    fit = [{**s, "blocked": _blocked(s, doc.get("free_gb"), mem_gb)} for s in doc["slots"]
            if not s.get("trains") and cpulist(s["cpus"]) >= cpus]
     if not fit:
         raise ValueError(f"no slot of {doc.get('file')} gives {cpus} CPUs")
@@ -432,7 +457,7 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str
                 f"{share['waiters']} waiting")
     of = f" of Lean pool `{lean_pool}`" if lean_pool else ""
     ranked, stalled, notes = [], [], [said]
-    for i, (machine, pool) in enumerate(SPILL):
+    for i, (machine, pool) in enumerate(_pools(docs)):
         doc = docs.get(machine)
         try:
             line, lean = _lean(doc, lean_pool)
@@ -543,11 +568,11 @@ def smaller(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: st
             ) -> tuple[int, float, tuple[str, str]] | None:
     """The smallest change of a job's request that starts it now: (CPUs, GB, the pool that takes it), the request cut to a
     slot that is free in some pool and to the memory free on its machine (`_blocked`), where `expect` then gives it no wait
-    (the first such pool of SPILL, as `choose` takes it). Of several, the one that keeps the most of what was asked, as its
+    (the first such pool, as `choose` takes it). Of several, the one that keeps the most of what was asked, as its
     share of the CPUs plus its share of the memory. None when no smaller request starts now."""
     cpus = max(cpus, 1)
     shapes = set()
-    for machine, pool in SPILL:
+    for machine, pool in _pools(docs):
         doc = docs.get(machine)
         doc = doc.get(pool) if isinstance(doc, dict) else None
         if not isinstance(doc, dict):
@@ -559,7 +584,7 @@ def smaller(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: st
                 shapes.add((min(cpus, cpulist(s["cpus"])), gb))
     shapes.discard((cpus, mem_gb))
     for c, m in sorted(shapes, key=lambda cm: (-(cm[0] / cpus + (cm[1] / mem_gb if mem_gb else 1)), cm)):
-        for target in SPILL:
+        for target in _pools(docs):
             if expect(docs, target, c, m, lean_pool).minutes == 0:
                 return c, m, target
     return None

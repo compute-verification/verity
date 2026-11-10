@@ -20,6 +20,14 @@ REPO = Path(__file__).resolve().parents[3]
 N2, CPU1, CPU5 = auto.AUTO_NODE, "vy-nebius-cpu-1", "vy-nebius-cpu-5"
 #: node 2's answer as `auto.read` gives it while the node is stopped
 DOWN = f"{auto.NO_SSH} (Connection timed out)"
+#: the CPU nodes `auto.read` asks in these tests, and `auto.spill` as the module defines it
+NODES, SPILL = (CPU1, "vy-nebius-cpu-3", CPU5), auto.spill
+
+
+@pytest.fixture(autouse=True)
+def cpu_nodes(monkeypatch):
+    """`auto.read` asks NODES, not the CPU nodes in the registry of the machine these tests run on."""
+    monkeypatch.setattr(auto, "spill", lambda machines=None: tuple((m, auto.SPILL_POOL) for m in NODES))
 
 
 def share(free: int = 0, waiters: int = 0, size: int = 48, fits: bool | None = None) -> dict:
@@ -56,12 +64,44 @@ def test_a_pool_slot_free_now_wins_even_when_node_2_could_start_the_job():
 
 
 def test_an_idle_nodes_research_pool_takes_a_job_while_the_busy_ones_queue():
-    """cpu-7, 8, 9 and 11 sat near load 0 while cpu-1, 5 and 6 queued 20 or more runs each, outside SPILL."""
+    """A node's idle pool takes the job while the others queue, whichever node it is."""
     full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=22)
     for idle in ("vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-11"):
-        assert (idle, "research") in auto.SPILL
         target, why = auto.choose({N2: share(waiters=5), CPU1: full, CPU5: full, idle: pool(slot("r0", cpus="12-33"))}, 4, 16)
         assert target == (idle, "research") and why.endswith("a slot is free there now")
+
+
+def test_on_auto_asks_every_cpu_node_in_the_registry_and_skips_one_whose_pool_lists_no_slot(tmp_path):
+    """The machines `--on auto` may use are the CPU nodes of the launcher's registry, by number, with no list to keep: a node
+    left out of a list sat with free slots while the listed ones queued. One whose research pool has no slots file, or lists
+    no slot, is asked and skipped, at no wait."""
+    machines = {N2: {"project": "verity"}, "vy-nebius-cpu-10": {"project": "verity"}, CPU1: {"projects": ["verity", "pous"]},
+                "vy-nebius-cpu-4": {"project": "verity"}, "vy-nebius-cpu-12": {"project": "other"},
+                "vy-auditor-1": {"project": "verity"}, "vy-nebius-cpu-4-old": {"project": "verity"}}
+    assert SPILL(machines) == ((CPU1, "research"), ("vy-nebius-cpu-4", "research"), ("vy-nebius-cpu-10", "research")), \
+        "the project's CPU nodes by number; never an auditor's machine, another project's node or a name that only starts so"
+    assert SPILL({}) == ()
+    asked = []
+
+    def run(argv, payload):
+        asked.append(argv[0])
+        return subprocess.CompletedProcess(argv, 1, b"", b"no python here")
+
+    (tmp_path / auto.SLOT_PY).parent.mkdir(parents=True)
+    (tmp_path / auto.SLOT_PY).write_text("")
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(auto, "spill", lambda: SPILL(machines))
+        docs = auto.read(tmp_path, 4, reach=lambda name: [name], run=run)
+    assert list(docs) == [N2, CPU1, "vy-nebius-cpu-4", "vy-nebius-cpu-10"] and sorted(asked) == sorted(docs)
+    empty = {"file": "/workspace/research/locks/research/slots", "slots": [], "waiters": [], "free_gb": 400}
+    docs = {N2: DOWN, CPU1: {"research": empty}, "vy-nebius-cpu-4": {"research": {**empty, "slots": None}},
+            "vy-nebius-cpu-10": pool(slot("r0", held=True), free_gb=400), "vy-nebius-cpu-12": pool(slot("r0"), free_gb=400)}
+    target, why = auto.choose(docs, 4, 16)
+    assert target == ("vy-nebius-cpu-12", "research"), "a node in no list of this module's takes the job"
+    assert why.count("/workspace/research/locks/research/slots lists no slot") == 2
+    assert auto.expect(docs, (CPU1, "research"), 4, 16) == auto.Wait(None, "/workspace/research/locks/research/slots lists no slot", False)
+    del docs["vy-nebius-cpu-12"]
+    assert auto.choose(docs, 4, 16)[0] == ("vy-nebius-cpu-10", "research"), "the pools with no slot rank nowhere: the one line there is"
 
 
 def test_a_run_that_takes_a_lean_build_slot_goes_only_where_the_machines_lean_slots_have_build():
@@ -109,7 +149,7 @@ def test_a_free_lean_slot_wins_over_a_shorter_line_for_a_cpu_slot_where_the_lean
     target, why = auto.choose(docs, 4, 16, lean_pool="build")
     assert target == (CPU5, "research")
     assert f"{CPU1}'s research pool: slots r0 held, r1 held, r2 held, r3 held; 1 waiting; Lean `build`: 0 of 8 free, 0 waiting; " in why
-    assert "; 7 waiting; Lean `build`: 2 of 3 free, 0 waiting; " in why, "each machine's Lean pool is shown beside its line"
+    assert "; 7 waiting; Lean `build`: 2 of 3 free, 0 waiting: " in why, "each machine's Lean pool is shown beside its line"
     assert why.endswith(f": {CPU5}'s research pool, the shortest line per run that fits where a slot of Lean pool `build` is free")
     target, why = auto.choose(docs, 4, 16, lean_pool="audit")
     assert target == (CPU5, "research") and f"{CPU1}'s research pool skipped: its Lean slots give `audit` none; " in why
@@ -154,7 +194,7 @@ def test_with_no_lean_slot_free_anywhere_the_shortest_line_for_one_per_slot_wins
     assert why.endswith(f": no machine has a slot of Lean pool `build` free, so the shortest line for one, per slot: {CPU1}'s research pool")
     even = {**docs, CPU5: {**free, **lean(build=(4, 4, 1))}}
     assert auto.choose(even, 4, 16, lean_pool="build")[0] == (CPU5, "research"), "the same Lean line: the shorter line for a check slot"
-    assert auto.choose({**even, CPU5: {**busy, **lean(build=(4, 4, 1))}}, 4, 16, lean_pool="build")[0] == (CPU1, "research"), "then SPILL's order"
+    assert auto.choose({**even, CPU5: {**busy, **lean(build=(4, 4, 1))}}, 4, 16, lean_pool="build")[0] == (CPU1, "research"), "then the order they were asked in"
 
 
 def test_a_machine_whose_lean_slots_cant_be_read_is_not_preferred():
@@ -208,9 +248,8 @@ def test_a_pool_whose_line_is_stalled_on_memory_never_takes_the_job():
 
 
 def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
-    """cpu-3's research pool is in SPILL, so it doesn't sit idle while cpu-1's and cpu-5's lines are long."""
+    """cpu-3's research pool doesn't sit idle while cpu-1's and cpu-5's lines are long."""
     cpu3 = "vy-nebius-cpu-3"
-    assert (cpu3, "research") in auto.SPILL
     full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=22)
     target, why = auto.choose({N2: share(waiters=5), CPU1: full, CPU5: full, cpu3: pool(slot("b4", cpus="0-15", mem=48))}, 4, 16)
     assert target == (cpu3, "research") and why.endswith("a slot is free there now")
@@ -294,7 +333,7 @@ def test_a_machine_that_cant_be_read_is_skipped_and_with_neither_a_pool_nor_node
     assert target == (CPU1, "research") and why.startswith(f"{N2}'s share wasn't read (exit 255: ssh: connect refused); ")
     with pytest.raises(auto.Unplaceable, match=f"no pool fits and {N2} takes no job.*research run --on MACHINE --mem-gb N"):
         auto.choose({N2: "exit 255: ssh: connect refused", CPU1: "no answer in 30 s"}, 4, 16)
-    with pytest.raises(auto.Unplaceable, match="no slot of .* gives 64 CPUs;"):
+    with pytest.raises(auto.Unplaceable, match="no slot of .* gives 64 CPUs:"):
         auto.choose({N2: "exit 255: ssh: connect timed out", CPU1: pool(slot("r0"))}, 64, 300)
     target, why = auto.choose({N2: share(waiters=5), CPU1: {"research": {"error": "OSError: no slots"}}}, 4, 16)
     assert target is None and f"{CPU1}'s research pool skipped: OSError: no slots" in why
@@ -345,7 +384,7 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     target, why = auto.choose({N2: share(free=8), CPU1: {"research": short}}, 4, 16)
     assert target is None and "disk:" in why, "a pool on a full disk is skipped like one that can't be read"
     failing = auto.read(src, 4, reach=lambda name: [sys.executable, "-c", "import sys; sys.exit('no python here')"])
-    assert failing == {m: "exit 1: no python here" for m in (N2, *(machine for machine, _ in auto.SPILL))}
+    assert failing == {m: "exit 1: no python here" for m in (N2, *NODES)}
 
 
 def test_the_probe_reads_a_machines_lean_slots_with_the_trees_lean_slot_py(tmp_path, monkeypatch, node_2):
@@ -360,7 +399,7 @@ def test_the_probe_reads_a_machines_lean_slots_with_the_trees_lean_slot_py(tmp_p
     def read(**kw) -> dict:
         """Node 2's answer, the one machine asked."""
         with monkeypatch.context() as m:
-            m.setattr(auto, "SPILL", ())
+            m.setattr(auto, "spill", lambda: ())
             return auto.read(src, 4, reach=lambda name: [sys.executable, "-"], **kw)[N2]
 
     assert "lean" not in read() and read()["share"]["free"] == 48
@@ -550,7 +589,7 @@ def node_2(tmp_path, monkeypatch):
         """Node 2's answer at `now`, its share's document alone."""
         at = datetime.fromisoformat(now).replace(tzinfo=UTC).timestamp()
         with monkeypatch.context() as m:
-            m.setattr(auto, "SPILL", ())                                       # node 2 alone is asked
+            m.setattr(auto, "spill", lambda: ())                                       # node 2 alone is asked
             return {"share": auto.read(src, 4, reach=lambda name: [sys.executable, "-"], now=at)[N2]["share"]}
 
     return hold, read
