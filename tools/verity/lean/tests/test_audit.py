@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import threading
 from pathlib import Path
 
@@ -5127,6 +5128,170 @@ def test_the_sampled_recompile_follows_the_build_and_its_failure_fails_the_audit
     n = A.build_threads(pkg)
     assert calls == [(["P"], {"P.A", "P"}, ["env", "-u", "LAKE_CACHE_DIR", *([f"LEAN_NUM_THREADS={n}"] if n else [])])]
     assert rep["failure_codes"] == ["sampled"] and rep["sampled"]["modules"] == ["P.B"] and announced == []
+
+
+#: the input hash Lake gives `P`'s compile in `_lake_left`
+P_HASH = hashlib.sha256(b"P").hexdigest()[:16]
+
+
+def _publishable(tmp: Path) -> Path:
+    """Package `p`, whose library `P` is the one module `P`, which runs no code while it compiles."""
+    pkg = tmp / "p"
+    pkg.mkdir(parents=True)
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    (pkg / "lakefile.toml").write_text('name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n')
+    (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": []}))
+    (pkg / "P.lean").write_text("theorem p : True := trivial\n")
+    return pkg
+
+
+def _lake_left(pkg: Path, restored: bool) -> None:
+    """`P` in ``pkg``'s build as Lake leaves it once it compiled it, or restored it (``restored``): its outputs, each beside
+    its `.hash`, its `setup.json`, and last the trace naming them under its input hash."""
+    build, outs = pkg / ".lake" / "build", {"olean": "a" * 16, "ilean": "b" * 16, "c": "c" * 16}
+    for ext, h in outs.items():
+        f = build / ("ir" if ext == "c" else "lib/lean") / f"P.{ext}"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.unlink(missing_ok=True)
+        f.write_text(f"P.{ext} {h}")
+        (f.parent / f"{f.name}.hash").write_text(h)
+    (build / "ir" / "P.setup.json").write_text(json.dumps({"name": "P", "package": "p", "importArts": {}}))
+    (build / "lib/lean/P.trace").write_text(json.dumps({"depHash": P_HASH, "outputs": {
+        "o": [f"{outs['olean']}.olean"], "m": False, "i": f"{outs['ilean']}.ilean", "c": f"{outs['c']}.c"}}
+        | ({"synthetic": True} if restored else {})))
+
+
+class _Announced(Exception):
+    """Raised by a test's `built`: the audit stops where it announces its build."""
+
+
+def _publishing(tmp: Path, monkeypatch) -> tuple[Path, Path, Path]:
+    """check.py as `lean_audit.py` runs it for a recorded check (`--artifacts STORE --bundle BUNDLE`), with no replay
+    entry stored yet: (``tmp``'s package, STORE, BUNDLE)."""
+    store, bundle = tmp / "store", tmp / "bundle"
+    bundle.mkdir()
+    for name, value in (("ARTIFACTS", store), ("BUNDLE", bundle), ("ACCEPTED", []), ("_PACKED", [0]), ("PUBLISHING", {})):
+        monkeypatch.setattr(A, name, value)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv: argv)
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    return _publishable(tmp), store, bundle
+
+
+def _built_once(pkg: Path, monkeypatch, *, sandbox: bool = True, rc: int | None = 0, sample_fails: bool = False) -> list:
+    """One audit of ``pkg`` as far as its build's announcement, its publish waited for: its `build` step compiles `P` and
+    exits ``rc``, or restores `P` (``rc`` None). What happened, in order: each build step with the files its staged cache
+    held for package `p` (None: no cache staged), the sampled recompile with what the build compiled, the announcement
+    or the failures the audit stopped with."""
+    events: list = []
+
+    def run(argv, cwd, log=None, timeout=0):
+        stage = next((Path(a.split("=", 1)[1]) / "outputs" / "p" for a in argv if a.startswith("LAKE_CACHE_DIR=")), None)
+        events.append((Path(log).stem, None if stage is None else sorted(os.listdir(stage)) if stage.is_dir() else []))
+        if argv[-1] == "build":
+            _lake_left(pkg, restored=rc is None)
+            Path(log).write_text("" if rc is None else "✔ [1/1] Built P (1.2s)\n")
+        return (rc or 0) if argv[-1] == "build" else 0, ""
+
+    def sampled(pkg_, roots, work, built, jobs, log=print):
+        events.append(("sampled", sorted(built)))
+        return [A.Failure("sampled", "P", "sampled: P: planted")] if sample_fails else [], {
+            "population": 1, "modules": ["P"], "seconds": 0.0}
+
+    def announce():
+        events.append("announced")
+        raise _Announced
+
+    monkeypatch.setattr(A, "sandboxed", lambda: sandbox)
+    monkeypatch.setattr(A, "run", run)
+    monkeypatch.setattr(A, "sampled_recompile", sampled)
+    try:
+        events.append(A.audit(pkg, pkg.parent / "out", build=True, runs=False, built=announce)["failures"])
+    except _Announced:
+        pass
+    finally:
+        if pkg in A.PUBLISHING:
+            A.PUBLISHING.pop(pkg)[0].join()
+    return events
+
+
+def _store_holds(store: Path) -> list[str]:
+    index = store / A.sibling("module_keys").INDEX
+    return sorted(json.loads(f.read_text())["module"] for f in index.iterdir()) if index.is_dir() else []
+
+
+def test_what_a_build_published_is_restored_only_under_lake_s_input_hash_and_only_in_the_sandbox(tmp_path, monkeypatch):
+    """A build's publish, at its end, indexes what it compiled under the key of its sources and of the outputs it read;
+    a later build of the same sources finds it only in a cache staged for it under the input hash Lake computed for that
+    compile, which is the one name Lake looks a module up by. A build outside the sandbox is staged nothing, and compiles
+    everything."""
+    pkg, store, _ = _publishing(tmp_path, monkeypatch)
+    assert _built_once(pkg, monkeypatch) == [("build", []), ("build-roots", []), ("sampled", ["P"]), "announced"]
+    assert _store_holds(store) == ["P"]
+    assert _built_once(pkg, monkeypatch, rc=None)[:2] == [("build", [f"{P_HASH}.json"]), ("build-roots", [f"{P_HASH}.json"])], \
+        "the next build is staged P under the input hash of its compile, and nothing else"
+    assert _built_once(pkg, monkeypatch, sandbox=False, rc=None)[:2] == [("build", None), ("build-roots", None)]
+
+
+def test_the_sampled_recompile_runs_on_every_restore_before_the_build_publishes(tmp_path, monkeypatch):
+    """A module a build restored from what another build published was not compiled by it, so it is among those the
+    sampled recompile draws from (its population: what the build holds and didn't compile), on every restore. And the
+    publish comes after the sample: a build whose sample differs publishes nothing, and is never announced."""
+    pkg, store, bundle = _publishing(tmp_path, monkeypatch)
+    _built_once(pkg, monkeypatch)
+    first = sorted(os.listdir(bundle))
+    assert first == ["lean-artifacts.tar.gz"]
+    restored = _built_once(pkg, monkeypatch, rc=None)
+    assert restored[0] == ("build", [f"{P_HASH}.json"]) and restored[2:] == [("sampled", []), "announced"], \
+        "P restored, not compiled: it is in the sample's population"
+    shutil.rmtree(store)
+    assert _built_once(pkg, monkeypatch, sample_fails=True)[2:] == [("sampled", ["P"]), ["sampled: P: planted"]]
+    assert _store_holds(store) == [] and sorted(os.listdir(bundle)) == first, "P compiled, but its build's sample failed"
+
+
+def test_nothing_a_build_without_the_sandbox_or_a_failed_build_step_compiled_is_published(tmp_path, monkeypatch):
+    """Outside the sandbox, code a module runs while it compiles could leave any outputs in the build; a build step that
+    failed is one whose build never passed. Neither publishes: nothing goes into the artifact cache at the build's end, and
+    no bundle or replay pack is written. A build in the sandbox whose steps and sample pass publishes what it compiled
+    before the audit goes on, whatever the audit then comes to, and its bundle carries the replay entries this run's kernel
+    had accepted by then beside it."""
+    pkg, store, bundle = _publishing(tmp_path, monkeypatch)
+    (tmp_path / "lean-replay").mkdir()
+    A.store_replay(tmp_path / "lean-replay", "1" * 64, "P")
+    assert _built_once(pkg, monkeypatch, sandbox=False)[-1] == "announced"
+    assert _built_once(pkg, monkeypatch, rc=1)[-1] == ["build: exit 1\n"]
+    assert _store_holds(store) == [] and os.listdir(bundle) == []
+    assert _built_once(pkg, monkeypatch)[-1] == "announced"
+    assert _store_holds(store) == ["P"] and sorted(os.listdir(bundle)) == ["lean-artifacts.tar.gz", "lean-replays.tar.gz"]
+    with tarfile.open(bundle / "lean-artifacts.tar.gz") as t:
+        assert sum(n.startswith(A.sibling("module_keys").INDEX + "/") for n in t.getnames()) == 1
+
+
+def test_a_replay_pack_holds_only_the_entries_this_run_s_kernel_accepted_as_it_stored_them(tmp_path, monkeypatch):
+    """The replay cache is the node's, written by every run on it, and an entry there is a kernel's acceptance of the
+    bytes its key names. So a pack holds the entries this process stored after its own kernel accepted them, as it
+    stored them, never what the cache holds under their keys or beside them, and each entry goes into one pack. A pack
+    is a verdict pack: regular files under `check/lean-replay/`, which `verdicts.py import` adds to the replay cache of
+    the node that takes it, never replacing one."""
+    monkeypatch.setattr(A, "ACCEPTED", [])
+    monkeypatch.setattr(A, "_PACKED", [0])
+    cache, at = tmp_path / "lean-replay", tmp_path / "out"
+    cache.mkdir()
+    at.mkdir()
+    A.store_replay(cache, "1" * 64, "P.A")
+    (cache / f"{'2' * 64}.json").write_bytes(A.replay_entry("2" * 64, "Q"))
+    A.store_replay(cache, "3" * 64, "P.B")
+    (cache / f"{'3' * 64}.json").write_text("rewritten by another run")
+    dest, n = A.pack_replays(at)
+    with tarfile.open(dest) as t:
+        members = t.getmembers()
+        got = {m.name: t.extractfile(m).read() for m in members}
+    assert n == 2 and got == {f"check/lean-replay/{k}.json": A.replay_entry(k, m) for k, m in (("1" * 64, "P.A"),
+                                                                                              ("3" * 64, "P.B"))}
+    assert all(m.isreg() and not Path(m.name).name.startswith(".") for m in members)
+    assert A.pack_replays(at) is None, "each entry goes into one pack"
+    A.store_replay(cache, "4" * 64, "P.C")
+    assert A.pack_replays(at) == (at / "lean-replays-2.tar.gz", 1)
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

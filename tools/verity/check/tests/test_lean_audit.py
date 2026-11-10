@@ -38,7 +38,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bundle"))]
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 (out / "argv.json").write_text(json.dumps(a))
@@ -148,7 +148,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bundle"))]
 out.mkdir(parents=True, exist_ok=True)
 reps, failed = [], []
 for pkg in named:
@@ -199,7 +199,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bookkeeping"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bundle", "--bookkeeping"))]
 out.mkdir(parents=True, exist_ok=True)
 reps, failed = [], []
 for pkg in named:
@@ -1000,27 +1000,31 @@ def test_a_slot_wrapped_check_is_a_recorded_check_whose_bundle_and_verdicts_are_
 
 def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_path, monkeypatch):
     """The bundle was written only when `RESEARCH_RUN_DIR` was set, which `check.env()` never passes to a step: no recorded
-    check ever wrote one. `check.py` now says so with `--bundle`, inside a recorded run alone."""
-    _tree(tmp_path, monkeypatch)
+    check ever wrote one. `lean_audit.py` now says so with `--bundle`, inside a recorded run alone, and hands its `--out`
+    to `check.py --bundle`, whose builds bundle what they compiled there as each passes (`publish`). Afterwards it puts
+    into this node's cache alone each build check.py's report doesn't say it published, and bundles nothing."""
+    root = _tree(tmp_path, monkeypatch)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
-
     put_with = []
-
-    def put(self, reports, since=None, log=print):
-        put_with.append({p.name: rep for p, rep in reports.items()})
-        self.added = [(f"keys/{'1' * 64}.json", ["e" * 16 + ".olean"])]
-        return 1
-
-    monkeypatch.setattr(LA.LakeArtifacts, "put", put)
-    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda self, dest, cap=0: dest.write_bytes(b"") or 1)
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: put_with.append(
+        {p.name: (r["sandbox"], r["failures"]) for p, r in reports.items()}) or 0)
+    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda *a, **k: pytest.fail("bundled after check.py"))
     for n, bundle in enumerate((False, True)):
         shutil.rmtree(tmp_path / "cache", ignore_errors=True)
-        assert LA.run(tmp_path / f"out{n}", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
+        out = tmp_path / f"out{n}"
+        assert LA.run(out, tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
                       log=lambda s: None, bundle=bundle) == 1
-        assert (tmp_path / f"out{n}" / "lean-artifacts.tar.gz").exists() == bundle
-        assert {p: (r["sandbox"], r["failures"]) for p, r in put_with[-1].items()} == {
-            "a": (True, []), "b": (True, ["reads docs/outside.txt"])}, \
+        argv = json.loads((out / "argv.json").read_text())
+        assert (Path(argv[argv.index("--bundle") + 1]).resolve() if "--bundle" in argv else None) == \
+            (out.resolve() if bundle else None)
+        assert put_with[-1] == {"a": (True, []), "b": (True, ["reads docs/outside.txt"])}, \
             "each package it built, with check.py's report on it, which says whether it was built in the sandbox"
+    (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT.replace(
+        'reps[-1]["sandbox"] = True', 'reps[-1]["sandbox"] = True\n    if pkg.name == "a":\n        reps[-1]["published"] = 0'))
+    shutil.rmtree(tmp_path / "cache", ignore_errors=True)
+    assert LA.run(tmp_path / "out2", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
+                  log=lambda s: None, bundle=True) == 1
+    assert put_with[-1] == {"b": (True, ["reads docs/outside.txt"])}, "check.py published a's build: it is not put again"
     out = tmp_path / "steps"
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     def step():

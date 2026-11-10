@@ -340,8 +340,21 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
             f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
-#: `--artifacts`: the node's Lake artifact cache, which a run writes after its builds (`lean_audit.LakeArtifacts`)
+#: `--artifacts`: the node's Lake artifact cache, which each build's publish writes once it passed (`publish`)
 ARTIFACTS: Path | None = None
+#: `--bundle`: the directory each build's publish writes a bundle for other nodes into, its replay pack beside it
+BUNDLE: Path | None = None
+#: when this process began: a module its builds compiled has a trace written after it (`LakeArtifacts.put`'s ``since``)
+STARTED = time.time()
+#: (key, module) of each replay entry this process stored (`store_replay`): those its kernel accepted, in order, of which
+#: `pack_replays` packs what no pack holds yet (`_PACKED`)
+ACCEPTED: list[tuple[str, str]] = []
+_ACCEPTED = threading.Lock()
+_PACKED = [0]
+#: one bundle or replay pack written into `BUNDLE` at a time, each at the first free name
+_BUNDLING = threading.Lock()
+#: each package's publish (`publishing`): {package: (its thread, what it said)}, which `one` waits for before it reports
+PUBLISHING: dict[Path, tuple[threading.Thread, dict]] = {}
 #: `--dev-cache`: the dependencies come from the verified build cache, so the result is not a Lean verdict
 DEV_CACHE = False
 #: the kind a `--dev-cache` run's reports carry: `lean_changed.FAST_KIND`, which `check` and `research merge` refuse
@@ -4257,9 +4270,8 @@ def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple
     from ``pkg``'s own build so that Lake restores or compiles those modules (`took`, `module_keys.settle`) and how many
     modules it `left` to Lake, and the error where staging failed, which leaves ``dest`` empty and everything to be built).
     Staging writes nothing in the build of a package ``pkg`` requires by path: `main` seals that build before ``pkg`` is
-    staged, and other audits read it meanwhile. The caller holds the build (`writing`), and stores what the build compiles
-    when it ends (`lean_audit.LakeArtifacts.put`): a module whose trace is taken is compiled again by every build until
-    one stores it."""
+    staged, and other audits read it meanwhile. The caller holds the build (`writing`), and stores what the build compiled
+    once it passed (`publish`): a module whose trace is taken is compiled again by every build until one stores it."""
     try:
         mk.sweep(ARTIFACTS)
         shutil.rmtree(dest, ignore_errors=True)
@@ -4786,10 +4798,89 @@ def closure_plan(facts: dict, passed) -> tuple[list[str], list[str]]:
     return sorted(missing), sorted(above - missing)
 
 
+def replay_entry(key: str, module: str) -> bytes:
+    """The replay cache's entry saying that ``module`` passed the replay under ``key``."""
+    return json.dumps({"schema": REPLAY_SCHEMA, "module": module, "key": key}).encode()
+
+
 def store_replay(replay_cache: Path, key: str, module: str) -> None:
-    """Record that ``module`` passed the replay under ``key``. Two packages whose closures share a module store its key at
-    once, each through a temporary file of its own (`write_atomic`)."""
-    write_atomic(replay_cache / f"{key}.json", json.dumps({"schema": REPLAY_SCHEMA, "module": module, "key": key}).encode())
+    """Record that ``module`` passed the replay under ``key``, here and in `ACCEPTED`. Two packages whose closures share a
+    module store its key at once, each through a temporary file of its own (`write_atomic`)."""
+    write_atomic(replay_cache / f"{key}.json", replay_entry(key, module))
+    with _ACCEPTED:
+        ACCEPTED.append((key, module))
+
+
+#: where a replay pack holds its entries: a verdict pack's layout (`tools/verity/check/verdicts.py`), under which
+#: `verdicts.py import` adds them to `$CHECK_CACHE/lean-replay`, the replay cache `lean_audit.py` gives every audit
+REPLAY_PACK = "check/lean-replay/"
+
+
+def first_free(at: Path, stem: str) -> Path:
+    """``at``/``stem``.tar.gz, else ``stem``-2.tar.gz, -3, ...: the first name no file holds."""
+    return next(p for i in range(1, 100_000) if not (p := at / f"{stem}{'' if i == 1 else f'-{i}'}.tar.gz").exists())
+
+
+def pack_replays(at: Path) -> tuple[Path, int] | None:
+    """Write the replay entries this process stored that no pack holds yet (`ACCEPTED`) at the first free
+    `lean-replays*.tar.gz` in ``at``: (that path, how many), or None when there are none. Each is the bytes `store_replay`
+    wrote after this run's kernel accepted that module under that key, never read back from the cache, which other runs
+    write too. Called under `_BUNDLING`."""
+    import io
+    import tarfile
+
+    with _ACCEPTED:
+        todo, _PACKED[0] = ACCEPTED[_PACKED[0]:], len(ACCEPTED)
+    if not todo:
+        return None
+    dest = first_free(at, "lean-replays")
+    tmp = dest.with_name(f".{dest.name}.tmp")
+    with tarfile.open(tmp, "w:gz", compresslevel=1) as t:
+        for key, module in todo:
+            info = tarfile.TarInfo(f"{REPLAY_PACK}{key}.json")
+            data = replay_entry(key, module)
+            info.size, info.mode, info.mtime = len(data), 0o644, int(time.time())
+            t.addfile(info, io.BytesIO(data))
+    os.replace(tmp, dest)
+    return dest, len(todo)
+
+
+def publish(pkg: Path, rep: dict, held: threading.Event, said: dict, log=print) -> None:
+    """Put what ``pkg``'s build compiled into the node's artifact cache (`ARTIFACTS`, `lean_audit.LakeArtifacts.put`, on
+    ``rep``, what the audit said of the build), and with `BUNDLE` write the module versions it added there as a bundle
+    for other nodes (`LakeArtifacts.bundle_into`), with the replay entries this run's kernel has accepted so far beside
+    them (`pack_replays`). The put reads the build under the package's `writing`, and ``held`` is set once it holds it
+    (or failed to): a dependent's build, which waits for that hold, then cannot write the build under it. ``said`` gets
+    how many versions were new (`published`)."""
+    try:
+        store = sibling("lean_audit").LakeArtifacts(ARTIFACTS)
+        with writing(pkg, log):
+            held.set()
+            said["published"] = store.put({pkg: rep}, STARTED, log)
+        log(f"publish: {pkg}: {said['published']} module version(s) new in the artifact cache")
+        if BUNDLE is not None:
+            with _BUNDLING:
+                if store.added:
+                    dest, n = store.bundle_into(BUNDLE)
+                    log(f"publish: {pkg}: {n} of them bundled for other nodes ({dest.name})")
+                if got := pack_replays(BUNDLE):
+                    log(f"publish: {got[1]} replay entries this run's kernel accepted, packed beside them ({got[0].name})")
+    except (OSError, ValueError) as e:
+        log(f"publish: {pkg}: the artifact cache was not written: {e}")
+    finally:
+        held.set()
+
+
+def publishing(pkg: Path, rep: dict, log=print) -> None:
+    """Once ``pkg``'s build steps and its sampled recompile passed in the sandbox, whatever its audit comes to: start its
+    `publish`, and return once that holds the build. The seal, the facts and the replay, which read the seal's copies,
+    run beside the put; the build is announced (`built`) after this returns, so no dependent's build writes it first."""
+    held, said = threading.Event(), {}
+    build = {"package": rep["package"], "sandbox": rep["sandbox"], "failures": list(rep["failures"])}
+    t = threading.Thread(target=publish, args=(pkg, build, held, said, log), daemon=True)
+    PUBLISHING[pkg] = (t, said)
+    t.start()
+    held.wait()
 
 
 def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> int:
@@ -5426,6 +5517,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             if fails:
                 rep["failures"] += fails
                 return reported(rep)
+        if ARTIFACTS is not None and rep["sandbox"] and not DEV_CACHE:
+            publishing(pkg, rep, log)
     # the seal, taken before the build is announced (`built`): every reader below reads these private copies, so a
     # dependent's build, which may write this package's `.lake` once it is announced, cannot change what they see
     try:
@@ -5865,7 +5958,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    global TOOL, ARTIFACTS, DEV_CACHE
+    global TOOL, ARTIFACTS, BUNDLE, DEV_CACHE
     ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
@@ -5900,10 +5993,14 @@ def main(argv: list[str]) -> int:
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
     ap.add_argument("--artifacts", type=Path, metavar="DIR", help="the node's Lake artifact cache (`lean_audit.LakeArtifacts`): "
-                    "each build restores the modules it indexes under their keys (`module_keys.py`), and never writes it "
-                    "(`stage_build`). A module of the package that its build holds and the cache lacks is compiled again, so "
-                    "the caller stores what the build compiled when it ends (`LakeArtifacts.put`); the build of a package it "
-                    "requires by path is left as it is")
+                    "each build restores the modules it indexes under their keys (`module_keys.py`) and never writes it "
+                    "(`stage_build`). A module of the package that its build holds and the cache lacks is compiled again, and "
+                    "once the build steps and the sampled recompile pass in the sandbox, what the build compiled goes in "
+                    "(`publish`), whatever the audit then comes to; the build of a package it requires by path is left as it is")
+    ap.add_argument("--bundle", type=Path, metavar="DIR", help="with --artifacts: each build's publish also writes the module "
+                    "versions it added into DIR as a bundle for other nodes (`lean-artifacts*.tar.gz`, "
+                    "`LakeArtifacts.bundle_into`), with the replay entries this run's kernel has accepted beside it "
+                    "(`lean-replays*.tar.gz`, a verdict pack); the run's last entries go into one more pack as it ends")
     ap.add_argument("--closure", action="store_true", help="the replay also checks every module of the import closure, the "
                     "toolchain's, Mathlib's and ArkLib's included, that has not passed it under its key (with --replay-cache, "
                     "a warm run checks only what changed; `replay_step`)")
@@ -5965,7 +6062,12 @@ def main(argv: list[str]) -> int:
             ap.error(f"{a.moved}: a JSON object of old names to new names")
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
+    if a.bundle is not None and a.artifacts is None:
+        ap.error("--bundle writes what a build put into the artifact cache: it goes with --artifacts")
     ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
+    BUNDLE = a.bundle.resolve() if a.bundle else None
+    if BUNDLE is not None:
+        BUNDLE.mkdir(parents=True, exist_ok=True)
     DEV_CACHE = a.dev_cache
     lifts = None
     if a.lift:
@@ -6063,6 +6165,10 @@ def main(argv: list[str]) -> int:
         finally:
             if a.facts_from is None and not built[pkg].is_set():
                 seal(pkg)
+            if pkg in PUBLISHING:
+                PUBLISHING[pkg][0].join()
+        if "published" in (said := PUBLISHING.get(pkg, (None, {}))[1]):
+            rep["published"] = said["published"]
         with lock:
             if tamper := [Failure("tamper", p, f"tamper: {p} changed while {pkg} was built and audited")
                           for p in tampered(seals, bins)]:
@@ -6131,6 +6237,11 @@ def main(argv: list[str]) -> int:
                 j.result()
     finally:
         run_seals.close()
+    if BUNDLE is not None:
+        with _BUNDLING:
+            if got := pack_replays(BUNDLE):
+                print(f"publish: {got[1]} replay entries this run's kernel accepted, packed for other nodes ({got[0].name})",
+                      flush=True)
     reports = [reports[p] for p in pkgs]
     if lifts and not reports[0]["failures"]:
         moved = Path(f"{a.lift}.moved.json")

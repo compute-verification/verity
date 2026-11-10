@@ -1531,10 +1531,12 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
     ``regenerate`` (`check.py --regenerate`, the Lean check of `next`) passes a package whose every failure is a record
     difference; such a pass is never stored, since its lock changes when drive commits the record.  What each package's build
-    compiled in the sandbox goes into the artifact cache whether the package passed, failed or check.py was killed
-    (`built`, `LakeArtifacts.put`), and ``bundle`` (a recorded check) writes the module versions it
-    indexed to ``out`` for other nodes (`LakeArtifacts.bundle`).  Where builds aren't sandboxed (`sandboxed`) none of that
-    happens and no kept build or artifact cache is read: every package builds cold.  Returns (the failed, the audited)."""
+    compiled in the sandbox goes into the artifact cache once its build steps and sampled recompile pass, before its audit
+    goes on (check.py's `publish`), and with ``bundle`` (a recorded check) check.py writes those module versions to ``out``
+    for other nodes then, with the replay entries its kernel had accepted beside them (`--bundle`). What a build compiled
+    whose package failed before that, or whose check.py was killed, goes into this node's cache alone afterwards (`built`,
+    `LakeArtifacts.put`), and into no bundle.  Where builds aren't sandboxed (`sandboxed`) none of that happens and no
+    kept build or artifact cache is read: every package builds cold.  Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because check.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
@@ -1570,6 +1572,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
                             "--replay-cache", str((work if fresh else cache.parent) / "lean-replay"),
                             *([] if fresh or cold else ["--artifacts", str(artifacts.store)]),
+                            *(["--bundle", str(out)] if bundle and not fresh and not cold else []),
                             *(["--regenerate"] if regenerate else []), *(["--bookkeeping", "warn"] if bookkeeping else []),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
@@ -1599,11 +1602,9 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             ok = [p for p in audited if p in reports and not reports[p].get("failures")]
             kept = {work / p for p in ok}
             try:
-                mine = {at: rep for at, rep in built(out).items() if work in at.resolve().parents}
-                log(f"lean-audit: {artifacts.put(mine, since, log)} module version(s) new in the artifact cache")
-                if bundle and artifacts.added:
-                    dest = artifacts.bundle_into(out)
-                    log(f"lean-audit: {dest[1]} of them bundled for other nodes ({dest[0].name})")
+                mine = {at: rep for at, rep in built(out).items() if work in at.resolve().parents and "published" not in rep}
+                log(f"lean-audit: {artifacts.put(mine, since, log)} module version(s) new in the artifact cache of builds "
+                    "check.py did not publish")
             except OSError as e:
                 log(f"lean-audit: the artifact cache was not written: {e}")
             builds.give_back(work, kept)
@@ -1879,8 +1880,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--regenerate", action="store_true", help="the Lean check of `next`: `check.py --regenerate`, so a package whose "
                     "every failure is a record difference passes and audit.json's `regenerated` names its record; not in the "
                     "cache key, and such a pass is never stored")
-    ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: write the module versions it added to the "
-                    "artifact cache as lean-artifacts.tar.gz in --out, for other nodes to take (`shared_bundles`)")
+    ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: as each build passes, write the module "
+                    "versions it added to the artifact cache as lean-artifacts*.tar.gz in --out, for other nodes to take "
+                    "(`shared_bundles`), with the replay entries the kernel had accepted beside them (`check.py --bundle`)")
     ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, drive's lock run after a landing: "
                     "`check.py --bookkeeping warn`, so a package that fails only on its lock's bookkeeping passes on the lock "
                     "with it repaired; an unread area above its cap, and a cap of `tests/test_lean_packages.py` the locks "
