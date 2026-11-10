@@ -13,9 +13,10 @@ its refs are left as drive keeps them.  `ready` is the open PRs drive would land
 `signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner or under the low-risk
 rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by
 its merge), not on `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files`
-is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`), and `conflict`
-whether `Queue._merge` merges it onto `main`, kept by (head, `main`).  The owner of one that doesn't is told once a head the
-files it conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`); its mark stays.
+is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`) of a change that
+compiles (a lock's alone doesn't), and `conflict` whether `Queue._merge` merges it onto `main`, kept by (head, `main`).  The
+owner of one that doesn't is told once a head the files it conflicts in, to rebase it onto `main` and mark the new head
+(`Loop._conflicts`); its mark stays.
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
@@ -24,11 +25,12 @@ the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
 no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`drive.RATCHET_STEP`: it judges
 each merge against its first parent, which a task keyed by its inputs can't) or off the gate in policy.toml at the candidate,
-so graph2's lean-agreement gates as the run beside the check's does: a failed task an unexpired
-allowance of that policy covers passed, as drive reads it (`Driver._task_allowed`); else a failed or blocked task is fail,
-each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing tests
-(result/v1's `failed_tests` and those graph2's verdict names of it, or what a task's own fault names: `_fault_tests`) and its
-key and failing tests in its base's graph as graph2 listed it, where there are (`Failed.base_key`, `Failed.base_tests`),
+so graph2's lean-agreement gates as the run beside the check's does: a failed task an unexpired allowance of policy.toml at
+its base covers passed, as drive reads it (`Driver._task_allowed`), so a candidate's own allowance never covers its own
+failure; else a failed or blocked task is fail, each failed task with its inputs (its own, its env's spec files and those of
+each task it reads), its failing tests (result/v1's `failed_tests` and those graph2's verdict names of it, with a fault of its
+key alone where it failed for more than them: `_tests`; or what a task's own fault names: `_fault_tests`) and its key and
+failing tests in its base's graph as graph2 listed it, where there are (`Failed.base_key`, `Failed.base_tests`),
 ended once no gating task runs but behind an infra error; else a task whose newest result is graph2's infra error
 (`detail.infra`; graph2's `tree` where `Failed` has one) is infra, else every gating task passed is pass once graph2's own
 verdict, where it has one, can be read and counts none pending (`World._held`, which an inherited fail's end waits on too),
@@ -132,9 +134,9 @@ from . import policy, vqueue
 from .drive import CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Driver, cancel_runs, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
-from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, conflicting_files, flags_at,
-                    label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at,
-                    unreviewed)
+from .queue import (LEAN_SOURCES, PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers,
+                    conflicting_files, flags_at, label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit,
+                    review_owners, rules_at, unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
                      Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
 
@@ -154,7 +156,8 @@ WINDOW_S = 48 * 3600
 GATES = GRAPH2_GATE, CHECK_GATE = "graph2", "check"
 SHARDS = 3
 INTERVAL_S = 60
-#: the most members a candidate holds, candidates stacked at once and members changing Lean, a lock or a spec in a candidate
+#: the most members a candidate holds, candidates stacked at once and members of a candidate whose Lean change compiles (a
+#: spec's or Lean source's, not a lock's alone: `World._judge`)
 BATCH, DEPTH, LEAN = 16, 3, 3
 #: the clone's refs the loop fetches into, none of drive's
 NS = "refs/vqueue"
@@ -707,12 +710,14 @@ class World:
         return self._files[key]
 
     def _judge(self, main: str, head: str, config: tuple[str, ...] | None = None) -> tuple[bool, bool]:
-        """(whether ``head`` is a Lean change, whether it doesn't merge onto ``main``), kept by (head, main).  The merge is `git
-        merge-tree`'s alone (`merged_tree`, no worktree, with ``main``'s merge drivers: ``config``, else `base_drivers`), so
-        judging every ready PR stays cheap; a build's codemod (`Queue._merge`) checks out a worktree, and a member it refuses is
-        left out of that build as one that doesn't merge."""
+        """(whether ``head`` is a Lean change that compiles, whether it doesn't merge onto ``main``), kept by (head, main): a
+        Lean change (`queue.lean_change`) whose only Lean files are locks (`lean-audit.json` records) compiles nothing.  The
+        merge is `git merge-tree`'s alone (`merged_tree`, no worktree, with ``main``'s merge drivers: ``config``, else
+        `base_drivers`), so judging every ready PR stays cheap; a build's codemod (`Queue._merge`) checks out a worktree, and a
+        member it refuses is left out of that build as one that doesn't merge."""
         if (key := (head, main)) not in self._judged:
-            self._judged[key] = (lean_change(self.repo, head, _out(self.repo, "merge-base", main, head)),
+            self._judged[key] = (lean_change(self.repo, head, _out(self.repo, "merge-base", main, head))
+                                 and any(f.endswith(LEAN_SOURCES) for f in self._changed(main, head)),
                                  merged_tree(self.repo, main, head, config=config)[0] is None)
         return self._judged[key]
 
@@ -789,7 +794,7 @@ class World:
         states, keys, seen = self._settled(graph, since, _said(theirs))
         closure = _Closure(tasks, envs)
         needed = _walk(tasks, gates)
-        allowed = self._allowed(sha, tasks, states, needed)
+        allowed = self._allowed(sha, base, tasks, states, needed)
         failed = frozenset(i for i in needed if states[i][0] == FAIL and i not in allowed)
         bad: list[str] = []
         for i in gates:
@@ -814,7 +819,7 @@ class World:
         named = _named(theirs)
         fail = () if waits is not None else tuple(
             _failure(i, keys[i], closure.inputs(i), base_key=based.get(i, (None, None))[0],
-                     tests=_tests(states[i][1]) | named.get((i, keys[i]), frozenset()),
+                     tests=_tests(states[i][1], keys[i], tasks[i]["kind"]) | named.get((i, keys[i]), frozenset()),
                      base_tests=based.get(i, (None, None))[1]) for i in dict.fromkeys(bad))
         fail, crossed, unsaid = self._crossed(base, fail)
         if unsaid is not None:
@@ -898,14 +903,16 @@ class World:
             return "graph2 hasn't labelled the listing it runs yet"
         return None
 
-    def _allowed(self, sha: str, tasks: dict[str, dict], states: dict[str, tuple], ids: Iterable[str]) -> set[str]:
-        """The failed tasks of ``ids`` an allowance of ``sha``'s policy covers, each red record they name, as drive's
-        `executor = "on"` path reads them (`Driver._task_units`, `Driver._task_allowed`): drive takes each as passed."""
+    def _allowed(self, sha: str, base: str, tasks: dict[str, dict], states: dict[str, tuple], ids: Iterable[str]) -> set[str]:
+        """The failed tasks of ``ids`` of candidate ``sha`` an allowance of its base ``base``'s policy (``sha``'s, with no
+        base) covers, each red record they name at ``sha``, as drive's `executor = "on"` path reads them (`Driver._task_units`,
+        `Driver._task_allowed`): drive takes each as passed."""
         out = set()
         for i in ids:
             if states[i][0] == FAIL:
                 d, res = self.driver(), states[i][1] or {}
-                if all(d._task_allowed(sha, tasks[i], res, row).covered for row in d._task_units(sha, tasks[i], res).values()):
+                if all(d._task_allowed(sha, tasks[i], res, row, at=base).covered
+                       for row in d._task_units(sha, tasks[i], res).values()):
                     out.add(i)
         return out
 
@@ -1182,10 +1189,24 @@ def _suite(t: dict) -> str | None:
     return s if t.get("kind") == "test-file" and isinstance(s := (t.get("vars") or {}).get("suite"), str) else None
 
 
-def _tests(doc: object) -> frozenset[str]:
-    """The failing tests a result names (result/v1's `failed_tests`)."""
-    got = (doc.get("detail") or {}).get("failed_tests") if isinstance(doc, dict) else None
-    return frozenset(x for x in got if isinstance(x, str)) if isinstance(got, list) else frozenset()
+def _tests(doc: object, key: str = "", kind: str = "") -> frozenset[str]:
+    """The failing tests a result names (result/v1's `failed_tests`).  A fail of a test file or a lean-suites task (``kind``)
+    for more than its tests adds a test of its ``key`` alone, which no base fails, as a cut detail does (`_run_tests`), so a
+    new crash beside the base's failing tests is never inherited by them: a test file's that pytest ended with another exit
+    than 1, a test's failure (2: collecting failed, or a `pytest.exit`); a lean-suites suite's (each row of `detail.failed`)
+    that names no test, failed for more than them (its `beyond_tests` isn't false, as when its list is cut) or timed out."""
+    d = (doc.get("detail") or {}) if isinstance(doc, dict) else {}
+    got = d.get("failed_tests")
+    named = frozenset(x for x in got if isinstance(x, str)) if isinstance(got, list) else frozenset()
+    if not isinstance(doc, dict) or doc.get("status") != FAIL:
+        return named
+    if kind == "test-file" and isinstance(exit_ := d.get("exit"), int) and exit_ != 1:
+        return named | {f"fault:its run failed beyond the tests it names (exit {exit_}), at {key}"}
+    if kind == SUITES_KIND:
+        return named | {f"fault:suite {r.get('name')} failed beyond the tests it names, at {key}" for r in d.get("failed") or ()
+                        if isinstance(r, dict) and (not r.get("failed_tests") or r.get("beyond_tests") is not False
+                                                    or r.get("timed_out"))}
+    return named
 
 
 def _job(t: dict, tasks: dict[str, dict]) -> str:
@@ -2197,8 +2218,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--batch", type=int, default=BATCH, help=f"the most members a candidate holds (default {BATCH})")
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
                                                              f"its check (default {DEPTH})")
-    ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a candidate that change Lean, a lock or a "
-                                                           f"spec (default {LEAN})")
+    ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a candidate whose Lean change compiles: a "
+                                                           f"spec's or a Lean source's, not a lock's alone (default {LEAN})")
     ap.add_argument("--pending-hours", type=float, default=4.0,
                     help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
                          "again; rung at twice that (default 4)")

@@ -1934,13 +1934,14 @@ class Driver:
                                     and (status.get(u.removeprefix("suite ")) in ("passed", "cached") or u in named))
             for u in self._suite_units(tip, task)}}
 
-    def _task_allowed(self, tip: str, task: dict, result: dict, row: dict | None = None) -> policy.Coverage:
-        """Whether an allowance of ``tip``'s policy covers failed graph/v2 ``task`` by its ``result``, with the expired ones that
-        would have: a failed suite of a lean-suites task's by its report ``row`` (`Policy.suite`, as a run's); a test-file's as
-        its suite's (`Policy.suite`, `suite NAME` or `suite NAME::TEST` for each failed test, the latter only when pytest exited
-        1 with failed tests to name); a circuit-check task's by the new failures it names (`Policy.circuit`), fewer than
-        `CIRCUIT_NAMED`; no other kind's."""
-        pol, now, d = self._policy(tip), self.now(), result.get("detail") or {}
+    def _task_allowed(self, tip: str, task: dict, result: dict, row: dict | None = None,
+                      at: str | None = None) -> policy.Coverage:
+        """Whether an allowance of ``tip``'s policy (``at``'s, given) covers failed graph/v2 ``task`` of ``tip`` by its
+        ``result``, with the expired ones that would have: a failed suite of a lean-suites task's by its report ``row``
+        (`Policy.suite`, as a run's); a test-file's as its suite's (`Policy.suite`, `suite NAME` or `suite NAME::TEST` for each
+        failed test, the latter only when pytest exited 1 with failed tests to name); a circuit-check task's by the new
+        failures it names (`Policy.circuit`), fewer than `CIRCUIT_NAMED`; no other kind's."""
+        pol, now, d = self._policy(at or tip), self.now(), result.get("detail") or {}
         if row is not None:
             return pol.suite(str(row["name"]), row, now)
         if task["kind"] == "test-file":
@@ -2197,12 +2198,12 @@ class Driver:
                 (ok if covered else bad).add(step)
         return ok - bad
 
-    def _only_allowed(self, run: dict) -> bool:
-        """Whether ``run`` failed only on failures its tip's allowances cover: some step failed, and each failed step is
-        `_allowed_steps`'."""
+    def _only_allowed(self, run: dict, at: str | None = None) -> bool:
+        """Whether ``run`` failed only on failures its tip's allowances (``at``'s, given) cover: some step failed, and each
+        failed step is `_allowed_steps`'."""
         dirs = [d for ds in self._shards(run) for d in ds]
         failed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "failed" and not not_run(st)}
-        return bool(failed) and failed <= self._allowed_steps(run["tip"], dirs)
+        return bool(failed) and failed <= self._allowed_steps(at or run["tip"], dirs)
 
     def _postland_failed(self, drive: dict, pl: dict, run: dict, why: str, signalled: bool = False) -> None:
         """An after-landing run of ``run["tip"]`` that failed.  Killed by the machine (``signalled``: by a signal or 128+N, or a

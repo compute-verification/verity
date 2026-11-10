@@ -837,6 +837,9 @@ def test_a_fail_at_its_base_s_key_graph2_s_verdict_on_the_base_doesn_t_list_hold
     on_base.write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [
         {"task": "pytest:t", "key": "sha512:other", "tests": ["test_t.py::a"]}]}))
     assert w.verdict(sha, main).disputed == (L.Dispute("pytest:t", FAIL, "sha512:other", at, main),)
+    on_base.write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [               # another task's fail at that key
+        {"task": "pytest:other", "key": at, "tests": ["test_t.py::a"]}]}))
+    assert w.verdict(sha, main).disputed == (held,)
     assert env.main() == main and env.withdrawn == [] and not {"red", "eject", "rerun"} & set(_acts(env.lines()))
     on_base.write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [
         {"task": "pytest:t", "key": at, "tests": ["test_t.py::a"]}]}))
@@ -1191,6 +1194,21 @@ def test_the_snapshot_reads_the_clock_lean_and_pending_hours_and_a_check_pending
     assert seen[-1].candidates[0].enqueued == T0 and seen[-1].candidates[0].tries == 2
 
 
+def test_a_member_counts_toward_the_lean_cap_only_when_its_lean_change_compiles(env):
+    """`--lean` caps a candidate's members whose Lean change compiles: a Lean source's of a package with a lock, the spec's,
+    or a proof's beside a lock's records.  A change to a lock's records alone (`lean-audit.json`) compiles nothing, and
+    counts no more than a change with no Lean."""
+    _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
+    env.put(1, {"pkg/lean-audit.json": '{"records": 1}\n'})
+    env.put(2, {"pkg/A.lean": "-- b\n"})
+    env.put(3, {"Security/Definitions/D.lean": "-- d\n"})
+    env.put(4, {"pkg/lean-audit.json": '{"records": 2}\n', "Security/Proofs/P.lean": "-- p\n"})
+    env.put(5, {"a.txt": "5\n"})
+    seen: list[Snapshot] = []
+    env.loop(lambda s: seen.append(s) or []).tick()
+    assert {r.number: r.lean for r in seen[-1].ready} == {1: False, 2: True, 3: True, 4: True, 5: False}
+
+
 def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_base_fails_too_is_inherited(env):
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
@@ -1239,6 +1257,51 @@ def test_the_failing_tests_graph2_s_verdict_names_count_beside_its_result_s_for_
     assert (f.task, f.tests, f.base_key, f.base_tests) == (t, frozenset({node}), "sha512:base-f", frozenset({node, more}))
     assert L._named({"labelled": "2026-01-01T00:00:00Z", "failed": [{"task": t, "key": keys[t], "tests": [node]}]}) == {}
     assert _acts(loop.tick()) == ["red", "advance", "on_main", "drop"] and env.main() == sha    # not rerun: inherited
+
+
+#: a lean-suites result's row of a suite that failed on one test and nothing more
+ROW = {"name": "verity-flock", "suite": "verity/ml/flock", "failed_tests": ["tests/test_d.py::test_draw"], "beyond_tests": False}
+#: the test a fail for more than the tests it names adds, of the candidate's key alone
+BEYOND = "fault:suite {} failed beyond the tests it names, at sha512:t1"
+
+
+@pytest.mark.parametrize("kind, detail, fault", [
+    ("test-file", {"exit": 1}, None),
+    ("test-file", {"exit": 2}, "fault:its run failed beyond the tests it names (exit 2), at sha512:t1"),
+    ("lean-suites", {"failed": [ROW]}, None),
+    ("lean-suites", {"failed": [{**ROW, "beyond_tests": True}]}, BEYOND.format("verity-flock")),
+    ("lean-suites", {"failed": [{k: v for k, v in ROW.items() if k != "beyond_tests"}]}, BEYOND.format("verity-flock")),
+    ("lean-suites", {"failed": [{**ROW, "timed_out": True}]}, BEYOND.format("verity-flock")),
+    ("lean-suites", {"failed": [ROW, {**ROW, "name": "verity", "failed_tests": []}]}, BEYOND.format("verity")),
+    ("lean-suites", {"failed": [ROW, 7]}, None),
+    ("lean-suites", {"failed": None}, None),
+])
+def test_a_fail_for_more_than_the_tests_it_names_is_never_inherited_by_them(env, kind, detail, fault):
+    """A crash beside the tests its base fails too would pass for the base's failure: a test file pytest ended with exit 2
+    (collecting failed, or a `pytest.exit`), and a lean-suites suite that names no test, failed for more than them (its list
+    cut) or timed out, fails a test of its own key too, which no base fails, so its PR is suspected.  Failed on its tests
+    alone, it is inherited, and so is one whose detail has no row to read."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop, {"state": PENDING})
+    (built,) = loop.tick()
+    sha, t, node = built["sha"], f"{kind}:t", ROW["failed_tests"][0]
+    base = {"exit": 1, **({"failed": [ROW]} if kind == "lean-suites" else {"failed_tests": [node]})}
+    for at, key, d in ((main, "sha512:base-t", base), (sha, "sha512:t1", {**base, **detail})):
+        env.graph2.list_graph(f"ready:{at}", _graph(at, [{"id": "pytest:a", "kind": "test-file", "inputs": ["a.txt"],
+                                                          "key": "sha512:a"},
+                                                         {"id": t, "kind": kind, "inputs": ["t.py"], "key": key}]))
+        env.graph2.finish_result({"key": key, "task": t, "status": FAIL, "outputs": {"out": "sha512:o"}, "detail": d})
+        Path(f"{script}.verdict.ready:{at}").write_text(json.dumps({"state": FAIL, "failed": [
+            {"task": t, "key": key, "tests": [node], "inputs": ["t.py"], "reads": []}]}))
+    env.result("sha512:a", "pytest:a", PASS)
+    (f,) = loop.world.verdict(sha, main).verdict.failed
+    assert (f.task, f.tests, f.base_key, f.base_tests) == (t, {node, *([fault] if fault else [])}, "sha512:base-t", {node})
+    assert vqueue._inherited(f) is (fault is None)
+    assert _acts(loop.tick()) == (["red", "advance", "on_main", "drop"] if fault is None else ["rerun"])
+    assert L._tests({"status": PASS, "detail": d}, "sha512:t1", kind) == L._tests({"status": FAIL, "detail": d}) \
+        == frozenset(d.get("failed_tests") or ())
 
 
 def test_graph2_s_verdict_on_a_base_is_read_once_a_tick_and_afresh_the_next(env):
@@ -1727,10 +1790,14 @@ reason = "red until its fix lands"
 '''
 
 
-def test_a_failure_an_allowance_of_the_candidate_s_policy_covers_is_passed_as_drive_reads_it_until_it_expires(env):
-    """drive's `executor = "on"` path takes a failed task whose every red record an unexpired allowance of the checked commit's
-    policy covers as passed (`Driver._task_units`, `Driver._task_allowed`), and so does the verdict."""
-    env.put(1, {"a.txt": "1\n", "tools/verity/check/policy.toml": ALLOWED})
+@pytest.mark.parametrize("own", [False, True])
+def test_a_failure_an_allowance_of_the_candidate_s_base_covers_is_passed_as_drive_reads_it_until_it_expires(env, own):
+    """drive's `executor = "on"` path takes a failed task whose every red record an unexpired allowance covers as passed
+    (`Driver._task_units`, `Driver._task_allowed`), and so does the verdict, by policy.toml at the candidate's base: an
+    allowance the candidate adds itself (``own``) never covers its own failure."""
+    if not own:
+        _main_to(env, {"tools/verity/check/policy.toml": ALLOWED})
+    env.put(1, {"a.txt": "1\n", **({"tools/verity/check/policy.toml": ALLOWED} if own else {})})
     loop = env.loop(vqueue.decide)
     (built,) = loop.tick()
     sha, w = built["sha"], loop.world
@@ -1738,6 +1805,9 @@ def test_a_failure_an_allowance_of_the_candidate_s_policy_covers_is_passed_as_dr
     env.result(keys["pytest:a"], "pytest:a", "pass")
     env.result(keys["pytest:z"], "pytest:z", "fail", tests=["test_z.py::test_one"])
     j = w.verdict(sha, built["base"])
+    if own:
+        assert j.verdict.state == FAIL and [f.task for f in j.verdict.failed] == ["pytest:z"] and j.note != "allowed: pytest:z"
+        return
     assert (j.verdict, j.note) == (Verdict(PASS), "allowed: pytest:z")
     env.clock = T0 + 365 * 86400                                       # past its expiry: red again
     assert [f.task for f in w.verdict(sha, built["base"]).verdict.failed] == ["pytest:z"]
@@ -2282,7 +2352,7 @@ def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_an
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("or a spec", 3))), said
+    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("a lock's alone", 3))), said
     loop = Loop(None, tmp_path / "log")
     assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
 

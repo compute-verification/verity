@@ -52,7 +52,8 @@ class Ready:
     number: int
     head: str
     files: frozenset[str]          # the paths its change touches, against its merge base with `main`
-    lean: bool = False             # it changes Lean, a lock or a spec: a batch holds at most `Snapshot.lean` such members
+    lean: bool = False             # its Lean change compiles (a spec's or a Lean source's, not a lock's alone): a batch holds
+                                   # at most `Snapshot.lean` such members
     rank: int = 0                  # the queue's order, lowest first (drive's priority file, then mark time)
     conflict: bool = False         # it doesn't merge onto `main`: the queue skips it until its head changes
 
@@ -113,7 +114,7 @@ class Snapshot:
     batch: int = 6                 # the most members a candidate takes
     depth: int = 2                 # the most candidates checked at once, each on the one below
     rings: int = 2                 # infra verdicts on one candidate before infra is rung; 2 at most
-    lean: int = 1                  # the most members of a batch that change Lean, a lock or a spec
+    lean: int = 1                  # the most members of a batch whose Lean change compiles (`Ready.lean`)
     now: float | None = None       # when the snapshot was taken, in seconds since the epoch; None: nothing times out
     pending_s: float = 4 * 3600    # how long the lowest candidate is pending after its first enqueue before it is retried
     tree_ejects: bool = False      # infra errors marked `tree` are bisected and eject; off while graph2 marks `tree` on any
