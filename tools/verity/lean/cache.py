@@ -554,7 +554,7 @@ def get(root: Path, pkgs: list[str], env=os.environ, log=print, now=time.time, f
 
 def out_dir(out: Path, pkg: str) -> Path:
     """Where `build` writes ``pkg``'s outputs below ``out``: one directory per package, never one inside another's (a
-    package may sit inside another, as `Security/Proofs` does in `Security`)."""
+    package may sit inside another, as `security/Proofs` does in `security`)."""
     return out / urllib.parse.quote(pkg, safe="")
 
 
