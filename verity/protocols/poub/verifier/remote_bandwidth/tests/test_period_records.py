@@ -12,7 +12,7 @@ import pytest
 
 from remote_bandwidth_fakes import Clock, Entropy
 from test_verifier_party import COINS
-from verity.core.protocols.pous import period as pous_period
+from verity.protocols.pous.verifier import period as pous_period
 from verity.protocols.poub.verifier.remote_bandwidth import period as P
 from verity.spot.device import challenger as C
 

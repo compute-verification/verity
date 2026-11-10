@@ -22,7 +22,7 @@ from hypothesis import strategies as st
 import ra_cases as M
 from ra_cases import Entropy
 import verity_difftest as D
-from verity.core.protocols.pous.verifier import MerkleTree, leaf_hash
+from verity.protocols.pous.verifier.verifier import MerkleTree, leaf_hash
 from verity.protocols.poub.verifier.remote_bandwidth import coins, p2, p2_party, receipts
 from verity.protocols.poub.verifier.remote_bandwidth.codec import P2_EXPANDER, P2_POINT, P2Codec
 from verity.protocols.poub.verifier.remote_bandwidth.receipts import Plan

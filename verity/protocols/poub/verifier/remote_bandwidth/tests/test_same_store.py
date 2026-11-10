@@ -14,11 +14,11 @@ from types import ModuleType
 
 import pytest
 
-from verity.core.protocols.pous import memory_challenger as mc
-from verity.core.protocols.pous import period as pous
-from verity.core.protocols.pous import run as R
-from verity.core.protocols.pous import setup
-from verity.core.protocols.pous.schemes.p2 import P2Params
+from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.verifier import period as pous
+from verity.protocols.pous.verifier import run as R
+from verity.protocols.pous.verifier import setup
+from verity.protocols.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.poub.verifier.remote_bandwidth import p2, p2_case, p2_party
 from verity.protocols.poub.verifier.remote_bandwidth import period as P
 

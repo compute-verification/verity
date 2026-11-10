@@ -264,8 +264,8 @@ BENCHMARKS_IMPORTERS = {
     ), "compute-accounting: PoUW's clear lifecycle (`verity/protocols/pouw/clear`, and `pearl_c4`)"),
     "verity/protocols/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/run.py`)",
-    **dict.fromkeys(("verity/core/protocols/pous/check/scripts/difftest_vectors.py",
-                     "verity/core/protocols/pous/check/tests/test_timed_audit.py"),
+    **dict.fromkeys(("verity/protocols/pous/verifier/check/scripts/difftest_vectors.py",
+                     "verity/protocols/pous/verifier/check/tests/test_timed_audit.py"),
                     "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "
                     "responder (`benchmarks/pous/band_gpu/harness.py`)"),
     "verity/definitions/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "

@@ -74,9 +74,9 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(STAGE))
 
-from verity.core.protocols.pous import verifier as V
-from verity.core.protocols.pous.labels import salt_value, tag
-from verity.core.protocols.pous.schemes.p2 import P2Params
+from verity.protocols.pous.verifier import verifier as V
+from verity.protocols.pous.verifier.labels import salt_value, tag
+from verity.protocols.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.poub.verifier.remote_bandwidth import coins, p2, p2_case, p2_party, receipts
 from verity.commitments.merkle import merkle_depth
 

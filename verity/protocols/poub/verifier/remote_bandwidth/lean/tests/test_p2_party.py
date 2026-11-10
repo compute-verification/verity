@@ -21,8 +21,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pous import setup
-from verity.core.protocols.pous.schemes.p2 import P2Params
+from verity.protocols.pous.verifier import setup
+from verity.protocols.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.poub.verifier.remote_bandwidth import coins, p2, p2_lean, p2_party, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -298,9 +298,9 @@ def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names
     """`--pous-record DIR --pous-session SID`: the registration of the setup the memory challenger kept for PoUS session
     SID (`challenger_party.keep`), its whole store the plan; refused for an id out of form, a record of another session,
     or one without a setup."""
-    from verity.core.devices.memory_challenger import challenger_party as CP
-    from verity.core.protocols.pous import challenger_session as CS
-    from verity.core.protocols.pous import run as R
+    from verity.protocols.pous.device.memory_challenger import challenger_party as CP
+    from verity.protocols.pous.device import challenger_session as CS
+    from verity.protocols.pous.verifier import run as R
 
     reg = store.registration
     q = reg.params

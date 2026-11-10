@@ -40,11 +40,11 @@ path = "../../verity/protocols/certifier/device/lean"
 
 [[require]]
 name = "pous_check"
-path = "../../verity/core/protocols/pous/check"
+path = "../../verity/protocols/pous/verifier/check"
 
 [[require]]
 name = "core_memory_challenger"
-path = "../../verity/core/devices/memory_challenger/lean"
+path = "../../verity/protocols/pous/device/memory_challenger/lean"
 
 [[require]]
 name = "core_firewall"

@@ -53,7 +53,7 @@ from pathlib import Path
 
 import jsonschema
 import pytest
-from verity.core.protocols.pous import wipe_period as W
+from verity.protocols.pous.verifier import wipe_period as W
 from verity.spot.verifier.one_stage import registration as REG
 
 HERE = Path(__file__).resolve().parent

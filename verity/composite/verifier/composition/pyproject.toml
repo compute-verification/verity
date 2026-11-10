@@ -47,7 +47,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/protocols/pouw/verifier", "verity/core/protocols/spot",
           "verity/core/protocols/network", "verity/core/protocols/certifier",
           "verity/core/protocols/pous", "verity/protocols/poub/verifier/remote_bandwidth",
-          "verity/core/devices/memory_challenger/lean", "verity/commitments/attest/lean",
+          "verity/protocols/pous/device/memory_challenger/lean", "verity/commitments/attest/lean",
           "verity/spot/verifier/lean", "verity/spot/verifier/recursive", "verity/flock/verifier",
           "verity/commitments/lms/lean",
           "verity/commitments/identity", "verity/commitments/randomness",

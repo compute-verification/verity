@@ -18,11 +18,11 @@ from pathlib import Path
 
 import reference as R
 from verity_difftest import protocol as P
-from verity.core.protocols.pous import memory_challenger as mc
-from verity.core.protocols.pous import period as pous
-from verity.core.protocols.pous import run as RUN
-from verity.core.protocols.pous import setup
-from verity.core.protocols.pous.schemes import p2 as P2
+from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.verifier import period as pous
+from verity.protocols.pous.verifier import run as RUN
+from verity.protocols.pous.verifier import setup
+from verity.protocols.pous.verifier.schemes import p2 as P2
 from verity.protocols.poub.verifier.remote_bandwidth import p2, p2_case, p2_lean
 from verity.commitments.identity import canonical_json_bytes
 
@@ -99,7 +99,7 @@ def _served(case: dict) -> dict:
 def build(tmp: Path) -> None:
     """Fill `reference.POUS` and `reference.BANDWIDTH` with their cases, the memory challenger's session logs in
     `tmp`."""
-    M = R.module("mc_cases", ROOT / "verity/core/devices/memory_challenger/lean/tests/mc_cases.py")
+    M = R.module("mc_cases", ROOT / "verity/protocols/pous/device/memory_challenger/lean/tests/mc_cases.py")
     T = R.module("p2_party_sessions", BANDWIDTH / "lean/tests/test_p2_party.py")
     signer = M.deployed_signer()
     store = _committed(T)

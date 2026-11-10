@@ -50,10 +50,10 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from verity.core.protocols.pous import setup
-from verity.core.protocols.pous.params import SALT_BITS
-from verity.core.protocols.pous.schemes.p2 import P2Params
-from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash
+from verity.protocols.pous.verifier import setup
+from verity.protocols.pous.verifier.params import SALT_BITS
+from verity.protocols.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.pous.verifier.verifier import MerkleTree, VerifierKey, leaf_hash
 from verity.commitments.randomness import frame
 
 from . import audit, coins, receipts

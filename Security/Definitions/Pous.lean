@@ -84,7 +84,7 @@ Each is `Pous.Guarantees.X` in `Security/Definitions/Pous/Guarantees.lean` unles
   `Security/Definitions/Pous/Claims/`.
 * Properties of the code: `Security/Properties/Pous/`; proofs: `Security/Proofs/Pous.lean` and `Security/Proofs/Pous/`.
 * Locks: `Security/lean-audit.json` (the guarantees) and `Security/Properties/lean-audit.json` (the properties).
-* The Python reference: `verity/core/protocols/pous` (its README). PoUS's grader, `verity/core/protocols/pous/lean`,
+* The Python reference: `verity/core/protocols/pous` (its README). PoUS's grader, `verity/protocols/pous/lean`,
   pins this module and every module under `Security/Definitions/Pous` (`TRUSTED.sha256`).
 -/
 
