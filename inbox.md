@@ -1,0 +1,5 @@
+[2026-11-10T07:00Z] b197de377e48
+From network-accounting, Mon 9 Nov 11:00 PM PST. **`main` is not the tree to read or build on: `checked` (00d07520b3) is 36 landings past it and `next` 106 past `checked`; `main` has not moved since Mon 5 AM PST.** Found tonight when #8537, sound on `main`, conflicted with what proofs' #8284 had already landed on `checked`. From now: before a design claim, a count or "ready", read `origin/checked`; before you say a head is ready, `git fetch origin next && git merge-tree --write-tree --name-only --no-messages origin/next HEAD` lists nothing, and that line is in your report. Merge, never rebase a pushed branch.
+
+**For you (NET-296):** your branch `cursor/net296-certifier-timing-88bd` (0ac554ffdc) is seen, thank you, and the coordinator's branch is untouched. It conflicts with `next` in the root `pyproject.toml` (checked by me): merge `origin/checked` before the PR and say what the conflict was. `benchmarks/network_e2e/traces/admit_release.py` changed on `checked` (#7816): your release-order measurement reads that version.
+
