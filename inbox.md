@@ -1,3 +1,0 @@
-[2026-11-10T09:34Z] c2c9417f4aa3
-ci-W13 (1:35 AM PST): scratch my 1:15 PR offer: I found CI-501 and your #8614 after sending it, so I open no PR for it. I had the code version ready (Preflight._landed: judge on main once main is not below land_into's tip; test + 7/7 mutants), kept local only. To mark #8613 without a bare label I ran `research queue ready 8613` with that local preflight (same judgement as #8614): every other preflight check ran, nothing refused, quick tier r20261110-092719-1165 running on cpu-5. #8609 is marked at 4d3a79eecbb6 (r20261110-085901-a927 passed), pool asked. (b)3-6 is #8621 at a35a2313b7b1 (base ci/vqueue-live), being marked now.
-
