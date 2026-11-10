@@ -207,6 +207,39 @@ def test_every_process_of_the_suite_loaded_inductor_under_the_pin() -> None:
     env.require_inductor({})
 
 
+@pytest.mark.parametrize("plugin", [False, True], ids=["plain", "under-the-suite-guard"])
+def test_the_suites_guard_fails_the_test_that_leaves_a_switch_changed_and_no_test_whose_monkeypatch_undoes_it(tmp_path, plugin) -> None:
+    """`conftest.py`'s Inductor guard on `inductor_guard_cases.py`, in a pytest of their own: a test that sets the switch, or puts a
+    stand-in module in, with `monkeypatch` passes; the test that leaves the switch changed is an error at its teardown, by name,
+    with the guard's message; and the test after it reads the pin again.  The same under the plugin `suites.py` loads into every
+    suite, loaded by name as it loads it: its autouse fixture sets `monkeypatch` up before any fixture of this suite, so
+    `monkeypatch` undoes a test's change after every other fixture is torn down."""
+    import subprocess
+    from pathlib import Path
+
+    pytest.importorskip("torch")
+    cases = "tests/engine/inductor_guard_cases.py"
+    # under `suites.py` the child's plugin must not act for this run: no report written over this run's, no test left out as
+    # another part's or as a reused pass; the child still traces what it reads, as every Python a test starts does
+    runner = ("VERITY_SUITE_REPORT", "VERITY_SUITE_PART", "VERITY_SUITE_REUSE", "VERITY_SUITE_HEAVY")
+    environ = {k: v for k, v in os.environ.items() if k not in runner}
+    if plugin:
+        guard = Path(__file__).resolve().parents[4] / "tools" / "verity" / "check" / "guard"
+        environ["PYTHONPATH"] = os.pathsep.join([*filter(None, environ.get("PYTHONPATH", "").split(os.pathsep)), str(guard)])
+    r = subprocess.run([sys.executable, "-m", "pytest", cases, "-rA", "-p", "no:cacheprovider", f"--basetemp={tmp_path / 'b'}",
+                        *(["-p", "verity_suite_guard"] if plugin else [])], cwd=Path(__file__).resolve().parents[2], env=environ,
+                       capture_output=True, text=True)
+    lines = r.stdout.splitlines()
+    left = f"{cases}::test_a_switch_left_changed_is_failed_by_name"
+    assert sorted(line for line in lines if line.startswith(("PASSED ", "FAILED ", "ERROR "))) == sorted([
+        f"PASSED {cases}::test_a_switch_set_with_monkeypatch_is_not_left",
+        f"PASSED {cases}::test_a_stand_in_module_set_with_monkeypatch_is_not_left",
+        f"PASSED {left}", f"ERROR {left}",
+        f"PASSED {cases}::test_the_test_after_it_reads_the_pin"]), r.stdout + r.stderr
+    assert r.returncode == 1 and any("ERROR at teardown of test_a_switch_left_changed_is_failed_by_name" in line for line in lines)
+    assert "test left torch._inductor.config reading {'dynamic_scale_rblock': True}" in r.stdout
+
+
 @pytest.mark.parametrize("module, fn", TP_ENGINES)
 def test_every_tp_engine_checks_its_inductor_before_it_is_built(module, fn) -> None:
     import importlib
