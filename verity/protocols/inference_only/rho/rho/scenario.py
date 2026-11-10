@@ -13,7 +13,7 @@ above an attack is a contradiction: one of the bound's premises is false for tha
 it.
 
 The overhead is the hardware multiple over the reference training algorithm at its MFU, `MFU₀` (the scenario's `mfu`),
-at least 1: Lean's `hardwareMultiple`, and for a remote regime `InferenceOnly.Guarantees.DampenerRemote`'s `ρ`
+at least 1: Lean's `hardwareMultiple`, and for a remote regime `InferenceOnly.Guarantees.SlowdownRemote`'s `ρ`
 (`theorem.Overhead`). The padded size ratio `|A| / T_0`, each server block padded to its capacity, is the intermediate
 the bound gives (`Overhead.padded`), and a contradiction compares it. The time to the target, wall-clock, is reported
 beside the overhead: at least the overhead times `T_0 / (MFU₀ Φ_total)`, the reference's own time (`Scenario.seconds`).

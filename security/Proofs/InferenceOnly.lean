@@ -20,7 +20,7 @@ public import Proofs.InferenceOnly.FitSlotsWitness
 public import Proofs.InferenceOnly.WeightsSlotsWitness
 public import Proofs.InferenceOnly.FitRate
 public import Proofs.InferenceOnly.FitWitness
-public import Proofs.InferenceOnly.Dampener
+public import Proofs.InferenceOnly.Slowdown
 public import Proofs.InferenceOnly.Info
 public import Proofs.InferenceOnly.Transfers
 public import Proofs.InferenceOnly.Fmt

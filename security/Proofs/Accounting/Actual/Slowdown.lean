@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Actual.Dampener
+public import Definitions.Accounting.Guarantees.Actual.Slowdown
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -47,7 +47,7 @@ import Proofs.InferenceOnly.Threads
 
 namespace Accounting.SecurityProofs.Actual
 
-open Verity InferenceOnly Finset InferenceOnly.Dampener
+open Verity InferenceOnly Finset InferenceOnly.Slowdown
 
 /-- **The windows' count is the ceiling**: `⌈t/ω⌉₊ = (t + ω − 1)/ω` for a whole-tick window `ω > 0`. -/
 theorem ceil_div_eq_pred_div {t ω : ℕ} (hω : 0 < ω) : ⌈(t : ℝ) / ω⌉₊ = (t + ω - 1) / ω := by

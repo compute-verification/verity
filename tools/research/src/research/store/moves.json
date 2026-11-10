@@ -2234,6 +2234,16 @@
         "verity/protocols/inference_only/verifier/nci/lean/NciCheck/": "verity/protocols/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/",
         "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py": "verity/protocols/inference_only/verifier/inference_only/lean/scripts/inference_only_reference.py"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Accounting/Guarantees/Actual/Dampener.lean": "security/Definitions/Accounting/Guarantees/Actual/Slowdown.lean",
+        "security/Definitions/InferenceOnly/Assumptions/Dampener.lean": "security/Definitions/InferenceOnly/Assumptions/Slowdown.lean",
+        "security/Definitions/InferenceOnly/Dampener.lean": "security/Definitions/InferenceOnly/Slowdown.lean",
+        "security/Definitions/InferenceOnly/Guarantees/Dampener.lean": "security/Definitions/InferenceOnly/Guarantees/Slowdown.lean",
+        "security/Proofs/Accounting/Actual/Dampener.lean": "security/Proofs/Accounting/Actual/Slowdown.lean",
+        "security/Proofs/InferenceOnly/Dampener.lean": "security/Proofs/InferenceOnly/Slowdown.lean"
+      }
     }
   ]
 }
