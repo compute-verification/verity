@@ -89,7 +89,9 @@ theorem maskLog_bytes (ls lh : HmNets.Laid) : Zk.maskLogOf (bytesOf ls lh) = 14 
 theorem byName_t0 : Tags.byName? NAME = some t0 := by kernel_rfl
 theorem plain_t0 : t0.plainLeaves = false := by decide +kernel
 
-theorem part_plain : plain partObj = true := by kernel_rfl
+theorem part_plain : plain partObj = true := by
+  simp only [partObj, progHex, HmRow.PARTITION_V1]
+  plain_json
 theorem fjnorm_part : FlockSoundness.Discharge.Recursion.FirewallJson.norm partObj = partObj := by kernel_rfl
 
 /-- **The partition file reads back** to `partObj`. -/

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.Header
+public import Proofs.Flock.SpotFlock.InstanceStmt.Plain
 public import Proofs.Flock.SessionLoop.Concrete.File
 public import Proofs.Flock.SessionLoop.Concrete.Inputs
 import Flock.HmRow
@@ -60,15 +61,17 @@ namespace SpotFlock.InstanceStmt
 /-! ## META -/
 
 theorem metaJ_obj : metaJ = .obj ⟨⟨objT metaJ⟩⟩ := by kernel_rfl
-theorem plain_metaJ : plain metaJ = true := by kernel_rfl
+theorem plain_metaJ : plain metaJ = true := by
+  simp only [metaJ, lsM, rng, mrng, partHex, progHex, NAME, HmRow.ROW_SCHEMA_V2, HmRow.SCHEME, HmRow.PARTITION_V1]
+  plain_json
 theorem fjnorm_metaJ : FlockSoundness.Discharge.Recursion.FirewallJson.norm metaJ = metaJ := by kernel_rfl
 
 theorem parse_meta : JsonParse.parse metaText = .ok metaJ := by
   rw [metaText, parse_printJson plain_metaJ, fjnorm_metaJ]
 
 theorem metaText_last : metaText.toList.getLast? = some '}' := by
-  rw [metaText, printJson, String.toList_ofList, metaJ_obj]
-  simp [jsonChars]
+  rw [metaText, printJson, String.toList_ofList, metaJ_obj, jsonChars]
+  exact List.getLast?_concat
 
 theorem trim_meta : ("META " ++ metaText).trimAsciiEnd.toString = "META " ++ metaText := by
   apply trim_of
@@ -91,7 +94,7 @@ def secs (ls lh : HmNets.Laid) : List String :=
     secLs VStar.HM_NET VStar.HM_NET lh
 
 theorem nl_bytes : "\n".toByteArray.data.toList = [10] := by decide +kernel
-theorem head_len : ("flock-circuit " ++ "copy16").toByteArray.data.toList.length = 20 := by decide +kernel
+theorem head_size : "flock-circuit copy16".utf8ByteSize = 20 := by decide +kernel
 theorem head_none : ("flock-circuit " ++ "copy16").toByteArray.data.toList.findIdx? (· == (10 : UInt8)) = none := by
   decide +kernel
 
@@ -110,11 +113,11 @@ theorem bytesOf_list (ls lh : HmNets.Laid) : (bytesOf ls lh).data.toList =
 
 theorem findByte_head (ls lh : HmNets.Laid) : findByte (bytesOf ls lh) 10 = some 20 := by
   rw [findByte_eq, bytesOf_list, List.drop_zero, List.findIdx?_append, head_none, Option.none_or, List.findIdx?_cons]
-  simp [head_len]
+  simp [head_size]
 
 theorem findByte_meta (ls lh : HmNets.Laid) : ∃ n2, findByte (bytesOf ls lh) 10 21 = some n2 := by
   rw [findByte_eq, bytesOf_list]
-  rw [← List.singleton_append, ← List.append_assoc, List.drop_left' (by simp [head_len])]
+  rw [← List.singleton_append, ← List.append_assoc, List.drop_left' (by simp [head_size])]
   cases hx : (("META " ++ metaText).toByteArray.data.toList ++
       10 :: (joinNl (secs ls lh)).toByteArray.data.toList).findIdx? (· == (10 : UInt8)) with
   | some i => exact ⟨i + 21, rfl⟩

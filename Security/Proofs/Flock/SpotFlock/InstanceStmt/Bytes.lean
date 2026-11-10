@@ -97,27 +97,30 @@ def rng (net : String) (sl p0 n : Nat) : Json := Json.mkObj [("count", jn n), ("
   ("slot_log", jn sl), ("type", js "unit")]
 def mrng (sl p0 n : Nat) : Json := Json.mkObj [("count", jn n), ("pos0", jn p0), ("slot_log", jn sl), ("type", js "mask")]
 
-/-- META's entries but its bindings (`HmRow.BINDING_KEYS`): what the circuit's class hashes. -/
-def metaBase : List (String × Json) := [
+/-- The pinned leaf scheme (`Tags.leafSchemeHm96`), its members in key order. -/
+def lsM : Json := Json.mkObj [("id", js "hm96-sha512/v1"), ("inner", js "sha512 column digest"),
+  ("key", js "default_key, a statement constant for every tree"), ("key_sha512", js keyHex), ("salt_bytes", jn 192),
+  ("salt_source", js "chacha20 expansion of a fresh 256-bit os key per proof, never reused or stored")]
+
+/-- META. Every object in it lists its members in key order, the order `JsonParse` inserts them in, so that its line
+parses back to this tree (`parse_meta`): a tree's shape depends on the order its keys went in. Its bindings
+(`HmRow.BINDING_KEYS`) are the partition, the program's digest and its one template's; the circuit's class hashes the
+rest. -/
+def metaJ : Json := Json.mkObj [
   ("dummy", Json.mkObj [("bc", ja [js (hexOf bcI), js (hexOf bcO)]), ("outputs", ja [jn 0])]),
-  ("format", js "flock-circuit"), ("input_ports", jn 1), ("k_log", jn 22),
-  ("leaf_scheme", tz.pinnedLeafScheme.getD .null), ("leaves_in", ja [ja [jn 0]]), ("leaves_out", ja [ja [jn 0]]),
-  ("mask_log", jn 14), ("out_ports", ja [ja [js "o0", jn 1]]),
+  ("format", js "flock-circuit"), ("input_ports", jn 1), ("k_log", jn 22), ("leaf_scheme", lsM),
+  ("leaves_in", ja [ja [jn 0]]), ("leaves_out", ja [ja [jn 0]]), ("mask_log", jn 14),
+  ("out_ports", ja [ja [js "o0", jn 1]]),
+  ("partition", Json.mkObj [("digest", js partHex), ("rule", js HmRow.PARTITION_V1)]),
   ("per_vu", Json.mkObj [("hm96", jn 2), ("sha512x3", jn 1), ("unit", jn 1)]),
   ("ports", ja [ja [js "i0", jn 64, jn 1], ja [js "o0", jn 1, jn 0]]),
+  ("program_digests", Json.mkObj [("T_v1", js progHex)]), ("program_sha512", js progHex),
   ("ranges", ja [rng "hm96" 18 0 2, rng "sha512x3" 18 2 1, rng "unit" 9 1536 1, mrng 14 64 1]),
   ("row_key_sha512", js keyHex),
   ("row_schemas", ja [ja [js HmRow.ROW_SCHEMA_V2, jn 1024], ja [js HmRow.ROW_SCHEMA_V2, jn 16]]),
   ("rows", ja [rowJ i0, rowJ o0]), ("scheme", js HmRow.SCHEME), ("statement", js NAME),
   ("units_per_vu", jn 1), ("vus_per_block", jn 1),
   ("wires", ja [ja [js "hm96", jn 0, jn 0, js "sha512x3", jn 0, jn 0]])]
-
-/-- META's bindings: the program, its one template's digest, and the partition. -/
-def metaBinds : List (String × Json) := [
-  ("partition", Json.mkObj [("digest", js partHex), ("rule", js HmRow.PARTITION_V1)]),
-  ("program_digests", Json.mkObj [("T_v1", js progHex)]), ("program_sha512", js progHex)]
-
-def metaJ : Json := Json.mkObj (metaBase ++ metaBinds)
 def metaText : String := printJson metaJ
 
 def lines (ls lh : HmNets.Laid) : List String := fileLs "copy16" metaText FlockDeploy.Concrete.unitLaid ls lh

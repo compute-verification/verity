@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.Header
+public import Proofs.Flock.SpotFlock.InstanceStmt.Plain
 import Proofs.Flock.Claims.Sampling.Select.SecondWitness
 import Flock.HmRow
 import Flock.TemplateQuery
@@ -44,7 +45,9 @@ open FlockSoundness.Refine
 open Properties.Spot.SecurityProofs (canon_fuel)
 open Lean (Json)
 
-theorem plain_progJ : plain progJ = true := by kernel_rfl
+theorem plain_progJ : plain progJ = true := by
+  simp only [progJ]
+  plain_json
 theorem fjnorm_progJ : FlockSoundness.Discharge.Recursion.FirewallJson.norm progJ = progJ := by kernel_rfl
 
 theorem parse_prog : JsonParse.parse progText = .ok progJ := by
