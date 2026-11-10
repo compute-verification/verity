@@ -161,14 +161,6 @@ files = [
     "tools/research/console/verity_console.py",
 ]
 
-[[against]]
-loader = "benchmarks"
-loaded = "archive"
-files = [
-    "benchmarks/one_stage/prove_bundle.py",
-    "benchmarks/one_stage/served_verdicts.py",
-]
-
 # What each verifier's and each device's Python loads, and what loads it, by `verifier/` or `device/` directory under
 # `verity/`: `loads`, the places outside it that its files load; `reaches`, the places those load in turn, and so on;
 # `loaded_by`, the Python files under `verity/` outside every verifier and device that load it, tests included.  A
@@ -637,6 +629,9 @@ loaded_by = [
     "verity/flock/prover/tests/test_tmpl_statement.py",
     "verity/flock/prover/tests/tmpl_statement.py",
     "verity/protocols/certifier/prover/window_charge.py",
+    "verity/protocols/inference_only/rho/rho/params.py",
+    "verity/protocols/inference_only/rho/tests/test_envelopes.py",
+    "verity/protocols/inference_only/rho/tests/test_params.py",
     "verity/protocols/pouw/prover/circuit/h1window.py",
     "verity/protocols/pouw/prover/circuit/plan.py",
     "verity/protocols/tests/test_profile.py",
@@ -657,6 +652,9 @@ reaches = [
 ]
 loaded_by = [
     "verity/flock/prover/tests/test_audit_profile.py",
+    "verity/protocols/inference_only/rho/rho/params.py",
+    "verity/protocols/inference_only/rho/tests/test_envelopes.py",
+    "verity/protocols/inference_only/rho/tests/test_params.py",
     "verity/protocols/pouw/prover/circuit/plan.py",
     "verity/protocols/tests/test_profile.py",
     "verity/spot/optimize.py",
