@@ -196,7 +196,7 @@ def test_a_scan_whose_answer_names_a_tie_the_check_does_not_wire_is_refused(serv
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and PC.TIE_UNHELD in json.loads(out)["reason"], (u, n, out)
     monkeypatch.setattr(PC, "TIED_LISTS", lists)
-    monkeypatch.setattr(PC, "_tied_input_wired", lambda a: True)
+    monkeypatch.setattr(PC, "tied_input_wired", lambda a: True)
     for n in range(2):
         refused_by_lean_alone(build("rows-answer-tied", n, small=True), server, PC.TIE_UNHELD)
 

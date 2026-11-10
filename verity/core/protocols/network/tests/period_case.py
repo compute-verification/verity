@@ -834,7 +834,7 @@ def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
         for a, r in zip(p.audits, audits))
 
 
-def _tied_input_wired(a: dict) -> bool:
+def tied_input_wired(a: dict) -> bool:
     """`tiedInputWired`: the answer's public outputs name no tied Input, or the scan's `prog` alone."""
     pub = a["public"]
     return not (isinstance(pub, dict) and TIED_KEY in pub) or pub[TIED_KEY] == [PROG_PARAM]
@@ -1000,7 +1000,7 @@ def check(p: Params, c: Commitment, e) -> tuple:
         findings += [Finding(REJECT, f"window {p.first + i}: {UNSTATED}") for i, reg in enumerate(c.windows)
                      if not _state_tied(p, c.audits, reg)]
         findings += [Finding(REJECT, f"window {p.first + i}: {TIE_UNHELD}") for i, x in enumerate(windows)
-                     if not _tied_input_wired(x.answer)]
+                     if not tied_input_wired(x.answer)]
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
         return REJECT, rejected.reason
     if findings:
