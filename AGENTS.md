@@ -20,10 +20,12 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
     (the served workloads' Definitions), `protocols` (the circuits core's protocols' provers build, which their
     verifiers don't read) and `flock/` (`verity_flock`, its own distribution: Flock, the proof system's prover, with its
-    verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its Python verifier reads
-    are on the soundness path: `ml.circuits`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which
-    only shrinks); core reaches neither the catalog (`ml.circuits.ops`, `ml.circuits.silicon`) nor the kernels. The rest
-    can't affect soundness.
+    verifier's specification in `verifier/`). Until each protocol's verifier is Lean, what its Python verifier and each
+    device load is on the soundness path, which only shrinks: `verity/circuits`, `verity/commitments`,
+    `verity/configuration`, `verity/hardware`, `verity/spot` and the protocols' own `verity/protocols/pous`,
+    `verity/protocols/poub`, `verity/protocols/pouw` and `verity/protocols/certifier`; of `verity/definitions` SPOT's
+    verifier loads the library (`verity/definitions/circuits/library.py`) and nothing else, and none reaches the
+    catalog or the kernels. The rest can't affect soundness.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
@@ -39,12 +41,15 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
   (its `infra/`) and its `.cursor`, nothing else.
 
-Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
-`verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
-that `CORE_ML_EDGES` lists. `verity.ml` never imports `verity.core` (`ML_IMPORTS_CORE` names the exceptions).
-Inside `verity` each unit imports only what `ALLOWED` lists, and `verity` imports no other distribution of the workspace.
-Nothing outside `infra/` imports it (`INFRA_IMPORTERS`), and nothing under `verity/` imports an integration (`KNOWN` in
-`tests/test_integration_boundaries.py`). `benchmarks/` is measurement only: nothing outside it imports its code, by
+Dependencies point inward, and the import order is one listing, `tests/import_order.toml`, which
+`tests/test_boundaries.py` holds the tree to; every list of either only shrinks. A file loads only what its own row of
+the listing or an earlier row holds, in Python and in Lean, but for the ties the listing names by file. No file under
+a `verifier/` loads one under a `prover/`. Until its protocol's verifier is Lean, a Python verifier and each device
+load and reach only the places the listing's `trusted` entry froze for them, and outside the verifiers and the devices
+only the files its `loaded_by` names load one. A directory under `verity/` with an import root of its own is a
+distribution the listing names with its owner: `verity` loads none of them by name (a load by file is read only into
+`benchmarks/`) and imports no other distribution of the workspace. `infra/` is the last row, so nothing outside it loads it but a listed tie, and nothing under `verity/` imports
+an integration (`KNOWN` in `tests/test_integration_boundaries.py`). `benchmarks/` is measurement only: nothing outside it imports its code, by
 package name or by a path put on `sys.path` or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a
 protocol uses reaches it through a card file citing an `art:` id.
 
@@ -133,7 +138,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   plan.
 - **Lean is the definition and the verifier.** Python in `verity.ml` mirrors it for the prover's
   speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
-  Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
+  Python verifier and what it loads stay on the soundness path (the listing's `trusted` entries), which gains no load.
 - **Soundness and zero knowledge in Lean; completeness may be Python.** What a guarantee says about a cheating
   prover is proved in Lean or rests on an auditor-trusted device; that honest serving passes may be checked in Python.
 - **That a circuit computes what the model computes is completeness, never proved.** It decides only whether
