@@ -56,8 +56,11 @@ Every path git sees changed must be one of:
   manifest only in where its path packages sit, which no pinned output reads (`manifest_pin`);
 - an entry appended to research's `moves.json` whose paths agree with the range's (`moves_change`);
 - a new, empty `__init__.py` in a directory at or above a `.py` file the range moved there out of a package (its old
-  directory had an `__init__.py`), and no higher than the root of that file's package after the move (`[roots] new` of a
-  path map under `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by its new name;
+  directory had an `__init__.py`) or from outside every package (none at or above it) to a directory not run by path
+  (`tests/`, `lean/`), and no higher than the root of that file's package after the move (`[roots] new` of a path map under
+  `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by its new name. And a
+  deleted `__init__.py` of a package the range's moves took away: files left its directory by a rename and HEAD has none
+  at or below it (`rules`'s `emptied` in the `--json` report);
 - on a line none of these explains, what the move's own path map says beyond the renames (`Rows`): the map each commit of
   the range names (`Layout-move: tools/move/NAME.toml`, `tools/move/stage.py`'s line), read as BASE has it. A reference to
   a directory the map splits may go where its `[tokens]` row sends it, or stay, when the range bears the row out (part of
@@ -1588,14 +1591,20 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
     def package_level(d: str) -> bool:
         """Whether an empty `__init__.py` added in `d` is a package level the move needs: a module the range moved to `d` or
-        below it was a package's at BASE, so it is importable by its new name only if each directory from it up to its
-        package's root is a package (`tools/move/layout.py` writes these, and none above the root)."""
+        below it is its package's there (`tools/move/layout.py`'s `module_there`: it was a package's at BASE, or outside
+        every package and now outside a directory run by path), so it is importable by its new name only if each
+        directory from it up to its package's root is a package (the mover writes these, and none above the root)."""
         for o, n in renamed:
-            if n.endswith(".py") and n.startswith(d + "/") and posixpath.join(posixpath.dirname(o), "__init__.py") in B.set:
+            if n.endswith(".py") and n.startswith(d + "/"):
                 root = next((r for r in roots if n.startswith(r + "/")), None)
-                if root is not None and (d == root or d.startswith(root + "/")):
+                if root is not None and (d == root or d.startswith(root + "/")) and _rename().L.module_there(o, n, root, B.set):
                     return True
         return False
+
+    def emptied(d: str) -> bool:
+        """Whether the range's moves took the package at `d` away: files left it by a rename, and HEAD has none at or below
+        it, so the `__init__.py` that marked it has nothing to mark (the mover deletes it)."""
+        return not H.has_dir(d) and any(o.startswith(d + "/") for o, _ in renamed)
 
     new_projects = set()
     for e in entries:
@@ -1663,6 +1672,10 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         if st == "D" and old in rows.drop:
             report["edits"].append({"path": old, "kind": "dropped"})
             report["rules"].setdefault("drop", []).append(old)
+            continue
+        if st == "D" and posixpath.basename(old) == "__init__.py" and emptied(posixpath.dirname(old)):
+            report["edits"].append({"path": old, "kind": "emptied package"})
+            report["rules"].setdefault("emptied", []).append(old)
             continue
         if st not in "RM":
             refuse(e, {"A": "added", "D": "deleted", "C": "copied", "T": "type changed"}.get(st, f"status {st}"))

@@ -29,8 +29,10 @@ unless the map lists the directory under [rewrite] words (`"Security"`: no key a
 its name alone between quotes or backticks is rewritten in every file but Rust and Lean. Where a key is made of another
 word and a package's path (`"INLINE Security"`), [rewrite] word_ends lists the file (`{glob = [directories]}`): there the
 name is rewritten also as the last word of a double-quoted string. A tracked file that a `.gitignore` matches stays tracked where
-it moves. It appends [paths] to research's `moves.json` (once), each row whose path the tree has, and never rewrites the
-moves recorded there.
+it moves. A `.py` file moved below a package root from a package, or from outside every package to a directory that is
+not run by path (`tests/`, `lean/`), gets an `__init__.py` in each directory from it up to the root; and an `__init__.py`
+left where a package held more and now holds only such files is deleted with the package. It appends [paths] to research's
+`moves.json` (once), each row whose path the tree has, and never rewrites the moves recorded there.
 
 It fails on a rewritten reference to a directory the map splits across destinations (`backends/flock/` to `verity/ml/flock/`
 with its `verifier/lean/` to `verity/core/service/flock/`): the rewrite follows the larger part, so a gate that named the
@@ -64,6 +66,8 @@ RETIRED = ("packages/", "protocols/", "census/", "backends/gkr/", "backends/dire
            "backends/ligerito-verify/", "backends/sp1/", "backends/vole/", "backends/redteam/", "backends/shared/",
            "backends/numerical/", "backends/README.md", "backends/AGENTS.md", "benchmarks/dot_product/",
            "benchmarks/ir_call/")
+#: directories whose Python is run by path and is no module of the package around it
+BY_PATH = {"tests", "lean"}
 #: a dotted name ending in one of these is a file name (`verity_pouw.json`), not a module
 MOVES = "tools/research/src/research/store/moves.json"   # each layout move's [paths], for reading a tool from an older tree
 FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "cuh", "yaml", "yml", "gz", "jsonl", "npy", "html"}
@@ -228,6 +232,15 @@ def module_name(path: str, roots: dict[str, str]) -> str | None:
     return ".".join(parts) if all(IDENT.match(x) for x in parts) else None
 
 
+def module_there(old: str, new: str, root: str, tracked) -> bool:
+    """Whether the `.py` file moved from `old` to `new`, below the package root `root`, is a module of that package: it was a
+    package's (its directory had an `__init__.py`, among the `tracked` files), or it was outside every package (no
+    `__init__.py` at or above its directory) and lands outside each directory run by path (`BY_PATH`)."""
+    if posixpath.join(posixpath.dirname(old), "__init__.py") in tracked:
+        return True
+    return not any(f"{d}/__init__.py" in tracked for d in _ancestors(old)) and not BY_PATH & set(new[len(root) + 1:].split("/")[:-1])
+
+
 def braces(token: str) -> list[str]:
     """Each path a brace list names: `a/{x,y/z}.py` is `a/x.py` and `a/y/z.py`; a token with no list is itself."""
     m = re.search(r"\{([^{}]*)\}", token)
@@ -283,6 +296,7 @@ class Run:
         self.moved: dict[str, str] = {}             # new path -> old path, for files this run moves
         self.texts: dict[str, str] = {}             # new path -> text as it will be written
         self.dropped: list[str] = []                # old paths of the files [drop] deletes
+        self.leftover: list[str] = []               # the `__init__.py` files left alone in the packages the move empties
         self.splits: dict[str, str] = {}            # "old file: old directory" -> a rewrite of a split directory's reference
 
     def note(self, kind: str, what: str):
@@ -337,7 +351,21 @@ class Run:
             raise SystemExit("two files would land at one path:\n  " + "\n  ".join(sorted(set(dup))[:50]))
         self.old_dirs = {posixpath.dirname(p) for p in tracked}
         self.old_dirs |= {d for p in (*tracked, *fetched) for d in _ancestors(p)}
+        self.leftover = self._leftover(tracked, dict(moves))
         return moves
+
+    def _leftover(self, tracked: list[str], dest: dict[str, str]) -> list[str]:
+        """Each `__init__.py` that stays in a directory which held more and, after the move, holds nothing but such files,
+        or below one: the package is gone, and a file that only marked it goes with it ([create] keeps one it names)."""
+        before = sorted(tracked)
+        after = sorted({dest.get(p, p) for p in tracked if p not in self.L.drop} | set(self.L.data.get("create", {})))
+
+        def only_marks(files: list[str], d: str) -> bool:
+            lo, hi = bisect.bisect_left(files, d + "/"), bisect.bisect_left(files, d + "0")
+            return all(f.endswith("/__init__.py") for f in files[lo:hi])
+        return [p for p in before if p.endswith("/__init__.py") and dest.get(p, p) == p and p not in self.L.drop
+                and p not in self.L.data.get("create", {})
+                and any(only_marks(after, d) and not only_marks(before, d) for d in _ancestors(p))]
 
     def move(self, moves: list[tuple[str, str]]):
         landing = {n for _, n in moves}
@@ -352,11 +380,14 @@ class Run:
             dst.parent.mkdir(parents=True, exist_ok=True)
             os.rename(self.root / aside.get(old, old), dst)
         if not self.dry:
-            for p in self.dropped:
+            for p in (*self.dropped, *self.leftover):
                 (self.root / p).unlink()
         self.changes["files dropped"] = len(self.dropped)
+        for p in self.leftover:
+            self.note("`__init__.py` left alone in a package the move empties, deleted", p)
         if not self.dry:
-            for d in sorted({posixpath.dirname(o) for o in (*(o for o, _ in moves), *self.dropped)}, key=len, reverse=True):
+            for d in sorted({posixpath.dirname(o) for o in (*(o for o, _ in moves), *self.dropped, *self.leftover)},
+                            key=len, reverse=True):
                 for a in [d, *_ancestors(d)]:
                     try:
                         (self.root / a).rmdir()
@@ -365,14 +396,15 @@ class Run:
         self.changes["files moved"] = len(moves)
 
     def create(self):
-        """[create] files, and an `__init__.py` in each new directory between a moved package module and its root."""
+        """[create] files, and an `__init__.py` in each new directory between a module moved into a package (`module_there`)
+        and its root."""
         made = dict(self.L.data.get("create", {}))
         for new, old in self.moved.items():
-            if not new.endswith(".py") or not self._exists_old(posixpath.join(posixpath.dirname(old), "__init__.py")):
+            if not new.endswith(".py"):
                 continue
             root = next((d for d in sorted(self.L.new_roots.values(), key=len, reverse=True)
                          if new.startswith(d + "/")), None)
-            if root is None:
+            if root is None or not module_there(old, new, root, self.tracked_old):
                 continue
             d = posixpath.dirname(new)
             while d and (d == root or d.startswith(root + "/")):
@@ -399,7 +431,7 @@ class Run:
 
     def index(self, moves: list[tuple[str, str]]):
         dest = dict(moves)
-        kept = self.tracked_old - set(self.dropped)
+        kept = self.tracked_old - {*self.dropped, *self.leftover}
         self.new_files = {dest.get(p, p) for p in kept}
         self.old_of = {dest.get(p, p): p for p in kept}
         self.new_dirs = {d for p in self.new_files for d in _ancestors(p)}

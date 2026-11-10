@@ -452,6 +452,57 @@ def test_a_brace_list_whose_paths_go_two_ways_is_split(tmp_path):
     assert (r / "boundary.toml").read_text() == want
 
 
+def _run(tmp_path: Path, files: dict[str, str], layout: str, *args: str) -> tuple[Path, subprocess.CompletedProcess]:
+    """The mover's run by the map ``layout`` on a new repository of ``files``."""
+    r = tmp_path / "repo"
+    for p, t in {"tools/research/src/research/store/moves.json": '{"moves": []}\n', **files}.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(layout)
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    return r, subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock", *args],
+                             capture_output=True, text=True)
+
+
+LEVELS_MAP = """[roots]
+old = { verity = "verity" }
+new = { verity = "verity" }
+
+[paths]
+"benchmarks/live/" = "verity/composite/device/live/"
+"verity/core/wire/" = "verity/configuration/wire/"
+"verity/core/scripts/" = "verity/configuration/scripts/"
+
+[modules]
+"benchmarks.live" = "verity.composite.device.live"
+"verity.core.wire" = "verity.configuration.wire"
+"verity.core.scripts" = "verity.configuration.scripts"
+"""
+
+
+def test_a_module_moved_into_a_package_gets_each_level_and_an_emptied_package_loses_its_marks(tmp_path):
+    """`benchmarks/live/` was no package, and below `verity/` its modules import by name only if each directory up to the
+    root is one; its tests, run by path, get no level, and neither do scripts that a package held as no module of its
+    own. `verity/core/` then holds only the `__init__.py` files that marked it and its packages: they go, and
+    `verity/__init__.py` and a package that never held more (`verity/empty/`) stay."""
+    r, p = _run(tmp_path, {
+        "verity/__init__.py": "", "verity/core/__init__.py": '"""The trusted core."""\n', "verity/core/wire/__init__.py": "",
+        "verity/core/wire/frames.py": "X = 1\n", "verity/core/scripts/vectors.py": "Y = 1\n", "verity/core/sub/__init__.py": "",
+        "verity/empty/__init__.py": "", "benchmarks/live/auditor.py": "Z = 1\n", "benchmarks/live/tests/test_auditor.py": "W = 1\n",
+    }, LEVELS_MAP)
+    assert p.returncode == 0, p.stderr
+    assert sorted(git(r, "ls-files", "verity").split()) == [
+        "verity/__init__.py", "verity/composite/__init__.py", "verity/composite/device/__init__.py",
+        "verity/composite/device/live/__init__.py", "verity/composite/device/live/auditor.py",
+        "verity/composite/device/live/tests/test_auditor.py", "verity/configuration/__init__.py",
+        "verity/configuration/scripts/vectors.py", "verity/configuration/wire/__init__.py", "verity/configuration/wire/frames.py",
+        "verity/empty/__init__.py"]
+    assert not (r / "verity/core").exists()
+    assert "`__init__.py` left alone in a package the move empties, deleted: 2" in p.stdout
+
+
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]

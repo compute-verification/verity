@@ -154,20 +154,48 @@ def test_a_new_file_is_refused(tmp_path):
 
 
 def test_an_empty_init_for_a_package_level_the_move_makes_is_certified(tmp_path):
-    """`tools/move/layout.py` writes an empty `__init__.py` in each new directory from a moved package module up to its
-    package's root, so the module imports by its new name. Only that is let in: one with a line in it, or one above no
-    module that was a package's at BASE (`verity_pouw/x.py` has no `__init__.py` beside it), is a new file like any other."""
-    roots = {"tools/move/layout_map.toml": '[roots]\nnew = { security = "security", loose = "loose" }\n'}
+    """`tools/move/layout.py` writes an empty `__init__.py` in each new directory from a module moved into a package up to
+    its package's root, so the module imports by its new name: a module that was a package's at BASE, and one that was
+    outside every package (`verity_pouw/x.py` has no `__init__.py` at or above it). Only that is let in: one with a line in
+    it, one above a script a package held as no module of its own (`verity_pous/scripts/gen.py`), or one in a directory
+    run by path (`tests/`), is a new file like any other."""
+    roots = {"tools/move/layout_map.toml": '[roots]\nnew = { security = "security", loose = "loose" }\n',
+             "protocols/pous/src/verity_pous/scripts/gen.py": "G = 1\n", "protocols/pouw/src/verity_pouw/tests/test_x.py": "T = 1\n"}
     repo, base = _repo(tmp_path, {**BASE_FILES, **roots})
     _move(repo, "protocols/pous/src/verity_pous/codec.py", "security/pous/codec.py")
     _move(repo, "protocols/pouw/src/verity_pouw/x.py", "loose/pouw/x.py")
-    _write(repo, {"security/__init__.py": "", "security/pous/__init__.py": "", "loose/pouw/__init__.py": "",
+    _move(repo, "protocols/pous/src/verity_pous/scripts/gen.py", "loose/scripts/gen.py")
+    _move(repo, "protocols/pouw/src/verity_pouw/tests/test_x.py", "loose/pouw/tests/test_x.py")
+    _write(repo, {"security/__init__.py": "", "security/pous/__init__.py": "", "loose/pouw/__init__.py": "", "loose/__init__.py": "",
+                  "loose/scripts/__init__.py": "", "loose/pouw/tests/__init__.py": "",
                   "tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity_pous.codec", "security.pous.codec")})
     r = _check(repo, base, {"verity_pous.codec": "security.pous.codec"})
-    assert [(f["path"], f["reason"]) for f in r["refusals"]] == [("loose/pouw/__init__.py", "added")]
-    assert {e["path"] for e in r["edits"] if e["kind"] == "package level"} == {"security/__init__.py", "security/pous/__init__.py"}
+    assert [(f["path"], f["reason"]) for f in r["refusals"]] == [("loose/pouw/tests/__init__.py", "added"),
+                                                                  ("loose/scripts/__init__.py", "added")]
+    assert {e["path"] for e in r["edits"] if e["kind"] == "package level"} == {
+        "security/__init__.py", "security/pous/__init__.py", "loose/__init__.py", "loose/pouw/__init__.py"}
     _write(repo, {"security/pous/__init__.py": "X = 1\n"})
     assert ("security/pous/__init__.py", "added") in [(f["path"], f["reason"]) for f in _check(repo, base)["refusals"]]
+
+
+def test_the_init_of_a_package_the_move_emptied_may_be_deleted(tmp_path):
+    """The mover deletes the `__init__.py` left alone where a package was: its files left by the range's renames and HEAD
+    has nothing at or below its directory. One whose directory still holds a file, and one of a package no file left by a
+    rename, is a deleted file like any other."""
+    files = {**BASE_FILES, "protocols/pous/src/verity_pous/sub/__init__.py": "", "protocols/pous/src/verity_pous/sub/kept.py": "K = 1\n",
+             "protocols/pouw/src/verity_pouw/idle/__init__.py": '"""Nothing here."""\n'}
+    repo, base = _repo(tmp_path, files)
+    _move(repo, "protocols/pous/src/verity_pous/codec.py", "security/pous/codec.py")
+    _write(repo, {"tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity_pous.codec", "security.pous.codec")})
+    _git(repo, "rm", "-q", "protocols/pous/src/verity_pous/sub/__init__.py", "protocols/pouw/src/verity_pouw/idle/__init__.py")
+    r = _check(repo, base, {"verity_pous.codec": "security.pous.codec"})
+    assert sorted(f["path"] for f in r["refusals"]) == ["protocols/pous/src/verity_pous/sub/__init__.py",
+                                                        "protocols/pouw/src/verity_pouw/idle/__init__.py"]
+    _move(repo, "protocols/pous/src/verity_pous/sub/kept.py", "security/pous/kept.py")
+    _git(repo, "rm", "-q", "protocols/pous/src/verity_pous/__init__.py")
+    r = _check(repo, base, {"verity_pous.codec": "security.pous.codec"})
+    assert [f["path"] for f in r["refusals"]] == ["protocols/pouw/src/verity_pouw/idle/__init__.py"]
+    assert r["rules"] == {"emptied": ["protocols/pous/src/verity_pous/__init__.py", "protocols/pous/src/verity_pous/sub/__init__.py"]}
 
 
 def test_an_empty_init_above_the_packages_root_is_refused(tmp_path):
