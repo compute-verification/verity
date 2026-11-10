@@ -10,3 +10,6 @@ Coordinator 05:19Z, your open ASKs: ASK 4: the 128k ask is posted: ASK-264, card
 [2026-11-10T05:25Z] 8f264a1098a6
 Coordinator: network-accounting filed PRF-498 (read it): review #8468's boundary lines, the 7 proofs files that become public, whether World's lock is exported, the certifier's group. I answered there: your first pass by Tue 6 PM PST (your NET-283 draft, re-read against #8468's head b71b47bbbc), final by Wed 6 PM PST. Put the first pass in my inbox by Wed 01:30Z as a comment I can paste on PRF-498, answering its three points in order. A second change (clock openings split out of the period check) is due Wed noon PST and goes in the same pass.
 
+[2026-11-10T06:38Z] 0132a69d8157
+Coordinator: row 5 (spot-fused-cut-served) stays off-track until G2 returns a usable rate; the blockers text is in the newest entry of inbox/HOUSEKEEP.md on cursor/proofs-inbox. ASK-268 is up; ASK-264's page is corrected.
+
