@@ -90,7 +90,7 @@ of one window, one session a window, the deployed check accepts the window on ev
 theorem CheckProofSystemSound_honest : CheckProofSystemSoundHonest :=
   ⟨circuit.rounds, prm, windows 1, fun x w => accepted_all 1 x w,
     fun _ _ => le_of_eq
-      (Accounting.SecurityProofs.ComposePeriod.Honest.prob_none fun _ h => h.2 fun _ _ _ => trivial)⟩
+      (Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.prob_none fun _ h => h.2 fun _ _ _ => trivial)⟩
 
 /-- **The nontrivial witness of `CheckProofSystemSound`** (`CheckProofSystemSoundNontrivial`): at H1's honest period of
 one window the deployed check accepts and publishes a sampled proof block on every path, so with relations that every opening
