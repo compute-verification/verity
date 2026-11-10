@@ -23,6 +23,11 @@ path = "../../../../service/flock"
 name = "core_protocol"
 path = "../../../interface"
 
+# SPOT's reader of an execution phase's circuit record (`Spot.Wires`), the one parse `NciCheck.Record` reads it through.
+[[require]]
+name = "core_spot"
+path = "../../../../service/spot"
+
 [[lean_lib]]
 name = "NciCheck"
 
