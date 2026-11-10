@@ -8,7 +8,8 @@ Every process of the suite runs under the engine profile's fixed Inductor switch
 does: torch reads them once, when `torch._inductor.config` is imported, so this file pins them and imports that module itself,
 before any test.  No test is then the first to import it, whatever that test has cleared from the environment, and a test that
 builds engine arguments (`engine.env.require_inductor`) doesn't depend on which test ran before it.  A second guard fails, by
-name, a test that leaves the loaded module reading a fixed switch otherwise, and puts the pinned value back."""
+name, a test that leaves the loaded module reading a fixed switch otherwise, and puts the pinned value back; it looks once the
+test's teardown has finalized every fixture, so a change the test's `monkeypatch` undoes is not one it left."""
 from __future__ import annotations
 
 import importlib.util
@@ -71,15 +72,21 @@ def _verity_modules_not_swapped():
                     pytrace=False)
 
 
-@pytest.fixture(autouse=True)
-def _inductor_reads_the_fixed_switches():
-    yield
-    cfg, pinned = sys.modules.get("torch._inductor.config"), dict(_engine_env.FIXED.values())
-    left = {attr: getattr(cfg, attr) for attr, want in pinned.items() if cfg is not None and getattr(cfg, attr, want) != want}
-    for attr in left:
-        setattr(cfg, attr, pinned[attr])
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_teardown(item):
+    """The Inductor guard, after the test's every fixture is finalized (the hook's own work), not as a fixture among them: an
+    autouse fixture is torn down before `monkeypatch` undoes the test's change wherever `monkeypatch` was set up first, as under a
+    plugin whose own autouse fixture takes it, and would read what the test was about to put back."""
+    try:
+        result = yield
+    finally:
+        cfg, pinned = sys.modules.get("torch._inductor.config"), dict(_engine_env.FIXED.values())
+        left = {attr: getattr(cfg, attr) for attr, want in pinned.items() if cfg is not None and getattr(cfg, attr, want) != want}
+        for attr in left:
+            setattr(cfg, attr, pinned[attr])
     if left:
         pytest.fail(f"test left torch._inductor.config reading {left}, where every process of the suite reads {pinned} "
                     f"(engine.env.FIXED): it set the attribute, or unloaded the module and imported it again without the pin in its "
                     f"environment, and every later engine build in this process would be refused (engine.env.require_inductor); undo "
                     f"what the test changed (monkeypatch.setattr, monkeypatch.delitem)", pytrace=False)
+    return result
