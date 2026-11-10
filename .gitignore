@@ -61,8 +61,8 @@ verity/ml/flock/tests/fixtures/honest-session
 verity/ml/flock/tests/fixtures/honest-plain
 verity/ml/flock/tests/fixtures/plain-tree
 benchmarks/pouw/machine_model/data/cover/corpus.json
-benchmarks/pouw/sass_census/data/bu_12_9.json
-benchmarks/pouw/sass_census/data/sass_isa_tables.json
+benchmarks/pouw/machine_model/data/cover/bu_12_9.json
+benchmarks/pouw/machine_model/data/cover/sass_isa_tables.json
 benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json
 verity/ml/flock/tests/fixtures/public-inputs
 verity/ml/flock/tests/fixtures/public-inputs-blocks

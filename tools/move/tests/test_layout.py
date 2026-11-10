@@ -252,6 +252,59 @@ def test_a_distributions_tests_path_follows_the_move_and_moves_json_records_only
     assert moves == [{"paths": {"dist/tests/old/": "dist/tests/new/"}}]
 
 
+def test_uv_lock_names_a_moved_distribution_by_its_new_directory(tmp_path):
+    """A map that moves a distribution and renames no member (the machine model to `verity/hardware/`): `uv lock` reads the
+    locked distribution's metadata at its old directory and fails, and `uv sync` with it, so every suite of the moved tree
+    fails before it starts. The mover rewrites the directory, under `--no-lock` too; one that stays keeps its line, and
+    so does a second run."""
+    r = tmp_path / "repo"
+    lock = ('[manifest]\nmembers = ["model", "other"]\n\n[[package]]\nname = "model"\nsource = { editable = "bench/model" }\n\n'
+            '[[package]]\nname = "probe"\nsource = { virtual = "bench/model/probe" }\n\n'
+            '[[package]]\nname = "other"\nsource = { editable = "bench/other" }\n\n'
+            '[package.metadata]\nrequires-dist = [{ name = "model", editable = "bench/model" }]\n')
+    files = {"bench/model/pyproject.toml": "[project]\nname = 'model'\n", "bench/model/probe/pyproject.toml": "[project]\nname = 'probe'\n",
+             "bench/other/pyproject.toml": "[project]\nname = 'other'\n", "uv.lock": lock,
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text('[roots]\nold = {}\nnew = {}\n\n[paths]\n"bench/model/" = "hardware/model/"\n\n[modules]\n'
+                                       '"bench.model" = "hardware.model"\n\n[rewrite]\nexclude = ["uv.lock"]\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    run = ["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"]
+    subprocess.run(run, check=True, capture_output=True)
+    want = lock.replace('"bench/model/probe"', '"hardware/model/probe"').replace('"bench/model"', '"hardware/model"')
+    assert (r / "uv.lock").read_text() == want and '"bench/other"' in want
+    git(r, "commit", "-q", "-m", "moved")
+    subprocess.run(run, check=True, capture_output=True)
+    assert git(r, "status", "--porcelain") == ""
+
+
+def test_a_failed_uv_lock_fails_the_move(tmp_path):
+    """A move whose `uv lock` failed left a lock `uv sync` fails on, and exited 0, so `stage.py` certified a commit no suite
+    could start on. It exits 1 with uv's reason, which `stage.py` and `restack.py` refuse on."""
+    r = tmp_path / "repo"
+    files = {"old/a.txt": "", "tools/verity/check/pod_setup.sh": "UV_VERSION=${UV_VERSION:-9.9.9}\n",
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    uv = tmp_path / "bin" / "uv"
+    uv.parent.mkdir()
+    uv.write_text('#!/bin/sh\n[ "$1" = --version ] && echo "uv 9.9.9" && exit 0\necho "error: Distribution not found at: old" >&2\nexit 2\n')
+    uv.chmod(0o755)
+    (tmp_path / "map.toml").write_text('[roots]\nold = {}\nnew = {}\n\n[paths]\n"old/" = "new/"\n\n[modules]\n"old" = "new"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    p = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml")], capture_output=True,
+                       text=True, env={**os.environ, "PATH": f"{uv.parent}{os.pathsep}{os.environ['PATH']}"})
+    assert p.returncode == 1, p.stderr
+    assert "Distribution not found at: old" in p.stdout and "`uv sync` fails on it" in p.stderr
+
+
 def test_a_shell_scripts_paths_from_its_own_directory_are_recounted_from_where_it_moved(tmp_path):
     """The streamed wipe's `demo.sh` goes from three directories down to two (`examples/wipe/`): its climb to the root through
     `$0`, `${BASH_SOURCE[0]}` or a variable it sets to its own path is recounted, as is a path past the root to a file that
@@ -277,6 +330,36 @@ def test_a_shell_scripts_paths_from_its_own_directory_are_recounted_from_where_i
         demo.replace('"$SELF")/../../..', '"$SELF")/../..').replace('"${BASH_SOURCE[0]}")/../../..', '"${BASH_SOURCE[0]}")/../..')
         .replace('"$0")/../stay/run.sh', '"$0")/../../bench/pous/stay/run.sh'))
     assert (r / "bench/pous/stay/run.sh").read_text() == stay.replace('"$0")/../wipe/demo.sh', '"$0")/../../../examples/wipe/demo.sh')
+
+
+def test_a_path_that_is_a_shell_variables_default_follows_the_move(tmp_path):
+    """`${DEFS:-flock/pod/defs.json}` names a file as any path does. The `-` before it belongs to the expansion (elsewhere a
+    `-` before a path makes the path part of a longer word, which is left alone), and the `}` after it closes the
+    expansion, so the file's own row is followed, not its directory's: `flock/pod/` is split here, and a reference to it
+    would be refused."""
+    r = tmp_path / "repo"
+    run = ('export RESOLVER=${RESOLVER:-flock/pod/catalog.py:definition}\nDEFS=$REPO/${DEFS:-flock/pod/defs.json}\n'
+           'T=${TESTS:-flock/tests/test_a.py flock/tests/test_b.py}\nU=${UNSET-flock/pod/catalog.py}\n'
+           'W=pre-flock/pod/catalog.py\n')
+    files = {"flock/pod/run.sh": run, "flock/pod/catalog.py": "", "flock/pod/defs.json": "{}\n", "flock/tests/test_a.py": "",
+             "flock/tests/test_b.py": "", "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(
+        '[roots]\nold = {}\nnew = {}\n\n[paths]\n"flock/pod/catalog.py" = "prover/catalog.py"\n'
+        '"flock/pod/defs.json" = "prover/data/defs.json"\n"flock/tests/" = "prover/tests/"\n\n[modules]\n'
+        '"flock.pod.catalog" = "prover.catalog"\n"flock.tests" = "prover.tests"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    p = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    assert (r / "flock/pod/run.sh").read_text() == (
+        'export RESOLVER=${RESOLVER:-prover/catalog.py:definition}\nDEFS=$REPO/${DEFS:-prover/data/defs.json}\n'
+        'T=${TESTS:-prover/tests/test_a.py prover/tests/test_b.py}\nU=${UNSET-prover/catalog.py}\n'
+        'W=pre-flock/pod/catalog.py\n')
 
 
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():

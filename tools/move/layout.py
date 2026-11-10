@@ -65,6 +65,8 @@ MOVES = "tools/research/src/research/store/moves.json"   # each layout move's [p
 FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "cuh", "yaml", "yml", "gz", "jsonl", "npy", "html"}
 #: file types whose plain relative paths (`fixtures/x.json`, with no `./`) are resolved against the file's directory
 RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", ".yaml", ".yml", ".txt", ".cfg", ".lean"}
+#: a distribution's directory as `uv.lock` writes it: a package's `source` and a `requires-dist` or manifest entry
+_LOCK_SOURCE = re.compile(r'\b(editable|virtual|directory) = "([^"\n]+)"')
 #: a shell script's own directory and the path joined to it (`$(dirname "$0")/../..`); `ref` is what `dirname` takes
 SH_ANCHOR = re.compile(r'(?P<head>\$\(dirname\s+"(?P<ref>\$(?:\{[A-Za-z_0-9]\w*(?:\[0\])?\}|[A-Za-z_0-9]\w*))"\))'
                        r'(?P<rel>(?:/[\w.\-]+)+)')
@@ -73,6 +75,8 @@ SH_SELF = re.compile(r'^\s*(?:export\s+|readonly\s+|local\s+)?(?P<v>[A-Za-z_]\w*
                      r'(?:\$\(cd\s+"\$\(dirname\s+"(?P<a>\$0|\$\{BASH_SOURCE\[0\]\})"\)"\s+&&\s+pwd\)/\$\(basename\s+"(?P=a)"\)'
                      r'|\$\((?:realpath|readlink\s+-f)\s+"(?:\$0|\$\{BASH_SOURCE\[0\]\})"\))(?P=q)\s*$', re.M)
 SH_OWN = {"0", "BASH_SOURCE", "BASH_SOURCE[0]"}
+#: what stands before a shell variable's default (`${DEFS:-verity/x.json}`): the `-` there is no part of a longer word
+SH_DEFAULT = re.compile(r"\$\{\w+:?-\Z")
 
 
 def is_shell(path: str, text: str) -> bool:
@@ -503,12 +507,12 @@ class Run:
             pre, p, rest = m.group("pre") or "", m.group("p"), m.group("rest")
             start = m.start("p") if not pre else m.start()
             before = text[start - 1] if start > 0 else ""
-            if not pre and before and (before.isalnum() or before in "_.-/"):
+            if not pre and before and (before.isalnum() or before in "_.-/") and not SH_DEFAULT.search(text, 0, start):
                 return m.group(0)
             token = p + rest
             trail = ""
-            while token and token[-1] in ".,":
-                token, trail = token[:-1], token[-1] + trail
+            while token and (token[-1] in ".," or (token[-1] == "}" and token.count("}") > token.count("{"))):
+                token, trail = token[:-1], token[-1] + trail    # a `}` no `{` of the token opens closes what holds the path
             if "/" not in token:
                 after = text[m.end("p"):m.end("p") + 1]
                 if not (before in "\"'" and after == before) or path.endswith((".py", ".rs", ".lean")):
@@ -1235,6 +1239,21 @@ class Run:
             self.texts[path] = json.dumps(doc, indent=2) + "\n"
             self._count(path, "layout moves recorded")
 
+    def lock(self):
+        """Name each moved distribution by its new directory in `uv.lock`. `uv lock` doesn't: where a map moves a
+        distribution and no member's name changes, it reads the locked one's metadata at the old directory and fails
+        (`Distribution not found at`), and so does `uv sync` on the moved tree."""
+        if (text := self._read("uv.lock")) is None:
+            return
+        def moved(m: re.Match) -> str:
+            if (new := self.L.file(f"{m.group(2)}/pyproject.toml")) is None:
+                return m.group(0)
+            self._count("uv.lock", "distribution directories")
+            return f'{m.group(1)} = "{posixpath.dirname(new)}"'
+        new = _LOCK_SOURCE.sub(moved, text)
+        if new != text:
+            self.texts["uv.lock"] = new
+
     # ---------------------------------------------------------------------------------------------- writing
 
     def write(self):
@@ -1523,6 +1542,7 @@ def main(argv: list[str] | None = None) -> int:
                          + "".join(f"  {x}\n" for x in unacknowledged)
                          + "".join(f"  [split] acknowledges what no reference needs any more: {k}\n" for k in stale))
     run.record()
+    run.lock()
     run.write()
     renamed_modules = sum(1 for o, n in moves if o.endswith(".py") and (mo := module_name(o, layout.old_roots))
                           and mo != module_name(n, layout.new_roots))
@@ -1552,6 +1572,10 @@ def main(argv: list[str] | None = None) -> int:
         a.report.write_text(json.dumps({"base": base, "changes": run.changes, "notes": run.notes,
                                         "files": {p: dict(c) for p, c in sorted(run.files_changed.items())},
                                         "moves": dict(moves)}, indent=1, sort_keys=True))
+    if "uv lock failed" in run.notes:
+        print("`uv lock` failed, so uv.lock doesn't match the moved tree and `uv sync` fails on it: fix what uv names "
+              "above and run the move again", file=sys.stderr)
+        return 1
     return 0
 
 

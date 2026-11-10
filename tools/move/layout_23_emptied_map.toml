@@ -1,0 +1,56 @@
+# The layout move of the `__init__.py` of each package level the moves empty, to `archive`: what
+# `tools/move/layout.py --map tools/move/layout_23_emptied_map.toml` moves and rewrites. 5 files in 5 rows. Written
+# by `tools/move/layout_maps.py`, which states the rule: edit that, not this.
+# A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
+# path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
+# ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
+# row a file. Nothing is edited or deleted.
+# The layout's maps run in the order of their names. This one runs after `layout_01_definitions_map.toml`,
+# `layout_02_circuits_map.toml`, `layout_03_flock_verifier_map.toml`, `layout_04_flock_prover_map.toml`,
+# `layout_05_flock_map.toml`, `layout_06_spot_map.toml`, `layout_07_pouw_map.toml`, `layout_08_pous_map.toml`,
+# `layout_09_poub_map.toml`, `layout_10_certifier_map.toml`, `layout_11_inference_only_map.toml`,
+# `layout_12_composite_map.toml`, `layout_13_hardware_map.toml`, `layout_14_configuration_map.toml`,
+# `layout_15_windows_map.toml`, `layout_16_difftest_map.toml`, `layout_17_verity_map.toml`,
+# `layout_18_vllm_map.toml`, `layout_19_commitments_map.toml`: it renames a package that those maps take modules out
+# of, and would rename their modules with it. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/core/__init__.py" = "archive/verity/core/__init__.py"
+"verity/core/devices/__init__.py" = "archive/verity/core/devices/__init__.py"
+"verity/core/protocols/__init__.py" = "archive/verity/core/protocols/__init__.py"
+"verity/ml/__init__.py" = "archive/verity/ml/__init__.py"
+"verity/ml/protocols/__init__.py" = "archive/verity/ml/protocols/__init__.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), and files whose bytes a digest pins.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz",
+           "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock",
+           "uv.lock", "tools/move/**", "archive/**", "benchmarks/numerical/reports/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**",
+           "integrations/vllm/data/**", "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json", "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py",
+           "benchmarks/hash/dither/j10ca_ref.py", "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py",
+           "integrations/vllm/tools/migrate/superseded_quarantine.py", "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json", "integrations/vllm/manifests/definitions.json"]
+# a mention of an emptied package that is left after the other maps stays as written
+keep_dotted = ["verity.core", "verity.core.devices", "verity.core.protocols", "verity.ml", "verity.ml.protocols"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"verity.core" = "archive.verity.core"
+"verity.core.devices" = "archive.verity.core.devices"
+"verity.core.protocols" = "archive.verity.core.protocols"
+"verity.ml" = "archive.verity.ml"
+"verity.ml.protocols" = "archive.verity.ml.protocols"
