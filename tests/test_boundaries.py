@@ -226,9 +226,8 @@ BENCHMARKS_IMPORTERS = {
     "examples/h200/interfaces/verity_e2e_demo/replay_bundle.py": "compute-accounting: kernels' commit_slots "
                                                                  "(`benchmarks/torch_gpu/commit_slots`)",
     # the served path: verity_vllm runs benchmarks' code
-    "integrations/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
-                                                       "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
-                                                       "its `P2_POUS` and `P2_STAGE`",
+    "integrations/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store and its load "
+                                                       "(`benchmarks/pous/p2_v1`), through its `P2_V1`",
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
                                                                           "(`benchmarks/remote_session`, "
                                                                           "its `REMOTE_SESSION`) and `paged.py` "
