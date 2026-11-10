@@ -107,8 +107,8 @@ def test_the_listing_is_the_same_bytes_from_any_checkout(tmp_path):
     one, two = (toy_tree(tmp_path / d, SPEC, SUITE) for d in ("one", "two/deeper"))
     assert json.dumps(family.tasks(one, graph.tracked(one))) == json.dumps(family.tasks(two, graph.tracked(two)))
     assert family.tasks(one, graph.tracked(one)) == family.tasks(one, graph.tracked(one))
-    a, b = (graph.listing(r, listers=LISTERS)["tasks"] for r in (one, two))
-    assert a == b and all(t["key"] for t in a)
+    a, b = (graph.listing(r, {"test-file"}, LISTERS)["tasks"] for r in (one, two))
+    assert a and a == b and all(t["key"] for t in a)
 
 
 def test_a_test_file_s_inputs(tmp_path):
@@ -228,7 +228,7 @@ def test_a_reads_entry_that_declares_nothing_is_refused(tmp_path, reads, refused
 
 def test_the_core_completes_them_from_the_table(tmp_path):
     root = toy_tree(tmp_path / "tree", SPEC, SUITE)
-    t = next(t for t in graph.listing(root, listers=LISTERS)["tasks"] if t["id"] == "test-file:s/tests/sub/test_b.py")
+    t = next(t for t in graph.listing(root, {"test-file"}, LISTERS)["tasks"] if t["id"] == "test-file:s/tests/sub/test_b.py")
     assert (t["kind"], t["env"], t["argv"]) == ("test-file", "py", ["verity", "graph", "run", t["id"]])
     assert t["about"] == "pytest on s/tests/sub/test_b.py alone, as suite s runs it"
     assert t["resources"] == {"cores": 1, "mem_gb": 6, "disk_gb": 2} and t["timeout_s"] == 121
@@ -270,7 +270,7 @@ def results(tmp_path_factory) -> dict[str, dict]:
     """Each toy test file's result/v1 (`runners.execute`), by file name, the runner pointed at the toy checkout."""
     root = toy_tree(tmp_path_factory.mktemp("runs"), SPEC, RUNS)
     work = tmp_path_factory.mktemp("work")
-    doc = graph.listing(root, listers=LISTERS)
+    doc = graph.listing(root, {"test-file"}, LISTERS)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(runner, "ROOT", root)
         tools = {Path(w).parent for w in map(shutil.which, ("git", "cc")) if w} - {Path(sys.executable).parent}
