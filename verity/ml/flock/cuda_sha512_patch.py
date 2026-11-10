@@ -18,7 +18,7 @@ g = pathlib.Path("cuda-ghash")
 if "FLOCK_HB" in (g / "merkle_open.hpp").read_text():
     raise SystemExit("cuda_sha512_patch: already applied")
 KERNELS_SHA = '#include "../../kernels/sha512.cuh"\n'
-shutil.copy(pathlib.Path(__file__).resolve().parents[3] / "verity/ml/kernels/sha512.cuh", g / "kernels_sha512.cuh")
+shutil.copy(here.parent / "kernels" / "sha512.cuh", g / "kernels_sha512.cuh")
 s = (here / "cuda" / "sha512.cuh").read_text()
 assert s.count(KERNELS_SHA) == 1, f"cuda/sha512.cuh: {KERNELS_SHA!r} occurs {s.count(KERNELS_SHA)} times, expected 1"
 (g / "sha512.cuh").write_text(s.replace(KERNELS_SHA, '#include "kernels_sha512.cuh"\n'))
