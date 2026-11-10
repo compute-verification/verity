@@ -27163,3 +27163,29 @@ Both figures were `StopCheck_v1`'s, not `StopRule_v1`'s [run: the census's estim
 - I ran no estimator, no circuit-check and no stager this turn, as you said. Every figure for `StopRule_v1` itself is arithmetic.
 - Which form a class Program would hold, and so which price applies: `StopRule_v1` lowered through Flock's word pieces (at most the estimator's 127·T + 448) or `StopRule_v2` on gates (104 to 108 ANDs an id at 875 to 8,192 outputs). Network pins `StopRule_v1` by closure digest; the class's request Definition is vllm's. [guess: nobody has said]
 - Whether the 4,096 cap's class is 4,096 or 8,192: network's note counts 4,097 egress cells (section 3.1), and I did not read how a class counts the end cell.
+
+## MOEBIND2, Tue 10 Nov 07:46Z: land ask: #8565 marked at `38e2f7d067` (07:43Z); `witnesses_assumed`, for your line to Daniel
+
+**The Goals answer again: no.** `ExpertReadAccepted` is about the template check's code (that `Flock.ReadNet.check 256 3072` accepts the template parsed back from `readTmpl 256 3072`'s text), not about the read's gates. The goal's first sentence holds as worded.
+
+**Land ask.** [#8565](https://github.com/compute-verification/verity/pull/8565) is marked at `38e2f7d067`, and the queue shows it ready and admitted.
+- **What it changes:**
+  1. It proves `TableReadBinding`: wherever `Flock.ReadNet.check V H` accepts a parsed circuit file's read template, every read at a copy of its unit returns its table's committed row, except with probability at most ε + E[cost]/2^256. It also proves an honest witness at 256 × 3072 and a premise-free nontrivial witness, all on the three standard axioms.
+  2. The Security lock gains the guarantee, its witnesses and records, and `ExpertReadAccepted` under `open` and `witnesses_assumed`. The Properties lock gains the root `Properties.Flock.ReadNet`. No verifier code changes.
+- **It lands after nothing.** It is based on `origin/main` `7af4d24fca`, still `main`'s tip at 07:44Z, and holds only my 16 commits. It is a Lean PR, so it builds alone.
+- **Runs:** [run]
+  - `r20261110-062950-413d` (cpu-5): the records at the head. Security, Security/Proofs and Security/Properties passed, and the ready mark's records gate matched both keys.
+  - `r20261110-071452-4d72` (cpu-11): the quick tier. All 9 changed suites passed: benchmarks/nci 128, pouw 1842, ml/circuits/ops 946, verity-flock 1420, verity-pouw-benchmarks 1237, benchmarks/rho 569, repository 280, verity-graph 168, pous 541.
+  - Before those: `r20261110-051140-4130` passed at `6e4da68c0d`, the commit before the reason's rewording. A first quick tier, `r20261110-065003-b0b0`, sat on cpu-1 behind 14 memory-blocked checks; I cancelled it before it started.
+- **Not run before the mark:** the kernel replay, which only the full check after landing does.
+- **For @lean:** the records drop three `shape.inline` entries of `Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted`, @lean's guarantee. `--update` drops an entry whose premise no longer offends. I didn't touch that guarantee.
+
+**`witnesses_assumed`, for your line to Daniel.** The PR uses it once.
+- **The lock entry:** `Security/lean-audit.json`, `witnesses_assumed["Accounting.ReadUnit.ExpertReadAccepted"]`, whose reason reads: "not an assumption about the world but an unproved fact about code: the Lean check `Flock.ReadNet.check 256 3072` accepts the read template at H = 3072 as its text reads back (`flock-read-tmpl 256 3072` exits 0 on it); to be proved by PRF-458; until then the honest witness takes it."
+- **The guarantee it sits on:** the honest witness `Accounting.SecurityProofs.TableReadBinding_honest` of `TableReadBinding`. The guarantee itself does not read it.
+- **What a reader of the lock should conclude:**
+  - `TableReadBinding` is proved for every template `check` accepts, assuming nothing of the gates.
+  - Only the demonstration that its premise holds at the served 256 × 3072 shape rests on something not yet in Lean: that `check` accepts that template. Running `flock-read-tmpl` checks it ([run] `r20261109-200652-1f20`: exit 0 at H = 3072, 96, 4096 and 4).
+  - It is a decidable fact about our code, to be proved, not a standing assumption.
+- **What removes it, and by when:** a Lean proof that `check 256 3072` accepts the parsed template, which means running each part's generator at H = 3072 in Lean. It is under PRF-458, due 30 Nov. That PR deletes this entry and the `open` one.
+- **Your two conditions are met:** the reason above, and #8565's description opens with the same statement. The `witnesses_assumed` rule accepted the entry in both records runs.
