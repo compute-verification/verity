@@ -87,6 +87,7 @@ public import Proofs.Flock.SpotFlock.InstanceStmt.Partition
 public import Proofs.Flock.SpotFlock.InstanceStmt.Texts
 public import Proofs.Flock.SpotFlock.InstanceStmt.Setup
 public import Proofs.Flock.SpotFlock.InstanceStmt.SetupAt
+public import Proofs.Flock.SpotFlock.InstanceStmt.InsSetup
 public import Proofs.Flock.Encodings
 public import Proofs.Flock.SpotFlock.Reveals
 public import Proofs.Flock.SpotFlock.RevealsLe
