@@ -32,8 +32,9 @@ The report gives:
 
 * what the export copied, rewrote, and cut, and the fetched fixtures it shipped and couldn't;
 * per Lean lock, the entries it kept and dropped by section, the dropped names no tracked file declares, the entries that
-  went with a witness it doesn't copy, the kept names a file it leaves out declares too, and the lane-text sites left in a
-  kept entry's prose, each with its section and entry;
+  went with a witness it doesn't copy, the kept names a file it leaves out declares too, and what the text of a kept
+  entry still holds, each with its section, entry, kind and text: the lane-text sites, and the declarations, modules and
+  paths the export leaves out that it spells. The export rewords neither; the lock they come from is reworded;
 * per area of the tree, the leftovers a reader of the public tree shouldn't meet, by kind, over whole files: the lane-text
   lint's kinds (`tests/lint/test_repo_lane_text.py`: Linear, Slack, Notion and PR ids and links, agent ids, run and `art:`
   ids, lane handles, dates, names) and agents' branches;
@@ -463,6 +464,11 @@ def _above(names) -> set[str]:
     return {".".join(parts[:i]) for n in names for parts in [n.split(".")] for i in range(1, len(parts) + 1)}
 
 
+def _under(files) -> set[str]:
+    """Each of ``files`` and every directory above it."""
+    return {"/".join(parts[:i]) for f in files for parts in [f.split("/")] for i in range(1, len(parts) + 1)}
+
+
 class Held:
     """What the copied files hold of the tree's Lean, for the names a lock states (`public_lock`'s kinds).
 
@@ -487,6 +493,7 @@ class Held:
         self.modules = {m for m, f in modules.items() if f in copied}
         self.prefixes = _above(self.modules)
         self.tracked_prefixes = _above(modules)
+        self.paths = _under(tree.files) - _under(copied)
 
     def has(self, here: str, kind: str, name: str) -> bool:
         """Whether the copied files hold ``name``, of ``kind``, for the lock of the package at ``here``."""
@@ -506,6 +513,18 @@ class Held:
         if kind == L.PACKAGE:
             return _norm(here, name, "lakefile.toml") in self.copied
         raise ValueError(f"public_export: a lock's name of a kind it doesn't know: {kind}")
+
+    def spelled(self, text: str) -> list[tuple[str, str]]:
+        """(kind, token) of what ``text`` spells that only the files the export leaves out have: a dotted name one of
+        them declares and no copied file does (`declaration`), a dotted module prefix with no copied module at or under
+        it (`module`), and a tracked file or directory the export copies nothing of (`path`)."""
+        out = []
+        for name in PUBLIC_LOCK.names(text):
+            if name in self.withheld and name not in self.declared:
+                out.append(("declaration", name))
+            elif name in self.tracked_prefixes and name not in self.prefixes:
+                out.append(("module", name))
+        return out + [("path", p) for p in PUBLIC_LOCK.paths(text) if p in self.paths]
 
     def undeclared(self, kind: str, name: str) -> bool:
         """Whether no tracked file declares ``name`` or is it: an entry the tree outgrew, or one the scanner can't find."""
@@ -529,28 +548,21 @@ def rewrite_lock(text: str, here: str, held: Held) -> tuple[str, list[tuple[str,
     return new, [(path, name) for path, names in dropped.items() for name in names]
 
 
-def lock_sites(lock: dict) -> list[tuple[str, str, str]]:
-    """(section, entry, `kind: text`) of each leftover (`scrub`'s kinds) in a lock: the lane text a kept entry's prose still
-    holds, which only a reworded lock removes. A section of subsections (`shape`) is read by subsection (`shape.frozen`),
-    and an entry is a key of a section that is a dict."""
-    sections = [(f"{k}.{sub}", v) if k in PUBLIC_LOCK.NESTED and isinstance(value, dict) else (k, value)
-                for k, value in lock.items()
-                for sub, v in (value.items() if k in PUBLIC_LOCK.NESTED and isinstance(value, dict) else [("", value)])]
-    out = []
-    for section, value in sections:
-        for entry, v in value.items() if isinstance(value, dict) else [("", value)]:
-            text = LEAN_CHECK.layout({entry: v} if entry else v)
-            out += [(section, entry, what) for _, what in LANE_TEXT.found_in([(1, text)])]
-            out += [(section, entry, f"{kind}: {m.group()}") for kind, pattern in EXTRA for m in pattern.finditer(text)]
-    return out
+def lane_text(text: str) -> list[tuple[str, str]]:
+    """(kind, text) of each leftover (`scrub`'s kinds) in ``text``."""
+    return [(kind, what) for _, found in LANE_TEXT.found_in([(1, text)]) for kind, _, what in [found.partition(": ")]] + \
+        [(kind, m.group()) for kind, pattern in EXTRA for m in pattern.finditer(text)]
 
 
 def lock_report(old: dict, new: dict, dropped: list[tuple[str, str]], held: Held) -> dict:
     """What the export did to one lock: per section the entries kept and dropped, how many lane fields it removed, the
     dropped names no tracked file declares, the entries that went with a witness the export doesn't copy, the kept
-    declarations a file the export leaves out declares too, and the leftovers in what it kept (`lock_sites`)."""
+    declarations a file the export leaves out declares too, and what the text it kept still holds, each as (section,
+    entry, kind, text) with its count per section (`public_lock.leftovers`): the lane text (`lane_text`), and the
+    declarations, modules and paths the export leaves out that a kept string spells (`Held.spelled`). Neither is
+    removed here: the lock they come from is reworded."""
     kinds = dict(PUBLIC_LOCK.ENTRIES)
-    sites = lock_sites(new)
+    sites, spelled = PUBLIC_LOCK.leftovers(new, lane_text), PUBLIC_LOCK.leftovers(new, held.spelled)
     both = {f"{where}: {name}" for where, kind, name in PUBLIC_LOCK.named(new)
             if kind == PUBLIC_LOCK.DECLARATION and name in held.withheld}
     return {"kept": PUBLIC_LOCK.counts(new), "dropped": dict(Counter(path for path, _ in dropped)),
@@ -559,7 +571,8 @@ def lock_report(old: dict, new: dict, dropped: list[tuple[str, str]], held: Held
                                  if path in kinds and held.undeclared(kinds[path], name)),
             "witness_withheld": sorted({f"{path}: {name}" for path, name in dropped if path not in kinds}),
             "also_withheld": sorted(both),
-            "sites": dict(Counter(section for section, _, _ in sites)), "site_list": [list(s) for s in sites]}
+            "sites": dict(Counter(section for section, *_ in sites)), "site_list": [list(s) for s in sites],
+            "spelled": dict(Counter(section for section, *_ in spelled)), "spelled_list": [list(s) for s in spelled]}
 
 
 def fetch(root: Path, paths: list[str], log: Path) -> str:
@@ -913,7 +926,9 @@ def main(argv: list[str] | None = None) -> int:
                                               (len(lock["witness_withheld"]), "entries gone with a witness it doesn't copy"),
                                               (lock["lane_fields"], "lane fields removed"),
                                               (len(lock["also_withheld"]), "kept names a file left out declares too"),
-                                              (sum(lock["sites"].values()), f"leftovers in kept entries {lock['sites']}")) if n]
+                                              (sum(lock["sites"].values()), f"leftovers in kept entries {lock['sites']}"),
+                                              (sum(lock["spelled"].values()),
+                                               f"names and paths it leaves out spelled in kept entries {lock['spelled']}")) if n]
         print(f"  {f}: {lock['bytes'][0]} to {lock['bytes'][1]} bytes; entries kept {sum(lock['kept'].values())}, dropped "
               f"{sum(lock['dropped'].values())}" + "".join(f"; {m}" for m in more))
     lt = report["lean_targets"]

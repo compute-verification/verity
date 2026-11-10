@@ -14,7 +14,9 @@ the lock it ships states only what the copied files hold:
 * no entry carries its `owner`, `issue` or `due` (`LANE_FIELDS`), and the sections that hold only those go
   (`LANE_SECTIONS`);
 * everything else stays as it stands: a kept entry's record (its hashes, its reasons), a `reads` group, which is its
-  module's whole, and the sections that name nothing of the repository's Lean (`OPAQUE`).
+  module's whole, and the sections that name nothing of the repository's Lean (`OPAQUE`). A reason is never reworded
+  here: what a kept entry's text still holds that the public tree shouldn't is found (`leftovers`) and reworded in the
+  lock it comes from.
 
 What the copied files have is the caller's to say, one name at a time: ``has(kind, name)``, for the kinds below. A section
 no rule covers refuses the lock (`unruled`), so a section added to the lock's schema gets its rule here before a lock
@@ -23,7 +25,8 @@ holding it ships (`tests/test_public_boundary.py` holds the rules to `check.ORDE
 from __future__ import annotations
 
 import copy
-from collections.abc import Callable, Iterator
+import re
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 
 #: a declaration, by its full name
@@ -90,6 +93,10 @@ OWNED = ("guarantees", "assumptions", "domain", "open")
 LANE_SECTIONS = ("default_owner", "open_default_issue", "open_seed")
 #: how many names a refusal shows
 SHOWN = 20
+#: a dotted name, as a reason spells a declaration or a module
+NAME = re.compile(r"[A-Za-z_][\w']*(?:\.[A-Za-z_][\w']*)+")
+#: a path of two components or more, as a reason spells a file or a directory
+PATH = re.compile(r"[\w.-]+(?:/[\w.-]+)+")
 #: every section a rule covers, a section of subsections by each subsection
 RULED = frozenset({path.partition(".*")[0] for path, _ in (*ENTRIES, *WITNESSES, *CITES)} | {*OPAQUE, *LANE_SECTIONS})
 #: the sections of subsections
@@ -160,6 +167,50 @@ def lane_fields(node, where: str = "") -> Iterator[str]:
     elif isinstance(node, list):
         for v in node:
             yield from lane_fields(v, where)
+
+
+def entries(lock: dict) -> Iterator[tuple[str, str, object]]:
+    """(section, entry, what it holds) for all of ``lock``: each key of a section that is a dict, with its value under that
+    key, and a section that is none whole, as the entry `""`. A section of subsections (`NESTED`) is read by subsection
+    (`shape.frozen`)."""
+    for k, value in lock.items():
+        nested = k in NESTED and isinstance(value, dict)
+        for section, v in [(f"{k}.{sub}", v) for sub, v in value.items()] if nested else [(k, value)]:
+            if isinstance(v, dict):
+                for entry, record in v.items():
+                    yield section, entry, {entry: record}
+            else:
+                yield section, "", v
+
+
+def _strings(node) -> Iterator[str]:
+    """Every string at or below ``node``: a dict's keys too."""
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for k, v in node.items():
+            yield k
+            yield from _strings(v)
+    elif isinstance(node, list):
+        for v in node:
+            yield from _strings(v)
+
+
+def names(text: str) -> list[str]:
+    """The dotted names ``text`` spells (`NAME`), each once, in the order it first spells them."""
+    return list(dict.fromkeys(NAME.findall(text)))
+
+
+def paths(text: str) -> list[str]:
+    """The paths ``text`` spells (`PATH`), without a sentence's full stop or a leading `./`, each once, in order."""
+    return list(dict.fromkeys(p for m in PATH.findall(text) if (p := m.strip(".").lstrip("/"))))
+
+
+def leftovers(lock: dict, find: Callable[[str], Iterable[tuple[str, str]]]) -> list[tuple[str, str, str, str]]:
+    """(section, entry, kind, text) for each (kind, text) ``find`` reports in a string of ``lock``, by the entry that
+    holds the string (`entries`): what a kept entry's key, reason or record still spells. The caller says what counts."""
+    return [(section, entry, kind, text) for section, entry, held in entries(lock)
+            for s in _strings(held) for kind, text in find(s)]
 
 
 def missing(lock: dict, has: Callable[[str, str], bool]) -> list[str]:

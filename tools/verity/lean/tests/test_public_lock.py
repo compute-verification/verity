@@ -275,3 +275,35 @@ def test_a_lock_with_few_sections_is_read_as_one():
 def test_a_section_that_is_one_name_goes_with_it():
     assert PL.public({"format": 3, "assumptions_module": "Gone.Defs"}, has) == ({"format": 3},
                                                                               {"assumptions_module": ["Gone.Defs"]})
+
+
+def test_a_locks_text_is_read_entry_by_entry() -> None:
+    """Each key of a dict section is an entry with its record, a section of subsections is read by subsection, and a
+    section that is no dict is one entry."""
+    got = {"format": 3, "roots": ["Lib"], "exempt": {"Lib.Run": "a runner"},
+           "shape": {"frozen": {"Lib.G": {"why": "as it was"}}, "events": ["Lib.E"]}}
+    assert list(PL.entries(got)) == [
+        ("format", "", 3), ("roots", "", ["Lib"]), ("exempt", "Lib.Run", {"Lib.Run": "a runner"}),
+        ("shape.frozen", "Lib.G", {"Lib.G": {"why": "as it was"}}), ("shape.events", "", ["Lib.E"])]
+
+
+def test_what_a_locks_strings_still_hold_is_named_by_section_and_entry() -> None:
+    """`leftovers` reads every string, keys too, and names each find by the entry that holds it; what counts is the
+    caller's to say."""
+    got = {"exempt": {"Lib.Run": "a runner, by Ada", "Lib.Ada": {"why": ["plain", "for Ada and Ada"]}},
+           "shape": {"frozen": {"Lib.G": "plain"}, "events": ["Ada.E"]}, "format": 3}
+
+    def find(text: str) -> list[tuple[str, str]]:
+        return [("name", "Ada")] * text.count("Ada")
+
+    assert PL.leftovers(got, find) == [
+        ("exempt", "Lib.Run", "name", "Ada"), ("exempt", "Lib.Ada", "name", "Ada"), ("exempt", "Lib.Ada", "name", "Ada"),
+        ("exempt", "Lib.Ada", "name", "Ada"), ("shape.events", "", "name", "Ada")]
+    assert PL.leftovers(got, lambda text: []) == []
+
+
+def test_the_names_and_paths_a_reason_spells() -> None:
+    text = "As Lib.Gone.walk' and Lib.Kept (see ./lean/Lib/Gone.lean, tests/data/ and lean/Lib/Gone.lean.), e.g. Lib.Kept."
+    assert PL.names(text) == ["Lib.Gone.walk'", "Lib.Kept", "Gone.lean", "e.g"]
+    assert PL.paths(text) == ["lean/Lib/Gone.lean", "tests/data"]
+    assert PL.names("a plain reason") == [] and PL.paths("a plain reason, and/or none") == ["and/or"]

@@ -577,7 +577,8 @@ def test_the_export_writes_a_lock_that_states_only_what_it_copies(tmp_path_facto
     assert report["undeclared"] == ["guarantees: Lib.Outgrown"] and report["witness_withheld"] == []
     assert report["also_withheld"] == ["four_names_except: Lib.Twice"]
     assert report["lane_fields"] == 3 + 2 * 3 + 1
-    assert report["sites"] == {"layers": 1} and report["site_list"] == [["layers", "Lib", "pr: #1234"]]
+    assert report["sites"] == {"layers": 1} and report["site_list"] == [["layers", "Lib", "pr", "#1234"]]
+    assert report["spelled"] == {} and report["spelled_list"] == []
     assert report["bytes"] == [len(PE.LEAN_CHECK.text(source)), len(wrote)]
 
 
@@ -668,9 +669,29 @@ def test_every_section_the_lean_check_writes_has_its_rule_for_the_export() -> No
 def test_a_locks_leftovers_are_named_by_section_and_entry() -> None:
     lock = {"format": 3, "exempt": {"Lib.Run": "a runner, since #4321"}, "deployed": ["Lib.G"],
             "shape": {"frozen": {"Lib.G": "frozen: see note:lean/20260101T0000Z-report-x"}, "events": ["Lib.E"]}}
-    sites = PE.lock_sites(lock)
-    assert [(section, entry) for section, entry, _ in sites] == [("exempt", "Lib.Run"), ("shape.frozen", "Lib.G")]
-    assert sites[0][2] == "pr: #4321" and sites[1][2].startswith("note: ")
+    sites = PE.PUBLIC_LOCK.leftovers(lock, PE.lane_text)
+    assert [(section, entry, kind) for section, entry, kind, _ in sites] == [("exempt", "Lib.Run", "pr"),
+                                                                             ("shape.frozen", "Lib.G", "note")]
+    assert sites[0][3] == "#4321" and sites[1][3].startswith("note:")
+
+
+def test_the_report_names_what_a_kept_reason_spells_that_the_export_leaves_out(tmp_path_factory) -> None:
+    """A reason is prose, so the export keeps it as it stands; the report says where one still spells a declaration, a
+    module or a path only the files left out have, and not where it spells what a copied file has."""
+    why = ("runs beside Lib.Withheld and Lib.Hidden.Deep (lean/Lib/Hidden.lean, lean/Lib/Hidden/); Lib.Kept, Lib.Twice, "
+           "Lib.Hidden.Open, Mathlib.Tactic and lean/Lib/Shown.lean are another matter.")
+    lock = {"format": 3, "roots": ["Lib"], "exempt": {"Lib.Hidden": why}, "shape": {"frozen": {"Lib.Kept": "as Lib.Withheld"}}}
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    assert json.loads((dest / "lean/lean-audit.json").read_text(encoding="utf-8")) == lock
+    report = got["locks"]["lean/lean-audit.json"]
+    assert report["spelled"] == {"exempt": 3, "shape.frozen": 1}
+    assert report["spelled_list"] == [
+        ["exempt", "Lib.Hidden", "declaration", "Lib.Withheld"], ["exempt", "Lib.Hidden", "module", "Lib.Hidden.Deep"],
+        ["exempt", "Lib.Hidden", "path", "lean/Lib/Hidden.lean"],
+        ["shape.frozen", "Lib.Kept", "declaration", "Lib.Withheld"]]
+    assert report["sites"] == {} and report["site_list"] == []
 
 
 def test_the_export_ships_the_fetched_fixtures_its_boundary_names(judged, tmp_path_factory, monkeypatch) -> None:
