@@ -408,7 +408,8 @@ theorem prob_seqP : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (E : List 
       (fun q a => (seqW D M S Rg (i + 1) l q).map fun o => (a :: o.1, o.2))
       (fun q a w => (FlockSoundness.Discharge.Exec.prob_strategy_map _ _ _ _).trans
         ((prob_seqP l (fun ts => E (a :: ts)) (i + 1) q (Strategy.ofMap _ _ w)).trans
-          (prob_map (fun o : List Transcript × CoinTape g σ => E o.1) (fun o => (a :: o.1, o.2)) _ w).symm))
+          (prob_map (fun o : List Transcript × CoinTape g σ => E o.1)
+            (fun o : List Transcript × CoinTape g σ => (a :: o.1, o.2)) _ w).symm))
       m.N p w
 
 open Classical in
@@ -433,7 +434,8 @@ theorem seqOff_le_prob (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guara
       (fun q a o' => ∃ ts, SeqReach D M BL B S Rg (i + 1) l q (ts, o'.2) ∧ o'.1 = a :: ts)
       (fun q a w hq => (seqOff_le_prob Q l (fun ts => E (a :: ts)) (i + 1) q (Strategy.ofMap _ _ w)
           fun o ho hQ => hq (a :: o.1, o.2) ⟨o.1, ho, rfl⟩ hQ).trans_eq
-        (prob_map (fun o : List Transcript × CoinTape g σ => E o.1) (fun o => (a :: o.1, o.2)) _ w).symm)
+        (prob_map (fun o : List Transcript × CoinTape g σ => E o.1)
+            (fun o : List Transcript × CoinTape g σ => (a :: o.1, o.2)) _ w).symm)
       m.N p w h
 
 end Seq
@@ -485,7 +487,8 @@ theorem prob_windowP (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strate
         (fun ts => E (windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, ts)) 0
         (Pos.root (roundCuts V θ F c rd) (M.start ω)) (Strategy.ofMap _ _ (w ω))).trans
       (prob_map (fun o : W.Out × CoinTape (V.game θ F c) σ => E o.1)
-        (fun o => ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)) _ (w ω)).symm)
+        (fun o : List FlockSoundness.Discharge.Exec.Transcript × CoinTape (V.game θ F c) σ =>
+          ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)) _ (w ω)).symm)
 
 /-- The joint law's strategy: it has no message to send. -/
 noncomputable def windowGS (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
@@ -530,7 +533,8 @@ theorem windowOff_le_prob (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : S
         fun o ho hQ => h ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)
           ⟨ω, rfl, rfl, ho⟩ hQ).trans_eq
       (prob_map (fun o : W.Out × CoinTape (V.game θ F c) σ => E o.1)
-        (fun o => ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)) _ (w ω)).symm
+        (fun o : List FlockSoundness.Discharge.Exec.Transcript × CoinTape (V.game θ F c) σ =>
+          ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)) _ (w ω)).symm
 
 /-! ## The logged coupling at the window's projection -/
 
@@ -569,7 +573,9 @@ theorem windowLogged (k : Verity.Registration.Composite) (P : Exchange → Prop)
         W.hidingTerm := by
   have h := (hC fun x => V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c rd σ x ∧
       P (CoinTape.run (V.game θ F c) σ x)).trans
-    (add_le_add (windowOff_le_prob V θ F c W t rd σ D M BL B _
+    (add_le_add (windowOff_le_prob V θ F c W t rd σ D M BL B
+      (fun x => V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c rd σ x ∧
+        P (CoinTape.run (V.game θ F c) σ x))
       (fun o => ((W.extend M.widening).joint t).Accepts o) hD (windowGS V θ F c W t rd σ D M)) le_rfl)
   rw [← prob_windowP V θ F c W t rd σ D M (fun o => ((W.extend M.widening).joint t).Accepts o)] at h
   exact h

@@ -23,10 +23,10 @@ it ends at, which the next member's session starts from:
   `SeqChain.le`, `SeqChain.inv`).
 * **A property of every member's transcript, a member at a time** (`SeqChain.forall₂`): from an invariant `I` of the
   position each member's session starts at, kept by each member's trace.
-* **The decoders' premise at the window, a member at a time** (`WindowReaches.chain`, `windowDecodes_of_members`):
-  `WindowDecodes` holds wherever each member's session's trace, in a chain whose end's tape plays an accepted play
-  that misses nowhere, keeps the invariant and writes a transcript flock-verify `--zk` accepts when the member has a
-  proof block in the sample.
+* **The decoders' premise at the window, a member at a time** (`WindowReaches.chain`, `MemberDecodes`,
+  `windowDecodes_of_members`): `WindowDecodes` holds wherever each member's session's trace, in a chain whose end's
+  tape plays an accepted play that misses nowhere, keeps the invariant and writes a transcript flock-verify `--zk`
+  accepts when the member has a proof block in the sample.
 -/
 
 @[expose] public section
@@ -82,7 +82,8 @@ theorem RoundsReachK.ends {τ ο : Type} {wr : LiveOutJ J mPts → τ}
 
 /-- **A trace to its end, and what follows from there, is a trace then what follows the session.** -/
 theorem RoundsEnd.reachK {τ ο : Type} (wr : LiveOutJ J mPts → τ)
-    (next : Pos g σ Claims.Msg (Fin R) → τ → ο → Prop) (o : ο) (he : RoundsEnd D M dg J B rootB pts N rs p q out) :
+    (next : Pos g σ Claims.Msg (Fin R) → τ → ο → Prop) (o : ο)
+    (he : RoundsEnd D M dg J B rootB pts N rs p q out) :
     next q (wr out) o → RoundsReachK D M dg J B wr next rootB pts N rs p o := by
   induction he with
   | zero rs p => exact fun hn => .zero rs p o hn
@@ -166,8 +167,8 @@ theorem MemberReach.inv {Ks₀ : Fin R → DigestCut Claims.Msg g} {i : ℕ} {m 
 variable (D M BL B S Rg) in
 /-- **The members' sessions' traces, in order**, from the position `p` to the position `r` the last ends at: the
 trace of the member at place `i`, its transcript, and the rest from the position it ends at. -/
-inductive SeqChain : ℕ → List (Flock.Guarantees.MemberV5 Reg nJ) → Pos g σ Claims.Msg (Fin R) → List Transcript →
-    Pos g σ Claims.Msg (Fin R) → Prop
+inductive SeqChain : ℕ → List (Flock.Guarantees.MemberV5 Reg nJ) → Pos g σ Claims.Msg (Fin R) →
+    List Transcript → Pos g σ Claims.Msg (Fin R) → Prop
   | nil (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)) : SeqChain i [] p [] p
   | cons (i : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (l : List (Flock.Guarantees.MemberV5 Reg nJ))
       (p q r : Pos g σ Claims.Msg (Fin R)) (out : LiveOutJ (memberTabs S Rg m) (memberPts m)) (ts : List Transcript)
@@ -254,29 +255,38 @@ theorem WindowReaches.chain {W : Window} {t : ℕ} {rd : Reading W.rounds} {σ :
   obtain ⟨r, hc, ht⟩ := SeqReach.chain _ 0 _ (o.1.2.2, o.2) hs
   exact ⟨ω, r, hR, hS, hc, ht⟩
 
-/-- **The decoders' premise at the window, a member at a time** (`WindowDecodes`): at an invariant `I` of the widened
-coins, the place and the position a member's session starts at that holds at the play's start on the coin map's tape,
-`WindowDecodes` holds wherever each member's session's trace from a position `I` holds at, ending at a position `q`
-before a position `r` that keeps the play's start and whose tape's play the sampled verdict accepts, misses at no round
-and not at the record and `P` holds of, has `I` at the next place and `q`, and, when the member has a proof block in
-the sample, writes a transcript flock-verify `--zk` accepts at the member's `own`. -/
+/-- **The decoders' premise at each member's session**, at an invariant `I` of the widened coins, the place and the
+position a member's session starts at: `I` holds at the play's start on the coin map's tape (`start`); and each
+member's session's trace from a position `I` holds at, ending at a position `q` before a position `r` that keeps the
+play's start and whose tape's play the sampled verdict accepts, misses at no round and not at the record and `P` holds
+of, has `I` at the next place and `q`, and, when the member has a proof block in the sample, writes a transcript
+flock-verify `--zk` accepts at the member's `own` (`step`). -/
+structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
+    (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ℕ → Decoders W.rounds ByteArray)
+    (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
+    (I : (W.extend M.widening).L.Ω → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop) : Prop where
+  start : ∀ ω, I ω 0 (Pos.root (roundCuts V θ F c rd) (M.start ω))
+  step : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Flock.Guarantees.MemberV5 ByteArray W.nJ)
+    (p q r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds))
+    (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) m) (memberPts m)),
+    ((W.extend M.widening).joint t).ms[i]? = some m → I ω i p →
+    MemberReach D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) i m p q out → q.Le r →
+    r.Inv (roundCuts V θ F c rd) →
+    V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
+      P (CoinTape.run (V.game θ F c) σ r.tape) →
+    I ω (i + 1) q ∧ ((m.part ((W.extend M.widening).L.draw ω)).Nonempty →
+      FlockSoundness.Discharge.ZkHidden.AcceptsZKP m.I m.own
+        (m.wr (m.part ((W.extend M.widening).L.draw ω)) (windowReg V θ F c W rd σ D) out))
+
+/-- **The decoders' premise at the window, a member at a time** (`WindowDecodes`): it holds wherever the decoders'
+premise holds at each member's session (`MemberDecodes`), at any invariant of the position a member's session starts
+at. The joint law's support is the members' traces in order, each from where the one before it ended, and the tape an
+accepted play is on is the one at the position the last ends at. -/
 theorem windowDecodes_of_members (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ℕ → Decoders W.rounds ByteArray)
     (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
     (I : (W.extend M.widening).L.Ω → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
-    (h0 : ∀ ω, I ω 0 (Pos.root (roundCuts V θ F c rd) (M.start ω)))
-    (hm : ∀ (ω : (W.extend M.widening).L.Ω) (i : ℕ) (m : Flock.Guarantees.MemberV5 ByteArray W.nJ)
-      (p q r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds))
-      (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) m) (memberPts m)),
-      ((W.extend M.widening).joint t).ms[i]? = some m → I ω i p →
-      MemberReach D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) i m p q out → q.Le r →
-      r.Inv (roundCuts V θ F c rd) →
-      V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
-        P (CoinTape.run (V.game θ F c) σ r.tape) →
-      I ω (i + 1) q ∧ ((m.part ((W.extend M.widening).L.draw ω)).Nonempty →
-        FlockSoundness.Discharge.ZkHidden.AcceptsZKP m.I m.own
-          (m.wr (m.part ((W.extend M.widening).L.draw ω)) (windowReg V θ F c W rd σ D) out))) :
-    WindowDecodes V θ F c k P W t rd σ D M BL B := by
+    (h : MemberDecodes V θ F c k P W t rd σ D M BL B I) : WindowDecodes V θ F c k P W t rd σ D M BL B := by
   intro o ho hacc
   obtain ⟨ω, r, -, hS, hc, ht⟩ := ho.chain
   rw [ht] at hacc
@@ -284,12 +294,10 @@ theorem windowDecodes_of_members (k : Verity.Registration.Composite) (P : Exchan
   have hf : List.Forall₂ (fun (m : Flock.Guarantees.MemberV5 ByteArray W.nJ) ts =>
       (m.part ((W.extend M.widening).L.draw ω)).Nonempty →
         FlockSoundness.Discharge.ZkHidden.AcceptsZKP m.I m.own ts) ((W.extend M.widening).joint t).ms o.1.2.2 :=
-    hc.forall₂ (Acc := fun m ts => (m.part ((W.extend M.widening).L.draw ω)).Nonempty →
-        FlockSoundness.Discharge.ZkHidden.AcceptsZKP m.I m.own ts) (I ω) (h0 ω)
-      fun j k m p q out hj hk hI hmr hle => by
-        have e : k = j := by omega
-        subst e
-        exact hm ω _ m p q r out hk hI hmr hle hri hacc
+    hc.forall₂ (I ω) (h.start ω) fun j k m p q out hj hk hI hmr hle => by
+      have e : k = j := by omega
+      subst e
+      exact h.step ω _ m p q r out hk hI hmr hle hri hacc
   have ho1 : o.1 = (o.1.1, (W.extend M.widening).L.draw ω, o.1.2.2) := Prod.ext rfl (Prod.ext hS rfl)
   rw [ho1]
   exact hf
