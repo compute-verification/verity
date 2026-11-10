@@ -420,10 +420,10 @@ theorem wordsAreTheSemantics_of (hA : PeelARow) (hB : PeelBRow) : WordsAreTheSem
   have hjn := hcols _ (get!_mem hy)
   have hWy := hW _ (get!_mem hy)
   obtain ⟨hseed, -, -, hF⟩ := fixedNoiseIsTheSpec salt rootB _ wn hwn
-  have hsd : bytesNat wn.seedB = NoiseSha512.seedB (saltOf s) (rootOf (U.layout.wid u)) := by
+  have hsd : bytesNat wn.seedB = NoiseSha512.seedB (saltOf s) (rootOf (U.layout.fixedId u)) := by
     rw [hseed, hsalt, hroot]
   obtain ⟨hC, hP⟩ := tileWords (z := (semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act)
-    (wt := U.weight (U.layout.wid u)) hA hB hk hact hwt
+    (wt := U.fixed (U.layout.fixedId u)) hA hB hk hact hwt
     (fun l hl t => by rw [(hF l hl t).1, hsd]; rfl) (fun l hl t => by rw [(hF l hl t).2, hsd]; rfl)
     (fun i hi e he => by
       obtain ⟨h1, h2⟩ := lineIsTheSpec _ 0 0 0 Words.NORM_E 256 e (by norm_num) (by norm_num) (Or.inl ⟨rfl, rfl⟩) he
