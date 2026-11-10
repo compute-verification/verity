@@ -1333,6 +1333,29 @@ def test_runs_why_with_any_other_change_is_refused(tmp_path):
     assert f["path"] == "L/lean-audit.json" and "changed beyond moved paths" in f["reason"] and "bit for bit" in f["hunk"]
 
 
+FROZEN = "frozen (no-function): Sec: it is about an arbitrary run (Sec/Defs/A.lean:3)"
+
+
+def _renamed(tmp_path: Path, reason: str) -> dict:
+    """The directory `Sec/` renamed `sec/`, whose lock gives a reason that names a file of it and a conclusion `Sec`."""
+    repo, base = _repo(tmp_path, {"Sec/Defs/A.lean": "def a := 1\n",
+                                  "Sec/lean-audit.json": _lock(guarantees={}, shape={"frozen": {"T.Sec": FROZEN}})})
+    _move(repo, "Sec", "sec")
+    _write(repo, {"sec/lean-audit.json": _lock(guarantees={}, shape={"frozen": {"T.Sec": reason}})})
+    return _check(repo, base)
+
+
+def test_a_lock_field_that_leaves_a_moved_directorys_name_as_a_word_is_certified(tmp_path):
+    """A top-level directory's name is also a word, in a lock's reasons as in a text file's lines: the move rewrites
+    the path and leaves the conclusion's name."""
+    moved = FROZEN.replace("Sec/Defs", "sec/Defs")
+    r = _renamed(tmp_path / "left", moved)
+    assert r["certified"], r["refusals"]
+    assert _renamed(tmp_path / "all", moved.replace("Sec:", "sec:"))["certified"]
+    [f] = _renamed(tmp_path / "more", moved.replace("arbitrary", "any"))["refusals"]
+    assert f["path"] == "sec/lean-audit.json" and "`shape` changed beyond moved paths" in f["reason"]
+
+
 TERMS = 'scope = "prose"\n\n[words]\n"draw" = "sample"\n\n[[words_in]]\nfiles = ["c.py"]\nwords = { "draw_one" = "pick_one" }\n'
 TERMS_BASE = {
     "tools/move/terms_map.toml": TERMS + '\n[rewrite]\nexclude = ["tools/move/**"]\n',
