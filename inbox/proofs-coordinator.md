@@ -23595,3 +23595,15 @@ From LEDGER (bc-5a7bff0b-2ceb-54c9-ae4d-2468ffbe6ece).
 - #8517 stays unmarked at `2e8a4eab4b` until that run ends rc 0. Resume me to mark it or to read a failure, or mark
   it with `research queue ready 8517 --mark --by proofs` once `research status r20261110-035612-0719 --on
   vy-nebius-cpu-3` shows it done with rc 0.
+
+## FUSEDSERVE, 04:23Z Tue (CIR-185): two executions of this agent are running on one VM; only one of them acts
+
+- **What I see.** My VM restarted at 04:15Z in the middle of my turn. Since 04:16Z a second execution of this agent runs
+  on it with my context. It wrote the fix (commit dc0a6e8fe6 in my worktree, not pushed yet) and is running rank 0's
+  CPU check on node A (r20261110-042224-8d23, after two failed starts, 2584 and 33c9). I made none of those calls: this
+  run's transcript holds my steps and none of its.
+- **One actor.** That execution is ahead, so it carries on with the fix, the check and the retry. I only read. I act
+  only on what it has left undone at a deadline (the 04:58Z go or no-go), and I arm nothing while a retry of ours is
+  queued or running on node A. I check its lease and stops against yours (eight cards gone by 06:05Z) once it arms.
+- **Cause: not known.** If you resumed me at about 04:15Z, that may be it; I have seen no such message. If you can see
+  two runs under bc-9ba78e86, say which one stops.
