@@ -5326,6 +5326,92 @@ def test_a_dependent_staged_on_a_cold_cache_rewrites_no_file_its_dependency_s_au
     assert (build(d2), build(p2)) == ((set(), {}), (set(), {})), "a second tree restores D and P and compiles neither"
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_dependent_that_fetches_more_than_its_dependency_stores_both_on_a_cold_cache(tmp_path, monkeypatch):
+    """`d` fetches a package `x`; `p` requires `d` by path and fetches `z` too, as a proofs package requires the
+    definitions' and fetches more than they do. A node's artifact cache holds nothing. `d` is built, by its own Lake over
+    its own copy of `x`, then `p`, whose Lake finds `D` up to date, and what the two builds compiled is stored. `D`'s key
+    names `x`'s pin and no `z`, which `d` can't import: it is one key under `d` and under `p`, so the compile `d`'s build
+    left is `D`'s entry under `p` as well and `P`, which loads it, is stored above it. When `D`'s key under `p` named
+    `z` too, `d`'s own compile of it was no compile of that key, nothing stood under it, and every tree compiled `P`
+    again. A second tree compiles neither package's modules."""
+    spec = importlib.util.spec_from_file_location("lean_audit_for_fetched", HERE.parent / "lean_audit.py")
+    LA = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(LA)
+    mk = A.sibling("module_keys")
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(A, "ARTIFACTS", store)
+    stages = iter(range(99))
+    toolchain = HERE / "fixtures" / "control" / "lean-toolchain"
+    git = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull, "PATH": os.environ["PATH"],
+           **{f"GIT_{who}_{what}": v for who in ("AUTHOR", "COMMITTER") for what, v in (("NAME", "a"), ("EMAIL", "a@example.org"))}}
+
+    def manifest(name: str, packages: list[dict]) -> str:
+        return json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": packages, "name": name,
+                           "lakeDir": ".lake", "fixedToolchain": False})
+
+    def fetched(name: str) -> dict:
+        """A package `name` with one module, as a Git repository under `upstream`: its entry in a manifest that pins it."""
+        repo = tmp_path / "upstream" / name
+        repo.mkdir(parents=True)
+        (repo / "lakefile.toml").write_text(f'name = "{name}"\n\n[[lean_lib]]\nname = "{name.upper()}"\n')
+        (repo / "lake-manifest.json").write_text(manifest(name, []))
+        (repo / f"{name.upper()}.lean").write_text(f"def {name.upper()}.v : Nat := 1\n")
+        (repo / ".gitignore").write_text(".lake\n")
+        shutil.copy(toolchain, repo)
+        for argv in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", name]):
+            subprocess.run(["git", *argv], cwd=repo, check=True, capture_output=True, env=git)
+        rev = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True,
+                             env=git).stdout.strip()
+        return {"url": str(repo), "type": "git", "subDir": None, "scope": "", "rev": rev, "name": name,
+                "manifestFile": "lake-manifest.json", "inputRev": rev, "inherited": False, "configFile": "lakefile.toml"}
+
+    x_pin, z_pin = fetched("x"), fetched("z")
+    by_path = {"type": "path", "scope": "", "name": "d", "manifestFile": "lake-manifest.json", "inherited": False,
+               "dir": "../d", "configFile": "lakefile.toml"}
+
+    def tree(ws: Path) -> tuple[Path, Path]:
+        for name, text, requires in (("D", "import X\n\ndef D.v : Nat := X.v\n", [x_pin]),
+                                     ("P", "import D\nimport Z\n\ndef P.v : Nat := D.v + Z.v\n",
+                                      [by_path, z_pin, x_pin | {"inherited": True}])):
+            at = ws / name.lower()
+            at.mkdir(parents=True)
+            (at / "lakefile.toml").write_text(
+                f'name = "{name.lower()}"\ndefaultTargets = ["{name}"]\n'
+                + "".join(f'\n[[require]]\nname = "{r["name"]}"\n'
+                          + (f'path = "{r["dir"]}"\n' if r["type"] == "path" else f'git = "{r["url"]}"\nrev = "{r["rev"]}"\n')
+                          for r in requires if not r["inherited"])
+                + f'\n[[lean_lib]]\nname = "{name}"\n')
+            (at / "lake-manifest.json").write_text(manifest(name.lower(), requires))
+            shutil.copy(toolchain, at)
+            (at / f"{name}.lean").write_text(text)
+            for r in requires:
+                if r["type"] == "git":
+                    shutil.copytree(tmp_path / "upstream" / r["name"], at / ".lake" / "packages" / r["name"], symlinks=True)
+        return ws / "d", ws / "p"
+
+    def build(pkg: Path) -> set[str]:
+        """The modules of `d` and `p` that Lake compiled in ``pkg``'s build as an audit runs it: staged from the node's
+        cache, then `lake build` reading what was staged. Each tree compiles its own copies of `x` and `z`, which an
+        audit's fetched packages come built."""
+        cache = tmp_path / "staged" / str(next(stages))
+        _, said = A.stage_build(mk, pkg, [pkg.name.upper()], cache)
+        r = subprocess.run(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], cwd=pkg,
+                           capture_output=True, text=True, env=A.lake_env())
+        assert r.returncode == 0 and "error" not in said and not said["took"], (said, r.stdout + r.stderr)
+        shutil.rmtree(cache)
+        return {m for m, *_ in A.BUILT.findall(r.stdout + r.stderr)} & {"D", "P"}
+
+    d, p = tree(tmp_path / "ws")
+    assert (build(d), build(p)) == ({"D"}, {"P"}) and not list((store / mk.INDEX).glob("*")), "the cache is cold"
+    under = {r.name: mk.keys(r)["D"] for r in (d, p)}
+    one_key = (under["d"].env, under["d"].task) == (under["p"].env, under["p"].task)
+    stored = LA.LakeArtifacts(store).put({d: {"sandbox": True}, p: {"sandbox": True}}, log=lambda s: None)
+    d2, p2 = tree(tmp_path / "elsewhere" / "ws")
+    again = (build(d2), build(p2))
+    assert (one_key, stored, again) == (True, 2, (set(), set())), "D has one key under d and p, and a second tree compiles neither"
+
+
 def test_without_the_sandbox_a_module_no_build_of_the_run_compiled_fails_the_audit(tmp_path, monkeypatch):
     """Where check.py's own sandbox probe fails, nothing is recompiled, so a module its build didn't compile passes only if
     a build of this run compiled it, as a dependent's path dependency's audit compiled it. One restored or kept fails,
