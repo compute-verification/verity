@@ -29697,3 +29697,37 @@ LEDGER, PRF-492: a planner run's `out/rows.jsonl`, one JSON object a row. I read
 **5. For you alone.**
 - **Network's other line.** It asks proofs to fix `accounting/network-glm53`'s "53,000 TB or more" once the world is one number. At 1.778e16 network gives 44,500 TB (10 bits) to 57,900 TB (13 bits) [network's figures, not mine]. The goal is yours to set.
 - **What's left:** r20261110-165156-0d56, the `spot_figures` suite on my PRF-497 branch, on cpu-8's research pool behind 14 waiting runs. It should start about 18:05Z and finish about 18:20Z. Nothing else is due from me.
+
+## SPOTCROSS, Tue 10 Nov 17:14Z: #8339's `ReadsAt.lean` never built and is the file you already ruled a PR of its own, so the scratch branch drops it (`5d237526ef09`, your yes needed); `DrawnAt` builds as it is; the fixture's export is queued for about 18:05Z
+
+Your 16:30Z and 16:48Z entries, read. I am `bc-620a35fa-6df3-5b43-9c93-59767f937835`.
+
+**#8339, `cursor/proofs-cross-8339-e88a` at `5d237526ef09`** (was `a43c3b92eb3a`)
+- **`DrawnAt.lean` needs no mending.** Try `r20261110-163844-7a68` (cpu-1) at `a43c3b92eb3a`: lean exit 0 in 698 s, 31 theorems, no axiom beyond the three. [run] My guess at 16:42Z that it would not build was wrong.
+- **`ReadsAt.lean` fails, and not because of the merge.** Try `r20261110-170045-7b73` (cpu-1): lean exit 1. [run]
+  - `portsOf_reads` (:203, :219): its walk stops at `reads_from`'s join point.
+  - `unitIndices_session` (:282): it gives `HeaderRoots.loadPublic_raw`, a lemma about `HmRow.loadPublic`, a hypothesis about `HmOut.loadPublic`.
+  - `regEntry` and `CheckedRun.labelAt` fall with those two.
+  - Everything these read (`Flock/Registered.lean`, `Flock/HmRow.lean`, `HeaderRoots.lean`, `Refine/Walk.lean`) is the same at #8339's head and on the candidate. [run, `git diff --stat`] So the file did not build at `b51bd3382126` either. [read; I ran no try at that head]
+- **What the file is.** #8339 holds TWOOPENS's snapshot `6ac7ec5c71` (397 lines, Mon 11:43Z), merged in mid-work for `ownOf`'s parts; #8339's body says so. TWOOPENS's branch went on to 1,161 lines (`5f9455f2b9`). That later text does not build beside #8486 (TWOOPENS's `r20261110-063500-15e2`, their 07:04Z entry [read, not my run]), and #8486 is in the candidate (`1e45282296`). [run] You ruled then that ReadsAt gets its own PR, by Thu 12 Nov 12:00Z, and #8363 dropped it (`afa64c80e0`).
+- **So I did not mend it; `5d237526ef09` removes it,** with its one import in `Proofs/Flock.lean`, as #8363 did. No lock entry names it and nothing else imports it. [run] Mending it here would be TWOOPENS's three-hour PR done twice. **This is a change to what #8339 holds, so it is yours to accept:** say no and I revert the commit, and #8339 stays unbuildable until ReadsAt's PR.
+- **`DrawnAt.lean` stays.** It is byte for byte #8363's copy (head `a81a1b11ea1d`). [run] If you would rather #8363 alone carry it, #8339 over the candidate is then one line of `fixtures/artifacts.json` and no Lean; say so and I drop it too.
+- **What #8339 adds over the candidate now:** `DrawnAt.lean`, its import, and the fixture's line. [run]
+- **The fixture.** Neither registered fixture has `rows` in `held.json`: #8339's `art:fcc14a73…` has five templates and `wires`; the candidate's `art:a4086fce…` has four templates and neither. [run, both fetched and read] So the candidate's own registered fixture is stale against its `TwoGuard.lean` too. [read]
+- **Runs:**
+  - export, `benchmarks/two_stage/audit.sh` at `a43c3b92eb3a` (the same `benchmarks/` and `verity/` as `5d237526ef09`): **r20261110-165150-c0e5**, cpu-8, 14 ahead, start about 18:05Z;
+  - records of `Security/Proofs` at `5d237526ef09`: **r20261110-171059-2ece**, cpu-12 pool proofs, first in line at 17:12Z;
+  - quick tier at `5d237526ef09`: **r20261110-171219-76b5**, cpu-2, 12 ahead, start about 18:35Z;
+  - cancelled, both launched from `a43c3b92eb3a`: records `r20261110-170100-50c9` and quick tier `r20261110-164015-e3dd` (it never started; relaunching cost its 31 minutes in line).
+- **Left after the export:** `guard.py pack`, `research data put --kind fixture/v1 --preserve`, the registry line, then `guard_node.py --pytest` on a node (#8339's body gives 2,342 s for it) for "TwoGuard.lean accepts it", and the suites that read the registry. That ends after 19:30Z [guess], past your 19:00Z.
+
+**#8139, `cursor/proofs-cross-8139-bd99` at `424189699fbf`** (unchanged)
+- Quick tier **r20261110-162729-765c** (cpu-11, 71 suites): running since about 16:55Z. Verdict about 17:45Z. [guess]
+- Records of `Security/Proofs`: **r20261110-164306-7f23**, cpu-12 pool proofs, running since 16:43Z. **A correction:** my 16:42Z entry named `r20261110-163018-71b6` (cpu-8, pool `build`); that was a duplicate and I cancelled it.
+- The one rename move #8139's head has not crossed (`core_incorrect_map.toml`, #8347) rewrites 0 files of the merged tree. [run, `rename.py --dry-run`] On #8339's it is the same, and `trace_transcript_map.toml` rewrites one line, which the candidate has too (`test_audit.py:4074`).
+
+**#7780:** closed by you; nothing left.
+
+**Note:** `lanes/proofs/20261110T1714Z-checkpoint-spotcross.md`.
+
+**I end my turn here,** since everything left is a wait of more than 20 minutes. Resume me for: #8139's two verdicts; #8339's records, export and the fixture; your yes or no on dropping ReadsAt (and DrawnAt); and BASE.
