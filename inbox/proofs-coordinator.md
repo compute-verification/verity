@@ -26624,3 +26624,44 @@ The heads are #8406 `fe32fa055d` and #8486 `ec0803420c`. Neither changes `Regist
 - **#8454.** Head `0e694dd53e`, unmarked. The quick suites at `4ea8a5a63c` (`r20261110-063327-fbf1`) failed one test of #8538's,
   `test_names.py::test_statement_dir`, on my merged `prove_time.sh`; `0e694dd53e` fixes the script, not the test. The quick
   suites at `0e694dd53e` are `r20261110-070323-3236` on cpu-12, running. The mark and the line you asked for follow when it passes.
+
+## LLAMARATE, Tue 10 Nov 07:12Z: the page is revised on PROVECUT's review; PRF-484's question is a yes (every member's `--registered` file before the draw), with a draft
+
+Both are about 13 hours before your Tue 20:00Z. Nothing was run; no code, no branch. [read] is a file and line I read, [run] a lookup, [relayed] another worker's or lane's statement, [estimate] mine.
+
+**1. The page** (`note:proofs/20261110T0551Z-draft-ask-one-draw-several-sessions`, revised in place; the tool's page check passes). What changed, each from PROVECUT's 06:55Z entry and your 07:00Z note:
+
+- **One new step, not two.** Background now says a cut needs one new step, unsized: one set of incorrect blocks, fixed before the draw, that every session of a member agrees with; today each member's set comes from its own session; parts that depend on the draw are routine. I checked it [read]: `Bound.lean:53-75` goes through the union (`:68-69`) and unfolds `part` (`:71`), and each member's set is its own session's (`Statement.lean:264-265`). "Why the lane recommends A" says A costs that one step, sized first.
+- **The in-turn check's cost** is under A: Pearl+'s 630 to 1,160 sessions run one at a time until sessions side by side are proved [PROVECUT's guess].
+- **What the form shows beyond today** is under A: `m`, each session's size, and each session's duration. The duration is PROVECUT's guess (it did not read the release side). Drop the clause if you would rather not state a guess to Daniel.
+- **Option D** names the form the review recommends (a closure of fixed size a tile, repeats allowed, not yet written), its three definitions (`Spot.OneStage.evidenceOf`, `Spot.Draw.proved`, `provedHeld`) and the lock's records of `Spot.OneStage` and `Spot.Draw`.
+- **The table counts:** "630 to 1,160 tables: at the smallest blocks, 83 to 254 in each stratum". "Four" is gone. The card's `--why` in the note's `post:` line is changed to match.
+- **Smaller:** three proofs "gain a case" (PROVECUT's answer 6), not "move"; the review is in Sources.
+- **Length:** 1,086 words of prose with the formulas and the Sources out (about 1,010 at 06:11Z by the same count), 1,190 with them. The skill says about 400 to 900. Everything added is what the review asked for; if it must shrink, the Background's table (five rows) is the piece I would cut first, since TOP-394 holds it.
+- **Still yours to set**, unchanged from my 06:11Z entry: the default (C at 6 PM PST Fri 13 Nov) or blocking, and whether the members' use waits on Daniel too.
+
+**2. PRF-484's question: yes.** Every member's `--registered` file is completed before the draw. That is what the sentence meant. Full text with lines: `note:proofs/20261110T0235Z-report-which-one-stage-v2-main-keeps`, section 6. A draft for PRF-484, 226 words:
+
+> **Yes: complete every member's `--registered` file before the draw. That is what we meant.**
+>
+> - **The parameter is the file.** In `remote`'s per-member form each member's `registered` is the verifier's registered file itself, an object, beside its circuit's digest (`OneStageZk.lean:168-179`, `:188-207`). No digest or path names it. So the parameters are fixed before the draw only if every member's file is.
+> - **Nothing else fixes it.** `remote`'s Lean reads a member's file only if the evidence holds a statement for it (`runMembers`, `:574-580`), and holds no file to the registration (`publicHeld` is `main`'s). No check reads an undrawn member's file, completed or not, and a drawn member's file completed after the draw reads the same as one completed before it. The bound still speaks about every member's blocks.
+> - **The fold is not what fixes it.** The verifier's file takes its roots, domains and leaf counts from the registration, and its reads from the layout and the staged body (`flock_inputs.py:146-168` on your branch). The fold checks the served rows against the root and makes the header's paths, which only a drawn member's session reads. Keep it or move it after the draw: the parameters are the same.
+> - **Open, soundness's point 2:** if the public file's digest moves to the parameters, every member's public file is completed before the draw too, and the fold with it.
+
+What is behind it:
+
+- **What the parameters bind** [read]. In all three forms the registered file is the object itself, never a digest, a path or a root: `main` `Spot/OneStageZk.lean:180-183` (with the circuit's and the public file's SHA-512, `:178-179`, keys `:190`); `remote` one statement `:171-174`; `remote` per member `:193-194`. The public file's digest is in the parameters on `main` and in the evidence on `remote` (`:249-250`, per statement `:262`).
+- **What completion adds** [read: `flock_inputs.py:98-171` at 0d4fea3311]. For each port that is no parameter port: its value's name, words, schema and first unit from the layout; its root, domain and leaf count from the registration; its reads, the identity or, for a shared-row member, the staged body's refs. Every field is fixed before the coins as a function: the registration record holds the roots and the bodies' leaf layer (`rows.py:796-798`, `:816`). But no Lean check on `remote` holds the file to the registration, so only the parameters' being fixed before the draw fixes it.
+- **The lighter way passes the same check** [read]. `m.own` is read at `:578` only, for a member a statement names [run: grep]. So nothing in the record tells the two ways apart but the driver's own check (`registered_fixed`). That is the reason to keep it, not to drop it.
+- **`remote`'s own a5 already does it** [read at 700a981f5d]: it writes every reading member's `registered.json` at `a5.py:784-791` and draws at `:797`. It binds the other ports at the registration's root and domain, which costs no fold. The fold is the price of "every port a registered read", which our answer asked for because no proof reads `RegBound`.
+- **The cost of the stricter way: not measured, and avoidable** [read; the suggestion is network's code, not mine]. The fold hashes a leaf for each row and the tree above, in one process (`rows.py:777-784`), then writes a path for each row (`flock_inputs.py:164-165`). The verifier's file reads none of it (`:166-168`). So `complete_members` could write the files without folding, and `complete_drawn` fold the drawn members as today. What is lost is the refusal, before the draw, of an undrawn member whose rows do not fold to its root; no guarantee reads it. As staged, a drawn member is folded twice (`a5.py:667` and `:692`).
+- **A reason to keep the fold until soundness answers.** `JointSampledV5` fixes each member's public file with the audit, before the registration is sent (`MemberV5.I`, `Statement.lean:65-67`; `Flock/Witness.lean:41-48`). `remote`'s check takes it from the evidence. If point 2 goes `main`'s way, every member's public file is completed before the draw, and that needs every member's fold. What network staged already computes it.
+
+**For soundness (PRF-490), not decided here:** point 2 for the per-member form (is each member's public file fixed before the draw, as `MemberV5.I` has it, or may the evidence name it); and that `JointSampledV5` names no registered file [run: grep over `Joint/V5/`], so how the leg ties each member's `registered` parameter to its statement is the leg's to say.
+
+**Not verified:** the fold's cost (no figure); the staged port's tests and its run (`r20261110-061705-bdcb` [relayed]); whether any check holds a shared-row member's refs to the window's public layout, or the staged bodies to the registration's leaf layer before the draw (I read the pin's docstring, which names R4, not the check); `HmOut.checkPublic` itself (I read what `RegBound.lean:5-6` says of it).
+
+**Two corrections I owed from 06:11Z.** The three files of the audit's proofs that name the no-closure fact are `Properties/Verity/Sampled/Held.lean`, `Properties/Spot/Credited.lean` and `Properties/Verity/Sampled/Record/Nums.lean`; the other five of the eight are Flock's, about a session's own draw. And `plan.py:1-22` [read] confirms a closure spans templates and Programs.
+
+**The resolved `OneStageZk.lean` in the merge:** I read it when you name who resolved it. I cannot be woken by a subscription (a Task subagent's are refused), so I poll my file inbox about every 20 minutes while this turn lasts.
