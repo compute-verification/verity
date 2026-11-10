@@ -176,17 +176,8 @@ theorem StreamedWipeMeetsServer5GB_fails : ¬ StreamedWipeMeetsServer5GB acceptA
       (keepAll _ _ _ _ _ _ (by decide +kernel)) le_rfl)
 
 /-- **`StreamedWipeMeetsServerH200`'s honest lemma**: the premises of the 5 GB form hold at the deployed H200 as
-<<<<<<< ours
 measured (`h200`): its fill of `n = 2,319,974,400` labels and `R = 18,211,667,968` bits (2.28 GB) outside it, at
 the deployed `k = 5500` and `r = 62`. -/
-||||||| base
-measured in r20261026-003454-bfd2 (`h200`, `art:213936fe824d1f844fe4bb0cbc4749fcc364e0dc38757c9fa73848a7872bfaa4`):
-its fill of `n = 2,319,974,400` labels and `R = 18,211,667,968` bits (2.28 GB) outside it, at the deployed `k = 5500`
-and `r = 62`. -/
-=======
-measured (`h200`): its fill of `n = 2,319,974,400` labels and `R = 18,211,667,968` bits (2.28 GB) outside it, at the
-deployed `k = 5500` and `r = 62`. -/
->>>>>>> theirs
 theorem StreamedWipeMeetsServerH200_meets :
     h200.Ms = 512 * h200.n + h200.R ∧ 0 < h200.n ∧ 0 < h200.r ∧
       (h200.r - 1) ^ h200.k * 2 ^ 129 ≤ h200.r ^ h200.k ∧ OperatingPoint h200.n h200.r h200.k h200.R := by

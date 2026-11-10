@@ -45,44 +45,18 @@ import Proofs.Pous.Prob
 /-!
 # The pooled sample: windows and sessions, the proof
 
-<<<<<<< ours
-**A window.** The window's draw of `d` openings is uniform over its `P·N` receipts and independent of its passes'
-coins: at each store and each value of those coins, the window's correct receipts are one fixed set, and the draw lands
-in it with probability `(#correct/(P·N))^d` (`Pooled.pr_sample'`, `Chain.pr_draw_le`).
-||||||| base
-**A window.** The window's draw of `d` openings is uniform over its `P·N` receipts and independent of its passes'
-coins: at each store and each value of those coins, the window's correct receipts are one fixed set, and the draw lands
-in it with probability `(#correct/(P·N))^d` (`Horizon.pr_sample'`, `Chain.pr_draw_le`).
-=======
 **A window.** The window's sample of `d` openings is uniform over its `P·N` receipts and independent of its passes'
 coins: at each store and each value of those coins, the window's correct receipts are one fixed set, and the sample lands
-in it with probability `(#correct/(P·N))^d` (`Horizon.pr_sample'`, `Chain.pr_sample_le`).
->>>>>>> theirs
+in it with probability `(#correct/(P·N))^d` (`Pooled.pr_sample'`, `Chain.pr_sample_le`).
 
 **The monitoring period.** A session's windows are causal rounds over `M = P·N` items (`Rate.Causal`): window `w`'s
-<<<<<<< ours
-correct receipts read the store, the earlier windows' coins, their draws among them, and its own passes' coins, never
-its own draw. `PooledSampling` bounds the session's shortfall over its windows (`Session.pr_draws_le`).
-||||||| base
-correct receipts read the store, the earlier windows' coins, their draws among them, and its own passes' coins, never
-its own draw. `HorizonSampling` bounds the session's shortfall over its windows (`Session.pr_draws_le`).
-=======
 correct receipts read the store, the earlier windows' coins, their samples among them, and its own passes' coins, never
 its own sample. `PooledSampling` bounds the session's shortfall over its windows (`Session.pr_samples_le`).
->>>>>>> theirs
 
 **The floor in every window.** Keep the first window whose correct receipts number at most `K_w` as it is and count
 every other window's receipts all good: still causal, since whether window `w` is the first short one reads only the
-<<<<<<< ours
 windows up to `w`, and the good sets then hold at most `(n − 1)·M + K_w` items in all. `PooledSampling` bounds it,
 with no union over the windows (`Pooled.pr_floor_le`).
-||||||| base
-windows up to `w`, and the good sets then hold at most `(n − 1)·M + K_w` items in all. `HorizonSampling` bounds it,
-with no union over the windows (`Horizon.pr_floor_le`).
-=======
-windows up to `w`, and the good sets then hold at most `(n − 1)·M + K_w` items in all. `PooledSampling` bounds it,
-with no union over the windows (`Horizon.pr_floor_le`).
->>>>>>> theirs
 
 **Paid.** A session with more than `K` correct receipts in all, or more than `K_w` in every window, whose reads fall
 short of those receipts' words leaves some window short (`Session.pr_unpaid_le`), and that window some pass, which
