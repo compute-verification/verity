@@ -10,7 +10,7 @@ that registered no run, never ran or was stopped is infra, which the loop launch
 passed run passes once its Lean report (`merge.lean_report`) can be read: every package it regenerated is committed, and a
 change to what a guarantee says (the report's `statement_changes`: a guarantee's statement, a definition one reads, a listed
 premise or listed compile-time code) refuses nothing.  The records commit names each such change (`_changes`), and the spec DM
-shows Daniel each one once it lands on `main` (`merge.caught_up`, on the loop's `on_main`): that DM is the check.
+shows each one once it lands on `main` (`merge.caught_up`, on the loop's `on_main`): that DM is the check.
 
 A records commit is drive's lock commit (`Driver._put_locks`): the records the run regenerated (`Driver._locks`, from the
 store, else from its run dir on its node), each at its path in the tree (`drive.lock_path`), committed on top of the candidate
@@ -132,7 +132,8 @@ def _kept(got: dict) -> RecordsRun:
 def _changes(driver: Driver, rid: str, tip: str) -> list[str]:
     """What the records passed records run ``rid`` regenerated change of what a guarantee says: each line of the review of each
     package it regenerated whose report says its records do (`statement_changes`), its details aside, under the package and
-    with the owners of what it names in ``tip``'s lock (`_owners`).  Raises `QueueError` when its Lean report can't be read."""
+    with the owners of what it names in ``tip``'s lock (`_owners`), which a package new at ``tip`` hasn't.  Raises when its Lean
+    report, or a lock of ``tip`` it names, can't be read."""
     report = lean_report(driver.q.store, rid, driver.fetch)
     if not isinstance(report, dict):
         raise QueueError(f"{rid}'s Lean report ({AUDIT}) can't be read from the store or from its run dir on its node")
@@ -144,10 +145,7 @@ def _changes(driver: Driver, rid: str, tip: str) -> list[str]:
         if r is None or not r.get("statement_changes"):
             continue
         got = _git(driver.repo, "show", f"{tip}:{lock_path(pkg)}", check=False)
-        try:
-            lock = json.loads(got.stdout) if not got.returncode else {}
-        except ValueError:
-            lock = {}
+        lock = json.loads(got.stdout) if not got.returncode else {}
         out += [f"{pkg}: {line} ({', '.join(_owners(lock, line))})" for line in r.get("review") or ()
                 if isinstance(line, str) and line[:1] != " "]
     return out
@@ -198,8 +196,8 @@ def commit(driver: Driver, sha: str, rid: str, prs: Iterable[int]) -> tuple[str,
     try:
         changed = _changes(driver, rid, sha)
     except Exception as e:  # noqa: BLE001  (a commit naming none of the changes its records make never lands)
-        return (f"{rid}'s Lean report ({AUDIT}) can't be read ({type(e).__name__}), so a records commit couldn't name what "
-                "its records change of what a guarantee says")
+        return (f"{rid}'s Lean report ({AUDIT}) or a lock it names can't be read ({type(e).__name__}), so a records commit "
+                "couldn't name what its records change of what a guarantee says")
     prs = " ".join(f"#{n}" for n in prs) or f"`{into}` {sha[:12]}"
     warned = bookkeeping_warnings(driver.q.store, rid, driver.fetch)
     message = lock_message(prs, rid, into, sha, warned, files, changed)
