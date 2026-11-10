@@ -80,6 +80,7 @@ public import Proofs.Flock.SpotFlock.Depths
 public import Proofs.Flock.SpotFlock.InstanceStmt.File
 public import Proofs.Flock.SpotFlock.InstanceStmt.Sizes
 public import Proofs.Flock.SpotFlock.InstanceStmt.Digests
+public import Proofs.Flock.SpotFlock.InstanceStmt.Inputs
 public import Proofs.Flock.Encodings
 public import Proofs.Flock.SpotFlock.Reveals
 public import Proofs.Flock.SpotFlock.RevealsLe
