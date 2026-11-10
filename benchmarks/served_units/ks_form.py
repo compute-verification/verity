@@ -2,8 +2,9 @@
 `one_stage.proofs.ks_form_why` and `template_why` on the circuit file's head, the Python mirror that
 `verity/ml/flock/tests/test_lean_ks_form.py` holds to `flock-verify ks-form` (seconds a statement). One TSV line a statement:
 its directory, type, n, META's ``out_net`` (the net returning the outputs: ``unit``, or a tail stage the unit's form
-refuses), whether the public file has shared rows, and ``accepted`` or the refusal. A shared-row public file is Lean's alone
-to refuse (`KsScope.sharedWhy`), which the mirror doesn't run, so its line says that check is open."""
+refuses), whether the public file has shared rows, and the mirror's verdict (``mirror_zk``: ``accepted`` or the
+refusal; Lean's own is `flock-verify ks-form`'s). A shared-row public file is Lean's alone to refuse
+(`KsScope.sharedWhy`), which the mirror doesn't run, so its line says that check is open."""
 
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ def form(d: Path) -> list[str]:
 
 
 def main(dirs: list[str]) -> None:
-    print("dir\ttype\tn\tout_net\tshared_rows\tlean_zk")
+    print("dir\ttype\tn\tout_net\tshared_rows\tmirror_zk")
     for fw in dirs:
         for d in sorted(Path(fw, "data").iterdir()):
             if (d / ".done").exists():
