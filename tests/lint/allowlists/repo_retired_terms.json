@@ -4717,7 +4717,7 @@
     {"file": "tools/verity/graph/verity_graph/runners/lean_agreement.py", "count": 1},
     {"file": "tools/verity/graph/verity_graph/runners/lean_unit_cut.py", "count": 1},
     {"file": "tools/verity/lean/Facts.lean", "count": 2},
-    {"file": "tools/verity/lean/README.md", "count": 8},
+    {"file": "tools/verity/lean/README.md", "count": 6},
     {"file": "tools/verity/lean/check.py", "count": 14},
     {"file": "tools/verity/lean/lean_audit.py", "count": 86},
     {"file": "tools/verity/lean/merge.py", "count": 67},
