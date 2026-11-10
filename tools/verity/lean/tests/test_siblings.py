@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -71,12 +72,15 @@ def test_a_trace_states_its_source_by_file_name_or_states_none(tmp_path):
     trace.write_text(json.dumps({"depHash": "950f7100ae4d8693", "inputs": [
         ["deps", [["imports", [["P.B:importArts", "722ab1e256688428"]]]]], ["Lean 4.34.0", "a1c6c7aa3e9abfe7"],
         ["/tree/p/P/A.lean", "42d00b9fd865c9a6"], ["options", "00000000000006bb"]]}))
-    assert S.built_from(trace, "A.lean") == "42d00b9fd865c9a6"
-    assert S.built_from(trace, "B.lean") is None and S.built_from(tmp_path / "none.trace", "A.lean") is None
+    assert S.built_from(trace, "A.lean") == ("42d00b9fd865c9a6", False)
+    assert S.built_from(trace, "B.lean") == (None, False) == S.built_from(tmp_path / "none.trace", "A.lean")
     for text in ("{}", "[]", '{"inputs": [["/tree/p/P/A.lean", "42d0', '{"inputs": {"/tree/p/P/A.lean": "42d00b9fd865c9a6"}}',
-                 '{"inputs": [["/a/A.lean", "1"], ["/b/A.lean", "2"]]}'):
+                 '{"inputs": [["/a/A.lean", "1"], ["/b/A.lean", "2"]]}', '{"synthetic": true, "inputs": [["options", "06bb"]]}',
+                 '{"synthetic": "true", "inputs": []}', '{"synthetic": true}'):
         trace.write_text(text)
-        assert S.built_from(trace, "A.lean") is None, text
+        assert S.built_from(trace, "A.lean") == (None, False), text
+    trace.write_text('{"synthetic": true, "schemaVersion": "2025-09-10", "outputs": {}, "log": [], "inputs": [], "depHash": "b3c1e3c25b4816c6"}')
+    assert S.built_from(trace, "A.lean") == (None, True), "as Lake writes it for a module it took from its cache"
 
 
 def test_the_stub_imports_the_built_modules_that_import_file_neither_directly_nor_through_others(tmp_path):
@@ -195,6 +199,28 @@ def test_a_source_written_again_as_it_was_built_from_leaves_its_build_checked(tm
                                                         ["Proofs.Far", "Proofs.New", "Proofs.Old"])
     pouw.write_text(was)
     assert S.plan(proofs, "Proofs/File.lean").unchecked == []
+
+
+def test_a_module_lake_took_from_its_cache_counts_until_its_source_is_written_again(tmp_path):
+    """Lake writes a trace with no input for a module it finds in its artifact cache, as a node's records runs leave most
+    of a slot tree: there is no source hash to compare. Lake took it for the source as it was then, so it is a sibling
+    while its trace is at least as new as its source, and unchecked, with what imports it, once a sync has written the
+    source again. The `.olean` itself is a link into the cache, touched whenever the cache is read: its time says
+    nothing."""
+    pkg, then = tmp_path / "p", 2_000_000_000.0
+    write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P"), "P/File.lean": "module\n", "P/A.lean": "module\n",
+                "P/B.lean": "module\nimport P.A\n"})
+    built(pkg, "P.A", "P.B")
+    (trace := pkg / S.LIB / "P" / "A.trace").write_text('{"synthetic": true, "inputs": [], "depHash": "b3c1e3c25b4816c6"}')
+    os.utime(pkg / "P" / "A.lean", (then, then))
+    os.utime(trace, (then, then))
+    os.utime(pkg / S.LIB / "P" / "A.olean", (then - 500, then - 500))
+    assert S.plan(pkg, "P/File.lean") == S.Plan("P.File", True, ["P.A", "P.B"], [])
+    os.utime(pkg / "P" / "A.lean", (then + 100, then + 100))
+    os.utime(pkg / S.LIB / "P" / "A.olean", (then + 500, then + 500))
+    assert S.plan(pkg, "P/File.lean") == S.Plan("P.File", True, [], ["P.A", "P.B"])
+    built(pkg, "P.A")
+    assert S.plan(pkg, "P/File.lean").unchecked == [], "built from the source as it is"
 
 
 def test_no_stub_imports_a_product_with_no_source_or_a_module_whose_build_loads_one(tmp_path):
@@ -339,7 +365,7 @@ def test_try_with_siblings_passes_over_products_built_before_names_moved_and_fai
     def stated(pkg: Path, mod: str) -> tuple[str | None, str]:
         """(the hash ``mod``'s trace states for its source, the hash of that source as it is)."""
         rel = Path(*mod.split("."))
-        return (S.built_from((pkg / S.LIB / rel).with_suffix(".trace"), f"{rel.name}.lean"),
+        return (S.built_from((pkg / S.LIB / rel).with_suffix(".trace"), f"{rel.name}.lean")[0],
                 S.lake_hash((pkg / rel).with_suffix(".lean").read_bytes()))
 
     assert (first := lake("build")).returncode == 0, first.stdout
