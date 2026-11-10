@@ -164,13 +164,12 @@ PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-
 KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
   $(find verity/ml/flock/cuda verity/ml/flock/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g$GPU-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
-LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+LSHA=$(python3 tools/verity/lean/closure.py key verity/core/service/flock)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
 # the Lean frame a firewalled prover (MODES=ZK server) releases through, built beside flock-verify
 export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
 # the release side's Lean session loop (RELEASE=1: prove --firewall-state), keyed by its package's sources and those it requires
-CSHA=$(cd verity/core && find service/flock service/firewall protocols/interface difftest/lean -name .lake -prune -o -type f -print \
-  | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+CSHA=$(python3 tools/verity/lean/closure.py key verity/core/service/firewall)
 export FC_CORE_FIREWALL=$L/corefw-$CSHA/core-firewall
 FWS=$DD/fw RELEASE=${RELEASE:-0}
 FSHA=$( (echo $LSHA; cat verity/ml/flock/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
@@ -520,9 +519,9 @@ lean_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
     if [ ! -x $LEAN_BIN ] || [ ! -x $FC_FIREWALL_LEAN ]; then
-      rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/core/service/flock/. $L/lean-src/ \
-        && (cd $L/lean-src && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
-        && cp $L/lean-src/.lake/build/bin/flock-verify $L/lean-src/.lake/build/bin/flock-firewall $L/lean-$LSHA/
+      rm -rf $L/lean-src && LEAN_SRC=$(python3 tools/verity/lean/closure.py copy verity/core/service/flock $L/lean-src) \
+        && (cd $LEAN_SRC && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
+        && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_SRC/.lake/build/bin/flock-firewall $L/lean-$LSHA/
     fi
   )
 }
@@ -537,10 +536,9 @@ corefw_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/corefw.lock; flock 9
     if [ ! -x $FC_CORE_FIREWALL ]; then
-      C=$L/corefw-src; rm -rf $C && mkdir -p $C/service $C/protocols $C/difftest \
-        && cp -r verity/core/service/flock verity/core/service/firewall $C/service/ && cp -r verity/core/protocols/interface $C/protocols/ \
-        && cp -r verity/core/difftest/lean $C/difftest/ && (cd $C/service/firewall && lake build core-firewall) \
-        && mkdir -p $L/corefw-$CSHA && cp $C/service/firewall/.lake/build/bin/core-firewall $FC_CORE_FIREWALL
+      C=$L/corefw-src; rm -rf $C && C=$(python3 tools/verity/lean/closure.py copy verity/core/service/firewall $C) \
+        && (cd $C && lake build core-firewall) \
+        && mkdir -p $L/corefw-$CSHA && cp $C/.lake/build/bin/core-firewall $FC_CORE_FIREWALL
     fi
   )
 }
@@ -554,7 +552,7 @@ fold_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/fold.lock; flock 9
     if [ ! -x $FOLD_BIN ]; then
-      C=$L/fold-src; rm -rf $C && mkdir -p $C && cp -r verity/core/service/flock/. $C/ && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
+      C=$L/fold-src; rm -rf $C && C=$(python3 tools/verity/lean/closure.py copy verity/core/service/flock $C) && cp verity/ml/flock/tests/lean/InnerFold.lean $C/ \
         && printf '\n[[lean_exe]]\nname = "inner-fold"\nroot = "InnerFold"\n' >> $C/lakefile.toml \
         && (cd $C && lake build inner-fold) && mkdir -p $L/fold-$FSHA && cp $C/.lake/build/bin/inner-fold $FOLD_BIN
     fi

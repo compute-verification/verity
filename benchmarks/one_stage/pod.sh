@@ -2,7 +2,7 @@
 # One-stage audit, run A0, on a CPU pod (a job run from a clone of the tree, with m0.tar, lean.tar and set.tar sent:
 # bash benchmarks/one_stage/pod.sh). The inputs are `git archive`s of M0's tree and the Lean
 # verifier's tree at pinned commits, and one captured input set. Builds M0's `flock-circuit` (CPU, M0's own
-# 60-circuit.sh MODE=build) and Lean's `flock-verify` (lake build, no dependencies) once per pod, then runs a0.py.
+# 60-circuit.sh MODE=build) and Lean's `flock-verify` (lake build, nothing fetched) once per pod, then runs a0.py.
 # env: K=16 DELTA=0.01 BIND=1 (run A1's M0 half: the statement binds the partition, program and unit indices)
 #      RUN=a3 (one audit over every template set in set.tar, layer LAYER=0, K=128; DRAW_FILE=1 serves the verifier's Lean sample)
 #      RUN=a2 (served.tar from vllm-serving-commit: registration.json, pub-N.bin, inst-N.bin, index.json; K=256;

@@ -25,14 +25,15 @@ S=$(mktemp -d "$W/scratch.XXXXXX"); trap 'rm -rf "$S"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
 
-# the Lean verifier, built once per tree of verity/core/service/flock (as benchmarks/pouw/hidden_zk/job.sh builds it)
-KEY=$(cd verity/core/service/flock && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+# the Lean verifier, built once per tree of verity/core/service/flock and the packages it requires by path (as
+# benchmarks/pouw/hidden_zk/job.sh builds it)
+KEY=$(python3 tools/verity/lean/closure.py key verity/core/service/flock)
 L=$W/lean-$KEY
 (
   exec 8>"$W/lean.lock"; flock 8
   if [ ! -x "$L/.lake/build/bin/flock-verify" ]; then
-    rm -rf "$L.tmp" && mkdir -p "$L.tmp" && (cd verity/core/service/flock && tar --exclude=.lake -cf - .) | tar -xf - -C "$L.tmp" \
-      && (cd "$L.tmp" && lake build flock-verify) > "$O/lake-build.log" 2>&1 && rm -rf "$L" && mv "$L.tmp" "$L"
+    rm -rf "$L.tmp" && P=$(python3 tools/verity/lean/closure.py copy verity/core/service/flock "$L.tmp") && ln -s "${P#"$L.tmp/"}/.lake" "$L.tmp/.lake" \
+      && (cd "$P" && lake build flock-verify) > "$O/lake-build.log" 2>&1 && rm -rf "$L" && mv "$L.tmp" "$L"
   fi
 )
 LEAN=$L/.lake/build/bin/flock-verify
