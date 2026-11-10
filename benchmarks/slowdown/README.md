@@ -38,10 +38,10 @@ algorithm families the adversary may use, and the bounds and attacks applied. Fo
 ## Run
 
 ~~~sh
-verity bench rho --out DIR    # every scenario; writes rho.md, rho.json and figures/ to DIR
+verity bench slowdown --out DIR    # every scenario; writes slowdown.md, slowdown.json and figures/ to DIR
 ~~~
 
-`verity bench rho` runs `run.py`, which prints Markdown and, with `--out DIR`, writes `rho.md`, `rho.json` and
+`verity bench slowdown` runs `run.py`, which prints Markdown and, with `--out DIR`, writes `slowdown.md`, `slowdown.json` and
 `figures/` there. `run.py` takes `--scenario NAME` (repeatable), `--target X` and `--set KEY=VALUE` (any registry key, for the whole run).
 `periods.py` gives the same per monitoring period, over one datacenter and over the world's compute, with each scenario's
 range, its parts by kind and its premises ranked; `periods.py --measured CIRCUIT` evaluates them with a measured training
@@ -136,7 +136,7 @@ uncertified or unregistered gates at a structure whose `s_×` is above 1, with t
 
 ## Names
 
-The package, its command and its outputs (`benchmarks/slowdown`, `verity bench rho`, `rho.md`, `rho.json`) and the
+The package, its command and its outputs (`benchmarks/slowdown`, `verity bench slowdown`, `slowdown.md`, `slowdown.json`) and the
 identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` and `slowdown` all name the
 slowdown (the training cost once called the overhead; `Overhead` and `theorem.overhead` keep that name);
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The slowdown is the `ρ` of Lean's

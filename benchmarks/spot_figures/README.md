@@ -106,7 +106,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     layer's boundary bits under (B); (C)'s is the K incorrect blocks its plan detects, each the widest block's bits.
 - **The bounds against proof overhead** (`figure1.py`, `render.py`): the same model against marginal proof overhead,
   a curve per share of compute spent on replays, interior commitments and proofs.
-  - Scopes are the world (rho's `world-h200` fleet, which computes the census's `world-inference-2027`) and a
+  - Scopes are the world (the slowdown calculator's `world-h200` fleet, which computes the census's `world-inference-2027`) and a
     datacenter (the census's `dc-12500-machines-600s`), each over a week, a month and a year
     (`reporting.PERIODS`).
   - Costs are the scope's GPU-seconds: a replay costs the `replay` card's factor times what it re-runs at serving's
@@ -150,7 +150,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
       serve time, outside the budget, and the JSON gives that hashing's share of the scope's compute
       (`serve_hash_share`).
   - The vertical line is the `proof_overhead` card's `model_overhead`, the marginal: a token's per-block proving
-    seconds, statements' fixed costs excluded, over its MACs at the peak. The reference lines come from rho's reference
+    seconds, statements' fixed costs excluded, over its MACs at the peak. The reference lines come from the slowdown calculator's reference
     (its reference model's, SparseLoCo's syncs scaled to the served model's parameters), the model's checkpoint and
     every `references` card. A line at 0 runs along the axis's floor and is named in the caption, lines that coincide
     are plotted once, and one far above the headline curves is named at the axis's top. Each line's label wraps to stay inside its axis, beside its
