@@ -6,3 +6,9 @@ Evidence so far: art:3b03635aff9b27a3fccc7fbdf0e6bdc058bda1462a2a30b72b865e0989d
 art:f8c96f0872ae95833a8147117eb7f76bd71d5fba4d1dcb8cd0fd9e3db9a9e172 (LEAN-258 (c)); note lean/20261110T1326Z-report-lean251-restack.
 Comments: LEAN-251 ff461bed (report, 12:56Z), 58a88520 (48da's rows, 13:15Z), 8dd25711 (done-when, 13:27Z);
 LEAN-258 bd02e95d (mark, 12:46Z), ce625188 ((c), 13:22Z).
+r20261110-135310-7836  pr8139 merged with 48da's base (a70ceafc5f9d), under --cwd clone as on the day, carrier 1c45a51577:
+                       first a probe of the lock's merge driver in the clone, then restack across 48da
+Results: 9662 clean with a pins commit (sha256sum only), 13.29 min; 2cb9 based-after on the earlier move c6a38b702d28.
+Evidence: art:f49a7ed5b73f33072073a724f32a424ff8e992b2a88b8798dd2cc3eaead59804. Comments: LEAN-258 13:49Z, LEAN-251 13:49Z.
+Found 13:50Z: a --cwd source run has no merge drivers registered (lean-audit.json conflicts textually); --cwd clone registers them
+(research.clone.set_drivers). Counted with none registered: 81 of 265 open PRs stop at base, against 51 of 271 with them.
