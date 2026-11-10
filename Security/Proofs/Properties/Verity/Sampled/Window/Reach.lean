@@ -15,12 +15,17 @@ it ends at, which the next member's session starts from:
   what follows from there (`RoundsReachK.ends`, `RoundsEnd.reachK`); the one-session trace is a trace to its end
   beside the tape there (`RoundsReach.ends`, `RoundsEnd.reach`), so what `Stops` proves of a `RoundsReach` trace holds
   of each member's. The end is a later position that keeps the invariant (`RoundsEnd.le`, `RoundsEnd.inv`).
+* **Past a position** (`Pos.Past`, `Pos.toStop_toStop`, `Pos.Past.head`): the position itself or a later one than
+  its next stop, which is where a walk on from it goes; a position past a coin node no cut fixes keeps the node's
+  coin. A trace's end is past its start (`RoundsEnd.past`), and at each answered stop past the stop with its coins
+  written in and consumed (`RoundsEnd.answers`); a trace keeps to its end what each consumed stop passes on and the
+  next stop keeps (`RoundsEnd.keeps`).
 * **A member's session's trace** (`MemberReach`): link points its held-off event doesn't hold of at the session's
   first stop, and the rounds' trace to its end from the tape with them written in (`MemberReach.le`,
-  `MemberReach.inv`).
+  `MemberReach.inv`, `MemberReach.past`, `MemberReach.keeps`).
 * **The members' traces in order** (`SeqChain`): each member's from where the one before it ended, with its
   transcript; the sessions' joint law's support is such a chain, beside the tape at its end (`SeqReach.chain`,
-  `SeqChain.le`, `SeqChain.inv`).
+  `SeqChain.le`, `SeqChain.inv`, `SeqChain.past`).
 * **A property of every member's transcript, a member at a time** (`SeqChain.forall₂`): from an invariant `I` of the
   position each member's session starts at, kept by each member's trace.
 * **The decoders' premise at the window, a member at a time** (`WindowReaches.chain`, `MemberDecodes`,
@@ -30,6 +35,55 @@ it ends at, which the next member's session starts from:
 -/
 
 @[expose] public section
+
+namespace Verity.Game.Pos
+
+variable {α V ι : Type} {g : Game α} {σ : Strategy g}
+
+/-- **The next stop from a stop is the stop.** -/
+theorem toStop_toStop (p : Pos g σ V ι) : p.toStop.toStop = p.toStop := by
+  rcases p.toStop_stops with h | ⟨a, ha⟩
+  · exact walk_here p.toStop.g' p.toStop.s' p.toStop.Ks p.toStop.x p.toStop.back h
+  · have key : ∀ q : Pos g σ V ι, q.g' = .ret a → q.toStop = q := fun ⟨_, _, _, _, _⟩ hg => by
+      subst hg
+      rfl
+    exact key p.toStop ha
+
+/-- **The position `r` is past the position `p`**: `p` itself, or a later position than `p`'s next stop. A walk on
+from `p` goes to its next stop first, so each position it passes is past `p`. -/
+def Past (p r : Pos g σ V ι) : Prop := r = p ∨ p.toStop.Le r
+
+theorem Past.refl (p : Pos g σ V ι) : p.Past p := Or.inl rfl
+
+/-- **A position's next stop is past it.** -/
+theorem past_toStop (p : Pos g σ V ι) : p.Past p.toStop := Or.inr (Le.refl _)
+
+/-- **A position past `p` is a later position than `p`.** -/
+theorem Past.le {p r : Pos g σ V ι} (h : p.Past r) : p.Le r := by
+  rcases h with h | h
+  · rw [h]
+    exact Le.refl p
+  · exact (le_toStop p).trans h
+
+theorem Past.trans {p q r : Pos g σ V ι} (h₁ : p.Past q) (h₂ : q.Past r) : p.Past r := by
+  rcases h₁ with h₁ | h₁
+  · rw [h₁] at h₂
+    exact h₂
+  · exact Or.inr (h₁.trans h₂.le)
+
+/-- **A position past a coin node no cut fixes keeps the node's coin**: its tape is one through the node, holding
+there the coin the node's tape holds (`walk_coin_keeps`). -/
+theorem Past.head {p r : Pos g σ V ι} (h : p.Past r) {C : Type} {iF : Fintype C} {iN : Nonempty C}
+    {k : C → Game α} (hg : p.g' = @Game.coin _ C iF iN k) (hK : ∀ i, (p.Ks i).isHere = false) :
+    ∃ z, r.tape = p.back z ∧ headCoin hg p.s' z = headCoin hg p.s' p.x := by
+  rcases h with h | h
+  · rw [h]
+    exact ⟨p.x, rfl, rfl⟩
+  · obtain ⟨f, hf, hc⟩ := walk_coin_keeps hg p.s' p.Ks p.x p.back hK
+    obtain ⟨f', hf'⟩ := h
+    exact ⟨f (f' r.x), (hf' r.x).trans (hf _), hc _⟩
+
+end Verity.Game.Pos
 
 namespace Verity.Sampled
 
@@ -129,6 +183,48 @@ theorem RoundsEnd.inv {Ks₀ : Fin R → DigestCut Claims.Msg g} (he : RoundsEnd
   | round N rs p s c q out _ _ _ ih =>
     exact fun hp => ih (Pos.inv_consume (Pos.inv_rewrite (Pos.toStop_spec hp).2.2 _))
 
+/-- **A trace's end is past its start.** -/
+theorem RoundsEnd.past (he : RoundsEnd D M dg J B rootB pts N rs p q out) : p.Past q := by
+  induction he with
+  | zero rs p => exact Pos.Past.refl p
+  | stop N rs p _ => exact Pos.past_toStop p
+  | round N rs p s c q out _ _ _ ih => exact Or.inr (((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans ih.le)
+
+/-- **What a trace keeps to its end**: a property `Q` of positions its start has, that each consumed stop passes on
+and a position's next stop keeps. -/
+theorem RoundsEnd.keeps (he : RoundsEnd D M dg J B rootB pts N rs p q out)
+    (Q : Pos g σ Claims.Msg (Fin R) → Prop) (hQ : Q p)
+    (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
+      Q (q.toStop.rewrite φ).consume) (hstop : ∀ q, Q q → Q q.toStop) : Q q := by
+  induction he with
+  | zero rs p => exact hQ
+  | stop N rs p _ => exact hstop p hQ
+  | round N rs p s c q out _ _ _ ih => exact ih (hstep p _ hQ)
+
+/-- **A trace's answered stops, to its end**: the outcome's rounds are the answered submissions' in order, and at
+each a position the trace passes through that keeps any invariant `Q` its start keeps and each consumed stop passes
+on, the submission decoded at the stop after it, its coins, which `B` doesn't hold of there, and the trace's end past
+the stop with them written in and consumed (`RoundsReach.answers`, with where the trace ends). -/
+theorem RoundsEnd.answers (he : RoundsEnd D M dg J B rootB pts N rs p q out)
+    (Q : Pos g σ Claims.Msg (Fin R) → Prop) (hQ : Q p)
+    (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
+      Q (q.toStop.rewrite φ).consume) :
+    ∃ as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽))),
+      out = ⟨rootB, pts, as.foldl (fun rs a =>
+        addRoundJ rs a.2.1.tab a.2.1.rep (roundOf dg a.2.1.bytes a.2.1.n a.2.2)) rs,
+          D.proofs (CoinTape.run g σ q.tape)⟩ ∧
+      ∀ a ∈ as, Q a.1 ∧ D.sub J a.1.toStop.modes = some a.2.1 ∧ ¬ B a.1.toStop.g' J a.2.1 a.2.2 ∧
+        (a.1.toStop.rewrite (M.round a.1.toStop J a.2.1 a.2.2)).consume.Past q := by
+  induction he with
+  | zero rs p => exact ⟨[], rfl, fun _ h => by simp at h⟩
+  | stop N rs p _ => exact ⟨[], rfl, fun _ h => by simp at h⟩
+  | round N rs p s c q out hs hB ho ih =>
+    obtain ⟨as, h1, h2⟩ := ih (hstep p _ hQ)
+    refine ⟨(p, ⟨s, c⟩) :: as, h1, fun a ha => ?_⟩
+    rcases List.mem_cons.1 ha with rfl | ha
+    · exact ⟨hQ, hs, hB, ho.past⟩
+    · exact h2 a ha
+
 end Rounds
 
 /-! ## The members' traces, in order -/
@@ -163,6 +259,22 @@ theorem MemberReach.inv {Ks₀ : Fin R → DigestCut Claims.Msg g} {i : ℕ} {m 
     (h : MemberReach D M BL B S Rg i m p q out) (hp : p.Inv Ks₀) : q.Inv Ks₀ := by
   obtain ⟨pts, -, he⟩ := h
   exact he.inv (Pos.inv_consume (Pos.inv_rewrite (Pos.toStop_spec hp).2.2 _))
+
+/-- **A member's session's trace ends past the position it starts from.** -/
+theorem MemberReach.past {i : ℕ} {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Claims.Msg (Fin R)}
+    {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (h : MemberReach D M BL B S Rg i m p q out) : p.Past q := by
+  obtain ⟨pts, -, he⟩ := h
+  exact Or.inr (((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans he.le)
+
+/-- **What a member's session's trace keeps to its end**: a property `Q` of positions its start has, that each
+consumed stop passes on and a position's next stop keeps. -/
+theorem MemberReach.keeps {i : ℕ} {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Claims.Msg (Fin R)}
+    {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (h : MemberReach D M BL B S Rg i m p q out)
+    (Q : Pos g σ Claims.Msg (Fin R) → Prop) (hQ : Q p)
+    (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
+      Q (q.toStop.rewrite φ).consume) (hstop : ∀ q, Q q → Q q.toStop) : Q q := by
+  obtain ⟨pts, -, he⟩ := h
+  exact he.keeps Q (hstep p _ hQ) hstep hstop
 
 variable (D M BL B S Rg) in
 /-- **The members' sessions' traces, in order**, from the position `p` to the position `r` the last ends at: the
@@ -202,6 +314,13 @@ theorem SeqChain.le {i : ℕ} {l : List (Flock.Guarantees.MemberV5 Reg nJ)} {p r
   | nil i p => exact Pos.Le.refl p
   | cons i m l p q r out ts hm _ ih => exact hm.le.trans ih
 
+/-- **The members' traces end past the position they start from.** -/
+theorem SeqChain.past {i : ℕ} {l : List (Flock.Guarantees.MemberV5 Reg nJ)} {p r : Pos g σ Claims.Msg (Fin R)}
+    {ts : List Transcript} (hc : SeqChain D M BL B S Rg i l p ts r) : p.Past r := by
+  induction hc with
+  | nil i p => exact Pos.Past.refl p
+  | cons i m l p q r out ts hm _ ih => exact hm.past.trans ih
+
 /-- **The members' traces end at a position that keeps the invariant their start keeps.** -/
 theorem SeqChain.inv {Ks₀ : Fin R → DigestCut Claims.Msg g} {i : ℕ} {l : List (Flock.Guarantees.MemberV5 Reg nJ)}
     {p r : Pos g σ Claims.Msg (Fin R)} {ts : List Transcript} (hc : SeqChain D M BL B S Rg i l p ts r) :
@@ -212,21 +331,22 @@ theorem SeqChain.inv {Ks₀ : Fin R → DigestCut Claims.Msg g} {i : ℕ} {l : L
 
 /-- **A property of every member's transcript, a member at a time**: `Acc` holds of each member and its transcript
 along the members' traces wherever an invariant `I` of the place and the position a member's session starts at holds
-at the chain's start and, at each member's trace from a position it holds at, holds at the next place and the
-position the trace ends at, with `Acc` of the member and the transcript the trace writes. -/
+at the chain's start and, at each member's trace from a position it holds at, ending at a position the chain's end
+is past, holds at the next place and the position the trace ends at, with `Acc` of the member and the transcript the
+trace writes. -/
 theorem SeqChain.forall₂ {Acc : Flock.Guarantees.MemberV5 Reg nJ → Transcript → Prop}
     (I : ℕ → Pos g σ Claims.Msg (Fin R) → Prop) {i : ℕ} {l : List (Flock.Guarantees.MemberV5 Reg nJ)}
     {p r : Pos g σ Claims.Msg (Fin R)} {ts : List Transcript} (hc : SeqChain D M BL B S Rg i l p ts r) :
     I i p →
     (∀ (j k : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (p' q : Pos g σ Claims.Msg (Fin R))
       (out : LiveOutJ (memberTabs S Rg m) (memberPts m)), j = i + k → l[k]? = some m → I j p' →
-      MemberReach D M BL B S Rg j m p' q out → q.Le r → I (j + 1) q ∧ Acc m (m.wr (m.part S) Rg out)) →
+      MemberReach D M BL B S Rg j m p' q out → q.Past r → I (j + 1) q ∧ Acc m (m.wr (m.part S) Rg out)) →
     List.Forall₂ Acc l ts := by
   induction hc with
   | nil i p => exact fun _ _ => .nil
   | cons i m l p q r out ts hm hl ih =>
     intro hI h
-    obtain ⟨hI', hacc⟩ := h i 0 m p q out rfl rfl hI hm hl.le
+    obtain ⟨hI', hacc⟩ := h i 0 m p q out rfl rfl hI hm hl.past
     exact .cons hacc (ih hI' fun j k m' p' q' out' hj hk =>
       h j (k + 1) m' p' q' out' (by omega) (by simpa using hk))
 
@@ -257,10 +377,10 @@ theorem WindowReaches.chain {W : Window} {t : ℕ} {rd : Reading W.rounds} {σ :
 
 /-- **The decoders' premise at each member's session**, at an invariant `I` of the widened coins, the place and the
 position a member's session starts at: `I` holds at the play's start on the coin map's tape (`start`); and each
-member's session's trace from a position `I` holds at, ending at a position `q` before a position `r` that keeps the
-play's start and whose tape's play the sampled verdict accepts, misses at no round and not at the record and `P` holds
-of, has `I` at the next place and `q`, and, when the member has a proof block in the sample, writes a transcript
-flock-verify `--zk` accepts at the member's `own` (`step`). -/
+member's session's trace from a position `I` holds at, ending at a position `q` that a position `r` is past
+(`Pos.Past`), where `r` keeps the play's start and its tape's play the sampled verdict accepts, misses at no round and
+not at the record and `P` holds of, has `I` at the next place and `q`, and, when the member has a proof block in the
+sample, writes a transcript flock-verify `--zk` accepts at the member's `own` (`step`). -/
 structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ℕ → Decoders W.rounds ByteArray)
     (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold) (B : WindowRoundHold)
@@ -270,7 +390,7 @@ structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Pr
     (p q r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds))
     (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) m) (memberPts m)),
     ((W.extend M.widening).joint t).ms[i]? = some m → I ω i p →
-    MemberReach D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) i m p q out → q.Le r →
+    MemberReach D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) i m p q out → q.Past r →
     r.Inv (roundCuts V θ F c rd) →
     V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
       P (CoinTape.run (V.game θ F c) σ r.tape) →
@@ -294,10 +414,10 @@ theorem windowDecodes_of_members (k : Verity.Registration.Composite) (P : Exchan
   have hf : List.Forall₂ (fun (m : Flock.Guarantees.MemberV5 ByteArray W.nJ) ts =>
       (m.part ((W.extend M.widening).L.draw ω)).Nonempty →
         FlockSoundness.Discharge.ZkHidden.AcceptsZKP m.I m.own ts) ((W.extend M.widening).joint t).ms o.1.2.2 :=
-    hc.forall₂ (I ω) (h.start ω) fun j k m p q out hj hk hI hmr hle => by
+    hc.forall₂ (I ω) (h.start ω) fun j k m p q out hj hk hI hmr hqr => by
       have e : k = j := by omega
       subst e
-      exact h.step ω _ m p q r out hk hI hmr hle hri hacc
+      exact h.step ω _ m p q r out hk hI hmr hqr hri hacc
   have ho1 : o.1 = (o.1.1, (W.extend M.widening).L.draw ω, o.1.2.2) := Prod.ext rfl (Prod.ext hS rfl)
   rw [ho1]
   exact hf
