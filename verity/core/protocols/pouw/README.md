@@ -26,7 +26,7 @@ every product, is a reference, not an answer.
   2. `Accounting.Guarantees.ComputeOfPouwPerRun` (`Accounting/Guarantees/PerRun.lean`): the same certificate and error
      as the compute audit's per-run guarantee, on any device whose compute audit realizes PoUW's game. Assumes TT and
      `Accounting.BudgetAbort`.
-  3. `Pouw.Guarantees.PeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`): a credit period's openings
+  3. `Pouw.Guarantees.MonitoringPeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`): a credit period's openings
      fail to bind with probability at most |L|·√(q/2^256 + κ). Assumes `Claims.ExpectedCR`; κ is not yet bounded.
   4. `Pouw.Guarantees.RelativeSecurity.TheoremSStaged` and `TheoremSOverlap` (`Pouw/Guarantees/RelativeSecurity.lean`):
      a play whose errors are of degree at most 2 is accepted with deficiency at least D with probability at most

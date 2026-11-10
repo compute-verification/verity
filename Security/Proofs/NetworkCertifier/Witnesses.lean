@@ -62,7 +62,7 @@ Each guarantee that says what an accepted run establishes has two lemmas (the tw
 accepts everything. Each builds its instance and takes no hypothesis.
 
 * `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`, `PeriodLeakAccepted` (and
-  `Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted`). Their premise `Compiled.KS` holds at SHA-512 at the
+  `Accounting.Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted`). Their premise `Compiled.KS` holds at SHA-512 at the
   deployed compiled form over the masked Flock record at the deployed relation, at a toy code that parses no statement,
   accepts no run and opens no session (`SamplingDeploy.toyCode`): `ks_toy`, from the compiler at Flock's KS there
   (`SamplingDeploy.ks_compiled`, `FlockDeploy.KS.zk_KS_untrim`) and the code's facts, which hold there. So does the
@@ -137,7 +137,7 @@ theorem SampledAuditAccepted_honest : (toyL).KS shaD := ks_toy
 
 set_option synthInstance.maxSize 1024 in
 /-- **`PeriodLeakAccepted`'s premises at the toy code**, which are `SampledLeakRegistered`'s and
-`CommOfPeriodLeakAccepted`'s too: `Compiled.KS` (`ks_toy`), and the code's commitment binds (`binds_deployOf`). -/
+`CommOfMonitoringPeriodLeakAccepted`'s too: `Compiled.KS` (`ks_toy`), and the code's commitment binds (`binds_deployOf`). -/
 theorem PeriodLeakAccepted_honest : (toyL).KS shaD ∧ (toyL).commit.Binds shaD :=
   ⟨ks_toy, binds_deployOf (FlockDeploy.deployZk relD) SamplingDeploy.toyCode shaD⟩
 

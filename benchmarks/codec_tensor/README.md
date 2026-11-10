@@ -17,5 +17,5 @@ builds `wt.cu` for each field and runs `bench.py` on one GPU (`RECEIPT=1` adds `
 
 **Reads and writes:** the suite reads `benchmarks/word_codec`'s KV codec and the bandwidth audit's code; `bench.py`
 writes `codec-tensor.json` and `bench.log` into its `--out`, and the step and reader scripts their gates and timings as
-JSON. **Backs:** the receipts it computes on the GPU are the ones `Accounting.Guarantees.Remote.SketchBoundSession` and
+JSON. **Backs:** the receipts it computes on the GPU are the ones `Accounting.Guarantees.Remote.SketchBoundRun` and
 `SketchBoundDeployed` bound, the memory line's sketch premise.

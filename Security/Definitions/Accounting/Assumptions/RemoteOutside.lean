@@ -25,7 +25,7 @@ the session's record of computation off the node (`Accounting.Remote.Held.Outsid
 The two give `SketchBound` (`Accounting.SecurityProofs.Remote.sketchBound_of_noOutside`) and `SketchBound` gives
 `SketchBoundAt` at every `O`, so the line under the two is as strong as under `SketchBound`, and the relay breaks only
 `NoOutsideCompute`. How C stands to the sketch model's premises, under which `SketchBound` is derived
-(`Accounting.Guarantees.Remote.SketchBoundSession`):
+(`Accounting.Guarantees.Remote.SketchBoundRun`):
 
 * `Present` is C's block clause over the passes together with the same statement without a location (`PresentAt`, in
   the proofs: the block obtained whole was on the node or computed on outside it at a tick of the pass). `Present`

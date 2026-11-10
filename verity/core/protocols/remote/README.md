@@ -99,7 +99,7 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
    outputs.
 5. **Accounting**, per monitoring period. The accepted verification phases' bounds pool over the monitoring period
-   (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod`
+   (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod`
    for PoUW), and the overhead calculator turns them into overhead (see Results).
 
 ## The security argument, end to end
@@ -232,7 +232,7 @@ The time credit adds the data sheet's rates.
   (`GUARANTEE`) and refuses every other window form for, **proved** under the premises above.
 - The time credit: `Accounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
 - The proofs behind PoUW's credit, `Accounting.Guarantees.TS.SessionSoundAt`: **proved**, under `AcceptedLive` (no
-  served path meets it yet), `WindowDesign`, `ServedChecksHold` and `ServedRootsLinked`. It concludes
+  served path meets it yet), `ExecutionPhaseDesign`, `ServedChecksHold` and `ServedRootsLinked`. It concludes
   `ProofLayer.SoundAt` from part 1's theorem; it doesn't discharge `ServiceSound`.
 - The verifier's verdicts tied to these theorems: **open** (What's open, below).
 
@@ -303,7 +303,7 @@ total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): for a year's total below 1%, δ_bind
 **Assumes.** Parts 1 to 4's assumptions.
 
 **Lean.** `Accounting.Guarantees.JointPooledLive` (onsite's five audits in one adaptive game; the inference-only policy is not among them), `Flock.Guarantees.IntegrityHorizon`
-(sampled proofs) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointPooledLive`
+(sampled proofs) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` (PoUW): **proved**. `JointPooledLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
 ### 6. The slowdown bound
@@ -488,12 +488,12 @@ PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/Perio
   skip. It stays an assumption until those words are defined from the committed values.
 - `Accounting.Assumptions.TS.AcceptedLive`, a premise of the proofs behind PoUW's credit (`SessionSoundAt`'s), not of the period credit: an
   accepted proof's check words are `1` as `flock-verify --zk --registered` reads them. No served path meets it yet.
-- `Accounting.Assumptions.TS.WindowDesign`, `ServedChecksHold` and `ServedRootsLinked`, `SessionSoundAt`'s other premises:
+- `Accounting.Assumptions.TS.ExecutionPhaseDesign`, `ServedChecksHold` and `ServedRootsLinked`, `SessionSoundAt`'s other premises:
   the sample follows its stated sampling design, the served checks hold, and the served roots are linked to the
   registered ones.
 - The data sheet: `Accounting.Assumptions.TS.SheetClock`, `SheetDispatch`, `SheetTensor`, `SheetPipe`, `SheetSmem`,
   `SheetWords`, `SheetSemantics`, `FoldOpt`, `FoldOptFoldedAt` and `FillOpt`: the GPU's clock, rates and semantics are
-  the data sheet's, and the folds are optimal. The live-words credit over a monitoring period (`CircuitCreditPeriod`,
+  the data sheet's, and the folds are optimal. The live-words credit over a monitoring period (`CircuitCreditMonitoringPeriod`,
   `H1J10RCheckedCreditPeriod`) doesn't read them. The time credit `Accounting.Guarantees.Compose.CircuitCredit` does, and it
   is what backs the slowdown bound's `PouwSound` (below), so the slowdown over remote rests on the data sheet.
 
@@ -544,7 +544,7 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
   98%).
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all
   at once.
-- **The failure probability.** The δ is pooled over the monitoring period (`IntegrityHorizon`, `CircuitCreditPeriod`),
+- **The failure probability.** The δ is pooled over the monitoring period (`IntegrityHorizon`, `CircuitCreditMonitoringPeriod`),
   not per verification phase.
 
 ## The demo

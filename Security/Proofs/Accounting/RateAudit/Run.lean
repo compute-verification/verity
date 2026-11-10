@@ -51,7 +51,7 @@ in it with probability `(#correct/(P·N))^d` (`Horizon.pr_sample'`, `Chain.pr_sa
 
 **The monitoring period.** A session's windows are causal rounds over `M = P·N` items (`Rate.Causal`): window `w`'s
 correct receipts read the store, the earlier windows' coins, their samples among them, and its own passes' coins, never
-its own sample. `PooledSampling` bounds the session's shortfall over its windows (`Session.pr_samples_le`).
+its own sample. `PooledSampling` bounds the session's shortfall over its windows (`Run.pr_samples_le`).
 
 **The floor in every window.** Keep the first window whose correct receipts number at most `K_w` as it is and count
 every other window's receipts all good: still causal, since whether window `w` is the first short one reads only the
@@ -59,8 +59,8 @@ windows up to `w`, and the good sets then hold at most `(n − 1)·M + K_w` item
 with no union over the windows (`Horizon.pr_floor_le`).
 
 **Paid.** A session with more than `K` correct receipts in all, or more than `K_w` in every window, whose reads fall
-short of those receipts' words leaves some window short (`Session.pr_unpaid_le`), and that window some pass, which
-`RatePaidNamedRO` bounds at the devices the earlier coins pick (`Session.pr_window_le`, then `Chain.pr_unpaid_le`).
+short of those receipts' words leaves some window short (`Run.pr_unpaid_le`), and that window some pass, which
+`RatePaidNamedRO` bounds at the devices the earlier coins pick (`Run.pr_window_le`, then `Chain.pr_unpaid_le`).
 -/
 
 @[expose] public section
@@ -197,13 +197,13 @@ theorem pr_unpaid_sample_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : 
 
 end Chain
 
-namespace Session
+namespace Run
 
 variable {n P N b h ρ S L q r s d : ℕ}
 
 /-- **Sequencing over windows**: an event of window `w`'s chained prover and its coins has at most its bound for the
 chained provers the earlier windows' coins pick. -/
-theorem pr_window_le (A : Session n P N b h ρ S L q r s d) (w : Fin n)
+theorem pr_window_le (A : Run n P N b h ρ S L q r s d) (w : Fin n)
     (Q : Chain P N b h ρ S L q r s → Store N b × WindowCoins P N b h ρ r s d → Prop) (ε : ℝ≥0∞)
     (hQ : ∀ η, pr (Q (A.window w η)) ≤ ε) :
     pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) => Q (A.chain w x.2) (x.1, x.2 w)) ≤ ε := by
@@ -221,13 +221,13 @@ theorem pr_window_le (A : Session n P N b h ρ S L q r s d) (w : Fin n)
     funext v
     simp [η, v.2.ne]
   have hc : A.chain w ((Equiv.funSplitAt w (WindowCoins P N b h ρ r s d)).symm (y.2, ω')) = A.window w η := by
-    simp only [Session.chain]
+    simp only [Run.chain]
     rw [hη]
   simpa [e, hω, hc] using hy
 
 /-- **A session's pooled samples**: every window's openings land on correct receipts while the session holds at most
 `K` in all or some window at most `K_w`. -/
-theorem pr_samples_le (A : Session n P N b h ρ S L q r s d) (K Kw : ℕ) :
+theorem pr_samples_le (A : Run n P N b h ρ S L q r s d) (K Kw : ℕ) :
     pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.chain w x.2).correctAll x.1 (x.2 w).1) ∧
           (∑ w, ((A.chain w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
@@ -248,7 +248,7 @@ theorem pr_samples_le (A : Session n P N b h ρ S L q r s d) (K Kw : ℕ) :
     have hη : (fun v : {v : Fin n // v < w} => e.symm ω v.1) = (fun v => e.symm ω' v.1) :=
       funext fun v => by simp [e, hlt v.1 v.2]
     have h₁ : (e.symm ω w).1 = (e.symm ω' w).1 := by simp [e, hw]
-    simp only [G, Session.chain]
+    simp only [G, Run.chain]
     rw [hη, h₁]
   have hmem : ∀ ω w t, (e.symm ω w).2 t ∈ (A.chain w (e.symm ω)).correctAll E (e.symm ω w).1 →
       (ω w).2 t ∈ G w ω := by
@@ -280,7 +280,7 @@ theorem pr_samples_le (A : Session n P N b h ρ S L q r s d) (K Kw : ℕ) :
 
 /-- A session's unpaid words from a per-pass bound: the probability that some window's reads, rebuilt words and `P`
 slacks fall short of its correct receipts' words is at most `n·P·ε`. -/
-theorem pr_unpaid_le {τ : ℕ} (A : Session n P N b h ρ S L q r s d) (tier : ℕ → Fin τ) (slack : ℕ) (ε : ℝ≥0∞)
+theorem pr_unpaid_le {τ : ℕ} (A : Run n P N b h ρ S L q r s d) (tier : ℕ → Fin τ) (slack : ℕ) (ε : ℝ≥0∞)
     (hε : ∀ w η j ι, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, ((A.window w η).device j ι).tierReads tier t x.1 x.2.1 x.2.2 +
             ((A.window w η).device j ι).rebuilt x.1 x.2.1 x.2.2 * b + slack <
@@ -298,7 +298,7 @@ theorem pr_unpaid_le {τ : ℕ} (A : Session n P N b h ρ S L q r s d) (tier : �
           (fun η => (A.window w η).pr_unpaid_sample_le tier slack d ε (hε w η)))
     _ = (n : ℝ≥0∞) * (P * ε) := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-end Session
+end Run
 
 end Accounting.Rate
 
@@ -314,17 +314,17 @@ theorem RateWindowSample : Accounting.Guarantees.RateWindowSample := by
   intro P N b h ρ S L q r s d K A
   exact Chain.pr_sample_le A d K
 
-/-- **A session's pooled samples: the monitoring period and every window** (`Accounting.Guarantees.RateSessionSample`). -/
-theorem RateSessionSample : Accounting.Guarantees.RateSessionSample := by
+/-- **A session's pooled samples: the monitoring period and every window** (`Accounting.Guarantees.RateRunSample`). -/
+theorem RateRunSample : Accounting.Guarantees.RateRunSample := by
   intro n P N b h ρ S L q r s d K Kw A
-  exact Session.pr_samples_le A K Kw
+  exact Run.pr_samples_le A K Kw
 
 /-- **The route `Sampled` for a session, with named words, with side sources that ignore the oracle**
-(`Accounting.Guarantees.RateSessionSampledNamedRO`). -/
-theorem RateSessionSampledNamedRO : Accounting.Guarantees.RateSessionSampledNamedRO := by
+(`Accounting.Guarantees.RateRunSampledNamedRO`). -/
+theorem RateRunSampledNamedRO : Accounting.Guarantees.RateRunSampledNamedRO := by
   intro n P N b h ρ S L q r s d K Kw lam τ tier A hA
-  have h₁ := Session.pr_samples_le A K Kw
-  have h₂ := Session.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun w η j ι =>
+  have h₁ := Run.pr_samples_le A K Kw
+  have h₂ := Run.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun w η j ι =>
     (pr_mono (fun _ hx => by omega)).trans
       (RatePaidNamedRO N b h ρ S L q lam τ tier ((A.window w η).device j ι) (hA w η j ι)))
   refine ((pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ h₂))).trans

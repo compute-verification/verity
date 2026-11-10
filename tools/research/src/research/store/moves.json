@@ -1737,6 +1737,21 @@
         "Security/Proofs/Accounting/DeclaredCircuit/": "Security/Proofs/Accounting/RegisteredCircuit/",
         "Security/Properties/Accounting/DeclaredCircuit.lean": "Security/Properties/Accounting/RegisteredCircuit.lean"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Accounting/Guarantees/JointBridge/CommOfPeriodLeakAccepted.lean": "Security/Definitions/Accounting/Guarantees/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "Security/Definitions/Accounting/JointBridge/CommOfPeriodLeakAccepted.lean": "Security/Definitions/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "Security/Proofs/Accounting/Actual/Windows.lean": "Security/Proofs/Accounting/Actual/ServerBlocks.lean",
+        "Security/Proofs/Accounting/JointBridge/CommOfPeriodLeakAccepted.lean": "Security/Proofs/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean": "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityMonitoringPeriod.lean",
+        "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityPeriod.lean": "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityMonitoringPeriod.lean",
+        "Security/Proofs/Accounting/JointBridge/WorkOfH1CheckedCreditPeriod.lean": "Security/Proofs/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean",
+        "Security/Proofs/Accounting/RateAudit/Session.lean": "Security/Proofs/Accounting/RateAudit/Run.lean",
+        "Security/Proofs/Accounting/RegisteredCircuit/Session.lean": "Security/Proofs/Accounting/RegisteredCircuit/Run.lean",
+        "Security/Proofs/Properties/Accounting/Remote/Session.lean": "Security/Proofs/Properties/Accounting/Remote/Run.lean",
+        "Security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditPeriod.lean": "Security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean"
+      }
     }
   ]
 }
