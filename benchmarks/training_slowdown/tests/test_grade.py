@@ -1,19 +1,21 @@
-"""training_slowdown.grade on synthetic records: the fit, the seeds, H and p both ways, ρ at a named policy, S and what
-it refuses, the bound of record beside it, the periods, and the command."""
-import gzip
+"""training_slowdown.grade on synthetic records and on a job's own: the fit, the seeds, H and p both ways, ρ from the
+search record's trace at a named policy, S and what it refuses, the bound of record beside it, the periods, and the
+command."""
 import json
 import math
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import synthetic
 
 from training_slowdown import calculator, gates, policy
 from training_slowdown import formalism as F
 from training_slowdown import grade as G
+from training_slowdown.capture import products
 
 FIXTURES = Path(__file__).parent / "fixtures"
-#: the scaling law the synthetic starts sit on, and the start every config here branches from, the 45M reference's shape
+#: the fit the synthetic starts sit on, and the start every config here branches from, the 45M reference's shape
 E, A, GAMMA = 0.4, 20.0, 0.07
 SHAPE = policy.SHAPES[policy.REFERENCE_PARAMS] | {"ctx": 1024, "parameters": policy.REFERENCE_PARAMS}
 PER_MAC = gates.per_mac("gemm/bf16")
@@ -21,21 +23,27 @@ PER_MAC = gates.per_mac("gemm/bf16")
 LOG, STEP_GATES = [["fwd", "theta", "mm", "[[8]]", 1, 80]], 80 * PER_MAC
 #: a traced job's steps a checkpoint: past the first steps the products term leaves out, those a block of k bits holds
 PER = 16
+#: the 45M dense step's product rows as the capture states them, priced: what a job's trace of that step prices to
+STATED = json.loads((FIXTURES / "dense_45m.products.json").read_text())
+#: a raw row's keys beside its `dtypes` (`capture.products.raw_on_dial`), and the dtype an operand passed at a width has
+RAW = ("count", "phase", "op", "dims", "token_dims", "affected", "widths", "self", "gathered", "rates")
+DTYPE = {16: "bfloat16", 32: "float32"}
 
 
-def law(c0_macs: float) -> float:
+def loss_at(c0_macs: float) -> float:
     return E + A * (c0_macs * PER_MAC) ** -GAMMA
 
 
-def registry() -> dict:
-    """A starts registry as `starts.toml` parses: four starts on the law, one off its frontier and one on other data."""
-    on = {name: {"data": "d", "shape": SHAPE, "c0_macs": c, "l0_bpb": law(c)}
-          for name, c in (("s", 1e15), ("m", 1e16), ("l", 1e17), ("x", 1e18))}
-    return {"data": {"d": {}}, "starts": on | {"off": {"data": "d", "shape": SHAPE, "c0_macs": 5e16, "l0_bpb": 1.4},
-                                                "far": {"data": "e", "shape": SHAPE, "c0_macs": 1e19, "l0_bpb": 0.2}}}
+def registry(start: str = "s", shape: dict = SHAPE) -> dict:
+    """A starts registry as `starts.toml` parses: four starts on the fit (the first named `start`, of `shape`), one
+    off its frontier and one on other data."""
+    on = {name: {"data": "d", "shape": shape, "c0_macs": c, "l0_bpb": loss_at(c)}
+          for name, c in ((start, 1e15), ("m", 1e16), ("l", 1e17), ("x", 1e18))}
+    return {"data": {"d": {}}, "starts": on | {"off": {"data": "d", "shape": shape, "c0_macs": 5e16, "l0_bpb": 1.4},
+                                                "far": {"data": "e", "shape": shape, "c0_macs": 1e19, "l0_bpb": 0.2}}}
 
 
-L0 = law(1e15)
+L0 = loss_at(1e15)
 FIT = G.fit([(e["c0_macs"] * PER_MAC, e["l0_bpb"]) for e in registry()["starts"].values() if e["data"] == "d"])
 #: the loss a gain of 1.1 from the start reaches, and losses a hair on either side of it
 TARGET = G.target(FIT, L0, 1.1)
@@ -59,27 +67,39 @@ def job(losses: list, seed: int = 0, split: str = "final", **kw) -> dict:
     return {"seed": seed, "split": split, "record": record(losses, split, **kw)}
 
 
-def traced(losses: list, **trace) -> dict:
-    """A search job as its traced rows, a checkpoint each `PER` steps: the 45M dense step's products as each prefix's
-    trace, with `trace`'s fields over it."""
-    block = json.loads((FIXTURES / "dense_45m.products.json").read_text())
-    rows = []
-    for i, loss in enumerate(losses):
-        rec = record(losses[:i + 1], "search", per=PER)
-        rec["structures"]["a"] |= {"updated": [], "affected_share": 0.5, "sigma": 1.0, "token_factor": 1.0,
-                                   "delta_grad_bits": 1e9}
-        rec["formalism"] = {"trace": {"products": block, "data_dependent": [], "carried_scalars": [],
-                                      "affected_share": 0.5, "u1_bits": 1e6} | trace}
-        rows.append({"checkpoint_step": PER * (i + 1) - 1, "val_bpb": loss, "start_bpb": L0, "start": "s", "training_slowdown": "0",
-                     "formalism": F.of_record(rec), "output": {"e_bytes": 1e8}})
-    return {"seed": 0, "split": "search", "rows": rows}
+def trace(**over) -> dict:
+    """A job's trace of the 45M dense step (`run.trace_step`), the keys the grade reads and no other: the stated rows
+    unpriced, each operand's dtype its passed width's, at each k of the dial; `over` its fields."""
+    def raw(b: dict) -> dict:
+        return {"k": b["k"], "p_match": b["p_match"],
+                "rows": [{k: r[k] for k in RAW} | {"dtypes": [DTYPE[w] for w in r["widths"]]} for r in b["rows"]]}
+
+    return raw(STATED) | {"capture": products.CAPTURE, "tokens": STATED["tokens"], "data_dependent": [],
+                          "carried_scalars": [], "at": {k: raw(b) for k, b in STATED["at"].items()}} | over
+
+
+def traced(losses: list, seed: int = 0, **over) -> dict:
+    """A search job whose record has a trace, a checkpoint each `PER` steps: a run of the 45M dense step's own plain
+    products, each step after the first reading a weight the step before changed, traced as `trace` (`over` its
+    fields), with a nonempty E at every checkpoint."""
+    rec = record(losses, "search", per=PER)
+    rec["structures"]["a"]["log"] = [["fwd", "theta", r["op"], json.dumps([[r["dims"]["m"], r["dims"]["k"]],
+                                                                           [r["dims"]["k"], r["dims"]["n"]]]),
+                                      r["count"], r["count"] * r["macs"]]
+                                     for r in STATED["rows"] if r["op"] in F.PLAIN_PRODUCTS]
+    for s in rec["steps"]:
+        s["by"] = {"fwd/theta": sum(row[5] for row in rec["structures"]["a"]["log"])}
+        s["weights"] = {"w": [str(s["step"])]} if s["step"] else {}
+    for cp in rec["checkpoints"]:
+        cp["e_bytes"] = 10**8
+    return {"seed": seed, "split": "search", "record": rec | {"trace": trace(**over)}}
 
 
 def graded(runs, honest, config=CONFIG, **kw) -> dict:
     return G.grade(config, registry(), runs, honest, **kw)
 
 
-def test_the_fit_reads_the_frontier_of_one_data_and_recovers_its_law():
+def test_the_fit_reads_the_frontier_of_one_data_and_recovers_its_parameters():
     """Four starts on L(C) = E + A·C^(−γ) give it back; the start off the frontier (more compute, a worse loss) and the
     other data's are not read; under five points the fit is provisional, and under three there is none. A target is
     the gain's inverse, and a loss at or below E has no finite gain."""
@@ -89,7 +109,7 @@ def test_the_fit_reads_the_frontier_of_one_data_and_recovers_its_law():
     assert G.gain_from(FIT, L0, TARGET) == pytest.approx(1.1) and TARGET < L0
     assert G.target(FIT, FIT["E"], 1.1) is None and G.gain_from(FIT, L0, FIT["E"]) == math.inf
     assert G.fit([(1e18, 1.2), (1e19, 1.1)]) is None and G.fit([(1e18, 1.2), (2e18, 1.1), (3e18, 1.0)]) is None
-    three = G.fit([(1e18, law(1e15)), (1e19, law(1e16)), (1e20, law(1e17))])
+    three = G.fit([(1e18, loss_at(1e15)), (1e19, loss_at(1e16)), (1e20, loss_at(1e17))])
     assert G.c_spread(three, 1.0) is None and G.c_spread(FIT, TARGET) >= 0
 
 
@@ -170,7 +190,8 @@ def test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
     search = traced([OVER, UNDER, UNDER])
     runs, ref = [job([OVER, OVER, UNDER], 0), job([OVER, OVER, UNDER], 1), search], [job([OVER, UNDER])]
     s = graded(runs, ref)
-    want = F.published(F.measure(search["rows"][1], SHAPE), *policy.CONSOLE)
+    row = G.traced(search["record"], G.rows_of(search["record"])[1])
+    want = F.published(F.measure(row, SHAPE | {"forward_macs_per_token": 51_342_080}), *policy.CONSOLE)
     assert want["rho"] > 1 and s["rho"]["rho"] == want["rho"] and s["rho"]["rests_on"] == want["rests_on"]
     assert (s["rho"]["checkpoint_step"], s["rho"]["at"]) == (2 * PER - 1, "its first checkpoint reaching the gain")
     assert s["rho"]["work"]["N"] > 0 and s["rho"]["work"]["C_gates"] == s["rho"]["C_gates"]
@@ -182,18 +203,160 @@ def test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
     assert at["S"]["why"] == at["rho"]["why"] and at["p"] == s["p"] and at["per_period"] is None
 
 
-def test_no_rho_without_a_traced_search_record_the_formalism_measures():
-    """p reads the count alone, so it stands where ρ has no traced step, or one the formalism refuses."""
+def test_the_trace_is_priced_by_the_capture_over_the_steps_after_the_first_update():
+    """What ρ reads of a record's trace: each raw row priced by `capture.products.priced`, which gives back the row
+    the capture states, at the rows' k and at each k of the dial; over the steps through the checkpoint that read a
+    changed weight, by their tokens over the traced step's. The grade holds no price: the products are the
+    formalism's of the stated rows."""
+    rec = traced([OVER, UNDER])["record"]
+    row = G.traced(rec, G.rows_of(rec)[1])["formalism"]
+    block, got = row["trace"]["products"], row["products"]
+    stated = [{k: v for k, v in r.items() if k not in ("P", "fed", "k_whole")} for r in STATED["rows"]]
+    assert block["rows"] == stated and block["rows"] == [products.priced(r) for r in rec["trace"]["rows"]]
+    assert set(block["at"]) == set(STATED["at"]) and all(
+        [r["cell_gates"] for r in b["rows"]] == [r["cell_gates"] for r in STATED["at"][k]["rows"]]
+        for k, b in block["at"].items())
+    assert (block["k"], block["tokens"], block["capture"], block["capture_code"]) == (
+        STATED["k"], STATED["tokens"], products.CAPTURE, rec["training_slowdown"])
+    steps = (2 * PER - 1) * 512 / STATED["tokens"]
+    want = F.products_of_trace(STATED | {"capture": products.CAPTURE, "capture_code": "0"}, steps)
+    assert got["he"]["steps"] == steps and {k: got[k] for k in want} == want
+    assert got["stand_in"] == {"structures": ["a"], "step_tokens": [512], "traced_tokens": STATED["tokens"],
+                               "why": F.STAND_IN}
+    assert row["labels"]["products"] == f"{F.TRACED_PRODUCTS}; {F.STAND_IN}"
+    assert row["trace"]["affected_share"] == 1 and set(row["trace"]) == {
+        "products", "affected_share", "data_dependent", "carried_scalars"}
+    assert set(rec["trace"]) == set(G.TRACE)
+    whole = traced([OVER, UNDER], tokens=512)["record"]
+    assert "stand_in" not in G.traced(whole, G.rows_of(whole)[0])["formalism"]["products"]
+
+
+def test_a_step_is_after_the_first_update_when_it_reads_a_changed_weight():
+    """A weight of θ is listed where its value isn't θ's, and a value derived from a gradient always; a tensor θ
+    doesn't hold counts once a value it is read at isn't the first it was read at, so a table a model builds never
+    does and an adapter does from its first update on. A prefix stops at its checkpoint."""
+    def steps(*weights: dict) -> dict:
+        return {"steps": [{"step": i, "weights": w} for i, w in enumerate(weights)]}
+
+    table = {"new/0": ["t"]}
+    assert [s["step"] for s in G.changed_steps(steps(table, table | {"w": ["1"]}, table | {"w": ["2"]}), None)] == [1, 2]
+    assert G.changed_steps(steps(table, table, table), None) == []
+    adapter = steps(table | {"new/1": ["a"]}, table | {"new/1": ["b"]}, table | {"new/1": ["a"]}, table | {"new/1": ["c"]})
+    assert [s["step"] for s in G.changed_steps(adapter, None)] == [1, 3]
+    assert [s["step"] for s in G.changed_steps(adapter, 2)] == [1]
+    assert [s["step"] for s in G.changed_steps(steps({"new/1": ["a", "b"]}, {"derived/0": [""]}, {}), None)] == [0, 1]
+    assert G.changed_steps(steps({"new/1": [""]}, {"new/1": [""]}), None) == []
+
+
+def test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is_taken_again():
+    """p reads the count alone, so it stands where ρ has no trace to read: a record with none, one whose step the
+    capture refused, one of another capture version, or one without a key ρ reads. The reason names the job that
+    re-traces the record at its commit and config.text; a record without them is told it has no config to re-trace
+    from, and no command."""
     ref = [job([UNDER])]
     assert "no search record" in graded([job([UNDER])], ref)["S"]["why"]
-    s = graded([job([UNDER]), job([OVER, UNDER], split="search")], ref)
-    assert s["rho"] == {"rho": None, "why": "unmeasured: the search record is untraced, and ρ reads a traced step"}
-    assert s["S"]["any"] is None and s["p"]["any"]["p"] == 1
+
+    def why(search: dict, **record) -> str:
+        search = search | {"record": search["record"] | record}
+        s = graded([job([UNDER]), search], ref)
+        assert s["rho"] == {"rho": None, "why": s["S"]["why"]} and s["S"]["any"] is None and s["p"]["any"]["p"] == 1
+        assert f"none: {s['rho']['why']}" in G.text(s)
+        return s["rho"]["why"]
+
+    here = {"config": {"text": 'start = "s"\n'}, "commit": "c0ffee"}
+    again = (f"re-trace it at the record's commit c0ffee and config.text with a CPU job, `{G.RETRACE}`, RUN_JSON the "
+             f"record")
+    orphan = "the record has no config.text and no commit, so no config to re-trace from"
+    assert G.RETRACE == "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device cpu"
+    assert why(job([OVER, UNDER], split="search"), **here) == (
+        f"refused: the search record has no trace, and ρ reads a traced step; {again}")
+    refused = {"refused": {"reason": "unsupported", "op": "aten::foo", "message": "foo has no trace"}}
+    assert why(traced([OVER, UNDER]), trace=refused, **here) == (
+        f"refused: the capture refused the search record's step (unsupported, aten::foo: foo has no trace), and ρ "
+        f"reads a traced step; {again}")
+    assert why(traced([OVER, UNDER], capture="0.1"), **here) == (
+        f"refused: the search record's trace is capture 0.1's, and this grade reads capture {products.CAPTURE}'s; "
+        f"{again}")
+    lacking = traced([OVER, UNDER])
+    del lacking["record"]["trace"]["at"], lacking["record"]["trace"]["carried_scalars"]
+    assert why(lacking, **here) == (f"refused: the search record's trace has no at, carried_scalars, which ρ reads; "
+                                    f"{again}")
+    for search in (job([OVER, UNDER], split="search"), traced([OVER, UNDER], capture="0.1"),
+                   traced([OVER, UNDER]) | {"record": traced([OVER, UNDER])["record"] | {"trace": refused}}):
+        assert why(search).endswith(f"; {orphan}") and "python" not in why(search)
+    assert why(traced([OVER, UNDER], capture="0.1"), commit="c0ffee").endswith(
+        "; the record has no config.text, so no config to re-trace from")
+
+
+def test_no_rho_from_a_step_the_formalism_refuses_or_a_prefix_no_update_precedes():
+    """A read-back that decides what the graph can't carry, a trace whose products no update reaches, and a
+    checkpoint with a nonempty E before any step reads a changed weight are refused, never priced; p stands."""
+    ref = [job([UNDER])]
     read_back = {"kind": "a comparison of a read-back float", "where": "train.py:9", "steps": [0, 3]}
     s = graded([job([UNDER]), traced([OVER, UNDER], data_dependent=[read_back])], ref)
     assert s["rho"]["rho"] is None and s["rho"]["why"].startswith("refused: data-dependent: not measured")
     assert s["S"]["why"] == s["rho"]["why"] and s["p"]["any"]["p"] == 1
     assert s["attack"]["splits"]["search"]["seeds"]["0"]["reached"]
+    still = trace()
+    for b in (still, *still["at"].values()):
+        b["rows"] = [r | {"affected": [False, False]} for r in b["rows"]]
+    s = graded([job([UNDER]), traced([OVER, UNDER], **still)], ref)
+    assert s["rho"]["why"] == ("refused: update-free trace: E is 100000000 bytes, but the traced step shows no update "
+                               "(its affected share is 0)")
+    idle = traced([OVER, UNDER])
+    for step in idle["record"]["steps"]:
+        step["weights"] = {"new/0": ["t"]}
+    s = graded([job([UNDER]), idle], ref)
+    assert s["rho"]["why"] == ("refused: update-free prefix: E is not empty, but no step through checkpoint "
+                               f"{2 * PER - 1} reads a weight the run changed")
+
+
+def test_a_records_provenance_is_passed_on_and_never_read():
+    """A record that says where it came from is graded as the same record that doesn't: its `provenance` goes, as it
+    is, beside the record in `records` and, for the record ρ read, into what S rests on and the block's lines."""
+    said = {"converted_from": "another schema", "by": "a script"}
+    plain, marked = traced([OVER, UNDER]), traced([OVER, UNDER])
+    marked["record"]["provenance"] = said
+    runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1)], [job([UNDER])]
+    a, b = graded([*runs, plain], ref), graded([*runs, marked], ref)
+    assert a["rests_on"]["provenance"] is None and all("provenance" not in x for x in a["records"])
+    assert b["rests_on"]["provenance"] == said and b["rho"]["provenance"] == said
+    assert [x.get("provenance") for x in b["records"]] == [None, None, said, None]
+    drop = {"rests_on": None, "records": None}
+    assert {**b, **drop, "rho": b["rho"] | {"provenance": None}} == {**a, **drop}
+    line = json.dumps(said, sort_keys=True)
+    assert f"; the record's provenance: {line}" in G.text(b) and f", provenance: {line}" in G.text(b)
+    assert "provenance" not in G.text(a)
+
+
+@pytest.fixture(scope="module")
+def ran(tmp_path_factory):
+    """One search job of the tiny start, run as a node runs it, through the sandbox."""
+    return synthetic.run_job(tmp_path_factory.mktemp("job"))[0]
+
+
+def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
+    """The record a job writes, with the trace its job took of its own step, grades as it is: its rows priced by the
+    capture, over the steps after the run's first update (step 0 reads θ and the tables the model builds), of the
+    traced step's own shape. Its trace says more than the grade reads, and a refused one has no ρ."""
+    assert set(G.TRACE) < set(ran["trace"]) and ran["trace"]["capture"] == products.CAPTURE
+    assert [s["step"] for s in G.changed_steps(ran, None)] == [1, 2] and ran["steps"][0]["weights"]
+    f = G.traced(ran, G.rows_of(ran)[-1])["formalism"]
+    assert f["trace"]["products"]["rows"] == [products.priced(r) for r in ran["trace"]["rows"]]
+    assert f["products"]["he"]["steps"] == 2 and "stand_in" not in f["products"] and f["trace"]["affected_share"] > 0
+    config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
+    starts = registry("tiny", synthetic.SHAPE)
+    runs = [{"seed": 0, "split": "search", "record": ran}]
+    s = G.grade(config, starts, runs, runs)
+    assert s["basis"]["split"] == "search" and s["rho"]["checkpoint_step"] == 2
+    assert s["rho"]["rho"] is not None and s["rho"]["rho"] >= 1, s["rho"]
+    assert s["rests_on"]["capture"] == products.CAPTURE and s["rests_on"]["capture_code"] == ran["training_slowdown"]
+    assert s["rho"]["terms"]["products"] is not None and s["rests_on"]["provenance"] is None
+    assert (s["rho"]["work"] is None) == (not s["bound_of_record"]["available"])
+    here = f"re-trace it at the record's commit {ran['commit']} and config.text with a CPU job, `{G.RETRACE}`"
+    refused = {"refused": {"reason": "unsupported", "op": "aten::foo", "message": "foo has no trace"}}
+    s = G.grade(config, starts, [runs[0] | {"record": ran | {"trace": refused}}], runs)
+    assert s["rho"]["rho"] is None and here in s["rho"]["why"] and s["S"]["why"] == s["rho"]["why"]
 
 
 def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
@@ -215,8 +378,9 @@ def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
 
 def test_the_bound_of_record_is_the_calculators_beside_s_and_never_in_it(monkeypatch):
     """Where the calculator has `min_cut`, the bound of record is its `bound` at the policy's (c, k) on the traced
-    step's N, O, β_w, β_x, b_y, F and |C|, with no n; S is p·ρ either way. Without the module, or without a traced
-    step, it is not available, with the reason."""
+    step's N, O, β_w, β_x, b_y, F and |C|, with no n; S is p·ρ either way. Without the module, without a traced
+    step, or on one whose M is empty (no operand holds a bit, so there is no β to hand over), it is not available,
+    with the reason."""
     runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
     calls = []
 
@@ -235,6 +399,12 @@ def test_the_bound_of_record_is_the_calculators_beside_s_and_never_in_it(monkeyp
     assert "pays at least 7.5x (HE: at least 3 blocks" in G.text(s) and "rests on: given (H) and (E)" in G.text(s)
     untraced = graded([job([UNDER])], ref)["bound_of_record"]
     assert not untraced["available"] and "gives none" in untraced["why"] and len(calls) == 1
+    flat = trace()
+    for b in (flat, *flat["at"].values()):
+        b["rows"] = [r | {"rates": [0.0, 0.0]} for r in b["rows"]]
+    empty = graded([*runs[:2], traced([OVER, UNDER], **flat)], ref)
+    assert empty["rho"]["terms"] == {"products": 0.0} and empty["rho"]["rho"] == 1 and empty["rho"]["work"] is None
+    assert not empty["bound_of_record"]["available"] and len(calls) == 1
     monkeypatch.setattr(calculator, "_min_cut", lambda: None)
     s = graded(runs, ref)
     absent = s["bound_of_record"]
@@ -273,9 +443,8 @@ def test_the_periods_and_fleets_are_the_calculators():
 
 
 def test_a_records_rows_carry_its_prefix_and_the_command_reads_a_tree_of_jobs(tmp_path, capsys):
-    """`rows_of` gives each checkpoint its prefix's op log, the last one the whole run's. The command reads
-    `<seed>/<split>/run.json`, or a traced record's `rows.jsonl.gz` in its place, prints the block and writes
-    `slowdown.json`."""
+    """`rows_of` gives each checkpoint its prefix's op log, the last one the whole run's. The command reads each
+    `<seed>/<split>/run.json` and nothing beside it, prints the block and writes `slowdown.json`."""
     coded = record([OVER, UNDER])
     coded["checkpoints"][1] |= {"e_bytes": 100, "format": "full"}
     rows = G.rows_of(coded)
@@ -284,17 +453,18 @@ def test_a_records_rows_carry_its_prefix_and_the_command_reads_a_tree_of_jobs(tm
     assert [r["output"] for r in rows] == [{}, {"e_bytes": 100, "format": "full"}] and rows[1]["split"] == "final"
     assert [G.counted(r) for r in rows] == pytest.approx([STEP_GATES, 2 * STEP_GATES]) and G.counted({}) is None
 
-    def put(root: str, seed: int, split: str, losses: list) -> None:
+    def put(root: str, seed: int, split: str, rec: dict) -> None:
         d = tmp_path / root / str(seed) / split
         d.mkdir(parents=True)
-        (d / "run.json").write_text(json.dumps(record(losses, split)))
+        (d / "run.json").write_text(json.dumps(rec))
 
-    put("attack", 0, "final", [OVER, UNDER])
-    put("attack", 1, "final", [OVER, OVER, UNDER])
-    put("attack", 0, "search", [OVER, UNDER])
-    put("reference", 0, "final", [UNDER])
-    with gzip.open(tmp_path / "attack" / "0" / "search" / "rows.jsonl.gz", "wt") as fh:
-        fh.write("\n".join(json.dumps(r) for r in traced([OVER, UNDER])["rows"]) + "\n")
+    put("attack", 0, "final", record([OVER, UNDER]))
+    put("attack", 1, "final", record([OVER, OVER, UNDER]))
+    put("attack", 0, "search", traced([OVER, UNDER])["record"])
+    put("reference", 0, "final", record([UNDER]))
+    (tmp_path / "attack" / "0" / "search" / "rows.jsonl").write_text("not a record\n")
+    (tmp_path / "attack" / "notes" / "final").mkdir(parents=True)
+    (tmp_path / "attack" / "notes" / "final" / "run.json").write_text("{}")
     starts = "".join(f'[starts.{n}]\ndata = "{e["data"]}"\nc0_macs = {e["c0_macs"]!r}\nl0_bpb = {e["l0_bpb"]!r}\n'
                      + "shape = { " + ", ".join(f"{k} = {v}" for k, v in e["shape"].items()) + " }\n"
                      for n, e in registry()["starts"].items())
@@ -306,7 +476,7 @@ def test_a_records_rows_carry_its_prefix_and_the_command_reads_a_tree_of_jobs(tm
     s = json.loads((tmp_path / "out" / "slowdown.json").read_text())
     assert s["schema"] == "slowdown/v1" and s["config"] == "attack" and s["p"]["honest"]["p"] == pytest.approx(2.5)
     assert s["S"]["any"] == pytest.approx(2.5 * s["rho"]["rho"])
-    assert [(x["config"], x["seed"], x["split"], x["form"]) for x in s["records"]] == [
-        ("attack", 0, "final", "record"), ("attack", 0, "search", "rows"), ("attack", 1, "final", "record"),
-        ("reference", 0, "final", "record")]
+    assert [(x["config"], x["seed"], x["split"]) for x in s["records"]] == [
+        ("attack", 0, "final"), ("attack", 0, "search"), ("attack", 1, "final"), ("reference", 0, "final")]
+    assert all("form" not in x and x["source"].endswith("run.json") for x in s["records"])
     assert capsys.readouterr().out.startswith("SLOWDOWN attack ")

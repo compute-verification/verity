@@ -91,15 +91,15 @@ python -m training_slowdown.grade --config attacks/NAME.toml --starts starts.tom
 ~~~
 
 A config names its `start`, its `target.gain`, its `policy`, its `honest` config and its `seeds`; each DIR holds one
-config's records, `DIR/<seed>/<split>/run.json` (`split` is `search` or `final`), a traced record as its rows
-(`rows.jsonl[.gz]`) where it has them. The grade reads no file of a served run. It prints one block and writes
-`OUT/slowdown.json` (`slowdown/v1`):
+config's records as its jobs wrote them, `DIR/<seed>/<split>/run.json` (`split` is `search` or `final`). The grade
+reads no file of a served run. It prints one block and writes `OUT/slowdown.json` (`slowdown/v1`):
 
 - **the gain** each seed reached, through the fit of the starts on the start's data (loss to effective compute);
 - **H**, the least counted |C| reaching the target gain: over the honest config's records, and over every config's
   given (`--also` adds configs at the same start and gain);
 - **p**, the attack's |C| over H, against the honest route and against any route, each with its range over the seeds;
-- **ρ**, the attack's own cost at the config's policy: `formalism.published` at (c, k) on the traced search record;
+- **ρ**, the attack's own cost at the config's policy: `formalism.published` at (c, k) on the search record, read
+  with its `trace`, whose raw product rows the grade prices with `capture.products.priced` (it holds no price);
 - **S = p·ρ**, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
 - **the bound of record** at the same policy, what every partition of the attack's traced circuit must pay, beside S
   (what this attack pays) and never mixed into it; "not available", with what is missing, where the calculator has
@@ -111,7 +111,11 @@ A config's `policy` is a name, and `policy.named` resolves it: `console` is the 
 session of the reference model of the start's size, k the session's input ids), and any other name is a fixed policy
 of the calculator's registry (`benchmarks/rho/data`, its `[policy.*]` tables). The block says which kind it was, and a
 name that is neither is refused. p is read on the final set where the attack and its honest config each have a final
-record, else on the search split, and the block says which. Without a traced search record there is no ρ and no S.
+record, else on the search split, and the block says which. A search record with no trace, with one the capture
+refused, or with one of a capture version the tree's `priced` doesn't read has no ρ, and then there is no S: the
+reason names the job that takes the trace again at the record's commit and `config.text` (`--retrace`, above), or
+says the record has no config to re-trace from. A record's `provenance`, where it has one (no job writes it), is
+passed on unread, beside the record and in what S rests on.
 
 ## Limits of the count
 

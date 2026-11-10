@@ -5,10 +5,10 @@
 
 A config (an attack's TOML file) names its `start`, its `target.gain`, its `policy`, its `honest` config and its
 `seeds` (`search` and `final`). DIR holds one config's records as its jobs wrote them, `DIR/<seed>/<split>/run.json`
-with `split` `search` or `final`; a traced record may come as its rows instead, `rows.jsonl[.gz]` in the same place (one
-row per checkpoint, as `rows_of` builds them). `--honest` is the honest config's DIR, and each `--also` another
-config's at the same start and gain. The grade reads no file of a served run. It prints the block (`text`) and
-writes `OUT/slowdown.json` (`SCHEMA`):
+with `split` `search` or `final`. `--honest` is the honest config's DIR, and each `--also` another config's at the
+same start and gain. The grade reads no file of a served run. A record may say where it came from (`provenance`, which
+no job writes): the grade never reads it and passes it on, beside each record it read (`records`) and, for the record
+ρ read, in what S rests on (`rests_on`). It prints the block (`text`) and writes `OUT/slowdown.json` (`SCHEMA`):
 
 - **the gain**, through the fit of the start's data (`fit`): L(C) = E + A·C^(−γ) through the registry's starts on that
   data, each at its training compute C0 and its loss. A loss's effective compute is the C at which the fit reaches it,
@@ -23,9 +23,12 @@ writes `OUT/slowdown.json` (`SCHEMA`):
 - **p** = C/H against each, with its range over the seeds (C's least over H's greatest, to C's greatest over H's
   least). C and H are read on one split (`basis`): the final set where the attack and the honest config each have a
   final record, else the search split, and the block says which;
-- **ρ**, the attack's own cost at the config's policy (`policy.named`): `formalism.published` at (c, k) on the traced
-  search record, at its first checkpoint reaching the gain on the search split, else at its last, which the block
-  says. An untraced search record, or a traced step `formalism.measure` refuses, has no ρ, and then there is no S;
+- **ρ**, the attack's own cost at the config's policy (`policy.named`): `formalism.published` at (c, k) on the search
+  record, at its first checkpoint reaching the gain on the search split, else at its last, which the block says. It
+  reads the record's `trace`, the step the job traced itself, and prices its product rows here (`traced`,
+  `training_slowdown.capture.products.priced`): the grade holds no price. A search record with no trace, with one
+  the capture refused or of a capture version this tree doesn't read, or with a step `formalism.measure` refuses, has
+  no ρ, and then there is no S; the reason names how the trace is taken again (`retrace`);
 - **S = p·ρ** against each H, a lower bound where ρ is one (`partial`), with what each factor rests on;
 - **the bound of record** at the same policy (`calculator.bound`): what every partition of the attack's traced
   circuit pays at the least, beside S, what this attack pays, and never mixed into it;
@@ -36,7 +39,6 @@ writes `OUT/slowdown.json` (`SCHEMA`):
 from __future__ import annotations
 
 import argparse
-import gzip
 import json
 import math
 import statistics
@@ -61,6 +63,10 @@ GAMMAS = np.linspace(0.01, 2.0, 399)
 OUTPUT = ("e_bytes", "format", "rebuild_macs", "decoder_gates")
 #: the theorem's inputs on a traced step, as `formalism.he_products` names them
 WORK = ("N", "O", "beta_w", "beta_x", "b_y", "F")
+#: what ρ reads of a record's `trace` (`traced`); the job writes more (`run.trace_step`), which the grade never reads
+TRACE = ("capture", "tokens", "k", "rows", "p_match", "at", "data_dependent", "carried_scalars")
+#: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which a refused trace's reason names
+RETRACE = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device cpu"
 
 
 # ---- the fit -----------------------------------------------------------------------------------------------------------
@@ -153,15 +159,22 @@ def macs_log(record: dict, through: int | None) -> dict:
     return {"by": by, "ops": ops}
 
 
+def prefix(record: dict, step: int) -> int | None:
+    """The last step of the prefix a checkpoint at `step` closes: None at or past the record's last step, the whole
+    run and its tail."""
+    last = record["steps"][-1]["step"] if record["steps"] else -1
+    return None if step >= last else step
+
+
 def rows_of(record: dict) -> list[dict]:
     """One row per checkpoint of a run record, as `formalism.measure` reads one: its step, its loss (`val_bpb`, the
     checkpoint's `score.bpb`), the start's loss on the same split (`start_bpb`, its `score.start_bpb`), the split, the
     `formalism` block and op log of the run's prefix through it, its output's facts (`OUTPUT`) and the record's
-    `invalid`."""
-    last = record["steps"][-1]["step"] if record["steps"] else -1
+    `invalid`. The block is the count's (`formalism.of_record`); what the record's `trace` gives it is added where ρ
+    reads it (`traced`)."""
     out = []
     for cp in record["checkpoints"]:
-        through, score = None if cp["step"] >= last else cp["step"], cp.get("score") or {}
+        through, score = prefix(record, cp["step"]), cp.get("score") or {}
         out.append({"checkpoint_step": cp["step"], "val_bpb": score.get("bpb", cp.get("bpb", cp.get("val_bpb"))),
                     "start_bpb": score.get("start_bpb", record["start"].get("val_bpb")),
                     "split": score.get("split", record.get("split")), "start": record["start"].get("name"),
@@ -177,13 +190,12 @@ def counted(row: dict) -> float | None:
 
 
 def checkpoints(run: dict, start: str) -> list[dict]:
-    """A job's checkpoints by step (`run`: its `seed`, its `split` and its `record`, or its `rows`): each one's loss,
-    the start's loss on the job's split and its counted |C| in gates (`counted`), or why it has none. A job from
-    another start, or scored on another split than its place says, is refused."""
-    rows = rows_of(run["record"]) if run.get("rows") is None else run["rows"]
+    """A job's checkpoints by step (`run`: its `seed`, its `split` and its `record`): each one's loss, the start's
+    loss on the job's split and its counted |C| in gates (`counted`), or why it has none. A job from another start, or
+    scored on another split than its place says, is refused."""
     where = f"seed {run['seed']}, {run['split']}"
     out = []
-    for r in sorted(rows, key=lambda r: r["checkpoint_step"]):
+    for r in sorted(rows_of(run["record"]), key=lambda r: r["checkpoint_step"]):
         if r.get("start") not in (None, start):
             raise ValueError(f"grade: the record at {where} is from start {r['start']!r}, not the config's {start!r}")
         if r.get("split") not in (None, run["split"]):
@@ -241,22 +253,103 @@ def ratio(c: dict | None, h: dict | None) -> dict | None:
 
 # ---- ρ, the bound of record and the periods --------------------------------------------------------------------------
 
+def retrace(record: dict) -> str:
+    """How a record's trace is taken again, which a record ρ can't read says: by the job that re-traces a record's
+    own config (`RETRACE`), which reads its `config.text` and checks its tree against the record's; a record without
+    its `config.text` or its `commit` has no config to re-trace from."""
+    lacks = [k for k, v in (("config.text", (record.get("config") or {}).get("text")), ("commit", record.get("commit")))
+             if not v]
+    if lacks:
+        return f"the record has no {' and no '.join(lacks)}, so no config to re-trace from"
+    return (f"re-trace it at the record's commit {record['commit']} and config.text with a CPU job, `{RETRACE}`, "
+            f"RUN_JSON the record")
+
+
+def changed_steps(record: dict, through: int | None) -> list[dict]:
+    """The record's steps through `through` (None: all) after the run's first update: each that read a weight the run
+    had changed, as the counter lists a step's `weights` (`flops`). A weight of θ is listed only where its value
+    differs from θ's, and a value derived from a gradient always; a tensor θ doesn't hold (`new/…`: a table a model
+    builds, an adapter) is listed by every step that reads it, so it counts once a value it is read at isn't the
+    first it was read at (a record without digests shows none as changed)."""
+    first, out = {}, []
+    for s in record["steps"]:
+        changed = [not key.startswith("new/") or any(v != first.setdefault(key, values[0]) for v in values)
+                   for key, values in (s.get("weights") or {}).items()]
+        if any(changed) and (through is None or s["step"] <= through):
+            out.append(s)
+    return out
+
+
+def traced(record: dict, row: dict) -> dict:
+    """`row` (one of `rows_of(record)`) as ρ reads it: with the products of the record's `trace`, the step its job
+    traced (`run.trace_step`), in its `formalism` block, as `formalism.measure` takes a traced record's. Each raw
+    product row is priced here by `capture.products.priced`, at the k the job classified the rows at and at each
+    other k of the console's dial (`at`), and the traced step stands for every step through the row's checkpoint
+    after the run's first update (`changed_steps`), by their tokens over its own, a `stand_in` where they differ from
+    it in structure or tokens. Of the trace it reads `TRACE`: the capture's version, the traced step's tokens, the
+    rows with their k, their P-match check and the dial's, and the read-backs `formalism.refusal` refuses on; with
+    them goes the share of the traced step's product MACs an update reaches (`affected_share`), which it reads only
+    for being 0.
+
+    Raises `formalism.Refused`, with how the trace is taken again (`retrace`), for a record with no trace, with one
+    the capture refused, with one of a capture version this tree's `priced` doesn't read, or with one that lacks a
+    key of `TRACE`; and for a checkpoint with a nonempty E that no step after the run's first update precedes."""
+    from .capture import products
+
+    tr = record.get("trace")
+    if not tr:
+        raise F.Refused(f"the search record has no trace, and ρ reads a traced step; {retrace(record)}")
+    if "refused" in tr:
+        r = tr["refused"]
+        raise F.Refused(f"the capture refused the search record's step ({r.get('reason')}, {r.get('op')}: "
+                        f"{r.get('message')}), and ρ reads a traced step; {retrace(record)}")
+    if tr.get("capture") != products.CAPTURE:
+        raise F.Refused(f"the search record's trace is capture {tr.get('capture')}'s, and this grade reads capture "
+                        f"{products.CAPTURE}'s; {retrace(record)}")
+    lacks = [k for k in TRACE if k not in tr]
+    if lacks:
+        raise F.Refused(f"the search record's trace has no {', '.join(lacks)}, which ρ reads; {retrace(record)}")
+    steps = changed_steps(record, prefix(record, row["checkpoint_step"]))
+    if not steps and (row.get("output") or {}).get("e_bytes") != 0:
+        raise F.Refused(f"update-free prefix: E is not empty, but no step through checkpoint {row['checkpoint_step']} "
+                        f"reads a weight the run changed")
+
+    def priced(b: dict) -> dict:
+        return {"k": b["k"], "rows": [products.priced(r) for r in b["rows"]], "p_match": b["p_match"]}
+
+    block = priced(tr) | {"capture": tr["capture"], "capture_code": record.get("training_slowdown"),
+                          "tokens": tr["tokens"], "at": {k: priced(b) for k, b in tr["at"].items()}}
+    got = F.products_of_trace(block, sum(s["tokens"] for s in steps) / tr["tokens"])
+    label = F.TRACED_PRODUCTS
+    structures, counts = sorted({s["struct"] for s in steps}), sorted({s["tokens"] for s in steps})
+    if len(structures) > 1 or counts not in ([], [tr["tokens"]]):
+        got["stand_in"] = {"structures": structures, "step_tokens": counts, "traced_tokens": tr["tokens"],
+                           "why": F.STAND_IN}
+        label = f"{label}; {F.STAND_IN}"
+    macs = [(r["count"] * r["macs"], any(r["affected"])) for r in block["rows"]]
+    share = sum(m for m, hit in macs if hit) / sum(m for m, _ in macs) if macs else 0.0
+    f = row["formalism"]
+    return row | {"formalism": f | {
+        "products": got, "labels": f.get("labels", {}) | {"products": label},
+        "trace": {"products": block, "affected_share": share} | {k: tr[k] for k in F.READ_BACKS}}}
+
+
 def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> dict:
     """ρ at the policy `pol` from the config's search job `run`, a start of `shape`: `formalism.published` at (c, k) on
-    its first scored checkpoint at or below its target, else on its last (`at` says which), with the theorem's inputs
-    there (`work`, where its products term has them) and the capture that traced it. No ρ, with why, without a search
-    record, without a scored checkpoint, on an untraced one, or on one `formalism.measure` refuses or can't measure."""
+    its first scored checkpoint at or below its target, else on its last (`at` says which), read with its record's
+    trace (`traced`), with the theorem's inputs there (`work`, where its products term has them: none where it is
+    unmeasured or its M is empty) and the capture that traced it. No ρ, with why, without a search record, without a
+    scored checkpoint, on a record whose trace `traced` refuses, or on one `formalism.measure` refuses or can't
+    measure."""
     if run is None:
         return {"rho": None, "why": "unmeasured: the config has no search record"}
     at = seed_at(run["checkpoints"], f, g)
     cp = next((c for c in run["checkpoints"] if c["gates"] is not None and c["step"] == at.get("step")), None)
     if cp is None:
         return {"rho": None, "why": f"unmeasured: the search record has no scored checkpoint ({at.get('why')})"}
-    if (cp["row"].get("formalism") or {}).get("trace") is None:
-        return {"rho": None, "why": "unmeasured: the search record is untraced, and ρ reads a traced step"}
-    fwd = (run.get("record") or {}).get("forward_macs_per_token")
+    fwd = run["record"].get("forward_macs_per_token")
     try:
-        m = F.measure(cp["row"], shape | ({"forward_macs_per_token": fwd} if fwd else {}))
+        m = F.measure(traced(run["record"], cp["row"]), shape | ({"forward_macs_per_token": fwd} if fwd else {}))
     except F.Refused as e:
         return {"rho": None, "why": f"refused: {e}"}
     except ValueError as e:
@@ -267,8 +360,9 @@ def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> dict:
         "seed": run["seed"], "checkpoint_step": cp["step"], "C_gates": cp["gates"],
         "at": "its first checkpoint reaching the gain" if at["reached"] else
               f"its last checkpoint: the search record doesn't reach {g:g}x",
-        "capture": (m.products or {}).get("capture"),
-        "work": None if term is None else {x: got.get(x) for x in WORK} | {"C_gates": cp["gates"]}}
+        "capture": (m.products or {}).get("capture"), "provenance": run["record"].get("provenance"),
+        "work": None if term is None or got.get("subset") is None else
+                {x: got.get(x) for x in WORK} | {"C_gates": cp["gates"]}}
 
 
 def per_period(run_gates: float, rho: dict) -> dict:
@@ -299,7 +393,7 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
           others: dict[str, list[dict]] | None = None) -> dict:
     """The slowdown of `config` (its `name`, `start`, `target.gain`, `policy`, `honest` and `seeds`) from its jobs
     `runs`, its honest config's (`honest`) and other configs' at the same start and gain (`others`, by name), each job
-    its `seed`, its `split` and its `record` or `rows`; `starts` is the starts registry (module docstring)."""
+    its `seed`, its `split` and its `record`; `starts` is the starts registry (module docstring)."""
     starts = starts.get("starts", starts)
     if config["start"] not in starts:
         raise ValueError(f"grade: no start {config['start']!r} in the starts registry ({', '.join(starts)})")
@@ -341,6 +435,7 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
             "p": f"counted |C| ({gates.UNIT}) at each seed's first checkpoint at or below its target on "
                  f"{SPLITS[basis]}, the mean over the seeds that reach, over the same for H",
             "rho": rho.get("rests_on"), "capture": rho.get("capture"), "capture_code": rho.get("capture_code"),
+            "provenance": rho.get("provenance"),
             "gain": f"the fit {FORM} on {f['points']} of the {len(data)} starts on data {entry.get('data')}"
                     + (f", provisional under {FIT_TARGET}" if f["provisional"] else "")},
         "per_period": per_period(C["mean"] * rho["rho"], rho) if C and rho["rho"] is not None else None,
@@ -348,13 +443,14 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
 
 
 def _read(name: str, run: dict) -> dict:
-    """What the grade read of one job: its place, its form, the label and the version of the code that wrote it, and
-    how many of its checkpoints are scored."""
-    wrote = run.get("record") or (run.get("rows") or [{}])[0]
+    """What the grade read of one job: its place, the label and the version of the code that wrote its record, how
+    many of its checkpoints are scored, and the record's `provenance` where it has one, passed on as it is."""
+    wrote = run["record"]
     return {"config": name, "seed": run["seed"], "split": run["split"], "source": run.get("source"),
-            "form": "rows" if "rows" in run else "record", "label": wrote.get("label"),
-            "version": wrote.get("training_slowdown") or wrote.get("te_core"), "checkpoints": len(run["checkpoints"]),
-            "scored": sum(c["gates"] is not None for c in run["checkpoints"])}
+            "label": wrote.get("label"), "version": wrote.get("training_slowdown") or wrote.get("te_core"),
+            "checkpoints": len(run["checkpoints"]),
+            "scored": sum(c["gates"] is not None for c in run["checkpoints"])} | (
+        {"provenance": wrote["provenance"]} if "provenance" in wrote else {})
 
 
 # ---- the block -------------------------------------------------------------------------------------------------------
@@ -374,6 +470,10 @@ def _h(h: dict) -> str:
 
 def _p(p: dict | None) -> str:
     return "none" if p is None else f"{p['p']:.4g} [{p['range'][0]:.3g}, {p['range'][1]:.3g}]"
+
+
+def _said(provenance) -> str:
+    return provenance if isinstance(provenance, str) else json.dumps(provenance, sort_keys=True)
 
 
 def text(s: dict) -> str:
@@ -413,8 +513,9 @@ def text(s: dict) -> str:
                                   + (f", sd {C['sd']:.3g}" if C["sd"] is not None else "")))
     r = s["rests_on"]
     add("rests on", f"rho: {r['rho'] or 'nothing: it is unmeasured'}",
-        f"capture: {r['capture'] or 'none'}, its code {r['capture_code'] or 'unrecorded'}", f"p: {r['p']}",
-        f"gain: {r['gain']}")
+        f"capture: {r['capture'] or 'none'}, its code {r['capture_code'] or 'unrecorded'}"
+        + (f"; the record's provenance: {_said(r['provenance'])}" if r["provenance"] is not None else ""),
+        f"p: {r['p']}", f"gain: {r['gain']}")
     add("bound of record", *([bound["why"]] if not bound["available"] else [
         f"every partition of the attack's traced circuit into the policy's blocks pays at least "
         f"{bound['slowdown']:,.6g}x ({bound['theorem']}: at least {bound['blocks']:.4g} blocks of c gates over its |C|)",
@@ -430,8 +531,9 @@ def text(s: dict) -> str:
               for rows in [[x for x in per["rows"] if x["over"] == over]]),
             f"(the window is {per['window']}'s; each fleet at its peak rate)",
             *(f"{k}: {v}" for k, v in per["parts"].items()))
-    add("records", *(f"{x['config']} {x['seed']}/{x['split']}: {x['form']}, version {x['version']}, "
+    add("records", *(f"{x['config']} {x['seed']}/{x['split']}: version {x['version']}, "
                      f"{x['scored']} of {x['checkpoints']} checkpoints scored" + (f", {x['label']}" if x["label"] else "")
+                     + (f", provenance: {_said(x['provenance'])}" if "provenance" in x else "")
                      for x in s["records"]))
     return "\n".join(lines)
 
@@ -446,18 +548,10 @@ def _plain(v):
 
 
 def read(root: Path) -> list[dict]:
-    """A config's jobs under `root`: `<seed>/<split>/` with `rows.jsonl.gz` or `rows.jsonl` (a traced record's rows),
-    else `run.json`."""
-    out = []
-    for d in sorted(p for p in root.glob("*/*") if p.name in SPLITS and p.parent.name.isdigit()):
-        job = {"seed": int(d.parent.name), "split": d.name}
-        rows = next((p for p in (d / "rows.jsonl.gz", d / "rows.jsonl") if p.exists()), None)
-        if rows is not None:
-            with (gzip.open if rows.suffix == ".gz" else open)(rows, "rt") as fh:
-                out.append(job | {"rows": [json.loads(ln) for ln in fh if ln.strip()], "source": str(rows)})
-        elif (d / "run.json").exists():
-            out.append(job | {"record": json.loads((d / "run.json").read_text()), "source": str(d / "run.json")})
-    return out
+    """A config's jobs under `root`: each `<seed>/<split>/run.json`, the record its job wrote."""
+    return [{"seed": int(p.parent.parent.name), "split": p.parent.name, "record": json.loads(p.read_text()),
+             "source": str(p)}
+            for p in sorted(root.glob("*/*/run.json")) if p.parent.name in SPLITS and p.parent.parent.name.isdigit()]
 
 
 def main(argv=None) -> int:
