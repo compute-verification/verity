@@ -3,7 +3,7 @@ title: Daniel has, in one comment on his draft, the five sentences the ledger ca
 
 **Ask.** Carry five corrections to Daniel's draft of the post as one comment on his page. The page is his, so nothing is edited for him.
 
-**Why.** The draft was last edited Mon 9 Nov 02:36Z; I read it again Tue 10 Nov 02:15Z [read].
+**Why.** The draft was last edited Mon 9 Nov 02:36Z; I read it again Tue 10 Nov about 02:05Z [read].
 1. "its security is provably based entirely on: the integrity of this one small computer; one or two cryptographic assumptions", and "It does not add any new ones".
    - Source, the lock on `main` [read]: `trust.base` holds SHA-512's collision resistance, uniform random bytes and three facts of the challenger's log. `SampledKSLiveV5`, deployed, rests on one more (`RecordCustodyZKJPLaw`). `Theft` takes three open premises (`HonestUseHard`, `LeaksThrough`, `Simulable`), and `SpotKSTwo` three.
    - Proposed: "Its security rests on this one small computer and its log of the coins it flipped, and on SHA-512. The weight-theft bound also takes a hardness assumption about honest use. The premises still open are listed with the proofs."

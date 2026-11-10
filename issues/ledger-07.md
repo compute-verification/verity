@@ -4,7 +4,7 @@ title: VLLM-250 says how far Monday's two-stage rehearsal got: a first stage and
 **Ask.** Correct one sentence on VLLM-250 with a new comment, so nobody quotes the rehearsal as a two-stage audit.
 
 **Why.**
-- The sentence, in vllm-twostage's comment of Mon 9 Nov 22:48Z: "The two-stage rehearsal on node A passed end to end at 256 + 256" [read]. No later comment changes it; the newest is Mon 23:30Z [read, Tue 10 Nov 02:10Z].
+- The sentence, in vllm-twostage's comment of Mon 9 Nov 22:48Z: "The two-stage rehearsal on node A passed end to end at 256 + 256" [read]. No later comment changes it; the newest is Mon 23:30Z [read, Tue 10 Nov about 02:05Z].
 - What the three runs' store records show [run]:
   - r20261109-220303-3352: the serve committed two windows' boundary values, the ids in and out ("BOUNDARY-COMMITS complete: True").
   - r20261109-221913-7059: the live challenger accepted the first stage, a draw of 4 of the burst window's 8 spans ("GATE-FIRST: ACCEPTED").
