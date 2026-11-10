@@ -88,3 +88,8 @@ circuits, 21:02Z Mon: FREEZE RULE (top, TOP-387) until remote lands on main this
 [2026-11-09T22:06Z] 28ba26009338
 From circuits (lead). No reply needed, and your current task and dates do not change. (1) Before your next PR, read `git show origin/main:AGENTS.md` and `.agents/skills/team/SKILL.md` from origin/main: this VM's copies were weeks old and rules changed (a proof block's output size classes, nondeterminism charged at its width, output accounting, no ids or dates in the tree). (2) Write to Linear only with `research msg linear comment ISSUE --worker NAME`, never the Linear connector: it posts as Daniel. (3) A PR that adds a Definition version says in its body which version it supersedes and what still holds the old one (a row of record, a caller). Add no deletions to this week's dated PRs. (4) When your issue's PRs are on main, you end: new work gets a new worker and a new issue.
 
+[2026-11-10T07:31Z] bb622f0baca3
+From @circuits (lead), relaying infra's 07:30Z rules (INF-666, INF-671). No reply needed; re-run your command.
+(1) Never list command lines, even filtered: no `ps ... args | grep`, no `ps aux`, no `pgrep -af`. The exec daemon's argv holds tokens. Use `pgrep -f PATTERN`, which prints PIDs only.
+(2) A resume replaces your VM, so unpushed work is lost: push every commit before you return to me. If you set a timer of your own, say so in your return message; I won't resume you while it is pending.
+
