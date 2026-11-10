@@ -5,8 +5,9 @@ The developer and the auditor each learn the truth or falsehood of a prespecifie
 schedule. Every protocol is zero-knowledge, so the auditor learns those statements and nothing else about the workload.
 
 **This page describes the architecture the repository is moving to, not the tree as it is today.**
-[What `main` does not have yet](#what-main-does-not-have-yet) lists the differences. [`AGENTS.md`](AGENTS.md) maps
-today's tree, with its commands and the rules in force.
+[What `main` does not have yet](#what-main-does-not-have-yet) lists the differences. For today's tree and the Glossary,
+read [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`GLOSSARY.md`](GLOSSARY.md). The rules in force and the commands are in
+[`AGENTS.md`](AGENTS.md).
 
 ## The three parties
 
@@ -75,7 +76,7 @@ Two of them are what an auditor runs:
 A protocol has three sides:
 
 - **The check:** parameters, a commitment and evidence in; accept, reject or undecided out. It is a function in Lean,
-  the language Verity's proofs are written in.
+  the language Verity's proofs are written in. Every protocol's check implements the same Lean interface.
 - **Its parties:** the devices it names and the messages they exchange.
 - **What it needs of the workload:** proof of useful work (PoUW) replaces each matrix multiply and proof of useful
   space (PoUS) stores the weights, while `spot` only reads what the workload emits.
@@ -119,8 +120,9 @@ verity/
                  which part of the hardware it accounts for
   config.py      reads and hashes the public TOML file a run starts from
   runtime/       runs parties over channels: sockets, coins and clock, transcripts
-  protocols/     flock, spot, recursion, pouw, pous, poub, certifier, inference_only, remote, onsite;
-                 each with its Lean check and its prover
+  protocols/     interface/, the Lean interface every protocol's check implements, and the ten protocols:
+                 flock, spot, recursion, pouw, pous, poub, certifier, inference_only, remote, onsite;
+                 each protocol with its verifier/, which holds its Lean check, and its prover/
   circuits/      the circuit language, and the circuits a protocol names
   commitments/   commitments to values
 adapters/
@@ -131,13 +133,20 @@ security/        Lean: what each protocol guarantees, and the proofs
 benchmarks/  tools/  tests/
 ```
 
-The four files at the top of `verity/` are types and plumbing. `verity/` keeps only the circuits a protocol names: the
-circuit language, the type of Boolean circuit Flock proves, matrix multiplication and the other primitives with what
-each GPU instruction computes, SHA-512 and the universal circuit. The circuits of the kernels a system serves go with
-that system's adapter, whose compiler emits them.
+The four files at the top of `verity/` are types and plumbing. `fixtures/` is not in this tree: each of its files goes
+to the code that reads it. The harness for the differential tests goes under `tools/`, and the datacenter model stays in
+`benchmarks/`.
 
-`fixtures/` is not in this tree: each of its files goes to the code that reads it. The harness for the differential
-tests goes under `tools/`, and the datacenter model stays in `benchmarks/`.
+`verity/` keeps only the circuits a protocol names: the circuit language, the type of Boolean circuit Flock proves,
+matrix multiplication and the other primitives with what each GPU instruction computes, SHA-512 and the universal
+circuit. A kernel is a routine that runs on a GPU. A kernel and its circuit go to whoever uses them:
+
+- **What a protocol names or replaces is that protocol's.** PoUW's own circuits and its matrix-multiplication kernels
+  are under `verity/protocols/pouw/`, and an adapter imports them as PoUW's workload side.
+- **What commits is the commitments'.** The two CUDA headers that hash and commit on the GPU are under
+  `verity/commitments/`.
+- **What a system serves is its adapter's.** The kernels of a served model and their circuits are with that system's
+  adapter, whose compiler emits the circuits.
 
 What imports what. An arrow goes from a part to a part it imports, and a dotted arrow is not an import:
 
@@ -189,18 +198,17 @@ The rules, each of which a test can enforce:
 - `verity/circuits/` imports nothing, and `verity/commitments/` imports only `verity/circuits/`. A protocol may import
   both.
 - An adapter imports a protocol's workload side. A protocol never imports an adapter.
-- Inside `verity/protocols/`: flock at the bottom, spot and recursion on it, the audits on those, remote and onsite on
-  top.
+- Inside `verity/protocols/`, from the bottom up: flock, the interface (`verity/protocols/interface/`) on it, spot and
+  recursion, the audits, and remote and onsite on top.
 
 ## What `main` does not have yet
 
 The sections above describe the target. `main` differs from it in these ways:
 
-- **The layout.** `main` has the older tree, which `AGENTS.md` maps. `verity/` is split into `verity/core/`, the
-  verifiers, and `verity/ml/`, the provers. The one adapter is `integrations/vllm/`, the demos are in `examples/`, the
-  Lean is in `Security/`, the data sheets are in `verity/hardware/`, and `fixtures/` is still at the root. The four
-  files at the top of `verity/` do not exist: the party type, the configuration check and the runtime are in
-  `verity/core/deploy/`.
+- **The layout.** `main` has the older tree, which `ARCHITECTURE.md` describes. `verity/` is split into `verity/core/`
+  and `verity/ml/`. The one adapter is `integrations/vllm/`, the demos are in `examples/`, the Lean is in `Security/`,
+  the data sheets are in `verity/hardware/`, and `fixtures/` is still at the root. The four files at the top of
+  `verity/` do not exist: the party type, the configuration check and the runtime are in `verity/core/deploy/`.
 - **The import rules.** The rules above are the target's. `main` enforces the rules of today's tree, with listed
   exceptions (`tests/test_boundaries.py`).
 - **A stated list of the messages between workload and prover.** Today the workload hands its values to the prover
