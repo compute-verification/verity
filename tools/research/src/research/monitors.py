@@ -1313,8 +1313,7 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
         gate = [(n, _pr(ctx, n).get("headRefName") or "") for n in ratchet_prs("\n".join(row.get("ratchet") or ()))]
     except Exception as e:  # noqa: BLE001  (the lander still hears of it)
         prs, gate, unread = [], [], f" Its PRs are unread ({type(e).__name__}: {str(e)[:120]})."
-    jobs = [j for j in dict.fromkeys((None if row.get("suite") else row.get("step"),
-                                      RATCHET_STEP if "ratchet" in row else None)) if j]
+    jobs = [j for j in (row.get("step"), RATCHET_STEP if "ratchet" in row else None) if j]
     try:
         table = _jobs(ctx, row.get("sha")) if jobs else []
     except Exception as e:  # noqa: BLE001  (the lanes and the lander still hear of it)

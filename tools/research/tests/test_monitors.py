@@ -968,7 +968,7 @@ CI_TOML = "".join(f'[[job]]\nname = "{j}"\nowner = "{o}"\n\n' for j, o in (("pyt
 def ci_toml(argv, refs=None) -> subprocess.CompletedProcess | None:
     """GitHub's answer to `monitors._jobs`' read of ci.toml at a commit (`CI_TOML`, or ``refs``'s answer for that ref: None for
     a commit GitHub doesn't hold), None for another command."""
-    if argv[:2] != ["gh", "api"] or f"/contents/{M.CI_TOML}?ref=" not in argv[-1]:
+    if argv[:2] != ["gh", "api"] or "/contents/tools/verity/check/ci.toml?ref=" not in argv[-1]:
         return None
     text = (refs or {}).get(ref := argv[-1].rpartition("?ref=")[2], CI_TOML)
     return subprocess.CompletedProcess(argv, *((0, text, "") if text is not None else
@@ -1094,7 +1094,7 @@ RATCHET_LINES = ["  #12 (aaaaaaaaaaaa): failed: grows p01.json 2 -> 3 entries", 
 def test_the_reader_gives_a_failed_ratchet_gates_lines_though_another_step_failed_first(tmp_path, monkeypatch):
     """Each merge a failed ratchet gate fails is a lane to ring (`failed_check`), and circuit-check, before the gate in ci.toml,
     can fail first: the gate's lines come with the row whichever step failed first, at most `RATCHET_LINES` of them.  A gate
-    that passed gives none, and one that failed with no log an empty list."""
+    that passed gives none, and one that failed with no log, or none on disk, an empty list."""
     slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
     write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=1,
               steps=[{"step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"},
@@ -1106,6 +1106,8 @@ def test_the_reader_gives_a_failed_ratchet_gates_lines_though_another_step_faile
               logs={"pytest.log": "FAILED tests/test_a.py::test_b - x\n", "ratchet-gate.log": RATCHET_LOG})
     write_run(tmp_path, "r20261003-200000-cccc", command=slot, state="failed", rc=1,
               steps=[{"step": "ratchet-gate", "status": "failed"}])
+    write_run(tmp_path, "r20261003-200000-dddd", command=slot, state="failed", rc=1,
+              steps=[{"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}])
 
     def rows():
         script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(tmp_path / "none"))
@@ -1115,6 +1117,7 @@ def test_the_reader_gives_a_failed_ratchet_gates_lines_though_another_step_faile
     got = rows()
     assert got["aaaa"]["step"] == "circuit-check" and got["aaaa"]["ratchet"] == RATCHET_LINES
     assert "ratchet" not in got["bbbb"] and got["cccc"]["step"] == "ratchet-gate" and got["cccc"]["ratchet"] == []
+    assert got["dddd"]["ratchet"] == []
     monkeypatch.setattr(M, "RATCHET_LINES", 1)
     assert rows()["aaaa"]["ratchet"] == RATCHET_LINES[:1]
 
@@ -1160,6 +1163,7 @@ def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_mer
     memo: dict = {}
     got = {f.key: f for f in M.failed_checks(M.Ctx(now=T0, memo=memo, run=answer))}
     assert set(got) == {"vy-nebius-1:r1", "vy-nebius-2:r4"}
+    assert sum(c[:2] == ["gh", "api"] for c in calls) == 1                 # r1's job's owner; r4 failed no step
     f = got["vy-nebius-1:r1"]
     assert f.owners == ("infra", M.LANDER) and f.thread == M.MERGE_THREAD
     assert f.text == ("*Check `r1` failed step `pytest` on vy-nebius-1* at 20:20Z (the run goes on): its log's first failing line "
@@ -1216,6 +1220,12 @@ def test_a_ratchet_gate_row_with_no_open_pr_at_its_commit_rings_the_lane_of_each
     assert got["r1"].owners == ("infra", "circuits", M.LANDER) and got["r1"].text.endswith(
         "`cursor/y-8c79`. Its jobs' owners are unread (RuntimeError: `gh api -H Accept: application/vnd.github.raw` exited 1: "
         "gh: No commit found for the ref main).")
+    refs["abc123def456"] = CI_TOML.replace('"vllm"', '"ratchets"')     # the run's commit's own, where GitHub holds it
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", "circuits", "ratchets", M.LANDER)
+    refs["abc123def456"] = ""                                           # one declaring no job
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", "circuits", M.LANDER) and got["r1"].text.endswith("#14 `cursor/y-8c79`.")
 
 
 # ---- what node 2 runs ---------------------------------------------------------------------------------------------------------

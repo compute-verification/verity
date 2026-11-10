@@ -2419,7 +2419,8 @@ OFF_TREE = {"tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = 
                 ("pytest", "ci"), ("circuit-check", "circuits"), ("ratchet-gate", "vllm"), ("flock-rust-tests", "proofs"))),
             Q.REGISTRY.as_posix(): json.dumps({"handles": [
                 *({"handle": h} for h in ("ci", "circuits", "vllm", "lane-1", "lane-2")),
-                {"handle": "heads", "owns": ["verity/core/protocols/certifier/"]}, {"handle": "artifacts", "owns": ["fixtures/"]}]}),
+                {"handle": "heads", "owns": ["verity/core/protocols/certifier/"]},
+                {"handle": "artifacts", "owns": ["fixtures/"]}]}),
             "verity/core/protocols/certifier/head_check.circuit-check.json": json.dumps({HEAD: {"digest": "sha512:h"}}) + "\n",
             "fixtures/head.json": json.dumps({HEAD: "no pin"}) + "\n"}
 #: a change meeting circuit-check's inputs (`queue.forces_cold`), and one that doesn't
@@ -2493,25 +2494,28 @@ def test_under_gate_check_a_ratchet_gate_naming_no_merge_it_fails_rings_its_owne
     assert rings == ([(["@vllm"], ["ratchet-gate"])] if base == "passed" else [])
 
 
-@pytest.mark.parametrize("who", ["pins", "members", "job"])
+@pytest.mark.parametrize("who", ["pins", "members", "stranger", "job"])
 def test_under_gate_check_a_circuit_check_target_its_base_passed_rings_its_pins_owner_else_the_members_meeting_its_inputs(
         env, monkeypatch, who):
     """circuit-check is off the merge gate.  Of what the candidate's check fails of it, a target the base's check fails too
     (`main`'s own red), one whose process died and a failure an allowance at the candidate covers ring nobody.  A target the
     base passed rings the owner of each sidecar's pins file pinning it (heads); one no pins file pins rings the lane of each
-    member whose change meets circuit-check's inputs (#2's, not #1's), else the step's owner in ci.toml (circuits)."""
-    loop, runs, main, sha = _off(env, monkeypatch, OTHER, CIRCUITS if who != "job" else {"b.txt": "2\n"})
+    member whose change meets circuit-check's inputs (#2's, not #1's), and the step's owner in ci.toml (circuits) where one
+    such member has no lane in the registry (#3) or none meets them."""
+    prs = [OTHER, CIRCUITS if who != "job" else {"b.txt": "2\n"}, *([{"verity/ml/circuits/x.py": "# x\n"}] * (who == "stranger"))]
+    loop, runs, main, sha = _off(env, monkeypatch, *prs)
     target = HEAD if who == "pins" else ROPE
     runs.end(main, also={"circuit-check": _circuit(f"lowering/pin-mismatch {HEAD if who != 'pins' else ROPE}")})
     runs.end(sha, also={"circuit-check": _circuit(f"lowering/pin-mismatch {HEAD}", f"lowering/pin-mismatch {ROPE}",
                                                   f"lowering/dead {DEAD}", f"circuit-check/killed {BIG}")})
     logged = loop.tick()
     assert _acts(logged) == ["slim", "slim", "ring"] and logged[1]["record"]["verdict"]["state"] == PASS
-    to = {"pins": ["@heads"], "members": ["@lane-2"], "job": ["@circuits"]}[who]
+    to = {"pins": ["@heads"], "members": ["@lane-2"], "stranger": ["@lane-2", "@circuits"], "job": ["@circuits"]}[who]
     assert (logged[2]["step"], logged[2]["failures"], logged[2]["to"]) == (
         "circuit-check", [f"lowering/pin-mismatch {target}"], to)
+    members = " ".join(f"#{n}" for n in range(1, len(prs) + 1))
     assert env.posts == [f"{' '.join(to)} vqueue: "
-                         + _off_said(sha, "#1 #2", "circuit-check", main, f"lowering/pin-mismatch {target} it failed")]
+                         + _off_said(sha, members, "circuit-check", main, f"lowering/pin-mismatch {target} it failed")]
     assert loop.tick() == [] and len(env.posts) == 1
 
 
@@ -2519,13 +2523,13 @@ def test_under_gate_check_a_circuit_check_target_its_base_passed_rings_its_pins_
 def test_under_gate_check_what_a_candidate_fails_off_the_gate_waits_for_its_bases_check_and_what_that_fails_rings_nobody(
         env, monkeypatch, base):
     """What the candidate's check fails off the gate is rung only once the base's check ended, and only what that check
-    passed: a red the base shares (`main`'s own) rings nobody, and nor does any where the base's check didn't run the step to
-    its end (its process killed), since what the base fails is unknown."""
+    passed: a red the base shares (`main`'s own: a target it fails, in whatever way) rings nobody, and nor does any where the
+    base's check didn't run the step to its end (its process killed), since what the base fails is unknown."""
     loop, runs, main, sha = _off(env, monkeypatch, CIRCUITS)
     failed = _circuit(f"lowering/pin-mismatch {HEAD}")
     runs.end(sha, also={"circuit-check": failed})
     assert _acts(loop.tick()) == ["slim"] and env.posts == []             # the base's check still runs
-    runs.end(main, also={"passed": {}, "failed": {"circuit-check": failed},
+    runs.end(main, also={"passed": {}, "failed": {"circuit-check": _circuit(f"lowering/dead {HEAD}")},
                          "killed": {"circuit-check": (failed, 137)}}[base])
     logged = loop.tick()
     assert _acts(logged) == ["slim", *(["ring"] if base == "passed" else [])]
@@ -2551,7 +2555,9 @@ def test_under_gate_check_a_candidate_on_another_is_rung_about_what_that_one_s_c
     """A candidate built on another is judged off the gate against that candidate's check, as its log holds it: the red both
     fail rings only about the lower one, against `main`'s check, which passed."""
     def stack(s: Snapshot) -> list:
-        return [Build((len(s.candidates) + 1,), s.candidates[0].sha if s.candidates else s.main, 5)] if len(s.candidates) < 2 else []
+        if len(s.candidates) > 1:
+            return []
+        return [Build((len(s.candidates) + 1,), s.candidates[0].sha if s.candidates else s.main, 5)]
 
     loop, runs, main, low = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"}, decide=stack, batch=1)
     (high,) = [r["sha"] for r in loop.tick() if r["action"] == "build"]
@@ -2573,8 +2579,10 @@ def test_under_gate_check_a_warn_step_s_red_rings_its_owner_in_ci_toml_else_ci(e
     assert rings == {"flock-rust-tests": (["@proofs"], ["flock-rust-tests"]), "lean-audit": (["@ci"], ["lean-audit"])}
 
 
-def test_under_gate_check_a_ring_off_the_gate_quotes_its_first_failures_in_the_log_s_order_each_cut_short(env, monkeypatch):
-    monkeypatch.setattr(L, "OFF_SAID", 2)
+@pytest.mark.parametrize("cap", [2, 3])
+def test_under_gate_check_a_ring_off_the_gate_quotes_its_first_failures_in_the_log_s_order_each_cut_short(env, monkeypatch, cap):
+    """A ring quotes the first `OFF_SAID` failures in the log's order, each cut at 200 characters, and counts the rest."""
+    monkeypatch.setattr(L, "OFF_SAID", cap)
     loop, runs, main, sha = _off(env, monkeypatch, OTHER)
     runs.end(main)
     said = [f"lowering/pin-mismatch {ROPE} " + "y" * 300, f"lowering/pin-mismatch {HEAD} it differs", "lowering/dead Other_v1"]
@@ -2582,8 +2590,23 @@ def test_under_gate_check_a_ring_off_the_gate_quotes_its_first_failures_in_the_l
     (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
     assert ring["failures"] == [f"lowering/pin-mismatch {ROPE}", f"lowering/pin-mismatch {HEAD}", "lowering/dead Other_v1"]
     assert ring["to"] == ["@heads", "@circuits"]
-    assert ring["text"] == _off_said(sha, "#1", "circuit-check", main, said[0][:200], said[1]).replace(
-        ". Nothing", "; and 1 more. Nothing")
+    assert ring["text"] == _off_said(sha, "#1", "circuit-check", main, said[0][:200], *said[1:cap]).replace(
+        ". Nothing", f"{'; and 1 more' if cap == 2 else ''}. Nothing")
+
+
+def test_under_gate_check_the_steps_off_the_gate_are_its_bases_and_the_allowances_the_candidate_s_own(env, monkeypatch):
+    """What a candidate fails off the gate is read by the policy its verdict and its landing are: the steps off the gate are its
+    base's (one it takes off the gate itself fails it on the gate, and rings nothing off it), the allowances its own, as the
+    check after it lands reads them (one it adds covers its failure; one expired covers nothing)."""
+    allow = '[[allow]]\nid = "circuit-check lowering/dead {}"\nowner = "circuits"\nexpires = "{}"\nreason = "red for now"\n'
+    pol = (OFF_TREE["tools/verity/check/policy.toml"].replace('"ratchet-gate"]', '"ratchet-gate", "pytest"]')
+           + allow.format("New_v1", "2030-06-01T00:00:00Z") + allow.format("Old_v1", "2020-06-01T00:00:00Z"))
+    loop, runs, main, sha = _off(env, monkeypatch, {"tools/verity/check/policy.toml": pol})
+    runs.end(main)
+    runs.end(sha, 3, "pytest", "error: no\n", also={"circuit-check": _circuit("lowering/dead New_v1", "lowering/dead Old_v1")})
+    logged = loop.tick()
+    assert logged[1]["record"]["verdict"]["state"] == FAIL
+    assert [(r["step"], r["failures"]) for r in logged if r["action"] == "ring"] == [("circuit-check", ["lowering/dead Old_v1"])]
 
 
 def test_under_gate_check_a_ring_off_the_gate_in_shadow_is_only_logged_once(env, monkeypatch):
