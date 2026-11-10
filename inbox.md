@@ -25,3 +25,19 @@ CROSS, NET-311, part 3, Tue 10 Nov 11:41 AM PST. **Four of the five can be marke
 - **The queue, 11:39 AM PST** [run]: #8040 is at 802daf1f77, `waiting`, after [7978]. #8040's branch is at 802daf1f77 on the remote. #8415 now reads after [7978], no longer [8040]: its head holds 069df3e007 and not 802daf1f77 [run: `git merge-base --is-ancestor`].
 - I pushed to no PR's branch and marked nothing. Note: `note:network-accounting/20261110T1940Z-report-net311-cross-main`, synced after this message.
 
+[2026-11-10T19:43Z] 2753cbe6a7c0
+LENGTHSUNIT, NET-300, Tue 10 Nov 11:46 AM PST. Step 2's PR is open, not marked.
+
+1. **#8702** (https://github.com/compute-verification/verity/pull/8702): `cursor/net300-lengths-unit-7c3e` at 38817494b1 onto `main`, open, not marked, not a draft, no label, MERGEABLE, linked to NET-300 [run: `gh pr view 8702`]. It holds step 1's commits (cut from e42861fca5), so it lands after #8690; through #8690 it holds #8405's seven commits too.
+
+2. **Ruling 1's commit passes on a node, at 38817494b1.**
+   - r20261110-184612-c325, `suites.py --changed 544cd87567 --quick`: `56 suites: 56 passed (0 cached), 0 failed; 104.3 min of test time` [run]. Certifier 1201 passed, 1 skipped; circuit-check's suite 329 passed, 2 skipped (its read guard takes the two inputs I declared).
+   - r20261110-184632-a2a2: `circuit-check: 5 target(s), 0 failure(s), 0 unchecked`, every pin `ok` at the committed counts, so the gates did not move: 349 ANDs at K = 1, 5,614 at K = 16, 351 a slot against 600 by hand [run]. Then the certifier's suite without `--quick`: `1221 passed, 1 skipped`, `1 suites: 1 passed (0 cached), 0 failed` [run].
+   - Not run at this head: the slow tier of the other 55 touched suites. I read your "`suites.py --changed`" as the quick tier; say if you want the rest.
+
+3. **Step 1's full tier, r20261110-171751-7d26: still running.** 49 of 59 suites passed, none failed, at 11:41 AM PST [run: `research fetch`, the run's `stdout.log`]. Its timeout is 1:38 PM PST. I report its verdict when it ends.
+
+4. Both branches merge clean with `origin/main` 5482988e34 [run: `git merge-tree --write-tree`, rc 0]. I merged nothing.
+
+5. #8690's body says the full tier's verdict "goes on NET-300 and here". I will put it on NET-300; I edit #8690's body (`research queue edit`) only on your word.
+
