@@ -674,6 +674,43 @@ def test_loads_are_named_with_their_rungs_and_the_engines_context_fits_them():
     assert int(args["--random-input-len"]) + int(args["--random-output-len"]) + 64 <= S.LOADS["long"].context
 
 
+def test_the_load_that_repeats_a_prefix_is_four_planned_requests_sent_one_at_a_time(tmp_path: Path):
+    """Two prompts near the context limit, each sent again with another ending. The client's file gives each request
+    its lengths and an id a block, and the second of a pair carries the first's ids for the blocks they share, so the
+    client draws both the same tokens there and no others. One request in flight: a second request starts when the
+    prompt it repeats has been computed."""
+    load, plan = S.LOADS["prefix"], S.PAIRS
+    assert (load.plan, load.prompts, load.rungs, load.number, load.file) == (plan, 4, (1,), False, None)
+    assert [n for n, x in S.LOADS.items() if x.number] == ["chat", "long"]
+    assert S.planned(plan) == {"requests": 4, "prompt_tokens": 519647, "repeated_tokens": 259712}
+    # every request with its output fits the context the load names, and a pair shares whole blocks both prompts have
+    assert all(r.prompt + r.output <= load.context for r in plan)
+    assert [(r.after, r.blocks * S.BLOCK) for r in plan] == [(None, 0), (0, 130752), (None, 0), (2, 128960)]
+    f = Path(S.write_trace(tmp_path / "prefix.trace.jsonl", plan))
+    lines = [json.loads(x) for x in f.read_text().splitlines()]
+    assert lines == S.trace_lines(plan) and all(set(x) == {"timestamp", "input_length", "output_length", "hash_ids"} for x in lines)
+    assert [(x["input_length"], x["output_length"]) for x in lines] == [(r.prompt, r.output) for r in plan]
+    a, b, c, d = (x["hash_ids"] for x in lines)
+    assert [len(x) for x in (a, b, c, d)] == [2044, 2044, 2016, 2016]         # an id a block, the last block short
+    assert b[:2043] == a[:2043] and d[:2015] == c[:2015]                      # the blocks a pair shares
+    assert len({*a, *b[2043:], *c, *d[2015:]}) == 2044 + 1 + 2016 + 1         # and no other block is shared
+    for bad in ((S.Planned(0.0, 640, 8, after=0, blocks=1),), (plan[0], S.Planned(0.0, 640, 8, after=0, blocks=11)),
+                (plan[0], S.Planned(0.0, 640, 8, after=0))):
+        with pytest.raises(ValueError, match="an earlier request"):
+            S.trace_lines(bad)
+    # the client sends the file's lines in its order, one in flight, each prompt as token ids of its planned length
+    argv = S.bench_argv(S.MODELS["glm53"], Path("/ck"), 1, load, 1, tmp_path, "prefix@1-r1", dataset=str(f))
+    at = argv.index("--dataset-name")
+    assert argv[at:at + 12] == ["--dataset-name", "timed_trace", "--timed-trace-chunk-hash-size", "64", "--no-self-timed",
+                                "--dataset-path", str(f), "--num-prompts", "4", "--seed", "0", "--request-rate"]
+    assert argv[argv.index("--max-concurrency") + 1] == "1" and argv[argv.index("--goodput") + 1:][:2] == [
+        "tpot:80", "--percentile-metrics"]
+    # its engine's context is its own, so it is served in a run of its own
+    assert S.context_of(S.parse_loads("prefix"), None) == 131072
+    with pytest.raises(SystemExit, match="prefix is served in a run of its own"):
+        S.parse_loads("chat,prefix")
+
+
 @pytest.fixture
 def pinned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[S.Dataset, bytes, Path]:
     """Chat's dataset pinned to a few bytes, under a node's Hugging Face cache in ``tmp_path``: the pin, the bytes,
@@ -763,14 +800,15 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
 def test_the_pinned_dataset_is_a_whole_sha512_and_a_commit_of_its_repository():
     ds = S.LOADS["chat"].file
     assert re.fullmatch(r"[0-9a-f]{128}", ds.sha512) and re.fullmatch(r"[0-9a-f]{40}", ds.revision) and ds.size > 0
-    assert [n for n, load in S.LOADS.items() if load.file] == ["chat"] and list(S.LOADS) == ["chat", "long"]
+    assert [n for n, load in S.LOADS.items() if load.file] == ["chat"] and list(S.LOADS) == ["chat", "long", "prefix"]
 
 
 def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp_path: Path):
-    now, calls = [0.0], []
+    now, calls, seeds = [0.0], [], []
 
-    def run(argv, stdout, stderr):
+    def run(argv, stdout, stderr, env):
         calls.append(argv)
+        seeds.append((env.get("PYTHONHASHSEED"), "PATH" in env))
         stdout.write(b"Starting main benchmark run...\n")
         d = Path(argv[argv.index("--result-dir") + 1])
         (d / argv[argv.index("--result-filename") + 1]).write_text(json.dumps(result(completed=197, failed=3)))
@@ -782,12 +820,14 @@ def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp
     assert (m["requests"], m["unfinished"], m["unserved"], m["concurrency"], m["rate"]) == (200, 3, 3, 8, None)
     assert (m["wall_s"], m["t0_unix"], m["client"], m["tag"]) == (64.25, 1700.0, "vllm-bench", "long@8-r1")
     assert calls == [S.bench_argv(S.MODELS["glm53"], Path("/ck"), 8000, S.LOADS["long"], 8, tmp_path / "rep-1", "long@8-r1")]
+    assert seeds == [("0", True)]        # the job's environment, with the seed a planned load's tokens are drawn under
     assert json.loads((tmp_path / "rep-1" / "meta.json").read_text()) == m
     assert (tmp_path / "rep-1" / "bench.log").read_bytes() == b"Starting main benchmark run...\n"
     for rc, why in ((1, "exited 1"), (0, "saved no result")):
         with pytest.raises(RuntimeError, match=why):
             S.drive_bench(8000, S.MODELS["glm53"], Path("/ck"), S.LOADS["long"], 8, "x", tmp_path / f"bad-{rc}",
-                          run=lambda argv, stdout, stderr, rc=rc: NS(returncode=rc), clock=lambda: 0.0, now=lambda: 0.0)
+                          run=lambda argv, stdout, stderr, env, rc=rc: NS(returncode=rc), clock=lambda: 0.0,
+                          now=lambda: 0.0)
 
 
 def test_a_pass_metrics_are_the_clients_own_figures():
