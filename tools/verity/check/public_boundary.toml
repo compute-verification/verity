@@ -310,10 +310,6 @@ why = "the identity hash's properties' proofs, which the network certifier's che
 paths = ["Security/Proofs/Properties/Hash"]
 from = ["certifier"]
 
-# Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
-# (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
-# matches. A Lean lock's kept text is held closer: lane text in it, or the name of what the export leaves out, refuses the
-# export unless an entry here covers it (the lock under `paths`, the text matching `pattern`).
 [[needed]]
 why = "the task graph's key rule and its digests, which key each module the Lean check's artifact cache restores"
 paths = ["tools/verity/graph/verity_graph/contract.py"]
@@ -332,6 +328,10 @@ why = "a package path of an earlier layout, and a build directory a layout move 
 edge = "tools/verity/lean/cache.py -> tools/verity/lean/moved.py"
 why = "the paths a package had before a layout move, under which the cache looks for an older build: none where the file isn't"
 
+# Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
+# (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
+# matches. A Lean lock's kept text is held closer: lane text in it, or the name of what the export leaves out, refuses the
+# export unless an entry here covers it (the lock under `paths`, the text matching `pattern`).
 [[residue]]
 what = "the auditor ledger's `lane` field: a monitoring period's prover, as the v2 ledger's period-open and period-close name it"
 pattern = '\bperiod\b[^\n]*\blane\b|\blane\b[^\n]*\bperiod\b'
