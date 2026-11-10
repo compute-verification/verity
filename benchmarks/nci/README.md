@@ -18,8 +18,8 @@ The slowdown lower bound's numbers come from [`benchmarks/rho`](../rho/README.md
 `rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`,
 `fit.py` and `figures.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
 `host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
-multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02, and rho's
-remote scenario at the H200 gives 3.04. Without the reference-efficiency assumption they are 1.21 and 1.22, without the
+multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
+where every unit is proved (T1 to T4), and rho's remote scenario at the H200 gives 3.04. Without the reference-efficiency assumption they are 1.21 and 1.22, without the
 hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `efficiency` and `residual`;
 `GLOSSARY.md`, Older names).
 
@@ -192,7 +192,11 @@ are worth enters through `m`. An incorrect proof block is worth at most the coun
 cheater can declare blocks of weight matmuls, so `tiers.py` takes such a block's own \(\kappa_{\text{block}} = 1\)
 (each multiply-add's multiplication counted) rather than the recipe's average. The cheating share \(\chi\) grows as
 \(\sqrt{\kappa_{\text{block}}}\): 1.27x what 0.60 gives, and 1.77x at 2, a block of multiplications alone whose
-additions are left to another block.
+additions are left to another block. A proof block's outputs fit its Definition's public size class, a power of two
+from 16 to 262,144 bits, and an incorrect block injects the widest (`tiers.py`'s `step_bits` reads
+`verity.ml.circuits.partition_v2.UNIT_CLASS_MAX`). At `tiers.py`'s defaults, today's sparse-draw proving cost, the
+injected bits are then worth more than the fleet's capacity and \(\chi\) stops at 1: sampled proofs (T5) bound nothing
+there, and bound something only at a lower proving cost (`statement.py`'s known holes).
 
 `--sweep` prints the bracket over a grid of `b_w` and `b_a`. `--efficiency` prices training recipes (BF16, FP8,
 4-bit, ternary, and extrapolated 2- and 1-bit) at the rates their matmuls read, each with its compute multiplier

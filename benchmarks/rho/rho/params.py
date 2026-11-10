@@ -8,7 +8,9 @@ sweeps and tornados span), `source` (a datasheet, a measurement, a Lean name, a 
     [location.h200-hgx]
     phi = { value = 1.583e16, unit = "FLOP/s", source = "census h100-sxm5-80gb/e4m3 x 8", status = "datasheet" }
 
-The monitoring periods are core's (`PERIODS`), not a layer's: each is the registry's `horizon.<name>.seconds`.
+What `verity` states is read from it, not restated in a layer (`sourced`; a file that sets one of these keys is refused):
+the monitoring periods are core's (`PERIODS`), each the registry's `horizon.<name>.seconds`, and the bits an incorrect
+proof block injects are the widest public size class of a block's outputs (`BLOCK_OUTPUT_BITS`).
 
 A table becomes an object through its layer's `build`, which takes its fields by name (`Registry.fields`). Every
 parameter of every layer is then one key, so a sweep is `registry.override({key: value})` and a rebuild, whatever the
@@ -24,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols import reporting
+from verity.ml.circuits import partition_v2
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 
@@ -31,6 +34,9 @@ STATUSES = frozenset({"datasheet", "measured", "declared", "assumed", "ruled", "
 
 #: core's monitoring periods (`reporting`), seconds by name
 PERIODS = dict(reporting.PERIODS)
+#: the keys that hold the output bits an accepted incorrect proof block injects: a block's outputs fit its Definition's
+#: public size class, so the widest class (`partition_v2.UNIT_CLASS_MAX`), over the classes down to the smallest
+BLOCK_OUTPUT_BITS = ("regime.remote-sampled.step_bits", "incorrect.step_bits")
 
 
 @dataclass(frozen=True)
@@ -67,10 +73,7 @@ class Registry:
 
     @classmethod
     def load(cls, paths: Iterable[Path] | None = None) -> Registry:
-        params = {f"horizon.{name}.seconds": Param(f"horizon.{name}.seconds", s, "s",
-                                                   source="verity.core.protocols.reporting PERIODS",
-                                                   status="declared")
-                  for name, s in PERIODS.items()}
+        params = {p.key: p for p in sourced()}
         for path in sorted(paths if paths is not None else DATA.glob("*.toml")):
             with open(path, "rb") as f:
                 for key, p in _flatten(tomllib.load(f)):
@@ -137,6 +140,19 @@ class Registry:
             old = self.param(key)
             params[key] = replace(value, key=key) if isinstance(value, Param) else replace(old, value=value)
         return Registry(params, index=self._tables())
+
+
+def sourced() -> list[Param]:
+    """The parameters `verity` states, read from it: no file under `data/` restates one (`Registry.load` refuses a key
+    set twice)."""
+    periods = [Param(f"horizon.{name}.seconds", s, "s", source="verity.core.protocols.reporting PERIODS",
+                     status="declared") for name, s in PERIODS.items()]
+    widest, smallest = partition_v2.UNIT_CLASS_MAX, partition_v2.UNIT_CLASSES[0]
+    bits = [Param(key, widest, "bit", low=smallest, high=widest,
+                  source="verity.ml.circuits.partition_v2 UNIT_CLASS_MAX: a proof block's outputs fit its Definition's "
+                         "public size class, and an incorrect block injects the widest; low: UNIT_CLASSES' smallest",
+                  status="derived") for key in BLOCK_OUTPUT_BITS]
+    return periods + bits
 
 
 def _flatten(table: Mapping[str, Any], prefix: str = "") -> Iterable[tuple[str, Param]]:
