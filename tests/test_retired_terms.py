@@ -214,8 +214,6 @@ ALLOWED: dict[str, str] = {
                                                               "after it lands",
     "production would publish every event": "infra's Vercel deployment, another sense",
     "Production is `verity-slack-events`": "infra's Vercel deployment, another sense",
-    "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
-                                                                             "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
     "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
                              "which their digests hash",
