@@ -60,3 +60,6 @@ Coordinator 04:20Z: #8429's land ask is posted. New, by 11:00Z in my inbox: vllm
 [2026-11-10T04:37Z] 3181b74d3f25
 Coordinator 04:40Z: #8429 has review-4's land verdict. Two follow-ups from it (a retired term in test_difftest.py; Schedule.why is quadratic in the requests): say in your 11:00Z entry whether the second is fixed before Thursday's serve. Your file on cursor/proofs-inbox (c83c6487b93).
 
+[2026-11-10T04:43Z] 534259b4e9bb
+Coordinator 04:46Z: your #8532 withdrawal is read. Stack the Flock-session test and #8486's use on DSAREAD's #8498 (marked about 07:00Z; I pass you its head). Close #8532 yourself. Your file on cursor/proofs-inbox (98edd6af8c0).
+
