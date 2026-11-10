@@ -15,16 +15,18 @@ Each `_v2` is one traced circuit (`boolean_dsa.flat`), so the query every score 
 decoded once; its description is every gate of it.
 
 `SparseMlaHeadBlock_v3` is the key block whose description does not grow with its gates: `boolean_attention`'s block form over
-this block's operands, a batch of one Definition per row of k16 steps.  A full step is cut at both operands, so a block of full
-steps computes no value twice, as one trace of it doesn't: the 16 words of the query (the same for the block's NVIS keys) and of
-bf16(P) (the same for the DV columns) are decoded once for their row (`AttnDotStepA`), and each word of a key row once for the
-block (`SparseMlaDotStepB_v1{DOT}`), whether its score's step reads it, its P V step or both, as a kv_c word is by both.
-`SparseMlaDotStep_v1{DOT}` is the rest of the step, from the two frontiers; a chain starts from the zero accumulator's bits.
-The first visited block's partial step (NVIS not a multiple of 16) is an `AttnDotStep{DOT,NV,FROM_ZERO}`, P's zero words folded
-in, on its keys' words and zero rows, so it decodes those keys' kv_c words a second time.  The online softmax between the chains
-is the attention blocks' (`boolean_attention._softmax`: the scale word folded into the gates that read it, the rescale decoded
-once a row).  It is ``opt_in`` (`verity.ml.definitions.boolean`): `boolean_version` keeps `_v2`, and `_v3` serves only a caller
-that binds it.
+this block's operands, a batch of one Definition per row of k16 steps.  A full step is cut at both operands, so no operand of
+one is decoded twice: the 16 words of the query (the same for the block's NVIS keys) and of bf16(P) (the same for the DV
+columns) are decoded once for their row (`AttnDotStepA`), and each word of a key row once for the block
+(`SparseMlaDotStepB_v1{DOT}`), whether its score's step reads it, its P V step or both, as a kv_c word is by both.
+`SparseMlaDotStep_v1{DOT}` is the rest of the step, from the two frontiers.  The online softmax between the chains is the
+attention blocks' (`boolean_attention._softmax`: the scale word folded into the gates that read it, the rescale decoded once a
+row).  Three things the block computes again, which one trace of it doesn't (circuit-check counts them as redundant gates, a
+warning): a chain starts from the zero accumulator's bits, and each member of its first step computes the step's gates on
+those constants; the first visited block's partial step (NVIS not a multiple of 16) is an `AttnDotStep{DOT,NV,FROM_ZERO}`, P's
+zero words folded in, on its keys' words and zero rows, so it decodes those keys' kv_c words a second time; and the softmax's
+per-key callees repeat what they repeat in the attention blocks.  It is ``opt_in`` (`verity.ml.definitions.boolean`):
+`boolean_version` keeps `_v2`, and `_v3` serves only a caller that binds it.
 """
 from __future__ import annotations
 
