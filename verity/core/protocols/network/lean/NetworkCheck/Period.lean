@@ -484,10 +484,11 @@ def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
   | _ => none
 
 /-- Whether the arguments `own` (the templates' row, state and egress arguments) read input nodes of their own: their
-input nodes (`inputArg`) are pairwise distinct, and none is `pk`, the slot entries'. At the cost of the arguments. -/
-def argsApart (P : Flock.Program.Prog) (own : List Flock.Program.Arg) (pk : Nat) : Bool :=
+input nodes (`inputArg`) are pairwise distinct, and none is one of `pks`, the slot entries' input nodes. At the cost of
+the arguments. -/
+def argsApart (P : Flock.Program.Prog) (own : List Flock.Program.Arg) (pks : List Nat) : Bool :=
   let ks := own.map (inputArg P)
-  decide ks.Nodup && !ks.contains (some pk)
+  decide ks.Nodup && pks.all fun pk => !ks.contains (some pk)
 
 /-- Whether two types have as many leaves, each of one width, the same in both (`Flock.Program.Widths.homo`): what a
 tie of two rows of gates, leaf by leaf, needs of their types. From the types' structure, no walk over their leaves. -/
@@ -771,7 +772,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     s!"scan: bucket t's prog<j> is not row j · {nb} + ⌊t / {s.every}⌋ of the slot entries' input node, lane j's \
       slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)"
   let own := (xf.args.extract 0 1 ++ (later.map fun (x, _) => x.args.extract 0 2).getD #[] ++ xe.args).toList
-  need (argsApart prog own pk) "scan: two of the templates' row, state and egress arguments read one input node, or \
+  need (argsApart prog own [pk]) "scan: two of the templates' row, state and egress arguments read one input node, or \
     one reads the slot entries': an input node would be left that nothing reads, or a slot entry would be a state gate \
     (NetworkCheck.Period.argsApart)"
   need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
