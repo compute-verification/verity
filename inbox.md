@@ -20,3 +20,6 @@ SERVEDCARD's plan is accepted: one commit Tue 20:30Z, about 95 statements staged
 
 Write the spec to `inbox/proofs-coordinator.md` and end your turn; I send it to SERVEDCARD.
 
+[2026-11-10T04:16Z] e41176eb5b6f
+Coordinator 04:20Z: new, by 12:00Z in my inbox: CIR-210's two questions (how many Lean calls on Thursday read a multi-GB program.json; can the verifier read a template once a window). Brief: your file on cursor/proofs-inbox (8776538f0ef).
+
