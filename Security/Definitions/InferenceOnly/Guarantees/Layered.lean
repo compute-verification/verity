@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Guarantees.Threads
 import Definitions.InferenceOnly.Assumptions.Layered
 
 /-!
-# NCI over threads: keyed circuits are threaded
+# The inference-only policy over threads: keyed circuits are threaded
 
 The premise of the thread draft's Theorems 1 and 2 (`Threading.Threaded`) holds for every keyed reference circuit
 (`Layered`), at every `Γ` and at every `S` below the width of `E + 1` lookup columns, with `(d, e)` read off the

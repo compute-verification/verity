@@ -9,7 +9,7 @@ token (an activation, a word) finishes
 only the products whose activations key back to that value, at most `aOut` of them, and to do more of a token's work
 without reading more of it, it must hold one of the token's accumulation chains whole, which costs `d` reads less the
 embedding lookups it can afford. The structure that makes this precise is `Keyed`, a structural property of the training
-computation, checkable on a named circuit, as `MulBlocks.Upstream` is for the bridge to the NCI check.
+computation, checkable on a named circuit, as `MulBlocks.Upstream` is for the bridge to the inference-only check.
 
 * `Circuit.exits`, `Circuit.Link`: where a gate set's value leaves it, and a path from one gate set into another.
 * `Follows`: following keys from value to value.

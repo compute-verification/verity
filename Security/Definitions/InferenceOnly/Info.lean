@@ -3,7 +3,7 @@ import Definitions.InferenceOnly.Threads
 import Mathlib.Analysis.SpecialFunctions.Log.Base
 
 /-!
-# NCI's reads counted by information: the vocabulary
+# The inference-only policy's reads counted by information: the vocabulary
 
 `novelReads` counts what a set of gates reads by width: the bits on its wires from outside it and the baseline. A wire
 can be wide and carry little: a copy of a value read on another wire, a value another read determines, or a state rebuilt

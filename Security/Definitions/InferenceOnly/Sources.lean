@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Work
 import Mathlib.Analysis.SpecialFunctions.Log.Base
 
 /-!
-# NCI over threads, each value charged once over its copies: the vocabulary
+# The inference-only policy over threads, each value charged once over its copies: the vocabulary
 
 `WeightsSupportFmt` charges `b_w` per weight gate a subcircuit uses and bounds a value's charge per thread through a
 margin `μ` derived nowhere. Both fail on copies: a weight quantized once

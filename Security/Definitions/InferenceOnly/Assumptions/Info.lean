@@ -2,7 +2,7 @@ import Definitions.InferenceOnly.Info
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
-# NCI over threads, reads counted by information: the named assumption
+# The inference-only policy over threads, reads counted by information: the named assumption
 
 `WeightsIncompressible` charges a subcircuit's reads by width. Its support form, `WeightsSupport`, charges them by the
 number of distinct values they take, as `ActivationsSupport` does the chain's: wiring cannot make a read carry more than
