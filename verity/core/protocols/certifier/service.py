@@ -88,7 +88,7 @@ proves in zero knowledge, outside this protocol.
 block's public parameters) and ``wit`` (each end's head, its leaf's salt, its two siblings and the certifier's salt),
 each the little-endian concatenation of its parameters' bits in whole u16 words (`LinkWindows.layout`,
 `LinkWindows.row`), and the output row ``o0``, one u16 word holding the two output bits (`OUT_BITS`); each row committed
-under a hiding salt. Its circuit is `LinkWindows.proof_unit`, the registered proof block with each gate the Definition
+under a hiding salt. Its circuit is `LinkWindows.proof_block`, the registered proof block with each gate the Definition
 its pinned digest names, bound to the registered partition and Program (`benchmarks/network_traces/n2_zk.py` proves it
 behind the ZK server).
 
@@ -661,7 +661,7 @@ class LinkWindows:
         return unit(self.head_key(0), self.head_key(1), self.served_key())
 
     @cached_property
-    def proof_unit(self):
+    def proof_block(self):
         """The proof block a proof's circuit lowers: `unit` with each gate the Definition it names (`unit(proof=True)`),
         the template of the registered query under the same id. The prover's and the auditor's lowering, never the
         registered Program, which holds the gates."""

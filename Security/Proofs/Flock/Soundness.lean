@@ -30,7 +30,7 @@ public import Proofs.Flock.Soundness.OpeningPhase
 public import Proofs.Flock.Soundness.ListSize
 public import Proofs.Flock.Soundness.LincheckPhase
 public import Proofs.Flock.Soundness.ZerocheckPhase
-public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.BindSound
 public import Proofs.Flock.Soundness.LigeritoCoins
 public import Proofs.Flock.Soundness.LigeritoQueries
 public import Proofs.Flock.Soundness.JohnsonMCA

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Composed.Base
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.BindSound
 public import Proofs.Flock.Soundness.Refine.Setup
 
 /-!

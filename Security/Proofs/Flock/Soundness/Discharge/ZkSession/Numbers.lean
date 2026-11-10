@@ -200,7 +200,7 @@ theorem zk_flock_count_execOS_m1 (hA : A.Correct) (hM1 : ∀ S R (j : Fin (planZ
     {δlink : (R : Reg) → Cont (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ) R → ℝ≥0∞}
     (hlink : (analysisZK A P planZ tab (decodeOfPlace A P planZ tab place) Xc
-      (loweringSoundZK_of_place A P planZ tab place)).LinkSound δlink)
+      (loweringSoundZK_of_place A P planZ tab place)).BindSound δlink)
     (K : ℕ)
     (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ))) :

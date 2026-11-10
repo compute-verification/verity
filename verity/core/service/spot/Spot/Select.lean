@@ -5,7 +5,7 @@ program and query, that sampling design expanded over them, and the sample from 
 a work sample's closure under the challenger's closure map, held to `Draw.checkDraw` as the stream holds it. With the sample,
 the number of bytes of the coins it read.
 
-A rule's law text is a rate law (`parseRate`: `rate:NUM/DEN[:T]`, what a new Spec states) or one `parseLaw` reads. A rate
+A rule's law text is a rate law (`parseRate`: `rate:NUM/DEN[:T]`, what a new Spec states) or one `parseDesign` reads. A rate
 law names no sampling design until the population is known: over `n` units it is `subset:k` at `k = Rate.count` (`Rule.over`,
 `resolve`), so the sample, the registration's law and the audit are a uniform `k`-subset's, and `select` runs on that rule.
 
@@ -37,10 +37,10 @@ private def split1 (s sep : String) : String × String :=
   | a :: rest => (a, sep.intercalate rest)
   | [] => (s, "")
 
-/-- `draw.parse_law`: `subset:K`, `stratified:K` or `work:K` (`K ≥ 1`), or `bernoulli:NUM/DEN` with `0 < DEN` and
+/-- `draw.parse_design`: `subset:K`, `stratified:K` or `work:K` (`K ≥ 1`), or `bernoulli:NUM/DEN` with `0 < DEN` and
 `NUM ≤ DEN`, split at the first `:` and the first `/`, each number one or more ASCII digits; the sampling design object, a Bernoulli
 law's `p` written without leading zeros. -/
-def parseLaw (text : String) : V Json := do
+def parseDesign (text : String) : V Json := do
   let (kind, arg) := split1 text ":"
   if kind == "subset" && digits arg && 1 ≤ arg.toNat! then
     return Json.mkObj [("law", "subset"), ("k", Lean.toJson arg.toNat!)]
@@ -70,7 +70,7 @@ def parseRate (text : String) : Option (Nat × Nat × Nat) :=
   | none => none
 
 /-- The selection rules a `Stream` runs: every unit (`All`), a one-stage law, a rate law (`parseRate`) or one in
-`parseLaw`'s syntax (`Law`), and a two-stage design (`TwoStage`): replay blocks, the template instances of the replay
+`parseDesign`'s syntax (`Law`), and a two-stage design (`TwoStage`): replay blocks, the template instances of the replay
 partition's query `grain`, sampled by the first stage's law `replay` (a rate law or `subset:K`), then `k` proof blocks
 inside each sampled replay block (`second`). -/
 inductive Rule where
@@ -87,10 +87,10 @@ def grain? (g : Json) : Bool :=
 
 /-- A two-stage rule's first-stage law text: a rate law or `subset:K`, a uniform sample of replay blocks. -/
 def replayLaw? (t : String) : Bool :=
-  (parseRate t).isSome || (match parseLaw t with | .ok l => jeq (getD l "law") "subset" | .error _ => false)
+  (parseRate t).isSome || (match parseDesign t with | .ok l => jeq (getD l "law") "subset" | .error _ => false)
 
 /-- A rule as `to_json` writes it, exactly its keys: `{rule: all}`, `{rule: law, law}`, its sampling design text a rate law or one
-`parseLaw` reads, as `service.Law` refuses any other when it is made, or `{rule: two-stage, grain, replay, k}`, its
+`parseDesign` reads, as `service.Law` refuses any other when it is made, or `{rule: two-stage, grain, replay, k}`, its
 grain the replay partition's query (a `Q_template_instance` query object), its replay law a rate law or `subset:K`
 (`replayLaw?`) and `k` a positive integer, as `service.TwoStage` refuses any other. A stream refuses a sequential
 rule. -/
@@ -100,7 +100,7 @@ def Rule.ofJson (j : Json) : V Rule := do
   | .str "law" =>
     if keys? j == some #["law", "rule"] then
       if let .str t := getD j "law" then
-        if (parseRate t).isNone then let _ ← parseLaw t
+        if (parseRate t).isNone then let _ ← parseDesign t
         return .law t
   | .str "two-stage" =>
     if keys? j == some #["grain", "k", "replay", "rule"] then
@@ -120,8 +120,8 @@ def Rule.ofJson (j : Json) : V Rule := do
 two-stage rule's is its first stage's, over `n` replay blocks. -/
 def Rule.lawOver : Rule → Nat → V Json
   | .all, n => return Json.mkObj [("law", "subset"), ("k", Lean.toJson n)]
-  | .law t, _ => parseLaw t
-  | .twoStage _ t _, _ => parseLaw t
+  | .law t, _ => parseDesign t
+  | .twoStage _ t _, _ => parseDesign t
 
 /-- A sampling design text over `n` units: a rate law is `subset:k` at `k = Rate.count NUM DEN T n`, none unless `1 ≤ k ≤ n`; any
 other text is itself. -/
@@ -189,7 +189,7 @@ def resolve (rule : Rule) (p : Program) (query : Json) : V Rule := do
   return r
 
 /-- `selection_law`, `draw.derive` and `select_draw` on the coins `src`, then `Stream.select`'s `draw.check_draw`, under
-a rule `resolve` gives (`parseLaw` refuses a rate law itself): the
+a rule `resolve` gives (`parseDesign` refuses a rate law itself): the
 sample object over the population of `p` under `query` (`Partition.units`), the units it proves (`Draw.proved`'s: the sampled
 proof blocks, then a work sample's closure) and the number of bytes of `src` it read. The sampling design is the rule's over that population,
 expanded (`Draw.derive`, with the work `table`); `All` samples every unit and reads nothing, any other rule samples its Flock

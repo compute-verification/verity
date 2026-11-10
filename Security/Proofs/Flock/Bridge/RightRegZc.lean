@@ -152,7 +152,7 @@ theorem zk_linkSoundC_regC
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') :
     (analysisZCRegC (L := L) A Hs P planZ tab vb canon (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow hown hcan a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow hown hcan a hj).BindSound
       (linkBoundZC A Hs P planZ tab vb k Rw M ρ t') := by
   intro R τ tgt
   refine le_of_eq_of_le (congrArg avg (funext fun ω => ?_))

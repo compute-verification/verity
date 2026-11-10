@@ -145,7 +145,7 @@ theorem realFrames_of {g : Params} {grid : Array Slots} (hs : grid.size = g.buck
 
 theorem frameTag_size : frameTag.size = 34 := by decide
 
-theorem block_of {x : ByteArray} (h : x.size ≤ 128) : block x = .ok (x ++ ⟨Array.replicate (128 - x.size) 0⟩) := by
+theorem chunk_of {x : ByteArray} (h : x.size ≤ 128) : block x = .ok (x ++ ⟨Array.replicate (128 - x.size) 0⟩) := by
   unfold block
   rw [ite_eq_left h]
   rfl
@@ -153,7 +153,7 @@ theorem block_of {x : ByteArray} (h : x.size ≤ 128) : block x = .ok (x ++ ⟨A
 theorem frameLeaf_of {f : ByteArray} {B : Nat} (hB : B < 2 ^ 32) (hf : f.size = B) :
     ∃ x, frameLeaf f B = .ok x ∧ x.size = 64 := by
   obtain ⟨u, hu, hus⟩ := uBE_of (w := 4) (x := B) "B" (by omega) (cast_lt (w := 4) hB)
-  have hblk := block_of (x := frameTag ++ u) (by rw [ByteArray.size_append, frameTag_size, hus]; omega)
+  have hblk := chunk_of (x := frameTag ++ u) (by rw [ByteArray.size_append, frameTag_size, hus]; omega)
   have hne : ¬ (f.size ≠ B) := fun h => h hf
   have hl : leafInput f B = .ok (frameTag ++ u ++ ⟨Array.replicate (128 - (frameTag ++ u).size) 0⟩ ++ f) := by
     unfold leafInput

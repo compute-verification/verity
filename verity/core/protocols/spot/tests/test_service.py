@@ -710,6 +710,6 @@ def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     table = WORK if text.startswith("work") else None
     for seed in range(8):
         stream = _stream(_spec(S.Law(text), public=(*RECORD_ITEMS, STRATUM)), coins=random.Random(seed).randbytes)
-        reg = stream.register(_record(law=D.parse_law(text), work_table=table), _ports(6), work_table=table)
+        reg = stream.register(_record(law=D.parse_design(text), work_table=table), _ports(6), work_table=table)
         draw = stream.select(reg)
         assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6)

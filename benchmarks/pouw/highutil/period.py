@@ -662,7 +662,7 @@ class RefDriver:
         self.roots: dict[int, bytes] = {}
         self.ready = ["ready", "ref"]
 
-    def block_of(self, step: int) -> int:
+    def layer_of(self, step: int) -> int:
         return step % NB
 
     def block(self, b: int, g0: int, steps: int, arm: str, cheat: str, seeds: Path, roots: Path) -> dict:
@@ -684,7 +684,7 @@ class RefDriver:
         for s in range(steps):
             for li, (_, n, k) in enumerate(LAYERS):
                 f = shape(n, k, self.row)
-                t = self.block_of(g0 + s)
+                t = self.layer_of(g0 + s)
                 sd = v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)])
                 skip = _cheated(kind) if kind != "none" and at in (None, li) else None
                 T, O = v31.fill_values(f, np.asarray(operand(self.cfg, "A", li, t)), np.asarray(operand(self.cfg, "B", li, t)),

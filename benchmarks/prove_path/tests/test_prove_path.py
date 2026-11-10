@@ -1398,7 +1398,7 @@ def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure
     assert [(g["port"], g["at"], g["units"], g["step"]) for g in doc[IF.WINDOW_INGRESS]] == [
         ("in0", 0, 4, 0), ("in0", 4, 1, 1), ("in0", 5, 4, 2), ("in0", 9, 1, 3), ("in0", 10, 1, 4)]
     assert "ingress" not in doc
-    mine = IF.window_of_record(doc, DR.parse_law(LAYER0["law"]), IF.resolve)
+    mine = IF.window_of_record(doc, DR.parse_design(LAYER0["law"]), IF.resolve)
     inputs = 11 * 16 * 2 * 128
     assert doc["templates"] == [["SiluMul_v2{I=128}", 11]] and bits > 0
     assert RA.leak_count(mine.members, (), bits) == {"inputs": inputs, "wired": 0, "ingress": 0, "registered": 0, "external": 0,

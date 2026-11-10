@@ -12,14 +12,14 @@ from typing import Iterable
 
 from .layout import FunctionCall, Circuit, GateSelection
 
-ExecutionTranscript = dict[int, int]
+Trace = dict[int, int]
 
 
 class MissingValue(KeyError):
     pass
 
 
-def evaluate_region(circuit: Circuit, sub: GateSelection, transcript: ExecutionTranscript, *, strict: bool = True) -> ExecutionTranscript:
+def evaluate_region(circuit: Circuit, sub: GateSelection, transcript: Trace, *, strict: bool = True) -> Trace:
     """Evaluate every gate of `sub` in canonical order, writing into `transcript` (mutated and returned).
     `Input` gates must be present already. With `strict=False`, gates whose operands are missing are skipped."""
     for gv in sub:
@@ -47,11 +47,11 @@ def evaluate_region(circuit: Circuit, sub: GateSelection, transcript: ExecutionT
     return transcript
 
 
-def evaluate_call(circuit: Circuit, call: FunctionCall, args: Iterable[int], transcript: ExecutionTranscript | None = None) -> tuple[int, ...]:
+def evaluate_call(circuit: Circuit, call: FunctionCall, args: Iterable[int], transcript: Trace | None = None) -> tuple[int, ...]:
     """Bind `args` (encodings, in `call.args` order) then evaluate the call's region; return the encodings
     of `call.returns`. Values of `call.args` that lie inside the call (impossible for a well-formed call)
     or repeated references are bound consistently or rejected."""
-    t: ExecutionTranscript = {} if transcript is None else transcript
+    t: Trace = {} if transcript is None else transcript
     arg_gates = call.args
     args = list(args)
     if len(args) != len(arg_gates):

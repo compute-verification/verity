@@ -33,7 +33,7 @@ comparison to each verdict, which decides nothing.
   stream's δ, on the Lean verifier's sample. ``tampered`` then changes every window (`every_count`), which any
   sample refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
   window accepted, which the network verdict refuses by name (``period-draw``).
-* **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_unit` lowered once (the registered unit with each
+* **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_block` lowered once (the registered unit with each
   gate the Definition its pinned digest names), bound to the registered partition and Program. Each execution phase is a
   statement of its own with one instance, proof block 0: rows ``pub`` and ``wit`` (`LinkWindows.layout`,
   `LinkWindows.row`) and the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at
@@ -357,7 +357,7 @@ def _one_stage():
 
 
 def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
-    """The one circuit: `LinkWindows.proof_unit` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
+    """The one circuit: `LinkWindows.proof_block` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
     to the registered partition and Program, which are written beside it as the verifier's own. Its ports are
     `service.PORTS`, each the length the verifier opens (`LinkWindows.bits`)."""
     rows = [(r, M.V2, lw.bits(r), list(lw.layout[r])) for r in SVC.ROWS]
@@ -368,7 +368,7 @@ def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
     t, was = time.time(), gc.isenabled()
     gc.disable()
     try:
-        st = M.CS.UnitStager(lw.proof_unit, "unit/n2-link-window", rows, [(M.V2, (0,))], circuit=out / "circuit.txt",
+        st = M.CS.UnitStager(lw.proof_block, "unit/n2-link-window", rows, [(M.V2, (0,))], circuit=out / "circuit.txt",
                              bind=bound)
         st.pin
     finally:
@@ -658,10 +658,10 @@ def prove(a) -> int:
     M.PF.executable = lambda: Path(a.lean)
     _record_lean_runs(M.PF)
     sg = stager(M, lw0, out / "stager")
-    summary["stager"] = {"unit": lw0.proof_unit.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
+    summary["stager"] = {"unit": lw0.proof_block.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
                          "circuit_sha512": sg.circuit_sha512, "bits": {p: lw0.bits(p) for p in SVC.PORTS},
                          "ands": sg.st.low.layout.counts["ands"]}
-    log(f"stager: {lw0.proof_unit.id}, {sg.lower_s} s, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, "
+    log(f"stager: {lw0.proof_block.id}, {sg.lower_s} s, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, "
         f"pin {sg.st.pin[:16]}")
     summary["staging"] = stage(M, sg, members, os.urandom(32), out)
     log(f"staged: {summary['staging']}")

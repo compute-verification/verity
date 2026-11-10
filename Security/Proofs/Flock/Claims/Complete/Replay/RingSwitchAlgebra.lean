@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
-public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.BindSound
 public import Proofs.Flock.Soundness.Discharge.Layout.Region
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.RingSwitch
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay

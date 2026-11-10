@@ -334,15 +334,15 @@ def test_the_unit_is_each_ends_head_check(tmp_path):
     assert wide.head_key(1) == (9, 8, 0) and wide.head_key(0) == (9, 4, 0)
 
 
-def test_the_proof_unit_is_the_registered_template(tmp_path):
+def test_the_proof_block_is_the_registered_template(tmp_path):
     """The proof block a proof's circuit lowers has the registered proof block's id, signature and descriptor id, so the
     registered query names it as its template; it is bound without tracing, since each gate's expansion traces the head
     check (`head_check.expand`, minutes), which the proving run (`benchmarks/network_traces/n2_zk.py`) lowers and checks
     against the IR reference."""
     lw = Run(tmp_path).lw
-    assert lw.proof_unit.id == lw.unit.id and lw.proof_unit.signature() == lw.unit.signature()
-    assert codec.descriptor_id(lw.proof_unit) == codec.descriptor_id(lw.unit) == P.template_id(lw.unit)
-    assert lw.proof_unit.defn is not lw.unit.defn and lw.partition is lw._partition
+    assert lw.proof_block.id == lw.unit.id and lw.proof_block.signature() == lw.unit.signature()
+    assert codec.descriptor_id(lw.proof_block) == codec.descriptor_id(lw.unit) == P.template_id(lw.unit)
+    assert lw.proof_block.defn is not lw.unit.defn and lw.partition is lw._partition
 
 
 def test_n2s_program_reads_no_registered_value(tmp_path):

@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Coined
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
 public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
-public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.BindSound
 
 /-!
 # A valid witness's registered values are the public ones

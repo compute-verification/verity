@@ -1664,6 +1664,11 @@
         "verity/core/service/sampled_proofs/SampledProofs.lean": "verity/core/service/spot/Spot.lean",
         "verity/core/service/sampled_proofs/SampledProofs/": "verity/core/service/spot/Spot/"
       }
+    },
+    {
+      "paths": {
+        "Security/Proofs/Flock/Soundness/LinkSound.lean": "Security/Proofs/Flock/Soundness/BindSound.lean"
+      }
     }
   ]
 }

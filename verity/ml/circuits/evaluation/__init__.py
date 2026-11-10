@@ -25,7 +25,7 @@ from .batch import (  # noqa: F401
     word_kernel,
 )
 from .reference import (  # noqa: F401
-    ExecutionTranscript,
+    Trace,
     MissingValue,
     RegisteredTable,
     ScalarReference,

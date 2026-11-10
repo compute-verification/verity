@@ -1019,7 +1019,7 @@ theorem keyedWindow_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin
       (windowIdx (KeyedDraw.flat calls) (windowK σ call w f 27713)) (fun _ => L)
       (windowTest (KeyedDraw.flat calls) (windowK σ call w f 27713) B) η)
     (A : Analysis ((keyedWindow (n := n) sec domain context calls L).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hW : 0 < totalWork σ w)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
     (σ' : Strategy (audit ((keyedWindow (n := n) sec domain context calls L).closure cl) Reg session)) :
@@ -1044,7 +1044,7 @@ theorem keyedWindow_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) 
       (windowTest (KeyedDraw.flat calls) (windowK σ call w f 27713) B) η)
     (A : ExtractionAnalysis ((keyedWindow (n := n) sec domain context calls L).closure cl) Reg session)
     {εks δlink : (R : Reg) → Cont ((keyedWindow (n := n) sec domain context calls L).closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hW : 0 < totalWork σ w)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
     (σ' : Strategy (audit ((keyedWindow (n := n) sec domain context calls L).closure cl) Reg session)) :
@@ -1073,7 +1073,7 @@ theorem keyedWindowReg_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin 
     (A : ∀ R, ExtractionAnalysis ((keyedWindow (n := n) sec domain (ctx R) calls L).closure cl) Reg session)
     {εks δlink : ∀ R, (R' : Reg) → Cont ((keyedWindow (n := n) sec domain (ctx R) calls L).closure cl) Reg session R' →
       ℝ≥0∞}
-    (hks : ∀ R, (A R).KnowledgeSound (εks R)) (hlink : ∀ R, (A R).LinkSound (δlink R)) (hW : 0 < totalWork σ w)
+    (hks : ∀ R, (A R).KnowledgeSound (εks R)) (hlink : ∀ R, (A R).BindSound (δlink R)) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
     (σ' : Strategy (auditReg (fun R => (keyedWindow (n := n) sec domain (ctx R) calls L).closure cl) session)) :
@@ -1099,7 +1099,7 @@ theorem keyedWindowReg_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : 
       (windowIdx (KeyedDraw.flat calls) (windowK σ call w f 27713)) (fun _ => L)
       (windowTest (KeyedDraw.flat calls) (windowK σ call w f 27713) B) η)
     (A : ∀ R, Analysis ((keyedWindow (n := n) sec domain (ctx R) calls L).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : ∀ R, (A R).KnowledgeSound εks) (hlink : ∀ R, (A R).LinkSound δlink) (hW : 0 < totalWork σ w)
+    (hks : ∀ R, (A R).KnowledgeSound εks) (hlink : ∀ R, (A R).BindSound δlink) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
     (σ' : Strategy (auditReg (fun R => (keyedWindow (n := n) sec domain (ctx R) calls L).closure cl) session)) :

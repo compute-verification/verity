@@ -39,7 +39,7 @@ WINDOWED = "onsite-h200-kimi"
 PHASES = (
     ("onsite-h200-kimi", ("regime", "k_wipe"), ("regime", "wipe_s")),
     ("onsite-h200-kimi", ("regime", "side"), ("regime", "ingress")),
-    ("remote-h200-kimi", ("regime", "residual"), ("fleet", "eps_dark")),
+    ("remote-h200-kimi", ("regime", "residual"), ("fleet", "eps_unreg")),
 )
 STATUS_COLORS = {"proved": "#1a9850", "conditional": "#2c7bb6", "draft": "#f28e2b", "absent": "#999999",
                  "outside": "#cccccc"}
@@ -306,16 +306,16 @@ def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targ
     (`grid + 11` points), per scenario, with `μ/ε_dark`, the most the dark pool alone allows."""
     points = grid + 11
     plt = _plt()
-    names = [n for n in (names or registry.names("scenario")) if _key(registry, n, ("fleet", "eps_dark"))]
+    names = [n for n in (names or registry.names("scenario")) if _key(registry, n, ("fleet", "eps_unreg"))]
     if not names:
         return []
-    p0 = registry.param(_key(registry, names[0], ("fleet", "eps_dark")))
+    p0 = registry.param(_key(registry, names[0], ("fleet", "eps_unreg")))
     ds = _logspace(min(1e-4, p0.low / 10), 0.5, points)
     data: dict = {"d": ds, "scenarios": {}}
     fig, ax = plt.subplots(figsize=(8, 5.2))
     ms = set()
     for i, name in enumerate(names):
-        key = _key(registry, name, ("fleet", "eps_dark"))
+        key = _key(registry, name, ("fleet", "eps_unreg"))
         lo = analysis.sweep(registry, name, key, ds, LO)
         attack = analysis.sweep(registry, name, key, ds, analysis.ATTACK)
         base = analysis.result(registry, name)

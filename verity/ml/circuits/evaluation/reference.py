@@ -19,7 +19,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Sequence
 
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.evaluate import ExecutionTranscript, MissingValue, evaluate_call, evaluate_region
+from verity.ml.circuits.evaluate import Trace, MissingValue, evaluate_call, evaluate_region
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.ports import forward, harness
 from verity.ml.circuits.program import Program
@@ -27,7 +27,7 @@ from verity.ml.circuits.refs import Affine
 from verity.ml.circuits.types import Type, Value
 
 __all__ = [
-    "ExecutionTranscript",
+    "Trace",
     "MissingValue",
     "RegisteredTable",
     "ScalarReference",

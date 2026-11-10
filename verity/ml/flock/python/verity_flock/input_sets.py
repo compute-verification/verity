@@ -195,7 +195,7 @@ class InputSet:
         return bad
 
     def ref(self, lo: int = 0, hi: int | None = None, art: str | None = None) -> dict[str, Any]:
-        """The result fingerprint's ``instances`` entry for ids ``[lo, hi)`` (``contract.instances_ref``'s fields, plus the set's
+        """The result fingerprint's ``instances`` entry for ids ``[lo, hi)`` (``contract.input_set_ref``'s fields, plus the set's
         subcircuit, content digest, source and store id)."""
         hi = self.n if hi is None else hi
         if not 0 <= lo < hi <= self.n:
