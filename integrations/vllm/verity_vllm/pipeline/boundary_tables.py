@@ -41,7 +41,7 @@ from verity_vllm.commit import history_tables as H
 from verity_vllm.records.boundary_tables import ASSIGN, ROOTS, TableAssignment, TableRoots
 
 __all__ = ["ASSIGN", "CAPACITY", "KEY", "ROOTS", "WORDS", "Builder", "Channel", "Kept", "Latents", "LocalChannel", "StepHook",
-           "assignment", "computed", "fill", "key", "layers_of", "mla_layers", "name", "positions", "private", "private_root"]
+           "assignment", "computed", "key", "layers_of", "mla_layers", "name", "private", "private_root"]
 
 #: a span's key in its tables' names (`history_tables.name`): the window's run, the class and the slot
 KEY = "{run}/p{prompt}-o{outputs}/s{slot}"
@@ -71,22 +71,6 @@ def computed(prompt: int, served: int, finish: str | None) -> tuple[int, int]:
     position but its last id's; one aborted, errored or still running computed some prefix of its prompt and ids."""
     n = int(prompt) + int(served)
     return (n - 1, n - 1) if finish in ("stop", "length") and n else (0, n)
-
-
-def positions(prompt: int, outputs: int, capacity: int) -> int:
-    """C, the strings every table of class (``prompt``, ``outputs``) holds: a public function of the class alone, its cap on
-    positions, at most the table's ``capacity``. A request's own length beyond its class is private."""
-    return min(int(prompt) + int(outputs), int(capacity))
-
-
-def fill(table: Any, prompt: int, outputs: int) -> range:
-    """Rows L to C−1 of ``table`` (a `history.HistoryTable` or `history_tables_device.Table` of L rows) zero rows under
-    fresh salts, C its class's `positions`, so its strings show the class and never L: each fill string hides as every
-    other does, where a placeholder past L would show it. A read past L still opens the zero row. -> their positions."""
-    c = positions(prompt, outputs, table.leaves)
-    if len(table.rows) > c:
-        raise ValueError(f"{table.value}: {len(table.rows)} rows past its class's {c} positions")
-    return table.append(np.zeros((c - len(table.rows), table.words), np.uint16))
 
 
 def assignment(window: int, run: str, program: str, prompt: int, outputs: int, layers: Sequence[int], capacity: int,
