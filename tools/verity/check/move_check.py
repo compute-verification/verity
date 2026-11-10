@@ -38,8 +38,9 @@ Every path git sees changed must be one of:
   split shares out and the Lean check holds to the build), and changes any other field only by moved paths and module
   names, a moved path there too left where it is a word (a reason that calls a conclusion `Security`, when the directory
   of that name moves); a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
-  renamed, its package-relative paths following the move and its `why` changed only by moved paths from the root, and
-  must end up in exactly one, otherwise unchanged (`runs_moved`);
+  renamed, its package-relative paths following the move and its `why` changed only by moved paths from the root and
+  the dotted names of moved Python modules (`rules`'s `why` in the `--json` report lists the locks whose `why` a dotted
+  name changed), and must end up in exactly one, otherwise unchanged (`runs_moved`);
 - a new `lakefile.toml`, `lakefile.lean`, `lake-manifest.json`, `lean-audit.json` or `lean-toolchain` at the root of a new
   Lake package that the range moved `.lean` files into from one source package, which is a copy of the source package's
   file (`copy_change`): a lakefile may differ only in package and library names, `roots`, `globs`, `defaultTargets`,
@@ -1682,7 +1683,12 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                 report["rules"].setdefault(rule, []).append(new)
     for path, why in terms.conflicts() if terms else ():
         report["refusals"].append({"path": path, "status": "M", "reason": why, "hunk": None})
-    runs_moved(entries, B, H, pmap, lmods, report["refusals"])
+
+    def run_string(field: str, w: str, g: str) -> set[str]:
+        """The rules by which a string of a `runs` entry may change beyond its package-relative paths: its `why` is prose,
+        where each moved path is rewritten and each dotted name follows its moved Python module."""
+        return {"why"} if field == "why" and dotted_rewrite(substitute(w, pmap), g, modules) else set()
+    runs_moved(entries, B, H, pmap, lmods, report["refusals"], run_string, report["rules"])
     report["certified"] = not report["refusals"]
     return report
 
@@ -1718,10 +1724,23 @@ def move_run(entry, old_dir: str, new_dir: str, pmap: dict[str, str], base: Tree
     return entry
 
 
-def runs_moved(entries: list[dict], B: Tree, H: Tree, pmap: dict[str, str], lmods: dict[str, str], refusals: list) -> None:
+def but_strings(want, got, take, field: str = "") -> bool:
+    """Whether ``got`` is ``want`` but for strings `take(the top-level field they are in, old, new)` takes."""
+    if isinstance(want, str) and isinstance(got, str):
+        return want == got or take(field, want, got)
+    if isinstance(want, list) and isinstance(got, list):
+        return len(want) == len(got) and all(but_strings(w, g, take, field) for w, g in zip(want, got))
+    if isinstance(want, dict) and isinstance(got, dict):
+        return want.keys() == got.keys() and all(but_strings(want[k], got[k], take, field or k) for k in want)
+    return want == got
+
+
+def runs_moved(entries: list[dict], B: Tree, H: Tree, pmap: dict[str, str], lmods: dict[str, str], refusals: list,
+               string=None, rules: dict | None = None) -> None:
     """Each `runs` entry of a lock the range touches must be in exactly one touched lock at HEAD, under its runner module's
     new name, with nothing changed but the paths the move rewrites: a run may move to the proofs package's lock, never vanish,
-    be duplicated or change its data."""
+    be duplicated or change its data. A string that still differs is ``string``'s to take (the top-level field it is in,
+    old, new, to the rules that take it), and each lock a rule took goes under the rule's name in ``rules``."""
     olds = [e["old"] for e in entries if e["status"] in "RMD" and posixpath.basename(e["old"]) == "lean-audit.json"]
     news = [e["new"] for e in entries if e["status"] in "RMA" and posixpath.basename(e["new"]) == "lean-audit.json"]
     head = {p: lock_runs(H, p) for p in news}
@@ -1744,9 +1763,18 @@ def runs_moved(entries: list[dict], B: Tree, H: Tree, pmap: dict[str, str], lmod
                 if (isinstance(want, dict) and isinstance(got, dict) and isinstance(w := want.get("why"), str)
                         and isinstance(g := got.get("why"), str) and partly(w, g, pmap)):
                     want = {**want, "why": g}           # its prose's moved paths from the root, rewritten or left
-                if want != got:
+                took: set[str] = set()
+
+                def take(field: str, w: str, g: str, took=took) -> bool:
+                    took.update(r := string(field, w, g) if string else ())
+                    return bool(r)
+                if not but_strings(want, got, take):
                     refuse(hits[0], f"`runs` entry {name} changed beyond moved paths and its module's name",
                            field_hunk("runs", json.dumps({new_name: want}), json.dumps({new_name: got})))
+                    took.clear()
+                for rule in sorted(took) if rules is not None else ():
+                    if hits[0] not in rules.setdefault(rule, []):
+                        rules[rule].append(hits[0])
     for p, runs in head.items():
         for name in runs:
             if (p, name) not in claimed:

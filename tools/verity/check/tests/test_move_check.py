@@ -1572,3 +1572,35 @@ def test_a_file_the_maps_drop_lists_may_be_deleted(tmp_path):
         assert [(f["path"], f["reason"]) for f in r["refusals"]] == [(p, "deleted") for p in refused], case
         assert r["rules"] == ({"drop": [drop]} if message == LAYOUT_MSG else {}), case
         assert [e for e in r["edits"] if e["kind"] == "dropped"] == [{"path": p, "kind": "dropped"} for p in r["rules"].get("drop", [])]
+
+
+def test_a_runs_why_may_follow_a_moved_modules_dotted_name(tmp_path):
+    """A run's `why` is prose that names the Python it holds the Lean to by module: the name follows the module's move
+    (`scripts/difftest_vectors.py` goes to the proofs package with the run), and no other."""
+    why = "instances on which lean.scripts.difftest_vectors (packages/verity/lean/scripts) gives what the Lean gives"
+    moved = why.replace("lean.scripts", "core.scripts").replace("packages/verity/lean/scripts", "security_proofs/core/scripts")
+    for case, now in (("moved", moved), ("elsewhere", moved.replace("core.scripts.difftest", "core.scripts.other"))):
+        repo, base = _repo(tmp_path / case, {**SPEC_FILES, f"{SPEC}/Verity/SecurityProofs/Difftest.lean": "def main : IO Unit := pure ()\n",
+                                             f"{SPEC}/scripts/difftest_vectors.py": "print(1)\n",
+                                             f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS,
+                                                                              reads=READS, runs={"Verity.SecurityProofs.Difftest": {**RUN, "why": why}})})
+        for m in ("Foo", "Bar", "Difftest"):
+            _move(repo, f"{SPEC}/Verity/SecurityProofs/{m}.lean", f"{PROOFS}/CoreProofs/{m}.lean")
+        _move(repo, f"{SPEC}/scripts", f"{PROOFS}/scripts")
+        _write(repo, {
+            f"{PROOFS}/CoreProofs/Bar.lean": BAR.replace("import Verity.SecurityProofs.Foo", "import CoreProofs.Foo"),
+            f"{SPEC}/Verity/SecurityProofs.lean": "import CoreProofs.Foo\nimport CoreProofs.Bar\n",
+            f"{SPEC}/lean-audit.json": _lock(roots=["Verity.Protocol", "Verity.Guarantees", "Verity.SecurityProofs"],
+                                             layers={"Verity.Protocol": []}, pins=PINS, reads=READS, proved_in=["../../../security_proofs/core"]),
+            f"{PROOFS}/lakefile.toml": LAKEFILE_PROOFS, f"{PROOFS}/lean-toolchain": "leanprover/lean4:v4.99.0\n",
+            f"{PROOFS}/lake-manifest.json": _manifest("coreproofs", VERITY_PATH, MATHLIB),
+            f"{PROOFS}/lean-audit.json": _lock(roots=["CoreProofs"], layers={"Verity.Protocol": []},
+                                               runs={"CoreProofs.Difftest": {**RUN, "why": now}}),
+        })
+        r = _check(repo, base)
+        if case == "moved":
+            assert r["certified"], r["refusals"]
+            assert r["rules"] == {"why": [f"{PROOFS}/lean-audit.json"]}
+        else:
+            [f] = r["refusals"]
+            assert f["path"] == f"{PROOFS}/lean-audit.json" and "changed beyond moved paths" in f["reason"] and r["rules"] == {}
