@@ -104,6 +104,13 @@ def modules() -> dict[str, str]:
     return {R.module_name(p): R.rel(p) for p in R.library_files()}
 
 
+@lru_cache(maxsize=None)
+def core_packages() -> tuple[str, ...]:
+    """The packages of ``R.DEFINITIONS`` that aren't the library's (``R.in_library``): core's, so an import of one is no edge."""
+    return tuple(R.module_name(init) for d in sorted(R.DEFINITIONS.iterdir())
+                 if (init := d / "__init__.py").is_file() and not R.in_library(init))
+
+
 def _resolve(target: str, known: dict[str, str]) -> str | None:
     parts = target.split(".")
     for i in range(len(parts), 0, -1):
@@ -131,13 +138,14 @@ def edges() -> tuple[Edge, ...]:
                 if node.level:
                     anchor = pkg.split(".")[: len(pkg.split(".")) - node.level + 1]
                     base = ".".join([*anchor, *([base] if base else [])])
-                targets = [f"{base}.{a.name}" if f"{base}.{a.name}" in known else base for a in node.names]
+                targets = [name if name in known or in_group(name, core_packages()) else base
+                           for name in (f"{base}.{a.name}" for a in node.names)]
             else:
                 lit = R.dynamic_module(node) if isinstance(node, ast.Call) else None
                 if lit:
                     targets = [lit]
             for t in targets:
-                if not any(t == p or t.startswith(p + ".") for p in LIBRARY_PACKAGES):
+                if not in_group(t, LIBRARY_PACKAGES) or in_group(t, core_packages()):
                     continue
                 dst = _resolve(t, known)
                 if dst and dst != mod:
