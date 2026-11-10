@@ -153,8 +153,8 @@ class Cost:
 @dataclass(frozen=True)
 class Row:
     """A block type's row: the blocks of it proved a served token, a block's cost, a block's served MACs where the
-    census holds them, and the GPU-seconds a block its sampling plan's own planner priced it at, where the plan states
-    them."""
+    census holds them, the GPU-seconds a block its sampling plan's own planner priced it at, where the plan states
+    them, and every staged type a steady-state row of it was staged as, at any prover count, measured or not."""
 
     block: str
     k_log: int | None
@@ -162,6 +162,7 @@ class Row:
     cost: Cost
     macs: float | None = None
     planned: float | None = None
+    staged_as: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -325,10 +326,12 @@ class Flock:
         elsewhere: dict[str, set[int]] = {}
         held = {definition_id(b.name) for b in census.blocks}
         unread = []
+        names: dict[str, set[str]] = {}
         for s in self.steady:
             if s.definition not in held:
                 unread.append(s)
                 continue
+            names.setdefault(s.definition, set()).add(s.type)
             if s.provers != self.provers:
                 if s.measured:
                     elsewhere.setdefault(s.definition, set()).add(s.provers)
@@ -364,7 +367,7 @@ class Flock:
                     cost = replace(cost, note="; ".join(filter(None, [cost.note, *why])))
                 if steady_rate is not None and b.k_log is not None and cost.seconds is not None:
                     cost = replace(cost, at_steady_rate=steady_rate * 2**b.k_log)
-            rows.append(Row(b.name, b.k_log, b.per_token, cost, b.macs))
+            rows.append(Row(b.name, b.k_log, b.per_token, cost, b.macs, staged_as=tuple(sorted(names.get(spelled, ())))))
         basis = (None if steady_rate is None else
                  f"every type not measured at steady state at {self.provers} prover{'' if self.provers == 1 else 's'} "
                  f"priced at the full-statement steady-state types' median, "
@@ -443,8 +446,9 @@ class SamplingPlan:
 @dataclass(frozen=True)
 class Spot:
     """SPOT over a proof system: `prover`'s cost of each block type, at the blocks `plan` samples a served token. A
-    plan's cell is a row's by the block type's name, else by the staged type that measured or tried the row (a plan
-    names a block type no served run has taken by its staged type alone); a plan and a census that don't cover each
+    plan's cell is a row's by the block type's name, else by a staged type any steady-state row of the type was staged
+    as, the one that priced it first (a plan names a block type no served run has taken by its staged type alone, and
+    a newer row may stage it under another name); a plan and a census that don't cover each
     other are refused, since the total would price another workload. Each row keeps its cell's price in the plan
     (`Row.planned`), where the plan states one."""
 
@@ -459,7 +463,8 @@ class Spot:
         by_staged = {staged: cell for cell, staged in self.plan.staged.items()}
         rows, used, bare = [], set(), []
         for r in inner.rows:
-            cell = r.block if r.block in self.plan.sampled else by_staged.get(r.cost.staged or "")
+            cell = r.block if r.block in self.plan.sampled else next(
+                (by_staged[n] for n in (r.cost.staged, *r.staged_as) if n in by_staged), None)
             if cell is None or cell in used:
                 bare.append(r.block)
                 continue

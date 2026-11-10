@@ -399,6 +399,13 @@ def test_spot_prices_the_blocks_its_plan_samples_and_refuses_another_census_plan
                                          r"\(Stray_v1"):
         P.Spot(flock, plan([*cells, {"block": "Stray_v1{N=1}", "type": "", "taken": 1.0}]), serving).table(census)
 
+    # a newer, fuller row staged under another name prices the type; the plan's cell still finds it by the old name
+    renamed = P.Flock((steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 4, 8.0),
+                       steady("gemm-k64", P.definition_id(GEMM64), "r20260103-000000-0003", 8, 4.0)), SESSIONS, "art:card")
+    rows = P.Spot(renamed, got, serving).table(census).rows
+    assert (rows[0].block, rows[0].per_token, rows[0].cost.staged, rows[0].cost.seconds) == (GEMM64, 40 / 800, "gemm-k64", 0.5)
+    assert rows[0].staged_as == ("gemm-k64", "gemm64")
+
 
 def test_a_plan_that_states_its_own_prices_gets_both_totals_and_where_they_differ():
     """A plan's sample fits its planner's prices, and the table prices the same blocks from its own sources. Where the
