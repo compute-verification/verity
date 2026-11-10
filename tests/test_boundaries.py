@@ -882,13 +882,30 @@ def _named(tree: Any, name: str, directory: str, roots: tuple[str, ...]) -> tupl
     return modules, tuple(above)
 
 
+def _naming_nodes(parsed: ast.AST) -> list[ast.AST]:
+    """The nodes of ``parsed`` that can name a module (the four kinds ``_imports`` reads), in the order of their lines.
+    One pass with no generator, since the order reads every Python file of the tree."""
+    out, todo = [], [parsed]
+    while todo:
+        node = todo.pop()
+        if isinstance(node, (ast.Import, ast.ImportFrom, ast.Call, ast.Constant)):
+            out.append(node)
+        for field in node._fields:
+            value = getattr(node, field, None)
+            if type(value) is list:
+                todo += [v for v in value if isinstance(v, ast.AST)]
+            elif isinstance(value, ast.AST):
+                todo.append(value)
+    return sorted(out, key=lambda n: (n.lineno, n.col_offset))
+
+
 def _python_loads(tree: Any, f: str) -> list[Load]:
     """What the Python file ``f`` loads, at load or inside a function: for each module it names (``_imports``; a relative
     name resolved from the root), the files ``_named`` gives, and for ``from M import a`` the module ``M.a`` when it is one."""
     text = tree.text(f)
     parsed = ast.parse(text, filename=f)
     path, directory, roots = tree.root / f, posixpath.dirname(f), _path_roots(tree, f, parsed, text)
-    nodes = list(ast.walk(parsed))
+    nodes = _naming_nodes(parsed)
     froms = [n for n in nodes if isinstance(n, ast.ImportFrom) and n.module]
     names = _imports(path, tree.root, (), nodes)
     names += [(f"{name}.{a.name}", line, True) for n, (name, line, _) in zip(froms, _imports(path, tree.root, (), froms))
@@ -1105,7 +1122,7 @@ def test_a_file_loads_only_its_own_row_or_an_earlier_one() -> None:
     directory the file puts on ``sys.path``), in Lean (an import) and in Lake (a package required by path).  The ties
     against it are the listing's ``against``: for a pair of rows, each file of the first that loads the second.  It only
     shrinks: a file it doesn't list fails, and so does a listed file that no longer loads the later row, naming the pair to
-    delete once its last file is gone.  Reading every tracked Python and Lean file takes some twenty seconds, which
+    delete once its last file is gone.  Reading every tracked Python and Lean file is most of this file's time, which
     nothing cheaper replaces: an order over the whole tree is only held by reading the whole tree."""
     listing = _listing()
     dirs, loads = _tree_loads()
