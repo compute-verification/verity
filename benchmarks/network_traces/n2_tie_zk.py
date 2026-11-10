@@ -3,7 +3,7 @@ each proved as IoTieRequest (`tie_service.IngressTie`, its proof block `NetworkI
 registered on the link's own stream, proved by Flock `prove --zk` behind the Lean firewall with each proof block's
 witness row read off the network certifier's
 root (`warden_rows.bucket_port`), delivered, decided by the tie's verifier of record on its own lanes from the advice
-and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
+and the network certifier's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
 the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
 through `tie_service.Ties`, the verifier's tie source).
 
@@ -37,10 +37,10 @@ through `tie_service.Ties`, the verifier's tie source).
 * **The statement and the rounds** follow `warden_zk`'s: one circuit, `IngressTie.proof_unit` lowered once (the gate
   the Definition its pinned digest names), and each link-window a statement of T instances, unit t bucket t, on rows
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file every port
-  of which is a registered read, ``wit`` the window's bucket rows under the warden's salts and paths, and ``pub`` and
+  of which is a registered read, ``wit`` the window's bucket rows under the network certifier's salts and paths, and ``pub`` and
   ``o0`` the prover's rows under the known values' public salts (`known`). A round registers, selects, proves live
   behind the firewall, delivers, and decides on the proof: the verifier's own Lean run with its own registered reads
-  (`IngressTie.registered`: the warden's root, and at known content its own lanes from the advice and the release
+  (`IngressTie.registered`: the network certifier's root, and at known content its own lanes from the advice and the release
   and the output word 1), each ``pub`` row opened to its own copy and each ``o0`` row read. Per window: prove (the
   session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean
   included). The members run one after another, one firewalled session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is
@@ -160,7 +160,7 @@ def advice(prompt_lens, got) -> TS.LinkAdvice:
 
 
 def served(prompt_lens, arrivals, rates) -> Q.ServedIngress:
-    """The requests through the warden's own ingress over the class's windows."""
+    """The requests through the network certifier's own ingress over the class's windows."""
     return Q.serve(PARAMS, requests(prompt_lens), arrivals, rates, buckets=WINDOWS * T)
 
 
@@ -317,7 +317,7 @@ def members() -> dict[str, tuple]:
 
 
 def link_windows(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=None) -> SimpleNamespace:
-    """Every link-window of the member as the warden and the prover hold it before it registers: the warden's cells
+    """Every link-window of the member as the network certifier and the prover hold it before it registers: the network certifier's cells
     (`warden_rows.Cells`: a network certifier run's own, else fresh salts) and its head, the verifier's lanes of `adv`
     (``own``, None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a
     tuple, the lanes of those prompt lengths), the prover's rows (the network certifier's, or a `Forge`'s), each proof
@@ -402,7 +402,7 @@ def known(tie: TS.IngressTie, x: SimpleNamespace) -> dict:
 def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNamespace], out: Path) -> dict:
     """Every link-window's statement on the one circuit, T instances each, unit t bucket t (`UnitStager.stage`: the
     outputs the lowering's, held to the IR reference): a shared-row file every port of which is a registered read, its
-    ``wit`` table the window's bucket rows under the warden's salts and paths (`warden_rows.Cells.statement`), and its
+    ``wit`` table the window's bucket rows under the network certifier's salts and paths (`warden_rows.Cells.statement`), and its
     ``pub`` and ``o0`` rows under the prover's known values' public salts and paths (`known`). Each staged ``o0`` row
     must open to its output word, and each ``pub`` row to the verifier's own copy exactly where the prover's lanes are
     the verifier's. Beside it, the verifier's own registered reads (`IngressTie.registered`, null where it has no
@@ -516,7 +516,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
                          "max_child_rss_gb": proc["max_child_rss_gb"], "cpu_s": proc["cpu_s"]},
                "verify_s": verify_s, "server_verdict": ((record or {}).get("verdict") or {}).get("accepted"),
                **({"clear": verdict["clear"]} if "clear" in verdict else {})}
-        # every row is a registered read (the warden's root, the verifier's lanes, the output word 1), so a window the
+        # every row is a registered read (the network certifier's root, the verifier's lanes, the output word 1), so a window the
         # reference refuses is Lean's to refuse, whatever the unit says of it
         held = (proof["proved"] and opened == x.words) if x.expect else not proof["lean_accepted"]
         row["registered_read"] = x.held

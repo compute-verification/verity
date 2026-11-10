@@ -203,7 +203,7 @@ def test_the_kv_pool_is_the_hooks_record_of_the_schedulers(tmp_path):
 def test_warden_ingress_is_the_engines_arrival_order(tmp_path):
     """`ingress="warden"` reads the engine's own `arrival` stamp (the server's body read, the order vLLM schedules in):
     requests the client sent out of the engine's order cost order bits at the client's send and none there, the floor a
-    server admitting in the warden's release order would give."""
+    server admitting in the network certifier's release order would give."""
     t = trace("sync-kv-pressure")
     d = corpus_dir(t, tmp_path)
     recs = [json.loads(line) for line in (d / "requests.jsonl").read_text().splitlines()]

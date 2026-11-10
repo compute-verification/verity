@@ -7,7 +7,7 @@ nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint
 node's records in a private copy whose requests.jsonl is rebuilt from the users map and the certified I/O (moved out of
 the run dir first), publishes only its report, windows.jsonl and serve.json, and writes nothing from an endpoint that
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
-seed or trace record); chain runs chain_record.sh's warden path on the kept fetch with the endpoint's art or a dry
+seed or trace record); chain runs chain_record.sh's network certifier path on the kept fetch with the endpoint's art or a dry
 rehearsal's records, and is refused without the leak guard; its draw on the gate's coins names the auditor's node as
 the coin link's peer, and the served node is refused."""
 from __future__ import annotations
@@ -35,7 +35,7 @@ import scan_zk as sz  # noqa: E402
 RUN = "c20261028T120000Z-0000"
 #: a witness value (the stub's witness/certified.jsonl) its status plants with STUB_NOTE: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
-#: the warden's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
+#: the network certifier's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
 #: aligned text pieces (`leak_guard.TEXT` bytes), as it did on a served run
 _CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
 STALLS = (" " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n').encode()
@@ -195,7 +195,7 @@ def test_sigterm_mid_session_releases_nothing(tmp_path):
 
 
 def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_records(tmp_path, monkeypatch):
-    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the warden's stall probe
+    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the network certifier's stall probe
     records its cgroup in the witness (stalls.json), and no public file of the run holds it: published, the leak guard
     holds the reply as a piece of the witness, and an accepted session exited 4. The reply goes to KEEP/RUN alone
     (0600), so the session exits on the gate's verdict."""
