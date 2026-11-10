@@ -19,7 +19,7 @@ holds these units yet (`verity.core.protocols.certifier.egress`).
   `egress_traffic.states`), row t of the member's committed states (`warden_zk.committed_value`: each bucket's state
   under a salt of the prover's own, committed before staging, the root the registration names before any coin, where
   the scan registers its view tree), and computes ``o0``, 1 when the state renders a row, and ``o1``, the row,
-  committed under the salt of the warden's row t and registered as a read of it, so the proof opens the warden's row
+  committed under the salt of the network certifier's row t and registered as a read of it, so the proof opens the network certifier's row
   only when the row the state renders is it. Each ``o0`` row is committed under its public salt and read off the
   verifier's own value of words 1 (`known_o0`, its rows and salts in the verifier's registered reads, from which Lean
   recomputes the root), so a unit whose state renders no row fails its read.
@@ -129,7 +129,7 @@ def _changed_state(at: SimpleNamespace) -> tuple[int, EG.State, dict]:
 
 def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
     """A member's proof blocks' state, in proof block order, the row each computes (`egress.outputs`, its ``o1``), the salts its
-    ``o1`` rows are committed under, the header's `registered` entry (the warden's positions and paths for the rows
+    ``o1`` rows are committed under, the header's `registered` entry (the network certifier's positions and paths for the rows
     it names), each unit's ``o0``, and the states the member commits before staging, in bucket order (``committed``:
     unit t reads bucket ``order[t]``'s)."""
     cells, T = at.cells, PARAMS.window

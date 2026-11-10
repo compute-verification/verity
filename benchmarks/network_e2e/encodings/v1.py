@@ -6,22 +6,22 @@ self-delimiting code (`code_v1.py`) under the registered codebook.
 `decode(encode(a)) == a`. `decode` is total: any byte string decodes to one I1 v0 or is refused by name (`V1Error`),
 deterministically, and a string longer than the cap ℓ (`Registered.cap_bits`) is refused unread.
 
-**Certified, 0 bits** (`CertifiedRequests`, from the warden's signed records under design v3; the compile unit holds
+**Certified, 0 bits** (`CertifiedRequests`, from the network certifier's signed records under design v3; the compile unit holds
 them as witness):
-- the warden's connection ordinals, in the order its own schedule admitted them (`CertifiedRequests.requests`);
+- the network certifier's connection ordinals, in the order its own schedule admitted them (`CertifiedRequests.requests`);
 - each request's ingress bytes, an id request's fields (`id_request_fields`): its `user` (I1's id), its `prompt` ids and
   its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the
   server holds its whole body;
 - each request's output ids, its id events' `token_id`s in order, and each output's release bucket (`Request.release`),
-  which the warden's fixed schedule sets (egress cell i in bucket a + D + ⌊i/r⌋).
-The reference order is the warden's release order, the requests by (a, ordinal) (`release_order`).
+  which the network certifier's fixed schedule sets (egress cell i in bucket a + D + ⌊i/r⌋).
+The reference order is the network certifier's release order, the requests by (a, ordinal) (`release_order`).
 
 **Sent, the order**: the engine doesn't admit in that order. It admits in the API server's body-read order, which
-comes after the release and overtakes it under load (the trace corpus behind the warden: 2,970 inversions of 499,500
+comes after the release and overtakes it under load (the trace corpus behind the network certifier: 2,970 inversions of 499,500
 pairs on its heavy trace, 3 on small KV). So the engine's arrival order (`arrival_order`, recovered from the advice) is
 sent as the permutation from release order to it (`_deviations`): for each arrival that isn't the earliest released
 request not yet arrived, its position and its rank among those, in code_v1's `order` field as (position, (rank,)).
-`streams` (`Decoded.streams`) is that permutation as the I/O tie's egress side reads it: each I1 request's warden
+`streams` (`Decoded.streams`) is that permutation as the I/O tie's egress side reads it: each I1 request's network certifier
 ordinal.
 
 **Replayed, 0 bits**: `replay.replay` runs vLLM's scheduler over the requests in arrival order under the
@@ -141,7 +141,7 @@ class Request:
 
 @dataclass(frozen=True)
 class CertifiedRequests:
-    """The certified record: the requests in the warden's admission order."""
+    """The certified record: the requests in the network certifier's admission order."""
 
     requests: tuple[Request, ...]
 
@@ -154,7 +154,7 @@ class CertifiedRequests:
 
 
 def release_order(record: CertifiedRequests) -> list[int]:
-    """The certified reference order: the warden's release order, each request's last ingress cell landing, by
+    """The certified reference order: the network certifier's release order, each request's last ingress cell landing, by
     (`end`, ordinal)."""
     return sorted(range(len(record.requests)), key=lambda k: (record.requests[k].end, k))
 
@@ -236,13 +236,13 @@ def _topo(after: dict[int, set[int]], key: Callable[[int], int]) -> tuple[list[i
 
 def streams(advice: I1.Advice, record: CertifiedRequests) -> tuple[int, ...]:
     """The order permutation as the I/O tie's egress side reads it (`walk.order` through the arrival order): for each I1
-    request q, the warden's ingress ordinal of the stream that carries it."""
+    request q, the network certifier's ingress ordinal of the stream that carries it."""
     ordinal = {q.id: k for k, q in enumerate(record.requests)}
     return tuple(ordinal[q.id] for q in advice.requests)
 
 
 class Decoded(NamedTuple):
-    """What a string carries under the record: the advice; `streams`, each I1 request's warden ordinal (the I/O tie's
+    """What a string carries under the record: the advice; `streams`, each I1 request's network certifier ordinal (the I/O tie's
     egress side checks each cell's stream against its request q through it); and the arrival order, the ordinals in the
     order the engine took them."""
 
@@ -815,7 +815,7 @@ TABLE_CAPS = CV.Caps(arrived=1 << 20, hits=1 << 20, order=1 << 16, order_len=1)
 def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client",
             book: dict | None = None) -> dict[str, Any]:
     """One trace-corpus trace (`replay.read_corpus_trace`; `ingress` the certified order's stand-in: the client's send,
-    or on a `.released` view the warden's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
+    or on a `.released` view the network certifier's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
     trace) and under the uniform book: each string's charge per window, the order's part of it, and whether it decodes
     back to the trace's I1 v0; the residual's decisions, order entries and sent hits; the replay's ideal order bits
     (`replay.order_bits`); and I1 v0's own charge (`advice.bits_by_window`) for that advice."""

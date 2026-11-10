@@ -545,7 +545,7 @@ def test_phase_6s_split_of_339_and_16_token_prompts_is_refused_by_the_ingress_ti
     """The prompt split at the link's 4096-byte cells: prompts of 339 and 16 tokens served (two request cells,
     then one; 338 is one cell at the relay's cut), advised as 16 and 339. The cells' total is honest's and
     the first request's end a cell earlier, so no count of the link's frames refuses it; IoTieRequest's reference on the
-    warden's ingress does."""
+    network certifier's ingress does."""
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
     a = V.Advice((V.RequestAdvice("u0", 339, 2, "length"), V.RequestAdvice("u1", 16, 1, "length")),

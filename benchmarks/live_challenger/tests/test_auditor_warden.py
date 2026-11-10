@@ -1,7 +1,7 @@
-"""The gate's warden rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
+"""The gate's network certifier rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
 the gate refuses a request it can't check, one whose minutes the traffic doesn't fit in, a read-only key, and a second
-rehearsal (a certifier's or a warden's) while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
-warden through the tunnel into `witness/`, publishes to `out/` only the warden's deployment, registrations and
+rehearsal (a certifier's or a network certifier's) while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
+network certifier through the tunnel into `witness/`, publishes to `out/` only the network certifier's deployment, registrations and
 certificates, and writes its end; `fetch` gives `witness/` to the run's own lane and vy-admin alone."""
 
 from __future__ import annotations
@@ -152,7 +152,7 @@ def test_one_warden_session_takes_the_gates_most_requests_at_height_13_in_an_hou
 
 
 def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
-    """A warden window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
+    """A network certifier window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
     so height 12's 4096 sign 819 windows and 1031 (55 minutes of the scan's 3.2 s windows) take 13; a load's heads come
     first. 1559 requests at the gate's rate are `warden_windows` 1031 and fit 55 minutes at height 13, which the gate
     takes; at 12 it refuses them with the height that fits, writing nothing, rather than run a session whose signer
@@ -502,7 +502,7 @@ def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_
 
 
 def test_a_groups_windows_are_the_scans_delay_and_its_tokens_buckets_and_their_minutes_the_groups_windows():
-    """`test_warden_serve` holds `scan_group_windows` to `warden_serve.group_windows` and the warden's schedule."""
+    """`test_warden_serve` holds `scan_group_windows` to `warden_serve.group_windows` and the network certifier's schedule."""
     assert [A.scan_group_windows(t) for t in (1, 2, 11, 12, 139, 140)] == [1, 1, 1, 2, 2, 3]
     assert [A.warden_group_minutes(g, 2, 10) for g in (1, 10, 100, 400)] == [4, 4, 9, 25]
     assert A.warden_group_minutes(400, 64, 10) == 46 and A.warden_group_minutes(1, 2) == 8

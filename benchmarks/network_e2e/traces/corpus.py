@@ -16,7 +16,7 @@ and DIR/README.md. `compare` does the same comparison across corpora that serve 
 prefill, an 8192-token budget): ``honest`` under vLLM's own scheduler, the others under `vllm_adversarial_plugin`'s hostile
 one, with its seed and prefix-cache mode. If a request's output ids moved with the hostile choices, `compare` shows it.
 
-`WARDEN`'s traces serve a trace's server and load through the active warden: `warden_serve.py serve` in front of the
+`WARDEN`'s traces serve a trace's server and load through the active network certifier: `warden_serve.py serve` in front of the
 server, a process beside it on its host (``warden beside the server, not on the auditor host``), and the client
 (`drive_warden`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
 their own (`cpu_plan`), the relay under `warden_probe.py` (its every tick, publish and collection) and the host's load
@@ -112,24 +112,24 @@ TRACES |= {name: (["--enable-chunked-prefill", "--max-num-batched-tokens", "8192
                   f"heavy's load, chunked prefill (8192-token budget), a hostile scheduler (seed {h[1]}: random "
                   f"preemptions, hold-backs, order and prefill splits; {CACHE_WHAT[h[0]]})")
            for name, h in HOSTILE.items()}
-#: warden trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
-#: active warden (`verity.core.protocols.certifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
-#: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the warden's egress base
-#: (`egress_base`), covers the slowest request's send to last token without the warden (heavy 10.7 s, small KV 55.7 s,
+#: network certifier trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
+#: active network certifier (`verity.core.protocols.certifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
+#: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the network certifier's egress base
+#: (`egress_base`), covers the slowest request's send to last token without the network certifier (heavy 10.7 s, small KV 55.7 s,
 #: async greedy).
 WARDEN = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv", 1200)}
 WARDEN_WHERE = "warden beside the server, not on the auditor host"
 #: a stall of the client's event loop it records (`drive_warden`), in seconds: a fifth of a bucket
 LOOP_LAG_S = 0.02
-#: the descriptors the client holds beside its connections' (the server's and warden's pipes, the loop's, the logs')
+#: the descriptors the client holds beside its connections' (the server's and network certifier's pipes, the loop's, the logs')
 FD_MARGIN = 256
-#: the warden's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the warden never
+#: the network certifier's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the network certifier never
 #: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in memory
 WARDEN_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
                    "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096}
-#: seconds the warden runs past the last arrival's D, for the last responses' egress cells
+#: seconds the network certifier runs past the last arrival's D, for the last responses' egress cells
 WARDEN_TAIL_S = 60.0
-#: seconds the trace waits for the warden past its last window: a spawned publisher may still be committing the last
+#: seconds the trace waits for the network certifier past its last window: a spawned publisher may still be committing the last
 #: windows' records (`warden_probe`'s `publisher`)
 WARDEN_END_S = 900.0
 TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active warden, D = {d} buckets of 100 ms "
@@ -323,14 +323,14 @@ async def drive(port: int, served: str, requests: list[dict], arrivals: list[flo
 
 
 def http_request(body: dict, rid: str, host: str) -> bytes:
-    """The bytes of `drive`'s request on a connection of its own (`Connection: close`), as the warden's client sends them."""
+    """The bytes of `drive`'s request on a connection of its own (`Connection: close`), as the network certifier's client sends them."""
     data = json.dumps(body, separators=(",", ":")).encode()
     return (f"POST /v1/completions HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\nX-Request-Id: {rid}\r\n"
             f"Content-Length: {len(data)}\r\nConnection: close\r\n\r\n").encode() + data
 
 
 def read_response(data: bytes, times: list[float], payload: int, sent: float) -> dict:
-    """What `drive` records of a streamed completion, read from the bytes the warden's cells carried: `data`, and `times`,
+    """What `drive` records of a streamed completion, read from the bytes the network certifier's cells carried: `data`, and `times`,
     when each `DATA` or `END` cell arrived (cell k carries bytes kP ... (k+1)P - 1, P = `payload`). A server-sent event's
     tokens arrived with the cell that completed it, so `chunks` has the seconds from `sent` to that cell's arrival."""
     head, sep, _ = data.partition(b"\r\n\r\n")
@@ -387,7 +387,7 @@ def read_response(data: bytes, times: list[float], payload: int, sent: float) ->
 
 
 def warden_modules():
-    """`verity`'s warden and `warden_serve` (benchmarks/network_traces), imported only for a warden trace."""
+    """`verity`'s warden and `warden_serve` (benchmarks/network_traces), imported only for a network certifier trace."""
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
@@ -399,9 +399,9 @@ def warden_modules():
 
 async def drive_warden(deployment: dict, served: str, requests: list[dict], arrivals: list[float], ids: list[str], out: Path,
                        drain_s: float, sampling: str, cpus: list[int] | None = None) -> dict:
-    """`drive` through the warden: from the warden's origin, each request at its arrival on a connection of its own to the
-    warden's listener, sent as cells and read through the client shim (`warden.cells`, `warden.Shim`), to the warden's
-    close. client.jsonl has `drive`'s fields (`read_response`) and each request's warden ordinal and outcome, and
+    """`drive` through the network certifier: from the network certifier's origin, each request at its arrival on a connection of its own to the
+    network certifier's listener, sent as cells and read through the client shim (`warden.cells`, `warden.Shim`), to the network certifier's
+    close. client.jsonl has `drive`'s fields (`read_response`) and each request's network certifier ordinal and outcome, and
     warden/client.json the shim's record of every connection in `warden_serve.connection_log`'s form, for its `check`.
 
     The shim times each cell when the event loop reads it, so the loop must not stall: on `cpus` when given (`cpu_plan`),
@@ -521,7 +521,7 @@ def pin_threads(cpus) -> None:
 
 
 def cpu_plan(cpus: list[int]) -> dict | None:
-    """The job's cores split for a warden trace, so that nothing else runs on the warden's or the client's: the warden the
+    """The job's cores split for a network certifier trace, so that nothing else runs on the network certifier's or the client's: the network certifier the
     last one (the last two from 8 cores, its publisher beside its ticker), the client the one before, and
     the server, its engine core and the host sampler the rest. None under 4 cores (nothing is pinned)."""
     cpus = sorted(cpus)
@@ -572,7 +572,7 @@ def start_warden(d: Path, port: int, delay: int, span_s: float, key: Path, env: 
 
 
 def check_warden(d: Path) -> int:
-    """`warden_serve.py check` of a warden trace's d/warden (its certificates, the audit of its records and the client's
+    """`warden_serve.py check` of a network certifier trace's d/warden (its certificates, the audit of its records and the client's
     cells against them), into d/warden/check.json."""
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
     with open(d / "warden" / "check.log", "w") as log:
