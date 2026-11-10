@@ -8,21 +8,23 @@ drive's after-landing run as shards, judged on the steps `main` waits for at the
 from __future__ import annotations
 
 import json
+import shutil
+import signal
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from research import merge
-from research.drive import (ACTIVE, AFTER_LANDING, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, SIGTERM_RC, shard_machines,
-                            step_paths, step_records, touches)
+from research.drive import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, PLAN_WAIT_S, SIGTERM_RC,
+                            shard_machines, step_paths, step_records, touches)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
-from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, audit_failures, based, combine, judge, key, reads, start,
-                                  step_test, unnamed)
+from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, abandon, audit_failures, based, combine, judge, key, reads,
+                                  shard_count, start, step_test, unnamed)
 from test_drive_executor import PREFLIGHTS, _slim
 from test_drive_policy import _policy
-from test_drive_review import GATED_TREE, _main, _move_main
+from test_drive_review import GATED_TREE, _main, _move_main, _plan_doc
 from test_queue import World, _git
 from test_queue_drive import LINT_LOG, Harness
 
@@ -104,6 +106,34 @@ def _rewrite(d, **steps: dict | None) -> None:
 
 def _down(rid: str, sha: str, why: str) -> Verdict:
     return Verdict(INFRA, (), (Failed(f"the run beside its check ({rid}) {why}", f"{sha}:{rid}", frozenset()),))
+
+
+class Plans:
+    """Drive's auto plans (`Driver.plan_shards`, `Driver.planned`) on ``d``: each one asked for gets a job's directory and a
+    plan's (``tmp``'s job-K and plan-K, the plan's file in it), and is being made until ``answers`` holds what its plan's
+    directory answers.  An answer is read once, as `drive._job_end` reads a job's end: its job's directory goes, and a job
+    with none is gone with no exit."""
+
+    def __init__(self, d, tmp: Path):
+        self.asked: list[tuple[str, str, int | None, int | None]] = []
+        self.answers: dict[str, tuple[dict | None, str | None]] = {}
+        self.tmp = tmp
+        d.plan_shards, d.planned = self.plan, self.planned
+
+    def plan(self, repo, tip, steps, max_shards=None, n=None) -> dict:
+        self.asked.append((tip, steps, max_shards, n))
+        job, out = (self.tmp / f"{x}-{len(self.asked)}" for x in ("job", "plan"))
+        job.mkdir(parents=True)
+        out.mkdir()
+        (out / AUTO_PLAN).write_text("{}\n")
+        return {"dir": str(job), "pid": 7000 + len(self.asked), "out": str(out)}
+
+    def planned(self, rec: dict) -> tuple[dict | None, str | None]:
+        if not Path(rec["dir"]).is_dir():
+            return None, "its process is gone with no exit written (a restart of the pod)"
+        if (got := self.answers.get(rec["out"], (None, None))) != (None, None):
+            shutil.rmtree(rec["dir"])
+        return got
 
 
 # -- start
@@ -427,6 +457,127 @@ def test_a_sharded_launch_is_read_once_every_shard_printed_and_a_shard_that_regi
     else:
         assert got.state == INFRA and "registered no run: shard 2/2: train.sh: no slot" in got.infra[0].task
         assert not got.infra[0].launch and h.cancelled == ["r-1"] and judge(h.d, rec) == got
+
+
+def test_shards_are_n_of_ci_tomls_plan_or_auto_n_of_an_auto_plan():
+    assert [shard_count(s) for s in (0, 3, "auto:6", "auto:12")] == [(0, False), (3, False), (6, True), (12, True)]
+    for bad in ("auto:0", "auto:", "auto:6x", "auto:-1", " auto:6", "6", "x:6"):
+        with pytest.raises(ValueError, match="or auto:N"):
+            shard_count(bad)
+
+
+@pytest.mark.parametrize("detached", [False, True])
+def test_start_with_auto_shards_has_the_candidates_plan_made_and_the_judge_that_finds_it_launches_its_n_shards(
+        world, monkeypatch, tmp_path, detached):
+    """`auto:N`: `start` launches no shard but has the auto plan of the candidate's tree made, of every after-landing step and
+    exactly N shards (`check.py --shard-plan --deferred STEPS --n N`); pending while it is made, and the first `judge` that
+    finds it made launches each shard `--shard auto:K/N` with its file on shard K's machines, the plan read once.  The file
+    goes once every shard has its run ids, each having sent it with its run."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, machines, printed, launches, post = "m1,m2,m3,m4,m5,m6", [], {}, [], h.d.launch_postland
+    plans = Plans(h.d, tmp_path)
+
+    def launch(repo, commit, machine, steps, **kw):
+        machines.append(machine)
+        if not detached:
+            return post(repo, commit, machine, steps, **kw)
+        h.posted.append((commit, steps, kw))
+        launches.append(got := {"dir": str(tmp_path / f"launch-{len(launches) + 1}"), "pid": 1})
+        return got
+
+    h.d.launch_postland, h.d.launched = launch, lambda got: (printed.get(got["dir"]), "")
+    rec = start(h.d, sha, base, shards="auto:6")
+    kw, out = h.d._postland_args({"verified": base}, sha, False)[0], tmp_path / "plan-1"
+    assert plans.asked == [(sha, ",".join(AFTER_LANDING), None, 6)] and h.posted == []
+    assert rec == {"ids": [], "plan": {"dir": str(tmp_path / "job-1"), "pid": 7001, "out": str(out), "n": 6,
+                                       "deferred": ",".join(AFTER_LANDING), "kw": kw},
+                   "tip": sha, "base": base, "at": h.clock, "gate": CHECK, "skip": ["lean-agreement"],
+                   "steps": [s for s in AFTER_LANDING if s != "lean-agreement"]}
+    assert any(x.endswith(f"as an auto plan's 6 shards as candidate {sha[:12]}'s check: planning") for x in world.logs)
+    h.clock += PLAN_WAIT_S
+    assert judge(h.d, rec) == Verdict(PENDING) and h.posted == [] and "made" not in rec["plan"]
+    rec = json.loads(json.dumps(rec))
+    plans.answers[str(out)] = (_plan_doc(6), None)
+    h.clock += 60
+    assert judge(h.d, rec) == Verdict(PENDING)
+    assert h.posted == [(sha, ",".join(AFTER_LANDING), {**kw, "shard": f"auto:{k}/6", "shard_plan": str(out / AUTO_PLAN),
+                                                        "train_from": OWN_TRAIN}) for k in range(1, 7)]
+    assert machines == shard_machines(h.d.on, 6) == [f"m{k}" for k in range(1, 7)]
+    assert rec["plan"]["made"] == {"digest": "d" * 64, "predicted_s": 3600.0} and rec["at"] == h.clock
+    ids = [f"r-{k}" for k in range(1, 7)] if detached else [f"r-post-{k}" for k in range(6)]
+    said = "launching" if detached else " ".join(ids)
+    assert any(x.endswith(f": auto plan {'d' * 12}, predicted wall 60 min: {said}") for x in world.logs), world.logs
+    if detached:
+        assert rec["ids"] == [] and [r["launch"] for r in rec["shards"]] == launches and (out / AUTO_PLAN).is_file()
+        rec = json.loads(json.dumps(rec))
+        printed.update({x["dir"]: [f"r-{k}"] for k, x in enumerate(launches, 1)})
+        h.run_state.update({f"r-{k}": ("running", None, None) for k in range(1, 7)})
+        assert judge(h.d, rec) == Verdict(PENDING)
+    assert (rec["ids"], rec["groups"], "shards" in rec) == (ids, [[i] for i in ids], False)
+    assert not out.exists() and not (tmp_path / "job-1").exists()
+    assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING) and len(h.posted) == 6, "its shards launch once"
+
+
+def test_a_shard_of_an_auto_plan_that_registered_no_run_stops_the_others_and_the_plans_file_goes(world, monkeypatch, tmp_path):
+    """As a shard of ci.toml's plan does, one of an auto plan's that printed no run ids stops the others, and no shard sends the
+    plan's file any more."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, printed = "m1,m2", {}
+    plans = Plans(h.d, tmp_path)
+    launches = [{"dir": str(tmp_path / f"launch-{k}"), "pid": 1} for k in (1, 2)]
+    h.d.launch_postland = lambda *a, **kw: launches[int(kw["shard"].removeprefix("auto:").split("/")[0]) - 1]
+    h.d.launched = lambda got: (printed.get(got["dir"]), "train.sh: no slot")
+    rec = start(h.d, sha, base, shards="auto:2")
+    plans.answers[rec["plan"]["out"]] = (_plan_doc(2), None)
+    assert judge(h.d, rec) == Verdict(PENDING) and (Path(rec["plan"]["out"]) / AUTO_PLAN).is_file()
+    printed.update({launches[0]["dir"]: ["r-1"], launches[1]["dir"]: []})
+    h.run_state["r-1"] = ("running", None, None)
+    got = judge(h.d, rec)
+    assert got.state == INFRA and "registered no run: shard 2/2: train.sh: no slot" in got.infra[0].task
+    assert h.cancelled == ["r-1"] and not Path(rec["plan"]["out"]).exists()
+
+
+@pytest.mark.parametrize("how", ["failed", "lost", "late", "another n"])
+def test_an_auto_plan_that_failed_or_was_not_made_in_time_is_infra_its_directories_gone(world, monkeypatch, tmp_path, how):
+    """A plan that failed (`check.py --shard-plan` exited nonzero, or the pod lost its job), has another N than asked, or wasn't
+    made `PLAN_WAIT_S` after the start (its job stopped): infra, kept, no shard launched, the plan's directories removed.  Only
+    a lost job points at the machines (`Failed.launch`): the planner runs the candidate's own check.py."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, stopped = "m1,m2", []
+    plans = Plans(h.d, tmp_path)
+    monkeypatch.setattr("research.vqueue_slim.os.killpg", lambda pid, sig: stopped.append((pid, sig)))
+    rec = start(h.d, sha, base, shards="auto:2")
+    gone = "its process is gone with no exit written (a restart of the pod)"
+    plans.answers[rec["plan"]["out"]] = {"failed": (None, "`check.py --shard-plan` exited 2: no costs"), "lost": (None, gone),
+                                         "late": (None, None), "another n": (_plan_doc(3), None)}[how]
+    h.clock += PLAN_WAIT_S
+    if how == "late":
+        assert judge(h.d, rec) == Verdict(PENDING) and stopped == []
+        h.clock += 1
+    got = judge(h.d, rec)
+    why = {"failed": "failed: `check.py --shard-plan` exited 2: no costs", "lost": f"failed: {gone}",
+           "late": f"was not made in {PLAN_WAIT_S // 60} min (stopped)", "another n": "has 3 shards, not 2"}[how]
+    assert got == Verdict(INFRA, (), (Failed(f"the run beside its check registered no run: its auto plan {why}", f"{sha}:no run",
+                                             frozenset(), launch=how == "lost"),))
+    assert stopped == ([(7001, signal.SIGTERM)] if how == "late" else []) and h.posted == []
+    assert not Path(rec["plan"]["out"]).exists() and not Path(rec["plan"]["dir"]).exists()
+    assert judge(h.d, json.loads(json.dumps(rec))) == got and rec["verdict"]["state"] == INFRA
+
+
+@pytest.mark.parametrize("made", [False, True])
+def test_abandon_gives_up_a_plan_still_being_made_and_keeps_one_its_launching_shards_send(world, monkeypatch, tmp_path, made):
+    """A candidate dropped while its plan is made launches no shard: the plan's directories go, so its job writes no plan.  Once
+    made, its shards' launches send its file, which stays until each has its run ids."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, h.got = "m1,m2", {"dir": str(tmp_path / "launch"), "pid": 1}
+    plans = Plans(h.d, tmp_path)
+    rec = start(h.d, sha, base, shards="auto:2")
+    if made:
+        plans.answers[rec["plan"]["out"]] = (_plan_doc(2), None)
+        assert judge(h.d, rec) == Verdict(PENDING) and len(h.posted) == 2 and "made" in rec["plan"]
+    abandon(rec)
+    assert (Path(rec["plan"]["out"]) / AUTO_PLAN).is_file() == made and not Path(rec["plan"]["dir"]).exists()
+    abandon({"ids": ["r-1"], "tip": sha})
 
 
 @pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS), ("lean-changed", PASS),

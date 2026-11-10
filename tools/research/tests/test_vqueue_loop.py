@@ -2463,17 +2463,59 @@ def test_under_gate_check_a_run_started_while_graph2_gated_is_started_again_as_t
     assert loop.tick() == [] and len(runs.launches) == 6
 
 
+def test_under_gate_check_auto_shards_launch_once_each_checks_plan_is_made_and_a_candidate_dropped_while_it_is_made_launches_none(
+        env, monkeypatch):
+    """`--shards auto:N`: each check, `main`'s and the candidate's, has the auto plan of its tree made first, and the first tick
+    that finds it made launches its N shards `--shard auto:K/N` with its file; the candidate advances once every shard passed.
+    One dropped while its plan is made launches none, the plan given up (`vqueue_slim.abandon`)."""
+    from research.drive import AFTER_LANDING, AUTO_PLAN
+    from test_drive_review import _plan_doc
+    from test_vqueue_slim import Plans
+
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, shards="auto:3")
+    plans = Plans(loop.world.slim_driver(), env.tmp / "plans")
+    _, built, started = loop.tick()
+    sha = built["sha"]
+    assert runs.launches == [] and plans.asked == [(c, ",".join(AFTER_LANDING), None, 3) for c in (main, sha)]
+    assert started["record"]["plan"]["n"] == 3 and loop.tick() == [] and runs.launches == [], "pending while they are made"
+    plans.answers.update({str(plans.tmp / f"plan-{k}"): (_plan_doc(3), None) for k in (1, 2)})
+    assert _acts(loop.tick()) == ["slim", "slim"]
+    assert [(c, m, kw["shard"], kw["shard_plan"]) for c, m, _, kw in runs.launches] == [
+        (c, f"m{k}", f"auto:{k}/3", str(plans.tmp / f"plan-{p}" / AUTO_PLAN)) for p, c in ((1, main), (2, sha)) for k in (1, 2, 3)]
+    assert not any((plans.tmp / f"plan-{k}").exists() for k in (1, 2)) and loop.tick() == []
+    runs.end(main)
+    runs.end(sha)
+    assert _acts(loop.tick()) == ["slim", "slim", "advance", "on_main", "drop"] and env.main() == sha
+    env.put(2, {"b.txt": "1\n"})
+    built, started = loop.tick()
+    assert (built["action"], started["record"]["plan"]["out"]) == ("build", str(plans.tmp / "plan-3"))
+    env.o.gh.ready.discard((2, built["heads"][0]))                  # its ready mark withdrawn: dropped
+    (drop,) = loop.tick()
+    assert drop["action"] == "drop" and "beside_launching" not in drop and "beside_cancelled" not in drop
+    assert not (plans.tmp / "plan-3").exists() and not (plans.tmp / "job-3").exists()
+    assert loop.tick() == [] and len(runs.launches) == 6 and len(plans.asked) == 3
+
+
 def test_the_gate_is_graph2_unless_the_command_says_check_which_needs_the_run_beside_each_check(capsys, tmp_path):
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(o in said for o in ("--gate {graph2,check}", "--shards", "--on", "(default 3)")), said
+    assert all(o in said for o in ("--gate {graph2,check}", "--shards", "--on", "(default 3)", "or auto:N")), said
     loop = Loop(None, tmp_path / "log")
     assert (loop.gate, loop.shards, L.GATES) == ("graph2", 3, ("graph2", "check")) and vqueue_slim.CHECK == L.CHECK_GATE
     assert L.main(["--gate", "check", "--no-slim", "--shadow", "--once"]) == 1
     assert "neither --no-slim nor --shards below 1" in capsys.readouterr().err
     with pytest.raises(ValueError, match="a gate is one of graph2, check"):
         Loop(None, tmp_path / "log", gate="check")
+    for bad in ("0", "-1", "auto:0", "auto:x"):
+        assert L.main(["--gate", "check", "--shards", bad, "--shadow", "--once"]) == 1
+        assert "and --shards is N (ci.toml's plan) or auto:N (an auto plan)" in capsys.readouterr().err
+    assert (L._shards("6"), L._shards("auto:6")) == (6, "auto:6")
+    assert Loop(None, tmp_path / "log", slim=vqueue_slim, gate="check", shards="auto:6").shards == "auto:6"
+    with pytest.raises(ValueError, match="'check' with auto:0 shard"):
+        Loop(None, tmp_path / "log", slim=vqueue_slim, gate="check", shards="auto:0")
 
 
 def _under(tasks: dict[str, dict], i: str, seen: set[str]) -> list[str]:

@@ -495,14 +495,14 @@ PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkd
             'uv run -q python tools/verity/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
 
 
-def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None) -> dict:
+def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None, n: int | None = None) -> dict:
     """The auto plan of ``tip``'s after-landing ``steps`` (`PLAN_JOB`: `check.py --shard-plan --deferred STEPS`, at most
-    ``max_shards`` shards), made in the background (`detach`) into a directory of its own under `LAUNCHES`: the record
-    `planned` reads."""
+    ``max_shards`` shards, or ``n`` exactly), made in the background (`detach`) into a directory of its own under `LAUNCHES`:
+    the record `planned` reads."""
     root = Path(tempfile.gettempdir()) / LAUNCHES
     root.mkdir(parents=True, exist_ok=True)
     out = tempfile.mkdtemp(prefix="plan-", dir=root)
-    args = ["--deferred", steps, *(["--max-shards", str(max_shards)] if max_shards else [])]
+    args = ["--deferred", steps, *(["--max-shards", str(max_shards)] if max_shards else []), *(["--n", str(n)] if n else [])]
     return {**detach(repo, ["sh", "-c", PLAN_JOB, "sh", out, tip, *args], {**os.environ, "GIT_TERMINAL_PROMPT": "0"}),
             "out": out}
 

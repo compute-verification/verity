@@ -60,7 +60,8 @@ after it started, a fail whose every other failure is inherited is pending.
 
 The gate (`--gate`).  With `graph2`, the default, a candidate's verdict is the two combined, as above.  With `check`, drive's
 after-landing check gates in graph2's place: the run beside each candidate, and beside `main`, is every after-landing step
-as `--shards` shards on `--on`'s machines (`vqueue_slim.start` with ``shards``), judged on every step `main` waits for,
+as `--shards` shards on `--on`'s machines (`vqueue_slim.start` with ``shards``: N, ci.toml's plan, or `auto:N`, an auto
+plan of the candidate's tree, which splits pytest by suite), judged on every step `main` waits for,
 and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  A failed step
 is inherited by its failing tests, those the run beside its base's check failed too.  graph2's check is enqueued, read,
 retried with the check and cancelled at a drop as before, in shadow: its verdict (`Judged.shadow`) holds, ejects and
@@ -1450,14 +1451,14 @@ class Loop:
     """The verified queue's loop on ``world``: `tick` once, or `run` every ``interval`` seconds.  ``slim`` is
     `research.vqueue_slim` (its `start`, `judge` and `combine`), or None to judge each candidate on its graph2 check alone.
     ``gate`` is what gates a candidate (`GATES`): its graph2 check with the run beside it, or the check ``slim`` runs as
-    ``shards`` shards, alone."""
+    ``shards`` shards (N of ci.toml's plan, or `auto:N`: `vqueue_slim.shard_count`), alone."""
 
     def __init__(self, world: World, log: Path, *, decide: Callable[[Snapshot], list[Action]] = vqueue.decide,
                  shadow: bool = False, dry_run: bool = False, batch: int = BATCH, depth: int = DEPTH, lean: int = LEAN,
                  pending_s: float = 4 * 3600, slim=None, now: Callable[[], float] = time.time,
                  out: Callable[[str], None] = print, state: Path | None = None, tree_ejects: bool = False,
-                 gate: str = GRAPH2_GATE, shards: int = SHARDS):
-        if gate not in GATES or gate == CHECK_GATE and (slim is None or shards < 1):
+                 gate: str = GRAPH2_GATE, shards: int | str = SHARDS):
+        if gate not in GATES or gate == CHECK_GATE and (slim is None or _count(slim, shards) < 1):
             raise ValueError(f"gate {gate!r} with {shards} shard(s){'' if slim is not None else ' and no run beside a check'}: "
                              f"a gate is one of {', '.join(GATES)}, and `{CHECK_GATE}` is the run beside each check "
                              "(`research.vqueue_slim`) as one shard or more")
@@ -1839,10 +1840,13 @@ class Loop:
     def _drop(self, a: Drop, c: Candidate, t: Tick) -> dict:
         """Cancel ``c``'s check and the run beside it while that runs (it would hold drive's machines for nothing), delete its
         branch and log its outcome.  A run still launching (its shards, of a sharded one) has no run ids yet: its record is
-        logged (`beside_launching`), and `_launched` cancels it once it has them."""
+        logged (`beside_launching`), and `_launched` cancels it once it has them; an auto plan still being made is given up
+        (`vqueue_slim.abandon`), so no shard of it launches."""
         w, j = self.world, t.judged.get(c.sha)
         cancel = w.cancel(c.sha)
         rec = (j.record or {}) if j is not None and j.slim is not None and j.slim.state == PENDING else {}
+        if "plan" in rec:
+            self.slim.abandon(rec)
         ids = list(rec.get("ids") or ())
         failed = w.cancel_runs(ids, f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}") if ids else {}
         w.push("", branch(c.sha), c.sha)
@@ -2166,6 +2170,19 @@ def _slim():
     return importlib.import_module(name) if importlib.util.find_spec(name) is not None else None
 
 
+def _shards(text: str) -> int | str:
+    """`--shards`: N as an int, anything else as it is given, which `vqueue_slim.shard_count` reads (`auto:N`) or refuses."""
+    return int(text) if text.isdigit() else text
+
+
+def _count(slim, shards: int | str) -> int:
+    """How many shards ``shards`` is to ``slim`` (`vqueue_slim.shard_count`), 0 for one it refuses."""
+    try:
+        return slim.shard_count(shards)[0]
+    except ValueError:
+        return 0
+
+
 def _locked(path: Path):
     """Hold ``path``'s lock, or None when another tick holds it."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -2217,9 +2234,10 @@ def main(argv: list[str]) -> int:
                     help=f"what gates a candidate: `{GRAPH2_GATE}` (the default), its graph2 check with the run beside it; "
                          f"`{CHECK_GATE}`, drive's after-landing check of it, every step as --shards shards, with graph2's "
                          "check in shadow: read, compared with the check's verdict in one logged line, and deciding nothing")
-    ap.add_argument("--shards", type=int, default=SHARDS,
-                    help=f"with --gate {CHECK_GATE}, the shards each check runs as, an N ci.toml has a shard plan for, one "
-                         f"launch each (default {SHARDS})")
+    ap.add_argument("--shards", type=_shards, default=SHARDS,
+                    help=f"with --gate {CHECK_GATE}, the shards each check runs as, one launch each: an N ci.toml has a shard "
+                         f"plan for, or auto:N, N shards of an auto plan of the candidate's tree made before they launch, "
+                         f"which splits pytest by suite (default {SHARDS})")
     ap.add_argument("--on", default="", help="the machines the run beside each check takes, a comma list, each shard its "
                                              "share of them as drive gives its own (default drive.toml's `on` at `main`)")
     ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red, flakes and messages, and do none of "
@@ -2236,9 +2254,10 @@ def main(argv: list[str]) -> int:
         print("research queue vqueue: research.vqueue_slim isn't in this tree, so no run beside a candidate's check can start: "
               "--no-slim judges each candidate on its graph2 check alone", file=sys.stderr)
         return 1
-    if a.gate == CHECK_GATE and (a.no_slim or a.shards < 1):
+    if a.gate == CHECK_GATE and (a.no_slim or _count(slim, a.shards) < 1):
         print(f"research queue vqueue: --gate {CHECK_GATE} is the run beside each candidate's check, as one shard or more: "
-              "it runs with neither --no-slim nor --shards below 1", file=sys.stderr)
+              "it runs with neither --no-slim nor --shards below 1, and --shards is N (ci.toml's plan) or auto:N (an auto "
+              "plan)", file=sys.stderr)
         return 1
     lock = None if a.dry_run else _locked(a.lock)
     if not a.dry_run and lock is None:
