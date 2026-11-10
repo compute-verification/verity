@@ -1063,7 +1063,9 @@ class LakeArtifacts:
         and that still can't go in (not `indexable`, a module it loads not indexed, an artifact's name taken) is recorded
         under its key (`module_keys.UNSTORED`), so the next build leaves it to Lake rather than compile it again for
         nothing (`module_keys.settle`), and so is each module of a build refused for the code its sources run. Only what
-        the compiled modules load is read, so a build that compiled nothing costs its traces' `stat`s."""
+        the compiled modules load is read, so a build that compiled nothing costs its traces' `stat`s. A report that
+        names the modules its build compiled (`"compiled"`, check.py's publish) has only those indexed: in one check.py,
+        another package's build, which may fail, can compile a module of a path dependency the two share."""
         with self._lock():
             n = 0
             for pkg in sorted(reports):
@@ -1081,6 +1083,10 @@ class LakeArtifacts:
                 keyed, owners = MK.keys(pkg, MK.policy_roots(pkg)), {}
                 with ThreadPoolExecutor(max_workers=8) as ex:
                     built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
+                if rep.get("compiled") is not None:
+                    only = set(rep["compiled"])
+                    built = {m: b if m in only or isinstance(b, str) else "compiled by another build of this check.py"
+                             for m, b in built.items()}
                 need, todo = set(), [m for m, b in built.items() if not isinstance(b, str)]
                 while todo:
                     if (m := todo.pop()) not in need:

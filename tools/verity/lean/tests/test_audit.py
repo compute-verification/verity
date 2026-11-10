@@ -5178,11 +5178,13 @@ def _publishing(tmp: Path, monkeypatch) -> tuple[Path, Path, Path]:
     return _publishable(tmp), store, bundle
 
 
-def _built_once(pkg: Path, monkeypatch, *, sandbox: bool = True, rc: int | None = 0, sample_fails: bool = False) -> list:
+def _built_once(pkg: Path, monkeypatch, *, sandbox: bool = True, rc: int | None = 0, sample_fails: bool = False,
+                says_built: bool = True) -> list:
     """One audit of ``pkg`` as far as its build's announcement, its publish waited for: its `build` step compiles `P` and
-    exits ``rc``, or restores `P` (``rc`` None). What happened, in order: each build step with the files its staged cache
-    held for package `p` (None: no cache staged), the sampled recompile with what the build compiled, the announcement
-    or the failures the audit stopped with."""
+    exits ``rc``, or restores `P` (``rc`` None); with ``says_built`` False, `P` is left compiled as another build of the
+    same check.py leaves it, and this build's log names nothing it built. What happened, in order: each build step with
+    the files its staged cache held for package `p` (None: no cache staged), the sampled recompile with what the build
+    compiled, the announcement or the failures the audit stopped with."""
     events: list = []
 
     def run(argv, cwd, log=None, timeout=0):
@@ -5190,7 +5192,7 @@ def _built_once(pkg: Path, monkeypatch, *, sandbox: bool = True, rc: int | None 
         events.append((Path(log).stem, None if stage is None else sorted(os.listdir(stage)) if stage.is_dir() else []))
         if argv[-1] == "build":
             _lake_left(pkg, restored=rc is None)
-            Path(log).write_text("" if rc is None else "✔ [1/1] Built P (1.2s)\n")
+            Path(log).write_text("✔ [1/1] Built P (1.2s)\n" if rc is not None and says_built else "")
         return (rc or 0) if argv[-1] == "build" else 0, ""
 
     def sampled(pkg_, roots, work, built, jobs, log=print):
@@ -5252,15 +5254,19 @@ def test_the_sampled_recompile_runs_on_every_restore_before_the_build_publishes(
 def test_nothing_a_build_without_the_sandbox_or_a_failed_build_step_compiled_is_published(tmp_path, monkeypatch):
     """Outside the sandbox, code a module runs while it compiles could leave any outputs in the build; a build step that
     failed is one whose build never passed. Neither publishes: nothing goes into the artifact cache at the build's end, and
-    no bundle or replay pack is written. A build in the sandbox whose steps and sample pass publishes what it compiled
-    before the audit goes on, whatever the audit then comes to, and its bundle carries the replay entries this run's kernel
-    had accepted by then beside it."""
+    no bundle or replay pack is written. Nor does a passing build publish what it holds and didn't compile, which another
+    build of the same check.py, failed or not, may have compiled into a path dependency the two share. A build in the
+    sandbox whose steps and sample pass publishes what it compiled before the audit goes on, whatever the audit then comes
+    to, and its bundle carries the replay entries this run's kernel had accepted by then beside it."""
     pkg, store, bundle = _publishing(tmp_path, monkeypatch)
     (tmp_path / "lean-replay").mkdir()
     A.store_replay(tmp_path / "lean-replay", "1" * 64, "P")
     assert _built_once(pkg, monkeypatch, sandbox=False)[-1] == "announced"
     assert _built_once(pkg, monkeypatch, rc=1)[-1] == ["build: exit 1\n"]
     assert _store_holds(store) == [] and os.listdir(bundle) == []
+    assert _built_once(pkg, monkeypatch, says_built=False)[-2:] == [("sampled", []), "announced"]
+    assert _store_holds(store) == [] and not [f for f in os.listdir(bundle) if f.startswith("lean-artifacts")], \
+        "P was compiled by another build, not this one"
     assert _built_once(pkg, monkeypatch)[-1] == "announced"
     assert _store_holds(store) == ["P"] and sorted(os.listdir(bundle)) == ["lean-artifacts.tar.gz", "lean-replays.tar.gz"]
     with tarfile.open(bundle / "lean-artifacts.tar.gz") as t:
