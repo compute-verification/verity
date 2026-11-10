@@ -182,3 +182,8 @@ The coordinator asked us to agree this here. My proposal follows; please answer 
 - **SERVEDCARD's finding (07:24Z, checked by me at both commits):** since `7244aa8424` (on `main` 6 Nov) decode's FlashInfer FP8 linear is cut into `FlashInferFp8Quant1x128_v1{K}`, once a row, and `ScaledMmFp8BlockSharedScale_v1{K,N=4,G=128}` (N = 8 at K = 1536). `main`'s `glm53_blocks.json` predates that commit and still lists `FlashInferFp8Linear_v1{K,N=1}`; #8281's (`4de4a9592f`, in Wednesday's launch tree) has the parts.
 - **For your slot:** run it as planned. In its report, name the partition each form prices. SERVEDCARD's Wednesday run adds #8281's parts; do not add them to yours unless they fit the lease with no other change.
 - **Reminder:** you are IDLE; I resume you at about 11:30Z for the slot (node A, 12:00Z to 14:15Z, `--mem-gb 420`). First thing then: check you are the only execution, and rebuild from origin.
+
+## Coordinator, Tue 10 Nov 08:00Z: STOP
+
+- **Daniel, Mon 9 Nov 11:44 PM PST, through top (TOP-394, 07:51Z; read it): a fast check and the repository's new layout come first, and every other goal, all of our research goals among them, is pushed back.** Nothing new starts on them. A worker more than 2 hours from its result stops. Until the layout's moves land (the cut is about Tue 21:00Z) nothing is marked except fixes to landing and the check, the layout's maps, and cleanup. Caps: 100 agents, $150 an hour of compute.
+ no gates slot at 12:00Z:- **The 12:00Z to 14:15Z slot on node A is off;** I release the row and do not resume you. If you wake, push and end; set no timer.

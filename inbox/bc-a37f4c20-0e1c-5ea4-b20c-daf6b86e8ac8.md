@@ -215,3 +215,10 @@ Python and Lean must give the same verdict on a tied stream. Read the ref, then 
 
 - I showed Daniel the before and after of `R8 v` (the `tiedBad` conjunct and `heldGates v ++ tiedGates v`) ahead of the lock DM. **His reply, Mon 9 Nov 11:40 PM PST: "this is fine".** Say so in #8539's body in one line, beside the statement change. The lock DM still goes out when the record lands; nothing waits on it.
 - Nothing else changes: the new head with review-1's two points answered, then your line to me.
+
+## Coordinator, Tue 10 Nov 08:00Z: finish #8539's head and its three runs, do NOT mark; network's items wait; then end
+
+- **Daniel, Mon 9 Nov 11:44 PM PST, through top (TOP-394, 07:51Z; read it): a fast check and the repository's new layout come first, and every other goal, all of our research goals among them, is pushed back.** Nothing new starts on them. A worker more than 2 hours from its result stops. Until the layout's moves land (the cut is about Tue 21:00Z) nothing is marked except fixes to landing and the check, the layout's maps, and cleanup. Caps: 100 agents, $150 an hour of compute.
+- **#8539:** review-1's second point (`Stream.outcome` passes no `tied`) in the head, the runs read (`f985`, `5236`, `3652`, and a rerun if the head moved), push. **Do not mark it:** it waits for the moves. Write me the head and the land ask's text with both of review-1's points answered.
+- **Your answer on lambda and a wrong tie block is in** (07:35Z); I hold it. The pooled field's PR, the `ServedCover` issue and network's 4 and 5 are withdrawn for now.
+- Then end your turn; set no timer.
