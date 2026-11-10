@@ -12,7 +12,7 @@ What code outside this directory may use. Everything else here is internal.
 
 | Entry point | What it is |
 |---|---|
-| `uv run tools/verity/check/suites.py benchmarks/codec_tensor` | The suite, on the CPU: `wide.py`, `sketch_receipt.py` and `sketching.py` against PoUB's code and `tests/vectors.json`, and the decode step's plan. It keeps nothing. |
+| `uv run tools/verity/check/suites.py benchmarks/codec_tensor` | The suite, on the CPU: `wide.py`, `sketch_receipt.py` and `sketching.py` against PoUB's code and `tests/vectors.json`, and the decode step's plan. It writes no result. |
 | `bash benchmarks/codec_tensor/run.sh`, with `FIELDS`, `RECEIPT=1` and `BENCH_ARGS` as its header lists them | `wt.cu` built for each field, then `bench.py`'s gates and timings on one GPU. It writes `codec-tensor.json` and `bench.log` to `$RESEARCH_RUN_DIR/out`. |
 | `bash benchmarks/codec_tensor/reader.sh` | The device reader on one GPU (`reader.py`): `reader.cu` built, gated byte for byte against PoUB's driver, then one pass timed. It writes its gates and timings as JSON to `$RESEARCH_RUN_DIR/out`. |
 | `bash benchmarks/codec_tensor/step.sh`, with `MODEL` and `BATCH` | One decode step at HBM exhaustion on one GPU (`step.py`), after the codecs' tests and `reader.cu`'s gate. It writes its gates and timings as JSON to `$RESEARCH_RUN_DIR/out`. |
