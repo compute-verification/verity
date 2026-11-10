@@ -125,8 +125,13 @@ A spec-level reference for network accounting's timing channel:
   window's output root registered before the window's coins, as the memory check's initial values; runs `CacheStep_v3`'s
   stream from it over the calls row with v5's ragged keys; and commits the row the stream leaves as the output root. A
   window from the empty pool's root (`genesis`) is v5's, and a chain restarts from it after a failed window. The compile
-  slice's free input is the advice, the pool window's its checked rows (the left row and the stream's witness) at their
-  widths until their lemma (`free_width`). `PoolChain_v1` is two windows so chained, and `parts` prices both units at any
+  slice's free input is the advice, the pool window's its checked rows (the left row, the blocks' sources and the
+  stream's witness) at their widths until their lemma (`free_width`). A request still open at the window's edge is cut
+  (its registered ``a_cut`` bit): `CompileEdge` frees every running slot in vLLM's preemption order and holds each open
+  request to having emitted its ``a_O``, and the next window takes its continuation, (id, P + e) with its prompt then its
+  released outputs, as an ordinary arrival that hits its blocks in the carried pool. The close gives each keyed block's
+  page its source, the window's own write or the previous window's carried port, and a `PageCopy_v1` copy block holds
+  the window's carried port to it. `PoolChain_v1` is two windows so chained, and `parts` prices both units at any
   class, which `benchmarks/mempool/cost.py` does at a served load's;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
