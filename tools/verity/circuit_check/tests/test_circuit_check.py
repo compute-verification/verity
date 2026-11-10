@@ -9,8 +9,9 @@ here.
 The tests that read the suite (the `suite` fixture) or the Calls it gives (`targets.call_families`) are marked slow: the process
 that runs one builds circuit-check's catalog first (conftest.py), from the bindings' records when they count and binding by
 binding without them, and only the whole suite shows what they hold (every registered family checked, every Call partitioned).
-The two walks of every Call over the partition budget (`_unchecked_walk`) are opt-in (`_opt_in`): `circuit-check --all` fails a
-Call whose partition nothing checks by its name, and the walks hold `targets.CALLEE_CALLS` and `OVER_PARTITION_BUDGET` current.
+The two walks of every Call over the partition budget (`_unchecked_walk`) are opt-in (`_opt_in`), and the nightly cold check runs
+them by name (check.py's `OPT_IN`): `circuit-check --all` fails a Call whose partition nothing checks by its name, and the walks
+hold `targets.CALLEE_CALLS` and `OVER_PARTITION_BUDGET` current.
 A test that selects targets by family reads the family off the catalog (`Catalog.reached`), so it makes only those.
 """
 from __future__ import annotations

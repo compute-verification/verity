@@ -56,7 +56,8 @@ from verity.ml.circuits.types import Array, Value
 ROOT = Path(__file__).resolve().parents[5]
 ONSITE_PACKAGE, REMOTE_PACKAGE = ROOT / "verity/core/protocols/onsite", ROOT / "verity/core/protocols/remote"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-#: the mark of a difftest that takes over five minutes on a node: it stays out of `check` and runs where VERITY_SLOW asks
+#: the mark of a difftest that takes over five minutes on a node: it stays out of every check but the nightly cold one, which runs
+#: each by name with VERITY_SLOW=1 (check.py's `OPT_IN`), and runs wherever else VERITY_SLOW asks
 OPT_IN = pytest.mark.skipif(opt.get("VERITY_SLOW") != "1", reason="over five minutes on a node: VERITY_SLOW=1")
 
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max_size=3),

@@ -7,7 +7,8 @@ recorded in `population_recorded.json` (written on main before a unit's populati
 A change meant to change these programs rewrites the record (its ``--write``, run by `REWRITE`'s command) and says so; any
 other change leaves it as it is. The programs are built in a child process: the sidecars import modules that register
 kernels, which `test_evaluation`'s registry test would otherwise see in the same worker. It builds them all in that one
-process, about 13 minutes on a node, so the test is opt-in (``VERITY_ML_CIRCUITS_SLOW``) and stays out of `check`."""
+process, about 13 minutes on a node, so the test is opt-in (``VERITY_ML_CIRCUITS_SLOW``): it stays out of every check but the
+nightly cold one, which runs it by name with the variable set (check.py's `OPT_IN`)."""
 from __future__ import annotations
 
 import hashlib
