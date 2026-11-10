@@ -4,8 +4,7 @@
 block's proof overhead: seconds a block times the card's peak MACs a second over the block's MACs, marginal (``per_block``)
 and amortized. A block's MACs are its stage.json's ``macs`` (a fused expert block's N K), else its K (a coordinate's); the
 card's peak is its s8 rate (`verity.hardware`; e4m3 runs at that rate on
-the cards here, their ``weight.e4m3`` 1). A statement proved by K provers at once (``PT_PROVERS``, its ``prove-<i>.tsv``) is
-timed by its throughput (`overlap`) and fitted as its own type, ``<tag>/p<K>``.
+the cards here, their ``weight.e4m3`` 1).
 
     python prove_time.py OUT_DIR [--card SKU]     prints the summary as JSON
 """
@@ -20,32 +19,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _summary():
+def _session_set():
     spec = importlib.util.spec_from_file_location("s8_summary", ROOT / "benchmarks/flock_s8_block/summary.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod
-
-
-def overlap(d: Path, stamped) -> dict:
-    """K provers' sessions at once on one device (``prove-<i>.tsv``): the device's seconds a statement, one over the
-    provers' summed rates, each prover's its timed sessions over the span from the end of its last warm session (else of
-    its first) to the end of its last; ``overlap_s`` is how long every prover was in its timed sessions at once, against
-    which the spans read as the share of the time the K provers shared the device."""
-    live = [[(t, json.loads(l[5:])) for t, l in stamped(f) if l.startswith("LIVE")] for f in sorted(d.glob("prove-*.tsv"))]
-    accepted = [v.get("accepted") for p in live for _, v in p]
-    spans = []
-    for p in live:
-        t0 = max((t for t, v in p if v.get("warm")), default=p[0][0] if p else None)
-        ts = [t for t, v in p if not v.get("warm") and t > t0]
-        if not ts:
-            return {"provers": len(live), "error": "a prover has no timed session after its first", "accepted": accepted}
-        spans.append((t0, ts[-1], len(ts)))
-    rate = sum(n / (t1 - t0) for t0, t1, n in spans)
-    return {"provers": len(live), "timed": sum(n for *_, n in spans), "prove_total_s": 1 / rate,
-            "spans_s": [round(t1 - t0, 3) for t0, t1, _ in spans],
-            "overlap_s": round(min(t1 for _, t1, _ in spans) - max(t0 for t0, _, _ in spans), 3), "accepted": accepted,
-            "prove_total_all_s": [v.get("prove_total_s") for p in live for _, v in p]}
+    return mod.session_set
 
 
 def peak_macs(card: str) -> float:
@@ -67,16 +45,15 @@ def fit(points: list[tuple[int, float]]) -> tuple[float, float] | None:
 
 
 def main(out: Path, card: str | None) -> dict:
-    summary = _summary()
+    session_set = _session_set()
     peak = peak_macs(card) if card else None
     res = {"card": card, "peak_macs_per_s": peak, "statements": {}, "types": {}, "table": []}
     types = {}
     for dev in ("gpu", "cpu"):
         for d in sorted(p for p in (out / dev).glob("*") if (out / "stage" / p.name / "stage.json").is_file()):
             st = json.loads((out / "stage" / d.name / "stage.json").read_text())
-            k = len(list(d.glob("prove-*.tsv")))
-            s = overlap(d, summary.stamped) if k else summary.session_set(d, gpu=dev == "gpu")
-            rec = {"device": dev, "tag": st["tag"], "provers": k or 1, "n": st["n"], "k_log": st["k_log"], "unit_log": st.get("unit_log"),
+            s = session_set(d, gpu=dev == "gpu")
+            rec = {"device": dev, "tag": st["tag"], "n": st["n"], "k_log": st["k_log"], "unit_log": st.get("unit_log"),
                    "vus_per_block": st["vus_per_block"],
                    "ands": st["ands"], "macs": st.get("macs") or st["statics"]["K"], "public_inputs": st.get("public_inputs", []),
                    "accepted": s.get("accepted"), "prove_total_s": s.get("prove_total_s"),
@@ -85,7 +62,7 @@ def main(out: Path, card: str | None) -> dict:
                    "error": s.get("error")}
             res["statements"][f"{dev}/{d.name}"] = rec
             if rec["prove_total_s"] is not None:
-                types.setdefault(f"{dev}/{st['tag']}" + (f"/p{k}" if k else ""), []).append(rec)
+                types.setdefault(f"{dev}/{st['tag']}", []).append(rec)
     for key, recs in sorted(types.items()):
         recs.sort(key=lambda r: r["n"])
         macs, r0 = recs[0]["macs"], recs[0]

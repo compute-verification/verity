@@ -34,11 +34,12 @@ Files:
   at each size of `PT_NS`, on one leased GPU (`PT_DEVICE=gpu`) or the CPU prover (`cpu`); `prove_time.py` fits each type's
   fixed seconds a statement and seconds a block, and on a GPU gives its proof overhead (seconds a block × the card's peak MACs
   a second ÷ the block's MACs), marginal and amortized at each size. `PT_STATEMENTS` proves statements staged elsewhere as
-  they are, and `PT_PROVERS="1 4"` proves each one by K prover processes at once on the one device as well, priced from
-  their throughput.
+  they are. It times one prover on the device; K provers at once are `benchmarks/one_stage/server_rate.py`'s, which times
+  them on the verifier's clock.
 - `stage_window.py WINDOW_DIR OUT (--member K | --pick P N)`: a served window's member (a TP Commit's `--serving-rows`
   window, or `verity-vllm tp-serving-rows`') as its served statement for `PT_STATEMENTS`: the verifier's circuit for its
   template bound to the window's digests, and the window's own bodies (its `inst.bin` is the prover's: keep OUT private).
+  `server_rate.py` takes OUT as `Z/<type>/c<n>/stage`.
 
 From the source tree's root on a CPU node with 160 GB for the job (results go to `$RESEARCH_RUN_DIR/out`; `SU_CACHE` keeps
 builds and stagings between runs):

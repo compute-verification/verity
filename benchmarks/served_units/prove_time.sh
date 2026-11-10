@@ -18,15 +18,13 @@
 #      (LIGERITO_TRACE=1 PCS_TRACE=1 LINCHECK_TRACE=1, into prove.err)
 #      PT_STATEMENTS="DIR ...": statement directories staged elsewhere (stage_window.py's served members), each proved as it
 #      is under its directory's name after PT_UNITS' (which then defaults to none)
-#      PT_PROVERS="1 4": each statement proved by each count K of prover processes at once on the one device (K above 1: the
-#      overlap, each prover's FC_VERIFY_AHEAD sessions awaiting their verdicts; prove_time.py prices it from the throughput)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/served-units-time}/out; mkdir -p $O
 DEV=${PT_DEVICE:-gpu}; case $DEV in gpu | cpu) ;; *) echo "PT_DEVICE is gpu or cpu, not $DEV"; exit 1 ;; esac
 FW=${FLOCK_WORK:-/workspace/tmp/served-units-time-$DEV}; mkdir -p $FW || exit 1
 STMTS=${PT_STATEMENTS:-}; [ -n "$STMTS" ] && UNITS=${PT_UNITS:-} || UNITS=${PT_UNITS:-"fp8-coord:K=6144 fp8-coord:K=6144+public-weights"}
-NS=${PT_NS:-"16 64"}; JOBS=${PT_JOBS:-4}; PROVERS=${PT_PROVERS:-1}
+NS=${PT_NS:-"16 64"}; JOBS=${PT_JOBS:-4}
 for s in $STMTS; do for f in circuit.txt pub.bin inst.bin stage.json; do
   [ -s $s/$f ] || { echo "PT_STATEMENTS: $s has no $f (stage_window.py stages one)"; exit 1; }; done; done
 WARM=${WARM:-1}; RUNS=${RUNS:-3}; NSESS=$((WARM + RUNS)); SM=${SM:-120}; STEPS=${STEPS:-"build stage prove"}
@@ -42,7 +40,7 @@ BUILT=$FW/flock-gpu-link/flock/target/release/flock-circuit; B=${PT_BINARY:-$BUI
 has() { case " $STEPS " in *" $1 "*) return 0 ;; esac; return 1; }
 { echo "device=$DEV cpus=$CPUS prover=$PCPU verifier=$VCPU"; lscpu | grep -E 'Model name|^CPU\(s\)'; free -g | head -2
   [ $DEV = gpu ] && nvidia-smi --query-gpu=name,driver_version,memory.total,clocks.max.sm --format=csv; } > $O/host.txt 2>&1
-echo "device=$DEV units=$UNITS ns=$NS statements=$STMTS provers=$PROVERS warm=$WARM runs=$RUNS" > $O/config.txt
+echo "device=$DEV units=$UNITS ns=$NS statements=$STMTS warm=$WARM runs=$RUNS" > $O/config.txt
 
 if has build; then
   echo "== build $(date -u +%T)"
@@ -101,37 +99,24 @@ gpu_sample() {
     sleep 0.2
   done > $1/smi.tsv
 }
-# session UNIT N [K]: stage.py's statement's sessions (session_at)
-session() { session_at $(name $1 $2) $FW/data/$(name $1 $2)-$KEY ${3:-1}; }
-# session_at NAME DIR [K]: a verifier process and WARM + RUNS prover sessions against DIR's statement, into $O/$DEV/NAME; with K
-# above 1 (PT_PROVERS), K prover processes at once on the one device against the one verifier, each into its own prove-<i>.tsv,
-# into $O/$DEV/NAME-pK
+# session UNIT N: stage.py's statement's sessions (session_at)
+session() { session_at $(name $1 $2) $FW/data/$(name $1 $2)-$KEY; }
+# session_at NAME DIR: a verifier process and WARM + RUNS prover sessions against DIR's statement, into $O/$DEV/NAME
 session_at() {
-  local K=${3:-1} d=$2 G= GS=; local nm=$1$([ $K = 1 ] || echo -p$K); local o=$O/$DEV/$nm
+  local nm=$1 d=$2 G= GS=; local o=$O/$DEV/$nm
   [ $DEV = gpu ] && G=--gpu
   mkdir -p $o $O/stage/$nm; rm -rf $d/sessions; cp $d/stage.json $O/stage/$nm/
   local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1)
   taskset -c $VCPU $B serve --zk --listen 127.0.0.1:$PORT --out $d/sessions --instances $d/pub.bin --circuit $d/circuit.txt \
-    --pin $PIN --operator loopback --concurrency $((K * (NSESS + 1))) > $o/serve.log 2>&1 &
+    --pin $PIN --operator loopback --concurrency $((NSESS + 1)) > $o/serve.log 2>&1 &
   local SP=$!
   wait_serving $o/serve.log $SP || { tail -20 $o/serve.log; return 1; }
   [ $DEV = gpu ] && { gpu_sample $o & GS=$!; }
-  local PERF=; [ "${PT_PERF:-0}" = 1 ] && [ $K = 1 ] && PERF="perf record -q -F ${PT_PERF_HZ:-499} -o $o/perf.data --"
-  if [ $K = 1 ]; then
-    RAYON_NUM_THREADS=$((NC - VC)) FC_VERIFY_AHEAD=$NSESS taskset -c $PCPU /usr/bin/time -v -o $o/time-prove.txt $PERF $B prove --zk $G \
-      --verifier 127.0.0.1:$PORT --instances $d/inst.bin --circuit $d/circuit.txt --warm $WARM --runs $RUNS \
-      2> $o/prove.err | stamp > $o/prove.tsv
-    echo "prove $nm exit ${PIPESTATUS[0]}: $(grep -o '"accepted":[a-z]*' $o/prove.tsv | sort | uniq -c | tr '\n' ' ')$(grep -o '"why":"[^"]*"' $o/prove.tsv | sort -u | head -2 | tr '\n' ' ')"
-  else
-    local pids=() i
-    for i in $(seq $K); do
-      RAYON_NUM_THREADS=$(((NC - VC) / K)) FC_VERIFY_AHEAD=$NSESS taskset -c $PCPU $B prove --zk $G --verifier 127.0.0.1:$PORT \
-        --instances $d/inst.bin --circuit $d/circuit.txt --warm $WARM --runs $RUNS 2> $o/prove-$i.err | stamp > $o/prove-$i.tsv &
-      pids+=($!)
-    done
-    wait "${pids[@]}"
-    echo "prove $nm ($K provers): $(cat $o/prove-*.tsv | grep -o '"accepted":[a-z]*' | sort | uniq -c | tr '\n' ' ')"
-  fi
+  local PERF=; [ "${PT_PERF:-0}" = 1 ] && PERF="perf record -q -F ${PT_PERF_HZ:-499} -o $o/perf.data --"
+  RAYON_NUM_THREADS=$((NC - VC)) FC_VERIFY_AHEAD=$NSESS taskset -c $PCPU /usr/bin/time -v -o $o/time-prove.txt $PERF $B prove --zk $G \
+    --verifier 127.0.0.1:$PORT --instances $d/inst.bin --circuit $d/circuit.txt --warm $WARM --runs $RUNS \
+    2> $o/prove.err | stamp > $o/prove.tsv
+  echo "prove $nm exit ${PIPESTATUS[0]}: $(grep -o '"accepted":[a-z]*' $o/prove.tsv | sort | uniq -c | tr '\n' ' ')$(grep -o '"why":"[^"]*"' $o/prove.tsv | sort -u | head -2 | tr '\n' ' ')"
   if [ -n "$PERF" ]; then
     perf report -q -i $o/perf.data --stdio --no-children --sort symbol --percent-limit 0.2 > $o/perf.txt 2> $o/perf-report.err
     rm -f $o/perf.data
@@ -145,14 +130,14 @@ if has prove; then
   echo "== prove ($DEV) $(date -u +%T)"
   if [ $DEV = gpu ]; then
     export -f session session_at name gpu_sample free_port wait_serving stamp
-    export B O FW KEY DEV PCPU VCPU NC VC NSESS WARM RUNS UNITS NS STMTS PROVERS
+    export B O FW KEY DEV PCPU VCPU NC VC NSESS WARM RUNS UNITS NS STMTS
     GPU_LEASE_WHO=${GPU_LEASE_WHO:-served-units-time} gpu-lease 1 --wait --max-min ${LEASE_MIN:-30} -- bash -c '
       nvidia-smi -L > $O/lease-gpu.txt
-      for k in $PROVERS; do for u in $UNITS; do for n in $NS; do session $u $n $k; done; done
-        for s in $STMTS; do session_at $(basename $s) $s $k; done; done'
+      for u in $UNITS; do for n in $NS; do session $u $n; done; done
+      for s in $STMTS; do session_at $(basename $s) $s; done'
   else
-    for k in $PROVERS; do for u in $UNITS; do for n in $NS; do session $u $n $k; done; done
-      for s in $STMTS; do session_at $(basename $s) $s $k; done; done
+    for u in $UNITS; do for n in $NS; do session $u $n; done; done
+    for s in $STMTS; do session_at $(basename $s) $s; done
   fi
 fi
 echo "== summary $(date -u +%T)"
