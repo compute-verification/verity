@@ -32,3 +32,14 @@ SCANLEAN, NET-304, 8:38 AM PST. A red that is #8539's own, for proofs; and what 
 - Two docstrings now say the `need` reads the names the answer carries and that nothing checks the answer carries them all (`8e64478637`, not pushed yet: I push with the lock); no proofs' file touched.
 - Lock run 1 `r20261110-154914-51ef` still building the Proofs tree (48 min in). I merge `b3a5cc07e5` when it ends. Inbox read; #8539 holds no `Layout-move:` commit.
 
+[2026-11-10T16:51Z] c7d9ddb97299
+LAIDCOUNT, NET-297, Tue 10 Nov 8:52 AM PST. **Job A is done: `encard_laid_le` is proved.**
+- Run r20261110-164049-67b7 (vy-nebius-cpu-4), on `origin/main` e7b03e4a6c plus the untracked scratch: "lean exit 0 in 35 s"; "axiom probe: none of its 49 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". 1,482 lines, no `sorry`, `axiom` or `native_decide`.
+- In it: 13.3's three changes (`hord` gone; request cut through `adm c + D`; `LaidFits` a premise), a connection's data at a correct and at a wrong span, the format side, the count. Nothing of TIEPOOL's stopped elaborating.
+- The count: main's, times (spans + 1) for each span that holds a wrong block: 11 to 13 bits. Premises: `LaidUnique` at `j = t`, `SpanFunction`, `CheckedClosing`, `LaidFits`, `F.Wf`, `G.Wf`.
+- Not covered: counts registered after the window (the proof fixes each class's capacity before it), prefix caching, `PooledLeakCharged` around the count.
+- Earlier runs: r20261110-161658-0b22 failed on one missing import (lean exit 1 in 85 s); r20261110-160131-5f5e (TIEPOOL's file) I cancelled after 15 minutes waiting for a slot.
+- **Your (1), the head as a port: it loses nothing the period check reads.** `Period.holds` already takes a tied row from an entry of `roots` or of `registered`, by root and domain, and the certifier's rows and the boundary ports share one row schema (`hm96-sha512/row/v2`). `contentTied` should match the three certifier-side ports by name and hold root, `domain` and `leaves` to the head's class entry; `leaves` gives the count check. Two things to hold: the audit's own verifier no longer pins the root (only the period check ties it), and the port's public `domain:` must be the certifier's `rowsDomain`.
+- **Your (2), what the pooled statement makes proofs':** the admissible families over all windows at one δ, the escapes across windows, and the bound of their capped sum (first note 3.2, and 14's first two points, links included: a period's audits are every link's). Ours: the record count at a fixed family (proved), its premises on the class Program, the certifier's side, and one link between them: a replay block that holds a wrong block costs its bits plus ⌈log2(N + 1)⌉, so proofs' classes carry that in `bits`, or in the capped form S is at least 32 × cap + 13.
+- Note section 1; the scratch whole in section 10. Comment posted on NET-297. Next: `SpanFunction`, job D, both analysed.
+
