@@ -27,7 +27,8 @@ Every route is `api/index.py`, the FastAPI app `slack_events/app.py` builds; `se
 ## Modules
 
 All under `service/`, the Vercel project's Root Directory: Python 3.13 on Fluid Compute, `framework: null`, installed
-from `service/pyproject.toml` (which the uv workspace excludes, so Vercel installs it alone).
+from `service/pyproject.toml` and its `service/uv.lock`, which hashes every package (the uv workspace excludes
+them, so Vercel installs them alone; `uv lock` in `service/` after a pin moves).
 
 | Module | What it is |
 |---|---|

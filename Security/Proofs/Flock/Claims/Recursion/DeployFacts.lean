@@ -78,7 +78,7 @@ open FlockDeploy (Coin)
 /-- **A run accepts only where its verifier's step does.** -/
 theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (vnext : List Claims.Msg → Claims.OC Claims.Out) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       (Claims.stepWith H P x ω vnext n hist as t).out = .acc → ∃ as', ((vnext as').eval H).1 = .acc
   | 0, _, _, _, h => by simp [Claims.stepWith] at h
   | n + 1, hist, as, t, h => by
@@ -93,7 +93,7 @@ the run's `m` new messages are the replayed ones from `hist.length` on, and any 
 run. -/
 theorem stepWith_replay (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (vnext : List Claims.Msg → Claims.OC Claims.Out)
     (ms : List Claims.Msg) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       ∃ m, (Claims.stepWith H (Claims.replay ms) x () vnext n hist as t).msgs.map Prod.fst =
           t.msgs.map Prod.fst ++ (List.range m).map (fun i => ms.getD (hist.length + i) []) ∧
         ∀ ms' : List Claims.Msg, (∀ i < m, ms'.getD (hist.length + i) [] = ms.getD (hist.length + i) []) →

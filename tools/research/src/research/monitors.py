@@ -679,6 +679,28 @@ def node_heartbeat(ctx: Ctx) -> list[Finding]:
     return found
 
 
+def redirected_base(url: str, key: str) -> str:
+    """The base that `url` redirects `key` to, or `url` itself when it doesn't redirect. The site's edge denies a burst of
+    anonymous HEADs from one address (`X-Vercel-Mitigated: deny`), so the burst goes to where the site redirects."""
+    import urllib.error
+    import urllib.request
+
+    class Stay(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None
+
+    req = urllib.request.Request(f"{url}/{key}", method="HEAD", headers={"User-Agent": "research-store-fetch"})
+    try:
+        urllib.request.build_opener(Stay).open(req, timeout=30).close()
+    except urllib.error.HTTPError as e:
+        loc = (e.headers.get("Location") or "").split("?")[0]
+        if e.code in (301, 302, 303, 307, 308) and loc.endswith(f"/{key}"):
+            return loc[: -len(key) - 1]
+    except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        print(f"monitors: the store's redirect probe failed ({type(e).__name__}: {e}); reading {url} directly", file=sys.stderr)
+    return url
+
+
 def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
     """The ids in `arts` whose manifest the public export at `url` doesn't hold. The export writes a manifest after its blobs, so
     a manifest there means the fixture is whole."""
@@ -688,9 +710,10 @@ def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
     from .store.local import manifest_key
     from .store.remote import HttpRemote
 
-    pub = HttpRemote(url)
+    keys = [manifest_key(ids.hex_of(a)) for a in arts]
+    pub = HttpRemote(redirected_base(url, keys[0]) if keys else url)
     with ThreadPoolExecutor(max_workers=jobs) as ex:
-        held = list(ex.map(lambda a: pub.head(manifest_key(ids.hex_of(a))) is not None, arts))
+        held = list(ex.map(lambda k: pub.head(k) is not None, keys))
     return [a for a, h in zip(arts, held) if not h]
 
 
@@ -710,6 +733,27 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
                     + ", ".join(f"`{a[:16]}…`" for a in gone[:5]) + (f" and {len(gone) - 5} more" if len(gone) > 5 else "")
                     + ". A node or pod without the store's key can't fetch them.",
                     cleared="*Cleared:* the public export holds every fixture main registers.")]
+
+
+#: the verified queue's decision log on the control pod (the live loop's `--log`), its last line's `at` the last decision
+VQUEUE_DECISIONS = "data/vqueue/live/decisions.jsonl"
+UNVERIFIED_S = 3 * 3600
+
+
+def unverified_main(ctx: Ctx) -> list[Finding]:
+    """The verified queue, the one path `main` moves by, has decided nothing for over `UNVERIFIED_S`: a loop stopped or stuck,
+    and every marked PR waits with nobody outside ci told. Timed from its decisions file's (`VQUEUE_DECISIONS`) last
+    decision, else the file's own time; one event per further hour, to ci and top, until the queue decides again. A queue
+    that decides is ci's, which it rings itself; a file this can't read is the monitor's own finding, in time."""
+    decisions = ctx.root / VQUEUE_DECISIONS
+    lines = [ln for ln in decisions.read_text().splitlines() if ln.strip()]
+    last = json.loads(lines[-1]).get("at") if lines else None
+    since = calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ")) if last else decisions.stat().st_mtime
+    if (behind := ctx.now - since) < UNVERIFIED_S:
+        return []
+    hours = int(behind // 3600)
+    return [Finding(f"vqueue:{hours}", f"*The verified queue has decided nothing for {hours} h*: its last decision in "
+                    f"`/{VQUEUE_DECISIONS}` is from {iso(since)}, and `main` moves only through it.", owners=("ci", "top"))]
 
 
 # ---- every machine: its memory, the runs infrastructure killed, the peers it watches, the checks lost -----------------------------
@@ -1378,6 +1422,11 @@ MONITORS: list[Monitor] = [
             "`not local and not on any source` was registered without `research data push`, so ask whoever registered it to push "
             "it; a loop that isn't running is restarted with `setsid -f /data/infra/fixtures_export.sh`.",
             every_s=900, for_s=1800, unread_s=4 * 3600),
+    Monitor("unverified-main", "ci", "warn", "relay", unverified_main,
+            "Read the end of the live loop's decision log (`/data/vqueue/live/decisions.jsonl`) and its output on the control "
+            "pod: start a loop that stopped again, or fix what a stuck one fails on each tick. It rings again each hour until "
+            "the queue decides again.",
+            every_s=600, events=True, unread_s=3600),
 ]
 BY_ID = {m.id: m for m in MONITORS}
 

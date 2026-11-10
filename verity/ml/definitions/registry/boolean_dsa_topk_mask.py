@@ -290,3 +290,7 @@ DsaTopKRowV2 = EW.on_bits("DsaTopKRow", 2, ["N", "TOPK"], lambda S: ((("scores",
 BOOLEAN_DSA_TOPK_MASK = [DsaTopKKeyV2, DsaRadixPass, DsaRadixTies, DsaTopKMaskV2, DsaRowValid, DsaTopKMaskCountedV2,
                          DsaButterflyTagBits, DsaButterflyCtl, DsaButterflySettingsV2, DsaButterflyRowsV2, DsaButterflyRowsPadV2,
                          DsaTopKRowV2]
+
+#: `dsa_topk_mask.CUTS` on bits: the counted mask past `dsa_topk_mask_cut.WHOLE_MAX` keys as `dsa_topk_mask_cut`'s units, which
+#: import this module
+CUTS = {"DsaTopKMaskCounted_v2": "verity.ml.definitions.registry.dsa_topk_mask_cut"}

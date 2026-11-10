@@ -778,6 +778,18 @@ theorem kept_nil (b : Bool) (c : Array String) (x : String) :
     Registration.kept b c x = #[] ↔ c = #[] ∧ b = true := by
   cases b <;> simp [Registration.kept, addCode_ne_nil]
 
+/-- R6's pool codes (`Registration.poolMarks`) add none exactly when the window names the pool's reset, week and spent
+mark and no reset falls where the week's is spent before it. -/
+theorem poolMarks_nil (w : Json) (pool : Option Registration.Pool) (log : Array Json) (c : Array String) :
+    Registration.poolMarks w pool log c = #[] ↔ c = #[] ∧
+      jeq (getD w "pool_reset") (match pool with | some p => .bool p.reset | none => .null) = true ∧
+      jeq (getD w "pool_week") (match pool with | some p => Lean.toJson p.week | none => .null) = true ∧
+      jeq (getD w "pool_spent")
+        (match pool with | some p => .bool (p.reset || p.spentBefore log) | none => .null) = true ∧
+      (match pool with | some p => !(p.reset && p.spentBefore log) | none => true) = true := by
+  rw [Registration.poolMarks, kept_nil, kept_nil, kept_nil, kept_nil]
+  exact ⟨fun ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩ => ⟨a, r, wk, s, o⟩, fun ⟨a, r, wk, s, o⟩ => ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩⟩
+
 theorem any_false_iff {α : Type} (xs : Array α) (p : α → Bool) : xs.any p = false ↔ ∀ x ∈ xs, p x = false := by
   rw [Bool.eq_false_iff, ne_eq, Array.any_eq_true']
   simp
@@ -828,23 +840,23 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 jD j4 j3 j2
     j1 j0 c1
   have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ PoolResetOnce v ∧
-      (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ True := by
+  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧
+      WindowPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ True := by
     intro c
     simp only [j13]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
-      rw [h14, kept_nil, checkOutputs_nil, kept_nil, kept_nil, kept_nil, poolChained_iff]
-      exact ⟨fun ⟨⟨⟨⟨⟨⟨a, s⟩, r⟩, o⟩, b⟩, q⟩, _⟩ => ⟨a, s, r, o, ⟨b, q⟩, trivial⟩,
-        fun ⟨a, s, r, o, ⟨b, q⟩, _⟩ => ⟨⟨⟨⟨⟨⟨a, s⟩, r⟩, o⟩, b⟩, q⟩, trivial⟩⟩
-    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, kept_nil]
-      exact ⟨fun ⟨⟨⟨⟨a, s⟩, r⟩, o⟩, _⟩ => ⟨a, s, r, o, trivial, trivial⟩,
-        fun ⟨a, s, r, o, _⟩ => ⟨⟨⟨⟨a, s⟩, r⟩, o⟩, trivial⟩⟩
+      rw [h14, kept_nil, checkOutputs_nil, poolMarks_nil, kept_nil, poolChained_iff]
+      exact ⟨fun ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, _⟩ => ⟨a, s, r, wk, p, o, ⟨b, q⟩, trivial⟩,
+        fun ⟨a, s, r, wk, p, o, ⟨b, q⟩, _⟩ => ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, trivial⟩⟩
+    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, kept_nil, poolMarks_nil]
+      exact ⟨fun ⟨⟨⟨a, s⟩, r, wk, p, o⟩, _⟩ => ⟨a, s, r, wk, p, o, trivial, trivial⟩,
+        fun ⟨a, s, r, wk, p, o, _⟩ => ⟨⟨⟨a, s⟩, r, wk, p, o⟩, trivial⟩⟩
   have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
       jeq (getD (get "window") "stream") (.str sp.1) = true ∧
       jeq (getD (get "window") "prover") (.str sp.2) = true) ∧
-      (WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧
-        True) := by
+      (WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v ∧
+        (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ True) := by
     intro c
     simp only [j12]
     rcases hb : v.binding with _ | ⟨stream, prover⟩
@@ -1017,16 +1029,16 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   rw [ek, ef, e7]
   constructor
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hdecl, hsch, hroots, hports,
-      h7', h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h7r, _⟩
+      h7', h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h7r, _⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
     exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop, hdecl⟩,
-      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f⟩,
-      fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩⟩
+      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5',
+      ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩⟩
   · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop, hdecl⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f⟩, h7r⟩
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, h7r⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4',
-      h5', h6a, h6b, h6c, h6d, h6e, h6f, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, trivial⟩
+      h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, trivial⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3

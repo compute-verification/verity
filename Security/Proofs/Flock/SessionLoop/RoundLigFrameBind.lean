@@ -240,7 +240,7 @@ theorem sched_lig {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : Byte
     (coin : ℕ → ℕ → F128) (l : Array Claims.Msg) (hc : CoinAt coin l.size (cr.extract alg.size cr.size).toList)
     {n : ℕ} (hnl : l.size + (cr.size - alg.size) = n) :
     cr.size < sched.size ∧
-      ∃ (T : F128) (sws : Array _root_.Flock.Switched) (tr₂ : Transcript) (l₂ L : Array Claims.Msg),
+      ∃ (T : F128) (sws : Array _root_.Flock.Switched) (tr₂ : Flock.Transcript) (l₂ L : Array Claims.Msg),
         l₂.size = l.size + (xs.size + 2) + 1 ∧
         (∃ zc lc, FlockComplete.LigLock.Fed.PtsAt t.st.m t.st.fold.kLog
             (FlockComplete.LigLock.Fed.recCoin (cr.extract 0 alg.size)) 0 zc lc ∧

@@ -10,12 +10,14 @@ records run's, the jobs and kinds its graph lacks, and the `queue/*` branches it
 The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`refs/vqueue/`), so drive's clone, its worktree and
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
-`signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner or under the low-risk
-rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by
-its merge), not on `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files`
-is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`), and `conflict`
-whether `Queue._merge` merges it onto `main`, kept by (head, `main`).  The owner of one that doesn't is told once a head the
-files it conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`); its mark stays.
+`signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner (its head's, or with
+drive.toml's `verdict_carry` "on" at `main` one the verdict carry takes from another of its heads whose commits since only
+merge trusted ones, `Landing._carried_from`, each decision logged once a head: `carry`) or under the low-risk rule (drive.toml's
+`lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by its merge), not on
+`main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files` is its change
+against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`), and `conflict` whether
+`Queue._merge` merges it onto `main`, kept by (head, `main`).  The owner of one that doesn't is told once a head the files it
+conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`); its mark stays.
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
@@ -144,14 +146,15 @@ from operator import or_
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import policy, vqueue, vqueue_records
+from . import carry, policy, vqueue, vqueue_records
 from .landing import (CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Landing, cancel_runs, gating,
                       merge_thread_post)
 from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
-from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, conflicting_files, flags_at,
-                    label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at,
-                    unreviewed)
+from .queue import (PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, conflicting_files,
+                    flags_at, label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners,
+                    rules_at, unreviewed)
+from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
                      Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
 from .vqueue_records import LOCK_SUBJECT
@@ -357,6 +360,10 @@ class Past:
 
     def ignored(self) -> set[tuple[str, str]]:
         return {(r.get("ref"), r.get("sha")) for r in self.of("ignore")}
+
+    def carries(self) -> dict[tuple[int, str], str]:
+        """The newest verdict carry decision logged of each PR's head (`World._carry`), by (number, head)."""
+        return {(r.get("number"), (r.get("heads") or [""])[0]): r.get("why") for r in self.of("carry")}
 
     def flaked(self) -> set[str]:
         return {r.get("key") for r in self.of("flaky") if r.get("done") or r.get("shadow")} | self._posting(
@@ -591,6 +598,11 @@ class World:
         #: by (head, `main`): its files (`_changed`), and (lean, conflict) (`_judge`)
         self._files: dict[tuple[str, str], frozenset[str]] = {}
         self._judged: dict[tuple[str, str], tuple[bool, bool]] = {}
+        #: each `carry.delta` judged, by its arguments (`_delta`)
+        self._deltas: dict[tuple[str, str, tuple[str, ...], frozenset[str]], carry.Delta] = {}
+        #: what the last `ready` decided of the verdict carry (`_carry`): {number: its head, the older head, why, whether it
+        #: carries}
+        self.carried: dict[int, dict] = {}
         self._prs: dict[int, PR] | None = None
         self._driver: Landing | None = None
         self._slim: Landing | None = None
@@ -667,20 +679,25 @@ class World:
         old = _git(self.repo, "rev-parse", "-q", "--verify", f"{CHECKED}^{{commit}}", check=False).stdout.strip()
         entries = q.entries(prs, q.load_state(), base=main, landed=main, queued=main, open_numbers=set(self.open()),
                             old_landed=old or None)
+        landed = (main, old) if old else (main,)
         flags = flags_at(self.repo, main)
         excludes = tuple(flags.lowrisk_excludes) if flags.lowrisk_lane else ()
         self._files = {k: v for k, v in self._files.items() if k[1] == main}
         self._judged = {k: v for k, v in self._judged.items() if k[1] == main}
+        self._deltas = {k: v for k, v in self._deltas.items() if k[2] == landed}
         admitted = [n for n, e in entries.items() if e.state == "ready"]
+        why = {n: unreviewed(labels.reviews(n, entries[n].pr.head),
+                             review_owners(q, labels, n, entries[n].pr.head, entries[n].pr.owner, self.open()))
+               for n in admitted}
+        try:
+            carried = self._carry(list(landed), entries, why, flags.verdict_carry)
+        except Exception as e:  # noqa: BLE001 -- the carry never stops the reading, which takes the verdicts as they are
+            self.log(f"research queue vqueue: the verdict carry didn't run: {type(e).__name__}: {e}")
+            carried, self.carried = set(), {}
         with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:
             files = dict(zip(admitted, pool.map(lambda n: self._changed(main, entries[n].pr.head), admitted)))
-            took = []
-            for n in admitted:
-                p, reviews = entries[n].pr, labels.reviews(n, entries[n].pr.head)
-                landing = unreviewed(reviews, review_owners(q, labels, n, p.head, p.owner, self.open())) is None
-                held = (unreviewed(reviews, ()) or "").startswith("held")
-                if landing or not p.move and not held and lowrisk(files[n], excludes):
-                    took.append(n)
+            took = [n for n in admitted if why[n] is None or n in carried
+                    or not entries[n].pr.move and not (why[n] or "").startswith("held") and lowrisk(files[n], excludes)]
             specs, clears = self._frozen()
             if specs:                                       # a PR's own change: above `checked` while `main` doesn't hold it
                 below = old if old and not self._ancestor(old, main) else main
@@ -739,6 +756,69 @@ class World:
             self.log(f"research queue vqueue: #{p.number} at {p.head[:12]} waits for the freeze to end ({self.frozen_file}): it "
                      f"renames or deletes {len(hits)} file(s) under its paths: {'; '.join(hits[:5])}")
         return bool(hits)
+
+    def _carry(self, landed: list[str], entries: dict[int, Entry], why: dict[int, str | None], mode: str) -> set[int]:
+        """The verdict carry (`carry`), as drive.toml's `verdict_carry` at `main` says: an admitted PR with no land verdict at
+        its head (``why``, `queue.unreviewed`'s) takes the newest at another of its heads with verdicts of their own when
+        `Landing._carried_from` says so, trusting ``landed`` (`main`, and the old path's `checked` while origin has it) and the
+        heads of the admitted PRs judged before it that land on their verdicts or carry one, a PR judged after those it contains
+        (`Entry.after`).  Each decision is kept in `carried`, which the loop logs once a head.  With "on" the PRs carried
+        (returned) count as reviewed; with "shadow" none does.  No verdict is written."""
+        self.carried = {}
+        if mode not in ("shadow", "on"):
+            return set()
+        heads: dict[int, list[str]] = {}
+        for n, w in why.items():
+            if w is None:
+                continue
+            try:
+                if hs := sorted(self.labels._other_heads(n, entries[n].pr.head, vocab.REVIEWED)):
+                    heads[n] = hs
+            except QueueError as e:
+                self.log(f"research queue vqueue: #{n}'s other heads can't be read, so no verdict carries to it now: {e}")
+        if not heads:
+            return set()
+        self.labels.prefetch([(n, h) for n, hs in heads.items() for h in hs])
+        d, trusted, out, order = self.driver(), set(), set(), []
+
+        def visit(n: int, path: tuple[int, ...] = ()) -> None:
+            if n in order or n in path or n not in why:
+                return
+            for a in entries[n].after:
+                visit(a, (*path, n))
+            order.append(n)
+
+        for n in sorted(why):
+            visit(n)
+        for n in order:
+            p = entries[n].pr
+            if why[n] is None:
+                trusted.add(p.head)
+                continue
+            if n not in heads:
+                continue
+            try:
+                got = d._carried_from(Member(n, p.head, p.owner or "", ""), heads[n], why[n], landed, trusted)
+            except Exception as e:  # noqa: BLE001 -- one PR's failure leaves the others judged
+                got = "?", f"it can't be judged: {type(e).__name__}: {e}", False
+            if got is None:
+                continue
+            old, because, ok = got
+            if ok:
+                trusted.add(p.head)
+                if mode == "on":
+                    out.add(n)
+            verb = ("carried" if ok else "did not carry") if mode == "on" else ("would carry" if ok else "would not carry")
+            self.carried[n] = {"head": p.head, "old": old, "carries": ok,
+                               "why": f"{verb} #{n}'s land from {old[:12]} to {p.head[:12]} ({because})"}
+        return out
+
+    def _delta(self, old: str, new: str, landed: list[str], trusted: set[str]) -> carry.Delta:
+        """`carry.delta` of ``new`` over ``old`` (`Landing.delta`), kept by its arguments: judging a merge takes a `git
+        merge-tree`, and each tick judges every carry again."""
+        if (key := (old, new, tuple(landed), frozenset(trusted))) not in self._deltas:
+            self._deltas[key] = carry.delta(self.repo, old, new, carry.trust(self.repo, landed, trusted))
+        return self._deltas[key]
 
     def _changed(self, main: str, head: str) -> frozenset[str]:
         """The files ``head`` changes against its merge base with ``main``."""
@@ -1211,8 +1291,13 @@ class World:
         return bool(self.post(f"{' '.join(to)} vqueue: {text}", to))
 
     def driver(self) -> Landing:
+        """The landing's steps as the loop runs them (`Landing`): on the labels and the open PRs this tick reads, each
+        `carry.delta` kept (`_delta`)."""
         if self._driver is None:
-            self._driver = Landing(self.q, on="", post=self.post, now=self.now)
+            self._driver = Landing(self.q, on="", post=self.post, now=self.now, reviews=lambda n, h: self.labels.reviews(n, h),
+                                   ready_by=lambda n, h: self.labels.ready_by(n, h))
+            self._driver.delta = self._delta
+        self._driver._prs = self.open()
         return self._driver
 
     def slim_driver(self) -> Landing:
@@ -1497,6 +1582,8 @@ class Tick:
     below: dict | None = None
     #: each candidate's records run's record as the snapshot judged it (`Loop._records_run`), by sha
     records: dict[str, dict] = field(default_factory=dict)
+    #: the verdict carry's decisions (`World.carried`)
+    carried: dict[int, dict] = field(default_factory=dict)
 
 
 class Loop:
@@ -1584,7 +1671,7 @@ class Loop:
         snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth,
                         lean=self.lean, now=self.now(), pending_s=self.pending_s, tree_ejects=self.tree_ejects,
                         records=self.records is not None)
-        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen)
+        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried))
 
     def _records_run(self, past: Past, n: int, main: str, origin: str, sha: str, built: dict, wrote: list[dict],
                      regen: dict[str, dict]) -> RecordsRun | None:
@@ -1718,8 +1805,9 @@ class Loop:
             self.out("\n".join(f"would {_name(a)}: {a}" for a in actions) or "nothing to do")
             return []
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
-               for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._flaky(t) + self._bases(t) \
-            + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t)) + self._conflicts(t)
+               for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._carried(t)
+        new += self._flaky(t) + self._bases(t) + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t)) \
+            + self._conflicts(t)
         new += self._launched(t)
         new += [self._on_main(t, adv, told) for adv, told in t.past.moved()]
         for rec in new:
@@ -1794,6 +1882,7 @@ class Loop:
                          + "".join(f"\n  failed {f.task} {f.key[:19]}" for f in c.verdict.failed)
                          + "".join(f"\n  infra {f.task} {f.key[:19]}" for f in c.verdict.infra))
         lines.append(f"history {len(s.history)}: " + " ".join(o.state for o in s.history[-10:]))
+        lines += [c["why"] for _, c in sorted(t.carried.items())]
         lines += [f"ignored queue/{name} at {sha[:12]}: no build of the loop's" for name, sha in t.foreign.items()]
         return "\n".join(lines)
 
@@ -2117,6 +2206,12 @@ class Loop:
             what = f"enqueuing it again failed too ({str(e)[-200:]}): the next tick tries again"
         return self.record(t, "rerun", **line, why=f"graph2 refused the rerun ({why[-200:]}): {what}", failed=failed,
                            keys=list(keys), done=False)
+
+    def _carried(self, t: Tick) -> list[dict]:
+        """Each verdict carry decision of the tick's `ready` (`World._carry`), logged once a head while it says the same."""
+        said = t.past.carries()
+        return [self.record(t, "carry", members=[n], heads=[c["head"]], number=n, why=c["why"], old=c["old"],
+                            carries=c["carries"]) for n, c in sorted(t.carried.items()) if said.get((n, c["head"])) != c["why"]]
 
     def _flaky(self, t: Tick) -> list[dict]:
         """Ring the owners of each test graph2 says flaked (its verdict's `flaky`: a fail a rerun replaced), once a key: a test

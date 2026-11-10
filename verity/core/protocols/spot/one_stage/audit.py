@@ -134,15 +134,16 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
         checks["served"] = {"ok": False, "codes": ["served"], "detail": {"served": sorted(served)[:16], "drawn": list(draw["units"])[:16]}}
     if session_roots is not None:
         registered = {r["port"]: r["root"] for r in registration["roots"]}
-        wrong = sorted(p for p, r in session_roots.items() if registered.get(p) != r)
+        wrong = sorted(p for p, r in session_roots.items() if p not in registered or registered[p] != r)
         if not session_roots or wrong:
             checks["roots"] = {"ok": False, "codes": ["roots"], "detail": {"ports": wrong}}
     if "registered" in registration or session_registered is not None:
         want = {e["value"]: e["root"] for e in registration.get("registered", [])}
-        if dict(session_registered or {}) != want:
+        opened = dict(session_registered or {})
+        if opened != want:
             checks["registered"] = {"ok": False, "codes": ["registered"],
-                                    "detail": {"registered": sorted(want), "opened": sorted(session_registered or {}),
-                                               "wrong": sorted(v for v in want if (session_registered or {}).get(v) != want[v])}}
+                                    "detail": {"registered": sorted(want), "opened": sorted(opened),
+                                               "wrong": sorted(v for v in want if v not in opened or opened[v] != want[v])}}
     ran = {k: v for k, v in verdicts.items() if v.get("accepted") is not None}
     of_record = [v for v in verdicts.values() if v.get("of_record")]
     accepted = (bool(of_record) and all(v.get("accepted") is True for v in of_record)

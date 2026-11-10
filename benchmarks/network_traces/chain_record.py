@@ -180,7 +180,8 @@ def eps_at_delta(n: int, k: int, law: str) -> dict:
     return {"law": law, "units": n, "drawn": k,
             "incorrect_at_delta": {f"{d:.3g}": subset_bound(n, k, d) for d in DELTAS},
             "per_proof": "each proof's soundness error, ε_ks + ε_bind (KSLinOn's κ + √(γ·Pr B) + Pr[Bext]), "
-                         "symbolic: Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive"}
+                         "symbolic: Claims.SamplingGeneric.Compiled.KS is a hypothesis until "
+                         "Flock.Guarantees.SampledKSLive"}
 
 
 # --- custody ----------------------------------------------------------------------------------------------------------
@@ -766,7 +767,8 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
             "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
             "uncovered": [
                 "the I/O tie (IoTieRequest) is checked in the clear, outside the proofs",
-                "Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it live",
+                "Claims.SamplingGeneric.Compiled.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it "
+                "live",
                 "hdata (the wardens' arrivals are the framed egress of the certifier's observations) and Carries "
                 "are run conditions, not yet named assumptions",
                 "B_reg: the trace's values at reg are the registration's",

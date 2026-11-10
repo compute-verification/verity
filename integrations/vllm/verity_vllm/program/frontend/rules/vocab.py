@@ -490,6 +490,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_butterfly_settings": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaButterflySettings, N=N, K=TOPK),
            "dsa_butterfly_rows": lambda N, TOPK, W: ir_bind(_dsa_topk_mask.DsaButterflyRows, N=N, K=TOPK, W=W, E=16),
            "dsa_butterfly_rows_pad": lambda T, N, TOPK, W: ir_bind(_dsa_topk_mask.DsaButterflyRowsPad, T=T, N=N, K=TOPK, W=W, E=16),
+           # the batched form's long rows (`vllm_dsa.long_row_blocks`): the mask of a row of n keys at its block's N, and a token's
+           # latent cache row [kv_c | k_pe] as one Definition
+           "dsa_topk_mask_counted": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=TOPK),
+           "dsa_latent_row": lambda KVL, R, EPS: ir_bind(_dsa_norm.DsaLatentRow, KVL=KVL, R=R, EPS=EPS),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "triton_block_rmsnorm": lambda N, BLOCK, WARPS, EPS: ir_bind(_dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
@@ -651,6 +655,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                  "word a switch)",
            "dsa_butterfly_rows_pad": "DsaButterflyRowsPad_v1{T,N,K=TOPK,W,E=16}: DsaButterflyRows_v1{N} over a row's T history rows "
                                      "and then N - T pad rows, the history and the pad two arguments",
+           "dsa_topk_mask_counted": "DsaTopKMaskCounted_v1{N,TOPK}: DsaTopKMask_v1's set of the first n of N scores, n an i32 "
+                                    "argument, so the rows of a block of the batched form share one N",
+           "dsa_latent_row": "DsaLatentRow_v1{KVL,R,EPS}: a token's latent cache row, DsaRMSNorm_v1{KVL,EPS} of kv_c then "
+                             "RoPEHeadGptJ_v2{R} of k_pe (_fused_norm_rope_kernel), one Definition per row",
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "triton_block_rmsnorm": "TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: the same reduction over N live elements of a masked BLOCK "
                                    "on 32 WARPS threads (_fused_q_kv_rmsnorm_kernel)",

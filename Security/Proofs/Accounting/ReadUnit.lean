@@ -76,7 +76,7 @@ theorem pr_or_le {α : Type} [Fintype α] (p q : α → Prop) :
     (Finset.card_union_le _ _)
 
 /-- A correct unit's local evaluation is the transcript at a gate outside the unit, and at a committed gate in it. -/
-theorem localEval_of_committed {C : Verity.Circuit} {n : ℕ} {P : Verity.Partition C n} {X : C.Transcript} {u : Fin n}
+theorem localEval_of_committed {C : Verity.Circuit} {n : ℕ} {P : Verity.Partition C n} {X : C.Trace} {u : Fin n}
     (hcorrect : P.Correct X u) {g : Fin C.N} (hg : P.unit g = some u → g ∈ P.committed) :
     P.localEval X u g = X g := by
   by_cases hu : P.unit g = some u
@@ -85,7 +85,7 @@ theorem localEval_of_committed {C : Verity.Circuit} {n : ℕ} {P : Verity.Partit
 
 /-- The bits gates hold in a correct unit's local evaluation are the transcript's, where those in the unit are
 committed. -/
-theorem bits_localEval {C : Verity.Circuit} {n : ℕ} {P : Verity.Partition C n} {X : C.Transcript} {u : Fin n}
+theorem bits_localEval {C : Verity.Circuit} {n : ℕ} {P : Verity.Partition C n} {X : C.Trace} {u : Fin n}
     (hcorrect : P.Correct X u) {k : ℕ} {gs : Fin k → Fin C.N}
     (hg : ∀ i, P.unit (gs i) = some u → gs i ∈ P.committed) : bits (P.localEval X u) gs = bits X gs := by
   unfold bits
@@ -106,7 +106,7 @@ a hypothesis) makes the row it returns in `u`'s local evaluation the table's row
 there, for every opening of that leaf the root accepts, or `H` or `G` collides on what the read's check and the
 opening's hashed. -/
 theorem readUnitBinds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (consts : Fin C.N → Option Bool) {n : ℕ}
-    (P : Verity.Partition C n) (u : Fin n) (q : Ports C) (r d : Verity.Digest) (X : C.Transcript)
+    (P : Verity.Partition C n) (u : Fin n) (q : Ports C) (r d : Verity.Digest) (X : C.Trace)
     (hgates : GatesRefine H G key consts P u q) (hcorrect : P.Correct X u) (hrows : RegisteredRows consts P u q r d X) :
     Binds H G key q r d (P.localEval X u) := by
   intro o₀ h₀
@@ -136,7 +136,7 @@ no two messages the read's check and the table's check hashed collide under `H`,
 is drawn when its unit is. -/
 theorem readUnitDrawn {Ω : Type} [Fintype Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
-    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript) (ε : ℝ)
+    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ε : ℝ)
     (hgates : ∀ i ∈ R.reads, GatesRefine H H key consts P (R.unit i) (R.port i)) (hcommitted : R.Committed H H key)
     (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
       ¬ (P.Correct (X ω) (R.unit i) ∧
@@ -164,7 +164,7 @@ finder outputs two messages the drawn reads hashed that collide under `H`, if th
 reader's to state from the adversary it runs. -/
 theorem readUnitDrawnCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
-    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript) (cost : Ω → ℕ) (ε : ℝ)
+    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (cost : Ω → ℕ) (ε : ℝ)
     (hgates : ∀ i ∈ R.reads, GatesRefine H H key consts P (R.unit i) (R.port i)) (hcommitted : R.Committed H H key)
     (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
       ¬ (P.Correct (X ω) (R.unit i) ∧

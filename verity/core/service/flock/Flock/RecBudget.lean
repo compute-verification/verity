@@ -78,7 +78,7 @@ def count (n : Nat) : V Unit :=
   else pure ()
 
 /-- The most hm96 calls V\*'s list records at the verifier's inner shape (`recordedCalls`): `2^32`. -/
-def MAX_RECORDED : Nat := 4294967296
+@[noinline] def MAX_RECORDED : Nat := 4294967296
 
 /-- **The hm96 calls V\*'s statement `st` records at most**, at the inner shape `i`, two at each port and instance it
 reads: at each row a message-round port of it reads (`RecVStar.ownPorts`); at an algebra part, at `v` and `out`, then

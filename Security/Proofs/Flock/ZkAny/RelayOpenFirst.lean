@@ -28,7 +28,7 @@ open FlockComplete.Replay (afterSq bind_go liftTM_ok)
 
 /-- **A loop whose first step throws**, then a continuation, throws with the first step's log. -/
 theorem forIn_first_err {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) {n : ℕ} (hn : n ≠ 0) (s₀ : σ)
-    (f : σ → TMW PS β) {t : Transcript} {l l' : Array Claims.Msg} {e : String}
+    (f : σ → TMW PS β) {t : Flock.Transcript} {l l' : Array Claims.Msg} {e : String}
     (h : ((body 0 s₀).run t).go l = (.error e, l')) :
     ((forIn [:n] s₀ body >>= f).run t).go l = (.error e, l') := by
   refine FlockComplete.bind_go_err ?_
@@ -38,7 +38,7 @@ theorem forIn_first_err {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep 
   rw [List.range'_succ, List.forIn_cons]
   exact FlockComplete.bind_go_err h
 
-theorem rsLoopB_zero (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t : Transcript) {N : ℕ}
+theorem rsLoopB_zero (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t : Flock.Transcript) {N : ℕ}
     (hN : N ≠ 0) : rsLoopB sv coin L (pcsT t) 0 = rsBody sv N t.pending.data.toList 0 := by
   rw [rsLoopB_eq, rsBody, ite_eq_left (Nat.pos_of_ne_zero hN), ite_eq_left rfl]
   simp only [rsLoopT, pcsT, label_enc, List.append_assoc]
@@ -46,7 +46,7 @@ theorem rsLoopB_zero (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L 
 /-- **The cut ring switch, cut at its first ask**: from the empty log it stops past the openings having sent its first
 body after `t`'s pending bytes. -/
 theorem ringSwitchCut_zero (coin : ℕ → ℕ → F128) (sv : ℕ → Array F128) (claims : Array _root_.Flock.Claim)
-    (hN : claims.size ≠ 0) (t : Transcript) :
+    (hN : claims.size ≠ 0) (t : Flock.Transcript) :
     ((ringSwitchCut (asksCut coin 0) sv claims).run t).go #[] =
       (.error "past the openings", #[rsBody sv claims.size t.pending.data.toList 0]) := by
   unfold ringSwitchCut

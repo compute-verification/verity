@@ -66,7 +66,7 @@ theorem zk_stepWith_acc_iff {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Cla
     (v₁ v₂ : List Claims.Msg → Claims.OC Claims.Out) (K : ℕ)
     (hlt : ∀ bs : List Claims.Msg, bs.length < K → v₁ bs = v₂ bs)
     (heq : ∀ bs : List Claims.Msg, bs.length = K → (((v₁ bs).eval H).1 = .acc ↔ ((v₂ bs).eval H).1 = .acc)) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       as.length + n = K →
       ((Claims.stepWith H P x ω v₁ n hist as t).out = .acc ↔ (Claims.stepWith H P x ω v₂ n hist as t).out = .acc) := by
   intro n
