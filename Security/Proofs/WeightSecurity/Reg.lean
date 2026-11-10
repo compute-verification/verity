@@ -18,7 +18,7 @@ the run's coins.
 * `PeriodReg`: the run leaves `M` incorrect proof blocks undetected with probability at most `Σ_t ε_t + x^M`, each
   `ε_t` bounding window `t`'s `ε_reg` at every strategy the run plays it with. It is `period_undetected` at
   `oneRegRec`: `hacc` is `Compiled.KSReg`'s first conjunct and `hstage` is the sample's miss of the committed incorrect
-  set, at most `P_a(Freg)` by the draw law (`Compiled.Sessions.draws`).
+  set, at most `P_a(Freg)` by the contract's sample (`Compiled.Sessions.draws`).
 * `CompilerPeriodReg`: `PeriodReg` at every run of window verifiers that meet `CompilerKSReg`'s premises, at sampling
   designs that miss every set `B` of proof blocks with probability at most `x^{|B|}` at every statement in scope.
 
@@ -87,7 +87,7 @@ def PeriodReg (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) (x : ℝ) : Prop 
 
 /-- **The period bound from the windows' verifiers**: when every window's verifier meets `CompilerKSReg`'s premises and
 every statement in its scope has a sampling design that misses each set `B` of its proof blocks with probability at
-most `x^{|B|}`, `PeriodReg` holds (`period_undetected` at `oneRegRec`, from `CompilerKSReg` and the draw law). -/
+most `x^{|B|}`, `PeriodReg` holds (`period_undetected` at `oneRegRec`, from `CompilerKSReg` and that miss bound). -/
 def CompilerPeriodReg : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (O V Tick Adv : Type)
     (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) (x : ℝ), A.KS H →

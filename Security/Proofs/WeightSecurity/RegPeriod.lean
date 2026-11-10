@@ -13,8 +13,8 @@ import Proofs.Flock.SamplingGeneric.Reg
 
 `PeriodReg` is `period_undetected` at `oneRegRec`. Each record reads only the strategy its window is played with, so
 both of a window's bounds hold at every strategy: `hacc` is `Compiled.KSReg`'s first conjunct at the statement and
-prover it sends, and `hstage` is the draw law (`Compiled.Sessions.draws`) at the committed incorrect set, which the
-statement and prover fix before the run's coins.
+prover it sends, and `hstage` is the contract's sample (`Compiled.Sessions.draws`) at the committed incorrect set,
+which the statement and prover fix before the run's coins.
 
 * `oneRegRec_accepted_le`: a window is accepted with a sampled proof block in the committed incorrect set with
   probability at most `ε_reg` at the statement and prover it sends, and never out of scope.
@@ -66,8 +66,8 @@ theorem oneRegRec_accepted_le (H : Msg → Msg) (L : Compiled Coin A) (hks : L.K
     exact zero_le
 
 /-- **A window's sample misses the committed incorrect set** with probability at most `x^n`, `n` the count its strategy
-fixes: in scope by the draw law at that set, which the statement and prover fix before the coins, and the design's
-`P_a(B) ≤ x^{|B|}`; out of scope the count is `0`. -/
+fixes: in scope by the contract's sample at that set (`Sessions.draws`), which the statement and prover fix before the
+coins, and the design's `P_a(B) ≤ x^{|B|}`; out of scope the count is `0`. -/
 theorem oneRegRec_missed_le (H : Msg → Msg) (L : Compiled Coin A) (hS : L.Sessions H) {x : ℝ} (hx0 : 0 ≤ x)
     (hpa : ∀ y s P, L.parse y = some s → L.partition s = some P → InScope P s →
       ∀ B ⊆ Finset.range P.blocks.length, s.design.Pa P B ≤ x ^ B.card)
@@ -123,7 +123,7 @@ theorem periodReg_of (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) {x : ℝ} 
   exact h
 
 /-- **The period bound from the committed form**: `CompilerKSReg` gives `CompilerPeriodReg`, with each window's miss
-from its draw law and its refusal of what is out of scope from its contract (`Compiled.Sessions`). -/
+from its sampling design and its refusal of what is out of scope, both from its contract (`Compiled.Sessions`). -/
 theorem compilerPeriodReg_of (hks : CompilerKSReg) : CompilerPeriodReg := by
   intro Coin _ _ _ A O V Tick Adv H Lv x hA hS hx0 hx1 hpa
   exact periodReg_of H Lv hx0 hx1 (fun t => hks Coin A (Lv t) H hA (hS t).1 (hS t).2) (fun t => (hS t).2) hpa

@@ -17,7 +17,7 @@ public import Proofs.WeightSecurity.TwoRegWitnesses
 # Model weight security's proofs
 
 `Reg`: a period of one-stage windows at the committed traces, the statement `PeriodReg` in `period_undetected`'s form.
-`RegPeriod`: `PeriodReg` from each window's committed form and draw law (`periodReg_of`), so **`CompilerPeriodReg` is
+`RegPeriod`: `PeriodReg` from each window's committed form and miss bound (`periodReg_of`), so **`CompilerPeriodReg` is
 proved** (`compilerPeriodReg`). `RegWitnesses`: its premises hold together at `twoL` (`periodReg_honest`), and
 `PeriodReg` fails at `sksL` (`periodReg_nontrivial`).
 
