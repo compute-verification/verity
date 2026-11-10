@@ -1,6 +1,6 @@
 """The advice code for advice v1: the residual's coder, canonical, prefix-free and self-delimiting per window.
 
-Advice v1 (`derived.py`) charges nothing for what is certified (the warden's admission order, the request records, the
+Advice v1 (`derived.py`) charges nothing for what is certified (the network certifier's admission order, the request records, the
 release buckets), replayed (the scheduler replay, `replay.py`) or derived (`derived.py`'s rules), and sends only the
 residual, one `Window` (the certifier's `window_charge.Window`) per sampling block, each field's values in the
 order its reader asks for them:

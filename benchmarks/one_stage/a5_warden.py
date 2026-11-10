@@ -1,10 +1,10 @@
-"""One-stage audit, run A5, on a transfer-gate stand-in: a window whose transfer-gate units open the warden's signed cells,
+"""One-stage audit, run A5, on a transfer-gate stand-in: a window whose transfer-gate units open the network certifier's signed cells,
 audited by `a5.audit` as rank 0 of a one-rank step through its `service.Stream`, on a local challenger's coins
 (``--challenger local``). No served window has transfer gates yet (the I/O
-shell's ingress parse and egress render units have no Flock lowering, and no Commit was served behind the warden), so
-this window stands in for one, its cells a warden run's (`warden_serve.py rehearse`, ``--run``).
+shell's ingress parse and egress render units have no Flock lowering, and no Commit was served behind the network certifier), so
+this window stands in for one, its cells a network certifier run's (`warden_serve.py rehearse`, ``--run``).
 
-* **The rows** are the warden's, one a bucket (`warden_rows`, registration v2): row t − first_bucket of a link-window is
+* **The rows** are the network certifier's, one a bucket (`warden_rows`, registration v2): row t − first_bucket of a link-window is
   bucket t, S = lanes·r slots of B bytes, slot j at bytes j·B (words j·B/2), a connection's cells at the slots its
   wiring gives it, a slot no connection holds B zero bytes.
 * **The window** (`window`), under ``<ROOT>/rank0`` and the sampling design ``work-rate:1/8``: 2n units of the transfer-gate template
@@ -14,30 +14,30 @@ this window stands in for one, its cells a warden run's (`warden_serve.py rehear
   transfer-gate unit (work 0, floor all of them: selection All) beside the rest's sampled share, and a5's transfer-gate
   negatives (`a5.transfer_gate_negatives`) refuse each way of leaving one out.
   - chunk ``c0``, the ingress gates: unit i reads connection q's ingress cell i, its ``row`` the bucket row that cell is in,
-    committed under the warden's salt for that row, so its ``b || c`` is the warden's;
+    committed under the network certifier's salt for that row, so its ``b || c`` is the network certifier's;
   - chunk ``c1``, the egress gates: unit i's ``o0`` is the bucket row of connection q's egress cell D·r + i (the D buckets
-    before are its delay's pads), under the warden's salts.
+    before are its delay's pads), under the network certifier's salts.
   These are the Program's units' wiring (`warden_rows.Units`, `links`), fixed from public structure alone (the schedule, the
-  ordinals and the signed wiring, never the cells' bytes): q is the lowest connection admitted in link-windows the warden
+  ordinals and the signed wiring, never the cells' bytes): q is the lowest connection admitted in link-windows the network certifier
   registered with n ingress cells and D·r + n egress cells. r of a connection's cells share a row, so r units open each row.
   Each chunk is a shared-row member (its ``row`` rows a table, each unit its own row) whose header names the units' value
   (`warden_rows.Units.value`, the head's value and the units' digest), its registered port's rows, each row's position in
-  the link-window and its path to the warden's root (`warden_rows.Cells.statement`).
+  the link-window and its path to the network certifier's root (`warden_rows.Cells.statement`).
 * **The verifier's reads** (`reads`): each link-window's registration read under the deployment's key and session and the
   schedule (`warden_rows.check_registration`), and from it the verifier's own ``--registered`` file of each chunk
   (`warden_rows.port` of the Program's units: their value, the head's root, and the row of each unit's read, placed by the
-  wiring the warden signed), which a5 hands Lean's verify of each sampled chunk (`a5.audit`'s ``registered``), so a statement
+  wiring the network certifier signed), which a5 hands Lean's verify of each sampled chunk (`a5.audit`'s ``registered``), so a statement
   made for any other units' wiring is refused, even at the same rows. The wiring is opened to the verifier as the units'
   wiring is: `warden_rows`' named gap. A transfer gate is addressed as (row, byte, bit): bit 8k + i of a unit's
   registered port is bit i of byte k of its row, row t − first_bucket bucket t (the registration's ``layout``), and the
   unit's own cell is its slot's bytes, which the summary lists for each unit (``links``: the cell, row, bucket, slot and
   words).
-* **Provenance** (`source`): the registration's window names, for each link, the warden's value, root, certificate digest,
+* **Provenance** (`source`): the registration's window names, for each link, the network certifier's value, root, certificate digest,
   the registration's SHA-512, the units' digest, and the reads and rows its units open, and the verifier holds them to its
   own read.
 * **Negatives**, beside a5's (the registered reads' three and the verdict reporting another root, on chunk c0; the
   transfer-gate negatives; R1 to R4 and the sample's): the prover's own root over the link-window's rows (one byte off) under
-  the warden's certificate, refused by `check_registration`; the window's provenance naming another root, refused by
+  the network certifier's certificate, refused by `check_registration`; the window's provenance naming another root, refused by
   `source`; the reads no honest read is, on the ingress link-window, each refused by `warden_rows.port` by name: a foreign
   read (another connection's cell, under a wiring that drops the connection holding its slot), a duplicate read, a
   padding-slot read (of a connection holding no slot, and under a wiring that puts one in empty slots) and a read past the
@@ -46,12 +46,12 @@ this window stands in for one, its cells a warden run's (`warden_serve.py rehear
   ("not another value"), those rows under the Program's value ("reads position"), and two units' cells swapped, at the
   Program's rows ("not another value").
 * **Refused runs**, each to pass every check before the sample, sample the unit and be refused by Lean's registered reads by
-  name: ``--altered``, unit 0 of c0 reads its row one bit off in its cell, under the warden's salt, its output the same bits
+  name: ``--altered``, unit 0 of c0 reads its row one bit off in its cell, under the network certifier's salt, its output the same bits
   (the circuit holds) ("does not open"); ``--made-for pad|pad-named|swapped``, c1's statement made for that wiring.
 
 The run exits 0 when it is as expected: accepted with every negative refused, or (``--altered``, ``--made-for``) refused by
 Lean's registered reads by its reason. ``--out`` holds the window as committed (``window/``, its private files too) and
-a5's records (``rank0/``, ``challenger/``, ``summary.json``); the warden's rows and salts stay in ``--run``.
+a5's records (``rank0/``, ``challenger/``, ``summary.json``); the network certifier's rows and salts stay in ``--run``.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5_warden.py --run WARDEN_RUN --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
@@ -93,7 +93,7 @@ from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/warden-stand-in/v1").hexdigest()
 RULE = "work-rate:1/8"
-#: each chunk's registered port, by the warden record it opens: the ingress cells are the circuit's input, the egress its output
+#: each chunk's registered port, by the network certifier record it opens: the ingress cells are the circuit's input, the egress its output
 LINKS = {ws.INGRESS: ("c0", "row"), ws.EGRESS: ("c1", "o0")}
 #: the egress chunk's statement made for another units' wiring (`made_for`), and what Lean's registered reads, and the host's
 #: read of them (`warden_rows.refusal`), refuse it by
@@ -109,9 +109,9 @@ def first_cells(params: WardenParams) -> dict[str, int]:
 def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
     """Each link's link-window of connection q and the Program's units' wiring on it (`warden_rows.Units`), fixed from public
     structure alone (the schedule, the ordinals and the signed wiring, never the cells' bytes): q the lowest connection admitted
-    (its first row past the window's first, or window 0) in link-windows the warden registered with n ingress cells and D·r + n
-    egress cells, unit i reading its cell `first_cells` + i. Each with the registration as the verifier reads it, the warden's
-    opening (the record's rows and wiring under its salts) held to its head, the row and slot the warden's wiring places each
+    (its first row past the window's first, or window 0) in link-windows the network certifier registered with n ingress cells and D·r + n
+    egress cells, unit i reading its cell `first_cells` + i. Each with the registration as the verifier reads it, the network certifier's
+    opening (the record's rows and wiring under its salts) held to its head, the row and slot the network certifier's wiring places each
     unit's cell at, and how many of those cells hold the server's bytes (`data_units`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
@@ -183,7 +183,7 @@ def chunks(mine: CS.Binding) -> dict[str, CS.Member]:
 
 
 def provenance(at: dict[str, SimpleNamespace]) -> dict:
-    """What the window's registration names of the warden's cells: per link, its value, root, certificate digest, the
+    """What the window's registration names of the network certifier's cells: per link, its value, root, certificate digest, the
     registration's SHA-512, and the units' reads (q, k) and the rows they open."""
     return {"stand-in": "benchmarks/one_stage/a5_warden.py", "connection": at[ws.INGRESS].connection,
             "links": {name: {"value": x.head.value, "root": x.head.root.hex(), "certificate": x.registration["certificate"]["digest"],
@@ -193,7 +193,7 @@ def provenance(at: dict[str, SimpleNamespace]) -> dict:
 
 
 def rest_rows(m: CS.Member) -> np.ndarray:
-    """The rest's rows: bytes of their own, not the warden's."""
+    """The rest's rows: bytes of their own, not the network certifier's."""
     w = dict(m.rows)["row"]
     return np.asarray([WR.words(hashlib.shake_256(b"a5-warden/rest/%d" % i).digest(2 * w)) for i in range(m.n)], dtype=np.uint16)
 
@@ -233,7 +233,7 @@ def refused(x: SimpleNamespace, st: SimpleNamespace, reads_from: int = 0) -> str
 
 def commit(out: Path, mine: CS.Binding, at: dict[str, SimpleNamespace], altered: bool = False,
            made: str | None = None) -> CS.Committed:
-    """The window committed into ``out`` as serving would commit it: each chunk's registered port's rows under the warden's
+    """The window committed into ``out`` as serving would commit it: each chunk's registered port's rows under the network certifier's
     salts and its header naming the Program's units' value and the rows' positions and paths (``altered``: unit 0 of c0 reads
     its row one bit off, in its cell's last byte; ``made``: c1's statement made for another units' wiring, `made_for`), the
     rest under fresh salts."""
@@ -262,15 +262,15 @@ def commit(out: Path, mine: CS.Binding, at: dict[str, SimpleNamespace], altered:
 
 
 def reads(mine: CS.Binding, at: dict[str, SimpleNamespace]) -> dict[str, dict]:
-    """The verifier's own ``--registered`` file of each chunk: its registered port at the root the warden signed, named by the
+    """The verifier's own ``--registered`` file of each chunk: its registered port at the root the network certifier signed, named by the
     Program's units' value, each unit (from the chunk's first) opening the row of its read (q, k), placed by the wiring the
-    warden signed."""
+    network certifier signed."""
     return {m.key: WR.reads_file({LINKS[name][1]: WR.port(x.head, x.opening.wiring, x.params, x.units, m.base)})
             for name, m in chunks(mine).items() for x in [at[name]]}
 
 
 def source_of(mine: CS.Binding, at: dict[str, SimpleNamespace]):
-    """The verifier's check of the registration's window: a stand-in of its run naming the warden's cells as it read them."""
+    """The verifier's check of the registration's window: a stand-in of its run naming the network certifier's cells as it read them."""
     want = provenance(at)
 
     def source(w: dict) -> dict:
@@ -297,7 +297,7 @@ def refusal(f, name: str) -> dict:
 
 
 def crossed(x: SimpleNamespace) -> tuple[WR.Wiring, tuple[int, int], tuple[int, int], tuple[int, int]]:
-    """A foreign read on the link-window: a wiring without connection q1 (the warden's but for it), which places connection
+    """A foreign read on the link-window: a wiring without connection q1 (the network certifier's but for it), which places connection
     q2's cell k2, live just above q1 in one of q1's rows, on q1's cell k1; and that (q2, k2), (q1, k1) and their (row, slot)."""
     w, r = x.opening.wiring, x.params.slots
     live, held = w.live(x.params), {q: (first, cells) for q, first, cells in w.connections}
@@ -315,7 +315,7 @@ def crossed(x: SimpleNamespace) -> tuple[WR.Wiring, tuple[int, int], tuple[int, 
 
 
 def padded(x: SimpleNamespace) -> tuple[WR.Wiring, tuple[int, int], tuple[int, int]]:
-    """A padding-slot read on the link-window: the warden's wiring with one more connection g, live for one row past the last
+    """A padding-slot read on the link-window: the network certifier's wiring with one more connection g, live for one row past the last
     connection's first, which places (g, 0) on an empty slot; and that (g, 0) and its (row, slot)."""
     w, p = x.opening.wiring, x.params
     live, g = w.live(p), w.connections[-1][0] + 1
@@ -326,7 +326,7 @@ def padded(x: SimpleNamespace) -> tuple[WR.Wiring, tuple[int, int], tuple[int, i
 
 
 def negatives(at: dict[str, SimpleNamespace], source, rec: dict) -> dict[str, dict]:
-    """The prover's own root over the ingress link-window's rows (one byte off) under the warden's certificate, the window's
+    """The prover's own root over the ingress link-window's rows (one byte off) under the network certifier's certificate, the window's
     provenance naming another root, the reads no honest read is, each refused by `warden_rows.port` by name: a foreign read
     (`crossed`), a duplicate read, a padding-slot read (of a connection holding no slot, and under `padded`'s wiring) and a
     read past the connection's cells; and the egress chunk's statement made for another units' wiring (`made_for`: a pad in

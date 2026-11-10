@@ -16,8 +16,8 @@ by the Lean verifier's registered reads (`flock-verify verify --zk --registered`
 * **The proof blocks** (`EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`, circuit-check's pinned shape), one a bucket, T
   of them: each reads row ``state`` (the egress view of the slot state the scan's ingress step wrote at its bucket,
   `egress_traffic.states`; a hidden row under a fresh salt here, where the scan registers it), and computes ``o0``, 1
-  when the state renders a row, and ``o1``, the row, committed under the salt of the warden's row t and registered as
-  a read of it, so the proof opens the warden's row only when the row the state renders is it.
+  when the state renders a row, and ``o1``, the row, committed under the salt of the network certifier's row t and registered as
+  a read of it, so the proof opens the network certifier's row only when the row the state renders is it.
 * **Members.** ``honest``: accepted, every ``o0`` 1. ``lying``: one rendered output id of one bucket's state changed:
   the proof block computes a row the network certifier didn't sign, so its ``o1`` opens no registered row: refused by
   Lean ("does not open"). ``moved``: proof blocks t and t + 1 given each other's state, their positions and salts
@@ -120,7 +120,7 @@ def _changed_state(at: SimpleNamespace) -> tuple[int, EG.State, dict]:
 
 def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
     """A member's proof blocks' state, in proof block order, the row each computes (`egress.outputs`, its ``o1``), the salts its
-    ``o1`` rows are committed under, the header's `registered` entry (the warden's positions and paths for the rows
+    ``o1`` rows are committed under, the header's `registered` entry (the network certifier's positions and paths for the rows
     it names), and each unit's ``o0``."""
     cells, T = at.cells, PARAMS.window
     states, order, changed = list(at.states), list(range(T)), {}
@@ -191,7 +191,7 @@ def verdict_bcs(m: dict) -> list[bytes]:
 def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     """Member `name`'s statement: its units' ``state`` rows in a shared-row file (each instance its own table row),
     ``state`` and ``o0`` under fresh salts and ``o1`` under the salts and paths of its registered entry; and the
-    verifier's own `--registered` file at the warden's root. The units' outputs are the reference's."""
+    verifier's own `--registered` file at the network certifier's root. The units' outputs are the reference's."""
     t0 = time.time()
     st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"
     nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())

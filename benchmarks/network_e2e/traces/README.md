@@ -42,7 +42,7 @@ checkpoint's end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json r
 - `corpus.py run --admit tick` serves under the certified tick (`verity_vllm.pipeline.serve_admit`, which vLLM's
   server loads through `verity_vllm.pipeline.tick_plugin`): the engine adds the requests whose release bucket closed by
   its logical clock, in release order, so that batch composition is a function of the certified releases and the advice
-  v1 sends no timing. In a warden trace the network certifier in front of the server sends the release headers and
+  v1 sends no timing. In a network certifier trace the network certifier in front of the server sends the release headers and
   streams the watermark (`warden_serve.py serve --watermark`), and the summary takes each request's release from what
   the server got, where the certifier's log agrees (`summary.feed_releases`); a run behind it shows the network
   certifier's code in front of the server on the serving host, not on a host the prover doesn't control. With no

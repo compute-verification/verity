@@ -24,8 +24,8 @@ the one-stage audit as `n2_zk.py` proves N2's head checks.
   proof blocks' wiring is refused by Lean's registered
   reads, even at the same rows.
 * **Members.** One statement of n units each, a shared-row public file whose registered ports are the verifier's own
-  (`--registered`, `warden_rows.port` at the warden's root):
-  - ``sender``: ``o0`` registered, under the warden's salts and paths: the sender's unit opens its output as the rows;
+  (`--registered`, `warden_rows.port` at the network certifier's root):
+  - ``sender``: ``o0`` registered, under the network certifier's salts and paths: the sender's unit opens its output as the rows;
   - ``receiver``: ``row`` registered: the receiver's check opens the same rows as its input;
   - ``unsigned``: ``o0`` under the prover's own tree over the window's rows, proof block 0's cell one byte off: rows the
     network certifier didn't sign (and the prover's registration of its own root, under the network certifier's
@@ -239,7 +239,7 @@ def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
 def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     """Member `name`'s statement: its input rows, a shared-row file (each instance its own table row), its registered
     port's rows under its salts and paths (`member_rows`), every other row under a fresh salt; and the verifier's own
-    `--registered` file at the warden's root."""
+    `--registered` file at the network certifier's root."""
     t0 = time.time()
     st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"
     k_log = st.meta["k_log"]
