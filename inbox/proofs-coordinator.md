@@ -23167,3 +23167,199 @@ The PR is `cursor/proofs-zkverify-field-vfb`, being written now. The names below
   - Each row's `all_pass` becomes `as_expected`.
   - Each row gains two counts over its honest checks: `lean_accepted` and `lean_refused_no_program`.
   - `served_units` drops `lean_passes_honest` and the printed `lean_verify`.
+
+## BREAKEVEN 04:02Z: PRF-456 items 2, 4 and 5, and the goal's 49 TB (blocks to paste)
+
+The second part of your 03:28Z ask. There are four blocks between the rules: item 2 (with the end-to-end gap), item 4,
+item 5, and the goal's 49 TB. Notes for you follow the last rule.
+- Every GB is at the 10% point over the world's year, at the 875-token cap, with the verifier as measured, unless a
+  cell says otherwise.
+- The own-premises cells carry λ = 1.05 (part 1's correction).
+
+---
+
+proofs, Tue 10 Nov. **Item 2: one definition of the number.**
+
+**The number.** It is the world-year exfiltration capacity: the most bits about GLM-5.3's weights that can leave the wire
+over the world's year at 10% total compute cost, except with probability δ_period. The target is under 300 GB. The world
+is `fleet.world-h200`: 46.87 M eight-GPU H200 machines serving the census's 9.36e30 FLOP a year at an assumed 40%
+serving MFU (range 0.2 to 0.6).
+
+**What it sums,** by soundness's composition as refined on network-accounting's point (here, Tue 03:28Z):
+
+$$K_{\text{link, phase}} = \text{schedules} + \text{cells} + \text{jitter} + \min\big(\text{entry bits},\ \text{advice} + \text{the wrong blocks' output bits at }\delta\big)$$
+
+- **The number is K summed over links and phases,** pooled over the period with no per-window rounding. Error
+  probabilities add, and δ_period is printed beside the number. Timing is counted once: jitter or the tick, not both.
+- **Schedules, cells and jitter are the network certifier's own terms.** Each leaves the sum once it is held to the
+  program's outputs: response lengths by NET-200, timing by NET-296.
+- **The minimum's second branch must be pooled over the period:** the compute audit's pooled count at δ, which proofs
+  publishes in a field the period check reads (by Thu 12 Nov).
+- **Today, by this form, it is at least 53,000 TB, almost all of it the length charge** (network-accounting's worked
+  figure; nothing measured or proved). Once lengths and timing are held, it is the compute cut: 8,456 GB today
+  (modeled; r20261110-033213-4d4e).
+- **The compute cut by period** (modeled; r20261110-034537-ff25): the world's week, month and year are 8,151, 8,263
+  and 8,456 GB, and a datacenter's are 7,511, 7,624 and 7,819 GB.
+
+**Each term in three columns.** Proved means a Lean statement on `main` with its open premises listed; measured, a
+run of record; scaled, the census's counts named:
+
+| term | owner | proved | measured | scaled | today |
+|---|---|---|---|---|---|
+| the wrong blocks' output bits at δ, pooled over the period | proofs | For one two-stage audit, `Flock.SecurityProofs.SpotExfilTwo` bounds what an accepted run can serve by its influence set, at most \(\sum_T 2^{b(T)}\) members. `Properties.Spot.TwoStageCheckSound`, proved, bounds that sum by the planner's bits at its design. Open premises: `Claims.Sampling.InScopeTwo`, `Claims.SamplingGeneric.CompiledTwo.Scope`, `SpotFlock.Embeds`, `SpotFlock.FrameIs`, and Lean's verifier refuses every two-stage run today (P6). Pooled over a period, `NetTiming.SecurityProofs.PooledLeakAccepted` counts \((N+1)^{F} \cdot 2^{bF}\), given two per-window inputs not yet discharged; open premise `Verity.Assumptions.TrustedHost`. | The prices it reads: the prover (3.71×), the verifier, the proof server at one prover with its statement cache warm, the card's measured types, and the fused cut's prices from synthetic statements on one H200. No served block yet (P3). | 1.18e16 H200-seconds a year (modeled), from the census's FLOP at an assumed 40% MFU. One δ = 0.01 over the period. | 8,456 GB (modeled; r20261110-033213-4d4e) |
+| advice | proofs | Its factor \(\prod_i 2^{\#(\text{free}_i \setminus \text{reg}_i)}\) in `PooledLeakAccepted` and `PeriodLeakAccepted`. `Verity.SecurityProofs.RegisteredLeakage`: a registration leaks at most \(\log_2 m\) bits, with m = 1 at the value service of record; open premise `Verity.Assumptions.ZkServerOwnUser`. | Zero, shown only with prefix caching off and a client standing in for the certifier. Design (d) caches. | none | 0 in the planner, which takes the certified tick's stamps as the arrivals |
+| schedules and cells | network-accounting | None for the check's K (PRF-491, until `PeriodLeakChecked` lands). `NetTiming.SecurityProofs.PeriodLeakAccepted`, deployed, carries their factor \(\#S_s \cdot \prod_c(\mathrm{cap}_c+1)\) on four open premises. | one phase on one link, Llama 3.2 1B | everything else | each response's length, 10 to 13 bits, charged twice: 53,000 to 69,000 TB at the census's requests (network-accounting restates it in this world, 6a) |
+| jitter, or the tick | network-accounting (jitter); vllm and proofs (the tick) | the factor \(D_j^{k}\) in the same two statements | The tick's throughput is simulated on Llama 3.2 1B traces; on GLM-5.3 the tick is simulated only. | everything | jitter: 1 bit a 4 s bucket a link, 46 TB at this world's 46.87 M links (modeled, network-accounting's rule) |
+| entry bits | network-accounting | none | none | none | every output id at 18 bits: no bound |
+
+**Errors.** They are SPOT's δ = 0.01 over the period (the design card's, a stated parameter), the collision terms (a
+finder's budget over \(2^{256}\)), the network statement's ε₁ + ε₂ (\(2^{-63}\) a phase, network-accounting's), and LMS
+for the remote audit. The planner adds only δ.
+
+**The one command** is benchmarks' `verity bench` (P1, on `main` Thu 12 Nov).
+- It reads labelled runs only: vllm's serving-cost run, proofs' proving cost and planner run, and network-accounting's
+  term (6a, NET-298).
+- It prints each term per link and phase with its run and its label (measured, modeled or assumed), takes the form
+  above, sums, and prints δ_period beside the number.
+- Today the compute cut comes from the planner on a branch, with a wrapper in proofs' notes. Network's term comes from
+  `benchmarks/network_traces/leak_bounds.py`.
+
+**What the end-to-end number needs that the compute cut lacks:**
+
+| what | owner | built | date |
+|---|---|---|---|
+| response length held to the output count the program computes | The circuit is `StopRule_v1`, vLLM's stop check as the request program's length rule, on `main`. The statement is network-accounting's (NET-200, 6c-1). | The circuit is built, but not checked on GLM-5.3's served 128k program. The statement is not built. | statement with soundness Thu 12 Nov; proof in review Fri 20 Nov |
+| timing charged once | network-accounting (NET-296, 6c-2); the tick, vllm | No. A server that loads the certifier's host can move the next release, and GLM-5.3's tick is simulated only. | target Wed 11 Nov 6 PM; benchmark on `main` Fri 13 Nov |
+| entries charged through the compute audit | network-accounting (NET-297, 6c-3), reading proofs' pooled field | No. soundness agreed the form on Tue at 03:28Z. | proofs' field Thu 12 Nov; in review Tue 17 Nov |
+| the advice term | proofs (`proofs/spot-advice-certified`) | 0 in the planner at the certified tick. It is shown 0 only with caching off, and design (d) caches. vllm's codec prices length and finish at 0 once `StopRule_v1` checks them. | Thu 12 Nov |
+| the 128k replay form (the span variant) priced | proofs prices it; vllm commits its history table | Not priced. Its history table hashes 13.7 GB of rows and 1.2 GiB of trees for each 128k request while serving (modeled, 9 Nov), and each history read is its own proof block. Serving and proving go up, the replay down. | no date |
+| the 875-token cap certified on a GLM-5.3 run | proofs (P5), with network-accounting (NET-281; NET-295 sizes it) | No check certifies it today. Without it, nothing bounds a request's output. | NET-295 Wed 11 Nov noon; P5 Fri 13 Nov |
+| a two-stage run accepted | proofs (P6) | Lean refuses every two-stage run | an instance Fri 13 Nov; the open premise Mon 30 Nov |
+| rows past 2,048 keys proved | circuits (CIR-195) | No. They are 82.5% of the 128k plan's computed tokens (modeled), have no provable form until CIR-195 lands, and the number prices them as covered. | no date on record |
+
+---
+
+proofs, Tue 10 Nov. **Item 4: each change between today's figure and 300 GB.**
+
+Each factor is the planner's GB at 10% before and after the change. The scope is the world's year, at the cap, with the
+verifier as measured, on each row's own premises (modeled; r20261110-034443-6e7d, r20261110-034902-53f4). The goal named
+five changes and a sixth without an owner. The table gives them in the goal's order, with the levers the goal doesn't
+name just before the sixth.
+
+| change | owner | date | factor | GB after |
+|---|---|---|---:|---:|
+| **today's figure**: the registered MoE cut, each lever measured or approved | | | | **8,456** |
+| 1. the fused per-expert cut served, with its fit on served members | proofs (P4) | works Thu 12 Nov noon; `main` Fri 13 Nov | 5.85× | 1,446 |
+| 2. overlapped verifier waits | already in today's figure: the proof server's prices, measured on seeded statements; the served steady state is kernels' (5b) | measured on served blocks in P3's run, Wed 11 Nov | counted | |
+| 3. the statement cache on the families the card still prices cold: the warm estimate, 0.25 a statement and a block (0.13 to 0.44) | proofs (P3: the card's final run from served blocks) | run Wed 11 Nov; `main` Fri 13 Nov | 2.67× (1.87× to 3.63×) | 543 (398 to 772) |
+| 4. the faster prover | kernels | 3.71× is measured, on `main` and in today's figure; the 4× goal has no date | 1.02× more at 4× | |
+| 5. the chosen replay design, at the 128k indexer's cost | proofs; vllm (VLLM-260) | design (d) and the 128k plan's sparse MLA keys are in today's figure; the lifetime replay, read live, has no date | 1.10× for the lifetime replay | |
+| the templated check for every type (measured for two) | proofs (`proofs/spot-verifier-cost`) | Fri 13 Nov | 1.11× | |
+| the flat-column verifier cut, and the next session's front run beside device work | proofs | no date | 1.01× each | |
+| 2 to 5 and the levers above, together, at their goals | | | 1.27× | 427 |
+| 6. the in-proof hashing cut | **none** | none | not priced | |
+| **left to 300 GB** | | | **1.42×** | **300** |
+
+- **Each lever's own factor** is taken alone on the fused cut. Together they are 1.27× on the fused cut with the warm
+  estimate.
+- **The sixth has no owner, and none exists.** No goal or issue carries the in-proof hashing cut, and no worker's hashing
+  work is on it: that work is the host's witness walk, not hashing inside a proof.
+  - On the 7 Nov path it was worth 1.39× (modeled), taking hashing as half of a proof block's marginal cost (assumed)
+    and cutting it 4×.
+  - Today's prover is 3.71× faster, and nobody has measured its hashing share, so the cut is unpriced.
+  - If it is taken up, it belongs with kernels, which owns the prover's speed.
+- **No priced change closes the last 1.42×.** Two candidates:
+  - Sparse MLA at the 128k plan's keys costs 1.79× on the last row, against the census's keys (543 GB against 304 GB on
+    own premises), and nobody is working to cut it.
+  - The span variant is unpriced and moves the number both ways.
+- **λ = 1.05 is a premise, not a change.** At λ = 1 the last row is 407 GB.
+- **The first two steps hold in every period.** On own premises (modeled; r20261110-034537-ff25 and
+  r20261110-033213-4d4e), the steps are today's cut, then the fused cut, then the fused cut with the warm estimate:
+
+  | period | today's cut | the fused cut | with the warm estimate |
+  |---|---:|---:|---:|
+  | the world's week | 8,151 | 1,440 | 536 |
+  | the world's month | 8,263 | 1,442 | 538 |
+  | the world's year | 8,456 | 1,446 | 543 |
+  | a datacenter's week | 7,511 | 1,426 | 522 |
+  | a datacenter's month | 7,624 | 1,428 | 524 |
+  | a datacenter's year | 7,819 | 1,433 | 529 |
+
+  So the fused cut is worth 5.27× to 5.85×, and the warm estimate 2.67× to 2.73×.
+
+---
+
+proofs, Tue 10 Nov. **Item 5: what the 10% counts.**
+
+**The denominator** is the period's serving compute: 1.18e16 H200-seconds over the world's year (46.87 M machines × 8
+GPUs × 3.1536e7 s), and 3.15e12 over one datacenter's year. That is modeled from the census's FLOP at the assumed 40% MFU.
+- The audit's costs are in the same H200-seconds.
+- The CPU time of the verifier and the compiler is converted at 81.8 core-seconds an H200-second. The rate is from
+  Nebius's on-demand list prices: an H200 at $5.40 an hour, against one EPYC Genoa core with its 8 GiB.
+- So the numerator is GPU time plus CPU time at list-price parity.
+
+**The numerator at today's figure's 10% point** (modeled; r20261110-033213-4d4e):
+
+| part | share | what it counts | how it is known today | whose measurement replaces it |
+|---|---:|---|---|---|
+| serving | 4.34 pt | the wait at e (2.29), the certified tick's throughput loss (1.63), deterministic top-k (0.25), and the edge snapshot, the prefix-cache hits the pool's windows lose and hashing the carried pages (0.17 together) | The wait is modeled on the B128 trace. The tick is modeled: simulated on Llama 3.2 1B traces, 1.63 on the mean run and 4.17 on the worst. Top-k is kernel-modeled. The edge pause is measured on GLM-5.3 at TP8, and hashing is priced at a measured hashing rate. Nothing is measured on GLM-5.3 against stock vLLM as a whole. | vllm's serving-cost benchmark (4), Fri 13 Nov |
+| proving and verifying | 5.37 pt | the sampled proof blocks proved on H200s at four provers a GPU, and the Lean verifier's CPU time | Measured prices: the prover (3.71×), the verifier, the proof server at one prover with its statement cache warm, and the card's measured types plus its computed rules. None is from served blocks. | proofs (P3: the card's final run, Wed 11 Nov) |
+| replays | 0.17 pt | the sampled requests replayed under design (d) | modeled | proofs |
+| the pool | 0.07 pt | each window's pool statements, proved and verified | modeled | proofs |
+| phase edges | 0.04 pt | the carried cut recomputed at each phase edge | modeled | proofs |
+| compiling | 0.0055 pt | compiling the sampled replays, in CPU time | modeled | proofs |
+
+- **The split doesn't move with the scope or the world:** the 10% point's β is 5.53% to 5.65% in every period, both
+  worlds and the MFU range (modeled; r20261110-033213-4d4e, r20261110-034537-ff25).
+- **Not counted yet:**
+  - **The certifier's machines.** The network certifiers and memory challengers are the auditor's own hardware, and
+    nothing prices them. The tick's 1.63 points are serving's throughput loss, not the certifier.
+  - **The network check's own proving cost at 128k**, which network-accounting dates Wed 11 Nov 6 PM.
+  - **The 128k replay form.** The span variant moves serving and proving up and the replay down (item 2).
+  - **A measured serving cost.** The 4.34 points are the card's priced parts plus a modeled wait.
+
+---
+
+proofs, Tue 10 Nov. **The goal's 49 TB.**
+
+**It reproduces from the run on record, at a configuration no longer used.**
+- It is the row "today: (A) tokens only" of Figure 5's 7 Nov draft: 48.7 TB over one datacenter's year at 10% total
+  cost, 129 times the weights. Over the world's year it was 53.2 TB.
+- Its run is r20261107-195338-c84d, the planner's break-even surface at `9189d95712`, preserved with its
+  `breakeven_surface.json`.
+- Its configuration, the surface's case A:
+  - the registered MoE cut, unfused, at the 7 Nov proof-overhead card
+    (art:85a28f30ca2a88ee883f751a7eb4ae39e4c36e178ee37bd848e783103dea65a1), with a proof overhead h = 1.40e10;
+  - a serve tax of 2.04%: the tick 1.63, the step record, token commits and edge snapshot 0.16, and deterministic top-k
+    0.25, with no wait at e and no hashing;
+  - no answer cap;
+  - the two-stage design as then priced, before design (d).
+- **The arithmetic.** The surface's bound at β = 10% is 38.77 TB over a datacenter's year. At a 10% total, β = 10% −
+  2.04% = 7.96%, and the bound goes as 1/β, so 38.77 TB × 10 / 7.96 = 48.7 TB.
+- **It was labelled measured** because h was the card's measured overhead. The bound itself was modeled.
+- **What has changed since:** the wait at e (+2.29 points), the cap at 32 bits a token, design (d), the verifier as
+  measured, the repriced card and the world's year as the scope.
+
+**The sentence the goal text should carry instead** (in the Goals page's form):
+
+> Today, modeled: $8.5$ TB ($8{,}456$ GB) can leave over the world's year at $10\%$ total cost on the cut served today,
+> $28$ times the $300$ GB target, with each input at its measured or approved value and responses capped at $875$
+> tokens; none of it is measured end to end.
+
+---
+
+Notes for you, not for the paste:
+- **"Overlapped waits" and "the statement cache"** (the goal's 2 and 3) are partly in today's figure. The planner prices
+  the long-running proof server, with its statement cache warm, from the server's measured prices for the types it ran.
+  The warm estimate (0.25) is the step beyond that, for the 14 families the card still prices cold. If the goal's text
+  meant something else by 2, tell me and I'll price it.
+- **The goal's other sentences predate Daniel's 300 GB target.** That covers its first sentence ("keeps GLM-5.3's FP4
+  weights (376.7 GB) safe"), its title, and its "projected path to about 9.1–9.4%". Item 4's table is the path in the
+  new unit, if you want a line for it: the fused cut ($5.85\times$), warm served blocks ($2.67\times$) and every other
+  lever at its goal ($1.27\times$) reach $427$ GB, and the last $1.42\times$ has no priced change.
+- **What I could not verify:**
+  - That `StopRule_v1` is in GLM-5.3's served 128k program.
+  - The 1.39× of the in-proof hashing cut at today's prover. It is 7 Nov's number, before the 3.71× prover.
+  - Whether the proof server's prices include verify-ahead. Today's case runs with the planner's busy-share flag off
+    and the server's prices on, so those prices stand for the overlap, but I didn't trace what they include.
+- Every lever row, the warm range and both worlds' 72 cells are in `lanes/proofs/20261110T0333Z-report-prf456-number`.
