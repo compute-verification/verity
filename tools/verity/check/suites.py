@@ -3,6 +3,7 @@
     uv run tools/verity/check/suites.py                     every suite whose inputs changed since it last passed here
     uv run tools/verity/check/suites.py verity flock        only these suites (a package name, a directory, or a unique part of one)
     uv run tools/verity/check/suites.py --quick             without the tests marked `slow`
+    uv run tools/verity/check/suites.py --deselect FILE     without the tests FILE names (`deselections`), reported deselected
     uv run tools/verity/check/suites.py --changed REV       only the suites the change from REV touches (`touched`)
     uv run tools/verity/check/suites.py --fresh             run even where a pass is cached
     uv run tools/verity/check/suites.py --list              each suite, its inputs, and whether a pass is cached
@@ -1818,6 +1819,7 @@ class Result:
     failed_tests: list | None = None     # node ids of the tests that failed
     reads: dict | None = None        # test module (or "*") -> the suite's other test modules it opened
     reused: int = 0                  # tests left out because a kept pass answers for them (`PerTest`)
+    deselected: list | None = None   # repository node ids of the tests `--deselect` left out
     contradicts: list | None = None  # in a fresh run: what failed that a cached pass answers for
     nondeterministic: list | None = None     # tests that both passed and failed under one key
     child_outside: dict | None = None    # test module (or "*") -> what a process its tests started read outside the inputs
@@ -2058,7 +2060,8 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     # tests the suite collected (`part_out`: none when it collected none, which fails as the whole suite would), or a part whose
     # every test a selection (`--quick`'s `-m "not slow"`) leaves out
     empty = part is not None and ((not part.files) if part.by != "id" else (rep.get("part_out") or 0) > 0)
-    ran_all = rc == 0 or (rc == 5 and (bool(reuse) or empty or (part is not None and ("-m" in args or "-k" in args))))
+    ran_all = rc == 0 or (rc == 5 and (bool(reuse) or empty or DESELECT_ARG in args
+                                       or (part is not None and ("-m" in args or "-k" in args))))
     reported = bool(rep)
     reads, child_outside, by = {m: set(fs) for m, fs in (rep.get("reads") or {}).items()}, {}, {}
     traced = set(rep["traced"]) if isinstance(rep.get("traced"), list) else None
@@ -2085,7 +2088,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
                   rep.get("unmarked_slow"), log, workers=workers, unguarded=rep.get("unguarded"), reported=reported,
                   watched=rep.get("watched"), distributions=rep.get("distributions"), missing=rep.get("missing"),
                   passed=rep.get("passed"), failed_tests=rep.get("failed"), reads=rep.get("reads"), reused=len(reuse),
-                  child_outside={m: sorted(set(fs)) for m, fs in child_outside.items()}, traced=traced,
+                  deselected=rep.get("deselected"), child_outside={m: sorted(set(fs)) for m, fs in child_outside.items()}, traced=traced,
                   untraced={m: sorted(v) for m, v in untraced.items()}, ran_all=ran_all,
                   child_reads=[(k, rel, sorted(w)) for (k, rel), w in sorted(by.items())], signal=sig,
                   peak_rss_gb=usage.ru_maxrss / 2**20, oom=oom, leftover=leftover, timed_out=timed_out)
@@ -2252,6 +2255,28 @@ def select(suites: list[Suite], names: list[str]) -> list[Suite]:
     return list(dict.fromkeys(chosen))
 
 
+DESELECT_ARG = "--verity-deselect"
+
+
+def deselections(text: str, suites: list[Suite]) -> dict[Suite, list[str]]:
+    """The tests a `--deselect` file names, by the suite that runs each: one node id a line, its file's path from the
+    repository's root (`PATH::NAME`, a parametrization's `NAME[...]` or every one of `NAME`'s), with blank lines and lines
+    starting with `#` left out. A test belongs to the suite whose directory is the deepest to hold its file."""
+    out: dict[Suite, set[str]] = {}
+    for line in text.splitlines():
+        if not (nodeid := line.strip()) or nodeid.startswith("#"):
+            continue
+        path, sep, name = nodeid.partition("::")
+        if not (sep and name and path.endswith(".py")) or path.startswith(("/", "../")):
+            raise ValueError(f"{nodeid!r} is not a test's node id: PATH::NAME, with PATH a test file's from the repository's root")
+        owner = max((s for s in suites if s.path == "." or path.startswith(s.path.rstrip("/") + "/")),
+                    key=lambda s: 0 if s.path == "." else len(s.path), default=None)
+        if owner is None:
+            raise ValueError(f"{nodeid!r}: no suite's directory holds {path}")
+        out.setdefault(owner, set()).add(nodeid)
+    return {s: sorted(ids) for s, ids in out.items()}
+
+
 def _since(d: dict | None) -> str:
     """The commit and time a kept pass records, or `?` for what it lacks."""
     d = d or {}
@@ -2260,8 +2285,8 @@ def _since(d: dict | None) -> str:
 
 def _count(r: Result) -> str:
     c = r.counts or {}
-    c = {**c, "reused": r.reused}
-    return ", ".join(f"{c[k]} {k}" for k in ("passed", "reused", "failed", "error", "skipped") if c.get(k)) or "no tests"
+    c = {**c, "reused": r.reused, "deselected": len(r.deselected or ())}
+    return ", ".join(f"{c[k]} {k}" for k in ("passed", "reused", "failed", "error", "skipped", "deselected") if c.get(k)) or "no tests"
 
 
 def failing_path(out: Path) -> Path:
@@ -2331,6 +2356,9 @@ def main(argv: list[str] | None = None) -> int:
                     "[tool.verity.tests] parts = M; every part runs the suite whole; a suite named NAME:K/M takes its own")
     ap.add_argument("--timings", type=Path, metavar="FILE", help="the timing record --files partitions by: JSON {suite name: {test "
                     "file: seconds}} (default: this machine's per-test record, `file_times`)")
+    ap.add_argument("--deselect", type=Path, metavar="FILE", help="leave out the tests FILE names, one node id a line, its path from "
+                    "the repository's root (`deselections`): each is reported deselected, and each suite holding one keys its pass by "
+                    "them, so it never answers for a run of the whole suite; a pass of the whole suite answers for it")
     a = ap.parse_args(argv)
     specs: dict[str, tuple[tuple[int, ...], int, str | None]] = {}
     if a.files and not re.fullmatch(r"[1-9]\d*(?:,[1-9]\d*)*/[1-9]\d*", a.files):
@@ -2365,6 +2393,22 @@ def main(argv: list[str] | None = None) -> int:
     skipped = select(suites, a.skip) if a.skip else []
     chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra
+    try:
+        drop = deselections(a.deselect.read_text(), suites) if a.deselect else {}
+    except (OSError, ValueError) as e:
+        print(f"suites: --deselect {a.deselect}: {e}", file=sys.stderr)
+        return 2
+
+    def arg_sets(s: Suite) -> list[list[str]]:
+        """Suite `s`'s pytest arguments, then those of each other run whose pass answers for its run: a full pass answers for
+        --quick, and a pass that ran the tests --deselect leaves out for one that didn't."""
+        bases = [args] + ([extra] if a.quick else [])
+        left = [x for nodeid in drop.get(s, []) for x in (DESELECT_ARG, nodeid)]
+        return [b + left for b in bases] + bases if left else bases
+
+    for s in chosen:
+        if drop.get(s):
+            print(f"suites: {s.name}: --deselect leaves out {', '.join(drop[s])}")
     tree = worktree()
     if a.changed:
         try:
@@ -2419,10 +2463,10 @@ def main(argv: list[str] | None = None) -> int:
         ids = input_ids(tree, sorted(set(paths) | set(RUNNER)), markdown(s), cuts[s])
         ids.update({f"fixture:{p}": art for p, art in fixtures.items() if covered(p, paths, cuts[s])})
         deps = resolved(roots(s, pkgs), lock, s.path)
-        keys = [key(s, ids, env, args, deps)] + ([key(s, ids, env, extra, deps)] if a.quick else [])   # a full pass also covers --quick
+        keys = [key(s, ids, env, x, deps) for x in arg_sets(s)]
         if s in parts:                     # its own pass, then (a pass of the whole suite answers for each of its parts) the suite's
             mods, own, reach[s] = part_context(s, parts[s], tree, cuts[s])
-            keys = [part_key(s, parts[s], reach[s], mods, ids, own, env, x, deps) for x in [args] + ([extra] if a.quick else [])] + keys
+            keys = [part_key(s, parts[s], reach[s], mods, ids, own, env, x, deps) for x in arg_sets(s)] + keys
         hit = next((c for c in map(cached, keys) if c and holds(c, tree, lock, provided)), None)
         plan.append((s, paths, keys, hit, deps))
         ids_of[s] = ids
@@ -2430,8 +2474,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.explain:
         [(s, _paths, keys, hit, deps)] = plan
         ids = ids_of[s]
-        now = components(s, ids, env, args, deps)
-        per = None if a.no_per_test else PerTest(s, ids, env, [args] + ([extra] if a.quick else []), deps, tree)
+        now = components(s, ids, env, arg_sets(s)[0], deps)
+        per = None if a.no_per_test else PerTest(s, ids, env, arg_sets(s), deps, tree)
         print("\n".join(explain(s, now, keys, hit, per, tree, lock, provided)))
         return 0
 
@@ -2459,8 +2503,7 @@ def main(argv: list[str] | None = None) -> int:
               f"{', '.join(sorted(p for p in unfetched if covered(p, inputs[s], cuts[s])))[:300]} (log: {fetch_log})")
         results.append(Result(s, "failed", log=fetch_log))
     todo = [(s, paths, keys, deps) for s, paths, keys, hit, deps in plan if (a.fresh or not hit) and s not in blocked]
-    per = {s: PerTest(s, ids_of[s], env, [args] + ([extra] if a.quick else []), deps, tree)
-           for s, _paths, _keys, deps in todo if not a.no_per_test}
+    per = {s: PerTest(s, ids_of[s], env, arg_sets(s), deps, tree) for s, _paths, _keys, deps in todo if not a.no_per_test}
     whole = {s: w for s, pt in per.items() if not a.fresh and (w := pt.whole(lock, provided))}
     results += [Result(s, "cached", since=w, key=w["key"]) for s, w in whole.items()]
     todo = [t for t in todo if t[0] not in whole]
@@ -2472,7 +2515,7 @@ def main(argv: list[str] | None = None) -> int:
                 results.append(Result(s, "failed", log=logs / "lean-build.log"))
         todo = [t for t in todo if t[0].name not in AFTER_LEAN]
     here = kept_passes() if todo else {}
-    forced = {s: forced_by(s, components(s, ids_of[s], env, args, deps), here.get(s.name, []),
+    forced = {s: forced_by(s, components(s, ids_of[s], env, arg_sets(s)[0], deps), here.get(s.name, []),
                            any(map(cached, keys)), a.fresh) for s, _paths, keys, deps in todo}
     known = _durations()
 
@@ -2515,7 +2558,7 @@ def main(argv: list[str] | None = None) -> int:
         with lanes[s in wide].take(turns[s], n), (memory.take(turns[s], gb) if memory and s in wide else nullcontext()):
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
-            return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not covered(m, paths, cuts[s])],
+            return run(s, paths + meta + list(RUNNER), arg_sets(s)[0], logs, n, [m for m in meta if not covered(m, paths, cuts[s])],
                        reuse.get(s, []), (s.timeout_s or SUITE_TIMEOUT_S) if a.timeouts else 0.0, threads_per_process(jobs),
                        parts.get(s))
 
@@ -2577,7 +2620,8 @@ def main(argv: list[str] | None = None) -> int:
                                                           "run": a.run, "when": time.strftime("%Y-%m-%d %H:%M"), "counts": r.counts,
                                                           "reused": r.reused, "seconds": round(r.seconds, 1), **u,
                                                           **({"part": parts[s].row()} if s in parts else {}),
-                                                          "components": components(s, ids_of[s], env, args, deps)}, indent=1) + "\n")
+                                                          "components": components(s, ids_of[s], env, arg_sets(s)[0], deps)}, indent=1)
+                                                          + "\n")
         elif r.outside:
             few = [p + (f" (read by {m})" if m != "*" else " (read by a conftest or session fixture)")
                    for p, m in list(r.outside.items())[:3]]
@@ -2641,7 +2685,7 @@ def main(argv: list[str] | None = None) -> int:
                                        "seconds": round(r.seconds, 1), "workers": r.workers, "counts": r.counts,
                                        "failed_tests": r.failed_tests, "beyond_tests": r.beyond_tests,
                                        "log": str(r.log) if r.log else None, "outside": r.outside, "child_outside": r.child_outside, "unguarded": r.unguarded,
-                                       "since": r.since, "reused": r.reused,
+                                       "since": r.since, "reused": r.reused, "deselected": r.deselected,
                                        "contradicts": r.contradicts, "nondeterministic": r.nondeterministic,
                                        "timed_out": r.timed_out, "forced_by": forced.get(r.suite),
                                        **({"part": parts[r.suite].row()} if r.suite in parts else {})} for r in results]
