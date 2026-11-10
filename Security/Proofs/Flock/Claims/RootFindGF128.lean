@@ -46,6 +46,7 @@ import Proofs.Flock.Claims.RootFindCorrect
 import Proofs.Flock.Claims.RootFindCost
 import Std.Tactic.BVDecide.Normalize.Prop
 public import Proofs.Flock.Claims.RootFindCost
+public import Proofs.Flock.Claims.RootFind
 
 /-!
 # The root finder over GF(2^128)

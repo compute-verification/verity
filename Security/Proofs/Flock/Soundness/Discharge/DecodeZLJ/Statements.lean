@@ -18,6 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Setup
+public import Proofs.Flock.Soundness.Discharge.DecodeZL
 
 /-!
 # The decoder at `J` tables: statements

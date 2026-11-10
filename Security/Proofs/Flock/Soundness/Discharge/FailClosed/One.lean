@@ -45,6 +45,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 public import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
 public import Proofs.Flock.Soundness.Discharge.PlainJ.Sound
+public import Proofs.Flock.Soundness.Discharge.PlainHJ
+public import Proofs.Flock.Soundness.Discharge.PlainJ
 
 /-!
 # Soundness: one theorem over everything flock-verify accepts

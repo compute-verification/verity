@@ -19,6 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Tape
 public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin
 
 /-!
 # A rep's run, from its rounds' frames (`DecodesOn`'s message half)

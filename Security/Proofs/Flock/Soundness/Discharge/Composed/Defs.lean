@@ -5,6 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
 public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 public import Proofs.Flock.Soundness.Discharge.ZkView.Fixed
 public import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
+public import Proofs.Flock.Soundness.Discharge.ZkView
 
 /-!
 # One `--zk` sampled session: the pieces the soundness half reads
