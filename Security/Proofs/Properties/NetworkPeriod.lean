@@ -434,18 +434,25 @@ theorem tiedAnswer_unwired :
       tiedInputWired (tiedAnswer #[.str "state"]) = false ∧ tiedInputWired (tiedAnswer #[]) = false := by
   decide +kernel
 
-/-- **No period check that accepts every period has `RowsTiedInputWired`'s property** (its nontrivial lemma): such a
-check accepts a rows-form period of one link-window whose scan's `prog` is wired to the slot audit, and whose answer
-names a second tied Input, which no check wires. -/
-theorem rowsTiedInputWired_nontrivial : ¬ RowsTiedInputWiredOf acceptAllRows := by
+/-- **`RowsTiedInputWired`'s nontrivial lemma**: its conclusion fails at a link-window whose scan's `prog` is wired to
+the slot audit and whose answer names a second tied Input, which no check wires. -/
+theorem rowsTiedInputWired_nontrivial :
+    ¬ (tiedInputWired (tiedAnswer #[.str progParam, .str "state"]) = true ∧
+      wired #[slotAudit] slotSchedule #[slotReg] tiedWindow = true) := by
+  intro h
+  cases tiedAnswer_unwired.1.symm.trans h.1
+
+/-- **No period check that accepts every period has `RowsTiedInputWired`'s property**: such a check accepts a rows-form
+period of that one link-window, where the conclusion fails (`rowsTiedInputWired_nontrivial`). -/
+theorem rowsTiedInputWired_acceptAll : ¬ RowsTiedInputWiredOf acceptAllRows := by
   intro h
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
   let x : Window := ⟨tiedAnswer #[.str progParam, .str "state"], #[], .rows #[]⟩
-  have hw : tiedInputWired x.answer = true :=
-    (h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[x]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow x
-      rfl rfl).1
-  rw [tiedAnswer_unwired.1] at hw
-  cases hw
+  have hw : tiedInputWired (tiedAnswer #[.str progParam, .str "state"]) = true ∧
+      wired #[slotAudit] slotSchedule #[slotReg] tiedWindow = true :=
+    h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[x]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow x
+      rfl rfl
+  exact rowsTiedInputWired_nontrivial hw
 
 end Properties.NetworkPeriod
