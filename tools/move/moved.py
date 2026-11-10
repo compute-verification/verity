@@ -32,6 +32,8 @@ class Moved:
         #: a package, and its import root, where the maps leave none; and a map's `[create]` files
         self.created = self._created()
         self._cat = None
+        #: the files `read` could not give as text, by path, each with what the decoder said
+        self.not_text: dict[str, str] = {}
 
     def _git(self, *args: str) -> str:
         return subprocess.run(["git", *args], cwd=self.repo, check=True, capture_output=True, text=True).stdout
@@ -75,7 +77,8 @@ class Moved:
         data = self._cat.stdout.read(int(head[2]) + 1)[:-1]
         try:
             return data.decode("utf-8")
-        except UnicodeDecodeError:
+        except UnicodeDecodeError as e:
+            self.not_text[p] = f"{e.reason} at byte {e.start}"
             return None
 
     def close(self) -> None:

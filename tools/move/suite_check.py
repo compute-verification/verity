@@ -41,7 +41,10 @@ Python also runs the `__init__.py` of each package above a module, and the read 
 a suite's tests import, 3 takes the `__init__.py` of every package from where it lands up to its import root (`packages`:
 one the maps move there, leave there, or `layout.py` creates) and fails where the suite's inputs don't hold it. Two
 things 3 does not follow: what such an `__init__.py` itself imports, where today's packages ran another, and a module a
-test imports by a bare name through `sys.path`."""
+test imports by a bare name through `sys.path`.
+
+A file the check cannot read, one that is not UTF-8 text or Python that does not parse, is named with the reason
+(`unread`) and fails the check: what it imports is not known."""
 from __future__ import annotations
 
 import argparse
@@ -86,6 +89,8 @@ class Imports:
             if p.endswith(".py") and (name := L.module_name(p, self.roots)):
                 self.file.setdefault(name, p)
         self.memo: dict[tuple[str, bool], set[str]] = {}
+        #: the files whose imports could not be read, by path, each with what the parser said
+        self.unparsed: dict[str, str] = {}
 
     def resolve(self, name: str) -> str | None:
         while name:
@@ -103,7 +108,8 @@ class Imports:
         self.memo[f, at_import] = out
         try:
             tree = ast.parse(self.m.read(f) or "")
-        except (SyntaxError, ValueError):
+        except (SyntaxError, ValueError) as e:
+            self.unparsed[f] = f"{type(e).__name__}: {e}"
             return out
         me = L.module_name(f, self.roots) or ""
         pkg = (me if f.endswith("/__init__.py") else me.rpartition(".")[0]).split(".")
@@ -346,7 +352,8 @@ def check(m: Moved) -> dict:
     return {"orphans": orphans, "parted": parted, "inputs": list(lost.values()), "needs": needs,
             "packages": list(packages.values()), "packages_outside_today": list(outside_pk.values()),
             "loads_archive": sorted(loads.values(), key=lambda x: x["module"]), "archived_with_code": with_code,
-            "sent_with_code": with_suite, "reached": len(reached), "outside_today": list(outside.values())}
+            "sent_with_code": with_suite, "reached": len(reached), "outside_today": list(outside.values()),
+            "unread": {**{f: f"not UTF-8 text: {why}" for f, why in m.not_text.items()}, **imports.unparsed}}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -411,7 +418,9 @@ def main(argv: list[str] | None = None) -> int:
         today = r["packages_outside_today"]
         print(f"  not counted: {len(today)} `__init__.py` above them are outside it too, {sum(x['at_import'] for x in today)} of "
               f"them run when a test file is imported")
-    return 1 if r["orphans"] or r["parted"] or r["inputs"] or r["loads_archive"] or r["packages"] else 0
+    for f, why in sorted(r["unread"].items()):
+        print(f"  not read, so what it imports is not counted: {f} ({why})")
+    return 1 if r["orphans"] or r["parted"] or r["inputs"] or r["loads_archive"] or r["packages"] or r["unread"] else 0
 
 
 if __name__ == "__main__":

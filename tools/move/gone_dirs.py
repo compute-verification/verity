@@ -18,7 +18,8 @@ the maps empty), by their paths today: a directory that holds nothing else is th
 that holds once that commit has landed.
 
 Not seen: a directory named with no `/` (one segment), a path relative to the file that holds it, a path put together
-at run time, and a module name (`[modules]` rewrites those)."""
+at run time, and a module name (`[modules]` rewrites those). A file that is not UTF-8 text is not read; the last line
+counts those and `--json` lists them (`not_text`)."""
 from __future__ import annotations
 
 import argparse
@@ -69,7 +70,8 @@ def check(m: Moved) -> dict:
     return {"count": sum(len(v) for v in refs.values()),
             "directories": [{"directory": d, "references": len(refs[d]), "files_go_to": goes[d], "where": refs[d]}
                             for d in sorted(refs, key=lambda d: (-len(refs[d]), d))],
-            "gone_unreferenced": [d for d in gone if d not in refs], "one_segment": one_segment, "tokens_to_nothing": empty}
+            "gone_unreferenced": [d for d in gone if d not in refs], "one_segment": one_segment, "tokens_to_nothing": empty,
+            "not_text": sorted(m.not_text)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -104,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  [tokens] {t}: the new directory holds nothing after the maps")
     if r["one_segment"]:
         print(f"  not counted, one segment: {', '.join(r['one_segment'])}")
+    if r["not_text"]:
+        print(f"  not read: {len(r['not_text'])} files that are not UTF-8 text (--json lists them)")
     return 1 if r["count"] or r["tokens_to_nothing"] else 0
 
 

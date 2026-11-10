@@ -230,6 +230,25 @@ def test_maps_apply_in_order_and_an_excluded_file_is_not_read(repo: Path) -> Non
     assert gone(repo, second)["directories"][0]["where"] == ["old/pkg/pyproject.toml:7"]
 
 
+def test_a_file_that_cannot_be_read_is_named(repo: Path, capsys: pytest.CaptureFixture) -> None:
+    (repo / "old/lib/deep.py").write_text("def broken(:\n")                    # old/lib/mod.py imports it
+    (repo / "data").mkdir()
+    (repo / "data/blob.bin").write_bytes(b"\xff\xfe old/lib \x00")
+    for args in (["add", "-A"], ["commit", "-q", "-m", "unreadable"]):
+        subprocess.run(["git", *args], cwd=repo, check=True, env={**os.environ, **ENV})
+    unread = suites(repo, WHOLE)["unread"]
+    assert list(unread) == ["old/lib/deep.py"] and unread["old/lib/deep.py"].startswith("SyntaxError: ")
+    assert gone(repo, ROOTS + "[paths]\n" + PARTS)["not_text"] == ["data/blob.bin"]
+    (repo / "good.toml").write_text(WHOLE)
+    m = MOVED.Moved
+    SUITES.Moved = lambda maps, ref, deleted=(), m=m: m(maps, "HEAD", repo, deleted)
+    try:
+        assert SUITES.main([str(repo / "good.toml")]) == 1, "a map that passes on a tree it cannot read all of"
+    finally:
+        SUITES.Moved = m
+    assert "not read, so what it imports is not counted: old/lib/deep.py (SyntaxError: " in capsys.readouterr().out
+
+
 def test_the_commands_exit_1_with_the_paths(repo: Path, capsys: pytest.CaptureFixture) -> None:
     (repo / "bad.toml").write_text(ROOTS + "[paths]\n" + PARTS)
     (repo / "good.toml").write_text(WHOLE)
