@@ -56,7 +56,7 @@ end Work
 theorem smallInfo_piece {c d : RegisteredCircuit} (M : Containment c.D d.D)
     (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Trace} {θv : d.D.Trace}
     (hv : ∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) {Γ : ℕ} {K : ℝ}
-    {W : Finset (Fin d.D.N)} (hWc : W ⊆ d.D.computed) (hΓ : d.D.size W ≤ Γ) (hK : novelInfo d θv W ≤ K) :
+    {W : Finset (Fin d.D.N)} (hWc : W ⊆ d.D.computed) (hΓ : d.D.size W ≤ Γ) (hK : freshInfo d θv W ≤ K) :
     SmallInfo c θc Γ K (univ.filter fun g => M.emb g ∈ W) := by
   have hPc : (univ.filter fun g => M.emb g ∈ W) ⊆ c.D.computed := fun g hg => by
     have := (mem_filter.1 (hWc (mem_filter.1 hg).2)).2
@@ -69,6 +69,6 @@ theorem smallInfo_piece {c d : RegisteredCircuit} (M : Containment c.D d.D)
     exact card_le_card fun x hx => by
       obtain ⟨g, hg, rfl⟩ := mem_map.1 hx
       exact (mem_filter.1 hg).2
-  exact ⟨hPc, hPs, (novelInfo_le_of_containment M hθ hv hWc).trans hK⟩
+  exact ⟨hPc, hPs, (freshInfo_le_of_containment M hθ hv hWc).trans hK⟩
 
 end Nci.SecurityProofs

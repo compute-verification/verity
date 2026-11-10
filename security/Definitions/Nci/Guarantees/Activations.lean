@@ -41,7 +41,7 @@ def ActivationsReads : Prop :=
     0 < b_w → 0 < b_a → 0 < dd →
     Assumptions.EntersAtMost T e → Assumptions.DrawsAtLeast L dd →
     Assumptions.ActivationsIncompressibleAll r T L c k b_w b_a →
-    ∀ R, Small r c k R → b_a * (T.mults R).card ≤ novelReads r R * T.bound k b_w dd e
+    ∀ R, Small r c k R → b_a * (T.mults R).card ≤ freshInput r R * T.bound k b_w dd e
 
 /-- **The activations bound over all of training, with dark gates** ([ACTIVATIONS-BOUND]): a declaration `d` that
 complies at `(Γ, α)` (`CompliesRate`) and contains the reference circuit `r` partly, computing the gates `S` of `r` and

@@ -7,15 +7,15 @@ public import Proofs.Nci.Threads
 /-!
 # Proofs of NCI's guarantees with reads counted by information
 
-A set of gates takes at most `2^width` values (`support_le_width`), so `novelInfo ≤ novelReads`
-(`novelInfo_le_novelReads`), with equality when the novel reads are novel input gates, which range freely
-(`novelInfo_eq_novelReads_of_inputs`). So incompressibility in support form and `WeightsIncompressible` say the same
+A set of gates takes at most `2^width` values (`support_le_width`), so `freshInfo ≤ freshInput`
+(`freshInfo_le_freshInput`), with equality when the novel reads are novel input gates, which range freely
+(`freshInfo_eq_freshInput_of_inputs`). So incompressibility in support form and `WeightsIncompressible` say the same
 at a subcircuit whose novel reads are novel input gates (`weightsSupport_iff_of_inputs`).
 
-Theorem 1's proof reads `novelReads` only through incompressibility and the cap `S`, so it carries over with `novelInfo`
+Theorem 1's proof reads `freshInput` only through incompressibility and the cap `S`, so it carries over with `freshInfo`
 in its place (`threaded_count`, and `Proofs.Nci.Fmt2`). A run of `c` lifts to a run of a declaration that contains it,
 with the baseline at its committed values (`liftRun`), so the piece of `c` inside a set `W` of `d`'s gates reads no more
-information than `W` (`novelInfo_le_of_containment`). Supports multiply at most over a union (`support_union_le`), and a
+information than `W` (`freshInfo_le_of_containment`). Supports multiply at most over a union (`support_union_le`), and a
 function of `k` bits takes at most `2^k` values (`support_le_of_factor`): that bounds a set read by a state and an
 ingress (`InfoOfState`). A set of gates fed by no novel input outside `P` takes at most `2^width(P)` values
 (`support_le_of_feeds`).
@@ -110,33 +110,33 @@ section Info
 
 variable (d : RegisteredCircuit) (θv : d.D.Trace) (R : Finset (Fin d.D.N))
 
-theorem novelInfo_le_iff (x : ℝ) :
-    novelInfo d θv R ≤ x ↔ (support d θv (d.D.into R \ d.θ) : ℝ) ≤ 2 ^ x :=
+theorem freshInfo_le_iff (x : ℝ) :
+    freshInfo d θv R ≤ x ↔ (support d θv (d.D.into R \ d.θ) : ℝ) ≤ 2 ^ x :=
   Real.logb_le_iff_le_rpow (by norm_num) (Nat.cast_pos.2 (support_pos d θv _))
 
-theorem le_novelInfo_iff (x : ℝ) :
-    x ≤ novelInfo d θv R ↔ (2 : ℝ) ^ x ≤ support d θv (d.D.into R \ d.θ) :=
+theorem le_freshInfo_iff (x : ℝ) :
+    x ≤ freshInfo d θv R ↔ (2 : ℝ) ^ x ≤ support d θv (d.D.into R \ d.θ) :=
   Real.le_logb_iff_rpow_le (by norm_num) (Nat.cast_pos.2 (support_pos d θv _))
 
 /-- **Information is at most width.** -/
-theorem novelInfo_le_novelReads : novelInfo d θv R ≤ novelReads d R := by
-  rw [novelInfo_le_iff, Real.rpow_natCast]
+theorem freshInfo_le_freshInput : freshInfo d θv R ≤ freshInput d R := by
+  rw [freshInfo_le_iff, Real.rpow_natCast]
   have := support_le_width d θv (d.D.into R \ d.θ)
-  unfold novelReads
+  unfold freshInput
   exact_mod_cast this
 
 /-- **Information is width on novel inputs**: when `R`'s novel reads are novel input gates. -/
-theorem novelInfo_eq_novelReads_of_inputs (hU : ∀ g ∈ d.D.into R \ d.θ, d.D.isInput g = true) :
-    novelInfo d θv R = novelReads d R := by
+theorem freshInfo_eq_freshInput_of_inputs (hU : ∀ g ∈ d.D.into R \ d.θ, d.D.isInput g = true) :
+    freshInfo d θv R = freshInput d R := by
   have hs := support_eq_of_inputs d θv fun g hg => ⟨hU g hg, (mem_sdiff.1 hg).2⟩
-  unfold novelInfo novelReads
+  unfold freshInfo freshInput
   rw [hs, Nat.cast_pow, Nat.cast_ofNat, ← Real.rpow_natCast, Real.logb_rpow (by norm_num) (by norm_num)]
 
 end Info
 
 theorem smallInfo_of_small {c : RegisteredCircuit} (θv : c.D.Trace) {Γ : ℕ} {S : ℝ} {R : Finset (Fin c.D.N)}
     (hR : Small c Γ S R) : SmallInfo c θv Γ S R :=
-  ⟨hR.1, hR.2.1, (novelInfo_le_novelReads c θv R).trans hR.2.2⟩
+  ⟨hR.1, hR.2.1, (freshInfo_le_freshInput c θv R).trans hR.2.2⟩
 
 /-- **Where the two forms agree**: at a subcircuit whose novel reads are novel input gates, the
 inequality in support form is `WeightsIncompressible`'s. -/
@@ -144,8 +144,8 @@ theorem weightsSupport_iff_of_inputs {c : RegisteredCircuit} (θv : c.D.Trace) (
     (R : Finset (Fin c.D.N)) (hU : ∀ g ∈ c.D.into R \ c.θ, c.D.isInput g = true) :
     (2 : ℝ) ^ (b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card) ≤
         support c θv (c.D.into R \ c.θ) ↔
-      b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ novelReads c R := by
-  rw [← le_novelInfo_iff, novelInfo_eq_novelReads_of_inputs c θv R hU]
+      b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ freshInput c R := by
+  rw [← le_freshInfo_iff, freshInfo_eq_freshInput_of_inputs c θv R hU]
 
 section Threads
 
@@ -221,11 +221,11 @@ theorem emb_into_filter {c d : RegisteredCircuit} (M : Containment c.D d.D)
 
 /-- **Information through a containment**: the piece of `c` inside a set `W` of `d`'s computed gates reads no more
 information than `W`. -/
-theorem novelInfo_le_of_containment {c d : RegisteredCircuit} (M : Containment c.D d.D)
+theorem freshInfo_le_of_containment {c d : RegisteredCircuit} (M : Containment c.D d.D)
     (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Trace} {θv : d.D.Trace}
     (hv : ∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) {W : Finset (Fin d.D.N)}
-    (hW : W ⊆ d.D.computed) : novelInfo c θc (univ.filter fun g => M.emb g ∈ W) ≤ novelInfo d θv W := by
-  unfold novelInfo
+    (hW : W ⊆ d.D.computed) : freshInfo c θc (univ.filter fun g => M.emb g ∈ W) ≤ freshInfo d θv W := by
+  unfold freshInfo
   refine Real.logb_le_logb_of_le (by norm_num) (Nat.cast_pos.2 (support_pos c θc _)) ?_
   exact_mod_cast support_le_of_containment M hθ hv (emb_into_filter M hθ hW)
 
@@ -237,7 +237,7 @@ theorem InfoOfState : Guarantees.InfoOfState := by
       _ ≤ 2 ^ k * 2 ^ D.D.width Sin := Nat.mul_le_mul (support_le_of_factor D θv f hf) (support_le_width D θv Sin)
       _ = 2 ^ (k + D.D.width Sin) := (pow_add 2 k _).symm
   refine ⟨(support_le_support_into D θv hR (subset_refl R)).trans hs, ?_⟩
-  rw [novelInfo_le_iff, ← Nat.cast_add, Real.rpow_natCast]
+  rw [freshInfo_le_iff, ← Nat.cast_add, Real.rpow_natCast]
   exact_mod_cast hs
 
 section Feeds

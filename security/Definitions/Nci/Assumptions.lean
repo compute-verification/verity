@@ -65,9 +65,9 @@ as the activations' half of `TrainingIncompressible`. The counterexample to its 
 apply to it: an E2M1 product takes at most 37 values, but an inference block that holds the product gate reads its
 weight and input wires whole, at least `b_w + b_a` bits. -/
 def ActivationsIncompressible (D : RegisteredCircuit) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
-  ∀ R ⊆ D.D.computed, D.D.size R ≤ c → (novelReads D R : ℝ) ≤ k →
+  ∀ R ⊆ D.D.computed, D.D.size R ≤ c → (freshInput D R : ℝ) ≤ k →
     b_w * (ch.weightsUsed R).card +
-        b_a * ((ch.inputsUsed R).filter fun x => ¬ ch.LinkedWhole R x.1 x.2.1 x.2.2).card ≤ novelReads D R
+        b_a * ((ch.inputsUsed R).filter fun x => ¬ ch.LinkedWhole R x.1 x.2.1 x.2.2).card ≤ freshInput D R
 
 /-- **Incompressibility of partial sums** (the draft's partial-sum incompressibility, applied jointly with weight
 incompressibility, and the count of partial sums in the proof of its theorem). A partial sum is a sum of some of the
@@ -90,10 +90,10 @@ as the partial sums' half of `TrainingIncompressible`. The counterexample to its
 apply to it: an adder inference block over a `k × k × k` block holds values determined by `2k²` entries, but it reads
 its `k³` products' wires to form them. -/
 def PartialSumsIncompressible (D : RegisteredCircuit) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
-  ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ c ∧ (novelReads D (P.gates u) : ℝ) ≤ k) →
+  ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ c ∧ (freshInput D (P.gates u) : ℝ) ≤ k) →
     ∃ s : Fin n → ℕ,
       ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
-      ∀ u, b_w * (ch.weightsUsed (P.gates u)).card + b_a * s u ≤ novelReads D (P.gates u)
+      ∀ u, b_w * (ch.weightsUsed (P.gates u)).card + b_a * s u ≤ freshInput D (P.gates u)
 
 /-! The parameters the guarantees are taken at, named: what a chain's shape, a run's coverage and a division's caps must
 be for a guarantee's factor to apply. Each is checkable on the circuit it reads, and none is about the world. -/
@@ -113,7 +113,7 @@ def Coverage (κ : ℝ) (r : RegisteredCircuit) (x : ℝ) : Prop :=
 /-- **Small inference blocks**: each block of the division `P` of `D` has at most `c` gates and reads at most `k` fresh
 input bits, the caps under which `PartialSumsIncompressible` charges a division. -/
 def SmallBlocks (D : RegisteredCircuit) {n : ℕ} (P : Partition D.D n) (c : ℕ) (k : ℝ) : Prop :=
-  ∀ u, D.D.size (P.gates u) ≤ c ∧ (novelReads D (P.gates u) : ℝ) ≤ k
+  ∀ u, D.D.size (P.gates u) ≤ c ∧ (freshInput D (P.gates u) : ℝ) ≤ k
 
 /-- **Sessions of exactly `c` gates, each reading its own prompt of at most `k` bits**: each block `u` of the division
 `P` of `d` has exactly `c` gates, padding included, and reads from outside itself only registered information and its

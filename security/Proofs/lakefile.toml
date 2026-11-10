@@ -60,7 +60,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.NetworkCertifier.Check", "Proofs.Properties.NetworkCertifier.DeviceOutput", "Proofs.Properties.NetworkCertifier.DeviceOutput.Runs",
   "Proofs.Properties.Hash.Identity", "Proofs.Properties.Nci.DescVerdict", "Proofs.Properties.Nci.DescAgree",
   "Proofs.Properties.Nci.Walk", "Proofs.Properties.Nci.Resolve", "Proofs.Properties.Nci.BodiesOk",
-  "Proofs.Properties.Nci.Width", "Proofs.Properties.Nci.Novel", "Proofs.Properties.Nci.BaselineSteps",
+  "Proofs.Properties.Nci.Width", "Proofs.Properties.Nci.Fresh", "Proofs.Properties.Nci.BaselineSteps",
   "Proofs.Properties.Nci.Baseline", "Proofs.Properties.Nci.OperandsResolve", "Proofs.Properties.Nci.Agrees",
   "Proofs.Properties.Spot", "Proofs.Properties.Spot.Halt", "Proofs.Properties.Spot.Interval",
   "Proofs.Properties.Spot.FactorUpper", "Proofs.Properties.Spot.TwoStageCheck", "Proofs.Properties.Spot.Bits",

@@ -33,7 +33,7 @@ and gives a verdict on every well-formed instance, are completeness, in `Proofs.
 **A verdict is the definition's.** The decoded Program is the definition's circuit as the check's docstring maps
 descriptor v1 to it (`LaysOut`: gate `g` of the canonical layout is gate `g`, of its primitive's width `Value<w>`, an input
 gate when its primitive is an input node, reading the gates its operands name). `LaysOut` fixes a circuit's gates,
-widths, input gates and reads, which is all `size` and `Nci.novelReads` read, and leaves its operations and outputs free.
+widths, input gates and reads, which is all `size` and `Nci.freshInput` read, and leaves its operations and outputs free.
 
 * `Decodes`: on every instance with a verdict, the Program lays out a circuit (`Verity.Circuit`, its gates in
   topological order and its input gates reading nothing), `theta` names its registered information
@@ -41,7 +41,7 @@ widths, input gates and reads, which is all `size` and `Nci.novelReads` read, an
   `0 … n - 1`, none empty (`Verity.Partition`, `Divides`).
 * `Reports`: for every registered circuit `d` laid out by the Program with the registered information `theta` names,
   whose inference blocks `d.𝓘` (the registered compiler's) the owners are, the verdict's `gates` is `d`'s number of
-  gates, its `ius` lists per inference block `u` its `size` and `Nci.novelReads` exactly, its `complies` is `true`
+  gates, its `ius` lists per inference block `u` its `size` and `Nci.freshInput` exactly, its `complies` is `true`
   exactly when every inference block has at most `c` gates and at most `α` fresh input bits per gate (`Meets`), and its
   `failure` is the first block that doesn't, with the rule it breaks first.
 * `Witnesses`: a verdict whose `complies` is `true` means the registered circuit complies at the rate,
@@ -217,7 +217,7 @@ def Divides {D : Verity.Circuit} {n : ℕ} (owner : Array Json) (U : Verity.Part
 /-- Inference block `u` of `U` has at most `c` gates and at most `α` fresh input bits per gate, the two bounds
 `Nci.CompliesRate` states. -/
 def Meets (d : Verity.RegisteredCircuit) {n : ℕ} (U : Verity.Partition d.D n) (c : ℕ) (α : ℝ) (u : Fin n) : Prop :=
-  d.D.size (U.gates u) ≤ c ∧ (Nci.novelReads d (U.gates u) : ℝ) ≤ α * d.D.size (U.gates u)
+  d.D.size (U.gates u) ≤ c ∧ (Nci.freshInput d (U.gates u) : ℝ) ≤ α * d.D.size (U.gates u)
 
 /-- **What a verdict is about.** On every instance with a verdict, the Program lays out a circuit of the definition's,
 the entries of `theta` name its registered information, and the owners are a partition of its computed gates. -/
@@ -230,7 +230,7 @@ def Decodes : Prop :=
 /-- The verdict `out` on `j` is the definition's: for every registered circuit `d` the Program lays out with the
 registered information `theta` names, whose inference blocks `d.𝓘`, the registered compiler's, the owners are, at
 `c = gamma` and `α = num / den`: `gates` is `d`'s number of gates; `ius` lists per inference block its `size` and
-`novelReads`; `complies` is `true` exactly when every block meets both bounds; and `failure` is `null` when every block
+`freshInput`; `complies` is `true` exactly when every block meets both bounds; and `failure` is `null` when every block
 does, and otherwise the first block `u` that doesn't, with `size` when it has more than `c` gates and else `nci`. -/
 def Reported (j out : Json) : Prop :=
   ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
@@ -239,7 +239,7 @@ def Reported (j out : Json) : Prop :=
     let α : ℝ := (i.num : ℝ) / i.den
     out.getObjVal? "gates" = .ok (toJson d.D.N) ∧
     out.getObjVal? "ius" = .ok (Json.arr (Array.ofFn fun u : Fin d.n =>
-      Json.arr #[toJson (d.D.size (d.𝓘.gates u)), toJson (Nci.novelReads d (d.𝓘.gates u))])) ∧
+      Json.arr #[toJson (d.D.size (d.𝓘.gates u)), toJson (Nci.freshInput d (d.𝓘.gates u))])) ∧
     (out.getObjVal? "complies" = .ok (.bool true) ↔ ∀ u, Meets d d.𝓘 i.gamma α u) ∧
     (out.getObjVal? "complies" = .ok (.bool false) ↔ ¬ ∀ u, Meets d d.𝓘 i.gamma α u) ∧
     (out.getObjVal? "failure" = .ok .null ↔ ∀ u, Meets d d.𝓘 i.gamma α u) ∧
@@ -248,7 +248,7 @@ def Reported (j out : Json) : Prop :=
         (∀ u' < u, Meets d d.𝓘 i.gamma α u') ∧
           ((rule = "size" ∧ i.gamma < d.D.size (d.𝓘.gates u)) ∨
            (rule = "nci" ∧ d.D.size (d.𝓘.gates u) ≤ i.gamma ∧
-             α * d.D.size (d.𝓘.gates u) < (Nci.novelReads d (d.𝓘.gates u) : ℝ)))
+             α * d.D.size (d.𝓘.gates u) < (Nci.freshInput d (d.𝓘.gates u) : ℝ)))
 
 /-- **The verdict is the definition's.** On every instance with a verdict, the verdict is `Reported`. -/
 def Reports : Prop :=

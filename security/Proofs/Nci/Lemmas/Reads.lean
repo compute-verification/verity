@@ -32,6 +32,6 @@ def UpdatedMatMulReads : Prop :=
     0 < b_w → 0 < b_a → Assumptions.InnerAtLeast ch d → Assumptions.SmallBlocks D P c k →
     Assumptions.ActivationsIncompressible D ch c k b_w b_a →
     Assumptions.PartialSumsIncompressible D ch c k b_w b_a →
-      ch.G * readFactor k b_w b_a d ≤ ∑ u, (novelReads D (P.gates u) : ℝ)
+      ch.G * readFactor k b_w b_a d ≤ ∑ u, (freshInput D (P.gates u) : ℝ)
 
 end Nci.Guarantees

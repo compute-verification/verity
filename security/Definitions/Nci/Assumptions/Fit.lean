@@ -50,7 +50,7 @@ codes, or updates it computes itself from fewer bits of activations and gradient
 ensemble, whose members each start the token from its id, or a low-bit boundary code. -/
 def Fits (c : RegisteredCircuit) (T : Threading c) {k : ℕ} (P : Partition c.D k) (start : Fin T.m → Fin k)
     (b_w w_e : ℝ) : Prop :=
-  ∀ j, b_w * (T.weightsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤ novelReads c (P.gates j)
+  ∀ j, b_w * (T.weightsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤ freshInput c (P.gates j)
 
 /-- **F3 per parameter (empirical)**: every thread that does a counted multiplication uses at least `Nstar` distinct
 parameter slots of `σ` in its counted multiplications. It is `Reach` counted in parameters rather than weight gates: in
@@ -79,6 +79,6 @@ initialization), or when a window other than `start t` works on a thread from fe
 each start the token from its id, or a low-bit boundary code. -/
 def FitsSlots (c : RegisteredCircuit) (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (b_w w_e : ℝ) : Prop :=
-  ∀ j, b_w * (σ.slotsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤ novelReads c (P.gates j)
+  ∀ j, b_w * (σ.slotsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤ freshInput c (P.gates j)
 
 end Nci.Assumptions

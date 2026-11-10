@@ -39,8 +39,8 @@ activations' half of `PackedTrainingIncompressible`, which implies it
 `c` work of training since the commitment, as `ActivationsIncompressible` does, and is false on a declared circuit,
 whose wiring the prover controls. -/
 def PackedActivationsIncompressible {p : ℕ} (D : RegisteredCircuit) (ch : PackedChain D.D p) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
-  ∀ R ⊆ D.D.computed, D.D.size R ≤ c → (novelReads D R : ℝ) ≤ k →
+  ∀ R ⊆ D.D.computed, D.D.size R ≤ c → (freshInput D R : ℝ) ≤ k →
     b_w * (ch.weightsUsed R).card +
-        b_a * ((ch.inputsUsed R).filter fun x => ¬ ch.LinkedWhole R x.1 x.2.1 x.2.2).card ≤ novelReads D R
+        b_a * ((ch.inputsUsed R).filter fun x => ¬ ch.LinkedWhole R x.1 x.2.1 x.2.2).card ≤ freshInput D R
 
 end Nci.Assumptions

@@ -28,7 +28,7 @@ def ThreadedReadsInfoFmt2 : Prop :=
     (d e n k₀ : ℕ),
     0 < b_w → 0 < b_a → 0 < d → 0 < e → Src.FanOutBound b_a e n → Src.OffFresh k₀ →
     Assumptions.WeightsSupportFmt2 r θv T Src c S b_w b_a d e n k₀ →
-    ∀ R, SmallInfo r θv c S R → b_a * (T.mults R).card ≤ novelInfo r θv R * T.bound S b_w d e
+    ∀ R, SmallInfo r θv c S R → b_a * (T.mults R).card ≤ freshInfo r θv R * T.bound S b_w d e
 
 /-- **Theorem 1 through a containment, each value charged once over its copies**: a declaration `d` contains the
 reference circuit `r` through `M`, with `r`'s registered values `θc` the ones `θv` gives their images, and `r` is as in
@@ -42,7 +42,7 @@ def ThreadedContainedInfoFmt2 : Prop :=
     0 < b_w → 0 < b_a → 0 < dd → 0 < e → Src.FanOutBound b_a e n → Src.OffFresh k₀ →
     Assumptions.WeightsSupportFmt2 r θc T Src c K b_w b_a dd e n k₀ →
     ∀ W, SmallInfo d θv c K W →
-      b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤ novelInfo d θv W * T.bound K b_w dd e
+      b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤ freshInfo d θv W * T.bound K b_w dd e
 
 /-- **The count a memory cap needs, each value charged once over its copies**: with `d`, `r` and `M` as in
 `ThreadedContainedInfoFmt2`, a set `W` of `d`'s computed gates, at most `c` of them, whose fresh input reads are a state

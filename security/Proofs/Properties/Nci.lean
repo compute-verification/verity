@@ -142,7 +142,7 @@ theorem failStep_some (gamma num den : ℕ) (hden : 0 < den) (u : Fin n) (v : �
     failStep gamma num den (ius c dv) u.val = some (v, rule) ↔ v = u.val ∧
       ((rule = "size" ∧ gamma < d.D.size (U.gates u)) ∨
        (rule = "nci" ∧ d.D.size (U.gates u) ≤ gamma ∧
-         (num : ℝ) / den * d.D.size (U.gates u) < (Nci.novelReads d (U.gates u) : ℝ))) := by
+         (num : ℝ) / den * d.D.size (U.gates u) < (Nci.freshInput d (U.gates u) : ℝ))) := by
   rw [failStep, S.ius_get u, ratio_lt_iff _ _ _ _ hden]
   dsimp only
   split_ifs with h1 h2
@@ -176,7 +176,7 @@ theorem failure_some (gamma num den : ℕ) (hden : 0 < den) (u : Fin n) (rule : 
       (∀ u' < u, Meets d U gamma ((num : ℝ) / den) u') ∧
         ((rule = "size" ∧ gamma < d.D.size (U.gates u)) ∨
          (rule = "nci" ∧ d.D.size (U.gates u) ≤ gamma ∧
-           (num : ℝ) / den * d.D.size (U.gates u) < (Nci.novelReads d (U.gates u) : ℝ))) := by
+           (num : ℝ) / den * d.D.size (U.gates u) < (Nci.freshInput d (U.gates u) : ℝ))) := by
   rw [failure_eq, findSome_range_some, S.ius_size]
   constructor
   · rintro ⟨i, hi, hs, hj⟩
@@ -260,7 +260,7 @@ theorem refines {j out : Json} (hev : evaluate j = .ok out) {i : Instance} {P : 
     (hL : LaysOut P d.D) (hθ : Names i.theta d.θ) (hU : Divides i.owner U)
     (hc : out.getObjVal? "complies" = .ok (.bool true)) :
     (∀ u, d.D.size (U.gates u) ≤ i.gamma ∧
-        (Nci.novelReads d (U.gates u) : ℝ) ≤ (i.num : ℝ) / i.den * i.gamma) ∧
+        (Nci.freshInput d (U.gates u) : ℝ) ≤ (i.num : ℝ) / i.den * i.gamma) ∧
       ∀ g, d.D.isInput g = false → ∃ u, g ∈ U.gates u := by
   refine ⟨fun u => ?_, fun g hg => ?_⟩
   · obtain ⟨hs, hr⟩ := (Reports j out hev i P (.ofPartition d.D d.θ d.θ_input n U) hpar hdec hL hθ hU).2.2.1.1 hc u
