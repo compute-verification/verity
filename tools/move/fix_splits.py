@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`tools/move/fix_splits.py MAP CERT.json [--log FILE]` (STAGING ONLY): make a map's `[split]` rows what `layout.py` asked
+"""`tools/move/fix_splits.py MAP CERT.json|--text OUTPUT [--log FILE]` (STAGING ONLY): make a map's `[split]` rows what `layout.py` asked
 for when `stage.py --through-refusals` could not run the map: drop each row it called stale ("[split] acknowledges what
 no reference needs any more: KEY") and add each reference it called unacknowledged. Prints and logs every row it drops or
 adds, for the map's owner; exits 1 when the certificate names nothing to fix."""
@@ -12,9 +12,12 @@ REASON = "added by the staging run: `layout.py` names this reference and the map
 
 
 def main(argv):
-    path, cert = Path(argv[0]), json.loads(Path(argv[1]).read_text())
+    path = Path(argv[0])
     log = Path(argv[argv.index("--log") + 1]) if "--log" in argv else None
-    text = "\n".join(m.get("refused") or "" for m in cert["moves"] if not m.get("commit"))
+    if argv[1] == "--text":                 # the script's own output (stage.py's STAGE_KEEP_OUTPUT), every line of it
+        text = Path(argv[2]).read_text()
+    else:
+        text = "\n".join(m.get("refused") or "" for m in json.loads(Path(argv[1]).read_text())["moves"] if not m.get("commit"))
     stale = re.findall(r"\[split\] acknowledges what no reference needs any more: (.+)", text)
     new = [x.split(" (", 1)[0] for x in re.findall(r"^  (?!\[split\])(\S[^\n]*: [^\n]+ \([^\n]*\))$", text, re.M)]
     if not stale and not new:
