@@ -61,8 +61,8 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.population import population
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.refs import coll_concat
+from verity.ml.circuits.types import Array
 from verity.ml.commitments import history as HT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -181,24 +181,16 @@ def inlined(template: SpecializedDefinition, n: int) -> SpecializedDefinition:
     """`TemplateInlined_v1{template, N=n}`: `n` instances of the composite ``template``, each one's body emitted in place, every
     parameter an array over instances and the result the instances' results in order. It computes `population`'s function,
     but its roots are the calls inside ``template``'s body, so a check of the templates that body calls counts their
-    instances in it, while its outputs stay ``template``'s alone. Where ``template`` returns a tuple, the result is a tuple
-    of its fields, each the instances' in order: an output port holds rows of one field, as round 2 links a block's return
-    (`second_stage._return_links`: a part of the return is rows of one field), where one array of the instances' tuples
-    would lay rows of several widths end to end."""
+    instances in it, while its outputs stay ``template``'s alone."""
     if not isinstance(getattr(template, "defn", None), CompositeDefinition) or n < 1:
         raise ValueError(f"inlines one instance or more of a composite template, not {n} of {template.id}")
     params, ret = template.signature()
-    fields = ret.fields if isinstance(ret, Tuple) else None
 
     def signature(S: Any) -> tuple[tuple[tuple[str, Any], ...], Any]:
-        out = Array(S.N, ret) if fields is None else Tuple(*(Array(S.N, f) for f in fields))
-        return tuple((name, Array(S.N, t)) for name, t in params), out
+        return tuple((name, Array(S.N, t)) for name, t in params), Array(S.N, ret)
 
     def body(B: Any, S: Any, *args: Any) -> Any:
-        outs = [template.defn.body(B, template.S(), *(a[i] for a in args)) for i in range(S.N)]
-        if fields is None:
-            return coll_concat(Array(S.N, ret), outs)
-        return tuple_of(*(coll_concat(Array(S.N, f), [o[j] for o in outs]) for j, f in enumerate(fields)))
+        return coll_concat(Array(S.N, ret), [template.defn.body(B, template.S(), *(a[i] for a in args)) for i in range(S.N)])
 
     defn = CompositeDefinition("TemplateInlined", 1, ("template", "N"), signature, body, register=False,
                                doc=f"{n} instances of {template.id}, each body in place")

@@ -3,7 +3,12 @@
 of the replay block.
 
     DsaTopKReadRowsCut_v1{N,TOPK,BLOCK,READ}    `DsaTopKReadRows_v1{N,TOPK,BLOCK,READ}`'s parameters, then the index rows
-        (..., c: Array<ceil(TOPK/CHUNK), I32>, i: Array<CHUNK, I32>) -> (kv, ok)                  (`index_params`)
+        (..., c: Array<ceil(TOPK/CHUNK), I32>, i: Array<CHUNK, I32>) -> ok                        (`index_params`)
+
+It returns `DsaTopKReadRows_v1`'s ``ok`` alone. The rows that Definition returns (``kv``) are its read units' outputs, row j
+read unit j's, which the interior commits once, at the read's output port; a reader of a row takes that output, one whole
+output of one unit, as every wire here does. Returned as well they would be the replay block's output a second time, TOPK
+rows an instance, which no public size class holds at the served statics.
 
 `DsaTopKReadRows_v1` calls its mask whole, one call past what a proof block holds at a long row (`dsa_topk_mask_cut.WHOLE_MAX`),
 and reads the merge's slots one I32 each, which is no whole output of any unit.  This body is the units instead (`units`), each a
@@ -21,7 +26,8 @@ call whose every operand is one whole parameter row or one whole output of one u
 
 It is this cut at every N: also up to `WHOLE_MAX` keys, where `dsa_topk_reads.cut` takes the mask as one unit, which no long
 row is.  The index rows are inputs so that one chunk template and one slot template serve every instance; where ``c[k]`` = k and
-``i[k]`` = k (`index_values`, what the verifier supplies) it returns (kv, ok) as `DsaTopKReadRows_v1` does.  At the served
+``i[k]`` = k (`index_values`, what the verifier supplies) its reads return (kv, ok) as `DsaTopKReadRows_v1` does (`read_calls`), and
+it returns their ok.  At the served
 statics (`SERVED`, `served`: N = 2^17 keys, TOPK 2,048, blocks of 16,384, `EmbeddingRead_v1{V=2^17, H=576}`) that is 44 + 9 + 64
 + 2,048 + 2,048 = 4,213 units of 56 templates an instance.  `layout` registers it over the window's class (`PROMPT`,
 `OUTPUTS`): per_prompt 0 and per_output 1, instance i the row at decode step i.
@@ -50,7 +56,7 @@ import numpy as np
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.refs import Coll, concat, tuple_of
+from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import dsa_topk_mask_cut as X
 from verity.ml.definitions.registry import dsa_topk_reads as R
@@ -93,8 +99,10 @@ def index_values(TOPK: int) -> dict[str, list[int]]:
     return {name: list(range(ty.n)) for name, ty in index_params(TOPK)}
 
 
-def _body(B: Any, S: Any, scores: Coll, n: Coll, root: Coll, domain: Coll, row: Coll, salt: Coll, path: Coll, c: Coll,
-          i: Coll) -> Coll:
+def read_calls(B: Any, S: Any, scores: Coll, n: Coll, root: Coll, domain: Coll, row: Coll, salt: Coll, path: Coll, c: Coll,
+               i: Coll) -> list[Coll]:
+    """The check's units emitted on ``B``, and its TOPK read calls in slot order: read j's output is row j of
+    `DsaTopKReadRows_v1`'s kv and its ok."""
     out: dict[tuple, Coll] = {}
     for u in X.plan(S.N, S.TOPK, S.BLOCK):
         out[u.key] = B.call(u.defn, *_args(u.defn, u.keys, u.wires, out, scores, n))
@@ -104,10 +112,11 @@ def _body(B: Any, S: Any, scores: Coll, n: Coll, root: Coll, domain: Coll, row: 
     chunk, slot = _index_units(S.N, S.TOPK)
     chunks = [B.call(chunk, merged, c[k]) for k in range(c.type.n)]
     slots = [B.call(slot, chunks[j // R.CHUNK], i[j % R.CHUNK]) for j in range(S.TOPK)]
-    reads = [B.call(S.READ, slots[j], root, domain, row[j], salt[j], path[j]) for j in range(S.TOPK)]
-    row_t = S.READ.signature()[1].fields[0]
-    return tuple_of(Coll(Array(S.TOPK, row_t), concat([r[0].refs for r in reads])),
-                    Coll(Array(S.TOPK, BL.BIT), concat([r[1].refs for r in reads])))
+    return [B.call(S.READ, slots[j], root, domain, row[j], salt[j], path[j]) for j in range(S.TOPK)]
+
+
+def _body(B: Any, S: Any, *args: Coll) -> Coll:
+    return Coll(Array(S.TOPK, BL.BIT), concat([r[1].refs for r in read_calls(B, S, *args)]))
 
 
 def _index_units(N: int, TOPK: int) -> tuple[SpecializedDefinition, SpecializedDefinition]:
@@ -116,16 +125,18 @@ def _index_units(N: int, TOPK: int) -> tuple[SpecializedDefinition, SpecializedD
 
 def _signature(S: Any) -> tuple[tuple[tuple[str, Any], ...], Any]:
     params, ret = bind(R.DsaTopKReadRows, N=S.N, TOPK=S.TOPK, BLOCK=S.BLOCK, READ=S.READ).signature()
-    return (*params, *index_params(S.TOPK)), ret
+    return (*params, *index_params(S.TOPK)), ret.fields[1]
 
 
 DsaTopKReadRowsCut = CompositeDefinition(
     "DsaTopKReadRowsCut", 1, ("N", "TOPK", "BLOCK", "READ"), _signature, _body, refuse=R.DsaTopKReadRows.refuse,
-    conformance="model-untested: DsaTopKReadRows_v1's function as its cut (dsa_topk_reads.cut) where index rows c[k] = k and "
-                "i[k] = k, held to DsaTopKReadRows_v1 at small statics by integrations/vllm/tests/pipeline/test_long_row.py; "
-                "the check that would hold it to the model is DsaTopKReadRows_v1's",
-    doc="DsaTopKReadRows_v1{N,TOPK,BLOCK,READ} as its cut, the chunks' and slots' index rows (c, i) its last two parameters: "
-        "every unit serving proves the row by is a call reading whole parameter rows and whole outputs")
+    conformance="model-untested: DsaTopKReadRows_v1's ok as its cut (dsa_topk_reads.cut) where index rows c[k] = k and "
+                "i[k] = k, its read units' outputs that Definition's kv: both held to DsaTopKReadRows_v1 at small statics by "
+                "integrations/vllm/tests/pipeline/test_long_row.py; the check that would hold it to the model is "
+                "DsaTopKReadRows_v1's",
+    doc="DsaTopKReadRows_v1{N,TOPK,BLOCK,READ}'s ok as its cut, the chunks' and slots' index rows (c, i) its last two "
+        "parameters: every unit serving proves the row by is a call reading whole parameter rows and whole outputs, and "
+        "row j is read unit j's output")
 
 
 def units(t: SpecializedDefinition) -> tuple[tuple[tuple, SpecializedDefinition], ...]:

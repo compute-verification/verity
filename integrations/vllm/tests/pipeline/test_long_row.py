@@ -5,14 +5,16 @@
 * at small statics its body calls `units` in order, `boundary_rows.Layout` takes it inline over the window's class, and each
   unit reads the window's operands and the units before it as round 2 links and wires them (`second_stage`'s node links and
   node wires);
-* where its index rows are `index_values` it computes `DsaTopKReadRows_v1`'s function (slow);
+* where its index rows are `index_values` it returns `DsaTopKReadRows_v1`'s ok and its read units return that Definition's
+  kv, so the check and the rows its reads commit are together `DsaTopKReadRows_v1`'s function (slow);
 * its links (`links`) at the served statics are 87, of nine values, and at small statics they are the ones round 2 derives
   from the replay block (`interior_links.links`), under either naming of round 1's record, and its interior window
   (`window`) with them is the stream's interior program, a function of the replay sample's size (slow);
 * a drawn span's units (`spans`) are one span a template, every unit of the mask's cut and of the index on rows its
-  Definition returns its outputs on and every read an opening of the span's table at its slot's position; the reads return
-  what the check returns on the same operands, and `interior_rows.interior` commits the spans under the block's wires and
-  links, refusing a row that is not its writer's, its value's or its table's (slow).
+  Definition returns its outputs on and every read an opening of the span's table at its slot's position; the reads' ok
+  bits are what the check returns on the same operands and their rows `DsaTopKReadRows_v1`'s kv, and
+  `interior_rows.interior` commits the spans under the block's wires and links, refusing a row that is not its writer's,
+  its value's or its table's (slow).
 """
 from __future__ import annotations
 
@@ -27,10 +29,10 @@ import pytest
 from verity.core.protocols.spot import second_stage as SS
 from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.circuits.codec import definitions, descriptor_id
-from verity.ml.circuits.defs import Builder, bind
+from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.refs import Affine, Coll
-from verity.ml.circuits.types import Tuple
+from verity.ml.circuits.refs import Affine, Coll, concat
+from verity.ml.circuits.types import Array, Tuple
 from verity.ml.commitments import history as HT
 from verity.ml.commitments.gates.embedding import read
 from verity.ml.definitions.registry import dsa_topk_reads as R
@@ -125,11 +127,23 @@ def _random_args(rng: random.Random, t, rows: int) -> list[np.ndarray]:
                         for _ in range(rows)], dtype=np.uint8) for name, ty in params]
 
 
+def _read_rows(t):
+    """The rows the check's read units return, as a Definition of this test's: the check's own units (`long_row.read_calls`) on
+    its parameters, returning each read's row in slot order where the check returns each read's ok. They are what an interior
+    commits at the reads' output port."""
+    rows = Array(t.bindings["TOPK"], t.bindings["READ"].signature()[1].fields[0])
+    defn = CompositeDefinition("LongRowTestReadRows", 0, (), lambda S_: (t.signature()[0], rows),
+                               lambda B, S_, *args: Coll(rows, concat([r[0].refs for r in LR.read_calls(B, t.S(), *args)])),
+                               register=False)
+    return bind(defn)
+
+
 @pytest.mark.slow
-def test_it_computes_the_long_rows_function() -> None:
+def test_its_ok_and_its_reads_rows_are_the_long_rows_function() -> None:
     """The stand-in against `DsaTopKReadRows_v1` at the same small statics, its index rows `index_values`, on random operands
-    and on scores with ties at the threshold at every n: the one test that evaluates the stand-in whole, which the counts and
-    the layout don't."""
+    and on scores with ties at the threshold at every n: the check returns that Definition's ok, and its read units' rows
+    (`_read_rows`) are that Definition's kv, so the check with the rows its reads commit loses nothing of the Definition.
+    The one test that evaluates the stand-in whole, which the counts and the layout don't."""
     t = _small()
     rng = random.Random("long-row-cut")
     args = _random_args(rng, t, 6)
@@ -140,7 +154,12 @@ def test_it_computes_the_long_rows_function() -> None:
             args[0][i] = np.asarray(_i32s(words), dtype=np.uint8)
         args[1][i] = np.asarray(_i32s([n]), dtype=np.uint8)
     whole = bind(R.DsaTopKReadRows, **{k: t.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ")})
-    assert np.array_equal(np.asarray(BS.evaluate_bits(t, *args)), np.asarray(BS.evaluate_bits(whole, *args[:-2])))
+    kv, ok = whole.signature()[1].fields
+    assert t.signature()[1] == ok
+    want = np.asarray(BS.evaluate_bits(whole, *args[:-2])).reshape(6, -1)
+    assert want.shape[1] == kv.leaves + ok.leaves
+    assert np.array_equal(np.asarray(BS.evaluate_bits(t, *args)).reshape(6, -1), want[:, kv.leaves:])
+    assert np.array_equal(np.asarray(BS.evaluate_bits(_read_rows(t), *args)).reshape(6, -1), want[:, :kv.leaves])
 
 
 PARAMS = ("scores", "n", "c", "i", "root", "domain", "row", "salt", "path")
@@ -258,9 +277,9 @@ def test_a_spans_units_are_each_its_definitions_value() -> None:
 @pytest.mark.slow
 def test_a_drawn_spans_units_commit_as_its_interior() -> None:
     """Two sampled spans of a class of three (`spans`: one of two instances, one of one, which the interior pads to the
-    block's two), each opening its own table as round 1 registered it: the reads' rows and oks are what the check returns
-    on the same operands at each instance (the one place a span's units are held to the whole check), and
-    `interior_rows.interior` commits them under the replay block's wires and rows (`second_stage.replay_wires`,
+    block's two), each opening its own table as round 1 registered it: the reads' oks are what the check returns on the
+    same operands at each instance and their rows `DsaTopKReadRows_v1`'s kv there (the one place a span's units are held
+    to the whole check and to its Definition), and `interior_rows.interior` commits them under the replay block's wires and rows (`second_stage.replay_wires`,
     `replay_rows`) and `links`: its program is the stream's at two spans, it registers the block's nine parameters as
     round 2 names them, and a wired unit reads its own instance's writer (read j its slot j). It refuses a
     span whose wired row is not its writer's output, whose scores at one unit are not the block's another unit read, or
@@ -282,9 +301,13 @@ def test_a_drawn_spans_units_commit_as_its_interior() -> None:
     args = {"scores": [_i32s(s) for s, _n in rows], "n": [_i32s([n]) for _s, n in rows],
             **{p: [_i32s(v)] * len(rows) for p, v in index.items()},
             **{p: opening[p][:, 0] for p in IL.TABLE}, **{p: opening[p].reshape(len(rows), -1) for p in IL.READ[3:]}}
-    got = np.asarray(BS.evaluate_bits(t, *(np.asarray(args[p], dtype=np.uint8) for p, _ty in t.signature()[0])))
-    want = [_bits(read.data["outs"]["o0"]).reshape(len(rows), -1), _bits(read.data["outs"]["o1"])[:, 0].reshape(len(rows), -1)]
-    assert np.array_equal(got.reshape(len(rows), -1), np.concatenate(want, axis=1))
+    operands = [np.asarray(args[p], dtype=np.uint8) for p, _ty in t.signature()[0]]
+    whole = bind(R.DsaTopKReadRows, **{k: t.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ")})
+    kv = whole.signature()[1].fields[0]
+    assert np.array_equal(np.asarray(BS.evaluate_bits(t, *operands)).reshape(len(rows), -1),
+                          _bits(read.data["outs"]["o1"])[:, 0].reshape(len(rows), -1))
+    assert np.array_equal(np.asarray(BS.evaluate_bits(whole, *operands[:-2])).reshape(len(rows), -1)[:, :kv.leaves],
+                          _bits(read.data["outs"]["o0"]).reshape(len(rows), -1))
 
     served = {"roots": [{"port": x.value, "root": x.root.hex(), "leaves": x.leaves, "domain": x.domain.domain_id.hex()}
                         for x in tables]}
