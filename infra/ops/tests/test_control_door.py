@@ -37,6 +37,13 @@ def guard_state() -> dict:
     return {"last_ok_poll": NOW - 30, "lines": {}, "budgets": {"source": "budgets.toml", "lines": {"vy-a-": line}}}
 
 
+class GateSource(importlib.machinery.SourceFileLoader):
+    """The gate's file, compiled from its source each time: it has no suffix, and no bytecode cache is looked for or written."""
+
+    def get_code(self, fullname):
+        return self.source_to_code(self.get_data(self.path), self.path)
+
+
 class Pod:
     """What the gate reaches on the pod, faked: RunPod's API, and the programs it starts (recorded, never run)."""
 
@@ -64,9 +71,8 @@ class Pod:
 @pytest.fixture
 def gate(tmp_path, monkeypatch):
     """The gate as the pod runs it, on a fake pod: its state file, its log and its clock are the test's."""
-    loader = importlib.machinery.SourceFileLoader("vy_control_gate", str(CONTROL / "vy-control-gate"))
+    loader = GateSource("vy_control_gate", str(CONTROL / "vy-control-gate"))
     G = importlib.util.module_from_spec(importlib.util.spec_from_loader("vy_control_gate", loader))
-    monkeypatch.setattr("sys.dont_write_bytecode", True)
     loader.exec_module(G)
     (tmp_path / "state.json").write_text(json.dumps(guard_state()))
     G.pod = Pod()
