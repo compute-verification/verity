@@ -974,14 +974,12 @@ def test_a_fresh_run_builds_the_verifier_and_runs_the_suites_with_lakes_artifact
     (root / ".gitignore").write_text(".lake/\n")
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
-    bin_, said = tmp_path / "bin", tmp_path / "lake-said"
-    bin_.mkdir()
-    (bin_ / "lake").write_text(f'#!/bin/sh\necho "$1 ${{LAKE_ARTIFACT_CACHE-unset}}" >> {said}\n')
-    (bin_ / "lake").chmod(0o755)
-    extra = {"PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "HOME": str(tmp_path / "home"),   # ELAN puts $HOME/.elan/bin first
-             "LAKE_ARTIFACT_CACHE": "true"}
+    lake, said = tmp_path / "home" / ".elan" / "bin" / "lake", tmp_path / "lake-said"   # ELAN puts $HOME/.elan/bin first
+    lake.parent.mkdir(parents=True)
+    lake.write_text(f'#!/bin/sh\necho "$1 ${{LAKE_ARTIFACT_CACHE-unset}}" >> {said}\n')
+    lake.chmod(0o755)
     for args, want in (((), "true"), (("--fresh",), "false")):
-        p = _run_suite(root, tmp_path, *args, extra={**extra, "WANT": want})
+        p = _run_suite(root, tmp_path, *args, extra={"HOME": str(tmp_path / "home"), "LAKE_ARTIFACT_CACHE": "true", "WANT": want})
         assert p.returncode == 0 and "passed  verity-flock" in p.stdout, p.stdout + p.stderr
     assert said.read_text().splitlines() == ["build true", "build false"]
 
