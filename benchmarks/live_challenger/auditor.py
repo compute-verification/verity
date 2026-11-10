@@ -2307,7 +2307,7 @@ def certifier_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list
     prompts = ["--prompts-file", str(out.parent / WITNESS / PROMPTS)] if varied and req.get("prompts") else []
     traffic = ["--traffic", "varied", "--name", req["run"]] if varied else \
         ["--profile", req.get("profile", CERTIFIER_PROFILES[0])]
-    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "certifier_serve.py"), "rehearse",
+    return [sys.executable, str(tree / "benchmarks/network_traces/certifier_serve.py"), "rehearse",
             "--upstream", url, "--out", str(out), *height_argv(req), "--requests", str(req["requests"]), *given,
             *prompts, *sampling_argv(req), *traffic, "--strategies", req["tamper"] or "honest"]
 
