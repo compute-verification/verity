@@ -20,9 +20,12 @@ copy.
 
 A library's root file the export doesn't copy, while it copies modules below it, is written by the export
 (`generated_roots`): an aggregate module that imports what isn't public can't ship, so the export's is the imports of the
-modules below it that it does copy. The library then builds as a whole, and its lock's roots have their files. The
-module a lock names as its assumptions' is written the same way. A root whose copied modules are each a root of their own
-is not written: the lakefile and the lock lose it (`spare_roots`). A copied module that only files the export leaves out
+modules below it that it does copy. The library then builds as a whole, and its lock's roots have their files. It
+writes one under a tracked file's name only when that file is imports and comments alone (`imports_alone`), so the public
+tree never holds another text under the name of a module that declares something. A root whose copied modules are each
+a root of their own, and a root of the lock alone whose tracked file declares something, are not written: the lakefile
+and the lock lose them (`spare_roots`). A library's root whose tracked file declares something refuses the export. A
+copied module that only files the export leaves out
 import has no root to build it, so the export lists it as a root of the package's lock (`unreached`).
 
 A Lean lock (`lean-audit.json`) states only what the copied files hold (`tools/verity/lean/public_lock.py`): an entry stays

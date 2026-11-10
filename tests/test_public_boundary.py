@@ -466,24 +466,61 @@ def test_a_root_whose_modules_are_each_a_root_is_dropped_and_not_written() -> No
     assert set(PE.generated_roots(_Texts(files), set(files))) == {"p/Lib/Agg.lean", "p/Lib/Real.lean"}
 
 
-def test_the_module_a_lock_names_as_its_assumptions_is_written_and_its_root_imports_it() -> None:
-    """The Lean check requires the build to hold the module a lock names as its assumptions'. Where the export copies
-    only modules below it, the export writes it as it writes a root, and the root written above it imports it, so the
-    build holds it."""
+@pytest.mark.parametrize(("text", "alone"), [
+    ("", True),
+    ("module\n\npublic import A.B\nimport C\n", True),
+    ("/- why -/\nmodule\n\npublic import A.B\n\n@[expose] public section\n", True),
+    ("import A\n\n/-! The modules under `A`. /- nested -/ -/\n-- a line\npublic section\n/- last -/\n", True),
+    ("import A\n\n@[expose] public section\n\nnamespace A\n", False),
+    ("import A\n\n@[expose] public section\n\n@[expose] public section\n", False),
+    ("import A\n\nsection Named\n", False),
+    ("import A\n\n/-- a doc -/\ndef x := 1\n", False),
+    ("import A\n\nabbrev TAG : String := \"tag/v1\"\n", False),
+    ("import A\n\n/-! left open\n", False),
+    ("import\n", False),
+])
+def test_a_file_of_imports_alone_declares_nothing(text: str, alone: bool) -> None:
+    """A file is imports alone when it is its header, comments and module docs, and at most one line opening an unnamed
+    section with nothing in it. Anything else may declare something, and a file that doesn't read counts as that."""
+    assert PE.imports_alone(text) is alone
+
+
+def test_no_generated_file_stands_under_the_name_of_a_file_that_declares_something() -> None:
+    """The export writes a root's file under a tracked file's name only when that file is imports alone: a file of
+    imports must not stand in for a module with content. A root of the lock alone whose tracked file declares something
+    is dropped, its modules still built by the root above, and a library's refuses the export, naming the file. The
+    module a lock names as its assumptions' is no root, so it is not written: the root above imports the modules under
+    it."""
+    lakefile = 'name = "p"\n[[lean_lib]]\nname = "Lib"\n'
     files = {
-        "p/lakefile.toml": 'name = "p"\n[[lean_lib]]\nname = "Lib"\n',
-        "p/lean-audit.json": json.dumps({"roots": ["Lib"], "assumptions_module": "Lib.Assumptions"}),
-        "p/Lib/Assumptions/Hash.lean": "module\n", "p/Lib/Defs.lean": "module\n",
+        "p/lakefile.toml": lakefile,
+        "p/lean-audit.json": json.dumps({"roots": ["Lib", "Lib.Table"], "assumptions_module": "Lib.Assumptions"}),
+        "p/Lib.lean": "module\n\npublic import Lib.Defs\npublic import Lib.Private\n\n@[expose] public section\n",
+        "p/Lib/Defs.lean": "module\n",
+        "p/Lib/Private.lean": "module\n",
+        "p/Lib/Table.lean": "module\n\npublic import Lib.Table.Part\n\nabbrev TAG : String := \"tag/v1\"\n",
+        "p/Lib/Table/Part.lean": "module\n",
+        "p/Lib/Assumptions.lean": "module\n\npublic import Lib.Assumptions.Hash\n\ndef Cut : Prop := True\n",
+        "p/Lib/Assumptions/Hash.lean": "module\n",
     }
-    got = PE.generated_roots(_Texts(files), set(files))
-    assert got == {
-        "p/Lib/Assumptions.lean": ("module\n\npublic import Lib.Assumptions.Hash\n\n"
-                                   "/-! The modules under `Lib.Assumptions` that this tree holds. -/\n"),
-        "p/Lib.lean": ("module\n\npublic import Lib.Assumptions\npublic import Lib.Assumptions.Hash\npublic import Lib.Defs\n\n"
-                       "/-! The modules under `Lib` that this tree holds. -/\n")}
-    files["p/Lib/Assumptions.lean"] = "module\n"
-    assert set(PE.generated_roots(_Texts(files), set(files))) == {"p/Lib.lean"}
-    assert PE.spare_roots(_Texts(files), set(files)) == {}
+    tree = _Texts(files)
+    copied = set(files) - {"p/Lib.lean", "p/Lib/Private.lean", "p/Lib/Table.lean", "p/Lib/Assumptions.lean"}
+    assert PE.generated_roots(tree, copied) == {
+        "p/Lib.lean": ("module\n\npublic import Lib.Assumptions.Hash\npublic import Lib.Defs\n"
+                       "public import Lib.Table.Part\n\n/-! The modules under `Lib` that this tree holds. -/\n")}
+    assert PE.spare_roots(tree, copied) == {"p": {"Lib.Table": ["Lib.Table.Part"]}}
+
+    class Has:
+        def has(self, here, kind, name):
+            return True
+
+    new, dropped = PE.rewrite_lock(PE.LEAN_CHECK.text(json.loads(files["p/lean-audit.json"])), "p", Has(),
+                                   spare={"Lib.Table": ["Lib.Table.Part"]})
+    assert json.loads(new)["roots"] == ["Lib"] and dropped == [("roots", "Lib.Table")]
+    assert json.loads(new)["assumptions_module"] == "Lib.Assumptions"
+    files["p/Lib.lean"] += "\ndef x := 1\n"
+    with pytest.raises(ValueError, match=r"public_export: p/Lib\.lean: .* more than imports and comments"):
+        PE.generated_roots(_Texts(files), copied)
 
 
 def test_a_module_only_files_the_export_leaves_out_import_is_a_root_of_the_lock_it_writes() -> None:
@@ -1149,12 +1186,16 @@ def test_third_party_pins_are_read_without_fetching(tmp_path: Path) -> None:
 @pytest.mark.slow
 def test_this_trees_export_rewrites_every_manifest_it_copies(tmp_path: Path) -> None:
     """This tree's export, in a process of its own: each manifest it rewrites reads as the old one less the entries it
-    drops, or the export fails. A manifest laid out in a way the rewrite doesn't know fails here, not on the export's day."""
+    drops, or the export fails. A manifest laid out in a way the rewrite doesn't know fails here, not on the export's day.
+    Each root file it writes under a tracked file's name replaces a file of imports alone."""
     r = subprocess.run([sys.executable, str(EXPORT), str(tmp_path / "export"), "--report", str(tmp_path / "report.json")],
                        cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
     assert report["rewrites"] and report["lean_targets"]
+    standing = [f for f in report["generated_roots"] if (ROOT / f).is_file()]
+    assert standing, "this tree's export writes root files under tracked files' names; the next line holds each to the rule"
+    assert [f for f in standing if not PE.imports_alone((ROOT / f).read_text(encoding="utf-8"))] == []
 
 
 def test_the_build_shares_one_set_of_dependencies_where_pins_agree(tmp_path: Path, monkeypatch) -> None:
