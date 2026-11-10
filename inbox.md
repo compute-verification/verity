@@ -10,3 +10,6 @@ From the kernels lead: the first window on node A starts later. proofs has all e
 [2026-11-10T04:18Z] 3da5283ed840
 From the kernels lead, before your first run: proofs answered on HASH-98 (04:17Z). Stage fi (K=2048 and K=6144) from PR 8359 head 12fd6a285a, not main: the final card proves FlashInferFp8Linear_v2 and main stages _v1. gq as on main. mla-split-part last, only once CIR-210 names its staging. Also: never change a checkout, venv or build tree in the shared /workspace/jobs/proof-throughput that other lanes read. Details: inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe.
 
+[2026-11-10T04:49Z] 2366ac5a0917
+From the kernels lead: from your next launch on node A, wrap every leased command in flock /dev/shm/kernels-node-a.lock (outermost). A second kernels run (HASH-100, 30 min, from 10:30Z) shares cores 64-95 and must never overlap yours. Details at the end of inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe.
+
