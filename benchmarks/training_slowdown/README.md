@@ -22,21 +22,25 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model |
 | `counterexample.py` | a program's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, seed replay and their composition |
-| `starts.py` | a start's entry in the starts registry the run command reads |
+| `starts.py`, `starts.toml` | the starts registry: each start by its store artifact, its files' sha256, its shape, C0 and loss, and its data's pins; `load` reads an installed start and checks it |
+| `data.py` | a start's data: the training stream (`Stream`, by the job's data seed) and the held-out sets (`held_out`: the search pool and the final set), checked against the registry; the search slice from a live coin (`draw_slice`) |
+| `evaluate.py` | the harness's evaluator: a checkpoint's bits per byte on the job's split, the search pool's paired with θ on the same slice |
+| `model.py` | the starts' architecture, the lf dense decoder |
 
 The reference shapes are the lf model's (`integrations/vllm/tests/program/train_step_lf.py`), which the suite checks.
 
 ## Running a program
 
 ~~~text
-python -m training_slowdown.run --program train.py --starts starts.json --start small --tier 0 --seed 0 --out OUT \
-    [--evaluator MODULE:FUNCTION] [--device cuda] [-- PROGRAM ARGS...]
-python -m training_slowdown.starts --name small --theta THETA.pt --factory MODULE:FUNCTION [--ctx 1024] [--vocab 50304]
+python -m training_slowdown.run --program train.py --start s-t20 [--split search|final] --tier 0 --seed 0 --out OUT \
+    [--starts-root DIR] [--device cuda] [-- PROGRAM ARGS...]
 python -m training_slowdown.capture.circuit STEP.npz    # a saved step circuit's quantities
 python -m training_slowdown.gates [--check]             # gates per multiply-add by op; --check compiles the Definitions
 ~~~
 
-Run them from this directory. The program contract: a program is one Python file defining `train(te)`, `te` the
+Run them from this directory. A start and its data are read where `starts.toml` says a node holds them, and checked
+against it; elsewhere, `research data fetch ART --path starts/NAME/theta.safetensors` (and its `start.json`) gets a
+start, and `--starts-root` points at it. The program contract: a program is one Python file defining `train(te)`, `te` the
 `Harness`. It loads θ into its model and registers it (`te.load`), declares its step count (`te.plan`), wraps each
 training step in `with te.step():`, and may name its output model (`te.output`) and write counterexample families
 (`te.family`). Everything it computes through torch is counted; the harness's own work (loading, evaluating each

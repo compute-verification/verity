@@ -1,20 +1,19 @@
 """Run one submission inside the harness: the program trains from θ through a `Harness`, and everything it computes
 through torch is counted (flops.py).
 
-    python -m training_slowdown.run --program train.py --starts starts.json --start small --tier 0 --seed 0 --out OUT \\
-        [--evaluator MODULE:FUNCTION] [--device cuda] [-- PROGRAM ARGS...]
+    python -m training_slowdown.run --program train.py --start s-t20 [--split search|final] --tier 0 --seed 0 --out OUT \\
+        [--starts-root DIR] [--device cuda] [-- PROGRAM ARGS...]
 
 The program is a Python file defining `train(te)`; `te` is the `Harness`. It builds its model, loads θ and registers it
 (`te.load(model)`), declares its step count (`te.plan(n)`), wraps each training step in `with te.step():` and may
 name its output model (`te.output(fn)`, default: the registered model's weights) and write counterexample families
-(`te.family(name, plan)`). A checkpoint is taken after every 5% of the planned steps: the output model's held-out
-bits per byte from the fixed evaluator, uncounted. Tokens computed outside a step, or a run with no step, make the run
-invalid.
+(`te.family(name, plan)`). A checkpoint is taken after every 5% of the planned steps: with `--split`, the output
+model's bits per byte on that held-out split (`training_slowdown.evaluate`), uncounted. Tokens computed outside a step,
+or a run with no step, make the run invalid.
 
-`--starts` is a registry of starts, `{name: {path, sha256, val_bpb, ctx, vocab, forward_macs_per_token}}`;
-c is `C_PER_FORWARD_TOKEN` times the start's `forward_macs_per_token` (`block_c`; measured on the registered model when
-the registry lacks it). The evaluator is a function `(state_dict, split, device) -> bits per byte`, or None for a split
-it keeps sealed (a held-out `test`).
+`--start` names a start in `starts.toml` (`training_slowdown.starts`), read from its installed copy under
+`--starts-root`; `--theta` gives an unregistered θ's file instead, scored by no split. c is `C_PER_FORWARD_TOKEN`
+times the start's forward MACs per token (`block_c`), measured on the registered model.
 
 Writes `OUT/run.json` (the count, the checkpoints, the flags, the program's and θ's digests), `OUT/families/*/` with each
 family's `verified.json` (checked here, after training, on the run's device, from a live coin) and, with
@@ -51,9 +50,11 @@ os.environ["TORCHDYNAMO_DISABLE"] = "1"
 import torch
 import torch.nn.modules.module as nn_module
 
-from . import VERSION
+from . import VERSION, starts
 from .codecs import Plan
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
+from .data import SPLITS, Data
+from .evaluate import Evaluator
 from .flops import Counter, _tensors, digest, flags, forward_macs_per_token, guard_exits, leaked, plain
 
 CHECKPOINTS = 20
@@ -81,9 +82,7 @@ def theta_sha256(state: dict[str, torch.Tensor]) -> str:
 
 def load_theta(path: Path) -> tuple[dict[str, torch.Tensor], dict]:
     if str(path).endswith(".safetensors"):
-        from safetensors.torch import load_file
-
-        return load_file(str(path)), {}
+        return starts.tensors(starts.read_file(path)), {}
     obj = torch.load(path, map_location="cpu", weights_only=True)
     state, meta = (obj["state"], obj.get("meta", {})) if "state" in obj else (obj, {})
     return state, meta
@@ -118,14 +117,14 @@ class Harness:
     """What a program sees. Everything but `step`'s body and the program's own code runs uncounted."""
 
     def __init__(self, theta: dict[str, torch.Tensor], out: Path, *, seed: int = 0, tier: int = 0, device: str = "cpu",
-                 start: dict | None = None, evaluator=None, budget_s: float = 0.0, keep_checkpoints: bool = False,
-                 digests: bool = True, args: list[str] | None = None, clock=time.perf_counter,
-                 families: Path | None = None):
+                 start: dict | None = None, evaluator=None, split: str = "", budget_s: float = 0.0,
+                 keep_checkpoints: bool = False, digests: bool = True, args: list[str] | None = None,
+                 clock=time.perf_counter, families: Path | None = None):
         self.theta, self.out = theta, Path(out)
         self.families_root = Path(families) if families else self.out / "families"
         self.seed, self.tier, self.device = seed, tier, device
         self.start = start or {}
-        self.evaluator, self.budget_s, self.keep = evaluator, budget_s, keep_checkpoints
+        self.evaluator, self.split, self.budget_s, self.keep = evaluator, split, budget_s, keep_checkpoints
         self.args = list(args or [])
         self.clock = clock
         self.counter = Counter(theta, digests=digests)
@@ -144,7 +143,8 @@ class Harness:
     def _measure(self, model: torch.nn.Module) -> None:
         if not self.forward_macs_per_token:
             with self.counter.pause():
-                ctx, vocab = int(self.start.get("ctx", 1024)), int(self.start.get("vocab", 50304))
+                shape = self.start.get("shape", {})
+                ctx, vocab = int(shape.get("ctx", 1024)), int(shape.get("vocab", 50304))
                 self.forward_macs_per_token = forward_macs_per_token(model, ctx, vocab, self.device)
             self.start["forward_macs_per_token_source"] = "measured on the registered model"
 
@@ -267,12 +267,10 @@ class Harness:
     def checkpoint_state(self, step: int, state: dict[str, torch.Tensor], extra: dict | None = None) -> dict:
         """Score `state` as the output model after step `step` (inclusive), uncounted."""
         with self.uncounted(), torch.no_grad():
-            bpb = float(self.evaluator(state, "val", self.device)) if self.evaluator else None
-            cp = {"step": step, "macs": self.macs_so_far(), "val_bpb": bpb, "elapsed_s": self.elapsed(),
-                  "output_sha256": theta_sha256(state)} | (extra or {})
-            test = self.evaluator(state, "test", self.device) if self.tier >= 2 and self.evaluator else None
-            if test is not None:
-                cp["test_bpb"] = float(test)
+            digest = theta_sha256(state)
+            score = self.evaluator(state, digest) if self.evaluator else None
+            cp = {"step": step, "macs": self.macs_so_far(), "bpb": score["bpb"] if score else None, "score": score,
+                  "elapsed_s": self.elapsed(), "output_sha256": digest} | (extra or {})
             if self.keep or (self.n_steps and step == max(self.cp_steps, default=-1)):
                 path = self.out / "checkpoints" / f"step{step:07d}-{len(self.checkpoints):02d}.pt"
                 path.parent.mkdir(exist_ok=True)
@@ -304,7 +302,7 @@ class Harness:
         c = block_c(self.forward_macs_per_token)
         rec |= meta | {
             "schema": "training-slowdown/run/v1", "training_slowdown": VERSION, "seed": self.seed, "tier": self.tier,
-            "start": self.start, "theta_sha256": theta_sha256(self.theta), "device": self.device,
+            "split": self.split, "start": self.start, "theta_sha256": theta_sha256(self.theta), "device": self.device,
             "forward_macs_per_token": self.forward_macs_per_token, "c": c, "planned_steps": self.n_steps,
             "checkpoints": self.checkpoints,
             "flags": flags(rec["totals"], float(meta.get("peak_macs_per_s", 0))) + list(notes or []),
@@ -449,27 +447,21 @@ def load_program(path: Path):
     return mod
 
 
-def load_evaluator(name: str):
-    if not name or name == "none":
-        return None
-    mod, _, fn = name.partition(":")
-    return getattr(importlib.import_module(mod), fn)
-
-
 def parse(argv=None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--program", type=Path, required=True, help="a file defining train(te)")
     ap.add_argument("--digests", choices=("on", "off"), default="on",
                     help="digest every updated weight value (flops.KeyedDigest, on the run's device; counterexample "
                          "checks need them)")
-    ap.add_argument("--starts", type=Path, help="the starts registry (JSON)")
-    ap.add_argument("--start", default="", help="a start's name in --starts")
-    ap.add_argument("--theta", type=Path, help="θ's file, instead of --starts/--start")
+    ap.add_argument("--start", default="", help="a start in starts.toml")
+    ap.add_argument("--starts-root", type=Path, default=None,
+                    help="where the starts are installed, NAME/{theta.safetensors,start.json} (default starts.toml's)")
+    ap.add_argument("--theta", type=Path, help="an unregistered θ's file, instead of --start")
+    ap.add_argument("--split", choices=SPLITS, default=None, help="the held-out split each checkpoint is scored on")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--tier", type=int, default=0, choices=(0, 1, 2))
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    ap.add_argument("--evaluator", default="none", help="MODULE:FUNCTION, (state, split, device) -> bits per byte")
     ap.add_argument("--budget-minutes", type=float, default=0.0)
     ap.add_argument("--keep-checkpoints", action="store_true")
     ap.add_argument("--families", type=Path, default=None,
@@ -486,23 +478,22 @@ def main(argv=None) -> int:
     torch.cuda.graphs.CUDAGraph.replay = lambda self: (_ for _ in ()).throw(
         RuntimeError("training_slowdown: CUDA graph replay runs work the counter can't see"))
     args = a.program_args[1:] if a.program_args[:1] == ["--"] else a.program_args
+    evaluator = None
     if a.theta:
+        if a.split:
+            raise SystemExit("run: --split scores a registered start (--start), not --theta")
         start = {"name": a.start or a.theta.name, "path": str(a.theta)}
-        path = a.theta
+        theta, _ = load_theta(a.theta)
     else:
-        starts = json.loads(a.starts.read_text())
-        start = dict(starts[a.start], name=a.start)
-        path = Path(start["path"])
-        if not path.is_absolute():
-            path = a.starts.parent / path
-    theta, _ = load_theta(path)
-    if start.get("sha256") and theta_sha256(theta) != start["sha256"]:
-        raise SystemExit(f"{path}: θ has sha256 {theta_sha256(theta)}, the registry says {start['sha256']}")
+        s = starts.start(a.start)
+        start = s.entry()
+        theta = starts.load(s, a.starts_root)
+        if a.split:
+            evaluator = Evaluator(Data.of(s.data), a.split, theta, s.shape, a.device)
     torch.manual_seed(a.seed)
-    te = Harness(theta, a.out, seed=a.seed, tier=a.tier, device=a.device, start=start,
-                 evaluator=load_evaluator(a.evaluator), budget_s=60 * a.budget_minutes,
-                 keep_checkpoints=a.keep_checkpoints, digests=a.digests != "off", args=args,
-                 families=a.families)
+    te = Harness(theta, a.out, seed=a.seed, tier=a.tier, device=a.device, start=start, evaluator=evaluator,
+                 split=a.split or "", budget_s=60 * a.budget_minutes, keep_checkpoints=a.keep_checkpoints,
+                 digests=a.digests != "off", args=args, families=a.families)
     guard_exits()
     imports = Imports()
     with no_bytecode():
@@ -523,7 +514,7 @@ def main(argv=None) -> int:
 
 def report(rec: dict) -> int:
     print(json.dumps({"macs": rec["totals"]["macs"], "steps": len(rec["steps"]), "checkpoints": [
-        {k: cp.get(k) for k in ("step", "macs", "val_bpb", "source")} for cp in rec["checkpoints"]],
+        {k: cp.get(k) for k in ("step", "macs", "bpb", "source")} for cp in rec["checkpoints"]],
         "flags": rec["flags"], "invalid": rec["invalid"], "families": [
             {k: f[k] for k in ("family", "passed", "failed", "covers")} for f in rec["families"]]}))
     return 1 if rec["invalid"] else 0
