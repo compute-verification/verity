@@ -48,8 +48,8 @@ theorem regCount_cases (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) (P :
   rcases hd : L.two s with _ | d
   · exact Or.inl (by simp only [regCount, hs, hPt, hd])
   by_cases hin : InScopeTwo Pt d s
-  · exact Or.inr ⟨s, Pt, d, by simp only [hs], hPt, hd, hin, by simp only [regCount, hs, hPt, hd, if_pos hin]⟩
-  · exact Or.inl (by simp only [regCount, hs, hPt, hd, if_neg hin])
+  · exact Or.inr ⟨s, Pt, d, rfl, hPt, hd, hin, by simp only [regCount, hs, hPt, hd, ite_eq_left hin]⟩
+  · exact Or.inl (by simp only [regCount, hs, hPt, hd, ite_eq_right hin])
 
 /-- **A window is accepted with a sampled proof block in the committed incorrect set** at most as often as `ε_reg,2` at
 the statement and prover it sends, at a statement in scope by `CompiledTwo.KSRegTwo` at a prover with no tape, and out
