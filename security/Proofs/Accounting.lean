@@ -125,7 +125,7 @@ behind them, and the proofs of resource accounting's properties, the bridges tha
 guarantee as the joint period's input (`JointBridge/`, such as `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld`,
 locked in `Security/Properties/lean-audit.json`). `Defs` holds the proof-only vocabulary no guarantee reads,
 `Sanity` shows the joint guarantee's hypotheses hold, and `Coverage` proves the inference-only policy's
-`Nci.SecurityProofs.CapabilityFloor`. `Security/lean-audit.json` pins each guarantee's theorem, so a
+`InferenceOnly.SecurityProofs.CapabilityFloor`. `Security/lean-audit.json` pins each guarantee's theorem, so a
 change to the guarantee, or to a definition it reads, changes its record.
 
 ## Where the top guarantees are proved

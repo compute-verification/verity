@@ -10,7 +10,7 @@ inference_overhead = { value = nan, unit = "x", source = "not modeled: a placeho
 [regime.unmonitored]
 kind = "unmonitored"
 
-# Nci.Guarantees.DampenerRemote's terms, each at verity/protocols/inference_only/nci/tiers.py's DEFAULTS (tests/test_envelopes.py holds them).
+# InferenceOnly.Guarantees.DampenerRemote's terms, each at verity/protocols/inference_only/nci/tiers.py's DEFAULTS (tests/test_envelopes.py holds them).
 # PoUW: residual, clock_share, host, eps_w, eps_agg, window_delta_*; detection: identities, lag_s (and, sampled, the rest).
 # window_delta_coin and window_delta_crypto, one and two of the per-window delta, and SPOT's p_evade are
 # not set here: the registry reads the per-window delta from core (rho/params.py).

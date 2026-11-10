@@ -1,0 +1,330 @@
+module
+
+public import Definitions.InferenceOnly.Guarantees.Capability.Witnesses
+public import Proofs.InferenceOnly.Capability.Items
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Probability.Distributions.Uniform
+public import Mathlib.Tactic.Linarith
+
+/-!
+# Local bounds: proofs of their witnesses
+
+Each witness of `Definitions.InferenceOnly.Guarantees.Capability.Witnesses`, at the toy instance (`InferenceOnly.Capability.Toy`). The
+facts about the toy they share come first: its `(2, 1)`-partition, a block program's bits, what the block recomputes,
+the decoder's description lengths, and the budgets of items priced one bit each.
+-/
+
+@[expose] public section
+
+namespace InferenceOnly.Capability.Toy
+
+open Verity Finset InferenceOnly.Capability
+open scoped ENNReal
+
+theorem isCK : R1.d.𝓘.IsCK R1.d 2 1 where
+  boolean := ⟨fun _ => rfl, by decide⟩
+  card := by decide
+  reads := by decide
+
+theorem unregistered_R1 (u : Fin 1) : R1.d.unregistered (P1.gates u) = {1} := by
+  revert u
+  decide
+
+theorem unregistered_R1' (u : Fin 1) : R1.d.unregistered (R1.d.𝓘.gates u) = {1} := unregistered_R1 u
+
+theorem blockProgram_R1 (e : List Bool) (X : C.Trace) (u : Fin 1) :
+    blockProgram R1 e X u = e ++ [(X 1).getLsbD 0] := by
+  obtain rfl : u = 0 := Subsingleton.elim _ _
+  show e ++ indexCode (0 : Fin 1) ++ C.bits X ((R1.d.unregistered (P1.gates 0)).sort (· ≤ ·)) = _
+  rw [unregistered_R1]
+  simp [indexCode, Circuit.bits]
+
+theorem recompute_zero (X : C.Trace) : R1.recompute X 0 0 = 1 := C.run_fixed rfl
+
+theorem recompute_one (X : C.Trace) : R1.recompute X 0 1 = X 1 := C.run_fixed rfl
+
+theorem recompute_two (X : C.Trace) : ((R1.recompute X 0) 2).getLsbD 0 = (X 1).getLsbD 0 := by
+  have h : R1.recompute X 0 2 = C.op 2 (R1.recompute X 0) := C.run_free rfl
+  rw [h]
+  show (BitVec.ofBool ((R1.recompute X 0 0).getLsbD 0 && (R1.recompute X 0 1).getLsbD 0)).getLsbD 0 = _
+  rw [recompute_zero, recompute_one]
+  simp
+
+theorem recompute_three (X : C.Trace) : ((R1.recompute X 0) 3).getLsbD 0 = (X 1).getLsbD 0 := by
+  have h : R1.recompute X 0 3 = C.op 3 (R1.recompute X 0) := C.run_free rfl
+  rw [h]
+  show (BitVec.ofBool ((R1.recompute X 0 0).getLsbD 0 && (R1.recompute X 0 1).getLsbD 0)).getLsbD 0 = _
+  rw [recompute_zero, recompute_one]
+  simp
+
+theorem eval_two (a : C.Trace) : (C.eval a 2).getLsbD 0 = ((a 0).getLsbD 0 && (a 1).getLsbD 0) := by
+  rw [C.eval_op a (g := 2) (by decide)]
+  show (BitVec.ofBool ((C.eval a 0).getLsbD 0 && (C.eval a 1).getLsbD 0)).getLsbD 0 = _
+  rw [C.eval_input a (g := 0) (by decide), C.eval_input a (g := 1) (by decide)]
+  simp
+
+theorem eval_three (a : C.Trace) : (C.eval a 3).getLsbD 0 = ((a 0).getLsbD 0 && (a 1).getLsbD 0) := by
+  rw [C.eval_op a (g := 3) (by decide)]
+  show (BitVec.ofBool ((C.eval a 0).getLsbD 0 && (C.eval a 1).getLsbD 0)).getLsbD 0 = _
+  rw [C.eval_input a (g := 0) (by decide), C.eval_input a (g := 1) (by decide)]
+  simp
+
+/-- The run whose every input is `1`: honest, its token set, so gates `2` and `3` hold `11`. -/
+theorem honest_ones : R1.Honest fun _ => 1 := fun _ _ => rfl
+
+theorem eval_ones : z (C.eval fun _ => 1) = [true, true] := by
+  simp [z, eval_two, eval_three]
+
+theorem selection_two (T : C.Trace) (σ : Fin 1 → Finset (Fin 4)) (hσ : σ 0 = {2, 3}) :
+    selectionBits T {0} σ = z T := by
+  have : (({2, 3} : Finset (Fin 4)).sort (· ≤ ·)) = [2, 3] := by
+    rw [Finset.sort_insert _ (by decide) (by decide), Finset.sort_singleton]
+  simp [selectionBits, hσ, this, Circuit.bits, z]
+
+/-- Every program `M` accepts is nonempty. -/
+theorem ldl_pos (t : ℕ) (y : List Bool) : (1 : ℕ∞) ≤ LDL M t () y := by
+  unfold LDL
+  refine le_iInf₂ fun p hp => ?_
+  have : p ≠ [] := by
+    rintro rfl
+    simp [M, decode] at hp
+  exact_mod_cast List.length_pos_of_ne_nil this
+
+/-- `M` describes `11` in one bit. -/
+theorem ldl_eleven (t : ℕ) : LDL M t () [true, true] ≤ 1 :=
+  iInf₂_le_of_le [false] rfl (by simp)
+
+/-- Source hardness at deficiency `1` for the value of gates `2` and `3`: every description is at least one bit. -/
+theorem sourceHard : Assumptions.SourceHard R1 M () 0 z 2 1 := fun _ _ =>
+  calc ENNReal.ofReal (2 - 1) ≤ ((1 : ℕ∞) : ℝ≥0∞) := by norm_num
+    _ ≤ _ := ENat.toENNReal_le.2 (ldl_pos _ _)
+
+/-- `11`'s one-bit description refutes every price above one bit for it. -/
+theorem not_le_ldl_eleven (t : ℕ) {p : ℝ} (hp : 1 < p) : ¬ ENNReal.ofReal p ≤ (LDL M t () [true, true] : ℝ≥0∞) := by
+  intro h
+  have h1 : (LDL M t () [true, true] : ℝ≥0∞) ≤ 1 := by exact_mod_cast ENat.toENNReal_le.2 (ldl_eleven t)
+  exact absurd (ENNReal.ofReal_le_one.1 (h.trans h1)) (not_le.2 hp)
+
+/-- No description is shorter than two bits at deficit `0` once it is one bit: `11`'s refutes a price of two. -/
+theorem not_two_le_ldl_eleven (t : ℕ) : ¬ ENNReal.ofReal 2 ≤ (LDL M t () [true, true] : ℝ≥0∞) :=
+  not_le_ldl_eleven t one_lt_two
+
+theorem sum_price_le {ι : Type} [Fintype ι] (X : Items C ι) (hp : ∀ i, X.price i = 1) (U : Finset ι) :
+    ∑ i ∈ U, X.price i ≤ Fintype.card ι := by
+  simp only [hp, sum_const, nsmul_eq_mul, mul_one]
+  exact_mod_cast card_le_univ U
+
+theorem held_W2_R1 : HeldPriceAtMost R1 W2 2 := fun _ U _ _ _ =>
+  (sum_price_le W2 (fun _ => rfl) U).trans (by norm_num)
+
+/-- `W2` is priced two bits in all, so no consumer needs state above `2`. -/
+theorem not_requires_K2 : ¬ K2.RequiresState W2 2 := by
+  intro h
+  obtain ⟨U, σ, -, -, hlt⟩ := h 0
+  have hle : ∑ i ∈ U, W2.price i ≤ 2 := (sum_price_le W2 (fun _ => rfl) U).trans (by norm_num)
+  linarith
+
+theorem upstream : K.Upstream := by
+  intro c F hF g hg
+  obtain ⟨q, -, rfl⟩ := mem_image.1 hF
+  rw [mem_singleton.1 hg]
+  exact ⟨1, show (1 : Fin 4) ∈ C.into {2} ∩ {1} by decide, .refl (mem_singleton_self _)⟩
+
+theorem overlapWeights : K.OverlapWeights fun _ => 1 := by
+  refine ⟨fun _ => zero_le_one, fun x => ?_⟩
+  rw [sum_const, nsmul_one]
+  exact_mod_cast (card_le_univ _).trans (by simp)
+
+/-- Weight `2` is over what gate `1`'s one region allows. -/
+theorem not_overlapWeights_two : ¬ K.OverlapWeights fun _ => 2 := fun h => by
+  have := h.2 (1 : Fin 4)
+  norm_num [K, Consumers.ofUses] at this
+
+theorem servedIn_R1 : K.servedIn (R1.d.𝓘.gates 0) = univ := by
+  refine eq_univ_of_forall fun c => ?_
+  obtain rfl : c = 0 := Subsingleton.elim c 0
+  rw [Consumers.servedIn, mem_filter]
+  refine ⟨mem_univ _, {2}, mem_image.2 ⟨(0, 0), by decide, rfl⟩, by decide⟩
+
+theorem held_W2 : HeldPriceAtMost R2 W2 1 := by
+  intro u U σ hsel hheld
+  have key : ∀ i u : Fin 2, (if i = 0 then ({2} : Finset (Fin 4)) else {3}) ⊆ holds C (P2.gates u) → i = u := by
+    decide
+  have hU : U ⊆ {u} := fun i hi => by
+    have h1 := hsel i hi
+    have h2 := hheld i hi
+    simp only [W2] at h1
+    split_ifs at h1 with h
+    · rw [mem_singleton.1 h1] at h2
+      exact mem_singleton.2 (key i u (by simpa [h] using h2))
+    · rw [mem_singleton.1 h1] at h2
+      exact mem_singleton.2 (key i u (by simpa [h] using h2))
+  calc ∑ i ∈ U, W2.price i ≤ ∑ i ∈ {u}, W2.price i :=
+        sum_le_sum_of_subset_of_nonneg hU fun i _ _ => W2.price_nonneg i
+    _ = 1 := by simp [W2]
+
+theorem requires_K2 : K2.RequiresState W2 1 := by
+  intro c
+  refine ⟨univ, fun i => if i = 0 then {2} else {3}, fun i _ => ?_, fun i _ => ?_, ?_⟩
+  · simp only [W2]
+    split_ifs <;> exact mem_singleton_self _
+  · exact (show ∀ i : Fin 2, (if i = 0 then ({2} : Finset (Fin 4)) else {3}) ⊆ holds C {2, 3} by decide) i
+  · simp [W2]
+
+end InferenceOnly.Capability.Toy
+
+namespace InferenceOnly.SecurityProofs
+
+open Verity Finset InferenceOnly.Capability InferenceOnly.Capability.Toy
+open scoped ENNReal
+
+theorem HeldBudgetHonest : Guarantees.HeldBudgetHonest := by
+  refine ⟨isCK, fun U σ hU => ?_, fun a _ U σ _ => ?_, fun h => ?_⟩
+  · rcases (U 0).eq_empty_or_nonempty with h0 | h0
+    · refine ⟨[true, true, false], le_rfl, fun u X => ?_⟩
+      obtain rfl : u = 0 := Subsingleton.elim u 0
+      rw [blockProgram_R1]
+      simp [M, decode, selectionBits, h0, Circuit.bits]
+    · have hU0 : U 0 = {0} := eq_singleton_iff_nonempty_unique_mem.2 ⟨h0, fun i _ => Subsingleton.elim i 0⟩
+      have hσ : σ 0 = {2, 3} := by
+        have := (hU 0).1 0 (by simp [hU0])
+        simpa [Y2] using this
+      refine ⟨[true, false], by simp, fun u X => ?_⟩
+      obtain rfl : u = 0 := Subsingleton.elim u 0
+      show M.run () (blockProgram R1 [true, false] X 0) 0 = some (selectionBits (R1.recompute X 0) (U 0) σ)
+      rw [blockProgram_R1, hU0, selection_two _ _ hσ]
+      simp only [M, decode, z, List.cons_append, List.nil_append, Option.some.injEq, List.cons.injEq, and_true]
+      exact ⟨by simpa using (recompute_two X).symm, by simpa using (recompute_three X).symm⟩
+  · have hc : (U.card : ℝ) ≤ 1 := by exact_mod_cast (card_le_univ U).trans (by simp)
+    have hs : ∑ i ∈ U, (Y2 2).price i ≤ 2 := by
+      simp only [Y2, sum_const, nsmul_eq_mul]
+      push_cast
+      linarith
+    calc ENNReal.ofReal (∑ i ∈ U, (Y2 2).price i - 1) ≤ ((1 : ℕ∞) : ℝ≥0∞) :=
+          ENNReal.ofReal_le_of_le_toReal (by simp; linarith)
+      _ ≤ _ := ENat.toENNReal_le.2 (ldl_pos _ _)
+  · have := h _ honest_ones {0} (fun _ => {2, 3}) (fun _ _ => mem_singleton_self _)
+    rw [selection_two _ _ rfl, eval_ones] at this
+    exact not_two_le_ldl_eleven 0 (by simpa [Y2] using this)
+
+theorem HeldBudgetNontrivial : Guarantees.HeldBudgetNontrivial := by
+  refine ⟨isCK, fun U σ hU => ?_, fun h => ?_, fun h => ?_⟩
+  · exact HeldBudgetHonest.2.1 U σ fun u => ⟨fun i hi => by simpa [Y2] using (hU u).1 i hi, (hU u).2⟩
+  · have := h _ honest_ones {0} (fun _ => {2, 3}) (fun _ _ => mem_singleton_self _)
+    rw [selection_two _ _ rfl, eval_ones] at this
+    exact not_le_ldl_eleven 0 (by norm_num [Y2]) this
+  · have := h 0 {0} (fun _ => {2, 3}) (fun _ _ => mem_singleton_self _)
+      (fun _ _ => show ({2, 3} : Finset (Fin 4)) ⊆ holds C (P1.gates 0) by decide)
+    norm_num [Y2] at this
+
+theorem StatHeldBudgetHonest : Guarantees.StatHeldBudgetHonest := by
+  refine ⟨isCK, fun a ha g hg => ?_, fun U σ v hsel => ?_⟩
+  · obtain ⟨b, -, rfl⟩ := (PMF.mem_support_map_iff _ _ _).1 ha
+    rw [mem_singleton.1 hg]
+    rfl
+  · rcases U.eq_empty_or_nonempty with h0 | h0
+    · subst h0
+      simp only [sum_empty, sub_zero, Real.rpow_zero, ENNReal.ofReal_one]
+      rw [PMF.toOuterMeasure_apply]
+      exact (ENNReal.tsum_le_tsum fun x => Set.indicator_le_self _ _ x).trans_eq μ.tsum_coe
+    · have hU : U = {0} := eq_singleton_iff_nonempty_unique_mem.2 ⟨h0, fun i _ => Subsingleton.elim i 0⟩
+      subst hU
+      have hσ : σ 0 = {2} := by
+        have := hsel 0 (mem_singleton_self _)
+        simpa [Y] using this
+      have hbound : ENNReal.ofReal ((2 : ℝ) ^ ((0 : ℝ) - ∑ i ∈ ({0} : Finset (Fin 1)), (Y 1).price i)) = 2⁻¹ := by
+        rw [show (0 : ℝ) - ∑ i ∈ ({0} : Finset (Fin 1)), (Y 1).price i = -1 by simp [Y], Real.rpow_neg_one,
+          ENNReal.ofReal_inv_of_pos (by norm_num)]
+        simp
+      rw [hbound, μ, PMF.toOuterMeasure_map_apply]
+      calc (PMF.uniformOfFintype Bool).toOuterMeasure
+            (tok ⁻¹' {a | selectionBits (R1.d.D.eval a) {0} σ = v}) ≤
+            (PMF.uniformOfFintype Bool).toOuterMeasure {v.headD false} := by
+            refine PMF.toOuterMeasure_mono _ fun b ⟨hb, _⟩ => ?_
+            simp only [Set.mem_preimage, Set.mem_ofPred_eq, selectionBits, singleton_biUnion, hσ, sort_singleton,
+              Circuit.bits] at hb
+            simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil] at hb
+            rw [Set.mem_singleton_iff, ← hb]
+            simpa [tok] using (eval_two (tok b)).symm
+        _ = 2⁻¹ := by
+            rw [PMF.toOuterMeasure_apply_singleton, PMF.uniformOfFintype_apply]
+            simp
+
+theorem StatHeldBudgetNontrivial : Guarantees.StatHeldBudgetNontrivial := by
+  refine ⟨isCK, StatHeldBudgetHonest.2.1, fun h => ?_, fun h => ?_⟩
+  · have hle := h {0} (fun _ => {2}) [true] (fun _ _ => mem_singleton_self _)
+    have hbound : ENNReal.ofReal ((2 : ℝ) ^ ((0 : ℝ) - ∑ i ∈ ({0} : Finset (Fin 1)), (Y 3).price i)) ≤ 4⁻¹ := by
+      rw [show (0 : ℝ) - ∑ i ∈ ({0} : Finset (Fin 1)), (Y 3).price i = -((3 : ℕ) : ℝ) by simp [Y],
+        Real.rpow_neg (by norm_num), Real.rpow_natCast]
+      exact ENNReal.ofReal_le_of_le_toReal (by norm_num)
+    have hhalf : (2⁻¹ : ℝ≥0∞) ≤ μ.toOuterMeasure
+        {a | selectionBits (R1.d.D.eval a) {0} (fun _ => ({2} : Finset (Fin 4))) = [true]} := by
+      rw [μ, PMF.toOuterMeasure_map_apply]
+      calc (2⁻¹ : ℝ≥0∞) = (PMF.uniformOfFintype Bool).toOuterMeasure {true} := by
+            rw [PMF.toOuterMeasure_apply_singleton, PMF.uniformOfFintype_apply]
+            simp
+        _ ≤ _ := by
+            refine PMF.toOuterMeasure_mono _ fun b ⟨hb, _⟩ => ?_
+            rw [Set.mem_singleton_iff.1 hb]
+            simp only [Set.mem_preimage, Set.mem_ofPred_eq, selectionBits, singleton_biUnion, sort_singleton,
+              Circuit.bits, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+            simpa [tok] using eval_two (tok true)
+    have := (hhalf.trans hle).trans hbound
+    norm_num [ENNReal.inv_le_inv] at this
+  · have := h 0 {0} (fun _ => {2}) (fun _ _ => mem_singleton_self _)
+      (fun _ _ => show ({2} : Finset (Fin 4)) ⊆ holds C (P1.gates 0) by decide)
+    norm_num [Y] at this
+
+theorem RecoveredBudgetHonest : Guarantees.RecoveredBudgetHonest := by
+  refine ⟨isCK, le_rfl, sourceHard, fun a ha u => ⟨[true], by norm_num, ?_⟩, fun h => ?_, fun h => ?_⟩
+  · obtain rfl : u = 0 := Subsingleton.elim u 0
+    have h0 : (a 0).getLsbD 0 = true := by rw [ha 0 (by decide)]; rfl
+    have h2 := eval_two a
+    have h3 := eval_three a
+    rw [h0, Bool.true_and] at h2 h3
+    rw [blockProgram_R1, C.eval_input a (g := 1) (by decide)]
+    simp only [M, decode, z, List.cons_append, List.nil_append, ite_true, Option.some.injEq, List.cons.injEq, and_true]
+    exact ⟨by simpa using h2.symm, by simpa using h3.symm⟩
+  · have := h _ honest_ones
+    rw [eval_ones] at this
+    exact not_two_le_ldl_eleven 0 (by simpa using this)
+  · obtain ⟨s, hs, hrun⟩ := h _ honest_ones 0
+    obtain rfl : s = [] := by norm_num at hs; exact hs
+    rw [blockProgram_R1] at hrun
+    simp [M, decode] at hrun
+
+theorem RecoveredBudgetNontrivial : Guarantees.RecoveredBudgetNontrivial := by
+  refine ⟨isCK, le_rfl, sourceHard, fun h => ?_, ?_⟩
+  · obtain ⟨s, hs, -⟩ := h _ honest_ones 0
+    have h0 : (0 : ℝ) ≤ s.length := Nat.cast_nonneg _
+    norm_num at hs <;> linarith
+  · show ¬ ((7 : ℝ) * ((1 : ℕ) : ℝ) ≤ ((1 + Nat.clog 2 1 + 3 : ℕ) : ℝ) + 1 + 1)
+    rw [Nat.clog_one_right]
+    norm_num
+
+theorem ImportOrRecomputeHonest : Guarantees.ImportOrRecomputeHonest :=
+  ⟨upstream, overlapWeights⟩
+
+theorem ImportOrRecomputeNontrivial : Guarantees.ImportOrRecomputeNontrivial := by
+  refine ⟨upstream, not_overlapWeights_two, ?_⟩
+  rw [servedIn_R1, unregistered_R1',
+    show (univ : Finset (Fin 1)).filter (fun c => K.G c ⊆ R1.d.𝓘.gates 0) = ∅ by decide]
+  norm_num
+
+theorem RecomputeByGatesHonest : Guarantees.RecomputeByGatesHonest :=
+  ⟨overlapWeights, fun _ => by simp [K, Consumers.ofUses]⟩
+
+theorem RecomputeByGatesNontrivial : Guarantees.RecomputeByGatesNontrivial := by
+  refine ⟨overlapWeights, fun h => ?_, ?_⟩
+  · have := h 0
+    norm_num [K, Consumers.ofUses] at this
+  · rw [show (univ : Finset (Fin 1)).filter (fun c => K.G c ⊆ ({1} : Finset (Fin 4))) = univ by decide]
+    norm_num
+
+theorem RecomputeByStateHonest : Guarantees.RecomputeByStateHonest :=
+  ⟨held_W2, requires_K2⟩
+
+theorem RecomputeByStateNontrivial : Guarantees.RecomputeByStateNontrivial :=
+  ⟨held_W2_R1, not_requires_K2, fun h => h 0 0 (by decide)⟩
+
+end InferenceOnly.SecurityProofs
