@@ -26809,3 +26809,69 @@ The report note's line is corrected in place (`note:proofs/20261110T0505Z-report
 > - **The five GEMM rows are the same in both partitions** [run: the two files' definitions agree on them]. Which partition the priced card follows decides which ScaledMm and FlashInfer rows kernels needs.
 > - **Staging one block on cpu-12 took 15 to 115 s and at most 3.7 GB, except `LlBf16DotprodGemm`: 286 s and 15 GB** [run]. At `full`, `stage.py` builds the same circuit once and draws more values [read]. Time and memory at `full` weren't measured here.
 > - **The `_v1` quantisation part,** `FlashInferFp8Quant1x128_v1{K=256}`, has pin `8f76ac8a2c5af822`, and the form check accepts it too [run]. The card stages `_v2`, as it does for `fi-quant`.
+
+## GATEPOLICY, Tue 10 Nov 7:30Z: piece 1 is reworked on `fc2d47bf11`: head `bf237a5158` on `cursor/proofs-gatepolicy-reader-198e`; one finder of the open, no caller names the session; its suites are queued, so it is not yet ready to stage
+
+**The VLLM-269 comment** (126 words). It is true as written now. When `r20261110-071914-5168` passes, the first line becomes "**Ready to stage: `bf237a5158`.**" and the sentence about confirming goes.
+
+> **Not ready to stage yet: head `bf237a5158`, suites queued.** Branch `cursor/proofs-gatepolicy-reader-198e`, three commits on your `fc2d47bf11`; it replaces `9d51cc9492`. proofs confirms here when `r20261110-071914-5168` passes.
+>
+> Interface: you pass nothing. `served_verdicts.sh` gives `served_composite.sh` `POLICY_PIECE`, PoUW's piece beside each `record --pieces` (`$OUT`, `$DEFER_DIR`, `$COMPOSE_DIR`). The session is the one that piece's `development.json` check held Pearl+'s passes to, as `pearlplus_of_record` reads it; the open is `_ledger_period`'s; the pin is `H1_KEY_SHA512`.
+>
+> If that open signs the four fields, α and Γ are the signed ones whatever `ALPHA`/`GAMMA` say, and the case is refused unless the id is `verity/inference-only/v0` and `registration` is the digest of the case's log's first record. If it signs none, or the piece names no live session, `ALPHA`/`GAMMA` stand, printed "signed by no one". `--from-division` is gone.
+
+**Where the session comes from, and why not where vllm said.** [read, at `fc2d47bf11`]
+
+- vllm's `served_sources.py:423` (the case's passes' manifests, exactly one) is in `served_sources.py record`. That program writes no inference-only case: it carries the served node's `inference-only.json` ("not recomputed", its docstring).
+- The inference-only case is written by `served_composite.sh`, which `served_verdicts.sh` runs at three steps: on the served node, in the deferral follow-on, and in the compose hand-off, the default. The hand-off carries PoUW's piece (`COMPOSE_PIECE_FILES`, `served_verdicts.sh:1359`: `development.json`, `ledger.jsonl`, and each `session/*/out/key.json`) and not Pearl+'s case's parts (`handoff_inputs`, `:1361`).
+- At all three, the compose holds the session in `piece_row` → `pearlplus_of_record`: `development.json`'s `coins.check.session`, where the coins are live and the check held a pass (`served_verdicts.py:1793-1800`). My reader now reads the same place under the same conditions (`served_cases.live_session`).
+- My own mistake on the way: `dad7693800`, pushed 06:54Z, read the session from Pearl+'s parts. On the hand-off it would never have run, and the case would have said "signed by no one" whatever the gate signed. I found it reading `handoff_inputs`, before anyone staged it. `bf237a5158` is the fix. Nobody should stage `dad7693800` or `9d51cc9492`.
+
+**Who makes which check.** [read] unless marked.
+
+| Check | vllm's code at `fc2d47bf11` | Mine at `bf237a5158` |
+|---|---|---|
+| Which open | `_ledger_period`: the prover's period open at the session's reserve | the same function; my own walk is deleted |
+| "The window": the open precedes the reserve and was open at it | inherent in `_ledger_period` | no separate check any more; `--policy-period` and `--policy-session` are gone |
+| The session's key held to the pin | `pinned_key` at `:1288` (piece time) and `:1802` (compose) | the same call again, because I verify the ledger under that key |
+| The ledger's signatures and period rules | `pearlplus_coins` → `CC.live_salt`, on the served node at piece time. `pearlplus_of_record` reads the lines as text (`:1806`) | `Ch.ledger_head` in the composite's own process, on the copy it reads. Only mine at compose time, as far as I read; I did not read `pearlplus_live_draw` to the end |
+| The lane's own reserve | `pearlplus_of_record` | not mine; the reader takes no lane |
+| All four fields present | only at the open: `pearlplus_period_open` records whether the gate's answer holds them | only mine at compose |
+| The policy's id | asked for at the open (`LIMITS_POLICY`); never read back | only mine |
+| α as `[N, D]`, Γ a natural | none | only mine (the gate checks them at signing) |
+| `registration` is the digest of the first record of the case's log | none. The serve signs `DREG_DIGEST`, which is `REG.digest` of that record (`prove_path.py:1221`), the form I compare | only mine |
+| Whose policy | none | only mine, unchanged: the auditor's only with `policy_name` or `by` = `vy-admin` |
+
+**What the reader does when the gate signed nothing.** Two cases fall back to the run's own `ALPHA`/`GAMMA`, labelled "signed by no one": the piece names no live session (no document, H1's, in-process coins, a check that refused or held no pass), or the open signs none of the four. Once the piece names a live session, every other failure refuses the case: wrong key, bad signature, no reserve, no period, a policy signed in part, another id, another registration, no pin.
+
+**Evidence.**
+
+- [run, local, at `bf237a5158`] `tests/test_served_cases.py` without its one slow test: 98 passed. `tests/test_served_sources.py`: 55 passed. `tests/test_served_verdicts.py`: 392 passed, 3 failed; the same 3 fail at `fc2d47bf11` without my change on this VM (below).
+- [run, local] the deferral follow-on test, both params, passes with the new `POLICY_PIECE` assertion. It needed a venv that resolves the worktree; that closes that "could not verify".
+- [run, local] 25 mutants of `signed_policy`, `live_session` and the producer's wiring: 25 killed.
+- [run, local, two trees] the gate's own code at D1b's head `b301a406cc` signed five periods and six reserves under a test key; the reader at `bf237a5158` read that ledger byte for byte: the lane's own policy, a registered one named by the open, `vy-admin`'s own open, an open with no policy, another registration, a session between periods, another pin, an edited ledger, in-process coins, no document. Each gave the expected case or refusal.
+- [run, local] the seven `repository` failures of report 7 are identical with and without my first two commits.
+
+**For vllm: theirs, at `fc2d47bf11` without my change.**
+
+1. A flake. `tests/test_served_sources.py::test_editing_an_answer_file_the_served_node_wrote_leaves_pouws_row_as_it_was` failed in 2 of 11 local runs (`pytest -n 4 tests/test_served_sources.py`), on different params each time. The two rows it compares differ only in the `fetch <session>` read's bytes and SHA-512. [guess] a tar or gzip timestamp crossing a second between the two composes.
+2. `test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_record_at_its_pin_and_answers_it[None, edit1, edit2]` fail on this VM with and without my change. [guess] this VM's checkout is a git worktree. `5168` decides.
+3. The seven `repository` tests (report 7).
+
+**A correction.** The 18 `test_served_sources.py` failures I reported earlier were my invocation: `verity_vllm` came from the main checkout and `verity` from the worktree. With one tree on the path all 55 pass. There is nothing to tell vllm about them.
+
+**Runs.**
+
+- `r20261110-071914-5168`, cpu-1, at `bf237a5158`: `benchmarks/one_stage`, `benchmarks/prove_path`, `verity-cli`, `--quick`. Waiting for a slot, 6 ahead at 07:29Z. ETA 08:30Z.
+- `r20261110-070615-4087`, at `dad7693800`: the slow `test_remotetie.py` tests, whose fixture no longer passes `--from-division`. `4311` was `--quick`, so that change has never run. Waiting, 2 ahead at 07:29Z. ETA 08:15Z. `--on auto` placed it on cpu-2, which is not on your list; say so and I move it.
+- `r20261110-065517-449d`: cancelled before it started; its head was superseded.
+
+**Where the deliverables stand.** D1 (#8531, `a055b48ed4`) and D1b (#8540, `b301a406cc`): both "ready, admitted" in the queue [read: `research queue status`, 07:28Z]; `main` is still `7af4d24fca`. D2 piece 1: this entry. D2 piece 2: its date is owed by Tue 20:00Z.
+
+**Could not verify.**
+
+- The suites on the node: both runs are still queued.
+- `test_served_cases.py`'s one slow test on the final head. It passed before the third commit; a local rerun did not finish in 290 s.
+- Anything against a ledger the deployed gate wrote. D1 and D1b are not deployed. In the two-tree run the end entries are written by hand in the gate's form, since no challenger ran.
+- That a real Pearl+ piece's `development.json` has the shape I read. I read the code that writes it (`served_verdicts.py:1540-1555`) and did not see one from a serve.
+- That vllm's tip is still `fc2d47bf11`; it was at 06:52Z.
