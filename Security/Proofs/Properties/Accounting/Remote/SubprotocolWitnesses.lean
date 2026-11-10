@@ -3,6 +3,12 @@ module
 public import Proofs.Accounting.RemoteHeld.Subprotocol
 public import Proofs.Accounting.RemoteHeld.Draw
 public import Proofs.Pouw.Prob
+import Proofs.Pous.Prob
+import all Init.Data.Array.DecidableEq
+import all Init.Data.List.Sort.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
 
 /-!
 # The bandwidth component's properties hold at the honest node and fail at a verifier that accepts everything
@@ -569,7 +575,7 @@ theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
 theorem binding_empty {n κ : ℕ} {X : Type} [Fintype X] [IsEmpty (Fin n)] {m : ℕ} {s : Fin n → ℕ}
     (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) : R.binding D prf rest = 0 := by
-  simp [Receipts.binding, Pous.pr]
+  simp [Receipts.binding, Pous.pr_eq_card]
 
 theorem toy_delta : (Toy.node.delta : ℝ) = 1 / 2 := by
   rw [← Rat.cast_nnratCast]

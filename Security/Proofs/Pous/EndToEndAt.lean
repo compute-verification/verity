@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Soundness.ExecDraw
 public import Proofs.Flock.Soundness.KeyedDraw
 public import Properties.Pous.EndToEndAt
+public import Proofs.Pous.Sanity
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Algebra.Order.Ring.Star
 import Mathlib.CategoryTheory.Category.Init
