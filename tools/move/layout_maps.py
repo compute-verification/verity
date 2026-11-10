@@ -26,7 +26,8 @@ whichever component they are in: circuit-check finds a module's bindings beside 
 
 The `__init__.py` of a package level the moves empty (every other file under it leaves, and none arrives) goes to
 `archive/` under its path today, in the map that runs last, `emptied`, whichever component it is in: no destination
-keeps the level, and a row that took it along would rename the package under the maps that run later. That map
+keeps the level, and a row that took it along would rename the package under the maps that run later, or land on
+the `__init__.py` that `layout.py` created for a map that ran earlier. That map
 rewrites no dotted name (`keep_dotted`): what still mentions `verity.core` or `verity.ml` then is prose for its owner.
 
 EXCEPTIONS, each a row of `EXCEPT` or `KEEP` with its reason: where the rule gives two files one path, puts a file
@@ -435,9 +436,13 @@ def plan(data, owner, say):
             continue
         if p not in out:
             empty = under[d] == 1                      # it stays, and every other file under it leaves
-        else:                                          # it goes by the rule, and no other file of the package goes with it
-            there = posixpath.dirname(out[p][0]) + "/"
-            empty = len(inside[d]) > 1 and not any(q != p and q in out and out[q][0].startswith(there) for q in inside[d])
+        else:
+            there, move = posixpath.dirname(out[p][0]) + "/", out[p][2]
+            with_it = [q for q in inside[d] if q != p and q in out and out[q][0].startswith(there)]
+            # it goes by the rule and no other file of the package goes with it; or another map takes a module of the
+            # package to the same place: that map runs first, `layout.py` creates this `__init__.py` for it, and the
+            # row would land on the created file
+            empty = (len(inside[d]) > 1 and not with_it) or any(q.endswith(".py") and out[q][2] != move for q in with_it)
         if empty:
             if p not in out:
                 for a in (d, *ancestors(d)):
