@@ -1,25 +1,28 @@
 """The inference-only policy's check of an execution phase's circuit record, unit by unit: the reference
 `NciCheck.Record` is held to.
 
-    check_detail(instance, trusted) -> {"blocks", "gates", "bool_gates", "inputs", "fresh", "cross_wires",
+    check_detail(instance, trusted) -> {"blocks", "gates", "inputs", "fresh", "cross_wires", "free", "ingress",
                                         "unregistered", "openings", "wired_rows", "wired_bits", "complies", "failure"}
                                        | {"error": code}
     check(instance, trusted) -> {"complies"} | {"error": code}
-    count(detail, c, k, n) -> {"complies", "failure"} | {"error": code}
+    kinds(instance, trusted, rows) -> [kind, …] | {"error": code}
+    count(instance, trusted, limits) -> {"bool_gates", "complies", "failure"} | {"error": code}
 
 `NciCheck.Record`'s docstring gives the instance, the trusted input, the stages and their refusals, and what each field
-of the summary counts. Where the Lean reads one summary per template (`NciCheck.Desc.summarize`), one closed form per
-wire and per declaration, and multiplies through the slots, this file expands: each template's gates and the parameter
-leaves they read gate by gate (`nci_reference.activation_gates`, `nci_reference.source`), every unit's slot from the
-inference entries' digits, every input row of every unit with what fills it, and every reader row of every wire with
-its writer. A block is one slot's units; a wire is inside a block when every reader row it covers is read from a writer
-of the reader's slot, and every row of any other wire counts as read across blocks; the bits of a row are the widths of
-the leaves of it that the unit's gates read.
+of the summary counts; `NciCheck.RecordCount`'s gives the count's limits. Where the Lean reads each template's gates
+from the Program's own count and its rows from its Definition's parameters, takes one closed form per wire and per
+declaration, and multiplies through the slots, this file expands: each template's gates gate by gate
+(`nci_reference.activation_gates`), every unit's slot from the inference entries' digits, every input row of every
+unit with what fills it, and every reader row of every wire with its writer. A block is one slot's units; a wire is
+inside a block when every reader row it covers is read from a writer of the reader's slot, and every row of any other
+wire counts as read across blocks. Every input row of every unit is classed once (`KINDS`, by `expand`'s `kind`): one
+nothing shows inside its block or θ is fresh; and it counts whole, 16 bits a word, whether or not a gate reads it.
 
-Three stages take another rule than an expansion. The wires' own check is SPOT's (`Spot.Wires.check`, which the Lean
-runs on the wires as `Spot.Wires.Wiring.ofJson` reads them); here it is Python's statement of the same rule,
+Four rules are no expansion. The wires' own check is SPOT's (`Spot.Wires.check`, which the Lean runs on the wires as
+`Spot.Wires.Wiring.ofJson` reads them); here it is Python's statement of the same rule,
 `verity.ml.windows.interface.check_wires`. θ's rule and the rule for a table opening are the Lean's, restated
-(`theta`, `held`): nothing unrolls a registration log.
+(`theta`, `held`): nothing unrolls a registration log. A Definition's closure digest is the period check's
+(`closure_digest`).
 """
 from __future__ import annotations
 
@@ -27,6 +30,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import sys
 from pathlib import Path
 
 from verity.ml.circuits import codec
@@ -35,9 +39,11 @@ from verity.ml.circuits.program import is_input
 from verity.ml.circuits.types import Array
 
 
-def _load(name: str):
-    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / f"{name}.py")
+def _load(name: str, where: Path | None = None):
+    spec = importlib.util.spec_from_file_location(name, (where or Path(__file__).resolve().parent) / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
+    if where is not None:
+        sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -46,7 +52,9 @@ reference = _load("nci_reference")
 Malformed = reference.Malformed
 _nat = reference._nat
 
-FIELDS = ("program", "record", "gamma", "alpha")
+FIELDS = ("program", "record", "gamma", "alpha", "pins")
+#: the count's limits: the gate table, and `(c, k, n)`
+LIMITS = ("table", "c", "k", "n")
 WIRE = {"reader", "port", "writer", "out", "at", "radix", "base", "step"}
 READ = {"reader", "port", "param", "at", "radix", "base", "step"}
 REGISTERED = {"params", "tables", "reads", "roots", "openings"}
@@ -54,23 +62,42 @@ TABLE = {"name", "param", "offset", "words", "rows"}
 TABLE_READ = {"reader", "port", "table", "of", "at", "units"}
 OPENING = {"reader", "table", "key", "ports", "verdict", "at", "units"}
 INGRESS = {"reader", "port", "at", "units", "step"}
+#: `NciCheck.Record.Kind`: what an input row of a unit is classed as, each row exactly one. `inside`: a wire fills it
+#: from a writer of its own block. `theta`: a registered read of θ, a table read of a table over θ, or a port of an
+#: opening held against such a table (`held`). The rest are fresh (`FRESH`): `cross_wires`, a wire that is not inside;
+#: `free`, nothing fills it; `ingress`; `unregistered`, a registered read or a table read of a parameter that is not θ;
+#: `openings`, a port of an opening that is not held.
+KINDS = ("inside", "theta", "cross_wires", "free", "ingress", "unregistered", "openings")
+FRESH = KINDS[2:]
 #: the summary's fields, in the order `NciCheck.Record.Summary` holds them
-SUMMARY = ("blocks", "gates", "bool_gates", "inputs", "fresh", "cross_wires", "unregistered", "openings", "wired_rows",
-           "wired_bits")
+SUMMARY = ("blocks", "gates", "inputs", "fresh", *FRESH, "wired_rows", "wired_bits")
+
+
+def is_digest(x) -> bool:
+    """Whether `x` is a SHA-512 in lower-case hex."""
+    return isinstance(x, str) and len(x) == 128 and all(c in "0123456789abcdef" for c in x)
 
 
 def parse(inst) -> dict:
     """The instance's fields: `instance` where one is missing or of the wrong JSON kind, `params` where `Γ`, `α` or a
-    value of the gate table is not as stated."""
+    pin is not as stated."""
     if not (isinstance(inst, dict) and all(k in inst for k in FIELDS) and isinstance(inst["program"], str)
-            and isinstance(inst["record"], str) and isinstance(inst.get("table", {}), dict)):
+            and isinstance(inst["record"], str) and isinstance(inst["pins"], list)):
         raise Malformed("instance")
-    gamma, alpha, table = inst["gamma"], inst["alpha"], inst.get("table", {})
+    gamma, alpha = inst["gamma"], inst["alpha"]
     if not (_nat(gamma) and isinstance(alpha, list) and len(alpha) == 2 and all(map(_nat, alpha)) and alpha[1] != 0
-            and all(map(_nat, table.values()))):
+            and all(map(is_digest, inst["pins"]))):
         raise Malformed("params")
     return {"program": inst["program"], "record": inst["record"], "gamma": gamma, "num": alpha[0], "den": alpha[1],
-            "table": table, **({"order": inst["order"]} if "order" in inst else {})}
+            "pins": inst["pins"], **({"order": inst["order"]} if "order" in inst else {})}
+
+
+def closure_digest(desc: dict, key: str) -> str:
+    """The closure digest of Definition `key` of the Program whose descriptor is `desc`, which a pin names: the period
+    check's (`slotEntryDigest`), by its Python mirror, `period_case.slot_entry_digest` of the network suite."""
+    if "period_case" not in sys.modules:
+        _load("period_case", Path(__file__).resolve().parents[3] / "tests")
+    return sys.modules["period_case"].slot_entry_digest(desc, key)
 
 
 def fields_of(ret) -> tuple:
@@ -78,26 +105,17 @@ def fields_of(ret) -> tuple:
     return tuple(f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,)))
 
 
-def template_use(fn) -> tuple[list[list[int]], list[set[int]], list[str]]:
-    """One activation of a template on its own, gate by gate: each parameter's leaf widths, the leaves of it some gate
-    reads (every leaf of a primitive's), and each gate's primitive."""
+def template_gates(fn) -> list[str]:
+    """One activation of a template on its own, gate by gate: each gate's primitive."""
     from verity.ml.circuits.layout import Scope
-    widths = [t.leaf_widths() for _, t in reference.params_of(fn)]
     if isinstance(fn, PrimitiveDefinition):
-        return widths, [set(range(len(w))) for w in widths], [codec.descriptor_id(fn)]
-    top = Scope(fn, 0, None, 0, 0)
-    gates, used = [], [set() for _ in widths]
-    for prim, scope, refs in reference.activation_gates(top):
-        gates.append(codec.descriptor_id(prim))
-        for r in refs:
-            if (s := reference.source(scope, r, top)) is not None:
-                used[s[0]].add(s[1])
-    return widths, used, gates
+        return [codec.descriptor_id(fn)]
+    return [codec.descriptor_id(prim) for prim, _, _ in reference.activation_gates(Scope(fn, 0, None, 0, 0))]
 
 
 class Template:
     """A template of the record: its Definition and units; its rows, each parameter's `(name, words, outer length)`; its
-    outputs, each return field's `(o<j>, words)`; and what one activation reads (`template_use`). `templates` where a
+    outputs, each return field's `(o<j>, words)`; and one activation's gates (`template_gates`). `templates` where a
     parameter is not whole u16 words, an output has no bit, or two ports share a name."""
 
     def __init__(self, tid: str, fn, units: int) -> None:
@@ -116,16 +134,11 @@ class Template:
             self.outs.append((f"o{j}", -(-bits // 16)))
         if len({p for p, *_ in self.rows + self.outs}) != len(self.rows) + len(self.outs):
             raise Malformed("templates")
-        self.widths, self.used, self.prims = template_use(fn)
+        self.prims = template_gates(fn)
 
     def port(self, p: str, outs: bool = False) -> int | None:
         """Port `p`'s words: an input row's, or with `outs` an output's too."""
         return {q: w for q, w, *_ in self.rows + (self.outs if outs else [])}.get(p)
-
-    def row_bits(self, i: int, k: int, j: int) -> int:
-        """The bits of row `j` of parameter `i` cut `k` ways that the template's gates read."""
-        L = len(self.widths[i])
-        return sum(self.widths[i][x] for x in self.used[i] if j * L // k <= x < (j + 1) * L // k)
 
 
 def templates_of(program, rec: dict, digest: str) -> list[Template]:
@@ -341,21 +354,21 @@ def theta(T: dict, params: dict, p: str) -> bool:
     return m is not None and m[0] * m[1] == params[p] and m[2] == 16
 
 
-def held(x: Inputs, is_theta, o: dict) -> bool:
-    """Whether opening `o` is checked against its registered table inside its units: the table is over a θ parameter,
-    and one table read of the table's root and one of its domain id, by the opening's reader, each cover its units."""
+def held(x: Inputs, is_theta, is_pinned, o: dict) -> bool:
+    """Whether opening `o` is checked against its registered table inside its units: its reader's Definition is one the
+    policy pins, the table is over a θ parameter, and one table read of the table's root and one of its domain id, by
+    the opening's reader, each cover its units."""
     def covered(of: str) -> bool:
         return any(r["reader"] == o["reader"] and r["table"] == o["table"] and r["of"] == of and r["at"] <= o["at"]
                    and o["at"] + o["units"] <= r["at"] + r["units"] for r in x.roots)
-    return is_theta(x.tables[o["table"]]["param"]) and covered("root") and covered("domain")
+    return is_pinned(o["reader"]) and is_theta(x.tables[o["table"]]["param"]) and covered("root") and covered("domain")
 
 
 def expand(inst, tr) -> dict:
     """Everything the summary is read from, unit by unit: the instance's fields (`i`), the templates, the wires and
-    cuts, the declarations (`x`), the slots and each unit's (`slots`, `slot`), each wire's `inside`, and per slot the
-    sums `gates`, `bool_gates` (None where the table lacks a primitive), `inputs` (whole rows), and of the bits the
-    gates read `cross_wires`, `unregistered` and `openings`, whose sum is `fresh`. Refused (`Malformed`) with the first
-    stage's code, in `NciCheck.Record`'s order."""
+    cuts, the declarations (`x`), the slots and each unit's (`slots`, `slot`), each wire's `within`, `kind` (the class
+    of what fills a row), and per slot the sums `gates`, `inputs` (every row, whole), each of `KINDS`' bits, and
+    `fresh`, the sum of `FRESH`'s. Refused (`Malformed`) with the first stage's code, in `NciCheck.Record`'s order."""
     i = parse(inst)
     program = reference.desc_program(i["program"])
     try:
@@ -366,7 +379,8 @@ def expand(inst, tr) -> dict:
         raise Malformed("record")
     T = reference.trusted_of(tr)
     run = T["log"][T["run"]]
-    digest = codec.program_digest(json.loads(i["program"]))
+    desc = json.loads(i["program"])
+    digest = codec.program_digest(desc)
     if run.get("program") != digest:
         raise Malformed("run-program")
     window = run.get("window")
@@ -379,39 +393,38 @@ def expand(inst, tr) -> dict:
     by = {t.tid: t for t in templates}
     inside = [all(slot[w["reader"]][u] == slot[w["writer"]][v] for u, _, v in entries(w)) for w in wires]
     is_theta = {p: theta(T, x.params, p) for p in x.params}.__getitem__
-    holds = [held(x, is_theta, o) for o in x.openings]
+    is_pinned = {t.tid: closure_digest(desc, t.tid) in i["pins"] for t in templates}.__getitem__
+    holds = [held(x, is_theta, is_pinned, o) for o in x.openings]
 
-    def kind(what: tuple | None) -> str | None:
-        """What a row filled by `what` counts as: None where it is no fresh bit."""
-        if what is None or what[0] == "ingress":
-            return "unregistered"
+    def kind(what: tuple | None) -> str:
+        """The class of a row filled by `what`, None where nothing fills it: one of `KINDS`."""
+        if what is None:
+            return "free"
         if what[0] == "wire":
-            return None if inside[what[1]] else "cross_wires"
+            return "inside" if inside[what[1]] else "cross_wires"
         if what[0] == "read":
-            return None if is_theta(what[1]) else "unregistered"
+            return "theta" if is_theta(what[1]) else "unregistered"
         if what[0] == "root":
-            return None if is_theta(x.tables[what[1]]["param"]) else "openings"
-        return None if holds[what[1]] else "openings"
+            return "theta" if is_theta(x.tables[what[1]]["param"]) else "unregistered"
+        if what[0] == "opening":
+            return "theta" if holds[what[1]] else "openings"
+        return "ingress"
 
-    sums = {k: [0] * slots for k in ("gates", "inputs", "cross_wires", "unregistered", "openings")}
-    bools: list = [0] * slots
+    sums = {k: [0] * slots for k in ("gates", "inputs", *KINDS)}
     for t in templates:
-        b = sum(i["table"][p] for p in t.prims) if all(p in i["table"] for p in t.prims) else None
         for u in range(t.units):
             s = slot[t.tid][u]
             sums["gates"][s] += len(t.prims)
-            bools[s] = None if b is None or bools[s] is None else bools[s] + b
-            for j, (p, words, _) in enumerate(t.rows):
+            for p, words, _ in t.rows:
                 k = int(cuts.get(t.tid, {}).get(p, 1))
                 sums["inputs"][s] += 16 * words
                 for row in range(k):
-                    if (c := kind(x.fill.get((t.tid, p), {}).get((u, row)))) is not None:
-                        sums[c][s] += t.row_bits(j, k, row)
+                    sums[kind(x.fill.get((t.tid, p), {}).get((u, row)))][s] += 16 * words // k
+    assert all(sums["inputs"][s] == sum(sums[k][s] for k in KINDS) for s in range(slots))
     wired = [(math.prod(w["radix"]), 16 * by[w["reader"]].port(w["port"]) // int(cuts.get(w["reader"], {}).get(w["port"], 1)))
              for w in wires]
     return {"i": i, "templates": templates, "wires": wires, "cuts": cuts, "x": x, "slots": slots, "slot": slot,
-            "inside": inside, "bool_gates": bools, **sums,
-            "fresh": [sum(sums[k][s] for k in ("cross_wires", "unregistered", "openings")) for s in range(slots)],
+            "within": inside, "kind": kind, **sums, "fresh": [sum(sums[k][s] for k in FRESH) for s in range(slots)],
             "wired_rows": sum(n for n, _ in wired), "wired_bits": sum(n * b for n, b in wired)}
 
 
@@ -420,9 +433,7 @@ def evaluate(inst, tr) -> dict:
     it: `size` where a block has more than `Γ` gates, else `nci` where its fresh bits exceed `α` times its gates."""
     e = expand(inst, tr)
     i = e["i"]
-    out = {"blocks": e["slots"], "gates": max(e["gates"]),
-           "bool_gates": None if None in e["bool_gates"] else max(e["bool_gates"]),
-           **{k: max(e[k]) for k in ("inputs", "fresh", "cross_wires", "unregistered", "openings")},
+    out = {"blocks": e["slots"], **{k: max(e[k]) for k in ("gates", "inputs", "fresh", *FRESH)},
            "wired_rows": e["wired_rows"], "wired_bits": e["wired_bits"]}
     failure = ("size" if out["gates"] > i["gamma"] else
                "nci" if out["fresh"] * i["den"] > i["num"] * out["gates"] else None)
@@ -443,13 +454,35 @@ def check(inst, tr) -> dict:
     return res if "error" in res else {"complies": res["complies"]}
 
 
-def count(detail: dict, c: int, k: int, n: int) -> dict:
-    """`NciCheck.Record.count` on a summary: `(c, k, n)` over the blocks' Boolean gates, fresh bits and number,
-    `gate-table` where the table lacks a primitive a block computes; a refusal is passed through."""
-    if "error" in detail:
-        return detail
-    if detail["bool_gates"] is None:
+def kinds(inst, tr, rows) -> list | dict:
+    """`NciCheck.Record.kinds`: the class of each of `rows`, `[template, port, unit, row]` each (`free` where the
+    record's declarations fill no such row), or the refusal."""
+    try:
+        e = expand(inst, tr)
+    except Malformed as m:
+        return {"error": m.code}
+    return [e["kind"](e["x"].fill.get((t, p), {}).get((u, r))) for t, p, u, r in rows]
+
+
+def count(inst, tr, limits) -> dict:
+    """`NciCheck.RecordCount.count`: `(c, k, n)` over the blocks' Boolean gates (each gate its primitive's entry of the
+    gate table), fresh bits and number. `instance` or `params` where the limits are not as stated, then the form's own
+    refusal, then `gate-table` where the table lacks a primitive a block computes."""
+    if not (isinstance(limits, dict) and all(k in limits for k in LIMITS) and isinstance(limits["table"], dict)):
+        return {"error": "instance"}
+    table = limits["table"]
+    if not (all(_nat(limits[k]) for k in ("c", "k", "n")) and all(map(_nat, table.values()))):
+        return {"error": "params"}
+    try:
+        e = expand(inst, tr)
+    except Malformed as m:
+        return {"error": m.code}
+    if any(p not in table for t in e["templates"] for p in t.prims):
         return {"error": "gate-table"}
-    failure = ("gates" if detail["bool_gates"] > c else "fresh" if detail["fresh"] > k else
-               "count" if detail["blocks"] > n else None)
-    return {"complies": failure is None, "failure": failure}
+    bools = [0] * e["slots"]
+    for t in e["templates"]:
+        for u in range(t.units):
+            bools[e["slot"][t.tid][u]] += sum(table[p] for p in t.prims)
+    failure = ("gates" if max(bools) > limits["c"] else "fresh" if max(e["fresh"]) > limits["k"] else
+               "count" if e["slots"] > limits["n"] else None)
+    return {"bool_gates": max(bools), "complies": failure is None, "failure": failure}

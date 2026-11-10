@@ -4,25 +4,27 @@ for `NciCheck/RecordDifftestMain.lean`.
     python scripts/record_difftest_vectors.py <verity checkout> --out DIR [--count N]
 
 Writes two files under `DIR/record_difftest/`, one line per case: `cases.jsonl`, `{"instance", "trusted", "spot",
-"count"}`: the instance and the trusted input as `NciCheck.Record.check` reads them (`NciCheck.Record`'s docstring), the
-record's wires as SPOT's `wires` piece reads them (`nci_record_reference.spot_instance`, from Python's own layout of
-each template; `null` where the reference refuses the case before its wires), and `(c, k, n)` for the count; and
-`python.jsonl`, `{"detail", "public", "count"}`: `nci_record_reference`'s `check_detail`, `check` and `count`. The Lean
-audit runs `NciCheck/RecordDifftestMain.lean` on the two (`runs` in `lean-audit.json`).
+"rows", "count"}`: the instance and the trusted input as `NciCheck.Record.check` reads them (`NciCheck.Record`'s
+docstring), the record's wires as SPOT's `wires` piece reads them (`nci_record_reference.spot_instance`, from Python's
+own layout of each template; `null` where the reference refuses the case before its wires), some input rows of its
+units (`[template, port, unit, row]` each) and the count's limits (`{"table", "c", "k", "n"}`); and `python.jsonl`,
+`{"detail", "public", "kinds", "count"}`: `nci_record_reference`'s `check_detail`, `check`, `kinds` of those rows and
+`count`. The Lean audit runs `NciCheck/RecordDifftestMain.lean` on the two (`runs` in `lean-audit.json`).
 
 Case `seed`, for the first `COUNT`, is a random circuit (`random_circuit`): one to four templates of a few gates, each
 reading some of its parameters' leaves (directly, through a call and through a batch), their units laid out by one or
 two inference entries each with the slot digit anywhere among the digits; wires from earlier templates that keep to the
 reader's slot, cross slots or do either unit by unit, written unit by unit and merged into runs
 (`verity.ml.windows.interface.coalesce`, as a lowering states them); registered reads, a table with its table reads and
-opening, and ingress; and a registration log in R6's chain whose first record registers some of the parameters, under
-the root the run's own record commits or another. About two in five are broken in one way, each refused at one stage
-(`BROKEN`). Then `shaped()`: circuits in the shape of a served class (`lowered`: a slot scan, an embedding read through
-a table opening, a norm, matmul rows over registered weights, an attention template per position reading every earlier
-position's rows by a cut, a mix, a selection and a token feed reading its own earlier units), at two slots and three
-positions and at the served class's four slots and 35, with the weights registered at the start of the deployment and
-with none, under another root, with the opening's root read dropped, with a wire into the next slot, and with the order
-given beside the record.
+opening, and ingress; a registration log in R6's chain whose first record registers some of the parameters, under the
+root the run's own record commits or another; and pins of most templates' Definitions, among other digests. About two
+in five are broken in one way, each refused at one stage (`BROKEN`). Then `shaped()`: circuits in the shape of a served
+class (`lowered`: a slot scan, an embedding read through a table opening, a norm, matmul rows over registered weights,
+an attention template per position reading every earlier position's rows by a cut, a mix, a selection and a token feed
+reading its own earlier units), at two slots and three positions and at the served class's four slots and 35, with the
+weights registered at the start of the deployment and with none, under another root, with the opening's root read
+dropped, with the opening's reader another Definition under the pinned one's name whose verdict is a constant 1, with a
+wire into the next slot, and with the order given beside the record.
 
 Every wire of every case is one `NciCheck.Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -66,8 +68,8 @@ FUEL = 4096
 V2 = "verity/registration/v2"
 #: how a random case is broken, by the stage that refuses it
 BROKEN = {
-    "instance": ["no-field", "program-type", "record-type", "table-type"],
-    "params": ["gamma", "alpha", "table-value"],
+    "instance": ["no-field", "program-type", "record-type", "pins-type"],
+    "params": ["gamma", "alpha", "pin-value"],
     "program": ["program-text"],
     "not-topological": ["forward"],
     "record": ["record-text", "record-list"],
@@ -89,11 +91,12 @@ def _zero(*_a):
 
 
 def prim(ins: tuple[int, ...], r: int) -> PrimitiveDefinition:
-    """A primitive reading values of widths `ins` and returning `Value<r>`."""
+    """A primitive reading values of widths `ins` and returning `Value<r>`: 0, or with no operand the constant of `r`
+    ones."""
     if (ins, r) not in _PRIMS:
         name = f"RecOp{'x'.join(map(str, ins))}r{r}" if ins else f"RecConst{r}"
         _PRIMS[(ins, r)] = PrimitiveDefinition(name, 1, tuple((f"a{i}", Value(w)) for i, w in enumerate(ins)), Value(r),
-                                               _zero, register=False)
+                                               _zero if ins else lambda: (1 << r) - 1, register=False)
     return _PRIMS[(ins, r)]
 
 
@@ -431,23 +434,25 @@ def random_circuit(rng, seed: int) -> Circuit:
 # Circuits in the shape of a served class
 
 
-def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True) -> Circuit:
+def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forged: bool = False) -> Circuit:
     """A circuit in the shape of a served class of `S` slots and `T` positions (the module docstring), E = 2 words a
     hidden row: `Scan` (one unit a slot, its state a registered read of `scan-state`, the phase's own input), `Embed`
     (a table opening at the token), `Norm`, `Gemm` (per position and slot, two rows of the query weights then four of
     the mixing weights), `Attn<v>` (one template a position, its keys every earlier position's query rows by a cut of
     `v`), `Mix`, `Select` and `Feed` (the next position's token; its state its own earlier unit's). With `cross`, the
-    mix of one position reads the attention of the next slot; without `root_read`, no table read of the root."""
+    mix of one position reads the attention of the next slot; without `root_read`, no table read of the root; with
+    `forged`, `Embed` is another Definition under the same name, its verdict a constant 1 that reads no port."""
     c = Circuit(f"lowered{S}x{T}", S, T)
     E, v16 = 2, Value(16)
     row = Array(E, v16)
 
-    def make(name: str, params: list, outs: list, used: dict[int, list[int]]):
-        """A template whose gates, one an output leaf, read between them the leaves `used` names (parameter: leaves)."""
+    def make(name: str, params: list, outs: list, used: dict[int, list[int]], constant: tuple[int, ...] = ()):
+        """A template whose gates, one an output leaf, read between them the leaves `used` names (parameter: leaves);
+        each output of `constant` is a constant instead, reading none."""
         n = sum(t.leaves for t in outs)
         plan, x = [], 0
-        for t in outs:
-            plan.append([("op", w, [(i, k) for i, ks in used.items() for k in ks[x + j::n]])
+        for o, t in enumerate(outs):
+            plan.append([("op", w, [] if o in constant else [(i, k) for i, ks in used.items() for k in ks[x + j::n]])
                          for j, w in enumerate(t.leaf_widths())])
             x += t.leaves
         return template(f"Low{name}", params, outs, plan)
@@ -455,8 +460,8 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True) -> C
     scan = c.add(make("Scan", [("state", Array(4, v16))], [v16, row], {0: [0, 1, 2]}), [([S], ["slot"], 0)])
     embed = c.add(make("Embed", [("tok", v16), ("root", DIGEST), ("domain", DIGEST), ("row", row), ("salt", Value(32)),
                                  ("path", Array(4, v16))], [row, Value(1)],
-                       {0: [0], 1: list(range(8)), 2: list(range(8)), 3: [0, 1], 4: [0], 5: [0, 1, 2, 3]}),
-                  [([T, S], ["step", "slot"], 0)])
+                       {0: [0], 1: list(range(8)), 2: list(range(8)), 3: [0, 1], 4: [0], 5: [0, 1, 2, 3]},
+                       constant=(1,) if forged else ()), [([T, S], ["step", "slot"], 0)])
     norm = c.add(make("Norm", [("x", row), ("w", row)], [row], {0: [0, 1], 1: [0, 1]}), [([T, S], ["step", "slot"], 0)])
     gemm = c.add(make("Gemm", [("x", row), ("w", Array(4, v16))], [row], {0: [0, 1], 1: [0, 1, 2]}),
                  [e for t in range(T) for e in (([S, 2], ["slot", "-"], t), ([S, 4], ["slot", "-"], t))])
@@ -509,29 +514,33 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True) -> C
 
 
 WEIGHTS = ("weights/embed/table", "weights/norm", "weights/query", "weights/mixing")
+EMBED = "LowEmbed_v1"
 
 
 def shaped() -> list[dict]:
     """The cases on `lowered` circuits, at two slots and three positions and at four slots and 35, each size under one
     policy: `Γ` a block's gates, `α` and `(c, k, n)` exactly what a block holds with the weights registered at the
-    start of the deployment. That case is accepted: a block's fresh bits are its scan state's. With none registered,
-    and with the run committing none, the weights' reads and the opening are fresh and the rate refuses (`nci`), the
-    count `fresh`. Then at two slots and three positions: the query weights under another root than the run commits,
-    the opening with no table read of its root, and a wire into the next slot, each refused the same way; the order
-    given beside the record, and a deployment whose first record is the run's own, each accepted."""
+    start of the deployment, and one pin, `Embed`'s closure digest. That case is accepted: a block's fresh bits are
+    its scan state's. With none registered, and with the run committing none, the weights' reads and the opening are
+    fresh and the rate refuses (`nci`), the count `fresh`. Then at two slots and three positions: the query weights
+    under another root than the run commits, the opening with no table read of its root, the opening's reader another
+    Definition under `Embed`'s name whose verdict is a constant 1, and a wire into the next slot, each refused the same
+    way; the order given beside the record, and a deployment whose first record is the run's own, each accepted."""
     out = []
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
         policy: dict = {}
+        pins = [ref.closure_digest(json.loads(lowered(S, T).program()[0]), EMBED)]
 
         def one(what: str, c: Circuit, seed: int, *, held=WEIGHTS, committed=WEIGHTS, moved=(), beside=False,
-                before=2, policy=policy, n=n) -> None:
+                before=2, policy=policy, pins=pins, n=n) -> None:
             rng = random.Random(50_000 + 100 * n + seed)
             roots = {p: _hex(rng) for p in c.params}
             order = None
             if beside:
                 order, c.order = c.order, None
             made = finish(rng, c, {p: (_hex(rng) if p in moved else roots[p], c.params[p] // 2, 2) for p in held},
-                          {p: roots[p] for p in (*committed, "scan-state")}, before=before, order=order, policy=policy)
+                          {p: roots[p] for p in (*committed, "scan-state")}, pins, before=before, order=order,
+                          policy=policy)
             out.append(made | {"shape": what, "broken": None})
 
         one(f"{S}x{T} registered", lowered(S, T), 0)
@@ -540,6 +549,7 @@ def shaped() -> list[dict]:
         if n == 0:
             one("2x3 another root", lowered(S, T), 3, moved=("weights/query",))
             one("2x3 no root read", lowered(S, T, root_read=False), 4)
+            one("2x3 a constant verdict", lowered(S, T, forged=True), 8)
             one("2x3 a wire into the next slot", lowered(S, T, cross=True), 5)
             one("2x3 the order beside the record", lowered(S, T), 6, beside=True)
             one("2x3 the run's record first", lowered(S, T), 7, before=0)
@@ -549,12 +559,12 @@ def shaped() -> list[dict]:
 # Cases
 
 
-def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[str, str], *, before: int = 2,
-           after: int = 0, order=None, policy: dict | None = None) -> dict:
-    """The case on circuit `c`: its instance (the Program, the record, a gate table, `Γ` and `α`), the trusted input
-    (`trusted`), the wires as SPOT reads them and `(c, k, n)`; with what it was made from. The limits are at, just
-    under or just over what the circuit's blocks hold; or `policy`'s, which an empty `policy` is first filled with: a
-    table of every primitive and exactly what the blocks hold."""
+def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[str, str], pins: list[str], *,
+           before: int = 2, after: int = 0, order=None, policy: dict | None = None) -> dict:
+    """The case on circuit `c`: its instance (the Program, the record, `Γ`, `α` and the pins), the trusted input
+    (`trusted`), the wires as SPOT reads them, up to six of its units' input rows and the count's limits; with what it
+    was made from. The limits are at, just under or just over what the circuit's blocks hold; or `policy`'s, which an
+    empty `policy` is first filled with: a table of every primitive and exactly what the blocks hold."""
     text, digest = c.program()
     record = IF.circuit_bytes(c.doc(digest)).decode()
     inside = [all(s == t for s, t in _slots(c, w)) for w in c.wires]
@@ -563,32 +573,37 @@ def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[s
         if searched(c.slots, g, w) is not want:
             raise AssertionError(f"{c.name}: the search doesn't decide wire {w.doc()} within its fuel")
     reference.desc_program(text)
-    prims = sorted({p for fn, _ in c.templates for p in ref.template_use(fn)[2]})
+    prims = sorted({p for fn, _ in c.templates for p in ref.template_gates(fn)})
+    every = {p: 3 + 2 * k for k, p in enumerate(prims)}
     if policy is None:
         table = {p: rng.choice([0, 1, 2, rng.randint(0, 40)]) for p in prims}
         if rng.random() < 0.1:
             del table[rng.choice(prims)]
     else:
-        table = policy.get("table", {p: 3 + 2 * k for k, p in enumerate(prims)})
-    inst = {"program": text, "record": record, "table": table, "gamma": BIG, "alpha": [BIG, 1],
+        table = every | policy.get("count", {}).get("table", {})
+    inst = {"program": text, "record": record, "gamma": BIG, "alpha": [BIG, 1], "pins": pins,
             **({"order": order} if order is not None else {})}
     tr = trusted(rng, digest, record, held, roots, before, after)
     probe = ref.check_detail(inst, tr)
     assert "error" not in probe, (c.name, probe)
+    bools = ref.count(inst, tr, {"table": every, "c": 0, "k": 0, "n": 0})["bool_gates"] if policy is not None else \
+        ref.count(inst, tr, {"table": table, "c": 0, "k": 0, "n": 0}).get("bool_gates", 0)
 
     def near(x: int) -> int:
         return x if policy is not None else max(0, x + rng.choices([0, -1, 1, rng.randint(-3, 3)], [5, 2, 2, 1])[0])
     den = rng.randint(1, 5) if policy is None else probe["gates"]
-    limits = {"table": table, "gamma": near(probe["gates"]),
-              "alpha": [near(-(-probe["fresh"] * den // max(probe["gates"], 1))), den],
-              "count": [near(probe["bool_gates"] or 0), near(probe["fresh"]), near(probe["blocks"])]}
+    limits = {"gamma": near(probe["gates"]), "alpha": [near(-(-probe["fresh"] * den // max(probe["gates"], 1))), den],
+              "count": {"c": near(bools), "k": near(probe["fresh"]), "n": near(probe["blocks"])}}
     if policy is not None:
         limits = policy if policy else policy.update(limits) or policy
     inst.update(gamma=limits["gamma"], alpha=limits["alpha"])
+    rows = [(codec.descriptor_id(fn), p, u, r) for fn, n in c.templates for p, _ in fn.signature()[0]
+            for u in range(n) for r in range(c.cuts.get(codec.descriptor_id(fn), {}).get(p, 1))]
     return {"case": {"instance": inst, "trusted": tr, "spot": spot_of(c, json.loads(record), order),
-                     "count": limits["count"]}, "circuit": c,
-            "inside": inside, "theta": sorted(p for p, (root, n, w) in held.items()
-                                              if roots.get(p) == root and n * w == c.params[p])}
+                     "rows": [list(r) for r in rng.sample(rows, min(6, len(rows)))],
+                     "count": {"table": table, **{k: limits["count"][k] for k in ("c", "k", "n")}}},
+            "circuit": c, "inside": inside,
+            "theta": sorted(p for p, (root, n, w) in held.items() if roots.get(p) == root and n * w == c.params[p])}
 
 
 def spot_of(c: Circuit, doc: dict, order=None) -> dict:
@@ -624,11 +639,19 @@ def case(seed: int) -> dict:
             continue
         w = rng.choice([d for d in range(1, n + 1) if n % d == 0])
         held[p] = (roots.get(p, _hex(rng)) if how != "root" else _hex(rng), n // w + (how == "shape"), w)
-    made = finish(rng, c, held, roots, before=rng.choice([0, 1, 2, 2, 3]), after=rng.choice([0, 0, 1]))
+    desc = json.loads(c.program()[0])
+    pins = [ref.closure_digest(desc, t) for t in c.units if rng.random() < 0.7] + [_hex(rng) for _ in range(rng.randint(0, 2))]
+    rng.shuffle(pins)
+    made = finish(rng, c, held, roots, pins, before=rng.choice([0, 1, 2, 2, 3]), after=rng.choice([0, 0, 1]))
     stage = rng.choice(sorted(BROKEN)) if rng.random() < 0.4 else None
     how = rng.choice(BROKEN[stage]) if stage else None
     if how and not _break(rng, made, how):
         stage = how = None
+    if rng.random() < 0.04:
+        limits = made["case"]["count"]
+        rng.choice([lambda: limits.pop(rng.choice(ref.LIMITS)), lambda: limits.update(table=[]),
+                    lambda: limits.update(c=rng.choice([-1, "3", 1.5, None])), lambda: limits.update(n=[1]),
+                    lambda: limits["table"].update(RecNope_v1=rng.choice([-1, 1.5, "2"]))])()
     if stage in ("instance", "params", "program", "not-topological", "record", "trusted", "run-program", "run-circuit",
                  "templates"):
         made["case"]["spot"] = None
@@ -676,14 +699,14 @@ def _break(rng, made: dict, how: str) -> bool:
         inst["program"] = json.loads(inst["program"])
     elif how == "record-type":
         inst["record"] = doc
-    elif how == "table-type":
-        inst["table"] = rng.choice([[], 3, "{}"])
+    elif how == "pins-type":
+        inst["pins"] = rng.choice([{}, 3, "pins", None])
     elif how == "gamma":
         inst["gamma"] = rng.choice([-1, 1.5, "2", None, True])
     elif how == "alpha":
         inst["alpha"] = rng.choice([[1, 0], [1], 3, [1, -2], [1.5, 2], "1/2", [1, 2, 3]])
-    elif how == "table-value":
-        inst["table"][rng.choice(sorted(inst["table"]) or ["RecOp16r16_v1"])] = rng.choice([-1, 1.5, "2", None])
+    elif how == "pin-value":
+        inst["pins"].append(rng.choice([3, None, "abc", _hex(rng).upper().replace("0", "A"), _hex(rng)[:-1], [_hex(rng)]]))
     elif how == "program-text":
         inst["program"] = rng.choice(["", "{", "[]", inst["program"].replace('"root":', '"rooot":', 1)])
     elif how == "forward":
@@ -888,14 +911,14 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 11
+    return COUNT + 12
 
 
 def results(case: dict) -> dict:
-    """The reference's results on a case: the whole verdict, what is published, and the count."""
-    detail = ref.check_detail(case["instance"], case["trusted"])
-    return {"detail": detail, "public": ref.check(case["instance"], case["trusted"]),
-            "count": ref.count(detail, *case["count"])}
+    """The reference's results on a case: the whole verdict, what is published, its rows' classes, and the count."""
+    inst, tr = case["instance"], case["trusted"]
+    return {"detail": ref.check_detail(inst, tr), "public": ref.check(inst, tr), "kinds": ref.kinds(inst, tr, case["rows"]),
+            "count": ref.count(inst, tr, case["count"])}
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:
