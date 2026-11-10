@@ -374,3 +374,33 @@ KP2's run on card 4 ended at 20:38Z and left nothing on it; vllm's half hour on 
 row is pushed. Use it for the one-prover rows still open (row 13, 15, 28, 29, 30, 32, 34, 36, 37 to 40), the same
 start check, lock and one lease. Card 4 is on NUMA node 2 and cores 12-23 on node 0, and the slot has 12 cores, not
 24: say both in each row's conditions, and keep a type whose provers need more than 12 cores off it.
+
+## Tue 10 Nov 21:42Z: CHANGE OF ORDER. The command reads 19.2% steady, because its census is still `main`'s
+
+Read benchmarks' comment of 20:25Z on HASH-98 first (posted through the Linear connector, so it shows as Daniel's and
+rang nobody). Its command, run over today's labelled rows from #8664's head: **steady rows price 19.2% of Flock's
+proving (26 types).** The lead's "near 80%" was on #8281's census; the command's census of record is still
+`main`'s, and 52 of your rows are types of #8281's census, unread until #8281 lands and its census is labelled.
+What the command says is missing, heaviest first, and what to do, in this order, ahead of everything queued:
+
+1. **`FlashInferFp8Linear_v1{K=2048,N=1}`: 50.4% of the command's total**, priced today from a single session at
+   56.6 ms a block. Your first row measures it (r20261110-055806-f308, art:4cdf1d17a60b…: 0.605 ms a block, 121 of
+   121, `stage.word` the census's name) and **carries no label** [checked by the lead]. Run today's nine checks over
+   that run's records. If all pass, label the art and the run now. If one cannot be run on its records or fails,
+   time the type again today (the uncut linear, `main`'s partition, as f308 staged it) and label that.
+2. **`FlashInferFp8Linear_v1{K=6144,N=1}`: 25.9%**, modeled at 83.6 ms a block. No row of it exists. It is `fi:K=6144`
+   of your first plan (staged as `_v2`, 1,024 blocks a statement). One prover, on a 24-core slot, next.
+3. **`main`'s tail**, each under 1.2% (benchmarks' list): `ScaledMmFp8BlockSharedScale_v1{K=256}` and FlashInfer at
+   K=256 as `main`'s census names them. `EmbeddingRead_v1{V=256,H=4}` is your row 13 (no row: the streaming prover
+   takes no templated unit; the lead rings proofs). The 64-key split part of `main`'s census has no form the
+   verifier accepts: skip it.
+4. **Stop queuing head blocks one `NVIS` at a time.** benchmarks' reader prices a family's other statics from its
+   measured member (18:49Z; "steady state, its family's": in the totals, never in the measured share). Each costs 70
+   minutes of a card's lease in staging. Let the ones already staging finish; cancel the links not yet started
+   (`NVIS=59` and below) and say which. Rows 1, 2 and 37 to 40 are enough for the family.
+5. **Row 34:** its `stage.word` is the `_v1` name and the cut's stratum is `_v2`, so it is unread. That is the
+   stager's word, not yours: say on HASH-98 which line of the stager writes it, for proofs.
+6. Then the 2- and 4-prover rows as queued.
+
+Check each step against benchmarks' list in its comment, not against this summary. Say on HASH-98 when 1 and 2 are
+labelled: benchmarks runs its command again on them.
