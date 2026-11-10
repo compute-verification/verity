@@ -30,10 +30,10 @@ path = "../../service/sampled_proofs"
 name = "pouw_check"
 path = "../pouw/lean/check"
 
-# The inference-only policy: its check as a core protocol (`NciCheck.Protocol`).
+# The inference-only policy: its check as a core protocol (`InferenceOnlyCheck.Protocol`).
 [[require]]
-name = "nci_check"
-path = "../network/nci/lean"
+name = "inference_only_check"
+path = "../network/inference_only/lean"
 
 # Integrity: sampled proofs in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
 # check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).

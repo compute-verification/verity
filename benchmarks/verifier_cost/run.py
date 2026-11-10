@@ -3,8 +3,8 @@ the size of the circuit that description unrolls to (README.md).
 
   measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an inference-only check instance (θ its registered inputs, one
-      IU per Call), checked by `nci-check --policy` (`NciCheck.Desc`) and, where the unrolled circuit has at most GATES
-      gates, by `nci-check --policy --unrolled` (`NciCheck.check`) on the instance expanded gate by gate;
+      IU per Call), checked by `nci-check --policy` (`InferenceOnlyCheck.Desc`) and, where the unrolled circuit has at most GATES
+      gates, by `nci-check --policy --unrolled` (`InferenceOnlyCheck.check`) on the instance expanded gate by gate;
       DIR/results.json.
   partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       the one-stage verifier's partition (`sampled-proofs-difftest`'s `partition`: `Partition.units`, `strata`, the law
@@ -33,7 +33,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-NCI = ROOT / "verity/core/protocols/network/nci/lean"
+NCI = ROOT / "verity/core/protocols/network/inference_only/lean"
 EXE = NCI / ".lake/build/bin/nci-check"
 SCHEMA = "verity/verifier-cost/v1"
 
@@ -55,7 +55,7 @@ BOOLEAN = ("tiny", "tiny-2", "small", "mid", "b0-1", "b0")
 
 
 def _reference():
-    spec = importlib.util.spec_from_file_location("nci_reference", NCI / "scripts/nci_reference.py")
+    spec = importlib.util.spec_from_file_location("inference_only_reference", NCI / "scripts/inference_only_reference.py")
     ref = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ref)
     return ref
@@ -89,7 +89,7 @@ def program(name: str, ir: str) -> str:
 
 
 def instance(ref, text: str) -> tuple[dict, dict]:
-    """`NciCheck.Desc`'s instance (θ the registered inputs, one IU per Call, a gate-less node in none) and the
+    """`InferenceOnlyCheck.Desc`'s instance (θ the registered inputs, one IU per Call, a gate-less node in none) and the
     description's sizes."""
     inp, reg, spans = ref.root_nodes(text)
     desc = json.loads(text)
@@ -298,11 +298,11 @@ def plot(args) -> int:
 
     path = subprocess.run(["research", "data", "fetch", args.art], check=True, capture_output=True, text=True).stdout.strip()
     res = json.loads(Path(path).read_text())
-    nci = res["schema"] == SCHEMA
+    inference_only = res["schema"] == SCHEMA
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8))
     for ax, x, label in ((axes[0], "description_bytes", "description (bytes)"), (axes[1], "unrolled_gates", "unrolled circuit (gates)")):
         for ir, marker in (("word", "o"), ("boolean", "s")):
-            if not nci:
+            if not inference_only:
                 for shape, query, style in (("serve", "template", "-"), ("population", "template", ":"),
                                             ("serve", "Q_word v1", "--"), ("serve", "Q_call v1", "-.")):
                     rs = sorted((r for r in res["rows"] if r["ir"] == ir and r["shape"] == shape and r["query"] == query
@@ -312,18 +312,18 @@ def plot(args) -> int:
                                 label=f"{query}, {'population program' if shape == 'population' else 'Serve_v1'}, {ir}")
                 continue
             rs = sorted((r for r in res["rows"] if r["ir"] == ir), key=lambda r: r[x])
-            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"NciCheck.Desc, {ir}")
+            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"InferenceOnlyCheck.Desc, {ir}")
             us = [r for r in rs if "seconds" in r["unrolled"]]
             if us:
                 ax.plot([r[x] for r in us], [r["unrolled"]["seconds"] for r in us], marker=marker, linestyle="--",
-                        label=f"NciCheck.check (unrolled), {ir}")
+                        label=f"InferenceOnlyCheck.check (unrolled), {ir}")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(label)
         ax.set_ylabel("verifier wall time (s)")
         ax.grid(True, which="both", alpha=0.3)
     axes[1].legend(fontsize=8)
-    fig.suptitle(f"{'NCI check' if nci else 'one-stage partition'} on Serve_v1 ({args.art})", fontsize=10)
+    fig.suptitle(f"{'NCI check' if inference_only else 'one-stage partition'} on Serve_v1 ({args.art})", fontsize=10)
     fig.tight_layout()
     fig.savefig(args.to, dpi=130)
     print(args.to)

@@ -1,6 +1,6 @@
 import Definitions.Accounting.Guarantees.Actual.Threaded
 import Proofs.Accounting.Actual.Windows
-import Proofs.Nci.Threads
+import Proofs.InferenceOnly.Threads
 
 /-!
 # The memory cap over threads
@@ -8,23 +8,23 @@ import Proofs.Nci.Threads
 `ThreadedThrottled`'s proof with the declared division replaced by the windows. `WindowsAt`, at the cuts `min(kω, t)`,
 divides the developer's region over `[0, t)` into `n ⌈t/ω⌉` windows of at most `Φ_X ω ≤ Γ` gates, each reading in the
 containment's image at most the state at its start plus `β_X ω`, so at most `K = R + r ω` (`windows_small`). Pulled back
-through the containment (`Nci.SecurityProofs.pull`), the windows divide the reference circuit into pieces no larger whose
-novel reads are at most their windows' reads in the image (`Nci.SecurityProofs.novelReads_pull_le_readsIn`, which needs
-no condition on the baselines), each small at `(Γ, K)`, and Theorem 1 (`Nci.SecurityProofs.ThreadedReads`) bounds each
+through the containment (`InferenceOnly.SecurityProofs.pull`), the windows divide the reference circuit into pieces no larger whose
+novel reads are at most their windows' reads in the image (`InferenceOnly.SecurityProofs.novelReads_pull_le_readsIn`, which needs
+no condition on the baselines), each small at `(Γ, K)`, and Theorem 1 (`InferenceOnly.SecurityProofs.ThreadedReads`) bounds each
 piece's counted multiplications by `K Λ(K) / b_a`; every counted multiplication lies in one piece (`card_M_eq_sum`).
-Through a partial containment the windows divide only the gates the declaration computes (`Nci.SecurityProofs.piece`),
+Through a partial containment the windows divide only the gates the declaration computes (`InferenceOnly.SecurityProofs.piece`),
 each reading novelly at most its window's reads in the image of those gates and the gates they read
-(`Nci.SecurityProofs.novelReads_piece_le_readsIn`), and every other counted multiplication is a dark gate
+(`InferenceOnly.SecurityProofs.novelReads_piece_le_readsIn`), and every other counted multiplication is a dark gate
 (`ThreadedRuntimeDark`).
 
 The runtime follows from `⌈t/ω⌉ ω ≤ t + ω` (`runtime_of_count`); the rate at `ω = R/r` from `(2R)² / ω = 4 R r`. Each is
-proved per parameter slot, through Theorem 1 per slot (`Nci.SecurityProofs.ThreadedReadsSlots`), and the form over weight
-gates is its instance at one slot per weight gate (`Nci.SecurityProofs.Fit.idSlots`).
+proved per parameter slot, through Theorem 1 per slot (`InferenceOnly.SecurityProofs.ThreadedReadsSlots`), and the form over weight
+gates is its instance at one slot per weight gate (`InferenceOnly.SecurityProofs.Fit.idSlots`).
 -/
 
 namespace Accounting.SecurityProofs.Actual
 
-open Verity Nci Finset
+open Verity InferenceOnly Finset
 
 /-- Every counted multiplication lies in exactly one unit of a division of the reference circuit. -/
 theorem card_M_eq_sum {c : Declaration} (T : Threading c) {m : ℕ} (Q : Partition c.D m) :
@@ -100,16 +100,16 @@ theorem ThreadedRuntimeSlots : Guarantees.Actual.ThreadedRuntimeSlots := by
   obtain ⟨P, hP⟩ := windows_small A ℓ Φ ends β link n X θ hθ t ω Γ R r (univ.map ⟨M.emb, M.emb_inj⟩) hω hX hC hΦ
     hL hΓ hr hR
   have hΛ : 0 ≤ T.bound (R + r * ω) b_w d e := le_max_of_le_left (Nat.cast_nonneg _)
-  have hpiece : ∀ u, Small c Γ (R + r * ω) ((Nci.SecurityProofs.pull M P).gates u) := fun u =>
-    ⟨Partition.gates_subset_computed _ u, (Nci.SecurityProofs.card_pull_gates_le (M := M) (P := P) u).trans (hP u).1,
-      (Nat.cast_le.2 (Nci.SecurityProofs.novelReads_pull_le_readsIn M P u)).trans (hP u).2⟩
+  have hpiece : ∀ u, Small c Γ (R + r * ω) ((InferenceOnly.SecurityProofs.pull M P).gates u) := fun u =>
+    ⟨Partition.gates_subset_computed _ u, (InferenceOnly.SecurityProofs.card_pull_gates_le (M := M) (P := P) u).trans (hP u).1,
+      (Nat.cast_le.2 (InferenceOnly.SecurityProofs.novelReads_pull_le_readsIn M P u)).trans (hP u).2⟩
   have hcount : b_a * T.M.card ≤
       ((n * ((t + ω - 1) / ω) : ℕ) : ℝ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) :=
-    calc b_a * (T.M.card : ℝ) = ∑ u, b_a * ((T.mults ((Nci.SecurityProofs.pull M P).gates u)).card : ℝ) := by
-          rw [card_M_eq_sum T (Nci.SecurityProofs.pull M P), Nat.cast_sum, mul_sum]
-      _ ≤ ∑ u, (novelReads c ((Nci.SecurityProofs.pull M P).gates u) : ℝ) * T.bound (R + r * ω) b_w d e :=
+    calc b_a * (T.M.card : ℝ) = ∑ u, b_a * ((T.mults ((InferenceOnly.SecurityProofs.pull M P).gates u)).card : ℝ) := by
+          rw [card_M_eq_sum T (InferenceOnly.SecurityProofs.pull M P), Nat.cast_sum, mul_sum]
+      _ ≤ ∑ u, (novelReads c ((InferenceOnly.SecurityProofs.pull M P).gates u) : ℝ) * T.bound (R + r * ω) b_w d e :=
           sum_le_sum fun u _ =>
-            Nci.SecurityProofs.ThreadedReadsSlots c T σ Γ (R + r * ω) b_w b_a d e hbw hba hd hT hW _ (hpiece u)
+            InferenceOnly.SecurityProofs.ThreadedReadsSlots c T σ Γ (R + r * ω) b_w b_a d e hbw hba hd hT hW _ (hpiece u)
       _ ≤ ∑ _u : Fin (n * ((t + ω - 1) / ω)), (R + r * ω) * T.bound (R + r * ω) b_w d e :=
           sum_le_sum fun u _ => mul_le_mul_of_nonneg_right (hpiece u).2.2 hΛ
       _ = _ := by simp
@@ -118,9 +118,9 @@ theorem ThreadedRuntimeSlots : Guarantees.Actual.ThreadedRuntimeSlots := by
 /-- `ThreadedRuntimeSlots` at one slot per weight gate. -/
 theorem ThreadedRuntime : Guarantees.Actual.ThreadedRuntime := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T d e hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT hW
-  exact ThreadedRuntimeSlots A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T (Nci.SecurityProofs.Fit.idSlots T) d e
+  exact ThreadedRuntimeSlots A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T (InferenceOnly.SecurityProofs.Fit.idSlots T) d e
     hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT
-    (Nci.SecurityProofs.weightsIncompressibleSlots_of (Nci.SecurityProofs.Fit.idSlots T) hbw.le hW)
+    (InferenceOnly.SecurityProofs.weightsIncompressibleSlots_of (InferenceOnly.SecurityProofs.Fit.idSlots T) hbw.le hW)
 
 theorem ThreadedRateSlots : Guarantees.Actual.ThreadedRateSlots := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω p Γ R r b_w b_a c T σ d e hω hX hC hΦ hL hbw hba hd hΓ hr hwipe hpω
@@ -172,29 +172,29 @@ theorem ThreadedRateSlots : Guarantees.Actual.ThreadedRateSlots := by
 theorem ThreadedRate : Guarantees.Actual.ThreadedRate := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω p Γ R r b_w b_a c T d e hω hX hC hΦ hL hbw hba hd hΓ hr hwipe hpω hωt
     hopt hquad hcont hT hW
-  exact ThreadedRateSlots A ℓ Φ ends β link n X θ hθ t ω p Γ R r b_w b_a c T (Nci.SecurityProofs.Fit.idSlots T) d e
+  exact ThreadedRateSlots A ℓ Φ ends β link n X θ hθ t ω p Γ R r b_w b_a c T (InferenceOnly.SecurityProofs.Fit.idSlots T) d e
     hω hX hC hΦ hL hbw hba hd hΓ hr hwipe hpω hωt hopt hquad hcont hT
-    (Nci.SecurityProofs.weightsIncompressibleSlots_of (Nci.SecurityProofs.Fit.idSlots T) hbw.le hW)
+    (InferenceOnly.SecurityProofs.weightsIncompressibleSlots_of (InferenceOnly.SecurityProofs.Fit.idSlots T) hbw.le hW)
 
 theorem ThreadedRuntimeDarkSlots : Guarantees.Actual.ThreadedRuntimeDarkSlots := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T σ d e M hω hX hC hΦ hL hbw hba hd hΓ hr hR hT hW
   obtain ⟨P, hP⟩ := windows_small A ℓ Φ ends β link n X θ hθ t ω Γ R r ((M.S ∪ c.D.into M.S).image M.emb) hω hX hC
     hΦ hL hΓ hr hR
   have hΛ : 0 ≤ T.bound (R + r * ω) b_w d e := le_max_of_le_left (Nat.cast_nonneg _)
-  have hpiece : ∀ u, Small c Γ (R + r * ω) (Nci.SecurityProofs.piece M P u) := fun u =>
-    ⟨Nci.SecurityProofs.piece_subset_computed u, (Nci.SecurityProofs.card_piece_le u).trans (hP u).1,
-      (Nat.cast_le.2 (Nci.SecurityProofs.novelReads_piece_le_readsIn M P u)).trans (hP u).2⟩
-  have hM : (T.M ∩ M.S).card = ∑ u, (T.mults (Nci.SecurityProofs.piece M P u)).card := by
-    have h := Nci.SecurityProofs.sum_card_filter_piece (M := M) (P := P) T.M fun g => g
+  have hpiece : ∀ u, Small c Γ (R + r * ω) (InferenceOnly.SecurityProofs.piece M P u) := fun u =>
+    ⟨InferenceOnly.SecurityProofs.piece_subset_computed u, (InferenceOnly.SecurityProofs.card_piece_le u).trans (hP u).1,
+      (Nat.cast_le.2 (InferenceOnly.SecurityProofs.novelReads_piece_le_readsIn M P u)).trans (hP u).2⟩
+  have hM : (T.M ∩ M.S).card = ∑ u, (T.mults (InferenceOnly.SecurityProofs.piece M P u)).card := by
+    have h := InferenceOnly.SecurityProofs.sum_card_filter_piece (M := M) (P := P) T.M fun g => g
     simp only [filter_mem_eq_inter] at h
     exact h.symm
   have hcount : b_a * (T.M ∩ M.S).card ≤
       ((n * ((t + ω - 1) / ω) : ℕ) : ℝ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) :=
-    calc b_a * ((T.M ∩ M.S).card : ℝ) = ∑ u, b_a * ((T.mults (Nci.SecurityProofs.piece M P u)).card : ℝ) := by
+    calc b_a * ((T.M ∩ M.S).card : ℝ) = ∑ u, b_a * ((T.mults (InferenceOnly.SecurityProofs.piece M P u)).card : ℝ) := by
           rw [hM, Nat.cast_sum, mul_sum]
-      _ ≤ ∑ u, (novelReads c (Nci.SecurityProofs.piece M P u) : ℝ) * T.bound (R + r * ω) b_w d e :=
+      _ ≤ ∑ u, (novelReads c (InferenceOnly.SecurityProofs.piece M P u) : ℝ) * T.bound (R + r * ω) b_w d e :=
           sum_le_sum fun u _ =>
-            Nci.SecurityProofs.ThreadedReadsSlots c T σ Γ (R + r * ω) b_w b_a d e hbw hba hd hT hW _ (hpiece u)
+            InferenceOnly.SecurityProofs.ThreadedReadsSlots c T σ Γ (R + r * ω) b_w b_a d e hbw hba hd hT hW _ (hpiece u)
       _ ≤ ∑ _u : Fin (n * ((t + ω - 1) / ω)), (R + r * ω) * T.bound (R + r * ω) b_w d e :=
           sum_le_sum fun u _ => mul_le_mul_of_nonneg_right (hpiece u).2.2 hΛ
       _ = _ := by simp
@@ -204,14 +204,14 @@ theorem ThreadedRuntimeDarkSlots : Guarantees.Actual.ThreadedRuntimeDarkSlots :=
     rw [le_div_iff₀ hba]
     linarith
   have hs : (T.M.card : ℝ) ≤ M.dark.card + (T.M ∩ M.S).card := by
-    exact_mod_cast Nci.SecurityProofs.card_le_dark_add_inter M T.M_computed
+    exact_mod_cast InferenceOnly.SecurityProofs.card_le_dark_add_inter M T.M_computed
   linarith
 
 /-- `ThreadedRuntimeDarkSlots` at one slot per weight gate. -/
 theorem ThreadedRuntimeDark : Guarantees.Actual.ThreadedRuntimeDark := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T d e M hω hX hC hΦ hL hbw hba hd hΓ hr hR hT hW
-  exact ThreadedRuntimeDarkSlots A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T (Nci.SecurityProofs.Fit.idSlots T) d
+  exact ThreadedRuntimeDarkSlots A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T (InferenceOnly.SecurityProofs.Fit.idSlots T) d
     e M hω hX hC hΦ hL hbw hba hd hΓ hr hR hT
-    (Nci.SecurityProofs.weightsIncompressibleSlots_of (Nci.SecurityProofs.Fit.idSlots T) hbw.le hW)
+    (InferenceOnly.SecurityProofs.weightsIncompressibleSlots_of (InferenceOnly.SecurityProofs.Fit.idSlots T) hbw.le hW)
 
 end Accounting.SecurityProofs.Actual

@@ -11,7 +11,7 @@
     "CoreComposition.Cases",
     "CoreComposition.Tie",
     "MemoryChallenger.WipeProtocol",
-    "NciCheck.Protocol",
+    "InferenceOnlyCheck.Protocol",
     "NetworkCheck.Period",
     "PousCheck.RunProtocol",
     "PouwCheck.Period",

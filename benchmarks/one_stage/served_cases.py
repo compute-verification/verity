@@ -112,8 +112,8 @@ SAMPLED_CMD = ("sampled",)
 ONE_STAGE = "one-stage"
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
-INFERENCE_ONLY_LEAN = (ROOT / "verity/core/protocols/network/nci/lean", "inference-only")
-NCI_REFERENCE = INFERENCE_ONLY_LEAN[0] / "scripts" / "nci_reference.py"
+INFERENCE_ONLY_LEAN = (ROOT / "verity/core/protocols/network/inference_only/lean", "inference-only")
+NCI_REFERENCE = INFERENCE_ONLY_LEAN[0] / "scripts" / "inference_only_reference.py"
 PERIOD = PC.ID
 DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only", PERIOD: "pouw-period",
         V2: "sampled-proofs-v2"}
@@ -236,8 +236,8 @@ def period_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
 
 
 def _reference():
-    """`nci_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
-    spec = importlib.util.spec_from_file_location("nci_reference", NCI_REFERENCE)
+    """`inference_only_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
+    spec = importlib.util.spec_from_file_location("inference_only_reference", NCI_REFERENCE)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

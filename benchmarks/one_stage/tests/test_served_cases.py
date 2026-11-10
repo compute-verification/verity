@@ -396,7 +396,7 @@ def test_v1s_lean_checks_the_audits_case_and_names_the_records_digest(tmp_path, 
 ])
 def test_the_lean_check_accepts_the_inference_only_case_at_its_budgets_and_not_past_them(
         tmp_path, capsys, inference_only_exe, toy_v1, change, verdict, reason):
-    """At Γ the one block's gates and α its input bits a gate (the Lean's profile, which is `nci_reference`'s),
+    """At Γ the one block's gates and α its input bits a gate (the Lean's profile, which is `inference_only_reference`'s),
     `inference-only check` accepts; one gate or one bit under, it rejects naming the budget. Its answer names the
     record's digest, so the case is written either way, its verdict the Lean's."""
     v1 = toy_v1
@@ -887,7 +887,7 @@ def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(
     it decodes in the policy's Lean check, which accepts it at the α and Γ ``--from-division`` reads off its division
     (`division_policy`: Γ its one block's gates, α its input bits a gate) and rejects it a gate under. The toy tests
     can't catch what only the served shapes have: the class's own Definitions
-    (heads cut by key block, scans, registered reads) through `nci_reference.root_nodes` and the Lean decoder, the
+    (heads cut by key block, scans, registered reads) through `inference_only_reference.root_nodes` and the Lean decoder, the
     description's walk bound, and the size of a served Program's text through the CLI's files."""
     from verity_vllm.program.predict.phi import Phi
     from verity_vllm.program.predict.steps import Registered

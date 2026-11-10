@@ -4,7 +4,7 @@
 
 [family.full]
 kind = "full"
-kappa = { value = 0.602, low = 0.294, high = 0.667, source = "Nci.Cover.Guarantees.FanOutIntensity docstring: alpha0 = 0.301 with Dgrad on the forward's tokens (c = 2); low: forward only (0.147)", status = "derived" }
+kappa = { value = 0.602, low = 0.294, high = 0.667, source = "InferenceOnly.Cover.Guarantees.FanOutIntensity docstring: alpha0 = 0.301 with Dgrad on the forward's tokens (c = 2); low: forward only (0.147)", status = "derived" }
 state_bits_per_param = { value = 16, low = 2.5, high = 96, source = "the state an exact run carries across wipes: FP8 weights and one 8-bit moment; low: lossy weights only (benchmarks/nci/parameters.json b_w.pretrained/frontier-lossy); high: FP32 master weights and Adam's two moments", status = "assumed" }
 b = { value = 2.5, low = 0.8, high = 4.5, source = "UpdateHardness at Kimi K2 (FanOutIntensity docstring); range: b_w.pretrained/frontier-lossy", status = "conjecture" }
 b_w = { value = 2.5, low = 0.8, high = 4.5, source = "benchmarks/nci/parameters.json b_w.pretrained/frontier-lossy", status = "measured" }
@@ -16,11 +16,11 @@ bcol = { value = 1, low = 1, high = 2.5, source = "ColumnsIncompressible at Kimi
 beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "measured: replay-consistent, exact block on Qwen2.5-1.5B; the best coder's rate, so an upper bound on what the premise may assume, carried to other models at fixed F/d", status = "assumed" }
 thread_d = { value = 10, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
 thread_c = { value = 2, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
-thread_k = { value = 2e7, unit = "bit", source = "Nci.Guarantees.ReferenceThreaded: the Threading certificate checked for Kimi K2 at S = 2e7 bits (benchmarks/nci/rows.json pretrain-full)", status = "declared" }
-c_w = { value = 2.5, low = 0.8, high = 3.4, source = "Nci.Cover.Guarantees.CoveringBoundAdditive docstring (c_w = 2.5 at Kimi K2, b_w.pretrained/frontier-lossy); low: b_w's; high: Nci.Guarantees.CoveringBoundPriced docstring, a uniform c_w is at most the cheapest 1%'s 2.3-3.4", status = "conjecture" }
-c_a = { value = 4, low = 1, high = 16, source = "Nci.Cover.Guarantees.CoveringBoundAdditive docstring: each counted product's output reads all four bits of its FP4 activation; high: CoveringBoundPriced's bf16 activation, 16", status = "derived" }
-price = { value = 2.8, low = 2.3, high = 6.7, source = "Nci.Guarantees.CoveringBoundPriced docstring at Kimi K2: a uniform price at most the cheapest 1%'s 2.3-3.4; high: priced per parameter, the weights' mean, 6.7 bits", status = "derived" }
-price_max = { value = 8, low = 8, high = 16, unit = "bit", source = "Nci.Guarantees.CoveringBoundPriced docstring: t is at most a weight's width, 8 bits in FP8; high: bf16's 16", status = "derived" }
+thread_k = { value = 2e7, unit = "bit", source = "InferenceOnly.Guarantees.ReferenceThreaded: the Threading certificate checked for Kimi K2 at S = 2e7 bits (benchmarks/nci/rows.json pretrain-full)", status = "declared" }
+c_w = { value = 2.5, low = 0.8, high = 3.4, source = "InferenceOnly.Cover.Guarantees.CoveringBoundAdditive docstring (c_w = 2.5 at Kimi K2, b_w.pretrained/frontier-lossy); low: b_w's; high: InferenceOnly.Guarantees.CoveringBoundPriced docstring, a uniform c_w is at most the cheapest 1%'s 2.3-3.4", status = "conjecture" }
+c_a = { value = 4, low = 1, high = 16, source = "InferenceOnly.Cover.Guarantees.CoveringBoundAdditive docstring: each counted product's output reads all four bits of its FP4 activation; high: CoveringBoundPriced's bf16 activation, 16", status = "derived" }
+price = { value = 2.8, low = 2.3, high = 6.7, source = "InferenceOnly.Guarantees.CoveringBoundPriced docstring at Kimi K2: a uniform price at most the cheapest 1%'s 2.3-3.4; high: priced per parameter, the weights' mean, 6.7 bits", status = "derived" }
+price_max = { value = 8, low = 8, high = 16, unit = "bit", source = "InferenceOnly.Guarantees.CoveringBoundPriced docstring: t is at most a weight's width, 8 bits in FP8; high: bf16's 16", status = "derived" }
 gamma = { value = 1, source = "E1 Proposition 3': the splitting margin of H_gamma^t; exact coverings measured splitting at 1.1-1.5x (premise.e1-h-gamma)", status = "assumed" }
 beta_v = { value = 0.63, low = 0.18, high = 0.63, unit = "bit", source = "E1 Proposition 6b: beta_v^R 0.18-0.63 at FP8 (premise.e1-output-premise)", status = "derived" }
 h_eff = { value = 17, unit = "bit", source = "E1 Corollary 4a: a partial sum held at a 17-bit token's bits", status = "derived" }
