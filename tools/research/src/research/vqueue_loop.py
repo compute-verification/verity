@@ -23,9 +23,9 @@ drive's Lean-change test (`queue.lean_change`) of a change that compiles (a lock
 conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`), unless `main` fetched again holds that
 head; its mark stays.  `left` is why each other open PR into `main` isn't ready (`World.ready`: the queue's word on it, a
 withdrawn mark's author, a hold and by whom, no land verdict, the freeze), which a candidate's drop for a member no longer
-ready names (`vqueue._stale`); `pulled` those of them others than their owners took (an eject or a mark withdrawn by
-another, a hold by a reviewer or a `hold` label, the freeze, the shadow's eject, or a PR holding one of them), the only ones
-that drop a candidate in flight; and `flying` each member of the chain not ready at its head as built, with its files.
+ready names (`vqueue._stale`); `pulled` those of them others than their owners took (a red's eject, any other eject or a
+mark withdrawn by another, a hold by a reviewer or a `hold` label, the freeze, the shadow's eject, or a PR holding one of
+them), the only ones that drop a candidate in flight; and `flying` each member of the chain not ready at its head as built, with its files.
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
@@ -770,12 +770,13 @@ class World:
 
     def _pulled(self, e: Entry, ejected: dict | None) -> bool:
         """Whether another than its owner took ``e``, which the queue doesn't admit, from the queue (`Snapshot.pulled`): a hold
-        label, an eject (``ejected``: its record in the queue's state) or a mark withdrawn by another, as a red's eject is by
-        `EJECTOR`; not its owner's withdrawal, a push or a cause no one gave."""
+        label, an eject (``ejected``: its record in the queue's state) by another or by `EJECTOR`, a red's, even of its own PR,
+        or a mark withdrawn by another; not its owner's withdrawal, a push or a cause no one gave."""
         if e.why.startswith("held ("):
             return True
         if e.why.startswith("ejected at"):
-            return self._another(e.pr.number, (ejected or {}).get("by") or EJECTOR)
+            by = (ejected or {}).get("by") or EJECTOR
+            return _who(by) == _who(EJECTOR) or self._another(e.pr.number, by)
         return e.why.startswith("not marked ready") and self.q.marked_by is not None and self._another(
             e.pr.number, self.q.marked_by(e.pr.number, e.pr.head))
 
