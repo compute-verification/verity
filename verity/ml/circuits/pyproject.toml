@@ -9,9 +9,13 @@ untraced = ["tests/test_ruff.py"]
 # Test-only: tests register the catalog's Definitions before decoding, tests/evaluation self-checks every registered kernel
 # against its Definition (the kernels and the silicon models they read), tests/test_stacking holds property/v1's table to
 # Lean's registry, and tests/test_lean_gates recomputes the circuit model's rows from s8, census/v1 and property/v1.
-# tests/test_ruff runs ruff, which the guard doesn't trace, under the repository's one configuration (ruff.toml).
-inputs = ["verity", "verity/ml/circuits", "verity/ml/kernels", "Security/Definitions/Accounting/Gates/Registry.lean",
-          "Security/Proofs/Accounting/Gates/Rows.lean", "ruff.toml"]
+# tests/test_ruff runs ruff, which the guard doesn't trace, on this directory under the repository's one configuration
+# (ruff.toml).
+# Keyed on `verity/ml` and the modules every unit shares, not on all of `verity/`: `verity.ml` reaches `verity.core` only
+# where tests/test_boundaries.py's `ML_IMPORTS_CORE` says (Flock's `rec_*` builders, two other suites' tests), and a
+# test that goes there fails the read guard, which names the file to list.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/settings.py", "verity/ml",
+          "Security/Definitions/Accounting/Gates/Registry.lean", "Security/Proofs/Accounting/Gates/Rows.lean", "ruff.toml"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
