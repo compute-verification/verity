@@ -2,6 +2,8 @@ module
 
 public import Properties.Nci.Record
 import Mathlib.Algebra.Order.Field.Basic
+import Std.Data.TreeMap.Raw.Lemmas
+import all Lean.Data.Json.Basic
 
 /-!
 # The circuit record's properties, from their parts
@@ -14,6 +16,10 @@ reads carries its instance's fields (`Owns`) and lays out a circuit (`LaidOut`),
 check's provenance (`Provenance`) and a layout that reads a Definition's signature alone (`LayoutReads`).
 
 `pin_listed`: the pin an opened row is held under is one the instance lists, from `Owns` and `Provenance`.
+
+`ofJson_wiresOf`: a text `Spot.Wires.Wiring.ofJson` accepts whose `cuts` and `wires` are the record's has the cuts
+and the wires that reader gives of the record's own piece (`wiresOf`), which it accepts too. The reader reads each of
+its keys on its own, the piece's empty `templates` has no template to refuse, and it states no `order`.
 -/
 
 @[expose] public section
@@ -22,6 +28,7 @@ namespace NciCheck.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog)
+open NciCheck.Baseline (getD)
 open NciCheck.DefinitionDigest (closureDigest)
 
 theorem complies_of {F : Form} (hown : Owns F) (hlaid : LaidOut F) (hcount : Counts F) (hrate : Rates F) :
@@ -89,5 +96,82 @@ theorem pin_listed {F : Form} (hown : Owns F) (hprov : Provenance F) {j tr : Jso
       IsTheta log run p ∧ pin ∈ (F.inst c).pins ∧ closureDigest pj r.tid = .ok pin ∧ _ := hgood r _ hheld
   obtain ⟨-, -, -, -, -, hpins⟩ := hown j tr c hread
   exact ⟨_, hpins, List.mem_toArray.mpr (List.mem_map.mpr ⟨pin, hmem, rfl⟩)⟩
+
+/-! ## The record's piece of a text SPOT's reader accepts -/
+
+private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+private theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
+
+private theorem getObjVal?_mkObj {l : List (String × Json)} (hd : l.Pairwise (fun a b => ¬ compare a.1 b.1 = .eq))
+    {k : String} {v : Json} (hm : (k, v) ∈ l) : (Json.mkObj l).getObjVal? k = .ok v := by
+  simp only [Json.mkObj, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?]
+  rw [Std.TreeMap.Raw.getElem?_ofList_of_mem (Std.ReflCmp.compare_self) hd hm]
+  rfl
+
+private theorem getObjVal?_mkObj_not {l : List (String × Json)} {k : String}
+    (hk : (l.map Prod.fst).contains k = false) : ∃ e, (Json.mkObj l).getObjVal? k = .error e := by
+  simp only [Json.mkObj, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?]
+  rw [Std.TreeMap.Raw.getElem?_ofList_of_contains_eq_false hk]
+  exact ⟨_, rfl⟩
+
+private theorem field_ok {j v : Json} {k : String} (h : j.getObjVal? k = .ok v) : Spot.Wires.field j k = .ok v := by
+  simp only [Spot.Wires.field, h]
+
+/-- An object of no field has no field. -/
+private theorem fields_nil : Spot.Wires.fields (Json.mkObj []) = .ok [] := by
+  have h : (∅ : Std.TreeMap.Raw String Json).toList = [] :=
+    List.isEmpty_iff.1 (Std.TreeMap.Raw.isEmpty_toList.trans Std.TreeMap.Raw.isEmpty_emptyc)
+  simp only [Json.mkObj, Spot.Wires.fields, Std.TreeMap.Raw.ofList_nil, Array.toList_map,
+    Std.TreeMap.Raw.toList_toArray, h, List.map_nil]
+
+private theorem wiresOf_templates (doc : Json) : (wiresOf doc).getObjVal? "templates" = .ok (Json.mkObj []) :=
+  getObjVal?_mkObj (by simp) (by simp)
+
+private theorem wiresOf_cuts (doc : Json) :
+    (wiresOf doc).getObjVal? "cuts" = .ok ((doc.getObjVal? "cuts").toOption.getD (Json.mkObj [])) :=
+  getObjVal?_mkObj (by simp) (by simp)
+
+private theorem wiresOf_wires (doc : Json) : (wiresOf doc).getObjVal? "wires" = .ok (getD doc "wires") :=
+  getObjVal?_mkObj (by simp) (by simp)
+
+private theorem wiresOf_order (doc : Json) : ∃ e, (wiresOf doc).getObjVal? "order" = .error e :=
+  getObjVal?_mkObj_not (by simp)
+
+/-- **A text with the record's cuts and wires is read as the record's piece is.** Where `Spot.Wires.Wiring.ofJson`
+accepts the text `j`, and `j`'s `cuts` and `wires` are the ones `wiresOf` gives of the record `doc`, it accepts
+`wiresOf doc` too, with the same cuts and the same wires, whatever templates and order `j` states beside them: what
+`Served` holds a wiring to, for a check whose wiring is the reader's of such a text. -/
+theorem ofJson_wiresOf {j doc : Json} {W : Spot.Wires.Wiring} (h : Spot.Wires.Wiring.ofJson j = .ok W)
+    (hc : j.getObjVal? "cuts" = .ok ((doc.getObjVal? "cuts").toOption.getD (Json.mkObj [])))
+    (hw : j.getObjVal? "wires" = .ok (getD doc "wires")) :
+    ∃ W', Spot.Wires.Wiring.ofJson (wiresOf doc) = .ok W' ∧ W'.cuts = W.cuts ∧ W'.wires = W.wires := by
+  obtain ⟨e, ho⟩ := wiresOf_order doc
+  unfold Spot.Wires.Wiring.ofJson at h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨c, h4, h⟩ := bind_ok h
+  obtain ⟨_, h5, h⟩ := bind_ok h
+  obtain ⟨cs, h6, h⟩ := bind_ok h
+  obtain ⟨w, h7, h⟩ := bind_ok h
+  obtain ⟨_, h8, h⟩ := bind_ok h
+  obtain ⟨ws, h9, h⟩ := bind_ok h
+  obtain rfl := Except.ok.inj ((field_ok hc).symm.trans h4)
+  obtain rfl := Except.ok.inj ((field_ok hw).symm.trans h7)
+  refine ⟨{ templates := [], cuts := cs, wires := ws, order := none }, ?_, ?_⟩
+  · unfold Spot.Wires.Wiring.ofJson
+    simp only [field_ok (wiresOf_templates doc), field_ok (wiresOf_cuts doc), field_ok (wiresOf_wires doc), ho,
+      fields_nil, h5, h6, h8, h9, List.mapM_nil, ok_bind, pure_bind] <;> rfl
+  · cases hj : j.getObjVal? "order"
+    all_goals
+      simp only [hj] at h
+      repeat (obtain ⟨_, -, h⟩ := bind_ok h)
+      obtain rfl := Except.ok.inj h
+      exact ⟨rfl, rfl⟩
 
 end NciCheck.Properties.Record.SecurityProofs
