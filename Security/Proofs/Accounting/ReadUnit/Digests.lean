@@ -34,8 +34,8 @@ expensive part of each hm96 leaf (its mask), so the kernel computes it once.
 
 The `import all` lines let the kernel unfold the core definitions SHA-512 and the key's derivation run on (`ByteArray`,
 `Std.Legacy.Range`'s loops, `String.toUTF8`, the `UInt` operations), which a module otherwise sees only by signature.
-`digests₀` reads the key as its bytes (`keyK`, by `key_eq`), so that a key bit is a walk down a literal list, and each
-mask bit through `xorFold` (`maskBit_eq`), which forces the fold's accumulator at each step.
+`digests₀` reads the key as its bytes (`keyK`, by `key_eq`), and each mask bit through `xorFold` (`maskBit_eq`), which
+reads a key bit off the key's number (`bit_eq_testBit`) and forces the fold's accumulator at each step.
 -/
 
 @[expose] public section
@@ -87,27 +87,52 @@ def keyK : List UInt8 := [
 theorem key_eq : Flock.Hm96.Default512.key.data.toList = keyK := by
   decide +kernel
 
-/-- `Hm96.maskBit`'s fold, its accumulator forced at each step, so that the kernel never builds the xor of 1536 terms
-that a salt of ones would leave it to evaluate at the end. -/
-def xorFold (key : Hash.Msg) (i : ℕ) : List ℕ → Bool → Bool
+/-- A byte string as a number, byte `k` its base-256 digit `k`. -/
+def natOf : List UInt8 → ℕ
+  | [] => 0
+  | b :: l => 2 ^ 8 * natOf l + b.toNat
+
+theorem beq_one (x : ℕ) : (x == 1) = decide (x = 1) := by
+  by_cases h : x = 1 <;> simp [h]
+
+/-- Bit `t` of a byte string is bit `t` of its number. -/
+theorem bit_eq_testBit : ∀ (l : List UInt8) (t : ℕ), Hash.Hm96.bit l t = (natOf l).testBit t
+  | [], t => by simp [Hash.Hm96.bit, natOf]
+  | b :: l, t => by
+    rw [natOf, Nat.testBit_two_pow_mul_add _ b.toNat_lt]
+    split
+    · rename_i ht
+      have h0 : t / 8 = 0 := Nat.div_eq_of_lt ht
+      have h1 : t % 8 = t := Nat.mod_eq_of_lt ht
+      rw [Hash.Hm96.bit, h0, h1, List.getD_cons_zero, Nat.testBit_eq_decide_div_mod_eq, beq_one]
+    · rename_i ht
+      have h0 : t / 8 = (t - 8) / 8 + 1 := by omega
+      have h1 : t % 8 = (t - 8) % 8 := by omega
+      rw [← bit_eq_testBit l (t - 8), Hash.Hm96.bit, Hash.Hm96.bit, h0, h1, List.getD_cons_succ]
+
+/-- `Hm96.maskBit`'s fold over the key's number `k`, its accumulator forced at each step: the kernel then reads a key
+bit as one shift of `k`, and never builds the xor of 1536 terms that a salt of ones would leave it to evaluate at the
+end. -/
+def xorFold (k i : ℕ) : List ℕ → Bool → Bool
   | [], acc => acc
   | j :: js, acc =>
-    match xor acc (Hash.Hm96.bit key (i + j)) with
-    | true => xorFold key i js true
-    | false => xorFold key i js false
+    match xor acc (k.testBit (i + j)) with
+    | true => xorFold k i js true
+    | false => xorFold k i js false
 
-theorem foldl_xorFold (key : Hash.Msg) (i : ℕ) :
-    ∀ (l : List ℕ) (acc : Bool), l.foldl (fun acc j => xor acc (Hash.Hm96.bit key (i + j))) acc = xorFold key i l acc
+theorem foldl_xorFold (key : Hash.Msg) (i : ℕ) : ∀ (l : List ℕ) (acc : Bool),
+    l.foldl (fun acc j => xor acc (Hash.Hm96.bit key (i + j))) acc = xorFold (natOf key) i l acc
   | [], _ => rfl
   | j :: js, acc => by
-    rw [List.foldl_cons, xorFold]
-    cases xor acc (Hash.Hm96.bit key (i + j)) <;> exact foldl_xorFold key i js _
+    rw [List.foldl_cons, xorFold, bit_eq_testBit]
+    cases xor acc ((natOf key).testBit (i + j)) <;> exact foldl_xorFold key i js _
 
 theorem maskBit_eq (key y : Hash.Msg) (i : ℕ) :
-    Hash.Hm96.maskBit key y i = xorFold key i ((List.range (8 * Hash.Hm96.SALT_BYTES)).filter (Hash.Hm96.bit y)) false :=
+    Hash.Hm96.maskBit key y i =
+      xorFold (natOf key) i ((List.range (8 * Hash.Hm96.SALT_BYTES)).filter (Hash.Hm96.bit y)) false :=
   foldl_xorFold key i _ false
 
--- The kernel hashes every message of `L₀` and computes each mask bit of its two openings, about ten minutes.
+-- The kernel hashes every message of `L₀` and computes each mask bit of its two openings, about three minutes.
 set_option maxHeartbeats 8000000 in
 theorem digests₀ : (L₀.dedup.map fun m => (Verity.sha512 m).bytes).Nodup := by
   simp only [L₀, V₀, key_eq, Hash.RowLeaf.outerHashed, Hash.RowLeaf.leafMsg, Hash.Hm96.hashed, Hash.Hm96.leaf,
