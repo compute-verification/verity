@@ -51,22 +51,16 @@ s1=$OUT/stage1/$(basename "$class")/stage1.json
 rc=0; $PY "$I/check_stage1.py" "$s1" > "$OUT/check.txt" 2>&1 || rc=$?
 tail -n 3 "$OUT/check.txt"
 if [ -f "$I/advice.json" ]; then
-  python3 - "$I/advice.json" "$s1" <<'EOF' || rc=1
+  $PY - "$I/advice.json" "$s1" <<'EOF' || rc=1
 import json, sys
-want = json.load(open(sys.argv[1]))["binding"]
-def found(x):
-    if isinstance(x, dict):
-        if "binding" in x:
-            yield x["binding"]
-        for v in x.values():
-            yield from found(v)
-    elif isinstance(x, list):
-        for v in x:
-            yield from found(v)
-got = list(found(json.load(open(sys.argv[2]))))
-ok = bool(got) and all(g == want for g in got)
-print(f"ADVICE-BOUND: {'yes' if ok else 'NO'}, every binding stage1.json names is the published registration's ({len(got)} named)")
-sys.exit(0 if ok else 1)
+from verity.core.protocols.spot.one_stage import registration as R
+want, s = json.load(open(sys.argv[1]))["binding"], json.load(open(sys.argv[2]))
+rec = s.get("record") or {}
+named = (rec.get("window") or {}).get("binding") == want
+digest = bool(rec) and R.digest(rec) == s.get("registration")
+print(f"ADVICE-BOUND: {'yes' if named and digest else 'NO'} (the record's window names the published binding: {named}; "
+      f"the record registers to the digest the coins committed to: {digest})")
+sys.exit(0 if named and digest else 1)
 EOF
 fi
 exit $rc

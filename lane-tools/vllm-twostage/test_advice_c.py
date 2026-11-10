@@ -89,4 +89,4 @@ def test_a_request_in_no_window_is_refused(arm: Path):
 def test_an_engine_id_without_a_client_id_is_refused(arm: Path):
     (arm / "warm" / "client.jsonl").write_text(json.dumps({"id": "someone-else"}) + "\n")
     with pytest.raises(AC.CutError, match="carries no client id"):
-        AC.users(arm, set().union(*map(set, AC.boundary(arm).values())))
+        AC.users(arm, {w: set(m) for w, m in AC.boundary(arm).items()})

@@ -97,15 +97,18 @@ def cut(recs: list[dict], windows: dict[int, set[str]]) -> dict[int, list[dict]]
     return sliced
 
 
-def users(arm: Path, engine_ids: set[str]) -> dict[str, str]:
+def users(arm: Path, windows: dict[int, set[str]]) -> dict[str, str]:
     """Each engine id's client id: the one client record id it carries (vLLM's request id is made from X-Request-Id)."""
     ids = {json.loads(x)["id"] for f in arm.rglob("client.jsonl") for x in f.read_text().splitlines() if x.strip()}
     out = {}
-    for e in engine_ids:
-        hit = [c for c in ids if re.search(rf"(?<![0-9A-Za-z]){re.escape(c)}(?![0-9A-Za-z])", e)]
-        if len(hit) != 1:
-            raise CutError(f"an engine id carries {'no' if not hit else 'more than one'} client id")
-        out[e] = hit[0]
+    for w in sorted(windows):
+        for e in windows[w]:
+            hit = [c for c in ids if re.search(rf"(?<![0-9A-Za-z]){re.escape(c)}(?![0-9A-Za-z])", e)]
+            if len(hit) != 1:
+                raise CutError(f"an engine id of w{w} carries {'no' if not hit else 'more than one'} client id")
+            out[e] = hit[0]
+    if len(set(out.values())) != len(out):
+        raise CutError("two engine ids carry one client id")
     return out
 
 
@@ -143,20 +146,24 @@ def main() -> int:
     ap.add_argument("--T", type=int, default=600)
     ap.add_argument("--tau", type=float, default=0.1)
     a = ap.parse_args()
-    traces = sorted((a.arm / "server").glob("step_trace.*.jsonl*"))
+    traces = [recs for t in sorted((a.arm / "server").glob("step_trace.*.jsonl*")) if len(recs := records(t)) > 1]
     if len(traces) != 1:
-        raise SystemExit("advice-c: not one step trace under ARM/server (one engine core)")
-    recs = records(traces[0])
-    spans = boundary(a.arm)
-    windows = {w: set(m) for w, m in spans.items()}
+        raise SystemExit("advice-c: not one step trace with records under ARM/server (one engine core)")
+    recs = traces[0]
     try:
+        spans = boundary(a.arm)
+        windows = {w: set(m) for w, m in spans.items()}
         sliced = cut(recs, windows)
-        who = users(a.arm, set().union(*windows.values()))
     except CutError as e:
         print(f"advice-c: the cut does not line up with the boundary windows: {e}", flush=True)
         return 1
     print(f"advice-c: the cut lines up with the boundary windows {', '.join(f'w{w}' for w in sorted(sliced))}", flush=True)
     failed = controls(recs, windows) if a.controls else []
+    try:
+        who = users(a.arm, windows)
+    except CutError as e:
+        print(f"advice-c: no Commit record, so no advice: {e}", flush=True)
+        return 1
     compiler = ADV.registered_compiler()
     for w in sorted(sliced):
         d = a.priv / f"w{w}"

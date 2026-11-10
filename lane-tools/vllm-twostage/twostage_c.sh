@@ -9,10 +9,12 @@
 #     interior values tools/interior_classG.json), waited on for at most 20 min. stage1.json lands in the first stage's
 #     run record (research fetch RUN_F --all), which (b)'s twostage_b.sh is sent. The window's advice binding
 #     (out/advice/w<W>/registration.json of RUN_C, or of ADVICE_RUN) goes with it as --advice when published;
-#     CHALLENGER=local runs a local session (sampled-proofs-verifier built first) and doesn't wait.
+#     CHALLENGER=local runs a local session instead, from a clone (sampled-proofs-verifier built first), queued by
+#     --on auto with 8 CPUs and 32 GB (FIRST_ON=NODE: on that node), and doesn't wait.
 #   [DRY=1] NOT_BEFORE=ISO bash twostage_c.sh advice RUN_C
-#     advice_c.py on node A's CPU (no GPU, 4 CPUs, 8 GB) over RUN_C's kept private dir: each boundary window's advice
-#     into PRIV/advice/, only its binding into the run's out/advice/w<k>/registration.json. Prints the run id: ADVICE_RUN.
+#     advice_job.sh on node A's CPU (no GPU, an 8 GB cap) over RUN_C's kept private dir: each boundary window's advice
+#     into PRIV/advice-runs/<run>/, only its binding into the run's out/advice/w<k>/registration.json. Prints the run
+#     id: ADVICE_RUN.
 # REV (default 7af4d24fca, main, the gate's pin since Mon 9 Nov 17:56Z): holds C (#8045), P1 (#8066) and #8055.
 set -uo pipefail
 T=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -40,14 +42,8 @@ case ${1:-} in
     nb=${NOT_BEFORE:?NOT_BEFORE: when node A may be read, a UTC time}
     if [ -z "${DRY:-}" ] && [ "$(date -u +%s)" -lt "$(date -u -d "$nb" +%s)" ]; then echo "twostage-c: before $nb"; exit 2; fi
     run research run --on vy-spot-glm53 --project verity --source "$TREE" --cwd source --campaign spot-post --timeout 20m \
-      --gpus 0 --cpus 4 --mem-gb 8 --send "$T/advice_c.py" --env "RUN_C=$rc" -- bash -c 'set -u
-P=/workspace/research/vllm-twostage/$RUN_C; A=$P/out/boundary-rows
-[ -d "$A/server/boundary" ] || { echo "advice: $RUN_C kept no boundary-rows arm"; exit 2; }
-[ -e "$P/advice" ] && { echo "advice: $P/advice exists"; exit 2; }
-[ -d /workspace/cp/venv312 ] && v=/workspace/cp/venv312 || v=/workspace/venv312
-(umask 077; CUDA_VISIBLE_DEVICES= PYTHONPATH=$PWD/integrations/vllm:$PWD nice -n 10 "$v/bin/python" \
-  "$RESEARCH_RUN_DIR/inputs/advice_c.py" "$A" "$P/advice" "$RESEARCH_RUN_DIR/out" --controls > "$P/advice.log" 2>&1); a=$?
-grep "^advice-c:" "$P/advice.log"; echo "advice: exit $a (its log: the private dir'"'"'s advice.log)"; exit $a' ;;
+      --mem-gb 8 --send "$T/advice_job.sh" --send "$T/advice_c.py" --env "RUN_C=$rc" \
+      -- bash -c 'bash $RESEARCH_RUN_DIR/inputs/advice_job.sh' ;;
   first)
     rc=${2:?usage: twostage_c.sh first RUN_C}; w=$(mktemp -d); ch=${CHALLENGER:-gate}; extra=()
     if [ -z "${DRY:-}" ]; then
@@ -62,11 +58,16 @@ grep "^advice-c:" "$P/advice.log"; echo "advice: exit $a (its log: the private d
       if [ -f "$reg" ]; then cp "$reg" "$w/advice.json"; extra+=(--send "$w/advice.json")
       elif [ -n "${ADVICE_RUN:-}" ]; then echo "twostage-c: $ar published no w${W:-1} advice"; exit 2; fi
     fi
-    [ "$ch" = local ] && extra+=(--env CHALLENGER=local) || extra+=(--wait)
+    if [ "$ch" = local ]; then
+      on=(--on "${FIRST_ON:-auto}" --cwd clone --timeout "${TIMEOUT:-40m}" --env CHALLENGER=local)
+      [ "${FIRST_ON:-auto}" = auto ] && on+=(--cpus 8 --mem-gb 32)
+    else
+      on=(--on vy-nebius-cpu-3 --cwd source --timeout "${TIMEOUT:-30m}" --wait)
+    fi
     cp "$T/interior_classG.json" "$w/interior.json"
     git -C "$VERITY" fetch -q origin main && git -C "$VERITY" rev-list --first-parent origin/main > "$w/main.txt"
-    run research run --on vy-nebius-cpu-3 --project verity --source "$TREE" --cwd source --campaign spot-post \
-      --timeout "${TIMEOUT:-30m}" --send "$T/twostage_first.sh" --send "$T/check_stage1.py" --send "$w/main.txt" \
+    run research run "${on[@]}" --project verity --source "$TREE" --campaign spot-post \
+      --send "$T/twostage_first.sh" --send "$T/check_stage1.py" --send "$w/main.txt" \
       --send "$w/commit.json" --send "$w/interior.json" --env PEER=vy-nebius-cpu-3 "${extra[@]}" \
       -- bash -c 'bash $RESEARCH_RUN_DIR/inputs/twostage_first.sh' ;;
   *) echo "usage: twostage_c.sh serve | advice RUN_C | first RUN_C"; exit 2 ;;
