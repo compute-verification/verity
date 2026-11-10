@@ -486,7 +486,7 @@ def test_the_rule_changes_the_trial_only_where_a_rejection_meets_an_undecided_co
 #: form draws from the same generator, and gives up the cases it draws seldom: a disagreement that one case in a hundred
 #: shows escapes 150 cases about one time in five, and a thousand almost never. `product IDS serve` is a composite's own
 #: `serve` behind a choice by the ids, which fewer cases show.
-FEWER, FEWER_OF_PRODUCT = 150, 50
+FEWER, FEWER_OF_PRODUCT = 150, 100
 
 
 def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int,
