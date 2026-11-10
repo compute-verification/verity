@@ -22742,3 +22742,38 @@ Not changed, and why: row 8 (MOEBIND2 at 02:30Z gives steps, about 13 and 70 min
 One thing for you from the board: PRF-492 to PRF-497 are in Backlog with no project (read 03:11Z). They are `from:proofs` in our own team, so the audit does not call them stray, but PRF-495 is due today and unstarted. Say if you want them placed under "Full proofs: protocol soundness" on the SPOT milestone.
 
 Next: FUSEDSERVE's verdict line after 04:20Z into row 5, your holder into row 7, both pushed by 05:00Z with an entry.
+
+## LEDGER, Tue 10 Nov 03:25Z: task 3 done. compute-research's deletion-reader check over proofs' 143 unmerged branches finds no reader in proofs' unlanded work; the reply for the thread is below
+
+From LEDGER (bc-5a7bff0b-2ceb-54c9-ae4d-2468ffbe6ece). The full account, the list of branches and what I could not check are in my ledger note, section 9 (`lanes/proofs/20261109T2010Z-report-claims-ledger.md`, synced b919541444). The scripts as I ran them and their outputs are in `lanes/proofs/tools/ledger-deletion-readers/`.
+
+**The reply for thread 1794258587.729769** (68 words):
+
+> proofs ran your script (art:412b3ecf) over its 143 unmerged branches (`cursor/proofs-*` and `cursor/verity-proofs-84b5`), with your directory filter removed and our own census. 854 never-landed files, 306 hits: no reader in proofs' unlanded work. One hit is network-accounting's: their unlanded `tools/move/network_vocabulary_map.toml:20` lists `benchmarks/prove_path/served_statics_zk.py` (tier 2). The same search over lines our branches add to landed files found none. Nothing reads a file PRs 8439, 8441, 8482 or 8483 delete.
+
+**What I ran** [run]. The script is compute-research's `unlanded_readers.py` from art:412b3ecf, with its matching untouched and three changes, without which it reads none of proofs' files:
+
+1. The census walks the remote's `cursor/proofs-*` heads and `cursor/verity-proofs-84b5`, not a VM's local branches.
+2. `main_ever_added.txt` is my reconstruction (`git log --no-renames --diff-filter=A --name-only origin/main`): the artifact holds neither the file nor its command.
+3. The filter that keeps only compute-research's directories is removed, so every file `main` never had is read.
+
+**The counts** [run, at `origin/main` 7af4d24fca]:
+
+- **Branches:** 143 unmerged (142 `cursor/proofs-*` and `cursor/verity-proofs-84b5`). 94 add files `main` lacks, 48 only change files `main` has, and `cursor/proofs-inbox` shares no history with `main` and was not read.
+- **Files:** 854 never-landed text files read.
+- **Hits:** 306, naming 23 of the 222 entries. 209 are in Markdown, 207 of them in this branch's `inbox/` messages. 95 are a bare name in code, each another file of the same name (`import replay` is `benchmarks/serve_tax/replay.py`; `stage.py` is `served_units`' or `spot_proved`'s). 2 name a listed path in a file that is not Markdown.
+
+**Readers found: none in proofs' work.** The two path hits, both on `cursor/proofs-recursiveform-310f` (draft PR #7503, open, base `cursor/soundness-assemble-5e54`, last pushed 5 Nov):
+
+| Listed entry | Status | Where | Is it proofs' work? |
+|---|---|---|---|
+| `benchmarks/prove_path/served_statics_zk.py` | tier 2, owner network-accounting | `tools/move/network_vocabulary_map.toml:20`, a word map that lists it among the files it renames in | No. #7503 changes 2 files, not this one. The map is network-accounting's commit 54e1f98812, on 46 remote branches. |
+| `benchmarks/pouw/clear` | keep | `benchmarks/pouw/pearlplus_lean/pyproject.toml:13`, a suite's declared input | The entry is kept, so nothing breaks. |
+
+**Beyond their script (mine, and labelled so in the note).** The script never reads a line a branch adds to a file `main` has. I searched those lines too, by path patterns only (805,782 added lines): no line of proofs' own names an entry that goes. No hit of either search is a reader of a file that #8439, #8441, #8482 or #8483 removes.
+
+**One thing for you as owner, which no branch search can answer.** The list has `benchmarks/spot_proved/node_record.sh`, `tree_allreduce.py` and `rebind.py` and `benchmarks/dsa_topk/replay.sh` at tier 1 with `runs: 0` and owner proofs. Proofs' cross-node replays ran the first two as copies sent from `/tmp`, which the plan's run evidence cannot attribute to the tree's path. If a run this week still needs them, say so before tier 1 goes.
+
+**Not checked:** the 293 archived proofs refs, which are not branches.
+
+Next: task 4 (TOP-389's rows), then PRF-492.
