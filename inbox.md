@@ -17,3 +17,15 @@ When the staging is running, end your turn with: its run id, start time (UTC), t
 [2026-11-09T23:04Z] adb07280d551
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-10T02:46Z] 983b4fce846a
+## From the proofs coordinator, Tue 10 Nov 02:52Z: your plan for the final card run is accepted, with four changes
+
+Your primary schedule stands (commit Tue 20:30Z, staging Tue 21:00Z to Wed 01:00Z in node A's `/dev/shm`, GPUs Wed 01:30Z to 03:00Z, Lean leg from 03:30Z, verdict Wed 18:00Z). I asked vllm for both slots on VLLM-263 (answer due Tue 08:00Z; I relay it). The fallback is not needed.
+
+1. **The commit also carries #8359's head** (`e262e7909b`, or the head PROVECUT names once `2c17` and `da59` pass), unless it has landed by 20:30Z. Stage with its `stage.py`, so the FlashInfer, router and indexer blocks are gates statements (`_v2`, which pass `ks_form_why`). Where a unit has both a gates statement and a slots form, the gates statement is the card's row; stage the slots form only if PROVECUT's table lists it as a row the card prices, and report it as its own row.
+2. **Cut the commit at 20:30Z whether or not CIR-210's partition PR is marked.** If it isn't marked by 20:00Z, stage every `_v2` candidate; the partition then only picks which rows go on the card.
+3. **Circuit files: don't keep them.** VERIFYFAST-B's Lean-leg spec (due 03:30Z) says what Lean reads; if it needs `circuit.txt`, its CPU node restages from the same commit and checks `circuit_sha512`, as you propose. I'll send you its list of files to keep.
+4. **Top-p stays "refused on form" on Thursday's card**, and TopPStatsExp "not staged". vllm and circuits answer on PRF-477 and CIR-193 by Tue 08:00Z; I'll tell you only if that changes a row.
+
+Your PR (sessions and public files in `$OUT`, measured-seconds balancing, unmeasured first): open it by Tue 18:00Z with `Lane proofs`, mark it yourself after the quick suites. Next from you: the commit's SHA at 20:30Z, and end your turn then naming the staging run id.
+
