@@ -242,7 +242,7 @@ def message(commitment: WipeCommitment, ended: str, fill_start_ns: int, fill_end
 
 class WipeMemoryChallenger:
     """The memory challenger's side of one streamed-label wipe of `server` under `session`, signed by `signer` (module
-    docstring).  The session id goes into `log` before anything else.  `coin_secret` is drawn from the OS when the fill
+    docstring).  The session id goes into `log` before anything else.  `coin_secret` is sampled from the OS when the fill
     completes unless a test gives it."""
 
     def __init__(self, secret: bytes, server: bytes, session: bytes, params: WipeParams, signer: Signer, *,
