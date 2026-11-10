@@ -40,7 +40,8 @@ Every path git sees changed must be one of:
   of that name moves); a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
   renamed, its package-relative paths following the move and its `why` changed only by moved paths from the root and
   the dotted names of moved Python modules (`rules`'s `why` in the `--json` report lists the locks whose `why` a dotted
-  name changed), and must end up in exactly one, otherwise unchanged (`runs_moved`);
+  name changed; a string of it may also change as a line may by the map's rows, below), and must end up in exactly
+  one, otherwise unchanged (`runs_moved`);
 - a new `lakefile.toml`, `lakefile.lean`, `lake-manifest.json`, `lean-audit.json` or `lean-toolchain` at the root of a new
   Lake package that the range moved `.lean` files into from one source package, which is a copy of the source package's
   file (`copy_change`): a lakefile may differ only in package and library names, `roots`, `globs`, `defaultTargets`,
@@ -1686,8 +1687,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
     def run_string(field: str, w: str, g: str) -> set[str]:
         """The rules by which a string of a `runs` entry may change beyond its package-relative paths: its `why` is prose,
-        where each moved path is rewritten and each dotted name follows its moved Python module."""
-        return {"why"} if field == "why" and dotted_rewrite(substitute(w, pmap), g, modules) else set()
+        where each moved path is rewritten and each dotted name follows its moved Python module; any string is read as a
+        line is (`Rows`: a generator's `{repo}/verity/x.py`)."""
+        return {"why"} if field == "why" and dotted_rewrite(substitute(w, pmap), g, modules) else rows.reads(w, g)
     runs_moved(entries, B, H, pmap, lmods, report["refusals"], run_string, report["rules"])
     report["certified"] = not report["refusals"]
     return report

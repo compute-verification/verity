@@ -464,12 +464,12 @@ RUN = {"why": "random instances", "args": ["{difftest/instances.jsonl}", "10000"
        "data": {"difftest/instances.jsonl": "c048"}, "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]}
 
 
-def _runs_split(tmp_path: Path, proofs_runs: dict | None, spec_runs: dict | None = None) -> dict:
-    """The split, with core's lock holding a difftest whose runner module and generator move to the proofs package."""
+def _runs_split(tmp_path: Path, proofs_runs: dict | None, spec_runs: dict | None = None, was: dict = RUN) -> dict:
+    """The split, with core's lock holding a difftest (``was``) whose runner module and generator move to the proofs package."""
     base_files = {**SPEC_FILES, f"{SPEC}/Verity/SecurityProofs/Difftest.lean": "def main : IO Unit := pure ()\n",
                   f"{SPEC}/scripts/difftest_vectors.py": "print(1)\n",
                   f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS, reads=READS,
-                                                   runs={"Verity.SecurityProofs.Difftest": RUN})}
+                                                   runs={"Verity.SecurityProofs.Difftest": was})}
     repo, base = _repo(tmp_path, base_files)
     for m in ("Foo", "Bar", "Difftest"):
         _move(repo, f"{SPEC}/Verity/SecurityProofs/{m}.lean", f"{PROOFS}/CoreProofs/{m}.lean")
@@ -1580,27 +1580,26 @@ def test_a_runs_why_may_follow_a_moved_modules_dotted_name(tmp_path):
     why = "instances on which lean.scripts.difftest_vectors (packages/verity/lean/scripts) gives what the Lean gives"
     moved = why.replace("lean.scripts", "core.scripts").replace("packages/verity/lean/scripts", "security_proofs/core/scripts")
     for case, now in (("moved", moved), ("elsewhere", moved.replace("core.scripts.difftest", "core.scripts.other"))):
-        repo, base = _repo(tmp_path / case, {**SPEC_FILES, f"{SPEC}/Verity/SecurityProofs/Difftest.lean": "def main : IO Unit := pure ()\n",
-                                             f"{SPEC}/scripts/difftest_vectors.py": "print(1)\n",
-                                             f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS,
-                                                                              reads=READS, runs={"Verity.SecurityProofs.Difftest": {**RUN, "why": why}})})
-        for m in ("Foo", "Bar", "Difftest"):
-            _move(repo, f"{SPEC}/Verity/SecurityProofs/{m}.lean", f"{PROOFS}/CoreProofs/{m}.lean")
-        _move(repo, f"{SPEC}/scripts", f"{PROOFS}/scripts")
-        _write(repo, {
-            f"{PROOFS}/CoreProofs/Bar.lean": BAR.replace("import Verity.SecurityProofs.Foo", "import CoreProofs.Foo"),
-            f"{SPEC}/Verity/SecurityProofs.lean": "import CoreProofs.Foo\nimport CoreProofs.Bar\n",
-            f"{SPEC}/lean-audit.json": _lock(roots=["Verity.Protocol", "Verity.Guarantees", "Verity.SecurityProofs"],
-                                             layers={"Verity.Protocol": []}, pins=PINS, reads=READS, proved_in=["../../../security_proofs/core"]),
-            f"{PROOFS}/lakefile.toml": LAKEFILE_PROOFS, f"{PROOFS}/lean-toolchain": "leanprover/lean4:v4.99.0\n",
-            f"{PROOFS}/lake-manifest.json": _manifest("coreproofs", VERITY_PATH, MATHLIB),
-            f"{PROOFS}/lean-audit.json": _lock(roots=["CoreProofs"], layers={"Verity.Protocol": []},
-                                               runs={"CoreProofs.Difftest": {**RUN, "why": now}}),
-        })
-        r = _check(repo, base)
+        r = _runs_split(tmp_path / case, {"CoreProofs.Difftest": {**RUN, "why": now}}, was={**RUN, "why": why})
         if case == "moved":
             assert r["certified"], r["refusals"]
             assert r["rules"] == {"why": [f"{PROOFS}/lean-audit.json"]}
         else:
             [f] = r["refusals"]
             assert f["path"] == f"{PROOFS}/lean-audit.json" and "changed beyond moved paths" in f["reason"] and r["rules"] == {}
+
+
+def test_a_runs_generator_named_from_the_root_follows_its_move(tmp_path):
+    """A run names its generator from the root after `{repo}/`, which the mover reads as the root: the path follows the
+    script's move, as on a line; one sent anywhere else is refused."""
+    old = ["python3", "{repo}/packages/verity/lean/scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+    for case, to in (("moved", "security_proofs/core/scripts"), ("elsewhere", "security_proofs/scripts")):
+        now = {**RUN, "generate": [old[0], old[1].replace("packages/verity/lean/scripts", to), *old[2:]]}
+        r = _runs_split(tmp_path / case, {"CoreProofs.Difftest": now}, was={**RUN, "generate": old})
+        if case == "moved":
+            assert r["certified"], r["refusals"]
+            assert r["rules"] == {"prefixes": [f"{PROOFS}/lean-audit.json"]}
+        else:
+            [f] = r["refusals"]
+            assert f["path"] == f"{PROOFS}/lean-audit.json" and "changed beyond moved paths" in f["reason"] and r["rules"] == {}
+
