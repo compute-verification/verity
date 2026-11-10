@@ -19,8 +19,12 @@ stage  each UNIT@N its own `prove_time.sh STEPS=stage PT_DEVICE=cpu` into $FLOCK
 prove  the statements of UNITS_FILE staged under FLOCK_WORK, and under each WIN_ALSO directory (colon-separated
        FLOCK_WORKs, each statement linked file by file into FLOCK_WORK/data so its sessions are written there), a unit's
        statements on one GPU, in WIN_GPUS groups balanced by estimated time, each group one `prove_time.sh STEPS=prove
-       PT_DEVICE=gpu` on its own slice of the job's cores under `gpu-lease 1` (the tree's gpu_lease.sh where none is
-       installed). Every 2 s: a group whose GPU holds more than WIN_DEV_GIB has its prover killed (every prover, once
+       PT_DEVICE=gpu` (WARM=1 RUNS=1 unless set) on its own slice of the job's cores under `gpu-lease 1` (the tree's
+       gpu_lease.sh where none is installed). A statement's estimate is its seconds in WIN_SECONDS (an earlier prove's
+       out/seconds.tsv); one it doesn't hold finished takes WIN_UNMEASURED_S (default 900) or its unfinished seconds there,
+       whichever is more, and its unit starts first in its group. Without WIN_SECONDS the estimate is a model of the
+       circuit's size and k_log. As each statement ends, its KEEP files (its public files and every session's records;
+       WIN_KEEP_ALSO adds colon-separated globs under its directory) are copied to out/kept/NAME/. Every 2 s: a group whose GPU holds more than WIN_DEV_GIB has its prover killed (every prover, once
        nvidia-smi goes unread for 30 s), and our processes' RSS, plus a FLOCK_WORK in RAM with its sessions, over
        WIN_MEM_GB x 0.97 kills the largest process. Then, or as soon as the job stops (SIGTERM included), its groups are
        killed and FLOCK_WORK is removed (its links, not what they point to), unless WIN_KEEP=1. A stopped `stage` kills its
@@ -32,7 +36,8 @@ holds counts as host memory beside the processes' RSS), WIN_MEM_PEER (stage: ano
 counts against WIN_MEM_GB too, so two stagings share one memory grant), WIN_DEV_GIB, WIN_GPUS; WIN_DEVICE=cpu builds and proves on the CPU
 (a rehearsal off the GPU node). Once a statement waits for disk, later ones of more than WIN_BACKFILL_DISK_GB (default 0)
 wait behind it. Records under
-$RESEARCH_RUN_DIR/out: window.log, stage.tsv or prove.tsv, and each prove_time.sh run's own out/."""
+$RESEARCH_RUN_DIR/out: window.log, stage.tsv or prove.tsv (with prove's seconds.tsv and kept/), and each prove_time.sh run's
+own out/."""
 
 from __future__ import annotations
 
@@ -48,6 +53,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -57,6 +63,11 @@ OUT = Path(os.environ.get("RESEARCH_RUN_DIR", "/tmp/served-units-window")) / "ou
 PAGE = os.sysconf("SC_PAGE_SIZE")
 GB = 1e9
 RAM = "/dev/shm/"  # a FLOCK_WORK here is host memory, counted with the processes' RSS against WIN_MEM_GB
+#: a proved statement's files prove copies to $OUT/kept/NAME/, globs under its directory, for a verifier run elsewhere: its
+#: public files and every session's records. Never inst.bin (the witness), nor circuit.txt (gigabytes: the verifier's node
+#: restages it from the same commit and checks it against stage.json's circuit_sha512). WIN_KEEP_ALSO adds globs.
+KEEP = ("pub.bin", "stage.json", "pin.txt", "partition.json", "tables", "sessions/index.jsonl", "sessions/*/session.json",
+        "sessions/*/circuit.rep*.bin", "sessions/*/verifier.json")
 
 
 def env(k: str, default: str | None = None) -> str:
@@ -334,6 +345,48 @@ def stage(units: list[Unit]) -> int:
     return 0 if built else 1
 
 
+def read_seconds(path: str) -> dict[str, tuple[float, bool]]:
+    """An earlier prove's seconds.tsv (WIN_SECONDS): each statement's seconds, and whether it finished in them."""
+    if not path:
+        return {}
+    rows = [ln.split("\t") for ln in Path(path).read_text().splitlines()[1:] if ln.strip()]
+    return {r[0]: (float(r[2]), r[3] == "1") for r in rows}
+
+
+def statements_run() -> list[tuple[str, str, float, bool]]:
+    """Each statement a group started: (name, group, seconds, finished), from prove_time.sh's start and done files; an
+    unfinished one's seconds so far."""
+    rows = []
+    for s in sorted(OUT.glob("gpu*/out/[cg]pu/*/start")):
+        d, done = s.parent, s.parent / "done"
+        try:
+            t0 = float(s.read_text())
+            t1, fin = (float(done.read_text()), True) if done.exists() else (time.time(), False)
+        except ValueError:
+            continue
+        rows.append((d.name, d.parts[-4], t1 - t0, fin))
+    return rows
+
+
+def keep(fw: Path, k: str, kept: set[str]) -> None:
+    """Each finished statement not yet in `kept`: its KEEP files, and WIN_KEEP_ALSO's globs, copied to $OUT/kept/NAME/."""
+    globs = KEEP + tuple(filter(None, env("WIN_KEEP_ALSO", "").split(":")))
+    for done in sorted(OUT.glob("gpu*/out/[cg]pu/*/done")):
+        nm = done.parent.name
+        if nm in kept:
+            continue
+        src, dst = fw / "data" / f"{nm}-{k}", OUT / "kept" / nm
+        for g in globs:
+            for f in sorted(src.glob(g)):
+                t = dst / f.relative_to(src)
+                t.parent.mkdir(parents=True, exist_ok=True)
+                if f.is_dir():
+                    shutil.copytree(f, t, dirs_exist_ok=True)
+                else:
+                    shutil.copyfile(f, t)
+        kept.add(nm)
+
+
 def prove(units: list[Unit]) -> int:
     mem, cpus = limits("268")
     fw, k = Path(env("FLOCK_WORK")), key()
@@ -348,16 +401,25 @@ def prove(units: list[Unit]) -> int:
         log(f"no prover at {binary}: building it inside the window")
         subprocess.run(["bash", str(PT), "STEPS=build", f"PT_DEVICE={env('WIN_DEVICE', 'gpu')}"], cwd=REPO,
                        env={**os.environ, "FLOCK_WORK": str(fw), "RESEARCH_RUN_DIR": str(OUT / "build")}, check=True)
+    measured, floor = read_seconds(env("WIN_SECONDS", "")), float(env("WIN_UNMEASURED_S", "900"))
     staged = []
     for u in units:
         ns = [n for n in u.ns if (fw / "data" / f"{name(u.unit, n)}-{k}" / ".done").exists()]
         if ns:
-            recs = [json.loads((fw / "data" / f"{name(u.unit, n)}-{k}" / "stage.json").read_text()) for n in ns]
-            est = sum(10 + 3 * r["circuit_bytes"] / GB + (int(env("WARM", "1")) + int(env("RUNS", "3"))) *
-                      (4 + 2 ** max(r["k_log"] - 23, 0)) for r in recs)
-            staged.append((u, ns, est))
+            est, fresh = 0.0, False
+            for n in ns:
+                r = json.loads((fw / "data" / f"{name(u.unit, n)}-{k}" / "stage.json").read_text())
+                model = 10 + 3 * r["circuit_bytes"] / GB + (int(env("WARM", "1")) + int(env("RUNS", "1"))) * \
+                    (4 + 2 ** max(r["k_log"] - 23, 0))
+                s, fin = measured.get(name(u.unit, n), (0.0, False))
+                est += s if fin else max(s, floor) if measured else model
+                fresh = fresh or not fin
+            staged.append((u, ns, est, fresh))
         else:
             log(f"not staged, skipped: {u.unit}")
+    if measured:
+        log(f"estimates: {sum(not x[3] for x in staged)} of {len(staged)} types measured in {env('WIN_SECONDS')}; an unmeasured "
+            f"statement {floor:.0f} s or its unfinished seconds there, whichever is more, and started first in its group")
     other = sorted({d.name.rsplit("-", 1)[1] for d in (fw / "data").glob("*-*") if (d / ".done").exists()} - {k})
     if other:
         log(f"statements staged under key(s) {', '.join(other)}, not this tree's {k}: prove from the staging's commit")
@@ -370,6 +432,8 @@ def prove(units: list[Unit]) -> int:
     groups: list[list] = [[] for _ in range(ngpu)]
     for item in sorted(staged, key=lambda x: -x[2]):
         min(groups, key=lambda g: sum(x[2] for x in g)).append(item)
+    for items in groups:
+        items.sort(key=lambda x: (not x[3], -x[2]))
     scratch = Path(tempfile.mkdtemp(prefix="window-bin-"))
     path = os.environ["PATH"]
     if not shutil.which("gpu-lease"):
@@ -381,24 +445,34 @@ def prove(units: list[Unit]) -> int:
     for g, items in enumerate(groups):
         if not items:
             continue
-        units_arg = " ".join(f"{u.unit}@{','.join(ns)}" for u, ns, _e in items)
+        units_arg = " ".join(f"{u.unit}@{','.join(ns)}" for u, ns, *_x in items)
         lease = int(env("LEASE_MIN", "30"))
         cores = ",".join(map(str, cpus[g * per:(g + 1) * per]))
-        log(f"group {g}: {len(items)} types, estimated {sum(e for *_x, e in items) / 60:.1f} min, lease {lease} min, cores {cores}")
+        log(f"group {g}: {len(items)} types ({sum(x[3] for x in items)} unmeasured, first), estimated "
+            f"{sum(x[2] for x in items) / 60:.1f} min, lease {lease} min, cores {cores}")
         p = start(f"gpu group {g}", ["STEPS=prove", f"PT_DEVICE={env('WIN_DEVICE', 'gpu')}", f"PT_UNITS={units_arg}", f"LEASE_MIN={lease}",
-                                     f"VCPUS={env('VCPUS', '2')}", f"WARM={env('WARM', '1')}", f"RUNS={env('RUNS', '3')}"],
+                                     f"VCPUS={env('VCPUS', '2')}", f"WARM={env('WARM', '1')}", f"RUNS={env('RUNS', '1')}"],
                   OUT / f"gpu{g}", {"FLOCK_WORK": str(fw), "PATH": path, "GPU_LEASE_WHO": env("GPU_LEASE_WHO", "servedcard")},
                   prefix=["taskset", "-c", cores])
         jobs.append(Job(f"gpu{g}", p, time.time()))
+    kept: set[str] = set()
     try:
-        watch(jobs, mem, dev_mib, on_gpu, ram)
+        watch(jobs, mem, dev_mib, on_gpu, ram, lambda: keep(fw, k, kept))
     finally:
         stop(jobs)
         shutil.rmtree(scratch, ignore_errors=True)
-        if env("WIN_KEEP", "0") != "1":
-            freed = du(fw)
-            shutil.rmtree(fw, ignore_errors=True)
-            log(f"removed FLOCK_WORK {fw} ({freed / GB:.1f} GB)")
+        try:
+            keep(fw, k, kept)
+            ran = statements_run()
+            (OUT / "seconds.tsv").write_text("name\tgroup\tseconds\tdone\n" +
+                                             "".join(f"{n}\t{g}\t{s:.1f}\t{int(f)}\n" for n, g, s, f in ran))
+            log(f"kept {len(kept)} statements' files in out/kept ({du(OUT / 'kept') / GB:.2f} GB); {sum(f for *_x, f in ran)} "
+                f"of {len(ran)} started statements finished (out/seconds.tsv)")
+        finally:
+            if env("WIN_KEEP", "0") != "1":
+                freed = du(fw)
+                shutil.rmtree(fw, ignore_errors=True)
+                log(f"removed FLOCK_WORK {fw} ({freed / GB:.1f} GB)")
     rows = []
     for j in jobs:
         s = OUT / j.label / "out" / "summary.json"
@@ -429,12 +503,15 @@ def link_also(fw: Path, also: Path) -> None:
     log(f"linked {n} statements staged under {also}")
 
 
-def watch(jobs: list[Job], mem: float, dev_mib: float, on_gpu: bool, ram: Path | None = None) -> None:
+def watch(jobs: list[Job], mem: float, dev_mib: float, on_gpu: bool, ram: Path | None = None,
+          tick: Callable[[], None] | None = None) -> None:
     """Until every group exits: kill a group's prover past dev_mib on its GPU, and the largest of our processes past
     0.97 x mem, counting a FLOCK_WORK in RAM (`ram`, its statements and the sessions written beside them) with them.
-    Device memory unread for 30 s in a row kills every prover, since the limit can't be held."""
+    Device memory unread for 30 s in a row kills every prover, since the limit can't be held. `tick` runs each round."""
     blind, held, last = 0, du(ram) if ram else 0, time.time()
     while any(j.proc.poll() is None for j in jobs):
+        if tick:
+            tick()
         if ram and time.time() - last > 10:
             held, last = du(ram), time.time()
         t = procs()
