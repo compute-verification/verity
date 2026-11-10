@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Core.Assumptions
+public import Definitions.NetworkCertifier.Carried
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 public import Definitions.NetworkCertifier.PeriodChecked
 public import Definitions.NetworkCertifier.PeriodConditions
-public import Definitions.NetworkCertifier.PooledLeak
 public import Definitions.NetworkCertifier.Tap
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -80,7 +80,7 @@ trace's commitment binds (`CommitmentScheme.Binds`), over a monitoring period of
 (`WindowsPlaced`: partition `Pw i`, and `β i` bounding the committed bits of each of its possible incorrect sets; its
 registered values `ρ i`), each window's two checks together pinning its checked inputs (`CheckedUnique`); with an
 operator `op` fixed before the period and the covert sender's secrets, window `i`'s reading only the windows before
-`i`, closed by then (`PeriodOperator`); with the network certifier's openings `tops s` at each statement, and a network
+`i`, closed by then (`runsBefore`); with the network certifier's openings `tops s` at each statement, and a network
 certifier that runs its code by `trusted-host`, its one run giving the cells the client receives and the observations
 of the monitoring period's windows (its record of those cells, in the format `f`), which reads back under a registered
 parameter (`RecordFormat.ReadsBy`); and a covert sender in the server over the registered parameters `Θ`, whose secrets
@@ -107,8 +107,7 @@ def PeriodLeakChecked : Prop :=
     (hplaced : WindowsPlaced D.partition δ sw Pw β)
     (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
       (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r))
-    (ρ : Fin n → ℕ → Bool) (op : Fin n → (Fin n → List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool)
-    (hop : PeriodOperator op)
+    (ρ : Fin n → ℕ → Bool) (op : Fin n → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool)
     {Conn Cell Srv Dev Z Par : Type} (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
@@ -131,14 +130,15 @@ def PeriodLeakChecked : Prop :=
         D.κ δ m + ε₁ m + ε₂ m + Real.sqrt (D.γ m * Claims.PrB H D.V P m) + (Bext H D.V D.E Ω P m).Pr H +
           (Btap H D.V D.E D.commit D.parse tops Ω P m).Pr H) ∧
       ((∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s)
-          (op i (run tap (schedOf z, srvOf z)).2) s (tops s) ((run tap (schedOf z, srvOf z)).2 i)) →
+          (op i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) s (tops s) ((run tap (schedOf z, srvOf z)).2 i)) →
         (∀ z ∈ Zs, (∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
               (ρ i) tops (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)) →
             ∃ θ ∈ Θ, (run tap (schedOf z, srvOf z)).1 = rd θ (run tap (schedOf z, srvOf z)).2 ∧
               ∀ i, (run tap (schedOf z, srvOf z)).2 i ∈
                 AccSeqsChecked (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i))
                   (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i))
-                  (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r) δ (op i (run tap (schedOf z, srvOf z)).2) Dj) ∧
+                  (fun r => valid₁ (sw i) r ∧ valid₂ (sw i) r) δ
+                  (op i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) Dj) ∧
           {z | z ∈ Zs ∧ ∀ i, WindowGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i)
               (ρ i) tops (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
             Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞))
