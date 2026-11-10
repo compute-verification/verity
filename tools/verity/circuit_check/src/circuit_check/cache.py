@@ -2492,10 +2492,15 @@ def _cut(kind: str, reads: dict[str, Any]) -> list[dict[str, Any]]:
 def _hold(top: Path, k: dict, now: dict[str, dict[str, Any]]) -> dict:
     """The fields of an entry of key ``k`` that holds the reads ``now``, its records stored under ``top`` (its version's directory):
     in itself (``own``) its pins and each read whose name holds the id of the Definition it checks; every other read in a read set
-    it names (``shared``), each kind's runs (`_cut`) in it by reference, and each sited value in a run by reference.  A reference
-    is an index into the ``needs`` of the entry or record that holds it."""
+    it names (``shared``), each kind's runs (`_cut`) in it by reference; and each sited value, in the entry or a run, by
+    reference.  A reference is an index into the ``needs`` of the entry or record that holds it."""
     target = (k.get("request") or {}).get("target")
     label = target[1] if isinstance(target, list) and target[:1] == ["definition"] and isinstance(target[1], str) else None
+
+    def held(kind: str, reads: dict[str, Any], needs: list[str], up: str) -> dict[str, Any]:
+        return {n: _ref(needs, f"{up}{_put(top, 'values', v)}") if kind in _SITED and isinstance(v, dict) else v
+                for n, v in reads.items()}
+
     own: dict[str, dict[str, Any]] = {}
     runs: dict[str, list[int]] = {}
     needs: list[str] = []
@@ -2506,10 +2511,10 @@ def _hold(top: Path, k: dict, now: dict[str, dict[str, Any]]) -> dict:
             runs[kind] = []
             for run in _cut(kind, {n: v for n, v in reads.items() if n not in mine}):
                 values: list[str] = []
-                held = {n: _ref(values, f"../../{_put(top, 'values', v)}") if kind in _SITED and isinstance(v, dict) else v
-                        for n, v in run.items()}
-                runs[kind].append(_ref(needs, f"../../{_put(top, kind, {'needs': values, 'reads': held})}"))
-        return {"needs": [f"../{_put(top, 'set', {'needs': needs, 'runs': runs})}"], "own": own, "shared": 0}
+                kept = held(kind, run, values, "../../")
+                runs[kind].append(_ref(needs, f"../../{_put(top, kind, {'needs': values, 'reads': kept})}"))
+        refs = [f"../{_put(top, 'set', {'needs': needs, 'runs': runs})}"]
+        return {"needs": refs, "own": {kind: held(kind, reads, refs, "../") for kind, reads in own.items()}, "shared": 0}
 
 
 #: each record read, by its path: a record never changes
@@ -2534,10 +2539,15 @@ def _need(p: Path, rec: dict, i: Any) -> Path:
     return Path(os.path.normpath(p.parent / rec["needs"][i]))
 
 
+def _valued(p: Path, rec: dict, kind: str, reads: dict[str, Any]) -> dict[str, Any]:
+    """``reads``, of kind ``kind``, that the entry or record ``rec`` at ``p`` holds, each sited value read from its record."""
+    return {n: _record(_need(p, rec, v)) if kind in _SITED and type(v) is int else v for n, v in reads.items()}
+
+
 def _run(p: Path, kind: str) -> dict[str, Any]:
-    """The reads of kind ``kind`` the run at ``p`` holds, each sited value read from its record."""
+    """The reads of kind ``kind`` the run at ``p`` holds."""
     rec = _record(p)
-    return {n: _record(_need(p, rec, v)) if kind in _SITED and type(v) is int else v for n, v in rec["reads"].items()}
+    return _valued(p, rec, kind, rec["reads"])
 
 
 def _expand(p: Path, e: dict) -> dict[str, dict[str, Any]]:
@@ -2546,7 +2556,7 @@ def _expand(p: Path, e: dict) -> dict[str, dict[str, Any]]:
     rec = _record(s)
     out = {kind: {n: v for i in runs for n, v in _run(_need(s, rec, i), kind).items()} for kind, runs in rec["runs"].items()}
     for kind, reads in e["own"].items():
-        out[kind].update(reads)
+        out[kind].update(_valued(p, e, kind, reads))
     return {kind: dict(sorted(reads.items())) for kind, reads in out.items()}
 
 
@@ -2555,7 +2565,7 @@ def _current(root: Path, p: Path, e: dict) -> bool:
     same), held to the tree by its records: each read set and run once per process."""
     own = e["own"]
     now = _digests(root, {"files": [], "dirs": [], **{kind: list(reads) for kind, reads in own.items()}})
-    return all(now[kind] == reads for kind, reads in own.items()) and _fresh(root, _need(p, e, e["shared"]), None)
+    return all(now[kind] == _valued(p, e, kind, reads) for kind, reads in own.items()) and _fresh(root, _need(p, e, e["shared"]), None)
 
 
 def _fresh(root: Path, p: Path, kind: str | None) -> bool:
