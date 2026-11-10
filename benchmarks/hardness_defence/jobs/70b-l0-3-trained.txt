@@ -1,0 +1,17 @@
+# Layers 0-3 of 70B as a head exports them ($CODES, `qat.py --layers 4 --codes`: the recommended point's codes of the
+# trained latent weights, or untrained as the control), priced at the ranks and orders the book priced these matrices
+# at, each kind's union over its layers, every split in all orders. L0 q, k and v and L1 v are served exact,
+# uncredited and not priced. L0 gate and up are the codes of W·R less its top-32 part (the book's deflate 32).
+# q: the exact split, then the generous routes (svd and rpca to rank 192, svd alone above and at the half-steps)
+70b-l0-3-q --codes "$CODES" --layers 1,2,3 --match q_proj --fast --ranks 1,8,16,32,48,64,96,112,128,160,192,256,384 --orders none,fold,sort --workers 3
+70b-l0-3-q-gen-lo --codes "$CODES" --layers 1,2,3 --match q_proj --no-isvd --ranks 1,8,32,64,128,192 --orders none,fold,sort --workers 3
+70b-l0-3-q-gen-hi --codes "$CODES" --layers 1,2,3 --match q_proj --no-isvd --no-rpca --ranks 160,224,256,288,320,352,384,416,448,512,640,768,1024 --orders none,fold,sort --workers 3
+# k: the exact split and the generous routes on one grid, the knee's ranks, then svd alone at the half-steps
+70b-l0-3-k-gen --codes "$CODES" --layers 1,2,3 --match k_proj --ranks 1,8,16,32,48,64,80,96,112,128,160,192,256 --orders none,fold,sort --workers 3
+70b-l0-3-k-knee --codes "$CODES" --layers 1,2,3 --match k_proj --fast --ranks 24,40,56,72 --orders none,fold,sort --workers 3
+70b-l0-3-k-refine --codes "$CODES" --layers 1,2,3 --match k_proj --ranks 4,12,24,40,56,72,88,104 --orders none,fold,sort --no-isvd --no-rpca --workers 3
+70b-l0-3-v --codes "$CODES" --layers 2,3 --match v_proj --fast --ranks 1,2,4,6,8,10,12,16,32,48,64,96,128,192 --orders none,fold,sort --workers 2
+70b-l0-3-o --codes "$CODES" --layers 0,1,2,3 --match o_proj --fast --ranks 1,8,32,64,128,256,384 --orders none,fold,sort --workers 4
+70b-l0-3-gu --codes "$CODES" --layers 1,2,3 --match gate_proj,up_proj --fast --ranks 1,2,4,6,8,10,12,14,16,32,64,128,256 --orders none,fold,sort --workers 6
+70b-l0-3-gu-defl32 --codes "$CODES" --layers 0 --match gate_proj,up_proj --fast --ranks 1,8,16,32,64,128,256 --orders none,fold,sort --workers 2
+70b-l0-3-down --codes "$CODES" --layers 0,1,2,3 --match down_proj --fast --ranks 1,8,16,32,64,128,256 --orders none,fold,sort --workers 4
