@@ -2,7 +2,7 @@
 """VLLM-289: the restack rehearsal's driver for many branches in one `research run --on auto --cwd source` job. Scratch: it
 lands nowhere.
 
-    drive.py --staged STAGED --move M [--move M ...] --main MAIN [--workers N] [--pins auto|on|off] [--real] [--smoke] PR=HEAD...
+    drive.py --staged STAGED --move M [--move M ...] --main MAIN [--tool REF] [--workers N] [--pins auto|on|off] [--real] [--smoke] PR=HEAD...
 
 It makes the job's own clone of the source root with the repository's merge drivers registered (`research.clone.make`, what
 `--cwd clone` calls: a source root has none, and a lock, a pyproject's test lists or a lint allowlist then merges as text),
@@ -20,7 +20,8 @@ In the clone, in order:
    file's merge attribute, and a bundle of the commits it made ($OUT/bundles/pr-PR.bundle: the result, or the last step
    before a stop), so a stop can be read and mended on a VM without the script running again.
 
-`--real` only changes the commits' identity: the caller's GIT_AUTHOR_*/GIT_COMMITTER_* instead of the rehearsal's fixed
+`--tool REF` runs REF's `tools/move/restack.py` instead of the checkout's (the staged tree's copy, which is `main`'s once
+the layout lands). `--real` only changes the commits' identity: the caller's GIT_AUTHOR_*/GIT_COMMITTER_* instead of the rehearsal's fixed
 one. Nothing here pushes.
 """
 from __future__ import annotations
@@ -151,6 +152,7 @@ def main() -> int:
     ap.add_argument("--staged", required=True)
     ap.add_argument("--move", action="append", required=True)
     ap.add_argument("--main", required=True)
+    ap.add_argument("--tool", metavar="REF", help="run REF's tools/move/restack.py, not the checkout's")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--pins", choices=("auto", "on", "off"), default="auto")
     ap.add_argument("--real", action="store_true")
@@ -169,7 +171,13 @@ def main() -> int:
         from pathlib import Path
         shipped = research_clone.make(Path(SOURCE), Path(tree))
         os.chdir(tree)
-        sys.path.insert(0, os.path.join(tree, "tools", "move"))
+        home, blob = os.path.join(tree, "tools", "move"), "HEAD:tools/move/restack.py"
+        if a.tool:
+            home, blob = os.path.join(scratch, "tool"), f"{a.tool}:tools/move/restack.py"
+            os.makedirs(home)
+            with open(os.path.join(home, "restack.py"), "wb") as f:
+                f.write(subprocess.run(["git", "cat-file", "blob", blob], capture_output=True, check=True).stdout)
+        sys.path.insert(0, home)
         import restack
         RS, A = restack, a
 
@@ -177,7 +185,7 @@ def main() -> int:
         a.move = [RS.rev(m, None) for m in a.move]
         env = {"python": sys.version.split()[0], "executable": sys.executable, "git": tool("git", "--version"),
                "uv": tool("uv", "--version"), "cpus": os.cpu_count(), "shipped": shipped, "source": SOURCE,
-               "host": os.uname().nodename, "restack_blob": RS.out("rev-parse", "HEAD:tools/move/restack.py"),
+               "host": os.uname().nodename, "restack_blob": RS.out("rev-parse", blob), "tool": a.tool or "HEAD",
                "drivers": RS.out("config", "--local", "--get-regexp", r"^merge\..*\.name$").splitlines(),
                "staged": a.staged, "moves": a.move, "main": a.main, "workers": a.workers}
         say("environment", json.dumps(env))
