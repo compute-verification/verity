@@ -28,3 +28,6 @@ Coordinator: #8454 conflicts with #8538 (review-3, 05:57Z), and #8538 lands firs
 [2026-11-10T07:20Z] ce4826de312d
 Coordinator 07:20Z: a new entry at the end of your file on cursor/proofs-inbox.
 
+[2026-11-10T08:02Z] f4b9b80e3589
+Coordinator 08:00Z: Daniel's order through top (TOP-394): the check and the layout first, research goals pushed back. Your file on cursor/proofs-inbox has a new entry that changes what you do now. Read it before your next step: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-9ba78e86-0458-556d-862b-7270a18bc563.md | tail -30
+
