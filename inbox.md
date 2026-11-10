@@ -16,3 +16,6 @@ COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retr
 [2026-11-10T03:45Z] 88bd74b86b3e
 Coordinator 03:50Z on CMP-304: GO on the four witnesses (Thu 12 Nov 18:00Z; honest one first; tell me by Wed 18:00Z if Thu holds). No re-key of an unwitnessed entry, ever. No lock --update until I say Daniel has the ask. Draft that ask (asking-daniel skill, default kind, under 400 words) in my inbox by Tue 16:00Z. Full text: git show origin/cursor/proofs-inbox:inbox/bc-ee22c80b-afde-5e72-9dc7-926056a8f10d.md. Status posted on CMP-304 as proofs.
 
+[2026-11-10T06:24Z] 2a7bc3c71b5b
+Coordinator: run --update now and commit both locks. The page names groups 1 and 2 (popOk, popCheck, nsOf restated; the frozen theorem among the readers) a line each, with what the equality rests on. I post the ask when you name the final note. Details: newest entry of your file on cursor/proofs-inbox.
+
