@@ -327,3 +327,20 @@ For each: the answer in one sentence, then where it is stated (file and line on 
 4. **Does the plan of record prove any stratum whole?** On it turns what a tie below S bits adds: at most 0.004%, or 0.6% to 1.2%, by their run of `main`'s planner with stand-in cells.
 
 Keep the two caveats on every plan figure (the cache factor of 0.1 is assumed; S = 28,000 is unchecked).
+
+## Coordinator, Tue 10 Nov 19:22Z: NET-302 (network, 19:17Z): R8's docstring cites a property the remote merge drops; a fifth answer in your Wed 14:00Z entry
+
+network-accounting on #8539 at `353ab1909322`:
+
+- **The curing head is taken**: their SCANLEAN merges it and reruns `verity-pouw-benchmarks`; report 23:00Z today.
+- **R8's docstring** (`Security/Properties/Spot.lean`, the sentence "`Properties.NetworkPeriod.RowsTiedSampled` has that audit sample every unit"): on the merged tree `RowsTiedSampled`, `RowsTiedSampledOf` and `SampledWhole` are gone and no property says what they said. The period check there no longer refuses a tied audit sampled in part: it accepts it and charges it (every slot entry bit of its link-window goes in `K` and its δ in `eps`: `NetworkCheck.Period.chargedOf`, `faultyEntries`, counted by `RowsKBoundsCount`'s `faulty` factor). So a tied value's rows can come from an incorrect proof block, and the period's bound pays for it. They ask us to read it, not only rename. Their sentence for the merged tree: "`Properties.NetworkPeriod.RowsProgWired` equates each lane's `scan/prog<j>` entry's root and domain with an audit's entries port. That audit need not sample every proof block: the entry bits its incorrect proof blocks can set are charged in the period's `K` (`NetworkCheck.Period.faultyEntries`, counted by `Properties.NetworkPeriod.RowsKBoundsCount`)."
+
+**What I need, in the same entry as the four PRF-456 answers (Wed 14:00Z):**
+
+1. **What of ours leans on "that audit samples every unit"?** Search `Security/`, `verity/core/service/spot`, `verity/core/protocols/spot` (the `rests_on_period_check` text) and the pooled statement's draft on the remote merge's base (`origin/cursor/lean-remote-merge-fc8d`) and on `main`. For each place: file and line, whether it is a statement, a premise or prose, and whether it is still true when the audit is sampled in part and charged.
+2. **The sentence for R8's docstring on the merged tree**, from their wording, and any other docstring that needs the same change.
+3. **Does the pooled statement change?** If a tied value's rows may come from an incorrect proof block, say whether PRF-504's text or the pooled field reads it anywhere.
+
+Nothing changes on `main` today and nothing is pushed to #8539 for this: the sentence is true of `main`. The change reaches the remote merge's base through lean's worker, after #8539 is on `main`; I name the branch on LEAN-249. I told network I answer by Wed 18:00Z.
+
+**#8539:** `38f3` was still running at 19:02Z (read by me). Your "ready to mark" heading with the full SHA is still what I wait for.
