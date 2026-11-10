@@ -28,18 +28,31 @@ W = _load(HERE.parent / "warm.py", "lean_warm_under_test")
 LA, V = W.tools(ROOT)
 
 BASE = "b" * 40
-#: a tree of three audited packages: `b` requires `a` by path, `c` stands alone and names `b` as its prover
+TOOLCHAIN = "leanprover/lean4:v4.34.0\n"
+
+
+def _lakefile(name: str, lib: str) -> str:
+    return f'name = "{name}"\ndefaultTargets = ["{lib}"]\n\n[[lean_lib]]\nname = "{lib}"\n'
+
+
+#: a tree of three audited packages: `b` requires `a` by path and imports two of its modules, and `c` stands alone and
+#: names `b` as its prover
 FILES = {
     "tools/verity/lean/check.py": "", "tools/verity/lean/lean_audit.py": "", "tools/verity/lean/merge.py": "",
     "tools/verity/lean/README.md": "", "tools/verity/lean/tests/test_x.py": "", "tools/verity/check/common.py": "",
     LA.CONTRACT: "", "docs/note.md": "",
-    "pkg/a/lakefile.toml": "", "pkg/a/A.lean": "theorem a : True := trivial\n", "pkg/a/lean-audit.json": "{}",
-    "pkg/a/lake-manifest.json": json.dumps({"packages": [{"name": "dep", "type": "git", "rev": "abc"}]}),
-    "pkg/b/lakefile.toml": "", "pkg/b/B.lean": "", "pkg/b/lean-audit.json": "{}",
-    "pkg/b/lake-manifest.json": json.dumps({"packages": [{"name": "a", "type": "path", "dir": "../a"}]}),
-    "pkg/c/lakefile.toml": "", "pkg/c/C.lean": "", "pkg/c/lean-audit.json": json.dumps({"proved_in": ["../b"]}),
-    "pkg/c/lake-manifest.json": json.dumps({"packages": []}),
+    "pkg/a/lakefile.toml": _lakefile("a", "A"), "pkg/a/lean-toolchain": TOOLCHAIN, "pkg/a/lean-audit.json": "{}",
+    "pkg/a/lake-manifest.json": json.dumps({"name": "a", "packages": [{"name": "dep", "type": "git", "rev": "abc"}]}),
+    "pkg/a/A.lean": "import A.Base\nimport A.Leaf\n", "pkg/a/A/Base.lean": "theorem a : True := trivial\n",
+    "pkg/a/A/Leaf.lean": "import A.Base\n",
+    "pkg/b/lakefile.toml": _lakefile("b", "B"), "pkg/b/lean-toolchain": TOOLCHAIN, "pkg/b/lean-audit.json": "{}",
+    "pkg/b/lake-manifest.json": json.dumps({"name": "b", "packages": [{"name": "a", "type": "path", "dir": "../a"}]}),
+    "pkg/b/B.lean": "import A.Base\nimport B.Top\n", "pkg/b/B/Top.lean": "import A.Leaf\n",
+    "pkg/c/lakefile.toml": _lakefile("c", "C"), "pkg/c/lean-toolchain": TOOLCHAIN,
+    "pkg/c/lean-audit.json": json.dumps({"proved_in": ["../b"]}),
+    "pkg/c/lake-manifest.json": json.dumps({"name": "c", "packages": []}), "pkg/c/C.lean": "theorem c : True := trivial\n",
 }
+ALL = ["pkg/a", "pkg/b", "pkg/c"]
 
 
 @pytest.fixture
@@ -100,19 +113,25 @@ def test_the_names_warm_reads_are_the_auditors_and_the_verdict_packs_own():
         "no audit reads warm.py, so an edit to it moves no package's key (`lean_audit.NOT_READ`)"
 
 
-@pytest.mark.parametrize("diff, want", [
-    (["pkg/a/A.lean"], ["pkg/a", "pkg/b", "pkg/c"]),            # b requires a by path, and c reads the build of its prover b
-    (["pkg/b/B.lean"], ["pkg/b", "pkg/c"]),
-    (["pkg/c/C.lean"], ["pkg/c"]),
-    (["pkg/c/lean-audit.json"], ["pkg/c"]),                     # a lock alone
-    (["pkg/a/Gone.lean"], ["pkg/a", "pkg/b", "pkg/c"]),         # removed: no longer among the tree's files
-    (["tools/verity/lean/check.py"], ["pkg/a", "pkg/b", "pkg/c"]),  # the auditor is in every package's key
-    (["tools/verity/check/common.py"], ["pkg/a", "pkg/b", "pkg/c"]),
-    (["tools/verity/lean/merge.py", "tools/verity/lean/README.md", "tools/verity/lean/tests/test_x.py", "docs/note.md"], []),
-    ([], []),
+@pytest.mark.parametrize("diff, want, modules", [
+    # b requires a by path, and c reads the build of its prover b; a's three modules, and b's two that import them
+    (["pkg/a/A/Base.lean"], ALL, 5),
+    (["pkg/a/A/Leaf.lean"], ALL, 4),                            # not `A.Base`, which it imports
+    (["pkg/b/B/Top.lean"], ["pkg/b", "pkg/c"], 2),
+    (["pkg/c/C.lean"], ["pkg/c"], 1),
+    (["pkg/c/lean-audit.json"], ["pkg/c"], 0),                  # a lock alone: audited, and no module's key moves
+    (["pkg/a/A/Gone.lean"], ALL, 0),                            # removed: no longer among the tree's files, nor a module
+    (["pkg/a/lakefile.toml"], ALL, 5),                          # its options: each of a's modules, in either build
+    (["pkg/b/lean-toolchain"], ["pkg/b", "pkg/c"], 4),          # the env of every module b's build holds, a's two among them
+    (["pkg/a/A/Leaf.lean", "pkg/c/C.lean"], ALL, 5),
+    (["tools/verity/lean/check.py"], ALL, 0),                   # the auditor is in every package's key and in no module's
+    (["tools/verity/check/common.py"], ALL, 0),
+    (["tools/verity/lean/merge.py", "tools/verity/lean/README.md", "tools/verity/lean/tests/test_x.py", "docs/note.md"], [], 0),
+    ([], [], 0),
 ])
-def test_a_change_reaches_each_package_whose_audit_can_read_a_changed_path(tree, diff, want):
+def test_a_change_reaches_each_package_whose_audit_can_read_it_and_counts_each_module_whose_key_it_can_move(tree, diff, want, modules):
     assert W.reached(LA, sorted(FILES), diff) == want
+    assert W.moved(LA, tree, want, diff) == modules
 
 
 def test_every_package_whose_key_a_change_moves_is_reached(tree):
@@ -127,7 +146,7 @@ def test_every_package_whose_key_a_change_moves_is_reached(tree):
         moves[f] = {p for p in before if LA.key(p, files, LA.FLAGS) != before[p]}
         (tree / f).write_text(old)
         assert moves[f] <= set(W.reached(LA, files, [f])), f
-    assert moves["pkg/a/A.lean"] >= {"pkg/a", "pkg/b"} and moves["pkg/b/B.lean"] == {"pkg/b", "pkg/c"}
+    assert moves["pkg/a/A/Base.lean"] >= {"pkg/a", "pkg/b"} and moves["pkg/b/B.lean"] == {"pkg/b", "pkg/c"}
     assert moves["tools/verity/lean/check.py"] == set(before) and not moves["docs/note.md"]
 
 
@@ -135,7 +154,7 @@ def test_the_audit_runs_for_the_reached_packages_alone_in_an_audit_slot_and_pack
     cache = Path(LA.COMMON.cache_dir())
     (cache / "lean-audit").mkdir(parents=True)
     (cache / "lean-audit" / "old.json").write_text("{}")                     # stored before the audit: not this audit's
-    _diff(monkeypatch, ["pkg/b/B.lean"])
+    _diff(monkeypatch, ["pkg/b/B/Top.lean"])
     audit = Audit(stores={"lean-audit/new.json": "{}", "lean-audit/unread/new.json": "{}", "lean-replay/m.json": "{}",
                           "circuit-check/t.json": "{}",                      # another process of the node, meanwhile
                           "lean-artifacts/keys/k.json": "{}"},               # never a verdict (`verdicts.SKIP`)
@@ -150,7 +169,10 @@ def test_the_audit_runs_for_the_reached_packages_alone_in_an_audit_slot_and_pack
                     "--package", "pkg/b", "--package", "pkg/c"]
     assert _members(out / W.PACK) == ["check/lean-audit/new.json", "check/lean-audit/unread/new.json", "check/lean-replay/m.json"]
     assert V.refusal(out / W.PACK) is None, "a check imports the pack as it imports a recorded check's"
-    assert "pkg/b, pkg/c" in said[0] and "3 Lean verdict(s)" in said[-1]
+    assert "pkg/b, pkg/c, with 2 module(s) at or above it;" in said[0] and "3 Lean verdict(s)" in said[-1]
+    assert json.loads((out / W.FACTS).read_text()) == {
+        "schema": "lean-warm/v1", "base": BASE, "packages": ["pkg/b", "pkg/c"], "audited": ["pkg/b", "pkg/c"], "modules": 2,
+        "wide": False, "exit": 0, "verdicts": 3}
 
 
 def test_an_audit_whose_passes_are_all_kept_here_waits_for_no_slot(tree, tmp_path, monkeypatch):
@@ -180,12 +202,14 @@ def test_a_change_that_reaches_no_package_runs_nothing(tree, tmp_path, monkeypat
     _diff(monkeypatch, ["docs/note.md", "tools/verity/lean/merge.py"])
     audit, said, out = Audit(), [], tmp_path / "out"
     assert W.audit_merge(tree, BASE, out, run=audit, log=said.append) is None
-    assert audit.calls == [] and not out.exists()
+    assert audit.calls == [] and [f.name for f in out.iterdir()] == [W.FACTS]
     assert said == [f"lean warm: the change from {BASE[:12]} reaches no audited Lean package: nothing to audit"]
+    facts = json.loads((out / W.FACTS).read_text())
+    assert (facts["packages"], facts["modules"], facts["wide"], facts["exit"]) == ([], 0, False, None)
 
 
 def test_a_failed_audit_names_each_failed_package_and_its_first_failure_and_still_packs_what_passed(tree, tmp_path, monkeypatch):
-    _diff(monkeypatch, ["pkg/a/A.lean"])
+    _diff(monkeypatch, ["pkg/a/A/Base.lean"])
     report = {"passed": False, "failed": ["pkg/b", "pkg/c"],
               "packages": [{"package": "pkg/a", "failures": []},
                            {"package": "pkg/b", "failures": ["B.lean:3:0: error:\n  unsolved goals", "B.lean:9:0: error"]},
@@ -230,6 +254,61 @@ def test_the_last_line_says_why_within_what_a_caller_quotes(tree, tmp_path, monk
     assert W.main(["--base", BASE, "--out", str(tmp_path / "o")]) == 0
     assert capsys.readouterr().out.splitlines()[-1] == "lean warm: passed"
     assert seen == [(tree, BASE, tmp_path / "o")] * 2
+
+
+def test_a_wide_change_says_so_in_its_facts(tree, tmp_path, monkeypatch):
+    monkeypatch.setattr(W, "WIDE", 5)
+    for diff, wide in ((["pkg/a/A/Base.lean"], True), (["pkg/a/A/Leaf.lean"], False)):
+        _diff(monkeypatch, diff)
+        said = []
+        W.audit_merge(tree, BASE, tmp_path / "out", run=Audit(), log=said.append)
+        assert json.loads((tmp_path / "out" / W.FACTS).read_text())["wide"] is wide
+        assert ("so it is wide" in said[0]) is wide
+
+
+def test_the_wide_file_holds_a_pr_exactly_when_its_change_is_wide_and_keeps_every_other_line(tmp_path):
+    wide = tmp_path / "live" / "wide"
+    assert W.note_wide(wide, 8510, False) is False and not wide.exists()
+    assert W.note_wide(wide, 8510, True) is True and wide.read_text() == "8510\n"
+    assert W.note_wide(wide, 8510, True) is False, "listed already: the file isn't rewritten"
+    wide.write_text("# by hand\n8212\n\n8510  # until its mark\n85100\n")
+    assert W.note_wide(wide, 8466, True) is True
+    assert wide.read_text() == "# by hand\n8212\n\n8510  # until its mark\n85100\n8466\n"
+    assert W.note_wide(wide, 8510, False) is True, "a head that is no longer wide leaves the list"
+    assert wide.read_text() == "# by hand\n8212\n\n85100\n8466\n"
+    assert W.note_wide(wide, 851, False) is False
+    assert sorted(f.name for f in wide.parent.iterdir()) == [".wide.lock", "wide"], "nothing half-written is left beside it"
+
+
+def test_counting_alone_lists_a_wide_pr_and_audits_nothing(tree, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(W, "ROOT", tree)
+    monkeypatch.setattr(W, "WIDE", 5)
+    monkeypatch.setattr(W, "audit_merge", lambda *a, **kw: pytest.fail("counting builds nothing"))
+    wide = tmp_path / "wide"
+    _diff(monkeypatch, ["pkg/a/A/Base.lean"])
+    assert W.main(["--base", BASE, "--wide-file", str(wide), "--pr", "8411"]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"lean warm: #8411: 5 module(s) at or above its change from {BASE[:12]}, wide (wide from 5); {wide} now lists it"]
+    _diff(monkeypatch, ["pkg/a/A/Leaf.lean"])
+    assert W.main(["--base", BASE, "--wide-file", str(wide), "--pr", "8411"]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"lean warm: #8411: 4 module(s) at or above its change from {BASE[:12]}, not wide (wide from 5); {wide} no longer lists it"]
+    assert wide.read_text() == ""
+    assert W.main(["--base", BASE, "--wide-file", str(wide), "--pr", "8411"]) == 0
+    assert capsys.readouterr().out.endswith(f"{wide} doesn't list it\n")
+    monkeypatch.setattr(W, "changed", lambda t, base: (_ for _ in ()).throw(ValueError("`git diff` exited 128")))
+    wide.write_text("8411\n")
+    assert W.main(["--base", BASE, "--wide-file", str(wide), "--pr", "8411"]) == 1
+    assert capsys.readouterr().out.splitlines() == ["lean warm: `git diff` exited 128"]
+    assert wide.read_text() == "8411\n", "a count that can't be read changes nothing"
+
+
+@pytest.mark.parametrize("argv", [["--base", BASE], ["--base", BASE, "--wide-file", "f"], ["--base", BASE, "--pr", "1"],
+                                  ["--out", "d"]])
+def test_a_call_that_names_neither_job_whole_is_refused(argv, capsys):
+    with pytest.raises(SystemExit) as e:
+        W.main(argv)
+    assert e.value.code == 2
 
 
 def _git(repo: Path, *args: str) -> str:
