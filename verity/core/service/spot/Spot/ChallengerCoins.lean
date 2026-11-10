@@ -12,12 +12,12 @@ consecutive, so the prover picked none of them. `readReason` is `read_reason`: t
 that stream, and they read every coin opened.
 
 `coinsReason` is `coins_reason`: the commitment and the roots come from the code that already trusts them,
-`trustedSessionOf` over the evidence `{key, ledger, main, pins, segment, session}` (the verifier's challenger key, the
+`trustedChallengePhaseOf` over the evidence `{key, ledger, main, pins, segment, session}` (the verifier's challenger key, the
 auditor's ledger, the verifier's copy of main's first-parent history, the host's pins log, the segment and the
 session's files) for the window the verifier holds (its open root R, `windowRoot`, which it reads from the challenger's
 signed open of the registration's window, never from the record or the evidence), so the record names neither, the
 prover picks no window, and the session counts only from a commit the pins log records on main's first-parent line
-(`pinnedSession`): coins a session of another window released after the registration's digest are refused. The session
+(`pinnedChallengePhase`): coins a session of another window released after the registration's digest are refused. The session
 must be a withheld one (`withheldOn`: every ledger open of the window says `withheld: true`), whose challenger released
 no root, salt or path before it closed, as `drawCoins` requires. `Run.run` refuses a sample from the challenger whose evidence is missing or gives a
 reason (`select`, code `coins`), its `after` the registration's digest.
@@ -105,7 +105,7 @@ does. The session must be a withheld one (`withheldOn`), as `drawCoins`'s. -/
 def coinsReason (coins : Json) (window : String) (after read : ByteArray) : Option String :=
   if keys? coins != some #["key", "ledger", "main", "pins", "segment", "session"] then some COINS_FORM else
   let trusted : V (LiveCommitment × Roots) := do
-    trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])
+    trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])
       (← ChallengerKey.ofJson (getD coins "key")) (getD coins "pins") (getD coins "main") (getD coins "session")
   match trusted with
   | .error why => some why

@@ -14,7 +14,7 @@ import all Init.Data.Ord.String
 
 `flock-verify --zk` sets the session up on its keyed coin tree (`Live.coinSpec`, `roundsLog` 9), and `Record.decode`'s
 S2 holds the record's `coin_tree.spec` to it (`CoinTree.checkRecord`, by canonical text). v2's
-`Spot.Challenger.sessionTreeReason` holds the record's `coin_tree` to the tree the release log shows sampled
+`Spot.Challenger.challengePhaseTreeReason` holds the record's `coin_tree` to the tree the release log shows sampled
 under its root (`jeq`, by canonical text), and v2's read gives that tree's `Hello` the spec its line shows. So the
 device's log samples the record's tree with the session's spec, and the device serves no opening past a stream's
 `2^roundsLog` rounds (`LogServed`), so the session's layout has a slot for each round a stream of it opens.
@@ -23,7 +23,7 @@ device's log samples the record's tree with the session's spec, and the device s
   record reads the coins' tree, the session's.
 * **What the checks hold the spec to** (`checkRecord_spec`, `decode_coinTree`, `getD_of_fld`, `Trees.coinTree_held`,
   `spec_equiv`): where `Record.decode` accepts a record at a session on a coin tree, the record's `coin_tree.spec` prints
-  as the tree's spec does; where `sessionTreeReason` accepts it, its `coin_tree` prints as the logged tree's record,
+  as the tree's spec does; where `challengePhaseTreeReason` accepts it, its `coin_tree` prints as the logged tree's record,
   whose `spec` is the tree's line's.
 * **The trees' specs hold their keys in order** (`record_sorted`, `treeStep_spec`, `treeFold_sorted`,
   `trees_sorted`): each a line's value, so values that print alike are equivalent (`CanonLine.canon_inj`).
@@ -129,11 +129,11 @@ theorem getD_of_fld {j c : Json} {k : String} (h : Flock.Record.fld j k = .ok c)
     try rfl
 
 /-- **The record's coin tree is one the release log shows sampled under its root**, and its `coin_tree` prints as that
-tree's record (`jeq`), where `sessionTreeReason` accepts it. -/
+tree's record (`jeq`), where `challengePhaseTreeReason` accepts it. -/
 theorem Trees.coinTree_held {trees : Array LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
-    (h : sessionTreeReason trees tables record = none) :
+    (h : challengePhaseTreeReason trees tables record = none) :
     ∃ t ∈ trees, recordTree record = t.root ∧ jeq (getD record "coin_tree") t.record = true := by
-  unfold sessionTreeReason at h
+  unfold challengePhaseTreeReason at h
   dsimp only [Id.run] at h
   split at h
   case h_2 => cases h
@@ -245,14 +245,14 @@ theorem specValue_of_equiv {x y : Json} {sp : Flock.CoinTree.Spec} (hx : sortedK
 
 /-- **The record's tree is sampled in the device's log with the spec `checkRecord` held its `coin_tree` to**: where
 `coinTreesOf` accepts the release log `lines`, `readLog` reads it as releases of the frames and answers of the device's
-log `Lg`, `sessionTreeReason` accepts `record`, a value holding its keys in order, against its trees, and
+log `Lg`, `challengePhaseTreeReason` accepts `record`, a value holding its keys in order, against its trees, and
 `checkRecord` accepts its `coin_tree` at `sp`, tree `i` of the trees read, the record's tree (`KeyAt`), is sampled in
 `Lg` with `sp`. -/
 theorem helloSpec_of_record {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
     {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {Lg : List Verity.Release}
     (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg) {record : Json}
-    {tables : Array (String × Option ℕ)} (h : sessionTreeReason trees tables record = none)
+    {tables : Array (String × Option ℕ)} (h : challengePhaseTreeReason trees tables record = none)
     (hrs : sortedKeys record = true) {sp : Flock.CoinTree.Spec}
     {nonce key : String} (hC : Flock.CoinTree.checkRecord sp nonce (getD record "coin_tree") = .ok key) {i si : ℕ}
     {name : String} (hk : KeyAt (heldTrees trees) i si (recordTree record) name) : (helloSpecs Lg)[i]? = some sp := by
@@ -289,7 +289,7 @@ theorem helloSpec_of_decode {spec : Flock.SessionSpec} {text : String} {sess : F
     {records : List Json} {ξ : ByteArray} {lines : List String} {log : List Verity.Release}
     {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees) (hR : readLog label after records ξ lines = some log)
     {Lg : List Verity.Release} (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg)
-    {tables : Array (String × Option ℕ)} (h : sessionTreeReason trees tables record = none) {i si : ℕ}
+    {tables : Array (String × Option ℕ)} (h : challengePhaseTreeReason trees tables record = none) {i si : ℕ}
     {name : String} (hk : KeyAt (heldTrees trees) i si (recordTree record) name) : (helloSpecs Lg)[i]? = some sp := by
   obtain ⟨j, c, nonce, key, hp, hcj, hC⟩ := decode_coinTree hd hc
   have hjr : j = record := Except.ok.inj (hp.symm.trans hJ)
@@ -307,7 +307,7 @@ theorem SetsUp.helloSpec_session {V : Vocab d α} {θ : ByteArray} {F : Array By
     {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {Lg : List Verity.Release}
     (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg)
-    {tables : Array (String × Option ℕ)} (h : sessionTreeReason trees tables record = none) {i si : ℕ}
+    {tables : Array (String × Option ℕ)} (h : challengePhaseTreeReason trees tables record = none) {i si : ℕ}
     {name : String}
     (hk : KeyAt (heldTrees trees) i si (recordTree record) name) : (helloSpecs Lg)[i]? = some A.coinSpec :=
   helloSpec_of_decode hd (hA.spec_coinTree hs) hJ hT hR hl h hk
@@ -349,7 +349,7 @@ theorem SetsUp.covers_openings {V : Vocab d α} {θ : ByteArray} {F : Array Byte
 /-- **The session's layout has a slot for each round the device's log opens of a rep stream of the record's tree**
 (`stream_logs`'s `hcovL`), wherever v2 sets `A` up, `Record.decode` accepts the record's text at the session `--zk`
 sets up for it, v2's read of the release log is the device's log `Lg`, which serves each opening, and
-`sessionTreeReason` accepts the record: tree `i`, the record's tree (`KeyAt`), is sampled with the session's coin tree
+`challengePhaseTreeReason` accepts the record: tree `i`, the record's tree (`KeyAt`), is sampled with the session's coin tree
 (`SetsUp.helloSpec_session`), so `Lg` opens each of its streams at most `2^roundsLog` times. -/
 theorem SetsUp.covers_logged {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (hA : SetsUp V θ F A) {text : String} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
@@ -359,7 +359,7 @@ theorem SetsUp.covers_logged {V : Vocab d α} {θ : ByteArray} {F : Array ByteAr
     {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {Lg : List Verity.Release}
     (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg) (hS : LogServed Lg)
-    {tables : Array (String × Option ℕ)} (h : sessionTreeReason trees tables record = none) {i si : ℕ}
+    {tables : Array (String × Option ℕ)} (h : challengePhaseTreeReason trees tables record = none) {i si : ℕ}
     {name : String} (hk : KeyAt (heldTrees trees) i si (recordTree record) name) {S : Finset (Fin A.n)} {R : A.Reg}
     (t : Fin (A.J S R)) (r : Fin 2) (s : ℕ) : ∀ k < openedOf Lg i s, ∃ j, A.layout j = .rep t.val r k :=
   hA.covers_openings hS (hA.helloSpec_session hs hd hJ hT hR hl h hk) t r s

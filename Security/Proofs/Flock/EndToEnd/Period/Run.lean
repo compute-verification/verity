@@ -22,8 +22,8 @@ sampling block, then any game at the strategy that plays it there.
 
 `PeriodGood G good i T s` says every sampling block's strategy, on every run of the period, satisfies `good`: it is how
 a per-session hypothesis about the prover (such as `cr/sha-512` for its knowledge finders) is taken at exactly the
-strategies the period's prover plays. `PeriodPlays G i T s j τ` says `τ` is one of them, the strategy sampling block `j`
-is played with on some run, so a statement takes such a hypothesis flat, `∀ j τ, PeriodPlays G i T s j τ → good j τ`.
+strategies the period's prover plays. `MonitoringPeriodPlays G i T s j τ` says `τ` is one of them, the strategy sampling block `j`
+is played with on some run, so a statement takes such a hypothesis flat, `∀ j τ, MonitoringPeriodPlays G i T s j τ → good j τ`.
 -/
 
 @[expose] public section
@@ -110,10 +110,10 @@ def AtSomeEnd (f : α → Game δ) (Q : (a : α) → Strategy (f a) → Prop) :
 /-- **The strategies a period plays sampling block `j` with**: `τ` is the strategy sampling block `j` is played with on
 some run of the period's sampling blocks `i, …, i + T − 1` at `s`. A hypothesis at every such `τ` is `PeriodGood`'s,
 stated flat. -/
-def PeriodPlays (G : (i : ℕ) → Game (β i)) :
+def MonitoringPeriodPlays (G : (i : ℕ) → Game (β i)) :
     (i T : ℕ) → Strategy (periodG G i T) → (j : ℕ) → Strategy (G j) → Prop
   | _, 0, _, _, _ => False
   | i, T + 1, s, j, τ => (i = j ∧ HEq (Strategy.ofBind _ (G i) s) τ) ∨
-      AtSomeEnd (fun _ => periodG G (i + 1) T) (fun _ s' => PeriodPlays G (i + 1) T s' j τ) (G i) s
+      AtSomeEnd (fun _ => periodG G (i + 1) T) (fun _ s' => MonitoringPeriodPlays G (i + 1) T s' j τ) (G i) s
 
 end FlockSoundness.Game

@@ -4,7 +4,7 @@ part (`verity_flock.rec_live.CoinServer`) on the challenger's coin tree, held to
 holds it (`tests/test_challenger_inner_trees.py` holds that to this, the verifier).
 
 `rec_live`'s live-coin part opens each round of its session's tree once given what the round answers, which are other bytes
-than the ones `flock-circuit serve` opens a round after (`sessionTreeReason`): the link points, the tree's `session`
+than the ones `flock-circuit serve` opens a round after (`challengePhaseTreeReason`): the link points, the tree's `session`
 round 0, after `linkAfterRoots` of its record's `link.roots` (`rec_live.link_after`: the SHA-512 of their canonical
 JSON), and each round its record's `rounds` list (`{stream, k, coins, ...}`), its stream's round `k`, after `roundAfter`
 of that entry (`rec_live.round_after`: the SHA-512 of its canonical JSON without its coins).

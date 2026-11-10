@@ -227,15 +227,15 @@ theorem atEnds_of_atSomeEnd {ι : Type} {f : α → Game δ} {P : ι → (a : α
   | @Game.coin _ _ _ _ kk, s, h => fun c => atEnds_of_atSomeEnd hQ (kk c) (s c) fun x hx => h x ⟨c, hx⟩
 
 /-- **`PeriodGood` from its flat form**: `good` at every strategy the period plays a sampling block with
-(`PeriodPlays`). -/
+(`MonitoringPeriodPlays`). -/
 theorem periodGood_of_plays (G : (i : ℕ) → Game (β i)) (good : (i : ℕ) → Strategy (G i) → Prop) :
-    ∀ (T i : ℕ) (s : Strategy (periodG G i T)), (∀ j τ, PeriodPlays G i T s j τ → good j τ) →
+    ∀ (T i : ℕ) (s : Strategy (periodG G i T)), (∀ j τ, MonitoringPeriodPlays G i T s j τ → good j τ) →
       PeriodGood G good i T s
   | 0, _, _, _ => trivial
   | T + 1, i, s, h =>
       ⟨h i _ (Or.inl ⟨rfl, HEq.rfl⟩),
         atEnds_of_atSomeEnd (ι := (j : ℕ) × Strategy (G j))
-          (P := fun x _ s' => PeriodPlays G (i + 1) T s' x.1 x.2) (good := fun x => good x.1 x.2)
+          (P := fun x _ s' => MonitoringPeriodPlays G (i + 1) T s' x.1 x.2) (good := fun x => good x.1 x.2)
           (fun _ s' h' => periodGood_of_plays G good T (i + 1) s' fun j τ hp => h' ⟨j, τ⟩ hp) (G i) s
           fun x hx => h x.1 x.2 (Or.inr hx)⟩
 

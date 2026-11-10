@@ -457,12 +457,12 @@ theorem mapM_mem {β γ : Type} {f : β → Option γ} :
       exact ⟨x', List.mem_cons.2 (.inr hx'), e⟩
 
 /-- **The records v2's check read pass the trees it held them to**: each record `recordsOn` reads from the blobs sent
-is one `sessionTreeReason` accepts, at some tables, against trees `treesHeld` accepts the evidence's sessions at. -/
+is one `challengePhaseTreeReason` accepts, at some tables, against trees `treesHeld` accepts the evidence's sessions at. -/
 theorem records_of {s : Sent} {p : Spot.OneStageZk.Own} {e : Spot.OneStageZk.Evidence}
     {ts : Array LoggedTree} {recs : List Json}
     (h : Spot.OneStageZk.treesHeld p ts e (_root_.Core.Blobs.ofArray s.blobs) = .ok ())
     (hr : Verity.Sampled.recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs) :
-    ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none := by
+    ∀ rec ∈ recs, ∃ tabs, challengePhaseTreeReason ts tabs rec = none := by
   intro rec hrec
   obtain ⟨r, hr', hf⟩ := mapM_mem hr rec hrec
   unfold Verity.Sampled.recordOn at hf
@@ -475,7 +475,7 @@ run accepted as a `same` composition whose sampled component accepts its own cas
 (`Verity.Sampled.coinsRead`), that log is what `readLog` reads from the lines of a run of the device under the
 challenger's key, a run the device's own ledger opens withheld on the sample's window, whose release log reads as its
 coin commitment's (`releasedRootsOf`), with that run's released coins as the sample's, on the records the evidence
-names, each of which passes the coin trees the run's log holds (`coinTreesOf`, `sessionTreeReason`); or one of the
+names, each of which passes the coin trees the run's log holds (`coinTreesOf`, `challengePhaseTreeReason`); or one of the
 run's v2 records under the parameters' key carries a break. -/
 theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev : History) {s : Sent}
     (hs : SameAccepts k s) (ha : ComponentAccepts k .sampled s) {l : List Release}
@@ -486,7 +486,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
         (∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) ∧
         Verity.Sampled.recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs ∧
         Verity.Sampled.readLog d.label d.after recs (r.released d.label d.after) r.log = some l ∧
-        ∃ ts, coinTreesOf r.log = .ok ts ∧ ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none := by
+        ∃ ts, coinTreesOf r.log = .ok ts ∧ ∀ rec ∈ recs, ∃ tabs, challengePhaseTreeReason ts tabs rec = none := by
   unfold Verity.Sampled.coinsRead at hl
   cases hcase : caseOf s with
   | error _ => simp [hcase, Except.toOption] at hl

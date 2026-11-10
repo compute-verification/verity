@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Trees
 /-!
 # A `--zk` session's record counts the coins its tree's log shows opened
 
-`Spot.Challenger.sessionTreeReason` accepts a session's record (`none`), at any tables, only where each round
+`Spot.Challenger.challengePhaseTreeReason` accepts a session's record (`none`), at any tables, only where each round
 the record gives coins of is one the release log shows opened of its tree with as many coins as the record counts there
 (`session_counted`): its link's points, 16 bytes a coin, as the session stream's round 0 (`o.n == points.size / 16`),
 and each stream's round its `n` (`o.n == n`), every stream of the record counted (`streams_counted`,
@@ -44,18 +44,18 @@ def StreamCounted (t : LoggedTree) (s : Json) : Prop :=
   ∀ name rounds, getD s "stream" = .str name → getD s "rounds" = .arr rounds →
     ∀ x ∈ rounds.zipIdx, RoundCounted t name x
 
-/-- **A record `sessionTreeReason` accepts, at any tables, is counted of a tree of the log**: its coin tree's root is
+/-- **A record `challengePhaseTreeReason` accepts, at any tables, is counted of a tree of the log**: its coin tree's root is
 that of a tree `t` of the log; the coins its link's points give (`Verity.Sampled.recordRound`, the session stream's
 round 0) are a round the log shows opened of `t` with a count of one per 16 bytes, with those coins' SHA-512; and each
 stream of its `streams` is counted of `t` (`StreamCounted`). -/
 theorem session_counted {trees : Array LoggedTree} {tables : Array (String × Option Nat)} {record : Json}
-    (h : sessionTreeReason trees tables record = none) :
+    (h : challengePhaseTreeReason trees tables record = none) :
     ∃ t ∈ trees, Verity.Sampled.recordTree record = t.root ∧
       (∀ (stream : String) (k : Nat) (cs : ByteArray), (stream == TREE_SESSION && k == 0) = true →
         Verity.Sampled.recordRound record stream k = some cs →
         ∃ o, t.opening stream k = some o ∧ o.n = cs.size / 16 ∧ o.coins = sha512Hex cs) ∧
       ∃ streams, getD record "streams" = .arr streams ∧ ∀ s ∈ streams, StreamCounted t s := by
-  unfold sessionTreeReason at h
+  unfold challengePhaseTreeReason at h
   dsimp only [Id.run] at h
   split at h
   case h_2 => cases h
@@ -131,22 +131,22 @@ theorem session_counted {trees : Array LoggedTree} {tables : Array (String × Op
   simp only [Bool.and_eq_true, beq_iff_eq] at hlinkOk
   exact ⟨o, hlo, hlinkOk.1.1, hlinkOk.2⟩
 
-/-- **Each stream of a record `sessionTreeReason` accepts, at any tables, is counted** of a tree of the log whose root
+/-- **Each stream of a record `challengePhaseTreeReason` accepts, at any tables, is counted** of a tree of the log whose root
 is the record's coin tree's (`session_counted`): each round of each stream of the record's `streams` gives coins and a
 count, and is a round the log shows opened of that tree with that count, with those coins' SHA-512 (`StreamCounted`). -/
 theorem streams_counted {trees : Array LoggedTree} {tables : Array (String × Option Nat)} {record : Json}
-    (h : sessionTreeReason trees tables record = none) :
+    (h : challengePhaseTreeReason trees tables record = none) :
     ∃ t ∈ trees, Verity.Sampled.recordTree record = t.root ∧
       ∃ streams, getD record "streams" = .arr streams ∧ ∀ s ∈ streams, StreamCounted t s := by
   obtain ⟨t, ht, hroot, -, hs⟩ := session_counted h
   exact ⟨t, ht, hroot, hs⟩
 
-/-- **A record `sessionTreeReason` accepts, at any tables, counts the coins its tree's log shows opened**: its coin
+/-- **A record `challengePhaseTreeReason` accepts, at any tables, counts the coins its tree's log shows opened**: its coin
 tree's root is that of a tree of the log, and each round the record gives coins (`Verity.Sampled.recordRound`) and a
 count (`recordCount`) of is one the log shows opened of that tree with that count, with those coins' SHA-512
 (`session_counted`). -/
 theorem round_counted {trees : Array LoggedTree} {tables : Array (String × Option Nat)} {record : Json}
-    {stream : String} {k n : Nat} {cs : ByteArray} (h : sessionTreeReason trees tables record = none)
+    {stream : String} {k n : Nat} {cs : ByteArray} (h : challengePhaseTreeReason trees tables record = none)
     (hr : Verity.Sampled.recordRound record stream k = some cs) (hn : recordCount record stream k = some n) :
     ∃ t ∈ trees, Verity.Sampled.recordTree record = t.root ∧
       ∃ o, t.opening stream k = some o ∧ o.n = n ∧ o.coins = sha512Hex cs := by
