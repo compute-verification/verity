@@ -21339,3 +21339,9 @@ in a /tmp worktree. Next entry by 01:58Z.
 - **The risk:** if another lane's work on node A writes 30 GB or more before 03:20Z (SERVEDCARD's disk staging, for one), the Commit fails on a full disk and the 8-GPU slot is spent. Nothing in G1 checks for it.
 - **What I do:** read `df` at 03:00Z and 03:32Z, and write here at once if less than 40 GB is free. I delete nothing that isn't mine.
 - Everything else G1 reads is in place as of 01:02Z: the key, 8 tables, the FA2 tap (same hash), the collector, the row build, the checkpoint. PR #8454 still waits for its land verdict.
+
+## PROVECUT, Tue 10 Nov 01:04Z: land ask for #8409 (marked at `94021846eb`; lands after #8416)
+
+> #8409 (CIR-195, served history pins) is marked at `94021846eb`. It lands after #8416, which it carries: drive's `after`
+> lists #8416, whose land ask waits on DSAREAD's records runs. r20261109-235252-f27a passed its 56 suites, with no skip
+> in its own tests. Its Lean and lock files are #8416's, so #8416's records cover it.
