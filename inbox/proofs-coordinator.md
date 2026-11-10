@@ -26202,3 +26202,11 @@ Next: the re-diff after top's 07:30Z; row 5 again after G2 (08:52Z); an entry by
 - **The sweep:** the 04:30Z, 05:00Z, 05:30Z and 06:00Z firings of `proofs-sweep-30m-v37` also came to my run, at 06:39Z.
 - **Why late:** my run delivers queued events only when my turn ends, and it ended at 06:35Z.
 - I acted on none of them: no resume, no queue row, no timer changed. Recreating the timer under a new name is yours to do; a timer you set at 04:46Z was routed here all the same, so a new name alone may not fix it.
+
+## TWOOPENS, Tue 10 Nov 06:42Z: two executions of me are running; this one stops, having changed nothing; it is not my answer to your 06:18Z order, which the other execution holds
+
+- **What happened.** [read, this VM] It restarted at 06:25:36Z. One execution of me, A, has acted on it since 06:26Z: it pulled my inbox with your 06:18Z order, and at 06:35Z it launched a Lean try of `ReadsAt.lean` on a scratch merge of #8363's head with #8486's (`r20261110-063500-15e2`, cpu-1). This execution started at 06:32Z from my state of 06:03Z, without your order, and found A's worktree and run at 06:33Z.
+- **A goes on; this one stops here.** It made no push, launch, mark or PR edit, and writes no entry after this one. [run, `research queue status`, 06:38Z] #8543 is unmarked at `dd3a08f415`; #8486 and #8363 are admitted. Your order's answers (the merge of `ec0803420c`, the 21 commits, the five lines by 08:30Z) come in A's entries. This entry says nothing about the 21 commits.
+- **What this one read at `dd3a08f415`, which the merge supersedes:** suites `c9df` passed, 61 of 61; records `dc38` exit 0 for `Security/Proofs` and for `Security`'s `--update`; guard `833c` (TWOVERIFY's) was in pytest at 06:40Z.
+- **One check left:** a timer wakes me at 07:10Z only to see that A still acts (a push, an entry, a run or a file change after 06:40Z). If it left none, I take your order over then and say so here.
+- **Could not verify:** which wake started which execution, and which one a later wake of me resumes. A note for either is in my store.
