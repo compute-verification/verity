@@ -1,7 +1,7 @@
 """A live run's parties, each a process of its own. The server and the certifier share a host and its monotonic
 clock; the observer is on that host too, over loopback, or on another, where it reads its own clock alone:
 
-    python parties.py server|certifier|observer|waker CONFIG.json [KEY=VALUE ...]
+    python parties.py server|certifier|observer|waker|awake CONFIG.json [KEY=VALUE ...]
 
 - **The server** is the adversary. It samples a seed of its own, and interval t's bit and lead are SHA-512's of the
   seed and t (`draw`). It acts only through when and how it writes its own bytes: `Plan.writes` is every time it
@@ -14,9 +14,11 @@ clock; the observer is on that host too, over loopback, or on another, where it 
   interval's `chunk`, waiting in the kernel for it (`plain`) or polling without waiting (`spin`), and keeps each
   chunk's last byte, which names its interval. It never has the seed: `run.py` joins its timestamps with the
   server's bits once both have ended.
-- **The waker** (`waker_ms`) is a candidate fix beside the certifier, not a party to the channel: a reader asleep on
-  a loopback connection and a writer that wakes it every `waker_ms`, so the host's network path is as recently used
-  at every release whatever the server does.
+- **The waker** (`waker_ms`) and **the awake cores** (`awake`) are candidate fixes beside the certifier, not parties
+  to the channel. The waker is a reader asleep on a loopback connection and a writer that wakes it every `waker_ms`,
+  so the host's network path is as recently used at every release whatever the server does. `awake` is a process
+  spinning at idle priority on each of the run's CPUs, so none of them halts: what a guest's cores do under
+  `idle=poll`, without root.
 
 **The attacks** (`Plan.attack`), over interval t's release time R_t = t·τ + `aim` after the origin, `aim` the pacer's
 offset, or with a launch gate (`run.py --launch`) the gate's opening:
@@ -29,7 +31,8 @@ offset, or with a launch gate (`run.py --launch`) the gate's opening:
 With `ignore` the server draws its bits and writes as for bit 0 whatever they are: the control.
 
 The server takes the admission bucket s of a network certifier's connection from when its request arrives, the
-boundary after the one it was admitted at (`admit_lag`), and writes bucket s + D's bytes at once. Interval t's bytes
+boundary after the one it was admitted at (`admit_lag`), and writes bucket s + D's bytes at once; a request that
+comes before the origin it takes as the first interval's. Interval t's bytes
 are all the byte t mod 256, so `run.py` checks which interval each of the observer's chunks is, and on one host its
 first arrival's time as well. Nothing here but `certifier` imports `verity`.
 """
@@ -60,6 +63,9 @@ SPIN_S = 0.003
 HEADER_BYTES = 9
 #: what the observer sends, a request of no meaning
 HELLO = b"go\n"
+#: the socket priority of a certifier's client connections under a launch gate (`run.py --launch`): one no type of
+#: service maps to, so the gate's class holds the certifier's packets and no other of the host's
+LAUNCH_PRIORITY = 5
 
 
 @dataclass(frozen=True)
@@ -194,7 +200,7 @@ def server(cfg: dict) -> dict:
             try:
                 if not conn.recv(1 << 16):
                     continue
-                at = math.floor((time.monotonic() - origin) / tau)
+                at = max(0, math.floor((time.monotonic() - origin) / tau))
                 first = first_interval(cfg, at)
                 if cfg["certifier"] == "warden":
                     conn.sendall(bytes([first & 0xFF]) * unit)
@@ -226,8 +232,8 @@ def observer(cfg: dict) -> dict:
     """The client side: one connection after another until it has seen `intervals` intervals or its stop, each a
     segment: the monotonic time in ns at which the first byte of each `chunk` arrived, and each chunk's last byte
     (`labels`). On the certifier's host it starts at the run's origin and ends at its stop. On another host (`connect`,
-    and no `origin`) it has its own clock alone: it tries the certifier for `wait_s`, and ends once a connection's
-    intervals have had their time."""
+    and no `origin`) it has its own clock alone: it tries the certifier for `wait_s`, past any connection that gave it
+    nothing, and ends once a connection's intervals have had their time."""
     cpus = _pin(cfg, 3)
     spin, chunk, tau = cfg["observer"] == "spin", int(cfg["chunk"]), cfg["interval_ms"] / 1000
     address, remote = (cfg.get("connect", LOOPBACK), int(cfg["port"])), cfg.get("origin") is None
@@ -272,6 +278,9 @@ def observer(cfg: dict) -> dict:
                 total += len(data)
                 blobs.append(data)
         if len(arrivals) < 2:
+            if remote and not segments and time.monotonic() < retry:
+                time.sleep(1.0)
+                continue
             break
         segments.append(arrivals)
         labels.append(last_bytes(b"".join(blobs), chunk))
@@ -302,8 +311,40 @@ def waker(cfg: dict) -> dict:
     return {"waker_ms": cfg["waker_ms"], "sent": sent, "cpus": cpus}
 
 
+def awake(cfg: dict) -> dict:
+    """A process on each of the run's CPUs, spinning at idle priority until the run's stop."""
+    cpus, children = sorted(os.sched_getaffinity(0)), []
+    for cpu in cpus:
+        if (pid := os.fork()) == 0:
+            os.sched_setaffinity(0, {cpu})
+            os.sched_setscheduler(0, os.SCHED_IDLE, os.sched_param(0))
+            while time.monotonic() < cfg["stop"]:
+                pass
+            os._exit(0)
+        children.append(pid)
+    _announce({"awake": len(cpus)})
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    try:
+        for pid in children:
+            os.waitpid(pid, 0)
+    except SystemExit:
+        for pid in children:
+            os.kill(pid, signal.SIGKILL)
+    return {"awake": cpus}
+
+
+def _listener(cfg: dict) -> socket.socket:
+    """Where a certifier takes the observer: loopback, or `listen` and `port`. Under a launch gate every connection
+    accepted from it sends at `LAUNCH_PRIORITY`."""
+    sock = socket.create_server((cfg.get("listen", LOOPBACK), int(cfg.get("port", 0))))
+    if cfg.get("launch"):
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY, LAUNCH_PRIORITY)
+    return sock
+
+
 async def relay(cfg: dict) -> dict:
-    """The stand-in that paces nothing: each side's bytes go on as they come."""
+    """The stand-in that paces nothing: each side's bytes go on as they come. With `listen` it takes one connection,
+    the case's observer."""
     async def pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             while data := await reader.read(1 << 16):
@@ -312,11 +353,13 @@ async def relay(cfg: dict) -> dict:
             writer.close()
 
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        if cfg.get("listen"):
+            listener.close()
         up_reader, up_writer = await asyncio.open_connection(LOOPBACK, int(cfg["upstream"]))
         await asyncio.gather(pipe(reader, up_writer), pipe(up_reader, writer), return_exceptions=True)
 
     cpus = _pin(cfg, 0)
-    listener = await asyncio.start_server(handle, cfg.get("listen", LOOPBACK), cfg.get("port", 0))
+    listener = await asyncio.start_server(handle, sock=_listener(cfg))
     _announce({"port": listener.sockets[0].getsockname()[1], "hello": HELLO.hex(), "chunk": cfg["unit"]})
     stopped = asyncio.Event()
     asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, stopped.set)
@@ -332,7 +375,8 @@ async def relay(cfg: dict) -> dict:
 async def warden(cfg: dict) -> dict:
     """The network certifier of the tree on the import path, relaying any bytes, one lane for the observer and one
     spare; its records are dropped as they close. It runs for the intervals of one connection and, before them, the
-    `wait_s` an observer on another host may take to come. With `gate_ms` [before, after] it reads no server from
+    `wait_s` an observer on another host may take to come (`listen`), the one connection it then takes. With
+    `gate_ms` [before, after] it reads no server from
     `before` ms ahead of each release to `after` ms past it: the server's bytes for the next interval wait in the
     kernel. Returns each tick's lateness, and from a paced one each bucket's release start and write end after its
     time."""
@@ -364,7 +408,13 @@ async def warden(cfg: dict) -> dict:
 
     w = Warden(params, connect, origin=cfg["origin"], windows=-(-total // cfg["window"]), publish=drop, withhold=drop,
                paced=cfg["paced_ms"] / 1000 if cfg["paced_ms"] else None)
-    listener = await asyncio.start_server(w.handle, cfg.get("listen", LOOPBACK), cfg.get("port", 0))
+
+    async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        if cfg.get("listen"):
+            listener.close()
+        await w.handle(reader, writer)
+
+    listener = await asyncio.start_server(handle, sock=_listener(cfg))
     _announce({"port": listener.sockets[0].getsockname()[1], "hello": cells(HELLO, params.cell_bytes).hex(),
                "chunk": params.cell_bytes * params.slots})
     if cfg["origin"] - time.monotonic() < 0.5:
@@ -413,10 +463,12 @@ def main(argv: list[str]) -> int:
         doc = observer(cfg)
     elif role == "waker":
         doc = waker(cfg)
+    elif role == "awake":
+        doc = awake(cfg)
     elif role == "certifier":
         doc = asyncio.run(relay(cfg) if cfg["certifier"] == "relay" else warden(cfg))
     else:
-        raise SystemExit(f"a party is server, certifier, observer or waker, not {role!r}")
+        raise SystemExit(f"a party is server, certifier, observer, waker or awake, not {role!r}")
     Path(cfg["out"], f"{role}.json").write_text(json.dumps(doc))
     return 0
 

@@ -13,7 +13,9 @@ the test gives, the guard on a clock the test moves, and the network certifier o
 - The network certifier itself, on a clock the test moves: under `write` and `burst` every interval's cell leaves in
   its own interval whatever the bits (the last, with the server's end, as the `END` cell) and ends in the byte that
   names it, and under `delay` the first late interval fails the connection closed.
-- `--launch`'s gate is one interval's cycle from the release time, open and then shut.
+- `--launch`'s schedule is one interval's cycle from the release time, open and then shut for the certifier's
+  priority alone, and a case whose bytes went around it is named; the guard's cases and a control are rows of
+  their own and no part of the number.
 """
 
 from __future__ import annotations
@@ -292,7 +294,8 @@ def test_what_makes_a_case_no_measurement_is_named(tmp_path):
 
 def test_the_number_is_the_most_any_attack_showed_and_the_ceiling_every_attacks_bound(tmp_path):
     """Two runs each of an attack that shifts an interval by 1.349 standard deviations of its path and of one that
-    shifts nothing. Over seeds 0–199 the first's pooled `bits` is at least 0.101 and the second's at most 0.0114."""
+    shifts nothing, with the first's control and the guard's two cases beside them. Over seeds 0–199 the first's
+    pooled `bits` is at least 0.101 and the second's at most 0.0114."""
     rng = random.Random(6)
     cases = []
     for attack, shift in (("write", 1.349e-4), ("burst", 0.0)):
@@ -311,28 +314,87 @@ def test_the_number_is_the_most_any_attack_showed_and_the_ceiling_every_attacks_
     assert doc["ceiling"] == max(write["upper"], burst["upper"]) and doc["problems"] == []
     assert doc["best"] == {"attack": "write", "observer": "plain"}
     assert bench.summarize([])["value"] is None and bench.summarize([])["ceiling"] is None
+    assert bench.verdict(cases) is None
+    # the guard's cases and a control are rows of their own, after the attacks, and no part of the number
+    relay = CFG | {"certifier": "relay", "attack": "delay", "ignore": False}
+    control = CFG | {"certifier": "warden", "attack": "write", "ignore": True, "paced_ms": 50.0}
+    more = [bench.score(_case(tmp_path / "planted", relay, lambda t, writes: writes[-1][0] + _path(rng))),
+            bench.score(_case(tmp_path / "ignored", relay | {"ignore": True},
+                              lambda t, writes: writes[-1][0] + _path(rng))),
+            bench.score(_case(tmp_path / "control", control, lambda t, writes: plan.release(t) + _path(rng)))]
+    assert [bench.role(c) for c in more] == ["planted", "ignored", "control"]
+    whole = bench.result(more + cases)
+    assert [r["role"] for r in whole["rows"]] == ["attack", "attack", "planted", "ignored", "control"]
+    assert {k: whole[k] for k in ("value", "ceiling", "best", "n")} == {k: doc[k] for k in ("value", "ceiling", "best", "n")}
+    assert whole["guard"] == {"ok": True, "planted": 1.0, "ignored": more[1]["client"]["bits"],
+                              "bounds": {"planted_min": bench.PLANTED_MIN, "ignored_max": bench.IGNORED_MAX}}
+    assert whole["target"]["seconds_a_bit"] == [240.0, 600.0] and whole["target"]["met"] == [False, False]
+    # a guard without its control, or whose planted channel doesn't show, is not ok
+    assert not bench.verdict(more[:1])["ok"] and not bench.verdict(more[1:])["ok"]
+    assert not bench.verdict([more[1], more[1] | {"ignore": False}])["ok"]
+    table = bench._table([whole]).splitlines()
+    assert len(table) == 2 + 5 and table[2].split(" | ")[10:13] == ["attack", "write", "plain"]
 
 
-def test_the_launch_gate_is_one_intervals_cycle_from_the_release_time():
+def test_an_observer_on_another_host_leaves_its_file_by_the_cases_name(tmp_path):
+    case, seen = tmp_path / "out" / "write-spin", tmp_path / "seen"
+    assert bench._observed(case, None) is None
+    (seen / "write-spin").mkdir(parents=True)
+    assert bench._observed(case, seen) == seen / "write-spin" / "observer.json"
+    (seen / "one.json").write_text("{}")
+    assert bench._observed(case, seen / "one.json") == seen / "one.json"
+
+
+def test_the_launch_gate_is_one_intervals_cycle_from_the_release_time(tmp_path):
+    """The schedule passes the certifier's priority for the gate's opening alone and every other always, each on a
+    queue of its own; `txtime` adds the queue that holds the stamped packets; and a case whose gated queue carried
+    nothing, or dropped, is named."""
     launch = bench._launch_arg("eth1,20,5")
-    assert launch == {"dev": "eth1", "after_ms": 20.0, "open_ms": 5.0, "offload": False}
-    add, remove = bench.launch_commands(launch, 1000.07, 100)
-    assert add == ["tc", "qdisc", "replace", "dev", "eth1", "parent", "root", "handle", "100", "taprio", "num_tc", "1",
-                   "map", *["0"] * 16, "queues", "1@0", "base-time", "1000070000000",
-                   "sched-entry", "S", "01", "5000000", "sched-entry", "S", "00", "95000000",
-                   "clockid", "CLOCK_MONOTONIC"]
+    assert launch == {"dev": "eth1", "after_ms": 20.0, "open_ms": 5.0, "mode": "gate"}
+    setup, remove = bench.launch_commands(launch, 1000.07, 100)
+    assert setup == [["tc", "qdisc", "replace", "dev", "eth1", "parent", "root", "handle", "100", "taprio",
+                      "num_tc", "2", "map", "0", "0", "0", "0", "0", "1", *["0"] * 10, "queues", "1@0", "1@1",
+                      "base-time", "1000070000000", "sched-entry", "S", "03", "5000000",
+                      "sched-entry", "S", "01", "95000000", "clockid", "CLOCK_MONOTONIC"]]
+    assert setup[0][setup[0].index("map") + 1 + parties.LAUNCH_PRIORITY] == "1"
     assert remove == ["tc", "qdisc", "del", "dev", "eth1", "root"]
-    nic = bench.launch_commands(bench._launch_arg("eth1,20,5,offload"), 1000.07, 100)[0]
+    (nic,), _ = bench.launch_commands(bench._launch_arg("eth1,20,5,gate-nic"), 1000.07, 100)
     assert nic[-2:] == ["flags", "0x2"] and "clockid" not in nic
+    for mode, offload in (("txtime", []), ("txtime-nic", ["offload"])):
+        (stamps, held), _ = bench.launch_commands(bench._launch_arg(f"eth1,20,5,{mode}"), 1000.07, 100)
+        assert stamps[-6:] == ["flags", "0x1", "txtime-delay", "500000", "clockid", "CLOCK_TAI"]
+        assert held == ["tc", "qdisc", "replace", "dev", "eth1", "parent", "100:2", "etf", "clockid", "CLOCK_TAI",
+                        "delta", "200000", *offload, "skip_sock_check"]
     with pytest.raises(ValueError, match="open for part of an interval"):
         bench.launch_commands(launch | {"open_ms": 100.0}, 0.0, 100)
-    # the server aims at the gate's opening, the pacer keeps its own offset
+    with pytest.raises(bench.argparse.ArgumentTypeError):
+        bench._launch_arg("eth1,20,5,offload")
+    # the server aims at when the gate lets the bytes go, the pacer keeps its own offset
     args = bench.argparse.Namespace(interval_ms=100, paced_ms=50.0, launch=launch, intervals=10, lead_ms=2.0, burst=32,
-                                    start_s=6.0, pin=False, gate_ms=None, waker_ms=None)
+                                    start_s=6.0, pin=False, gate_ms=None, waker_ms=None, awake=False)
     cfg = bench.config(args, attack="write", observer="spin")
     assert (cfg["paced_ms"], cfg["aim_ms"]) == (50.0, 70.0) and parties.plan_of(cfg).release(3) == pytest.approx(0.37)
+    args.launch = launch | {"mode": "txtime"}
+    assert bench.config(args, attack="write", observer="spin")["aim_ms"] == pytest.approx(69.8)
     relay = bench.config(args, attack="delay", observer="plain", certifier="relay")
     assert (relay["paced_ms"], relay["aim_ms"], relay["launch"]) == (0.0, 0.0, None)
+    # the device's queues, as `tc -s -j qdisc show` gives them once the case has run
+    gated = CFG | {"certifier": "warden", "attack": "write", "ignore": False, "paced_ms": 50.0, "aim_ms": 70.0,
+                   "launch": launch}
+    plan = parties.plan_of(gated)
+    for name, queues, problems in (
+            ("through", [{"kind": "taprio", "handle": "100:", "packets": 900}, {"parent": "100:1", "packets": 9},
+                         {"parent": "100:2", "packets": 891, "drops": 0}], []),
+            ("around", [{"parent": "100:1", "packets": 900}, {"parent": "100:2", "packets": 0}],
+             ["none of the case's packets left by the launch gate's queue"]),
+            ("dropped", [{"parent": "100:2", "packets": 880, "drops": 11}],
+             ["the launch gate's queue dropped 11 packets"])):
+        case = _case(tmp_path / name, gated, lambda t, writes: plan.release(t) + 3e-4)
+        (case / "launch.json").write_text(json.dumps(queues))
+        scored = bench.score(case)
+        assert scored["problems"] == problems and scored["gated"]["packets"] == queues[-1]["packets"]
+    unrecorded = bench.score(_case(tmp_path / "unrecorded", gated, lambda t, writes: plan.release(t) + 3e-4))
+    assert unrecorded["problems"] == ["none of the case's packets left by the launch gate's queue"]
 
 
 def test_an_observers_chunks_start_and_end_where_the_bytes_say():

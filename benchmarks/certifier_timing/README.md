@@ -39,7 +39,8 @@ interval as `lower` and `upper`. `run` prints one JSON line and writes it to `--
 | `commit`, `run` | the commit measured from and the run's id |
 | `certifier`, `host` | the certifier's commit and settings; the host, its cores and its clock |
 | `guard`, `target` | the guard's two readings; the budget's bits an interval, and whether `ceiling` is under each end |
-| `rows`, `cases` | each attack with each observer, pooled; each run, with the certifier's own release times scored the same way (`sender`) |
+| `rows` | each attack with each observer, pooled, most bits first; then the guard's cases and any control, which are no part of the number (`role`) |
+| `cases` | each run: its settings, hosts and problems, and the certifier's own release times scored the same way (`sender`) |
 
 ## Run it
 
@@ -51,7 +52,7 @@ verity bench certifier_timing run --paced-ms 0        # the same certifier writi
 verity bench certifier_timing run --tree /path/to/checkout --tree-commit SHA   # another checkout's certifier
 verity bench certifier_timing guard                   # the guard alone
 verity bench certifier_timing target --interval-ms 100
-verity bench certifier_timing score DIR               # a recorded case again
+verity bench certifier_timing score DIR               # recorded cases again, as one result
 verity bench certifier_timing table RESULT.json       # results as a table's rows
 ~~~
 
@@ -96,27 +97,44 @@ Each is a flag beside the certifier, which this benchmark never changes:
 | `--pin` | the certifier's loop, its pacer, the server and the observer each on a core of the run's own |
 | `--gate-ms BEFORE,AFTER` | the certifier reads no server bytes from BEFORE ms ahead of each release to AFTER ms past it |
 | `--waker-ms MS` | a writer wakes a reader over loopback every MS ms, so the host's network path is in use at every release |
-| `serve --launch DEV,AFTER,OPEN[,offload]` | the kernel, or with `offload` the NIC, releases: a `taprio` gate on the device the certifier's bytes leave by, open OPEN ms from AFTER ms past each release time |
+| `--awake` | a process spins at idle priority on each of the run's CPUs, so none halts: a guest's cores under `idle=poll`, without root |
+| `serve --launch DEV,AFTER,OPEN[,MODE]` | the kernel, or the NIC, releases: a `taprio` schedule on the device the certifier's bytes leave by lets them pass for OPEN ms from AFTER ms past each release time |
 
-The certifier's egress is TCP, whose segments the stack times itself, so a socket's own launch time (`SO_TXTIME`
-with the ETF qdisc) doesn't apply to it; the gate is the same release at a time the sender's process doesn't set.
-With `--launch` the server aims at the gate's opening. It takes CAP_NET_ADMIN, `tc`, `sch_taprio` and a device with
-more than one transmit queue, and with `offload` a NIC that runs the schedule and a host clock kept to TAI.
+The certifier's egress is TCP, which takes no launch time from its socket (`SO_TXTIME`), so the release is put on
+the device: under `--launch` the certifier's connections send at a priority of their own
+(`parties.LAUNCH_PRIORITY`), the schedule holds that priority's packets to the gate and passes every other of the
+host's always, and the server aims at the gate. MODE says who holds the gate:
+
+| MODE | Who releases | It takes |
+| --- | --- | --- |
+| `gate` (default) | the kernel's timer, on the host's monotonic clock | `sch_taprio` |
+| `gate-nic` | the NIC, the whole schedule offloaded | a NIC that runs the schedule, its clock kept to TAI |
+| `txtime` | the kernel's ETF queue, at the stamp the schedule gave each packet | `sch_taprio`, `sch_etf` |
+| `txtime-nic` | the NIC, launching each packet at its stamp | a NIC with launch time, its clock kept to TAI |
+
+Every mode takes CAP_NET_ADMIN, `tc` and a device with two transmit queues. A case none of whose packets left by
+the gated queue, or whose queue dropped any, is no measurement (`launch.json`, the device's queue counts).
 
 ## Two hosts
 
 ~~~sh
-verity bench certifier_timing serve --listen 0.0.0.0 --port 47812 --attack write --wait-s 600 --out DIR   # the certifier's host
-verity bench certifier_timing observe HOST:47812 --observer spin --wait-s 600 --out DIR                   # the other host
-verity bench certifier_timing score DIR --observer OBSERVER.json
+verity bench certifier_timing serve --listen 0.0.0.0 --port 47812 --attack write --out OUT/write-spin   # the certifier's host
+verity bench certifier_timing observe HOST:47812 --observer spin --out SEEN/write-spin                   # the other host
+verity bench certifier_timing score OUT/write-spin --observer SEEN
 ~~~
 
-Nothing joins the two clocks. Which interval a chunk is comes from its bytes (interval t's are all the byte t mod
-256) and from the certifier's record of the connection, and `step` reads through the clocks' drift. `serve
---certifier relay --attack delay`, with and without `--ignore`, is the guard across the two hosts.
+`serve` takes one connection, the case's observer, and `observe` tries the certifier until it answers. Nothing joins
+the two clocks. Which interval a chunk is comes from its bytes (interval t's are all the byte t mod 256) and from the
+certifier's record of the connection, and `step` reads through the clocks' drift. `serve --certifier relay --attack
+delay`, with and without `--ignore`, is the guard across the two hosts, and `serve --ignore` an attack's control.
 
-`netns.sh OUT [serve's flags]` runs one such case on one host without root: a user namespace holds two network
-namespaces joined by a veth pair, the certifier's device `cert0`, which `--launch cert0,AFTER,OPEN` can gate.
+`pair.sh serve|observe ADDR PORT START OUT [serve's flags]` runs one side of every case: the guard's two, each
+attack with each observer, and a control. Both sides start each case at a time of day they work out from START
+alone, so a case that fails takes no other with it; `score A/out/* --observer B/seen` is then the result.
+
+`netns.sh OUT [serve's flags]` runs both sides on one host without root: a user namespace holds two network
+namespaces joined by a veth pair, the certifier's device `cert0`, which `--launch cert0,AFTER,OPEN[,MODE]` can
+gate.
 
 ## Why a directory of its own
 

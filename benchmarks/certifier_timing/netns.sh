@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# One case of certifier_timing with the observer in a network namespace of its own, on one host and without root.
+# certifier_timing's cases with the observer in a network namespace of its own, on one host and without root.
 #
-#   [INTERVALS=3000] [OBSERVER=spin] [CERTIFIER=warden] netns.sh OUT [serve's other flags]
+#   netns.sh OUT [serve's flags]
 #
 # A user namespace holds two network namespaces joined by a veth pair: the server and the certifier in one, the observer
-# in the other, as `serve` and `observe` on two hosts would be, but on one clock and one host's cores. The certifier's
-# bytes leave by a device of their own, `cert0`, which a launch gate can sit on (`--launch cert0,AFTER,OPEN`); loopback
-# takes none. It leaves the case in OUT/case and its score in OUT/result.json, and nothing outside its namespaces.
+# in the other, as `pair.sh`'s two sides on two hosts would be (its cases, and its INTERVALS, ATTACKS and OBSERVERS),
+# but on one clock and one host's cores. The certifier's bytes leave by a device of their own, `cert0`, which a launch
+# gate can sit on (`--launch cert0,AFTER,OPEN[,MODE]`); loopback takes none. It leaves the cases in OUT/out, their
+# observers' files in OUT/seen and the score in OUT/result.json, and nothing outside its namespaces.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 if [ "${1:-}" != --inside ]; then
@@ -14,9 +15,6 @@ if [ "${1:-}" != --inside ]; then
 fi
 out=$2
 shift 2
-py=${PYTHON:-python3}
-intervals=${INTERVALS:-3000}
-certifier=${CERTIFIER:-warden}
 address=10.77.0.1
 port=47812
 
@@ -33,10 +31,9 @@ nsenter -t "$peer" -n ip link set obs0 up
 nsenter -t "$peer" -n ip link set lo up
 
 mkdir -p "$out"
-"$py" "$here/run.py" serve --listen "$address" --port "$port" --wait-s 60 --intervals "$intervals" \
-    --certifier "$certifier" --out "$out/case" "$@" &
+start=$(($(date +%s) + 3))
+bash "$here/pair.sh" serve "$address" "$port" "$start" "$out" "$@" &
 serve=$!
-nsenter -t "$peer" -n "$py" "$here/run.py" observe "$address:$port" --wait-s 60 --intervals "$intervals" \
-    --certifier "$certifier" --observer "${OBSERVER:-spin}" --out "$out/case"
+nsenter -t "$peer" -n bash "$here/pair.sh" observe "$address" "$port" "$start" "$out"
 wait "$serve"
-"$py" "$here/run.py" score "$out/case" | tee "$out/result.json"
+"${PYTHON:-python3}" "$here/run.py" score "$out"/out/* --observer "$out/seen" | tee "$out/result.json"

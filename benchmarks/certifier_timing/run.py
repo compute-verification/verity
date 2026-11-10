@@ -2,13 +2,14 @@
 
     verity bench certifier_timing run     [--paced-ms 50] [--intervals 3000] [--attacks write,burst]
                                           [--observers plain,spin] [--repeat 1] [--tree DIR [--tree-commit SHA]]
-                                          [--pin] [--gate-ms BEFORE,AFTER] [--waker-ms MS] [--interval-ms 100] [--out DIR]
+                                          [--pin] [--gate-ms BEFORE,AFTER] [--waker-ms MS] [--awake]
+                                          [--interval-ms 100] [--out DIR]
     verity bench certifier_timing guard   [--intervals 600] [--interval-ms 100] [--out DIR]
     verity bench certifier_timing serve   --listen ADDR --port PORT [--attack write] [--certifier warden] [--ignore]
-                                          [--wait-s 600] [--launch DEV,AFTER,OPEN[,offload]] [run's flags] --out DIR
+                                          [--wait-s 600] [--launch DEV,AFTER,OPEN[,MODE]] [run's flags] --out DIR
     verity bench certifier_timing observe HOST:PORT [--certifier warden] [--observer spin] [--intervals 3000]
                                           [--wait-s 600] [--tree DIR] --out DIR
-    verity bench certifier_timing score   DIR... [--observer OBSERVER.json]
+    verity bench certifier_timing score   DIR... [--observer FILE|DIR]
     verity bench certifier_timing table   RESULT.json...
     verity bench certifier_timing target  [--interval-ms 100]
 
@@ -25,25 +26,37 @@ or the certifier failed a connection: the number is then of nothing.
 
 The candidates a run can turn on beside the certifier, none of them a change to it: `--pin` gives the certifier's loop,
 its pacer, the server and the observer a core each of the run's; `--gate-ms` keeps the certifier from reading the
-server around each release (`parties.warden`); `--waker-ms` keeps the host's network path in use (`parties.waker`).
+server around each release (`parties.warden`); `--waker-ms` keeps the host's network path in use (`parties.waker`);
+`--awake` keeps every one of the run's cores from halting (`parties.awake`).
 
 `guard` is the check that the measurement sees a channel: against a certifier that paces nothing (`relay`), a server
 that delays an interval's bytes by half an interval on bit 1 must show at least `PLANTED_MIN` bits an interval, and
 the same server writing as for bit 0 whatever its bits at most `IGNORED_MAX`.
 
 `serve` and `observe` are one case with the observer on another host. `serve` runs the server and the certifier, which
-listens on ADDR:PORT for `--wait-s`, and leaves the case's directory without its observer.json; `observe`, on the
-other host, connects to it, timestamps the intervals on its own clock and leaves observer.json; `score DIR --observer
-FILE` joins them. Nothing joins the two clocks: which interval a chunk is comes from its bytes and the certifier's
-record of the connection, and `channel`'s `step` reads through the clocks' drift. `serve --certifier relay --attack
-delay`, with and without `--ignore`, is the guard across the two hosts. `--launch` puts the release in the kernel's
-hands, or the NIC's: for the case it sets a `taprio` gate on DEV, the device the certifier's bytes leave by, open for
-OPEN ms from AFTER ms past each release time and shut for the rest of the interval, on the host's monotonic clock, or
-with `offload` in the NIC, on its clock (which the host keeps to TAI). The server then aims at the gate's opening. It
-takes CAP_NET_ADMIN, `tc`, `sch_taprio` and a device with more than one transmit queue.
+listens on ADDR:PORT for `--wait-s` and takes one connection, and leaves the case's directory without its
+observer.json; `observe`, on the other host, tries it until it answers, timestamps the intervals on its own clock and
+leaves observer.json; `score DIR --observer FILE` joins them, and `score DIR... --observer SEEN` many, each DIR's
+observer.json at SEEN/<DIR's name>/. Nothing joins the two clocks: which interval a chunk is comes from its bytes and
+the certifier's record of the connection, and `channel`'s `step` reads through the clocks' drift. `serve --certifier
+relay --attack delay`, with and without `--ignore`, is the guard across the two hosts, and `serve --ignore` an
+attack's control through the network certifier: `score` reads its guard from the first two and keeps the control out
+of its number.
+
+`--launch` puts the release in the kernel's hands, or the NIC's. For the case it sets a `taprio` schedule on DEV, the
+device the certifier's bytes leave by, of two classes: the certifier's connections, which send at
+`parties.LAUNCH_PRIORITY`, pass for OPEN ms from AFTER ms past each release time and wait for the rest of the
+interval; everything else of the host's passes always. The server then aims at the gate's opening. MODE says who
+holds the gate (`LAUNCH_MODES`): `gate`, the kernel's timer on the host's monotonic clock; `gate-nic`, the NIC, the
+whole schedule offloaded (its clock, which the host keeps to TAI); `txtime`, the kernel stamps each packet with its
+gate's opening and an ETF queue holds it till `ETF_DELTA_NS` before then, in software; `txtime-nic`, the same with
+the NIC launching each packet at its stamp. A socket's own `SO_TXTIME` plays no part: TCP sets no packet's time from
+it. `--launch` takes CAP_NET_ADMIN, `tc`, `sch_taprio` (and `sch_etf`) and a device with two transmit queues; it
+keeps the device's queue counts in launch.json, and a case none of whose packets left by the gated queue is no
+measurement.
 
 `score` measures recorded runs again, each DIR a case's directory as `run` or `serve` left it (config.json,
-server.json, observer.json, certifier.json), and `table` prints results' rows. `target` prints the budget's bits an
+server.json, observer.json, certifier.json), with `run`'s exit codes, and `table` prints results' rows. `target` prints the budget's bits an
 interval at an interval's length and the scored intervals it takes to show a number that small (`channel.target`,
 `channel.samples_to_show`).
 
@@ -70,60 +83,92 @@ sys.path.insert(0, str(HERE))
 
 import channel  # noqa: E402
 import parties  # noqa: E402
-from parties import ATTACKS, CERTIFIERS, HEADER_BYTES, OBSERVERS, distinct_cores, plan_of, span_s  # noqa: E402
+from parties import (  # noqa: E402
+    ATTACKS, CERTIFIERS, HEADER_BYTES, LAUNCH_PRIORITY, OBSERVERS, distinct_cores, plan_of, span_s,
+)
 
 SCHEMA = "certifier-timing/result/v1"
 #: the guard's two bounds, in bits an interval
 PLANTED_MIN, IGNORED_MAX = 0.9, 0.05
-#: a server write that ended this long after its time is counted late (`late_writes`), in µs
+#: a server write that ended this long after its time is counted late (`late_writes`), and a pacer's release that
+#: started this long after its (`late_releases`), in µs
 LATE_US = 250.0
 #: the certifier's schedule besides τ and the pacer's offset: one cell an interval, released D intervals after admission
 SCHEDULE = {"cell_bytes": 256, "slots": 1, "delay": 3, "window": 600, "admit_lag": 1}
 #: what a case's score keeps of its configuration
 KEEP = ("attack", "ignore", "certifier", "paced_ms", "observer", "interval_ms", "intervals", "pin", "gate_ms",
-        "waker_ms", "launch")
+        "waker_ms", "awake", "launch", "commit", "certifier_commit", "run", "host")
+#: who holds a launch gate: the kernel's timer, the NIC (the schedule offloaded), the kernel's ETF queue under the
+#: schedule's stamps, the NIC's launch time under them
+LAUNCH_MODES = ("gate", "gate-nic", "txtime", "txtime-nic")
+#: under `txtime`, how long the kernel allows a packet from the schedule to the device, and how long before its stamp
+#: the ETF queue lets it go (in software: when it leaves), in ns
+TXTIME_DELAY_NS, ETF_DELTA_NS = 500_000, 200_000
+CLOCK_TAI = 11
+
+
+def _git(tree: Path) -> str | None:
+    p = subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True, text=True)
+    return p.stdout.strip() if p.returncode == 0 else None
+
+
+def _commit() -> str | None:
+    return os.environ.get("RESEARCH_SOURCE_SHA") or _git(HERE)
 
 
 def config(args: argparse.Namespace, *, attack: str, observer: str, certifier: str = "warden", ignore: bool = False,
            intervals: int | None = None) -> dict:
-    """One case's public configuration, without its origin. The relay takes none of the candidates."""
+    """One case's public configuration, without its origin. The relay takes none of the candidates. Under a launch
+    gate the server aims at when the gate lets the bytes go: its opening, or under `txtime` `ETF_DELTA_NS` before."""
     relay = certifier == "relay"
     paced, launch = 0.0 if relay else args.paced_ms, None if relay else getattr(args, "launch", None)
+    aim = paced + (launch["after_ms"] - (ETF_DELTA_NS / 1e6 if launch["mode"] == "txtime" else 0.0) if launch else 0.0)
+    tree = getattr(args, "tree", None)
     return SCHEDULE | {
         "attack": attack, "ignore": ignore, "certifier": certifier, "observer": observer,
-        "interval_ms": args.interval_ms, "paced_ms": paced, "aim_ms": paced + (launch["after_ms"] if launch else 0.0),
+        "interval_ms": args.interval_ms, "paced_ms": paced, "aim_ms": aim,
         "intervals": intervals or args.intervals, "lead_ms": args.lead_ms, "burst": args.burst,
         "unit": SCHEDULE["slots"] * (SCHEDULE["cell_bytes"] - HEADER_BYTES), "start_s": args.start_s,
         "pin": False if relay else args.pin, "gate_ms": None if relay else args.gate_ms,
-        "waker_ms": None if relay else args.waker_ms, "launch": launch,
-        "cores": distinct_cores(sorted(os.sched_getaffinity(0)))}
+        "waker_ms": None if relay else args.waker_ms, "awake": False if relay else args.awake, "launch": launch,
+        "cores": distinct_cores(sorted(os.sched_getaffinity(0))),
+        "commit": _commit(), "run": os.environ.get("RESEARCH_RUN_ID"), "host": platform.node(),
+        "certifier_commit": (getattr(args, "tree_commit", None) or _git(tree)) if tree and not relay else _commit()}
 
 
-def launch_commands(launch: dict, base_s: float, interval_ms: int) -> tuple[list[str], list[str]]:
-    """`--launch`'s two commands: the `taprio` gate on the device's root, whose cycle is one interval from `base_s`
-    (seconds on the gate's clock: the host's monotonic clock, or with `offload` the NIC's), open for `open_ms` and
-    then shut; and its removal. Every priority is one traffic class on the device's first queue."""
-    tau, opened = interval_ms * 1_000_000, round(launch["open_ms"] * 1e6)
+def launch_commands(launch: dict, base_s: float, interval_ms: int) -> tuple[list[list[str]], list[str]]:
+    """`--launch`'s commands: what sets the schedule on the device's root, and what removes it. Its cycle is one
+    interval from `base_s` (seconds on the gate's clock: the host's monotonic clock under `gate`, else TAI), of two
+    classes on a queue each: priority `LAUNCH_PRIORITY`'s passes for `open_ms` and then waits, every other always.
+    Under `txtime` an ETF queue holds the first class's packets to the stamps the schedule gives them."""
+    tau, opened, dev, mode = interval_ms * 1_000_000, round(launch["open_ms"] * 1e6), launch["dev"], launch["mode"]
     if not 0 < opened < tau:
         raise ValueError("a launch gate is open for part of an interval")
-    clock = ["flags", "0x2"] if launch["offload"] else ["clockid", "CLOCK_MONOTONIC"]
-    return (["tc", "qdisc", "replace", "dev", launch["dev"], "parent", "root", "handle", "100", "taprio",
-             "num_tc", "1", "map", *["0"] * 16, "queues", "1@0", "base-time", str(round(base_s * 1e9)),
-             "sched-entry", "S", "01", str(opened), "sched-entry", "S", "00", str(tau - opened), *clock],
-            ["tc", "qdisc", "del", "dev", launch["dev"], "root"])
+    clock = {"gate": ["clockid", "CLOCK_MONOTONIC"], "gate-nic": ["flags", "0x2"]}.get(
+        mode, ["flags", "0x1", "txtime-delay", str(TXTIME_DELAY_NS), "clockid", "CLOCK_TAI"])
+    setup = [["tc", "qdisc", "replace", "dev", dev, "parent", "root", "handle", "100", "taprio", "num_tc", "2",
+              "map", *("1" if p == LAUNCH_PRIORITY else "0" for p in range(16)), "queues", "1@0", "1@1",
+              "base-time", str(round(base_s * 1e9)), "sched-entry", "S", "03", str(opened),
+              "sched-entry", "S", "01", str(tau - opened), *clock]]
+    if mode.startswith("txtime"):
+        setup.append(["tc", "qdisc", "replace", "dev", dev, "parent", "100:2", "etf", "clockid", "CLOCK_TAI",
+                      "delta", str(ETF_DELTA_NS), *(["offload"] if mode == "txtime-nic" else []), "skip_sock_check"])
+    return setup, ["tc", "qdisc", "del", "dev", dev, "root"]
 
 
 def _launch(cfg: dict) -> list[str]:
-    """Set the case's launch gate, its first opening `aim_ms` past the origin's boundary; the command that removes
-    it."""
-    base = cfg["origin"] + cfg["aim_ms"] / 1000
-    if cfg["launch"]["offload"]:
-        base += time.clock_gettime(time.CLOCK_TAI) - time.monotonic()
-    add, remove = launch_commands(cfg["launch"], base, cfg["interval_ms"])
-    done = subprocess.run(add, capture_output=True, text=True)
-    if done.returncode:
-        raise RuntimeError(f"--launch: `{' '.join(add)}` failed ({done.stderr.strip()}): it takes CAP_NET_ADMIN, "
-                           f"sch_taprio and a device with more than one transmit queue")
+    """Set the case's launch gate, its first opening `after_ms` past the origin's release time; the command that
+    removes it."""
+    base = cfg["origin"] + (cfg["paced_ms"] + cfg["launch"]["after_ms"]) / 1000
+    if cfg["launch"]["mode"] != "gate":
+        base += time.clock_gettime(CLOCK_TAI) - time.monotonic()
+    setup, remove = launch_commands(cfg["launch"], base, cfg["interval_ms"])
+    for command in setup:
+        done = subprocess.run(command, capture_output=True, text=True)
+        if done.returncode:
+            subprocess.run(remove, capture_output=True)
+            raise RuntimeError(f"--launch: `{' '.join(command)}` failed ({done.stderr.strip()}): it takes "
+                               f"CAP_NET_ADMIN, sch_taprio (and sch_etf) and a device with two transmit queues")
     return remove
 
 
@@ -159,6 +204,8 @@ def live(cfg: dict, out: Path, tree: Path = ROOT) -> None:
         server = start("server")
         if cfg["waker_ms"]:
             _line(start("waker"), "waker")
+        if cfg["awake"]:
+            _line(start("awake"), "awake")
         certifier = start("certifier", f"upstream={_line(server, 'server')['port']}", env=env)
         ready = _line(certifier, "certifier")
         if cfg.get("listen"):
@@ -178,6 +225,9 @@ def live(cfg: dict, out: Path, tree: Path = ROOT) -> None:
                 process.kill()
                 process.wait()
         if remove:
+            queues = subprocess.run(["tc", "-s", "-j", "qdisc", "show", "dev", cfg["launch"]["dev"]],
+                                    capture_output=True, text=True)
+            (out / "launch.json").write_text(queues.stdout if queues.returncode == 0 and queues.stdout else "[]")
             subprocess.run(remove, capture_output=True)
     if any(codes):
         tails = {p.args[2]: (out / f"{p.args[2]}.log").read_text()[-800:] for p in started if p.returncode}
@@ -227,10 +277,11 @@ def score(case: Path, observed: Path | None = None) -> dict:
     observer = json.loads((observed or case / "observer.json").read_text())
     pairs, problems = samples(cfg, server, observer)
     coins = {t: bit for t, bit, _ in server["rows"]}
-    sender = None
+    sender = late_releases = gated = None
     if cfg["certifier"] == "warden":
         if cfg["paced_ms"]:
             times = {r[0]: r[3] / 1e6 for r in certifier["releases"]["rows"]}
+            late_releases = sum(r[2] > LATE_US for r in certifier["releases"]["rows"])
         else:
             times = {t: x / 1e6 for t, x in enumerate(certifier["tick_late_us"])}
         sender = channel.measure([(times[t], coins[t]) for t in sorted(coins) if t in times])
@@ -244,34 +295,55 @@ def score(case: Path, observed: Path | None = None) -> dict:
                      for k, (s, first) in enumerate(zip(admitted, firsts)) if s + cfg["delay"] != first]
         over = sum(x > certifier["slack_ms"] * 1000 for x in certifier["tick_late_us"])
         problems += [f"{over} ticks ran past the slack"] * bool(over)
+    if cfg.get("launch"):
+        queues = json.loads(f.read_text()) if (f := case / "launch.json").exists() else []
+        gated = {k: sum(q.get(k, 0) for q in queues if q.get("parent") == "100:2") for k in ("packets", "drops")}
+        if not gated["packets"]:
+            problems.append("none of the case's packets left by the launch gate's queue")
+        if gated["drops"]:
+            problems.append(f"the launch gate's queue dropped {gated['drops']} packets")
     problems += [f"the server's connection: {c['error']}" for c in server["connections"] if "error" in c]
     return {k: cfg.get(k) for k in KEEP} | {
         "observer": observer["observer"], "dir": case.name, "remote": observer.get("remote", False),
-        "client": channel.measure(pairs), "sender": sender,
+        "observer_host": observer.get("host", cfg.get("host")), "client": channel.measure(pairs), "sender": sender,
         "problems": problems, "late_writes": sum(late > LATE_US for _, _, late in server["rows"]),
+        "late_releases": late_releases, "gated": gated,
         "cpus": {"server": server["cpus"], "observer": observer["cpus"], "certifier": certifier["cpus"],
                  "pacer": certifier.get("pacer_cpus")}}
 
 
-def guard(args: argparse.Namespace, out: Path) -> dict:
-    """The planted channel and its control, each one live run against the relay; `ok` when the first shows at least
-    `PLANTED_MIN` bits an interval and the second at most `IGNORED_MAX`."""
-    doc = {}
+def role(case: dict) -> str:
+    """What a case is to the number: an `attack` on the network certifier or its `control` (the server ignores its
+    bits), or of the guard, through the relay, the `planted` channel or its `ignored` twin."""
+    if case["certifier"] == "relay":
+        return "ignored" if case["ignore"] else "planted"
+    return "control" if case["ignore"] else "attack"
+
+
+def guard(args: argparse.Namespace, out: Path) -> list[dict]:
+    """The planted channel and its control, each one live run against the relay."""
+    cases = []
     for name, ignore in (("planted", False), ("ignored", True)):
         cfg = config(args, attack="delay", observer="plain", certifier="relay", ignore=ignore,
                      intervals=args.guard_intervals)
         live(cfg, out / f"guard-{name}")
-        doc[name] = score(out / f"guard-{name}")
-    planted, ignored = doc["planted"]["client"]["bits"], doc["ignored"]["client"]["bits"]
-    doc["ok"] = (planted is not None and planted >= PLANTED_MIN and ignored is not None and ignored <= IGNORED_MAX
-                 and not doc["planted"]["problems"] and not doc["ignored"]["problems"])
-    doc["bounds"] = {"planted_min": PLANTED_MIN, "ignored_max": IGNORED_MAX}
-    return doc
+        cases.append(score(out / f"guard-{name}"))
+    return cases
 
 
-def _git(tree: Path) -> str | None:
-    p = subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True, text=True)
-    return p.stdout.strip() if p.returncode == 0 else None
+def verdict(cases: list[dict]) -> dict | None:
+    """The guard among `cases`, if they hold one: `ok` when there is a planted case and an ignored one, every planted
+    one shows at least `PLANTED_MIN` bits an interval, every ignored one at most `IGNORED_MAX`, and none has a
+    problem; `planted` the least a planted one showed and `ignored` the most an ignored one did."""
+    of = {name: [c for c in cases if role(c) == name] for name in ("planted", "ignored")}
+    if not of["planted"] and not of["ignored"]:
+        return None
+    bits = {name: [c["client"]["bits"] for c in group] for name, group in of.items()}
+    measured = all(group and None not in group for group in bits.values())
+    planted, ignored = (min(bits["planted"]), max(bits["ignored"])) if measured else (None, None)
+    return {"ok": measured and planted >= PLANTED_MIN and ignored <= IGNORED_MAX
+            and not any(c["problems"] for group in of.values() for c in group),
+            "planted": planted, "ignored": ignored, "bounds": {"planted_min": PLANTED_MIN, "ignored_max": IGNORED_MAX}}
 
 
 def host() -> dict:
@@ -286,54 +358,56 @@ def host() -> dict:
 
 
 def summarize(cases: list[dict]) -> dict:
-    """The cases as one number: `rows`, the cases by (attack, observer), each pooled over its runs (`channel.pool`),
-    most bits first; `value`, `lower`, `upper` and `n`, the first row's; `ceiling`, the largest upper bound of any
-    row; and every case's problems."""
-    groups: dict[tuple[str, str], list[dict]] = {}
+    """The cases as one number: `rows`, the cases by (role, attack, observer), each pooled over its runs
+    (`channel.pool`), the attacks first, most bits first; `value`, `lower`, `upper` and `n`, the first attack's;
+    `ceiling`, the largest upper bound of any attack; and every case's problems."""
+    groups: dict[tuple[str, str, str], list[dict]] = {}
     for c in cases:
-        groups.setdefault((c["attack"], c["observer"]), []).append(c)
-    rows = [{"attack": a, "observer": o} | channel.pool([c["client"] for c in group])
+        groups.setdefault((role(c), c["attack"], c["observer"]), []).append(c)
+    rows = [{"role": r, "attack": a, "observer": o} | channel.pool([c["client"] for c in group])
             | {"sender": channel.pool([c["sender"] for c in group if c["sender"]])}
-            for (a, o), group in groups.items()]
-    rows.sort(key=lambda r: -(r["bits"] or 0.0))
-    best = rows[0] if rows and rows[0]["bits"] is not None else None
+            for (r, a, o), group in groups.items()]
+    rows.sort(key=lambda r: (r["role"] != "attack", -(r["bits"] or 0.0)))
+    attacks = [r for r in rows if r["role"] == "attack" and r["bits"] is not None]
+    best = attacks[0] if attacks else None
     return {"value": best and best["bits"], "unit": "bits/interval", "lower": best and best["lower"],
             "upper": best and best["upper"], "n": best and best["n"],
-            "ceiling": max((r["upper"] for r in rows if r["bits"] is not None), default=None),
+            "ceiling": max((r["upper"] for r in attacks), default=None),
             "best": best and {"attack": best["attack"], "observer": best["observer"]},
             "problems": sorted({p for c in cases for p in c["problems"]}), "rows": rows}
 
 
-def result(args: argparse.Namespace, guarded: dict, cases: list[dict]) -> dict:
-    tree = args.tree or ROOT
-    commit = os.environ.get("RESEARCH_SOURCE_SHA") or _git(HERE)
-    goal = channel.target(args.interval_ms / 1000)
+def result(cases: list[dict], **more) -> dict:
+    """What `run` and `score` print: the cases' number, its target at their interval, their guard, and the cases."""
     summary = summarize(cases)
-    goal["met"] = [summary["ceiling"] is not None and summary["ceiling"] <= b for b in goal["bits"]]
+    tau = {c["interval_ms"] for c in cases}
+    goal = channel.target(tau.pop() / 1000) if len(tau) == 1 else None
+    if goal:
+        goal["met"] = [summary["ceiling"] is not None and summary["ceiling"] <= b for b in goal["bits"]]
     return {"schema": SCHEMA, "benchmark": "certifier_timing"} | summary | {
-        "commit": commit, "run": os.environ.get("RESEARCH_RUN_ID"),
-        "certifier": {"tree": str(tree), "commit": args.tree_commit or (_git(tree) if args.tree else commit),
-                      "paced_ms": args.paced_ms, "pin": args.pin, "gate_ms": args.gate_ms,
-                      "waker_ms": args.waker_ms} | SCHEDULE,
-        "interval_ms": args.interval_ms, "host": host(), "target": goal,
-        "guard": {"ok": guarded["ok"], "planted": guarded["planted"]["client"]["bits"],
-                  "ignored": guarded["ignored"]["client"]["bits"], "bounds": guarded["bounds"]},
-        "cases": cases}
+        "commit": _commit(), "run": os.environ.get("RESEARCH_RUN_ID"), "target": goal,
+        "guard": verdict(cases)} | more | {"cases": cases}
 
 
 def _table(docs: list[dict]) -> str:
-    lines = ["| run | certifier | paced ms | pin | gate ms | waker ms | attack | observer | bits/interval | 95% | scored "
-             "| sender |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    """Results' rows as a Markdown table, each with what its cases ran with."""
+    head = ["run", "host", "observer's host", "certifier", "paced ms", "pin", "gate ms", "waker ms", "awake",
+            "launch", "role", "attack", "observer", "bits/interval", "95%", "scored", "sender"]
+    lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for d in docs:
-        c = d["certifier"]
         for r in d["rows"]:
             if r["bits"] is None:
                 continue
-            sender = r["sender"].get("bits")
-            lines.append(f"| {d['run'] or '-'} | {(c['commit'] or '-')[:10]} | {c['paced_ms']:g} | "
-                         f"{'yes' if c['pin'] else 'no'} | {c['gate_ms'] or '-'} | {c.get('waker_ms') or '-'} | "
-                         f"{r['attack']} | {r['observer']} | {r['bits']:.4f} | [{r['lower']:.4f}, {r['upper']:.4f}] | "
-                         f"{r['n']} | {'-' if sender is None else f'{sender:.4f}'} |")
+            c = next(c for c in d["cases"] if (role(c), c["attack"], c["observer"]) == (r["role"], r["attack"],
+                                                                                         r["observer"]))
+            launch, sender = c.get("launch"), r["sender"].get("bits")
+            cells = [c.get("run") or d.get("run") or "-", c.get("host") or "-", c.get("observer_host") or "-",
+                     (c.get("certifier_commit") or "-")[:10], f"{c['paced_ms']:g}", "yes" if c["pin"] else "no",
+                     c["gate_ms"] or "-", c.get("waker_ms") or "-", "yes" if c.get("awake") else "no",
+                     f"{launch['mode']} {launch['after_ms']:g}+{launch['open_ms']:g}" if launch else "-",
+                     r["role"], r["attack"], r["observer"], f"{r['bits']:.4f}",
+                     f"[{r['lower']:.4f}, {r['upper']:.4f}]", r["n"], "-" if sender is None else f"{sender:.4f}"]
+            lines.append("| " + " | ".join(map(str, cells)) + " |")
     return "\n".join(lines)
 
 
@@ -350,10 +424,15 @@ def _hello(certifier: str, tree: Path) -> tuple[str, int]:
 
 
 def _launch_arg(text: str) -> dict:
-    dev, after, opened, *rest = text.split(",")
-    if rest not in ([], ["offload"]):
-        raise argparse.ArgumentTypeError("--launch DEV,AFTER,OPEN[,offload]")
-    return {"dev": dev, "after_ms": float(after), "open_ms": float(opened), "offload": bool(rest)}
+    dev, after, opened, *mode = text.split(",")
+    if len(mode) > 1 or (mode and mode[0] not in LAUNCH_MODES):
+        raise argparse.ArgumentTypeError(f"--launch DEV,AFTER,OPEN[,MODE], MODE of {', '.join(LAUNCH_MODES)}")
+    return {"dev": dev, "after_ms": float(after), "open_ms": float(opened), "mode": mode[0] if mode else "gate"}
+
+
+def _observed(case: Path, where: Path | None) -> Path | None:
+    """A case's observer.json: its own, the file `where`, or the one under the directory `where` by the case's name."""
+    return where if where is None or where.is_file() else where / case.name / "observer.json"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -367,7 +446,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["run"].add_argument("--guard-intervals", type=int, default=600,
                                     help="the intervals of each of the guard's two runs")
     sub.choices["guard"].add_argument("--intervals", dest="guard_intervals", type=int, default=600)
-    sub.choices["guard"].set_defaults(lead_ms=2.0, burst=32, paced_ms=0.0, pin=False, gate_ms=None, waker_ms=None)
+    sub.choices["guard"].set_defaults(lead_ms=2.0, burst=32, paced_ms=0.0, pin=False, gate_ms=None, waker_ms=None,
+                                      awake=False)
     for name in ("run", "serve"):
         p = sub.choices[name]
         p.add_argument("--paced-ms", type=float, default=50.0,
@@ -380,6 +460,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--pin", action="store_true")
         p.add_argument("--gate-ms", type=lambda s: [float(x) for x in s.split(",")], metavar="BEFORE,AFTER")
         p.add_argument("--waker-ms", type=float)
+        p.add_argument("--awake", action="store_true")
     p = sub.choices["run"]
     p.add_argument("--attacks", default="write,burst")
     p.add_argument("--observers", default="plain,spin")
@@ -391,7 +472,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--attack", default="write", choices=ATTACKS)
     p.add_argument("--certifier", default="warden", choices=CERTIFIERS)
     p.add_argument("--ignore", action="store_true", help="the server writes as for bit 0 whatever its bits")
-    p.add_argument("--launch", type=_launch_arg, metavar="DEV,AFTER,OPEN[,offload]")
+    p.add_argument("--launch", type=_launch_arg, metavar="DEV,AFTER,OPEN[,MODE]")
     p = sub.add_parser("observe")
     p.add_argument("at", metavar="HOST:PORT")
     p.add_argument("--certifier", default="warden", choices=CERTIFIERS)
@@ -403,7 +484,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path, required=True)
     p = sub.add_parser("score")
     p.add_argument("dirs", nargs="+", type=Path)
-    p.add_argument("--observer", type=Path, help="one DIR's observer.json, where another host wrote it")
+    p.add_argument("--observer", type=Path, metavar="FILE|DIR",
+                   help="one DIR's observer.json, or where each DIR's is, at <DIR's name>/observer.json")
     sub.add_parser("table").add_argument("results", nargs="+", type=Path)
     sub.add_parser("target").add_argument("--interval-ms", type=int, default=100)
     args = ap.parse_args(argv)
@@ -412,13 +494,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(goal | {"to_show": [channel.samples_to_show(x) for x in goal["bits"]]}))
         return 0
     if args.command == "score":
-        if args.observer and len(args.dirs) != 1:
-            ap.error("--observer is one DIR's")
-        cases = [score(d, args.observer) for d in args.dirs]
-        print(json.dumps({"schema": SCHEMA, "benchmark": "certifier_timing"} | summarize(cases) | {
-            "commit": os.environ.get("RESEARCH_SOURCE_SHA") or _git(HERE), "run": os.environ.get("RESEARCH_RUN_ID"),
-            "cases": cases}))
-        return 0
+        if args.observer and args.observer.is_file() and len(args.dirs) != 1:
+            ap.error("--observer FILE is one DIR's")
+        doc = result([score(d, _observed(d, args.observer)) for d in args.dirs])
+        print(json.dumps(doc))
+        return 1 if doc["guard"] and not doc["guard"]["ok"] else 2 if doc["problems"] else 0
     if args.command == "table":
         print(_table([json.loads(p.read_text()) for p in args.results]))
         return 0
@@ -440,31 +520,34 @@ def main(argv: list[str] | None = None) -> int:
         cfg = config(args, attack=args.attack, observer="another host's", certifier=args.certifier, ignore=args.ignore)
         if args.attack == "delay" and args.certifier == "warden":
             ap.error("the network certifier fails a delayed interval closed: --attack delay goes with --certifier relay")
-        if cfg["launch"] and not cfg["aim_ms"] + cfg["launch"]["open_ms"] < args.interval_ms:
+        if cfg["launch"] and not args.paced_ms + cfg["launch"]["after_ms"] + cfg["launch"]["open_ms"] < args.interval_ms:
             ap.error("--launch: the gate opens and shuts inside the interval its release time is in")
+        if cfg["launch"] and not args.paced_ms:
+            ap.error("--launch: the gate is after a pacer's release time (--paced-ms)")
         live(cfg | {"listen": args.listen, "port": args.port, "wait_s": args.wait_s}, out, args.tree or ROOT)
-        print(json.dumps({"served": str(out), "commit": os.environ.get("RESEARCH_SOURCE_SHA") or _git(HERE),
-                          "run": os.environ.get("RESEARCH_RUN_ID"), "host": host()["name"]}))
+        print(json.dumps({"served": str(out), "commit": _commit(), "run": os.environ.get("RESEARCH_RUN_ID"),
+                          "host": platform.node()}))
         return 0
-    guarded = guard(args, out)
+    cases = guard(args, out)
     if args.command == "guard":
-        print(json.dumps({"guard": guarded}))
-        return 0 if guarded["ok"] else 1
+        print(json.dumps({"guard": verdict(cases), "cases": cases}))
+        return 0 if verdict(cases)["ok"] else 1
     attacks, observers = args.attacks.split(","), args.observers.split(",")
     if (bad := [a for a in attacks if a not in ATTACKS or a == "delay"] + [o for o in observers if o not in OBSERVERS]):
         ap.error(f"--attacks are of write, burst (the network certifier fails a delayed interval closed) and "
                  f"--observers of {', '.join(OBSERVERS)}: not {', '.join(bad)}")
-    cases = []
     for k in range(args.repeat):
         for attack in attacks:
             for observer in observers:
                 case = out / f"{attack}-{observer}-{k}"
                 live(config(args, attack=attack, observer=observer), case, args.tree or ROOT)
                 cases.append(score(case))
-    doc = result(args, guarded, cases)
+    doc = result(cases, interval_ms=args.interval_ms, host=host(), certifier={
+        "tree": str(args.tree or ROOT), "commit": cases[-1]["certifier_commit"], "paced_ms": args.paced_ms,
+        "pin": args.pin, "gate_ms": args.gate_ms, "waker_ms": args.waker_ms, "awake": args.awake} | SCHEDULE)
     (out / "result.json").write_text(json.dumps(doc, indent=1))
     print(json.dumps({k: v for k, v in doc.items() if k != "cases"}))
-    return 1 if not guarded["ok"] else 2 if doc["problems"] or doc["value"] is None else 0
+    return 1 if not doc["guard"]["ok"] else 2 if doc["problems"] or doc["value"] is None else 0
 
 
 if __name__ == "__main__":
