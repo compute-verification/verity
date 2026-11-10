@@ -57,7 +57,7 @@ another subprotocol undecided. And every subprotocol counts: each one's rejectio
 On acceptance the product makes public each subprotocol's public outputs and keeps each one's profile, both as JSON objects
 keyed by the subprotocol's id. On rejection or undecided nothing is public.
 
-`Properties.Composition` (`Security/Properties/Composition.lean`, proved in `Security/Proofs/Properties/Composition.lean`)
+`Properties.Composition` (`security/Properties/Composition.lean`, proved in `security/Proofs/Properties/Composition.lean`)
 states the accept row against this code. `answerAccepts` covers every `Core.Protocol`: what `answer` accepts decodes,
 and its check accepts it. `acceptMeans` covers `Core.Composition.check`: what it accepts fits the composition, every
 subprotocol accepts its own case, and the commitment is `bind` of the subprotocols' digests.

@@ -287,9 +287,9 @@ def test_certificates_at_their_points():
 
 def test_certificates_name_proved_guarantees():
     """A certificate's `theorem` is the proof `Pous.SecurityProofs.X` it rests on, a guarantee in
-    `Security/lean-audit.json`, of the statement `Pous.Guarantees.X` (`Definitions/Pous/Guarantees.lean` there and the
+    `security/lean-audit.json`, of the statement `Pous.Guarantees.X` (`Definitions/Pous/Guarantees.lean` there and the
     files under `Definitions/Pous/Guarantees/`), experimental schemes' included."""
-    security = Path(__file__).parents[5] / "Security"
+    security = Path(__file__).parents[5] / "security"
     specs = security / "Definitions" / "Pous"
     texts = [(specs / "Guarantees.lean").read_text()] + [f.read_text() for f in sorted((specs / "Guarantees").glob("*.lean"))]
     statements = {x for t in texts for x in re.findall(r"^def (\w+) : Prop", t, re.M)}

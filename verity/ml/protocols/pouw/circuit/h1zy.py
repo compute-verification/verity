@@ -36,7 +36,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   accepted proof. The ok rows are the verifier's own registered value ``ok`` (h1_prove's `register_ok`: row u the
   word 1 under unit u's public salt), and each unit's ok port ``o1`` reads it at the unit's row through ``--registered``,
   so Lean opens each ok row against that root rather than reading ok off the public file alone (``CheckedSessionSound``,
-  `Security/Proofs/Accounting/TS/CheckedSound.lean`, binds ok only through a port of ``own``). A lane's and a combine's ok take the same
+  `security/Proofs/Accounting/TS/CheckedSound.lean`, binds ok only through a port of ``own``). A lane's and a combine's ok take the same
   form: each statement's ok port (``o0``, its one output) reads the verifier's own ``ok``, one row of the word 1 a
   statement under its public salt, beside the ``partials`` ports.
 * **A leaf's lanes** (option A: the served path keeps one receipt a 32 × 32 leaf, and a sampled leaf is proved as its 32

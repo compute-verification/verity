@@ -3,7 +3,7 @@
 # FC_HOST_WITNESS=1), then one session per FC_FIREWALL_TAMPER control (the device dishonest in one named way, live
 # PROTOCOL.md §10.1), each against the same `serve --zk`. The honest session must be accepted with no rep stopped (no
 # `frames: ... stops the rep` line, no `prover_stopped`): each honest round passes the Lean frame's checks, the completeness
-# `Loop.HonestRoundsPass` names (Security/Proofs/Flock/SessionLoop/Fill.lean). Every control must end in a
+# `Loop.HonestRoundsPass` names (security/Proofs/Flock/SessionLoop/Fill.lean). Every control must end in a
 # visible refusal at its `Finish`, never before: the verifier's verdict (its `SESSION` line) does not accept, after as many
 # rounds as the honest session's, and the prover's record carries the control's own refusal (`EXPECT` below:
 # `prover_stopped`'s, the ZK server's, and the verdict's `why`, the Lean frame's stop where it stopped a rep; `ALSO`, a

@@ -9,12 +9,12 @@ untraced = ["tests/test_statement.py"]
 # falsification test (test_tiers.py) checks the parameters its Lean statements state against tiers.py's, with the
 # Dot width read from the BF16 GEMM's step (gemm.py's GEMM_HOPPER).
 inputs = [
-  "Security/lean-audit.json",
-  "Security/Definitions/Nci/Assumptions/Layered.lean",
-  "Security/Definitions/Nci/Guarantees/Layered.lean",
+  "security/lean-audit.json",
+  "security/Definitions/Nci/Assumptions/Layered.lean",
+  "security/Definitions/Nci/Guarantees/Layered.lean",
   "verity/ml/circuits/ops/boolean/gemm.py",
   # tiers.CARD pins the ACCEL model's sm_120 card table, and CREDITED_CLOCK_HZ PoUW's H1 record (test_tiers.py)
-  "Security/Definitions/Core/Accel/Sm120.lean",
+  "security/Definitions/Core/Accel/Sm120.lean",
   "verity/ml/protocols/pouw/circuit/h1device.py",
   # the slowdown D is the slowdown calculator's (statement.py, fit.py, imported by path)
   "benchmarks/rho/rho/__init__.py",
