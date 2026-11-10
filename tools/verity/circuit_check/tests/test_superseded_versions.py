@@ -8,10 +8,6 @@ second word ``Name_v3`` supersedes ``Name_v1``, and its Boolean version ``Name_v
 the ones circuit-check loads (`targets.load_registries`), read in an interpreter that ran nothing before (`registered`): the
 registry is the process's and grows as code runs, so read in this process it would hold whatever a test before it made.
 
-Every registered Definition counts, wherever its module is: the protocol circuits under ``verity/ml/protocols`` and
-``verity/core/protocols`` as the catalog's.  What the registries don't hold doesn't: a Definition made with ``register=False``,
-which only the code that makes it can reach, and a module or a Program named ``_vN``, whose name is no Definition's version.
-
 ``tests/lint/allowlists/superseded_versions.json`` lists every superseded version, one entry each: ``file``, the module that
 defines it (`sidecars.owner`); ``kind``, ``superseded``; ``symbol``, its name; ``detail``, its id.  A superseded version with no
 entry fails, so a change that adds ``Name_vN+1`` does one of three things:
