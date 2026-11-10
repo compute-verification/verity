@@ -156,7 +156,7 @@ from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
-from typing import NamedTuple
+from typing import NamedTuple, Sequence
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -1447,12 +1447,13 @@ def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
     return out
 
 
-def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str) -> dict:
+def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, rests: Sequence[str] = ()) -> dict:
     """One-stage's answer for the group's registration ``reg`` as a period check reads an execution phase's scan answer
     (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
     `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on incorrect proof
-    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit sampled, the bound 0); else a reject naming
-    ``reason``."""
+    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit sampled, the bound 0), and the tied values
+    its registration's R8 let through when there are any (``rests``, the registration verdict's
+    ``rests_on_period_check``), on whose period check the acceptance rests; else a reject naming ``reason``."""
     commitment = RG.digest(reg)
     if record is None:
         return {"commitment": commitment, "profile": None, "protocol": RG.PROTOCOL, "public": None, "reason": reason,
@@ -1465,7 +1466,8 @@ def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str) 
     wrong = AU.wrong_units(reg, draw, delta)
     return {"commitment": commitment, "profile": profile, "protocol": RG.PROTOCOL,
             "public": {"bound": wrong["bound"], "drawn": sorted(draw["units"]),
-                       "per_template": wrong.get("per_template"), "proved": sorted(record["proved_units"])},
+                       "per_template": wrong.get("per_template"), "proved": sorted(record["proved_units"]),
+                       **({"rests_on_period_check": list(rests)} if rests else {})},
             "reason": None, "verdict": "accept"}
 
 
@@ -1479,7 +1481,7 @@ def _answer(out: Path, name: str, res: dict, delta: Fraction, what: str) -> tupl
                     if v and k.startswith("lean-verify/"))
     failed = "; ".join(f"check {c}: {', '.join(codes or ())}" for c, codes in sorted((res.get("failed") or {}).items()))
     reason = f"{what} refused: " + (why or failed or f"audit {res.get('audit')}, outputs {res.get('opened')}")
-    return reg, window_answer(reg, record, delta, reason)
+    return reg, window_answer(reg, record, delta, reason, res.get("rests_on_period_check") or ())
 
 
 def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: dict | None = None) -> dict:
