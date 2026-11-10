@@ -501,6 +501,21 @@ def test_serve_releases_the_id_form_unless_told_and_rehearse_names_its_traffics_
     assert any("connection 1 failed closed (format) at egress cell 0" in p for p in problems), problems
 
 
+def test_a_response_cap_is_a_schedule_flag_rehearse_passes_to_serve():
+    """`--max-tokens-cap` sets the schedule's response cap, which `rehearse` passes to its `serve` and the digest
+    binds; without it the schedule has none and no flag carries it."""
+    serve = ["serve", "--upstream", "h:1", "--listen", "h:0", "--out", "o", "--key", "k", "--session", "00",
+             "--windows", "1"]
+    rehearse = ["rehearse", "--fake", "--out", "o", "--ids"]
+    capped = ws._params(ws.parser().parse_args(rehearse + ["--max-tokens-cap", "7"]))
+    assert capped.max_tokens_cap == 7 and capped.digest != ws._params(ws.parser().parse_args(rehearse)).digest
+    flags = ws._flags(ws.parser().parse_args(rehearse + ["--max-tokens-cap", "7"]))
+    assert flags[flags.index("--max-tokens-cap") + 1] == "7"
+    assert ws._params(ws.parser().parse_args(serve + flags)) == capped
+    assert "--max-tokens-cap" not in ws._flags(ws.parser().parse_args(rehearse))
+    assert ws._params(ws.parser().parse_args(serve)).max_tokens_cap is None
+
+
 def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():
     """`rehearse --ids`: an `id_traffic` request, sent network-certifier-form (`active.id_request`), is answered with
     its `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;

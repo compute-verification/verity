@@ -61,6 +61,16 @@ def test_a_workload_serves_at_least_its_proof_blocks_macs():
         cards.check(c | {"value": value | {"served_macs_per_token": 8.0}})
 
 
+def test_a_certifier_card_is_a_network_certifier_schedule():
+    """A certifier card's schedule is `WardenParams`' fields: an unknown field, a cap past the egress cells and a cap
+    outside the id egress form are refused, as the certifier refuses them."""
+    c = good() | {"slot": "certifier", "value": {"schedule": {"max_tokens_cap": 875}}}
+    cards.check(c)
+    for bad in ({"max_tokens": 875}, {"max_tokens_cap": 4096}, {"max_tokens_cap": 875, "egress": "bytes"}):
+        with pytest.raises(ValueError, match="not a network certifier schedule"):
+            cards.check(c | {"value": {"schedule": bad}})
+
+
 def test_load_falls_back_to_every_model_and_names_a_missing_card(tmp_path, monkeypatch):
     monkeypatch.setattr(cards, "CARDS", tmp_path)
     cards.write(good() | {"slot": "design", "model": None, "value": {"delta": .01, "budgets": [.01],

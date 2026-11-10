@@ -31,6 +31,7 @@ public import Proofs.NetworkCertifier.Tap
 public import Proofs.NetworkCertifier.RecordRows
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.Checked
+public import Proofs.NetworkCertifier.ResponseCap
 public import Proofs.NetworkCertifier.WitnessesChecked
 public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.WitnessesCarried
