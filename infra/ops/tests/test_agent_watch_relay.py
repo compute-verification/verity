@@ -496,6 +496,43 @@ def test_a_listed_workers_run_end_says_the_watch_resumes_it(relay):
     assert relay.ring_runs[0][-2:] == ["--to", "@proofs"], "a worker's failed run still rings its lane"
 
 
+def test_the_run_that_placed_its_sender_by_its_name_rings_that_lane_and_says_how_it_was_found(relay):
+    """A sender the watch placed by its name's issue key was infra's to place by hand. Its lane is rung at the placing run
+    whatever its result and its sender's status, so a wrong placement shows where it rings; its later runs are a worker's."""
+    kernels = relay.slack.tag(relay.slack.entry(relay.REG, "kernels"))
+    w = "bc-36363636-3636-3636-3636-363636363636"
+    rec = {"kind": "run_ended", "agent": w, "name": "HASH-7 KFLAGS: the committer's flag", "run": "r20261110-020000-aa00",
+           "handle": "kernels", "role": "worker", "lane": "kernels", "node": "vy-nebius-2", "what": "bench", "rc": 0,
+           "state": "done", "after": "12 min", "sender_status": "IDLE", "placed_by": "name", "issue": "HASH-7"}
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        rec, {**rec, "run": "r20261110-030000-aa01", "sender_status": "ACTIVE", "rc": 1, "state": "failed"},
+        {**rec, "run": "r20261110-030000-aa02", "listed": True},
+        {**rec, "run": "r20261110-030000-aa03", "quiet": True, "cancelled_by": "ubuntu", "cancel_reason": "superseded"},
+        {k: v for k, v in rec.items() if k not in ("placed_by", "issue")} | {"run": "r20261110-040000-bb04"}]) + "\n"
+    relay.once()
+    how = (" No handle owned this worker until now: the watch placed it under @kernels by its name's issue key HASH-7 (if it "
+           "is another lane's, tell @infra).")
+    head = "*Agent watch:* run {} (bench) of worker HASH-7 KFLAGS: the committer's flag (<https://cursor.com/agents/{}|{}>) ended"
+    assert relay.posts == [
+        f"{kernels} {head.format('r20261110-020000-aa00', w, w)} rc=0 after 12 min on vy-nebius-2; resume HASH-7 KFLAGS: the "
+        f"committer's flag with Task.{how}",
+        f"{kernels} {head.format('r20261110-030000-aa01', w, w)} rc=1 after 12 min on vy-nebius-2; its sender is in a turn, so "
+        f"nothing is to resume.{how}",
+        f"{kernels} {head.format('r20261110-030000-aa02', w, w)} rc=0 after 12 min on vy-nebius-2; the watch starts a run on it "
+        f"with the result if it is still idle in 10 min.{how}",
+        f"{head.format('r20261110-030000-aa03', w, w)} rc=0 after 12 min on vy-nebius-2, cancelled by "
+        f"its own lane (ubuntu: \u201csuperseded\u201d): nothing to resume.{how}",
+        f"{kernels} {head.format('r20261110-040000-bb04', w, w)} rc=0 after 12 min on vy-nebius-2; resume HASH-7 KFLAGS: the "
+        "committer's flag with Task."]
+    assert [(a[a.index("--run") + 1], a[-2:]) for a in relay.ring_runs] == [
+        (f"r20261110-{r}", ["--to", "@kernels"]) for r in ("020000-aa00", "030000-aa01", "030000-aa02")], \
+        "the placing run rings its lane at rc 0 and with its sender in a turn; a quiet one and a later rc 0 run ring no one"
+    assert relay.ring_runs[0][relay.ring_runs[0].index("--text") + 1] == (
+        "bench done after 12 min on vy-nebius-2; its sender placed under @kernels by its name's issue key HASH-7: "
+        + relay.slack.permalink(relay.REG, relay.ALERTS, "17600001.0"))
+    assert rings(relay) == []
+
+
 def test_a_restart_never_posts_a_line_again_even_with_its_offset_lost(relay):
     """The sent-set beside the offset keeps each line posted; a relay restarted from offset 0 (a lost or reset
     offset file, a new pod tree) skips every line it already posted and posts only the new one."""

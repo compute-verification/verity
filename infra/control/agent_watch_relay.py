@@ -14,8 +14,11 @@ sender's handle (a coordinator's own, a worker's launcher's, for a run whose sen
 `research msg ring-run`, the one sender of run-end doorbells: `from runs, run R rc N (AGENT): ...`, once per run however
 often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. A worker's run that ended rc 0
 is posted but rings no one: the watch resumes the worker itself, and rings its coordinator only if it stays idle (run
-ends were 47% of all doorbells, most of them workers' successes). The runs of one read whose sender
-no handle owns are one post that leads with infra's handle, naming each run's sender, rung as an alert. A record this relay can't render
+ends were 47% of all doorbells, most of them workers' successes). The run at whose end the watch placed its sender, which no
+handle owned, as a lane's worker by the issue key its name starts with (the record's `placed_by` and `issue`) rings that lane
+whatever its result and its sender's status, and says how the lane was found, so a wrong placement shows where it rings; the
+worker's later runs are any worker's. The runs of one read whose sender
+no handle owns, and no name places, are one post that leads with infra's handle, naming each run's sender, rung as an alert. A record this relay can't render
 (a kind it doesn't know, or one missing what its sentence needs) is posted as its raw JSON to infra, never as a sentence of ?s.
 A record the watch marks `quiet` (a run its own lane cancelled, a worker relaunch it declined) is posted with no handle and
 rings no one. Each line posted is kept by its sha256 beside the offset (`sent_path`, 3 days), so a restart, or an offset lost or
@@ -149,7 +152,7 @@ def rung(rec: dict) -> str | None:
         return UNROUTED
     if rec.get("quiet"):        # the watch's own judgement that nobody must act: a run its lane cancelled, a relaunch declined
         return None
-    if rec.get("kind") == "run_ended" and rec.get("sender_status") == "ACTIVE":
+    if rec.get("kind") == "run_ended" and rec.get("sender_status") == "ACTIVE" and not rec.get("placed_by"):
         return None             # its sender is in a turn and sees its own run end; if it then idles, the watch resumes it
     if rec.get("kind") in TOP or (rec.get("kind") == "silent" and rec.get("owner") == "top"):
         return "top"
@@ -171,6 +174,13 @@ def unknown(rec: dict) -> str:
     """What a worker alert says when no handle owns the worker or its parent, so infra knows why it was rung."""
     return (f" Its lane is unknown (no handle owns it or its parent), so @{UNROUTED} is rung to find its coordinator."
             if is_worker(rec) and lane_of(rec) is None else "")
+
+
+def placed(rec: dict) -> str:
+    """What a worker's run end says when the watch placed the worker by its name at this run (`placed_by`), so the lane knows
+    why it is rung and a wrong placement is put right."""
+    return (f" No handle owned this worker until now: the watch placed it under @{rec.get('handle')} by its name's issue key "
+            f"{rec.get('issue')} (if it is another lane's, tell @{UNROUTED})." if rec.get("placed_by") == "name" else "")
 
 
 def woke(rec: dict) -> str:
@@ -224,15 +234,17 @@ def text(rec: dict) -> str:
             who = (f"worker {name} ({link})" if rec.get("role") == "worker" else f"{name} ({link})" if rec.get("agent")
                    else f"lane {rec.get('handle') or '?'}")
             return (f"*Agent watch:* {run} of {who} {line}, cancelled by its own lane ({rec.get('cancelled_by') or '?'}: "
-                    f"\u201c{str(rec.get('cancel_reason') or '')[:160]}\u201d): nothing to resume.")
+                    f"\u201c{str(rec.get('cancel_reason') or '')[:160]}\u201d): nothing to resume.{placed(rec)}")
         if rec.get("sender_status") == "ACTIVE" and rec.get("role") in ("worker", "coordinator"):
             who = f"worker {name}" if rec.get("role") == "worker" else name
-            return f"*Agent watch:* {run} of {who} ({link}) {line}; its sender is in a turn, so no one is rung."
+            end = f"nothing is to resume.{placed(rec)}" if rec.get("placed_by") else "no one is rung."
+            return f"{lead}*Agent watch:* {run} of {who} ({link}) {line}; its sender is in a turn, so {end}"
         if rec.get("role") == "worker" and rec.get("listed"):
             return (f"{lead}*Agent watch:* {run} of worker {name} ({link}) {line}; the watch starts a run on it with the "
-                    "result if it is still idle in 10 min.")
+                    f"result if it is still idle in 10 min.{placed(rec)}")
         if rec.get("role") == "worker":
-            return f"{lead}*Agent watch:* {run} of worker {name} ({link}) {line}; resume {name} with Task.{unknown(rec)}"
+            return (f"{lead}*Agent watch:* {run} of worker {name} ({link}) {line}; resume {name} with Task.{unknown(rec)}"
+                    f"{placed(rec)}")
         if rec.get("role") == "coordinator":
             return f"{lead}*Agent watch:* your {run} ({link}) {line}; resume."
         if rec.get("role") == "unknown":
@@ -290,8 +302,10 @@ def call(argv: list[str]) -> subprocess.CompletedProcess:
 def ring_run(rec: dict, to: str, ts: str) -> None:
     """A run's end, rung with `research msg ring-run` (one doorbell per run, once however often called), its text the alert's
     one line and link. `--to` is the watch's handle for all but a coordinator's own run, which ring-run finds by the agent's
-    route; a former coordinator, which no route holds any more, is rung again with `--to`."""
-    one = (f"{rec.get('what')} {rec.get('state') or 'ended'} after {rec.get('after')} on {rec.get('node')}: "
+    route; a former coordinator, which no route holds any more, is rung again with `--to`. A run that placed its sender by
+    its name says so."""
+    how = f"; its sender placed under @{to} by its name's issue key {rec.get('issue')}" if rec.get("placed_by") == "name" else ""
+    one = (f"{rec.get('what')} {rec.get('state') or 'ended'} after {rec.get('after')} on {rec.get('node')}{how}: "
            f"{slack.permalink(REG, ALERTS, ts)}")
     argv = [*RING_RUN, "--run", str(rec["run"]), "--rc", str(rec["rc"] if rec.get("rc") is not None else rec.get("state")),
             "--text", one, *(("--agent", rec["agent"]) if rec.get("agent") else ())]
@@ -358,7 +372,8 @@ def once() -> None:
             ts = slack._post(api, ALERTS, "infra", post := text(rec))
             sent[key] = time.time()
             save_sent(sent)
-            if (to := rung(rec)) and rec.get("kind") == "run_ended" and rec.get("role") == "worker" and rec.get("rc") == 0:
+            if ((to := rung(rec)) and rec.get("kind") == "run_ended" and rec.get("role") == "worker" and rec.get("rc") == 0
+                    and not rec.get("placed_by")):
                 log(f"run {rec.get('run')}: a worker's run ended rc 0, posted unrung (the watch resumes the worker)")
             elif to:
                 try:
