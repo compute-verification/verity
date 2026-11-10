@@ -25,9 +25,9 @@ and no console script.
   composite's case, as `benchmarks/one_stage/composite.py` reads them.
 - **Loads from**: the packages at `verity/core/service/flock` and `verity/core/protocols/interface`, and nothing of
   the certifier.
-- **Not here**: its tests. They are in the suite `verity/core/protocols/network`, with the tests of the certifier's
-  Lean check: `test_nci_*.py` and `test_inference_only_protocol.py` in `../tests`, the second of which the tests of
-  `verity/core/protocols/composition` load by path.
+- **Not here**: its tests, `test_nci_*.py` and `test_inference_only_protocol.py`. They are in `../tests`, in the
+  suite `verity/core/protocols/network`, with the tests of the certifier's Lean check. The tests of
+  `verity/core/protocols/composition` load the second by path.
 
 ## Overview
 
