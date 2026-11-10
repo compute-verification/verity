@@ -22117,3 +22117,50 @@ gave that for PRF-398 alone.
 
 Next: the Goals table's row 5 after G1's verdict (04:15Z), and a re-read of the page for links other leads add
 before you run the script. Next entry by 02:57Z.
+
+## HOUSEKEEP, Tue 10 Nov 01:58Z: NET-283's draft redone: #8468's head moved at 01:37Z, after my pass; item 1 still stands on the new head, with different files
+
+**Use this draft, not the one in my 01:17Z entry.** #8468 went from `f7b94f9172` to `3fde94e698` at 01:37Z (one
+commit, "the tests that run network-records stay with the period check": it holds back
+`network/tests/test_{lean_audit,network_records_protocol}.py`). I reran the scan and my two scripts on the new head
+(scratch worktree, removed 01:58Z). Still open, no review, no label (`gh pr view`, 01:58Z). Nothing posted.
+
+**What changed against my first pass:**
+
+| | Head `f7b94f9172` | Head `3fde94e698` |
+|---|---|---|
+| Public files, more than `main` [run] | 8,034, 355 | 8,032, 353 (the two tests left; nothing else moved) |
+| Edges; cut by the export's rewrite [run] | 0; 19 | 0; 19, the same 19 |
+| Imports into a withheld protocol [run] | none | none |
+| Edge table row 2, `network-records` | three public tests and the service need it | the two tests are private now. Still public and still starting it: `certifier/service.py:229` (`OF_RECORD`: the Lean's verdict is the record on plain, served and warden links), `:1038` (`LA.SERVER.call("link-window", …)`; `:1033` "The Lean not built or not running raises"), `lean_audit.py:157`, and `certifier/tests/test_network_certifier_link_window_lean.py:216-241`, which has no skip [read] |
+| Token scan [run] | 48 paths, 93 sites | 50 paths, 95 sites: the two more are `network/pyproject.toml:12,15`, which names the two tests; the export's rewrite drops such entries (`public_export.py:354`, `untraced`) [read] |
+
+The other rows of the edge table (1, 3 to 7) read the same on the new head. `public_export.py:219` is where the
+export drops an executable whose root file it doesn't copy [read]; I built no export, so "raises on every
+execution phase" is from reading those four places, not from running the service.
+
+**The draft (299 words), for NET-283:**
+
+> proofs' first pass on #8468's boundary lines, at head `3fde94e698`, read-only.
+> 
+> **The scan** [run]: `public_boundary.py --all` on that head gives 8,032 public files (353 more than `main`), 0 edges, and 19 the export's rewrite cuts. One of the 19 is new: `network/lean/lakefile.toml:15` requires `nci_check`.
+> 
+> **No import crosses into a withheld protocol** [run]: none of the 353 files imports PoUS, either bandwidth audit, `Accounting`, `WeightSecurity` or `verity/core/service/spot`. NCI: only that require.
+> 
+> **Three things for network-accounting:**
+> 
+> 1. **`network-records` still doesn't survive the export** [read]. Your last commit holds back the two tests under `network/tests` that start it. Two public files still do: `certifier/service.py:229` makes the Lean's verdict the record on every link, through `lean_audit.py:157` (`lake build network-records`), and `certifier/tests/test_network_certifier_link_window_lean.py:216` calls it with no skip. `public_export.py:219` drops the executable, so the exported service raises on every execution phase. The check can't see this: the executable is named by a string. Cut: PUBLICCERT's `Clocks.lean` split, then `RecordsMain.lean` leaves the private line.
+> 2. **Two new `[[needed]]` entries widen the public set by 5 files**: `verity/core/primitives/world` (4) and `Security/Proofs/Properties/Hash/Identity.lean`. Neither is a withheld protocol's file and neither imports one [run]; only the certifier's device requires `core_world` [read]. By this issue's rule they are widenings, so top should see them.
+> 3. **Text naming what stays private** [run, a token scan]: 50 paths at 95 sites, 34 of them under `benchmarks/`. `PROTOCOL.md:294` names `NetworkCheck/Period.lean` and `:1765` `Accounting/Physical.lean`. `network/lean/lean-audit.json` keeps its root `NetworkCheck` and exemptions for `PeriodMain` and `RecordsMain`, all private.
+> 
+> **Tied to SPOT's Lean:** the certifier's proofs import 14 `Claims/Sampling*` files and 4 of `Proofs/Flock/SamplingGeneric`, all public on `main`'s boundary already, so they go out together.
+> 
+> **Not this PR's, same export:** `Security/lean-audit.json` is public and copied whole; it names 134 NCI, 77 PoUS, 11 Bandwidth and 11 WeightSecurity guarantees [read].
+> 
+> Not checked: a built export; TOP-387's frozen paths.
+
+Still not checked: a built export; TOP-387's frozen paths; that `clocksFn` and `signedSyncs` read nothing of NCI's
+(the cut in item 1 rests on PUBLICCERT's comment of Mon 23:18Z). I look at #8468's head again before you post
+(Tue 6 PM PST) and say if it moved.
+
+Next entry by 03:00Z.
