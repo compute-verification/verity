@@ -1570,6 +1570,10 @@ def main(argv: list[str] | None = None) -> int:
         a.report.write_text(json.dumps({"base": base, "changes": run.changes, "notes": run.notes,
                                         "files": {p: dict(c) for p, c in sorted(run.files_changed.items())},
                                         "moves": dict(moves)}, indent=1, sort_keys=True))
+    if "uv lock failed" in run.notes:
+        print("`uv lock` failed, so uv.lock doesn't match the moved tree and `uv sync` fails on it: fix what uv names "
+              "above and run the move again", file=sys.stderr)
+        return 1
     return 0
 
 
