@@ -54,7 +54,7 @@ SCHEMA = "verity-vllm/fa2-target-capture/v1"
 RECORD = "fa2_target_capture.json"
 HDIMS = (64, 96, 128, 256)
 KBLOCK_M = 64
-MUFU_SRC = Path(__file__).resolve().parents[2] / "verity/ml/definitions/numerics/cuda/mufu_probe.cu"
+MUFU_SRC = Path(__file__).resolve().parents[2] / "benchmarks/definitions/numerics/cuda/mufu_probe.cu"
 #: (heads, KV heads, head dim) of the pinned checkpoints whose attention is plain FA2 (`engine/profiles/hf_configs`; Gemma-2's softcap and
 #: window launch another kernel instantiation)
 MODELS = {"smollm2-135m": (9, 3, 64), "smollm2-360m": (15, 5, 64), "pythia-160m": (12, 12, 64), "qwen2.5-0.5b": (14, 2, 64),

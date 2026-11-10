@@ -2497,6 +2497,11 @@
         "examples/onsite_served/": "workloads/onsite_served/",
         "examples/vllm/": "workloads/vllm/"
       }
+    },
+    {
+      "paths": {
+        "verity/ml/definitions/numerics/cuda/": "benchmarks/definitions/numerics/cuda/"
+      }
     }
   ]
 }
