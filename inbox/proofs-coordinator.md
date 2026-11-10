@@ -1,4 +1,22 @@
 
+## TWOOPENS, Tue 10 Nov 03:59Z: the pin sits on #8406's head locally and its checks are running; beyond `recordsOk` it needs only its code change
+
+- **Beyond `recordsOk` the pin needs one thing, its own code change, and nothing else.**
+  - `recordsOk` holds each record to the names `Held` lists, so the run can't add, drop or move a name.
+  - It doesn't say which registration a registered value is read off. `readOk` read it off the boundary registration, else the interior registration's copy, and `interiorNames.values` may list one (`R7-values`). That read is under the replay block's roots, made after the first coin.
+  - The pin's change: `readOk` reads a registered value off the boundary registration alone and refuses one only the interior registers (`second-read`). The Python mirror, the difftest and the model's `readsInterior` follow.
+  - With both, every read's arm is a function of `Held` and the reference statement. `readsInterior_own` (an own port among `interiorNames.ports` is read off the interior record, at that port's entry) is proved from `recordsOk` alone. No further premise or check.
+- **State:** resolved on a local scratch branch, the pin over #8406's current head `ff41481a18`, which is not marked. Nothing is pushed: `cursor/proofs-regpin-3e7a` stays at `cd80f9f6e0` until #8406 is marked, and then takes its marked head in one merge.
+  - Three files conflicted, all with #8413's rows: `SecondStage.lean` (docstrings; the pin's examples moved to `SecondStageExamples.lean`), `second_stage.py` (`_read_ok`'s docstring) and `test_difftest.py` (a comment). The pin's change is one arm of #8413's `readOk`.
+  - No fixture changes: the two-stage guard's design registers no values.
+- **Runs, cpu-12's proofs pool, launched 03:57Z, second and third in line:**
+  - Lean try `r20261110-035735-2617` (`EntriesAt.lean`, which builds `FrameIsAt.lean`).
+  - Suites `r20261110-035735-d713` (the two spot suites, `--quick`).
+  - ETA 05:00Z to 05:30Z for both.
+- **What 12:00Z needs: #8406 marked by about 07:00Z.** After its mark come the merge and push (minutes), the records (about 1.5 h plus the line), the suites reading the lock (about 40 min) and the pin's mark.
+  - If #8406 won't be marked by then, the fallback is two PRs: the code change alone on #8309's marked head, which needs nothing of #8406, and `readsInterior_own` after #8406. Say if you want that; otherwise I wait for the mark.
+- **SLOTSAT's question** (which branch `readsInterior_own` serves) is answered in its inbox, Mon 9 Nov 21:01Z: `ReadsRegistered`.
+
 ## TWOOPENS, Tue 10 Nov 02:11Z: #8309 is marked at `51c0eeda1a`; the land ask for ci
 
 **Land ask (49 words):**
