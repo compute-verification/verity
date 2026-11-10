@@ -1,7 +1,9 @@
 """The post's configuration (`record.json`) and a serve's stamp against it (`record.py`). The fixtures are two serves'
 stored `meta.json`, each reduced to its configuration fields: one at the post's context length with no network
 certifier (the serve tax's `boundary` arm), one under the certified tick at a shorter context with prefix caching off
-(another harness, which records neither its decoding nor an execution phase)."""
+(another harness, which records neither its decoding nor an execution phase). The network certifier's record beside
+the second is made here, in the form its check and its `deployment.json` have, on made-up counts."""
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -11,10 +13,22 @@ import record
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 SERVE = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20]
+#: a certifier's record of a run at the tick fixture's bucket: its check's verdict with its counts, and its deployment
+CERTIFIER = {"check": {"accepted": True, "problems": [], "summary": {"requests": 4, "ended": 4, "refused": 0, "windows": 2,
+                                                                  "certified_windows": 6, "certificates": 6,
+                                                                  "signer_refused": []}},
+             "deployment": {"link": "certifier", "params": {"cell_bytes": 256, "bucket_ms": 250, "lanes": 512},
+                            "windows": 2}}
 
 
 def meta(name: str) -> dict:
     return json.loads((FIXTURES / f"meta.{name}.json").read_text())
+
+
+def certifier(change=lambda c: None) -> dict:
+    theirs = copy.deepcopy(CERTIFIER)
+    change(theirs)
+    return theirs
 
 
 def test_the_record_has_the_22_switches_and_the_posts_value_of_each():
@@ -35,7 +49,7 @@ def test_a_stored_serves_off_list(name, at, off):
     made = record.stamp(meta(name))
     assert made["off"] == off
     assert sorted(set(SERVE) - set(off)) == at
-    assert list(made) == ["digest", "observed", "off"]
+    assert list(made) == ["digest", "observed", "off", "with"] and made["with"] == {}
     assert made["digest"] == hashlib.sha512(record.RECORD.read_bytes()).hexdigest()
 
 
@@ -50,13 +64,53 @@ def test_what_each_serve_shows():
 
 def test_a_switch_shown_only_in_part_or_by_no_reader_stays_off():
     """A serve with every switch its `meta.json` can show at the post's value still has off the two it shows in part
-    (the engine unmodified, the certifier in front of it) and the seven nothing in it gives."""
+    (the engine unmodified, the certifier in front of it) and the seven nothing in it gives. The certifier's record
+    beside it clears the certifier's switch and no other."""
     m = meta("context-131072")
     m.update(sampling="seeded", plugin=["record", "boundary_rows"], tick={"bucket_us": 250000})
     made = record.stamp(m)
     assert made["off"] == [6, 9, 11, 12, 13, 14, 15, 16, 20]
     assert made["observed"]["8"] == "sampled" and made["observed"]["17"] == "two-stage"
     assert made["observed"]["20"] == {"tick": True}
+    both = record.stamp(m, certifier=certifier())
+    assert both["off"] == [6, 9, 11, 12, 13, 14, 15, 16] and both["with"] == {"20": "certifier"}
+    assert {k: v for k, v in both["observed"].items() if k != "20"} == {k: v for k, v in made["observed"].items() if k != "20"}
+
+
+def test_the_certifiers_record_shows_the_certifier_in_front_of_a_serve_under_the_tick():
+    made = record.stamp(meta("tick-40960"), certifier=certifier())
+    assert made["observed"]["20"] == {"tick": True, "certifier": "real"} == record.switches()[19]["post"]
+    assert 20 not in made["off"] and made["with"] == {"20": "certifier"}
+    assert record.stamp(meta("tick-40960"), certifier=None) == record.stamp(meta("tick-40960"))
+
+
+@pytest.mark.parametrize("change", [
+    lambda c: c["check"].update(accepted=False, problems=["window 1: not certified"]),
+    lambda c: c["check"].pop("accepted"),
+    lambda c: c["check"].update(accepted="yes"),
+    lambda c: c["check"]["summary"].update(certificates=0),
+    lambda c: c["check"]["summary"].pop("certificates"),
+    lambda c: c["check"].pop("summary"),
+    lambda c: c.pop("check"),
+])
+def test_a_certifier_whose_check_did_not_accept_or_signed_nothing_clears_nothing(change):
+    made = record.stamp(meta("tick-40960"), certifier=certifier(change))
+    assert made["observed"]["20"] == {"tick": True} and 20 in made["off"] and made["with"] == {}
+
+
+@pytest.mark.parametrize("name,change", [
+    ("tick-40960", lambda c: c["deployment"]["params"].update(bucket_ms=100)),
+    ("tick-40960", lambda c: c["deployment"].pop("params")),
+    ("tick-40960", lambda c: c.pop("deployment")),
+    ("context-131072", lambda c: None),
+])
+def test_it_refuses_another_serves_certifier(name, change):
+    """A certifier's record at another bucket, or beside a serve under no tick, is not of the certifier in front of
+    this serve."""
+    with pytest.raises(ValueError, match="the certifier's record is not this serve's"):
+        record.stamp(meta(name), certifier=certifier(change))
+    with pytest.raises(ValueError, match="no reader reads"):
+        record.stamp(meta(name), challenger={})
 
 
 @pytest.mark.parametrize("change,switch,value", [
@@ -112,6 +166,13 @@ def test_a_stamp_holds_no_request_count_or_time():
     text = json.dumps({"observed": made["observed"], "off": made["off"]})
     for private in ("651", "1496", "1794167899", "0.4375", "612.5", "node-a", "run-7", "/models", "/workspace", "52719"):
         assert private not in text
+    theirs = certifier(lambda c: c["check"]["summary"].update(requests=30017, certificates=4571, completion_tokens=684591))
+    theirs["deployment"].update(run_id="run-9", origin_unix=1794170357.5, listen=["127.0.0.1", 44423], session="93a4")
+    made = record.stamp(meta("tick-40960"), certifier=theirs)
+    assert made == record.stamp(meta("tick-40960"), certifier=certifier())
+    text = json.dumps({key: made[key] for key in ("observed", "off", "with")})
+    for private in ("30017", "4571", "684591", "run-9", "1794170357", "44423", "93a4", "127.0.0.1"):
+        assert private not in text
 
 
 @pytest.mark.parametrize("change", [
@@ -145,12 +206,25 @@ def test_the_record_is_checked(change, message):
 def test_the_command_prints_the_off_list_and_writes_the_stamp(tmp_path, capsys):
     record.main(["stamp", str(FIXTURES / "meta.context-131072.json"), "--out", str(tmp_path / "out")])
     out = capsys.readouterr().out
-    assert "at the post's value: 1, 2, 4, 5, 7, 10\n" in out
+    assert "at the post's value: 1, 2, 4, 5 (tensor-parallel degree only), 7, 10\n" in out
     assert "off: 6, 8, 9, 11, 12, 13, 14, 15, 16, 17, 20\n" in out
     assert json.loads((tmp_path / "out" / "record.json").read_text()) == record.stamp(meta("context-131072"))
     (tmp_path / "meta.json").write_text("{}")
     with pytest.raises(SystemExit, match="not a serve's meta.json"):
         record.main(["stamp", str(tmp_path / "meta.json")])
+
+
+def test_the_command_reads_the_certifiers_two_files_and_says_which_switch_they_cleared(tmp_path, capsys):
+    for name, part in CERTIFIER.items():
+        (tmp_path / f"{name}.json").write_text(json.dumps(part))
+    tick, files = str(FIXTURES / "meta.tick-40960.json"), [str(tmp_path / "check.json"), str(tmp_path / "deployment.json")]
+    record.main(["stamp", tick, "--certifier", *files, "--out", str(tmp_path / "out")])
+    out = capsys.readouterr().out
+    assert "at the post's value: 1, 2, 5 (tensor-parallel degree only), 20 (with the certifier's record)\n" in out
+    assert "off: 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17\n" in out
+    assert json.loads((tmp_path / "out" / "record.json").read_text()) == record.stamp(meta("tick-40960"), certifier=CERTIFIER)
+    with pytest.raises(SystemExit, match="the certifier's record is not this serve's"):
+        record.main(["stamp", str(FIXTURES / "meta.context-131072.json"), "--certifier", *files])
 
 
 def test_the_command_never_writes_a_stamp_over_the_record():
