@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`NciCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/record_difftest_vectors.py` writes 612 cases (600 random circuits,
-two in five broken in one way, and 12 in the shape of a served class) and, on each,
+`verity/core/protocols/network/nci/lean/scripts/record_difftest_vectors.py` writes 626 cases (600 random circuits,
+two in five broken in one way, and 26 in the shape of a served class) and, on each,
 `scripts/nci_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/RecordDifftestMain.lean` fails unless
 `NciCheck.Record` and `NciCheck.RecordCount` give Python's results on every case, and unless SPOT's reader reads the
@@ -10,17 +10,19 @@ same wiring from the form's instance and from the one Python builds from its own
 checks the data against the record's SHA-256 and caches its pass on the Lean package's files alone, so the first test
 is what says the data is still what the generator and the reference write. The second checks that the generator
 reaches what its docstring says and that the published result is the judgment alone. The third states the verdicts on
-the served class's shape, the negative vectors among them. The fourth is the check that no wire crosses slots: none
-does at the served class's shape, and one that does is counted. The fifth sets the form beside
+the served class's shape, the negative vectors among them, and the fourth the refusals of a pinned reader's layout:
+one negative vector a role, each refused, and the same records under no pin. The fifth is the check that no wire
+crosses slots: none does at the served class's shape, and one that does is counted. The sixth sets the form beside
 `NciCheck.Desc.evaluate`'s reference on the same Program: one block for the whole phase there and one a slot here,
-and input bits apart by exactly the rows no gate reads. The sixth holds the reference to
+and input bits apart by exactly the rows no gate reads. The seventh holds the reference to
 `verity.ml.windows.interface`, the rules a lowering states a record by: the stage that refuses a record, each unit's
 slot, and `input_count`'s totals.
 
-The sixth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
+The seventh holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
 not, `input_count` counts that opening's ports registered and the form counts them fresh, and the test holds the two
-apart by exactly those bits.
+apart by exactly those bits. The interface states no layout: a record the form refuses for a pinned reader's roles
+(`reader-layout`, `reader-roles`) is one the interface takes.
 """
 
 from __future__ import annotations
@@ -45,8 +47,10 @@ def _load(name: str):
 vectors = _load("record_difftest_vectors")
 ref, IF, codec = vectors.ref, vectors.IF, vectors.codec
 RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.RecordDifftestMain"]
-#: the random cases the quick tests read
-SEEDS = range(300)
+#: the random cases the quick tests read, enough of them to reach every way of `BROKEN`
+SEEDS = range(500)
+#: the refusals of a pinned reader's layout, which `verity.ml.windows.interface` does not state
+ROLES = ("reader-layout", "reader-roles")
 
 
 @pytest.fixture(scope="module")
@@ -61,7 +65,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 612 cases and the reference's results, byte for byte as the record pins them."""
+    """All 626 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -79,7 +83,7 @@ def test_the_generator_covers_what_it_says(random_cases, shaped):
                                                                "templates"))
         assert isinstance(r["kinds"], list) == ("error" not in detail)
     assert {m["broken"] for m in made} == set(vectors.BROKEN) | {None}
-    assert {m.get("how") for m in made if m["broken"]} == {how for hows in vectors.BROKEN.values() for how in hows}
+    assert {m["how"] for m in random_cases if m["broken"]} == {how for hows in vectors.BROKEN.values() for how in hows}
     good = [r for r in results if "error" not in r["detail"]]
     assert {r["detail"]["failure"] for r in good} == {None, "size", "nci"}
     assert {r["count"].get("failure") for r in good if "error" not in r["count"]} == {None, "gates", "fresh", "count"}
@@ -96,7 +100,7 @@ def test_the_served_shape(shaped):
     block's fresh bits then its scan state's alone; refused by the rate rule, and by the count on its fresh bits,
     with none registered or committed, under another root, with an opening that reads no root, with an opening whose
     reader is another Definition under the pinned one's name, and with one wire from the next slot."""
-    got = {what: vectors.results(m["case"]) for what, m in shaped.items()}
+    got = {what: vectors.results(m["case"]) for what, m in shaped.items() if what not in LAYOUT}
     verdicts = {what: (r["detail"]["failure"], r["count"]["failure"]) for what, r in got.items()}
     refused = ("nci", "fresh")
     assert verdicts == {
@@ -128,6 +132,64 @@ def test_the_served_shape(shaped):
         held_case["instance"]["record"])["registered"]
 
 
+#: the cases on a pinned reader's layout, at two slots and three positions: the stage that refuses each, or the rate
+#: rule's and the count's verdicts
+LAYOUT = {
+    "2x3 the key not wired": ("nci", "fresh"),
+    "2x3 the key among the ports": "reader-roles",
+    "2x3 the key among the ports, no pin": ("nci", "fresh"),
+    "2x3 another row the key": "reader-roles",
+    "2x3 the root read in the domain id's row": "reader-roles",
+    "2x3 the domain id read in the root's row": "reader-roles",
+    "2x3 the root's and the domain id's rows swapped": "reader-roles",
+    "2x3 an opened row left out": "reader-roles",
+    "2x3 the opened rows in another order": "reader-roles",
+    "2x3 another output the verdict": "reader-roles",
+    "2x3 the key the second row, pinned": "reader-layout",
+    "2x3 the key the second row, no pin": ("nci", "fresh"),
+    "2x3 a reader of one output, pinned": "reader-layout",
+    "2x3 a reader of one output, no pin": ("nci", "fresh"),
+}
+
+
+def test_a_pinned_readers_layout(shaped):
+    """A pin is a digest, and one layout by position says which rows of a pinned reader are its key, its table's root
+    and domain id, its opened rows and its verdict (the form's `layoutOf`). The form refuses a record that names
+    any other row or output of a pinned reader, one negative vector a role, and a pinned reader in no layout; it
+    counts none of them. The first three cases are why: with the token of the embedding read left unwired, the 48 bits
+    a block reads of it are free and the rate refuses; a record that then lists the token among the opening's ports
+    would have them counted with the opened rows, registered, and it is refused; under no pin the same record is taken
+    and every port of the opening is fresh. Whatever of these the form refuses, `verity.ml.windows.interface` takes."""
+    assert {what for what, m in shaped.items() if m["broken"]} == {what for what, v in LAYOUT.items() if isinstance(v, str)}
+    got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
+    for what, want in LAYOUT.items():
+        detail, count, m = got[what]["detail"], got[what]["count"], shaped[what]
+        if isinstance(want, str):
+            assert detail == count == got[what]["public"] == got[what]["kinds"] == {"error": want}, what
+            assert shaped[what]["broken"] == want and _interface(m)[0] is None, what
+        else:
+            assert (detail["failure"], count["failure"]) == want, what
+    held = vectors.results(shaped["2x3 registered"]["case"])["detail"]
+    unwired, no_pin = got["2x3 the key not wired"]["detail"], got["2x3 the key among the ports, no pin"]["detail"]
+    assert (unwired["free"], unwired["openings"]) == (48, 0) and unwired["fresh"] == held["fresh"] + 48
+    assert (no_pin["free"], no_pin["fresh"]) == (0, held["fresh"] + no_pin["openings"])
+    # the refused record differs from the one taken under no pin by its pins alone, and from the unwired one by the
+    # token listed among its opening's ports
+    among, loose, bare = (shaped[f"2x3 the key {what}"]["case"]["instance"]
+                          for what in ("among the ports", "among the ports, no pin", "not wired"))
+    assert among["record"] == loose["record"] and among["pins"] == shaped["2x3 registered"]["case"]["instance"]["pins"]
+    assert loose["pins"] == []
+    listed, plain = json.loads(among["record"]), json.loads(bare["record"])
+    [o], [p] = listed["registered"]["openings"], plain["registered"]["openings"]
+    assert o == {**p, "ports": [p["key"], *p["ports"]]}
+    assert {k: v for k, v in listed.items() if k != "registered"} == {k: v for k, v in plain.items() if k != "registered"}
+    # a reader in no layout is refused exactly where it is pinned
+    for what in ("the key the second row", "a reader of one output"):
+        pinned, free = (shaped[f"2x3 {what}, {how}"]["case"]["instance"] for how in ("pinned", "no pin"))
+        assert pinned["program"] == free["program"] and len(pinned["pins"]) == 1 and free["pins"] == []
+        assert json.loads(pinned["record"])["registered"] == json.loads(free["record"])["registered"]
+
+
 def test_no_wire_crosses_slots_at_the_served_shape(random_cases, shaped):
     """A wire from another slot's unit is the reading block's fresh input, so the form is a check that none crosses.
     At the served class's shape none does and the count is 0. One wire of one unit from the next slot is counted, its
@@ -135,6 +197,8 @@ def test_no_wire_crosses_slots_at_the_served_shape(random_cases, shaped):
     reads its reader's slot."""
     crossed = "2x3 one wire from the next slot"
     for what, m in shaped.items():
+        if m["broken"]:
+            continue
         detail = vectors.results(m["case"])["detail"]
         assert detail["wired_rows"] > 0
         if what != crossed:
@@ -215,10 +279,10 @@ def test_the_reference_reads_a_record_as_the_interface_does(random_cases, shaped
     for m in made:
         case = m["case"]
         inst, tr = case["instance"], case["trusted"]
-        detail = ref.check_detail(inst, tr)
+        refusal = ref.check_detail(inst, tr).get("error")
         stage, read = _interface(m)
-        assert stage == detail.get("error"), (m["shape"], m.get("how"))
-        if read is None:
+        assert stage == (None if refusal in ROLES else refusal), (m["shape"], m.get("how"))
+        if read is None or refusal is not None:
             continue
         lays, units, blocks, doc = read
         e = ref.expand(inst, tr)

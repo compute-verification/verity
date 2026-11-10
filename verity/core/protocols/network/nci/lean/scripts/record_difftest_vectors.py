@@ -25,7 +25,10 @@ cut, a mix, a selection and a token feed reading its own earlier units), at two 
 served class's four slots and 35, with the weights registered at the start of the deployment and with none, under
 another root, with the opening's root read dropped, with the opening's reader another Definition under the pinned
 one's name whose verdict is a constant 1, with one wire from the next slot, and with the order given beside the
-record.
+record; and the negative vectors of a pinned reader's layout (the form's `layoutOf`), one a role: the key listed
+among the opening's ports, another row named the key, the root or the domain id read in another row, an opened row
+left out or out of order, another output named the verdict, and a pinned reader whose rows are in no layout's order
+or that has one output, with the same records under no pin.
 
 Every wire of every case is one `NciCheck.Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -82,6 +85,9 @@ BROKEN = {
     "inputs": ["read-param", "read-leaves", "read-on-wire", "table-param", "root-port", "verdict", "ingress-units",
                "registered-keys"],
     "blocks": ["no-blocks", "slot-radix", "two-slots", "gap", "twice", "entry-template"],
+    "reader-layout": ["reader-other"],
+    "reader-roles": ["key-port", "key-row", "root-row", "domain-row", "rows-swapped", "port-out", "ports-order",
+                     "verdict-out"],
 }
 #: each way with its stage: case `seed`, where it is broken, is broken in way `seed` modulo their number
 WAYS = [(stage, how) for stage, hows in BROKEN.items() for how in hows]
@@ -439,7 +445,12 @@ def random_circuit(rng, seed: int) -> Circuit:
 # Circuits in the shape of a served class
 
 
-def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forged: bool = False) -> Circuit:
+#: `Embed`'s parameters in a layout's order (the form's `layoutOf`): the key, the root, the domain id, the opened rows
+READER = ("tok", "root", "domain", "row", "salt", "path")
+
+
+def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forged: bool = False,
+            key_wired: bool = True, rows: tuple[str, ...] = READER, verdict: bool = True) -> Circuit:
     """A circuit in the shape of a served class of `S` slots and `T` positions (the module docstring), E = 2 words a
     hidden row: `Scan` (one unit a slot, its state a registered read of `scan-state`, the phase's own input), `Embed`
     (a table opening at the token), `Norm`, `Gemm` (per position and slot, two rows of the query weights then four of
@@ -447,7 +458,9 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forg
     `v`), `Mix`, `Select` and `Feed` (the next position's token; its state its own earlier unit's). No wire crosses
     slots; with `cross`, one does: the first slot's mix at the second position reads the next slot's attention. Without
     `root_read`, no table read of the root; with `forged`, `Embed` is another Definition under the same name, its
-    verdict a constant 1 that reads no port."""
+    verdict a constant 1 that reads no port. Without `key_wired`, no wire fills `Embed`'s token. `rows` is the order of
+    `Embed`'s parameters, a layout's by default; without `verdict`, `Embed` has the one output, the row, which its
+    opening names as its verdict."""
     c = Circuit(f"lowered{S}x{T}", S, T)
     E, v16 = 2, Value(16)
     row = Array(E, v16)
@@ -464,10 +477,11 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forg
         return template(f"Low{name}", params, outs, plan)
 
     scan = c.add(make("Scan", [("state", Array(4, v16))], [v16, row], {0: [0, 1, 2]}), [([S], ["slot"], 0)])
-    embed = c.add(make("Embed", [("tok", v16), ("root", DIGEST), ("domain", DIGEST), ("row", row), ("salt", Value(32)),
-                                 ("path", Array(4, v16))], [row, Value(1)],
-                       {0: [0], 1: list(range(8)), 2: list(range(8)), 3: [0, 1], 4: [0], 5: [0, 1, 2, 3]},
-                       constant=(1,) if forged else ()), [([T, S], ["step", "slot"], 0)])
+    ports = {"tok": (v16, [0]), "root": (DIGEST, list(range(8))), "domain": (DIGEST, list(range(8))), "row": (row, [0, 1]),
+             "salt": (Value(32), [0]), "path": (Array(4, v16), [0, 1, 2, 3])}
+    embed = c.add(make("Embed", [(p, ports[p][0]) for p in rows], [row, Value(1)] if verdict else [row],
+                       {i: ports[p][1] for i, p in enumerate(rows)}, constant=(1,) if forged else ()),
+                  [([T, S], ["step", "slot"], 0)])
     norm = c.add(make("Norm", [("x", row), ("w", row)], [row], {0: [0, 1], 1: [0, 1]}), [([T, S], ["step", "slot"], 0)])
     gemm = c.add(make("Gemm", [("x", row), ("w", Array(4, v16))], [row], {0: [0, 1], 1: [0, 1, 2]}),
                  [e for t in range(T) for e in (([S, 2], ["slot", "-"], t), ([S, 4], ["slot", "-"], t))])
@@ -486,7 +500,8 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forg
         c.wires += IF.coalesce([IF.Wire(reader, port, writer, out, u, (n,), v, (d if n > 1 else 0,), (0, n))
                                 for u, v, d, n in cells])
 
-    wire(embed, "tok", scan, "o0", [(s, s, 0, 1) for s in range(S)])
+    if key_wired:
+        wire(embed, "tok", scan, "o0", [(s, s, 0, 1) for s in range(S)])
     wire(norm, "x", embed, "o0", [(u, u, 0, 1) for u in range(T * S)])
     wire(gemm, "x", norm, "o0", [(t * G + i, t * S + (i // 2 if i < 2 * S else (i - 2 * S) // 4), 0, 1)
                                  for t in range(T) for i in range(G)])
@@ -504,14 +519,15 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forg
         wire(feed, "sel", select, "o0", [(u, u, 0, 1) for u in range((T - 1) * S)])
         wire(feed, "st", scan, "o1", [(s, s, 0, 1) for s in range(S)])
         wire(feed, "st", feed, "o1", [(u, u - S, 0, 1) for u in range(S, (T - 1) * S)])
-        wire(embed, "tok", feed, "o0", [(u + S, u, 0, 1) for u in range((T - 1) * S)])
+        if key_wired:
+            wire(embed, "tok", feed, "o0", [(u + S, u, 0, 1) for u in range((T - 1) * S)])
     c.params = {"scan-state": 4 * S, "weights/embed/table": 2 * 16, "weights/norm": 2, "weights/query": 2 * 4,
                 "weights/mixing": 4 * 4}
     c.tables = [{"name": "table/weights/embed", "param": "weights/embed/table", "offset": 0, "words": 2, "rows": 16}]
     c.roots = [{"reader": embed, "port": of, "table": "table/weights/embed", "of": of, "at": 0, "units": T * S}
                for of in ("domain", "root") if root_read or of == "domain"]
     c.openings = [{"reader": embed, "table": "table/weights/embed", "key": "tok", "ports": ["row", "salt", "path"],
-                   "verdict": "o1", "at": 0, "units": T * S}]
+                   "verdict": "o1" if verdict else "o0", "at": 0, "units": T * S}]
     c.reads = IF.coalesce(
         [IF.Read(scan, "state", "scan-state", s, (1,), 4 * s, (0,)) for s in range(S)]
         + [IF.Read(norm, "w", "weights/norm", u, (1,), 0, (0,)) for u in range(T * S)]
@@ -533,14 +549,25 @@ def shaped() -> list[dict]:
     fresh and the rate refuses (`nci`), the count `fresh`. Then at two slots and three positions: the query weights
     under another root than the run commits, the opening with no table read of its root, the opening's reader another
     Definition under `Embed`'s name whose verdict is a constant 1, and one wire from the next slot, each refused the
-    same way; the order given beside the record, and a deployment whose first record is the run's own, each accepted."""
+    same way; the order given beside the record, and a deployment whose first record is the run's own, each accepted.
+
+    Then a pinned reader's layout, at two slots and three positions under the same policy and pin. `Embed`'s token left
+    unwired is free and the rate refuses. With the token then listed among the opening's ports the record is refused
+    (`reader-roles`), as it is with another row named the key, the root read in the domain id's row or the domain id in
+    the root's, the two swapped, an opened row left out, the opened rows in another order, and another output named the
+    verdict. `Embed` with its token its second row, and `Embed` with one output, are in no layout: pinned, the record
+    is refused (`reader-layout`). Under no pin none of those records is refused by its roles: the opening's ports are
+    fresh and the rate refuses."""
     out = []
+    first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
         policy: dict = {}
         pins = [ref.closure_digest(json.loads(lowered(S, T).program()[0]), EMBED)]
 
         def one(what: str, c: Circuit, seed: int, *, held=WEIGHTS, committed=WEIGHTS, moved=(), beside=False,
-                before=2, policy=policy, pins=pins, n=n) -> None:
+                before=2, policy=policy, pins=pins, n=n, edit=None, pinned=None, broken=None) -> None:
+            """The case on `c`; with `edit`, its record then edited; with `pinned`, its pins then those; `broken`, the
+            stage that refuses it."""
             rng = random.Random(50_000 + 100 * n + seed)
             roots = {p: _hex(rng) for p in c.params}
             order = None
@@ -549,8 +576,13 @@ def shaped() -> list[dict]:
             made = finish(rng, c, {p: (_hex(rng) if p in moved else roots[p], c.params[p] // 2, 2) for p in held},
                           {p: roots[p] for p in (*committed, "scan-state")}, pins, before=before, order=order,
                           policy=policy)
-            out.append(made | {"shape": what, "broken": None})
+            if edit is not None:
+                _rewrite(made, edit)
+            if pinned is not None:
+                made["case"]["instance"]["pins"] = pinned
+            out.append(made | {"shape": what, "broken": broken})
 
+        first = first or one
         one(f"{S}x{T} registered", lowered(S, T), 0)
         one(f"{S}x{T} none registered", lowered(S, T), 1, held=())
         one(f"{S}x{T} none committed", lowered(S, T), 2, committed=())
@@ -561,6 +593,33 @@ def shaped() -> list[dict]:
             one("2x3 one wire from the next slot", lowered(S, T, cross=True), 5)
             one("2x3 the order beside the record", lowered(S, T), 6, beside=True)
             one("2x3 the run's record first", lowered(S, T), 7, before=0)
+
+    def opening(**fields):
+        return lambda d: d["registered"]["openings"][0].update(fields)
+
+    def table_reads(**row):
+        """Each table read moved to the row `row` gives what it reads (`root`, `domain`), and dropped where it gives none."""
+        return lambda d: d["registered"].update(roots=[{**r, "port": row[r["of"]]} for r in d["registered"]["roots"]
+                                                       if r["of"] in row])
+
+    roles, among = "reader-roles", ["tok", "row", "salt", "path"]
+    first("2x3 the key not wired", lowered(2, 3, key_wired=False), 9)
+    first("2x3 the key among the ports", lowered(2, 3, key_wired=False), 10, edit=opening(ports=among), broken=roles)
+    first("2x3 the key among the ports, no pin", lowered(2, 3, key_wired=False), 11, pins=[], edit=opening(ports=among))
+    first("2x3 another row the key", lowered(2, 3), 12, edit=opening(key="row"), broken=roles)
+    first("2x3 the root read in the domain id's row", lowered(2, 3), 13, edit=table_reads(root="domain"), broken=roles)
+    first("2x3 the domain id read in the root's row", lowered(2, 3), 14, edit=table_reads(domain="root"), broken=roles)
+    first("2x3 the root's and the domain id's rows swapped", lowered(2, 3), 15,
+          edit=table_reads(root="domain", domain="root"), broken=roles)
+    first("2x3 an opened row left out", lowered(2, 3), 16, edit=opening(ports=["row", "salt"]), broken=roles)
+    first("2x3 the opened rows in another order", lowered(2, 3), 17, edit=opening(ports=["salt", "row", "path"]),
+          broken=roles)
+    first("2x3 another output the verdict", lowered(2, 3), 18, edit=opening(verdict="o0"), broken=roles)
+    for seed, what, shape in ((19, "the key the second row", {"rows": ("root", "tok", "domain", "row", "salt", "path")}),
+                              (21, "a reader of one output", {"verdict": False})):
+        pin = [ref.closure_digest(json.loads(lowered(2, 3, **shape).program()[0]), EMBED)]
+        first(f"2x3 {what}, pinned", lowered(2, 3, **shape), seed, pins=[], pinned=pin, broken="reader-layout")
+        first(f"2x3 {what}, no pin", lowered(2, 3, **shape), seed + 1, pins=[])
     return out
 
 
@@ -854,6 +913,61 @@ def _break(rng, made: dict, how: str) -> bool:
                 or how == "verdict" and not reg["openings"]):
             return False
         _rewrite(made, edit)
+    elif how in (*BROKEN["reader-layout"], *BROKEN["reader-roles"]):
+        desc = json.loads(inst["program"])
+        lays = {t: ref.layout(ref.Template(t, fn, n)) for (fn, n), t in zip(c.templates, ids, strict=True)}
+        pinned = [t for t in ids if ref.closure_digest(desc, t) in inst["pins"]]
+        opened = [k for k, o in enumerate(reg.get("openings", [])) if o["reader"] in pinned]
+        read = {of: [t for t in pinned if any(r["reader"] == t and r["of"] == of for r in reg.get("roots", []))]
+                for of in ("root", "domain")}
+        bare = [t for t in pinned if lays[t] is None]
+
+        def clear(d: dict, t: str, p: str) -> None:
+            """Nothing fills template `t`'s row `p`."""
+            d["wires"] = [w for w in d["wires"] if (w["reader"], w["port"]) != (t, p)]
+            d["registered"]["reads"] = [r for r in d["registered"]["reads"] if (r["reader"], r["port"]) != (t, p)]
+            if "ingress" in d:
+                d["ingress"] = [g for g in d["ingress"] if (g["reader"], g["port"]) != (t, p)]
+
+        def move(d: dict, t: str, row: dict) -> None:
+            """Template `t`'s table reads, each in the row `row` gives what it reads, and dropped where it gives none."""
+            d["registered"]["roots"] = [{**r, "port": row[r["of"]]} if r["reader"] == t else r
+                                        for r in d["registered"]["roots"] if r["reader"] != t or r["of"] in row]
+
+        def edit(d: dict) -> None:
+            r = d["registered"]
+            if how == "reader-other":
+                t = rng.choice(bare)
+                p = c.templates[ids.index(t)][0].signature()[0][0][0]
+                clear(d, t, p)
+                r["openings"].append({"reader": t, "table": rng.choice(r["tables"])["name"], "key": p, "ports": [p],
+                                      "verdict": "o0", "at": 0, "units": units[t]})
+            elif how in ("root-row", "domain-row", "rows-swapped"):
+                of = {"root-row": "root", "domain-row": "domain"}.get(how)
+                t = rng.choice(read[of] if of else [t for t in read["root"] if t in read["domain"]])
+                lay = lays[t]
+                move(d, t, {"root": lay["domain"]} if of == "root" else {"domain": lay["root"]} if of else
+                     {"root": lay["domain"], "domain": lay["root"]})
+            else:
+                o = r["openings"][rng.choice(opened)]
+                lay = lays[o["reader"]]
+                if how == "key-port":
+                    clear(d, o["reader"], o["key"])
+                    o["ports"] = [o["key"], *o["ports"]]
+                elif how == "key-row":
+                    o["key"] = rng.choice([lay["root"], lay["domain"], *lay["ports"]])
+                elif how == "port-out":
+                    o["ports"].remove(rng.choice(o["ports"]))
+                elif how == "ports-order":
+                    o["ports"] = rng.choice([o["ports"][::-1], o["ports"][1:] + o["ports"][:1]])
+                else:
+                    o["verdict"] = "o0"
+        if (how == "reader-other" and not (bare and reg.get("tables"))
+                or how in ("root-row", "domain-row") and not read[how[:-4]]
+                or how == "rows-swapped" and not set(read["root"]) & set(read["domain"])
+                or how in ("key-port", "key-row", "port-out", "ports-order", "verdict-out") and not opened):
+            return False
+        _rewrite(made, edit)
     elif how == "no-blocks":
         _rewrite(made, lambda d: rng.choice([lambda: d.pop("blocks"), lambda: d["blocks"].pop("inference"),
                                              lambda: d["blocks"]["inference"].update(slots=0),
@@ -921,7 +1035,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 12
+    return COUNT + 26
 
 
 def results(case: dict) -> dict:

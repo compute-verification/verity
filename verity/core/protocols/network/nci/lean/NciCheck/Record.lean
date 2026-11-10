@@ -54,6 +54,9 @@ record first, and the digest of the run's own record. `params` is not read.
    `param` for its writer, and SPOT's reader reads it (`Spot.Wires.Wire.ofJson`).
 9. `blocks`: the record's inference entries do not tile every template's units, each with one slot digit of the
    class's radix (`gridsOf`).
+10. `reader-layout`, then `reader-roles` (`rolesOf`, "The layout" below): a pinned template that an opening or a table
+    read names as its reader has no layout; or an opening or a table read of such a reader names a row or an output
+    that is not the layout's.
 
 ## Blocks, rows and kinds
 
@@ -96,23 +99,47 @@ under the root the run's own record commits the parameter under (`window.registe
 for it in 16-bit words (`isTheta`). So θ is registered at the start of the deployment, before the run, and no
 earlier run's output is θ.
 
+## The layout
+
+A pin is a digest and says nothing of which of its Definition's rows is which. One rule by position says it for every
+pinned reader (`layoutOf`), read from the template's rows and outputs, which are the Definition's parameters and return
+fields in order (`tmplOf`). A template has a layout where it has at least six input rows, the second and the third of
+32 words each, and at least two outputs. Its roles are then:
+
+* input row 0: the key;
+* input row 1: the table's root; input row 2: the table's domain id;
+* input rows 3, 4 and 5: the opened rows (the row the unit opens, its salt and its path);
+* output 1: the verdict.
+
+Any later input row and any other output has no role. The closure digest covers a Definition's parameters and return
+type, which its entry holds inline, so two Definitions of one digest have one layout.
+
+`rolesOf` holds the record to it, for every template that an opening or a table read names as its reader and whose
+Definition is pinned: it has a layout (`reader-layout`); an opening of it has the layout's key for its `key`, the
+layout's opened rows, in order and no other, for its `ports`, and the layout's verdict for its `verdict`; and a table
+read by it is of the root in the layout's root row, or of the domain id in the layout's domain id row
+(`reader-roles`). So no record chooses which rows of a pinned reader an opening fills: a record that names any other
+row is refused, never counted. A reader that is not pinned is held to no layout.
+
 ## An opening, held
 
-An opening's ports (the row it opens, its salt and its path) are counted θ only where `openingHeld`: the opening's
-reader is a template whose Definition's closure digest is among the pins; its table is over a θ parameter; and a
-table read of the table's root and one of its domain id, by the same reader, each cover the opening's units. The
-check decides those three and no more. That the units of a pinned Definition accept only a row the table's root
-commits is a statement about that Definition's circuit, which the pin fixes by SHA-512, and it holds up to a
-SHA-512 collision: both are premises of the bound, not something this check decides. A reader that is not pinned
-counts every port fresh, whatever the record declares of it.
+An opening's ports are counted θ only where `openingHeld`: the opening's reader is a template whose Definition's
+closure digest is among the pins; its table is over a θ parameter; and a table read of the table's root and one of
+its domain id, by the same reader, each cover the opening's units. Its ports are then the layout's opened rows, and
+those two table reads fill the layout's root and domain id rows (`rolesOf`). The check decides those and no more.
+That the units of a pinned Definition accept only a row the table's root commits is a statement about that
+Definition's circuit, which the pin fixes by SHA-512, and it holds up to a SHA-512 collision: both are premises of the
+bound, not something this check decides. A reader that is not pinned counts every port fresh, whatever the record
+declares of it.
 
 ## Cost
 
 In proportion to the Program's description and the record: each template is read once, from its Definition, and
 multiplied through its units; each wire and each declaration is counted in closed form through the entries' digits
 (`inSlot`); the greatest over the slots is taken over the slots where some declaration's count changes (`slotsToTry`),
-never over every slot of a class that has more; and `sameSlot` visits at most `FUEL` boxes of digits for a wire,
-past which the wire counts as crossing. No gate, unit or row is visited one by one.
+never over every slot of a class that has more; `sameSlot` visits at most `FUEL` boxes of digits for a wire, past
+which the wire counts as crossing; and a closure digest is taken once for each template an opening or a table read
+names as its reader (`rolesOf`). No gate, unit or row is visited one by one.
 -/
 
 @[expose] public section
@@ -311,19 +338,24 @@ structure Table where
   name : String
   param : String
 
-/-- A table read: template `reader`'s units `[start, start + units)` read `table`'s root (`root`), else its domain
-id. -/
+/-- A table read: template `reader`'s units `[start, start + units)` read, in input row `port`, `table`'s root
+(`root`), else its domain id. -/
 structure TableRead where
   reader : String
+  port : String
   table : String
   root : Bool
   start : Nat
   units : Nat
 
-/-- A table opening: template `reader`'s units `[start, start + units)` each open a row of `table`. -/
+/-- A table opening: template `reader`'s units `[start, start + units)` each open a row of `table` by the key in input
+row `key`, filling input rows `ports`, with the verdict in output `verdict`. -/
 structure Opening where
   reader : String
   table : String
+  key : String
+  ports : List String
+  verdict : String
   start : Nat
   units : Nat
 
@@ -455,7 +487,7 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (wired : Spot.Wires.Summar
     if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
     if !(tables.any (·.name == table)) || !(which == "root" || which == "domain") || words != 32 then throw "inputs"
     let k := W.cutsOf reader port
-    roots := roots ++ [({ reader, table, root := which == "root", start, units } : TableRead)]
+    roots := roots ++ [({ reader, port, table, root := which == "root", start, units } : TableRead)]
     decls := decls.push { w := rect reader port start units k, bits := 16 * words / k, fill := .table table }
   let .arr openingsJ := Baseline.getD reg "openings" | throw "inputs"
   let mut openings : List Opening := []
@@ -473,12 +505,14 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (wired : Spot.Wires.Summar
     if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
     let _ ← rowIn t key
     if !(tables.any (·.name == table)) || (t.outs.lookup out).isNone then throw "inputs"
+    let mut ports : List String := []
     for pj in portsJ do
       let .str p := pj | throw "inputs"
       let words ← rowIn t p
       let k := W.cutsOf reader p
       decls := decls.push { w := rect reader p start units k, bits := 16 * words / k, fill := .opening openings.length }
-    openings := openings ++ [({ reader, table, start, units } : Opening)]
+      ports := ports ++ [p]
+    openings := openings ++ [({ reader, table, key, ports, verdict := out, start, units } : Opening)]
   let .arr ingressJ := (doc.getObjVal? "ingress").toOption.getD (Json.arr #[]) | throw "inputs"
   for g in ingressJ do
     if !keyed g INGRESS then throw "inputs"
@@ -667,6 +701,46 @@ def isPinned (desc : Json) (pins : Array String) (tid : String) : Bool :=
   | .ok d => pins.contains d
   | .error _ => false
 
+/-! ## The layout -/
+
+/-- A reader's roles by position (the module docstring's "The layout"): the input rows that hold an opening's key, the
+table's root and the table's domain id, the input rows an opening fills (the row opened, its salt and its path), and
+the output that holds the verdict. -/
+structure Layout where
+  key : String
+  root : String
+  domain : String
+  ports : List String
+  verdict : String
+  deriving BEq, Inhabited, Repr
+
+/-- Template `t`'s layout, from its rows and outputs alone, which are its Definition's parameters and return fields in
+order: none unless it has at least six input rows, the second and the third of 32 words each, and at least two
+outputs. -/
+def layoutOf (t : Tmpl) : Option Layout :=
+  match t.rows, t.outs with
+  | (key, _, _) :: (root, 32, _) :: (domain, 32, _) :: (row, _, _) :: (salt, _, _) :: (path, _, _) :: _,
+      _ :: (verdict, _) :: _ => some { key, root, domain, ports := [row, salt, path], verdict }
+  | _, _ => none
+
+/-- The tenth stage of the module docstring on the declarations `x` of the templates `ts`, with `pinned` the templates
+whose Definitions the policy pins: the pinned templates that an opening or a table read names as its reader, `pinned`
+asked once of each. Refused (`reader-layout`) where one of them has no layout, else (`reader-roles`) where an opening
+of one has another `key`, other `ports` (the layout's, in order) or another `verdict` than its layout's, or a table
+read by one is in another row than its layout's root row (of the root) or domain id row (of the domain id). -/
+def rolesOf (ts : List Tmpl) (pinned : String → Bool) (x : Inputs) : Except String (List String) := do
+  let readers := ((x.openings.map (·.reader) ++ x.roots.map (·.reader)).eraseDups).filter pinned
+  let layouts ← readers.mapM fun tid => match (ts.find? (·.tid == tid)).bind layoutOf with
+    | some l => pure (tid, l)
+    | none => throw "reader-layout"
+  for o in x.openings do
+    if let some l := layouts.lookup o.reader then
+      if !(o.key == l.key && o.ports == l.ports && o.verdict == l.verdict) then throw "reader-roles"
+  for r in x.roots do
+    if let some l := layouts.lookup r.reader then
+      if r.port != (if r.root then l.root else l.domain) then throw "reader-roles"
+  return readers
+
 /-- Whether a table read of opening `o`'s table, of its root (`root`) or else its domain id, by `o`'s reader, covers
 `o`'s units. -/
 def covered (x : Inputs) (o : Opening) (root : Bool) : Bool :=
@@ -675,9 +749,10 @@ def covered (x : Inputs) (o : Opening) (root : Bool) : Bool :=
 
 /-- Whether opening `o` is held against its registered table: its reader's Definition is pinned, its table is over a θ
 parameter, and a table read of the table's root and one of its domain id, by the same reader, each cover its units.
-Only then are its ports counted θ. This decides no more than those three: that a unit of the pinned Definition
-accepts only a row the root it reads commits is a statement about the pinned circuit, and holds up to a SHA-512
-collision; the bound takes both as premises. -/
+Only then are its ports counted θ. On declarations `rolesOf` took, the ports are the opened rows of the reader's
+layout and the two table reads fill its root and domain id rows. This decides no more than those: that a unit of the
+pinned Definition accepts only a row the root it reads commits is a statement about the pinned circuit, and holds up
+to a SHA-512 collision; the bound takes both as premises. -/
 def openingHeld (pinned theta : String → Bool) (x : Inputs) (o : Opening) : Bool :=
   pinned o.reader && (((x.tables.find? (·.name == o.table)).map fun t => theta t.param).getD false) &&
     covered x o true && covered x o false
@@ -719,7 +794,7 @@ def fillAt (ds : List Decl) (tid port : String) (u row : Nat) : Option Fill :=
 
 /-! ## The record, read -/
 
-/-- The record, read (stages 1 to 9 of the module docstring): its front, its wiring and wires as SPOT checked them,
+/-- The record, read (stages 1 to 10 of the module docstring): its front, its wiring and wires as SPOT checked them,
 its declarations, the class's slots, each template's grids, per wire whether it is inside a block, per registered
 parameter whether it is θ, and per opening whether it is held. -/
 structure Case where
@@ -745,7 +820,9 @@ def Case.kind (c : Case) (fill : Option Fill) : Kind := kindOf c.inside c.held c
 /-- **The classing**: the kind of row `row` of port `port` of template `tid`'s unit `u`, one for every row. -/
 def Case.rowKind (c : Case) (tid port : String) (u row : Nat) : Kind := c.kind (fillAt c.x.decls tid port u row)
 
-/-- Stages 7 to 9 of the module docstring on a front, with `pinned` the templates whose Definitions the policy pins. -/
+/-- Stages 7 to 10 of the module docstring on a front, with `pinned` the templates whose Definitions the policy pins.
+`rolesOf` gives the pinned templates among the readers the declarations name, every opening's reader among them, so
+an opening's reader is pinned exactly where it is one of those. -/
 def finish (f : Front) (pinned : String → Bool) : Except String Case := do
   let W ← wiringOf f
   let wired ← match Spot.Wires.check W with
@@ -753,10 +830,12 @@ def finish (f : Front) (pinned : String → Bool) : Except String Case := do
     | .error _ => throw "wires"
   let x ← inputsOf f.ts W wired f.doc
   let (S, grids) ← gridsOf f.ts f.doc
+  let readers ← rolesOf f.ts pinned x
   let gridsAt := fun (tid : String) => (grids.lookup tid).getD []
   let inside := (wired.wires.map fun w => sameSlot S (gridsAt w.reader) (gridsAt w.writer) w).toArray
   let theta := x.params.map fun (p, leaves) => (p, isTheta f.T leaves p)
-  let held := (x.openings.map (openingHeld pinned (fun p => (theta.lookup p).getD false) x)).toArray
+  let thetaAt := fun (p : String) => (theta.lookup p).getD false
+  let held := (x.openings.map (openingHeld readers.contains thetaAt x)).toArray
   return { f, W, wired, x, S, grids, inside, theta, held }
 
 /-- The instance and the trusted input, read, or the first refusal's code in the module docstring's order. A template

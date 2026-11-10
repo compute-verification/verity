@@ -18,11 +18,11 @@ inside a block when every reader row it covers is read from a writer of the read
 wire counts as read across blocks. Every input row of every unit is classed once (`KINDS`, by `expand`'s `kind`): one
 nothing shows inside its block or θ is fresh; and it counts whole, 16 bits a word, whether or not a gate reads it.
 
-Four rules are no expansion. The wires' own check is SPOT's (`Spot.Wires.check`, which the Lean runs on the wires as
+Five rules are no expansion. The wires' own check is SPOT's (`Spot.Wires.check`, which the Lean runs on the wires as
 `Spot.Wires.Wiring.ofJson` reads them); here it is Python's statement of the same rule,
-`verity.ml.windows.interface.check_wires`. θ's rule and the rule for a table opening are the Lean's, restated
-(`theta`, `held`): nothing unrolls a registration log. A Definition's closure digest is the period check's
-(`closure_digest`).
+`verity.ml.windows.interface.check_wires`. θ's rule, a pinned reader's layout and the rule for a table opening are the
+Lean's, restated (`theta`, `layout` and `roles`, `held`): nothing unrolls a registration log, and a layout is read from
+a template's signature. A Definition's closure digest is the period check's (`closure_digest`).
 """
 from __future__ import annotations
 
@@ -355,10 +355,38 @@ def theta(T: dict, params: dict, p: str) -> bool:
     return m is not None and m[0] * m[1] == params[p] and m[2] == 16
 
 
+def layout(t: Template) -> dict | None:
+    """The Lean's `layoutOf`: template `t`'s roles by position, or None where it has no layout. It has one with
+    at least six input rows, the second and the third of 32 words each, and at least two outputs: input row 0 is the
+    `key`, 1 the table's `root`, 2 its `domain` id, 3 to 5 the opened rows (`ports`), and output 1 the `verdict`."""
+    if len(t.rows) < 6 or len(t.outs) < 2 or t.rows[1][1] != 32 or t.rows[2][1] != 32:
+        return None
+    names = [p for p, *_ in t.rows]
+    return {"key": names[0], "root": names[1], "domain": names[2], "ports": names[3:6], "verdict": t.outs[1][0]}
+
+
+def roles(templates: list[Template], is_pinned, x: Inputs) -> None:
+    """The Lean's `rolesOf`, over the pinned templates that an opening or a table read names as its reader:
+    `reader-layout` where one has no layout; else `reader-roles` where an opening of one has another key, other ports
+    (the layout's, in order) or another verdict than its layout's, or a table read by one is in another row than its
+    layout's root row (of the root) or domain id row (of the domain id)."""
+    by = {t.tid: t for t in templates}
+    named = {d["reader"] for d in (*x.openings, *x.roots) if is_pinned(d["reader"])}
+    layouts = {tid: layout(by[tid]) for tid in named}
+    if None in layouts.values():
+        raise Malformed("reader-layout")
+    if any(o["reader"] in layouts and (o["key"], o["ports"], o["verdict"]) != tuple(
+            layouts[o["reader"]][k] for k in ("key", "ports", "verdict")) for o in x.openings):
+        raise Malformed("reader-roles")
+    if any(r["reader"] in layouts and r["port"] != layouts[r["reader"]][r["of"]] for r in x.roots):
+        raise Malformed("reader-roles")
+
+
 def held(x: Inputs, is_theta, is_pinned, o: dict) -> bool:
     """Whether opening `o` is checked against its registered table inside its units: its reader's Definition is one the
     policy pins, the table is over a θ parameter, and one table read of the table's root and one of its domain id, by
-    the opening's reader, each cover its units."""
+    the opening's reader, each cover its units. On declarations `roles` took, its ports are the opened rows of its
+    reader's layout, and the two table reads fill the layout's root and domain id rows."""
     def covered(of: str) -> bool:
         return any(r["reader"] == o["reader"] and r["table"] == o["table"] and r["of"] == of and r["at"] <= o["at"]
                    and o["at"] + o["units"] <= r["at"] + r["units"] for r in x.roots)
@@ -395,6 +423,7 @@ def expand(inst, tr) -> dict:
     inside = [all(slot[w["reader"]][u] == slot[w["writer"]][v] for u, _, v in entries(w)) for w in wires]
     is_theta = {p: theta(T, x.params, p) for p in x.params}.__getitem__
     is_pinned = {t.tid: closure_digest(desc, t.tid) in i["pins"] for t in templates}.__getitem__
+    roles(templates, is_pinned, x)
     holds = [held(x, is_theta, is_pinned, o) for o in x.openings]
 
     def kind(what: tuple | None) -> str:
