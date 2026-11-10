@@ -23,8 +23,11 @@ it imports, directly or through others, in its package or in any package its pac
 Each of those has its `.olean` and the trace Lake wrote for it, that trace says the module is of the source as it is now
 (`current`), and none of them is a name some package of the workspace holds a product of with no source. One that isn't
 is listed as unchecked, with the count. An `.olean` built from a module's source names that source's imports, so the
-modules loaded are the ones the sources name, each built from its source, and a name two of them declare is declared
-twice in the sources.
+modules loaded are the ones the sources name, each built from its source, and no name is there twice because a product
+of another text declares it. One thing a module's own trace doesn't tell is left as it was: a build of its source made
+against an older build of an import (Lake mixes the imports' outputs into the one `depHash`, which only Lake recomputes).
+Lean imports such a build, and the names a module declares seldom depend on it, so it counts; where two of those clash,
+the line says how to rebuild them.
 
 What a trace says depends on how Lake came by the module. One it built states the hash of the source it built from
 (`built_from`), which is compared with the hash of the source as it is (`lake_hash`). That says what a modification time
@@ -369,8 +372,10 @@ def verdict(p: Plan, rc: int, output: str, seconds: float, peak_mb: int) -> tupl
             return 1, (f"siblings: {p.module} and {other} both declare '{name}', which Lean refuses when it imports both, "
                        f"as the package's root does: rename one ({cost}){left}")
         return 1, (f"siblings: {refused} and {earlier} both declare '{name}', neither of them {p.module}: a clash already "
-                   f"in the sources, since every build the stub loaded is of its source as it is, so a root that imports "
-                   f"both refuses them too: rename one; {p.module}'s own names are unchecked ({cost}){left}")
+                   f"in the sources, which a root that imports both refuses too (rename one), since each build the stub "
+                   f"loaded is of its source as it is; or one of them was built against an older build of a module it "
+                   f"imports (`lake build +{refused} +{earlier}` and try again); {p.module}'s own names are unchecked "
+                   f"({cost}){left}")
     return rc or 1, f"siblings: the stub that imports {p.module} beside them failed (its output above) ({cost}){left}"
 
 

@@ -299,7 +299,7 @@ def test_the_line_names_both_modules_of_a_clash_and_counts_what_it_left_unchecke
         "the count, not only names"
     rc, line = S.verdict(p, 1, "error: import P.X failed, environment already contains 'Q.z' from P.C\n", 1, 1)
     assert rc == 1 and "P.X and P.C both declare 'Q.z', neither of them P.D: a clash already in the sources" in line
-    assert "rename one" in line and "lake build" not in line and f"; {S.SHOWN + 2} unchecked" in line
+    assert "rename one" in line and "`lake build +P.X +P.C` and try again" in line and f"; {S.SHOWN + 2} unchecked" in line
     assert S.verdict(p, 0, "", 1, 1)[0] == 0
     assert S.verdict(p, 1, "error: object file ... does not exist\n", 1, 1)[0] == 1
 
