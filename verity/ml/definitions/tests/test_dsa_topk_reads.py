@@ -12,7 +12,9 @@
 * `DsaTopKReadRows_v1` over a table that holds a history gives today's long row's kv (`DsaButterflyRowsPad_v1` at the counted
   mask's settings over the history and a zero pad) with every ok 1, at small statics over three blocks, and ok 0 at a slot whose
   opening is not the table's;
-* `cut` counts its units at the served statics, and malformed bindings are refused.
+* `cut` counts its units at the served statics, and malformed bindings are refused;
+* every unit of the cut at every served class has the rows Flock's composer proves, and the index's units and the read pass
+  the window builder's `interface.check_proof_block`.
 """
 from __future__ import annotations
 
@@ -37,6 +39,7 @@ from verity.ml.definitions.registry import boolean_dsa_topk_mask as BM
 from verity.ml.definitions.registry import dsa_topk_mask as M
 from verity.ml.definitions.registry import dsa_topk_mask_cut as X
 from verity.ml.definitions.registry import dsa_topk_reads as R
+from verity.ml.windows import interface as IF
 
 SERVED_TOPK, SERVED_V, SERVED_H = 2048, 1 << 17, 576
 #: the score of a key past a row's own in today's long row (vllm_dsa's PAD_SCORE)
@@ -177,8 +180,8 @@ def test_an_index_out_of_range_gives_zeros(K, W, N) -> None:
 
 
 def test_the_served_chunk_and_slot_on_random_rows() -> None:
-    """At the served bindings (2,048 slots in chunks of 16, N 2^17, the longest row's class and the table's capacity): the
-    chunk's 7-level tree and its range at a power of two, and the slot's 4-level tree and bound at a power of two, on random
+    """At the served bindings (2,048 slots in chunks of 32, N 2^17, the longest row's class and the table's capacity): the
+    chunk's 6-level tree and its range at a power of two, and the slot's 5-level tree and bound at a power of two, on random
     rows, a tenth of their slots and a fifth of the chunks' past N."""
     rng = random.Random("dsa-chunk-served")
     K, W, N = SERVED_TOPK, R.CHUNK, SERVED_V
@@ -311,12 +314,65 @@ def test_the_cut_counts_its_units() -> None:
         masks = len(X.plan(N, SERVED_TOPK)) if N > X.WHOLE_MAX else 1
         assert (mask in cut) == (N <= X.WHOLE_MAX)
         assert cut[READ] == SERVED_TOPK and cut[bind(R.DsaPositionsMerge, M=len(bl), K=SERVED_TOPK)] == 1
-        assert cut[bind(R.DsaPositionsChunk, K=SERVED_TOPK, W=R.CHUNK)] == SERVED_TOPK // R.CHUNK == 128
+        assert cut[bind(R.DsaPositionsChunk, K=SERVED_TOPK, W=R.CHUNK)] == SERVED_TOPK // R.CHUNK == 64
         assert cut[bind(R.DsaPositionsSlot, K=R.CHUNK, N=N)] == SERVED_TOPK
         assert {(d.bindings["N"], d.bindings["AT"]) for d in cut if d.base_id == "DsaMaskPositions_v1"} == \
                {(hi - lo, lo) for lo, hi in bl}
-        assert sum(cut.values()) == masks + len(bl) + 1 + 128 + 2 * SERVED_TOPK
+        assert sum(cut.values()) == masks + len(bl) + 1 + 64 + 2 * SERVED_TOPK
     assert R.CUTS == {"DsaTopKReadRows_v1": R.cut}
+
+
+#: the row classes the long row serves: N a multiple of TOPK from 4,096 to the table's capacity
+SERVED_CLASSES = range(4096, SERVED_V + 1, SERVED_TOPK)
+#: the units the long row's own Definitions add to its cut: the index's past the mask, and the read
+INDEX_UNITS = ("DsaPositionsMerge_v1", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1", "EmbeddingRead_v1")
+
+
+def _served_units() -> dict[str, list]:
+    """Each unit of the long row's cut at every served class, once, by its template's id."""
+    READ = EM.read(SERVED_V, SERVED_H)
+    units: dict[str, dict] = {}
+    for N in SERVED_CLASSES:
+        for u, _ in R.cut(bind(R.DsaTopKReadRows, N=N, TOPK=SERVED_TOPK, BLOCK=R.BLOCK, READ=READ)):
+            units.setdefault(u.base_id, {})[u] = None
+    return {b: list(us) for b, us in units.items()}
+
+
+def test_every_served_unit_has_the_rows_flocks_composer_proves() -> None:
+    """Every unit of the cut at every served class, its rows read off its ports' bits as the composer reads them (a
+    parameter a row, then a return field a row, each whole u16 words): at most `interface.MAX_ROWS` rows, one of them past
+    `interface.LAST_BLOCK_BYTES` bytes so it compresses before its last SHA-512 block, and rows that alone fit a Flock
+    block of 2^K_MAX bits.  circuit-check's block check doesn't read the second: a slot over a chunk of 16 passed it."""
+    units = _served_units()
+    assert set(INDEX_UNITS) <= set(units)
+    for us in units.values():
+        for u in us:
+            params, ret = u.signature()
+            fields = getattr(ret, "fields", None) or (ret,)
+            rows = [2 * -(-sum(t.leaf_widths()) // 16) for t in [t for _, t in params] +
+                    [f[1] if isinstance(f, tuple) else f for f in fields]]
+            assert len(rows) <= IF.MAX_ROWS and max(rows) > IF.LAST_BLOCK_BYTES, (u.id, rows)
+            assert IF.rows_k_log(rows) <= IF.K_MAX, (u.id, rows)
+
+
+def test_the_index_and_read_units_pass_the_window_builders_proof_block_check() -> None:
+    """`interface.check_proof_block`, which vllm's window builder runs on every unit it settles, passes the merge, the
+    chunks, the slots and the read at every served class, at the least k_log their rows allow: 2^23 for the chunk and the
+    read, 2^21 for the slot (its chunk's 128 bytes the one row past 111), at most 2^26 for the merge of up to 8 blocks."""
+    units = _served_units()
+    k = {b: {IF.check_proof_block(u) for u in units[b]} for b in INDEX_UNITS}
+    assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v1"] == {23} and k["DsaPositionsSlot_v1"] == {21}
+    assert max(k["DsaPositionsMerge_v1"]) <= 26
+
+
+@pytest.mark.xfail(strict=True, raises=ValueError,
+                   reason="the mask's units and DsaMaskPositions_v1 take or give Boolean ports `interface.layout` doesn't lay "
+                          "out as rows: a mask, Array<N, BIT>, is one N-bit word, and a digit prefix or a rank of 8, 12 or "
+                          "24 bits isn't whole u16 words")
+def test_the_mask_units_pass_the_window_builders_proof_block_check() -> None:
+    for b, us in _served_units().items():
+        for u in us if b not in INDEX_UNITS else ():
+            IF.check_proof_block(u)
 
 
 def test_the_long_row_is_typed_by_its_read_and_malformed_bindings_are_refused() -> None:

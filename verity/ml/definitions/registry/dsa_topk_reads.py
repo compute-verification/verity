@@ -50,8 +50,10 @@ BIT = BL.BIT
 F32 = I32 = Array(32, BIT)
 BF16 = Array(16, BIT)
 BLOCK = X.BLOCK
-#: the slots of a chunk (`DsaPositionsChunk_v1`'s W), which a slot unit of the cut selects among: 128 chunks of 2,048 slots
-CHUNK = 16
+#: the slots of a chunk (`DsaPositionsChunk_v1`'s W), which a slot unit of the cut selects among: 64 chunks of 2,048 slots.
+#: Flock proves a unit only if one of its rows is past `interface.LAST_BLOCK_BYTES` (111) bytes, and the slot unit's
+#: longest row is its chunk, 4W bytes: 32 is the least power of two past it
+CHUNK = 32
 #: a read's ports: its hidden key (the position), the table's root and domain id, and the opening (the row, its salt, its path)
 READ_PORTS = ("tok", "root", "domain", "row", "salt", "path")
 

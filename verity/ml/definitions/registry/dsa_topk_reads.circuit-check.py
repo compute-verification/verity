@@ -19,7 +19,7 @@ RANGES = {
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The index units at small statics (a first block and one from AT, the merge of one list and of three, chunks of two of
     four slots and of five, a slot of four and of five), the long row over three blocks of 4 keys, two reads of a 16-row
-    table, and the merge, chunk and slot the longest row calls (8 blocks, 2,048 slots in chunks of 16, N 2^17): the merge
+    table, and the merge, chunk and slot the longest row calls (8 blocks, 2,048 slots in chunks of 32, N 2^17): the merge
     and the chunk over `targets.MAX_GATES`, each held to its digest pin."""
     from verity.ml.circuits.defs import bind
     from verity.ml.commitments.gates.embedding import read

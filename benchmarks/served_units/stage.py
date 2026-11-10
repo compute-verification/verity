@@ -73,9 +73,9 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
     rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
     table-read  `READS`: EmbeddingRead_v1{V,H}, one read of a request's history table for sparse MLA: V = 131072 ranks (the
                 table's capacity), H = 576 words (a kv row's 512 latent and 64 rope bf16 words), L = 8192 rows filled.
-    dsa-chunk   DsaPositionsChunk_v1{K,W}: chunk c of the long row's index, the merge's K = 2048 slots in chunks of W = 16,
+    dsa-chunk   DsaPositionsChunk_v1{K,W}: chunk c of the long row's index, the merge's K = 2048 slots in chunks of W = 32,
                 each port its own row; its slots below N = 131072 (the longest row's class) but a tenth of any u32.
-    dsa-slot    DsaPositionsSlot_v1{K,N}: slot j of a chunk (K = 16), held below N = 131072 whatever its inputs.
+    dsa-slot    DsaPositionsSlot_v1{K,N}: slot j of a chunk (K = 32), held below N = 131072 whatever its inputs.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -188,9 +188,9 @@ UNITS: dict[str, Unit] = {
     "s8-coord": Unit(lambda S: bind(BG.ScaledMmS8Coordinate, K=S["K"], **BG.GEMM_SM120_S8),
                      (("x", SEG, ("x", "sx")), ("w", V2, ("wrow", "sw"))), _s8_coord_draw, {"K": 2048}),
     "dsa-chunk": Unit(lambda S: bind(dsa_topk_reads.DsaPositionsChunk, K=S["K"], W=S["W"]),
-                      (("slots", SEG, ("slots",)), ("i", SEG, ("c",))), _dsa_index_rows, {"K": 2048, "W": 16, "N": 1 << 17}),
+                      (("slots", SEG, ("slots",)), ("i", SEG, ("c",))), _dsa_index_rows, {"K": 2048, "W": 32, "N": 1 << 17}),
     "dsa-slot": Unit(lambda S: bind(dsa_topk_reads.DsaPositionsSlot, K=S["K"], N=S["N"]),
-                     (("slots", SEG, ("slots",)), ("i", SEG, ("j",))), _dsa_index_rows, {"K": 16, "N": 1 << 17}),
+                     (("slots", SEG, ("slots",)), ("i", SEG, ("j",))), _dsa_index_rows, {"K": 32, "N": 1 << 17}),
 }
 
 
