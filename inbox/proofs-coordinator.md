@@ -28284,3 +28284,30 @@ The 34 are closed on af72 by top's `42fc411e9f`, as my 15:09Z entry says; **on a
 **Still going:** C `r20261110-144827-902c` (the b373 tree; nothing new expected from it); F1 `r20261110-150647-e087` and F2 `r20261110-150732-3f59`, both on af72's tip with our 11 rows (`5c61080f0e75`, my VM's). So far F1: `verity/circuits` 1115, `verity/flock/sigma` 4, `verity/spot/verifier` 825, the live challenger 654, all passed. F2: `test_class_statement.py`'s file, 29 passed; `test_population_recorded.py` runs about 14 minutes (831 s in B).
 
 Checkpoint: rows unchanged (the notes' 15:15Z sync changed only the file's header comment, which now names af72's move commit, and `restage.sh`, which took af72's second move for the first).
+
+## HOUSEKEEP, Tue 10 Nov 15:34Z: on af72's tip with our 11 new rows, all 88 formerly red tests of ours pass and the twelve suites are green; no code fix; one open point, top's and vllm's rows against #8404
+
+**Shown on af72** (`41d5514d7680`, which holds #8639 and #8624) with our 10 new lines and 1 insert applied by the stager's own tool: scratch commit `5c61080f0e75`, on my VM only, shipped to the nodes as an archive.
+
+| run | what | verdict [read: its `stdout.log`] |
+|---|---|---|
+| F1 `r20261110-150647-e087` | quick tier, eleven of our suites and `benchmarks/pouw/window_salt` | rc 0, "12 suites: 12 passed (0 cached), 0 failed" |
+| F2 `r20261110-150732-3f59` | `test_class_statement.py`; `test_population_recorded.py` | rc 0: 29 passed; 1 passed in 849 s |
+| G `r20261110-151653-3f4d` | the prover's nine other formerly red files | rc 0: 122 passed |
+| H `r20261110-152626-0d56` | the four slow ones the quick tier leaves out (firewall's release file; `evaluate`'s `sm120_captures`) | rc 0: 6 passed; 1 passed |
+
+Per test [run: each suite's report under the runs' `out/`, against the failed ids in the reports of top's check of `07acba4f5220`]: **88 formerly red, 88 passed, 0 failed, 0 not run, no new failure**: `verity/flock/prover` 48, `verity/circuits` 10, `verity/commitments` 6, `verity/definitions/evaluate` 6, the firewall 6, `vstar_cli` 5 (the five of `test_vstar_recursive.py`: passed, not among the 5 skipped), `benchmarks/one_stage` 3, `verity/spot/verifier` 2, `verity/flock/sigma` 1, `verity/spot/verifier/lean` 1. The two suites that were red without a failed test: the live challenger collects and passes, 654, and reads nothing outside its inputs; the composition passes, 19, and reads nothing outside. `window_salt` passes, 4.
+
+What that does not show: the prover's whole quick tier on af72. I ran it on b373's tree with #8639 (run A: 1424 passed, 27 skipped) and, on af72, only its ten formerly red files (151 passed). [not checked: why `vstar_cli` skips 5 and `spot/verifier/lean` 2 in the quick tier, and whether `main` skips the same; none is a formerly red test.]
+
+**The earlier runs**, on b373's tip with #8639 as the mover leaves it and the same rows (`fd965e62b941`): A `r20261110-143718-49bc` rc 1 (12 of 13 passed; the live challenger's 34 outside reads, closed on af72 by top's `42fc411e9f`); B `r20261110-143835-68eb` rc 0; C `r20261110-144827-902c` rc 1 for the same one suite (11 of 12 passed, then the prover's four files 82 passed); D `r20261110-145727-540f` rc 1, the live challenger alone, to keep the list of the 34.
+
+**The rows**: unchanged since the 14:39Z sync, 47 `[[line]]` and 1 `[[insert]]`. Checked [run] at b373's move commit, at af72's one-map move commit `af72fb276335` (48 pass; the builder writes the same file) and on the candidate's moved tree, where the stager's tool, with every lane's file as the notes held them at 15:33Z, ends "248 lines applied, 0 already as wanted, 0 regenerated, 2 stops" with all 48 of ours applied.
+
+**The two stops are the open point** (my 15:09Z entry has the rows): top's #1 and #2 and vllm's #52 on `tests/test_verifier_cost.py` name text that #8404, ours and in the candidate `c3ae3eaaf0b7`, rewrites. With the two rows on #8404's text the test file passes on that tree, after the one map and again after the second move [run]. Whose: top's and vllm's rows; the cause is our pull request.
+
+**Code:** none. No branch.
+
+**Still red, and whose** [as far as I ran]: of ours, nothing on af72 once the 11 rows are in. On af72 as pushed, the four tests those rows close (top's check, by your 15:02Z; I did not read that check). On a staging that holds #8404, `tests/test_verifier_cost.py` until the two rows change: top's and vllm's.
+
+Checkpoint: done but for what you send next. Notes synced 15:15Z (`03a9e63ded`); nothing pushed to any pull request or to `main`.
