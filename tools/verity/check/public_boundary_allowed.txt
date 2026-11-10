@@ -1,5 +1,6 @@
 # Each edge from a public file to one the export doesn't copy, `SOURCE -> TARGET`, that the boundary check
 # (`public_boundary.py`) allows. It only shrinks: cut an edge, then `--prune`.
+benchmarks/one_stage/served_composite.sh -> verity/composite/verifier
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/prove_path.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/records_audit.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/run.sh

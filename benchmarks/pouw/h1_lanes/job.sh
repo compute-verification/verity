@@ -32,16 +32,16 @@ RUN=$H/run.py K=${H1L_K:-448} PAR=${H1L_PAR:-3} LPAR=${H1L_LPAR:-8}
 WK=$W/work
 mkdir -p "$OUT/lean"
 setup
-build_own() {       # build_own DEST: DEST/verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-leaf-own-window
+build_own() {       # build_own DEST: DEST/verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1
   rm -rf "$D.tmp" && mkdir -p "$D.tmp" \
-    && (cd "$SRC" && tar --exclude=.lake --exclude=__pycache__ -cf - verity/core) | tar -xf - -C "$D.tmp" \
-    && (cd "$D.tmp/verity/core/protocols/pouw/lean/check" && lake build pouw-leaf-own-window) && rm -rf "$D" && mv "$D.tmp" "$D"
+    && (cd "$SRC" && tar --exclude=.lake --exclude=__pycache__ -cf - verity) | tar -xf - -C "$D.tmp" \
+    && (cd "$D.tmp/verity/protocols/pouw/verifier/lean/check" && lake build pouw-leaf-own-window) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 OWN=:
 if [ -z "${H1L_J10R:-}" ]; then
-  OWN=$(cached leafownwin "$(tree_key verity/core)" build_own)/verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
+  OWN=$(cached leafownwin "$(tree_key verity)" build_own)/verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-leaf-own-window
   [ -x "$OWN" ] || { log "pouw-leaf-own-window build FAILED: $(tail -20 "$OUT/build-leafownwin.log")"; exit 1; }
   sha256sum "$OWN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
 fi
