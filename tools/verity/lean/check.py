@@ -1612,7 +1612,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     for a, gs in taken.items():
         for g in gs:
             rests.setdefault(g, set()).add(a)
-    on_reads = {a for a, e in opens.items() if on_read(e)}
+    on_reads = {a for a, e in opens.items() if on_read(e) and a not in taken}
     for name in sorted(recorded):
         r = kept[name]
         takes = rests.get(name, set()) | set(r["assumptions"])

@@ -2930,6 +2930,13 @@ def test_a_why_on_the_entry_of_a_premise_a_statement_takes_fails_until_a_person_
     assert [x.code for x in again] == ["open.taken"] and written["open"] == wrong["open"]
     assert A.repaired(wrong, now, FILES, fails, TICKET)["open"] == wrong["open"]
     assert A.judge(lock, now, FILES)[0] == [], "the `why` removed"
+    reader = fact(signature="P.u : True", hyps=[], reads=[{"name": "P.Sound", "module": "P.Defs", "kind": "def", "hash": "5" * 32}])
+    now = {**now, "pins": {**now["pins"], "P.u": reader}}
+    seed = {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}}
+    lock = A.judge({**TWO, "assumptions": {}, "open_seed": seed}, now, FILES, update=True)[1]
+    wrong = {**lock, "open": {"P.Sound": lock["open"]["P.Sound"] | {"why": ON_READ["why"]}}}
+    assert A.judge(lock, now, FILES)[0] == [] and [(x.code, x.entry) for x in A.judge(wrong, now, FILES)[0]] == [
+        ("open.taken", "P.Sound")], "the record of a guarantee that only reads a premise another takes stays as it is"
 
 
 def test_an_entry_without_a_why_for_a_prop_no_statement_takes_fails_and_an_update_drops_it():
