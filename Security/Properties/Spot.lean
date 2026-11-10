@@ -228,7 +228,7 @@ them or not; its values are exactly the verifier's (`ValuesAre`); each of the ve
 naming it, as Python's dict reads it) as derived and held (`EntryIs`), a value it doesn't fill held to its output's root,
 else to the root it pinned before the record, else to the root the log first registered it under with the domain it
 takes now (`Registration.heldRoots`), and one it fills to none (`heldFor`); and each value it fills has the root it
-recomputes from the record, the log and its binding (`SuppliedIs`, `Supplied.root`). -/
+recomputes from the record, the log and its binding, in the row format it names for it (`SuppliedIs`, `Supplied.root`). -/
 def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
   ∃ mine es mine' held', Registration.ownEntries v = .ok mine ∧
     getD rec "registered" = .arr es ∧
@@ -242,7 +242,7 @@ def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
     (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
       EntryIs e want (heldFor v.supplied held' want.value)) ∧
     SuppliedIs es mine' v.supplied
-      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
+      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)) v.schemas)
 
 /-- R7's pool chain (`Registration.poolChained`): for a verifier with a pool, the record's entry for the value its window
 opens the pool from (`pin`; `Registration.entryOf`, the last entry naming it) has the domain and root of the pool the
