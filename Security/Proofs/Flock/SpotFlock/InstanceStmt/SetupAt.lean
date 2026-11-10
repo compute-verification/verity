@@ -42,8 +42,8 @@ theorem setup_rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : 
     Read.setup (rX r ls lh H C) = .ok (tabX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello) := by
   unfold Read.setup
   rw [tags_rX]
-  exact setupTables_X r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello hr hH hcl hls hlh hps hph hc1 hc2 hck hCe hu1 hu2 hd hd2
-    hid hhello
+  exact setupTables_X r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello hr hH hcl hls hlh hps hph hc1 hc2 hck hCe hu1 hu2 hd
+    hd2 hid hhello
 
 /-! ## At the fixed nets -/
 
@@ -65,8 +65,8 @@ theorem setup_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : Read.setup (ins
   have hp := FlockDeploy.fixedNets_parse hn
   have hCe : classHash.isEmpty = false := classOfB_isEmpty (HmNets.shaLaid ()) (HmNets.hmLaid ())
   exact setup_rX r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X
-    (s3X (hexOf classHash)) (s4X r (hexOf circuitHash) (hexOf classHash)) (s5X r cF (hexOf circuitHash) (hexOf classHash))
-    s6X helloX hr rfl (classOf_eq _ _) (FlockDeploy.sha_lines hn) (FlockDeploy.hm_lines hn) hp.1.2 hp.2.2 hc1_of hc2_of
+    (s3X (hexOf classHash)) (s4X r (hexOf circuitHash) (hexOf classHash))
+    (s5X r cF (hexOf circuitHash) (hexOf classHash)) s6X helloX hr rfl (classOf_eq _ _) (FlockDeploy.sha_lines hn) (FlockDeploy.hm_lines hn) hp.1.2 hp.2.2 hc1_of hc2_of
     (fun c h1 h2 => FlockDeploy.Concrete.check_of hp.1.1 hp.2.1 c h1 h2) hCe (hu1_of _)
     (hu2_of _ _ _ _ _ _ _ _ _ hCe) (hd_of _ _ _) (hd2_of _ _ _ _ _ _ _ _ _ _ _ _) hid_of hhello_of
 
