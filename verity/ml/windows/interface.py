@@ -680,7 +680,6 @@ WIDTHS = (16, 32)
 @dataclass(frozen=True)
 class Registered:
     """What the registration fixes that units read: the registered root parameters by name with their leaves, the tables
-<<<<<<< 0941037006
     over them, and the reads (`Read`, `TableRead`, `TableOpening`). ``values``: registered parameters the circuit's program
     takes as parameters of its own, in order, which no unit reads but through its registered reads (`population_program`'s
     values, `program_values`), so the window's registration registers them as the program's (one-stage's R7), as the
@@ -688,19 +687,10 @@ class Registered:
     parameter, the rows its reads read when they aren't 16-bit leaves in ``hm96-sha512/row/v2`` rows (`value_format`),
     ``{"row_schema", "word_bits"}``: Pearl+'s A rows and y are FP32 words in ``hm96-sha512/row-seg/v1`` rows, as its trees
     commit them; recorded only when there are some."""
-||||||| merged common ancestors
-    over them, and the reads (`Read`, `TableRead`, `Opening`)."""
-=======
-    over them, and the reads (`Read`, `TableRead`, `Opening`). ``values``: registered parameters the circuit's program
-    takes as parameters of its own, in order, which no unit reads but through its registered reads (`population_program`'s
-    values, `program_values`), so the window's registration registers them as the program's (one-stage's R7), as the
-    outputs of an earlier registration that registered them first; recorded only when there are some."""
->>>>>>> 7af4d24fca3e
     params: Mapping[str, int]
     tables: tuple[Table, ...] = ()
     reads: tuple[Read, ...] = ()
     roots: tuple[TableRead, ...] = ()
-<<<<<<< 0941037006
     openings: tuple[TableOpening, ...] = ()
     values: tuple[str, ...] = ()
     formats: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
@@ -718,12 +708,6 @@ class Registered:
                 raise ValueError(f"{v!r}'s format {f}: a registered parameter's other than a table's, {{row_schema: {V2} or "
                                  f"{SEG}, word_bits: 16 or 32}} other than the default (16-bit leaves in {V2} rows), its "
                                  "16-bit leaves whole leaves of that width")
-||||||| merged common ancestors
-    openings: tuple[Opening, ...] = ()
-=======
-    openings: tuple[Opening, ...] = ()
-    values: tuple[str, ...] = ()
->>>>>>> 7af4d24fca3e
 
     def doc(self) -> dict[str, Any]:
         return {"params": dict(sorted(self.params.items())), "tables": [t.doc() for t in self.tables],
@@ -735,25 +719,12 @@ class Registered:
     def of(cls, d: Any) -> Registered:
         try:
             if not {"params", "tables", "reads", "roots", "openings"} <= set(d) <= {"params", "tables", "reads", "roots",
-<<<<<<< 0941037006
                                                                                     "openings", "values", "formats"}:
-||||||| merged common ancestors
-            if set(d) != {"params", "tables", "reads", "roots", "openings"}:
-=======
-                                                                                    "openings", "values"}:
->>>>>>> 7af4d24fca3e
                 raise ValueError(sorted(d))
             return cls({str(k): v for k, v in d["params"].items()}, tuple(Table(**t) for t in d["tables"]),
                        tuple(Read.of(r) for r in d["reads"]), tuple(TableRead(**r) for r in d["roots"]),
-<<<<<<< 0941037006
                        tuple(TableOpening(**{**o, "ports": tuple(o["ports"])}) for o in d["openings"]),
                        tuple(d.get("values", ())), d.get("formats", {}))
-||||||| merged common ancestors
-                       tuple(Opening(**{**o, "ports": tuple(o["ports"])}) for o in d["openings"]))
-=======
-                       tuple(Opening(**{**o, "ports": tuple(o["ports"])}) for o in d["openings"]),
-                       tuple(d.get("values", ())))
->>>>>>> 7af4d24fca3e
         except (TypeError, ValueError, KeyError, AttributeError) as e:
             raise ValueError(f"a circuit's registered reads are {{params, tables, reads, roots, openings}}, its values and "
                              f"their formats: {e}") from e
@@ -1046,7 +1017,6 @@ def committed_reads(registered: Registered | None) -> tuple[Read, ...]:
     return tuple(out)
 
 
-<<<<<<< 0941037006
 def seg_ports(registered: Registered | None) -> dict[str, frozenset[str]]:
     """By template, the ports its registered reads (`Read`) fill with ``hm96-sha512/row-seg/v1`` rows (`value_format`: a
     declared table's parameter's, `gates.embedding`, or a value's of that format), so the port is a row of that schema
@@ -1064,8 +1034,8 @@ def seg_ports(registered: Registered | None) -> dict[str, frozenset[str]]:
         if next(iter(v))[0] == SEG:
             out.setdefault(tid, set()).add(p)
     return {tid: frozenset(ps) for tid, ps in out.items()}
-||||||| merged common ancestors
-=======
+
+
 def member_reads(members: Sequence[CS.Member], registered: Registered | None) -> list[dict[str, tuple[str, list[int], np.ndarray]]]:
     """Each of ``members``' ports a committed read fills (`committed_reads`), as `Window.close` commits them and
     `registered_reads` opens them, a template's units its members' from its first: by port, the parameter, the distinct
@@ -1075,7 +1045,6 @@ def member_reads(members: Sequence[CS.Member], registered: Registered | None) ->
     for m in members:
         base[m.template] = min(base.get(m.template, m.base), m.base)
     return [_reads_of(m.template, m.base - base[m.template], m.n, index, dict(m.rows + m.outs)) for m in members]
->>>>>>> 7af4d24fca3e
 
 
 def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, Any]], program: str, *,
@@ -1251,14 +1220,8 @@ class Circuit:
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
     layout (the network certifier's, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
     ports read as several rows (`RowLayout.cut`); ``registered`` and ``ingress``, what fills its other inputs
-<<<<<<< 0941037006
-    (`check_inputs`); ``blocks``, its proof and inference blocks (`Blocks`)."""
-||||||| merged common ancestors
-    (`check_inputs`); ``blocks``, its proof, inference and server blocks (`Blocks`)."""
-=======
-    (`check_inputs`); ``blocks``, its proof, inference and server blocks (`Blocks`); ``order``, the order of its units'
+    (`check_inputs`); ``blocks``, its proof and inference blocks (`Blocks`); ``order``, the order of its units'
     ranges its wires follow (`check_order`), or None for each template one range."""
->>>>>>> 7af4d24fca3e
     name: str
     templates: tuple[tuple[Any, int], ...]
     external: tuple[str, ...] = ()
@@ -1387,16 +1350,8 @@ def members(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | N
     (`committed_reads`). ``built``: the circuit's population program and query (`Circuit.program`), when the caller has
     them."""
     program, query = built or circuit.program()
-<<<<<<< 0941037006
     return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts,
-                    committed_reads(circuit.registered), seg_ports(circuit.registered))
-||||||| merged common ancestors
-    return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts, circuit.server_ends(),
-                    committed_reads(circuit.registered))
-=======
-    return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts, circuit.server_ends(),
-                    committed_reads(circuit.registered), circuit.order)
->>>>>>> 7af4d24fca3e
+                    committed_reads(circuit.registered), seg_ports(circuit.registered), circuit.order)
 
 
 class _ReadIndex:
@@ -1483,14 +1438,8 @@ class _Drawn:
 
 def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[str, Any], cap: int,
              wires: Sequence[Wire], cuts: Mapping[str, Mapping[str, int]] | None = None,
-<<<<<<< 0941037006
-             reads: Sequence[Read] = (), seg: Mapping[str, frozenset[str]] | None = None) -> tuple[CS.Member, ...]:
-||||||| merged common ancestors
-             servers: Mapping[str, Sequence[int]] | None = None, reads: Sequence[Read] = ()) -> tuple[CS.Member, ...]:
-=======
-             servers: Mapping[str, Sequence[int]] | None = None, reads: Sequence[Read] = (),
+             reads: Sequence[Read] = (), seg: Mapping[str, frozenset[str]] | None = None,
              order: Sequence[tuple[str, int, int]] | None = None) -> tuple[CS.Member, ...]:
->>>>>>> 7af4d24fca3e
     """`members` of ``templates`` (``(Definition, units)``) under their population ``program`` and ``query``. A member's row
     is wired on all its units or on none (`rows.Member.wired`), so a template's units are cut at every wire's ends first. A
     registered read covers whole members (`_reads_of`), so they are cut at every read's ends, and a member it covers is a
@@ -2087,20 +2036,10 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
         order = order_of(doc)
         check_wires(lays, wires, cuts, order)
         check_inputs(lays, cuts, wires, registered, ingress)
-<<<<<<< 0941037006
         if "blocks" in doc:
             Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])
         ms = _members(defs, program, query, doc["cap"], wires, cuts, committed_reads(registered),
-                      seg_ports(registered))
-||||||| merged common ancestors
-        servers = Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])[1] if "blocks" in doc else {}
-        ms = _members(defs, program, query, doc["cap"], wires, cuts, servers,
-                      committed_reads(registered))
-=======
-        servers = Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])[1] if "blocks" in doc else {}
-        ms = _members(defs, program, query, doc["cap"], wires, cuts, servers,
-                      committed_reads(registered), order)
->>>>>>> 7af4d24fca3e
+                      seg_ports(registered), order)
     else:
         ms = _listed_members(doc)
     tables = tuple(CS.RowTable(t["segment"], t["name"], t["template"], t["words"], _frozen(t["keys"]),

@@ -139,26 +139,8 @@ def cmp92() -> I.Circuit:
     S·p(p+1), the KV cache wired across steps), and the layer's H coordinates (``GemmCoordinate_v2{32}``, its ``x`` the two
     v rows); at the O logit steps p = NP − 1 + k the next token (``Gemm_v2{16, 1}``). Byte k of slot j enters at step k
     from the request row's leaf j(1 + NP) + 1 + k (the length, then the bytes as u16) and leaves at step NP − 1 + k as the
-<<<<<<< 0941037006
-    response's leaf j·O + k, the head's output row read once, as the response."""
-||||||| merged common ancestors
-    response's leaf j·O + k. With two servers, the rows crossing between them are wire transfers: layer 0's coordinates into
-    layer 1 an output-row read on the writer and a read on the reader (``x1``), and the token back into the embedding a read
-    of the response's leaves on the reader, the head's output row being read once, as the response; each server loads its
-    own weights. That split puts every inference block (slot, step) on both servers, the form network accounting forbids: it is the
-    negative of network accounting's check (`test_cmp92s_split_across_two_servers_is_refused`)."""
-    two = servers == 2
-    w0, w1 = ("weights0", "weights1") if two else ("weights", "weights")
-=======
-    response's leaf j·O + k. With two servers, the rows crossing between them are wire transfers: layer 0's coordinates into
-    layer 1 an output-row read on the writer and a read on the reader (``x1``), and the token back into the embedding a read
-    of the response's leaves on the reader, the head's output row being read once, as the response; each server loads its
-    own weights. That split puts every inference block (slot, step) on both servers, the form network certification forbids: it is the
-    negative of network certification's check (`test_cmp92s_split_across_two_servers_is_refused`). Its templates read one
+    response's leaf j·O + k, the head's output row read once, as the response. Its templates read one
     another, so it states an order, a range each inference entry's step (`ordered`)."""
-    two = servers == 2
-    w0, w1 = ("weights0", "weights1") if two else ("weights", "weights")
->>>>>>> 7af4d24fca3e
     pos, layer = T * H, 8 * H * H
     qw = {0: pos, 1: pos + layer}
     ow = {k: qw[k] + 6 * H * H for k in (0, 1)}
@@ -185,55 +167,15 @@ def cmp92() -> I.Circuit:
                    for k in range(LAYERS) for p in range(T)),
                  I.InferenceEntry(OID, 0, (LAYERS, T, S, H), ("-", "step", "slot", "-"), 0),
                  I.InferenceEntry(HID, 0, (O, S), ("step", "slot"), NP - 1))
-<<<<<<< 0941037006
-    return I.Circuit("cmp92", ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER),
-                               (OUT, LAYERS * H * T * S), (HEAD, O * S)),
-                     external=(f"{EID}/a", f"{HID}/o0"), wires=tuple(wires), cuts={QID: {"x": H}, OID: {"x": 2}, HID: {"x": H}},
-                     registered=I.Registered(params, (), tuple(reads)), blocks=I.Blocks(S, T, inference))
-||||||| merged common ancestors
-    names = sorted(SPLIT) if two else ["s0"]
-    rows = {"request": {"base": 0, "radix": [NP, S], "step": [1, 0]}, "response": {"base": NP - 1, "radix": [O, S], "step": [1, 0]},
-            "x1": {"base": 0, "radix": [T, S], "step": [1, 0]}, "tok": {"base": NP - 1, "radix": [O - 1, S], "step": [1, 0]}}
-
-    def transfer(server: str, direction: str, kind: str, value: str, t: str | None = None) -> dict:
-        return {"server": server, "direction": direction, "kind": kind, "value": value, "t": rows.get(t or value)}
-
-    transfers = [transfer("s0", "in", "request", "request"), transfer(names[-1], "out", "response", "response"),
-                 *(transfer(s, "in", "load", w) for s, w in zip(names, (w0, w1)))]
-    if two:
-        transfers += [transfer("s0", "out", "wire", "x1"), transfer("s1", "in", "wire", "x1"),
-                      transfer("s1", "out", "wire", "response", "tok"), transfer("s0", "in", "wire", "response", "tok")]
-    network = {"server": [{"name": s, "uplink": f"link-{s}", "units": SPLIT[s] if two else "all"} for s in names],
-               "server_time": [{"server": s, "steps": [0, T]} for s in names], "transfers": transfers}
-    return I.Circuit(f"cmp92-{servers}", ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER),
-                                          (OUT, LAYERS * H * T * S), (HEAD, O * S)),
-                     external=(f"{EID}/a", f"{HID}/o0"), wires=tuple(wires), cuts={QID: {"x": H}, OID: {"x": 2}, HID: {"x": H}},
-                     registered=I.Registered(params, (), tuple(reads)), blocks=I.Blocks(S, T, inference, network))
-=======
-    names = sorted(SPLIT) if two else ["s0"]
-    rows = {"request": {"base": 0, "radix": [NP, S], "step": [1, 0]}, "response": {"base": NP - 1, "radix": [O, S], "step": [1, 0]},
-            "x1": {"base": 0, "radix": [T, S], "step": [1, 0]}, "tok": {"base": NP - 1, "radix": [O - 1, S], "step": [1, 0]}}
-
-    def transfer(server: str, direction: str, kind: str, value: str, t: str | None = None) -> dict:
-        return {"server": server, "direction": direction, "kind": kind, "value": value, "t": rows.get(t or value)}
-
-    transfers = [transfer("s0", "in", "request", "request"), transfer(names[-1], "out", "response", "response"),
-                 *(transfer(s, "in", "load", w) for s, w in zip(names, (w0, w1)))]
-    if two:
-        transfers += [transfer("s0", "out", "wire", "x1"), transfer("s1", "in", "wire", "x1"),
-                      transfer("s1", "out", "wire", "response", "tok"), transfer("s0", "in", "wire", "response", "tok")]
-    network = {"server": [{"name": s, "uplink": f"link-{s}", "units": SPLIT[s] if two else "all"} for s in names],
-               "server_time": [{"server": s, "steps": [0, T]} for s in names], "transfers": transfers}
     templates = ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER), (OUT, LAYERS * H * T * S), (HEAD, O * S))
     starts: dict[str, list[int]] = {}
     for e in inference:
         run = math.prod(e.radix[e.axes.index("step") + 1:]) if "step" in e.axes else e.units
         starts.setdefault(e.template, []).extend(range(e.at, e.at + e.units, run))
-    return I.Circuit(f"cmp92-{servers}", templates, external=(f"{EID}/a", f"{HID}/o0"), wires=tuple(wires),
+    return I.Circuit("cmp92", templates, external=(f"{EID}/a", f"{HID}/o0"), wires=tuple(wires),
                      cuts={QID: {"x": H}, OID: {"x": 2}, HID: {"x": H}}, registered=I.Registered(params, (), tuple(reads)),
-                     blocks=I.Blocks(S, T, inference, network),
+                     blocks=I.Blocks(S, T, inference),
                      order=I.ordered({descriptor_id(fn): n for fn, n in templates}, wires, starts))
->>>>>>> 7af4d24fca3e
 
 
 @pytest.fixture(scope="module")

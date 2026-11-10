@@ -37,13 +37,7 @@ from verity.ml.commitments.gates import embedding as E
 from verity.ml.commitments.gates import sha512_stream as SS
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
-<<<<<<< 0941037006
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
-||||||| merged common ancestors
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
-=======
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row, row_leaf
->>>>>>> 7af4d24fca3e
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row, row_leaf
 from verity.ml.windows import flock_inputs as FI, interface as I, rows as CS, wiring as WI
 
 K = 64

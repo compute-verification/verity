@@ -1429,21 +1429,11 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     (`pouw_h1_challenger.credit_reason`) over `descriptor`, the bytes of the circuit the period committed
     (`pouw_h1_served.descriptor`; none refuses it), the sampled calls' `statements` (`pouw_h1_challenger.statement`'s) and
     the window's `live` evidence (`credit.LIVE_STATEMENTS`, ``h1_prove/live.py evidence``'s; none refuses it).
-<<<<<<< 0941037006
-    `draw_directory` is the window's draw session as `directory` is its session (its ``out/`` with `window_file`, else
-    its tree), from which its draw coin is read (none refuses it). With `lean_answers` (a memo directory in the
+    `draw_directory` is the window's sample session as `directory` is its session (its ``out/`` with `window_file`, else
+    its tree), from which its sampling coin is read (none refuses it). With `lean_answers` (a memo directory in the
     verifier's scratch) credit's verifier runs are `answers.Answers` on it: a run another step answered is taken by key,
     and its ``lean_answers`` says how many."""
-    from verity.core.protocols.sampled_proofs import remote
-||||||| merged common ancestors
-    `draw_directory` is the window's draw session as `directory` is its session (its ``out/`` with `window_file`, else
-    its tree), from which its draw coin is read (none refuses it)."""
-    from verity.core.protocols.sampled_proofs import remote
-=======
-    `draw_directory` is the window's sample session as `directory` is its session (its ``out/`` with `window_file`, else
-    its tree), from which its sampling coin is read (none refuses it)."""
     from verity.core.protocols.spot import remote
->>>>>>> 7af4d24fca3e
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import answers as A
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
