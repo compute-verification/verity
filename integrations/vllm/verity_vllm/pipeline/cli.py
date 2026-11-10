@@ -37,7 +37,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "boundary-plan": ("verity_vllm.pipeline.boundary_plan", "a row's call-boundary check over its Commit's Programs, and the Commit's call-boundary plan, keyed"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
     "capture-identities": ("verity_vllm.correspondence.capture_identities", "capture identities vs the canonical B1 circuit"),
-    "capture-map": ("verity_vllm.check.capture_map", "a capture map against a module inventory (check), its tap counts and value ids"),
     "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
     "commit-arb": ("verity_vllm.pipeline.commit_arb", "the served Commit under seeded varied traffic, each request's record held to its streamed ids"),
