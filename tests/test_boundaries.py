@@ -32,6 +32,7 @@ from __future__ import annotations
 import ast
 import builtins
 import fnmatch
+import functools
 import importlib.util
 import posixpath
 import re
@@ -40,7 +41,7 @@ import sys
 import tomllib
 from collections.abc import Callable, Iterable, Set
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import pytest
 
@@ -989,3 +990,300 @@ def test_core_never_reads_the_census() -> None:
         offenders += [f"{path.relative_to(SRC)}:{n.lineno}" for n in ast.walk(tree)
                       if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs and CENSUS_PATH.search(n.value)]
     assert not offenders, offenders
+
+
+#: The listing: the tree's directories, bottom first, and the ties against that order, by pair of directories.
+ORDER = ROOT / "tests" / "import_order.toml"
+#: The files the order reads as loaders: Python, Lean, and a Lake package's requirements.
+LOADERS = (".py", ".lean", "lakefile.toml")
+#: What it leaves out as loaders: circuit-check's bindings, which it loads by path beside their module, as it leaves the tests.
+SIDECAR = ".circuit-check.py"
+
+
+class Load(NamedTuple):
+    """One file loading another."""
+    loader: str
+    loaded: str
+    line: int
+    #: ``python import`` (a statement or an import-call string), ``python string`` (a ``"module:attr"`` string), ``python
+    #: package`` (the ``__init__.py`` of a package above an imported module), ``lean import`` or ``lake require``
+    kind: str
+    name: str
+    #: whether loading ``loader`` runs it: outside every function body, as every Lean import and Lake requirement is
+    at_load: bool
+
+    def __str__(self) -> str:
+        return f"{self.loader}:{self.line}: {self.kind} {self.name} loads {self.loaded}"
+
+
+def _listing(text: str | None = None) -> tuple[dict[str, int], dict[tuple[str, str], set[tuple[str, str]]]]:
+    """The listing (``ORDER``, or ``text``): each listed directory's step, the bottom row's 0 and one step a row, and each
+    pair of directories ``against`` excepts with its ties, ``(loader, loaded)`` by file."""
+    doc = tomllib.loads(ORDER.read_text(encoding="utf-8") if text is None else text)
+    steps = {d: n for n, row in enumerate(doc["order"]) for d in row}
+    assert "." in steps and len(steps) == sum(map(len, doc["order"])), "the order lists `.` and each directory once"
+    return steps, {(e["loader"], e["loaded"]): {(a, b) for a, b in e["ties"]} for e in doc.get("against", [])}
+
+
+def _row(path: str, steps: dict[str, int]) -> str:
+    """The listed directory ``path`` belongs to: the deepest one above it, ``.`` for the rest."""
+    d = posixpath.dirname(path)
+    while d and d not in steps:
+        d = posixpath.dirname(d)
+    return d or "."
+
+
+@functools.cache
+def _public_boundary() -> Any:
+    """``tools/verity/check/public_boundary.py``, whose ``Tree`` resolves a Python import and a Lake package as the public
+    boundary reads them.  Loaded on first use, since it loads this file for ``_imports``."""
+    return _load_tool("public_boundary_of_the_order", ROOT / "tools/verity/check/public_boundary.py")
+
+
+def _naming(tree: ast.AST) -> tuple[list[ast.AST], list[ast.AST]]:
+    """The nodes of ``tree`` that can name a module (an import, a call on a string, a string with a colon), in two lists:
+    those loading the file runs, and those inside a function's body.  A class's body runs at load, and so do a function's
+    decorators, defaults and annotations."""
+    out: tuple[list[ast.AST], list[ast.AST]] = ([], [])
+    todo = [(tree, True)]
+    while todo:
+        node, at_load = todo.pop()
+        if isinstance(node, (ast.Import, ast.ImportFrom)) or (
+                isinstance(node, ast.Constant) and isinstance(node.value, str) and ":" in node.value) or (
+                isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant)):
+            out[not at_load].append(node)
+        if at_load and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            head = [*getattr(node, "decorator_list", ()), node.args, *([node.returns] if getattr(node, "returns", None) else [])]
+            todo += [(c, any(c is h for h in head)) for c in ast.iter_child_nodes(node)]
+        else:
+            todo += [(c, at_load) for c in ast.iter_child_nodes(node)]
+    return out
+
+
+def _path_roots(tree: Any, f: str, parsed: ast.AST, text: str) -> tuple[str, ...]:
+    """Where a bare import of ``f`` resolves beyond its package's and its suite's roots: its own directory (a script's), and,
+    when it changes ``sys.path``, each tracked directory a path anchored on ``__file__`` reaches in it
+    (``tools/verity/check/anchors.py``), whether or not that path is the one put there."""
+    roots = {posixpath.dirname(f)}
+    if "sys.path" in text and "__file__" in text:
+        anchors = _public_boundary().ANCHORS
+        names = anchors.bindings(parsed, f)
+        roots |= set(names.values())
+        todo = [parsed]
+        while todo:
+            node = todo.pop()
+            if not isinstance(node, ast.Name) and (reached := anchors.anchor(node, f, names)) is not None:
+                roots.add(reached)
+            else:
+                todo += ast.iter_child_nodes(node)
+    return tuple(sorted(r for r in roots if r in tree.dirs))
+
+
+@functools.cache
+def _named(tree: Any, name: str, directory: str, roots: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The tracked files that importing ``name`` from a file of ``directory`` runs: its module, and the ``__init__.py`` of
+    each package above it that the name spells."""
+    modules = tuple(t for t in tree._module(name, posixpath.join(directory, "_.py"), roots) if t in tree.files)
+    above = []
+    for hit in modules:
+        parts, at = name.split("."), hit.removesuffix("/__init__.py").removesuffix(".py").split("/")
+        spelled = next((k for k in range(min(len(parts), len(at)), 0, -1) if at[-k:] == parts[:k]), 0)
+        above += [init for j in range(1, spelled) if (init := "/".join(at[:len(at) - spelled + j]) + "/__init__.py") in tree.files]
+    return modules, tuple(above)
+
+
+def _python_loads(tree: Any, f: str) -> list[Load]:
+    """What the Python file ``f`` loads: for each module it names (``_imports``; a relative name resolved from the root),
+    the files ``_named`` gives, and for ``from M import a`` the module ``M.a`` when it is one."""
+    text = tree.text(f)
+    parsed = ast.parse(text, filename=f)
+    path, directory, roots = tree.root / f, posixpath.dirname(f), _path_roots(tree, f, parsed, text)
+    out: dict[tuple[str, bool], Load] = {}
+    for at_load, nodes in zip((True, False), _naming(parsed)):
+        names = _imports(path, tree.root, (), nodes)
+        froms = [n for n in nodes if isinstance(n, ast.ImportFrom) and n.module]
+        names += [(f"{name}.{a.name}", line, True) for n, (name, line, _) in zip(froms, _imports(path, tree.root, (), froms))
+                  for a in n.names]
+        for name, line, imported in names:
+            modules, above = _named(tree, name, directory, roots)
+            for kind, files in (("python import" if imported else "python string", modules), ("python package", above)):
+                for t in files:
+                    if t != f:
+                        out.setdefault((t, kind == "python string"), Load(f, t, line, kind, name, at_load))
+    return list(out.values())
+
+
+@functools.cache
+def _lake_sources(tree: Any) -> dict[str, tuple[str, ...]]:
+    """By lakefile, where a Lean file of its package finds a module: the package's own source directory, then those of the
+    packages it requires by path, directly or through one another."""
+    pb = _public_boundary()
+    _, _, pkgs = tree.lake
+    out = {}
+    for lf in pkgs:
+        reached, todo = [lf], [lf]
+        while todo:
+            for e in tree._lakefile(todo.pop()):
+                if e.kind == "lake require" and e.target in pkgs and e.target not in reached:
+                    reached.append(e.target)
+                    todo.append(e.target)
+        out[lf] = tuple(dict.fromkeys(pb._rel(posixpath.relpath(pkgs[r].src, tree.root)) for r in reached))
+    return out
+
+
+@functools.cache
+def _lean_module(tree: Any, lakefile: str | None, module: str) -> tuple[str, ...]:
+    """The tracked files a Lean file of ``lakefile``'s package finds ``module`` in: under its sources (``_lake_sources``),
+    else under any tracked package's own source directory, test fixtures aside, since a file may be built against a
+    package its own doesn't require (a benchmark's ``Main.lean``, a submission checked against the analysis)."""
+    sources = _lake_sources(tree)
+    path = posixpath.join(*_public_boundary().HEADERS.parts(module)) + ".lean"
+    found = [t for src in sources.get(lakefile, ()) if (t := posixpath.join(src, path)) in tree.files]
+    found = found or [t for lf, srcs in sources.items() if not _is_test(lf) and (t := posixpath.join(srcs[0], path)) in tree.files]
+    return tuple(dict.fromkeys(found))
+
+
+def _lean_loads(tree: Any, f: str) -> list[Load]:
+    """What the Lean file ``f`` imports among the tracked files: each module of its header that its own package or a
+    package it requires by path holds; Mathlib's and the toolchain's are not tracked."""
+    headers = _public_boundary().HEADERS
+    text = tree.text(f)
+    header, starts = headers.header(text), headers.starts(text)
+    assert header is not None and starts is not None, f"{f}: its header is cut off, so what it imports can't be read"
+    out: dict[str, Load] = {}
+    for imp, at in zip(header.imports, starts):
+        for t in _lean_module(tree, tree.lake[1].get(f), imp.module):
+            if t != f:
+                out.setdefault(t, Load(f, t, text.count("\n", 0, at) + 1, "lean import", imp.module, True))
+    return list(out.values())
+
+
+def _loads(tree: Any, f: str) -> list[Load]:
+    """What the tracked file ``f`` loads among the tracked files: a Python file's imports, a Lean file's, and for a
+    ``lakefile.toml`` the lakefile of each package it requires by path."""
+    if f.endswith(".py"):
+        return _python_loads(tree, f)
+    if f.endswith(".lean"):
+        return _lean_loads(tree, f)
+    return [Load(f, e.target, e.line, e.kind, e.what, True) for e in tree._lakefile(f) if e.kind == "lake require"]
+
+
+def _all_loads(tree: Any) -> tuple[Load, ...]:
+    """Every load of ``tree``'s files, tests left out as loaders (``_is_test``: they are suites of their own, which declare
+    what they read) and circuit-check's bindings with them (``SIDECAR``)."""
+    return tuple(x for f in sorted(tree.files) if f.endswith(LOADERS) and not f.endswith(SIDECAR) and not _is_test(f)
+                 for x in _loads(tree, f))
+
+
+@functools.cache
+def _tree_loads() -> tuple[frozenset[str], tuple[Load, ...]]:
+    """The tracked tree's directories and its loads (``_all_loads``), read once for the tests below."""
+    tree = _public_boundary().Tree(ROOT)
+    return tree.dirs, _all_loads(tree)
+
+
+def _held(x: Load) -> bool:
+    """Whether the order holds ``x``: every load that loading its file runs, and inside ``verity/`` an import inside a
+    function and a module named in a string as well."""
+    return (x.at_load and x.kind != "python string") or (x.loader.startswith("verity/") and x.loaded.startswith("verity/"))
+
+
+def _against(loads: Iterable[Load], steps: dict[str, int]) -> dict[tuple[str, str], dict[tuple[str, str], Load]]:
+    """The ties against the order among ``loads``, by pair of listed directories: each ``(loader, loaded)`` whose loader's
+    row is listed before the loaded file's, with its first load.  A package above an imported module is a tie only where
+    the module is none: a module against the order brings its packages with it."""
+    out: dict[tuple[str, str], dict[tuple[str, str], Load]] = {}
+    brought = set()
+    for x in sorted(loads, key=lambda x: x.kind == "python package"):
+        a, b = _row(x.loader, steps), _row(x.loaded, steps)
+        if steps[a] < steps[b] and (x.loader, x.name) not in brought:
+            out.setdefault((a, b), {}).setdefault((x.loader, x.loaded), x)
+            if x.kind != "python package":
+                brought.add((x.loader, x.name))
+    return out
+
+
+def test_a_file_loads_only_its_own_row_or_an_earlier_one() -> None:
+    """The import order.  ``tests/import_order.toml`` lists the tree's directories bottom first; a file belongs to the
+    deepest listed directory above it, and loads only files of its own row or an earlier one, in Python (an import, the
+    packages above the imported module, a bare import under a directory the file puts on ``sys.path``), in Lean (an
+    import) and in Lake (a package required by path).  The order holds what loading a file runs; inside ``verity/`` it
+    holds an import inside a function and a module named in a string as well (``_held``).  The ties against it are the
+    listing's ``against``, by pair of directories and by file, which only shrinks: a tie it doesn't list fails, and so
+    does a listed tie the tree no longer has, naming the pair to delete once its last tie is gone.  Reading every tracked
+    Python and Lean file takes some twenty seconds, which nothing cheaper replaces: an order over the whole tree is only
+    held by reading the whole tree."""
+    steps, listed = _listing()
+    dirs, loads = _tree_loads()
+    empty = sorted(d for d in steps if d != "." and d not in dirs)
+    assert not empty, f"directories tests/import_order.toml lists that hold no tracked file; delete their rows: {empty}"
+    found = _against(filter(_held, loads), steps)
+    new = [f"{x} ({a} is listed before {b})" for (a, b), ties in sorted(found.items())
+           for tie, x in sorted(ties.items()) if tie not in listed.get((a, b), ())]
+    assert not new, ("a file loads only what its own row or an earlier row of tests/import_order.toml holds. Move what the "
+                     "loader needs down to its row or an earlier one, or pass it in. `against` only shrinks, so a new tie "
+                     "is cut, never listed:\n" + "\n".join(new))
+    done = [f"{a} -> {b}" for (a, b), ties in sorted(listed.items()) if not ties & set(found.get((a, b), ()))]
+    assert not done, f"pairs of `against` (tests/import_order.toml) no file needs any more; delete them: {done}"
+    gone = [f"{a} -> {b}: {loader} no longer loads {loaded}" for (a, b), ties in sorted(listed.items())
+            for loader, loaded in sorted(ties - set(found[a, b]))]
+    assert not gone, "ties of `against` (tests/import_order.toml) the tree no longer has; delete them:\n" + "\n".join(gone)
+
+
+#: A tree with one load of each kind the order reads, for the test below.
+ORDER_TREE = {
+    "verity/__init__.py": "",
+    "verity/circuits/__init__.py": "",
+    "verity/circuits/at_load.py": "from verity.definitions import ops\n",
+    "verity/circuits/in_function.py": "def f():\n    import verity.definitions.ops\n",
+    "verity/circuits/in_string.py": "TOOL = 'verity.definitions.ops:run'\n",
+    "verity/circuits/tests/test_a.py": "import verity.definitions.ops\n",
+    "verity/circuits/at_load.circuit-check.py": "import verity.definitions.ops\n",
+    "verity/definitions/__init__.py": "",
+    "verity/definitions/ops.py": "import verity.circuits.at_load\n",
+    "verity/flock/__init__.py": "",
+    "verity/flock/verifier/__init__.py": "",
+    "verity/flock/verifier/interface.py": "",
+    "verity/flock/verifier/lakefile.toml": ('name = "flock"\n[[lean_lib]]\nname = "Flock"\n'
+                                            '[[require]]\nname = "spot"\npath = "../../spot/lean"\n'),
+    "verity/flock/verifier/Flock/V.lean": "import Spot.X\nimport Mathlib.Y\nimport Flock.W\n",
+    "verity/flock/verifier/Flock/W.lean": "",
+    "verity/difftest/package_above.py": "import verity.flock.verifier.interface\n",
+    "verity/spot/lean/lakefile.toml": 'name = "spot"\n[[lean_lib]]\nname = "Spot"\n',
+    "verity/spot/lean/Spot/X.lean": "",
+    "verity/spot/by_path.py": ("import sys\nfrom pathlib import Path\n"
+                               "sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'workloads' / 'e2e'))\nimport prof\n"),
+    "workloads/e2e/prof.py": "",
+    "tools/lazy.py": "def f():\n    from benchmarks.probe import run\n",
+    "tools/eager.py": "from benchmarks.probe import run\n",
+    "benchmarks/probe/run.py": "import tools.eager\n",
+}
+
+
+def test_a_tie_against_the_order_is_found(tmp_path: Path) -> None:
+    """The check above isn't vacuous.  Against the listing's order it finds an import at load, the package above a module
+    of an earlier row, a bare import under a directory put on ``sys.path``, a Lean import from a package required by path
+    and that requirement, and inside ``verity/`` an import inside a function and a module named in a string; it leaves a
+    load with the order, a test's, a sidecar's, a module no tracked file holds, and outside ``verity/`` an import inside a
+    function."""
+    for f, text in ORDER_TREE.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text, encoding="utf-8")
+    steps, _ = _listing()
+    loads = _all_loads(_public_boundary().Tree(tmp_path, files=ORDER_TREE))
+    found = {pair: sorted(ties) for pair, ties in _against(filter(_held, loads), steps).items()}
+    assert found == {
+        ("verity/circuits", "verity/definitions"): [
+            ("verity/circuits/at_load.py", "verity/definitions/__init__.py"),
+            ("verity/circuits/at_load.py", "verity/definitions/ops.py"),
+            ("verity/circuits/in_function.py", "verity/definitions/ops.py"),
+            ("verity/circuits/in_string.py", "verity/definitions/ops.py")],
+        ("verity/difftest", "verity/flock"): [("verity/difftest/package_above.py", "verity/flock/__init__.py")],
+        ("verity/flock/verifier", "verity/spot"): [
+            ("verity/flock/verifier/Flock/V.lean", "verity/spot/lean/Spot/X.lean"),
+            ("verity/flock/verifier/lakefile.toml", "verity/spot/lean/lakefile.toml")],
+        ("verity/spot", "workloads"): [("verity/spot/by_path.py", "workloads/e2e/prof.py")],
+        ("tools", "benchmarks"): [("tools/eager.py", "benchmarks/probe/run.py")],
+    }, found
+    assert _row("verity/settings.py", steps) == "verity" and _row("pyproject.toml", steps) == "." \
+        and _row("verity/flock/verifier/Flock/V.lean", steps) == "verity/flock/verifier"
