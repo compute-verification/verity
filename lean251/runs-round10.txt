@@ -1,0 +1,7 @@
+Round 10, Tue 10 Nov: on top's staging cursor/top-layout-staged-48da at 07acba4f522078871459d1271613a03491efcf3f
+(move 48da738b7da6 on base f4c0d879ee51 over main d1c3ccf9e6a6), main's slow copy of tools/move/, carrier eee602f7b1aa.
+r20261110-124919-174b  pr8377 a78a0e3adf9f  cpu-1  clean, 0 files, plain clean, no pins commit, 13.49 min
+r20261110-125030-cd2a  pr8515 29caa8135341  cpu-1  clean, 0 files, plain clean, no pins commit, 13.59 min
+r20261110-125253-2256  pr8371 7844efe8ccac  cpu-5  clean, 0 files, plain clean, no pins commit, 13.19 min
+r20261110-125104-2f83  remote 700a981f5d90, moves first across the 18 moves the staging has and it lacks, the merge's ancestor
+                       under --no-lock: 655 files in conflict moved first, 664 unmoved; 4 of 18 scripts fail on remote, 13 on the ancestor
