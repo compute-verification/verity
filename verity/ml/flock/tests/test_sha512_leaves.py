@@ -122,6 +122,12 @@ def test_the_patch_installs_the_gpus_sha512_and_the_header_including_it(tmp_path
     assert installed == ours.replace(f'#include "{theirs}"', '#include "kernels_sha512.cuh"')
 
 
+def test_the_patch_reaches_the_tree_from_its_root() -> None:
+    """A move of the tree carries a path written from the repository's root, and not a join from the script's directory."""
+    anchors = set(re.findall(r"__file__\)((?:\.\w+(?:\(\))?|\[\d+\])*)", SCRIPT.read_text()))
+    assert len(anchors) == 1 and re.fullmatch(r"\.resolve\(\)\.parents\[\d+\]", *anchors), sorted(anchors)
+
+
 def test_the_patch_imports_only_the_standard_library() -> None:
     """A pod runs it with ``python3`` from the Flock checkout, where no package of this tree is installed."""
     imports = [node for node in ast.walk(ast.parse(SCRIPT.read_text())) if isinstance(node, ast.Import | ast.ImportFrom)]
