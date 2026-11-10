@@ -29996,3 +29996,15 @@ So three at a time still fit a 755 GB node, and the 48 take about 8 hours and ab
 6. **For PRF-460, ready to paste:**
 
    > PRF-460 TWOWITNESS 17:42Z: blocker for (A). With registered reads, Flock's verifier refuses a statement whose units are taken as stated (`Registered.check` needs units derived from the verifier's own program), so the no-program statement can never be set up (`setupOf true (x r) = none`). Options: (a) restore the program and prove `Program.decode`, `deriveTemplateUnits` and `HmLinks.check` at the instance through `Std.HashMap` lemmas, (A) moving to Thu 12 Nov 18:00Z; or (b) drop the registered reads, if SLOTSAT's `Addresses` can use `ReadsInterior` alone at this instance. Recommended: (a). Decision with @proofs.
+
+## PRF-460 TWOWITNESS, Tue 10 Nov 17:44Z: addendum to the 17:42Z blocker: way (b) is a smell too, since the deployed verifier refuses every session without `--program`; only (a) is honest
+
+1. **[read]** `ProvedScope.programHeld` refuses any session verified without the verifier's program, with `NO_PROGRAM`: "a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered".
+   - `flock-verify` runs it on every session (`FlockVerify.lean:1175`), and so does SPOT's one-stage verdict (`Spot/OneStageZk.lean:460`, `verdictOf`), registered reads or not.
+2. **[read]** The Lean predicates the witness must meet don't read it. `sessionOk` (`SpotFlock/Code.lean:313`) is `zkOk`, the shape, `scopeCheck` and `hiddenOf`.
+3. So under (b), no registered reads and no program, (D)'s accepted run could satisfy every Lean premise while `flock-verify` refuses it. That is a witness that passes for the wrong reason, a smell-check finding, and not one I would deliver. Under the current statement, registered reads and no program, (A) fails outright (17:42Z).
+4. **(a), the program restored, is the only honest way.** Size as at 17:42Z [guess]: 300 to 500 lines, 3 to 5 node iterations, (A) on Thu 12 Nov 18:00Z.
+   - I'm starting (a)'s `Program.decode` module now. It changes no statement byte, so nothing is lost if you rule otherwise.
+5. **For PRF-460, ready to paste** (replacing the 17:42Z line):
+
+   > PRF-460 TWOWITNESS 17:44Z: blocker for (A). Flock's verifier refuses the no-program statement two ways: with registered reads at setup (`Registered.check` needs units derived from the verifier's program), and without them at the verdict (`ProvedScope.programHeld`, `NO_PROGRAM`), which the Lean predicates don't read, so a no-program witness would be a run the deployed verifier refuses. The statement takes its program back: `Program.decode`, `deriveTemplateUnits` and `HmLinks.check` proved at the instance through `Std.HashMap` lemmas. (A) moves to Thu 12 Nov 18:00Z [guess]; (D) stays Fri 13 Nov 12:00Z. Decision with @proofs.
