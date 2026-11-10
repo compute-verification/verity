@@ -7,8 +7,9 @@ form "because the name is in this list" is a structural leak).  The inventory (A
 found 98 such decision points, ~68 structural; v2 retires them phase by phase.  This test pins the current set so that it
 can only shrink.
 
-What is scanned: every ``*.py`` under ``integrations/vllm/verity_vllm`` and ``verity/ml/definitions`` (the Definitions
-that moved from it, keyed by their repository paths) except ``tests/`` directories and
+What is scanned: every ``*.py`` under ``integrations/vllm/verity_vllm`` and, of ``verity/ml/definitions``, the modules at
+its top and its ``registry`` (the Definitions that moved from the package, keyed by their repository paths; a package core
+keeps in that directory is not scanned) except ``tests/`` directories and
 ``test_*.py`` files (test fixtures may name models).  Docstrings, comments, f-strings, ``raise``/``assert`` messages,
 message-like keyword/dict positions (``hint=``, ``why=``, ``help=``, …) and a module's ``__models__`` marker (the models it
 exists for, ``verity_vllm.glue``) are not rule positions and are ignored.
