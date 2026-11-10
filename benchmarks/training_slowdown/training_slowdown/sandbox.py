@@ -5,13 +5,14 @@
 `enter` puts the calling process in a user, a mount and a network namespace of its own, with its user mapped to itself,
 and mounts an empty read-only directory over each DIR; the entry then becomes COMMAND. The new network namespace holds
 one loopback interface, down, so nothing COMMAND starts reaches another host or a service of this one; and COMMAND,
-which holds no capability after the exec and gains none from a setuid program (no root is mapped), can't take the
-mounts off. It needs a machine that lets an unprivileged
-process make a user namespace (`REQUIRES`): where one doesn't, the entry stops with that and COMMAND never starts.
+started by a user other than root, holds no capability after the exec and gains none from a setuid program (no root
+is mapped), so it can't take the mounts off. It needs a machine that lets an unprivileged process make a user
+namespace (`REQUIRES`): where one doesn't, the entry stops with that and COMMAND never starts.
 
 `refusals` is COMMAND's own half, read before it runs any code it didn't write: what it can still reach, an interface
-that is up or an entry of a final set, each by name. A job that finds one stops before it trains (`run.inside`), so a
-sandbox that wasn't made is a failed job, never a job that trained outside one.
+that is up or an entry of a final set, each by name, and a capability it holds, as root's COMMAND does, with which it
+could undo the rest. A job that finds one stops before it trains (`run.inside`), so a sandbox that wasn't made is a
+failed job, never a job that trained outside one.
 
 What it hides is the directories the registry names (`final_sets`): a copy of a final set at another path stays as
 readable as the job's user finds it. The rest of the file system is the user's as before, sockets at a path among it.
@@ -84,10 +85,17 @@ def interfaces() -> dict[str, bool]:
     return out
 
 
-def refusals(hidden: Iterable[Path], up: Mapping[str, bool] | None = None) -> list[str]:
-    """Why this process is not inside the sandbox: each interface that is up (`up`, default this process's), and
-    each of `hidden` it can read an entry of. Empty inside it."""
+def capabilities() -> int:
+    """This process's effective capabilities, the kernel's bit set."""
+    with open("/proc/self/status") as f:
+        return int(next(line.split()[1] for line in f if line.startswith("CapEff:")), 16)
+
+
+def refusals(hidden: Iterable[Path], up: Mapping[str, bool] | None = None, caps: int | None = None) -> list[str]:
+    """Why this process is not inside the sandbox: each interface that is up (`up`, default this process's), each of
+    `hidden` it can read an entry of, and any capability it holds (`caps`, default this process's). Empty inside it."""
     up = interfaces() if up is None else up
+    caps = capabilities() if caps is None else caps
     out = [f"the network is reachable (interface {name} is up)" for name in sorted(up) if up[name]]
     for d in hidden:
         try:
@@ -96,6 +104,9 @@ def refusals(hidden: Iterable[Path], up: Mapping[str, bool] | None = None) -> li
             continue
         if seen:
             out.append(f"the final set at {d} is readable ({', '.join(seen[:3])})")
+    if caps:
+        out.append(f"the process holds capabilities ({caps:016x}) with which it could undo the sandbox: run the job as "
+                   f"a user other than root")
     return out
 
 

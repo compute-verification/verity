@@ -4,7 +4,8 @@
 # What the kind needs of a node: an unprivileged process can make a user namespace (kernel.unprivileged_userns_clone=1
 # and kernel.apparmor_restrict_unprivileged_userns=0, each where the kernel has it; user.max_user_namespaces above 0).
 # The job runs its route's code in namespaces of its own, with no network and an empty directory over each final set
-# (training_slowdown/sandbox.py); on a node that refuses them the job fails before it trains, with this reason.
+# (training_slowdown/sandbox.py), as a user other than root, who holds no capability to undo them; on a node that
+# refuses the namespaces, or as root, the job fails before it trains, with the reason.
 
 [kinds.training-attack]
 phase = "gpu1"

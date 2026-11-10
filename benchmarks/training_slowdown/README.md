@@ -64,7 +64,8 @@ token data out of torch, starts a thread or a process, or imports a module the s
 
 A route's code runs in a process of its own, inside the job's sandbox (`sandbox.py`): no network interface is up and
 each registered final set's directory is empty there. That process stops before it imports the route if it finds
-either reachable, so on a machine that can't make the sandbox a job fails with the reason and trains nothing. The
+either reachable, or holds a capability that could undo them, as root's does, so on a machine that can't make the
+sandbox a job fails with the reason and trains nothing. The
 job's own process reads the held-out split and scores each checkpoint's state as the route's process hands it out;
 no score goes back in. The sandbox hides the paths the registry names and nothing else of the file system.
 

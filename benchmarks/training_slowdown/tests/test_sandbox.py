@@ -13,9 +13,13 @@ import json, os, sys
 from pathlib import Path
 from training_slowdown import sandbox
 hidden = [Path(p) for p in sys.argv[1:]]
+try:
+    parents = os.listdir(f"/proc/{os.getppid()}/root{hidden[0]}")
+except OSError as e:
+    parents = e.strerror
 print(json.dumps({"interfaces": sandbox.interfaces(), "refusals": sandbox.refusals(hidden),
-                  "entries": [os.listdir(d) for d in hidden if d.exists()],
-                  "capabilities": next(l.split()[1] for l in open("/proc/self/status") if l.startswith("CapEff"))}))
+                  "entries": [os.listdir(d) for d in hidden if d.exists()], "through_its_parent": parents,
+                  "capabilities": sandbox.capabilities()}))
 """
 
 
@@ -25,17 +29,21 @@ def test_refusals_name_each_interface_that_is_up_and_each_final_set_with_an_entr
     empty.mkdir()
     (final / "tiny.bin").write_bytes(b"x")
     down = {"lo": False}
-    assert sandbox.refusals([empty, absent], down) == []
-    assert sandbox.refusals([empty, absent], {"lo": True, "eth0": True, "docker0": False}) == [
+    assert sandbox.refusals([empty, absent], down, 0) == []
+    assert sandbox.refusals([empty], down, 0x1FFFFFFFFFF) == [
+        "the process holds capabilities (000001ffffffffff) with which it could undo the sandbox: run the job as a user "
+        "other than root"]
+    assert sandbox.refusals([empty, absent], {"lo": True, "eth0": True, "docker0": False}, 0) == [
         "the network is reachable (interface eth0 is up)", "the network is reachable (interface lo is up)"]
-    assert sandbox.refusals([empty, final], down) == [f"the final set at {final} is readable (tiny.bin)"]
+    assert sandbox.refusals([empty, final], down, 0) == [f"the final set at {final} is readable (tiny.bin)"]
     assert sandbox.final_sets({"data": {"b": {"final": "/x/b"}, "a": {"final": "/x/a"}, "c": {"final": "/x/a"}}}) == [
         Path("/x/a"), Path("/x/b")]
 
 
 def test_the_entrys_command_finds_no_interface_up_and_each_hidden_directory_empty(tmp_path):
     """What a process started through the entry reaches: one loopback interface, down, an empty directory where the
-    final set is, and no capability to undo either. Outside it the final set is as readable as before."""
+    final set is, no capability to undo either, and no way to the final set through its parent's view of the file
+    system. Outside it the final set is as readable as before."""
     final = tmp_path / "final"
     final.mkdir()
     (final / "tiny.bin").write_bytes(b"x")
@@ -45,8 +53,8 @@ def test_the_entrys_command_finds_no_interface_up_and_each_hidden_directory_empt
                        cwd=here, capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-2000:]
     assert json.loads(p.stdout) == {"interfaces": {"lo": False}, "refusals": [], "entries": [[]],
-                                    "capabilities": "0000000000000000"}
-    assert sandbox.refusals([final], {"lo": False}) == [f"the final set at {final} is readable (tiny.bin)"]
+                                    "through_its_parent": "Permission denied", "capabilities": 0}
+    assert sandbox.refusals([final], {"lo": False}, 0) == [f"the final set at {final} is readable (tiny.bin)"]
     file = tmp_path / "file"
     file.write_bytes(b"x")
     p = subprocess.run([sys.executable, "-m", "training_slowdown.sandbox", "--hide", file, "--", "true"], cwd=here,
@@ -64,6 +72,7 @@ def test_a_routes_process_outside_the_sandbox_stops_before_it_reads_its_config(t
             tmp_path]
     monkeypatch.setattr(config, "load", lambda *a, **k: pytest.fail("the route's process read its config"))
     monkeypatch.setattr(sandbox, "interfaces", lambda: {"lo": False})
+    monkeypatch.setattr(sandbox, "capabilities", lambda: 0)
     with pytest.raises(SystemExit, match=rf"outside it: the final set at {final} is readable \(manifest.json, tiny.bin\)"):
         run.main(argv)
     for f in Path(final).iterdir():

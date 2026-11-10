@@ -8,8 +8,8 @@ computes through torch is counted (flops.py).
 A job is two processes. Its own (`outside`) runs no route's code: it reads the job's held-out split, starts the
 route's process in the sandbox (`training_slowdown.sandbox`: no network, an empty directory where each registered
 final set is) and scores each state that process hands out. The route's process (`inside`) stops before it imports
-the route when it finds an interface up or a final set readable, so a job never trains outside the sandbox; it gets
-no score back, and its record says what it found (`sandbox`).
+the route when it finds an interface up, a final set readable or a capability in its own hands, so a job never
+trains outside the sandbox; it gets no score back, and its record says what it found (`sandbox`).
 
 The route loop (`train`): the route builds its model and optimizers (`training_slowdown.routes`), the harness loads θ
 into the model and registers it, and runs the budget's steps, each the route's `step` on the next batch of the start's
