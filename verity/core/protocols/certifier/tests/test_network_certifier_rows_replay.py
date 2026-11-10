@@ -1,4 +1,4 @@
-"""Regressions on the network certifier's bucket rows (`warden_rows`): replays of real network-certifier-signed roots
+"""Regressions on the network certifier's bucket rows (`network_certifier_rows`): replays of real network-certifier-signed roots
 and certificates across windows and directions, and a certificate the network certifier signed over another digest, stay
 refused. Two gaps are closed:
 - the layout is bound: the signed head carries S, T and the wiring's digest, and the domain S and T, so a head of
@@ -16,12 +16,12 @@ import dataclasses
 import pytest
 
 import signers
-from verity.core.protocols.certifier import warden_rows as W
+from verity.core.protocols.certifier import network_certifier_rows as W
 from verity.core.protocols.certifier.active import DATA
 from verity.core.protocols.certifier.certificate import Direction, Issuer, certificate_digest
 from verity.core.protocols.certifier.grid import BlockGrid, Status
-from verity.core.protocols.certifier.tests.test_network_certifier_warden import PARAMS
-from verity.core.protocols.certifier.warden import cell
+from verity.core.protocols.certifier.tests.test_network_certifier import PARAMS
+from verity.core.protocols.certifier.network_certifier import cell
 
 SESSION = signers.SESSION
 T, R, S, B = PARAMS.window, PARAMS.slots, PARAMS.lanes * PARAMS.slots, PARAMS.cell_bytes
@@ -89,7 +89,7 @@ def test_a_real_cross_direction_replay_is_refused(tmp_path):
         W.check_registration(doc, key, SESSION, PARAMS, LINK, Direction.INGRESS, 0)
 
 
-def test_a_warden_certificate_over_another_digest_is_not_a_cells_certificate(tmp_path):
+def test_a_network_certifier_certificate_over_another_digest_is_not_a_cells_certificate(tmp_path):
     """The wire record's certificate signs `certificate_digest(salt, record_digest)`. A certificate the network
     certifier really signed over such a digest verifies on its own, but is refused here: `cert.digest` must be
     `head.digest()`."""

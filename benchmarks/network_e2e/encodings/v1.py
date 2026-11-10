@@ -897,7 +897,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--T", type=int, default=600, help="the window, in 100 ms buckets")
     ap.add_argument("--ingress", choices=INGRESS, default="client",
                     help="the certified order's stand-in: the client's send (client; on a .released view, the warden's "
-                         "release), or the engine's own arrival stamp (warden: no deviations)")
+                         "release), or the engine's own arrival stamp (network_certifier: no deviations)")
     ap.add_argument("--jobs", type=int, default=0, help="processes (default: one a trace, up to the cores)")
     ap.add_argument("--out", type=Path, required=True, help="the table's JSON")
     a = ap.parse_args(argv)

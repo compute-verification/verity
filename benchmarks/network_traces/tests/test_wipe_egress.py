@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.certifier.certificate import Certificate, Direction, LmsKey, certificate_message
-from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols.certifier.network_certifier import NetworkCertifierParams
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.ml.crypto import lms
 
@@ -25,10 +25,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "live_challenger"))
 import auditor as G  # noqa: E402
 import certifier_serve as cs  # noqa: E402
-import warden_serve as ws  # noqa: E402
+import network_certifier_serve as ws  # noqa: E402
 import wipe_egress as E  # noqa: E402
 
-SCAN = WardenParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
+SCAN = NetworkCertifierParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
 #: the origin of the rehearsal the record was first read off
 ORIGIN = 1793035442.0242794
 WINDOWS = 6

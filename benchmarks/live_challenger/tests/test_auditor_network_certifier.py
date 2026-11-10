@@ -43,7 +43,7 @@ def gate(host, argv, *, key=LANE, active=lambda r: False, started=None, token="a
                   read=lambda n: pytest.fail("read stdin") if stdin is None else stdin[:n])
 
 
-def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device_runs_at_a_time(host):
+def test_a_lane_key_starts_a_network_certifier_rehearsal_and_one_rehearsal_of_either_device_runs_at_a_time(host):
     started = []
     rc, out = gate(host, REQUEST, started=started)
     doc = json.loads(out)
@@ -113,7 +113,7 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     (["--top-p", ".9"], "--top-p '.9': above 0, at most 1"),
     (["--top-p", "0.99999"], "--top-p '0.99999': above 0, at most 1"),
 ])
-def test_the_gate_refuses_a_warden_rehearsal_it_cant_check(host, bad, why):
+def test_the_gate_refuses_a_network_certifier_rehearsal_it_cant_check(host, bad, why):
     good = dict(zip(REQUEST[1::2], REQUEST[2::2]))
     good.update(dict(zip(bad[::2], bad[1::2])))
     rc, out = gate(host, ["warden-rehearse", *[w for kv in good.items() for w in kv]], started=[])
@@ -121,7 +121,7 @@ def test_the_gate_refuses_a_warden_rehearsal_it_cant_check(host, bad, why):
     assert not host.certifier.exists()
 
 
-def test_a_key_that_reads_only_starts_no_warden_rehearsal(host):
+def test_a_key_that_reads_only_starts_no_network_certifier_rehearsal(host):
     for key in (None, "-"):
         rc, out = gate(host, REQUEST, key=key, started=[])
         assert rc == 3 and "this key reads only: a warden rehearsal" in json.loads(out)["refused"]
@@ -131,18 +131,18 @@ def test_a_key_that_reads_only_starts_no_warden_rehearsal(host):
 def test_the_least_minutes_are_two_seconds_a_request_three_minutes_and_the_key_more_rounded_up():
     """The key is 2^H one-time keys at `KEYGEN_LEAVES_S` a second: 256 s at the deployed height, the default, and
     nothing that rounds up a minute at 10."""
-    assert [A.warden_minutes(n, 10) for n in (4, 60, 61, 100, 400)] == [4, 5, 6, 7, 17]
-    assert [A.warden_minutes(n) for n in (4, 60, 61, 100, 400)] == [A.warden_minutes(n, 20) for n in
+    assert [A.network_certifier_minutes(n, 10) for n in (4, 60, 61, 100, 400)] == [4, 5, 6, 7, 17]
+    assert [A.network_certifier_minutes(n) for n in (4, 60, 61, 100, 400)] == [A.network_certifier_minutes(n, 20) for n in
                                                                     (4, 60, 61, 100, 400)] == [8, 10, 10, 11, 21]
     for h in (10, 20):
-        assert all(A.warden_minutes(n + 30, h) == A.warden_minutes(n, h) + 1 for n in range(4, A.WARDEN_REQUESTS[1] - 29))
+        assert all(A.network_certifier_minutes(n + 30, h) == A.network_certifier_minutes(n, h) + 1 for n in range(4, A.WARDEN_REQUESTS[1] - 29))
 
 
-def test_one_warden_session_takes_the_gates_most_requests_at_height_13_in_an_hour(host):
+def test_one_network_certifier_session_takes_the_gates_most_requests_at_height_13_in_an_hour(host):
     """The gate's most requests, 1700, at height 13 (8192 one-time keys) take 60 minutes, a scan rehearsal's on its own
     prompts too: one session of about 57 minutes of arrivals and tail, the whole-node wipe's 745 link-windows and more
     (`wipe_gate.sh`)."""
-    assert A.WARDEN_REQUESTS[1] == A.WARDEN_PROMPT_REQUESTS[1] == 1700 and A.warden_minutes(1700, 13) == 60
+    assert A.WARDEN_REQUESTS[1] == A.WARDEN_PROMPT_REQUESTS[1] == 1700 and A.network_certifier_minutes(1700, 13) == 60
     for token, argv in (("ab12", []), ("cd34", ["--scan", "--prompts", "--tokens", "24"])):
         rc, out = gate(host, REQUEST + argv + ["--requests", "1700", "--minutes", "60", "--height", "13"],
                        stdin=json.dumps([[1]] * A.WARDEN_PROMPTS[1]).encode(), started=[], token=token)
@@ -151,17 +151,17 @@ def test_one_warden_session_takes_the_gates_most_requests_at_height_13_in_an_hou
             {"requests": 1700, "minutes": 60, "height": 13}
 
 
-def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
+def test_a_network_certifier_key_signs_five_a_link_window_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
     """A network certifier window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
     so height 12's 4096 sign 819 windows and 1031 (55 minutes of the scan's 3.2 s windows) take 13; a load's heads come
-    first. 1559 requests at the gate's rate are `warden_windows` 1031 and fit 55 minutes at height 13, which the gate
+    first. 1559 requests at the gate's rate are `network_certifier_windows` 1031 and fit 55 minutes at height 13, which the gate
     takes; at 12 it refuses them with the height that fits, writing nothing, rather than run a session whose signer
     runs out 819 windows in. The default height, 20, signs anything the gate takes."""
-    assert [A.warden_height(w) for w in (1, 204, 205, 819, 820, 1031, 1638, 1639)] == [10, 10, 11, 12, 13, 13, 13, 14]
-    assert A.warden_height(1031, heads=733) == 13
-    assert A.warden_height(819, heads=1) == 12 and A.warden_height(819, heads=2) == 13
-    assert (A.warden_windows(1559), A.warden_windows(1700), A.warden_windows(1700, scan=False)) == (1031, 1119, 60)
-    assert (A.warden_minutes(1559, 13), A.warden_minutes(1700)) == (55, 64)
+    assert [A.network_certifier_height(w) for w in (1, 204, 205, 819, 820, 1031, 1638, 1639)] == [10, 10, 11, 12, 13, 13, 13, 14]
+    assert A.network_certifier_height(1031, heads=733) == 13
+    assert A.network_certifier_height(819, heads=1) == 12 and A.network_certifier_height(819, heads=2) == 13
+    assert (A.network_certifier_windows(1559), A.network_certifier_windows(1700), A.network_certifier_windows(1700, scan=False)) == (1031, 1119, 60)
+    assert (A.network_certifier_minutes(1559, 13), A.network_certifier_minutes(1700)) == (55, 64)
     long = REQUEST[:-1] + ["55", "--scan", "--prompts", "--requests", "1559", "--height"]
     rc, out = gate(host, long + ["13"], stdin=b"[[1]]", started=[])
     assert rc == 0 and {k: json.loads(out)[k] for k in ("requests", "minutes", "height")} == \
@@ -187,7 +187,7 @@ CHECK = {"accepted": True, "problems": [], "summary": {
     "wire_bits": {"ingress": 18432, "egress": 63488}, "cells_in_their_bucket": [31, 31], "tick_lateness_ms": {"n": 9},
     "data_bytes": {"egress": 4242}, "completion_tokens": 77, "prompt_tokens": [16, 99], "arrival_lag_ms": {"n": 31},
     "finish_reasons": {"length": 4}}, "connections": [{"ordinal": 1, "outcome": "end", "text_bytes": 300}]}
-#: a stand-in for `warden_serve.py rehearse`'s files: public, then witness
+#: a stand-in for `network_certifier_serve.py rehearse`'s files: public, then witness
 WARDEN_FILES = (
     f'(out / "deployment.json").write_text(json.dumps({{"upstream": url, "session": "00" * 32}}))\n'
     f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {{"rows": 600}}}}) + "\\n"'
@@ -202,7 +202,7 @@ WARDEN_FILES = (
 
 
 def rehearsal(source: str, seen: list | None = None):
-    """A stand-in for `warden_serve.py rehearse`: Python `source` run with `out` and `url` bound."""
+    """A stand-in for `network_certifier_serve.py rehearse`: Python `source` run with `out` and `url` bound."""
     def command(req, out, url):
         if seen is not None:
             seen.append((req, out, url))
@@ -210,7 +210,7 @@ def rehearsal(source: str, seen: list | None = None):
     return command
 
 
-def run_warden(host, source=WARDEN_FILES, seen=None, token="ab12") -> tuple[str, dict]:
+def run_network_certifier(host, source=WARDEN_FILES, seen=None, token="ab12") -> tuple[str, dict]:
     rc, out = gate(host, REQUEST, started=[], token=token)
     assert rc == 0, out
     run = json.loads(out)["run"]
@@ -224,9 +224,9 @@ def tar_names(blob: bytes) -> set[str]:
         return set(tar.getnames())
 
 
-def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_registrations_and_certificates(host):
+def test_a_network_certifier_rehearsal_writes_witness_apart_and_publishes_its_deployment_registrations_and_certificates(host):
     seen = []
-    run, end = run_warden(host, WARDEN_FILES, seen)
+    run, end = run_network_certifier(host, WARDEN_FILES, seen)
     d = host.certifier / run
     (req, work, url), = seen
     assert work == d / A.WITNESS and url.startswith("http://127.0.0.1:") and req["device"] == "warden"
@@ -260,8 +260,8 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_re
     (["--ssh", "fetch {run}", "--key", LANE], True),
     (["fetch", "{run}"], True),
 ])
-def test_fetch_gives_a_warden_rehearsals_witness_to_its_own_lane_and_vy_admin_alone(host, argv, witness):
-    run, _ = run_warden(host)
+def test_fetch_gives_a_network_certifier_rehearsals_witness_to_its_own_lane_and_vy_admin_alone(host, argv, witness):
+    run, _ = run_network_certifier(host)
     rc, blob = A.gate([w.format(run=run) for w in argv], host, by="vy-admin")
     names = tar_names(blob)
     assert rc == 0 and {f"{run}/request.json", f"{run}/end.json", f"{run}/out/cells.jsonl",
@@ -272,7 +272,7 @@ def test_fetch_gives_a_warden_rehearsals_witness_to_its_own_lane_and_vy_admin_al
         assert {f"{run}/witness/cells.salts", f"{run}/witness/certified.jsonl", f"{run}/witness/check.json"} <= hidden
 
 
-def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_why(host):
+def test_a_network_certifier_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_why(host):
     rc, out = gate(host, REQUEST, started=[])
     run = json.loads(out)["run"]
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL,
@@ -281,27 +281,27 @@ def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_wh
     assert end["verdict"] is None and end["registrations"] == {} and end["witness"] == {}
     assert set(end["files"]) == {"tunnel.log"}
 
-    run, end = run_warden(host, "raise SystemExit(1)", token="cd34")
+    run, end = run_network_certifier(host, "raise SystemExit(1)", token="cd34")
     assert end["rc"] == 1 and end["ended"] == "the rehearsal exited 1" and end["verdict"] is None
 
 
-def test_the_warden_rehearsal_runs_warden_serve_on_the_gates_traffic_through_the_tunnels_local_end(tmp_path):
+def test_the_network_certifier_rehearsal_runs_network_certifier_serve_on_the_gates_traffic_through_the_tunnels_local_end(tmp_path):
     """A request.json written before the gate took `--height` runs at the deployed key's, 20, as one that gives none."""
     req = {"device": "warden", "requests": 100}
-    argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
-    assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/warden_serve.py", "rehearse",
+    argv = A.network_certifier_command(req, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
+    assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/network_certifier_serve.py", "rehearse",
                     "--upstream", "127.0.0.1:40001", "--out", str(tmp_path), "--height", "20", "--requests", "100",
                     "--rate", "0.5", "--seed", "0", "--tail", "60", "--temperature", "0.0", "--top-p", "1.0"]
-    assert A.warden_command(req | {"height": 20}, tmp_path, "http://127.0.0.1:40001",
+    assert A.network_certifier_command(req | {"height": 20}, tmp_path, "http://127.0.0.1:40001",
                             tree=Path("/opt/vy-challenger") / PIN) == argv
-    assert A.warden_command(req | {"height": 10}, tmp_path, "u")[7:9] == ["--height", "10"]
-    assert A.warden_command(req | {"tokens": 64}, tmp_path, "http://127.0.0.1:1")[-2:] == ["--max-tokens", "64"]
+    assert A.network_certifier_command(req | {"height": 10}, tmp_path, "u")[7:9] == ["--height", "10"]
+    assert A.network_certifier_command(req | {"tokens": 64}, tmp_path, "http://127.0.0.1:1")[-2:] == ["--max-tokens", "64"]
 
 
 def test_a_scan_rehearsal_is_recorded_only_when_asked_and_runs_id_requests_at_the_scans_schedule(host, tmp_path):
     """`--scan` is recorded (`scan: true`) only when given, and its run is the same rehearsal with `--ids` and
-    `SCAN_SCHEDULE` added: the same traffic, sampling, height and tokens, so `warden_minutes` bounds it as it does any
-    (`test_warden_serve` holds the schedule to `scan_zk.PARAMS`)."""
+    `SCAN_SCHEDULE` added: the same traffic, sampling, height and tokens, so `network_certifier_minutes` bounds it as it does any
+    (`test_network_certifier_serve` holds the schedule to `scan_zk.PARAMS`)."""
     rc, out = gate(host, REQUEST + ["--scan", "--tokens", "64"], started=[])
     assert rc == 0, out
     scan = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
@@ -312,24 +312,24 @@ def test_a_scan_rehearsal_is_recorded_only_when_asked_and_runs_id_requests_at_th
     rc, out = gate(host, REQUEST + ["--scan", "--minutes", "10"], started=[], token="ef56")
     assert rc == 3 and "--minutes 10: 100 requests take 11 minutes" in json.loads(out)["refused"]
 
-    argv = A.warden_command(scan, tmp_path, "http://127.0.0.1:40001")
-    without = A.warden_command({k: v for k, v in scan.items() if k != "scan"}, tmp_path, "http://127.0.0.1:40001")
+    argv = A.network_certifier_command(scan, tmp_path, "http://127.0.0.1:40001")
+    without = A.network_certifier_command({k: v for k, v in scan.items() if k != "scan"}, tmp_path, "http://127.0.0.1:40001")
     at = without.index("--max-tokens")
     assert argv == [*without[:at], "--ids", *A.SCAN_SCHEDULE, *without[at:]]
-    assert A.warden_command(plain, tmp_path, "u") == A.warden_command(plain | {"scan": False}, tmp_path, "u")
-    assert "--ids" not in A.warden_command(plain, tmp_path, "u")
+    assert A.network_certifier_command(plain, tmp_path, "u") == A.network_certifier_command(plain | {"scan": False}, tmp_path, "u")
+    assert "--ids" not in A.network_certifier_command(plain, tmp_path, "u")
 
 
 def test_a_scan_rehearsals_tick_is_recorded_only_when_given_and_its_run_and_minutes_are_at_that_tick(host, tmp_path):
     """`--bucket-ms` is recorded (``bucket_ms``) only when given, and the run is the scan's schedule with that tick in
     place of its 100 ms, every other flag the scan's. The gate counts the minutes at it: a sampling block of 32 ticks
-    of 4 s is 128 s, past the minute `warden_minutes` counts for a shorter one, so 100 requests take a minute more, and
+    of 4 s is 128 s, past the minute `network_certifier_minutes` counts for a shorter one, so 100 requests take a minute more, and
     one group of 4 prompts of 4 ids out takes its one block, 6 minutes at height 10 where 100 ms takes 4."""
     rc, out = gate(host, REQUEST + ["--scan", "--bucket-ms", "4000"], started=[])
     assert rc == 0, out
     req = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
     assert (req["scan"], req["bucket_ms"]) == (True, 4000)
-    argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001")
+    argv = A.network_certifier_command(req, tmp_path, "http://127.0.0.1:40001")
     schedule = argv[argv.index("--ids") + 1:][:len(A.SCAN_SCHEDULE)]
     assert schedule == list(A.scan_schedule(4000)) and schedule[schedule.index("--bucket-ms") + 1] == "4000"
     assert [x for i, x in enumerate(schedule) if schedule[i - 1] != "--bucket-ms"] == \
@@ -352,7 +352,7 @@ def test_a_scan_rehearsals_tick_is_recorded_only_when_given_and_its_run_and_minu
     assert rc == 0, out
     req = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
     assert (req["bucket_ms"], req["window_per_group"], req["requests"]) == (4000, True, 4)
-    argv = A.warden_command(req, tmp_path, "u")
+    argv = A.network_certifier_command(req, tmp_path, "u")
     assert argv[argv.index("--ids") + 1:][:len(A.SCAN_SCHEDULE)] == list(A.scan_schedule(4000))
 
 
@@ -369,9 +369,9 @@ def test_the_gate_refuses_a_tick_without_the_scan_or_past_its_range_and_writes_n
     assert not host.certifier.exists()
 
 
-def test_a_warden_rehearsals_sampling_is_recorded_and_passed_on_every_request(host, tmp_path):
+def test_a_network_certifier_rehearsals_sampling_is_recorded_and_passed_on_every_request(host, tmp_path):
     """The defaults, temperature 0 and top_p 1, and given values alike are recorded and passed on, so that every request
-    of the traffic carries both (`warden_serve.varied_traffic`) and an endpoint's own generation config never applies;
+    of the traffic carries both (`network_certifier_serve.varied_traffic`) and an endpoint's own generation config never applies;
     a request.json written before the gate took them runs at the defaults."""
     for k, (given, recorded) in enumerate((([], (0.0, 1.0)), (["--temperature", "0.6", "--top-p", "0.9"], (0.6, 0.9)),
                                           (["--temperature", "2", "--top-p", "0.0001"], (2.0, 0.0001)))):
@@ -379,10 +379,10 @@ def test_a_warden_rehearsals_sampling_is_recorded_and_passed_on_every_request(ho
         assert rc == 0, out
         request = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
         assert (request["temperature"], request["top_p"]) == recorded
-        argv = A.warden_command(request, tmp_path, "http://127.0.0.1:1")
+        argv = A.network_certifier_command(request, tmp_path, "http://127.0.0.1:1")
         assert argv[argv.index("--temperature"):][:4] == ["--temperature", str(recorded[0]), "--top-p", str(recorded[1])]
     older = {k: v for k, v in request.items() if k not in ("temperature", "top_p")}
-    assert A.warden_command(older, tmp_path, "u")[-4:] == ["--temperature", "0.0", "--top-p", "1.0"]
+    assert A.network_certifier_command(older, tmp_path, "u")[-4:] == ["--temperature", "0.0", "--top-p", "1.0"]
 
 
 PROMPTS = [[70001, 3], [5], [7]]
@@ -419,7 +419,7 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
                           command=rehearsal(grouped, seen), wait=lambda proc, s: proc.wait())
     (got, work, url), = seen
     assert got == req and work == w and end["rc"] == 0 and end["witness"][A.PROMPTS] == len(b"[[70001,3],[5],[7]]")
-    argv = A.warden_command(got, work, url)
+    argv = A.network_certifier_command(got, work, url)
     assert argv[argv.index(A.SCAN_SCHEDULE[-2]) + 2:] == ["--prompts", str(w / A.PROMPTS), "--window-per-group",
                                                        "--max-tokens", "2"]
     assert "groups.json" in end["files"] and json.loads((d / "out" / "groups.json").read_text())["groups"]
@@ -463,7 +463,7 @@ def test_the_gate_refuses_prompts_it_cant_check_and_writes_nothing(host, argv, s
 
 
 def test_a_scan_rehearsals_prompt_may_be_the_scans_ki_ids_and_no_more():
-    """A scan rehearsal's prompt is at most the scan's KI = 1024 ids (`WARDEN_PROMPT_IDS`; `test_warden_serve` holds
+    """A scan rehearsal's prompt is at most the scan's KI = 1024 ids (`WARDEN_PROMPT_IDS`; `test_network_certifier_serve` holds
     it to `scan_zk.CLASS.KI`): the scan refuses a request of more, so the gate takes exactly KI and refuses KI + 1 at
     input. A varied certifier rehearsal's prompts, which no scan reads, keep the varied plan's 2048
     (`CERTIFIER_PROMPTS`)."""
@@ -476,14 +476,14 @@ def test_a_scan_rehearsals_prompt_may_be_the_scans_ki_ids_and_no_more():
 def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_and_tokens(host, tmp_path):
     """`--scan-class w63k4` is recorded (``scan_class``) only when given, takes a prompt of its KI = 32 ids and 4 tokens
     out (its 5 egress cells less the trailer), and runs the network certifier at the scan's schedule with its 5 egress cells, every
-    other flag the class of record's (`test_warden_serve` holds each class's schedule to `scan_zk.py schedule --class`).
+    other flag the class of record's (`test_network_certifier_serve` holds each class's schedule to `scan_zk.py schedule --class`).
     A request without it is the class of record's: its bounds are `WARDEN_PROMPT_IDS` and `WARDEN_PROMPT_TOKENS`."""
     rc, out = gate(host, SCAN + ["--scan-class", "w63k4", "--window-per-group", "--tokens", "4", "--minutes", "4"],
                    stdin=json.dumps([[0] * 32] * 4).encode(), started=[])
     assert rc == 0, out
     req = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
     assert (req["scan_class"], req["tokens"], req["prompts"]) == ("w63k4", 4, {"count": 4, "ids": 128})
-    argv = A.warden_command(req, tmp_path, "u")
+    argv = A.network_certifier_command(req, tmp_path, "u")
     schedule = argv[argv.index("--ids") + 1:][:len(A.SCAN_SCHEDULE)]
     assert schedule == list(A.scan_schedule(scan_class="w63k4")) and schedule[schedule.index("--egress-cells") + 1] == "5"
     assert [x for i, x in enumerate(schedule) if schedule[i - 1] != "--egress-cells"] == \
@@ -498,11 +498,11 @@ def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_
     assert rc == 0, out
     req = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
     assert "scan_class" not in req
-    assert A.warden_command(req, tmp_path, "u") == A.warden_command(req | {"scan_class": A.SCAN_CLASS}, tmp_path, "u")
+    assert A.network_certifier_command(req, tmp_path, "u") == A.network_certifier_command(req | {"scan_class": A.SCAN_CLASS}, tmp_path, "u")
 
 
 def test_a_groups_windows_are_the_scans_delay_and_its_tokens_buckets_and_their_minutes_the_groups_windows():
-    """`test_warden_serve` holds `scan_group_windows` to `warden_serve.group_windows` and the network certifier's schedule."""
+    """`test_network_certifier_serve` holds `scan_group_windows` to `network_certifier_serve.group_windows` and the network certifier's schedule."""
     assert [A.scan_group_windows(t) for t in (1, 2, 11, 12, 139, 140)] == [1, 1, 1, 2, 2, 3]
-    assert [A.warden_group_minutes(g, 2, 10) for g in (1, 10, 100, 400)] == [4, 4, 9, 25]
-    assert A.warden_group_minutes(400, 64, 10) == 46 and A.warden_group_minutes(1, 2) == 8
+    assert [A.network_certifier_group_minutes(g, 2, 10) for g in (1, 10, 100, 400)] == [4, 4, 9, 25]
+    assert A.network_certifier_group_minutes(400, 64, 10) == 46 and A.network_certifier_group_minutes(1, 2) == 8

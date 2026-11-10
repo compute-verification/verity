@@ -29,13 +29,13 @@ Poisson traffic. Plain vLLM's OpenAI server on one RTX PRO 6000, with the integr
   (`VERITY_ADV_CACHE`). It records its choices beside the tracer's files. `corpus.HOSTILE`'s traces serve heavy's load
   under the honest scheduler and under hostile ones, which tests whether a request's outputs depend on its batch-mates.
 - `corpus.WARDEN`'s traces serve heavy's and small KV's loads through the network certifier as a relay
-  (`benchmarks/network_traces/warden_serve.py serve`, a process beside the server, not on the auditor host). The client
+  (`benchmarks/network_traces/network_certifier_serve.py serve`, a process beside the server, not on the auditor host). The client
   speaks cells through the relay's shim. `summarize` checks what the relay published, and writes each relay trace
   twice more for the scheduler replay (`benchmarks/network_e2e/encodings/replay.py`'s `read_corpus_trace`): with the
-  relay's admission order and with its release order as the certified ingress (`summary.warden_views`). The relay,
+  relay's admission order and with its release order as the certified ingress (`summary.network_certifier_views`). The relay,
   the client and the server run on cores of their own (`corpus.cpu_plan`), and three probes say where a late tick or a
-  late cell read came from: `warden_probe.py` (the relay's every tick, publish and collection), `host_sample.py` (the
-  host's load every 100 ms) and the client's own event loop record (`corpus.drive_warden`); the summary lays each late
+  late cell read came from: `network_certifier_probe.py` (the relay's every tick, publish and collection), `host_sample.py` (the
+  host's load every 100 ms) and the client's own event loop record (`corpus.drive_network_certifier`); the summary lays each late
   tick against them (`summary.late_ticks`).
 - `run.sh`: the job on a leased GPU of a node (its header has its command and resources). `join.sh`: its summaries,
   comparison and the scheduler replay's table on a CPU node, for a GPU job run with `JOIN=0`. A summarized corpus is

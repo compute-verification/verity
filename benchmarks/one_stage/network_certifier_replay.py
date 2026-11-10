@@ -1,4 +1,4 @@
-"""A network certifier run (`warden_serve.py rehearse`'s files) over a served window's traffic, for `a5_warden.py --run`: the requests of
+"""A network certifier run (`network_certifier_serve.py rehearse`'s files) over a served window's traffic, for `a5_network_certifier.py --run`: the requests of
 a `verity-vllm serve-openai` run's closed Commit window K, sent through the network certifier in the order the run recorded them, and an
 upstream that answers each with the tokens the server streamed it, so the network certifier's cells carry that window's requests and
 responses.
@@ -11,14 +11,14 @@ responses.
   streamed it (``streamed_ids``), one server-sent event a token in vLLM's completion form (``token_ids``, no text), its finish
   reason the recorded one, then its usage and ``[DONE]``. serve-openai records token ids, not the HTTP bytes it sent, so the
   bytes are rendered again from them; a request the window doesn't hold is answered 404.
-* **The run** (`rehearse`): as `warden_serve.py rehearse` runs one (a key in scratch, ``serve`` and ``client`` as processes, then
+* **The run** (`rehearse`): as `network_certifier_serve.py rehearse` runs one (a key in scratch, ``serve`` and ``client`` as processes, then
   ``check``), with that traffic and that upstream. ``--out`` holds the network certifier's files (``deployment.json``, the records,
   ``cells.jsonl``; ``cells.salts`` is witness) and ``check.json``.
 
-    python benchmarks/one_stage/warden_replay.py rehearse --serve-run RUN --serve-window K --out DIR [--gap S] [--token-ms 20] [schedule]
-    python benchmarks/one_stage/warden_replay.py endpoint --serve-run RUN --serve-window K --listen HOST:PORT [--token-ms 20]
+    python benchmarks/one_stage/network_certifier_replay.py rehearse --serve-run RUN --serve-window K --out DIR [--gap S] [--token-ms 20] [schedule]
+    python benchmarks/one_stage/network_certifier_replay.py endpoint --serve-run RUN --serve-window K --listen HOST:PORT [--token-ms 20]
 
-``--serve-window`` is the served run's Commit window; ``--window`` is the network certifier's own, in buckets (`WardenParams`).
+``--serve-window`` is the served run's Commit window; ``--window`` is the network certifier's own, in buckets (`NetworkCertifierParams`).
 """
 from __future__ import annotations
 
@@ -41,8 +41,8 @@ HERE = Path(__file__).resolve().parent
 TRACES = HERE.parent / "network_traces"
 sys.path.insert(0, str(TRACES))
 
-import warden_serve as ws  # noqa: E402
-from verity.core.protocols.certifier.warden import WardenParams  # noqa: E402
+import network_certifier_serve as ws  # noqa: E402
+from verity.core.protocols.certifier.network_certifier import NetworkCertifierParams  # noqa: E402
 
 
 def served_requests(run: str | Path, window: int) -> list[dict]:
@@ -82,7 +82,7 @@ def arrivals(run: str | Path, requests: list[Mapping[str, Any]]) -> list[float]:
 
 
 def traffic(run: str | Path, window: int, *, start_s: float = 1.0, gap_s: float | None = None) -> list[dict]:
-    """`warden_serve`'s traffic form, {"at", "body"} a request, of window ``window``'s requests in the order they arrive: at
+    """`network_certifier_serve`'s traffic form, {"at", "body"} a request, of window ``window``'s requests in the order they arrive: at
     the times the run recorded (`arrivals`), or ``gap_s`` apart in the order it recorded them."""
     model, requests = served_model(run), served_requests(run, window)
     at = arrivals(run, requests) if gap_s is None else [i * gap_s for i in range(len(requests))]
@@ -162,7 +162,7 @@ def rehearse(args) -> int:
     params = ws._params(args)
     sent = traffic(args.serve_run, args.serve_window, start_s=args.start, gap_s=args.gap)
     (out / "traffic.json").write_text(json.dumps(sent))
-    warden = [sys.executable, str(TRACES / "warden_serve.py")]
+    network_certifier = [sys.executable, str(TRACES / "network_certifier_serve.py")]
     scratch = Path(tempfile.mkdtemp(prefix="warden-replay-"))
     procs: list[subprocess.Popen] = []
     try:
@@ -174,7 +174,7 @@ def rehearse(args) -> int:
         upstream = tuple(json.loads(up.stdout.readline())["listening"])
         windows = math.ceil((sent[-1]["at"] + args.tail) / (params.window * params.bucket_ms / 1000))
         with open(out / "serve.log", "w") as log:
-            serving = subprocess.Popen(warden + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0", "--out",
+            serving = subprocess.Popen(network_certifier + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0", "--out",
                                                  str(out), "--key", str(scratch / "warden"), "--session", secrets.token_hex(32),
                                                  "--windows", str(windows), "--start-in", str(args.start_in), "--slack",
                                                  str(args.slack), *ws._flags(args)],
@@ -183,7 +183,7 @@ def rehearse(args) -> int:
             if "listening" not in json.loads(serving.stdout.readline() or "{}"):
                 raise SystemExit("serve exited before listening (serve.log)")
             with open(out / "client.log", "w") as clog:
-                client_exit = subprocess.run(warden + ["client", "--deployment", str(out / "deployment.json"), "--traffic",
+                client_exit = subprocess.run(network_certifier + ["client", "--deployment", str(out / "deployment.json"), "--traffic",
                                                        str(out / "traffic.json"), "--out", str(out)],
                                              stdout=clog, stderr=subprocess.STDOUT).returncode
             serve_exit = serving.wait()
@@ -201,7 +201,7 @@ def rehearse(args) -> int:
 
 
 def parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="warden_replay.py", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="network_certifier_replay.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="command", required=True)
     e, r = sub.add_parser("endpoint", help="the window's recorded answers"), sub.add_parser("rehearse", help="the warden run")
     for q in (e, r):
@@ -216,7 +216,7 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--height", type=int, default=ws.cs.HEIGHT, help="the LMS key's tree height")
     r.add_argument("--start-in", type=float, default=2.0, help="the origin, seconds after the warden is up")
     r.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
-    for f in dataclasses.fields(WardenParams):
+    for f in dataclasses.fields(NetworkCertifierParams):
         r.add_argument(f"--{f.name.replace('_', '-')}", type=int, default=ws.SCHEDULE[f.name])
     return ap
 
