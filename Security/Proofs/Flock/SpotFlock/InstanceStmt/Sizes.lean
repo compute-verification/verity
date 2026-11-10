@@ -111,11 +111,10 @@ theorem icl_le : ∀ L : List (List Char), ([','].intercalate L).length ≤ (L.m
 
 theorem mem_len (e : (_ : String) × Json) : (memberChars e).length = e.1.toList.length + 3 + (jsonChars e.2).length := by
   simp only [memberChars, List.length_append, List.length_cons, List.length_nil]
-  omega
 
 theorem str_len (s : String) : (jsonChars (.str s)).length = s.toList.length + 2 := by
   show ('"' :: s.toList ++ ['"']).length = _
-  simp only [List.length_cons, List.length_append, List.length_singleton, List.length_nil] <;> omega
+  simp only [List.length_cons, List.length_append, List.length_nil]
 
 theorem obj_le {t : Impl String (fun _ => Json)} {L : List ((_ : String) × Json)} (hm : t.toListModel = L) :
     (jsonChars (.obj ⟨⟨t⟩⟩)).length ≤ (L.map fun e => (memberChars e).length + 1).sum + 2 := by
@@ -123,7 +122,7 @@ theorem obj_le {t : Impl String (fun _ => Json)} {L : List ((_ : String) × Json
   simp only [List.map_map, Function.comp_def] at h
   show ('{' :: [','].intercalate (jsonCharsObj t) ++ ['}']).length ≤ _
   rw [jsonCharsObj_eq, hm]
-  simp only [List.length_cons, List.length_append, List.length_singleton]
+  simp only [List.length_cons, List.length_append, List.length_nil]
   omega
 
 theorem arr_le (l : List Json) : (jsonChars (.arr l.toArray)).length ≤ (l.map fun j => (jsonChars j).length + 1).sum + 2 := by
@@ -131,20 +130,23 @@ theorem arr_le (l : List Json) : (jsonChars (.arr l.toArray)).length ≤ (l.map 
   simp only [List.map_map, Function.comp_def] at h
   show ('[' :: [','].intercalate (jsonCharsList l) ++ [']']).length ≤ _
   rw [jsonCharsList_eq]
-  simp only [List.length_cons, List.length_append, List.length_singleton]
+  simp only [List.length_cons, List.length_append, List.length_nil]
   omega
 
 theorem io_len (a b : Json) :
     (jsonChars (Json.mkObj [("i0", a), ("o0", b)])).length ≤ (jsonChars a).length + (jsonChars b).length + 14 := by
   rw [io_obj]
   refine Nat.le_trans (obj_le (io_model a b)) ?_
-  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, mem_len, List.length_cons, List.length_nil]
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, mem_len]
+  have hk : "i0".toList.length + "o0".toList.length = 4 := by decide +kernel
   omega
 
 theorem fv3_len (r : Run) : (jsonChars (fv3J r)).length ≤ r.bindI.toList.length + r.bindO.toList.length + 2 ^ 11 := by
   rw [fv3_obj]
   refine Nat.le_trans (obj_le (fv3_model r)) ?_
-  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, mem_len, List.length_cons, List.length_nil]
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, mem_len]
+  have hk : "bindings".toList.length + "domain_ids".toList.length + "frame".toList.length + "roots".toList.length +
+      "row_key_sha512".toList.length + "schemas".toList.length < 2 ^ 6 := by decide +kernel
   have h1 := io_len (.str r.bindI) (.str r.bindO)
   rw [str_len, str_len] at h1
   have h2 : (jsonChars (Json.mkObj [("i0", .str (hexOf fdomI)), ("o0", .str (hexOf fdomO))])).length < 2 ^ 6 := by
@@ -159,7 +161,9 @@ theorem fv3_len (r : Run) : (jsonChars (fv3J r)).length ≤ r.bindI.toList.lengt
 theorem units_len (cls : String) : (jsonChars (unitsJ cls)).length ≤ 2 * cls.toList.length + 2 ^ 8 := by
   rw [units_obj]
   refine Nat.le_trans (obj_le (units_model cls)) ?_
-  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, mem_len, List.length_cons, List.length_nil]
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, mem_len]
+  have hk : "blocks".toList.length + "classes".toList.length + "indices".toList.length + "units_per_vu".toList.length +
+      "vus_per_block".toList.length < 2 ^ 6 := by decide +kernel
   have h1 := arr_le [.str cls, .str cls]
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, str_len] at h1
   have h2 : (jsonChars (.arr #[.arr #[jn 0], .arr #[jn 1]])).length < 2 ^ 5 := by decide +kernel
@@ -173,8 +177,11 @@ theorem hdr_len (r : Run) (circ cls : String) : (jsonChars (hdrJ r circ cls)).le
       2 ^ 13 := by
   rw [hdr_obj]
   refine Nat.le_trans (obj_le (hdr_model r circ cls)) ?_
-  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, mem_len, List.length_cons, List.length_nil,
-    str_len]
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, mem_len, str_len]
+  have hk : "circuit_sha512".toList.length + "format".toList.length + "flock-circuit-inputs".toList.length +
+      "frame_v3".toList.length + "instances".toList.length + "registered".toList.length + "rows".toList.length +
+      "scheme".toList.length + "set".toList.length + "shared_rows".toList.length + "statement".toList.length +
+      "units".toList.length < 2 ^ 7 := by decide +kernel
   have h1 := fv3_len r
   have h2 := units_len cls
   have h3 : (jsonChars regHdrJ).length < 2 ^ 9 := by decide +kernel
@@ -257,7 +264,8 @@ theorem decode_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : FlockDeploy.de
 theorem encNat_length (n : Nat) : (FlockDeploy.encNat n).length = 8 := by simp [FlockDeploy.encNat]
 
 theorem encBytes_length (b : ByteArray) : (FlockDeploy.encBytes b).length = 8 + b.size := by
-  simp [FlockDeploy.encBytes, encNat_length, ByteArray.size]
+  show (FlockDeploy.encNat b.size ++ b.data.toList).length = 8 + b.data.size
+  rw [List.length_append, encNat_length, Array.length_toList]
 
 /-- **The statement is under 2^64 bytes.** -/
 theorem x_small (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : (x r).length < 2 ^ 64 := by
@@ -271,7 +279,7 @@ theorem x_small (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) : (x r).length < 
   have hf : FlockDeploy.FORMAT.toUTF8.size < 2 ^ 12 := by decide +kernel
   simp only [x, raw, rawOf, FlockDeploy.Raw.encode, FlockDeploy.encStr, FlockDeploy.encList, FlockDeploy.encBool,
     FlockDeploy.encOpt, List.length_append, List.length_cons, List.length_nil, List.flatMap_nil, encBytes_length,
-    encNat_length, List.length_singleton]
+    encNat_length]
   omega
 
 end SpotFlock.InstanceStmt
