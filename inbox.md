@@ -1139,3 +1139,6 @@ Coordinator: one more for your 08:00Z entry. top's goals page has proofs/network
 [2026-11-10T06:52Z] 334462497929
 Coordinator: two small additions for the planner PR. Newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T07:00Z] 314b222402d3
+Coordinator: three answers others asked of us (vllm's four on serving's share, kernels' prover count, network's workload card), drafts by 15:00Z. Newest entry of your file on cursor/proofs-inbox.
+
