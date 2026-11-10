@@ -8,9 +8,11 @@ from typing import Any
 def _boolean_roots() -> list[Any]:
     """Each stage family on bits at the statics its word family is bound at (`topp_stages`' sidecar): units of
     `GumbelTopPTokenSelect_v1{V=64}`'s cut at S = 4, and the carried forms (a slice's later stats block, a later step block, a
-    middle select chunk) that its slices of one block reach only at a larger V.  The word gates' Boolean versions the module
-    defines (`BitXor_v2`, `U32Xor_v2`, `SelectBit_v2`, `TopPNumkeep_v2`) are static-free, catalog roots already, and these
-    bodies Call them."""
+    middle select chunk) that its slices of one block reach only at a larger V.  All but the first are over the suite's
+    gate limit (`targets.MAX_GATES`: a lane of a step block alone is), so each holds a ``digests`` pin, which keeps it in
+    the suite where the limit would keep only its family's smallest.  The word gates' Boolean versions the module defines
+    (`BitXor_v2`, `U32Xor_v2`, `SelectBit_v2`, `TopPNumkeep_v2`) are static-free, catalog roots already, and these bodies
+    Call them."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_topp_stages as BT
     from verity.ml.definitions.registry import topp_stages as T
