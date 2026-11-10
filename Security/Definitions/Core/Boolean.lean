@@ -7,7 +7,7 @@ public import Definitions.Core.Circuit
 
 The circuits Flock proves are Boolean: input gates, and AND, XOR and NOT gates over earlier gates, and rows, the AND
 of the XOR of some earlier gates and the XOR of others (a row as the verifier parses it, `Flock.Circuit` in
-`verity/core/service/flock/`; the compiled lowering reads a template's rows as these gates, `Lowering.lean`). A Boolean
+`verity/flock/verifier/`; the compiled lowering reads a template's rows as these gates, `Lowering.lean`). A Boolean
 circuit is a circuit whose gates are all one bit wide (`toCircuit`), so every definition about circuits applies to it as
 it is.
 

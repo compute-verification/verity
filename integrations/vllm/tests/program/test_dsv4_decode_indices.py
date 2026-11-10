@@ -9,14 +9,14 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import numpy as np
 import pytest
 
-from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate, evaluate_batch, self_check
-from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.numerics import dsv4_decode_indices_twin as T
-from verity.ml.definitions.registry import boolean_dsv4_decode_indices as BX
-from verity.ml.definitions.registry import dsv4_decode_indices as X
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
+from verity.circuits.evaluation.bits import evaluate_words
+from verity.definitions import boolean as SW
+from verity.definitions.numerics import dsv4_decode_indices_twin as T
+from verity.definitions.registry import boolean_dsv4_decode_indices as BX
+from verity.definitions.registry import dsv4_decode_indices as X
 
 U = np.uint32
 M32 = 0xFFFFFFFF

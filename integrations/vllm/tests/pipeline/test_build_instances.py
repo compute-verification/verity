@@ -62,10 +62,10 @@ def _attention_program(seed: int):
     parts of every kind (contiguous, broadcast, empty, strided, scattered, explicit, nested), sometimes shorter than a cut before."""
     import random
 
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
-    from verity.ml.circuits.program import Program
-    from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, broadcast, concat
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.circuits.program import Program
+    from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, broadcast, concat
+    from verity.circuits.types import Array, Value
     V16, W, N = Value(16), 96, 10
     rng = random.Random(seed)
     Neg = PrimitiveDefinition("TINeg16", 1, (("a", V16),), V16, lambda a: -a & 0xFFFF, register=False)
@@ -165,7 +165,7 @@ def _glm_attention_layer(rows: int, heads: int):
     call reading q, the head's key log cut at the row (k_nope's and k_pe's rows, two producers a row) and its value log."""
     from types import SimpleNamespace as NS
 
-    from verity.ml.circuits.refs import Affine, PartLog
+    from verity.circuits.refs import Affine, PartLog
     keys, values, nodes = [PartLog() for _ in range(heads)], [PartLog() for _ in range(heads)], []
     for t in range(rows):
         for h in range(heads):
@@ -183,7 +183,7 @@ def test_the_writer_encodes_each_heads_items_once_not_once_a_call(monkeypatch):
     sum of 1..256 (267,264 items), where `RowTexts` encodes each once and each call's last few (8,184), into the same text: 33
     times less work here, and rows/8 times less at any length.  The work is counted, not timed (no test reads a clock): the I2048
     rank's 4 h writer was that sum, 1.3e9 items."""
-    from verity.ml.circuits import codec
+    from verity.circuits import codec
     from verity_vllm.program import compact
     from verity_vllm.program.instances_file import RowTexts, instance_rows
     monkeypatch.setattr(codec, "descriptor_id", lambda fn: fn)
@@ -204,8 +204,8 @@ def test_the_writer_encodes_a_weight_read_by_every_tokens_call_once(monkeypatch)
     reads here, against one per Call and read), into the same text, and every time once its memo is full."""
     from types import SimpleNamespace as NS
 
-    from verity.ml.circuits import codec
-    from verity.ml.circuits.refs import Affine, Concat, Strided
+    from verity.circuits import codec
+    from verity.circuits.refs import Affine, Concat, Strided
     from verity_vllm.program import compact, instances_file
     from verity_vllm.program.instances_file import RowTexts, instance_rows
     monkeypatch.setattr(codec, "descriptor_id", lambda fn: fn)
@@ -423,10 +423,10 @@ def test_read_instances_decodes_a_row_laid_out_otherwise_whole(tmp_path, monkeyp
 def _scattered_program():
     """A Program whose batch Call reads a SCATTERED Strided view of its parameter (inner 3, inner_stride 2: leaves 0,2,4 / 6,8,10 /
     ...) -- the per-leaf shape of the GLM-5.3 MLA-absorb transposed-weight read, at toy size."""
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-    from verity.ml.circuits.program import Program
-    from verity.ml.circuits.refs import Coll, strided_view
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+    from verity.circuits.program import Program
+    from verity.circuits.refs import Coll, strided_view
+    from verity.circuits.types import Array, Value
     V32 = Value(32)
     Add32 = PrimitiveDefinition("TAdd32", 1, (("a", V32), ("b", V32)), V32, lambda a, b: (a + b) & 0xFFFFFFFF, register=False)
     Row3 = CompositeDefinition("TRow3", 1, (), lambda S: ((("x", Array(3, V32)),), V32),
@@ -439,8 +439,8 @@ def _scattered_program():
 
 def _v1_rows(program) -> list[dict]:
     """What the v1 writer wrote (its expression verbatim, `runs(a.refs)` per argument), as JSON left it (lists, not tuples)."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.refs import runs
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.refs import runs
     return [{"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [[list(t) for t in runs(a.refs)] for a in n.args]}
             for k, n in enumerate(program.fn.body.nodes)]
 

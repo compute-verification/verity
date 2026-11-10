@@ -6,7 +6,7 @@ public import NciCheck.Check
 /-!
 # The inference-only check's properties, stated against the Lean function
 
-`NciCheck.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`, package `nci_check`) is
+`NciCheck.evaluate` (`verity/protocols/inference_only/verifier/nci/lean/NciCheck/Check.lean`, package `nci_check`) is
 the verifier's check of a declared division against the inference-only policy at its rate,
 `Nci.CompliesRate c α` (`Definitions/Nci.lean`), at the gate budget `c = gamma` and the rate
 `α = num / den`, and `NciCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving

@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # `sha512/row-seg/v1` over a hash (trusted)
 
-The row digest of PoUW's A rows (`verity/ml/commitments/frame_v3/PROTOCOL.md` §6, "Segmented bit rows"), with the hash a
+The row digest of PoUW's A rows (`verity/commitments/frame_v3/PROTOCOL.md` §6, "Segmented bit rows"), with the hash a
 parameter `G` (SHA-512 is the instance of record; the verifier's code is `Flock.HmRow.segDigest`). A row is a string of
 `ℓ` bits (`Row`). Its bytes are eight bits a byte, row bit `i` being bit `i mod 8` of byte `⌊i/8⌋`, the last byte's fill
 zero (`packBits`). It is cut into `s = ⌈ℓ/8192⌉` segments of 8192 bits, the last possibly shorter, and

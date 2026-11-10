@@ -23,8 +23,8 @@ import pytest
 # test_certifier_serve puts the benchmark on the path
 from test_certifier_serve import VARIED_TOKENS, _answer, _no_sleep, _Varied, _varied_runs, ar, cs
 from test_compact_phase10 import _as_id_events
-from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.grid import row_count
+from verity.protocols.certifier.verifier import active
+from verity.protocols.certifier.verifier.grid import row_count
 
 B = 8
 NOT_EOS = "a stop on an id that isn't EOS"

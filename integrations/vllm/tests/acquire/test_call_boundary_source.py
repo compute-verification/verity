@@ -1,7 +1,7 @@
 """The call-boundary source (`acquire.sources.call_boundary_source`) on CPU tensors with a recording committer, on request Programs written
 as Build dirs: a Gemma-2-style dense Program (the ATen norm chains, one input and x + residual, and the soft-capped logits) and the
 block-scaled FP8 linear (`Fp8GroupQuant_v1 -> ScaledMmFp8BlockSharedScale_v1`).  Every `call_boundaries` identity of the manifest is committed once
-per step over its element range with the words a row-by-row `verity.ml.circuits.evaluation.evaluate` of the Program gives -- on edge words too (NaN
+per step over its element range with the words a row-by-row `verity.circuits.evaluation.evaluate` of the Program gives -- on edge words too (NaN
 payloads, +-inf, +-0, subnormals, the largest finite); a manifest naming none attaches nothing and a forced attach refuses; a body the
 rule cannot evaluate is refused by name; an argument of another shape is a collector error naming the site; and the consuming GEMM's
 replay reads the committed words and checks the served output as before."""
@@ -15,10 +15,10 @@ import numpy as np
 import pytest
 
 from tests.acquire.call_boundary_programs import DENSE, EMB, EPS, H, IL, LP, PF, T, V, build_dir, dense_program
-from verity.ml.circuits.evaluation import evaluate, evaluate_batch
+from verity.circuits.evaluation import evaluate, evaluate_batch
 from verity_vllm.commit.binding import build_binding_map, logical_request
 from verity_vllm.query.compose import compose_global
-from verity.ml.definitions.call_scope import specialization
+from verity.definitions.call_scope import specialization
 from verity_vllm.query.manifest.format import spec_family
 from verity_vllm.query.program_view import definition_ports, spec_statics
 
@@ -77,7 +77,7 @@ def dense_fields():
 
 
 def reference(doc, prompt, fields, field_order):
-    """Every Call's output leaves, row by row through `verity.ml.circuits.evaluation.evaluate` (the circuit's plain-integer reference)."""
+    """Every Call's output leaves, row by row through `verity.circuits.evaluation.evaluate` (the circuit's plain-integer reference)."""
     weights = [int(w) for n in field_order for w in fields[n]]
     vals: dict[int, list[int]] = {}
     for r in doc["rows"]:
@@ -379,7 +379,7 @@ def test_a_definition_past_the_reference_bound_is_its_row_kernels_alone(dense, m
     assert len(com.errors) == 1 + T and all(f"the row kernel of Gemm_v1{{K={H},N={V}}} declines an instance" in e for e in com.errors)
     assert com.acquired and not any(n.startswith("logits_processor") for _s, n, _t in com.acquired)
     monkeypatch.setattr(CP, "REFERENCE_LEAVES", 12)
-    from verity.ml.definitions.numerics import kernel_registry
+    from verity.definitions.numerics import kernel_registry
     monkeypatch.delitem(kernel_registry._REGISTERED, ("Bf16DivScalar_v1", "rows"))
     why = " ".join(CB.plan_of(dense.man, dense.pdir).uncovered)
     assert "Bf16DivScalar_v1" in why and "past the reference's bound, and no rows kernel registered" in why
