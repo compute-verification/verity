@@ -154,7 +154,7 @@ ML_IMPORTS_CORE = {
     "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
-                                             "(`verity/circuits/population.py`, `verity/ml/commitments/registered.py`), "
+                                             "(`verity/circuits/population.py`, `integrations/vllm/commitments/registered.py`), "
                                              "core imports them from there, and this entry then covers only rec_live's coin "
                                              "server, which takes the inner session's coin tree from the challenger's device "
                                              "through sampled proofs' `remote.RemoteChallenger` (`--tree-from`) and holds "

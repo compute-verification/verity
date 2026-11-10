@@ -11,7 +11,7 @@ import pytest
 from verity.protocols.certifier.verifier import advice as I1
 from verity_vllm.pipeline import window_advice as WA
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[4] / "benchmarks" / "network_traces")))
 
 import window_chain as WC  # noqa: E402
 

@@ -48,7 +48,7 @@ def _skipped(world: World) -> list[str]:
     (["x/lean-toolchain"], False), (["x/lake-manifest.json"], False), (["x/TRUSTED.sha256"], False),
     (["verity/core/claims.py"], False),
     (["verity/definitions/ops/add.py"], False), (["verity/definitions/kernels/k.cu"], False),
-    (["verity/ml/commitments/c.py"], False), (["verity/commitments/crypto/c.py"], False), (["verity/commitments/randomness/r.py"], False),
+    (["integrations/vllm/commitments/c.py"], False), (["verity/commitments/crypto/c.py"], False), (["verity/commitments/randomness/r.py"], False),
     (["verity/ml/circuitsx/a.py"], True),                   # a directory entry is a whole path component
     ([], False),                                            # nothing to land
 ])

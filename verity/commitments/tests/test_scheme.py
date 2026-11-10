@@ -11,7 +11,7 @@ from verity.commitments.frame_v3 import FrameV3, Port, WordLeaf
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, MerkleTree
 from verity.commitments.scheme import CommitmentScheme
-from verity.ml.commitments.vllm_v1 import VllmV1
+from integrations.vllm.commitments.vllm_v1 import VllmV1
 
 
 def _domain(n: int) -> CommitmentDomain:

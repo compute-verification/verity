@@ -2619,6 +2619,13 @@
         "verity/core/claims/": "verity/claims/",
         "verity/core/protocols/reporting.py": "verity/protocols/reporting.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/network_traces/tests/test_window_chain.py": "integrations/vllm/network_traces/tests/test_window_chain.py",
+        "benchmarks/network_traces/window_chain.py": "integrations/vllm/network_traces/window_chain.py",
+        "verity/ml/commitments/": "integrations/vllm/commitments/"
+      }
     }
   ]
 }
