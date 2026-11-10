@@ -32,33 +32,17 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
 * **Voluntary rows.**
   - A record may give up up to ⌈m/64⌉ A rows (`voluntary_a`), and a weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same
     in every unit of the weight). They are committed in `records_root` with the excluded rows, before the sampling coin.
-<<<<<<< 99c8914848
   - A voluntary row earns no credit, and by the band rule (`UnitRecord.credited`) neither does the rest of its band of 64
     A rows or, for a B row, its block of 64 columns; an excluded B row takes its block's credit too. At the deployed
     64 × 64 tile, a tile holding one has no ticket and no credit, and every ticketed tile's credited cells are the game's
-    passing rows × all its columns. Its words are still formed, checked and hashed on every drawn tile that holds it.
-||||||| merged common ancestors
-  - A voluntary row earns no credit. Its words are still formed, checked and hashed on every drawn tile that holds it.
-=======
-  - A voluntary row earns no credit. Its words are still formed, checked and hashed on every sampled tile that holds it.
->>>>>>> 7af4d24fca3e
+    passing rows × all its columns. Its words are still formed, checked and hashed on every sampled tile that holds it.
   - It is exempt from the two-sided per-row check and R1, and it opens no exclusion tile.
   - The tile cap and R1 read credited rows only, as before. Giving up credit never helps a cheater, and the declaration
     can't adapt to the sample. `volunteer` is an honest prover's remedy for a tile over the cap.
-<<<<<<< 99c8914848
-* **The sampling guarantee is per credited cell.** The samples are weighted by the credited cells' `wref`, and a drawn
+* **The sampling guarantee is per credited cell.** The samples are weighted by the credited cells' `wref`, and a sampled
   tile's uncredited cells (filler, excluded, voluntary, or in a voluntary row's band or block) never count as coverage.
   Volunteering rows only lowers the weight of the tiles it reaches to their credited cells, which is exactly the bound
   claimed.
-||||||| merged common ancestors
-* **The sampling guarantee is per credited cell.** The samples are weighted by the credited cells' `wref`, and a drawn
-  tile's uncredited cells (filler, excluded or voluntary) never count as coverage. Volunteering a tile's other rows only
-  lowers that tile's weight to its credited cells, which is exactly the bound claimed.
-=======
-* **The sampling guarantee is per credited cell.** The samples are weighted by the credited cells' `wref`, and a sampled
-  tile's uncredited cells (filler, excluded or voluntary) never count as coverage. Volunteering a tile's other rows only
-  lowers that tile's weight to its credited cells, which is exactly the bound claimed.
->>>>>>> 7af4d24fca3e
 * **The samples (F8)** are keyed by the epoch's sampling coin, through `verity.ml.randomness.derive`.
   - `audit` asks the challenger for the coin once the verifier has recorded the prover's commitment (the transcript root
     and the records root, `draw_after`), and checks it against the epoch's coin commitment (`verity.core.protocols.pouw.coins`).
@@ -87,25 +71,11 @@ from clear_audit import Audit, Prover, TileOpening, Transcript, Verdict, Verifie
 from verity.core.protocols.pouw.audit import Epoch, opened_value
 from verity.core.protocols.pouw.coins import Challenger
 from verity.core.protocols.pouw.protocol import Context, Shape, Tile, tagged
-<<<<<<< 99c8914848
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, Prices
-from verity.core.protocols.pouw.schemes.pearl_c_work import ALIGN, BAND, Split, UnitRecord, records_root
-||||||| merged common ancestors
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, Prices
-from verity.core.protocols.pouw.schemes.pearl_c_work import ALIGN, Split, UnitRecord, records_root
-=======
 from verity.ml.protocols.pouw.schemes import pearl_c as C
 from verity.ml.protocols.pouw.schemes import pearl_c_debit as D
 from verity.ml.protocols.pouw.schemes import pearl_kw as P
 from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120, Prices
-from verity.ml.protocols.pouw.schemes.pearl_c_work import ALIGN, Split, UnitRecord, records_root
->>>>>>> 7af4d24fca3e
+from verity.ml.protocols.pouw.schemes.pearl_c_work import ALIGN, BAND, Split, UnitRecord, records_root
 from verity.core.protocols.pouw.serving import HASH_FORMATS
 from verity.ml.randomness import Key, derive
 
@@ -561,18 +531,10 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
     no tile's credited debit passes its cap, for `declare`.  The prover knows the salt when it forms and commits, so it
     replays every tile's debit as the verifier will.  For a tile over the cap it gives up the credited row whose removal
     leaves the least debit over the cap, and repeats while the tile is over and the count caps allow; a tile the caps
-<<<<<<< 99c8914848
-    leave over the cap stays so, and fails if drawn.  Under the row cap (`row_cap`) a credited A row over its own cap goes
+    leave over the cap stays so, and fails if sampled.  Under the row cap (`row_cap`) a credited A row over its own cap goes
     first, the furthest over first.  Rows go up to ⌈m/64⌉ per unit and ⌈n/64⌉ per weight.  By the band rule a row given
     up takes its band's or block's credit (`UnitRecord.credited`), so at the deployed 64 × 64 tile the first row given up
     leaves the tile no credited cell."""
-||||||| merged common ancestors
-    leave over the cap stays so, and fails if drawn.  Under the row cap (`row_cap`) a credited A row over its own cap goes
-    first, the furthest over first.  Rows go up to ⌈m/64⌉ per unit and ⌈n/64⌉ per weight."""
-=======
-    leave over the cap stays so, and fails if sampled.  Under the row cap (`row_cap`) a credited A row over its own cap goes
-    first, the furthest over first.  Rows go up to ⌈m/64⌉ per unit and ⌈n/64⌉ per weight."""
->>>>>>> 7af4d24fca3e
     va: dict[int, set[int]] = {r.matmul.index: set(r.voluntary_a) for r in records}
     vb: dict[int, set[int]] = {}
     for r in records:
