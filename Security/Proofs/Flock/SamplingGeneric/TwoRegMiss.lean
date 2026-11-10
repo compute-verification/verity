@@ -50,13 +50,13 @@ theorem exists_best_interiorAt (s : AuditStatement) (Pt : Partition) (d : Design
       escCell _ _ ((wrongAllAt s Pt d.part val fun _ => ι') ∩ cell Pt d.part ρ t).card
     rw [inter_cell_wrongAllAt s Pt d.part val _ hρ (mem_range.1 ht)]
   have hA : ∀ ι' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι') ∈
-      (range Pt.blocks.length).powerset.filter fun Z =>
-        ∃ ι'' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι'') = Z :=
+      (range Pt.blocks.length).powerset.filter fun wa =>
+        ∃ ι'' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι'') = wa :=
     fun ι' => mem_filter.2 ⟨mem_powerset.2 (wrongAllAt_subset s Pt d.part val _), ι', rfl⟩
-  obtain ⟨Z, hZ, hmax⟩ := ((range Pt.blocks.length).powerset.filter fun Z =>
-      ∃ ι'' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι'') = Z).exists_max_image
-    (fun Z => d.esc Pt (fun ρ t => (Z ∩ cell Pt d.part ρ t).card) ρ) ⟨_, hA fun _ => false⟩
-  obtain ⟨ι, hι⟩ := (mem_filter.1 hZ).2
+  obtain ⟨wa, hwa, hmax⟩ := ((range Pt.blocks.length).powerset.filter fun wa =>
+      ∃ ι'' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι'') = wa).exists_max_image
+    (fun wa => d.esc Pt (fun ρ t => (wa ∩ cell Pt d.part ρ t).card) ρ) ⟨_, hA fun _ => false⟩
+  obtain ⟨ι, hι⟩ := (mem_filter.1 hwa).2
   refine ⟨ι, fun ι' => ?_⟩
   rw [hf, hf, hι]
   exact hmax _ (hA ι')
@@ -191,7 +191,7 @@ theorem ksRegTwo_of_event (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Ses
     · obtain ⟨ι, hι⟩ := exists_best_interiorsAt s Pt d (L.regVal H P x ω)
       have hPa : d.Pa Pt (footprintAt s Pt d.part (L.regVal H P x ω) ι) ≤ δ := by
         have h := hM ι
-        simp only [Sampling.Design.Two.M, Set.mem_setOf_eq, not_lt] at h
+        simp only [Sampling.Design.Two.M, Set.mem_ofPred_eq, not_lt] at h
         exact h
       exact (Pr_mono fun r (hr : (∀ ι : ℕ → ℕ → Bool, footprintAt s Pt d.part (L.regVal H P x ω) ι ∉ d.M Pt δ) ∧
           ∀ u ∈ L.checked x r, u ∉ L.FregTwo H P x ω r) => hr.2).trans
