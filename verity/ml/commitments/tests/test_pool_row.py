@@ -58,9 +58,24 @@ def test_a_malformed_row_is_refused() -> None:
             R.row_bytes(bad)
     with pytest.raises(ValueError, match="one element a block"):
         R.row_bytes(ROW._replace(key=(KA,) * 4))
-    with pytest.raises(ValueError, match="a digest is 64 bytes, not 63"):
-        R.row_bytes(ROW._replace(key=(KA, KB, R.NOKEY, R.NOKEY, KB[:63])))
     with pytest.raises(ValueError, match="holds 2641 bits, not 2640"):
         R.decode(6, R.encode(ROW)[:-1])
     with pytest.raises(ValueError, match="has none to cache in"):
         R.empty(1)
+
+
+@pytest.mark.parametrize("pack", [R.encode, R.row_bytes, R.root])
+@pytest.mark.parametrize("key", [b"", KA[:63], KA + b"\x01"], ids=["0 bytes", "63 bytes", "65 bytes"])
+def test_a_key_that_is_not_64_bytes_is_refused(pack, key) -> None:
+    """`row_bytes` and `root` refuse the keys `encode` refuses. A 0-byte key would pack as 512 zero bits, `NOKEY`'s, and
+    a 65-byte key as its first 64 bytes, so each would share a root with another row."""
+    for at in range(5):
+        with pytest.raises(ValueError, match=f"a digest is 64 bytes, not {len(key)}$"):
+            pack(ROW._replace(key=ROW.key[:at] + (key,) + ROW.key[at + 1:]))
+
+
+@pytest.mark.parametrize("pack", [R.encode, R.row_bytes, R.root])
+@pytest.mark.parametrize("key", [KA[:63], KA + b"\x01"], ids=["63 bytes", "65 bytes"])
+def test_a_zero_byte_key_hides_no_later_key(pack, key) -> None:
+    with pytest.raises(ValueError, match="a digest is 64 bytes, not 0$"):
+        pack(ROW._replace(key=(b"", key, R.NOKEY, R.NOKEY, KB)))
