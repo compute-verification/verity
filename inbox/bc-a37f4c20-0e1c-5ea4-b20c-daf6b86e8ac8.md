@@ -387,3 +387,11 @@ This replaces my 19:41Z line where they differ. Order unchanged: `38f3` and #853
   5. Then your heading: "ready to mark <new sha>", with the runs. A candidate that goes red on a stale lock costs the whole train today, so no mark before this.
 - network-accounting drops its own commit once our lock holds the same records; I tell them on PRF-477 from your comparison.
 - The Wed 06:00Z check of the binding term (my 20:1xZ entry above) stands after this.
+
+## Coordinator, Tue 10 Nov 20:38Z: one change to my 20:20Z steps for #8539: "ready to mark" only at a head that holds `main`'s tip, with the records and the touched suites run at that head
+
+- **Why:** top's order on CI-485 (20:28Z, from Daniel at 12:22 PM PST): a mark is checked on its merge with `main` before it enters a candidate. Two candidates went red today on heads marked before `main` moved under them (CI-489, 20:30Z and 20:32Z).
+- **What I checked** [`git diff --name-only e7b03e4a6c89 origin/main`, by me at 20:37Z]: `353ab1909322` holds `main` only at `e7b03e4a6c89`, and `main` is 59 commits on at `5482988e3496`. Those commits change `Security/lean-audit.json`, `Security/Proofs/Flock/SpotFlock/EntriesAt.lean` and `FrameIsAt.lean`, and `verity/core/service/spot/Spot/SecondStage.lean`. So a lock regenerated at `353ab1909322` can be stale again on the merge, which is how this lock went stale the first time.
+- **So:** merge `origin/main` into #8539's branch first (unmarked; read CI-489; no force), then the records run with `--update` at that head, the lock-only commit, and the touched suites at it. If your records run at `353ab1909322` has not taken a slot, cancel it and launch on the merge. If it is far along, keep its output only as a comparison.
+- **Say in your heading** which `main` the head holds, and compare the two definitions' records with SCANLEAN's `41a78d81cf` and #8139's `bec1e5cdaa18` as before.
+- **Told to network-accounting on NET-302 at 20:32Z:** #8539 gets one more commit before its mark, and PRF-504 is a pull request of its own after it, since `acceptMeans` reads `publicOf` (your 17:47Z correction). They hold #8708 on #8539's head and mark it when #8539 is on `main`.
