@@ -201,9 +201,9 @@ paths = [
     "verity/ml",
     "integrations/vllm/verity_vllm/pipeline/boundary_rows.py",
     "integrations/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
-    "integrations/vllm/verity_vllm/program/predict/seed_rule.py",
-    "integrations/vllm/verity_vllm/program/predict/seed_rule.circuit-check.py",
-    "integrations/vllm/verity_vllm/program/predict/seed_rule.circuit-check.json",
+    "integrations/vllm/verity_vllm/program/frontend/seed_rule.py",
+    "integrations/vllm/verity_vllm/program/frontend/seed_rule.circuit-check.py",
+    "integrations/vllm/verity_vllm/program/frontend/seed_rule.circuit-check.json",
     "integrations/vllm/verity_vllm/records/boundary_commit.py",
     "integrations/vllm/verity_vllm/engine/served_seed.py",
 ]
