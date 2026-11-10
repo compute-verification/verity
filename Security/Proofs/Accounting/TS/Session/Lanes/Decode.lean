@@ -1,13 +1,44 @@
-import Proofs.Accounting.TS.Session.Lanes.Layout
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
-import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Layer
+public import Proofs.Accounting.TS.Session.Lanes.Layout
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The leaf's decodes, over its statements' port layout
 
 `Accounting.Guarantees.TS.LeafLanesSound` reads a session's registered rows through a decode per statement (`decL` for
-a lane's, `decC` for the combine's). These are the decodes, from INT-TIE's layout (`PouwWindow.Lanes`) and the
+a lane's, `decC` for the combine's). These are the decodes, from the statements' layout (`PouwWindow.Lanes`) and the
 session's own circuit:
 
 * `portBit s v name k`: bit `k` of the row of the port named `name`, at unit 0, in a layer value `v` (the registered reads
@@ -30,6 +61,8 @@ reads them at lane 0's ports.
 them decode alike. The leaf `LeafLanesSound` opens is the one the data ports' rows decode to (`Lanes.Committed`); the
 known values' content is flock-verify's to check (`Lanes.KnownRead`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

@@ -1,5 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
-import Proofs.Flock.Soundness.Discharge.Zero
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
+public import Proofs.Flock.Soundness.Discharge.Zero.Stack
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 
 /-!
 # `Layout.Aliased` at a hidden-output statement, from its flat twin's copy positions
@@ -10,11 +27,14 @@ the twin's layout `Lf` and unit facts `F`, which read only the circuit). Each un
 hidden statement as in its twin (`UnitRowsFlat`), so:
 - `zeroPos_blockH`: each unit slot's forced-zero row carries 0 (`Layout.placed_zero`, at the hidden layout);
 - `copyAt_blockH`, `copyPos_blockH`: each of template instance `g`'s stacked unit inputs carries what its copy position
-  carries (`Layout.placed_port`, at the twin, whose Δ is `HmRow.delta`'s);
+  carries (`Layout.placed_port`, at the twin, whose Δ is `HmRow.delta`'s); `copyAt_blockR` at one input whose row reads
+  the twin's, which is all a statement with public inputs has at its kept rows;
 - `aliased_of_copiesH`: an instance that wires the inputs as Δ copies them (`Aliased.Copies` at the twin) is aliased in
   the hidden statement (`Layout.Aliased`);
 - `stack_zero_blockH`: a stacked input that reads the zero carries 0.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -34,7 +54,7 @@ variable {tags : Tags} {st : Stmt} (L : Layout st) (Lf : Layout (Hidden.flatTwin
 theorem zeroPos_blockH {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o (Aliased.zeroPos Lf regs F hs₀) = 0 := by
-  have huse := (built_spec L.unit_built).2.1
+  have huse := F.useful
   have hra : st.c.unit.a.rows ≤ st.c.unit.useful := F.rowsA
   have hrb : st.c.unit.b.rows ≤ st.c.unit.useful := F.rowsB
   have hA : ∀ j', sparseEntry st.c.unit.a st.c.unit.useful j' = 0 := fun j' => by
@@ -51,32 +71,31 @@ theorem zeroPos_blockH {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : M
       fun j => (L.placed_zero hs₀ F.check.unit_zero huse hA hB _ j rfl).2⟩
   exact hZ.block_eq hz o
 
-include hR in
-/-- **A unit slot's input carries what its copy position carries** in the hidden statement, in every block of a
-satisfying witness. -/
-theorem copyAt_blockH {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hoff : off < st.c.unit.inWords * WORD)
-    (r : Fin (2 ^ (L.model regs).kLog)) (hr : r.val = st.c.unitRange.slot s₀ + off) {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+/-- **A unit slot's input carries what its copy position carries** in the hidden statement, at a row that reads its flat
+twin's rows (`hRr`), in every block of a satisfying witness. -/
+theorem copyAt_blockR {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hoff : off < st.c.unit.inWords * WORD)
+    (r : Fin (2 ^ (L.model regs).kLog)) (hr : r.val = st.c.unitRange.slot s₀ + off)
+    (hRr : ∀ j : Fin (2 ^ st.c.kLog), placedA st r j = placedA (Hidden.flatTwin st) r j ∧
+      placedB st r j = placedB (Hidden.flatTwin st) r j)
+    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o r = (L.model regs).block z o (Aliased.copyAt Lf regs F hs₀ off) := by
   unfold Aliased.copyAt
   by_cases hm : off ∈ portBits st.c.unit.inGroups
   · rw [ite_eq_left hm]
-    have hnd := portBits_nodup L.unit_built
+    have hnd := Aliased.unit_nodup L
     obtain ⟨p, t, hp, ht, hpt⟩ := mem_portBits hm
     have hsrc : flatSrcAt st.c s₀ off = Flat.flatSrc st.c s₀ p t := by
       unfold flatSrcAt
       rw [hpt, portOf_eq hnd hp ht]
       congr 1
       omega
-    have hself := port_self L.unit_built (L.unitLog_le hs₀) hm
+    have hself := Aliased.unit_self L (L.unitLog_le hs₀) hm
     rw [hpt] at hself
-    have hb : (portCols st.c.unit.inGroups)[p]!.1 + t < 2 ^ st.c.unit.unitLog :=
-      lt_of_lt_of_le (L.port_lt hp ht) (L.fit st.c.unitNet).2
-    have hrow := fun j => Lf.placed_port F.parse F.check F.delta F.sha F.hm hnd hs₀ hp ht (fun j' => (hself j').1)
+    have hrow := fun j => Lf.placed_portT F.parse (fun n => (F.nets n).1) F.check F.delta F.sha F.hm hnd hs₀ hp ht (fun j' => (hself j').1)
       (fun j' => by rw [Lf.unit_lookup]; exact (add_zero _).trans (hself j').2) r j (by rw [hr, hpt])
     have hrow' : ∀ j, placedA st r j = (if j.val = Flat.flatSrc st.c s₀ p t then 1 else 0) ∧
         placedB st r j = if j.val = Flat.flatSrc st.c s₀ p t then 1 else 0 := fun j => by
-      obtain ⟨eA, eB⟩ := hR s₀ hs₀ _ hb r j (by rw [hr, hpt])
+      obtain ⟨eA, eB⟩ := hRr j
       rw [eA, eB]
       exact hrow j
     rw [hsrc]
@@ -100,13 +119,22 @@ theorem copyAt_blockH {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (ho
     exact congrArg _ (Fin.ext hr)
 
 include hR in
+/-- **A unit slot's input carries what its copy position carries** in the hidden statement, in every block of a
+satisfying witness. -/
+theorem copyAt_blockH {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hoff : off < st.c.unit.inWords * WORD)
+    (r : Fin (2 ^ (L.model regs).kLog)) (hr : r.val = st.c.unitRange.slot s₀ + off) {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+    (L.model regs).block z o r = (L.model regs).block z o (Aliased.copyAt Lf regs F hs₀ off) :=
+  copyAt_blockR L Lf regs F hs₀ hoff r hr
+    (fun j => hR s₀ hs₀ off (lt_of_lt_of_le hoff (L.fit st.c.unitNet).2) r j hr) hz o
+
+include hR in
 /-- **Each of template instance `g`'s stacked unit inputs carries what its copy position carries** in the hidden
-statement, at its place (`stackPlace`, which `Layout.Aliased` reads), in every block of a satisfying witness. -/
+statement, at its place (`Layout.col`, which `Layout.Aliased` reads), in every block of a satisfying witness. -/
 theorem copyPos_blockH {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
-    (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x) =
+    (L.model regs).block z o (L.col regs hg x) =
       (L.model regs).block z o (Aliased.copyPos Lf regs F hg x.val) := by
   have hn := L.unitRows_nIn
   have hx' : x.val < st.c.upv * (unitRows st L.unit_built).nIn := hx
@@ -115,17 +143,13 @@ theorem copyPos_blockH {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit
   rw [dite_eq_left hx'']
   refine copyAt_blockH L Lf regs F hR _ (Nat.mod_lt _ (by
     exact Nat.pos_of_ne_zero fun h => by rw [h, Nat.mul_zero] at hx''; omega)) _ ?_ hz o
-  unfold stackPlace
-  rw [dite_eq_left hx']
-  show st.c.unitRange.slot (g * st.c.upv + x.val / (unitRows st L.unit_built).nIn) +
-    x.val % (unitRows st L.unit_built).nIn = _
-  rw [hn]
+  rw [L.col_val_in regs hg x hx', hn]
 
 include hR in
 /-- **The unit's inputs on one gate carry one value in the hidden statement** (`Layout.Aliased`), at template instance
 `g`'s stacked unit slots in every block, for an instance that wires them as Δ copies them in the flat twin
 (`Aliased.Copies`). -/
-theorem aliased_of_copiesH {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
+theorem aliased_of_copiesH {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g)
     (hcp : Aliased.Copies Lf regs F inst hg) (o : Fin (2 ^ (L.model regs).nbl)) : L.Aliased regs inst o hg := by
   intro c c' hw hc hc' z hz
@@ -135,13 +159,12 @@ theorem aliased_of_copiesH {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C 
   · rw [he, he', zeroPos_blockH L Lf regs F hs hz o, zeroPos_blockH L Lf regs F hs' hz o]
 
 include Lf F hR in
-/-- **A stacked input that reads the zero carries 0** in the hidden statement: at template instance `g`'s place (`stackPlace`), in every
+/-- **A stacked input that reads the zero carries 0** in the hidden statement: at template instance `g`'s place (`Layout.col`), in every
 block of a satisfying witness. -/
 theorem stack_zero_blockH {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hz : ZeroIn st.c x.val)
     {z : Model.Witness (L.model regs).m} (hsat : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
-    (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x) = 0 := by
+    (L.model regs).block z o (L.col regs hg x) = 0 := by
   have hx' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by
     have : x.val < st.c.upv * (unitRows st L.unit_built).nIn := hx
     rwa [L.unitRows_nIn] at this

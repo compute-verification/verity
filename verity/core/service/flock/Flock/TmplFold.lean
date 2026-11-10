@@ -1,5 +1,5 @@
 /-
-The lincheck fold of a templated unit under layout (iv), lenient (PRF-133), from its description. No verifier path reads
+The lincheck fold of a templated unit under layout (iv), lenient, from its description. No verifier path reads
 it yet.
 
 For a unit slot of `2^sl` bits, `Stmt.partialRanges` needs `p = project (baseOf α e_lo A B none sl) (eqTable r)`, with
@@ -20,7 +20,11 @@ caller binds, copy by copy.
 Cost: per call path, its Definition's own entries and its calls' bound inputs times their copies, each an `eq` of at
 most `sl` coordinates and a position read through the call tree; `work` counts the entries and binding terms.
 -/
-import Flock.TmplLayout
+module
+
+public import Flock.TmplLayout
+
+@[expose] public section
 
 namespace Flock.Tmpl
 
@@ -29,6 +33,20 @@ past `r` is 0); 0 if `u ≥ 2^n`. -/
 def eqAt (r : Array F128) (lo n u : Nat) : F128 :=
   if u ≥ 2 ^ n then 0
   else Nat.fold n (fun j _ acc => acc * (if u.testBit j then r.getD (lo + j) 0 else r.getD (lo + j) 0 + 1)) 1
+
+/-- `eqAt`, its bound by a shift: `Nat.pow` builds a GMP number on every call. -/
+def eqAtFast (r : Array F128) (lo n u : Nat) : F128 :=
+  if u >>> n != 0 then 0
+  else Nat.fold n (fun j _ acc => acc * (if u.testBit j then r.getD (lo + j) 0 else r.getD (lo + j) 0 + 1)) 1
+
+@[csimp] theorem eqAt_eq_fast : @eqAt = @eqAtFast := by
+  funext r lo n u
+  have h : (u >>> n != 0) = decide (u ≥ 2 ^ n) := by
+    rw [Nat.shiftRight_eq_div_pow]
+    by_cases hu : u ≥ 2 ^ n
+    · simp [hu, Nat.div_eq_zero_iff_lt (Nat.two_pow_pos n), Nat.not_lt.mpr hu]
+    · simp [hu, Nat.div_eq_of_lt (Nat.lt_of_not_le hu)]
+  simp only [eqAt, eqAtFast, h, decide_eq_true_eq]
 
 /-- `eq(r[lo ..], ·)` for every `lo ≤ |r|` in two halves: `eq(r[lo ..], u) = lo-table[u mod 2^h] · hi-table[⌊u/2^h⌋]`,
 `h` half of `|r| − lo`. -/
@@ -41,6 +59,18 @@ def halves (r : Array F128) : Array (Nat × Array F128 × Array F128) :=
 def eqTail (T : Array (Nat × Array F128 × Array F128)) (lo u : Nat) : F128 :=
   let (h, a, b) := T.getD lo (0, #[], #[])
   a.getD (u % 2 ^ h) 0 * b.getD (u / 2 ^ h) 0
+
+/-- `eqTail` by shifts. -/
+def eqTailFast (T : Array (Nat × Array F128 × Array F128)) (lo u : Nat) : F128 :=
+  let (h, a, b) := T.getD lo (0, #[], #[])
+  a.getD (u &&& ((1 <<< h) - 1)) 0 * b.getD (u >>> h) 0
+
+@[csimp] theorem eqTail_eq_fast : @eqTail = @eqTailFast := by
+  funext T lo u
+  unfold eqTail eqTailFast
+  generalize T.getD lo (0, #[], #[]) = x
+  obtain ⟨h, a, b⟩ := x
+  simp only [Nat.one_shiftLeft, Nat.and_two_pow_sub_one_eq_mod, Nat.shiftRight_eq_div_pow]
 
 /-- `Σ_{j < count} Π_{b < m} f b (bit b of j)`, for `count ≤ 2^m`, digit by digit from the top. -/
 def laneSum (f : Nat → Bool → F128) : Nat → Nat → F128

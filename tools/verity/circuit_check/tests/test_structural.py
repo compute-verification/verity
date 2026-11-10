@@ -21,11 +21,11 @@ MAJ = definition("StructuralTestMaj", 1, lambda C, a, b, c: [maj(C, a[0], b[0], 
                  (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT)), SB.BIT, register=False)
 
 W = ST.WORD
-K = 3 * W  # a hand-built unit's constant: its inputs from column 0, its rows from W, its outputs from 2 W
+K = 3 * W  # a hand-built template's constant: its inputs from column 0, its rows from W, its outputs from 2 W
 
 
 def _unit(ins: list[int], outs: list[int], rows, calls=(), callees=()) -> TM.Tmpl:
-    """A unit with input ports of widths ``ins`` from column 0, ``rows`` (their columns from W) and ``calls``, and output
+    """A template with input ports of widths ``ins`` from column 0, ``rows`` (their columns from W) and ``calls``, and output
     ports of widths ``outs`` from 2 W: its root is the last Definition, after ``callees``."""
     groups = [1, 0, 1, len(ins), *ins, 1, 2, 1, len(outs), *outs]
     inputs = tuple((c, (c,), (c,)) for c in range(sum(ins)))
@@ -74,7 +74,7 @@ def test_a_verdict_does_not_depend_on_the_labels_draw():
 # --- accepted --------------------------------------------------------------------------------------------------------
 
 def _emitted(target) -> TM.Tmpl:
-    """``target``'s flat ``flock-ir-unit/v2`` unit as `tmpl.emit` templates it."""
+    """``target``'s flat ``flock-ir-unit/v2`` lowering as `tmpl.emit` templates it."""
     C, _ins, words = ST._lowered(target)
     lay = IL.layout(C, list(C.inputs), [f"o{j}" for j in range(len(words))])
     return TM.emit(TM.parse_flat(IL.netlist(lay, "t").splitlines()))[0]
@@ -223,6 +223,38 @@ def test_the_structural_lowering_is_its_definitions_lowering():
     assert _verdict(t, tm)[0] == "syntactic"
 
 
+def test_a_struct_lower_template_reading_a_table_is_its_lowering_by_construction(monkeypatch):
+    """A toy library table read three times (of an input, of an XOR form and of a read's value; a fourth, of a constant,
+    folded): `struct_lower` lays the read's rows out once as `ir_lower._Read` does, and the lowering reads each live table
+    read as those rows (`_read_bits`), so the template is the lowering by construction."""
+    import numpy as np
+
+    from verity.ml.circuits.boolean import forms as F
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+    from verity.ml.circuits.ops import prims as OP
+    from verity.ml.circuits.refs import array_of
+    from verity.ml.circuits.types import Array, Value
+
+    S = pytest.importorskip("verity_flock.struct_lower")
+    table, words, b8 = "structural-test-toy", (np.random.default_rng(7).integers(0, 1 << 6, 256) | 0x80).astype(np.uint32), Value(8)
+    read = PrimitiveDefinition("StructuralTestRead", 1, (("x", b8),), b8, lambda x: int(words[x]), register=False)
+    mix = PrimitiveDefinition("StructuralTestMix", 1, (("x", b8), ("y", b8)), b8, lambda x, y: x ^ y, register=False)
+    monkeypatch.setitem(F.TABLES, table, lambda: words)
+    monkeypatch.setitem(F._TABLE_WORDS, table, words)
+    monkeypatch.setattr(IL, "_library_table", lambda name: name == table)
+    monkeypatch.setitem(IL.PIECES, read.id, lambda C, x: C.lookup(table, list(x), 8))
+    monkeypatch.setitem(IL.PIECES, mix.id, lambda C, x, y: [a ^ b for a, b in zip(x, y)])
+
+    def body(B, _S, x, y):
+        a = B.call(read, x)
+        return array_of([a, B.call(read, B.call(mix, x, y)), B.call(read, B.call(OP.const(8, 0x5A))), B.call(read, a)])
+
+    toy = bind(CompositeDefinition("StructuralTestReads", 1, (), lambda _S: ((("x", b8), ("y", b8)), Array(4, b8)), body,
+                                   register=False))
+    v, r = _verdict(toy, S.lower(toy)[0])
+    assert (v, r["structural"]["lowering"]["reads"], r["failures"]) == ("syntactic", 3, [])
+
+
 def test_the_struct_lower_realization_is_held_to_the_reference_from_its_template(monkeypatch):
     """``c-flock:struct_lower`` (`checks.struct_lowering`, under ``Options.struct_max_gates``): a scan's structural template,
     evaluated from the template, equals the reference on every correspondence vector; a template whose outputs differ is
@@ -247,12 +279,38 @@ def test_the_struct_lower_realization_is_held_to_the_reference_from_its_template
     assert [f["code"] for f in F.failures] == ["lowering-mismatch"] and CK.STRUCT_VIA in F.failures[0]["name"]
 
 
-# --- a unit on its row ports -----------------------------------------------------------------------------------------
+def test_a_familys_struct_budget_is_read_from_its_pins_so_every_run_checks_it_the_same_way():
+    """`checks.struct_budget`: a composite within its family's ``struct_max_gates`` pin is realized by its structural lowering
+    too under the default options, one over it is recorded unlowered with the budget named, and a family with no pin takes
+    ``Options.struct_max_gates`` alone."""
+    pytest.importorskip("verity_flock.struct_lower")
+    from circuit_check import checks as CK
+
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.types import Array
+
+    pair = Array(2, SB.BIT)
+    t = CompositeDefinition("StructuralTestMajs", 1, (), lambda S: ((("a", pair), ("b", pair), ("c", pair)), pair),
+                            lambda B, S, a, b, c: B.batch(MAJ, a, b, c, axes=(0, 0, 0)), register=False)
+
+    def struct(pins: dict) -> list[dict]:
+        e = CK.check_definition(t, CK.Options(vectors=8), pins=pins, as_call=False)
+        assert not e["failures"]
+        return [r for r in e["correspondence"]["realizations"] if r["via"] == CK.STRUCT_VIA]
+
+    assert struct({}) == []
+    (rec,) = struct({CK.STRUCT_PINS: {"StructuralTestMajs_v1": 1 << 20}})
+    assert rec["lowered"] and rec["mismatches"] == 0 and rec["compared"] > 0
+    (rec,) = struct({CK.STRUCT_PINS: {"StructuralTestMajs_v1": 1}})
+    assert not rec["lowered"] and "over its family's struct budget, 1 (its sidecar's 'struct_max_gates')" in rec["reason"]
+
+
+# --- a proof block on its row ports ----------------------------------------------------------------------------------
 
 def test_a_structural_stagers_unit_is_the_flat_unit_on_its_ports_by_construction():
-    """`check_unit`: the unit a structural stager writes (`struct_lower` on `class_statement.unit_ports`' u16 row ports) is
-    the flat unit the flat stager lays out on those ports (`class_statement.unit_circuit`) by construction, with the bound
-    on a wrong verdict recorded. The same template held to rows pairing each x with the next w computes another function
+    """`check_unit`: the proof block a structural stager writes (`struct_lower` on `class_statement.unit_ports`' u16 row
+    ports) is the flat proof block the flat stager lays out on those ports (`class_statement.unit_circuit`) by construction,
+    with the bound on a wrong verdict recorded. The same template held to rows pairing each x with the next w computes another function
     and is refused; the Definition's own template, on its leaves, is refused by its ports."""
     S = pytest.importorskip("verity_flock.struct_lower")
     from verity_flock import class_statement as CS

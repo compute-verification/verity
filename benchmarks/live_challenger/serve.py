@@ -1,10 +1,10 @@
-"""The proof service's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`): one epoch's coins for
+"""The proof system's challenger on its auditor host (`verity.core.protocols.spot.remote`): one epoch's coins for
 one client session, its record signed with the host's LMS key and written before the first coin opens, and its release
 log signed when the session ends.
 
     python3 benchmarks/live_challenger/serve.py --out DIR --port PORT --scheme SCHEME --families JSON --session ID
         [--epoch E] [--peer NAME [--peers FILE]] [--key DIR] [--params W,H] [--keygen-workers N] [--host NAME]
-        [--root HEX] [--secret-file FILE] [--sign-lock FILE]
+        [--root HEX] [--secret-file FILE] [--sign-lock FILE] [--withhold]
 
 - **The key** is the challenger's LMS key over SHA-512, on its host in `--key DIR` (default
   `~/.local/state/live-challenger/key`), in the memory challenger's layout (`benchmarks/pous/memory_challenger/live.py`):
@@ -12,7 +12,7 @@ log signed when the session ends.
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
   first, at `lms.DEPLOYED` (about 1.1G SHA-512 hashes over `--keygen-workers`) or at `--params W,H` (tests).  A key inside
   `--out` is refused, since a run's `out/` is published.
-- **The coins** are the operating system's bytes as the Lean verifier of record reads them (`one_stage.verifier.coins`:
+- **The coins** are the operating system's bytes as the Lean verifier reads them (`one_stage.verifier.coins`:
   `IO.getRandomBytes`, A3), its `sampled-proofs-verifier` built with `lake` on first use; a host where the Lean can't
   answer starts no session, and neither does one whose source no claim instance names (`challenger.served_claim`: A3's
   is `uniform/io-getrandombytes`).
@@ -20,16 +20,24 @@ log signed when the session ends.
   its window; the key's leaf state records it, so the key signs no id twice.  It commits to the layout's coins (`--scheme`,
   `--epoch`, `--families` as `[[label, count], ...]`), signs and writes `record.json`, `key.json` and the head of
   `releases.jsonl` to `--out` (`remote.open_session`), makes `hellos.jsonl` (empty), and only then listens on
-  127.0.0.1:PORT and prints `listening 127.0.0.1:PORT` (PORT 0: one the system picks).  With `--peer` it then opens
-  `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as `benchmarks/remote_session/run.sh` does for its
-  verifier), whose own 127.0.0.1:PORT the client connects to.  It serves the first client whose hello it accepts
-  (`remote.greet`, then `remote.serve`): a refused hello releases nothing, so it is logged in `hellos.jsonl` (`{"n",
-  "reason"}`, fsynced) and the next connection is taken, each hello read within 10 s; once one is accepted it stops
-  listening, so every later connection is refused.  However the session ends, a tunnel that ends first included, it
+  127.0.0.1:PORT and prints `listening 127.0.0.1:PORT` (PORT 0: one the system picks).  A window's session (`--root`)
+  opens no tunnel: PORT is one of its peer's certifier coin link, which carries it to the peer (`auditor.py`, the coins'
+  path), and `--peer` with `--root` is refused (`CoinsConfidential`).  Only a development session (`run.sh`) takes
+  `--peer`: it then opens `ssh -R PORT` to that machine of `--peers` (`/etc/vy/peers`, as
+  `benchmarks/remote_session/run.sh` does for its verifier), whose own 127.0.0.1:PORT the client connects to.  It
+  serves the first client whose hello it accepts (`remote.greet`, then `remote.serve`): a refused hello releases nothing, so it is logged in `hellos.jsonl` (`{"n",
+  "reason"}`, fsynced; `remote.log_hello`) and the next connection is taken, each hello read within 10 s, up to
+  `challenger.MAX_HELLOS` refused hellos, the most a session's evidence holds: the next refused past them ends the
+  session (`remote`, "The device's caps"). Once a hello is accepted it stops listening, so every later connection is
+  refused.  However the session ends, a tunnel that ends first included, it
   signs its release log and how it ended and writes `challenger.json` (`remote.close_session`).  On the auditor host
   (`auditor.py`) the session has a secret, `--secret-file` (64 hex digits, given to the window's opener by the gate),
   which the client's hello must carry, and `--root`, the window's Commit root: a salt family's coin (label `salt` or
-  `.../salt`) opens only after that root (RT4-INT-24), and any other is refused, which ends the session.
+  `.../salt`) opens only after that root, and any other is refused, which ends the session.
+- **A withheld session** (`--withhold`, which the auditor host passes when the window's open entry says `withheld: true`)
+  keeps its commitment on this host until the client closes it (`remote.open_session(..., withhold=True)`): the hello is
+  answered with the layout alone and each open with the coin's raw bytes, and once the signed close is written the
+  commitment and every opened coin's salt and path are released (`remote`, "A withheld session").
 - **Signing.**  The key's leaf state is opened only for each signature (the session id's start with the record's, then
   the close's), under `--sign-lock` when given (the auditor host's `sign.lock`, which every signer of the key takes), so
   the host's other sessions and the ledger sign between them.
@@ -56,14 +64,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.core.protocols.sampled_proofs import remote  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402
+from verity.core.protocols.spot import remote  # noqa: E402
+from verity.core.protocols.spot.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402
                                                              served_claim)
-from verity.core.protocols.sampled_proofs.one_stage import verifier as V  # noqa: E402
+from verity.core.protocols.spot.one_stage import verifier as V  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 KEY = Path.home() / ".local" / "state" / "live-challenger" / "key"
-HELLOS = "hellos.jsonl"
 HELLO_SECONDS = 10.0
 SSH = ["ssh", "-tt", "-o", "ObscureKeystrokeTiming=no", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
        "-o", "ServerAliveInterval=15"]
@@ -127,6 +134,7 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--root", default=None, help="the window's Commit root, 128 lowercase hex digits")
     p.add_argument("--secret-file", type=Path, default=None)
     p.add_argument("--sign-lock", type=Path, default=None)
+    p.add_argument("--withhold", action="store_true")
     return p.parse_args(argv)
 
 
@@ -148,13 +156,6 @@ class WindowChallenger:
             raise CoinError(f"a {label} coin opens only after the window's Commit root {self._root.hex()[:16]}…, not "
                             f"{bytes(after).hex()[:16]}…")
         return self._challenger.open(label, index, after)
-
-
-def log_hello(out: Path, n: int, why: str) -> None:
-    with open(out / HELLOS, "a", encoding="utf-8") as f:
-        f.write(json.dumps({"n": n, "reason": why}, sort_keys=True) + "\n")
-        f.flush()
-        os.fsync(f.fileno())
 
 
 def read_secret(path: Path | None) -> bytes | None:
@@ -185,6 +186,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.root is not None and not re.fullmatch(r"[0-9a-f]{128}", args.root):
         print("--root: the window's Commit root, 128 lowercase hex digits", file=sys.stderr)
         return 2
+    if args.root is not None and args.peer is not None:
+        print("the challenger refused to start: a window's session (--root) reaches its peer through the peer's "
+              "certifier coin link, never its own ssh -R (--peer; CoinsConfidential)", file=sys.stderr)
+        return 2
     try:
         secret = read_secret(args.secret_file)
         params = lms.DEPLOYED if args.params is None else lms.Params(64, *map(int, args.params.split(",")))
@@ -207,8 +212,8 @@ def main(argv: list[str] | None = None) -> int:
         with leaf_state(key, key_dir, args.sign_lock) as st:
             st.start(args.session.encode())
         session = remote.open_session(served, ChallengerKey(params.W, params.H, lms.public_key(key)), args.host, sign,
-                                      out, args.session)
-        with open(out / HELLOS, "x", encoding="utf-8") as f:
+                                      out, args.session, withhold=args.withhold)
+        with open(out / remote.HELLOS, "x", encoding="utf-8") as f:
             os.fsync(f.fileno())
     except (CoinError, ValueError, OSError, lms.StateError) as e:
         print(f"the challenger refused to start: {e}", file=sys.stderr)
@@ -247,7 +252,11 @@ def run(args: argparse.Namespace, out: Path, ssh: list[str] | None, session: rem
             why = remote.greet(conn, secret)
             if why is not None:
                 conn.close()
-                log_hello(out, refused, why)
+                try:
+                    remote.log_hello(out, refused, why)
+                except CoinError as e:
+                    ended = str(e)
+                    break
                 refused += 1
                 continue
             conn.settimeout(None)

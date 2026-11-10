@@ -60,18 +60,18 @@ nothing reads them). `opens_at` is its reference.
 """
 from __future__ import annotations
 
-from functools import lru_cache
 from types import SimpleNamespace
 from typing import Callable, Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import OR, ZERO, and_reduce, const_bits, or_reduce
+from verity.ml.circuits.boolean.trace import part as _part
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
 
-from ..merkle import _FRAME, _LEAF, _NODE, _hash, _uint
+from ..merkle import _FRAME, _LEAF, _NODE, frame_hash, _uint
 from .lms import LmsEqual
 from .sha512 import IV, compress_gadget, pad_tail, words_be
 
@@ -91,12 +91,12 @@ MAX_D = 64
 
 def leaf_ref(domain_id: bytes, schema: str, value: bytes, x: int) -> bytes:
     """The frame-v3-sha512 leaf of ``value`` at rank = position = ``x`` (`CommitmentDomain.leaf` over a domain id)."""
-    return _hash(_LEAF, domain_id, _uint(x), _uint(x), schema.encode("utf-8"), value, hash="sha512")
+    return frame_hash(_LEAF, domain_id, _uint(x), _uint(x), schema.encode("utf-8"), value, hash="sha512")
 
 
 def node_ref(domain_id: bytes, level: int, index: int, left: bytes, right: bytes) -> bytes:
     """The frame-v3-sha512 node at ``level`` and ``index`` (`CommitmentDomain.node` over a domain id)."""
-    return _hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash="sha512")
+    return frame_hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash="sha512")
 
 
 def root_ref(domain_id: bytes, schema: str, value: bytes, pos: int, path: Sequence[bytes]) -> bytes:
@@ -114,7 +114,7 @@ def opens(schema: str, root: bytes, domain_id: bytes, value: bytes, pos: int, pa
 
 def leaf_at_ref(domain_id: bytes, schema: str, value: bytes, rank: int, position: int) -> bytes:
     """The frame-v3-sha512 leaf of ``value`` at ``rank`` and ``position`` (`CommitmentDomain.leaf` over a domain id)."""
-    return _hash(_LEAF, domain_id, _uint(rank), _uint(position), schema.encode("utf-8"), value, hash="sha512")
+    return frame_hash(_LEAF, domain_id, _uint(rank), _uint(position), schema.encode("utf-8"), value, hash="sha512")
 
 
 def root_at_ref(domain_id: bytes, schema: str, value: bytes, rank: int, position: int, path: Sequence[bytes]) -> bytes:
@@ -271,26 +271,6 @@ def node_hash(C, domain, level, index, d, cur, sib, n: int) -> list:
 
 # --- traced Definitions ------------------------------------------------------------------------------------------------------
 
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str) -> CompositeDefinition:
-    """A Definition traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
-
-    @lru_cache(maxsize=None)
-    def traced(*key) -> TR.Traced:
-        S = SimpleNamespace(**dict(zip(statics, key)))
-        params, ret = signature(S)
-        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
-
-    def body(B, S, *colls):
-        params, ret = signature(S)
-        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
-
-    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    # C-Flock lowers an activation by its builder, commits included (`ir_lower._boolean_activation`)
-    d.build = build  # type: ignore[attr-defined]
-    d.traced = traced  # type: ignore[attr-defined]
-    return d
-
-
 def _leaf_blocks(schema: str, n: int, m: int | None = None) -> set[int]:
     """The block counts of the leaf messages under ``schema`` as uint(rank) takes 1 ... n bytes and uint(position) 1 ... m
     (the same length as the rank's, when m is None)."""
@@ -332,7 +312,7 @@ def _sig_leaf(S):
 FrameV3Leaf = _part(
     "FrameV3Leaf", ("B", "SCHEMA"), _sig_leaf, lambda C, S, *e: leaf_hash(C, S.SCHEMA, e[0:8], e[8:16], e[16], S.B),
     "the frame-v3-sha512 leaf of value at rank = position = x under the domain id domain and SCHEMA; x LSB first, its "
-    "uint 1 ... B bytes")
+    "uint 1 ... B bytes", calls=True)
 
 
 def _sig_node(S):
@@ -344,7 +324,7 @@ FrameV3Node = _part(
     "FrameV3Node", ("B",), _sig_node,
     lambda C, S, *e: node_hash(C, e[0:8], e[8], e[9], e[10][0], e[11:19], e[19:27], S.B),
     "the frame-v3-sha512 node at level k and index i (LSB first, its uint 1 ... B bytes) under the domain id domain over cur "
-    "and sib, cur the right child iff d")
+    "and sib, cur the right child iff d", calls=True)
 
 
 def _sig_leaf_at(S):
@@ -362,7 +342,7 @@ FrameV3LeafAt = _part(
     "FrameV3LeafAt", ("R", "B", "SCHEMA"), _sig_leaf_at,
     lambda C, S, *e: leaf_at_hash(C, S.SCHEMA, e[0:8], e[8:16], e[16], e[17], S.R, S.B),
     "the frame-v3-sha512 leaf of value at rank and position under the domain id domain and SCHEMA; each LSB first, uint(rank) "
-    "1 ... R bytes and uint(position) 1 ... B")
+    "1 ... R bytes and uint(position) 1 ... B", calls=True)
 
 
 def _sig_pick(S):

@@ -1,9 +1,10 @@
-"""Kernels' producer of vllm's `Served.receipts` (`served_h1/producer.py`, BRIDGE2) against `h1tile.reference`, word for
+"""vllm's producer of `Served.receipts` (`pouw_h1_receipts.Receipts`, BRIDGE2, with h1u.cu's units from
+`served_h1/producer.py`) against `h1tile.reference`, word for
 word: a call's receipts are (units, 2 (KS + m)) u32, unit u of the call row block u // (N / 32) and column block
 u % (N / 32) of its M slot rows (the served codes, then zero rows) and its weight, at position u0 + u, seeded from the
 run's salt and the call's registered roots, root(a/<K>@<s>) and root(b/<K>): the unit's public row as the verifier
 builds it (`credit.public_table`), which the references are seeded from. A row block past the served rows has v1's
-noise-derived receipt, not zero, unless the producer skips dead tiles (``skip_dead``, ``H1_SKIP_DEAD=1``): then it has v4's
+noise-derived receipt, not zero, unless the producer skips dead tiles (``skip_dead``): then it has v4's
 zero receipt and a row block holding a served row its full one. Through `Served` (slow: the window Program's real tile
 unit takes half a minute to declare) every call's ``receipt@<c>`` is those receipts' words; and on a GPU with h1u.cu's
 -hbc build named by `VERITY_POUW_H1U_SO` the units kernel gives the same words at Llama-3.1-8B's four linear shapes, a
@@ -18,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import os
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -26,7 +28,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
+from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
 
 SERVED_H1 = Path(__file__).resolve().parents[1] / "served_h1"
 SALT, RA, RB = hashlib.sha512(b"salt").digest(), hashlib.sha512(b"A").digest(), hashlib.sha512(b"B").digest()
@@ -63,7 +66,7 @@ def _ref_j10r(a: np.ndarray, b: np.ndarray, u: int, position: int, call: int, ro
                              salt, position, roots, call, blocks, pairs=[(0, 0)])[1]
 
 
-class _At(PR.Receipts):
+class _At(RC.Receipts):
     """The producer at a given first unit, without a window Program (v1's unit unless ``j10r``): unit u0 + t's public row
     is `core_check`'s row of the run's salt, u0 + t and the call's roots, and under J10-R u0 and the tile's blocks."""
 
@@ -132,13 +135,6 @@ def test_skipping_dead_tiles_gives_h1tile_reference_v4_on_a_step_of_64_20_or_0_s
     assert [v["ok"] for v in unskipped.values()] == live
 
 
-def test_skipping_dead_tiles_is_off_unless_h1_skip_dead_is_1(monkeypatch):
-    monkeypatch.delenv("H1_SKIP_DEAD", raising=False)
-    assert not PR.Receipts(None).skip_dead and PR.Receipts(None, skip_dead=True).skip_dead
-    monkeypatch.setenv("H1_SKIP_DEAD", "1")
-    assert PR.Receipts(None).skip_dead and not PR.Receipts(None, skip_dead=False).skip_dead
-
-
 def test_a_public_row_gives_back_the_salt_position_and_roots_it_carries():
     """`public_fields` inverts `core_check.public_words`, the verifier's public row; a row of another width is refused."""
     from verity.core.protocols.pouw import core_check as CC
@@ -177,8 +173,8 @@ def _window(producer, shapes, modules, blocks, rows: list[int], steps: int, seed
     ``producer(served)``: the run, each call's served codes by index, each linear's weight codes, each call's receipts as
     the producer returned them, by index (the native commit keeps no rows), and the producer. ``unit``: the window
     Program's tile unit (`Served.unit`), v1's by default."""
-    from verity_vllm.protocol_options import pouw_h1 as PH
-    from verity_vllm.protocol_options import pouw_h1_served as SV
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import served as SV
     served = SV.Served(blocks=blocks, window=hashlib.sha512(b"window").digest(), unit=unit)
     made, made_by = producer(served), {}
 
@@ -207,9 +203,9 @@ def _window(producer, shapes, modules, blocks, rows: list[int], steps: int, seed
 def _registered_receipts(run, made_by, c) -> np.ndarray:
     """Call c's receipt table's words: `receipt_words` of the receipts the producer returned for it, which the registered
     ``receipt@<c>`` is the native commit of (its root, under its nonce and the window's open root)."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
-    from verity_vllm.protocol_options import pouw_h1_registered as NR
-    from verity_vllm.protocol_options import pouw_h1_served as SV
+    from verity.ml.protocols.pouw.circuit import h1window as HW
+    from verity_vllm.protocols.pouw.h1 import registered as NR
+    from verity_vllm.protocols.pouw.h1 import served as SV
     served, rc = run.served, run.served.receipt_table(c.index)
     words, n = SV.receipt_words(made_by[c.index]), HW.call_units(served.program)[c.index][1]
     assert words.shape == served.receipt_shape(c.index) == (n, 2 * HT.Layout(32, 32, c.k).sets * 2)
@@ -224,8 +220,8 @@ def _held_to_reference(run, codes, weights, made_by, units_of):
     Program position and the registered roots), whose table is the ``pub@<c>`` `Served` registered; returns the units
     checked, live and dead."""
     from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.pouw.circuit import h1window as HW
-    from verity_vllm.protocol_options import pouw_h1_served as SV
+    from verity.ml.protocols.pouw.circuit import h1window as HW
+    from verity_vllm.protocols.pouw.h1 import served as SV
     served, pre, seen = run.served, run.served.program.fn.bindings["PREFIX"], {"live": 0, "dead": 0}
     assert not served.refused, served.refused
     j10r = HW.is_j10r(served.program)
@@ -259,7 +255,7 @@ def test_each_calls_receipt_table_is_h1tile_reference_through_served():
     every kept call, its reference seeded from the verifier's public rows, finds every unit's row the producer's."""
     from verity_vllm.engine import int8_ops as OPS
     shapes, blocks = [(64, 64), (32, 64), (32, 128)], (0, 0, 1)
-    run, codes, ws, made_by, made = _window(lambda s: PR.Receipts(s, keep=lambda c: True), shapes,
+    run, codes, ws, made_by, made = _window(lambda s: RC.Receipts(s, keep=lambda c: True), shapes,
                                             {0: "q", 1: "k", 2: "o"}, blocks, [20], 2, 3,
                                             lambda x, s_a, wt, sw: OPS.scaled_mm_zy(x, s_a, wt, sw, 64)[1])
     seen = _held_to_reference(run, codes, ws, made_by, lambda c, n: range(n))
@@ -283,16 +279,15 @@ def test_the_units_kernel_is_h1tile_reference_at_llama_8b_shapes_through_served(
     unit of every call equal to receipts.py's torch chain, and the first and last unit of each row block equal to
     `h1tile.reference`, word for word. The z/y records are zeros: no receipt reads them."""
     units = _kernel()
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     from verity_vllm.engine import int8_exact as E
-    from verity_vllm.protocol_options import pouw_h1 as PH
-    from verity_vllm.protocol_options import pouw_h1_served as SV
-    RC = PR.RC
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import served as SV
 
     def zeros(x, s_a, wt, sw):
         return torch.zeros(PH.units(x.shape[1], wt.shape[0], 64), E.ZY_BYTES, dtype=torch.uint8)
 
-    run, codes, ws, made_by, _made = _window(lambda s: PR.Receipts(s, units=units), LLAMA,
+    run, codes, ws, made_by, _made = _window(lambda s: RC.Receipts(s, units=units), LLAMA,
                                              {0: "qkv", 1: "o", 2: "gate_up", 3: "down"}, (0, 1, 2, 3), [64, 20], 3, 5,
                                              zeros)
     served, pre = run.served, run.served.program.fn.bindings["PREFIX"]
@@ -405,7 +400,7 @@ def test_a_j10r_units_counters_are_its_rows_and_columns_blocks_of_its_calls_one_
     """`receipts.j10r_counters` of every unit (I, J) of an M × N call at K is `h1tile.j10r_unit_blocks` at its
     `h1tile.j10r_blocks`, the counters its gates read, all inside the call's stream (`receipts.stream_blocks`): units of
     one row block share their rows' counters and units of one column block their columns'."""
-    RC, lay = PR.RC, HT.Layout(32, 32, k)
+    lay = HT.Layout(32, 32, k)
     us = RC.units(m, n)
     got = RC.j10r_counters(torch.tensor([i for i, _j in us]), torch.tensor([j for _i, j in us]), m, k)
     want = [HT.j10r_unit_blocks(lay, HT.j10r_blocks(m, k, (32, 32), i, j)) for i, j in us]
@@ -473,10 +468,10 @@ def test_each_calls_j10r_receipt_table_is_h1tile_j10r_reference_through_served()
     chain, the producer taking J10-R from the Program (`h1window.is_j10r`): every call's ``pub@<c>`` is the verifier's
     J10-R public table (`credit.public_table` with `h1window.call_blocks`), and every unit of every call's
     ``receipt@<c>`` is `h1tile.j10r_reference` seeded from its row, word for word; `check` of every kept call agrees."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     from verity_vllm.engine import int8_ops as OPS
     shapes, blocks = [(64, 64), (32, 64), (32, 128)], (0, 0, 1)
-    run, codes, ws, made_by, made = _window(lambda s: PR.Receipts(s, keep=lambda c: True), shapes,
+    run, codes, ws, made_by, made = _window(lambda s: RC.Receipts(s, keep=lambda c: True), shapes,
                                             {0: "q", 1: "k", 2: "o"}, blocks, [20], 2, 3,
                                             lambda x, s_a, wt, sw: OPS.scaled_mm_zy(x, s_a, wt, sw, 64)[1],
                                             unit=lambda k: HW.tile_unit(k, (32, 32), HT.PouwH1Tile5))
@@ -491,17 +486,17 @@ def test_each_calls_j10r_receipt_table_is_h1tile_j10r_reference_through_served()
 def _cubin():
     path = os.environ.get(CUBIN)
     if not path or not torch.cuda.is_available():
-        pytest.skip(f"no GPU, or {CUBIN} names no noise.cu cubin (nvcc -cubin -gencode arch=compute_120a,code=sm_120a "
-                    "-I benchmarks/codec_tensor): its run is a recorded run on vy-nebius-2 (producer_gpu.sh)")
-    return PR.RC.Cubin(path)
+        pytest.skip(f"no GPU, or {CUBIN} names no noise.cu cubin (`receipts.noise_cubin`, or noise.cu's nvcc line): "
+                    "its run is a recorded run on vy-nebius-2 (producer_gpu.sh)")
+    return RC.Cubin(path)
 
 
 def test_noise_cus_j10r_call_streams_are_seed_cs_noise_blocks():
     """On the GPU, noise.cu's `h1_noise_calls` over calls of 1, 37, 0 and 600 blocks and Llama-3.1-8B's gate_up stream
     (64 rows, N = 28672, K = 4096: 258,624 blocks) in one launch gives each call's stream block for block as hashlib does
     (`seeds.noise_block` of its seed_c), and its J10-R receipts are the torch chain's over hashlib's stream."""
-    from verity.core.protocols.pouw.circuit import seeds as SD
-    cubin, RC = _cubin(), PR.RC
+    from verity.ml.protocols.pouw.circuit import seeds as SD
+    cubin = _cubin()
     seeds = [SD.call_seed(SALT, c, RA, RB) for c in (0, 1, 2, 3, 2**33)]
     counts = [1, 37, 0, 600, RC.stream_blocks(64, 28672, 4096)]
     got = RC.call_streams(seeds, counts, torch.device("cuda"), cubin)
@@ -523,6 +518,18 @@ def _j10r_kernel():
     if not units.j10r:
         pytest.skip("this h1u.cu build has no J10-R units (kh_units_multi_j10r)")
     return units
+
+
+def test_the_producer_sizes_each_j10r_workspace_through_dither_j10r_ws():
+    """`Units.multi` takes each J10-R call's workspace from dither's `j10r_ws.workspace_bytes` at the call's N, which
+    asks the loaded build (an H1U_JW build's column blocks and W' past its rows) and refuses a size its flags
+    contradict: no served_h1 module calls a build's kh_j10r_*_bytes itself, so an H1U_JW build loaded here isn't sized
+    by its rows."""
+    call = re.compile(r"\bkh_j10r_(?:rows|jw|ws|workspace)_bytes\s*\(")
+    hits = [f"{p.name}:{i}" for p in sorted(SERVED_H1.glob("*.py"))
+            for i, line in enumerate(p.read_text().splitlines(), 1) if call.search(line)]
+    assert hits == []
+    assert Path(PR.WS.__file__) == SERVED_H1.parents[1] / "hash" / "dither" / "j10r_ws.py"
 
 
 def test_the_units_kernels_j10r_receipts_are_h1tile_j10r_reference_at_llama_8b_shapes():

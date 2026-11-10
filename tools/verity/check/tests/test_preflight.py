@@ -168,7 +168,7 @@ def test_lean_dependencies_come_from_the_store_or_nowhere(tmp_path, path):
 @pytest.mark.parametrize("parts, refused", [(["pytest", "lean-build"], False), ([], False), (["lean-audit:pkg/a"], True)])
 def test_a_shard_needs_only_the_dependencies_of_the_packages_it_audits(tmp_path, path, parts, refused):
     """A shard is sent URLs only for the bundles its own audits restore (`check.py --record --shard`), so asking it for any other
-    package's would refuse every shard but the audits' on a pod where one bundle is cold (r20261005-072556-7bc7)."""
+    package's would refuse every shard but the audits' on a pod where one bundle is cold."""
     tree = _tree(tmp_path)
     inputs = _inputs(tmp_path)
     (inputs / PF.CHECK.SHARD_PARTS).write_text(json.dumps(parts))

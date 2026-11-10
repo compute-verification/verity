@@ -1,14 +1,20 @@
 /-
 `coin-tree/hm96-sha512/v2`, the keyed coin tree (`docs/coin-tree-v2.md`, §3 and §7): the verifier's part. The prover's
 `Hello` carries its fresh 32-byte nonce in `coins`; the server answers with its root and a fresh 256-byte hm96 key for the
-session's tree, drawn after the nonce, never reused and never revealed before that answer. The record keeps
+session's tree, sampled after the nonce, never reused and never revealed before that answer. The record keeps
 `coin_tree = {key, nonce, root, spec}`.
 
 The verifier checks the record, not the openings: the commitment protects the prover (§7). It checks R7 with the prover's
 nonce, the record's `coin_tree`, and, across the sessions it verifies together, that no key repeats. Nonces are not
 compared across sessions: a repeated prover nonce is not a soundness matter.
 -/
-import Flock.Canon
+module
+
+public import Flock.Canon
+public import Flock.JsonParse
+public import Lean.Data.Json.FromToJson.Basic
+
+@[expose] public section
 
 namespace Flock.CoinTree
 
@@ -33,7 +39,7 @@ def Spec.coins (s : Spec) (nonce : String) : Json := s.toJson.setObjVal! "nonce"
 
 /-- The tree's spec, when a `Hello` names this scheme in `coins`. -/
 def ofHello (hello : String) : Option Spec := do
-  let c ← ((Json.parse hello).toOption.bind (·.getObjVal? "coins" |>.toOption))
+  let c ← ((JsonParse.parse hello).toOption.bind (·.getObjVal? "coins" |>.toOption))
   if (c.getObjValAs? String "scheme").toOption != some SCHEME then none
   let streams ← (c.getObjValAs? (Array String) "streams").toOption
   return ⟨streams, ← (c.getObjValAs? Nat "rounds_log").toOption, ← (c.getObjValAs? Nat "block").toOption⟩
@@ -44,7 +50,7 @@ def isHex (n : Nat) (s : String) : Bool := s.length == n && s.all fun c => c.isD
 /-- **R7 with the prover's nonce** (§3): the received `Hello` must be the verifier's own `Hello` object with the received
 `coins.nonce` put in, serialized canonically, byte for byte; the nonce must be 64 lowercase hex digits. The nonce. -/
 def checkHello (own : Json) (received : String) : V String := do
-  let some j := (Json.parse received).toOption | throw "S2/R7: the prover's Hello is not JSON"
+  let some j := (JsonParse.parse received).toOption | throw "S2/R7: the prover's Hello is not JSON"
   let nonce := ((j.getObjVal? "coins").toOption.bind (·.getObjValAs? String "nonce" |>.toOption)).getD ""
   if !isHex 64 nonce then throw "S2/R7: Hello's coins.nonce is not 64 lowercase hex digits"
   let coins := (own.getObjVal? "coins").toOption.getD Json.null
@@ -69,7 +75,7 @@ def checkRecord (spec : Spec) (nonce : String) (ct : Json) : V String := do
     throw "S2: coin_tree.spec is not the verifier's"
   return key
 
-/-- **The session key is fresh** (the red team's condition on #245): never reused. Refuse a key that one of the sessions
+/-- **The session key is fresh** (the red team's condition on the session key): never reused. Refuse a key that one of the sessions
 verified before this one used. -/
 def checkFresh (seen : Array String) (key : String) : V Unit :=
   if seen.contains key then throw "S2: coin_tree.key is an earlier session's; a session key is never reused" else pure ()

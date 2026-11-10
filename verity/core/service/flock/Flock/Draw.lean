@@ -1,12 +1,22 @@
 /-
-PROTOCOL.md §7.3: the unit draw. After serving registers its roots and before the session's statements are fixed, the
-verifier draws the sampled units from its own randomness with exact samplers and sends them in the clear. The drawn units'
-statement carries the draw (the public header's `unit_draw`, under Σ) and the session record keeps it. Offline, the
-verifier checks that the two agree, that the draw is well formed, and that the statement's instances are the drawn units.
+The unit draw. After serving registers its roots and before the session's statements are fixed, the challenger's coins
+sample the units with exact samplers, and the sample is sent in the clear; the verifier has no randomness of its own.
+The drawn units' statement carries the draw (the public header's `unit_draw`, under Σ) and the session record keeps it.
+Offline, the verifier checks that the two agree, that the draw is well formed, and that the statement's instances are
+the drawn units.
 -/
-import Lean.Data.Json
-import Std.Data.HashMap
-import Flock.Canon
+module
+
+public import Lean.Data.Json
+public import Std.Data.HashMap
+public import Flock.Canon
+meta import Lean.Data.Json
+meta import Std.Data.HashMap
+meta import Flock.Canon
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Draw
 
@@ -213,10 +223,12 @@ def Stratum.toJson (s : Stratum) : Json :=
   Json.mkObj [("template", Json.str s.template),
     ("units", Json.arr (s.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])), ("k", Lean.toJson s.k)]
 
+/-- A work stratum's object. Its fields are listed in key order, the order `Flock.norm` rebuilds an object in, so `norm`
+leaves its tree as it is: a draw the verifier keeps as `norm` of what it parsed is this object's tree. -/
 def WorkStratum.toJson (s : WorkStratum) : Json :=
-  Json.mkObj [("template", Json.str s.template),
+  Json.mkObj [("floor", Lean.toJson s.floor), ("k", Lean.toJson s.k), ("template", Json.str s.template),
     ("units", Json.arr (s.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
-    ("work", Lean.toJson s.work), ("floor", Lean.toJson s.floor), ("k", Lean.toJson s.k)]
+    ("work", Lean.toJson s.work)]
 
 /-- The law object (the registration's `law`): `{law, k, strata}` for `stratified` and `work`. -/
 def Law.toJson : Law → Json
@@ -236,6 +248,21 @@ def UnitDraw.toJson (d : UnitDraw) : Json :=
   | .work k strata => Json.mkObj ([("law", Json.str "work"), ("population", Lean.toJson d.population),
       ("k", Lean.toJson k), ("strata", Json.arr (strata.map (·.toJson))), ("units", u)] ++
       if d.closure.isEmpty then [] else [("closure", Json.arr (d.closure.map fun x => Lean.toJson x))])
+
+#guard
+  let s : WorkStratum := { template := "A", units := #[(0, 2)], k := 1, work := 3, floor := 1 }
+  let listed := Json.mkObj [("template", Json.str s.template),
+    ("units", Json.arr (s.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
+    ("work", Lean.toJson s.work), ("floor", Lean.toJson s.floor), ("k", Lean.toJson s.k)]
+  s.toJson.compress == listed.compress && (canon s.toJson).toOption == (canon listed).toOption
+#guard
+  let ss : Array WorkStratum := #[{ template := "A", units := #[(0, 2)], k := 1, work := 3, floor := 1 },
+    { template := "B", units := #[(2, 4)], k := 1, work := 1, floor := 1 }]
+  let record := Json.mkObj [("unit_draw", UnitDraw.toJson ⟨.work 2 ss, 4, #[1, 2], #[3]⟩)]
+  let printed := "{\"unit_draw\":{\"closure\":[3],\"k\":2,\"law\":\"work\",\"population\":4,\"strata\":[{\"floor\":1," ++
+    "\"k\":1,\"template\":\"A\",\"units\":[[0,2]],\"work\":3},{\"floor\":1,\"k\":1,\"template\":\"B\",\"units\":[[2,4]]," ++
+    "\"work\":1}],\"units\":[1,2]}}"
+  record.compress == printed && (canon record).toOption == some printed
 
 /-- A stratum object: exactly `{template, units, k}`, its units non-empty `[lo, hi)` ranges, ascending, disjoint and not
 adjacent (`draw.strata_problem`). -/
@@ -413,15 +440,16 @@ def drawWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteArray) (
     | .work _ strata => stratifiedWith get (strata.map (·.toStratum))
   return units.map fun units => { law, population, units }
 
-/-- The draw from the verifier's operating-system randomness: `drawWith` with every stream's bytes from
-`IO.getRandomBytes`. -/
+/-- The sample from the operating system's randomness: `drawWith` with every stream's bytes from `IO.getRandomBytes`.
+The verifier never runs it: it has no randomness of its own, and its samples read the challenger's coins (`drawOn`). -/
 def drawOS (law : Law) (population : Nat) : IO UnitDraw := do
   let some d ← drawWith (fun _ need => IO.getRandomBytes need.toUSize) law population
     | throw (IO.userError "unreachable")
   return d
 
-/-- The draw from given bytes (a test): `subset` and `bernoulli` on the one stream; `stratified` and `work` on
-consecutive segments, stratum `s`'s the next `2 k_s · width(n_s) + 64` bytes. `none` when a stream runs out. -/
+/-- The sample from given bytes, the challenger's coins (`flock-verify draw`): `subset` and `bernoulli` on the one
+stream; `stratified` and `work` on consecutive segments, stratum `s`'s the next `2 k_s · width(n_s) + 64` bytes. `none`
+when a stream runs out. -/
 def drawOn (law : Law) (population : Nat) (src : ByteArray) : Option UnitDraw := do
   let units ← match law with
     | .subset k => subset k population src
@@ -436,5 +464,26 @@ def drawOn (law : Law) (population : Nat) (src : ByteArray) : Option UnitDraw :=
         (acc.1.push (src.extract acc.2 (acc.2 + s.need)), acc.2 + s.need)) (#[], 0)
       stratified strata segs
   return { law, population, units }
+
+/-- The units every draw under a law has, when that count is fixed: `k` for a subset law and `Σ_s k_s` for a stratified
+one (`UnitDraw.ofJson` holds every decoded draw to them); none for a Bernoulli law, whose count is random, and a work law,
+whose closure varies from draw to draw. -/
+def Law.fixedCount : Law → Option Nat
+  | .subset k => some k
+  | .stratified _ strata => some (strata.foldl (fun acc s => acc + s.k) 0)
+  | _ => none
+
+/-- The refusal of a draw that several tables cannot split (`Stmt.setupTables`, `tablesWhy`). -/
+def TABLES_LAW : String :=
+  "tables: several tables need a subset or stratified draw, whose unit count is fixed (a Bernoulli draw's count is random, so the tables could not split it evenly, and a work draw's closure is not split)"
+
+/-- Why one draw under `law` cannot be split into `count` equal tables, as `Stmt.setupTables` splits a session's draw, else
+none: one table takes any law; several take a law of fixed count (`Law.fixedCount`) that is positive and a multiple of
+`count`. A law's count is fixed before any coin, so `flock-verify draw --tables J` refuses here before reading one. -/
+def tablesWhy (law : Law) (count : Nat) : Option String :=
+  if count ≤ 1 then none
+  else match law.fixedCount with
+    | none => some TABLES_LAW
+    | some n => if n == 0 || n % count != 0 then some s!"tables: {n} units do not split into {count} equal tables" else none
 
 end Flock.Draw

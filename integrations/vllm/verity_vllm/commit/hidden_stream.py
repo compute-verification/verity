@@ -1,5 +1,5 @@
-"""R9 lane cmt-hidden: one-stage commitment of the FA2 *hidden* value stream (scores, P, running max, rescale, lane
-sums, PV accumulators, epilogue) as acquired from the pinned kernel by the v7 taps of `out/gen/r9/cmt-hidden/src/`:
+"""One-stage commitment of the FA2 *hidden* value stream (scores, P, running max, rescale, lane
+sums, PV accumulators, epilogue) as acquired from the pinned kernel by the v7 taps:
 
 * **M1 stream** (`VERITY_TAP=3`): the kernel materialises the selected classes into one flat u32 buffer whose layout is
   arithmetic in (HB = b*h slabs, M = seqlen_q rows, NB = key-block cap) -- `StreamLayout` below mirrors
@@ -12,7 +12,7 @@ sums, PV accumulators, epilogue) as acquired from the pinned kernel by the v7 ta
   validity); only the 32-byte digests leave the SM.  `ThreadLeafCommitment` builds the tree over those digests; an
   opening reveals the thread leaf's message (regenerated on replay from the M1 stream / the Definition) plus a path.
 
-Validity conditions (BRIEF §3): (1) binding under SHA-256 (leaf) + the production Merkle rule (nodes); (2) the leaf
+Validity conditions: (1) binding under SHA-256 (leaf) + the production Merkle rule (nodes); (2) the leaf
 preimage contains the position header the verifier derives itself from the claimed identity, and a word's offset inside
 the leaf is fixed by the layout -- identity/position, not a multiset; (3) openings fold to the *prechallenge* root;
 (4) `test_hidden_stream.py` rejects altered / reordered / substituted words, substituted leaves, wrong launch tag.
@@ -38,10 +38,10 @@ KIND_THREAD = 2             # per-thread per-block leaf computed inside the kern
 KBLOCK_N = 128
 KBLOCK_M = 64
 CLASSES = ("S", "P", "RP", "ROW", "O", "FIN")
-#: MS (64): the seventh class, appended after FIN only by the guarded-max tap builds (`VERITY_MAT_SRC & 64`, `query.guarded_max`): one f32
+#: MS (64): the seventh class, appended after FIN only by the guarded-max tap builds (`VERITY_MAT_SRC & 64`, `hidden_source.TAP_ROW3`): one f32
 #: per (slab, row, key block), the `max * scale` that block's exp2 FMAs read.  Without it the layout, digest and bytes are the six classes'.
 SRC_BITS = {"S": 1, "P": 2, "RP": 4, "ROW": 8, "O": 16, "FIN": 32, "MS": 64}
-#: ROW word 3: never written, except by the guarded-max tap builds (`verity_tap_row3() == 1`, `query.guarded_max`), which store
+#: ROW word 3: never written, except by the guarded-max tap builds (`verity_tap_row3() == 1`, `hidden_source.TAP_ROW3`), which store
 #: GuardNegInfZero(row_max) there at every key block after a row's first and 0 at the first
 ROW_GUARD_FIELD = 3
 
@@ -50,9 +50,9 @@ ROW_GUARD_FIELD = 3
 class StreamLayout:
     """Word offsets of the M1 stream (mirror of `Verity_mat_layout(HB, M, NB, BN, D)`).
 
-    R13 lane fa2 (tap layout v8): the layout is arithmetic in the kernel tile -- `BN` = kBlockN of the launched kernel (128 for head
+    Tap layout v8: the layout is arithmetic in the kernel tile -- `BN` = kBlockN of the launched kernel (128 for head
     dim 64, 64 for 96/128/256 on the num_splits == 1 kernel; `hidden_source.fa2_kblock_n`) and `D` = head_dim (the O plane's row
-    width).  The defaults reproduce the R9 hd-64 layout, digest and chunk header word for word; other tiles enter the digest and the
+    width).  The defaults reproduce the legacy hd-64 layout, digest and chunk header word for word; other tiles enter the digest and the
     spare header words 8/9, so a chunk of a (64, 128) stream can never verify against a (128, 64) declaration.  `ms` appends the MS
     class after FIN (and enters the digest); without it every offset, the total and the digest are the six classes'."""
 

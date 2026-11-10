@@ -1,12 +1,24 @@
-import Proofs.Flock.C3.RegLevels.Chain
-import Proofs.Flock.C3.Compose.Honest
+module
+
+public import Proofs.Flock.C3.RegLevels.Chain
+public import Proofs.Flock.C3.Compose.Honest
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.Compose.Plays
-import Proofs.Flock.VBridge.InnerAccepts
-import Proofs.Flock.Soundness.Refine.Basis
-import Proofs.Flock.Soundness.Refine.Paths
-import Proofs.Flock.Soundness.Refine.Seam
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Refine.Basis
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # n5's read fact: R's Ligerito and the openings from the tape
@@ -25,6 +37,8 @@ acceptance is the model's compiled Ligerito's run to a pending result that accep
 whose openings pass the plain leaf's path checks against the proof's cap (`opensOK_of`); and a game plays on at most one
 prefix of a tape (`stageOf_of_playsT`), so the stage the run decodes is that play.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 
@@ -49,7 +63,7 @@ theorem proverAt_of_eq {β : Type} {s : Option Step} {d b : β} (hs : s = some (
 
 /-- **Compiled Ligerito's run on its messages and coins is a run on one tape** that takes steps of its shape's kinds
 (`ligShape`), with those messages and coin steps: the shape places the coins among the messages. -/
-theorem playsT_lig_of_tape {sch : Accounting.Schedule} {T₀ : 𝔽} {b : ℕ → 𝔽} {ms : List Game.Msg}
+theorem playsT_lig_of_tape {sch : FlockSoundness.Accounting.Schedule} {T₀ : 𝔽} {b : ℕ → 𝔽} {ms : List Game.Msg}
     {cs : List (Array Flock.F128)} {pend : PendL 𝔽 Dig} {ts : List Step}
     (h : Plays fOf (ligeritoC (D := Dig) execArith 2 sch T₀ b) ms cs pend)
     (hk : ts.map kindOf <+: ligShape 𝔽 𝕂 Dig sch) (hl : ts.filterMap Sum.getLeft? = ms)

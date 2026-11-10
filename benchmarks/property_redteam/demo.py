@@ -5,7 +5,7 @@ nonlinearity claimed, and the class the stacking-budget classifier puts it in.
 
     uv run python benchmarks/property_redteam/demo.py [--out FILE.json] [--words N]
 
-Sections (encode_in_circuit takes ~35 s a word on one core):
+Sections (encode_in_circuit takes ~55 s a word on one core):
   imma    the s8 IMMA's clamp and wrap become exact comparisons once the incoming accumulator C is a runtime value, and
           the static reduction-length limits that property/v1 checks (operand ranges + K);
   floors  registry primitives that compute an exact floor, carry, comparison, select or mod, with the class the
@@ -21,24 +21,25 @@ from __future__ import annotations
 
 import argparse
 import collections
-import importlib
 import json
 import os
-import pkgutil
 import random
 import struct
 import sys
 
 from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
+from verity.ml.circuits.evaluation.reference import ScalarReference, evaluate
+from verity.ml.circuits.types import Array, Value
 from verity.ml.circuits.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT,
                                                  BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP, IntegerMma, S32_MAX,
                                                  S32_MIN, s32_value)
+from verity.ml.definitions.registry import catalog
 from verity.core.protocols.remote_bandwidth import codec as C
 
 M32 = (1 << 32) - 1
 
 # The stacking-budget classifier's sets (cursor/stack-property-6cd3 4268176afa, count_budgets.py lines 41-50).  Its
-# headline per-byte budget c is cast + act (note:20261017T0814Z-report-stacking-property).  "free(widen)" is dropped
+# headline per-byte budget c is cast + act.  "free(widen)" is dropped
 # entirely (a pass); "int" and "unknown" are counted in the census but are not in c.
 CLASSES = {
     "cast": {"F2fpBf16", "F32ToBf16Rn", "F32ToE4m3Sat", "F32ToE2m1Sat"},
@@ -61,21 +62,12 @@ def classify(pid: str) -> str:
     return "unknown"
 
 
-# ---- registry -----------------------------------------------------------------------------------------------------------
-
-
-def load_registry() -> dict[str, PrimitiveDefinition]:
-    import verity.ml.circuits.ops as ops
-    import verity.core.protocols.pouw.circuit.words  # noqa: F401  (PoUW word primitives register on import)
-    import verity_vllm.program.registry as reg
-    for pkg, prefix in ((ops, "verity.ml.circuits.ops."), (reg, "verity_vllm.program.registry.")):
-        for m in pkgutil.walk_packages(pkg.__path__, prefix):
-            if ".tests" in m.name or "quarantine" in m.name or "circuit-check" in m.name:
-                continue
-            try:
-                importlib.import_module(m.name)
-            except Exception as e:
-                print(f"skip {m.name}: {type(e).__name__}", file=sys.stderr)
+def primitives() -> dict[str, PrimitiveDefinition]:
+    """Every registered primitive, with the catalog's ops and registry loaded (`catalog.load`); a module that fails to
+    import is named on stderr."""
+    import verity.ml.protocols.pouw.circuit.words  # noqa: F401  (PoUW word primitives register on import)
+    for e in catalog.load(("ops", "registry"))[1]:
+        print(f"skip {e}", file=sys.stderr)
     return {k: v for k, v in REGISTRY.defs.items() if isinstance(v, PrimitiveDefinition)}
 
 
@@ -220,7 +212,7 @@ def section_floors(prims: dict[str, PrimitiveDefinition]) -> dict:
     # A runtime-indexed gather over constant words is a lookup table: it realizes any function of the index.  Here a
     # 128-entry f32 column holds (i^2 + 7i) mod 251, and the gather returns its entry exactly: a data-dependent
     # nonlinearity property/v1 does not budget (the census counts gathers and fan-in, the budget does not read them).
-    from verity_vllm.program.registry.ref_prims import gather_f32
+    from verity.ml.definitions.registry.ref_prims import gather_f32
     table = [f32(float((i * i + 7 * i) % 251)) for i in range(128)]   # an arbitrary nonlinear table of the 7-bit index
     g = gather_f32(128)
     idx = 100
@@ -309,16 +301,20 @@ def _jacobi(a: int, n: int) -> int:
 
 # ---- the codec's encode from exact products and unbudgeted primitives ---------------------------------------------------
 
-#: u8 x u8 IMMA: the same instruction at operand formats u8.u8, which run r20261015-084000-06d8 also reproduced bit for bit
+#: u8 x u8 IMMA: the same instruction at operand formats u8.u8, which the validating run also reproduced bit for bit
 #: (`verity.ml.circuits.silicon.integer`'s docstring); its column sums here are at most 128 * 255^2 < 2^23, so every
 #: chain is in range from C = 0 and passes a static operand-range and reduction-length check.
 IMMA_U8 = IntegerMma(name="blackwell_sm120_u8u8_m16n8k32", arch="sm_120", dtype="u8", b_dtype="u8", operand_bits=8,
                      k_per_instruction=32, satfinite=True, validated="run r20261015-084000-06d8, form u8.u8 .satfinite")
+_IMMA_U8_SIGNATURE = ((Value(32), Array(32, Value(8)), Array(32, Value(8))), Value(32))
+IMMA_U8_STEP = ScalarReference(
+    "silicon.blackwell_sm120_u8u8_m16n8k32.step", IMMA_U8.step, lambda: _IMMA_U8_SIGNATURE,
+    doc="one accumulator coordinate of IMMA.16832.U8.U8.SAT: C + 32 u8 products, clamped to s32 (IntegerMma at u8.u8)")
 
 
-class Circuit:
-    """Multi-precision arithmetic mod p = 2^1024 - 105 on 128 u8 digits, every operation a registry evaluator call or an
-    IMMA step, counted by primitive id."""
+class ModArith:
+    """Multi-precision arithmetic mod p = 2^1024 - 105 on 128 u8 digits, every operation one run of the reference
+    evaluator (`reference.evaluate`) on a registry primitive or on the u8 IMMA step, counted by primitive id."""
 
     D = 128
 
@@ -343,7 +339,7 @@ class Circuit:
 
     def call(self, pid: str, *args: int) -> int:
         self.n[pid] += 1
-        return self.prims[pid].evaluate(*args)
+        return evaluate(self.prims[pid], *args)[0]
 
     def dot(self, c: int, pairs: list[tuple[int, int]]) -> int:
         """C + sum of u8 products, 32 a step (the chain's C the previous D)."""
@@ -353,7 +349,7 @@ class Circuit:
             a = [x for x, _ in chunk] + [0] * (32 - len(chunk))
             b = [y for _, y in chunk] + [0] * (32 - len(chunk))
             self.n["IMMA.u8.u8.SAT (silicon model)"] += 1
-            word = IMMA_U8.step(word, a, b)
+            word = evaluate(IMMA_U8_STEP, word, a, b)[0]
         return word
 
     def normalize(self, cols: list[int], width: int) -> tuple[list[int], int]:
@@ -462,7 +458,7 @@ def section_encode_in_circuit(prims: dict[str, PrimitiveDefinition], rng: random
     for w in range(words):
         m = int.from_bytes(bytes(rng.randrange(256) for _ in range(f.word_bytes - 1)), "little")
         i = rng.randrange(1 << 20)
-        ckt = Circuit(prims)
+        ckt = ModArith(prims)
         t = ckt.mul(digits(k.tau), digits(i))
         x = digits(m)
         for r, c in enumerate(k.c):
@@ -477,7 +473,7 @@ def section_encode_in_circuit(prims: dict[str, PrimitiveDefinition], rng: random
     # Comparison-only carries: the same circuit with every `split` by compares and selects, checked on modular products,
     # its encode census the measured one with each carry's I32Div + I32Rem replaced by the cmp split's 80 calls.
     p = f.p
-    ckt = Circuit(prims, carry="cmp")
+    ckt = ModArith(prims, carry="cmp")
     cmp_ok = 0
     trials = 4
     for _ in range(trials):
@@ -517,7 +513,7 @@ def main() -> None:
     ap.add_argument("--words", type=int, default=1, help="codec words to encode in-circuit (each ~6,100 modmuls)")
     args = ap.parse_args()
     rng = random.Random(args.seed)
-    prims = load_registry()
+    prims = primitives()
     result = {
         "n_registered_primitives": len(prims),
         "imma": section_imma(rng),

@@ -6,7 +6,7 @@ Content-neutral by construction: CPython's cyclic collector only frees objects t
 artifact byte, digest, verdict or population depends on WHEN it runs. What depends on it is wall time. With the
 interpreter defaults (700, 10, 10) a full (gen-2) collection is triggered every time the long-lived heap has grown
 25 %, and each one walks the whole resident graph -- the fold at llama B8 256/32 ran 24 gen-2 + 3,073 gen-1
-collections (mfast M-1147: fold 35.5 -> 23.5 s wall with (100000, 50, 1000), peak RSS +3.5 %); at B8 1024/128 the
+collections (fold 35.5 -> 23.5 s wall with (100000, 50, 1000), peak RSS +3.5 %); at B8 1024/128 the
 resident fold graph is ~27 GB and each full collection is tens of seconds; the B8 1024/128 envelope's derive takes 203 s
 at the defaults and 173 s tuned, to the same Program. gc.disable() is NOT the choice: the replay's cyclic garbage then
 stays resident (+38 % RSS at 256/32).
@@ -28,8 +28,9 @@ from __future__ import annotations
 import atexit
 import contextlib
 import gc
-import os
 from collections.abc import Iterator
+
+from verity_vllm import settings
 
 ENV = "VERITY_GC_THRESHOLDS"
 TUNED = (100_000, 50, 1000)
@@ -39,7 +40,7 @@ _freeze_registered = False
 
 def thresholds(env: str = ENV) -> tuple[int, int, int] | None:
     """The configured thresholds, or None when the interpreter is to be left alone."""
-    raw = os.environ.get(env, "").strip().lower()
+    raw = settings.get(env)
     if raw in LEAVE:
         return None
     if not raw:

@@ -1,14 +1,15 @@
 """G2: the served Commit's measured overhead over stock, per model, GPU, batch and phase, and the best achievable, rendered from
-the evidence store only (CIR-26). G2 has no pass/fail number: it is this curve.
+the evidence store only. It measures nothing: the runs it reads are `benchmarks/served_commit`'s and the hash loop's.
+G2 has no pass/fail number: it is this curve.
 
 Where the numbers come from:
-- Runs labeled campaign=g2 (`research data label RUN campaign g2 --by circuits --ref RUN`). The run's record
+- Runs labeled campaign=g2 in the store (a run counts once it carries that label). The run's record
   (`outputs.run_record`) holds verity-bench result docs (`*bench/result.json`, schema verity-bench/vllm-overhead/v1, from
   served_commit's `run.sh` or `prof.sh`: TP1 engines under vLLM's serving defaults) or tp_decode summaries
-  (`out/<arm>/summary.json`, `tp_decode.sh`: GLM-5.3 TP8 eager, the mode of GLM-5.3's row of record). A tp_decode arm's value
-  retention is its summary's `retain`; a run older than that field took it from `RETAIN=` on its command line when it ran T1R's
-  wrapper (`tp_decode_retain.sh`), and otherwise retained none, which `tp_decode.sh` exported before it took `RETAIN`.
-- The hash loop's results (campaign=hash-loop, kind bench-result/v1, `benchmarks/hash/loop/collect.py`'s): Qwen3-8B B32
+  (`out/<arm>/summary.json`, `tp_decode.sh`: GLM-5.3 TP8 eager, the mode of GLM-5.3's workload of record). A tp_decode arm's value
+  retention is its summary's `retain`; a run older than that field took it from `RETAIN=` on its command line when it ran the
+  retain wrapper (`tp_decode_retain.sh`), and otherwise retained none, which `tp_decode.sh` exported before it took `RETAIN`.
+- The hash loop's results (campaign=hash-loop, kind bench-result/v1, from the loop's collector): Qwen3-8B B32
   compiled, one result per iteration and GPU, from the loop branch. Only workload qwen3-8b is read: the loop's glm-5.3 rows
   are copies of campaign=g2 runs, and its other workloads aren't G2's models. Each result's run is read too, for its TTFT
   and ITL, under the loop's verdict on it. A run the loop's job made (`ROW` and `HYP` in its env, a re-run `redteam-N`
@@ -28,8 +29,8 @@ tp_decode's min and max over its pairs, or the loop's interval where it has one:
 An arm's scheme follows its name (`classify`): rows-sha512 (served-commit-rows*, tp_decode's rows*, the loop's sha512*);
 vllm-v1 (served-commit, served-commit-prof, served-commit-nativedrain*, ...: SHA-256 position leaves, kept in the table and
 never counted, by the one-hash rule); rows-blake3 (the loop's research arm, never counted). `-layer` arms acquire only each
-layer's residual stream, K and V (their roots are no scheme's: the per-layer unit is PRF-62's question, not the Commit of
-record), and `-4k` arms hash 4 KiB rows, rows-sha512's row size since the loop's iteration 1 (PRF-64); the loop's rows are 4
+layer's residual stream, K and V (their roots are no scheme's: the per-layer proof block is an open question, not the Commit of
+record), and `-4k` arms hash 4 KiB rows, rows-sha512's row size since the loop's iteration 1; the loop's rows are 4
 KiB from that iteration on, and every other rows arm (`rows`, `served-commit-rows`) hashes 256 B rows, the size before. A
 what-if arm (`whatif` in its name) commits less than the Commit and never counts. A compiled
 measure counts only under its Build of record's compile artifact (`pin` pinned, from the run's served-pin check), on the GPU
@@ -45,7 +46,7 @@ exists. Beside them, the lowest vllm-v1 ratio under the same rules but the hash.
     uv run --no-project --with matplotlib python3 benchmarks/g2/curve.py [--out DIR] [--no-refresh]
 
 Writes DIR/g2-curve.md (the curve, then every measure), DIR/g2-curve.png and DIR/g2-curve.json (every measure); DIR defaults
-to $OUT, else ./out. `research data refresh` first (a run publishes from its node), unless --no-refresh.
+to $OUT, else ./out. It refreshes the store's catalog first (a run publishes from its node), unless --no-refresh.
 """
 from __future__ import annotations
 
@@ -68,8 +69,8 @@ HARNESS = {"time_to_first_token_s": ("prefill", "ttft"), "inter_token_latency_p5
            "inter_token_latency_p99_s": ("decode", "itl_p99"), "time_per_output_token_s": ("run", "tpot"),
            "tokens_per_s": ("run", "tput")}
 LOOP_ARMS = {"sha512": "served-commit-rows", "sha512-layer": "served-commit-rows-layer", "blake3": "served-commit-rows-blake3"}
-LOOP_RETAIN = "none"   # every arm LOOP_ARMS names is defined with retain="none" (served_commit/prof_arm.py, hash/loop/arms.py)
-LOOP_4K_FROM = 1   # the loop's iteration 1 set rows-sha512's rows to 4 KiB (PRF-64)
+LOOP_RETAIN = "none"   # every arm LOOP_ARMS names is defined with retain="none" (served_commit/prof_arm.py, and the hash loop's arms)
+LOOP_4K_FROM = 1   # the loop's iteration 1 set rows-sha512's rows to 4 KiB
 ROW_BYTES = 4096   # rows-sha512's row size since then
 RETAINS = ("host", "device", "none")   # the curve's retention columns, in order
 SCHEME_ROWS, SCHEME_V1, SCHEME_B3 = "rows-sha512", "vllm-v1", "rows-blake3"
@@ -228,8 +229,8 @@ def harness_measures(doc: dict, *, run: str, source: str, pin: str, device: str 
 
 
 def tp_retain(summary: dict, params: dict) -> str:
-    """A tp_decode arm's value retention: its summary's, else the RETAIN its run (the attempt's `params`: argv and env) gave T1R's
-    wrapper (`tp_decode_retain.sh`, which set `tp_decode.sh`'s VERITY_RETAIN from it, and refused to run without it), else none,
+    """A tp_decode arm's value retention: its summary's, else the RETAIN its run (the attempt's `params`: argv and env) gave the
+    retain wrapper (`tp_decode_retain.sh`, which set `tp_decode.sh`'s VERITY_RETAIN from it, and refused to run without it), else none,
     which `tp_decode.sh` exported before it took RETAIN."""
     if summary.get("retain"):
         return str(summary["retain"])
@@ -451,8 +452,8 @@ def report(measures: list[Measure]) -> str:
         ("Ratios are the Commit arm over stock in the same run (1.00x is no overhead); brackets are the 95% interval over "
          "interleaved reps, or the min and max over tp_decode's pairs. prefill ttft is time to first token; decode itl_p50 is "
          "per-token latency p50, and decode step the mean decode step; run tpot is the run's wall per output token, prefill "
-         "included. Full Commit commits every value; per-layer commits each layer's residual stream, K and V only (PRF-62's "
-         "unit, whose roots are no scheme's). Each is split by value retention: host keeps every committed value in host "
+         "included. Full Commit commits every value; per-layer commits each layer's residual stream, K and V only (a "
+         "proof block whose roots are no scheme's). Each is split by value retention: host keeps every committed value in host "
          "memory for openings (GLM-5.3's mode of record); none keeps only the authentication state, so openings replay. A "
          "cell shows rows-sha512 at its 4 KiB rows where it has such a measure, else at the former 256 B rows (arm `rows` or "
          "`served-commit-rows`, named in the cell). A compiled measure counts only pinned to its Build of record."),
@@ -582,7 +583,7 @@ def load(refresh: bool = True) -> list[Measure]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=Path(os.environ.get("OUT", "out")))
-    ap.add_argument("--no-refresh", action="store_true", help="read this store's catalog as it is (no `research data refresh`)")
+    ap.add_argument("--no-refresh", action="store_true", help="read this store's catalog as it is, without refreshing it first")
     a = ap.parse_args()
     measures = load(refresh=not a.no_refresh)
     if not measures:

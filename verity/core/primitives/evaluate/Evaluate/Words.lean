@@ -1,10 +1,11 @@
-import Evaluate.Casts
-import Evaluate.TC.Dots
+module
+
+public import Evaluate.Casts
 
 /-!
 # PoUW's and NCP's word primitives
 
-Executable transcriptions of `verity.core.protocols.pouw.circuit.words` (the `Pouw*` primitives: `ncp-v2`'s word
+Executable transcriptions of `verity.ml.protocols.pouw.circuit.words` (the `Pouw*` primitives: `ncp-v2`'s word
 operations, Pearl-C4's tile check, Pearl-C's exact sums of squares and its cap's window words and salt-dead bit) and of the
 three `Ncp*` primitives of the vLLM integration's `pouw_rows`. Words as in `Evaluate.Scalar`; `sx` reads a two's-complement
 encoding as the Python's `sx` does, and a signed result is taken mod `2^k` as the Python's `& (2^k - 1)` (`lowBits`).
@@ -14,6 +15,8 @@ copied here, and the two it states over rationals (`eTildeWord`, `sqrtWord`) are
 definition each must equal. `Pouw.NCP.accWFrom` is route U's int32 accumulator, of which `PouwDot16U8S8_v1` is 16 steps.
 Security defines none of the others: the Python function is the definition.
 -/
+
+@[expose] public section
 
 namespace Evaluate.Words
 

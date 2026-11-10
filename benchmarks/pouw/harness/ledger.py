@@ -4,10 +4,10 @@ prose.
 
 A record's meta is everything the run knows, numbers included: the kernel variant (`verity.core.protocols.pouw.serving.KernelVariant`'s
 id, ``{family}-{device}/{source_sha256[:12]}``), the parent attempt, the tier, the harness commit and gate version, the
-metrics and the per-step time split, γ at both FP32 prices, the verifier's lines, and the one-line hypothesis. Judgments
+metrics and the per-step time split, the gap at both FP32 prices, the verifier's lines, and the one-line hypothesis. Judgments
 that change after the run are labels on it (`KERNEL_OUTCOME`, `KERNEL_REASON`), since a record is immutable.
 
-γ is never typed. It is looked up (`price_twins.lookup`) from the Lean-pinned price twins of the attempt's statement (its
+The gap is never typed. It is looked up (`price_twins.lookup`) from the Lean-pinned price twins of the attempt's statement (its
 panel line and version) on the priced path it ran (the gate's ``prices``, from the variant's), at both FP32 prices, and the
 larger is published. An arm whose lineage declares ``gamma`` gets no record (`typed_gamma`); the arm's own `Work.gamma`
 is kept as ``arm_claim`` and never published.
@@ -36,21 +36,23 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import price_twins as P
+from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
+settings = of(__file__)
 
 KIND = "kernel-attempt/v1"
 #: the gate code's version, so a record's validity is derived from it rather than voided by hand: 1 = the reference verifier
-#: accepts the timed run's own transcript (08:35Z); 2 = outputs poisoned before the dumped call and a no-write
-#: negative control the verifier rejects (11:50Z)
+#: accepts the timed run's own transcript; 2 = outputs poisoned before the dumped call and a no-write
+#: negative control the verifier rejects
 GATES = "pouw-gates/2"
 GATES_REQUIRED = 2
 TIERS = ("1", "2a", "2b", "3")
 OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
 #: label keys (`research.store.vocab`): the producing lane about its own attempt
 KERNEL_OUTCOME, KERNEL_REASON = "kernel_outcome", "kernel_reason"
-#: a call's step groups, as `verity.core.protocols.pouw.serving.GROUPS` (#567) names them; checked against it when it is importable
+#: a call's step groups, as `verity.core.protocols.pouw.serving.GROUPS` names them; checked against it when it is importable
 GROUPS = ("row_seeds", "a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 PHASES = ("before", "gemm", "after")
 ONE_LINE = 240
@@ -67,9 +69,9 @@ def _import_path(rel: str) -> None:
 
 
 def serving():
-    """`verity.core.protocols.pouw.serving` when importable (#567), else None."""
+    """`verity.core.protocols.pouw.serving` when importable, else None."""
     try:
-        from verity.core.protocols.pouw import serving as S  # noqa: PLC0415
+        from verity.core.protocols.pouw import serving as S
     except ImportError:
         return None
     return S if hasattr(S, "KernelVariant") else None
@@ -78,15 +80,15 @@ def serving():
 def store_module():
     """`research.store.local` and `research.store.vocab`, from the environment or this checkout."""
     try:
-        from research.store import local, vocab  # noqa: PLC0415
+        from research.store import local, vocab
     except ImportError:
         _import_path("tools/research/src")
-        from research.store import local, vocab  # noqa: PLC0415
+        from research.store import local, vocab
     return local, vocab
 
 
 def now() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def one_line(s: str | None, what: str) -> str | None:
@@ -160,21 +162,22 @@ def variant_record(*, family: str, device: str, schemes: Iterable[str], sources:
     return rec
 
 
-# ---- γ at both FP32 prices, from the Lean-pinned price twins ------------------------------------------------------------------
+# ---- the gap at both FP32 prices, from the Lean-pinned price twins ------------------------------------------------------------
 
 
 def typed_gamma(result: dict) -> dict[str, str]:
-    """The arms whose build record types γ in (a lineage ``gamma``): they get no record, since γ comes from the pins."""
+    """The arms whose build record types the gap in (a lineage ``gamma``): they get no record, since the gap comes from
+    the pins."""
     out = {}
     for name, arm in (result.get("arms") or {}).items():
         lineage = ((arm or {}).get("build") or {}).get("lineage") or {}
         if "gamma" in lineage:
-            out[name] = ("γ is typed into its lineage: the ledger looks γ up from the Lean-pinned price twins on the "
-                         "priced path the attempt ran (the variant's prices), so drop lineage.gamma and declare the path")
+            out[name] = ("the gap is typed into its lineage: the ledger looks it up from the Lean-pinned price twins on "
+                         "the priced path the attempt ran (the variant's prices), so drop lineage.gamma and declare the path")
     return out
 
 
-#: `verity.core.protocols.pouw.serving.SchemeId`'s FP8 grammar (#567), where the device names the record: sm120 (G = 4) is the panel's v1,
+#: `verity.core.protocols.pouw.serving.SchemeId`'s FP8 grammar, where the device names the record: sm120 (G = 4) is the panel's v1,
 #: sm120-unpromoted its v2; an older name (``pearl-c-sm120-v2-hot-h3``) isn't checked
 _SCHEME = re.compile(r"pearl-c-(?P<device>sm120|sm120-unpromoted)-(?:v0|v1)(?:-h[0-9]+)?(?:@[a-z0-9_]+)?")
 
@@ -191,9 +194,9 @@ def _scheme_conflict(scheme: str | None, statement: str | None) -> str | None:
 
 def gamma(twins: list[dict] | None, panel: dict | None, scheme: str | None, gate: dict, shape: dict,
           arm_claim: Any) -> dict:
-    """γ as the record keeps it: the forming-credited twins at both FP32 prices and the larger published, the chain-only
-    reading beside it, every pin with its status (pinned in the Lean store, or staged), and the arm's own derivation kept
-    as ``arm_claim``, never published."""
+    """The gap as the record keeps it (under ``gamma``, its stored key): the forming-credited twins at both FP32 prices and
+    the larger published, with its advantage ε = g/(1 − g) as ``eps``, the chain-only reading beside it, every pin with
+    its status (pinned in the Lean store, or staged), and the arm's own derivation kept as ``arm_claim``, never published."""
     stmt = P.statement((panel or {}).get("line"), (panel or {}).get("version"))
     if twins is None:
         out = {"statement": stmt, "path": gate.get("prices"), "published": None, "by_price": {},
@@ -207,8 +210,14 @@ def gamma(twins: list[dict] | None, panel: dict | None, scheme: str | None, gate
     if conflict:
         out["missing"].append(conflict)
         out["published"] = None
+    out["eps"] = None if out["published"] is None else str(eps(Fraction(out["published"])))
     out["arm_claim"] = arm_claim
     return out
+
+
+def eps(gap: Fraction) -> Fraction:
+    """The adversary's advantage ε that a gap g carries: g/(1 − g) (Lean `Pouw.Proofs.gGap_iff_gε`)."""
+    return gap / (1 - gap)
 
 
 def _twins() -> list[dict] | None:
@@ -251,7 +260,8 @@ def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: di
     arm at the shape passed (``exact``), the transcript the harness dumped from poisoned buffers verified
     (``poisoned_accepted``: an arm that dumps its own gets False), every control of the arm rejected (the harness's
     known-bad variants and the verifier's negative control), the SASS gate held. ``schedules_equal`` holds trivially for a
-    variant with one schedule; the harness doesn't compare schedules, so it is None otherwise."""
+    variant with one schedule; the harness doesn't compare schedules, so it is None otherwise. ``fold_bound`` is None: the
+    harness's exact check holds every output, none left past a fold's bound."""
     keys = [g for g in result.get("gates") or [] if len(g.get("key", [])) > 2 and g["key"][0] in ("arm", "chain")
             and g["key"][1] == shape["label"] and g["key"][2] == arm]
     negs = [x for x in result.get("negative_controls") or [] if arm in (x.get("key") or [])]
@@ -266,7 +276,8 @@ def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: di
             "poisoned_accepted": bool(verdict.get("accepted")) and poisoned,
             "controls_rejected": bool(negs) and all(x.get("rejected") for x in negs) and bool(verdict.get("negative_control")),
             "schedules_equal": True if len(schedules) <= 1 else None,
-            "sass_ok": bool(sass.get("ok")), "toolkit": ",".join(toolkits) or None, "prices": (variant or {}).get("prices")}
+            "sass_ok": bool(sass.get("ok")), "toolkit": ",".join(toolkits) or None, "prices": (variant or {}).get("prices"),
+            "fold_bound": None}
 
 
 def _metrics(r: dict, p: dict) -> dict:
@@ -308,7 +319,7 @@ def records(result: dict, *, run_id: str, commit: str | None, tier: str = "2a", 
             time: str | None = None, twins: list[dict] | None | str = "table") -> list[dict]:
     """One record per arm row of every shape in a verified result (`verify.py`'s rewritten RESULT_JSON): ``kind``,
     ``meta``, ``refs`` and the ``labels`` to assert. `hypothesis`, `parent`, `outcome` and `reason` (the run's, from
-    verify.py's flags) win over the arm's lineage. An arm that types γ in (`typed_gamma`) gets none. `twins` is the
+    verify.py's flags) win over the arm's lineage. An arm that types the gap in (`typed_gamma`) gets none. `twins` is the
     price-twin table (default: `price_twins.json`)."""
     if tier not in TIERS:
         raise LedgerError(f"tier {tier!r} is not one of {TIERS}")
@@ -526,13 +537,14 @@ def panel_row(art: str, meta: dict, labels: dict) -> dict | None:
         what.append("mechanism " + ", ".join(meta["mechanism"]))
     gm = meta.get("gamma") or {}
     if g is not None:
-        what.append(f"γ {gm.get('path')} at FADD {gm.get('published_at')}, the larger, from "
-                    + ("staged price twins (not yet in the Lean store)" if "staged" in (gm.get("pins") or []) else
-                       "Lean-store price twins"))
+        what.append(f"ε {float(eps(Fraction(g))):.4%} from the gap on {gm.get('path')} at FADD {gm.get('published_at')}, "
+                    "the larger, from " + ("staged price twins (not yet in the Lean store)"
+                                           if "staged" in (gm.get("pins") or []) else "Lean-store price twins"))
     else:
-        what.append("γ not published: " + "; ".join(gm.get("missing") or ["no price twin"]))
+        what.append("ε not published: " + "; ".join(gm.get("missing") or ["no price twin"]))
     if outcome:
         what.append(f"outcome {outcome}" + (f": {reason}" if reason else ""))
+    # "gamma" is panel.py's column for the gap g
     row = {"attempt": panel.get("attempt"), "line": panel["line"], "version": panel["version"],
            "precision": meta.get("stream"), "phase": phase, "shape": shape if tier == "2b" else f"{shape}:screen",
            "kind": "measured", "slowdown": mt["slowdown"], "lo": None, "hi": None,
@@ -571,7 +583,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("publish", help="put a run's records (its ledger/ directory) into the store")
     p.add_argument("run", type=Path, help="the run's directory, or its result JSON")
-    p.add_argument("--by", default=os.environ.get("GPU_LEASE_WHO") or os.environ.get("RESEARCH_LANE"))
+    p.add_argument("--by", default=settings.GPU_LEASE_WHO or settings.RESEARCH_LANE)
     o = sub.add_parser("outcome", help="label an attempt: screened, frontier, kept, dropped, voided or superseded")
     o.add_argument("art")
     o.add_argument("outcome", choices=OUTCOMES)
@@ -602,7 +614,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{a.art}: {', '.join(done) or 'unchanged'}")
         else:
             if a.refresh:
-                from research.store import cli as SC  # noqa: PLC0415
+                from research.store import cli as SC
                 SC.main(["refresh"] + (["--store", a.store] if a.store else []))
             rows = panel_rows(attempts(st))
             if a.json:

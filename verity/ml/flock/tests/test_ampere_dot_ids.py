@@ -1,5 +1,5 @@
 """The Ampere tensor-core step under both ids, the vLLM registry's ``AmpereBF16TcDot16_v1`` and core's ``_v2``: the same
-function on the A100 / RTX 4090 captures and on random finite and non-finite words, and C-Flock lowers a program using either
+function on the A100 / RTX 4090 captures and on random finite and non-finite words, and Flock lowers a program using either
 to the same circuit, gate for gate."""
 from __future__ import annotations
 
@@ -11,13 +11,13 @@ from pathlib import Path
 from verity.ml.circuits.defs import PrimitiveDefinition, bind
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16
 from verity.ml.circuits.silicon.total import tc_dot_total
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
 
 CAPTURES = Path(__file__).resolve().parents[2] / "circuits" / "ops" / "tests" / "fixtures" / "tc-total-2026-09-07"
-#: the vLLM registry's _v1 (verity_vllm.program.registry.prims) restated as its body is, so this backend test needs no integration
+#: the vLLM registry's _v1 (verity.ml.definitions.registry.prims) restated as its body is, so this backend test needs no integration
 V1 = PrimitiveDefinition("AmpereBF16TcDot16", 1, P.AmpereBF16TcDot16.params, P.F32,
                          lambda acc, *ab: tc_dot_total(AMPERE_BF16_M16N8K16, acc, tuple(ab[:16]), tuple(ab[16:32])), register=False)
 V2 = P.AmpereBF16TcDot16

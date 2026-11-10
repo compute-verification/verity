@@ -1,7 +1,7 @@
 """The one hash function of the POC and its tags.
 
-``H``, the leaf/node/lift/ids/empty tags and their rules are core's (:mod:`verity.ml.commitments.leaves`); :func:`ids_digest`
-here hashes the ids in the order given (callers pass them already in tree order).
+``H``, the leaf/node/lift/ids/empty tags and their rules, ``ids_digest`` among them, are core's
+(:mod:`verity.ml.commitments.leaves`).
 
 Byte layout of ``H(tag, *parts)`` (SHA-256 over a single stream)::
 
@@ -23,14 +23,13 @@ tag                             parts, in order
 ``verity-vllm/ids/v1``          the sorted canonical ids of a tree, one UTF-8 part each
 ``verity-vllm/empty/v1``        (no parts) -- the root of a tree with zero leaves
 ``verity-vllm/json/v1``         canonical JSON bytes of a document (manifest, description...)
-``verity-vllm/challenge/v1``    the bound digests and the sample of a challenge (see relations)
+``verity-vllm/challenge/v1``    the bound digests and the sample of a challenge
 ==============================  ==============================================================
 
 *Shape text* is ``"[" + ",".join(str(d) for d in shape) + "]"`` with no spaces; a scalar is
-``"[]"``.  *dtype* is the torch dtype name without the ``torch.`` prefix (``"bfloat16"``), see
-:mod:`verity_vllm.program.dtypes`.  *value* is the exact little-endian device bytes of the tensor in
-C order: BF16 is 2 bytes per element, FP8 1 byte, packed INT4 exactly as stored.  No conversion
-before hashing.
+``"[]"``.  *dtype* is the torch dtype name without the ``torch.`` prefix (``"bfloat16"``).  *value*
+is the exact little-endian device bytes of the tensor in C order: BF16 is 2 bytes per element, FP8
+1 byte, packed INT4 exactly as stored.  No conversion before hashing.
 
 Reference implementation in Python (what W1 can copy verbatim)::
 
@@ -47,7 +46,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable
 from typing import Any
 
 from verity.ml.commitments.leaves import (
@@ -59,6 +57,7 @@ from verity.ml.commitments.leaves import (
     NODE_TAG,
     H,
     empty_root,
+    ids_digest,
     leaf_hash,
     lift_hash,
     node_hash,
@@ -74,12 +73,6 @@ JSON_TAG = "verity-vllm/json/v1"
 CHALLENGE_TAG = "verity-vllm/challenge/v1"
 
 FRAME_DESCRIPTION = "sha256(u32be(len(tag)) || tag || (u64be(len(part)) || part)*)"
-
-
-def ids_digest(sorted_ids: Iterable[str]) -> bytes:
-    """Digest of a tree's canonical ids in tree (code-point) order, so an opening cannot be
-    replayed under another tree with the same root width."""
-    return H(IDS_TAG, *(cid.encode("utf-8") for cid in sorted_ids))
 
 
 def canonical_json_bytes(document: Any) -> bytes:

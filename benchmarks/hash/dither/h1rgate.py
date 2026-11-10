@@ -4,14 +4,14 @@ kernel version (`--versions`) gated in the same run before any is timed.
 One step of Llama-3.1-8B's 128 served linears (layer by layer qkv, o, gate_up, down, B the int8 pin's weights as vLLM merges
 them) at T slots, each call's first M_c slot rows random s8 and admitted, the rest zero (`served_h1`'s slot table), its units
 at SERVE-H1's static positions (step s, `serve.static_layout`), a random salt and random roots.  Calls alternate M_c between
-two counts, so some calls have a dead row block.
+two counts, so some calls have a dead row tile.
 
-    gate     per version, h1r into an output poisoned with 0xA5, against `served_h1/receipts.gated_receipts` (CA's torch
-             path, its noise through CA's `noise.cu`, computed once) on every unit of every call; `h1tile.reference`
+    gate     per version, h1r into an output poisoned with 0xA5, against `pouw_h1_receipts.gated_receipts` (vllm's
+             torch chain, its noise through `pouw_cuda`'s `noise.cu`, computed once) on every unit of every call; `h1tile.reference`
              (`receipts.gated_reference`) on chosen units (K = 4096 and 14336, first and last, a dead one); a no-write control
              (nowrite: the poison must survive and be refused); the launch captured as a CUDA graph and replayed into a fresh
              poison, then under a second salt written into the same device buffer (as a served step does), each against
-             receipts.py on sampled units
+             receipts.py on sampled proof blocks
     time     each version's graph, replayed in turn REPS times between CUDA events: the step's receipts, per live unit, at
              T = 64 and T = 256
 
@@ -26,25 +26,28 @@ import statistics
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT / "benchmarks" / "pouw" / "served_h1"))
 sys.path.insert(0, str(ROOT))
 
-import receipts as RC  # noqa: E402
+from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
 
 from h1r import H1R, Call, words  # noqa: E402
+
+if TYPE_CHECKING:
+    from h1r import Plan
 
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
 LAYERS = 32
 POISON = np.uint32(0xA5A5A5A5).view(np.int32)
 
 
-def weights(dev) -> list[torch.Tensor]:
+def weights(dev: torch.device) -> list[torch.Tensor]:
     """The 128 served linears' int8 weights [N, K] in SERVE-H1's order, merged as vLLM merges them."""
     from safetensors import safe_open
     idx = json.loads((Path(PIN) / "model.safetensors.index.json").read_text())["weight_map"]
@@ -68,7 +71,8 @@ def weights(dev) -> list[torch.Tensor]:
     return out
 
 
-def step(ws: list[torch.Tensor], t: int, rows: tuple[int, int], s: int, seed: int, dev):
+def step(ws: list[torch.Tensor], t: int, rows: tuple[int, int], s: int, seed: int,
+         dev: torch.device) -> tuple[list[Call], list[dict]]:
     """The step's calls (h1r's and receipts.py's view of each) at T = t, call i admitting rows[i % 2] slots."""
     g = torch.Generator(device="cpu").manual_seed(seed)
     rng = np.random.default_rng(seed)
@@ -94,11 +98,12 @@ def step(ws: list[torch.Tensor], t: int, rows: tuple[int, int], s: int, seed: in
     return calls, meta
 
 
-def ours(plan, i: int) -> np.ndarray:
+def ours(plan: Plan, i: int) -> np.ndarray:
     return plan.receipts(i).cpu().numpy().view(np.uint32)
 
 
-def gate(lib, v: int, calls, meta, salt: bytes, salt_dev, want: list, refs_want: list, replay_want: list) -> dict:
+def gate(lib: H1R, v: int, calls: list[Call], meta: list[dict], salt: bytes, salt_dev: torch.Tensor, want: list,
+         refs_want: list, replay_want: list) -> dict:
     """Version v against the step's answers (computed once, for every version)."""
     doc: dict = {"version": v}
     plan = lib.plan(calls)

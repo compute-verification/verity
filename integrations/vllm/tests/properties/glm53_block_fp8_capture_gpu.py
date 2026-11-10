@@ -155,7 +155,7 @@ def served() -> dict[str, Any]:
 def launch_dot(config: dict[str, Any], swap: bool):
     """The e4m3 k32 step a `fused_moe_kernel` launch's tile compiles to, the DOT its Programs bind (`fp8_moe.sm90_dot`; Triton's
     default 4 warps when the config names none)."""
-    from verity_vllm.program.registry.fp8_moe import sm90_dot
+    from verity.ml.definitions.registry.fp8_moe import sm90_dot
 
     return sm90_dot(config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"], config.get("num_warps", 4), swap)
 
@@ -273,7 +273,7 @@ def _halves_step(model, halves) -> Callable:
     """A k32 e4m3 step of `fp8_moe_rows.TWIN_DOTS`' signature: the bytes widened to bf16, then `model`'s k16 step over each index
     set of `halves` in turn, each from the previous one's result."""
     from verity.ml.kernels.tc import group_sum_total_batch
-    from verity_vllm.program.kernels.fp8_moe_rows import E4M3_AS_BF16, E4M3_NAN
+    from verity.ml.definitions.numerics.fp8_moe_rows import E4M3_AS_BF16, E4M3_NAN
 
     def step(acc, a, b):
         acc = np.asarray(acc, dtype=np.uint32)
@@ -290,8 +290,8 @@ def _halves_step(model, halves) -> Callable:
 def _fma_chain(acc, a, b):
     """Thirty-two IEEE FMAs in k order, each product exact: a dot with no grouped adder."""
     from verity.ml.circuits.silicon.cast import e4m3_to_f32_word
-    from verity_vllm.program.kernels.derived_rows import fma_rn
-    from verity_vllm.program.kernels.fp8_moe_rows import E4M3_NAN
+    from verity.ml.definitions.numerics.derived_rows import fma_rn
+    from verity.ml.definitions.numerics.fp8_moe_rows import E4M3_NAN
 
     f32 = np.array([e4m3_to_f32_word(e) for e in range(256)], dtype=np.uint32)
     acc = np.asarray(acc, dtype=np.uint32)
@@ -306,8 +306,8 @@ def mmav2_alternatives() -> dict[str, Callable]:
     """The models of `HopperE4m3MmaV2Dot32_v1` the MMAv2 probe must refute, each a k32 step: the twin is core's
     `HOPPER_BF16_M16N8K16` (one group of 16, adder width 26) over `MMAV2_HALVES` (k mod 4 < 2, then >= 2)."""
     from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16
-    from verity_vllm.program.kernels.derived_rows import tc_dot32_e4m3
-    from verity_vllm.program.kernels.fp8_moe_rows import MMAV2_HALVES
+    from verity.ml.definitions.numerics.derived_rows import tc_dot32_e4m3
+    from verity.ml.definitions.numerics.fp8_moe_rows import MMAV2_HALVES
 
     natural = (np.arange(16), np.arange(16, 32))
     alts = {"natural_k": _halves_step(HOPPER_BF16_M16N8K16, natural),
@@ -359,7 +359,7 @@ def moe_sum_probe(seed: int) -> tuple[np.ndarray, list[tuple[int, int]]]:
 def moe_sum_alternatives() -> dict[str, Callable]:
     """The models of `MoeSum_v1` (`bf16_rn` of the f32 sum from +0 over ascending k) the planted rows must refute, each y (..., TOPK,
     H) bf16 words -> (..., H) bf16 words."""
-    from verity_vllm.program.kernels import derived_rows as D
+    from verity.ml.definitions.numerics import derived_rows as D
 
     def fold(order, start_first=False, step=None, final=None):
         def f(y):
@@ -566,7 +566,7 @@ def moe_launches(work: Path, phase: str, name: str, inter: int, M: int, hot: int
     returns (launch records, comparison jobs)."""
     import torch
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
-    from verity_vllm.program.registry.fp8_moe import check_statics
+    from verity.ml.definitions.registry.fp8_moe import check_statics
 
     probe = phase == "mmav2"
     gen = torch.Generator(device="cuda").manual_seed(seed)
@@ -682,12 +682,12 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     read, and the reference on a sample."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.kernels.act_rows import silu_mul_expf_rows
-    from verity_vllm.program.kernels.deepgemm_twins import ue8m0_group_quant_row, ue8m0_group_quant_rows
-    from verity_vllm.program.kernels.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
-    from verity_vllm.program.registry import act as ACT
-    from verity_vllm.program.registry import deepgemm as DG
-    from verity_vllm.program.registry import fp8_moe as MO
+    from verity.ml.definitions.numerics.act_rows import silu_mul_expf_rows
+    from verity.ml.definitions.numerics.deepgemm_twins import ue8m0_group_quant_row, ue8m0_group_quant_rows
+    from verity.ml.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
+    from verity.ml.definitions.registry import act as ACT
+    from verity.ml.definitions.registry import deepgemm as DG
+    from verity.ml.definitions.registry import fp8_moe as MO
 
     rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}}
     out = {"phase": job["phase"], "case": job["case"], "launch": job["launch"], "pair_range": job["pair_range"]}
@@ -758,8 +758,8 @@ def compare_sum(job: dict[str, Any]) -> dict[str, Any]:
     planted rows), and `MoeSumCoordinate_v1` on a sample of the columns and every planted one."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.kernels.rows import moe_sum
-    from verity_vllm.program.registry import moe as MOE_R
+    from verity.ml.definitions.numerics.rows import moe_sum
+    from verity.ml.definitions.registry import moe as MOE_R
 
     rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}}
     a = _load(job["paths"])
@@ -810,7 +810,7 @@ def ptx(triton_cache: Path, tiles: set[tuple[int, int, int, int]] = frozenset())
     """Every `fused_moe_kernel` the run compiled (one Triton cache entry per specialization): its e4m3 `tt.dot` (M, N, K) from the
     TTIR, its warps from the entry's metadata, the DOT family `fp8_moe.sm90_dot` gives that tile, and the family its PTX runs
     (`ptx_family`); ok when every kernel's two agree and every launch's tile (`launch_tile`) is among the kernels."""
-    from verity_vllm.program.registry.fp8_moe import sm90_dot
+    from verity.ml.definitions.registry.fp8_moe import sm90_dot
 
     kernels: dict[str, Any] = {}
     for f in sorted(glob.glob(str(triton_cache / "**" / "fused_moe_kernel*.ptx"), recursive=True)):
@@ -840,11 +840,11 @@ def bind_check(statics: set[tuple[int, int, int, bool, str]]) -> dict[str, Any]:
     with the weight-scale rows each reads; each quant, activation and the sum at the run's sizes."""
     from verity.ml.circuits.evaluation.batch import type_shape
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import act as ACT
-    from verity_vllm.program.registry import deepgemm as DG
-    from verity_vllm.program.registry import fp8_moe as MO
-    from verity_vllm.program.registry import fp8_moe_experts as MX
-    from verity_vllm.program.registry import moe as MOE_R
+    from verity.ml.definitions.registry import act as ACT
+    from verity.ml.definitions.registry import deepgemm as DG
+    from verity.ml.definitions.registry import fp8_moe as MO
+    from verity.ml.definitions.registry import fp8_moe_experts as MX
+    from verity.ml.definitions.registry import moe as MOE_R
 
     out: dict[str, Any] = {}
     inters = sorted({c[1] for c in MOE + MMAV2_PROBE})

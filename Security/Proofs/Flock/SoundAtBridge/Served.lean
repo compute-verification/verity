@@ -1,4 +1,37 @@
-import Proofs.Flock.SoundAtBridge.Statement
+module
+
+public import Proofs.Flock.SoundAtBridge.Session
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The rows link at served roots (trusted)
@@ -13,13 +46,15 @@ value layer is the extractor's and not the committed tree's, and `RelOfRows` fai
 A served root is covered when the service registers its tree as a port of `own` before the session's statement and coin,
 with the prover's commit-time opening as the registrant's (`RowsSession.ServedRegistered`: unit `u`'s opening reads
 exactly `u`'s rows at the ports `own` names, through `own`'s first port of that name, at the position it gives `u`).
-`Flock.Guarantees.ServedRowsLinked` says that then, at every accepted outcome, a drawn unit whose rows are right at its
+`Flock.Guarantees.ServedRowsLinked` says that then, at every accepted outcome, a sampled proof block whose rows are right at its
 owned reads (`RowsAt`) has the committed tree's row at each served read.
 
 `RowsSession.xv_eq_of_rowsAt` gives it from `OwnReadsHJ` at the outcome, and `OwnReadsHJ` at `ServedRegistered` is
 C3's `FlockC3.Compose.ownReads_cover` in this setting (`Proofs.Flock.SoundAtBridge.ServedProof`, whose
 `servedRowsLinked` is the proof). `ServedRegistered` is the one premise: the service's registration of its served trees.
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge
 
@@ -39,10 +74,10 @@ variable (s : RowsSession)
 def ownPort (q : Fin s.c.ports.size) : _root_.Flock.Registered.Port :=
   (s.own.toList.find? (·.name == s.c.ports[q].name)).getD default
 
-/-- **Unit `u`'s served roots are registered** (owner: the proof service, which registers each served tree a relation
+/-- **Unit `u`'s served roots are registered** (owner: the proof system, which registers each served tree a relation
 reads as a port of `own` before the session's statement and coin): `rdU u` reads exactly `u`'s rows at the ports `own`
 names, each through `own`'s first port of that name (`ownPort`), at the position that port gives `u` in every table
-draw that proves it. -/
+sample that proves it. -/
 def ServedRegistered (u : Fin s.n) : Prop :=
   (∀ p, (s.rdU u).isRead p ↔
       ∃ q : Fin s.c.ports.size, p = .inl (u, q) ∧ ∃ pt ∈ s.own, pt.name = s.c.ports[q].name) ∧
@@ -78,16 +113,15 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open Classical
 
-/-- **C-Flock's rows link at served roots.** At a C-Flock session (`RowsSession`) whose circuit names each port once,
-at every outcome of its live audit (draw `S`, registration `R`, the record `wr` writes) that flock-verify `--zk
---registered` accepts, a drawn unit `u` whose served roots are registered (`ServedRegistered`: its opening `rdU u` reads
-exactly its rows at the ports `own` names, as `own` gives them) and whose rows are right at its owned reads (`RowsAt`)
-has, on each of its wires at a served read, the committed tree's row: the value layer's bit (`Xv`) is the registrant's
-row's. With `RelOfRows`, a relation that reads its operand leaves and receipt at served reads then reads the committed
-trees'. -/
+/-- **Flock's rows link at served roots.** At a Flock session (`RowsSession`), at every outcome of its live audit
+(sample `S`, registration `R`, the record `wr` writes) that flock-verify `--zk --registered` accepts, a sampled proof block `u`
+whose served roots are registered (`ServedRegistered`: its opening `rdU u` reads exactly its rows at the ports `own`
+names, as `own` gives them) and whose rows are right at its owned reads (`RowsAt`) has, on each of its wires at a served
+read, the committed tree's row: the value layer's bit (`Xv`) is the registrant's row's. Acceptance names each port of
+the circuit once (`Registered.namesOnce`), so nothing is asked of the circuit's names. With `RelOfRows`, a relation that
+reads its operand leaves and receipt at served reads then reads the committed trees'. -/
 def ServedRowsLinked : Prop :=
-  ∀ (s : RowsSession), (∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q') →
-    ∀ (S : Finset (Fin s.n)) (R : s.Reg)
+  ∀ (s : RowsSession) (S : Finset (Fin s.n)) (R : s.Reg)
       (o : LiveOutJ (planZHJ (Reg := s.Reg) s.dj s.y₀ S R).length (mPtsOf s.c.g (s.kd / nTab s.I))) (u : Fin s.n),
       LiveAcceptsZKR s.I s.own (R, S, s.wr S R o) → u ∈ S → s.ServedRegistered u →
       s.RowsAt (R, S, s.wr S R o) u →

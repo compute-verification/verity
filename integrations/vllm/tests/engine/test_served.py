@@ -1,6 +1,6 @@
 """`engine.served`: what sets each kernel-selecting switch of a served engine (vLLM's own config among them), the verdict on what a
-serving process reads back, the read-back itself, that every row file gives a reason for each switch it moves away from vLLM's
-default, and that a row's Build and its engine run under one batch invariance."""
+serving process reads back, the read-back itself, that every workload file gives a reason for each switch it moves away from vLLM's
+default, and that a workload's Build and its engine run under one batch invariance."""
 from __future__ import annotations
 
 import enum
@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity_vllm.config import WORKLOADS, RowId, row_execution
+from verity_vllm.config import WORKLOADS, RowId, row_execution, workload_files
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import served as SV
 from verity_vllm.engine import vllm_adapter as va
@@ -19,18 +19,21 @@ from verity_vllm.pipeline import row_records
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 GLM = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
-#: The switches GLM-5.3's Commit of record ran under (art:4b274f2088e57bbb01800948211a04c35b346b973dafa7214a090a202ed5b886,
-#: versions.json: ``env`` VLLM_BATCH_INVARIANT=0, VLLM_USE_V2_MODEL_RUNNER=1, VLLM_USE_FLASHINFER_SAMPLER=0,
-#: VLLM_DISABLE_SHARED_EXPERTS_STREAM=1, no VLLM_USE_DEEP_GEMM or NCCL_P2P_DISABLE; ``engine_kwargs`` enforce_eager, moe_backend
-#: triton, disable_custom_all_reduce false; its target's attention backend and FlashAttention version vLLM's own).
+#: The switches GLM-5.3's Commit of record ran under (its versions.json: ``env`` VLLM_BATCH_INVARIANT=0,
+#: VLLM_USE_V2_MODEL_RUNNER=1, VLLM_USE_FLASHINFER_SAMPLER=0, VLLM_DISABLE_SHARED_EXPERTS_STREAM=1, no
+#: VLLM_USE_DEEP_GEMM or NCCL_P2P_DISABLE; ``engine_kwargs`` enforce_eager, moe_backend triton,
+#: disable_custom_all_reduce false; its target's attention backend and FlashAttention version vLLM's own).
+#: Both records predate the collectives' switches, which they carry here at the values their environments held: vLLM's defaults,
+#: and under batch invariance what vLLM sets.
+_COLLECTIVES = {k: SV.DEFAULTS[k] for k in SV.COLLECTIVE_SWITCHES if k not in ("disable_custom_all_reduce", "NCCL_P2P_DISABLE")}
 GLM_SERVED = {"VLLM_BATCH_INVARIANT": False, "VLLM_USE_DEEP_GEMM": True, "VLLM_DISABLE_SHARED_EXPERTS_STREAM": True,
               "VLLM_USE_FLASHINFER_SAMPLER": False, "VLLM_USE_V2_MODEL_RUNNER": True, "NCCL_P2P_DISABLE": None,
               "disable_custom_all_reduce": False, "enforce_eager": True, "compilation_mode": "NONE", "cudagraph_mode": "NONE",
-              "attention_backend": None, "flash_attn_version": None, "moe_backend": "triton"}
+              "attention_backend": None, "flash_attn_version": None, "moe_backend": "triton", **_COLLECTIVES}
 LLAMA_BI = "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
-#: What the one rank of LLAMA_BI's first Commit read back (art:6bdd8171952edfb0705e4328bcb2aba9880fd400b3c01fdc4042a614ed52d24a,
-#: summary.json ``served.ranks``): vLLM's batch invariance had turned the custom all-reduce off.
-LLAMA_BI_SERVED = {**GLM_SERVED, "VLLM_BATCH_INVARIANT": True, "disable_custom_all_reduce": True, "moe_backend": "auto"}
+#: What the one rank of LLAMA_BI's first Commit read back (its summary.json ``served.ranks``): vLLM's batch invariance
+#: had turned the custom all-reduce off.
+LLAMA_BI_SERVED = {**GLM_SERVED, "VLLM_BATCH_INVARIANT": True, "moe_backend": "auto", **SV.BATCH_INVARIANT[0]}
 
 
 def _is_row(stem: str) -> bool:
@@ -40,7 +43,7 @@ def _is_row(stem: str) -> bool:
         return False
 
 
-ROWS = [p for p in sorted(WORKLOADS.glob("*.json")) if _is_row(p.stem)]
+ROWS = [p for p in workload_files() if _is_row(p.stem)]
 
 
 def _glm() -> tuple[dict, object]:
@@ -70,7 +73,7 @@ def test_a_compiled_row_declares_only_vllms_serving_defaults():
 
 
 def test_the_engine_profile_sets_no_switch_but_with_its_reason():
-    assert "VLLM_BATCH_INVARIANT" not in engine_env.ENGINE, "batch invariance is the row's execution label's"
+    assert "VLLM_BATCH_INVARIANT" not in engine_env.ENGINE, "batch invariance is the workload's execution label's"
     assert "VLLM_BATCH_INVARIANT" not in engine_env.EXPORT, "a Build's batch invariance is its target's"
     assert set(engine_env.REASONS) == set(engine_env.ENGINE) and all(engine_env.REASONS.values())
 
@@ -100,7 +103,7 @@ def test_glm53s_row_declares_each_switch_with_its_source_and_reason():
 
 def test_glm53s_commit_of_record_passes_with_its_reasons_and_fails_on_the_one_it_lacked():
     """The rail run over GLM-5.3's Commit of record: everything is vLLM's default or declared with a reason but its MoE backend, which
-    its target declared with none until the row file gave one."""
+    its target declared with none until the workload file gave one."""
     wl, target = _glm()
     assert SV.judge(GLM_SERVED, SV.declared(wl, target)) == []
     bare = {**wl, "engine": {**wl["engine"], "reasons": {}}}
@@ -110,11 +113,14 @@ def test_glm53s_commit_of_record_passes_with_its_reasons_and_fails_on_the_one_it
 
 def test_vllms_batch_invariance_turns_the_custom_all_reduce_off_over_the_row_file():
     """`ParallelConfig._verify_args` sets ``disable_custom_all_reduce`` under ``VLLM_BATCH_INVARIANT`` after every argument, so a
-    batch-invariant row declares it whatever its row file says, and a row that is not batch invariant still may not carry it."""
+    batch-invariant workload declares it whatever its workload file says, and a workload that is not batch invariant still may not carry it."""
     wl = va.load_workload(WORKLOADS / f"{LLAMA_BI}.json")
     d = SV.declared(wl, va.target_of_workload(wl))
     assert d["disable_custom_all_reduce"] == {"value": True, "source": "vLLM ParallelConfig", "reason": SV.BATCH_INVARIANT[1]}
+    assert d["NCCL_ALGO"] == {"value": "allreduce:tree", "source": "vLLM ParallelConfig", "reason": SV.BATCH_INVARIANT[1]}
     assert SV.judge(LLAMA_BI_SERVED, d) == []
+    assert SV.judge({**LLAMA_BI_SERVED, "NCCL_MAX_NCHANNELS": None}, d) == [
+        "NCCL_MAX_NCHANNELS=None where vLLM ParallelConfig declares '1'"]
     told_on = {**wl, "engine": {**wl["engine"], "args": {**wl["engine"]["args"], "disable_custom_all_reduce": False}}}
     assert SV.declared(told_on, va.target_of_workload(wl))["disable_custom_all_reduce"]["value"] is True
     assert SV.judge({**GLM_SERVED, "disable_custom_all_reduce": True}, SV.declared(*_glm())) == [
@@ -134,6 +140,10 @@ def test_every_row_gives_a_reason_for_each_switch_it_moves_from_vllms_default(p)
     ({"attention_backend": "FLASHINFER"}, "attention_backend='FLASHINFER' is not vLLM's default None and nothing declares it"),
     ({"VLLM_USE_DEEP_GEMM": False}, "VLLM_USE_DEEP_GEMM=False is not vLLM's default True and nothing declares it"),
     ({"NCCL_P2P_DISABLE": "1"}, "NCCL_P2P_DISABLE='1' is not vLLM's default None and nothing declares it"),
+    ({"NCCL_ALGO": "Ring"}, "NCCL_ALGO='Ring' is not vLLM's default None and nothing declares it"),
+    ({"VLLM_ALLREDUCE_USE_SYMM_MEM": False}, "VLLM_ALLREDUCE_USE_SYMM_MEM=False is not vLLM's default True and nothing declares it"),
+    ({"VLLM_FLASHINFER_ALLREDUCE_BACKEND": "trtllm"},
+     "VLLM_FLASHINFER_ALLREDUCE_BACKEND='trtllm' is not vLLM's default 'auto' and nothing declares it"),
 ])
 def test_a_switch_away_from_what_is_declared_or_vllms_default_is_a_problem(switches, problem):
     wl, target = _glm()
@@ -174,31 +184,86 @@ class _Backend(enum.Enum):
     FLASH_ATTN = 1
 
 
+#: A TP8 rank's all-reduce routes at vLLM's defaults on an H200 node: the custom all-reduce built but off, torch's symmetric memory
+#: to 64 MiB, FlashInfer's MNNVL workspace, pynccl over NCCL 2.29.7
+_ROUTES = {"world": 8, "flashinfer": True, "flashinfer_backend": "mnnvl", "quick": False, "flashinfer_pcie_ipc": False, "aiter": False,
+           "custom": False, "custom_max_bytes": None, "symm_mem": True, "symm_mem_max_bytes": 64 << 20, "pynccl": True,
+           "nccl_version": 22907}
+
+
 @pytest.fixture
 def vllm_stub(monkeypatch):
-    """`vllm.envs` and `vllm.distributed` as a serving process's: the flags as vLLM parses them, rank 3."""
+    """`vllm.envs` and `vllm.distributed` as a serving process's: the flags as vLLM parses them, rank 3 of a TP group whose
+    communicator resolved `_ROUTES`."""
     envs = types.ModuleType("vllm.envs")
     envs.__dict__.update(VLLM_BATCH_INVARIANT=False, VLLM_USE_DEEP_GEMM=True, VLLM_DISABLE_SHARED_EXPERTS_STREAM=True,
-                         VLLM_USE_FLASHINFER_SAMPLER=False)
+                         VLLM_USE_FLASHINFER_SAMPLER=False, VLLM_ALLREDUCE_USE_FLASHINFER=True, VLLM_FLASHINFER_ALLREDUCE_BACKEND="auto",
+                         VLLM_ALLREDUCE_USE_SYMM_MEM=True, VLLM_USE_NCCL_SYMM_MEM=False, VLLM_ALLREDUCE_USE_FLASHINFER_PCIE_IPC=False,
+                         VLLM_DISABLE_PYNCCL=False)
     dist = types.ModuleType("vllm.distributed")
     dist.get_tensor_model_parallel_rank = lambda: 3
+    comm = SimpleNamespace(world_size=8, fi_ar_comm=SimpleNamespace(disabled=False), qr_comm=None, fi_pcie_ipc_ar_comm=None,
+                           aiter_ar_comm=None, ca_comm=SimpleNamespace(disabled=True, max_size=256 << 10),
+                           symm_mem_comm=SimpleNamespace(disabled=False, max_size=64 << 20),
+                           pynccl_comm=SimpleNamespace(disabled=False, nccl_version=22907))
+    ps = types.ModuleType("vllm.distributed.parallel_state")
+    ps.get_tp_group = lambda: SimpleNamespace(device_communicator=comm)
+    dc = types.ModuleType("vllm.distributed.device_communicators")
+    fi = types.ModuleType("vllm.distributed.device_communicators.flashinfer_all_reduce")
+    fi._fi_ar_workspace = SimpleNamespace(backend="mnnvl")
+    dist.parallel_state, dist.device_communicators, dc.flashinfer_all_reduce = ps, dc, fi
     pkg = types.ModuleType("vllm")
     pkg.envs, pkg.distributed = envs, dist
-    monkeypatch.setitem(sys.modules, "vllm", pkg)
-    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
-    monkeypatch.setitem(sys.modules, "vllm.distributed", dist)
+    for name, mod in (("vllm", pkg), ("vllm.envs", envs), ("vllm.distributed", dist), ("vllm.distributed.parallel_state", ps),
+                      ("vllm.distributed.device_communicators", dc), ("vllm.distributed.device_communicators.flashinfer_all_reduce", fi)):
+        monkeypatch.setitem(sys.modules, name, mod)
+    for k in SV.NCCL_ENVS:
+        monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("NCCL_P2P_DISABLE", "1")
+    return comm
+
+
+def _vllm_config() -> SimpleNamespace:
+    return SimpleNamespace(use_v2_model_runner=True, parallel_config=SimpleNamespace(disable_custom_all_reduce=True),
+                           model_config=SimpleNamespace(enforce_eager=True),
+                           compilation_config=SimpleNamespace(mode=_Mode.NONE, cudagraph_mode=_Graphs.NONE),
+                           attention_config=SimpleNamespace(backend=_Backend.FLASH_ATTN, flash_attn_version=3),
+                           kernel_config=SimpleNamespace(moe_backend="triton"))
 
 
 def test_a_rank_reads_back_each_switch_as_vllm_resolved_it(vllm_stub):
-    vc = SimpleNamespace(use_v2_model_runner=True, parallel_config=SimpleNamespace(disable_custom_all_reduce=True),
-                         model_config=SimpleNamespace(enforce_eager=True),
-                         compilation_config=SimpleNamespace(mode=_Mode.NONE, cudagraph_mode=_Graphs.NONE),
-                         attention_config=SimpleNamespace(backend=_Backend.FLASH_ATTN, flash_attn_version=3),
-                         kernel_config=SimpleNamespace(moe_backend="triton"))
-    got = SV.read_rank(SimpleNamespace(vllm_config=vc))
+    got = SV.read_rank(SimpleNamespace(vllm_config=_vllm_config()))
     assert got == {"rank": 3, "switches": {**GLM_SERVED, "NCCL_P2P_DISABLE": "1", "disable_custom_all_reduce": True,
-                                           "attention_backend": "FLASH_ATTN", "flash_attn_version": 3}}
+                                           "attention_backend": "FLASH_ATTN", "flash_attn_version": 3},
+                   "collectives": _ROUTES}
+
+
+def test_a_rank_reads_back_nccls_switches_and_two_records_differ_in_each_collective_switch_and_route(vllm_stub, monkeypatch):
+    """The read-back carries NCCL's own switches from the rank's environment; `collectives_differ` names, rank by rank, every
+    collective switch and resolved route two engines differ in, and nothing else."""
+    monkeypatch.setenv("NCCL_ALGO", "NVLS")
+    a = SV.read_rank(SimpleNamespace(vllm_config=_vllm_config()))
+    assert a["switches"]["NCCL_ALGO"] == "NVLS" and a["switches"]["NCCL_PROTO"] is None
+    b = {**a, "switches": {**a["switches"], "NCCL_ALGO": None, "enforce_eager": False},
+         "collectives": {**a["collectives"], "flashinfer_backend": "trtllm"}}
+    assert SV.collectives_differ({"ranks": [a]}, {"ranks": [a]}) == []
+    assert SV.collectives_differ({"ranks": [a]}, {"ranks": [b]}) == [
+        "rank 3: NCCL_ALGO 'NVLS' against None", "rank 3: flashinfer_backend 'mnnvl' against 'trtllm'"]
+    assert SV.collectives_differ({"ranks": [a]}, {"ranks": []}) == ["ranks [3] against []"]
+
+
+def test_a_process_that_never_loaded_flashinfers_all_reduce_reads_no_backend(vllm_stub, monkeypatch):
+    monkeypatch.delitem(sys.modules, "vllm.distributed.device_communicators.flashinfer_all_reduce")
+    got = SV.read_rank(SimpleNamespace(vllm_config=_vllm_config()))
+    assert got["collectives"] == {**_ROUTES, "flashinfer_backend": None}
+
+
+def test_a_route_read_without_a_tp_group_raises(vllm_stub, monkeypatch):
+    def no_group():
+        raise AssertionError("tensor model parallel group is not initialized")
+    monkeypatch.setattr(sys.modules["vllm.distributed.parallel_state"], "get_tp_group", no_group)
+    with pytest.raises(AssertionError, match="not initialized"):
+        SV.collectives()
 
 
 def test_require_fails_the_commit_closed_and_says_why(tmp_path):

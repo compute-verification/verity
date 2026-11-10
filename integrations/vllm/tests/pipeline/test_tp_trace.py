@@ -1,6 +1,6 @@
 """`tp-commit --trace-dir` (`pipeline.tp.trace`): one extra pair under torch.profiler after the timed pairs, outside runs.jsonl -- the
 instrumented run installed, profiled, finalized for its roots only and reset --, the per-thread CPU readings around every timed run
-(`trace.thread_cpu`) and the per-rank Commit timing every finalize carries (`engine.rank_worker._commit_timing`).  CPU-only: stand-in ranks behind an LLM that dispatches `collective_rpc` to them."""
+(`trace.thread_cpu`) and the per-rank Commit timing every finalize carries (`pipeline.tp.rank_worker._commit_timing`).  CPU-only: stand-in ranks behind an LLM that dispatches `collective_rpc` to them."""
 from __future__ import annotations
 
 import json
@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity_vllm.acquire.committer_api import StepCommitment
-from verity_vllm.engine.rank_worker import _commit_timing
+from verity_vllm.pipeline.tp.rank_worker import _commit_timing
 from verity_vllm.pipeline.tp import trace as TRACE
 
 

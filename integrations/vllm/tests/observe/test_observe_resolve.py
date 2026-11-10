@@ -1,9 +1,9 @@
-"""v2 Phase 4b: the value-observation contract (`verity_vllm.observe.contract`) and occurrence resolution (`verity_vllm.correspondence.resolve`) over a
+"""The value-observation contract (`verity_vllm.observe.contract`) and occurrence resolution (`verity_vllm.check.match.resolve`) over a
 SYNTHETIC record -- pure python, no torch, no GPU.
 
 The record is a two-request batched fold in today's on-disk shape (instances.jsonl v1 rows + capture/log.jsonl.gz RunHeader/StepStart):
 request A prefill 2 rows then 2 decodes, request B arrives at engine step 1 with a 3-row prompt CHUNKED over engine steps 1..2, then one
-decode; one weight-only value per step (F-r19-int-15's `1 + w`), a Const row, and unstamped rows for the rows channel.
+decode; one weight-only value per step (`1 + w`), a Const row, and unstamped rows for the rows channel.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import json
 import pytest
 
 from verity_vllm.observe import contract as OB
-from verity_vllm.correspondence import resolve as RS
+from verity_vllm.check.match import resolve as RS
 from verity_vllm.check.match import batch_decomp as BD
 
 A, B = "req-A", "req-B"
@@ -55,7 +55,7 @@ def _write_record(tmp_path, *, stamp: bool = True, mutate_view: bool = False, ba
     Vmut = {"shape": [8], "strides": [2], "offset": 0, "dtype": "bf16"}
     for s, st in steps.items():
         tok, log = st["rows"], st["logits_rows"]
-        # a weight-only value (reads the weights parameter only) -- SHARED, F-r19-int-15
+        # a weight-only value (reads the weights parameter only) -- SHARED
         w = emit(s, "AddScalarBf16_v1{N=8}", "model.layers.0.input_layernorm/weight", preads=(2,), nrows=1, name="layers.0/scale")
         # one norm row per token row: reads the request's prompt (prefill) / the weight-only value
         norms = []
@@ -139,6 +139,15 @@ def test_progression_form_operand_refs_expand_to_distinct_node_ids():
     ob = OB.adapt_row(o, hdr)
     assert ob.reads == (10, 12, 14) and ob.param_reads == (2,)
     assert ob.occurrence.site == "model.layers.0.self_attn.attn"
+
+
+@pytest.mark.parametrize("params,tp,want", [('[["a", "bf16"], ["b", "f32"]]', '{"world": 2}', (["a", "b"], {"world": 2})),
+                                            ('[["a", "bf16"], ["b"]]', '{"world": }', ([], None))])
+def test_a_large_program_json_is_scanned_and_a_cut_window_is_stated_unknown(tmp_path, monkeypatch, params, tp, want):
+    p = tmp_path / "program.json"
+    p.write_text(f'{{"n_input_nodes": 3, "params": {params}, "tp": {tp}, "program": {{}}}}')
+    monkeypatch.setattr(OB.os.path, "getsize", lambda path: 1 << 30)
+    assert OB._program_json_layout(str(p), None) == (3, *want, None)
 
 
 # ------------------------------------------------------------------------------------------------------------------ resolve: the record

@@ -1,11 +1,9 @@
-"""[P6, 2026-09-23] The declared FAMILY FACTS table: what vLLM d9105ea80 hard-codes per HF `model_type` and `config.json` does not say.
+"""The declared FAMILY FACTS table: what vLLM d9105ea80 hard-codes per HF `model_type` and `config.json` does not say.
 
 This is the ONE place in `verity_vllm/engine/profiles/` where a model family name may appear (by-name lint class L, `retires: stays`;
-`tests/by_name_allowlist.json`, decision "P6 2026-09-23: family facts table is the declared home of vLLM's per-family hard-codes").
+`tests/by_name_allowlist.json`, whose decision makes the family facts table the declared home of vLLM's per-family hard-codes).
 Everything else a κ profile needs is a function of the role's `config.json` (`analytic.config_of`) and of the κ pins
-(`vllm_d9105ea80_sm89_eager`); `profiles.generic.build_profile(role)` is that function.  Before P6 these facts were spread over nine
-hand-written per-model modules (`gen_dense2_gemma2_2b`, `gen_ln_pythia160m`, `gen_moe_olmoe`, `gen_ov_moe_qwen3`, ...); their findings
-harvest is on Notion (findings index 3e4399515d9e8188ade0c8d9164c85b6).
+(`vllm_d9105ea80_sm89_eager`); `profiles.generic.build_profile(role)` is that function.
 
 Every fact cites the vLLM source that hard-codes it (`provenance`: file:line @ d9105ea80, read from the pinned tree).  Kinds:
   * `const`  -- a value vLLM's model code fixes (Gemma-2's `x * (1 + w)` norm; OLMoE's `renormalize=False`; GPT-NeoX's LayerNorm);

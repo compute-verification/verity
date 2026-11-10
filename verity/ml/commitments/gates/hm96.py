@@ -95,4 +95,4 @@ def leaf_gadget(C, x: Sequence[Sequence], y: Sequence[Sequence]) -> list[list]:
 Hm96Sha512Leaf = TR.definition(
     "Hm96Sha512Leaf", 1, lambda C, *e: leaf_gadget(C, e[:8], e[8:]), (("x", DIGEST), ("y", SALT)), Array(3, DIGEST),
     doc="hm96-sha512/v1 under its pinned key: b = x XOR M_key y, c = SHA-512(salt_prefix || y) and the tree leaf "
-        "SHA-512(leaf_prefix(key) || b || c), of the 64-byte digest x and the 192-byte salt y")
+        "SHA-512(leaf_prefix(key) || b || c), of the 64-byte digest x and the 192-byte salt y", calls=True)

@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.TmplPosMap
+module
+
+public import Proofs.Flock.Soundness.TmplPosMap
 
 /-!
-# `layoutsM`'s layouts are in order (PRF-133, part 3, stage 2)
+# `layoutsM`'s layouts are in order
 
 `layDefM` lays a Definition's calls out in order, each run of its own columns between them. `layDefM_ok` follows its
 loops: the runs it pushes are nonempty, ascending and apart from the calls, and with them cover the Definition's columns
@@ -10,6 +12,8 @@ loops: the runs it pushes are nonempty, ascending and apart from the calls, and 
 Each depends on what `parse` checks of each call: its copies inside its caller's columns, and its callee an earlier
 Definition.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl
 

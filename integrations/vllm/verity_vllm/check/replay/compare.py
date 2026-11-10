@@ -27,7 +27,7 @@ def _tp_member_alias(got: dict[str, Any], member: str) -> Any | None:
 
 
 def _interior_slice(got: dict[str, np.ndarray], lo: int, hi: int) -> np.ndarray | None:
-    """[R16 fp8] The words [lo, hi) of an INTERIOR producer's output refs = the concatenation of its members in return order (a
+    """The words [lo, hi) of an INTERIOR producer's output refs = the concatenation of its members in return order (a
     Fp8GroupQuant row returns (xq[K], sx[K/G]); a member-less Gemm returns its one output).  None when the slice leaves the output."""
     parts = [np.asarray(v).reshape(-1) for v in got.values()]
     total = sum(int(p.size) for p in parts)
@@ -51,7 +51,7 @@ _SLOT_MEMBER_RE = re.compile(r"^slot(?P<e>\d+)/(up|act|down|g)$")
 
 def padded_slot_enable(member: str, got: dict[str, np.ndarray], store: "CommittedStore", rid: str, step: int, op_path: str, row: int,
                        topk: int) -> tuple[bool | None, str]:
-    """[revb F-r17b-52 (ii)] the enable a_e of a padded slot member of one token row, from the COMMITTED router_ids of that row (the block's
+    """The enable a_e of a padded slot member of one token row, from the COMMITTED router_ids of that row (the block's
     enable is the step's run bit -> the router members are Active in every executed step; a_e = [e in ids]).  None + why when the committed
     ids are not available (the slot's verdict is then not evaluable by name -- never the twin's ids)."""
     m = _SLOT_MEMBER_RE.match(member)
@@ -69,7 +69,7 @@ def padded_slot_enable(member: str, got: dict[str, np.ndarray], store: "Committe
 
 
 def lifted_compare(have: np.ndarray, payload: np.ndarray, active: bool, dtype: str) -> tuple[bool, int, int | None, str]:
-    """[revb F-r17b-52 (ii)] committed LIFTED words (`have`, the plane's machine words) vs the twin's unlifted payload under the slot enable:
+    """Committed LIFTED words (`have`, the plane's machine words) vs the twin's unlifted payload under the slot enable:
     Active -> every word must be Active(payload) = payload exactly (tag clear); disabled -> every word must be enc(bot) = 1 << w exactly
     (never INV, never a bot with a nonzero payload).  Returns (equal, differing_elements, first_diff, verdict)."""
     wbits, nbytes = RM.LIFTED_DTYPES[dtype]
@@ -90,8 +90,8 @@ def lifted_compare(have: np.ndarray, payload: np.ndarray, active: bool, dtype: s
         return True, 0, None, verdict
     first = int(np.flatnonzero(diff)[0])
     hv = int(have[first])
-    kind = ("bot word under an Active enable (pad R17-42 s5)" if (active and hv == bot) else
+    kind = ("bot word under an Active enable" if (active and hv == bot) else
             "value word under a disabled enable" if (not active and not (hv & bot)) else
             "bot with a nonzero payload / INV" if (not active and (hv & bot) and hv != bot) else
-            "INV word (bot bit + nonzero payload) under an Active enable" if (active and (hv & bot)) else "payload differs")   # revb n-52-2
+            "INV word (bot bit + nonzero payload) under an Active enable" if (active and (hv & bot)) else "payload differs")
     return False, nd, first, verdict + f" -- FAIL: {kind}"

@@ -1,18 +1,18 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Data.Fintype.Sigma
-import Mathlib.Basic.Real.Basic
+module
+
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
 /-!
 # The remote bandwidth audit's node, its parameters and the γ terms (trusted)
 
-The remote bandwidth audit (`docs/remote-bandwidth-exhaustion.md`) certifies that a node's memory read bandwidth went
-to registered data. The node is a set of compute (every GPU die, host CPU and root complex: the console's actual-circuit
-model's location `X_N`), its memory tiers and its boundary links (the NIC; NVLink to any GPU outside the node). A
-memory tier (each GPU's HBM, the host's DRAM) is a location whose links all go to the node's compute (model v2.9);
-with the tag's oracle a location of its own, causality and the Links row give that it hears only the node's compute
-(`HearsChip`), so its port is counted at `β_m` bits a tick. A tier the audit rates at `R = 0` is unrated. A fleet
-audited at once, or an NVLink domain, is a node too (`Node.fleet`): its boundary is the fleet's, and the links between
-its members are inside it.
+The remote bandwidth audit (`docs/remote-bandwidth-exhaustion.md`) certifies that a node's memory read bandwidth went to
+registered data. The node is a set of compute (every GPU die, host CPU and root complex: the console's actual-circuit
+model's location `X_N`), its memory tiers and its boundary links (the NIC; NVLink to any GPU outside the node). A memory
+tier (each GPU's HBM, the host's DRAM) is a location whose links all go to the node's compute; with the tag's oracle a
+location of its own, causality and the Links row give that it hears only the node's compute (`HearsChip`), so its port
+is counted at `β_m` bits a tick. A tier the audit rates at `R = 0` is unrated. A fleet audited at once, or an NVLink
+domain, is a node too (`Node.fleet`): its boundary is the fleet's, and the links between its members are inside it.
 
 Over an audited interval `I` of `T` ticks, in `P` chained passes of `T + RTT` each, the audit's receipts cover the
 declared capacity `C = Σ_m R_m · T` (`Node.declared`), against the node's calibrated capacity `C_true = Σ_m β_m · T`
@@ -33,6 +33,8 @@ Identity there is no undeclared device of any kind, so μ_link is reported besid
 μ_link and μ_out, for the weaker statement that allows memory-only helpers and outside work. Every term but `muHost` is
 relative to `C`; `muHost` converts `C` into `C_true`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote
 

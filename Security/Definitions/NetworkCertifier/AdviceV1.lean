@@ -1,5 +1,11 @@
-import Mathlib.Data.Nat.Size
-import Mathlib.Data.List.OfFn
+module
+
+public import Mathlib.Data.Nat.Bits
+public import Mathlib.Data.Nat.Size
+public import Mathlib.Data.Subtype
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Tactic.Finiteness.Attr
 
 /-!
 # Advice v1's charge: the counted coded length of a decision stream under the registered book
@@ -22,7 +28,7 @@ and their decisions (`bit`). A slot that doesn't ask changes nothing, so the cha
 slots that ask, in order: the window's decision stream, a `List Bool`. The run's decision stream is one per window. The
 asks themselves are not advice: the compile slice, its charge included, is proved on every advised window and never
 sampled, so `en` is the scan that slice proves, pinned by it. The carry from window to window (the KT counts and the
-run) is committed across windows and chained from the book's priors (#3801, `charge_chain.check_chain`), as `charges`
+run) is committed across windows and chained from the book's priors (`charge_chain.check_chain`), as `charges`
 starts from `priors` and passes each window's carry on.
 
 **What is left.** That `ChargeCount_v1`'s circuit computes `window` is not proved in Lean. circuit-check holds the circuit
@@ -35,6 +41,8 @@ what `reference_charge` gives on 4,000 random instances, accepted and refused (`
 returns `none` there. On the states a window reaches (`low ≤ high < 2^32`), the Python's masks `& (HALF − 1)` are
 `% HALF`, as below.
 -/
+
+@[expose] public section
 
 namespace NetTiming.AdviceV1
 
@@ -180,7 +188,7 @@ def charges (bk : Book) (N : ℕ) {W : ℕ} (a : Fin W → List Bool) : Option (
   session bk N ⟨bk.priors, 0⟩ (List.ofFn a)
 
 /-- **Advice v1's decision streams**: those of `W` windows whose charge no window refuses. A refused window fails its
-compile unit, so no accepted run has other advice. -/
+compile slice's proof block, so no accepted run has other advice. -/
 def Streams (bk : Book) (N W : ℕ) : Type := {a : Fin W → List Bool // (charges bk N a).isSome}
 
 /-- **Advice v1's charge** (I1's `bits(advice, w)`): window `w`'s. -/

@@ -1,5 +1,5 @@
-"""`circuit.h1tile`'s J10-R units, `PouwH1Tile_v5` and `PouwH1Tile_v6` (note:compute-accounting/20261019T0845Z-draft-rt-algo-r3,
-J10-R, RT-ALGO-11 and -16): one seed a call from its first position and its registered roots, a unit's rows' and columns'
+"""`circuit.h1tile`'s J10-R units, `PouwH1Tile_v5` and `PouwH1Tile_v6`
+(J10-R): one seed a call from its first position and its registered roots, a unit's rows' and columns'
 noise the call-scale stream's at public block counters, its fold keys σ_R's at its own position; and the SHA-512
 compressions that saves a unit against the note's formula."""
 from __future__ import annotations
@@ -16,10 +16,10 @@ from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.refs import runs
 from verity.ml.circuits.types import Array
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
-pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
+pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 SALT = hashlib.sha512(b"salt").digest()
 ROOTS = (hashlib.sha512(b"a/64@3").digest(), hashlib.sha512(b"b/64").digest())
 GRID48 = tuple((i, j) for i in range(4) for j in range(8))
@@ -116,7 +116,7 @@ def test_compressions_a_unit_against_the_note(m, n, k):
 @pytest.mark.slow
 @pytest.mark.parametrize("d", ["PouwH1Tile", "PouwH1Tile5"])
 def test_in_proof_compressions_are_today_s(d):
-    """Inside a drawn unit's proof J10-R hashes what today's form does, its blocks, its lanes' key blocks and four for its
+    """Inside a sampled proof block's proof J10-R hashes what today's form does, its blocks, its lanes' key blocks and four for its
     seeds (`unit_compressions`): the saving is the serving side's, which derives each block once a call."""
     body = _v(getattr(H, d)).body
     defn = _defns(body)
@@ -247,7 +247,7 @@ def test_j10r_tile_is_its_reference(d, stream):
 
 def test_no_scheme_takes_j10r():
     """J10-R is a Definition only: every registered scheme's units still bind v1 or v3."""
-    from verity.core.protocols.pouw.circuit import compile as C
+    from verity.ml.protocols.pouw.circuit import compile as C
 
     for name in (H.SCHEME, H.SCHEME_V3):
         assert {u.defn for u in C._scheme(name).units.values()} <= {H.PouwH1Tile, H.PouwH1Tile3}

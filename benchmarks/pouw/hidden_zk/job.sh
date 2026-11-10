@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# Pearl-C4's hidden-check units under C-Flock --zk on CPUs, each proved by Rust `prove --zk` and verified by the Lean
+# Pearl-C4's hidden-check units under Flock --zk on CPUs, each proved by Rust `prove --zk` and verified by the Lean
 # `verify --zk`, a row unit's anchors held to the verifier's own `TileAnchors.public_inputs` file. Run from the source tree's
 # root (`research run --cwd source --declared-output 'out/*'`); results go to $RESEARCH_RUN_DIR/out, scratch to a
 # `mktemp -d` directory the job removes, builds to $HZ_CACHE (kept, keyed by their inputs) or the scratch directory.
 #   1. builds flock-circuit twice from Flock b684b12 and verity/ml/flock's patches (the proving build: sha512, glue; the
 #      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
-#      drawing all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
-#      controls, drawn the same way, and the Lean
+#      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
+#      controls, sampled the same way, and the Lean
 #      verifier on all of them:
 #        honest-own     the honest session, the verifier's own anchors file                         ACCEPT
 #        honest-wrong   the honest session, one bit of one anchor wrong in the verifier's file      REJECT
 #        honest-chosen  the honest session, the same anchor bit chosen by the prover (public file)  REJECT
-#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;
+#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement flock-verify
+#                       refuses once every check has passed (`ProvedScope.servedForm`): honest passes every check;
 #                       output_row_committed_false (a tampered output row), output_claim_false, unit_internal_bit_flipped
 #                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
-#      until T4 the verifier refuses --public-inputs (#1179), so summarize.py expects each row-unit check REFUSED; once every
+#      until T4 the verifier refuses --public-inputs, so summarize.py expects each row-unit check REFUSED; once every
 #      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
 #      REFUSED, and so are a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, for the tile's want of a Program
 #      (no --program, NO_PROGRAM)
@@ -80,6 +81,14 @@ build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
   rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/core/service/flock" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
     && (cd "$D.tmp" && lake build) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
+build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit, the prover's placement of a templated unit
+  command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
+  local D=$1
+  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/core/service/flock" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
+    && cp "$SRC/verity/ml/flock/tests/lean/TmplUnit.lean" "$D.tmp/" \
+    && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$D.tmp/lakefile.toml" \
+    && (cd "$D.tmp" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
+}
 build_python() {    # build_python DEST: a venv
   local D=$1
   rm -rf "$D" && uv venv -q --python 3.12 "$D" && uv pip install -q --python "$D/bin/python" numpy==2.5.3 blake3==1.0.9
@@ -122,7 +131,7 @@ setup() {
 free_port() { "$PY" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 
 session() {   # session D O: one loopback --zk session with the proving build, the verifier serving its own public file and
-  local D=$1 O=$2 port pin srv rc try up= tu=   # drawing all N instances (subset:N), as every soundness claim is about a drawn session
+  local D=$1 O=$2 port pin srv rc try up= tu=   # sampling all N instances (subset:N), as every soundness claim is about a sampled session
   pin=$(cat "$D/pin.txt")
   # a templated statement's unit rows, placed by flock-tmpl-unit (h1_lanes/job.sh), which serve and prove read
   [ -L "$D/unit.placed" ] || [ -e "$D/unit.placed" ] && tu="--tmpl-unit $D/unit.placed"
@@ -147,7 +156,7 @@ session() {   # session D O: one loopback --zk session with the proving build, t
   return $rc
 }
 
-controls() {  # controls D O ROLE: the selftest build's cases, recorded for the Lean verifier, drawn as session's are
+controls() {  # controls D O ROLE: the selftest build's cases, recorded for the Lean verifier, sampled as session's are
   local D=$1 O=$2 role=$3 c rc
   mkdir -p "$D/rec"
   for c in $CASES; do

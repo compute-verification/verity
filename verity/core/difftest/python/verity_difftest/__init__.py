@@ -1,4 +1,4 @@
-"""The differential test of core's Lean, the verifier of record, against the Python that mirrors it (`README.md` in this
+"""The differential test of core's Lean, the verifier, against the Python that mirrors it (`README.md` in this
 distribution's directory).
 
 A port is a Lean executable that answers one canonical JSON line per request, the Python it must agree with (`reference`),
@@ -12,17 +12,17 @@ and a Hypothesis strategy of inputs, invalid ones included. There are two kinds,
   per case. Lean and Python must agree on `verdict`, `commitment`, `public`, `profile` and `protocol` exactly; `reason` is
   not compared. `verity_difftest.protocol` is the interface's case framing in Python, for references to build on.
 
-`run` keeps one server process open, feeds both sides every input the strategy draws, and fails with a `Mismatch` on the
+`run` keeps one server process open, feeds both sides every input the strategy samples, and fails with a `Mismatch` on the
 first difference, shrunk by Hypothesis to a minimal input; a reference that raises something it doesn't declare, and a
-server that faults or dies, are differences too. A run is deterministic: Hypothesis draws from `seed` (`derandomize`, no
+server that faults or dies, are differences too. A run is deterministic: Hypothesis samples from `seed` (`derandomize`, no
 example database, no deadline) and from its own constants alone (`_no_local_constants`), so `run(port, examples=N,
 seed=S)` finds the same minimal input again whatever modules the process has loaded, and `replay(port, value)` compares
 one input. Nothing here reads a clock or times out (`tests/test_no_wall_clock.py`): a port whose Lean
 never answers hangs its test.
 
-A port names its verifier of record (`of_record`): ``"python"`` until its protocol switches to its Lean by the 8 Oct
-procedure, ``"lean"`` after (PoUW's switch is `verity/core/protocols/pouw/verifier.py`). Either way the two sides must
-agree; the side of record is the verdict a `Mismatch` holds the other to, and what a run's `Stats` count.
+A port names its verifier (`of_record`): ``"python"`` until its protocol switches to its Lean by the friction
+skill's switching ruling, ``"lean"`` after (PoUW's switch is `verity/core/protocols/pouw/verifier.py`). Either way the
+two sides must agree; the side of record is the verdict a `Mismatch` holds the other to, and what a run's `Stats` count.
 
 The harness never skips: when `lake` is missing or the build fails it raises. A port's test module skips on `lake` itself
 (`pytestmark = pytest.mark.skipif(shutil.which("lake") is None, ...)`), which puts its suite among those `check` runs after
@@ -44,7 +44,7 @@ import tempfile
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
     from hypothesis.strategies import SearchStrategy
@@ -90,9 +90,10 @@ class Vacuous(AssertionError):
 
 
 def canonical(value: Any) -> str:
-    """The canonical JSON text of `value` (as `Flock.canon` writes it): compact, object keys sorted, strings in UTF-8 with
-    only `"`, `\\` and control characters escaped. Its domain is null, booleans, integers, strings, lists (tuples) and objects
-    with string keys; anything else, a float among them, raises `TypeError`."""
+    """The canonical JSON text of `value` (as `Flock.canon` writes it): compact, object keys sorted, and every character
+    outside printable ASCII a lowercase `\\uXXXX` escape (a surrogate pair above U+FFFF), so the text is ASCII without DEL.
+    Its domain is null, booleans, integers, strings, lists (tuples) and objects with string keys; anything else, a float
+    among them, raises `TypeError`."""
     stack = [value]
     while stack:
         x = stack.pop()
@@ -112,7 +113,7 @@ def canonical(value: Any) -> str:
             stack.extend(x.values())
         else:
             raise TypeError(f"not canonical JSON: a {type(x).__name__}")
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
 #: Lake builds a path require in place, and ports share theirs (`lean/` here, the core protocol interface), so two ports'
@@ -166,14 +167,14 @@ class Server:
         reply = reply[:-1]
         try:
             msg = json.loads(reply)
-            ok = isinstance(msg, dict) and canonical(msg) == reply
-        except (ValueError, TypeError):
-            ok = False
-        if not ok:
+            why = "" if isinstance(msg, dict) and canonical(msg) == reply else "not canonical"
+        except (ValueError, TypeError) as e:
+            why = f"{type(e).__name__}: {e}"
+        if why:
             proc.kill()
             self._dead()
-            raise ProtocolError(f"{self.argv[0]} answered {line} with a line that is not one canonical JSON object "
-                                f"(stdout is the protocol's: write anything else to stderr): {reply[:500]}")
+            raise ProtocolError(f"{self.argv[0]} answered {line} with a line that is not one canonical JSON object ({why}; "
+                                f"stdout is the protocol's: write anything else to stderr): {reply[:500]}")
         return msg
 
     def call(self, fn: str, value: Any) -> Outcome:
@@ -215,8 +216,15 @@ def _exe(exe: str | Path, package: Path | None) -> str:
     return str(build(Path(package), str(exe)) if package is not None else Path(exe))
 
 
-def _undeclared(e: Exception, declared: tuple[type[BaseException], ...]) -> Outcome:
-    return "error", f"the reference raised {type(e).__name__}: {e}, not one of {[r.__name__ for r in declared]}"
+def _reference(port: Port | ProtocolPort, value: Any) -> tuple[str, Any]:
+    """The reference on a copy of `value`: `("returned", its output)`, `("reject", reason)` for one of the port's
+    `rejects`, or `("error", what)` for anything else it raises, which every comparison counts as a difference."""
+    try:
+        return "returned", port.reference(copy.deepcopy(value))
+    except port.rejects as e:
+        return "reject", str(e)
+    except Exception as e:  # noqa: BLE001 -- whatever else the reference raises is its outcome: an error, a difference
+        return "error", f"the reference raised {type(e).__name__}: {e}, not one of {[r.__name__ for r in port.rejects]}"
 
 
 #: A port's sides that can be of record.
@@ -232,7 +240,7 @@ def _check_record(port: Port | ProtocolPort) -> None:
 class Port:
     """One ported function. `exe` is the server executable's path, or with `package` the name of a `lean_exe` of that Lake
     package, which `run` builds. `reference(value)` returns the expected output (canonical JSON's domain) or raises one of
-    `rejects`. `inputs` draws inputs, invalid ones included; `need_rejects=False` waives the check that some are rejected.
+    `rejects`. `inputs` samples inputs, invalid ones included; `need_rejects=False` waives the check that some are rejected.
     `of_record` is the side of record (`RECORDS`)."""
 
     exe: str | Path
@@ -259,12 +267,9 @@ class Port:
         return server.call(self.fn, value)
 
     def python(self, value: Any) -> Outcome:
-        try:
-            out = self.reference(copy.deepcopy(value))
-        except self.rejects as e:
-            return "reject", str(e)
-        except Exception as e:
-            return _undeclared(e, self.rejects)
+        kind, out = _reference(self, value)
+        if kind != "returned":
+            return kind, out
         try:
             return "output", canonical(out)
         except TypeError as e:
@@ -294,7 +299,7 @@ def _outcome(msg: Any, who: str) -> Outcome:
 class ProtocolPort:
     """A core protocol's port: its executable (`exe`, or a `lean_exe` of the Lake package `package`) run as `EXE serve`.
     `reference(case)` returns the outcome dict, all six fields (`verity_difftest.protocol.answer` builds one as
-    `Core.Protocol.case` does). `inputs` draws cases, `{"commitment": hex, "evidence": hex, "params": JSON}` and malformed
+    `Core.Protocol.case` does). `inputs` samples cases, `{"commitment": hex, "evidence": hex, "params": JSON}` and malformed
     ones (bad hex, params, evidence, missing fields); `need_rejects=False` waives the check that some aren't accepted.
     `of_record` is the side of record (`RECORDS`)."""
 
@@ -306,6 +311,7 @@ class ProtocolPort:
     serve: tuple[str, ...] = ("serve",)
     of_record: str = "python"
     accepted = "accept"
+    rejects: ClassVar[tuple[type[BaseException], ...]] = ()
 
     def __post_init__(self) -> None:
         _check_record(self)
@@ -324,10 +330,9 @@ class ProtocolPort:
             raise ProtocolError(f"{server.argv[0]}: {e}") from None
 
     def python(self, case: Any) -> Outcome:
-        try:
-            out = self.reference(copy.deepcopy(case))
-        except Exception as e:
-            return _undeclared(e, ())
+        kind, out = _reference(self, case)
+        if kind != "returned":
+            return kind, out
         try:
             return _outcome(out, "the reference's")
         except (ValueError, TypeError) as e:
@@ -381,9 +386,9 @@ class Stats:
 
 @contextlib.contextmanager
 def _no_local_constants() -> Iterator[None]:
-    """Hypothesis also draws, at p = 0.05 per draw, constants it scrapes from every local module the process has loaded
-    (`providers._get_local_constants`, cached per constraint in `CONSTANTS_CACHE`), so a seeded run's draws moved when a
-    module the reference imports gained a literal, or a test imported one first. Within this, it draws from its own
+    """Hypothesis also samples, at p = 0.05 per sample, constants it scrapes from every local module the process has loaded
+    (`providers._get_local_constants`, cached per constraint in `CONSTANTS_CACHE`), so a seeded run's samples moved when a
+    module the reference imports gained a literal, or a test imported one first. Within this, it samples from its own
     constants alone. `tests/test_constants.py` pins the hook, so a Hypothesis upgrade that moves it fails there."""
     from hypothesis.internal.conjecture import providers
     from hypothesis.internal.constants_ast import Constants
@@ -399,7 +404,7 @@ def _no_local_constants() -> Iterator[None]:
 
 
 def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: Server | None = None) -> Stats:
-    """Draw `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
+    """Sample `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
     `Mismatch` with a report of the minimal input Hypothesis shrank to and how to reproduce it, or `Vacuous`. The `Stats`
     count the outcomes of the side of record by kind.  Hypothesis is imported here, so the server, `build` and `replay` run
     without it."""

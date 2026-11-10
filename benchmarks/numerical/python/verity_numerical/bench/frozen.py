@@ -1,8 +1,8 @@
 """The r20 campaign's frozen evidence that code still reads, fetched from the evidence store instead of kept in the tree.
 
-The overhead ledger (``backends/numerical/reports/ledger/*.jsonl``: frozen 2026-09-22, every claim imported as labels by
-``ledger_to_store``) and the run results the frozen backends' report scripts compare against (``backends/numerical/reports/*.json``,
-``backends/*/results*``) were tracked copies until 2026-09-29.  They are one ``frozen-evidence/v1`` tree artifact laid out at
+The overhead ledger (``backends/numerical/reports/ledger/*.jsonl``: frozen, every claim imported as labels by
+the r20 ledger import) and the run results the frozen backends' report scripts compare against (``backends/numerical/reports/*.json``,
+``backends/*/results*``) were tracked copies once.  They are one ``frozen-evidence/v1`` tree artifact laid out at
 their former repository paths, so a label ref ``backends/numerical/reports/ledger/<lane>.jsonl:<line>`` still names a file in it.
 
     path("backends/numerical/reports/ledger")   -> that directory, fetched
@@ -30,7 +30,7 @@ def root() -> Path:
 
 def path(rel: str) -> Path:
     """``rel`` in the frozen tree; FileNotFoundError when the tree has no such path (a directory that isn't there would read
-    as empty). The paths are where the files were on 2026-09-29: a layout move doesn't rewrite them."""
+    as empty). The paths are where the files were when the tree was frozen: a layout move doesn't rewrite them."""
     p = root() / rel
     if not p.exists():
         raise FileNotFoundError(f"{rel} is not in the frozen evidence {EVIDENCE}, which keeps the former repository paths")

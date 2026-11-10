@@ -1,7 +1,7 @@
 """P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu | p2-v3-gpu`) on CPU: the reference
 (`p2_v1/reference.py`) against the spec's pinned vectors, and every step of the arm with the reference standing in for the GPU
 library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's memory challenger process
-(`p2_v1/memory_challenger.py` for the spec's framing, `band_gpu/memory_challenger.py`'s `protocol.TimedAudit` for `p2-16448/v4`) on its
+(`p2_v1/memory_challenger.py` for the spec's framing, `verity/core/devices/memory_challenger/timed_audit.py`'s `protocol.TimedAudit` for `p2-16448/v4`) on its
 logical clock, so no outcome depends on a clock."""
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[3]
 BENCH = ROOT / "benchmarks" / "pous"
 WS = {"id": "toy/linears", "bytes": 2560, "tensors": [["q", 16, 32], ["k", 8, 32], ["down", 32, 16]]}
 SEED = "5eed" * 8
-"""`band_gpu/memory_challenger.py --seed` for the `V3` arm: its challenges, and so its controls' verdicts, are fixed."""
+"""`verity/core/devices/memory_challenger/timed_audit.py --seed` for the `V3` arm: its challenges, and so its controls' verdicts, are fixed."""
 
 
 def _bench():
@@ -139,27 +139,29 @@ def test_the_root_exponent_splits_as_the_kernel_takes_it():
 
 
 def test_params_refuse_a_modulus_below_the_payload():
-    """Every payload is below p (spec §2, `m < 2^b < p`): a c0 past 2^w (a negative modulus, which is 3 mod 4 in Python's
+    """Every payload is below p (`m < 2^b < p`): a c0 past 2^w (a negative modulus, which is 3 mod 4 in Python's
     arithmetic), or one leaving p at or below the largest payload, is refused rather than rejecting every block."""
     R, _, _ = _p2()
     for c0 in ((1 << 32) + 5, (1 << 32) - 3, (1 << 32) - (1 << 24) + 1):
         with pytest.raises(ValueError, match="payload"):
-            R.Params(32, c0, 3)
-    assert R.Params(32, 5, 3).p == (1 << 32) - 5
+            R.Params(32, c0, 3, 1, 1, "p2-3B")
+    assert R.Params(32, 5, 3, 1, 1, "p2-3B").p == (1 << 32) - 5
 
 
 def test_the_tree_and_the_audit_derivation_are_the_specs():
     import hashlib
 
+    from verity.core.protocols.pous.verifier import MerkleTree
     from verity.ml.commitments.identity import tagged_sha512
     from verity.ml.commitments.rowleaf import sha512_row_v2_digest
     from verity.ml.randomness import frame
 
     R, _, _ = _p2()
     leaves = [bytes([i]) * 64 for i in range(3)]
+    tree = MerkleTree(leaves)
     node = lambda l, r: hashlib.sha512(b"\x01" + l + r).digest()  # noqa: E731
-    assert R.root(leaves) == node(node(leaves[0], leaves[1]), leaves[2])                    # RFC 6962: split at 2
-    assert R.path(leaves, 2) == [node(leaves[0], leaves[1])] and R.path(leaves, 0) == [leaves[1], leaves[2]]
+    assert tree.root == node(node(leaves[0], leaves[1]), leaves[2])                         # RFC 6962: split at 2
+    assert tree.path(2) == (node(leaves[0], leaves[1]),) and tree.path(0) == (leaves[1], leaves[2])
     block, salt = bytes(range(256)) * 8 + bytes(8), b"t" * 32
     leaf = R.leaf(salt, 3, 513, block)
     assert leaf == hashlib.sha512(b"\x00" + salt + (3).to_bytes(8, "big") + (513).to_bytes(2, "big")
@@ -182,15 +184,15 @@ def test_the_tree_and_the_audit_derivation_are_the_specs():
 
 
 def test_the_spec_rtt_cap_is_the_schemes():
-    """The arm's Δ and RTT cap are spec v1.1's, as `verity`'s P2 scheme states them, so `rtt_allowance_within_spec`
-    judges against the cap whose `Δ + RTT` the certificate admits."""
+    """The arm's Δ and RTT cap are read from `verity`'s P2 scheme, so `rtt_allowance_within_spec` judges against the
+    cap whose `Δ + RTT` the certificate admits."""
     from verity.core.protocols.pous import audit
     from verity.core.protocols.pous.schemes import p2
 
     R, _, _ = _p2()
-    assert (R.DELTA_NS, R.MAX_RTT_ALLOWANCE_NS) == (p2.DELTA_NS, p2.RTT_ALLOWANCE_CAP_NS) == (500_000, 354_000)
+    assert (R.DELTA_NS, R.RTT_ALLOWANCE_CAP_NS) == (p2.DELTA_NS, p2.RTT_ALLOWANCE_CAP_NS) == (500_000, 354_000)
     assert p2.DELTA_NS == audit.DEADLINE_NS
-    assert R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS < p2.ROOT_CALL_NS <= R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS + 1_000
+    assert R.DELTA_NS + R.RTT_ALLOWANCE_CAP_NS < p2.ROOT_CALL_NS <= R.DELTA_NS + R.RTT_ALLOWANCE_CAP_NS + 1_000
 
 
 def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
@@ -344,13 +346,11 @@ def test_side_by_side_tables_both_arms_and_withholds_a_failed_one(tmp_path, monk
     assert json.loads((tmp_path / "side.json").read_text())["schema"] == sbs.SCHEMA
 
 
-def test_the_registered_expander_given_the_specs_prefix_gives_every_pinned_key():
+def test_the_v3_arm_gates_on_the_specs_vectors():
     bench = _bench()
     assert bench.IMPLS["p2-v3-gpu"] is bench.P2V3Gpu and bench.IMPLS["p2-v1-gpu"] is bench.P2V1Gpu
     got = bench.P2V3Gpu().conformance_gate()
-    assert got["passed"], got
-    assert {k for k in got["checks"] if k.startswith("expander/")} == {
-        "expander/p2-v4/w64/0", "expander/p2-v4/w96/0", "expander/p2-v4/w128/0", "expander/p2-v4/w16448/0"}
+    assert got["passed"] and "p2-v4/w16448/0" in got["checks"], got
 
 
 def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_challenger(tmp_path):
@@ -370,7 +370,7 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_ch
     params = schemes.P2Params(128, 173, 64, 3)
     setup = body["setup"]
     assert setup["scheme"] == "p2-128/v4" and setup["manifest"] == params.manifest() and len(bytes.fromhex(setup["salt"])) == 24
-    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-gpu", "memory_challenger": "band_gpu/memory_challenger.py",
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-gpu", "memory_challenger": "verity/core/devices/memory_challenger/timed_audit.py",
                                       "memory_challenger_args": []}
     w = b"".join(_bench()._w_segment(WS["id"], s, params.segment_bytes, WS["bytes"]) for s in range(3))
     commitment = protocol.commit(schemes.P2(params), w)
@@ -382,7 +382,7 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_ch
     honest = m["audit"]
     assert honest["scheme"] == "p2-128/v4" and honest["strict"] is False and honest["audits_accepted"] == 2
     assert honest["k"] == 105 and any("no certificate" in g for g in honest["gaps"])
-    from band_gpu.memory_challenger import seeded_source
+    from verity.core.devices.memory_challenger.timed_audit import seeded_source
     assert honest["seed"] == SEED and [r["source"] for r in honest["records"]] == [
         seeded_source(bytes.fromhex(SEED), j).hex() for j in range(2)]
     assert m["value_control"]["audits_accepted"] == 0 and m["late_control"]["audits_accepted"] == 0
@@ -439,13 +439,13 @@ def test_the_v3_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fa
 
 
 def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
-    """`band_gpu/memory_challenger.py`'s audit, strict, of `p2-16448/v4` at its registered point (one segment), against a responder whose
+    """`verity/core/devices/memory_challenger/timed_audit.py`'s audit, strict, of `p2-16448/v4` at its registered point (one segment), against a responder whose
     blocks match `vk`'s leaves, on the logical clock (or `clock`): the memory challenger checks leaves, not codewords."""
     import hashlib
 
     sys.path.insert(0, str(BENCH))
     from band_gpu import harness as H
-    from band_gpu import memory_challenger as live
+    from verity.core.devices.memory_challenger import timed_audit as live
 
     from verity.core.protocols.pous import schemes
     from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
@@ -463,7 +463,7 @@ def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
 
 
 def test_protocol_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it(tmp_path):
-    """The end-to-end claim's memory challenger: `Δ + 354 µs` (spec v1.1's cap) is inside `P2SlackFamilyUncond`'s
+    """The end-to-end claim's memory challenger: `Δ + 354 µs` (the cap) is inside `P2SlackFamilyUncond`'s
     certificate, so 105 challenges run and are accepted; `Δ + 355 µs` fits one 854,029 ns root call, so the memory challenger
     refuses before sending any challenge."""
     from verity.core.protocols.pous.schemes import p2
@@ -483,7 +483,7 @@ def test_the_host_trace_splits_each_slow_round_trip_into_where_its_time_went():
     over, and its split adds up: send, the wait for the first byte (the responder's reported time and the rest), the rest of
     the answer, and the memory challenger's own work outside the round trip."""
     sys.path.insert(0, str(BENCH))
-    from band_gpu import memory_challenger as live
+    from verity.core.devices.memory_challenger import timed_audit as live
 
     ping, challenge = live.OP_PING, live.OP_CHALLENGE
     log = [(ping, 0, 0, 1_000, 5_000, 6_000, 1_000, 2_000, 0),
@@ -568,7 +568,7 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
               "late_control", "recompute_control", "tampered_control", "signature_control", "fail_closed"):
         assert gates[g]["passed"], (g, gates[g])
     assert "certificate" not in gates and body["profile"] is None
-    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "memory_challenger": "memory_challenger/live.py",
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "memory_challenger": "benchmarks/pous/memory_challenger/live.py",
                                       "memory_challenger_args": ["--signer", "test"]}
     nb = _small().width_bytes
     raw = (tmp_path / "leaves-p2.bin").read_bytes()
@@ -710,7 +710,7 @@ def _live():
 
 
 def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monkeypatch):
-    """A verdict that fails after the sessions signed (r20261009-034919-c88c: `judge` could not import the Lean's server)
+    """A verdict that fails after the sessions signed (as when `judge` could not import the Lean's server)
     takes nothing with it: every signed session is in `sessions_out` first, whole, and still verifies under its signer."""
     from verity.core.protocols.pous import memory_challenger as mc
     from verity.core.protocols.pous import schemes
@@ -739,8 +739,8 @@ def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monke
 
 def test_a_test_signed_audit_leaves_nothing_in_tmpdir(tmp_path_factory, monkeypatch):
     """`--signer test`'s leaf state and session log are in a temporary directory the audit removes, whether it ends or
-    fails: nothing removes one left in `$TMPDIR` (`pous-session-log-*` and `pous-test-signer-*` held 82% of vy-nebius-2's
-    /workspace inodes, 19 Oct)."""
+    fails: nothing removes one left in `$TMPDIR` (`pous-session-log-*` and `pous-test-signer-*` held 82% of a GPU node's
+    /workspace inodes once)."""
     import tempfile
 
     from verity.core.protocols.pous.schemes import p2
@@ -789,12 +789,10 @@ def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused
     first = live.lms_signer(tmp_path / "key", params=small)
     assert first.scheme == "test/lms-sha512/n64-w1-h2/v0" and (tmp_path / "key" / "seed").stat().st_mode & 0o777 == 0o600
     a = lms.Signature.decode(small, first.sign(b"s" * 32, b"r"))
-    first.state.close()
     monkeypatch.setattr(lms, "keygen", lambda *_a, **_k: pytest.fail("the key is made again"))
     again = live.lms_signer(tmp_path / "key", params=small)
     assert again.public_key == first.public_key
     assert (a.q, lms.Signature.decode(small, again.sign(b"s" * 32, b"r")).q) == (0, 1)
-    again.state.close()
     tree = tmp_path / "key" / "tree.bin"
     raw = tree.read_bytes()
     tree.write_bytes(raw[:-1] + bytes([raw[-1] ^ 0xFF]))
@@ -825,7 +823,7 @@ def _deployed_signer(tmp_path):
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
-    return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+    return mc.LmsSigner(key, tmp_path / "state")
 
 
 def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profile(tmp_path, monkeypatch):

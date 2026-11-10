@@ -86,7 +86,7 @@ STAMP_M = (16, 64)
 HOST_SHAPES = ((512, 6144), (4096, 6144))
 HOST_CALLS, HOST_TOP = 200, 25
 #: hash_decode.cuh's stamp slots: a pd_commit CTA's phases (PS_*), and the tail's (PT_*: level l + 1 at PT_LEVEL + l)
-PS = ("start", "segs", "salt", "frame", "sync1", "fold", "sync2", "leaf", "seed")
+PS = ("start", "segs", "salt", "frame", "sync1", "fold", "sync2", "leaf", "seed", "seg1", "seg8", "seed0", "line")
 PT = {0: "start", **{1 + level: f"level{level + 1}" for level in range(8)}, 9: "seed_a", 10: "fillers", 11: "entry"}
 PT_ROW = 15
 #: a stream's lane in ``lanes``: the streams that run each kernel in turn, of those not named yet, numbered in their order
@@ -122,7 +122,7 @@ def _instrument(run, PPD) -> None:
 def run_mode(a) -> int:
     import torch
     import glm53_timing as T
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(SHAPES)
     schedule = (a.schedule or ["serial"])[0]
@@ -333,7 +333,7 @@ def grouped_mode(a) -> int:
     import glm53_timing as T
     import grouped_check as GC
     import torch
-    from verity_vllm.protocol_options import pouw_pearl_c_grouped as PG
+    from verity_vllm.protocols.pouw.pearl_c import grouped as PG
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(GC.SHAPES)
     schedules = a.schedule or list(GC.SCHEDULES)

@@ -1,4 +1,10 @@
-import Proofs.Pous.Chain.FamilyRounds
+module
+
+public import Proofs.Pous.Chain.FamilyRounds
+public import Definitions.Pous.Guarantees
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Chain.Family
 import Proofs.Pous.Continuous.TimeAverage
 
 /-!
@@ -17,6 +23,8 @@ unconditional `chainExPostFactoG_v6` (`band_seg_timedINC`), for every `D ≤ d` 
 `(0, 89)`, `(1, 93)`, `(2, 97)`, `(5, 111)`, the parameter points of `BandMultiMeetsFamilyD0`, `D1`, `D2` and
 `BandMultiMeetsFamily`.
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 
@@ -161,7 +169,7 @@ theorem band_epsProof_d2 (d : ℕ) (dom : ℕ → Bits 512) :
   rw [band_epsProof_one, βOne_2_97]
   norm_num
 
-/-- `ε_proof` at `D = 5`, `k = 111`, one segment: `3182352/2^28 ≈ 1.1855%`, lane E's figure. -/
+/-- `ε_proof` at `D = 5`, `k = 111`, one segment: `3182352/2^28 ≈ 1.1855%`. -/
 theorem band_epsProof_d5 (d : ℕ) (dom : ℕ → Bits 512) :
     epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) (βOne 5 111) = 3182352 / 2 ^ 28 := by
   rw [band_epsProof_one, βOne_5_111]

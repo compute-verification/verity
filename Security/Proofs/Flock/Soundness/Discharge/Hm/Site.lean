@@ -1,12 +1,33 @@
 /-
-`HmRowComputes` at e2e-layout's rows (`keyedRowsOuts_computes`). At a drawn unit's site in its table's accepted
+`HmRowComputes` at the keyed layout's rows (`keyedRowsOuts_computes`). At a sampled proof block's site in its table's accepted
 statement, the `b ‖ c` a satisfying witness holds at row port `p`'s `hm96` output (`bcCol`, the address the regions pin
 `Layout.bcAddr`) is the commit string of the row prefix and the bytes at the message columns, under the salt at `saltCol`
 (`bc_site_col`, `bc_site_commit`): `row_bc_setupH`, with each column in the block (`bcCol_lt`, `saltCol_lt`,
 `Layout.msgCol_lt_of_parse`), so the site's addresses read the block's bits (`bit_siteAddr`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Bc
-import Proofs.Flock.Soundness.Discharge.Layout
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Bc
+public import Proofs.Flock.Soundness.Discharge.Hm.Copy
+public import Proofs.Flock.Soundness.Discharge.Layout
+public import Proofs.Flock.Soundness.Discharge.Layout.Keyed
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
+import Proofs.Flock.Verifier.HmNets
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Flock.HmNets hiding and
@@ -127,7 +148,7 @@ theorem bytesAt_site (a : Placed.Accepted T) (z : Witness T.m) (o : Fin (2 ^ T.n
       bytesOf (blockBit T z o) N col :=
   ofFn_site a z o N col hcol
 
-/-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement whose unit returns the
+/-- **A row's `b ‖ c` at a sampled proof block's site**: in a satisfying witness of an accepted statement whose unit returns the
 outputs and whose rows are `sha512/row/v1` rows (`hv1`), at block `o`, template instance `g` and row port `p`, the 128
 bytes at the `hm96` slot's output (`bcCol`) are the commit string of the row prefix and the `2 · words` bytes at the
 message columns (`Typed.msgCol`), under the 192 bytes at `saltCol`. -/
@@ -167,7 +188,7 @@ theorem bc_site_commit (a : Placed.Accepted T) (ho : a.st.c.outNet = a.st.c.unit
 
 end Site
 
-/-! ## At e2e-layout's rows -/
+/-! ## At the keyed layout's rows -/
 
 section Keyed
 
@@ -181,7 +202,7 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {Reg : Type} {mPts : 
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
   {popOf : Reg → Public}
 
-/-- **`HmRowComputes` at e2e-layout's rows** (`hHm` for `Layout.keyedRowsOuts` at `saltCol`): at every drawn unit's
+/-- **`HmRowComputes` at the keyed layout's rows** (`hHm` for `Layout.keyedRowsOuts` at `saltCol`): at every sampled proof block's
 committed wire held by a row port `q` (each a `sha512/row/v1` row of `16 · words` bits in at least one chunk, `hv1`,
 which `Layout.scopeOk_ports` gives), in a satisfying witness of the unit's table, the `b ‖ c` at the port's `hm96`
 output is the commit string of the row's bytes (`rowEnc`) and the salt the witness holds at `saltCol`. -/

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_int, is_row_major, split_heads

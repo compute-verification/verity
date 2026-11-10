@@ -1,14 +1,50 @@
-import Mathlib
-import Definitions.Accounting.Actual.WipeDraw
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Definitions.Pous.Model.StreamedWipe
+public import Definitions.Accounting.Actual.Sampler
+public import Definitions.Accounting.TS.Drawn
+public import Definitions.Hash.RowLeaf
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The remote audit's opening draw (trusted)
 
 The draw `audit.pooled` reads, as the verifier runs it. A session has `n` windows, in order. Window `t` registers its
-`U_t ≤ m` receipts and their roots, which fix which of them are correct. Then the challenger releases window `t`'s
+`U_t ≤ m` receipts and their roots, which fix which of them are correct unless an opening collides (`Receipts`). Then
+the challenger releases window `t`'s
 openings coin, live, to the verifier and the prover, and the verifier opens `s'_t = min(s_t, U_t)` distinct receipts of
-the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openings")` under the key
+the `U_t` (`RemoteAudit.receiptSample`, `Session.close`): `Key.subset(s'_t, U_t, "openings")` under the key
 `derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})` (`verity/ml/randomness`), a partial Fisher–Yates whose step
 `i` swaps position `i` with position `i + Key.uniform(U_t − i)`, read from the keyed SHA-512 stream at
 `("s", "openings", i)`. `Key.uniform(N)` is exact rejection sampling: it reads `w`-bit big-endian words,
@@ -32,16 +68,20 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   `t`'s are read only off the earlier windows' openings coins is `Assumptions.Live`. `Session.lands t ω b` is window
   `t`'s test at its own `U_t`, `s'_t` and correct receipts, and `Session.bound t ω` the most it lands on uniform
   blocks, `(g_t/U_t)^(s'_t)` with `g_t` its correct receipts, `0` when `g_t < s'_t`.
-* `Committed`: **the session as the prover plays it holding the coin commitment.** The challenger commits every coin
-  before the first is released, as hm96-sha512 leaves (192-byte salts) in a frame-v3-sha512 tree, and the prover holds
-  the root from the start (`coins.py`). A root is a function of every coin, so a deployed window's size can read
-  window `t`'s openings coin through it, and `Live` is false of the deployed session (red team RD-12). `view c` is the
-  session the prover plays holding commitment `c`; `play com` is the deployed one, the prover holding `com ω` at
-  coins `ω` (the salts among the other coins `x`). `junk com t` is the commitment with openings coin `t`'s leaf
-  committing zeros, the other coins and every salt as they are: it reads no bit of coin `t`.
+* `Committed`: **a session read through a coin commitment.** The challenger commits every coin before the first is
+  released, as hm96-sha512 leaves (192-byte salts) in a frame-v3-sha512 tree (`coins.py`). It sends the prover each
+  coin as it releases it and the root only after the prover's last root, with the outcome (`audit.Session.disclose`,
+  which needs no hiding premise on the root), so the session the prover plays is a `Session` and the
+  guarantees take it plainly. A root is a function of every coin, so a prover holding it from the start could size a
+  window off window `t`'s openings coin, and that session is not `Live` (red team RD-12). `view c` is the session
+  played holding commitment `c`; `play com` holds `com ω` at coins `ω` (the salts among the other coins `x`).
+  `junk com t` is the commitment with openings coin `t`'s leaf committing zeros, the other coins and every salt as
+  they are: it reads no bit of coin `t`. The memory line over the prover's records reads its records through it
+  (`Properties.RemoteAudit.Line.recordCommitted`).
 * `Session.potential prf δ t`: the hybrid's potential after `t` windows: windows `j < t` land on `prf j` at their own
   coins, and a uniform 512-bit threshold coin `u` falls below `∏_{j<t} bound j`.
-* `Committed.hide com prf δ t`: **window `t`'s hiding term**, what the junk-commitment hybrid costs at window `t`:
+* `Committed.hide com prf δ t`: **window `t`'s hiding term**, what the junk-commitment hybrid costs at window `t`
+  (`0` at a view that reads no commitment):
   how much likelier the potential after `t + 1` windows is at the deployed commitment than at `junk com t`, plus how
   much likelier the potential after `t` windows is at `junk com t` than at the deployed one. Each is an event of the
   coins and the commitment the prover holds, read off the prover's sizes and correct receipts of windows `j ≤ t`,
@@ -61,11 +101,33 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   It is the hybrid over windows, the earlier windows real and window `t` given, with the later windows replaced by
   their bound as a coin: they read window `t`'s whole coin, which a distinguisher given `b` instead of a key doesn't
   have, and on uniform blocks each lands with probability at most its bound given the windows before.
+* `cont t ω ζ`: **window `t`'s continuation** of coins `ω` on `ζ`, the run that shares `ω`'s cut (its other coins,
+  the prover's, the world's and every salt, and its openings coins before window `t`'s) and continues on `ζ`'s openings
+  coins from window `t`'s on. It has `Accounting.TS.spliceAt`'s two laws, so the sampled window's forking lemma reads
+  it.
+* `Receipts`: **the receipts as the window's roots hold them.** Window `t` registers its receipts as
+  `hm96-sha512/row/v2` leaves, 16 receipts a leaf, in frame-v3-sha512 trees, and sends their roots before its coin is
+  released (`RemoteAudit.verifyWindow`). `opened t ω p` is the opening the prover presents for receipt `p` when the
+  window opens it. `Shows D prf rest t p ω v`: the window opens `p` at `ω` and the verifier accepts the presented
+  opening, of row `v`, at the receipt's root and rank as that run has them. `held D prf rest t ω p` is **the row the
+  root holds for it**, a definition, not the prover's: the plurality of the rows `p` shows over window `t`'s
+  continuations of `ω` (`Accounting.TS.plural` at `cont t`, ties broken by `Classical.epsilon`), as
+  `Accounting.TS.SampledLayer.committed` is a position's. It reads only `ω`'s cut, and no row is shown on more of the
+  cut's continuations (`Accounting.SecurityProofs.Remote.Binding.held_cont`, `tally_le_held`). A root alone fixes no
+  row: the prover may present another one. `Moved D prf rest t ω p` is the verifier accepting the presented opening at
+  the receipt's root and rank with a row other than the held one. `binding D prf rest` is **the receipts' binding
+  term**: the probability that some window's opened receipt moved. Its bound is the fork form (`Remote.Fork`,
+  `ReceiptsBindingOfFork`): two runs from window `t`'s cut show the receipt two accepted rows, which at one root, rank
+  and verifier hash a SHA-512 collision (`Hash.Guarantees.RowBinding`, proved), and otherwise split the receipt's
+  roots. Without a split it is a collision a finder outputs (`ReceiptsBindingOfCR`, claim `cr/sha-512`);
+  `ledger.binding` charges that, the split at 0 (the open gap `binding-split`).
 * `pooled n U s' δ`: `audit.pooled`'s horizon reading, the most wrong receipts `Σ_t f_t·U_t` over the shares `f_t` with
   `0 ≤ f_t ≤ 1 − s'_t/U_t` and `Σ_t s'_t·f_t ≤ budget S δ = S·(1 − δ^(1/S))`, `S = Σ_t s'_t`. `audit.pooled` computes it
   greedily, the windows taken by `U_t/s'_t` falling (the fractional knapsack's optimum); that the greedy order reaches
   this supremum is not stated here.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Draw
 
@@ -119,7 +181,7 @@ def below (δ P : ℝ) (u : Pous.Bits 512) : Prop := P ≤ δ ∨ Pous.bitsVal u
 /-- A session's coins: the other coins and window `t`'s openings coin. -/
 abbrev Coins (n κ : ℕ) (X : Type) : Type := X × (Fin n → Pous.Bits κ)
 
-/-- A session of `n` windows of at most `m` receipts, window `t` drawing `min(s_t, U_t)` of its `U_t`. -/
+/-- A session of `n` windows of at most `m` receipts, window `t` sampling `min(s_t, U_t)` of its `U_t`. -/
 structure Session (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) where
   /-- Window `t`'s receipt count `U_t`. -/
   size : Fin n → Coins n κ X → Fin (m + 1)
@@ -129,7 +191,7 @@ structure Session (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) where
 /-- `audit.pooled`'s budget: `S·(1 − δ^(1/S))` (`-expm1(log δ / S)·S`). -/
 noncomputable def budget (S : ℕ) (δ : ℝ) : ℝ := S * (1 - δ ^ ((S : ℝ)⁻¹))
 
-/-- The pooled bound of windows of sizes `U` drawing `d`: the most `Σ_t f_t·U_t` over the shares `f` with
+/-- The pooled bound of windows of sizes `U` sampling `d`: the most `Σ_t f_t·U_t` over the shares `f` with
 `0 ≤ f_t ≤ 1 − d_t/U_t` and `Σ_t d_t·f_t ≤ budget (Σ_t d_t) δ`. -/
 noncomputable def pooled (n : ℕ) (U d : Fin n → ℕ) (δ : ℝ) : ℝ :=
   sSup ((fun f : Fin n → ℝ => ∑ t, f t * U t) ''
@@ -140,13 +202,13 @@ namespace Session
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
 
 /-- Window `t`'s draw count, `min(s_t, U_t)`. -/
-def draws (t : Fin n) (ω : Coins n κ X) : ℕ := min (s t) (D.size t ω)
+def samples (t : Fin n) (ω : Coins n κ X) : ℕ := min (s t) (D.size t ω)
 
 /-- The receipts window `t` opens at coins `ω`: its draw on the first blocks `prf t` gives its coin, with the fallbacks
 `rest ω t` where the sampler rejects a first word. -/
 def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
     (ω : Coins n κ X) : Finset ℕ :=
-  openings (D.size t ω) (D.draws t ω) (prf t (ω.2 t)) (rest ω t)
+  openings (D.size t ω) (D.samples t ω) (prf t (ω.2 t)) (rest ω t)
 
 /-- Window `t`'s correct receipts among its `U_t`. -/
 def good (t : Fin n) (ω : Coins n κ X) : ℕ :=
@@ -154,12 +216,12 @@ def good (t : Fin n) (ω : Coins n κ X) : ℕ :=
 
 /-- Window `t`'s bound on uniform first blocks: `(g_t/U_t)^(s'_t)`, `0` when `g_t < s'_t`. -/
 noncomputable def bound (t : Fin n) (ω : Coins n κ X) : ℝ :=
-  if D.draws t ω ≤ D.good t ω then ((D.good t ω : ℝ) / (D.size t ω : ℕ)) ^ D.draws t ω else 0
+  if D.samples t ω ≤ D.good t ω then ((D.good t ω : ℝ) / (D.size t ω : ℕ)) ^ D.samples t ω else 0
 
 /-- Window `t`'s test at outcome `ω` on first blocks `b`: its draw of `s'_t` of its `U_t` lands in its correct
 receipts. -/
 def lands (t : Fin n) (ω : Coins n κ X) (b : Blocks m) : Prop :=
-  test (D.size t ω) (D.draws t ω) (D.correct t ω) b
+  test (D.size t ω) (D.samples t ω) (D.correct t ω) b
 
 /-- **Window `t`'s distinguisher** on coins `y.1 = (ω, u)` and first blocks `y.2`: windows `j < t` land on `prf j` at
 their coins in `ω`, window `t` lands on `y.2`, and the threshold coin `u` falls below `∏_{j ≤ t} bound j`. -/
@@ -175,11 +237,11 @@ def potential (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : ℕ) (
     below δ (∏ j ∈ univ.filter (fun j : Fin n => (j : ℕ) < t), D.bound j z.1) z.2
 
 /-- The session's wrong receipts, `Σ_t (U_t − good_t)`. -/
-def wrong (ω : Coins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
+def incorrect (ω : Coins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D.good t ω)
 
 /-- The session's pooled bound at `δ`, at the sizes and draw counts of outcome `ω`. -/
 noncomputable def pooled (δ : ℝ) (ω : Coins n κ X) : ℝ :=
-  Draw.pooled n (fun t => D.size t ω) (fun t => D.draws t ω) δ
+  Draw.pooled n (fun t => D.size t ω) (fun t => D.samples t ω) δ
 
 end Session
 
@@ -212,5 +274,60 @@ noncomputable def hide [Fintype X] (com : Coins n κ X → Cm) (prf : Fin n → 
     (Pous.pr ((F.play (junk com t)).potential prf δ t) - Pous.pr ((F.play com).potential prf δ t))
 
 end Committed
+
+/-- **Window `t`'s continuation** of coins `ω` on `ζ`: `ω`'s other coins and its openings coins before window `t`'s,
+then `ζ`'s openings coins from window `t`'s on. -/
+def cont {n κ : ℕ} {X : Type} (t : Fin n) (ω ζ : Coins n κ X) : Coins n κ X :=
+  (ω.1, fun j => if j < t then ω.2 j else ζ.2 j)
+
+/-- **A session's receipts as the windows' roots hold them**: receipt `p` of window `t` at coins `ω` is a row of an
+hm96 bit-row leaf at rank `rank t ω p` of the tree whose root `root t ω p` the window registered, checked by
+`verifier t ω p` under `hash` (SHA-512). `opened t ω p` is the opening the prover presents when the window opens it;
+the row the root holds for it is `Receipts.held`, read off the prover's runs. -/
+structure Receipts (n κ : ℕ) (X : Type) where
+  /-- The hash, SHA-512. -/
+  hash : Hash.Msg → Hash.Digest
+  /-- What the verifier holds for receipt `p`'s leaf: its domain, the hm96 key and the format (`row/v2`). -/
+  verifier : Fin n → Coins n κ X → ℕ → Hash.RowLeaf.Verifier
+  /-- The root window `t` registered for receipt `p`. -/
+  root : Fin n → Coins n κ X → ℕ → Hash.Digest
+  /-- Receipt `p`'s leaf's rank. -/
+  rank : Fin n → Coins n κ X → ℕ → ℕ
+  /-- The opening the prover presents for receipt `p`. -/
+  opened : Fin n → Coins n κ X → ℕ → Hash.RowLeaf.Opening
+
+namespace Receipts
+
+variable {n κ : ℕ} {X : Type} (R : Receipts n κ X)
+
+/-- **Receipt `p` of window `t` shows row `v` at coins `ω`**: the window opens it, the verifier accepts the opening the
+prover presents at the receipt's root and rank, and its row is `v`. -/
+def Shows {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
+    (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (p : ℕ) (ω : Coins n κ X) (v : Hash.Row) : Prop :=
+  p ∈ D.opened prf rest t ω ∧
+    Hash.RowLeaf.accepts R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p) (R.opened t ω p) ∧
+    (R.opened t ω p).row = v
+
+/-- **The row receipt `p`'s root holds** at window `t` and coins `ω`: the plurality of the rows it shows over window
+`t`'s continuations of `ω`, a row that the most of them show (`Accounting.TS.plural` at `cont t`, ties broken by
+`Classical.epsilon`). -/
+noncomputable def held [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X)
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : Coins n κ X)
+    (p : ℕ) : Hash.Row :=
+  Accounting.TS.plural (cont t) (R.Shows D prf rest t p) ω
+
+/-- **Receipt `p` of window `t` moved**: the verifier accepts the opening presented, at the receipt's root and rank,
+with a row other than the one its root holds. -/
+def Moved [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
+    (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : Coins n κ X) (p : ℕ) : Prop :=
+  Hash.RowLeaf.accepts R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p) (R.opened t ω p) ∧
+    (R.opened t ω p).row ≠ R.held D prf rest t ω p
+
+/-- **The receipts' binding term**: the probability that some window opens a receipt that moved. -/
+noncomputable def binding [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X)
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) : ℝ≥0∞ :=
+  Pous.pr fun ω => ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p
+
+end Receipts
 
 end Accounting.Remote.Draw

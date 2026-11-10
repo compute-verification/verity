@@ -1,11 +1,13 @@
-import RemoteAudit.Window
+module
+
+public import RemoteAudit.Window
 
 /-!
 # A session's bookkeeping: `audit.py`'s `Session`
 
 The verifier's side of one session as a state machine over the events it sees, on its own clock (each event carries the
 clock's reading where `Session` reads it) and with its own coins (the 2W committed coins, window t's challenge at t and
-its openings coin at W + t, and the append coins in the order drawn). Each event gives what the Python call returns:
+its openings coin at W + t, and the append coins in the order sampled). Each event gives what the Python call returns:
 
 * `start`, `boundary`: the coin released (`none` at the close after the last window);
 * `append(root, count)`: the first index and its coin `c_a`; rejected `append` if malformed or past the codec's
@@ -25,6 +27,10 @@ its openings coin at W + t, and the append coins in the order drawn). Each event
 A call `Session` refuses with `SessionError` (out of turn, after the session ended, before a window's roots are final)
 is `refused`. After a rejection every later call but `start` is refused, as `_live` raises.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Session
 
@@ -272,7 +278,7 @@ def close (s : State) (t : Int) (now : Nat) : Except String (Result × State) :=
   let s := { s with windows := s.windows.modify t ({· with final := true}) }
   if w.roots.size < s.params.minPasses then return s.fail t .few
   if t + 1 == s.params.windows && s.joined.size < s.appends.size then return s.fail t .coin
-  let some drawn := draws s.digest t s.coins[s.params.windows + t]! s.params.samples (w.plans.map (·.length))
+  let some drawn := receiptSample s.digest t s.coins[s.params.windows + t]! s.params.samples (w.plans.map (·.length))
     | throw "the openings' draw ran past its reads"
   return (.drew drawn, { s with windows := s.windows.modify t ({· with drawn := some drawn, openedNs := some now}) })
 

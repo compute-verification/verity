@@ -1,6 +1,6 @@
 """GLM-5.3 TP8's row evaluators (`kernels.glm53_rows`, and `kernels.cublas_gemm_rows` for the cuBLAS split-K pair) as the sampled
-replay calls them.  Every family the per-rank no-evaluator rule named on the TP8 B1 Commit r20261016-213336-6c35, and on B8 greedy's
-replay r20261021-213033-aa93, has one.  The replay hands a row kernel the statics `spec_statics` parses from
+replay calls them.  Every family the per-rank no-evaluator rule named on the TP8 B1 Commit, and on B8 greedy's
+replay, has one.  The replay hands a row kernel the statics `spec_statics` parses from
 the Program's spec text (`{"f64":...}` floats, `true` / `False`, `{"fn":...}` or bare step ids, quoted kernel names), not the Python
 values the kernel self-check binds, so each family is checked here on those spellings against its Definition's word reference."""
 from __future__ import annotations
@@ -15,10 +15,10 @@ from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
 from verity.ml.circuits.evaluation.reference import signature_of
 from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-from verity_vllm.program.kernels import rows
-from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.program.registry import b1, boolean_rope, cublas_bf16, cuda_rmsnorm, deepgemm, dsa, fp8_moe_experts, hopper
-from verity_vllm.program.registry import ll_bf16, moe, sparse_mla_split
+from verity.ml.definitions.numerics import rows
+from verity.ml.definitions.numerics.kernel_registry import Declined
+from verity.ml.definitions.registry import b1, boolean_rope, cublas_bf16, cuda_rmsnorm, deepgemm, dsa, fp8_moe_experts, hopper
+from verity.ml.definitions.registry import ll_bf16, moe, sparse_mla_split
 from verity_vllm.query.manifest import format as RM
 
 #: the families FIXWIT's per-rank rule failed GLM-5.3 TP8 B1's Commit on: four plane-fed MoE producers and eleven with no evaluator
@@ -35,7 +35,8 @@ MLA = dict(DR=16, DV=16, BN=16, DOT=HOP, INV=hopper.Fa3InvSum, SCALE=0.0625)
 #: (spec text as a Program spells it, the Definition bound at the same statics)
 CASES = [
     ('RMSNormCudaVector8_v1{N=64,EPS={"f64":"0x1.4f8b588e368f1p-17"},BLOCK=8}', bind(cuda_rmsnorm.RMSNormCudaVector8, N=64, EPS=1e-5, BLOCK=8)),
-    ('RMSNormFusedCudaVector8_v1{N=64,EPS=1e-05,BLOCK=3}', bind(cuda_rmsnorm.RMSNormFusedCudaVector8, N=64, EPS=1e-5, BLOCK=3)),
+    ('RMSNormFusedCudaVector8_v1{N=64,EPS=1e-05,BLOCK=3}', bind(cuda_rmsnorm.RMSNormFusedCudaVector8V1, N=64, EPS=1e-5, BLOCK=3)),
+    ('RMSNormFusedCudaVector8_v3{N=64,EPS=1e-05,BLOCK=3}', bind(cuda_rmsnorm.RMSNormFusedCudaVector8, N=64, EPS=1e-5, BLOCK=3)),
     ('LlBf16DotprodGemm_v1{N=3,K=128,BS=64,VEC=2,FMA=1}', bind(ll_bf16.LlBf16DotprodGemmWord, N=3, K=128, BS=64, VEC=2, FMA=1)),
     ('LlBf16SplitKGemm_v1{N=3,K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}',
      bind(ll_bf16.LlBf16SplitKGemmWord, N=3, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP)),
@@ -113,13 +114,13 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
     `splitk_rows`: at both gates, every M the capture runs that the dispatch table sends to the split-K kernel, at the table's
     SPLIT_K, TILE_K and WARPS, N words a token row; and the Definition's conformance cites the same record."""
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
-    from verity_vllm.program.frontend.conformance import status_of
-    from verity_vllm.program.kernels import batched_gemm_rows, glm53_rows
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.circuits.defs import conformance_label
+    from verity.ml.definitions.numerics import batched_gemm_rows, glm53_rows
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     p = rows.EVALUATOR_PROVENANCE["LlBf16SplitKGemm_v1"]
     assert p is glm53_rows.PROVENANCE["LlBf16SplitKGemm_v1"]
-    same = ("property", "run", "record", "record_served_default", "art", "variants", "captured_utc")
+    same = ("property", "record", "record_served_default", "art", "variants", "captured_utc")
     assert {k: p[k] for k in same} == {k: batched_gemm_rows.PROVENANCE[k] for k in same}
     assert set(p["cases"]) == {f"{m}/router/mlp.gate" for m in X.MODELS}
     for name, m in X.MODELS.items():
@@ -131,8 +132,8 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
         assert all((c["TILE_K"], c["WARPS"]) == (st["TILE_K"], st["WARPS"]) for st in split.values())
         assert c["mismatch"] == 0 and c["words"] == m.experts * sum(split)
     d = ll_bf16.LlBf16SplitKGemmWord
-    assert status_of(d.conformance) == "exact-model-tested"
-    assert p["run"] in d.conformance and p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
+    assert conformance_label(d.conformance) == "exact-model-tested"
+    assert p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
 
 
 @pytest.mark.parametrize("spec,d", CASES, ids=[s.split("{")[0] + f"-{i}" for i, (s, _) in enumerate(CASES)])

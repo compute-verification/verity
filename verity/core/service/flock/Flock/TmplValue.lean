@@ -1,5 +1,5 @@
 /-
-What a templated unit's copies compute (PRF-133): column values that satisfy the rows `Tmpl.rows` unrolls take, at every
+What a templated unit's copies compute: column values that satisfy the rows `Tmpl.rows` unrolls take, at every
 copy placed under one of the root's calls past the input rows, the value of that copy's Definition on its bound inputs
 (`rows_eval`). So a session's flat circuit is, to Lean, the composition of its Definitions, and a fact about one
 Definition (its value on its inputs) holds at every copy of it, wherever the template places it. Nothing on a verifier
@@ -21,7 +21,12 @@ clause too, since a row may read a column nothing writes. The proof has two halv
 The root is not a Definition copy like the others: its input rows are the unit's inputs and its last column the
 constant, so the statement is about the copies under its calls.
 -/
-import Flock.TmplApart
+module
+
+public import Flock.TmplApart
+public import Flock.TmplRows
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

@@ -38,7 +38,7 @@ def _toy(root: Path) -> Path:
                                 '        return y\n\n\ndef _g():\n    pass\n')
     _write(root, f"{pkg}/b/__init__.py", 'import os\nfrom os import environ\nenviron["VERITY_B"] = "1"\n'
                                          'if "VERITY_C" in environ:\n    pass\nos.environ.setdefault("VERITY_D", "0")\n')
-    _write(root, f"{pkg}/envs.py", '"""Settings."""\nimport os\nX = os.environ.get("VERITY_X")\n')
+    _write(root, f"{pkg}/settings.py", '"""Settings."""\nimport os\nX = os.environ.get("VERITY_X")\n')
     body = "".join(f"    x{i} = {i}\n" for i in range(120))
     _write(root, f"{pkg}/big.py", '"""Big."""\n\n\ndef _long():\n' + body + "".join(f"Y{i} = {i}\n" for i in range(330)))
     _write(root, f"{pkg}/tests/test_skipped.py", "import os\nos.environ['VERITY_T'] = '1'\n")
@@ -71,7 +71,7 @@ def test_each_number_on_a_toy_tree(tmp_path: Path) -> None:
     pkg = {"modules": 5, "modules_undocumented": 1, "public_defs": 2, "undocumented": 1, "functions": 2, "untyped": 1}
     assert card["docs_types"] == {"package": pkg, "interface": {**pkg, "modules": 3}}
     e = card["settings"]
-    assert e["settings_module"] == "verity_vllm/envs.py"
+    assert e["settings_module"] == "verity_vllm/settings.py"
     assert (e["sites"], e["reads"], e["writes"], e["modules"], e["variables"]) == (4, 2, 2, 2, 4)
     assert e["by_module"] == {"verity_vllm/b/__init__.py": 3, "verity_vllm/a.py": 1}
 
@@ -82,7 +82,7 @@ def test_the_cli_prints_the_card_and_its_json(tmp_path: Path) -> None:
                                     capture_output=True, text=True, check=True).stdout
     assert json.loads(run("--json")) == SC.scorecard(root)
     text = run()
-    assert "distinct modules imported" in text and "p99_demo" in text and "verity_vllm/envs.py" in text
+    assert "distinct modules imported" in text and "p99_demo" in text and "verity_vllm/settings.py" in text
 
 
 def test_env_uses_names_the_variable_and_the_mode() -> None:
@@ -103,15 +103,23 @@ def _p07_env_owners() -> frozenset[str]:
     raise AssertionError("tests/lint/test_p07_declared_inputs.py states no ENV_OWNERS")
 
 
+def _package_entries(name: str) -> list[dict]:
+    """An allowlist's entries in the package: the lints also hold the Definitions that moved to ``verity/ml/definitions/``,
+    which the scorecard doesn't count."""
+    entries = json.loads((LIMITS / f"{name}.json").read_text(encoding="utf-8"))["entries"]
+    return [e for e in entries if e["file"].startswith(f"{SC.PACKAGE}/")]
+
+
 @pytest.mark.slow
 def test_the_real_tree_agrees_with_the_p10_and_p7_allowlists() -> None:
     """On the real package (about 6 s): the scorecard's size bands and environment uses are the numbers the P10 and P7
-    ratchets hold, so a scorecard that drifted from what the lints enforce fails here, which the toy tree can't show."""
+    ratchets hold for it, so a scorecard that drifted from what the lints enforce fails here, which the toy tree can't
+    show."""
     card = SC.scorecard(TOOLS.parents[2], outside=False)
-    p10 = json.loads((LIMITS / "p10_size.json").read_text(encoding="utf-8"))["entries"]
+    p10 = _package_entries("p10_size")
     assert card["size"]["modules_over_800"] == sum(e["kind"] == "module" for e in p10)
     assert card["size"]["functions_over_150"] == sum(e["kind"] == "function" for e in p10)
-    p07 = json.loads((LIMITS / "p07_declared_inputs.json").read_text(encoding="utf-8"))["entries"]
+    p07 = _package_entries("p07_declared_inputs")
     owners = _p07_env_owners()
     by_module = card["settings"]["by_module"]
     assert card["settings"]["sites"] - sum(by_module.get(f, 0) for f in owners) == \

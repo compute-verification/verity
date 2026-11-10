@@ -1,4 +1,42 @@
-import Proofs.Flock.Claims.Recursion.DeployFacts
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Flock.Claims.Recursion.DeployFacts
+public import Proofs.Flock.Claims.Recursion.OuterKS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The compiled verifier runs each V* session as the outer verifier (`SessionRuns`)
@@ -31,9 +69,11 @@ the session's own run accepts, so `sessionRuns` takes `OuterAtEnd`, which `nextO
 setup at `H` has its recursive setup's rounds (`hr`).
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
-open Claims (Msg Out Seen Trace Prover stepWith run coinSeq)
+open Claims (Msg Out Seen Transcript Prover stepWith run coinSeq)
 open FlockDeploy (Coin)
 
 /-! ## The goal, as the recursion's analysis states it (`Claims.Recursion.SessionRuns`) -/
@@ -50,7 +90,7 @@ variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
 def histOf (p : Msg × Out) : Msg × Msg := (p.1, outMsg p.2)
 
 theorem stepWith_succ_msg (vn : List Msg → Claims.OC Out) (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg)
-    (t : Trace) {m : Msg} {lo : List (Msg × Msg)}
+    (t : Transcript) {m : Msg} {lo : List (Msg × Msg)}
     (h : (vn (as ++ [((P.next x hist ω).eval H).1])).eval H = (.msg m, lo)) :
     stepWith H P x ω vn (f + 1) hist as t =
       stepWith H P x ω vn f (hist ++ [(((P.next x hist ω).eval H).1, m)]) (as ++ [((P.next x hist ω).eval H).1])
@@ -59,14 +99,14 @@ theorem stepWith_succ_msg (vn : List Msg → Claims.OC Out) (f : ℕ) (hist : Li
   simp only [stepWith, h]
 
 theorem stepWith_succ_acc (vn : List Msg → Claims.OC Out) (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg)
-    (t : Trace) {lo : List (Msg × Msg)} (h : (vn (as ++ [((P.next x hist ω).eval H).1])).eval H = (.acc, lo)) :
+    (t : Transcript) {lo : List (Msg × Msg)} (h : (vn (as ++ [((P.next x hist ω).eval H).1])).eval H = (.acc, lo)) :
     stepWith H P x ω vn (f + 1) hist as t =
       { t with msgs := t.msgs ++ [(((P.next x hist ω).eval H).1, .acc)],
                pLog := t.pLog ++ ((P.next x hist ω).eval H).2, vLog := t.vLog ++ lo, out := .acc } := by
   simp only [stepWith, h]
 
 theorem stepWith_succ_rej (vn : List Msg → Claims.OC Out) (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg)
-    (t : Trace) {lo : List (Msg × Msg)} (h : (vn (as ++ [((P.next x hist ω).eval H).1])).eval H = (.rej, lo)) :
+    (t : Transcript) {lo : List (Msg × Msg)} (h : (vn (as ++ [((P.next x hist ω).eval H).1])).eval H = (.rej, lo)) :
     stepWith H P x ω vn (f + 1) hist as t =
       { t with msgs := t.msgs ++ [(((P.next x hist ω).eval H).1, .rej)],
                pLog := t.pLog ++ ((P.next x hist ω).eval H).2, vLog := t.vLog ++ lo, out := .rej } := by
@@ -74,7 +114,7 @@ theorem stepWith_succ_rej (vn : List Msg → Claims.OC Out) (f : ℕ) (hist : Li
 
 /-- **A run only appends** to its state's messages and verifier log, at most one message per round left. -/
 theorem stepWith_mono (vn : List Msg → Claims.OC Out) :
-    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       t.msgs <+: (stepWith H P x ω vn f hist as t).msgs ∧ t.vLog <+: (stepWith H P x ω vn f hist as t).vLog ∧
         (stepWith H P x ω vn f hist as t).msgs.length ≤ t.msgs.length + f
   | 0, _, _, t => by simp [stepWith]
@@ -99,7 +139,7 @@ theorem stepWith_mono (vn : List Msg → Claims.OC Out) :
 
 /-- A round left is a message more. -/
 theorem stepWith_length_succ (vn : List Msg → Claims.OC Out) (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg)
-    (t : Trace) : t.msgs.length < (stepWith H P x ω vn (f + 1) hist as t).msgs.length := by
+    (t : Transcript) : t.msgs.length < (stepWith H P x ω vn (f + 1) hist as t).msgs.length := by
   rcases hvb : (vn (as ++ [((P.next x hist ω).eval H).1])).eval H with ⟨o, lo⟩
   cases o with
   | msg m =>
@@ -116,9 +156,9 @@ theorem stepWith_length_succ (vn : List Msg → Claims.OC Out) (f : ℕ) (hist :
 /-- **A run that goes past round `m` reaches its state after `m` rounds**: the history and messages so far, its
 messages its first `m` new ones, and `m` fewer rounds left. -/
 theorem stepWith_reach (vn : List Msg → Claims.OC Out) :
-    ∀ (m f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (m f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       t.msgs.length + m < (stepWith H P x ω vn f hist as t).msgs.length →
-      ∃ t' : Trace, m ≤ f ∧
+      ∃ t' : Transcript, m ≤ f ∧
         t'.msgs = t.msgs ++ ((stepWith H P x ω vn f hist as t).msgs.drop t.msgs.length).take m ∧
         t.vLog <+: t'.vLog ∧
         stepWith H P x ω vn f hist as t =
@@ -133,7 +173,7 @@ theorem stepWith_reach (vn : List Msg → Claims.OC Out) :
     | msg mm =>
       rw [stepWith_succ_msg H P x ω vn f hist as t hvb] at h ⊢
       set a := ((P.next x hist ω).eval H).1
-      set t₁ : Trace :=
+      set t₁ : Transcript :=
         { t with msgs := t.msgs ++ [(a, .msg mm)], pLog := t.pLog ++ ((P.next x hist ω).eval H).2,
                  vLog := t.vLog ++ lo }
       have hl₁ : t₁.msgs.length = t.msgs.length + 1 := by simp [t₁]
@@ -160,7 +200,7 @@ theorem stepWith_reach (vn : List Msg → Claims.OC Out) :
 
 /-- **A run's message at round `i`**, past its state: the prover's message after the history so far, answered by the
 verifier on the messages so far and it. -/
-theorem stepWith_get (vn : List Msg → Claims.OC Out) (i f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace)
+theorem stepWith_get (vn : List Msg → Claims.OC Out) (i f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript)
     (h : t.msgs.length + i < (stepWith H P x ω vn f hist as t).msgs.length) :
     ∃ new : List (Msg × Out), new.length = i ∧
       new = ((stepWith H P x ω vn f hist as t).msgs.drop t.msgs.length).take i ∧
@@ -197,7 +237,7 @@ theorem stepWith_get (vn : List Msg → Claims.OC Out) (i f : ℕ) (hist : List 
 /-- **Two verifiers that answer alike on the first `m` rounds' messages give the same first `m` rounds**, and the
 runs go past round `m` together. -/
 theorem stepWith_agree (vn vn' : List Msg → Claims.OC Out) :
-    ∀ (f m : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t t' : Trace), t.msgs = t'.msgs →
+    ∀ (f m : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t t' : Transcript), t.msgs = t'.msgs →
       (∀ bs : List Msg, bs.length ≤ as.length + m → ((vn bs).eval H).1 = ((vn' bs).eval H).1) →
       (stepWith H P x ω vn f hist as t).msgs.take (t.msgs.length + m) =
           (stepWith H P x ω vn' f hist as t').msgs.take (t.msgs.length + m) ∧
@@ -241,7 +281,7 @@ theorem stepWith_agree (vn vn' : List Msg → Claims.OC Out) :
 
 /-- **An accepted run accepts at its last message**: its verifier accepts the run's messages. -/
 theorem stepWith_acc_length (vn : List Msg → Claims.OC Out) :
-    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as.length = t.msgs.length →
+    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as.length = t.msgs.length →
       (stepWith H P x ω vn f hist as t).out = .acc →
       ∃ as' : List Msg, as'.length = (stepWith H P x ω vn f hist as t).msgs.length ∧ ((vn as').eval H).1 = .acc
   | 0, _, _, _, _, h => by simp [stepWith] at h
@@ -260,7 +300,7 @@ theorem stepWith_acc_length (vn : List Msg → Claims.OC Out) :
 
 /-- **A run that refuses a round ends refused.** -/
 theorem stepWith_rej_out (vn : List Msg → Claims.OC Out) :
-    ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (a : Msg),
+    ∀ (f i : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (a : Msg),
       (stepWith H P x ω vn f hist as t).msgs[t.msgs.length + i]? = some (a, .rej) →
       (stepWith H P x ω vn f hist as t).out = .rej
   | 0, i, _, _, t, a, h => by simp [stepWith] at h
@@ -282,7 +322,7 @@ theorem stepWith_rej_out (vn : List Msg → Claims.OC Out) :
     | rej =>
       rw [stepWith_succ_rej H P x ω vn f hist as t hvb]
 
-theorem stepWith_zero (vn : List Msg → Claims.OC Out) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) :
+theorem stepWith_zero (vn : List Msg → Claims.OC Out) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) :
     stepWith H P x ω vn 0 hist as t = { t with out := .rej } := rfl
 
 end Steps
@@ -351,7 +391,7 @@ theorem sim (hP : ∀ hs, PS.next xO hs () = P.next x (hist₀ ++ hs) ω)
     (hlast : last = true → e = 0)
     (hnext : 0 < e → ∀ (bs : List Msg) (a m : Msg), bs.length = n → ((vS bs).eval H).1 = .msg m →
       ((vF (as₀ ++ bs ++ [a])).eval H).1 = .rej) :
-    ∀ (f : ℕ) (hs : List (Msg × Msg)) (bs : List Msg) (tS tF : Trace), 0 < f → bs.length + f = n →
+    ∀ (f : ℕ) (hs : List (Msg × Msg)) (bs : List Msg) (tS tF : Transcript), 0 < f → bs.length + f = n →
       tF.msgs = M₀ ++ tS.msgs → bs = tS.msgs.map Prod.fst → hs = tS.msgs.map histOf →
       (∀ p ∈ tS.msgs, ∃ m, p.2 = .msg m ∧ m ≠ []) → (∀ l ∈ tS.vLog, l ∈ tF.vLog) →
       (stepWith H PS xO () vS f hs bs tS).seen =
@@ -385,7 +425,7 @@ theorem sim (hP : ∀ hs, PS.next xO hs () = P.next x (hist₀ ++ hs) ω)
         | zero =>
           rw [stepWith_zero]
           refine ⟨?_, fun l hl => ?_⟩
-          · simp only [Trace.seen, sview, hF]
+          · simp only [Transcript.seen, sview, hF]
             rw [view_end M₀ tS.msgs _ (n := n) (by omega), fixLast_keep _ _ (by simpa using hm), segOut_concat]
             simp
           · simp only [List.mem_append] at hl ⊢
@@ -404,7 +444,7 @@ theorem sim (hP : ∀ hs, PS.next xO hs () = P.next x (hist₀ ++ hs) ω)
           subst ho'
           rw [stepWith_succ_rej H P x ω vF e _ _ _ hvr]
           refine ⟨?_, fun l hl => ?_⟩
-          · simp only [Trace.seen, sview, hF]
+          · simp only [Transcript.seen, sview, hF]
             rw [view_mid M₀ tS.msgs _ _ (n := n) (by omega), fixLast_keep _ _ (by simpa using hm), segOut_concat]
             simp
           · simp only [List.mem_append] at hl ⊢
@@ -447,7 +487,7 @@ theorem sim (hP : ∀ hs, PS.next xO hs () = P.next x (hist₀ ++ hs) ω)
           { tF with msgs := tF.msgs ++ [(a, .msg [])], pLog := tF.pLog ++ ((P.next x (hist₀ ++ hs) ω).eval H).2,
                     vLog := tF.vLog ++ lo }).2.1
         refine ⟨?_, fun l hl => ?_⟩
-        · simp only [Trace.seen, sview]
+        · simp only [Transcript.seen, sview]
           rw [← hrest]
           simp only [hF]
           rw [view_mid M₀ tS.msgs _ rest (n := n) (by omega), fixLast_acc _ _ hlen', segOut_concat]
@@ -461,7 +501,7 @@ theorem sim (hP : ∀ hs, PS.next xO hs () = P.next x (hist₀ ++ hs) ω)
         rw [stepWith_succ_acc H P x ω vF (0 + e) (hist₀ ++ hs) (as₀ ++ bs) tF (lo := lo)
           (by rw [hvF]; simp [sessOut, hlen])]
         refine ⟨?_, fun l hl => ?_⟩
-        · simp only [Trace.seen, sview, hF]
+        · simp only [Transcript.seen, sview, hF]
           rw [view_end M₀ tS.msgs _ (n := n) (by omega), fixLast_true]
           simp
         · simp only [List.mem_append] at hl ⊢
@@ -473,7 +513,7 @@ theorem sim (hP : ∀ hs, PS.next xO hs () = P.next x (hist₀ ++ hs) ω)
         stepWith_succ_rej H P x ω vF (f + e) (hist₀ ++ hs) (as₀ ++ bs) tF (by rw [hvF]; rfl)]
       simp only [hpa]
       refine ⟨?_, fun l hl => ?_⟩
-      · simp only [Trace.seen, sview, hF]
+      · simp only [Transcript.seen, sview, hF]
         rw [view_end M₀ tS.msgs _ (n := n) (by omega), fixLast_keep _ _ (by simp), segOut_concat]
         simp
       · simp only [List.mem_append] at hl ⊢
@@ -506,7 +546,7 @@ theorem range_map_drop {α : Type} (f : ℕ → α) (a b : ℕ) :
   rw [List.range_add, List.map_append, List.drop_left' (by simp), List.map_map]
   rfl
 
-/-- **The coins from round `off` on of a fork at `off`** are the session's coins (`sessCoins`) at the second draw. -/
+/-- **The coins from round `off` on of a fork at `off`** are the session's coins (`sessCoins`) at the second sample. -/
 theorem fork_drop_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {b n : ℕ} (hb : b ≤ n) :
     ((List.range (off + b)).map (coinSeq (Claims.Recursion.fork off r d))).drop off =
       (List.range b).map (coinSeq (sessCoins off d n)) := by
@@ -515,7 +555,7 @@ theorem fork_drop_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {b n : ℕ}
   rw [List.mem_range] at hi
   rw [coinSeq_fork_ge off r d (Nat.le_add_right _ _), coinSeq_sessCoins off d n (by omega)]
 
-/-- **The coins before round `off` of a fork at `off`** are the first draw's. -/
+/-- **The coins before round `off` of a fork at `off`** are the first sample's. -/
 theorem fork_take_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {m : ℕ} (hm : m ≤ off) :
     (List.range m).map (coinSeq (Claims.Recursion.fork off r d)) = (List.range m).map (coinSeq r) :=
   List.map_congr_left fun i hi => coinSeq_fork_lt off r d (by rw [List.mem_range] at hi; omega)
@@ -772,7 +812,7 @@ theorem outerAtEnd_sha512 : OuterAtEnd FlockDeploy.sha512 := fun _ _ _ hcs h => 
 open Classical in
 /-- **Session `s` of an accepted run, run alone**: at its first round `off` and its V* statement `xO`, read off the
 judged run's inner rounds, the outer verifier's run against `P` after the judged run's first `off` messages, at the
-second draw's coins from `off` on, is `session`'s view of the fork at `off`, and its oracle calls are the fork's. -/
+second sample's coins from `off` on, is `session`'s view of the fork at `off`, and its oracle calls are the fork's. -/
 theorem session_core (H : Msg → Msg) (hO : OuterAtEnd H) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {s : ℕ}
     (hs : s < nS x) {Ω : Type} (P : Prover Ω) (ω : Ω) (r d : Fin ((V IV st).k x) → Coin)
     (hacc : (run H P (V IV st) x ω r).out = .acc) {off : ℕ} {xs : List Msg} {xO : Msg}

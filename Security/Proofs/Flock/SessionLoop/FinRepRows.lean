@@ -1,14 +1,50 @@
-import Proofs.Flock.SessionLoop.FinRepOpen
-import Proofs.Flock.SessionLoop.FinRepXs
-import Proofs.Flock.SessionLoop.Tables
-import Proofs.Flock.Claims.ZK.FinishFwRep
-import Proofs.Flock.Claims.ZK.FrameUnrefused
+module
+
+public import Proofs.Flock.Claims.ZK.FinishFwRep
+public import Proofs.Flock.Claims.ZK.FinishFwRows
+public import Proofs.Flock.Claims.ZK.FrameUnrefused
+public import Proofs.Flock.SessionLoop.FinRepOpen
+public import Proofs.Flock.SessionLoop.FinRepXs
+public import Proofs.Flock.SessionLoop.Tables
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.DeployK
 
 /-!
 # `FinRepRows`: every table's rows hold at its base
 
-At a `Finish` `FinishIs` reads, table `j`'s rows hold at its base (`FinRows`) where the firewall's run on each of its
-reps fixes them (`Composed.rowsAt_of_fw`). The firewall's rep stream `2j + r` is `repFwC` answered by the opened coins
+At a `Finish` `FinishIs` reads, table `j`'s rows hold at its base (`FinRows`) where the ZK server's run on each of its
+reps fixes them (`Composed.rowsAt_of_fw`). The ZK server's rep stream `2j + r` is `repFwC` answered by the opened coins
 from the rep's first round (`Loop.finRepCut`), on the loop's table and request (`Loop.RepAt`), and `Masked.fwRows_at`
 reads its rows off that run:
 
@@ -25,9 +61,11 @@ consumes, none a premise of a guarantee:
 * `Loop.FinRepTarget`: the ring switch's `T` is the opening's (`Composed.openT`);
 * `Loop.FinRepRestart`: level 0's restart is `Σ y₁'·bFold`.
 
-**`Loop.finRepRows`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 the source draws
+**`Loop.finRepRows`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 the source samples
 from the tape (`Loop.Level0Src`), the four give `FinRepRows`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -45,7 +83,8 @@ namespace Loop
 noncomputable abbrev tabAt (x : Msg) (ops : List (Msg × Msg)) (j : Fin (Masked.jOf x)) :=
   (Masked.tabC Masked.PE x j).T (Masked.czExe Masked.PE x (finCoins x ops) j)
 
-/-- Table `j`'s randomness from the tape's base, its mask slot `.1` and extra lanes `.2.1.2.1`. -/
+/-- Table `j`'s randomness from the tape's base: its mask slot `.1`, level 0's hiding `.2.1` and, in it, the extra lanes
+`.2.1.2.1`. -/
 noncomputable abbrev randAtT (x : Msg) (ops : List (Msg × Msg)) (t : Masked.UE.Tape) (j : Fin (Masked.jOf x)) :=
   (tabAt x ops j).randOf ((Masked.UE.tape x t).1 j) 0
 
@@ -59,7 +98,7 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **The firewall's rep stream `k` at a `Finish` `FinishIs` reads**: on the loop's table `tb` and request `q`
+/-- **The ZK server's rep stream `k` at a `Finish` `FinishIs` reads**: on the loop's table `tb` and request `q`
 (`RepAt`), at the pads commitment `ic'` of the request's pads, `repFwC` answered by the opened coins from a history `l`
 at the rep's first round returns the proof `p`, transcript `tr` and history `l'`. -/
 def RepRun (ν : finS.Nonce) (t : finS.Tape) (κ : (LeanRelease.ofLoopLink L₀ src real).toSrv.Chk) (m₀ ρ₀ : Msg)
@@ -84,13 +123,13 @@ def RepRun (ν : finS.Nonce) (t : finS.Tape) (κ : (LeanRelease.ofLoopLink L₀ 
       (.ok (p, tr), l')
 
 /-- **Consumed: the clear values below `zp 64` are the request's**: at table `j`'s rep `r`'s run, below the layout's
-`zp 64` the workers' clear values `vs`, masked at the tape's mask slot and extra lanes, are the request's `q.vals`. -/
+`zp 64` the workers' clear values `vs`, at the tape's mask slot and level 0's hiding, are the request's `q.vals`. -/
 def FinRepMsgs : Prop :=
   ∀ ν t κ m₀ ρ₀ ops s0 spec (j : Fin (Masked.jOf x)) (r : Fin 2) tb hi q f ic' l p tr l',
     RepRun L₀ src real wk x w ν t κ m₀ ρ₀ ops s0 spec (2 * j.val + r.val) tb hi q f ic' l p tr l' →
     ∀ i < (Composed.layOf (Masked.zkTab x j).table (Masked.stAt x j)).zp 64,
-      (Composed.msgAt ((tabAt x ops j).tab.onVals.vals r (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) j)
-        (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1) i).val = q.vals[i]!
+      (Composed.msgAt ((tabAt x ops j).tab.onVals.vals r (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)
+        (randAtT x ops t j).1 (randAtT x ops t j).2.1) i).val = q.vals[i]!
 
 /-- **Consumed: level 0's values are the masked values**: at table `j`'s rep `r`'s run, the returned proof's level 0
 (its out-of-domain value, lane messages and pair's sums) is the workers' clear values plus the request's pads
@@ -99,8 +138,8 @@ def FinRepLanes : Prop :=
   ∀ ν t κ m₀ ρ₀ ops s0 spec (j : Fin (Masked.jOf x)) (r : Fin 2) tb hi q f ic' l p tr l',
     RepRun L₀ src real wk x w ν t κ m₀ ρ₀ ops s0 spec (2 * j.val + r.val) tb hi q f ic' l p tr l' →
     Masked.LaneVals (Masked.zkTab x j).table (Masked.stAt x j)
-      (fun i => (tabAt x ops j).tab.onVals.vals r (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) j)
-        (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1 i +
+      (fun i => (tabAt x ops j).tab.onVals.vals r (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)
+        (randAtT x ops t j).1 (randAtT x ops t j).2.1 i +
         fOf (_root_.Flock.Firewall.Finish.padsOf q.draws).h[i.val]!)
       p.proof.ligerito p.level0
 
@@ -127,7 +166,7 @@ def FinRepTarget : Prop :=
           (_root_.Flock.abcClaims tb.st.m tb.st.kLog zc lc ++ _root_.Flock.Firewall.Finish.claimsOf q.xs)).run t₂).go l₂ =
         (.ok ((ss, T, sws), t₃), l₃) →
       fOf T = Composed.openT (Masked.zkTab x j).table (Masked.stAt x j) (Masked.czExe Masked.PE x (finCoins x ops) j) r
-        ((tabAt x ops j).tab.onVals.nu (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) j) +
+        ((tabAt x ops j).tab.onVals.nu (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j) +
           (tabAt x ops j).tab.onVals.maskHom (randAtT x ops t j).1)
 
 /-- **Consumed: level 0's restart is `Σ y₁'·bFold`**: at table `j`'s rep `r`'s run, the returned proof's level-0
@@ -136,7 +175,7 @@ def FinRepRestart : Prop :=
   ∀ ν t κ m₀ ρ₀ ops s0 spec (j : Fin (Masked.jOf x)) (r : Fin 2) tb hi q f ic' l p tr l',
     RepRun L₀ src real wk x w ν t κ m₀ ρ₀ ops s0 spec (2 * j.val + r.val) tb hi q f ic' l p tr l' →
     gOf p.level0.tPrime = ∑ col, (tabAt x ops j).tab.onVals.y1'
-      (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) j) (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1 r col *
+      (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j) (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1 r col *
         Composed.bFold (Masked.zkTab x j).table (Masked.stAt x j) (Masked.czExe Masked.PE x (finCoins x ops) j) r col.val
 
 /-- **Where the loop's `Finish` returns, the loop proved every rep**: at a `Finish` `FinishIs` reads, `filesE` returned
@@ -160,7 +199,7 @@ theorem proofsOf_ok_of_ctx {ν : finS.Nonce} {t : finS.Tape} {κ m₀ ρ₀ ops}
   | ok files => exact ⟨files, rfl⟩
 
 /-- **`FinRepRows` from the four consumed facts**: in the masked scope, with a witness, at a statement the loop serves
-(no coin fault shows at the opened coins, `frameUnrefused_ofLoop`) whose level 0 the source draws from the tape
+(no coin fault shows at the opened coins, `frameUnrefused_ofLoop`) whose level 0 the source samples from the tape
 (`Level0Src`), table `j`'s rows hold at its base: at each rep `r`, the loop's rep stream `2j + r` (`proofsOf_at`,
 `proofFile_ok`) runs as `repFwC` at the opened coins (`finRepCut`) on the session's table, schedule and packed table
 (`finRepTab`, `schedsPZk_live`, `Level0Src.realOf`) at pads of the table's layout (`finRepPads`) and as many extra
@@ -187,8 +226,8 @@ theorem finRepRows (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.
   obtain ⟨files, hp⟩ := proofsOf_ok_of_ctx L₀ src real wk x w hctx hsx
   obtain ⟨schs, hschs, hschZ⟩ := Masked.schedsPZk_live hx
   refine Composed.rowsAt_of_fw Masked.PE (Masked.zkTab x j).table (Masked.stAt x j)
-    (Masked.czExe Masked.PE x (finCoins x ops) j) (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) j)
-    (randAtT x ops t j).1 (randAtT x ops t j).2.1.2.1 fun r => ?_
+    (Masked.czExe Masked.PE x (finCoins x ops) j) (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)
+    (randAtT x ops t j).1 (randAtT x ops t j).2.1 fun r => ?_
   -- rep stream `2j + r`
   have hk : 2 * j.val + r.val < 2 * spec.tables.size := by
     have := r.isLt
@@ -247,8 +286,8 @@ theorem finRepRows (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.
   rw [hkr, hk2, hsch] at hgo
   rw [hkr, hk2, hsch] at hT'
   have ht₀ : (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[j.val]! r.val).toUTF8).rounds = #[] := rfl
-  exact Masked.fwRows_at x hx w hR t (finCoins x ops) (refK x) hnr s0 spec hsx j r (vs x w ν (finCoins x ops))
-    (_root_.Flock.Firewall.Finish.claimsOf q.xs) hxsz tb.st hst tb.tPad _ tb.g hg tb.cm0.toC
+  exact Masked.fwRows_at x hx w hR t (finCoins x ops) (refK x) hnr s0 spec hsx j r
+    (vs x w ν (finCoins x ops) (finS.seenOf x t)) (_root_.Flock.Firewall.Finish.claimsOf q.xs) hxsz tb.st hst tb.tPad _ tb.g hg tb.cm0.toC
     (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic'.toC q.vals tb.extra tb.lanePad _ hps hab htw ht₀ hl hgo
     hM' hV' hT' hTP'
 

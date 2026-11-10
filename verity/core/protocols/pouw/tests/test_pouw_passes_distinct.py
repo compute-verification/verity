@@ -1,9 +1,9 @@
-"""`credit.passes_distinct` (CMP-84; `Properties.Pouw.LiveSalt.PassesDistinct`): Pearl-C passes credited together hold
+"""`credit.passes_distinct` (`Properties.Pouw.LiveSalt.PassesDistinct`): Pearl-C passes credited together hold
 each call index of their epoch (their salt) once, each below `pearl_c.CALL_RANGE`."""
 from __future__ import annotations
 
 from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw.schemes import pearl_c as PC
+from verity.ml.protocols.pouw.schemes import pearl_c as PC
 
 SALT, OTHER = "ab" * 32, "cd" * 32
 

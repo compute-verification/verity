@@ -1,5 +1,40 @@
-import Proofs.Flock.Claims.Deploy
-import Flock.With.VerifyE
+module
+
+public import Proofs.Flock.Claims.Deploy
+public import Flock.With.VerifyE
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
+import VCVio.Prelude.Core
 
 /-!
 # The element-level inner verifier at the deployment (`FlockDeploy.VE`)
@@ -15,6 +50,8 @@ oracle `H`, on the same messages and coins. The element-level verdict keeps ever
 digests of encodings, and every hash call (`Flock.verifyWithE_of_verifyWith`), so nothing that reads `VE`'s acceptance
 reads one stronger than the deployed verifier's.
 -/
+
+@[expose] public section
 
 namespace Claims
 
@@ -147,7 +184,7 @@ theorem nextE_eval_of_msg (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as :
 
 theorem stepWith_out_VE {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (cs : List Claims.Msg → List Coin) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       (Claims.stepWith H P x ω (fun as => next false x as (cs as)) n hist as t).out = .acc →
         (Claims.stepWith H P x ω (fun as => nextE x as (cs as)) n hist as t).out = .acc := by
   intro n

@@ -13,7 +13,7 @@ from verity.ml.circuits.defs import PrimitiveDefinition, bind
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.parts import Part, n_members
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 from verity.ml.circuits import query_ast as G
 from verity.ml.circuits.query_ast import GateSet, QueryError, evaluate
 from verity.ml.circuits.query import parse, query
@@ -482,8 +482,8 @@ def test_python_constructors_match_parse():
     assert q == parse(CANONICAL) and query_id(q) == query_id(parse(CANONICAL))
 
 
-def test_legacy_query_untouched(gemm, attn):
+def test_query_names_calls_by_path(gemm):
     assert [c.id for c in query(gemm.circuit, "//GemmCoordinate")] == ["GemmCoordinate_v1{K=32}"] * 6
-    regs = query(attn.circuit, "//AttnBlock ! groups(DotBf16, 4)")
-    assert regs and all(r.size == 4 * regs[0].size // 4 for r in regs)
     assert query(gemm.circuit, "/")[0].size == gemm.gates
+    with pytest.raises(QueryError, match="takes a path"):
+        query(gemm.circuit, "//Gemm ! groups(GemmCoordinate, 2)")

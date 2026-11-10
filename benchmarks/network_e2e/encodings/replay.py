@@ -1,4 +1,4 @@
-"""ENC-REPLAY: the advice as vLLM V1's scheduler, replayed from what the certified I/O already shows.
+"""The scheduler replay: the advice as vLLM V1's scheduler, replayed from what the certified I/O already shows.
 
 The advice (I1) carries every batch row serving chose. vLLM V1's scheduler (`vllm/v1/core/sched/scheduler.py` at the pods'
 pin, d9105ea80) decides those rows deterministically from:
@@ -21,6 +21,11 @@ pin, d9105ea80) decides those rows deterministically from:
 (`EngineCore.step`, `step_with_batch_queue`). It refuses what it doesn't model (priority policy, spec decode, KV
 connectors, multimodal, LoRA, structured output, aborts and stop strings) rather than guess.
 
+**The certified tick** (``--admit tick``, `verity_vllm.pipeline.serve_admit.TickGate`) removes the timing input: the engine
+adds a request when a logical clock T has passed the close of its network-certifier release bucket, and T is a function of
+the steps (`Tick`, registered with the engine class). `replay(tick=..., released=...)` runs that rule from the certified
+release buckets alone, so it asks nothing.
+
 **The residual advice** is the timing input, coded online inside the replay. A request's visibility matters only at an
 *open* step: one whose waiting loop reached the queue's end with room to admit it. At every other step it would be blocked
 whether it had arrived or not, and when the engine is quiet (nothing running or waiting) the next arrival is what starts
@@ -32,7 +37,7 @@ the step (`_Clock`), and its certified egress: the replay, forked at the open st
 now or a step later and nothing after it, says which of its steps emit its outputs, and an earlier request's output from
 each of those steps says which bucket it left in (`_Egress`). `decode` replays from that advice and the certified I/O
 alone, and
-`table` counts the bits per certifier window against I1 v0's (ADV-SPEC's `bits_by_window`, else `v0_widths`).
+`table` counts the bits per certifier window against I1 v0's (`advice.bits_by_window`, else `v0_widths`).
 """
 
 from __future__ import annotations
@@ -88,6 +93,27 @@ class Engine:
                    watermark=float(config.get("watermark", 0.0) or 0.0),
                    scheduler_reserve_full_isl=bool(config.get("scheduler_reserve_full_isl", True)),
                    policy=str(config.get("policy", "fcfs")))
+
+
+@dataclass(frozen=True)
+class Tick:
+    """The certified tick's registered constants, in microseconds: the network certifier's bucket τ_b, and the engine
+    class's step times τ_sat (a step after which the waiting queue is nonempty) and τ_free (one after which it is empty).
+    The serving side's is `verity_vllm.pipeline.serve_admit.Tick`; this stdlib copy keeps the replay loadable alone."""
+
+    bucket_us: int
+    sat_us: int
+    free_us: int
+
+    def __post_init__(self) -> None:
+        for name in ("bucket_us", "sat_us", "free_us"):
+            v = getattr(self, name)
+            if type(v) is not int or v <= 0:
+                raise ValueError(f"tick {name}: a positive integer of microseconds, not {v!r}")
+
+    def close(self, a: int) -> int:
+        """When bucket a closes: (a + 1)·τ_b."""
+        return (a + 1) * self.bucket_us
 
 
 @dataclass(frozen=True)
@@ -731,23 +757,37 @@ def _whatif(s: _Sched, queue: Queue, p: _Pass, i: int, now: bool, want: int) -> 
 
 
 def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int] | None = None,
-           decide: Decide | None = None, max_steps: int | None = None) -> Replay:
+           decide: Decide | None = None, tick: Tick | None = None, released: Sequence[int] | None = None,
+           max_steps: int | None = None) -> Replay:
     """Run the scheduler over `requests` (in the order they reached the engine) and return the executed steps.
 
     Exactly one of: `admit`, each request's `before_step` (it is added before the first `schedule` after `admit[i]`
-    executed steps, as the engine core adds it), or `decide(i, k, open)`, asked at each open step k whether the next
-    request i has arrived (an arrival into a quiet engine is added without asking)."""
+    executed steps, as the engine core adds it); `decide(i, k, open)`, asked at each open step k whether the next
+    request i has arrived (an arrival into a quiet engine is added without asking); or `tick` with `released`, each
+    request's certified release bucket (the requests in release order, so nondecreasing), added by the certified tick.
+    Under the tick, T starts at 0; before each iteration of the engine core's loop, when nothing is running or waiting T
+    jumps to the next request's bucket close, and every request whose bucket has closed by T ((a + 1)·τ_b ≤ T) is added,
+    except at an iteration that only frees finished requests (nothing running or waiting), which adds none; after each
+    step that schedules a token, T advances by τ_sat if the waiting queue is nonempty and by τ_free if it is empty."""
     n = len(requests)
-    if (admit is None) == (decide is None):
-        raise ValueError("give exactly one of admit and decide")
+    if (admit is not None) + (decide is not None) + (tick is not None) != 1:
+        raise ValueError("give exactly one of admit, decide and tick")
+    if (tick is None) != (released is None):
+        raise ValueError("give the release buckets with the tick, and only with it")
     if admit is not None:
         if len(admit) != n:
             raise ValueError(f"{len(admit)} admission steps for {n} requests")
         if any(admit[k] > admit[k + 1] for k in range(n - 1)):
             raise ValueError("admission steps must be nondecreasing in arrival order (FCFS)")
+    if released is not None:
+        if len(released) != n:
+            raise ValueError(f"{len(released)} release buckets for {n} requests")
+        if any(type(a) is not int or a < 0 for a in released) or any(released[k] > released[k + 1] for k in range(n - 1)):
+            raise ValueError("release buckets are ints ≥ 0, nondecreasing in release order")
     s = _Sched(engine, requests)
     out = Replay(steps=[], finish=[None] * n, admitted=[None] * n, forced=[False] * n, asked=[[] for _ in range(n)])
     nxt = 0
+    T = 0
     queue: Queue = deque()
     limit = max_steps if max_steps is not None else 4 * (sum(r.prompt_len + r.output_len for r in requests) + n) + 64
 
@@ -770,9 +810,16 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         return True
 
     def top() -> bool:
+        nonlocal T
         if admit is not None:
             while nxt < n and admit[nxt] <= len(out.steps):
                 add(s.quiet())
+        elif tick is not None and released is not None:
+            if not (s.quiet() and s.finished_ids):
+                if s.quiet() and nxt < n:
+                    T = max(T, tick.close(released[nxt]))
+                while nxt < n and tick.close(released[nxt]) <= T:
+                    add(s.quiet())
         elif nxt < n and s.quiet():
             add(True)
         if not s.has_requests() and not queue:
@@ -785,9 +832,12 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         return True
 
     def schedule() -> tuple[Step, dict[int, bool]]:
+        nonlocal T
         step, samples = s.schedule(on_open if decide is not None else None)
         if step.rows:
             out.steps.append(step)
+            if tick is not None:
+                T += tick.sat_us if (s.waiting or s.skipped) else tick.free_us
         return step, samples
 
     def executed(step: Step, samples: dict[int, bool]) -> None:
@@ -801,12 +851,24 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
 # --- traces ------------------------------------------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class Releases:
+    """A tick-admitted run's certified releases, as the network certifier (or the trace corpus's stand-in for it) gave
+    them: the registered tick, the certifier run's origin (unix seconds; bucket a is [origin + a·τ_b, origin + (a + 1)·τ_b)),
+    and each request's release number N and bucket a, in the trace's engine order."""
+
+    tick: Tick
+    origin_unix: float
+    n: tuple[int, ...]
+    bucket: tuple[int, ...]
+
+
 @dataclass
 class Trace:
     """A served run's step trace (`verity-vllm/step-trace/v1`), its requests in the order they reached the engine, with
     the certifier's view of its timing when the trace has a clock: each request's ingress time and each step's release
     time (its output's tokens leaving through the egress certifier), or each kept output's own (`output_t`) where the
-    recorder saw them leave one by one."""
+    recorder saw them leave one by one; and `releases`, a run served under the certified tick's releases."""
 
     engine: Engine
     ids: list[str]
@@ -818,6 +880,7 @@ class Trace:
     release_t: list[float | None]
     header: dict[str, Any] = field(default_factory=dict)
     output_t: list[list[float]] | None = None
+    releases: Releases | None = None
 
     def first_scheduled(self) -> list[int]:
         first = [-1] * len(self.requests)
@@ -847,8 +910,8 @@ class Trace:
         return [[self.release_t[s] for s in ks] for ks in self.kept_steps()]  # type: ignore[misc]
 
     def origin(self, bucket_s: float) -> int:
-        """The session's first bucket, its earliest ingress's, which the certified record's buckets count from (ADV-SPEC's
-        session-global buckets); 0 without a clock."""
+        """The session's first bucket, its earliest ingress's, which the certified record's buckets count from (the
+        advice module's session-global buckets); 0 without a clock."""
         return min(bucket(t, bucket_s) for t in self.ingress_t) if self.clocked() else 0  # type: ignore[arg-type]
 
     def certified(self, bucket_s: float = 0.1) -> Certified:
@@ -950,26 +1013,40 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in lines[:-1] if line.strip()]
 
 
-def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int = 16,
+def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int | None = None,
                       egress: str = "engine", ingress: str = "client") -> Trace:
-    """One trace of TRACE-CORPUS (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`): its directory's
-    `steps.jsonl`, `requests.jsonl` and `meta.json` (the server's argv), and `server.log` for the KV pool's size unless
-    `num_gpu_blocks` is given. The hook records no arrivals, so a request's engine order and admission step are its first
-    scheduling (FCFS schedules new requests in arrival order), and a step's release is the time its output was back. With
-    `egress="client"` each kept output left when the client got the streamed chunk that carried it (its `chunks`), which
-    is what an egress certifier on the link sees.
+    """One trace of the trace corpus (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`): its
+    directory's `steps.jsonl`, `requests.jsonl` and `meta.json` (the server's argv), and the KV pool where not given: its
+    block size and block count from `engine.json` (the hook's record of the scheduler's), else 16-token blocks and the
+    count `server.log`'s KV cache size gives. A pool of more than one KV cache group is refused: the replay models one.
+    The hook records no arrivals, so a request's engine order and admission step are its first scheduling (FCFS schedules
+    new requests in arrival order), and a step's release is the time its output was back. With `egress="client"` each
+    kept output left when the client got the streamed chunk that carried it (its `chunks`), which is what an egress
+    certifier on the link sees.
 
-    A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on today's link),
+    A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on the link),
     or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
     That is not what design v3's warden certifies: behind it the engine still follows the body read, and the warden's
-    release order (a, ordinal) leaves order exceptions to charge (TRACE-CORPUS's `<trace>.released` traces carry it as
-    their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give."""
+    release order (a, ordinal) leaves order exceptions to charge (the corpus's `<trace>.released` traces carry it as
+    their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give.
+
+    A trace served under ``--admit tick`` (meta.json's ``tick``: τ and the certifier run's origin) has each request's
+    release number and bucket from its network certifier, a warden trace's warden or the corpus's stand-in for it
+    (`requests.jsonl`'s ``release`` and ``bucket``), as `Trace.releases`."""
     d = Path(d)
-    argv = json.loads((d / "meta.json").read_text())["server_argv"]
+    meta = json.loads((d / "meta.json").read_text())
+    argv = meta["server_argv"]
 
     def opt(name: str) -> str | None:
         return argv[argv.index(name) + 1] if name in argv else None
 
+    pool = json.loads((d / "engine.json").read_text()) if (d / "engine.json").exists() else {}
+    if (pool.get("kv_cache_groups") or 1) != 1:
+        raise ValueError(f"{d / 'engine.json'}: {pool['kv_cache_groups']} KV cache groups; the replay models one pool")
+    if block_size is None:
+        block_size = int(pool.get("block_size") or 16)
+    if num_gpu_blocks is None and pool.get("num_gpu_blocks"):
+        num_gpu_blocks = int(pool["num_gpu_blocks"])
     if num_gpu_blocks is None:
         m = re.search(r"GPU KV cache size: ([\d,]+) tokens", (d / "server.log").read_text(errors="replace"))
         if m is None:
@@ -1037,8 +1114,15 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
             output_t.append(ts)
     elif egress != "engine":
         raise ValueError(f"egress {egress!r}: engine or client")
+    releases = None
+    if (tk := meta.get("tick")) is not None:
+        if unnumbered := [rid for rid in order if reqs[rid].get("release") is None or reqs[rid].get("bucket") is None]:
+            raise ValueError(f"{len(unnumbered)} requests of a tick trace without a release number and bucket: "
+                             f"{unnumbered[:4]}")
+        releases = Releases(Tick(int(tk["bucket_us"]), int(tk["sat_us"]), int(tk["free_us"])), float(tk["origin_unix"]),
+                            tuple(int(reqs[rid]["release"]) for rid in order), tuple(int(reqs[rid]["bucket"]) for rid in order))
     return Trace(engine=engine, ids=order, requests=requests, before_step=first, steps=steps, emits=emits,
-                 ingress_t=ingress_t, release_t=release, output_t=output_t,
+                 ingress_t=ingress_t, release_t=release, output_t=output_t, releases=releases,
                  header={"kind": "header", "schema": "vllm-trace-corpus/v1", "config": dict(engine.__dict__), "source": str(d),
                          "egress": egress, "ingress": ingress})
 
@@ -1397,7 +1481,7 @@ def width(n: int) -> int:
 
 
 def v0_widths(trace: Trace, *, window_buckets: int) -> dict[str, int]:
-    """I1 v0's fields at fixed width (a stand-in until ADV-SPEC's `bits`): per request its id (an index), prompt_len,
+    """I1 v0's fields at fixed width (a stand-in for `advice.bits`): per request its id (an index), prompt_len,
     output_len and finish; per step its row count and release bucket; per row its request, kind, start, n, cache_hit and
     preempted."""
     e = trace.engine
@@ -1409,7 +1493,7 @@ def v0_widths(trace: Trace, *, window_buckets: int) -> dict[str, int]:
 
 
 def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
-    """The trace as ADV-SPEC's advice v0, built with its module `v0` (`verity.core.protocols.certifier.advice`): the
+    """The trace as advice v0, built with its module `v0` (`verity.core.protocols.certifier.advice`): the
     trace's rows in its batch order, each hit's sources from the replay's block map, and each kept output released in its
     step's release bucket. v0 validates it as it builds it."""
     rp = replay(trace.engine, trace.requests, admit=trace.before_step)
@@ -1440,8 +1524,9 @@ def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
 
 
 def v0_parts(v0: Any, adv: Any) -> dict[str, int] | None:
-    """I1 v0's bits by record (`header`, `requests`, `steps`, `release`), from ADV-SPEC's layout (`_layout`, None without
-    one). The residual advice replaces only the step records: the verifier reads the rest from the certified record."""
+    """I1 v0's bits by record (`header`, `requests`, `steps`, `release`), from the advice module's layout (`_layout`,
+    None without one). The residual advice replaces only the step records: the verifier reads the rest from the
+    certified record."""
     layout = getattr(v0, "_layout", None)
     if layout is None:
         return None
@@ -1451,13 +1536,13 @@ def v0_parts(v0: Any, adv: Any) -> dict[str, int] | None:
 
 
 def framed_bits(n: int) -> int:
-    """A window's residual of `n` bits with ADV-SPEC's `uvar` length prefix (a u6 width, then the length), for a transport
-    that doesn't frame windows."""
+    """A window's residual of `n` bits with the advice module's `uvar` length prefix (a u6 width, then the length), for
+    a transport that doesn't frame windows."""
     return n + 6 + n.bit_length()
 
 
 def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0: Any = None) -> dict[str, Any]:
-    """Per certifier window: I1 v0's bits (ADV-SPEC's `bits_by_window` when its module is given as `v0`, else
+    """Per certifier window: I1 v0's bits (`advice.bits_by_window` when the module is given as `v0`, else
     `v0_widths`), the steps the replay matched, and the residual advice's bits under each code (Elias gamma; the adaptive
     code, unclocked and clocked), each code checked by decoding it back to the trace's steps."""
     truth = replay(trace.engine, trace.requests, admit=trace.before_step)
@@ -1494,12 +1579,12 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
             "passed": [x for x in g if x is not None]}
 
 
-#: where ADV-SPEC's advice v0 sits in the tree once it lands (PR #3499)
+#: advice v0's module (`verity.core.protocols.certifier.advice`)
 V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "certifier" / "advice.py"
 
 
 def load_v0(spec: str | Path | None) -> Any:
-    """ADV-SPEC's advice module from `spec`, a path to its `advice.py`, else from `V0_PATH` when it is there, else None
+    """The advice module from `spec`, a path to its `advice.py`, else from `V0_PATH` when it is there, else None
     (`table` falls back to `v0_widths`)."""
     import importlib.util
     import sys
@@ -1527,16 +1612,18 @@ def main(argv: Sequence[str] | None = None) -> None:
     import argparse
     ap = argparse.ArgumentParser(description="Bits per certifier window: I1 v0 against the replay's residual advice.")
     ap.add_argument("traces", nargs="+", type=Path,
-                    help="step traces (*.jsonl; <name>.tokens.json beside one with prefix caching) or TRACE-CORPUS trace dirs")
+                    help="step traces (*.jsonl; <name>.tokens.json beside one with prefix caching) or trace-corpus "
+                         "trace dirs")
     ap.add_argument("--bucket-ms", type=float, default=100.0)
     ap.add_argument("--window-buckets", type=int, default=600)
-    ap.add_argument("--v0", help="path to ADV-SPEC's advice.py (default: V0_PATH in the tree, else fixed widths)")
+    ap.add_argument("--v0", help="path to the advice module's advice.py (default: V0_PATH in the tree, else fixed "
+                                 "widths)")
     ap.add_argument("--egress", choices=("engine", "client"), default="engine",
-                    help="a TRACE-CORPUS output's release time: its step's (engine) or its streamed chunk's (client)")
+                    help="a trace-corpus output's release time: its step's (engine) or its streamed chunk's (client)")
     ap.add_argument("--ingress", choices=("client", "warden"), default="client",
-                    help="a TRACE-CORPUS request's certified ingress: the client's send time (client) or the engine's arrival "
-                         "stamp (warden: the floor a server admitting in the warden's release order would give; today's "
-                         "warden certifies the release order, which a trace's .released view carries)")
+                    help="a trace-corpus request's certified ingress: the client's send time (client) or the engine's "
+                         "arrival stamp (warden: the floor a server admitting in the warden's release order would "
+                         "give; the warden certifies the release order, which a trace's .released view carries)")
     ap.add_argument("--out", type=Path, help="write {trace: table} as JSON")
     a = ap.parse_args(argv)
     v0 = load_v0(a.v0)

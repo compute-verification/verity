@@ -1,25 +1,28 @@
-import Definitions.Pous.Model.P3Chain
-import Definitions.Pous.Model.Dense
+module
+
+public import Definitions.Pous.Model.P3Chain
+public import Definitions.Pous.Model.Dense
 
 /-!
 # The band scheme and the dense chain scheme over the overwrite chain on `Π₂`
 
-The definitions the proposed band pins read (`BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`,
-`BandMultiMeets14`, `BandMultiMeets14K106`, `ChainDenseMeets64`), copied verbatim from the proofs' sources, with
+The definitions the band pins read (`BandChainMeets64`, `BandChainMeets64D5`, `BandChainMeets64D12`,
+`BandMultiMeets14`, `BandMultiMeets14K106`, `ChainDenseMeets64`), copied verbatim from the proofs' source modules
+(the like-named sections of `Security/Proofs/Pous/Chain/Flat.lean` hold the rest of each), with
 each source namespace `PousX` renamed `Pous.X` (the `Pous.Dense` and `Definitions.Pous.Model.P3Chain` precedent). The
 overwrite chain itself (`Pous.Sponge.{iv, padBlk, parentsDesc, ovR, ovH, ovStep, ovAbsorb, ovKey}`) is reused from
 `Definitions.Pous.Model.P3Chain`, whose copies are of the same source.
-- `Pous.Sponge` (`lean/submissions/sponge-dense/SpongeDense.lean`, §§1, 4 and 9): the ideal-permutation model
+- `Pous.Sponge` (`SpongeDense`): the ideal-permutation model
   `idealPerm` (one uniform permutation `Π₂`, queried both ways), the domain `dom salt i = salt ‖ bin(i)`, and the dense
   scheme over the chain, `chainDense`, on the complete DAG;
-- `Pous.DenseReCert` (`dense/DenseReCert.lean`): the segment tag `salt ‖ u64(s)`;
-- `Pous.BandChain` (`band-chain/BandChainModel.lean`): the band DAG `bandDAG B d` (parents `v − d, …, v − 1`), the
+- `Pous.DenseReCert` (`DenseReCert`): the segment tag `salt ‖ u64(s)`;
+- `Pous.BandChain` (`BandChainModel`): the band DAG `bandDAG B d` (parents `v − d, …, v − 1`), the
   labels over the chain on any DAG, `labelG`, and the band scheme `chainBand`;
-- `Pous.BandMulti` (`band-multi/BandMultiModel.lean`): the `N`-segment band DAG, the per-segment domains `segDom`, and
+- `Pous.BandMulti` (`BandMultiModel`): the `N`-segment band DAG, the per-segment domains `segDom`, and
   the multi-segment scheme `chainBandSeg`.
 
-The public-encoder definitions (`PubMeets`, `exactCheck`) are not here: they are staged separately, for the three
-public-encoder pins, and enter only if those pins are approved.
+The public-encoder definitions (`PubMeets`, `exactCheck`) are not here: they are in `Definitions.Pous.Model.PubEncoder`
+and `Definitions.Pous.Accounting.PubMeets`.
 
 **The schemes.** All run in `idealPerm (ℓ + (ℓ + c))`, with `ℓ = 524288` (64 KiB labels) and capacity `c = 512`.
 Label `v` is `C_v = key_Π₂(IV(dom v); C_par(v) newest first, pad) ⊕ W_v`, where each call is `(r, h) = Π₂(B ‖ h)`: `r` is
@@ -29,6 +32,8 @@ there are no coins. Decoding recomputes each block's key from its parents in the
 The definitions are total; the side conditions the proofs need are hypotheses of their theorems.
 -/
 
+@[expose] public section
+
 namespace Pous.Sponge
 
 open Pous Pous.Labelling Pous.Invertible
@@ -36,7 +41,7 @@ open scoped ENNReal
 
 /-! ## `SpongeDense.lean`: the ideal-permutation model, the domains and the dense chain scheme -/
 
-/-- **The ideal-permutation model** on `b`-bit states. Setup draws `Π` uniformly from every permutation of `Bits b`;
+/-- **The ideal-permutation model** on `b`-bit states. Setup samples `Π` uniformly from every permutation of `Bits b`;
 the encoder and the preprocessor see it whole. A query is `.inl x`, answered `Π x`, or `.inr y`, answered `Π⁻¹ y`. -/
 def idealPerm (b : ℕ) : IdealModel where
   Ω := Equiv.Perm (Bits b)

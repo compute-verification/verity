@@ -1,12 +1,13 @@
-"""`requirement.from_census` and memory-map/v1's builder (`verity_vllm.commit.memory_map`) held to `core_requirement`'s Lean
-through the difftest's instance format (`test_requirement_difftest.encode`), Python's reference agreeing with Lean on each.
+"""`requirement.from_census` and memory-map/v1's builder (`verity_vllm.protocols.remote_bandwidth.commit_map`) held to
+`core_requirement`'s Lean through the difftest's instance format (`test_requirement_difftest.encode`), Python's reference
+agreeing with Lean on each.
 
 The census path: a census and a schedule as an instance (`census_execution`): the census's values, then a value of 0 bits
 for each root Call a step runs, whose operands are the values the Call reads or selects. Lean's live values and bits are
 `from_census`'s at every step, its reads `from_census`'s where those are known and, the selected values used too,
-`reads_upper`'s; and `pack`'s layout and store of `from_census`'s requirement, with the blocks each step reads as its plan,
-are W's at every step, crediting every live value. On the toy decoder, `b1.Serve` at TINY and `b1.RMSNormFusedCudaV1`,
-whose live and read bits are the gate path's.
+`reads_upper`'s; and `pack`'s store placement and store of `from_census`'s requirement, with the blocks each step reads
+as its plan, are W's at every step, crediting every live value. On the toy decoder, `b1.Serve` at TINY and
+`b1.RMSNormFusedCudaV1`, whose live and read bits are the gate path's.
 
 The memory map: a session's KV as an instance (`map_case`). Its values are the rows `MM.rows` finds, each born at its
 request's arrival step plus its own and read at the steps the requirement over the census reads it, in the block the
@@ -97,8 +98,8 @@ def census_execution(c: dict, schedule: R.Schedule, upper: bool) -> R.Execution:
 
 
 def census_case(c: dict, schedule: R.Schedule, block_bits: int, upper: bool) -> dict:
-    """`census_execution`'s instance under `pack`'s layout and store of `from_census`'s requirement, each step's plan the
-    blocks of the reads the instance states (all in complete blocks under `pack`)."""
+    """`census_execution`'s instance under `pack`'s store placement and store of `from_census`'s requirement, each step's
+    plan the blocks of the reads the instance states (all in complete blocks under `pack`)."""
     ex = census_execution(c, schedule, upper)
     layout, store = R.pack(R.from_census(c, schedule), block_bits)
     stated = R.Requirement.of(ex)
@@ -144,9 +145,9 @@ def test_the_toy_decoders_census_path(B, server):
 
 
 def test_the_tiny_serve_rows_census_path(server):
-    """Each weight is one census value, up to 66,048 bits, and the layout keeps a value in one block, so the census path
-    takes blocks of 2^17 bits. Every step's reads are known (its selections' candidates are read anyway), and its live
-    and read bits are the gate path's: `test_the_tiny_serve_row`'s weights less the RoPE rows no step reaches."""
+    """Each weight is one census value, up to 66,048 bits, and the store placement keeps a value in one block, so the
+    census path takes blocks of 2^17 bits. Every step's reads are known (its selections' candidates are read anyway), and
+    its live and read bits are the gate path's: `test_the_tiny_serve_row`'s weights less the RoPE rows no step reaches."""
     program, schedule, inputs = serve()
     req = held_census(program, schedule, 1 << 17, server)
     assert all(req.resolved(t) for t in range(req.steps))
@@ -174,8 +175,8 @@ def _payload(r: str, row) -> bytes:
 
 @pytest.fixture(scope="module")
 def requests() -> dict[str, Program]:
-    from verity_vllm.predict.build import build_program
-    from verity_vllm.predict.phi import Phi
+    from verity_vllm.program.predict.build import build_program
+    from verity_vllm.program.predict.phi import Phi
 
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": WIDE},
               target={"compute_capability": [12, 0], "num_sms": 188}, workload={"requests": []})
@@ -246,13 +247,14 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dic
     request, layer, plane and `MM.Row`, each value's block, and the blocks the replayed map holds at each step. A
     request's census is its Program's at its sampling events unless `censuses` gives one."""
     from verity_vllm.commit import memory_map as MM
-    from verity_vllm.store.interface import PageLayout
-    from verity_vllm.store.registry import _page_blocks
+    from verity_vllm.protocols.remote_bandwidth.commit_map import KvPool, record
+    from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
+    from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
 
     censuses = censuses or {}
     rows = {r: MM.rows(p, censuses.get(r)) for r, p in requests.items()}
     tables = first_need(rows, arrive)
-    head, steps = MM.record(rows, arrive, _payload, bytes(range(64)), MM.Layout(block_size=BLOCK_SIZE), tables)
+    head, steps = record(rows, arrive, _payload, bytes(range(64)), KvPool(block_size=BLOCK_SIZE), tables)
     end = max(arrive[r] + rs.steps for r, rs in rows.items())
     assert all(s.step < end for s in steps)
     (sb,) = {rs.row_bytes for rs in rows.values()}
@@ -305,7 +307,7 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dic
         ex_ops[g], ex_uses[g] = tuple(sorted(vs)), frozenset(uses.get((r, s), set()))
     ex = R.Execution(width, frozenset(), step, ex_ops, ex_uses, value)
     store = R.Store(0, written, freed, payload)
-    instance = encode(ex, R.Layout(block, offset), store, held, codec.BLOCK_BYTES * 8, end)
+    instance = encode(ex, R.Store.Packing(block, offset), store, held, codec.BLOCK_BYTES * 8, end)
     return instance, {"rows": of_value, "page": page_of, "width": width, "block": block, "held": held, "arrive": arrive}
 
 
@@ -365,7 +367,7 @@ def test_the_memory_map(r1, requests, server):
 def test_a_block_its_last_reader_completes_is_in_no_record(requests, server):
     """A request ending on a page boundary while another runs on: r1 (a prefill of 4 and 4 decode steps) from step 0 completes
     its second page at its last step, 4, which is also its last structural reader. Its rows were live only while the page was incomplete,
-    so no step reads the block while it is resident, and it is in no record (memory-map/v1's ruling of 18 Oct, 02:29Z):
+    so no step reads the block while it is resident, and it is in no record (memory-map/v1's ruling):
     the link holds at every step, and the map holds no block with every row dead."""
     value, session = map_case({"r0": requests["r0"], "r1": requests["r1_page"]}, {"r0": 0, "r1": 0})
     out = _lean(value, server)

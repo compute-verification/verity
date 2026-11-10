@@ -1,0 +1,1173 @@
+"""The audit from a window's records alone (`records_audit`), without proving, on a window written through the interface
+(`verity.ml.windows.interface`) under core's registration:
+
+* the verifier's window is the circuit record's, each template resolved in Verity's catalog, and the record must be the one
+  the registration binds; a window with row tables is refused until its records carry their segment roots;
+* the compile check runs the registered compiler as the verifier's table names it, on advice that opens the registered root,
+  and refuses by name a compiler it doesn't hold, an opening of another root, a compiler that refuses the advice, one whose
+  circuit is another or that writes none, and a length other than the registered one or none;
+* a compiler registered under a commit runs from a checkout of that commit, not the auditing tree's, and a commit whose code
+  doesn't hash to the registered digest is refused;
+* the leak bound's count is the circuit's unwired input bits, reported beside the advice's charge and vacuous past it, and
+  a record that declares registered reads counts those of a parameter the verifier pinned registered and the rest free
+  (`declared_count`); the audit counts a record that lists its members and declares its window's ingress so too, and
+  prints the window figure beside the run figure with its premise;
+* a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
+  (`pinned`), and refused before any sample without them, a record that lists its members (a served window's) as one that
+  states them; one whose program takes values only tied to the earlier registration that registered them first
+  (`tie_of`), its readers' reads registered at that record's roots;
+* a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
+* `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
+  the coins;
+* the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
+* ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, and the
+  audit takes that cache;
+* none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
+  compile and charges the length the registration does;
+* that command compiles over its own trace of each Program, never the prover's row dir, so a row dir whose names make
+  another circuit under unchanged digests is refused by name and one whose names make the same circuit is ignored."""
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass, fields, replace
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
+from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
+from verity.ml.circuits.ops import gemm as G
+from verity.ml.windows import interface as IF, rows as CS
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[1] / "one_stage"))
+import records_audit as RA  # noqa: E402
+import served_integrity as SI  # noqa: E402
+
+K = 64
+COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
+TID = descriptor_id(COORD)
+LAW = "stratified:2"
+RUN = "ab" * 64
+COMPILER = {"name": "test/compiler", "digest": "cd" * 64}
+ADVICE = bytes(range(40))
+
+FAKE = '''import argparse, json, sys
+ap = argparse.ArgumentParser()
+for f in ("--record", "--expect", "--advice", "--out", "--say", "--write"):
+    ap.add_argument(f)
+ap.add_argument("--bits", type=int)
+a = ap.parse_args()
+data = open(a.advice, "rb").read()
+if data.hex() != a.expect:
+    sys.stderr.write("advice this compiler can't compile")
+    sys.exit(2)
+if a.write != "no":
+    open(a.out, "w").write(open(a.record).read())
+print(a.say if a.say is not None else json.dumps({"bits": 8 * len(data) if a.bits is None else a.bits}))
+'''
+
+
+def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dict = COMPILER) -> SimpleNamespace:
+    """A window of ``n`` coordinates in members of ``cap``, its advice committed under ``compiler`` (or none), written and
+    registered through the interface under core's registration."""
+    reg = IF.commit_advice(compiler, ADVICE)
+    bound = IF.advice_binding(compiler, reg.root.hex(), 8 * len(ADVICE)) if advice else None
+    win = IF.Window(IF.Circuit("test", ((COORD, n),)), RUN, D.parse_design(LAW), cap, advice=bound)
+    rng = np.random.default_rng(0)
+    x, w = (rng.integers(-128, 128, (n, K)).astype(np.int8) for _ in range(2))
+    sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
+    ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
+    win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)], {"unit": 0})
+    win.write(win.close(salt_key=bytes(32)), d, {"label": "test"}, registrar=R)
+    doc = json.loads((d / "circuit.json").read_text())
+    return SimpleNamespace(dir=d, doc=doc, rec=json.loads((d / "registration.json").read_text()),
+                           opening=IF.advice_opening(ADVICE, reg), bound=bound)
+
+
+def _compilers(tmp: Path, doc: dict, **kw) -> dict:
+    """The verifier's table: `COMPILER` as the fake command, which writes ``doc`` less its run fields for `ADVICE` alone."""
+    body = json.dumps({**doc, "run": "", "context": ""}).encode()
+    record = tmp / f"record-{hashlib.sha512(body).hexdigest()[:16]}.json"
+    (tmp / "compiler.py").write_text(FAKE)
+    record.write_bytes(body)
+    argv = [sys.executable, str(tmp / "compiler.py"), "--record", str(record), "--expect", ADVICE.hex(),
+            *(x for k, v in kw.items() for x in (f"--{k}", str(v)))]
+    return {COMPILER["name"]: {"digest": COMPILER["digest"], "argv": argv}}
+
+
+@pytest.fixture
+def written(tmp_path):
+    return _write(tmp_path / "w")
+
+
+def test_the_verifiers_window_is_the_circuit_record_under_verity_s_catalog(written):
+    mine, doc, sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
+    assert doc == written.doc and mine.run == RUN and mine.partition_digest == written.rec["partition"]
+    assert [(m.template, m.n) for m in mine.members] == [(TID, 4), (TID, 1)]
+    assert set(sets) == {TID} and callable(sets[TID][0]) and descriptor_id(sets[TID][1]) == TID
+    w = written.rec["window"]
+    assert w["circuit"] == hashlib.sha512((written.dir / "circuit.json").read_bytes()).hexdigest()
+    assert (w["compiler"], w["advice"]) == (written.bound["compiler"], written.bound["advice"])
+    (written.dir / "circuit.json").write_text(json.dumps({**doc, "name": "other"}))
+    with pytest.raises(ValueError, match="not the circuit record the registration binds"):
+        RA.verifier_window(written.dir, D.parse_design(LAW), None)
+
+
+def test_a_registry_template_resolves_in_a_fresh_audit_process():
+    """A window's io shell (`ScanSlots_v2`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
+    fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
+    from verity.ml.definitions.registry import boolean_io_shell as BX
+
+    occ, lp, mx, ids = (tuple(f + 36333 * j for j in range(2)) for f in (376, 168, 200, 474))
+    tid = descriptor_id(bind(BX.ScanSlotsV2, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=occ, LP=lp, MAX=mx, IDS=ids))
+    code = f"""
+import sys
+sys.path.insert(0, {str(HERE.parent)!r})
+import records_audit as RA
+from verity.ml.circuits.codec import descriptor_id
+assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
+"""
+    p = subprocess.run([sys.executable, "-c", code, tid], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+
+
+def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(written, tmp_path):
+    w, doc, op = written.rec["window"], written.doc, written.opening
+    v, bound = RA.compile_check(doc, w, op, _compilers(tmp_path, doc), tmp_path / "c")
+    assert v["ok"] and bound == written.bound and v["detail"]["bits"] == 8 * len(ADVICE)
+    assert IF.circuit_of(json.loads((tmp_path / "c" / "compiled.json").read_text())) == IF.circuit_of(doc)
+    other = dict(op, salts=[("00" if op["salts"][0][:2] != "00" else "01") + op["salts"][0][2:], *op["salts"][1:]])
+    short = {**doc, "templates": [[TID, 4]]}
+    for name, (compilers, window, opening), codes in (
+            ("a compiler the verifier doesn't hold", ({}, w, op), ["compiler", "code", "compiles", "circuit", "length"]),
+            ("another digest", (_compilers(tmp_path, doc), {**w, "compiler": {**COMPILER, "digest": "00" * 64}}, op),
+             ["compiler", "advice", "code", "compiles", "circuit", "length"]),
+            ("an opening of another root", (_compilers(tmp_path, doc), w, other),
+             ["advice", "code", "compiles", "circuit", "length"]),
+            ("a compiler refusing the advice", (_compilers(tmp_path, doc, expect="00"), w, op), ["compiles", "circuit", "length"]),
+            ("another circuit", (_compilers(tmp_path, short), w, op), ["circuit"]),
+            ("another length", (_compilers(tmp_path, doc, bits=8 * len(ADVICE) + 1), w, op), ["length"]),
+            ("a length that isn't a whole number", (_compilers(tmp_path, doc, say='{"bits": "320"}'), w, op), ["length"]),
+            ("a length that's a boolean", (_compilers(tmp_path, doc, say='{"bits": true}'), w, op), ["length"]),
+            ("no length line", (_compilers(tmp_path, doc, say="compiled"), w, op), ["length"])):
+        v, bound = RA.compile_check(doc, window, opening, compilers, tmp_path / "c")
+        assert (v["codes"], bound) == (codes, None), name
+    v, _ = RA.compile_check(doc, w, op, _compilers(tmp_path, doc, expect="00"), tmp_path / "c")
+    assert v["detail"]["refused"] and "can't compile" in v["detail"]["stderr"]
+
+
+def test_a_command_that_exits_0_without_writing_its_circuit_fails_the_circuit_check(written, tmp_path):
+    """The command writes inside a fresh directory, so a stale ``compiled.json`` from an earlier compile is never compared."""
+    w, doc, op = written.rec["window"], written.doc, written.opening
+    assert RA.compile_check(doc, w, op, _compilers(tmp_path, doc), tmp_path / "c")[0]["ok"]
+    assert (tmp_path / "c" / "compiled.json").exists()
+    v, bound = RA.compile_check(doc, w, op, _compilers(tmp_path, doc, write="no"), tmp_path / "c")
+    assert (v["codes"], bound) == (["circuit"], None) and "output" in v["detail"]
+    assert not (tmp_path / "c" / "compiled.json").exists()
+
+
+def test_source_and_the_negatives_refuse_what_the_records_dont_bind(written, tmp_path):
+    w, doc = written.rec["window"], written.doc
+    compilers = _compilers(tmp_path, doc)
+    v, bound = RA.compile_check(doc, w, written.opening, compilers, tmp_path / "c")
+    held = {"run": RUN, "circuit": w["circuit"], "compiled": v["ok"], **bound, "compilers": compilers,
+            "opening": written.opening, "output": json.loads((tmp_path / "c" / "compiled.json").read_text())}
+    assert RA.source(w, held)["ok"]
+    assert RA.source(w, {**held, "run": "00" * 64})["codes"] == ["run"]
+    assert RA.source(w, {**held, "compiled": False})["codes"] == ["compiled"]
+    got = RA.negatives(w, held, doc, tmp_path / "n")
+    assert set(got) == {"registration-naming-another-circuit", "registration-naming-another-run",
+                        "registration-naming-another-compiler", "registration-naming-another-advice-root",
+                        "registration-charging-another-length", "registration-binding-no-compiler-or-advice",
+                        "opening-under-another-salt", "circuit-record-not-the-compilers-output"}
+    assert all(x["refused"] for x in got.values()), got
+    fixed = _write(tmp_path / "fixed", advice=False)
+    fw = fixed.rec["window"]
+    held = {"run": RUN, "circuit": fw["circuit"], "compiled": True, "compiler": None, "advice": None}
+    assert "compiler" not in fw and RA.source(fw, held)["ok"]
+    got = RA.negatives(fw, held, fixed.doc, tmp_path / "n")
+    assert set(got) == {"registration-naming-another-circuit", "registration-naming-another-run",
+                        "registration-binding-a-compiler-for-a-fixed-circuit"} and all(x["refused"] for x in got.values())
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+                           *args], check=True, capture_output=True, text=True).stdout.strip()
+
+
+def test_a_window_is_compiled_at_its_registered_commit_from_a_tree_at_another(tmp_path, monkeypatch):
+    """A registered compiler is (name, digest, commit): the audit compiles from its own checkout of the commit, refused unless
+    the digest it computes there is the registered one. The compiler's code at commit A charges the advice's length; at B
+    it charges a byte more. From a tree at B, a window registered under A is audited with A's code, and one naming B under
+    A's digest, a commit the repository doesn't hold, or a compiler whose table entry names no code is refused."""
+    repo = tmp_path / "repo"
+    (repo / "fake").mkdir(parents=True)
+    _git(repo, "init", "-q")
+    (repo / "fake" / "compiler.py").write_text(FAKE)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "A")
+    a, da = IF.commit_of(repo), IF.compiler_digest(COMPILER["name"], repo, ["fake"])
+    (repo / "fake" / "compiler.py").write_text(FAKE.replace("8 * len(data) if", "8 * len(data) + 8 if"))
+    _git(repo, "commit", "-qam", "B")
+    b, db = IF.commit_of(repo), IF.compiler_digest(COMPILER["name"], repo, ["fake"])
+    assert a != b and da != db
+
+    compiler = {"name": COMPILER["name"], "digest": da, "commit": a}
+    s = _write(tmp_path / "w", compiler=compiler)
+    w, doc, op = s.rec["window"], s.doc, s.opening
+    assert w["compiler"] == compiler
+    (tmp_path / "record.json").write_text(json.dumps({**doc, "run": "", "context": ""}))
+    entry = {"digest": da, "argv": [sys.executable, "fake/compiler.py", "--record", str(tmp_path / "record.json"),
+                                    "--expect", ADVICE.hex()], "code": ["fake"], "pythonpath": ["."]}
+    table = {COMPILER["name"]: entry}
+
+    v, bound = RA.compile_check(doc, w, op, table, tmp_path / "c", repo)
+    assert v["ok"], v
+    assert (v["detail"]["at"], v["detail"]["bits"], bound["compiler"]) == (a, 8 * len(ADVICE), compiler)
+    held = {"run": RUN, "circuit": w["circuit"], "compiled": True, **bound, "compilers": table, "opening": op, "repo": repo,
+            "output": json.loads((tmp_path / "c" / "compiled.json").read_text())}
+    assert RA.source(w, held)["ok"]
+    got = RA.negatives(w, held, doc, tmp_path / "n")
+    assert got["registration-naming-another-commit"] == {"refused": True, "codes": ["compiler"]}
+    assert all(x["refused"] for x in got.values()), got
+
+    monkeypatch.setattr(RA, "tree_root", lambda: repo)
+    for name, (window, compilers, why) in {
+            "the auditing tree's code, at B": ({**w, "compiler": {"name": COMPILER["name"], "digest": da}}, table, "hashes to"),
+            "commit B under A's digest": ({**w, "compiler": {**compiler, "commit": b}}, table, "hashes to"),
+            "a commit the repository doesn't hold": ({**w, "compiler": {**compiler, "commit": "e" * 40}}, table, "check out"),
+            "a table entry naming no code": (w, {COMPILER["name"]: {k: x for k, x in entry.items() if k != "code"}}, "no code"),
+    }.items():
+        v, bound = RA.compile_check(doc, window, op, compilers, tmp_path / "c", repo)
+        assert (v["codes"], bound) == (["code", "compiles", "circuit", "length"], None), name
+        assert why in v["detail"]["code"], (name, v["detail"])
+    v, _ = RA.compile_check(doc, {**w, "compiler": {**compiler, "digest": db, "commit": b}}, op, table, tmp_path / "c", repo)
+    assert v["codes"][:2] == ["compiler", "advice"]
+    assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_advices_charge(written):
+    """2a's audited window, 8 units of SiluMul_v2{I=8192}, counts its two bf16 rows of 8192 a unit, 2,097,152 bits, against
+    1,687 advice bits: vacuous. A wired port isn't an input, a shared-row port counts its table's rows, and an
+    external port is reported but not subtracted until a layout lists the ingress at its steps."""
+    per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
+    mine, doc = IF.of_records(written.dir, D.parse_design(LAW), IF.resolve)
+    got = RA.leak_count(mine.members, doc["external"], 8 * len(ADVICE))
+    assert got == {"inputs": 5 * per_unit, "wired": 0, "ingress": 0, "registered": 0, "external": 0,
+                   "other_inputs": 5 * per_unit, "advice_bits": 8 * len(ADVICE), "bound": "vacuous"}
+    assert RA.leak_count(mine.members, (), 5 * per_unit)["bound"] == "within the charge"
+    silu = [CS.Member("SiluMul_v2{I=8192}", (("g", 8192), ("u", 8192)), (("o0", 8192),), 8)]
+    assert RA.leak_count(silu, (), 1687)["other_inputs"] == 2_097_152 and RA.leak_count(silu, (), 1687)["bound"] == "vacuous"
+    m0, m1 = mine.members
+    x = 16 * dict(m0.rows)["x"]
+    got = RA.leak_count([replace(m0, wired=(("x", "o0", (0, 1, 2, 3)),)), replace(m1, tables=(("x", 3),))], [f"{TID}/wrow"], 0)
+    assert (got["wired"], got["inputs"]) == (4 * x, 5 * per_unit + 2 * x)
+    assert got["other_inputs"] == got["inputs"] - 4 * x and got["external"] == 5 * x
+
+
+def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
+    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s."""
+    rows, at, reads = IF.layout(COORD).rows, 0, []
+    for p, words in rows:
+        if p != free:
+            reads.append(IF.Read(TID, p, "a", at=0, radix=(n,), base=at, step=(words,)))
+        at += n * words
+    return IF.Circuit("test", ((COORD, n),), registered=IF.Registered({"a": at}, reads=tuple(reads)))
+
+
+#: the verifier's pin of ``a``, and a window registration's root for it
+PIN_A = {"a": "ab" * 64}
+
+
+def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_charge(tmp_path, capsys):
+    """A stated record whose inputs are declared is counted from its description alone: with every input row registered at
+    a root the verifier pinned before the run, the root the window's registration records, nothing is free, so its other
+    inputs are the advice's bits, the charge; a port left free adds its rows and the bound is vacuous, and so does every
+    registered read when the verifier pins no root, or when the window's root is another than the pin or none.
+    ``records_audit.py count`` prints the same from the record's and the registration's files (core's, its window's
+    ``registered_roots`` or its committed values' entries, or an integration's own, whose ``window`` is its index), and
+    refuses a pin with no root."""
+    doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(COORD).rows)
+    assert RA.declared_count(doc, 1687, pins=PIN_A, roots=PIN_A) == {
+        "units": 2, "inputs": inputs, "wired": 0, "registered": inputs, "ingress": 0, "free": 0, "other_inputs": 1687,
+        "advice_bits": 1687, "bound": "within the charge"}
+    unpinned = RA.declared_count(doc, 1687)
+    assert (unpinned["registered"], unpinned["free"], unpinned["bound"]) == (0, inputs, "vacuous")
+    assert RA.declared_count(doc, 1687, pins=PIN_A, roots={"a": "cd" * 64}) == unpinned == RA.declared_count(doc, 1687, pins=PIN_A)
+    x = 16 * dict(IF.layout(COORD).rows)["x"]
+    loose = RA.declared_count(_registered_circuit(free="x").description(), 1687, pins=PIN_A, roots=PIN_A)
+    assert (loose["free"], loose["other_inputs"], loose["bound"]) == (2 * x, 2 * x + 1687, "vacuous")
+    with pytest.raises(ValueError, match=r"\{param: root\}"):
+        RA.declared_count(doc, 1687, pins={"a"})
+    (tmp_path / "c.json").write_bytes(IF.circuit_bytes(doc))
+    def group(root: str) -> dict:
+        return {"program": "p", "values": {"a": {"value": "a", "root": root}}}
+
+    pouw = {"context": RUN, "kind": "served", "public": {}}
+    regs = {"core": {"window": {"run": RUN, "registered_roots": PIN_A}}, "own": {"window": 63, "registered_roots": PIN_A},
+            "other": {"window": {"run": RUN, "registered_roots": {"a": "cd" * 64}}}, "none": {"window": 63},
+            "activations": {"window": {**pouw, "activations": group("ab" * 64)}},
+            "registered": {"window": {**pouw, "activations": group("AB" * 64), "registered": group("ab" * 64)}}}
+    for name, reg in regs.items():
+        (tmp_path / f"{name}.json").write_text(json.dumps(reg))
+    for pins, reg, roots in [((), None, {}), ((), "core", PIN_A), (("a=" + "ab" * 64,), "core", PIN_A),
+                             (("a=" + "AB" * 64,), "own", PIN_A), (("a=" + "ab" * 64,), "other", {"a": "cd" * 64}),
+                             (("a=" + "ab" * 64,), "none", {}), (("a=" + "ab" * 64,), None, {}),
+                             (("a=" + "ab" * 64,), "activations", PIN_A), (("a=" + "ab" * 64,), "registered", PIN_A)]:
+        capsys.readouterr()
+        argv = ["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *(f"--pin={p}" for p in pins),
+                *(["--registration", str(tmp_path / f"{reg}.json")] if reg else [])]
+        assert RA.main(argv) == 0
+        got = json.loads(capsys.readouterr().out)
+        assert got == RA.declared_count(doc, 1687, pins=dict(RA.pin_arg(p) for p in pins), roots=roots)
+        assert got["free"] == (0 if pins and roots == PIN_A else inputs), (pins, reg)
+    entry = {"value": "a", "root": PIN_A["a"], "leaves": 1, "words": 4, "domain": REG.domain("p", "a", 4, 1).domain_id.hex()}
+    (tmp_path / "pins.json").write_text(json.dumps(PIN_A))
+    (tmp_path / "registration.json").write_text(json.dumps({"program": "p", "values": {"a": entry}}))
+    (tmp_path / "other-domain.json").write_text(json.dumps({"program": "q", "values": {"a": entry}}))
+    shape = {k: v for k, v in entry.items() if k != "root"}
+    (tmp_path / "record.json").write_text(json.dumps({"of_record": True, "registered_entries": {"a": shape}}))
+    for f in ("pins.json", "registration.json"):
+        capsys.readouterr()
+        assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", "--pins", str(tmp_path / f),
+                        "--registration", str(tmp_path / "core.json")]) == 0
+        assert json.loads(capsys.readouterr().out)["free"] == 0
+    with pytest.raises(ValueError, match="a weights record states each weight's shape, not its root"):
+        RA.pins_of((), [str(tmp_path / "record.json")])
+    for bad in (["--pin", "a"], ["--pin", "a=zz"], ["--pin", "a=" + "ab" * 64, "--pin", "a=" + "cd" * 64],
+                ["--pin", "a=" + "ab" * 64, "--pins", str(tmp_path / "pins.json")], ["--pins", str(tmp_path / "record.json")],
+                ["--pins", str(tmp_path / "other-domain.json")]):
+        with pytest.raises(SystemExit):
+            RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *bad])
+    with pytest.raises(ValueError, match="or its listed members"):
+        RA.declared_count({"templates": doc["templates"]}, 0)
+
+
+def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entries_roots():
+    """`window_roots`: the roots a window's registration records for its parameters are its ``registered_roots`` and each
+    entry's root of the committed values it names, ``{program, values}`` (`ENTRY_GROUPS`: per-window ``activations``,
+    PoUW's operands among them, and pinned ``registered``, PoUW's weights), one root a parameter; a group that isn't one,
+    an entry with no root of hex digits, or two roots for one parameter are refused."""
+    def group(**roots: str) -> dict:
+        return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
+
+    from verity.core.protocols.pouw import operands as OP
+
+    w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
+         "registered": group(w="cd" * 64)}
+    assert RA.window_roots(w) == {"e": "01" * 64, "x": "ab" * 64, "w": "cd" * 64}
+    a, b = (REG.Registered.commit("test/model", v, [[i] * 4], schema=REG.SCHEMA_V2) for i, v in enumerate("ab"))
+    pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
+            "registered": OP.block("test/model", {"b": b})}
+    assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
+    assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.registration_roots({"window": 63})
+    assert RA.registration_roots({"window": w}) == RA.window_roots(w)
+    for bad, why in [({"registered": {"w": "cd" * 64}}, r"is \{program, values"), ({"activations": group(x=7)}, "hex digits"),
+                     ({"activations": group(x="zz")}, "hex digits"), ({"registered": group(w=None)}, "hex digits"),
+                     ({**w, "registered": group(x="cd" * 64)}, r"two roots for \['x'\]"),
+                     ({"registered_roots": {"w": "ab" * 64}, "registered": group(w="cd" * 64)}, "two roots")]:
+        with pytest.raises(ValueError, match=why):
+            RA.window_roots(bad)
+
+
+def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge(tmp_path, monkeypatch, capsys):
+    """``prove_path.py window-circuit`` on the synthetic serve-openai run of `test_prove_path` (I2's window circuit stubbed,
+    one whose every input is registered): it writes the circuit's record from its description (members stated at its cap,
+    no run) or, ``--description``, the description, prints the length the registration charges with the count, and exits
+    `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the record finds the
+    charge. Each count holds the pin to the window's root its advice registration records: where it records another root,
+    or none, every registered read is free."""
+    import prove_path as PP
+    from test_prove_path import _served
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict.build import Unexpressible
+
+    s, circuit, refuse = _served(tmp_path, monkeypatch), _registered_circuit(), []
+
+    def lower(registered, compiled, cls):
+        assert cls == WC.CLASS_OF_RECORD and compiled.requests
+        if refuse:
+            raise Unexpressible("a family the window's lowering doesn't take")
+        return circuit
+
+    monkeypatch.setattr(WC, "window_circuit", lower)
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    bits = s.bound["advice"]["bits"]
+    reg_file = s.run / "advice" / "w0" / "registration.json"
+    served = json.loads(reg_file.read_text())
+    reg_file.write_text(json.dumps({**served, "registered_roots": PIN_A}))
+    base = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+            str(tmp_path / "advice.bin"), "--cap", "4", "--pin", "a=" + PIN_A["a"]]
+    capsys.readouterr()
+    assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
+    got = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert (got["bits"], got["count"]) == (bits, IF.input_count(circuit.description(), pins=PIN_A, roots=PIN_A))
+    assert got["count"]["free"] == 0
+    rec = json.loads((tmp_path / "c.json").read_text())
+    assert rec == IF.descriptor_record(circuit, 4) and (rec["cap"], rec["registered"]) == (4, circuit.registered.doc())
+    assert PP.main([*base, "--out", str(tmp_path / "d.json"), "--description"]) == 0
+    assert json.loads((tmp_path / "d.json").read_text()) == circuit.description()
+    capsys.readouterr()
+    assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", str(bits), "--pin", "a=" + PIN_A["a"],
+                    "--registration", str(reg_file)]) == 0
+    count = json.loads(capsys.readouterr().out)
+    assert (count["free"], count["other_inputs"], count["bound"]) == (0, bits, "within the charge")
+    for theirs in ({**served, "registered_roots": {"a": "cd" * 64}}, served):
+        reg_file.write_text(json.dumps(theirs))
+        assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
+        got = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        assert (got["count"]["registered"], got["count"]["free"]) == (0, got["count"]["inputs"])
+    refuse.append(True)
+    assert PP.main([*base, "--out", str(tmp_path / "e.json")]) == RA.REFUSED
+    assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
+
+
+def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = False,
+                listed: bool = False) -> SimpleNamespace:
+    """A window of ``n`` coordinates each reading its ``wrow`` from a registered value ``name`` of 4 rows (coordinate u row u % 4),
+    committed by core's registered rows, and the verifier's pin of it; ``own``: the window's own value instead, committed
+    under its run root and registered in its ``activations``, as `prove_path.py window-commit` commits the scan's state;
+    ``listed``: its record lists its members and declares the read beside them, a served window's form."""
+    rng = np.random.default_rng(1)
+    rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
+    value = REG.Registered.commit("test/model", name, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN if own else None)
+    read = IF.Read(TID, "wrow", name, 0, (n // 4, 4), 0, (0, K // 2))
+    win = IF.Window(IF.Circuit("test", ((COORD, n),), registered=IF.Registered({name: 4 * K // 2}, reads=(read,))), RUN,
+                    D.parse_design(LAW), cap, registered={name: value})
+    if listed:
+        stated = win.circuit_record()
+        win.circuit_record = lambda: IF.circuit_record(win.window, stated["name"], stated["templates"], stated["statements"],
+                                                       declared={"registered": stated["registered"]})
+    x = rng.integers(-128, 128, (n, K)).astype(np.int8)
+    sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
+    ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
+    win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
+    entry = {"program": "test/model", "values": {name: value.entry()}}
+    win.write(win.close(), d, {"label": "test", **({"activations": entry} if own else {})}, registrar=R)
+    return SimpleNamespace(dir=d, value=value, pin=entry)
+
+
+def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_free_inputs(tmp_path, capsys):
+    got = _registered(tmp_path / "w")
+    mine, doc, _sets = RA.verifier_window(got.dir, D.parse_design(LAW), None)
+    pins = RA.pinned(got.pin)
+    files = IF.registered_reads(doc, mine, pins, registered=REG)
+    assert [f["ports"]["wrow"]["reads"] for f in files.values()] == [[0, 1, 2, 3], [0, 1, 2, 3]]
+    assert all(f["ports"]["wrow"]["root"] == got.value.root.hex() for f in files.values())
+    per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
+    rec = json.loads((got.dir / "registration.json").read_text())
+    roots, pin = RA.registration_roots(rec), {v: e["root"] for v, e in pins.items()}
+    assert roots == rec["window"]["registered_roots"] == pin == {"w": got.value.root.hex()}
+    count = RA.declared_count(doc, 0, pins=pin, roots=roots)
+    assert (count["inputs"], count["registered"], count["free"]) == (8 * per_unit, 8 * 8 * K, 8 * per_unit - 8 * 8 * K)
+    assert count["other_inputs"] == count["free"] and count["bound"] == "vacuous"
+    assert RA.declared_count(doc, 0, pins={"w": "cd" * 64}, roots=roots)["free"] == 8 * per_unit
+    with pytest.raises(ValueError, match="another value or domain"):
+        RA.pinned({**got.pin, "program": "test/other"})
+    with pytest.raises(ValueError, match="a pin is"):
+        RA.pinned({"values": {}})
+    base = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath", ".",
+            "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o"), "--challenger", "local", "--main", "m.txt"]
+    assert RA.main(base) == 1
+    assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
+    (tmp_path / "circuit.json").write_bytes((got.dir / "circuit.json").read_bytes())
+    assert RA.main(["count", "--circuit", str(tmp_path / "circuit.json"), "--bits", "0", "--pin", f"w={pin['w']}",
+                    "--registration", str(got.dir / "registration.json")]) == 0
+    assert json.loads(capsys.readouterr().out.splitlines()[-1])["free"] == count["free"]
+
+
+def test_an_expert_tables_registration_is_a_pin_as_written():
+    """A TP rank's registration of the per-expert cut's tables (``verity-vllm tp-register-tables``) is ``--registered`` as written,
+    each table under its rank's program: moved to another rank's program it refuses, and two ranks' registrations name each table
+    twice, so a rank's window pins its own rank's."""
+    from verity_vllm.pipeline import expert_tables as ET
+
+    E, N, K, label = 8, 4, 64, "model.model.layers.3.mlp.experts.w13_weight"
+    fields = [(label, [E, N, K], 8), (label + "_scale_inv", [E, 1, 1], 32)]
+    tables = ET.tables_of(fields, {"w13": 2})
+    rng = np.random.default_rng(4)
+    words = {label: rng.integers(0, 256, (E, N, K), dtype=np.uint8), label + "_scale_inv": rng.random((E, 1, 1), dtype=np.float32)}
+
+    def registration(rank: int) -> dict:
+        prog, nonce = ET.program("test/model", "abc", 2, rank, "model."), ET.nonces(tables, [f for f, _s, _b in fields], rank)
+        values = {p: e for f, shape, _b in fields for p, e in ET.entries(prog, words[f], shape, tables[f], bytes(32), nonce).items()}
+        return json.loads(json.dumps({"schema": ET.SCHEMA, "program": prog, "repo": "test/model", "revision": "abc", "world": 2,
+                                      "rank": rank, "prefix": "model.", "blocks": {"w13": 2}, "values": values, "nonces": nonce}))
+
+    one, zero = registration(1), registration(0)
+    assert set(RA.pinned(one)) == set(one["values"]) and len(one["values"]) == N // 2 + 1
+    with pytest.raises(ValueError, match="another value or domain"):
+        RA.pinned({**one, "program": zero["program"]})
+    with pytest.raises(ValueError, match="pinned twice"):
+        RA.pinned([one, zero])
+
+
+def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_stated_records(tmp_path, capsys):
+    """A record that lists its members (a served window's form) declares its registered reads beside them, as a served
+    window reads its model's weights: the verifier's window takes it, each member's ``--registered`` file is the one the
+    stated record of the same window makes, and its count is the stated record's, the reads registered where the verifier
+    pinned the parameter at the root the window's registration records. Without a pin the audit refuses the window before
+    any sample; the count names the parameter ``unpinned`` and counts its reads free, as it does for a pin of another root
+    or a registration that records none."""
+    law = D.parse_design(LAW)
+    stated, listed = _registered(tmp_path / "s"), _registered(tmp_path / "l", listed=True)
+    (ms, sdoc, _), (ml, ldoc, _) = (RA.verifier_window(g.dir, law, None) for g in (stated, listed))
+    assert "cap" in sdoc and "members" in ldoc and "cap" not in ldoc and ldoc["registered"] == sdoc["registered"]
+    assert ml.members == ms.members and all(dict(m.tables)["wrow"] == 4 for m in ml.members)
+    pins = RA.pinned(listed.pin)
+    files = IF.registered_reads(ldoc, ml, pins, registered=REG)
+    assert files == IF.registered_reads(sdoc, ms, pins, registered=REG) and len(files) == 2
+    pin = RA.pin_roots(pins)
+    roots = RA.registration_roots(json.loads((listed.dir / "registration.json").read_text()))
+    count = RA.declared_count(ldoc, 0, pins=pin, roots=roots)
+    assert roots == pin and count == {**RA.declared_count(sdoc, 0, pins=pin, roots=roots), IF.WINDOW_INGRESS: 0}
+    assert count["registered"] == 8 * 8 * K and "unpinned" not in count
+    for p, r in ((None, roots), ({"w": "cd" * 64}, roots), (pin, {})):
+        free = RA.declared_count(ldoc, 0, pins=p, roots=r)
+        assert (free["registered"], free["free"], free["unpinned"]) == (0, count["free"] + 8 * 8 * K, ["w"])
+    base = ["audit", "--window", str(listed.dir), "--law", LAW, "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath",
+            ".", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o"), "--challenger", "local",
+            "--main", "m.txt"]
+    assert RA.main(base) == 1
+    assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
+    for pins_, want in (([f"--pin=w={pin['w']}"], count), ([], RA.declared_count(ldoc, 0))):
+        capsys.readouterr()
+        assert RA.main(["count", "--circuit", str(listed.dir / "circuit.json"), "--bits", "0", *pins_,
+                        "--registration", str(listed.dir / "registration.json")]) == 0
+        assert json.loads(capsys.readouterr().out.splitlines()[-1]) == want
+
+
+def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
+    """`tie_of`: a circuit whose program takes values (a served window's H1 tables, by their Commit names) is tied to the
+    earlier registration W that registered them first: one-stage's ``log`` is W, each value's ``registered`` words are W's
+    entry's, its ``outputs`` W's table of it under the prefix (`credit.window_table`) and its schema v2, and the audit pins
+    each at W's entry under the value's own name. With neither values nor W there's no tie; values without W or a prefix,
+    W without values, a value W registers other than once and a value that is no Commit table are refused."""
+    rows = np.arange(4 * K // 2, dtype=np.uint16).reshape(4, K // 2)
+    a, other, ids = (REG.Registered.commit("h1/program", v, r.tolist(), schema=REG.SCHEMA_V2).entry()
+                     for v, r in ((f"h1/a/{K}@0", rows), (f"h1/a/{K}@1", rows), ("h1/ids@0", rows[:, :4])))
+    w = {"format": R.FORMAT_V2, "registered": [a, other, ids], "previous": None}
+    values = [f"row-table/0/k{K}", "input-ids/0"]
+    reg = {"params": {values[0]: 4 * K // 2, values[1]: 16}, "tables": [], "reads": [], "roots": [], "openings": []}
+    doc = {"registered": {**reg, "values": values}}
+    tied, pins = RA.tie_of(doc, w, "h1/")
+    d = R.digest(w)
+    assert tied == {"log": [w], "registered": {values[0]: K // 2, values[1]: 4},
+                    "outputs": {values[0]: {"record": d, "value": f"h1/a/{K}@0"}, values[1]: {"record": d, "value": "h1/ids@0"}},
+                    "schemas": {v: REG.SCHEMA_V2 for v in values}}
+    assert pins == {values[0]: {**a, "value": values[0]}, values[1]: {**ids, "value": values[1]}}
+    assert RA.tie_of({}, None, None) == RA.tie_of({"registered": reg}, None, "h1/") == ({}, {})
+    named = {"registered": {**reg, "params": {"w": 16}, "values": ["w"]}}
+    for circuit, earlier, prefix, why in (
+            (doc, None, "h1/", "tie the audit to it"), ({"registered": reg}, w, "h1/", "takes no values"),
+            (doc, w, None, "give --tie-prefix"), (doc, {**w, "registered": [a, other]}, "h1/", "as 'h1/ids@0' 0 times"),
+            (doc, {**w, "registered": [a, a, ids]}, "h1/", f"as 'h1/a/{K}@0' 2 times"), (doc, w, "g/", "0 times"),
+            (named, w, "h1/", "is no Commit name")):
+        with pytest.raises(ValueError, match=why):
+            RA.tie_of(circuit, earlier, prefix)
+
+
+@dataclass(frozen=True)
+class _Reused(REG.Registered):
+    """W's table as the circuit's value (`pouw_h1_commit.Reused`): W's rows, salts and tree, by the circuit's name of it, so
+    its entry is W's but in name; there's no binding to recompute W's domain from."""
+
+    domain_id: bytes = b""
+
+    @property
+    def domain(self):
+        raise ValueError(f"{self.value}: a reused table has W's domain id alone")
+
+    def entry(self) -> dict:
+        return {"value": self.value, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
+                "domain": self.domain_id.hex()}
+
+
+def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
+    """A window of ``n`` coordinates each reading its ``wrow`` from round 0's A table of K (4 rows, coordinate u row u % 4),
+    a value its circuit's program takes (`IF.Registered.values`) and an earlier registration W registered first as
+    ``h1/a/<K>@0``: the window's registration is chained right after W and registers the table by W's entry, as
+    ``prove_path.py window-commit --window-registration W`` does. W is written beside the window as ``w.json``."""
+    rng = np.random.default_rng(2)
+    rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
+    theirs = REG.Registered.commit("h1/program", f"h1/a/{K}@0", rows.tolist(), schema=REG.SCHEMA_V2)
+    w = {"format": R.FORMAT_V2, "registered": [theirs.entry()], "previous": None}
+    name = f"row-table/0/k{K}"
+    value = _Reused(**{**{f.name: getattr(theirs, f.name) for f in fields(theirs)}, "value": name},
+                    domain_id=theirs.domain.domain_id)
+    read = IF.Read(TID, "wrow", name, 0, (n // 4, 4), 0, (0, K // 2))
+    circuit = IF.Circuit("test", ((COORD, n),), registered=IF.Registered({name: 4 * K // 2}, reads=(read,), values=(name,)))
+    win = IF.Window(circuit, RUN, D.parse_design(LAW), cap, registered={name: value})
+    x = rng.integers(-128, 128, (n, K)).astype(np.int8)
+    sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
+    ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
+    win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
+    win.write(win.close(), d, {"label": "test"}, registrar=R, previous=R.digest(w))
+    (d.parent / "w.json").write_text(json.dumps(w))
+    return SimpleNamespace(dir=d, w=w, w_file=d.parent / "w.json", name=name, entry=theirs.entry(),
+                           rec=json.loads((d / "registration.json").read_text()))
+
+
+def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_registration(tmp_path, monkeypatch):
+    """A window whose circuit takes values (`_tied`) is audited tied to the earlier registration W that registered them
+    first (``--tie W --tie-prefix P``), and refused before any session without the tie: the tie hands a5 one-stage's
+    ``log``, ``registered``, ``outputs`` and ``schemas`` (`tie_of`), the value's readers read W's table at W's root and
+    count registered (the root the window's registration records for the value), the value is the window's own to the
+    output class (its readers sampled like any other unit), and the summary names W's digest and the values. The sessions
+    (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass."""
+    import a5 as A5
+    import a5_coins as AC
+
+    got = _tied(tmp_path / "w")
+    assert got.rec["previous"] == R.digest(got.w) and got.rec["registered"] == [{**got.entry, "value": got.name}]
+    seen, owned = {}, []
+
+    def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
+        seen.update(tie=a.tie, outputs=a.outputs, registered=kw["registered"])
+        return {"audit": {"accepted": True}}, True
+
+    def output_class(circuit, given=(), own=frozenset()):
+        owned.append(set(own))
+        return []
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    monkeypatch.setattr(RA, "output_class", output_class)
+    base = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", got.rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
+            "local", "--main", "m.txt"]
+    for extra, why in (([], "tie the audit to it"), (["--tie", str(got.w_file)], "give --tie-prefix"),
+                       (["--tie", str(got.w_file), "--tie-prefix", "g/"], "0 times")):
+        assert RA.main([*base, "--out", str(tmp_path / "refused"), *extra]) == 1
+        assert why in json.loads((tmp_path / "refused" / "summary.json").read_text())["refused"]["records"]
+        assert not seen and not owned
+    assert RA.main([*base, "--out", str(tmp_path / "out"), "--tie", str(got.w_file), "--tie-prefix", "h1/"]) == 1
+    tied, pins = RA.tie_of(json.loads((got.dir / "circuit.json").read_text()), got.w, "h1/")
+    assert seen["tie"] == tied and tied["log"] == [got.w] and pins == {got.name: {**got.entry, "value": got.name}}
+    assert tied["outputs"] == {got.name: {"record": R.digest(got.w), "value": f"h1/a/{K}@0"}} and owned == [{got.name}]
+    assert len(seen["registered"]) == 2 and all(f["ports"]["wrow"]["root"] == got.entry["root"]
+                                                 and f["ports"]["wrow"]["domain"] == got.entry["domain"]
+                                                 for f in seen["registered"].values())
+    summary = json.loads((tmp_path / "out" / "summary.json").read_text())
+    assert summary["tie"] == {"record": R.digest(got.w), "values": [got.name]}
+    assert summary["registered"]["roots"] == summary["registered"]["pins"] == {got.name: got.entry["root"]}
+    assert summary["leak"]["registered"] == 8 * 8 * K and "unpinned" not in summary["leak"]
+
+
+def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
+    """What the records audit leaves under its ``--out`` ``out`` for ``window``: the population Program it sampled, its
+    summary, and an audit record of ``registration`` (default the window's) accepting a subset sample of 2 proof blocks;
+    or, not ``accepted``, a check before the sample that failed."""
+    mine, _doc, _sets = RA.verifier_window(window, D.parse_design(LAW), None)
+    rec = registration or json.loads((window / "registration.json").read_text())
+    (out / "window").mkdir(parents=True)
+    (out / "window" / "program.json").write_bytes(canonical_json(encode_program(mine.program)))
+    if not accepted:
+        (out / "summary.json").write_text(json.dumps({"checks_before_draw": {"registration": False}}))
+        return out
+    (out / "summary.json").write_text(json.dumps({"checks_before_draw": {"registration": True},
+                                                  "fixed_before_draw": {"ok": True}}))
+    (out / "window" / "audit.json").write_text(json.dumps({
+        "accepted": True, "registration": rec, "proved_units": [1, 5], "checks": {"draw": {"ok": True}},
+        "draw": {"law": "subset", "k": 2, "population": rec["population"], "units": [1, 5]},
+        "wrong_units": {"delta": 0.5, "bound": 3}}))
+    return out
+
+
+def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_registered(tmp_path, capsys):
+    """`period`: a window whose circuit reads its own scan state (`RA.TIED`) gives the network certifier's period its
+    registration, the Program the audit sampled (the one the registration names), the audit's answer, ``steps`` 0 and
+    ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
+    where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
+    Refused by name: a window that commits no scan state, a circuit the registration doesn't bind, an audit that wrote no
+    Program or another than the registration names, and an answer committing to another registration."""
+    got = _registered(tmp_path / "w", name=RA.TIED, own=True)
+    audit = _audited(got.dir, tmp_path / "a")
+    rec, doc = (json.loads((got.dir / f).read_text()) for f in ("registration.json", "circuit.json"))
+    p = RA.period(got.dir, audit, {})
+    per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
+    assert p["free"] == 8 * per_unit - 8 * 8 * K and p["steps"] == 0
+    assert p["registration"] == rec and p["answer"] == SI.answer(audit, rec) and p["answer"]["verdict"] == "accept"
+    assert program_digest(p["program"]) == rec["program"] and p["answer"]["commitment"] == R.digest(rec)
+    ties, untied = RA.window_pins(rec["window"], doc)
+    assert ties == {} and list(untied) == [RA.TIED]
+    audited = RA.declared_count(doc, 0, pins=RA.pin_roots(untied), roots=RA.window_roots(rec["window"]), untied=set(untied))
+    assert audited["free"] == 8 * per_unit and audited["untied"] == [RA.TIED]
+    capsys.readouterr()
+    assert RA.main(["period", "--window", str(got.dir), "--audit", str(audit), "--out", str(tmp_path / "p.json")]) == 0
+    assert json.loads((tmp_path / "p.json").read_text()) == p
+    assert json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix("PERIOD ")) == {
+        "verdict": "accept", "reason": None, "free": p["free"], "commitment": R.digest(rec), "program": rec["program"]}
+    refused = RA.period(got.dir, _audited(got.dir, tmp_path / "r", accepted=False), {})["answer"]
+    assert refused["verdict"] == "reject" and refused["commitment"] == R.digest(rec)
+
+    other = _registered(tmp_path / "x")
+    unbound = tmp_path / "u"
+    shutil.copytree(got.dir, unbound)
+    (unbound / "circuit.json").write_text(json.dumps({**doc, "name": "other"}))
+    bare, renamed = tmp_path / "b", tmp_path / "n"
+    for d in (bare, renamed):
+        shutil.copytree(audit, d)
+    (bare / "window" / "program.json").unlink()
+    (renamed / "window" / "program.json").write_text(json.dumps({**p["program"], "name": "other"}))
+    for window, audited_by, why in [
+            (other.dir, _audited(other.dir, tmp_path / "xa"), "commits no verity/certifier/scan-state/v1 its circuit reads"),
+            (unbound, audit, "is not the circuit record the registration binds"),
+            (got.dir, bare, "wrote no Program"),
+            (got.dir, renamed, "isn't the one the registration names"),
+            (got.dir, _audited(got.dir, tmp_path / "o", {**rec, "window": {**rec["window"], "label": "other"}}),
+             "commits to another registration than the window's")]:
+        with pytest.raises(ValueError, match=why):
+            RA.period(window, audited_by, {})
+    assert RA.main(["period", "--window", str(unbound), "--audit", str(audit), "--out", str(tmp_path / "q.json")]) == 1
+    assert "records_audit.py period: " in capsys.readouterr().err and not (tmp_path / "q.json").exists()
+
+
+#: a `ScanSlots_v2` of two lanes on a 40-word state row (`test_io_shell`'s)
+SLOTS = {"NS": 40, "NP": 4, "IDB": 17, "K0": 2, "K": 3,
+         "OCC": (3, 300), "LP": (40, 340), "MAX": (80, 380), "IDS": (120, 420)}
+
+
+def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> SimpleNamespace:
+    """`_registered`'s window of ``n`` coordinates reading the window's own scan state (`RA.TIED`), with ``shell`` units
+    of an io shell's `ScanSlots_v2` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
+    gives it."""
+    from verity.ml.definitions.registry import boolean_io_shell as BX
+
+    fn = bind(BX.ScanSlotsV2, **SLOTS)
+    state = np.random.default_rng(2).integers(0, 1 << 16, (shell, SLOTS["NS"]), dtype=np.uint16)
+    got = np.asarray(evaluate_words(fn, state.astype(np.uint32)), dtype=np.uint32).reshape(shell, -1)
+    outs = np.split(got, np.cumsum([count // 2 for _o, count in IF.layout(fn).outs])[:-1], axis=1)
+    rng = np.random.default_rng(1)
+    rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
+    value = REG.Registered.commit("test/model", RA.TIED, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN)
+    read = IF.Read(TID, "wrow", RA.TIED, 0, (n // 4, 4), 0, (0, K // 2))
+    registered = IF.Registered({RA.TIED: 4 * K // 2}, reads=(read,))
+    win = IF.Window(IF.Circuit("test", ((COORD, n), (fn, shell)), registered=registered), RUN, D.parse_design(LAW), cap,
+                    registered={RA.TIED: value})
+    x = rng.integers(-128, 128, (n, K)).astype(np.int8)
+    sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
+    ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
+    win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
+    win.record(fn, [state], [np.ascontiguousarray(o) for o in outs])
+    assert win.mismatches() == {}
+    entry = {"program": "test/model", "values": {RA.TIED: value.entry()}}
+    win.write(win.close(), d, {"label": "test", "activations": entry}, registrar=R)
+    return SimpleNamespace(dir=d, shell=fn)
+
+
+def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry_definition(tmp_path):
+    """``records_audit.py period`` as V3c runs it, in a process of its own, on a window whose circuit holds an io
+    shell's `ScanSlots_v2` beside the coordinates that read its scan state. `ScanSlots_v2` is a registry Definition,
+    which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates in Verity's
+    whole catalog (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
+    `interface.resolve` alone refuses the window ("names no Definition in Verity's catalog")."""
+    got = _io_shell_window(tmp_path / "w")
+    audit = _audited(got.dir, tmp_path / "a")
+    p = subprocess.run([sys.executable, str(HERE.parent / "records_audit.py"), "period", "--window", str(got.dir),
+                        "--audit", str(audit), "--out", str(tmp_path / "p.json")], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+    coord, state = (sum(16 * w for _p, w in IF.layout(fn).rows) for fn in (COORD, got.shell))
+    period = json.loads((tmp_path / "p.json").read_text())
+    assert period["free"] == 8 * coord - 8 * 8 * K + 3 * state and period["answer"]["verdict"] == "accept"
+
+
+def test_a_windows_committed_activations_are_held_to_domains_binding_its_run():
+    rows = [[1, 2], [3, 4]]
+    mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "sx")}
+    w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
+    got = RA.committed_activations(w)
+    assert got["ok"] and got["detail"]["values"]["x"] == {"root": mine["x"]["root"], "leaves": 2, "words": 2}
+    assert RA.committed_activations({"run": RUN}) is None
+    elsewhere = REG.Registered.commit("test/model", "x", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
+    for bad, code in (({**w, "run": "cd" * 64}, "domains"), ({**w, "activations": {**w["activations"], "program": "other"}}, "domains"),
+                      ({**w, "activations": {"program": "test/model", "values": {**mine, "x": elsewhere}}}, "domains"),
+                      ({**w, "activations": {"program": "test/model", "values": {}}}, "activations"),
+                      ({**w, "activations": {"program": "test/model"}}, "activations")):
+        v = RA.committed_activations(bad)
+        assert not v["ok"] and code in v["codes"], (bad, v)
+
+
+def _crafted(reads: tuple[IF.Read, ...], params: dict[str, int], n: int = 33) -> dict:
+    """A stated record of ``n`` coordinates declaring ``reads`` of ``params`` (no wires)."""
+    return {"templates": [[TID, n]], "wires": [], "registered": IF.Registered(params, reads=reads).doc()}
+
+
+#: coordinates 0..31 write their one-word ``o0`` as leaves 0..31 of ``y``, which coordinate 32's ``x`` (32 words) reads: a
+#: tie; coordinates 0..31 read their ``x`` from ``e``, which no output port writes
+TIE = (IF.Read(TID, "o0", "y", 0, (32,), 0, (1,)), IF.Read(TID, "x", "y", 32, (1,), 0, (32,)))
+INPUT_ONLY = (IF.Read(TID, "x", "e", 0, (32,), 0, (32,)),)
+PARAMS = {"y": 32, "e": 32 * 32}
+
+
+def test_a_value_is_a_tie_only_when_output_ports_write_every_leaf_its_input_ports_take():
+    """`tied_values`: ``y``, written by the coordinates' outputs and read by another's input, is a tie; ``e``, read only
+    by input ports, isn't; nor is a value whose readers take leaves no output writes; a value nothing reads isn't either."""
+    doc = _crafted(TIE + INPUT_ONLY, PARAMS)
+    assert RA.tied_values(doc, {"y", "e", "z"}) == {"y"}
+    assert RA.tied_values(doc, {"e"}) == set() and RA.tied_values(doc, ()) == set()
+    half = (IF.Read(TID, "o0", "p", 0, (16,), 0, (1,)), IF.Read(TID, "wrow", "p", 32, (1,), 0, (32,)))
+    assert RA.tied_values(_crafted(half, {"p": 32}), {"p"}) == set()
+
+
+def test_an_input_only_window_value_is_free_in_the_count_and_named():
+    """`declared_count` with ``untied``: the input rows read from a value no output port writes leave ``registered`` for
+    ``free``, by exactly those rows, and the count names it; a tie's reads stay registered. Both are pins, as the audit
+    pins every value it opens."""
+    doc = _crafted(TIE + INPUT_ONLY, PARAMS)
+    per_unit = 16 * sum(w for _p, w in IF.layout(COORD).rows)
+    roots = {v: f"{i:02x}" * 64 for i, v in enumerate(PARAMS, 1)}
+    before, after = (RA.declared_count(doc, 0, pins=roots, roots=roots),
+                     RA.declared_count(doc, 0, pins=roots, roots=roots, untied={"e"}))
+    assert before["registered"] == 16 * 32 + 32 * 16 * 32 and before["free"] == 33 * per_unit - before["registered"]
+    assert after["registered"] == 16 * 32 and after["free"] - before["free"] == 32 * 16 * 32 and after["untied"] == ["e"]
+    assert "untied" not in before
+
+
+def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_ties():
+    """`window_pins`: the per-window values the circuit reads are the registration's entries, each held to a domain binding
+    the window's run root, split into ties (pinned) and the untied (read only by input ports, counted free); one it
+    doesn't read is neither, and one committed under another run, or naming another value, is refused."""
+    rows = [[1, 2], [3, 4]]
+    mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "y", "e")}
+    w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
+    circuit = _crafted(TIE + INPUT_ONLY, PARAMS)
+    assert RA.window_pins(w, circuit) == ({"y": mine["y"]}, {"e": mine["e"]})
+    assert RA.window_pins(w, {}) == ({}, {}) and RA.window_pins({"run": RUN}, circuit) == ({}, {})
+    elsewhere = REG.Registered.commit("test/model", "y", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
+    for bad in ({**w, "run": "cd" * 64}, {**w, "activations": {"program": "test/model", "values": {"y": elsewhere}}},
+                {**w, "activations": {"program": "test/model", "values": {"y": mine["x"]}}}):
+        with pytest.raises(ValueError, match="another value or a domain"):
+            RA.window_pins(bad, circuit)
+
+
+def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
+    mine, doc = IF.of_records(written.dir, D.parse_design(LAW), IF.resolve)
+    assert not mine.row_tables
+    monkeypatch.setattr(IF, "of_records", lambda d, law, resolve: (SimpleNamespace(row_tables=("t0", "t1")), doc))
+    with pytest.raises(ValueError, match="2 row tables.*segment roots.*refused until they do"):
+        RA.verifier_window(written.dir, D.parse_design(LAW), None)
+
+
+def test_the_audit_needs_the_run_root_the_run_published(written, capsys):
+    base = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", "00" * 64, "--m0-pythonpath", ".", "--bin", "b",
+            "--lean", "l", "--firewall", "f", "--out", "o"]
+    with pytest.raises(SystemExit) as e:
+        RA.main(base)
+    assert e.value.code == 2 and "--run" in capsys.readouterr().err
+
+
+def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(written):
+    import a5 as A5
+
+    rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
+                              "compiled": True}
+    receipt = {"registration": R.digest(rec), "verifier": A5.CHALLENGER, "received": 1}
+    assert RA.fixed_before_draw(receipt, rec, written.bound)["ok"]
+    assert RA.fixed_before_draw({**receipt, "registration": "00" * 64}, rec, written.bound)["codes"] == ["after-the-draw"]
+    assert RA.fixed_before_draw({**receipt, "verifier": "another stream"}, rec, written.bound)["codes"] == ["after-the-draw"]
+    assert RA.fixed_before_draw(receipt, rec, None)["codes"] == ["compiler", "advice"]
+    late = RA.after_draw(receipt, rec, held)
+    assert late == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
+
+
+def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session(written, tmp_path, monkeypatch):
+    """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
+    `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger."""
+    import a5_coins as AC
+
+    args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
+            "--port", "10000",
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"), "--main", "main.txt"]
+    for bad in (["--peer", "vy-nebius-1"], ["--challenger-key", "key.json"]):
+        with pytest.raises(SystemExit, match="2"):
+            RA.main([*args, "--challenger", "gate:research@gate", *bad])
+    with pytest.raises(SystemExit, match="2"):
+        RA.main([*args, "--challenger", "remote"])
+    with pytest.raises(SystemExit, match="2"):
+        RA.main(args)
+
+    class Opened(Exception):
+        pass
+
+    seen = {}
+
+    def start(challenger, root, ranks, dest, main, **kw):
+        seen.update(challenger=challenger, root=root, ranks=ranks, main=main, **kw)
+        raise Opened
+
+    monkeypatch.setattr(AC, "start", start)
+    with pytest.raises(Opened):
+        RA.main([*args, "--challenger", "gate:research@gate", "--peer", "vy-nebius-1", "--challenger-key", "key.json",
+                 "--gate-key", "gate.key"])
+    assert seen == {"challenger": "gate:research@gate", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": "gate.key",
+                    "peer": "vy-nebius-1", "key_record": "key.json"}
+
+
+def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):
+    """A session listens on one port a member with a proved unit (closure included), so 20 proved members need 20 ports:
+    the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
+    refused before any session listens, since the next one could reach another audit's verifier."""
+    import a5 as A5
+    import a5_coins as AC
+
+    got = _write(tmp_path / "w", n=20, cap=1)
+    mine, _doc, _sets = RA.verifier_window(got.dir, D.parse_design(LAW), None)
+    assert len(mine.members) == 20 > A5.RANK_PORTS
+    every = {"law": "work", "units": [18, 19], "closure": list(range(18))}
+    assert A5.port_refusal(mine, every, 10000, A5.RANK_PORTS) == {
+        "sessions-past-the-reserved-ports": {"sessions": 20, "ports": 16, "from": 10000}}
+    assert A5.port_refusal(mine, every, 10000, 20) is None and A5.port_refusal(mine, every, 10000, None) is None
+    assert A5.port_refusal(mine, {"law": "subset", "units": [3, 7]}, 10000, 2) is None
+
+    class Opened(Exception):
+        pass
+
+    seen = {}
+
+    def free_ports(span):
+        seen["span"] = span
+        return 20000
+
+    def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
+        seen.update(port=port, ports=kw["ports"])
+        raise Opened
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", free_ports)
+    monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    args = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", got.rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+            "--challenger", "local", "--main", "m.txt"]
+    for extra, want in (([], {"span": 20, "port": 20000, "ports": 20}), (["--port", "10000", "--ports", "16"],
+                                                                         {"port": 10000, "ports": 16})):
+        seen.clear()
+        with pytest.raises(Opened):
+            RA.main([*args, *extra])
+        assert seen == want
+
+
+def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_window_figure_with_its_premise(
+        written, tmp_path, monkeypatch, capsys):
+    """A record that lists its members and declares its window's ingress (here each coordinate's ``x`` and ``sx``, rows
+    before the window) is counted by `declared_count`, not `leak_count`: the audit's ``RECORDS`` line and ``summary.json``
+    carry the run figure, the window ingress still free in it, and beside it the window figure with its premise
+    (`WINDOW_PREMISE`). The sessions (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass; its leak count
+    is the records' alone."""
+    import a5 as A5
+    import a5_coins as AC
+
+    mine, stated, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
+    ingress = [{"reader": TID, "port": p, "at": 0, "units": 5, "step": 0} for p in ("x", "sx")]
+    doc = IF.circuit_record(mine, stated["name"], stated["templates"], stated["statements"], stated["external"],
+                            declared={IF.WINDOW_INGRESS: ingress})
+    body = IF.circuit_bytes(doc)
+    (written.dir / "circuit.json").write_bytes(body)
+    rec = {**written.rec, "window": {**written.rec["window"], "circuit": hashlib.sha512(body).hexdigest()}}
+    (written.dir / "registration.json").write_text(json.dumps(rec))
+    assert "cap" not in doc and IF.of_records(written.dir, D.parse_design(LAW), IF.resolve)[0].members == mine.members
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", lambda *a, **kw: ({"audit": {"accepted": True}}, True))
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    capsys.readouterr()
+    assert RA.main(["audit", "--window", str(written.dir), "--law", LAW, "--circuit", rec["window"]["circuit"], "--run", RUN,
+                    "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+                    "--skip-negatives", "--challenger", "local", "--main", "m.txt"]) == 1
+    rows = dict(IF.layout(COORD).rows)
+    inputs, window = 5 * 16 * sum(rows.values()), 5 * 16 * (rows["x"] + rows["sx"])
+    figure = {"ingress": window, "free": inputs - window, "other_inputs": inputs - window, "bound": "vacuous",
+              "premise": RA.WINDOW_PREMISE}
+    printed = [json.loads(x.removeprefix("RECORDS ")) for x in capsys.readouterr().out.splitlines() if x.startswith("RECORDS ")]
+    assert [p["leak"] for p in printed] == [{"other_inputs": inputs, "free": inputs, "registered": 0, "advice_bits": 0,
+                                             "bound": "vacuous", "window": figure}]
+    summary = json.loads((tmp_path / "out" / "summary.json").read_text())
+    assert summary["leak"] == RA.declared_count(doc, 0) and summary["leak"]["window"] == figure
+
+
+def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
+    """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
+    statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
+    that cache, and none without ``--compose-cache``."""
+    import a5 as A5
+    import a5_coins as AC
+
+    seen = {}
+
+    def warm(a, sets, mine, jobs=1):
+        seen.update(cache=a.compose_cache, jobs=jobs, members=[m.template for m in mine.members],
+                    inputs={t: c.inputs for t, (c, _fn) in sets.items()})
+        return [{"template": TID, "seconds": 1.0, "kept": False, "pin": "ab", "k_log": 3}]
+
+    monkeypatch.setattr(A5, "warm", warm)
+    cache = str(tmp_path / "cache")
+    assert RA.main(["warm", "--window", str(written.dir), "--law", LAW, "--compose-cache", cache, "--jobs", "2"]) == 0
+    assert seen == {"cache": cache, "jobs": 2, "members": [TID, TID],
+                    "inputs": {TID: ["unit/window", written.doc["statements"][TID]]}}
+    lines = capsys.readouterr().out.splitlines()
+    assert json.loads(lines[0])["template"] == TID and json.loads(lines[-1].removeprefix("WARM "))["templates"] == 1
+
+    class Opened(Exception):
+        pass
+
+    def audit(a, *args, **kw):
+        seen["audit"] = a.compose_cache
+        raise Opened
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+            "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
+    for extra, want in ((["--compose-cache", cache], cache), ([], None)):
+        with pytest.raises(Opened):
+            RA.main([*args, *extra])
+        assert seen["audit"] == want
+
+
+def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):
+    """The verifier's window, the compile check, `source`, the negatives and the sample-order check, in a fresh process: no
+    `verity_vllm` module is loaded."""
+    compilers = tmp_path / "compilers.json"
+    compilers.write_text(json.dumps(_compilers(tmp_path, written.doc)))
+    (tmp_path / "opening.json").write_text(json.dumps(written.opening))
+    code = f"""
+import json, sys
+from pathlib import Path
+sys.path.insert(0, {str(HERE.parent)!r})
+import records_audit as RA
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
+import a5 as A5
+d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
+mine, doc, sets = RA.verifier_window(d, D.parse_design({LAW!r}), None)
+rec = json.loads((d / "registration.json").read_text())
+compilers, opening = json.loads((t / "compilers.json").read_text()), json.loads((t / "opening.json").read_text())
+v, bound = RA.compile_check(doc, rec["window"], opening, compilers, t / "c")
+held = {{"run": mine.run, "circuit": rec["window"]["circuit"], "compiled": v["ok"], **bound, "compilers": compilers,
+        "opening": opening, "output": json.loads((t / "c" / "compiled.json").read_text())}}
+assert v["ok"] and RA.source(rec["window"], held)["ok"]
+assert all(x["refused"] for x in RA.negatives(rec["window"], held, doc, t / "n").values())
+receipt = {{"registration": R.digest(rec), "verifier": A5.CHALLENGER}}
+assert RA.fixed_before_draw(receipt, rec, bound)["ok"] and RA.after_draw(receipt, rec, held)["refused"]
+print(json.dumps(sorted(m for m in sys.modules if m.split(".")[0] == "verity_vllm")))
+"""
+    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+    assert json.loads(p.stdout.strip().splitlines()[-1]) == []
+
+
+def test_the_served_compilers_command_charges_the_registered_length_and_refuses_what_it_cant_compile(tmp_path, monkeypatch, capsys):
+    """``prove_path.py circuit``, the served window's registered compiler as `records_audit.compile_check` runs it, on the
+    synthetic serve-openai run of `test_prove_path` (its I2 compile stubbed, and the window over its Programs a coordinate
+    window): it writes a circuit record the audit reads (`interface.window_of_record`) under no run and prints the length the
+    registration charges, and exits `records_audit.REFUSED` on advice it can't compile."""
+    import prove_path as PP
+    from test_prove_path import _served
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    s = _served(tmp_path, monkeypatch)
+    loaded = SimpleNamespace(progs={"r0": {}}, dirs={"r0": "d"}, arrivals={"r0": 0})
+    monkeypatch.setattr(PP.I2Compiler, "load", lambda self, rank, world, requests: loaded)
+    window = IF.Window(IF.Circuit("test", ((COORD, 5),)), "", D.parse_design(LAW), 4).window
+    monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (window, [[]]) if run == "" else None)
+    (tmp_path / "part.json").write_text(json.dumps({"templates": [TID], "law": LAW}))
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    base = ["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"), "--out",
+            str(tmp_path / "out.json")]
+    capsys.readouterr()
+    assert PP.main([*base, "--advice", str(tmp_path / "advice.bin")]) == 0
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1]) == {"bits": s.bound["advice"]["bits"]}
+    out = json.loads((tmp_path / "out.json").read_text())
+    assert out["format"] == IF.CIRCUIT and (out["run"], out["context"]) == ("", "") and set(out) == set(IF.circuit_record(
+        window, "x", IF.templates_of(window)))
+    assert IF.window_of_record(out, D.parse_design(LAW), IF.resolve).partition_digest == window.partition_digest
+    (tmp_path / "bad.bin").write_bytes(b"\xff" * 7)
+    assert PP.main([*base, "--advice", str(tmp_path / "bad.bin")]) == RA.REFUSED
+    assert "prove_path.py circuit:" in capsys.readouterr().err
+
+
+def test_the_output_class_is_the_given_ranges_and_every_uncut_registered_read_of_an_output_port():
+    """`output_class`: the verifier's own ranges, with each uncut registered read of an ``o<j>`` port adding its reader's
+    units at the template's base in the population; a read of an input port, or a cut one, adds none."""
+    circuit = {"templates": [["a", 8], ["b", 16]], "registered": {"reads": [
+        {"reader": "b", "port": "o0", "at": 4, "radix": [2, 2], "cut": [0, 1]},
+        {"reader": "a", "port": "o1", "at": 0, "radix": [2]},
+        {"reader": "b", "port": "w", "at": 0, "radix": [16], "cut": [0, 1]},
+        {"reader": "b", "port": "o0", "at": 12, "radix": [4], "cut": [1, 2]}]}}
+    assert RA.output_class(circuit) == [[0, 2], [12, 16]]
+    assert RA.output_class(circuit, [[2, 4], [20, 24]]) == [[0, 4], [12, 16], [20, 24]]
+    assert RA.output_class({"templates": [["a", 8]]}, [[4, 8]]) == [[4, 8]]
+    assert RA.output_class({"templates": [["a", 8]]}) == []
+    tie = {"templates": [["a", 8], ["b", 8]], "registered": {"reads": [
+        {"reader": "a", "port": "o0", "param": "y", "at": 0, "radix": [8]},
+        {"reader": "b", "port": "x", "param": "y", "at": 0, "radix": [8]},
+        {"reader": "b", "port": "o0", "param": "out", "at": 4, "radix": [4]}]}}
+    assert RA.output_class(tie, own={"y"}) == [[12, 16]]
+    assert RA.output_class(tie) == [[0, 8], [12, 16]]
+
+
+def test_a_served_output_that_the_next_step_reads_keeps_its_units_in_the_output_class():
+    """A decode loop's served ``out``, pinned from outside the window, is read by an output port and by the next step's
+    input port: it isn't one of the window's own values, so its writers stay in the class (keying the exclusion on any
+    value an input port reads would leave the class empty)."""
+    decode = {"templates": [["a", 8], ["b", 8]], "registered": {"reads": [
+        {"reader": "b", "port": "o0", "param": "out", "at": 0, "radix": [8]},
+        {"reader": "a", "port": "x", "param": "out", "at": 0, "radix": [8]}]}}
+    assert RA.output_class(decode) == [[8, 16]]
+    assert RA.output_class(decode, own={"y"}) == [[8, 16]]
+
+
+def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_ignored_by_the_compile_check(tmp_path, monkeypatch):
+    """No Program digest covers a Build's row names or its weights fields' names (nor its ``supplied``, correspondence or
+    ``prefix_cache.json``), and the served compiler's command reads none of them from the prover: it takes no row dir and
+    compiles over its own Build of each Program I2 compiled, beside the names its compile gives it (`prove_path.own_builds`).
+    Against a prover's row dir permuted under unchanged digests (each Build still I2's Program, `build_of`, its correspondence
+    record permuted with its names), the compile check refuses by name (``circuit``) the circuit.json whose names make another
+    circuit (a layer-1 SiluMul row and layer 0's first down_proj row swap names: one more SiluMul row in layer 0's scope), and
+    ignores names that make the same one (layers 0 and 1's first SiluMul rows swapped, which moves only the prover's own reads;
+    two weights fields swapped): the verifier's record is its own compile's in each case."""
+    import prove_path as PP
+    from test_prove_path import LAYER0, _circuit, _row_dir, _tiny_served
+
+    s = _tiny_served(tmp_path, monkeypatch)
+    (tmp_path / "part.json").write_text(json.dumps(LAYER0))
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    out = tmp_path / "mine" / "circuit.json"
+    out.parent.mkdir()
+    assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
+                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
+    assert s.compiles == [True] and list(out.parent.iterdir()) == [out]
+    mine = json.loads(out.read_text())
+    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, own=True)), s.data, LAYER0)
+    assert IF.circuit_of(own) == IF.circuit_of(mine)
+    copy = ("import json, shutil, sys; a = sys.argv; shutil.copy(a[1], a[a.index('--out') + 1]); "
+            f"print(json.dumps({{'bits': {s.bound['advice']['bits']}}}))")
+    compilers = {s.bound["compiler"]["name"]: {"digest": s.bound["compiler"]["digest"], "argv": [sys.executable, "-c", copy, str(out)]}}
+    opening = json.loads(Path(s.a.opening).read_text())
+    reads = lambda rows: [(rid, int(r["i"])) for rid, _pi, r, _d in rows[0]]  # noqa: E731
+    for k, (name, names, params, codes, same_reads) in enumerate((
+            ("honest", None, False, [], True),
+            ("a layer-1 SiluMul row and layer 0's down_proj swapped", ("model.model.layers.1.mlp.act_fn/", "model.model.layers.0.mlp.down_proj/"),
+             False, ["circuit"], False),
+            ("layers 0 and 1's SiluMul rows swapped", ("model.model.layers.0.mlp.act_fn/", "model.model.layers.1.mlp.act_fn/"), False, [], False),
+            ("layers 0 and 1's down_proj weights swapped", None, True, [], True))):
+        rows = _row_dir(tmp_path / f"rows{k}", s, names, params)
+        theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None)), s.data, LAYER0)
+        v, bound = RA.compile_check(theirs, s.bound, opening, compilers, tmp_path / "c")
+        assert (v["codes"], bound is None, reads(their_rows) == reads(own_rows)) == (codes, bool(codes), same_reads), name

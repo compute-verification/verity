@@ -1,14 +1,15 @@
-"""The CI agreement job (PROTOCOL.md §17.1): every replayable set of `vectors.json` through both verifiers.
+"""The CI agreement job (`verity/ml/flock/verifier/README.md`): every replayable set of `vectors.json` through both verifiers.
 
     python ci.py --lean BIN --upstream PR83_COMMIT=BIN [--upstream ...] --work DIR [--inputs DIR] [--jobs J] [--session-jobs K]
         [--seed S] [--fuzz N] [--sets I,J] [--out DIR]
     python ci.py --live --lean BIN --work DIR [--sets I,J] ...    `vectors.json`'s `live.sets`, against the live verdicts
 
-For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an upstream binary, the job:
+For each set (in `vectors.json` `replayable.sets`) whose M0 commit has an upstream binary, the job:
 - fetches its inputs from the evidence store (`research data fetch`), among them the verifier's own registered reads
   (`statement.registered`, `agree.py --registered`) for a statement that reads registered values, and passes the verifier's
-  own K (`statement.stratified`, `agree.py --stratified`) for sessions drawn by the stratified law, and a plain session's
-  coins (`statement.coins`, `agree.py --coins`: `os` for a live server's OS coins);
+  own K (`statement.stratified`, `agree.py --stratified`) for sessions sampled by the stratified sampling design, and a plain session's
+  coins (`statement.coins`, `agree.py --coins`: `tree` for a session on the challenger's coin tree; without it, a session
+  on seed coins, which the Lean verifier refuses last, `ProvedScope.SEED_COINS`);
 - for a set that names `mutants`, regenerates the proof mutants (`redigest.py`), the retained-bytes sessions
   (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;
@@ -16,14 +17,14 @@ For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an up
   (`record_text.session_text`, Lean's `Json.compress`), in a copy under the set's work directory;
 - runs `agree.py` on all of them, with `--lean-refuses` for a set marked `lean_refuses` (D12: a statement form the soundness
   proof does not cover, which the Lean verifier refuses whatever the session, once every check has passed),
-  `--lean-refuses-drawn` for one marked `lean_refuses_drawn` (D12 at its drawn sessions' law, which no soundness claim draws
+  `--lean-refuses-drawn` for one marked `lean_refuses_drawn` (D12 at its sampled sessions' law, which no soundness claim samples
   by, refused at setup), and `--lean-refuses-drawless` for one marked `lean_refuses_drawless` (D12 at its sessions without
-  a draw, refused once every check has passed). A session refused last, and for nothing else, passed every check.
+  a sample, refused once every check has passed). A session refused last, and for nothing else, passed every check.
 
 `--live` runs `live.sets` instead: sets with no upstream binary, whose upstream verdicts are the live server's in each
 case's `case.json` (`agree.py --upstream live`).
 
-`--inputs DIR` holds the stored inputs already fetched (`DIR/<art id prefix>/…`, as `research data fetch --to` lays them
+`--inputs DIR` holds the stored inputs already fetched (`DIR/<art id prefix>/…`, as the store's fetch lays them
 out), for a machine without store access. `--jobs` runs sets in parallel, and `--session-jobs` a set's sessions across that
 many verifier processes at once over all sets (by default the cores, and the available memory at 8 GB a process): each set's
 sessions are dealt into chunks of four or more (`agree.py --jobs`), and a set finishing early frees its slots for the
@@ -117,7 +118,7 @@ def py(*args):
 def run_set(i, s, a, ups, store):
     up = agree.LIVE if a.live else ups.get(s["pr83"])
     if up is None:
-        return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this PR #83 commit"}, False
+        return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this circuit prover commit"}, False
     w = a.work / f"set{i}"
     st = s["statement"]
     circuit, public = fetch(st["circuit"], store), fetch(st["public"], store)
@@ -170,7 +171,7 @@ def run_set(i, s, a, ups, store):
         cmd += ["--lean-refuses-drawn", s["lean_refuses_drawn"]]
     if "lean_refuses_drawless" in s:
         cmd += ["--lean-refuses-drawless", s["lean_refuses_drawless"]]
-    # in-process: every set's verifier processes draw on one budget (SLOTS), so a long set takes the slots short ones free
+    # in-process: every set's verifier processes sample on one budget (SLOTS), so a long set takes the slots short ones free
     rc = agree.main([str(x) for x in cmd[2:]], slots=SLOTS, quiet=True)
     r = json.loads((w / "agree" / "result.json").read_text())
     r.update({"set": i, "pr83": s["pr83"], "lean_statement": s["lean_statement"], "detail": st.get("detail", "")})

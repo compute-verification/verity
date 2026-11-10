@@ -1,4 +1,4 @@
-"""An untimed profile of Pearl-C mode on the smoke's chat prompts (`e2e.serve`'s ``chat``: vllm_bench's 16 prompts, 48 greedy
+"""An untimed profile of Pearl-C mode on the smoke's chat prompts (`e2e.serve`'s ``chat``: `e2e.PROMPTS`, 48 greedy
 tokens), split into first use against steady state, prefill against decode, and GEMM, forming, hashing and other.
 
   python benchmarks/pouw/pearl_c_vllm/profile_decode.py --model DIR --kernel K --cubin C --out RUN_DIR/profile.json
@@ -30,7 +30,6 @@ import cProfile
 import csv
 import io
 import json
-import os
 import pstats
 import statistics
 import sys
@@ -38,7 +37,10 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+from verity_config.settings import of
+
+settings = of(__file__)
+settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parent)]
 
@@ -154,10 +156,10 @@ class Profile:
 def instrument(prof: Profile):
     """Wrap the device run's module functions before the install, so every call's steps and sections are timed.  Returns
     the function that puts them back."""
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     run_cls = PPD.PearlCDeviceRun
     saved = [(PPD, n, getattr(PPD, n)) for n in ("_steps", "screen_into", "excluded")]
-    saved += [(run_cls, n, vars(run_cls)[n]) for n in ("_shape", "_pipe", "end", "gemm")]
+    saved += [(run_cls, n, vars(run_cls).get(n)) for n in ("_shape", "_pipe", "end", "gemm")]  # None: a mixin's, undone by delattr
     saved += [(PPD._Keys, "__call__", vars(PPD._Keys)["__call__"]), (PPD._Uploads, "put", vars(PPD._Uploads)["put"])]
     steps = PPD._steps
 
@@ -173,7 +175,7 @@ def instrument(prof: Profile):
     run_cls._shape = prof.section("shapes (first use: buffers)", run_cls._shape)
     run_cls._pipe = prof.section("pipelines (first use: build, tensor maps)", run_cls._pipe)
     end = run_cls.end
-    run_cls.end = lambda self: prof.section("pass end (tile tree, roots)", end)(self)
+    run_cls.end = lambda self, *a, **kw: prof.section("pass end (tile tree, roots)", end)(self, *a, **kw)
     gemm = run_cls.gemm
 
     def counted(self, w, x, weight, bias):
@@ -186,7 +188,10 @@ def instrument(prof: Profile):
 
     def undo() -> None:
         for owner, name, f in saved:
-            setattr(owner, name, f)
+            if f is None:
+                delattr(owner, name)
+            else:
+                setattr(owner, name, f)
     return undo
 
 
@@ -194,12 +199,11 @@ def run(args) -> dict:
     import e2e
     import torch
     from vllm import SamplingParams
-    from vllm_bench import PROMPTS, find_model
 
     prof = Profile()
     instrument(prof)
     llm = e2e.engine(args, "arm")
-    model = find_model(llm)
+    model = e2e.find_model(llm)
     t0 = time.perf_counter()
     run_, weights, stack = e2e.install(model, args, e2e.Coins(0))
     install_s = time.perf_counter() - t0
@@ -211,7 +215,7 @@ def run(args) -> dict:
         prof.forward(int(ids.shape[0]) if ids is not None else -1)
     model.register_forward_pre_hook(hook, with_kwargs=True)
     tok = llm.get_tokenizer()
-    chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in PROMPTS]
+    chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in e2e.PROMPTS]
     sp = SamplingParams(temperature=0.0, max_tokens=48)
     walls = {}
 
@@ -241,7 +245,7 @@ def run(args) -> dict:
     chat_pass("pearlc-cprofile", True, cprof=cprof)
     buf = io.StringIO()
     pstats.Stats(cprof, stream=buf).sort_stats("tottime").print_stats(30)
-    return {"schema": "verity-pouw/pearl-c-vllm-profile/v1", "run": os.environ.get("RESEARCH_RUN_ID"), "install_s": install_s,
+    return {"schema": "verity-pouw/pearl-c-vllm-profile/v1", "run": settings.RESEARCH_RUN_ID, "install_s": install_s,
             "host": run_.details["host"], "gate_ok": all(g["ok"] for g in gate), "gate": gate,
             "prompts": len(chat), "max_tokens": 48, "pass_wall_s": walls, "passes": prof.report(),
             "cprofile_top_tottime": buf.getvalue().splitlines()[:60]}

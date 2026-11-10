@@ -1,12 +1,11 @@
-"""[R13 lane tp, P4 step 2] Tensor-parallel construction scaffolding for Bet A: the collectives of ONE rank's forward as explicit
+"""Tensor-parallel construction scaffolding for Bet A: the collectives of ONE rank's forward as explicit
 Verity ops over (this rank's partial, the peer rank's partial), so that `derive_step --tp 2 --rank r` exports a TP-aware Program.
 
-Established first (R13 tp step 1, `out/gen/sweep/evidence/tp/tp2_semantics/RESULT.md`): under the admitted BI profile at TP2 the
-row-parallel linears compute two K/2-sharded `Gemm_v1` partials whose bf16 outputs are summed by ONE bf16 addition (the pynccl
-all-reduce, `bf16(f32(a)+f32(b))`, order-free for two ranks) — a different exact computation from TP1's single GEMM; column-parallel
+Under the admitted BI profile at TP2 the row-parallel linears compute two K/2-sharded `Gemm_v1` partials whose bf16 outputs are
+summed by ONE bf16 addition (the pynccl all-reduce, `bf16(f32(a)+f32(b))`, order-free for two ranks) — a different exact computation from TP1's single GEMM; column-parallel
 GEMMs, the vocab-parallel embedding (masked shard lookup + the same sum) and the lm_head all-gather (a concatenation) are
-bit-identical slices of the TP1 definitions.  The registered Definitions for these are `verity_vllm.program.registry.b1_tp2.{AllReduce2,
-AllGather2, EmbeddingShard}` (exact-model-tested on B1 TP2 by the GEN tp2 lane; re-confirmed bit-exactly on Llama by step 1).
+bit-identical slices of the TP1 definitions.  The registered Definitions for these are `verity.ml.definitions.registry.b1_tp2.{AllReduce2,
+AllGather2, EmbeddingShard}` (exact-model-tested on B1 TP2, and bit-exact on Llama).
 
 Mechanism (no vLLM source is modified; generic — nothing here names a model):
   * `TPStub` replaces vLLM's `_TP` GroupCoordinator for the meta instantiation + export of rank r at world size TP: the parallel
@@ -57,11 +56,11 @@ def ensure_ops() -> None:
     def _(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.empty(tuple(a.shape[:-1]) + (a.shape[-1] + b.shape[-1],), dtype=a.dtype, device=a.device)
 
-    # [lane vllm-tp-n] the WORLD-ary collectives (world > 2): `parts` in RANK order; bound by `AllReduceRule` / `AllGatherRule` to
+    # the WORLD-ary collectives (world > 2): `parts` in RANK order; bound by `AllReduceRule` / `AllGatherRule` to
     # `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}`.  World 2 keeps the binary ops above (recorded identities).
     @torch.library.custom_op("verity_tp::all_reduce", mutates_args=())
     def all_reduce(parts: list[torch.Tensor]) -> torch.Tensor:
-        from verity_vllm.program.registry.b1_tp2 import allreduce_order
+        from verity.ml.definitions.registry.b1_tp2 import allreduce_order
         order = allreduce_order(len(parts))
         acc = parts[order[0]]
         for r in order[1:]:
@@ -113,8 +112,7 @@ def ensure_ops() -> None:
 
 @dataclass
 class CollectiveBus:
-    """The collectives of one rank's forward, in call order.  `mode`: `probe` (record; no peers) or `trace` (consume peers, emit ops).
-    It also hands out the rank Program's one other input a kernel reads mid-forward, the `schedule` witness (`schedule_key`)."""
+    """The collectives of one rank's forward, in call order.  `mode`: `probe` (record; no peers) or `trace` (consume peers, emit ops)."""
     rank: int
     world: int
     mode: str = "probe"
@@ -122,9 +120,6 @@ class CollectiveBus:
     record: list[dict] = field(default_factory=list)
     settings: dict[str, bool] = field(default_factory=dict)
     cursor: int = 0
-    schedule: torch.Tensor | None = None
-    schedule_record: list[dict] = field(default_factory=list)
-    schedule_cursor: int = 0
 
     @property
     def peer_ranks(self) -> list[int]:
@@ -132,7 +127,7 @@ class CollectiveBus:
         return [r for r in range(self.world) if r != self.rank]
 
     def _peers_of(self, kind: str, x: torch.Tensor, out_shape: tuple) -> list[torch.Tensor] | None:
-        """Collective k's `world-1` peer partials (the other ranks', in rank order), or None in probe mode.  [lane vllm-tp-n] the flat peer
+        """Collective k's `world-1` peer partials (the other ranks', in rank order), or None in probe mode.  The flat peer
         input list is `k*(world-1) + j`: at world 2 exactly the old one-peer-per-collective layout (`peers_<k>`), so world-2 Program
         parameter names and digests are unchanged."""
         k = self.cursor
@@ -187,34 +182,16 @@ class CollectiveBus:
         ensure_ops()
         return torch.ops.verity_tp.fused_allreduce_rms_norm(self._parts(x, peers), residual, weight, float(eps))
 
-    def schedule_key(self, ids: torch.Tensor) -> torch.Tensor:
-        """The next `moe_align_block_size` call's key per pair (`registry.marlin_moe.MoeAlignRanks`), shaped as its router `ids`:
-        the next `ids.numel()` words of the `schedule` input, which the run's GPU sorted positions fill; recorded in probe mode."""
-        shape, n = tuple(ids.shape), ids.numel()
-        if self.mode == "probe":
-            off = sum(r["pairs"] for r in self.schedule_record)
-            self.schedule_record.append({"k": len(self.schedule_record), "shape": list(shape), "pairs": n, "offset": off})
-            return torch.empty(shape, dtype=torch.int32, device=ids.device)
-        k = self.schedule_cursor
-        self.schedule_cursor += 1
-        if self.schedule is None or k >= len(self.schedule_record) or self.schedule_record[k]["shape"] != list(shape):
-            raise RuntimeError(f"align call #{k} {shape} is not the probe's ({len(self.schedule_record)} calls recorded)")
-        off = self.schedule_record[k]["offset"]
-        return self.schedule[off:off + n].view(shape)
-
     def example_peers(self, device: str = "meta") -> tuple[torch.Tensor, ...]:
         """One example peer tensor per (collective k, peer rank j) in flat order `k*(world-1) + j`."""
         return tuple(torch.empty(tuple(r["shape"]), dtype=getattr(torch, r["dtype"]), device=device)
                      for r in self.record for _j in range(self.world - 1))
 
-    def example_schedule(self, device: str = "meta") -> torch.Tensor:
-        return torch.empty(sum(r["pairs"] for r in self.schedule_record), dtype=torch.int32, device=device)
-
-    def reset(self, mode: str, peers: list[torch.Tensor] | None = None, schedule: torch.Tensor | None = None) -> None:
-        self.mode, self.cursor, self.schedule_cursor = mode, 0, 0
-        self.peers, self.schedule = list(peers or []), schedule
+    def reset(self, mode: str, peers: list[torch.Tensor] | None = None) -> None:
+        self.mode, self.cursor = mode, 0
+        self.peers = list(peers or [])
         if mode == "probe":
-            self.record, self.schedule_record = [], []
+            self.record = []
 
 
 class TPStub:

@@ -1,11 +1,12 @@
-"""One vLLM v1 scheduler step as a Boolean Definition: the compile unit's core, between advice validity and the Programs.
+"""One vLLM v1 scheduler step as a Boolean Definition: the compile slice's proof block's core, between advice validity
+and the Programs.
 
     ReplayStep_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW} (state, arrivals, bits, prefix[, row_pfx])
         -> (ok, taken, used[, looked], rows, state')
 
-The precommitted compiler (PRF-143: committed Programs = compile(advice) under the advice's hiding root, total, refusing
-every ill-formed advice up to the cap ℓ) need not read the schedule from the advice: ENC-REPLAY replays vLLM's
-scheduler step for step from the certified I/O and a residual of a few bits per certifier window
+The precommitted compiler (committed Programs = compile(advice) under the advice's hiding root, total, refusing every
+ill-formed advice up to the cap ℓ) need not read the schedule from the advice: vLLM's scheduler is
+replayed step for step from the certified I/O and a residual of a few bits per certifier window
 (`benchmarks/network_e2e/encodings/replay.py`). This Definition is one step of that replay, `reference` its
 specification in Python, and the replay's own steps are its difftest (`benchmarks/network_e2e/encodings/replay_vectors.py`).
 
@@ -74,18 +75,20 @@ leaving requests leave it; and the next state.
   request's last known token (h·B ≥ P + out; vLLM keeps one to compute), or more blocks returned than held.
 
 **Not modeled.** The prefix-hash state (which blocks hold which tokens, the free queue's order, eviction):
-ENC-DERIVED's canonical source and hit rules carry it and supply h, the evictable count and the returns, which this
-circuit bounds but doesn't derive. Also priority scheduling, speculative decoding, LoRA, structured output, encoder
-inputs and KV connectors.
+the derived encoding's canonical source and hit rules carry it and supply h, the evictable count and the returns, which
+this circuit bounds but doesn't derive: `compile_slice_v3` derives them, in vLLM's order on CacheStep_v2's pool, through
+`_build`'s ``derive`` hooks. Also priority scheduling, speculative decoding, LoRA, structured output, encoder inputs
+and KV connectors.
 
-**Composition** (the compile unit, all inside one ZK proof under the advice's hiding root; the certifier's PROTOCOL.md,
-"Advice v1"):
+**Composition** (the compile slice's proof block, all inside one ZK proof under the advice's hiding root; the
+certifier's PROTOCOL.md, "Advice v1"):
 1. the committed advice is the decision bits themselves, one per open-step ask in the scan's order, read directly;
 2. a scan of this step over the session's steps, from the empty engine, the arrivals' cursor moving by `taken` and
-   the decisions' by `used`; the certified request records (P, O) are the arrivals, in the warden's release order;
+   the decisions' by `used`; the certified request records (P, O) are the arrivals, in the network certifier's release
+   order;
 3. the charge: advice v1's arithmetic code run forward over the same decisions (`arith_encode`), each window's coded
    length at most its declared charge, so no decoder runs in the circuit;
-4. `compile_steps` (`integrations/vllm/verity_vllm/predict/steps.py`): each row (request, start, n) becomes a `RowRef`
+4. `compile_steps` (`integrations/vllm/verity_vllm/program/predict/steps.py`): each row (request, start, n) becomes a `RowRef`
    into its request's Program, the rows being exactly I1 v0's `steps`, which v0 carried in the advice.
 
 **The circuit**, traced whole (`_build`): the running loop over static slots, each slot's n read off the budget the
@@ -516,16 +519,22 @@ def _split(fields, elements) -> dict:
     return out
 
 
-def _build(C, S, *elements, tap: dict | None = None):
+def _build(C, S, *elements, tap: dict | None = None, derive=None):
     """The step traced on `C`. A caller tracing it inline may pass `tap`, a dict the trace fills with wires it has
     already made, so a composition binds them without new gates: ``run``, ``wait`` and ``arr`` (the slots' records,
     after a quiet step's arrival moves into waiting slot 0), ``forced``, ``free`` (the state's); per running slot
     ``needs``, ``backs``, ``avail`` (free plus the returns of the slots after it), ``upto`` (the needs up to it),
-    ``kept``, ``popped`` and ``run_n``; ``cnt0``; per candidate ``cands`` (reach, admit, new, ntok, and ``at``, the
-    running count before it: its placed slot when admitted); the placed slots'
+    ``kept``, ``popped`` and ``run_n``; ``cnt0``; per candidate ``cands`` (reach, admit, new, ntok, hb, n, and ``at``,
+    the running count before it: its placed slot when admitted), filled as the waiting loop goes; the placed slots'
     records ``slots``; and per placed slot ``update`` (on, comp after the row, sampled before AS's fin mask, leave,
-    held, keep)."""
+    held, keep). With PC, a caller that computes the prefix layer's counts rather than reading them passes `derive`,
+    whose methods the trace calls where it reads them, so their wires can depend on the step's own:
+    ``returns(tap)`` once before the running loop (each running slot's returns were it freed after the slots past
+    it), ``running(tap)`` after it, ``hit(c, rec, ntok, tap)`` at candidate c's turn (its hit and evictable count),
+    ``candidates(tap)`` after the waiting loop, and ``leave(p, tap)`` per placed slot once ``update[p]`` has its
+    leave and held (its returns). The inputs ``hit``, ``evict`` and ``ret`` are then unread."""
     tap = {} if tap is None else tap
+    derive = derive if S.PC else None
     Z = widths(S)
     LW, TW, BW, HW, RC, AC, LB = Z.LW, Z.TW, Z.BW, Z.HW, Z.RC, Z.AC, Z.LB
     NW = max(LW, TW) + 1
@@ -590,7 +599,11 @@ def _build(C, S, *elements, tap: dict | None = None):
         needs.append(_sub(C, _cdiv(C, _add(C, r["comp"], n, LW + 1), LB, HW + 1), held, HW + 1))
         budget = _sub(C, budget, n, TW)
         ns.append(_pad(n, TW))
-    backs = [_sel(C, run[j]["valid"], ret_of(j, _cdiv(C, run[j]["comp"], LB, HW))) for j in range(R)]
+    if derive is not None:
+        rets = derive.returns(tap)
+        backs = [_sel(C, run[j]["valid"], rets[j]) for j in range(R)]
+    else:
+        backs = [_sel(C, run[j]["valid"], ret_of(j, _cdiv(C, run[j]["comp"], LB, HW))) for j in range(R)]
     after = [[ZERO] * SW]
     for j in range(R - 1, 0, -1):
         after.insert(0, _add(C, after[0], backs[j], SW))
@@ -623,6 +636,9 @@ def _build(C, S, *elements, tap: dict | None = None):
     taken = [ZERO] * AC
     taken[0] = forced
     adm, looked, cands = [], [], []
+    tap.update(run_n=run_n, cnt0=cnt0, cands=cands)
+    if derive is not None:
+        derive.running(tap)
     for c in range(W + A):
         is_arr = c >= W
         r = arr[c - W] if is_arr else wait[c]
@@ -631,7 +647,10 @@ def _build(C, S, *elements, tap: dict | None = None):
         reach = and_reduce(C, [going, present, or_reduce(C, budget), room])
         looked.append([reach])
         ntok = _add(C, r["P"], r["out"], LW)
-        h, ev = (I["hit"][c], I["evict"][c]) if S.PC else ([ZERO] * HW, [ZERO] * HW)
+        if derive is not None:
+            h, ev = derive.hit(c, r, ntok, tap)
+        else:
+            h, ev = (I["hit"][c], I["evict"][c]) if S.PC else ([ZERO] * HW, [ZERO] * HW)
         hb = _pad([ZERO] * LB + list(h), LW + 1)
         if S.PC:
             bad.append(C.AND(reach, OR2(C, _lt(C, h, ev), _lt(C, hb, ntok).inv())))
@@ -664,9 +683,10 @@ def _build(C, S, *elements, tap: dict | None = None):
         free = _sub(C, free, _sel(C, admit, _add(C, new, ev, BW)), BW)
         budget = _sub(C, budget, _sel(C, admit, _pad(n, TW)), TW)
         adm.append((admit, hb, _pad(n, TW)))
-        cands.append({"reach": reach, "admit": admit, "new": new, "ntok": ntok, "at": at})
+        cands.append({"reach": reach, "admit": admit, "new": new, "ntok": ntok, "at": at, "hb": hb, "n": _pad(n, TW)})
     bad.append(going)
-    tap.update(run_n=run_n, cnt0=cnt0, cands=cands)
+    if derive is not None:
+        derive.candidates(tap)
 
     # the admitted after the running list
     stage("place")
@@ -719,7 +739,11 @@ def _build(C, S, *elements, tap: dict | None = None):
         # stopped the step before leaves
         leave = C.AND(s["valid"][0], s["fin"][0]) if AS else stop
         held = _cdiv(C, comp, LB, HW + 1)
-        back = ret_of(p, _pad(held, HW))
+        if derive is not None:
+            upd[p].update(leave=leave, held=held)
+            back = derive.leave(p, tap)
+        else:
+            back = ret_of(p, _pad(held, HW))
         if S.PC:
             bad.append(C.AND(leave, _lt(C, held, back)))
         free = _add(C, free, _sel(C, leave, back), BW)
@@ -813,7 +837,7 @@ def _bits(v: int, w: int) -> list[int]:
 
 
 def arguments(S, st: State, inp: Inputs) -> list[list[int]]:
-    """The unit's arguments (each a flat list of bits, as `evaluate_bits` takes one instance)."""
+    """The proof block's arguments (each a flat list of bits, as `evaluate_bits` takes one instance)."""
     Z = widths(S)
     vals: dict[str, list[int]] = {}
 
@@ -834,7 +858,7 @@ def arguments(S, st: State, inp: Inputs) -> list[list[int]]:
 
 
 def decode(S, flat: Sequence[int]) -> Out:
-    """The unit's output bits as an `Out` (rows by slot, the states' valid slots)."""
+    """The proof block's output bits as an `Out` (rows by slot, the states' valid slots)."""
     at, f = 0, {}
     for name, n, w in _out_fields(S):
         f[name] = [sum(int(flat[at + e * w + j]) << j for j in range(w)) for e in range(n)]
@@ -855,7 +879,7 @@ def decode(S, flat: Sequence[int]) -> Out:
 
 
 def evaluate(st_: dict, cases: Sequence[tuple[State, Inputs]]) -> list[Out]:
-    """The unit at statics `st_` on each (state, inputs), in one evaluation."""
+    """The proof block at statics `st_` on each (state, inputs), in one evaluation."""
     S = SimpleNamespace(**st_)
     args = [list(rows) for rows in zip(*(arguments(S, s, i) for s, i in cases))]
     out = evaluate_bits(unit(**st_), *args)
@@ -920,7 +944,7 @@ def _staged(key: tuple) -> dict[str, int]:
 
 
 def size(**st_) -> dict[str, int]:
-    """The unit's ANDs by stage at statics `st_` (traced on a counting circuit, no gates written)."""
+    """The proof block's ANDs by stage at statics `st_` (traced on a counting circuit, no gates written)."""
     out = dict(_staged(tuple(st_[k] for k in STATICS)))
     out["ands"] = sum(out.values())
     return out

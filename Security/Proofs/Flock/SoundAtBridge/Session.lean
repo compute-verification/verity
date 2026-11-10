@@ -1,26 +1,51 @@
-import Proofs.Flock.EndToEndRegisteredRows.Statement
+module
+
+public import Flock.Desc
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+public import Proofs.Flock.Soundness.Registered.ReadsX
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# One C-Flock session with a registrant's opening per unit (trusted)
+# One Flock session with a registrant's opening per unit (trusted)
 
 `RowsSession` is `Flock.Guarantees.EndToEndRegisteredRows`' setting as a value, its binders in its order, with its one
 registrant's opening `rd` replaced by one per unit (`rdU u`); its circuit `c` is the one its descriptor `D` unrolls
 to. `EndToEndRegisteredRows` reads the input rows only where the verifier owns every registered read of `rd` at the
-outcome's draw (`OwnReadsHJ` is one condition over all of them), so at an `rd` covering every unit's reads it links no input row on a draw that leaves one out. With `rdU u` the
-opening of unit `u`'s reads alone (`Registered.ReadsX.restrict`, in `Proofs.Flock.Recursive.ZkReg.Off`), a drawn
-unit's input rows are linked wherever its own reads are owned, whatever else is drawn; the cost is a union bound over
+outcome's sample (`OwnReadsHJ` is one condition over all of them), so at an `rd` covering every unit's reads it links no input row on a sample that leaves one out. With `rdU u` the
+opening of unit `u`'s reads alone (`Registered.ReadsX.restrict`, in `Proofs.Flock.Recursive.ZkReg.Off`), a sampled
+proof block's input rows are linked wherever its own reads are owned, whatever else is sampled; the cost is a union bound over
 the `n` units (`Flock.SoundAtBridge.RowsSession.prob_badU_le`), `n` times `EndToEndRegisteredRows`' bound.
 
 The session's game, prover, value layer and events are those `EndToEndRegisteredRows` reads, at `rdU u` for unit
 `u`:
 
-* `G`, `τ`: the live audit and its prover; `Out`: its outcome (the registration, the draw and the transcript);
+* `G`, `τ`: the live audit and its prover; `Out`: its outcome (the registration, the sample and the transcript);
 * `Xv`: the plurality value layer the rows extraction finds at the registration (`XplurZC`);
-* `WrongAt u`: drawn unit `u` is wrong on the registration (`wrongRegZ`);
+* `WrongAt u`: sampled proof block `u` is wrong on the registration (`wrongRegZ`);
 * `RowsAt o u`: unit `u`'s rows are right at `Xv` (`RowsRightZC`) at its own owned registered reads;
-* `BadU o`: flock-verify accepts and some drawn unit is wrong or its rows are off;
+* `BadU o`: flock-verify accepts and some sampled proof block is wrong or its rows are off;
 * `CR`: `EndToEndRegisteredRows`' named assumptions at every unit's opening; `bound`: its bound.
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge
 
@@ -31,7 +56,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 open Classical
 
-/-- **One C-Flock session in `EndToEndRegisteredRows`' setting, with a registrant's opening per unit**: its binders,
+/-- **One Flock session in `EndToEndRegisteredRows`' setting, with a registrant's opening per unit**: its binders,
 in its order (the roots `own`, then the statement `I` with its coin, then the live prover `τ`), with its one `rd`
 replaced by `rdU u` for each unit `u`. -/
 structure RowsSession where
@@ -96,10 +121,10 @@ abbrev c : Flock.Circuit := s.D.unroll
 /-- `HmOut.parse` reads the session's circuit from its circuit file. -/
 theorem hc : HmOut.parse (zkTags s.I) s.I.circuitFile s.I.tables = .ok s.c := Flock.Desc.parse_flat s.hD
 
-/-- The session's outcome: the registration, the draw and the transcript. -/
+/-- The session's outcome: the registration, the sample and the transcript. -/
 abbrev Out : Type := s.Reg × Finset (Fin s.n) × Discharge.Exec.Transcript
 
-/-- The verifier's draw. -/
+/-- The verifier's sample. -/
 abbrev L := Law.execOS (n := s.n) s.src (.subset s.kd) s.n
 
 /-- The live audit. -/
@@ -134,13 +159,13 @@ def WrongAt (u : Fin s.n) : Prop :=
   u ∈ wrongRegZ execArith s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) s.Xv
 
 /-- Unit `u`'s rows are right at the value layer (`RowsRightZC`), at its own registered reads (`rdU u`) where the
-verifier owns them at the outcome `o`'s draw. -/
+verifier owns them at the outcome `o`'s sample. -/
 def RowsAt (o : s.Out) (u : Fin s.n) : Prop :=
   RowsRightZC execArith hs512 s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) (cont s.σ)
     (fun p => OwnReadsHJ s.I s.own s.c s.pub o.2.2 (s.rdU u).isRead (s.rdU u).port (s.rdU u).readAt ∧
       (s.rdU u).isRead p) (s.wo u) s.k s.Rw u
 
-/-- **The per-unit event**: flock-verify accepts, and some drawn unit is wrong, or its rows are off at its own
+/-- **The per-unit event**: flock-verify accepts, and some sampled proof block is wrong, or its rows are off at its own
 registered reads. -/
 def BadU (o : s.Out) : Prop := LiveAcceptsZKR s.I s.own o ∧ ∃ u ∈ o.2.1, s.WrongAt u ∨ ¬ s.RowsAt o u
 

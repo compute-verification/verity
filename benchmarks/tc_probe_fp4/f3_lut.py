@@ -1,4 +1,4 @@
-"""F3 (lane pouw rtx-pro GPU 4): LUT-GEMM over the 16-code E2M1 alphabet, tables from the weights, against dense NVFP4 on sm_120a.
+"""F3: LUT-GEMM over the 16-code E2M1 alphabet, tables from the weights, against dense NVFP4 on sm_120a.
 
 A cheaper-computation search: with the weights fixed, the partial dots of G consecutive weights of C columns against every one
 of the 16^G activation-code tuples can be tabulated in advance, so one table lookup replaces G x C E2M1 products.  This tool
@@ -14,7 +14,7 @@ K = 64 atom.  ``dots`` is the lookups and their unpacking into the four blocks' 
 adds the atom's align-add on the CUDA cores, so its words are the atom's; ``native`` is the OMMA tile on the same rows and
 columns.  Widths (G, C) are ``WIDTHS``: G <= 2 tables in shared memory, G = 4 in global memory (L2).  Operand families:
 ``mixed`` (gate only: zero blocks, zero and subnormal scales, every kind of finite accumulator), ``uniform`` (uniform codes and
-UE4M3 scales) and ``gaussian`` (Pearl-C4's quantizer, ``fp4_emulation_1ad1aaa2.quantize_pearl_c4``), both from +0.
+UE4M3 scales) and ``gaussian`` (``gaussian_operand``, after Pearl-C4's quantizer), both from +0.
 
 Gates, before any timing (a failed gate writes no measurements): the device UUID and compute capability 12.0; the build's SASS
 gate (each LUT loop issues its lookups and no MMA, the native loop NT OMMA, no spills, no FP32 ``.FTZ``); for chains of 1 and
@@ -49,8 +49,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import f1_rates as F1  # noqa: E402
-from emulation import E  # noqa: E402
 import probe as P  # noqa: E402
+import vec as V  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 from verity.ml.circuits.silicon import models as M  # noqa: E402
 
@@ -58,7 +59,7 @@ ARCH = "sm_120a"
 SCHEMA = "pouw-rtxpro/f3-lut-sm120/v1"
 SRC = HERE / "f3_lut.cu"
 HEADER = HERE / "nvf4_step.cuh"
-NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / fast-math (the 09:34Z rule); build refuses them
+NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / fast-math; build refuses them
 LUT_TPB, NATIVE_TPB = 256, 128
 AROW = 9
 WIDTHS = {"g1c2": (1, 2), "g1c4": (1, 4), "g1c8": (1, 8), "g2c2": (2, 2), "g2c4": (2, 4), "g4c2": (4, 2)}
@@ -127,11 +128,60 @@ def mixed_acc(rng, shape) -> np.ndarray:
     return words.astype(np.uint32)
 
 
+#: RN-even thresholds between consecutive E2M1 magnitudes: (midpoint, a tie rounds up)
+_E2M1_MIDS = ((0.25, False), (0.75, True), (1.25, False), (1.75, True), (2.5, False), (3.5, True), (5.0, False))
+
+
+def _e2m1_rn(v: np.ndarray) -> np.ndarray:
+    mag = np.abs(v)
+    code = np.zeros(v.shape, np.int64)
+    for mid, up in _E2M1_MIDS:
+        code += (mag >= mid) if up else (mag > mid)
+    return np.where((v < 0) & (code > 0), code | 8, code)
+
+
+def _ue4m3_rn(v: np.ndarray) -> np.ndarray:
+    v = np.asarray(v, np.float64)
+    out = np.zeros(v.shape, np.int64)
+    sub = v < 2.0 ** -6
+    m_sub = np.rint(v / 2.0 ** -9).astype(np.int64)
+    out = np.where(sub, np.where(m_sub >= 8, 1 << 3, m_sub), out)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        e = np.floor(np.log2(np.where(sub, 1.0, v))).astype(np.int64)
+        m = np.rint((np.where(sub, 1.0, v) / np.exp2(e) - 1.0) * 8).astype(np.int64)
+    e = np.where(m == 8, e + 1, e)
+    m = np.where(m == 8, 0, m)
+    ef = e + 7
+    sat = (ef > 15) | ((ef == 15) & (m > 6))
+    ef, m = np.where(sat, 15, ef), np.where(sat, 6, m)
+    return np.where(sub, out, (ef << 3) | m)
+
+
+def gaussian_operand(x: np.ndarray, delta: float, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
+    """The ``gaussian`` family's input generator, not a model: an NVFP4 operand sampled the way Pearl-C4's clean path forms one
+    (alpha0 from the row max and RMS, row-relative noise, noisy UE4M3 block scales, RN E2M1 codes), in float64 with its own
+    samples.  Its samples and roundings fix the family's operands, so it stays as written.  Returns E2M1 codes (n, k) and UE4M3
+    scales (n, k / 16)."""
+
+    s = np.abs(x).max(axis=1, keepdims=True)
+    rho = np.sqrt((x[:, ::8] ** 2).mean(axis=1, keepdims=True))
+    sigma = delta * rho
+    alpha0 = 2688.0 / np.maximum(s + 4 * sigma, 2.0 ** -32)
+    v = alpha0 * (x + sigma * rng.standard_normal(x.shape))
+    n, k = v.shape
+    amax = np.abs(v).reshape(n, k // 16, 16).max(axis=2)
+    sc = np.maximum(_ue4m3_rn(amax / 6.0), 1)                          # floor at 2^-9 (code 1)
+    ma, ea = V.ue4m3_dyadic(sc)
+    scale_val = ma * np.exp2(ea)
+    codes = _e2m1_rn(v / np.repeat(scale_val, 16, axis=1))
+    return codes, sc
+
+
 def make_operands(family: str, rows: int, ng: int, c: int, seed: int) -> Operands:
     rng = np.random.default_rng([seed, FAMILIES.index(family), rows, ng, c])
     if family == "gaussian":
-        ac, asc = E.quantize_pearl_c4(rng.standard_normal((rows, 64)), 0.05, rng)
-        wc, wsc = E.quantize_pearl_c4(rng.standard_normal((ng * c, 64)), 0.05, rng)
+        ac, asc = gaussian_operand(rng.standard_normal((rows, 64)), 0.05, rng)
+        wc, wsc = gaussian_operand(rng.standard_normal((ng * c, 64)), 0.05, rng)
         ops = Operands(ac.astype(np.uint8), asc.astype(np.uint8), wc.astype(np.uint8).reshape(ng, c, 64),
                        wsc.astype(np.uint8).reshape(ng, c, 4), np.zeros((rows, c), np.uint32))
         return ops
@@ -209,8 +259,8 @@ def terms(acodes, ascale, wcodes, wscale, grp) -> tuple[np.ndarray, np.ndarray, 
     """Per (row, column, block), each (R, C, 4): the group dot (quarters), its scaled mantissa, X = -2 + ea + eb, participation
     (a nonzero product and both scale mantissas nonzero), as the pinned model's ``group_terms``."""
     r, c = acodes.shape[0], wcodes.shape[1]
-    ma, ea = E.ue4m3_dyadic(ascale.astype(np.int64))
-    mb, eb = E.ue4m3_dyadic(wscale.astype(np.int64))
+    ma, ea = V.ue4m3_dyadic(ascale.astype(np.int64))
+    mb, eb = V.ue4m3_dyadic(wscale.astype(np.int64))
     a = E2M1_HALVES[acodes].reshape(r, 4, 16)
     gd = np.zeros((r, c, 4), np.int64)
     anyp = np.zeros((r, c, 4), np.bool_)
@@ -224,11 +274,11 @@ def terms(acodes, ascale, wcodes, wscale, grp) -> tuple[np.ndarray, np.ndarray, 
 
 
 def chain(c0: np.ndarray, mant: np.ndarray, x: np.ndarray, part: np.ndarray, length: int) -> np.ndarray:
-    """The atom chained ``length`` times on fixed operands (``fp4_emulation_1ad1aaa2.nvf4_step``, the pinned model vectorised)."""
+    """The atom chained ``length`` times on fixed operands (``vec.nvf4_step``, the pinned model vectorised)."""
     c = c0.copy()
     ms, xs, ps = [mant[..., b] for b in range(4)], [x[..., b] for b in range(4)], [part[..., b] for b in range(4)]
     for _ in range(length):
-        c = E.nvf4_step(c, ms, xs, ps)
+        c = V.nvf4_step(c, ms, xs, ps)
     return c
 
 
@@ -417,7 +467,7 @@ class F3Device:
 class FakeF3:
     """CPU stand-in for the dry run: the LUT arms emulate f3_lut.cu through the packed tables and scale words, the native arm is
     the vectorised pinned model on the packed codes.  Its rates are invented (lookups at 32 per SM per clock, exact at a third of
-    that, NVFP4 at 2,048 products per SM per clock); ``--fake-silicon`` never runs under a research run."""
+    that, NVFP4 at 2,048 products per SM per clock); ``--fake-silicon`` never runs with ``RESEARCH_RUN_ID`` set."""
 
     SMS, MHZ = 2, 2000.0
 
@@ -426,7 +476,7 @@ class FakeF3:
 
     def identity(self) -> dict:
         return {"device": "FAKE SILICON", "compute_capability": "12.0", "driver": None, "gpu_uuid": "GPU-fake", "backend": "fake",
-                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -463,7 +513,7 @@ class FakeF3:
         gd[:, 0::2, :], gd[:, 1::2, :] = lo.transpose(0, 2, 1), hi.transpose(0, 2, 1)
         if arm == "dots":
             return self._ms(cycles), ((gd * iters) & 0xFFFFFFFF).astype(np.uint32).reshape(-1), cyc
-        ma, ea = E.ue4m3_dyadic(sc.astype(np.int64))
+        ma, ea = V.ue4m3_dyadic(sc.astype(np.int64))
         wv = pk.wsc.astype(np.int64)[grp]
         mm = ma[:, None, :] * (wv & 15)
         x = ea[:, None, :] + ((wv >> 4) & 15) - 12
@@ -726,12 +776,12 @@ def collect(args) -> int:
     meas += [{"name": f"{k}_products_per_sm_per_clock", "value": v["products_per_sm_per_clock"], "unit": "products/(SM*cycle)"}
              for k, v in rows.items()]
     clocks = sorted({str(w["clocks"]) for w in widths.values()})
-    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
            "clocks": clocks[0] if len(clocks) == 1 else "mixed", "label": "Measured" if clocks == ["locked-2100"] else "Measured, " + ",".join(clocks),
            "method": "F3 LUT-GEMM kernels from the fill queue (one width per chunk, each against dense NVFP4 in the same process), "
                      "collected; see f3_lut.json",
            "workload_fingerprint": {"tool": "tc_lut_fp4", "version": "1", "build_so_sha256": b.get("so_sha256"),
-                                    "widths": {k: v["sha256"] for k, v in widths.items()}, "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                    "widths": {k: v["sha256"] for k, v in widths.items()}, "commit": SHARED.RESEARCH_SOURCE_COMMIT},
            "validation": {"status": "passed" if ok else "failed", "checker": "every width's gates (UUID, cc 12.0, SASS, exact words = the "
                           "native atom's on every word and the pinned model's on a sample, dots = the integer group dots, at chains of 1 and 3 "
                           "and at the timed length) passed in its chunk, on this build",
@@ -752,12 +802,12 @@ def build_cmd(args) -> int:
               f"{g.get('lookup_loads') or g.get('mma_opcodes')}", flush=True)
     if rec.get("error"):
         print(rec["error"], flush=True)
-    if os.environ.get("RESEARCH_RUN_ID"):
-        res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    if SHARED.RESEARCH_RUN_ID:
+        res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
                "label": "Measured (ptxas and SASS of the F3 kernels; no device)",
                "method": "f3_lut.cu compiled for sm_120a with -Xptxas -v; each kernel's timed loop read from cuobjdump",
                "workload_fingerprint": {"tool": "tc_lut_fp4", "version": "1", "step": "build", "so_sha256": rec.get("so_sha256"),
-                                        "source_sha256": rec["source_sha256"], "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                        "source_sha256": rec["source_sha256"], "commit": SHARED.RESEARCH_SOURCE_COMMIT},
                "validation": {"status": "passed" if rec["ok"] else "failed",
                               "checker": "lookups per LUT loop, NT OMMA in the native loop, no spills, no FADD/FFMA/FMUL .FTZ",
                               "detail": ", ".join(n for n, g in (rec.get("gate") or {}).items() if not g["ok"]) or "every kernel",
@@ -793,8 +843,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--out", required=True)
     c.add_argument("--tolerance", type=float, default=0.02)
     args = ap.parse_args(argv)
-    if getattr(args, "fake_silicon", False) and os.environ.get("RESEARCH_RUN_ID"):
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+    if getattr(args, "fake_silicon", False) and SHARED.RESEARCH_RUN_ID:
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     return {"build": build_cmd, "run": run_width, "collect": collect}[args.cmd](args)
 
 

@@ -23,7 +23,7 @@ runs when it fails (exit 3).  A phase that raises records its error and fails th
              each case twice (`CASES`: over experts 8..383 decode batches from 1 to 17 tokens, 460 and 461 (moe blocks 8 and 16),
              922 (32) and ENVELOPE, over 12 hot experts 16 and ENVELOPE tokens, and over the edge experts only 8 and 922;
              `--cases` runs a named subset); every `moe_wna16_marlin_gemm` launch is intercepted, its statics checked against the
-             served path's (the moe block `fused_marlin_moe` picks for the batch, `block_of`, fp32 reduce, no atomic add, top_k and
+             served path's (the moe block `fused_marlin_moe` picks for the batch, `moe_block_size_of`, fp32 reduce, no atomic add, top_k and
              mul_topk_weights per launch, no bias, zeros, act order or global scale), its (pair -> block, expert) assignment against
              the routing in both runs, its words between the two runs on every pair both placed in the same moe block
              (`unmoved_rows_equal`), the second run's moved pairs against the twin at their own recorded blocks, and the first
@@ -66,7 +66,7 @@ mismatched words (the moved pairs' among them), every reference evaluation equal
 back from the driver's cache.  The forced cases are at a moe block of 8: forcing one at 922 tokens would compare about 4.6e10
 coordinate-k steps per candidate config (its w13 and w2 launches), against about 2.2e8 a second on 14 workers.
 
-Replay determinism (run r20261014-065141-a1ec, schema v2).  v2 compared the two runs' outputs whole, and decode460 and hot1024 were
+Replay determinism (schema v2).  v2 compared the two runs' outputs whole, and decode460 and hot1024 were
 NO-GO on that comparison alone, while every one of run1's 242,460,672 words matched the twin at run1's recorded assignment.  The
 launch is a function of its call: the k-slice fold is lock-serialized in slice order (marlin_template.h:2162-2170 at the pin,
 `barrier_acquire(&locks[locks_off], slice_idx)` before each `global_reduce_fp32`), and `replay` now checks that directly.  What
@@ -81,7 +81,7 @@ NT * KT mod iters per block), so a reshuffle shows exactly where an expert spans
 is block-invariant (672 a multiple of iters 21 and iters 112) and only a thin w2 tail differs, and their runs drew equal
 placements.  So v3 checks what the record claims: each run against the twin at its own recorded assignment, the runs against each
 other on the pairs they agree on, and the launch replayed at run1's call, bit for bit.  A served step's sorted_token_ids are part
-of its committed inputs, so the Programs bind at whatever placement the align kernel draws; nothing here needs a Definition change.
+of its committed inputs, so the Programs bind at whatever placement the align kernel samples; nothing here needs a Definition change.
 
 What the JIT decides.  At a given config (TK, TN, GRID) the served kernels' arithmetic is fixed by their PTX, and the JIT chooses no
 rounding in it.  In each of the three instantiations served at a moe block of 8 (256 threads at 8 x 8 n x k blocks, 128 at 8 x 4
@@ -129,7 +129,7 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties.glm53_block_fp8_capture_gpu import _activation, _error, _load, _save, _u16, _u32
-from verity_vllm.program.kernels import marlin_moe_rows as MR
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-marlin-capture/v3"
@@ -142,7 +142,7 @@ GROUP = 32
 ENVELOPE = 1024
 #: (name, tokens, pool): `uniform` routes over experts EDGE_EXPERTS.., `hot` over 12 of them, `edge` over the edge experts only; the
 #: batches above 16 are the first one, both sides of the moe block edge 8 | 16 (460, 461), the first of 32 (922) and ENVELOPE
-#: (`block_of`: 8 to 460 tokens, 16 to 921, 32 to 1843)
+#: (`moe_block_size_of`: 8 to 460 tokens, 16 to 921, 32 to 1843)
 CASES = (("decode1", 1, "uniform"), ("decode2", 2, "uniform"), ("decode3", 3, "uniform"), ("decode4", 4, "uniform"),
          ("decode8", 8, "uniform"), ("decode16", 16, "uniform"), ("hot16", 16, "hot"), ("edge8", 8, "edge"),
          ("decode17", 17, "uniform"), ("decode460", 460, "uniform"), ("decode461", 461, "uniform"), ("decode922", 922, "uniform"),
@@ -195,7 +195,7 @@ def launch_top_k(kind: str) -> int:
     return TOP_K if kind == "w13" else 1
 
 
-def block_of(M: int) -> int:
+def moe_block_size_of(M: int) -> int:
     """The moe block both of a batch's launches run at: `fused_marlin_moe`'s pick for M tokens of this rank (`MR.moe_block`)."""
     return MR.moe_block(M, TOP_K, NUM_EXPERTS)
 
@@ -616,12 +616,12 @@ def assignment(st: np.ndarray, ex: np.ndarray, ntpp: int, ids_flat: np.ndarray, 
 
 
 def statics_ok(L: dict[str, Any], kind: str, M: int) -> bool:
-    """The launch is the served path's (marlin_moe.py:136-230): M's moe block (`block_of`), the launch kind's top_k, router weight
+    """The launch is the served path's (marlin_moe.py:136-230): M's moe block (`moe_block_size_of`), the launch kind's top_k, router weight
     and sizes, fp32 reduce without atomic add, full K, the e2m1 weight type over e8m0 scales and bf16 activations, nothing
     optional."""
     K, N = shape(kind)
     a = L["args"]
-    want = {"moe_block_size": block_of(M), "top_k": launch_top_k(kind), "mul_topk_weights": kind == "w2", "size_m": prob_m(kind, M),
+    want = {"moe_block_size": moe_block_size_of(M), "top_k": launch_top_k(kind), "mul_topk_weights": kind == "w2", "size_m": prob_m(kind, M),
             "size_n": N, "size_k": K, "is_k_full": True, "use_atomic_add": False, "use_fp32_reduce": True, "is_zp_float": False,
             "b_q_type": "float4_e2m1f", "thread_k": -1, "thread_n": -1, "blocks_per_sm": -1}
     return (all(a.get(k) == v for k, v in want.items()) and L["absent"] == sorted(ABSENT)
@@ -685,7 +685,7 @@ def same_words(a, b) -> bool:
 
 
 def unmoved_rows_equal(a, b, moved: np.ndarray) -> bool:
-    """The rows of two runs' outputs outside ``moved`` hold the same words, as bits per row: a pair the two align draws placed in
+    """The rows of two runs' outputs outside ``moved`` hold the same words, as bits per row: a pair the two align samples placed in
     different moe blocks of its expert reads a different k-slice schedule (module docstring, Replay determinism), so only the pairs
     both runs placed alike are held to each other; the moved ones are checked against the twin at their own run's assignment."""
     import torch
@@ -716,11 +716,11 @@ def replay(L: dict[str, Any]) -> bool:
 def case_launches(work: Path, name: str, M: int, pool_kind: str, ids, launches: list[dict], W: dict[str, Any], sms: int,
                   types: list[int] | None) -> tuple[list[dict], list[dict], list[dict]]:
     """One case's records from its two runs' launches (labels `<name>/run1`, `<name>/run2`), each with its kernel; returns (launch
-    records, launch specs for the jobs — run1's whole, and run2's moved pairs at run2's own assignment where the two align draws
+    records, launch specs for the jobs — run1's whole, and run2's moved pairs at run2's own assignment where the two align samples
     differ — and the captured run1 launches for the replay and forced phases)."""
     by = {(L["label"].split("/")[1], kind_of(L)): L for L in launches if L["label"].startswith(f"{name}/")}
     ids_flat = ids.cpu().numpy().astype(np.int64).reshape(-1)
-    block = block_of(M)
+    block = moe_block_size_of(M)
     records, specs, captured = [], [], []
     for kind in ("w13", "w2"):
         L, twin = by.get(("run1", kind)), by.get(("run2", kind))
@@ -762,7 +762,7 @@ def sweep_record(launches: list[dict], sms: int, types: list[int] | None) -> dic
     for L in launches:
         if L["label"].startswith("sweep/"):
             M, kind = int(L["label"].split("/")[1]), kind_of(L)
-            config, ok = kernel_config(L.get("kernel"), sms, types, block=block_of(M))
+            config, ok = kernel_config(L.get("kernel"), sms, types, block=moe_block_size_of(M))
             served[kind][str(M)] = config if ok else None
             statics = statics and statics_ok(L, kind, M)
     ok = statics and all(served[k].get(str(M)) for k in served for M in SERVED_M)
@@ -801,7 +801,7 @@ def forced_launches(work: Path, W: dict[str, Any], cap: dict[str, Any], sms: int
         raise RuntimeError(f"probe {list(xs.shape)} for input {list(L['input'].shape)}")
     x = torch.from_numpy(xs.view(np.int16)).to(L["input"].device).view(torch.bfloat16)
     launches, specs, classes = [], [], {}
-    for tk, tn, b in candidates(block_of(cap["M"])):
+    for tk, tn, b in candidates(moe_block_size_of(cap["M"])):
         out = torch.full_like(L["output"].view(torch.int16), SENTINEL).view(torch.bfloat16)
         rec = {"phase": "forced", "case": cap["case"], "launch": kind, "M": cap["M"], "config": [tk, tn, b], "pairs": int(out.shape[0]),
                "K": K, "N": N, "refused": None}
@@ -882,8 +882,8 @@ def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
     coordinates, and for the w2 launch one coordinate through the expert gather over every expert's rows."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate
-    from verity_vllm.program.kernels.derived_rows import f2fp_bf16
-    from verity_vllm.program.registry import marlin_moe as MM
+    from verity.ml.definitions.numerics.derived_rows import f2fp_bf16
+    from verity.ml.definitions.registry import marlin_moe as MM
 
     TK, TN, GRID = job["statics"]
     K, N, E, P, par = job["K"], job["N"], job["E"], job["pairs"], job["par"]
@@ -936,7 +936,7 @@ def _auto(M: int, kind: str, sms: int, allow: dict[tuple[int, int], int]) -> tup
     """ops.cu's config for one launch kind at M tokens, over ``allow``, the per-config limits of the kernels at M's moe block."""
     N = shape(kind)[1]
     try:
-        return MR.auto_config(prob_m(kind, M), N, launch_top_k(kind), sms, allow, block=block_of(M))
+        return MR.auto_config(prob_m(kind, M), N, launch_top_k(kind), sms, allow, block=moe_block_size_of(M))
     except ValueError:
         return None
 
@@ -949,9 +949,9 @@ def model(served: dict[str, dict[str, list[int] | None]], sms: int) -> dict[str,
     out: dict[str, Any] = {}
     for kind, by_m in sorted(served.items()):
         swept = {int(M): c for M, c in by_m.items() if c}
-        for block in sorted({block_of(M) for M in SERVED_M}):
+        for block in sorted({moe_block_size_of(M) for M in SERVED_M}):
             consistent = MR.allows(swept, block, shape(kind)[1], TOP_K, launch_top_k(kind), NUM_EXPERTS, sms)
-            out[f"{kind}/{block}"] = {"observed": sum(block_of(M) == block for M in swept), "consistent": len(consistent),
+            out[f"{kind}/{block}"] = {"observed": sum(moe_block_size_of(M) == block for M in swept), "consistent": len(consistent),
                                       "allow": [{f"{tk}/{tn}": v for (tk, tn), v in allow.items()} for allow in consistent[:8]]}
     return out
 
@@ -963,8 +963,8 @@ def bind_check(served: set[tuple[str, int, int, int]]) -> dict[str, Any]:
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation.batch import type_shape
-    from verity_vllm.program.boolean import boolean_version
-    from verity_vllm.program.registry import marlin_moe as MM
+    from verity.ml.definitions.boolean import boolean_version
+    from verity.ml.definitions.registry import marlin_moe as MM
 
     out: dict[str, Any] = {}
     for kind, TK, TN, GRID in sorted(served):

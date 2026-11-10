@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Numbers
-import Proofs.Flock.Claims.NumbersPads
-import Proofs.Flock.Soundness.Accounting.PaddedNumbers
+module
+
+public import Proofs.Flock.Claims.Numbers
+public import Proofs.Flock.Claims.NumbersPads
+public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
 
 /-!
 # Flock's `γ` at the deployed parameters
@@ -20,6 +22,8 @@ At `201` rounds `C` runs from `2^{18.98}` (`m = 22`) to `2^{31.97}` (`m = 35`) w
 (`m = 25`, `N = 2^12`) to `2^{32.02}` (`m = 35`, `N = 2^13`) with it, so `γ` from `2^{31.67}` to `2^{44.67}`; the spec's
 `2^{38.5}` is `--zk` at `m = 26, 27` with `N = 2^12` (`2^{38.00}`, `2^{38.25}`). `λ` doesn't move: `½ log₂ γ ≤ 23.4`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.Numbers
 
@@ -41,17 +45,6 @@ theorem fast100_logLen₀ {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) 
 theorem m1Schedule_logLen₀ {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) :
     10 ≤ ((m1Schedule m).levels.headD default).logLen ∧ ((m1Schedule m).levels.headD default).logLen ≤ 23 := by
   interval_cases m <;> decide
-
-/-- `k = ⌈4N₀/e⌉` at a `fast100` schedule is `kVal d₀`. -/
-theorem k_fast100 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) :
-    kRep (sch.levels.headD default).logLen = kVal (sch.levels.headD default).logLen := by
-  have hm : 22 ≤ m ∧ m ≤ 35 := by
-    by_contra hc
-    have : fast100 m = none := by unfold fast100; split <;> simp_all
-    simp [this] at h
-  obtain ⟨h1, h2⟩ := hm
-  apply kRep_eq
-  interval_cases m <;> (simp only [fast100, Option.some.injEq] at h; subst h; decide)
 
 /-! ## The weight -/
 

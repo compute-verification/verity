@@ -1,0 +1,56 @@
+{
+ "definitions": {
+  "EmbeddingCoordinate_v1{V=200}": {
+   "and": 3972,
+   "type": "4e22c252de13b8aec4c4312d5d821136382e6a997f9b02a81029b4d2396ff87f82ea7e825a5d19a164c68bd8e424e275823969c00e435d7dec2574fa41b8e6a9"
+  },
+  "EmbeddingCoordinate_v1{V=256}": {
+   "and": 4820,
+   "type": "b01f7b3162ee92b643263ff9d65f4142950cafb2545008959fa9e060adf07185fa963e97b2218d10f82aa1bc9fc07e45c2e19a3ee73cfbb146df721f7fd57381"
+  },
+  "F32SumPartHalf_v1{G=64,HALF=0}": {
+   "and": 49832,
+   "type": "1bf15da136a2da5768eb780009052e91df967c89dbf606161a74e257fd687f01b9c2aeb18021b7a5b78956093dec149e5896ad7ea930c9093335f690ff71b584"
+  },
+  "F32SumPartHalf_v1{G=64,HALF=1}": {
+   "and": 49880,
+   "type": "2f881d598b7de7ac90fa74f8bd80b0bd6d72c822633e1768985fc1818263c15ace02160ad6ce9b9379954db0f23c238ae88bc59f2ded736164915d14b4ec7e74"
+  },
+  "RmsNormRecipHalf_v1{N=128,G=1,EPS=1e-05,HALF=0}": {
+   "and": 5472,
+   "type": "21d0c44cf907ce2ac9eb83debb2b799befd71253652458a5571776abcd67a8d996225a01f2a7c57e85e175ab3b1046d1f573f1a3d7eecd0cd3537030989db5f6"
+  },
+  "RmsNormRecipHalf_v1{N=128,G=1,EPS=1e-05,HALF=1}": {
+   "and": 5492,
+   "type": "f1526118b9dc8dae59bd9e6b331461ca3244f4e532f9d3233d1c65376c58739711f597c719f07b3d92a18d87c53b7d05111a113eacc8cf7d8fa913ea265a8dea"
+  },
+  "RmsNormRecipHalf_v1{N=16384,G=2,EPS=1e-05,HALF=0}": {
+   "and": 6254,
+   "type": "7ee287823b1efbd5197c77a8d1f746c5a5fc7565e9a4653b72b27beb4ea13890bad38b56e844fe7e19178f1fc662628d75f16582d0d2f354f6ee62c79740fe52"
+  },
+  "RmsNormRecipHalf_v1{N=16384,G=2,EPS=1e-05,HALF=1}": {
+   "and": 6274,
+   "type": "2fd91de2371ffb2ac27aafc7b10f7d82603ac20955da666cf61b7cc776aad133ae0438c2ff67ef556ed88cc7071fca6d4169fbf7e6955c59b2b393dbdce8ffcf"
+  },
+  "SoftmaxMax_v1{N=1}": {
+   "and": 30,
+   "type": "2961e69170d1451e9beee8a51180b30c47c90d6ba36047ca848640a682ec0e05a24e39e12c9698589d73828e0bff94bde304f76db5dd3cc8c8f75e6923e7c92c"
+  },
+  "SoftmaxMax_v1{N=32}": {
+   "and": 2127,
+   "type": "b691e219c3b7d98bd80029f1cb77ecdc39bc86d47177937fc6b4757d4f267b7a48339ef58496e807f401d7c43161533a67bc4f9e941446605d3966c66bd58d46"
+  },
+  "SoftmaxOut_v1": {
+   "and": 5701,
+   "type": "d822ab999a982a58f9a565a5edb54ca13d755c150783516113f08d8d79d47ff655be48357e6c06bda89fef01c94bd15a1c7414c3c0b16231f80bc959796cc3b2"
+  },
+  "SoftmaxRecip_v1{N=1,HALF=0}": {
+   "and": 6126,
+   "type": "5ddb7a6891f68118133c3f2e84a63818e1bd86771da7724751e0bd461b487d41163de1ce850f9abdaeb038dec4a28e492df460d9ea13e073b7516f4b95e98e44"
+  },
+  "SoftmaxRecip_v1{N=1,HALF=1}": {
+   "and": 6143,
+   "type": "c39912139addb02c7dc04bb4e55481c32c931e1b2fb7dad9430e19d70ddaa138896674875405b99c99f0de2e3c07f468a09dd35d23b2465598d108513ec87dca"
+  }
+ }
+}

@@ -562,8 +562,7 @@ SESSION_RE = re.compile(r"session-(\d+)\.scope$")
 
 
 #: A timer's oneshot that fails every run is `failed` only between its runs, so its incident stays open until the unit has
-#: been out of `systemctl --failed` this long (vy-custody.service, every 5 minutes, opened and cleared 12 times in an hour on
-#: node 1, 8 Oct).
+#: been out of `systemctl --failed` this long (a oneshot every 5 minutes would otherwise open and clear it 12 times an hour).
 UNITS_CLEAR_S = 1800
 
 
@@ -618,16 +617,21 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
     """Files on the nodes that aren't main's, still run old code, or stray (`research deploy drift --json`; it fetches origin,
     which the nodes can't): one incident per node and kind.  A node ssh can't connect to (a stopped VM) is skipped; any other
     read that fails, or every node unreachable, is the monitor's error."""
-    from .pods.nebius.preflight_probe import findings
-
     reps = json.loads(ctx.sh([*ctx.research, "deploy", "drift", "--json"], ok=(0, 1), timeout=900))
     none_read = all("error" in r for r in reps.values())
     if bad := sorted(n for n, r in reps.items() if "error" in r and (none_read or not r.get("unreachable"))):
         raise RuntimeError(f"deploy drift can't read {', '.join(bad)}: {str(reps[bad[0]]['error'])[:200]}")
     groups: dict[tuple[str, str], list[str]] = {}
-    for line in findings(reps):
-        n, kind, path = line.split(" ", 2)
-        groups.setdefault((n, kind), []).append(path)
+    for n, rep in sorted(reps.items()):
+        if "error" in rep:
+            continue
+        for e in rep["entries"]:
+            if e["state"] not in ("ok", "held") and not (e["state"] == "missing" and e.get("tree")):
+                groups.setdefault((n, e["state"]), []).append(e["path"])
+            if e.get("restart"):
+                groups.setdefault((n, "restart"), []).append(e["path"])
+        for p in rep["strays"]:
+            groups.setdefault((n, "stray"), []).append(p)
     return [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
                     + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".") for (n, kind), ps in sorted(groups.items())]
 
@@ -635,8 +639,8 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
 def asks(ctx: Ctx) -> list[Finding]:
     """An ask in #agent-coordination its record doesn't show answered after 2 hours (`research msg traffic --json`), to its owner,
     naming the record; the asks whose record can't be read (no Linear or Notion credentials), as one finding to infra.  A
-    machine's notice (`vy-*`, the router) isn't an ask anyone answers: vy-monitors' OOM notices naming @ci and @lean would ring
-    them for ever (as top_watch.py's sweep skips them)."""
+    machine's notice (`vy-*`, the router) isn't an ask anyone answers: vy-monitors' OOM notices naming a lane's handle would ring
+    it for ever (as top_watch.py's sweep skips them)."""
     rep = json.loads(ctx.sh([*ctx.research, "slack", "traffic", "--json", "--hours", "24", "--stale-h", "2"], timeout=300))
     out = []
     for a in rep.get("unanswered") or []:
@@ -706,6 +710,57 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
                     + ", ".join(f"`{a[:16]}…`" for a in gone[:5]) + (f" and {len(gone) - 5} more" if len(gone) > 5 else "")
                     + ". A node or pod without the store's key can't fetch them.",
                     cleared="*Cleared:* the public export holds every fixture main registers.")]
+
+
+#: drive's queue state on the control pod, whose `drive.postland.verified` is the last `main` an after-landing run passed
+DRIVE_STATE = "root/.research/queue/verity.state.json"
+DRIVE_LOG = "data/drive/drive.log"
+UNVERIFIED_S = 3 * 3600
+DRIVE_TICK_STALE_S = 30 * 60
+TICK_RE = re.compile(rb"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=", re.M)
+
+
+def drive_ticking(ctx: Ctx) -> bool:
+    """Whether drive's log (`DRIVE_LOG`) has a `tick rc=` line from the last `DRIVE_TICK_STALE_S`: drive is alive, so its own
+    `_behind` alarm speaks for a main left unverified."""
+    try:
+        with open(ctx.root / DRIVE_LOG, "rb") as f:
+            f.seek(max(0, f.seek(0, 2) - (1 << 20)))
+            ticks = TICK_RE.findall(f.read())
+    except OSError:
+        return False
+    return bool(ticks) and ctx.now - datetime.strptime(ticks[-1].decode(), "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=timezone.utc).timestamp() < DRIVE_TICK_STALE_S
+
+
+def unverified_main(ctx: Ctx) -> list[Finding]:
+    """`main` has carried commits no after-landing run verified for over 3 h (hundreds of PRs can land on an unverified main for
+    days with nobody outside ci told): drive's last verified commit (its state's `drive.postland.verified`) against
+    main, timed from the oldest landing after it: main's first-parent commits after it, drive's `Queue: #N` merges, each
+    committed when drive merged it (`git log --first-parent` in `$RESEARCH_DEPLOY_REPO`, the relay's clone, fetched here).
+    GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
+    hundreds hold no landing. One event per further hour behind, to ci and top, until an after-landing run verifies
+    main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
+    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead."""
+    if drive_ticking(ctx):
+        return []
+    state = json.loads((ctx.root / DRIVE_STATE).read_text())
+    verified = ((state.get("drive") or {}).get("postland") or {}).get("verified")
+    if not verified:
+        raise RuntimeError(f"/{DRIVE_STATE} names no drive.postland.verified")
+    repo = os.environ.get("RESEARCH_DEPLOY_REPO") or "/data/watchers/repo"
+    ctx.sh(["git", "-C", repo, "fetch", "-q", "origin", "main"], timeout=120)
+    landed = [ln.split() for ln in ctx.sh(["git", "-C", repo, "log", "--first-parent", "--format=%H %ct",
+                                           f"{verified}..FETCH_HEAD"], timeout=60).splitlines() if ln.strip()]
+    if not landed:
+        return []
+    since = float(landed[-1][1])
+    if (behind := ctx.now - since) < UNVERIFIED_S:
+        return []
+    hours = int(behind // 3600)
+    return [Finding(f"{verified[:12]}:{hours}", f"*`main` has gone {hours} h without a passing post-landing check*: its last "
+                    f"verified commit is `{verified[:12]}`, and {len(landed)} landing(s) followed it, the first at {iso(since)}.",
+                    owners=("ci", "top"))]
 
 
 # ---- every machine: its memory, the runs infrastructure killed, the peers it watches, the checks lost -----------------------------
@@ -828,6 +883,9 @@ def answering(ctx: Ctx) -> list[Finding]:
 WORKSPACE = "/workspace"
 DISK_FULL_PCT = 85.0        # resource_probe's HARD /workspace line: no new check starts past it
 INODES_FULL_PCT = 80.0      # resource_probe's inode_pct
+#: twice tools/verity/check/slot.py's DISK_MIN_INODES, under which no check slot starts: a page of its own, since a node can
+#: stand past INODES_FULL_PCT for days and that finding pages only once
+INODES_FREE_PAGE = 800_000
 FORECAST_S = 6 * 3600       # page while the line reaches FULL within this
 FIT_S = 3 * 3600            # the readings the line is fitted to
 FIT_MIN_S, FIT_MIN_N = 1800, 4
@@ -838,7 +896,8 @@ def disk_use(path: Path) -> dict[str, float]:
     s = os.statvfs(path)
     used, free = (s.f_blocks - s.f_bfree) * s.f_frsize, s.f_bavail * s.f_frsize
     return {"pct": 100.0 * used / (used + free) if used + free else 0.0, "size_b": float(used + free),
-            "ipct": 100.0 * (s.f_files - s.f_ffree) / s.f_files if s.f_files else 0.0}
+            "ipct": 100.0 * (s.f_files - s.f_ffree) / s.f_files if s.f_files else 0.0,
+            "ifree": float(s.f_favail) if s.f_files else None}
 
 
 def _slope_per_h(pts: list[tuple[float, float]]) -> float:
@@ -864,7 +923,8 @@ def _run_disk(ctx: Ctx) -> str:
 
 def disk_forecast(ctx: Ctx) -> list[Finding]:
     """/workspace's disk or inodes reaching DISK_FULL_PCT / INODES_FULL_PCT within 6 hours on the line fitted to the last 3
-    hours of readings (kept in the memo; at least 4 over 30 minutes), or already there. Names the biggest live runs on disk."""
+    hours of readings (kept in the memo; at least 4 over 30 minutes), or already there; and, as its own finding, fewer than
+    INODES_FREE_PAGE inodes free. Names the biggest live runs on disk."""
     now = disk_use(ctx.path(WORKSPACE))
     pts = [p for p in ctx.memo.get("readings", []) if ctx.now - FIT_S <= p[0] < ctx.now] + [[ctx.now, now["pct"], now["ipct"]]]
     ctx.memo["readings"] = pts
@@ -884,6 +944,12 @@ def disk_forecast(ctx: Ctx) -> list[Finding]:
                              f"{gain} over the last {span / 3600:.1f} h. Biggest live runs on disk: {biggest}.",
                              cleared=f"*Cleared:* {ctx.machine}'s /workspace {what} no longer reaches {full:.0f}% within "
                                      f"{FORECAST_S // 3600} h."))
+    if (left := now.get("ifree")) is not None and left < INODES_FREE_PAGE:
+        biggest = biggest or _run_disk(ctx)
+        found.append(Finding("inode-full", f"*{ctx.machine or 'This machine'}: /workspace has {left:,.0f} inodes free*, under "
+                             f"{INODES_FREE_PAGE:,}; check slots start nothing under {INODES_FREE_PAGE // 2:,}. Biggest live "
+                             f"runs on disk: {biggest}.",
+                             cleared=f"*Cleared:* {ctx.machine}'s /workspace has {INODES_FREE_PAGE:,} inodes free or more."))
     return found
 
 
@@ -992,12 +1058,12 @@ CHECK_LINE = "/workspace/research/locks/check-line"     # slot.py's LINE beside 
 NOT_STARTED = 75        # slot.py's exit when CMD never ran: a waiter past --wait-max, or a twin whose twin took a slot first
 FAILED_RECENT_S = 6 * 3600
 #: how long a run that ended before any step failed may lack its failure.json: `research run` classifies the end a few seconds
-#: after status.json says so, and a post read in between said "unclassified: no reason recorded" of a hand cancel (dc04, 12 Oct)
+#: after status.json says so, and a post read in between would say "unclassified: no reason recorded" of a hand cancel
 CLASSIFY_S = 120
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
-#: drive's reason when it cancels a landed train's check (drive.py, `postland`): its deferred steps run in the post-landing run, so
-#: the step it killed did not fail (INF-144)
+#: drive's reason when it cancels a landed train's check (drive.py, `postland`): its deferred steps run in the after-landing run, so
+#: the step it killed did not fail
 DRIVE_LANDED_CANCEL = "deferred steps run in the post-landing run"
 BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LANE_RE = re.compile(r"-([0-9a-f]{4})$")
@@ -1085,7 +1151,8 @@ for n in names:
         continue
     st = load(os.path.join(d, "status.json"))
     last = (st.get("transitions") or [{}])[-1]
-    bad = next((s for s in steps(os.path.join(d, "steps.jsonl")) if s.get("status") not in ("passed", "skipped")), None)
+    # a stopped step found nothing: another step failed, or the run was cancelled (check.py's `stopped`)
+    bad = next((s for s in steps(os.path.join(d, "steps.jsonl")) if s.get("status") not in ("passed", "skipped", "stopped")), None)
     suite = failed_suite(os.path.join(d, "stdout.log")) if bad is None else None
     if suite:
         bad = {"step": "suite " + suite[0], "ended_utc": last.get("ended_utc") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
@@ -1218,12 +1285,28 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
                    thread=MERGE_THREAD)
 
 
+def on_main(ctx: Ctx, sha: str | None) -> bool:
+    """Whether ``sha`` is a commit of `main` (GitHub's compare of it with main is `ahead` or `identical`): the tip an
+    after-landing run checks, which runs to its end to name every red step and suite, so `cancel_failed` never
+    stops it: cancelling one for a Lean check's slot before its pytest step reports leaves main unverified.  False when GitHub
+    can't say."""
+    if not sha:
+        return False
+    try:
+        got = ctx.sh(["gh", "api", f"repos/{REPO_SLUG}/compare/{sha}...main", "--jq", ".status"], timeout=30)
+    except Exception:  # noqa: BLE001  (cancelling stays the default)
+        return False
+    return got.strip() in ("ahead", "identical")
+
+
 def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
-    """Cancel a check whose step failed while a ticket waits for a check slot on its machine (top, 8 Oct: running on to find more
+    """Cancel a check whose step failed while a ticket waits for a check slot on its machine (running on to find more
     failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled. A suites.py
     run's failed suite only rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's
-    (top, 9 Oct: 25ea's verity-ops failure was cpu-1's, and its circuit_check worth keeping)."""
+    (a suite can fail for its machine's sake while the run's other steps are worth keeping)."""
     if not (ctx.act and waiting and row.get("step") and not row.get("suite") and row.get("state") == "running"):
+        return None
+    if on_main(ctx, row.get("sha")):
         return None
     who = ", ".join(w.get("run") or "a check" for w in waiting[:3]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
     ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",
@@ -1346,6 +1429,10 @@ MONITORS: list[Monitor] = [
             "`not local and not on any source` was registered without `research data push`, so ask whoever registered it to push "
             "it; a loop that isn't running is restarted with `setsid -f /data/infra/fixtures_export.sh`.",
             every_s=900, for_s=1800, unread_s=4 * 3600),
+    Monitor("unverified-main", "ci", "warn", "relay", unverified_main,
+            "Read the newest post-landing run's verdict line (drive.log's 'told @ci' line names it): land the red suite's fix, or "
+            "revert the PR that broke it (AGENTS.md: main always passes). It rings again each hour until a post-landing run passes.",
+            every_s=600, events=True, unread_s=3600),
 ]
 BY_ID = {m.id: m for m in MONITORS}
 

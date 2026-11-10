@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.boolean_moe`: the Boolean versions of `registry.moe`'s element-wise Definitions agree with their word
+"""`verity.ml.definitions.registry.boolean_moe`: the Boolean versions of `registry.moe`'s element-wise Definitions agree with their word
 Definitions (`trace.word_of`): the routed sum's coordinate on every word at one slot, on every pair of special words, every word
 against 8 specials and random pairs at two, and at OLMoE's eight slots on random rows, rows of special words, rows that cancel to a
 few ulps and rows that overflow; the sum in 64-column chunks (`MoeSum_v3`, the lift's version) on random and special rows; the router's exponential on special words, random words and words across its range, its
@@ -29,11 +29,11 @@ from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ZERO
 from verity.ml.circuits.cut import separable
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_moe as BM
-from verity_vllm.program.registry import moe as M
-from verity_vllm.program.kernels import moe_twins
-from verity_vllm.program.registry.prims import F32, I32
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_moe as BM
+from verity.ml.definitions.registry import moe as M
+from verity.ml.definitions.numerics import moe_twins
+from verity.ml.definitions.registry.prims import F32, I32
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -418,6 +418,28 @@ def test_the_sigmoid_routers_word_views() -> None:
     st = {"E": 256, "TOPK": 8, "SCALE": 2.5, "KERNEL": "block"}
     assert SW.boolean_version(bind(M.MoeRouterSigmoidBias, **st)).id == "MoeRouterSigmoidBias_v2{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}"
     assert TR.word_of(bind(BM.MoeRouterSigmoidBias, **st)).id == bind(M.MoeRouterSigmoidBias, **st).id
+    assert (SW.boolean_version(bind(M.MoeRouterSigmoidBiasSlots, **st)).id
+            == "MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}")
+    assert TR.word_of(bind(BM.MoeRouterSigmoidBiasSlots, **st)).id == bind(M.MoeRouterSigmoidBiasSlots, **st).id
+
+
+@pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
+@pytest.mark.parametrize("E_, TOPK", [(8, 2), (16, 8)])
+def test_the_router_slots_are_the_routers_words(kernel, E_, TOPK) -> None:
+    """`MoeRouterSigmoidBiasSlots_v1` returns `MoeRouterSigmoidBias_v1`'s words in its order, slot k's weight and id each a field
+    (a row of a unit) of its own."""
+    st = {"E": E_, "TOPK": TOPK, "SCALE": 2.5, "KERNEL": kernel}
+    x, b = _router_rows(E_, 300, 0x5E)
+    slots, router = bind(M.MoeRouterSigmoidBiasSlots, **st), bind(M.MoeRouterSigmoidBias, **st)
+    assert slots.signature()[1] == Tuple(*[F32] * TOPK, *[I32] * TOPK)
+    np.testing.assert_array_equal(_rows(E.evaluate_batch(slots, x, b), len(x)), _rows(E.evaluate_batch(router, x, b), len(x)))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
+def test_the_router_slots_on_bits(kernel) -> None:
+    """`MoeRouterSigmoidBiasSlots_v2` at 8 experts and 2 slots is its word view on the kernel tests' rows."""
+    _agree2(bind(BM.MoeRouterSigmoidBiasSlots, E=8, TOPK=2, SCALE=2.5, KERNEL=kernel), _router_rows(8, 300, 0x5C))
 
 
 @pytest.mark.slow

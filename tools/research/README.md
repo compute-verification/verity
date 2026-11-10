@@ -20,7 +20,7 @@ src/research/
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
-├── auto.py         --on auto: node 2's queue or cpu-1's research pool, whichever is sooner
+├── auto.py         --on auto: a CPU node's research pool (cpu-1, cpu-5, cpu-3) or node 2's queue
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
@@ -30,10 +30,6 @@ src/research/
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function)
 tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
-
-The `telemetry` and `pods` packages were promoted from `veritor` `zk/campaign/` at
-commit `df7fbea3d` (branch `lane/r17-mprof`, 2026-09-21) and have since been
-edited here like the rest of the package.
 
 `research run` pre-writes `job.json` (the harness keeps an existing one) and
 calls the harness's `run()` directly: one execution engine, one record.
@@ -107,6 +103,7 @@ research merge --canary [--tool check] [--json]                    # the gates' 
 research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
+research lean-times ...  # Lean tasks' p95
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
@@ -116,7 +113,7 @@ its image when the tree is unchanged, and the gate refuses a REF holding a commi
 `old2new SHA`, `check REF` and `build PRE POST` move clones onto it, name images, guard and build the map (`commitmap.py`).
 
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
-(refreshed from the remote first, when one is usable) holds an attempt of the tool, default `check`, with `state` done, rc 0,
+(refreshed from a usable remote first) holds an attempt of the tool, default `check`, with `state` done, rc 0,
 and a clean source at REF's exact commit, and when the target's tip is an ancestor of REF, so the merged tree is the checked one.
 The attempt's own record and result must agree with the target's declaration: its command (`Tool.command`, in a check slot or
 not, plus check.py's own flags only), a result kind it produces (`check/v1`, never `lean-fast/v1`), a passed verdict and no step
@@ -126,7 +123,7 @@ stores, that every gate refuses each bad attempt in `CANARY` and admits a good o
 
 `research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree, one `--no-ff` merge each
 (so its commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine), and when it
-passes fast-forwards the target to that exact tree. On a failure it bisects the prefixes to the first ref whose merge breaks it
+passes fast-forwards the target to that exact tree. On a failure it bisects to the first ref whose merge breaks it
 and fast-forwards to the longest prefix that passed.
 
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain, in a scratch
@@ -137,9 +134,9 @@ among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothi
 `check.py --slots` picks), and `research merge BRANCH` lands it.
 
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
-it). From the remote's copy of the target, the truth rather than the checkout, it closes each open pull request whose head is on
+it). From the remote's copy of the target, not the checkout, it closes each open PR whose head is on
 it, naming the commit, retargets each whose base branch's tip is on it (stacks GitHub never closes), and deletes a closed one's
-head branch unless an open one uses it. With `--push`, which whoever lands a train passes (Daniel, 1 Oct), a merge that lands is
+head branch unless an open one uses it. With `--push` (the lander's), a merge that lands is
 pushed, never forced, before the sweep, and a refused push sweeps nothing and exits 1; without it, run `research merge --sweep`
 after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Then `main` goes over ssh to node 1's
 bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs the `--mirror` rerun.
@@ -152,15 +149,18 @@ step needs. It may also name what runs after a landing (`Tool.after_land`, an ar
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
-Since 12 Oct `research queue drive` moves `main`; the lander handles only what drive refuses.
-
-`research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
-fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (drafts too),
+`research queue` is the merge queue: `next` is the landed branch (drive.toml's `land_into`: `checked`) plus every admitted PR,
+one `--no-ff` merge commit each, and drive fast-forwards `checked` to the reviewed prefix and `main` only to a commit of
+`checked` whose after-landing run passed every step on the merge gate (`research.drive`); its alarms ring the owner of a slow step, a
+stuck ready PR or a red, and the lander handles only what drive refuses. A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
-`pr:{n}@{head}`). No PR waits on Daniel (16 Oct) or on a per-head grant (8 Oct). The branch holds the queue's state (each
-merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
-conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
+`pr:{n}@{head}`); `ready` and `open` only warn of a body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes
+from KEY's goal label, nor `Issue: none: REASON`. No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
+merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
+root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
+
+The mark and sync refuse a lock merge dropping an entry `next` needs (`lock_drops`).
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
@@ -418,13 +418,9 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
   is written, `preserve_error` records why nothing was pushed.
-- The r20 campaign's numbers live in the store. `python -m
-  verity_numerical.bench.ledger_to_store [--store ROOT] [--dry-run]` imports
-  the frozen ledger once (labels on the attempt when the run is in the store,
-  else on a `ledger-row/v1` artifact; red-team verdicts as separate assertions;
-  idempotent). `python -m verity_numerical.bench.store_tables --diff-ledger
-  [--proof-class-by 'red-team-*']` rebuilds the like-for-like table from store
-  queries alone and diffs it row by row against `decision_tables.py`.
+- The r20 campaign's numbers live in the store: the frozen ledger was imported
+  once (labels on the attempt when the run is in the store, else on a
+  `ledger-row/v1` artifact; red-team verdicts as separate assertions).
 - Repo replicas: `fixtures/artifacts.json` maps `art:` ids to tracked files
   registered with `research data put --kind fixture/v1 --file PATH`; `where`
   lists the `repo` replica when the file still hashes to its id.
@@ -466,17 +462,17 @@ expired, `low` or `normal`, and preserved or regenerable, it holds no nested rec
 read again. A preserved path also needs its artifact to hold every file now under it at its size, so files custody trimmed never
 count as preserved, and `preserved.check` in head mode must find the artifact PRESERVED. An implicit record's marker must still vouch
 for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
-no remote; either way it prints every deletion and every skip with its reason. Its named failure: on 1 Oct node 2 held 737 GiB of
-unowned, unpreserved bitsets that nobody could decide to delete.
+no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of unowned,
+unpreserved files on a node that nobody can decide to delete.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
 `--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. A
 path no record covers has nobody to say yes and is never deleted. The records are read again just before `--apply` deletes. Each
 decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
-with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. Its named failure: on 3 Oct a disk cleanup ran a bare `rm -rf`
-on four FP8 passes (about 74 GB each) under `pouw/mvp-e2e`. Their record named @compute-accounting as owner until 7 Oct, but another
-lane had approved the deletion, so the passes were lost. Here that `rm` is refused with the true owner's name.
+with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. The failure it prevents: a disk cleanup's bare `rm -rf` of
+outputs whose record names another lane as owner, approved by a lane that doesn't own them, which loses them. Here that `rm` is
+refused with the true owner's name.
 
 ### Slack
 
@@ -542,7 +538,7 @@ SYNC-WARN lanes/x/20260929T0600Z-report-x.md: cites r20260928-042319-9aac, which
 ### The steward off the laptop
 
 `research notes watch` is the steward: liveness, reaping, deadlines,
-budgets, the daily render and scheduled runs (`notes.py`). Three flags let it run on any
+budgets and scheduled runs (`notes.py`). Three flags let it run on any
 always-on host (`steward.py`):
 
 - `--liveness git` (or `RESEARCH_LIVENESS=git`): a notes file's time is
@@ -558,8 +554,7 @@ always-on host (`steward.py`):
 - `research notes service systemd|launchd` prints the service definition
   (restart on exit and after a reboot; `watch --lease --standby`).
 
-Its schedule is `<notes root>/steward.toml`, re-read every pass: `[[render]]` entries (the tables render, `render_lines`) and
-`[[run]]` entries, each a recorded run launched on a machine once a UTC day at or after `at`, or once an ISO week with
+Its schedule is `<notes root>/steward.toml`, re-read every pass: `[[run]]` entries, each a recorded run launched on a machine once a UTC day at or after `at`, or once an ISO week with
 `weekday` (`run_lines`):
 
 ~~~toml

@@ -13,8 +13,8 @@ from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled
-from verity_vllm.program.registry import act
-from verity_vllm.program.registry import moe as M
+from verity.ml.definitions.registry import act
+from verity.ml.definitions.registry import moe as M
 
 H, E, TOPK, VPT, I = 32, 8, 2, 4, 16
 OP = "torch.ops.vllm.moe_forward.default"

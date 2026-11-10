@@ -1,0 +1,8 @@
+{
+ "definitions": {
+  "TemplatePopulations_v1{templates=('PlanShard_v1{S=32,GAPS=2}','PlanMatch_v1{P=4,NR=16,V=16,G=2,TB=8,RPB=2}'),counts=(1,2)}": {
+   "and": 7371,
+   "type": "de01bbff4c12105b75b9a8bf236009914855641a93bc5930686b14d0abf8382b10f3343b3ab2781dbd5fe071825389eb1f1e3f2a9c78935fc62cf289b9f4015a"
+  }
+ }
+}

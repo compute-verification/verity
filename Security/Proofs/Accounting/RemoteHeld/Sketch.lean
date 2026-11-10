@@ -1,6 +1,9 @@
-import Mathlib
-import Models.Accounting.Guarantees.RemoteSketch
-import Proofs.Accounting.RateAudit.DeployedSketchSum
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RemoteSketch
+public import Proofs.Accounting.RateAudit.DeployedSketchSum
+import Proofs.Pous.Prob
 
 /-!
 # The receipts' sketch bound, derived: the proof
@@ -18,7 +21,7 @@ store are within `ε` of uniform, so averaged over those (`pr_le_add_of_fst`) an
 A candidate's `Miss` (`miss_split`) is the verbatim rate audit's guess, at the candidate's own key:
 
 * its signs have a sector block below rank `r`: `ε` per candidate (`SketchRank`);
-* the block's tag is right without its query: `N/2^h` per candidate (`Device.pr_guess_le`);
+* the block's tag is right without its query: `N/2^h` per candidate (`Prover.pr_guess_le`);
 * a query named the block's sketch with a sector never obtained: at rank `r` that sector's `256^(32−r)` values that
   give the sketch are a `2^-(8r)` share of its `2^256`, once per query of the pass's budget (`card_bad_keys_le`,
   `card_bad_family_le` with each candidate's own signs).
@@ -28,7 +31,9 @@ pass `j`'s keys and the store are a uniform fiber of the session's coins (`Sessi
 `SketchBoundSession`; at the deployed receipts, `SketchBoundDeployed`.
 -/
 
-namespace Accounting.RateSketch.Device
+@[expose] public section
+
+namespace Accounting.RateSketch.Prover
 
 open scoped ENNReal
 
@@ -38,7 +43,7 @@ variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 in their signs too: if across the family the queries total at most `qtot` on every data point, the data on which some
 candidate makes a correct digest query without an obtained sector is at most a `qtot·g/|X|` fraction. -/
 theorem card_bad_keys_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg] {C : ℕ}
-    (A : Fin C → Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Fin C → Sig)
+    (A : Fin C → Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Fin C → Sig)
     (O : Fin C → Oracle N ρ h X Dg) (g qtot : ℕ)
     (hq : ∀ D : Data N m ρ X, ∑ c, (((A c).prog (σ c) D).queries (O c) D).length ≤ qtot)
     [DecidablePred (fun D : Data N m ρ X => ∃ c, ∃ i : Fin q, Bad (A c) dig (σ c) (O c) D i g)] :
@@ -103,7 +108,7 @@ theorem card_bad_keys_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq D
     _ = g * qtot * Fintype.card (Data N m ρ X) := by
         rw [Finset.sum_const, Finset.card_univ, smul_eq_mul, mul_assoc, mul_comm qtot]
 
-end Accounting.RateSketch.Device
+end Accounting.RateSketch.Prover
 
 namespace Accounting.Remote.Sketch
 
@@ -114,24 +119,8 @@ open Bandwidth (pr_exists_le pr_mono pr_or_le)
 
 variable {N m h S L q ks : ℕ}
 
-/-- A uniform finite event whose count times `m` is at most `g` times the sample-space size has probability at most
-`g/m` (restating `DeployedSketchSum.lean`'s private lemma). -/
-private theorem pr_le_div_of_card_mul_le {α : Type} [Fintype α] (P : α → Prop) [DecidablePred P] (g m : ℕ)
-    (hα : Fintype.card α ≠ 0) (hm : m ≠ 0)
-    (h : (Finset.univ.filter P).card * m ≤ g * Fintype.card α) :
-    pr P ≤ (g : ℝ≥0∞) / m := by
-  unfold pr
-  rw [ENNReal.div_le_iff (by exact_mod_cast hα) (ENNReal.natCast_ne_top _)]
-  rw [show (g : ℝ≥0∞) / m * Fintype.card α =
-      ((g : ℝ≥0∞) * Fintype.card α) / m by
-        simp only [ENNReal.div_eq_inv_mul]
-        ac_rfl]
-  rw [ENNReal.le_div_iff_mul_le (Or.inl (by exact_mod_cast hm)) (Or.inl (ENNReal.natCast_ne_top _))]
-  rw [Finset.filter_congr_decidable]
-  exact_mod_cast h
-
 /-- A device's correct receipt of a block one of whose sectors it never obtained, at a key. -/
-def Miss (A : RateSketch.Device N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
+def Miss (A : RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (κ : Key N m h ks) (D : Data N m 0 Sector) : Prop :=
   ∃ t ∈ A.correct sketch κ.1 κ.2 D, ∃ u, Sum.inl (t, u) ∉ A.obtained κ.1 κ.2 D
 
@@ -142,7 +131,7 @@ def LowRank (r : ℕ) (σ : SketchSigns ks m) : Prop :=
 /-- A correct receipt of a block with a sector never obtained: its tag was never queried, or a query named the block's
 sketch with that sector unobtained. -/
 theorem miss_split
-    (A : RateSketch.Device N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
+    (A : RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (O : Oracle N 0 h Sector (Fin ks → ZMod (2 ^ 32))) (D : Data N m 0 Sector) (g : ℕ)
     (hfib : fib (sketch (k := ks) (m := m)) σ ≤ g) (t : Fin N) (u : Fin m)
     (hu : Sum.inl (t, u) ∉ A.obtained σ O D) :
@@ -177,7 +166,7 @@ theorem pr_lowRank_le (r : ℕ) (ε : ℝ≥0∞) (hRank : Accounting.Assumption
 
 /-- The tag guess at one candidate's key: `1/2^h` per block, over the store and the key. -/
 theorem pr_guess_key_le
-    (A : RateSketch.Device N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32))) (t : Fin N) :
+    (A : RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32))) (t : Fin N) :
     pr (fun z : Data N m 0 Sector × Key N m h ks =>
       t ∈ A.correct sketch z.2.1 z.2.2 z.1 ∧ t ∉ queried A sketch z.2.1 z.2.2 z.1) ≤ (1 : ℝ≥0∞) / 2 ^ h := by
   let _ : Fintype (Oracle N 0 h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
@@ -188,13 +177,13 @@ theorem pr_guess_key_le
       left_inv := fun _ => rfl
       right_inv := fun _ => rfl }
   rw [Accounting.Rate.pr_equiv e]
-  exact Accounting.Rate.pr_le_of_fiber _ _ (fun σ => Device.pr_guess_le A σ t)
+  exact Accounting.Rate.pr_le_of_fiber _ _ (fun σ => Prover.pr_guess_le A σ t)
 
 /-- **One pass, all its candidates.** For a fixed family of `C` candidate devices on the store, each at its own uniform
 key, within the pass's budget of `qtot` queries: some candidate misses with probability at most
 `C·(ε + N/2^h) + qtot/2^(8r)`. -/
 theorem pr_pass_le {C : ℕ}
-    (A : Fin C → RateSketch.Device N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
+    (A : Fin C → RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (r qtot : ℕ) (ε : ℝ≥0∞) (hr32 : r ≤ 32) (hRank : Accounting.Assumptions.SketchRank ks m r ε)
     (hq : ∀ (κ : Fin C → Key N m h ks) (D : Data N m 0 Sector),
       ∑ c, (((A c).prog (κ c).1 D).queries (κ c).2 D).length ≤ qtot) :
@@ -221,7 +210,7 @@ theorem pr_pass_le {C : ℕ}
   · rw [mul_add]
     refine add_le_add ?_ ?_
     · refine (pr_exists_le _).trans ?_
-      refine (Finset.sum_le_sum (fun c _ => Device.pr_component_le c
+      refine (Finset.sum_le_sum (fun c _ => Prover.pr_component_le c
         (fun z : Data N m 0 Sector × Key N m h ks => LowRank r z.2.1) ε (pr_lowRank_le r ε hRank))).trans
         (le_of_eq ?_)
       simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
@@ -236,7 +225,7 @@ theorem pr_pass_le {C : ℕ}
             pr (fun x : Data N m 0 Sector × (Fin C → Key N m h ks) =>
               t ∈ (A c).correct sketch (x.2 c).1 (x.2 c).2 x.1 ∧
                 t ∉ queried (A c) sketch (x.2 c).1 (x.2 c).2 x.1) ≤ (1 : ℝ≥0∞) / 2 ^ h := fun t =>
-          Device.pr_component_le c
+          Prover.pr_component_le c
             (fun z : Data N m 0 Sector × Key N m h ks =>
               t ∈ (A c).correct sketch z.2.1 z.2.2 z.1 ∧ t ∉ queried (A c) sketch z.2.1 z.2.2 z.1)
             _ (pr_guess_key_le (A c) t)
@@ -245,11 +234,11 @@ theorem pr_pass_le {C : ℕ}
       refine (Finset.sum_le_sum (fun c _ => hc c)).trans (le_of_eq ?_)
       simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
   · refine Accounting.Rate.pr_le_of_fiber _ _ (fun κ => ?_)
-    have hcard := Device.card_bad_keys_le A sketch (fun c => (κ c).1) (fun c => (κ c).2) g qtot
+    have hcard := Prover.card_bad_keys_le A sketch (fun c => (κ c).1) (fun c => (κ c).2) g qtot
       (fun D => hq κ D)
-    have hbound := pr_le_div_of_card_mul_le
+    have hbound := Bandwidth.pr_le_of_card
       (fun D : Data N m 0 Sector => ∃ c, ∃ i : Fin q, Bad (A c) sketch (κ c).1 (κ c).2 D i g)
-      (g * qtot) (Fintype.card Sector) Fintype.card_ne_zero (by simp [Sector]) (by
+      (Fintype.card Sector) (g * qtot) (by simp [Sector]) (by
         simpa using hcard)
     have hXc : (Fintype.card Sector : ℝ≥0∞) = 2 ^ 256 := by
       norm_num [Sector]
@@ -272,7 +261,7 @@ theorem pr_pass_le {C : ℕ}
 theorem pr_eq_sum_div_fst {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → Prop) :
     pr Q = (∑ x, pr fun y => Q (x, y)) / Fintype.card X := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have e : (Finset.univ.filter Q).card = ∑ x, (Finset.univ.filter fun y => Q (x, y)).card := by
     rw [Finset.card_filter, Fintype.sum_prod_type]
     simp only [Finset.card_filter]
@@ -378,7 +367,7 @@ open Bandwidth (pr_exists_le pr_mono)
 private theorem pouw_pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : ∀ x, E x → F x) :
     Pouw.pr E ≤ Pouw.pr F := by
   classical
-  unfold Pouw.pr
+  unfold Pouw.pr Claims.Pr Claims.prUniform
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hsub : (Finset.univ.filter E) ⊆ Finset.univ.filter F := fun x hx => by
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hx ⊢
@@ -436,7 +425,7 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) =
       (pr (fun ω : Outcome β Hs N m =>
         ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1)).toReal := by
-    unfold Pouw.pr Pous.pr
+    unfold Pouw.pr Claims.Pr Claims.prUniform; simp only [Pous.pr_eq_card]
     rw [ENNReal.toReal_div]
     simp
   unfold SketchBound Trace.Holds

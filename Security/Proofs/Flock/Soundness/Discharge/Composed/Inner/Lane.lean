@@ -1,5 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Inner
-import Proofs.Flock.Soundness.LigeritoRes
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # `innerOf`'s lane phase: level 0's two lane-phase rows vanish at an honest prover's pads
@@ -14,6 +29,8 @@ rounds don't divide, so these hold at every coin vector, an outer coin `1` inclu
 * `laneF_k0`: `f` folded by every lane challenge is `Σ_l eq(r̄, l)·f(l + 2^k₀·c)`, the folded lanes `y₁`.
 * `laneRow_eval`, `laneRows_honest`: the `K` row's value is `0`, and so are both its coordinate rows.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

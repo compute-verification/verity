@@ -1,5 +1,5 @@
 """The night's summary and its expected verdicts (`run.py`), on summaries in the shape mockdc and lab_run write them,
-with the recorded night's verdicts and timings (`r20261023-075024-27ea`): those are the expected ones, and a differing
+with a recorded night's verdicts and timings: those are the expected ones, and a differing
 verdict or answer, a step that exited nonzero, a missing summary or a proxy tick past its slack each fails the night,
 named in `summary.txt`."""
 
@@ -21,8 +21,8 @@ HELD = 21577915695104.0
 SALT = {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1], "egress_salt_frames": 0,
         "egress_holds_salt": False, "block_received": True}
 EXITS = {"demo": 0, "lab --blocks 5": 0, "mockdc": 0, "mockdc-salt": 0, "lab --fleet --blocks 2": 0, "fleet": 0,
-         "fleet-swapped": 0, "lab default": 0, "python": 0, "workload/honest": 0, "workload/flip-bit": 0,
-         "workload/late": 0, "workload/extra": 0}
+         "fleet-swapped": 0, "lab default": 0, "python": 0, "workload/honest": 0, "workload/late": 0,
+         "workload/extra": 0}
 WAN = [["east.spine0-west.spine0", "wan/east-west=1e+11 bit/s (declared)",
         "wan/east-west-latency=0.02 s (declared)"]]
 
@@ -57,7 +57,6 @@ TIMES = {
     "fleet-swapped": {"east.b0": (3.615, 31.191), "east.b1": (3.509, 31.05), "west.b0": (3.385, 5.587),
                       "west.b1": (3.419, 9.893)},
     "honest": {"b0": (3.486, 5.664), "b1": (3.369, 10.216), "b2": (3.63, 5.681), "b3": (3.629, 10.201)},
-    "flip-bit": {"b0": (4.294, 5.532), "b1": (4.632, 10.225), "b2": (4.294, 5.621), "b3": (4.293, 10.168)},
     "late": {"b0": (4.342, 5.584), "b1": (4.382, 10.518), "b2": (4.343, 5.612), "b3": (4.382, 10.319)},
     "extra": {"b0": (3.869, 5.492), "b1": (3.852, 10.17), "b2": (3.853, 5.638), "b3": (3.968, 10.403)},
 }
@@ -72,25 +71,17 @@ def out(b: str, w: int) -> list[str]:
     return [f"port {b}.cert:out [{w * 6000}, {(w + 1) * 6000}): {why}" for why in CHEATED]
 
 
-def v5(windows: int, *refused: str) -> dict:
-    return {"windows": windows, "accepted": windows - len(refused), "refused": list(refused)}
-
-
-LATE_V5 = "responses[0] (the record's status is coverage-never-established)"
-
-
 def mockdc_block(strategy: str, b: str, times: tuple[float, float], against: bool | None) -> dict:
     """A block's entry as mockdc writes it, for the four strategies a fleet's blocks play."""
-    verdicts, refused, acc, window_v5 = {
-        "honest": (rows(), [], account(24.0), v5(6)),
-        "bits": (rows(), [], account(24.0), v5(6)),
-        "late": (rows(["responses", 0, COVERAGE, COVERAGE]), out(b, 0), account(20.0, LINE), v5(6, LATE_V5)),
-        "extra": (rows(["responses", 2, "mismatch", "mismatch"]), out(b, 2), account(20.0, LINE),
-                  v5(6, "responses[2]")),
+    verdicts, refused, acc = {
+        "honest": (rows(), [], account(24.0)),
+        "bits": (rows(), [], account(24.0)),
+        "late": (rows(["responses", 0, COVERAGE, COVERAGE]), out(b, 0), account(20.0, LINE)),
+        "extra": (rows(["responses", 2, "mismatch", "mismatch"]), out(b, 2), account(20.0, LINE)),
     }[strategy]
     return {"strategy": strategy, "accepted": all(r[2] is None for r in verdicts), "verdicts": verdicts,
-            "datacenter": {"accepted": not refused, "refused": refused, "account": acc},
-            "n3_v5": window_v5} | timing(*times) | ({} if against is None else {"against_honest": {"wire_is_honests": against}})
+            "datacenter": {"accepted": not refused, "refused": refused, "account": acc}} | timing(*times) | \
+        ({} if against is None else {"against_honest": {"wire_is_honests": against}})
 
 
 def mockdc_summary(run: str, salt: bool) -> dict:
@@ -103,8 +94,7 @@ def mockdc_summary(run: str, salt: bool) -> dict:
                      "datacenter": {"accepted": True, "refused": [], "account": account(16.0, serviced=HELD),
                                     "unplanned": {"accepted": False, "account": account(16.0, 2 * LINE), "refused": [
                                         f"port b4.cert:{d} [6000, 12000): no record: the certifier was down or its "
-                                        "record was withheld" for d in ("out", "in")]}},
-                     "n3_v5": v5(4)} | timing(*t["b4"])}
+                                        "record was withheld" for d in ("out", "in")]}}} | timing(*t["b4"])}
     if salt:
         for b, x in blocks.items():
             x["salt"] = SALT if b != "b4" else SALT | {"accepted": False, "violations": [[1, "salt"]],
@@ -131,48 +121,25 @@ def fleet_summary(run: str) -> dict:
 
 
 def workload_block(times: tuple[float, float], tamper: str | None = None, verdicts: list | None = None,
-                   n3: list[str] = (), window_v5: tuple[str, ...] = (), n2: tuple[int, ...] = ()) -> dict:
+                   n2: tuple[int, ...] = ()) -> dict:
     verdicts = verdicts or rows()
     return {"tamper": tamper, "certifier": {"accepted": all(r[2] is None for r in verdicts), "verdicts": verdicts},
-            "n3": {"accepted": not n3, "violations": list(n3)}, "n3_v5": v5(10, *window_v5),
             "n2": {"accepted": not n2, "windows": 5, "refused": list(n2),
                    "served_counts": [w not in n2 for w in range(5)]}} | timing(*times)
 
 
-def starved(b: str, first: int, events: int) -> list[str]:
-    return ["values " + b + ": the unit committed no values",
-            f"missing {b}:responses: {events} declared events, the first at position {first}",
-            f"missing {b}:requests: the request of session {b}.1"]
-
-
 def workload_summaries() -> dict[str, dict]:
     answers = {"answers": [16, 16], "reference": [16, 16]}
-    h, f, late, x = TIMES["honest"], TIMES["flip-bit"], TIMES["late"], TIMES["extra"]
+    h, late, x = TIMES["honest"], TIMES["late"], TIMES["extra"]
     return {
-        "honest": {"blocks": {b: workload_block(h[b]) for b in h},
-                   "n3": {"ok": True, "codes": {}, "violations": None}} | answers,
-        "flip-bit": {"blocks": {
-            "b0": workload_block(f["b0"]),
-            "b1": workload_block(f["b1"], "flip-bit", n3=["content b1:responses: the event at position 0 (message 4) "
-                                                          "isn't the declared one"], window_v5=("b1:responses[0]",)),
-            "b2": workload_block(f["b2"], n3=["content b2:requests: the request of session b2.0 isn't the declared "
-                                              "one"], window_v5=("b2:requests[0]",)),
-            "b3": workload_block(f["b3"])}, "n3": {"ok": False, "codes": {"content": 2}, "violations": None}} | answers,
+        "honest": {"blocks": {b: workload_block(h[b]) for b in h}} | answers,
         "late": {"blocks": {
-            "b0": workload_block(late["b0"], n3=starved("b0", 88, 88), window_v5=("b0:responses[0]",)),
-            "b1": workload_block(late["b1"], n3=starved("b1", 8, 8), window_v5=("b1:responses[0]", "b1:requests[0]")),
-            "b2": workload_block(late["b2"], "late", rows(["responses", 0, COVERAGE, COVERAGE]), starved("b2", 0, 16),
-                                 ("b2:responses[0] (the record's status is coverage-never-established)",
-                                  "b2:requests[0]"), n2=(0,)),
-            "b3": workload_block(late["b3"], n3=starved("b3", 0, 4))},
-            "n3": {"ok": False, "codes": {"missing": 9, "values": 4}, "violations": None},
-            "answers": None, "reference": [16, 16]},
+            "b0": workload_block(late["b0"]), "b1": workload_block(late["b1"]),
+            "b2": workload_block(late["b2"], "late", rows(["responses", 0, COVERAGE, COVERAGE]), n2=(0,)),
+            "b3": workload_block(late["b3"])}, "answers": None, "reference": [16, 16]},
         "extra": {"blocks": {
-            "b0": workload_block(x["b0"]),
-            "b1": workload_block(x["b1"], "extra", n3=["unexplained b1:responses: an event at position 16, past the "
-                                                       "Program's 16"], n2=(1,)),
-            "b2": workload_block(x["b2"]), "b3": workload_block(x["b3"])},
-            "n3": {"ok": False, "codes": {"unexplained": 1}, "violations": None}} | answers,
+            "b0": workload_block(x["b0"]), "b1": workload_block(x["b1"], "extra", n2=(1,)),
+            "b2": workload_block(x["b2"]), "b3": workload_block(x["b3"])}} | answers,
     }
 
 
@@ -207,8 +174,8 @@ def test_the_recorded_runs_verdicts_are_the_expected_ones(run, tmp_path, capsys)
     assert run.finish(tmp_path, EXITS) == 0
     summary = json.loads((tmp_path / "summary.json").read_text())
     assert summary["ok"] and summary["mismatches"] == [] and summary["ticks_over_slack"] == 0
-    assert summary["worst_tick"] == {"late_ms": 4.632, "slack_ms": 25.0, "over": 0, "lag_ms": 10.225,
-                                     "at": "workload/flip-bit b1"}
+    assert summary["worst_tick"] == {"late_ms": 4.382, "slack_ms": 25.0, "over": 0, "lag_ms": 10.518,
+                                     "at": "workload/late b1"}
     b4 = summary["runs"]["mockdc"]["blocks"]["b4"]
     assert b4["verdicts"]["charged"] == ["timing", "serviced"] and b4["verdicts"]["unplanned_charged"] == ["timing", "refused"]
     assert b4["account"]["covert_bits"] == 16.0 + HELD and b4["unplanned_account"]["covert_bits"] == 16.0 + 2 * LINE
@@ -222,46 +189,39 @@ def test_the_recorded_runs_verdicts_are_the_expected_ones(run, tmp_path, capsys)
     text = (tmp_path / "summary.txt").read_text()
     assert text == capsys.readouterr().out
     lines = text.splitlines()
-    assert lines[0].split() == ["run", "block", "case", "certifier", "audit", "records", "/", "N3", "N3", "v5", "N2",
-                                "served", "covert", "budget", "(bits)", "wire", "lag", "worst", "tick"]
-    assert len(lines) == 1 + 2 * 6 + 2 * 5 + 4 * 4 + 5 and all(line.endswith(" ok") for line in lines[1:39])
-    row = {tuple(line.split()[:2]): " ".join(line.split()) for line in lines[1:39]}
-    assert row["mockdc", "b0"] == "mockdc b0 honest accepted records accepted 6/6 - 24 sound 5.6 ms 4.3/25 ms ok"
+    assert lines[0].split() == ["run", "block", "case", "certifier", "audit", "records", "N2", "served", "covert",
+                                "budget", "(bits)", "wire", "lag", "worst", "tick"]
+    assert len(lines) == 1 + 2 * 6 + 2 * 5 + 3 * 4 + 5 and all(line.endswith(" ok") for line in lines[1:35])
+    row = {tuple(line.split()[:2]): " ".join(line.split()) for line in lines[1:35]}
+    assert row["mockdc", "b0"] == "mockdc b0 honest accepted records accepted - 24 sound 5.6 ms 4.3/25 ms ok"
     assert row["mockdc", "b2"] == ("mockdc b2 late refused responses[0] status:coverage-never-established records "
-                                   "refused out [0, 6000) 5/6 refused responses[0] - 2.4e+12 NOT sound 5.6 ms 4.3/25 ms "
-                                   "ok")
+                                   "refused out [0, 6000) - 2.4e+12 NOT sound 5.6 ms 4.3/25 ms ok")
     assert row["mockdc", "b3"].startswith("mockdc b3 extra refused responses[2] mismatch records refused out "
-                                          "[12000, 18000) 5/6 refused responses[2] - 2.4e+12 NOT sound")
+                                          "[12000, 18000) - 2.4e+12 NOT sound")
     assert row["mockdc", "b4"] == ("mockdc b4 maintenance refused responses[1] no-verdict, requests[1] no-verdict records "
-                                   "accepted; unplanned refused out, in [6000, 12000) 4/4 - 2.16e+13 sound; unplanned "
+                                   "accepted; unplanned refused out, in [6000, 12000) - 2.16e+13 sound; unplanned "
                                    "4.8e+12 NOT sound 5.5 ms 4.3/25 ms ok")
     assert row["mockdc", "all"] == ("mockdc all 10 ports records refused b2 out [0, 6000); b3 out [12000, 18000) "
                                     "2.64e+13 NOT sound ok")
-    assert row["mockdc-salt", "b1"] == ("mockdc-salt b1 bits accepted; salt accepted records accepted 6/6 - 24 sound "
+    assert row["mockdc-salt", "b1"] == ("mockdc-salt b1 bits accepted; salt accepted records accepted - 24 sound "
                                         "10.0 ms 3.7/25 ms ok")
     assert "no-verdict; salt refused [1] records accepted;" in row["mockdc-salt", "b4"]
     assert row["fleet", "east.b1"] == ("fleet east.b1 late refused responses[0] status:coverage-never-established "
-                                       "records refused out [0, 6000) 5/6 refused responses[0] - 2.4e+12 NOT sound "
-                                       "31.1 ms 3.7/25 ms ok")
-    assert row["fleet", "west.b0"] == "fleet west.b0 bits accepted records accepted 6/6 - 24 sound 5.5 ms 3.6/25 ms ok"
+                                       "records refused out [0, 6000) - 2.4e+12 NOT sound 31.1 ms 3.7/25 ms ok")
+    assert row["fleet", "west.b0"] == "fleet west.b0 bits accepted records accepted - 24 sound 5.5 ms 3.6/25 ms ok"
     assert row["fleet", "all"] == ("fleet all 8 ports records refused east.b1 out [0, 6000); west.b1 out "
                                    "[12000, 18000) 4.8e+12 NOT sound ok")
     assert row["fleet-swapped", "all"] == ("fleet-swapped all 8 ports records refused east.b1 out [12000, 18000); "
                                            "west.b1 out [0, 6000) 4.8e+12 NOT sound ok")
-    assert row["workload/flip-bit", "b2"] == ("workload/flip-bit b2 - accepted N3 refused (content) 9/10 refused "
-                                              "b2:requests[0] 5/5 5.6 ms 4.3/25 ms ok")
+    assert row["workload/late", "b0"] == "workload/late b0 - accepted - 5/5 5.6 ms 4.3/25 ms ok"
     assert row["workload/late", "b2"] == ("workload/late b2 late refused responses[0] status:coverage-never-established "
-                                          "N3 refused (missing, values) 8/10 refused b2:responses[0], b2:requests[0] "
-                                          "4/5 refused [0] 5.6 ms 4.3/25 ms ok")
-    assert row["workload/extra", "b1"] == ("workload/extra b1 extra accepted N3 refused (unexplained) 10/10 4/5 refused "
-                                           "[1] 10.2 ms 3.9/25 ms ok")
-    assert row["workload/honest", "b3"] == "workload/honest b3 - accepted N3 holds 10/10 5/5 10.2 ms 3.6/25 ms ok"
-    assert lines[39:] == [
+                                          "- 4/5 refused [0] 5.6 ms 4.3/25 ms ok")
+    assert row["workload/extra", "b1"] == "workload/extra b1 extra accepted - 4/5 refused [1] 10.2 ms 3.9/25 ms ok"
+    assert row["workload/honest", "b3"] == "workload/honest b3 - accepted - 5/5 10.2 ms 3.6/25 ms ok"
+    assert lines[35:] == [
         "",
-        "answers: honest [16, 16] equal the reference; flip-bit [16, 16] equal the reference; late none; extra [16, 16] "
-        "equal the reference",
-        "worst proxy tick: 4.6 ms late against 25 ms of slack (workload/flip-bit b1), 0 ticks past the slack in the "
-        "night",
+        "answers: honest [16, 16] equal the reference; late none; extra [16, 16] equal the reference",
+        "worst proxy tick: 4.4 ms late against 25 ms of slack (workload/late b1), 0 ticks past the slack in the night",
         "steps: " + ", ".join(f"{s} 0" for s in EXITS),
         "every verdict is the expected one"]
 
@@ -276,10 +236,9 @@ def test_a_differing_verdict_a_failed_step_a_missing_summary_or_a_late_tick_fail
     edit(tmp_path / "fleet-swapped" / "summary.json", lambda s: s.pop("records"))
     edit(tmp_path / "workload" / "honest" / "summary.json",
          lambda s: s["blocks"]["b3"]["ticks_over_slack"].update(egress=2))
-    edit(tmp_path / "workload" / "flip-bit" / "summary.json",
-         lambda s: (s["blocks"]["b2"]["n3"].update(violations=[]), s.update(answers=[16, 15])))
     (tmp_path / "workload" / "late" / "summary.json").unlink()
-    edit(tmp_path / "workload" / "extra" / "summary.json", lambda s: s["blocks"]["b1"]["n2"].update(refused=[]))
+    edit(tmp_path / "workload" / "extra" / "summary.json",
+         lambda s: (s["blocks"]["b1"]["n2"].update(refused=[]), s.update(answers=[16, 15])))
     assert run.finish(tmp_path, EXITS | {"mockdc": 1}) == 1
     summary = json.loads((tmp_path / "summary.json").read_text())
     m = summary["mismatches"]
@@ -291,16 +250,14 @@ def test_a_differing_verdict_a_failed_step_a_missing_summary_or_a_late_tick_fail
     assert m[3:] == ["fleet every port of: expected 8, got 10",
                      "fleet-swapped: no record check on every port",
                      "workload/honest b3: 2 proxy ticks past the 25 ms slack",
-                     "workload/flip-bit b2 n3: expected ['content'], got []",
-                     "workload/flip-bit answers: expected 'equal', got 'differ' ([16, 15] against [16, 16])",
                      "workload/late: no summary.json",
                      "workload/extra b1 n2: expected {'windows': 5, 'refused': [1], 'counts_refused': [1]}, got "
-                     "{'windows': 5, 'refused': [], 'counts_refused': [1]}"]
+                     "{'windows': 5, 'refused': [], 'counts_refused': [1]}",
+                     "workload/extra answers: expected 'equal', got 'differ' ([16, 15] against [16, 16])"]
     bad = {(run_, b) for run_, r in summary["runs"].items() for b, x in r["blocks"].items() if not x["ok"]}
-    assert bad == {("mockdc", "b1"), ("mockdc-salt", "b4"), ("workload/honest", "b3"), ("workload/flip-bit", "b2"),
-                   ("workload/extra", "b1")}
+    assert bad == {("mockdc", "b1"), ("mockdc-salt", "b4"), ("workload/honest", "b3"), ("workload/extra", "b1")}
     assert not summary["runs"]["fleet"]["records"]["ok"] and "records" not in summary["runs"]["fleet-swapped"]
     text = (tmp_path / "summary.txt").read_text()
-    assert "workload/late" not in text.split("\n\n")[0] and text.count("MISMATCH\n") == 6
+    assert "workload/late" not in text.split("\n\n")[0] and text.count("MISMATCH\n") == 5
     assert ["fleet-swapped", "all"] not in [line.split()[:2] for line in text.splitlines()]
-    assert text.endswith("10 MISMATCHES:\n" + "".join(f"  {x}\n" for x in m))
+    assert text.endswith("9 MISMATCHES:\n" + "".join(f"  {x}\n" for x in m))

@@ -19,16 +19,16 @@ import pytest
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart, TritonLaunch
 from verity_vllm.observe.fold.patterns import GemmLaunch, members
-from verity_vllm.engine.profiles import gen_llama_patterns as GP
-from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
+from verity_vllm.observe.fold.profiles import gen_llama_patterns as GP
+from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
 
-L = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B")
-Q = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN05")
+L = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B")
+Q = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN05")
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, StepContext, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"
@@ -109,12 +109,12 @@ def test_profile_is_discovered_by_case_and_shares_the_base_patterns(case, module
     assert prof is mod.PROFILE and prof.notes["case"] == case and prof.config is mod.C
     assert prof.id == mod.PROFILE_ID and prof.id != BASE.PROFILE.id
     base_names = [p.name for p in BASE.PROFILE.patterns]
-    # [P6] every configuration-derived profile: the target's tuned-GEMM specialization right before the base GemmLaunch, then the base list
+    # every configuration-derived profile: the target's tuned-GEMM specialization right before the base GemmLaunch, then the base list
     names = [p.name for p in prof.patterns]
     assert names == [GP.GemmLaunchTuned.name, *base_names]
     assert names.index(GP.GemmLaunchTuned.name) == names.index("gemm.matmul_kernel_persistent") - 1
     assert isinstance(prof.patterns[0], GP.GemmLaunchTuned) and isinstance(prof.patterns[1], GemmLaunch)
-    # [R15 moe GEMM-ADA-TABLE] the ada record pins all five vLLM keys; Llama's shapes hit (2048, 2048) only (the others are Qwen3-class)
+    # the ada record pins all five vLLM keys; Llama's shapes hit (2048, 2048) only (the others are Qwen3-class)
     assert set(prof.notes["pins"]["gemm_tuned_ada"]) == {"N=2048,K=2048", "N=2048,K=6144", "N=4096,K=2048", "N=12288,K=2048", "N=151936,K=2048"}
     assert GP.GemmLaunchTuned.name not in base_names                                             # the base profile is untouched
     assert prof.kernel_allowlist is BASE.PROFILE.kernel_allowlist                                # the frozen census allowlist, referenced
@@ -127,7 +127,7 @@ def test_profile_is_discovered_by_case_and_shares_the_base_patterns(case, module
 def test_llama32_1b_weight_field_covers_every_parameter_name_of_the_family():
     wf, rc = L.weight_field, L.root_class
     assert wf("model.embed_tokens.weight") == ("embed",) and wf("model.norm.weight") == ("norm",)
-    assert wf("lm_head.weight") == ("embed",)                                # tied per C; the tie itself is proven by root_policy from storage identity
+    assert wf("lm_head.weight") == ("embed",)                                # tied per C
     assert wf("model.layers.0.self_attn.rotary_emb.cos_sin_cache") == ("cos_sin",)
     for layer in range(L.C["NL"]):
         for hf, f in (("input_layernorm.weight", "ln1"), ("self_attn.qkv_proj.weight", "qkv_w"), ("self_attn.o_proj.weight", "o_w"),
@@ -165,10 +165,10 @@ def test_check_header_accepts_the_checkpoint_config_and_rejects_a_changed_one(ca
     assert mod.check_header(_header({**mod.HF_CONFIG, "tie_word_embeddings": False}, mod.REPO_ID))
 
 
-# --- the analytic rotary table with llama3 scaling: the rule root_policy checks the captured cos_sin_cache against ---------------
+# --- the analytic rotary table with llama3 scaling: the rule the captured cos_sin_cache is checked against --------------------
 
 def test_llama3_scaled_table_is_self_consistent_and_distinct_from_the_plain_rule():
-    """`analytic.check_cos_sin(C, table)` is what root_policy runs on the captured `cos_sin_cache.npy`; at this configuration the
+    """`analytic.check_cos_sin(C, table)` is the rule for the captured `cos_sin_cache.npy`; at this configuration the
     llama3 blend must (a) reproduce itself within the bound and (b) be told apart from the unscaled rule and from the other
     fields' errors, otherwise the analytic-table root would be vacuous."""
     C = L.C
@@ -226,7 +226,7 @@ def test_run_config_dry_run_resolves_the_profile_from_the_case(case, module_name
     wl = f"workloads/{WORKLOADS[case]}"
     out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", "--case", case, "--workload", wl, "--out", "/r/RUN",
                           "--cards-dir", "/r/cards", "--python-gpu", "/pod/py311", "--python-cpu", "/pod/py312", "--checkpoint-dir", "/ck/snap",
-                          "--phase", "all", "--parallel", "8", "--replay-budget-leaves", "8000000", "--seed", "7", "--dry-run"],
+                          "--phase", "all", "--parallel", "8", "--seed", "7", "--dry-run"],
                          capture_output=True, text=True, cwd=REPO, check=True).stdout
     cmds = {}
     for ln in out.splitlines():
@@ -236,18 +236,11 @@ def test_run_config_dry_run_resolves_the_profile_from_the_case(case, module_name
     assert "snapshot_steps=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]" in out       # every step of the 16-token workload
     cap = cmds["capture"]
     assert cap[cap.index("--case") + 1] == case and "--verify-weights" in cap and cap[cap.index("--workload") + 1] == wl
-    # D82 stage set at the swarm fork point: G5 = wiring + replay_a + replay_chain; tier b only under --full-replay
-    for st in ("resolve", "compare", "fold", "root_policy", "wiring", "replay_a", "replay_chain"):
+    for st in ("resolve", "fold", "fold_2"):
         c = cmds[st]
         assert c[c.index("--profile") + 1] == module_name, (st, c)
-    assert not any(st.startswith("replay_b_step") for st in cmds), sorted(cmds)                    # diagnostic only since D82
-    for st in ("replay_a", "replay_chain"):
-        c = cmds[st]
-        assert c[c.index("--max-arg-leaves") + 1] == "8000000"
     fold = cmds["fold"]
     assert fold[fold.index("--persist-dir") + 1] == "/r/RUN"                                        # D85: the frozen candidate files
-    rp = cmds["root_policy"]
-    assert rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"
     assert f"/r/cards/{case}-{Path(wl).stem}.json" in cmds["gates"][0]
 
 
@@ -318,7 +311,7 @@ def test_tuned_table_row_is_the_pinned_vllm_table_and_the_bucket_rule():
     assert GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 4096, 2048, 2048)[0]["BLOCK_SIZE_M"] == 64     # above the table: last bucket
     assert GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 32, 3072, 2048) is None                       # qkv_proj: not a key -> default
     assert GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 32, 2048, 8192) is None                       # down_proj: (N,K) order matters
-    for (n, k), row in GP.ADA_TUNED_GEMM.items():          # [R15 moe GEMM-ADA-TABLE] five keys; vLLM's (2048, 6144) row has block_k 128
+    for (n, k), row in GP.ADA_TUNED_GEMM.items():          # five keys; vLLM's (2048, 6144) row has block_k 128
         assert row["BLOCK_SIZE_K"] == (128 if (n, k) == (2048, 6144) else 64) and [m for m, _ in row["m_buckets"]] == sorted(m for m, _ in row["m_buckets"])
     assert not any(consts.get("HAS_BIAS") for consts in [GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 32, 2048, 2048)[0]])
 
@@ -393,11 +386,11 @@ def test_tuned_pattern_keeps_the_delegated_guards():
 
 
 def test_base_and_qwen05_profiles_do_not_have_the_tuned_pattern_but_pin_the_targets_geometry():
-    """[R13 ampere] The launch geometry is a TARGET fact, not a model-profile fact: the base `GemmLaunch` pins the registered target's
+    """The launch geometry is a TARGET fact, not a model-profile fact: the base `GemmLaunch` pins the registered target's
     `launch_config` (the sm_89 table row for a tabled (N,K) on the default `ada` target), so the profiles without the tuned pattern
     accept the tabled launch exactly as Bet A (`gemm_pins_for`) pins it — and still refuse any other tiling."""
     consts, warps, stages = GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 32, 2048, 2048)
-    for prof in (BASE.PROFILE,):                                       # [P6] the derived Qwen-0.5B profile now carries the tuned pattern too
+    for prof in (BASE.PROFILE,):                                       # the derived Qwen-0.5B profile carries the tuned pattern too
         assert not any(isinstance(p, GP.GemmLaunchTuned) for p in prof.patterns)
         r, _ = _resolve(prof, 32, 2048, 2048, consts, warps, stages)
         g = [m for m in members(r) if isinstance(m, Compute)]
@@ -406,7 +399,7 @@ def test_base_and_qwen05_profiles_do_not_have_the_tuned_pattern_but_pin_the_targ
         assert isinstance(r, Unsupported) and r.detail["mismatches"]["BLOCK_SIZE_M"] == {"observed": 128, "pinned": 16}, r
 
 
-# --- [R13 ampere] the GEMM target registry decides the geometry per capture host (B-AMPERE-GEMM-TILE fix) ----------------------
+# --- the GEMM target registry decides the geometry per capture host ----------------------
 
 A100_GPU = {"name": "NVIDIA A100-SXM4-80GB", "compute_capability": "8.0", "multi_processor_count": 108, "tuned_gemm_arch_family": None}
 H100_GPU = {"name": "NVIDIA H100 80GB HBM3", "compute_capability": "9.0", "multi_processor_count": 132, "tuned_gemm_arch_family": "hopper"}
@@ -416,7 +409,7 @@ L40S_GPU = {"name": "NVIDIA L40S", "compute_capability": "8.9", "multi_processor
 @pytest.mark.parametrize("M", [1, 32, 129])
 def test_a100_header_o_proj_default_tiling_is_the_registered_ampere_gemm(M):
     """Positive: on an A100 header (cc 8.0, family None) vLLM launches the o_proj with the DEFAULT tiling (no Ampere table) — the
-    registered `ampere` target's geometry: `Gemm_v1{K,N}` through the base pattern, NUM_SMS 108 pinned from the header (X-01)."""
+    registered `ampere` target's geometry: `Gemm_v1{K,N}` through the base pattern, NUM_SMS 108 pinned from the header."""
     consts, warps, stages = DEFAULT_TILING
     for prof in (L.PROFILE, BASE.PROFILE):
         r, (a, w, c) = _resolve(prof, M, 2048, 2048, consts, warps, stages, gpu=A100_GPU, num_sms=108)
@@ -445,7 +438,7 @@ def test_l40s_header_keeps_the_ada_table_and_pins_142_sms():
 
 
 def test_h100_header_binds_the_hopper_target_and_gemm_v2():
-    """[R13 hopper] cc 9.0 is the registered `hopper` GEMM target (vLLM family "hopper": the sm_90 tuned table; Triton lowers tl.dot to wgmma
+    """cc 9.0 is the registered `hopper` GEMM target (vLLM family "hopper": the sm_90 tuned table; Triton lowers tl.dot to wgmma
     there, another k16 step): the launch must show the HOPPER table's tiling for (M, N, K) and binds `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16}`
     — the sm_89 tiling (BLOCK_SIZE_K 64) on an H100 header is a pin mismatch, and the accepted `Gemm_v1` is NOT what an H100 launch binds."""
     from verity_vllm.program.frontend.gemm_targets import HOPPER_TUNED_GEMM

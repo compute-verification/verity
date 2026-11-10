@@ -20,17 +20,17 @@ once a window.
   (`SamplerInputsSource.rows`), with the map from a runner's request id to its arrival id, the input of
   `served_rows.step_rows`.
 - `python3 replay_vectors.py TRACE --slice W [--served SEAL] [--max-model-len L] [--R R --W W --A A] [--Q Q --D D
-  --P P --K K] [--AS 1] --out FIXTURE.json` writes all three as one fixture. At AS = 1 a unit is a `schedule()` and
-  the update of the step before it, an arrival is (id, P, O, cap), and the seal's steps are placed at the units that
-  ran rows (`by_unit`).
+  --P P --K K] [--AS 1] --out FIXTURE.json` writes all three as one fixture. At AS = 1 a proof block is a `schedule()`
+  and the update of the step before it, an arrival is (id, P, O, cap), and the seal's steps are placed at the proof
+  blocks that ran rows (`by_unit`).
 
-**vLLM run r20261024-141912-8eb1** (Llama-3.2-1B under vLLM's AsyncScheduler: max_num_seqs 8, max_num_batched_tokens
-2048, max_model_len 512, chunked prefill, no prefix caching, 101,626 KV blocks) served 480 requests in 6,169 steps and
+**vLLM session 8eb1** (Llama-3.2-1B under vLLM's AsyncScheduler: max_num_seqs 8, max_num_batched_tokens
+2048, max_model_len 512, chunked prefill, no prefix caching, 101,626 KV pages) served 480 requests in 6,169 steps and
 339 windows. Its records are `benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/`: the scheduler trace, and
 windows 212's and 1's seals.
 - The async replay reproduces all 6,169 steps (6,624 decisions, 466 requests arrived on an ask).
 - Every window opens on a drained engine, so each is a slice from the empty engine.
-- 314 of the 339 windows have the served schedule under sync scheduling too, so today's sync slice proves them as
+- 314 of the 339 windows have the served schedule under sync scheduling too, so the sync slice proves them as
   served. The other 25 need the slice at AS = 1 (below).
 - Over the windows: at most 4 requests, 4 running, none waiting, 4 taken in one step (so A = 5), 32 decisions and 54
   async units (52 steps).
@@ -51,42 +51,28 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
 - At 8eb1's engine class, its AsyncScheduler included (AS = 1, the trace's: `--slice 212 --served SEAL --R 8 --W 1
   --A 9 --Q 4 --D 32 --P 54 --K 4`), w212 is
   `verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class_async.json`: its 3 arrivals in 4 slots,
-  each with its cap, its 14 decisions in 32, and 33 idle steps after its 21 units. The ZK proof of record proves it
-  ([compile-slice.md](compile-slice.md)).
+  each with its cap, its 14 decisions in 32, and 33 idle steps after its 21 proof blocks. Its proof in zero knowledge is
+  [compile-slice.md](compile-slice.md)'s.
 - At the sync class, the same sizes under a sync scheduler (`--AS 0`), w212 is
   `verity/core/protocols/certifier/tests/fixtures/compile_slice_w212_class.json`: 34 idle steps after its 20, whose
   served rows are zero. The slice takes it as it is: it accepts the window with the seal's rows (0x3F), and each
   negative fails the flags it fails at w212's own statics (the same tests, over both fixtures).
-- **The slice of record** (#3886) charges by `ChargeLink_v1{32}` over the committed decisions, its carry committed
-  once a window (`charge_chain`), with no coder and no commit patch. At the sync class it is 857,866 ANDs, with
-  nnz_AB 32.8 million, built in 20 s at 2.8 GB. Of them, `ChargeLink_v1{32}` is 97,159, and 5,509 are its copies of
-  the words it carries from decision to decision (#3887). Without the copies it was 852,357 ANDs, with nnz_AB 65.3
-  million, built in 25 s at 3.7 GB. Its circuit is its reference on the window and every negative
+- **The slice** charges by `ChargeLink_v1{32}` over the committed decisions, its carry committed once a window
+  (`charge_chain`). At the sync class it is 857,866 ANDs, 97,159 of them `ChargeLink_v1{32}` and 5,509 its copies of
+  the words it carries from decision to decision. Its circuit is its reference on the window and every negative
   ([compile-slice.md](compile-slice.md)).
-- `CompileSlice_v1` with its coder (before #3886) couldn't build its circuit at the class. The builder's wires are GF(2)
-  forms over committed bits, and the coding carries the coder's state (`low`, `high`, `x`, `used`), the KT counts and
-  the code position from ask to ask without committing them, so each ask adds about 19 bits to their forms. The class
-  has P·A = 486 asks, so the build's nonzeros are quadratic in the window: nnz_AB is 23.5 million at P = 2 and 97.8
-  million at P = 4 (82,813 and 193,566 ANDs), and at P = 54 the build passed 352 GB unfinished (run
-  r20261024-184641-e2af).
-- Measured with those words committed once an ask (`Circuit.commit`, a patch of the coder's build, which the slice of
-  record doesn't need), the forms stay linear in the window: nnz_AB is 4.6 million at P = 2 and 24.3 million at P = 8.
-  At the class the unit is 3,181,376 ANDs, 66,815 of them the commit rows (3,114,561 without them), with nnz_AB 176.7
-  million, built in 142 s at 15.3 GB. Its circuit is its reference on the window and the four negatives (0x3F, 0x2E,
-  0x37, 0x2F, 0x2F; run r20261024-201333-a08a). At w212's own statics the same patch adds 5,425 commit rows to the
-  222,668 ANDs and cuts nnz_AB from 119.6 million to 11.9 million.
 - The statics are public, so a window proved at its own class shows its counts (3 requests, 20 steps). A session
   proves every window at one class, padded with idle steps and empty slots, and that shows only the session's
   maximum: 8eb1's engine class in the table below.
 
-**Cost at the served shapes** (`replay_step.size` and `replay_chain.size`). A step unit is `ReplayStep_v1` and
-`ReplayAdvance`, and a window is P step units and one `ReplayLoad`. Under async scheduling a unit is a `schedule()` and
-the update of the step before it, so P counts units, a few more than the steps. The AS and EW rows are the chain at
-those statics (`replay_chain.Shape`'s AS and EW), its rows `ReplayStep_v1`'s fields. EW = bitlen(NB): the walk entries matter only with prefix caching, and while the no-eviction
-bound holds the table has N = NB − 1 entries. 8eb1 serves without prefix caching, so its EW = 17 row is what it would
-cost with it.
+**Cost at the served shapes** (`replay_step.size` and `replay_chain.size`). A step proof block is `ReplayStep_v1` and
+`ReplayAdvance`, and a window is P step proof blocks and one `ReplayLoad`. Under async scheduling a proof block is a
+`schedule()` and the update of the step before it, so P counts proof blocks, a few more than the steps. The AS and EW
+rows are the chain at those statics (`replay_chain.Shape`'s AS and EW), its rows `ReplayStep_v1`'s fields. EW =
+bitlen(NB): the walk entries matter only with prefix caching, and while the no-eviction bound holds the table has N = NB
+− 1 entries. 8eb1 serves without prefix caching, so its EW = 17 row is what it would cost with it.
 
-| shape | (R, W, A) | Q, D, P, K | AS, EW | ReplayStep_v1 | ReplayAdvance | step unit | ReplayLoad | window |
+| shape | (R, W, A) | Q, D, P, K | AS, EW | ReplayStep_v1 | ReplayAdvance | step proof block | ReplayLoad | window |
 |---|---|---|---|---|---|---|---|---|
 | w212 | (2, 1, 2) | 3, 14, 20, 3 | sync | 2,441 | 610 | 3,051 | 845 | 61,865 |
 | | | 3, 14, 22, 3 | 1, 0 | 2,522 | 617 | 3,139 | 857 | 69,915 |
@@ -101,50 +87,50 @@ cost with it.
 | | | | 1, 0 | 564,404 | 83,360 | 647,764 | 810,754 | 422,505,118 |
 | | | | 1, 18 | 647,330 | 92,576 | 739,906 | 815,362 | 482,494,168 |
 
-- *8eb1's largest window* is the maximum over its windows (w290 has the most units and decisions). *8eb1's engine
+- *8eb1's largest window* is the maximum over its windows (w290 has the most proof blocks and decisions). *8eb1's engine
   class* holds any window of its engine: R = max_num_seqs, A = R + 1, and W = 1, since no 8eb1 window waits.
-- *Async heavy* is TRACE-CORPUS's heavy trace under async scheduling
-  (art:e86ec6d2d6b50e1469013dea2376897af1fcc329f8661c8efc06504f8ce99d3a, from run r20261024-064542-ae66): 1,000
+- *Async heavy* is the trace corpus's heavy trace under async scheduling: 1,000
   requests at 300 per second, 256 sequences, max_num_batched_tokens 8192, whole prefills, prefix caching, 172,615 KV
-  blocks. Its corpus window is the whole trace. The replay reproduces its 649 steps in 651 units, every unit in class
-  (256, 1, 35).
+  pages. Its corpus window is the whole trace. The replay reproduces its 649 steps in 651 proof blocks, every proof
+  block in class (256, 1, 35).
 - Async scheduling adds 3–8% to a step, and the walk entries 5–15% more. At R = 256 about half the step is
   compacting the running list (341,241 of the heavy step's 647,330 ANDs).
-- On their own, w212's 20 step units and the load are 61,865 ANDs, about half the slice's 117,164. Most of the rest is
-  the charge, `ChargeLink_v1{14}` (50,760, and its 2,359 copies); the served rows' equality is the remainder.
+- On their own, w212's 20 step proof blocks and the load are 61,865 ANDs, about half the slice's 117,164. Most of the
+  rest is the charge, `ChargeLink_v1{14}` (50,760, and its 2,359 copies); the served rows' equality is the remainder.
 - `ReplayClose`, once a session, is 8 ANDs at w212's shape and 11 at 8eb1's.
-- Not counted: `CacheStep_v1`'s calls with prefix caching, whose linear table at N = NB − 1 is far past any unit
+- Not counted: `CacheStep_v1`'s calls with prefix caching, whose linear table at N = NB − 1 is far past any proof block
   (PROTOCOL.md, "Scaling: offline memory checking"), and the charge, which goes with the decisions, not the steps
   (`ChargeLink_v1{D}`: 97,159 ANDs and 5,509 copies at D = 32).
 
-**Splitting a window into units.** The slice holds a whole window in one unit, its state rows wires between the steps.
-That works for 8eb1's windows: at its engine class a window's replay is at most 841,628 ANDs. The async heavy window
-is 651 step units of 739,906 ANDs, 4.8 × 10^8 in all, so it splits into the units `replay_chain` already defines,
-linked by its rows:
-- **Unit 0, the load:** `ReplayLoad`, 815,362 ANDs. It reads state rows 0 and 1 and window rows 0 and 1, and the
+**Splitting a window into proof blocks.** The slice holds a whole window in one proof block, its state rows wires
+between the steps. That works for 8eb1's windows: at its engine class a window's replay is at most 841,628 ANDs. The
+async heavy window is 651 step proof blocks of 739,906 ANDs, 4.8 × 10^8 in all, so it splits into the proof blocks
+`replay_chain` already defines, linked by its rows:
+- **Proof block 0, the load:** `ReplayLoad`, 815,362 ANDs. It reads state rows 0 and 1 and window rows 0 and 1, and the
   window's K certified arrivals and D decisions at public positions.
-- **Unit u = 1 … P, one step:** `ReplayStep_v1` and `ReplayAdvance`, 739,906 ANDs (647,330 and 92,576). It reads
+- **Proof block u = 1 … P, one step:** `ReplayStep_v1` and `ReplayAdvance`, 739,906 ANDs (647,330 and 92,576). It reads
   state rows u and u + 1 and window row 1. A step past the window's executed count is idle and costs the same.
 - **The links:** a window commits P + 2 state rows of 20,320 bits and two window rows of 37,024 bits, and makes
   3P + 4 = 1,957 reads, each a frame-v3 path of depth 10.
-- **k steps a unit** (not built; `replay_chain` is k = 1 and the slice is k = P): a unit reads state row j and writes
-  row j + k, the k − 1 rows between them wires. That divides the state rows and reads by k at k step units a unit.
-- **What the split adds to the slice:** no charge state crosses step units. The charge is the load unit's,
+- **k steps a proof block** (not built; `replay_chain` is k = 1 and the slice is k = P): a proof block reads state row j
+  and writes row j + k, the k − 1 rows between them wires. That divides the state rows and reads by k at k step proof
+  blocks a proof block.
+- **What the split adds to the slice:** no charge state crosses step proof blocks. The charge is the load proof block's,
   `ChargeLink_v1{D}` over window row 1's decisions, and its carry crosses windows in `charge_chain`'s rows
   ([charge-chain.md](charge-chain.md)).
 
 **For the 25 async windows.** Their sync replay isn't the served schedule, so `slice_inputs` refuses them at AS = 0.
 At AS = 1 the step also reads `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free` and `arr_cap A×1` after
 `arr_O`. `replay_chain`'s rows carry them at its AS (PROTOCOL.md, "The rows'"), with an arrival's cap as `q_cap` in the
-window row and `a_cap` in the warden's slots. The slice takes its chain's shape from its statics
+window row and `a_cap` in the network certifier's slots. The slice takes its chain's shape from its statics
 (`compile_slice.chain`), so at an async engine its rows widen and its circuit hands the step these fields.
 **w1** is the smallest of them with more than one request: window 1, requests 4–7 of the session, decisions
 `[1, 1, 1]`, 38 steps; its sync replay diverges from the trace at step 2.
 - At 8eb1's engine class under its async scheduling it is
   `verity/core/protocols/certifier/tests/fixtures/compile_slice_w1_class.json` (`--slice 1 --served SEAL --R 8 --W 1
   --A 9 --Q 4 --D 32 --P 54 --K 4 --AS 1`, the seal's records being `seal-w1.jsonl`): AS = 1, EW = 0 (no prefix
-  caching), 38 units, the last schedule on the drained engine dropped. Its charge is from the session's carry after
-  window 0, whose decisions `[1, 1, 1]` charge 24 bits; w1's then charge 21.
+  caching), 38 proof blocks, the last schedule on the drained engine dropped. Its charge is from the session's carry
+  after window 0, whose decisions `[1, 1, 1]` charge 24 bits; w1's then charge 21.
 - `ReplayStep_v1` at AS = 1 and the class is w1's served scheduler on all 39 of its async units, circuit and reference
   (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
 - `CompileSlice_v1` takes it at AS = 1, with two parts that sync didn't need:
@@ -153,9 +139,9 @@ window row and `a_cap` in the warden's slots. The slice takes its chain's shape 
     where it built sync tuples and `case` raised `MalformedRow` on w1's first state row. The build fed the step by
     name already.
   - **The served rows matched by request.** `served_rows.step_rows` gives a row the slot of its position in the
-    runner's batch, and at w1 that isn't the scheduler's running slot at two units: at unit 0 the batch is requests 4,
-    6, 5, 7, and at unit 5 request 5 holds slot 0 while its last output is in flight, so request 6, in slot 1, is the
-    batch's first row. The rows are the replay's at every unit as (request, kind, start, n)
+    runner's batch, and at w1 that isn't the scheduler's running slot at two proof blocks: at proof block 0 the batch is
+    requests 4, 6, 5, 7, and at proof block 5 request 5 holds slot 0 while its last output is in flight, so request 6,
+    in slot 1, is the batch's first row. The rows are the replay's at every proof block as (request, kind, start, n)
     (`verity/core/protocols/certifier/tests/test_network_certifier_compile_slice_w1.py`). At AS = 1 ``wit`` carries
     ``map``, R × R bits a step, and ``rows`` holds served row b to the slot its map row names: at most one 1 in each
     map row and column, a slot's column set iff the slot has a row, and the served row equal to that slot's (an empty
@@ -165,12 +151,9 @@ window row and `a_cap` in the warden's slots. The slice takes its chain's shape 
 - The slice accepts w1 (0x3F, 21 bits) at its own statics (4, 1, 5), Q 4, D 3, P 38, K 4
   (`verity/core/protocols/certifier/tests/fixtures/compile_slice_w1.json`) and at the class. The negatives fail as
   at w212: late admission 0x2E (`load` and `rows`; at the class only, past w1's own D), charge 0x37, longer prompt
-  0x2F, dropped row 0x2F. So does the one the map opens: unit 0's first two served rows (requests 4 and 6) with their
-  requests swapped, 0x2F. The circuit is its reference on all of them: at w1's own statics 314,936 ANDs, and at the
-  class 1,021,302, built in 19.5 s at 3.0 GB (7.3 GB with the six evaluations, 77 s; run r20261024-220244-255c).
-  Without the map (the reference fixed and the seal's rows put at their request's slot, run r20261024-205551-716a)
-  the class unit was 898,182 ANDs, 40,316 more than w212 at the sync class (857,866, run
-  r20261024-205722-af0a). The map adds 123,120: its products P·R²·32 = 110,592 at the class's 33-bit rows (P 54,
+  0x2F, dropped row 0x2F. So does the one the map opens: proof block 0's first two served rows (requests 4 and 6) with
+  their requests swapped, 0x2F. The circuit is its reference on all of them: at w1's own statics 314,936 ANDs, and at
+  the class 1,021,302, of which the map is 123,120: its products P·R²·32 = 110,592 at the class's 33-bit rows (P 54,
   R 8), its one-to-one checks 54·2·8·7 = 6,048, and 6,480 in the zero check over its 20,736 mismatch bits, against
   the 14,256 bits the slot-for-slot comparison reads.
 - The walk entries (`run_pfx`, `row_pfx`) come only with prefix caching, which 8eb1 doesn't serve.

@@ -1,5 +1,8 @@
-import Proofs.Accounting.HeadlineDc.Branches
-import Models.Accounting.Guarantees.HeadlineDc
+module
+
+public import Proofs.Accounting.HeadlineDc.Branches
+public import Definitions.Accounting.Guarantees.HeadlineDc
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The B200's headline at the data sheet
@@ -17,6 +20,8 @@ import Models.Accounting.Guarantees.HeadlineDc
 * FILL-OPT holds since there is no filler (`fillOpt_of_zero`), and (I7) at `7/8` is the receipt split's
   (`luck_of_receipt_half`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.HeadlineDc
 

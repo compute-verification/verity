@@ -1,14 +1,16 @@
-import Proofs.Flock.Claims.KS.Fork
-import Proofs.Flock.Claims.Recursion.Abort
+module
+
+public import Proofs.Flock.Claims.KS.Fork
+public import Proofs.Flock.Claims.Recursion.Abort
 
 /-!
 # The finders' events at runs that may abort, covered by `BAbort`
 
-`Escapes` over the draws `BAbort` makes, each a run's coins with its abort coins `(r, a)`:
+`Escapes` over the samples `BAbort` makes, each a run's coins with its abort coins `(r, a)`:
 
-* **Escapes over draws** (`EscapesD`): fork events on two draws at one tape, the second sharing the first's coins
-  before some round and drawing the rest and its abort coins fresh (`forkDraw`, as `BAbort` draws its second run), and
-  one-run events, each tied to a collision among the verifier's calls in the runs `tr` at those draws.
+* **Escapes over samples** (`EscapesD`): fork events on two samples at one tape, the second sharing the first's coins
+  before some round and sampling the rest and its abort coins fresh (`forkDraw`, as `BAbort` samples its second run), and
+  one-run events, each tied to a collision among the verifier's calls in the runs `tr` at those samples.
 * **The tie** (`EscapesD.Kept`, `EscapesD.toAbort`): escapes tied to the prover's runs whose events each read only kept
   runs are tied to the runs as they abort, since a kept run is the prover's run (`abortRun_of_keep`). Their term is
   the same (`EscapesD.term_toAbort`).
@@ -18,19 +20,21 @@ import Proofs.Flock.Claims.Recursion.Abort
   (`Pr_fork_le_abort`) and each one-run event by `BAbort` (`Pr_one_le_PrBAbort`).
 -/
 
+@[expose] public section
+
 namespace Claims.Recursion
 
 open Claims
 
-/-- **A fork's second draw** at round `j`: the coins before round `j` shared with `d`, the rest of the coins and the
-abort coins `d'`'s, as `BAbort` draws its second run. -/
+/-- **A fork's second sample** at round `j`: the coins before round `j` shared with `d`, the rest of the coins and the
+abort coins `d'`'s, as `BAbort` samples its second run. -/
 def forkDraw {Coin A : Type} {n : ℕ} (j : Fin n) (d d' : (Fin n → Coin) × A) : (Fin n → Coin) × A :=
   (forkCoins j d.1 d'.1, d'.2)
 
-/-- **One prover's escapes over draws**, at the runs `tr` at each tape and draw: fork events `ev i` on two draws, the
+/-- **One prover's escapes over samples**, at the runs `tr` at each tape and sample: fork events `ev i` on two samples, the
 second `forkDraw (j i)` of the first, with weights `c i` under a square root, and one-run events `ev₁ l` with linear
 weights `β l`, each tied to a collision among the verifier's calls in the runs `tr` reads. -/
-structure EscapesD {Ω Coin A : Type} (H : Msg → Msg) (n : ℕ) (tr : Ω → (Fin n → Coin) × A → Trace) where
+structure EscapesD {Ω Coin A : Type} (H : Msg → Msg) (n : ℕ) (tr : Ω → (Fin n → Coin) × A → Transcript) where
   I : Type
   [finI : Fintype I]
   c : I → ℝ
@@ -49,7 +53,7 @@ attribute [instance] EscapesD.finI EscapesD.finL
 
 section EscapesD
 
-variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → Coin) × A → Trace}
+variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → Coin) × A → Transcript}
 
 /-- The escapes' term at tape `ω`: `Σ_i √(c_i · Pr_{d,d'}[ev_i]) + Σ_l β_l · Pr_d[ev₁_l]`. -/
 noncomputable def EscapesD.term [Fintype Coin] [Fintype A] (e : EscapesD H n tr) (ω : Ω) : ℝ :=
@@ -66,7 +70,7 @@ theorem EscapesD.term_nonneg [Fintype Coin] [Fintype A] (e : EscapesD H n tr) (�
   add_nonneg (Finset.sum_nonneg fun _ _ => Real.sqrt_nonneg _)
     (Finset.sum_nonneg fun l _ => mul_nonneg (e.β_nonneg l) (Pr_nonneg _))
 
-/-- **The escapes' events read only kept runs**: both draws of each fork event, and the draw of each one-run event,
+/-- **The escapes' events read only kept runs**: both samples of each fork event, and the sample of each one-run event,
 are kept. -/
 def EscapesD.Kept (e : EscapesD H n tr) (keep : Ω → (Fin n → Coin) → A → Bool) : Prop :=
   (∀ i ω d d', e.ev i ω d d' → keep ω d.1 d.2 = true ∧
@@ -108,9 +112,6 @@ def EscapesD.toAbort (e : EscapesD H (V.k x) fun ω d => run H P V x ω d.1) (hk
 theorem EscapesD.term_toAbort [Fintype Coin] [Fintype A] (e : EscapesD H (V.k x) fun ω d => run H P V x ω d.1)
     (hk : e.Kept keep) : (e.toAbort hk).term = e.term := rfl
 
-theorem EscapesD.fits_toAbort (e : EscapesD H (V.k x) fun ω d => run H P V x ω d.1) (hk : e.Kept keep) (C : ℝ) :
-    (e.toAbort hk).Fits C ↔ e.Fits C := Iff.rfl
-
 end Tie
 
 section BAbort
@@ -126,7 +127,7 @@ theorem abortRun_vLog (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x :
   unfold abortRun
   split
   · exact (run_logs H P V x ω t.1).2
-  · simp [abortTrace]
+  · simp [abortTranscript]
 
 omit [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Fintype A] [Nonempty A] in
 /-- A verifier that takes no rounds at `x` makes no `H` calls there, as the run aborts or not. -/
@@ -152,7 +153,7 @@ theorem PrBAbort_le_one (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x
   · exact Pr_le_one _
   · exact zero_le_one
 
-/-- The probability that `BAbort`'s two runs, forked at round `j`, collide, over the tape and the two draws. -/
+/-- The probability that `BAbort`'s two runs, forked at round `j`, collide, over the tape and the two samples. -/
 noncomputable def forkPrA (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
     (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (hk : 0 < V.k x) (j : Fin (V.k x)) : ℝ :=
   Pr fun s : Ω × ((Fin (V.k x) → Coin) × A) × ((Fin (V.k x) → Coin) × A) => ∃ u v,
@@ -173,7 +174,7 @@ theorem PrBAbort_eq_avg (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x
   rw [← Pr_equiv e]
   exact Pr_guess fun t => ∃ u v, (BAbort H V P x keep hk).out (e t) = some (u, v) ∧ Collision H u v
 
-/-- **A fork event is covered by `BAbort`**: an event on two draws at one tape, the second forked from the first at
+/-- **A fork event is covered by `BAbort`**: an event on two samples at one tape, the second forked from the first at
 round `j`, on which the verifier's calls in the runs as they abort collide, has probability at most `BAbort`'s fork
 collision probability at `j`. -/
 theorem Pr_fork_le_abort (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
@@ -194,7 +195,7 @@ theorem Pr_fork_le_abort (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (
   obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 (findColl_isSome H hl (hev _ _ _ hs))
   exact ⟨u, v, huv, findColl_spec H _ hl u v huv⟩
 
-/-- **A one-run event is covered by `BAbort`**: an event on one draw on which the verifier's calls in the run as it
+/-- **A one-run event is covered by `BAbort`**: an event on one sample on which the verifier's calls in the run as it
 aborts collide has probability at most `Pr[BAbort]`. -/
 theorem Pr_one_le_PrBAbort (H : Msg → Msg) (V : Verifier Coin) (P : Prover Ω) (x : Msg)
     (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (ev₁ : Ω → (Fin (V.k x) → Coin) × A → Prop)

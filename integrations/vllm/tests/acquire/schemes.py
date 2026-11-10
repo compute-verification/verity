@@ -1,5 +1,5 @@
 """Adapters that present every commitment construction under test through ONE interface, so the security tests in
-`test_security.py` run unchanged against each of them (and against a sibling lane's engine once an adapter is added here).
+`test_security.py` run unchanged against each of them (and against another engine once an adapter is added here).
 
     scheme.commit(values: list[bytes], ctx: bytes) -> Committed          # values in tree order; ctx = context the root is bound to
     scheme.open(c: Committed, i: int) -> Opening

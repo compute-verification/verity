@@ -1,5 +1,16 @@
-import Proofs.Flock.VBridge.Algebra.Zerocheck
-import Proofs.Flock.Soundness.Refine.Lincheck
+module
+
+public import Flock.Statement
+public import Proofs.Flock.Soundness.Refine.Lincheck
+public import Proofs.Flock.VBridge.Algebra.Eval
+public import Proofs.Flock.VBridge.Algebra.Zerocheck
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Level3.Folded
+import Proofs.Flock.Soundness.Refine.Arith
+import VCVio.Prelude.Core
 
 /-!
 # V*'s lincheck residual is zero only when the lincheck's checks pass
@@ -11,9 +22,11 @@ the verifier's `CircuitFold.folded` at `lincheck`'s fold points. The rounds are 
 `Refine.forIn_rounds` shows the verifier's loop computes. The other `check` (Piop.lean:146) is the comb's width:
 `folded_size` reads it off level 3's `folded_eq` for a statement's circuit fold.
 
-`lincheck_coins` says which rounds `lincheck` draws its points from, `lincheck_of_residuals_dec` is the stage at a rep,
+`lincheck_coins` says which rounds `lincheck` samples its points from, `lincheck_of_residuals_dec` is the stage at a rep,
 and `lincheck_of_residuals` is it at a plain shape, where the comb w holds is the comb.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 
@@ -32,13 +45,13 @@ theorem folded_size {st : Stmt} {alpha beta : F128} {lw rho ts w : Array F128}
 
 /-! ## The lincheck over values -/
 
-section Coins
+section CoinSource
 
 variable {α : Type} [Val α]
 
-/-- The lincheck's rounds draw one round each, its first coin the round's challenge. -/
+/-- The lincheck's rounds sample one round each, its first coin the round's challenge. -/
 theorem lcRounds_coins :
-    ∀ (l : List (α × α)) (claim : α) (ts : Array F128) (k k' : Nat) (src : Coins) (claim' : α) (ts' : Array F128),
+    ∀ (l : List (α × α)) (claim : α) (ts : Array F128) (k k' : Nat) (src : CoinSource) (claim' : α) (ts' : Array F128),
       lcRounds l claim ts k src = .ok ((claim', ts'), k') →
       ts'.size = ts.size + l.length ∧ (∀ j < ts.size, ts'[j]! = ts[j]!) ∧ k' = k + l.length ∧
       ∀ j < l.length, ∃ c, src.round (k + j) 1 = .ok c ∧ ts'[ts.size + j]! = c[0]!
@@ -60,9 +73,9 @@ theorem lcRounds_coins :
         exact ⟨c', by rw [show k + (j + 1) = k + 1 + j by omega]; exact hc',
           by rw [show ts.size + (j + 1) = ts.size + 1 + j by omega]; exact he⟩
 
-/-- **The lincheck's coins.** The rounds `lincheck` draws its points from: `α`, `β`, one round per lincheck round, its
+/-- **The lincheck's coins.** The rounds `lincheck` samples its points from: `α`, `β`, one round per lincheck round, its
 challenge, then `r'`; and the points it hands on. -/
-theorem lincheck_coins {kLog : Nat} {M : Messages α} {zc : ZcPts α} {k k' : Nat} {src : Coins} {r1 : α}
+theorem lincheck_coins {kLog : Nat} {M : Messages α} {zc : ZcPts α} {k k' : Nat} {src : CoinSource} {r1 : α}
     {lc : LcPts α} (h : lincheck kLog M zc k src = .ok ((r1, lc), k')) :
     ∃ cα cβ cr, src.round k 1 = .ok cα ∧ src.round (k + 1) 1 = .ok cβ ∧ src.round (k + 2 + M.lc.size) 1 = .ok cr ∧
       lc.fold.alpha = cα[0]! ∧ lc.fold.beta = cβ[0]! ∧ lc.rPrime = cr[0]! ∧ lc.fold.lw = skipWeights zc.z ∧
@@ -89,7 +102,7 @@ theorem lincheck_coins {kLog : Nat} {M : Messages α} {zc : ZcPts α} {k k' : Na
   obtain ⟨c, hc, he⟩ := hco j hj
   exact ⟨c, by rw [show k + 2 + j = k + 1 + 1 + j by omega]; exact hc, he⟩
 
-end Coins
+end CoinSource
 
 /-! ## The lincheck over F -/
 
@@ -113,9 +126,9 @@ structure LcProofOf (M : Messages F128) (p : LincheckProof) : Prop where
   zp : p.zPartial = M.zp
 
 /-- The lincheck's rounds over F are the fold of `Refine.lStep` on round `j`'s messages and on coins `C` whose first
-entries are the challenges drawn. -/
+entries are the challenges sampled. -/
 theorem lcRounds_fold (rounds : Array (F128 × F128)) (C : Nat → Array F128) :
-    ∀ (l : List (F128 × F128)) (i : Nat) (claim : F128) (ts : Array F128) (k k' : Nat) (src : Coins)
+    ∀ (l : List (F128 × F128)) (i : Nat) (claim : F128) (ts : Array F128) (k k' : Nat) (src : CoinSource)
       (claim' : F128) (ts' : Array F128),
       lcRounds l claim ts k src = .ok ((claim', ts'), k') →
       (∀ j (hj : j < l.length), rounds[i + j]! = l[j]) →
@@ -153,7 +166,7 @@ theorem lcRounds_fold (rounds : Array (F128 × F128)) (C : Nat → Array F128) :
 verifier's rounds, on any coins `C` whose first entries are its challenges `ts`, from `α·v_A + v_B + β` at its `α`, `β`,
 at `dot comb z_partial` with challenges `ts`: Piop.lean:148's check, `comb` the verifier's `CircuitFold.folded` at
 `lincheck`'s fold points. -/
-theorem lincheck_checks {kLog : Nat} {M : Messages F128} {zc : ZcPts F128} {k k' : Nat} {src : Coins} {r1 : F128}
+theorem lincheck_checks {kLog : Nat} {M : Messages F128} {zc : ZcPts F128} {k k' : Nat} {src : CoinSource} {r1 : F128}
     {lc : LcPts F128} (h : lincheck kLog M zc k src = .ok ((r1, lc), k')) (h1 : r1 = 0) {p : LincheckProof}
     (hp : LcProofOf M p) {C : Nat → Array F128} (hC : ∀ j < M.lc.size, (C j).getD 0 0 = lc.fold.ts[j]!) :
     lcFold p C M.lc.size (lc.fold.alpha * M.fa + M.fb + lc.fold.beta) = (dot M.comb p.zPartial, lc.fold.ts) := by

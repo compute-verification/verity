@@ -1,11 +1,27 @@
-import Flock.Net
-import Mathlib.Algebra.BigOperators.Group.List.Basic
-import Mathlib.Algebra.Group.Action.Defs
-import Mathlib.Data.Nat.Bitwise
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
+module
+
 -- as in `ExecRows`: level3 already realizes the lemmas this file's `simp` calls need (`Std.Legacy.Range.mk.congr_simp`)
-import Proofs.Flock.Level3.LookupRows
+public import Aesop.BuiltinRules
+public import Flock.Comp
+public import Flock.Net
+public import Mathlib.Algebra.BigOperators.Group.List.Basic
+public import Mathlib.Algebra.Group.Action.Defs
+public import Mathlib.Algebra.GroupWithZero.Nat
+public import Mathlib.Data.Nat.Bitwise
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Level3.LookupRows
+import Mathlib.Algebra.BigOperators.Group.List.Defs
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.List.Basic
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # `Sparse`: the bytes `ofRows` writes, and `row` reads them back
@@ -14,6 +30,8 @@ import Proofs.Flock.Level3.LookupRows
 (`ofRows_spec`, `ofRows_row`). In a namespace of its own, which no file opens: `ExecRows` exports these names into
 `FlockSoundness`, and the template fold (`TmplFoldRef`) reads them without `ExecRows`' imports.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.SparseRows
 

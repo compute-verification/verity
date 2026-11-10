@@ -1,6 +1,6 @@
 """census/v1: what a `Program` computes, counted by class, and the values its root's Calls pass each other.
 
-A census is a pure function of a Program's IR, written as canonical JSON (`codec.canonical_json`, RFC 8785 on its integer domain)
+A census is a pure function of a Program, written as canonical JSON (`codec.canonical_json`, RFC 8785 on its integer domain)
 under a SHA-512 digest. Classes come from Definitions and primitives only: a class is a descriptor id (`codec.descriptor_id`, the
 family `Name_vN` with its static bindings), never a kernel.
 
@@ -50,7 +50,7 @@ counters from its rule over its statics instead: that is how a matmul family sta
 its served MACs (m·n·k) apart from its tail atoms (k-steps appended to the same product) and a fold Definition its receipt folds; the
 class's ancestors add up what the rule says. A class of a family `RULED` names is refused while `FAMILY_COUNTS` has no rule for it
 (the family's module registers it when imported, which decoding a Program never does), and so is a Definition carrying a rule
-(`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`.  The s8 family's served MACs are S8-PORT's, whose
+(`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`.  The s8 family's served MACs (`ops.s8`) are those whose
 roles Lean's `Accounting.Gates.roleOf` states: a served product's main chain toward its committed words, which only an `S8Dot`
 or `S8Matmul` has.  `GemmAccumulatorS8` and PoUW's segment dots (`PouwSegDot_v2`, `PouwSegDot0_v2`: an H1 tile's lanes) perform
 their products and serve none (`serves_none`).  `served_macs_by_precision` splits the served MACs by the
@@ -71,7 +71,7 @@ by family: Triton's MMAv2 e4m3 dot on sm_90 (`HopperE4m3MmaV2Dot32`) runs as f16
 `mac:fp8`.  Every other gate is `cuda:gate`.  A class's work includes
 its callees'.  The census counts work only when asked (`census(..., boolean=...)`; without it there is no `work`): for a Boolean
 Program, each root Call's own gates; for a word Program, each root Call through the Boolean version a resolver gives
-(`verity_vllm.program.boolean.boolean_version`), named in its class's `boolean_version`, so a class under a word Call has no
+(`verity.ml.definitions.boolean.boolean_version`), named in its class's `boolean_version`, so a class under a word Call has no
 `work`.  A root Call with no Boolean version, or whose Boolean body reaches a primitive other than a gate, a constant bit or an
 input, is refused by name (`NoBooleanWork`), and so is a `PRODUCTS` step bound to no silicon model (its module, which binds it,
 never imported).  A tensor-core step inlined into a traced body (a Definition compiled and traced again as one circuit) is no
@@ -118,7 +118,7 @@ from .layout import resolve
 from .liveness import _MEMBER_LIMIT
 from .program import input_id, is_input
 from .refs import Affine, Concat, Explicit, Refs, Strided, concat
-from .types import Array, Record, Tuple as TupleT, Type, Value
+from .types import Array, RecordType, Tuple as TupleT, Type, Value
 
 SCHEMA = "verity/census/v1"
 
@@ -135,11 +135,12 @@ PRODUCTS: dict[str, int] = {
     "HopperE4m3QgmmaDot32_v1": 32, "HopperE4m3MmaV2Dot32_v1": 32, "BlackwellE4m3QmmaDot32_v1": 32,
     "BlackwellE5m2QmmaDot32_v1": 32, "BlackwellNvf4OmmaDot64_v1": 64, "BlackwellMxf4OmmaDot64_v1": 64,
     "PouwDot16U8S8_v1": 16, "NcpDot16I7_v1": 16,
-    "AmpereBF16TcDot16_v3": 16, "HopperBF16WgmmaDot16_v2": 16, "HopperE4m3QgmmaDot32_v2": 32, "HopperE4m3MmaV2Dot32_v2": 32,
+    "AmpereBF16TcDot16_v3": 16, "HopperBF16WgmmaDot16_v2": 16, "HopperBF16WgmmaDot16_v3": 16, "HopperE4m3QgmmaDot32_v2": 32, "HopperE4m3MmaV2Dot32_v2": 32,
     "BlackwellE4m3QmmaDot32_v2": 32, "BlackwellE5m2QmmaDot32_v2": 32, "BlackwellNvf4OmmaDot64_v2": 64,
     "BlackwellMxf4OmmaDot64_v2": 64,
     "BlackwellS8ImmaDot32_v1": 32, "BlackwellU8S8ImmaDot32_v1": 32, "BlackwellS8ImmaDot32_v2": 32, "BlackwellU8S8ImmaDot32_v2": 32,
     "HopperBf16Dot16StepFirst_v1": 16, "HopperBf16Dot16Step_v1": 16, "HopperBf16Dot16StepFirstX_v1": 0, "HopperBf16Dot16StepX_v1": 0,
+    "HopperBf16Dot16StepFirst_v2": 16, "HopperBf16Dot16Step_v2": 16, "HopperBf16Dot16StepFirstX_v2": 0, "HopperBf16Dot16StepX_v2": 0,
     "PouwSegDot_v2": 32, "PouwSegDot0_v2": 32,
 }
 
@@ -148,8 +149,9 @@ PRODUCTS: dict[str, int] = {
 #: NCP's i7 step
 PRECISION: dict[str, str] = {
     **dict.fromkeys(("AmpereBF16TcDot16_v1", "AmpereBF16TcDot16_v2", "AmpereBF16TcDot16_v3", "HopperBF16WgmmaDot16_v1",
-                     "HopperBF16WgmmaDot16_v2", "HopperBf16Dot16StepFirst_v1", "HopperBf16Dot16Step_v1",
-                     "HopperBf16Dot16StepFirstX_v1", "HopperBf16Dot16StepX_v1"), "bf16"),
+                     "HopperBF16WgmmaDot16_v2", "HopperBF16WgmmaDot16_v3", "HopperBf16Dot16StepFirst_v1", "HopperBf16Dot16Step_v1",
+                     "HopperBf16Dot16StepFirstX_v1", "HopperBf16Dot16StepX_v1", "HopperBf16Dot16StepFirst_v2",
+                     "HopperBf16Dot16Step_v2", "HopperBf16Dot16StepFirstX_v2", "HopperBf16Dot16StepX_v2"), "bf16"),
     "HopperTf32WgmmaDot8_v1": "tf32", "HopperTf32WgmmaDot8_v2": "tf32",
     **dict.fromkeys(("HopperE4m3QgmmaDot32_v1", "HopperE4m3QgmmaDot32_v2", "HopperE4m3MmaV2Dot32_v1", "HopperE4m3MmaV2Dot32_v2",
                      "BlackwellE4m3QmmaDot32_v1", "BlackwellE4m3QmmaDot32_v2", "BlackwellE5m2QmmaDot32_v1",
@@ -176,19 +178,19 @@ COUNTERS = ("served_macs", "tail_atoms", "receipt_folds")
 #: family `Name_vN` -> its counters per instance from its statics (a subset of `COUNTERS`; the rest stay bottom-up)
 FAMILY_COUNTS: dict[str, Callable[[dict], dict[str, int]]] = {}
 
-#: the families that count by a `FAMILY_COUNTS` rule -> the module that registers it when imported (the IR never imports a
+#: the families that count by a `FAMILY_COUNTS` rule -> the module that registers it when imported (`verity.ml.circuits` never imports a
 #: semantics package, and decoding a Program imports none)
 RULED: dict[str, str] = {"S8Dot_v1": "verity.ml.circuits.ops.s8", "S8Matmul_v1": "verity.ml.circuits.ops.s8",
                          "S8Dot_v2": "verity.ml.circuits.ops.boolean.s8", "S8Matmul_v2": "verity.ml.circuits.ops.boolean.s8",
                          "GemmAccumulatorS8_v1": "verity.ml.circuits.ops.gemm",
                          "GemmAccumulatorS8_v2": "verity.ml.circuits.ops.boolean.gemm",
-                         "PouwSegDot_v2": "verity.core.protocols.pouw.circuit.segment",
-                         "PouwSegDot0_v2": "verity.core.protocols.pouw.circuit.segment"}
+                         "PouwSegDot_v2": "verity.ml.protocols.pouw.circuit.segment",
+                         "PouwSegDot0_v2": "verity.ml.protocols.pouw.circuit.segment"}
 
 
 def serves_none(bindings: dict) -> dict[str, int]:
     """The rule of an s8-family Definition whose products are no served product's main chain (Lean's `roleOf` at
-    `Site.other`): it performs them, and serves none."""
+    `Place.other`): it performs them, and serves none."""
     return {"served_macs": 0}
 
 
@@ -199,7 +201,7 @@ def family(fn: Any) -> str:
 
 def silicon_step(fn: Any, model: Any) -> Any:
     """Bind the tensor-core step `fn` (a word primitive, or the Boolean Definition computing one) to the silicon model it computes
-    (a `verity.ml.circuits.silicon` `GroupSum`, `Pipeline`, `BlockScaledAlignAdd` or `IntegerMma`): `fn.silicon` is `model`, and
+    (a `verity.ml.circuits.silicon` `GroupSum`, `BlockScaledAlignAdd` or `IntegerMma`): `fn.silicon` is `model`, and
     `SILICON` gives its family the precision `model`'s instruction multiplies in (`DTYPE_PRECISION` of its ``executes``, else of
     its operands).  Refused unless `PRODUCTS` counts the family and `PRECISION` gives it its operands' precision.  Returns `fn`."""
     fam = f"{fn.name}_v{fn.version}"
@@ -769,6 +771,18 @@ def _work_json(work: Work | dict[str, list[int]]) -> dict[str, dict[str, int]]:
     return {f: {"gates": g, "and": a} for f, (g, a) in sorted(work.items()) if g}
 
 
+def boolean_gates(fns: Iterable[Any]) -> list[int | str]:
+    """Each of ``fns``' two-input Boolean gates per instance, over every facet, as `census` with ``boolean`` counts a class's
+    work, in order; for one that isn't counted, the id of the first primitive it reaches that is no Boolean gate, constant
+    bit or input. A Definition shared by several is counted once."""
+    w = _Work()
+    out: list[int | str] = []
+    for fn in fns:
+        got = w.of(fn)
+        out.append(got if isinstance(got, str) else sum(g for g, _ in got.values()))
+    return out
+
+
 def _calls_work(post: list, ids: dict[int, str], calls: Iterable[Any], boolean: Any) -> tuple[dict[str, Work], dict[str, str]]:
     """The Boolean work of each class it counts and the Boolean version each root Call class counted through, by descriptor id;
     refused (`NoBooleanWork`) for every root Call it cannot count."""
@@ -912,7 +926,7 @@ def _bits(t: Type, lo: int, hi: int) -> int:
         if a == b:
             return _bits(t.elem, lo - a * L, hi - a * L)
         return _bits(t.elem, lo - a * L, L) + (b - a - 1) * _all_bits(t.elem) + _bits(t.elem, 0, hi - b * L)
-    fields = t.fields if isinstance(t, TupleT) else [ft for _, ft in t.fields] if isinstance(t, Record) else None
+    fields = t.fields if isinstance(t, TupleT) else [ft for _, ft in t.fields] if isinstance(t, RecordType) else None
     if fields is None:
         raise TypeError(t)
     out, pos = 0, 0
@@ -1002,7 +1016,7 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
            boolean: bool | Callable[[Any], Any] = False) -> dict:
     """The census/v1 of `program` (a `Program` or a `DecodedProgram`) over the steps `ends` (default: one step), naming the
     Program by `digest` (`codec.program_digest`) when given.  With `boolean` it counts Boolean work (`work`): True counts each
-    root Call's own gates, a resolver (`verity_vllm.program.boolean.boolean_version`) each root Call that is not Boolean through
+    root Call's own gates, a resolver (`verity.ml.definitions.boolean.boolean_version`) each root Call that is not Boolean through
     the Boolean Definition it returns; either refuses (`NoBooleanWork`) every root Call it cannot count, by name."""
     root = program.root
     nodes = root.body.nodes
@@ -1179,4 +1193,4 @@ def step_of(doc: dict) -> Callable[[int], int]:
 
 
 __all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
-           "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
+           "boolean_gates", "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]

@@ -1,71 +1,112 @@
-import Proofs.Flock.Recursive.Defs
-import Proofs.Flock.Recursive.Compose
-import Proofs.Flock.Recursive.Fork
-import Proofs.Flock.Recursive.Sound
-import Proofs.Flock.Recursive.Multi
-import Proofs.Flock.Recursive.Finds
-import Proofs.Flock.Recursive.PadsAt
-import Proofs.Flock.Recursive.Flock
-import Proofs.Flock.Recursive.Schedule
-import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Recursive.Holo
-import Proofs.Flock.Recursive.Transfer
-import Proofs.Flock.Recursive.Stage
-import Proofs.Flock.Recursive.StageRead
-import Proofs.Flock.Recursive.Registrants
-import Proofs.Flock.Recursive.Guarantees
-import Proofs.Flock.Recursive.OsSalts
-import Proofs.Flock.Recursive.Private
-import Proofs.Flock.Recursive.Compile
-import Proofs.Flock.Recursive.Audit
-import Proofs.Flock.Recursive.SoundExec
-import Proofs.Flock.Recursive.Universal
-import Proofs.Flock.Recursive.UniversalClass
-import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.Recursive.Written
-import Proofs.Flock.Recursive.Loads
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Recursive.Raw
-import Proofs.Flock.Recursive.OuterAbort
-import Proofs.Flock.Recursive.Description
-import Proofs.Flock.Recursive.Sessions
-import Proofs.Flock.Recursive.OuterZK
-import Proofs.Flock.Recursive.Firewall
-import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Recursive.OuterSessionZK
-import Proofs.Flock.Recursive.FirewallRun
-import Proofs.Flock.Recursive.FirewallFollows
-import Proofs.Flock.Recursive.PublicAudit
-import Proofs.Flock.Recursive.PublicAuditProof
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.Recursive.StageKinds
-import Proofs.Flock.Recursive.HoloCoins
-import Proofs.Flock.Recursive.HoloSched
-import Proofs.Flock.Recursive.HoloSchedRead
-import Proofs.Flock.Recursive.HoloSchedCheck
-import Proofs.Flock.Recursive.HoloRepCoins
-import Proofs.Flock.Recursive.HoloMap
-import Proofs.Flock.Recursive.ForkLast
-import Proofs.Flock.Recursive.ForkInnerC
-import Proofs.Flock.Recursive.AuditC3
-import Proofs.Flock.Recursive.RegExtract
-import Proofs.Flock.Recursive.AuditC3Proof
-import Proofs.Flock.Recursive.Witness
-import Proofs.Flock.Recursive.TopRoot
-import Proofs.Flock.Recursive.TopFinder
-import Proofs.Flock.Recursive.SaltFinder
-import Proofs.Flock.Recursive.ValueSrc
-import Proofs.Flock.Recursive.ValueFinder
-import Proofs.Flock.Recursive.ValueSource
-import Proofs.Flock.Recursive.ValueBridge
-import Proofs.Flock.Recursive.LeafFinder
-import Proofs.Flock.Recursive.ValueChecked
-import Proofs.Flock.Recursive.ValueInner
-import Proofs.Flock.Recursive.PartTie
-import Proofs.Flock.Recursive.HPortTie
+module
+
+public import Proofs.Flock.Recursive.Defs
+public import Proofs.Flock.Recursive.Compose
+public import Proofs.Flock.Recursive.Fork
+public import Proofs.Flock.Recursive.Sound
+public import Proofs.Flock.Recursive.Multi
+public import Proofs.Flock.Recursive.Finds
+public import Proofs.Flock.Recursive.Flock
+public import Proofs.Flock.Recursive.Schedule
+public import Proofs.Flock.Recursive.Target
+public import Definitions.Flock.Recursive.Holo
+public import Proofs.Flock.Soundness.Defs
+public import Proofs.Flock.Recursive.Transfer
+public import Proofs.Flock.Recursive.Stage
+public import Proofs.Flock.Recursive.StageRead
+public import Proofs.Flock.Recursive.Registrants
+public import Proofs.Flock.Recursive.Guarantees
+public import Proofs.Flock.Recursive.OsSalts
+public import Proofs.Flock.Recursive.Private
+public import Proofs.Flock.Recursive.Compile
+public import Proofs.Flock.Recursive.Audit
+public import Proofs.Flock.Recursive.SoundExec
+public import Proofs.Flock.Recursive.Universal
+public import Proofs.Flock.Recursive.ExecClass
+public import Proofs.Flock.Recursive.Written
+public import Proofs.Flock.Recursive.Loads
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Recursive.Raw
+public import Proofs.Flock.Recursive.OuterAbort
+public import Proofs.Flock.Recursive.Description
+public import Proofs.Flock.Recursive.Sessions
+public import Proofs.Flock.Recursive.OuterZK
+public import Proofs.Flock.Recursive.Firewall
+public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.OuterSessionZK
+public import Proofs.Flock.Recursive.FirewallRun
+public import Proofs.Flock.Recursive.FirewallTemplate
+public import Proofs.Flock.Recursive.FirewallLive
+public import Proofs.Flock.Recursive.FirewallAccepts
+public import Proofs.Flock.Recursive.FirewallAny
+public import Proofs.Flock.Recursive.FirewallWire
+public import Proofs.Flock.Recursive.FirewallJson
+public import Proofs.Flock.Recursive.FirewallAdaptive
+public import Proofs.Flock.Recursive.PublicAudit
+public import Proofs.Flock.Recursive.PublicAuditProof
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.Recursive.FirewallObj
+public import Proofs.Flock.Recursive.FirewallSteps
+public import Proofs.Flock.Recursive.FirewallHonest
+public import Proofs.Flock.Recursive.StageKinds
+public import Proofs.Flock.Recursive.HoloCoins
+public import Proofs.Flock.Recursive.HoloSched
+public import Proofs.Flock.Recursive.HoloSchedRead
+public import Proofs.Flock.Recursive.HoloSchedCheck
+public import Proofs.Flock.Recursive.HoloRepCoins
+public import Proofs.Flock.Recursive.HoloMap
+public import Proofs.Flock.Recursive.ForkLast
+public import Proofs.Flock.Recursive.ForkInnerC
+public import Proofs.Flock.Recursive.AuditC3
+public import Proofs.Flock.Recursive.RegExtract
+public import Proofs.Flock.Recursive.AuditC3Proof
+public import Proofs.Flock.Recursive.Witness
+public import Proofs.Flock.Recursive.TopRoot
+public import Proofs.Flock.Recursive.TopFinder
+public import Proofs.Flock.Recursive.SaltFinder
+public import Proofs.Flock.Recursive.ValueSrc
+public import Proofs.Flock.Recursive.ValueFinder
+public import Proofs.Flock.Recursive.ValueSource
+public import Proofs.Flock.Recursive.ValueBridge
+public import Proofs.Flock.Recursive.LeafFinder
+public import Proofs.Flock.Recursive.ValueChecked
+public import Proofs.Flock.Recursive.ValueInner
+public import Proofs.Flock.Recursive.PartTie
+public import Proofs.Flock.C3.RegLevels.VRows
+public import Proofs.Flock.C3.RegLevels.OutRegs
+public import Proofs.Flock.Recursive.HPortTie
+public import Proofs.Flock.Recursive.KSStatement
+public import Proofs.Flock.Recursive.KSNontrivial
+public import Proofs.Flock.Recursive.KS
+public import Proofs.Flock.Recursive.KSV
+public import Proofs.Flock.Recursive.KSDeployed
+public import Proofs.Flock.Recursive.KSProved
+public import Proofs.Flock.Recursive.KSCoinTreeProved
+public import Proofs.Flock.Recursive.KSCoinTreeWitnesses
+public import Proofs.Flock.Recursive.KSLinked
+public import Proofs.Flock.Claims.Recursion.DeployedCounts
+public import Proofs.Flock.Claims.Recursion.LamDeployedTight
+public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
+public import Proofs.Flock.Claims.Recursion.KappaEpsCap
+public import Proofs.Flock.Recursive.BitsK
+public import Proofs.Flock.Recursive.BitsKTight
+public import Proofs.Flock.Claims.Recursion.AcceptedScope
+public import Proofs.Flock.Claims.Recursion.InnerSetupCount
+public import Proofs.Flock.Claims.Recursion.IVStarCalls
+public import Proofs.Flock.Recursive.Loop
+public import Proofs.Flock.Recursive.LoopZK
+public import Proofs.Flock.Recursive.FirewallSalted
+public import Proofs.Flock.Recursive.LoopAny
+public import Proofs.Flock.Recursive.InnerRows
+public import Proofs.Flock.Recursive.LinksOuter
+public import Proofs.Flock.Recursive.LinksDeployed
+public import Proofs.Flock.Recursive.FirewallFixed
+public import Proofs.Flock.Recursive.LoopAnyDeployed
+public import Proofs.Flock.Recursive.LoopWitness
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
-(`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
+(`Guarantees`; circuit privacy and the registered private circuit's in `Private`; what a stop leaks, the counting lemma
+and a recursive session's stops, in `StopLeak`), its zero knowledge at the operating
 system's salts (`OsSalts`), its soundness at the compiled inner
 protocol with the compile lemma open (`Compile`), the compile premise at a class whose schedule is `fast100`'s
 (`Universal`), the universal unit's class of private circuits, its descriptions read in gate order
@@ -76,13 +117,27 @@ as the prover supplies them, typed where they type and refusing elsewhere, with 
 (`Loads`), the verifier's check that a session's circuit file is one of
 V*'s (`VStarCheck`, which `RecursiveAudit` doesn't read yet), V*'s outer sessions with the honest prover's self-check
 in them, which never stops (`OuterAbort`), and V*'s outer sessions (`Sessions`) and their zero knowledge, (ii)'s
-`_hOuter`, at the honest prover's code, its self-check included (`OuterZK`), and (ii) stated about the firewall's code
+`_hOuter`, at the honest prover's code, its self-check included (`OuterZK`), and (ii) stated about the ZK server's code
 and V*'s, with no zero knowledge of V*'s sessions taken (`Firewall`), its proof (`FirewallZK`), the committed-coin
-statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`), `FirewallSends`'
-template half proved about the firewall's code, what it sends at every salt list fixed by one run (`FirewallRun`), the
-honest worker's half left an obligation (`FirewallFollows`), and the recursive audit at public units, the inner
+statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`) and at V*'s statements
+run by the session loop's switched prover (`Loop`), `RecursiveZK` there with the session released at a stop the coins
+fix, its simulator reading only V*'s public statements (`LoopZK`), `FirewallZK`'s bound when each digest reads the
+salts the ZK server answered before it (`FirewallSalted`), what the ZK server's code sends at every salt list fixed by
+one run (`FirewallRun`), a finished session's sends the schedule's transcript (`FirewallTemplate`), `flock-firewall
+live`, the deployed send check, sending what the ZK server's run sends (`FirewallLive`), and `FirewallSends` from them
+with the honest worker's half left an obligation (`FirewallAccepts`, with (ii) from it and the live send check's sends
+from it), the honest worker's requests and rounds read back by `decode`, `frames` and `split` as it meant them
+(`FirewallWire`), a plain value's text parsing back to its canonical form with no fraction or exponent
+(`FirewallJson`), the live ZK server's sends at any requests (`FirewallAny`) and at any worker that reads its answers
+(`FirewallAdaptive`), the live session at a worker whose requests are fixed (`FirewallFixed`), `RecursiveZK` at the
+loop at such a worker, with no `FirewallSends` (`LoopAny`), and at the deployed tables (`LoopAnyDeployed`), each
+of the loop's two guarantees' premises at one instance and its bound failing at another (`LoopWitness`), and the
+recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
 (`PublicAuditProof`), the same audit at candidate 3's table (`HoloExec`, its coins `HoloCoins`, its schedule and the
 verifier's map of its records `HoloSched` and `HoloMap`, `AuditC3`, its proof `AuditC3Proof` from the
-pieces under `Proofs.Flock.C3` and gap 2 at the word the prover's runs open, `RegExtract`), and
-`flock-witness`'s checks of recorded sessions, each the model's predicate (`Witness`). -/
+pieces under `Proofs.Flock.C3` and gap 2 at the word the prover's runs open, `RegExtract`),
+`flock-witness`'s checks of recorded sessions, each the model's predicate (`Witness`), and a unit's rows read off the
+inner relation's witness, each the commit string its public file publishes (`InnerRows`). -/
+
+@[expose] public section

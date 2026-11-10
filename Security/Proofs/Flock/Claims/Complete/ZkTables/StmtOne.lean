@@ -1,13 +1,59 @@
-import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.Complete
+import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
+import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+import Proofs.Flock.Claims.JsonNorm
+import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Data.TreeMap.Raw.Lemmas
+import Std.Data.TreeMap.Raw.WF
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # What the masked record needs of the statement, at one table
 
-`stmt_of_one`: a masked statement in scope whose drawn setup has one table gives `StmtAt`'s facts under the JSON
-library's specification (`JsonSpec`), from the setup alone. So `StmtAt` holds at every good case of one table
+`stmt_of_one`: a masked statement in scope whose sampled setup has one table gives `StmtAt`'s facts from the setup
+alone. So `StmtAt` holds at every good case of one table
 (`Case.stmtOne`), and with `Case.stmtAt` at every good case (`stmtAt_all`); `StmtOkZk` holds (`stmtOkZk`); and
 `completeRel`, `completeJRel` and `complete_zk_relation` hold without it (`completeRelS`, `completeJRelS`,
 `complete_zk_relationS`). `complete_json` and `complete_jsonJ` are `completeRelS` and `completeJRelS` in
@@ -15,13 +61,17 @@ library's specification (`JsonSpec`), from the setup alone. So `StmtAt` holds at
 antecedent.
 
 * A setup of one table is `setupOne`'s (`setupTables_okAny`: one of several has more).
-* Its public header is the population's with the draw put in (`HmRow.drawn`), so its `unit_draw` is the statement's
-  draw (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`); its `Σ` is a SHA-512 digest
+* Its public header is the population's with the sample put in (`HmRow.drawn`), so its `unit_draw` is the statement's
+  sample (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`); its `Σ` is a SHA-512 digest
   and its `Hello` is `helloOf`'s (`setupOne_stmt`).
-* The setup checked the draw's law (`ProvedScope.drawLaw`), under `--zk` a stratified or a subset draw. Either, when it
+* The setup checked the sample's law (`ProvedScope.drawLaw`), under `--zk` a stratified or a subset sample. Either, when it
   decodes, is an object of exactly the keys it reads, each a string, a natural number, an array of them, or strata that
   decode (`good_stratified`, `good_subset`), so it is printable.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockComplete.ZkTables
 
@@ -86,10 +136,10 @@ private theorem isOk_ok {j : Json} {k : String} (h : (j.getObjVal? k).isOk = tru
 
 /-! ## What the setup of one table set up -/
 
-/-- A drawn session's setup checked its draw's law (`ProvedScope.drawLaw`). -/
+/-- A sampled session's setup checked its sample's law (`ProvedScope.drawLaw`). -/
 private theorem setup_drawLaw {s : Ins} {p : SessionSpec × Array Flock.Stmt} (h : s.setup = .ok p)
     (hd : s.read.draw.isSome = true) :
-    ProvedScope.drawLaw s.read.zk s.read.tags s.read.draw = .ok () := by
+    ProvedScope.drawLaw s.read.zk s.read.tags false s.read.draw = .ok () := by
   unfold Ins.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -107,7 +157,7 @@ private theorem hmOut_loadPublic {tags : Tags} {c : Circuit} {f : ByteArray} {po
     assumption
 
 set_option maxHeartbeats 4000000 in
-/-- What `Stmt.setupH` set up: its public file loaded (at a draw, `HmRow.drawn` of it) and passed `HmRow.checkPublic`,
+/-- What `Stmt.setupH` set up: its public file loaded (at a sample, `HmRow.drawn` of it) and passed `HmRow.checkPublic`,
 its instances, `Σ` and its `Hello`. -/
 private theorem setupH_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Flock.Stmt}
@@ -125,7 +175,7 @@ private theorem setupH_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
       rfl, by assumption⟩
 
 /-- **What a table's setup set up** (`setupOne`, either output mode): the public file a public-file load returned, at a
-draw that file's `HmRow.drawn`; the header's draw decodes to the statement's instances; a SHA-512 `Σ`; and the
+sample that file's `HmRow.drawn`; the header's sample decodes to the statement's instances; a SHA-512 `Σ`; and the
 `Hello`. -/
 private theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Flock.Stmt}
@@ -149,12 +199,12 @@ private theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
     obtain ⟨u, hu, -, hn'⟩ := T.instances d hd'
     exact ⟨u, hu, by rw [hn, hn']⟩
 
-/-! ## The public header's draw -/
+/-! ## The public header's sample -/
 
 set_option maxHeartbeats 4000000 in
-/-- The public file's header is a parsed object. -/
+/-- The public file's header is a rebuilt object (`Flock.norm` of what `JsonParse.parse` read). -/
 private theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
-    (h : HmRow.loadPublic tags c f = .ok pop) : (∃ t, Json.parse t = .ok pop.header) ∧ ∃ m, pop.header = .obj m := by
+    (h : HmRow.loadPublic tags c f = .ok pop) : (∃ j, pop.header = Flock.norm j) ∧ ∃ m, pop.header = .obj m := by
   unfold HmRow.loadPublic at h
   dsimp only at h
   simp only [throw_bind'] at h
@@ -165,10 +215,10 @@ private theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {p
     have hpj := ‹(pure _ : V Json) = Except.ok _›
     simp only [pure, Except.pure, Except.ok.injEq] at hpj
     subst hpj
-    exact ⟨⟨_, by assumption⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
+    exact ⟨⟨_, rfl⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
 
 set_option maxHeartbeats 4000000 in
-/-- `HmRow.drawn` puts the draw in the population's header. -/
+/-- `HmRow.drawn` puts the sample in the population's header. -/
 private theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeMap.Raw String Json compare}
     (hm : m.WF) (hp : pub.header = .obj m) (h : HmRow.drawn c pub d = .ok pub') :
     pub'.header.getObjVal? "unit_draw" = .ok d := by
@@ -188,18 +238,18 @@ private theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : S
       Std.TreeMap.Raw.getElem?_insert hm]
     simp
 
-/-- **The statement's header names its draw**: a draw's statement over a loaded public file has that draw as its
+/-- **The statement's header names its sample**: a sample's statement over a loaded public file has that sample as its
 `unit_draw`. -/
-private theorem unitDraw_of (S : JsonSpec) {tags : Tags} {c : Circuit} {pf : ByteArray} {pop pub : Public} {d : Json}
+private theorem unitDraw_of {tags : Tags} {c : Circuit} {pf : ByteArray} {pop pub : Public} {d : Json}
     (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
     pub.header.getObjVal? "unit_draw" = .ok d := by
-  obtain ⟨⟨t, ht⟩, m, hm⟩ := loadPublic_header hl
-  have hw := S.parse_wf _ _ ht
-  rw [hm] at hw
+  obtain ⟨⟨j, hj⟩, m, hm⟩ := loadPublic_header hl
+  have hw := FlockDeploy.wf_norm j
+  rw [← hj, hm] at hw
   cases hw with
   | obj hwf _ => exact drawn_header hwf hm hd
 
-/-! ## A stratified draw that decodes is printable -/
+/-! ## A stratified sample that decodes is printable -/
 
 /-- A stratum's `[lo, hi)` range is a pair of natural numbers. -/
 private theorem good_range {p : Array Json} (hs : p.size = 2) {c₀ c₁ : String} {lo hi : ℕ}
@@ -254,7 +304,7 @@ private theorem good_stratum {j : Json} (hw : Wf j) {s : Draw.Stratum} (h : stra
       exact asNat_good hn
 
 set_option maxHeartbeats 4000000 in
-/-- **A stratified draw that decodes is printable**: an object of exactly `law`, `population`, `units`, `k` and
+/-- **A stratified sample that decodes is printable**: an object of exactly `law`, `population`, `units`, `k` and
 `strata`, a string, natural numbers, an array of them, and strata that decode. -/
 private theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D)
     {K : ℕ} {strata : Array Draw.Stratum} (hl : D.law = .stratified K strata) : Good j := by
@@ -291,8 +341,8 @@ private theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : 
       cases hw' with
       | arr ha => exact good_stratum (ha x hx) hy
 
-/-- Under `--zk` the setup admits a stratified or a subset draw. -/
-private theorem law_of_lawWhy {tags : Tags} {D : Draw.UnitDraw} (h : ProvedScope.lawWhy true tags D = none) :
+/-- Under `--zk` the setup admits a stratified or a subset sample. -/
+private theorem law_of_lawWhy {tags : Tags} {D : Draw.UnitDraw} (h : ProvedScope.lawWhy true tags false D = none) :
     (∃ K strata, D.law = .stratified K strata) ∨ ∃ k, D.law = .subset k := by
   revert h
   cases hl : D.law with
@@ -304,7 +354,7 @@ private theorem law_of_lawWhy {tags : Tags} {D : Draw.UnitDraw} (h : ProvedScope
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **A masked setup of one table** is `setupOne`'s, at the statement's tags, coins and draw. -/
+/-- **A masked setup of one table** is `setupOne`'s, at the statement's tags, coins and sample. -/
 theorem setupOne_of {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployZk rel) x) (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1) :
     ∃ st, sts = #[st] ∧ spec = st.spec ∧
@@ -316,13 +366,13 @@ theorem setupOne_of {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array
   · omega
 
 /-- **What the masked record needs of the statement, at one table**, under the JSON library's specification: a masked
-statement in scope whose drawn setup has one table has a non-empty `Σ`, a printable draw that decodes to its instances
+statement in scope whose sampled setup has one table has a non-empty `Σ`, a printable sample that decodes to its instances
 and is the statement's, and a `Hello` that reads back with `coins` an object, printable with the prover's nonce. -/
-theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem stmt_of_one {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployZk rel) x) (hs : setupOf true x = some (s, spec, sts))
     (hdr : s.read.draw.isSome = true) (h1 : sts.size = 1) :
     0 < spec.sigma.size ∧ DrawOk spec ∧ spec.unitDraw = s.read.draw ∧
-      ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+      ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
         m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m)) := by
   obtain ⟨st, -, hspec, hst⟩ := setupOne_of hsc hs h1
   obtain ⟨⟨c, pop, hl, hd⟩, hinst, hsig, hhello⟩ := setupOne_stmt hst
@@ -334,11 +384,11 @@ theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpe
     simp [Readable.Read.coins, hzk, FlockSoundness.Discharge.ZkExec.zkCoins]
   rw [hco] at hhello
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 hdr
-  have hu := unitDraw_of S hl (hd d hdd)
+  have hu := unitDraw_of hl (hd d hdd)
   have hU : spec.unitDraw = some d := by
     rw [hspec]
     simp [Flock.Stmt.spec, hu, Except.toOption]
-  obtain ⟨m, kvs, hp, hm, hkv, hmg, hg⟩ := hello_ok S hhello
+  obtain ⟨m, kvs, hp, hm, hkv, hmg, hg⟩ := hello_ok hhello
   refine ⟨by rw [hspec]; exact hsig, ?_, by rw [hU, hdd], m, kvs, by rw [hspec]; exact hp, hm, hkv, hmg, hg⟩
   unfold DrawOk
   rw [hU]
@@ -347,80 +397,79 @@ theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpe
   have hdl := setup_drawLaw (setupOf_some hs).2 hdr
   rw [hdd, hzk] at hdl
   simp only [ProvedScope.drawLaw, hD] at hdl
-  have hlw : ProvedScope.lawWhy true s.read.tags D = none := by
-    cases e : ProvedScope.lawWhy true s.read.tags D with
+  have hlw : ProvedScope.lawWhy true s.read.tags false D = none := by
+    cases e : ProvedScope.lawWhy true s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
-  obtain ⟨t, ht⟩ := draw_parse (setupOf_some hs).1 hdd
-  have hw := S.parse_wf t d ht
+  have hw := (insOf_draw_norm (setupOf_some hs).1 hdd).2
   refine ⟨ofJson_obj hD, ?_, D, hD, by rw [hspec]; exact hn⟩
   rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
   · exact good_stratified hw hD hK
   · exact (good_subset hw hD hk).1
 
 /-- **`StmtAt` at every good case of one table**, under the JSON library's specification. -/
-theorem Case.stmtOne (S : JsonSpec) (c : Case H rel) (h1 : c.sts.size = 1) : StmtAt c :=
-  stmt_of_one S c.scope c.setup c.ready_parts.1 h1
+theorem Case.stmtOne (c : Case H rel) (h1 : c.sts.size = 1) : StmtAt c :=
+  stmt_of_one c.scope c.setup c.ready_parts.1 h1
 
 /-- **`StmtAt` at every good case**, under the JSON library's specification: `Case.stmtOne` at one table,
 `Case.stmtAt` at several. -/
-theorem stmtAt_all (S : JsonSpec) (c : Case H rel) : StmtAt c :=
-  c.one_or_several.elim (c.stmtOne S) (c.stmtAt S)
+theorem stmtAt_all (c : Case H rel) : StmtAt c :=
+  c.one_or_several.elim (c.stmtOne) (c.stmtAt)
 
 /-- **`StmtOkZk` holds**, under the JSON library's specification: a good masked case has one table. -/
-theorem stmtOkZk (S : JsonSpec) : StmtOkZk H rel :=
-  fun c => stmt_of_one S c.scope c.setup c.ready_parts.2.1 c.ready_parts.1
+theorem stmtOkZk : StmtOkZk H rel :=
+  fun c => stmt_of_one c.scope c.setup c.ready_parts.2.1 c.ready_parts.1
 
 /-! ## Completeness without the statement's premise -/
 
 /-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
 share, with error `δc H`, at any number of tables: `completeRel` with the statement's premise proved
 (`stmtAt_all`). -/
-theorem completeRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
+theorem completeRelS (H : Claims.Msg → Claims.Msg) (h64 : JsonRT.Out64 H)
     (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c) (hR : ∀ c : Case H Readable.relation, RepShapedAt c)
     (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  completeR H Readable.relation S h64 (stmtAt_all S) hPR hR Run.rsExtras hC hMR maskFree_relation
+  completeR H Readable.relation h64 (stmtAt_all) hPR hR Run.rsExtras hC hMR maskFree_relation
 
 /-- **Flock's completeness at the deployed masked verifier**, at the deployed relation, of the record's reference
 prover (`(deployZk Readable.relation).P`, `honestPR`) at the record's error (`(deployZk Readable.relation).δc`, `δc H`),
 at any number of tables: `completeRelS`, the oracle's 64-byte outputs (`Out64`) being `Claims.Complete`'s own
 antecedent. -/
-theorem complete_json (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_json (H : Claims.Msg → Claims.Msg) 
     (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c) (hR : ∀ c : Case H Readable.relation, RepShapedAt c)
     (hC : ∀ o : Run H Readable.relation, LgInnerAt H Readable.relation o) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
-  completeRelS H S h64 hPR hR hC hMR h64
+  completeRelS H h64 hPR hR hC hMR h64
 
 /-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
 share, with error `δc H`, at any number of tables: `completeJRel` with `StmtOkZk` proved (`stmtOkZk`). -/
-theorem completeJRelS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
+theorem completeJRelS (H : Claims.Msg → Claims.Msg) (h64 : JsonRT.Out64 H)
     (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
     (hLg : FlockComplete.LigeritoZk H Readable.relation) (hIn : FlockComplete.Inner H Readable.relation)
     (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)
     (hCJ : LgInnerJ H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  completeJRel H S h64 (stmtOkZk S) hR hPR hLg hIn hPRJ hRJ hCJ hMR
+  completeJRel H h64 (stmtOkZk) hR hPR hLg hIn hPRJ hRJ hCJ hMR
 
 /-- **Flock's completeness at the deployed masked verifier**, at the deployed relation, of the record's reference
 prover at the record's error, at any number of tables: `completeJRelS`, from the one-table premises and the same
 three at several tables (`ProverRunsJ`, `RepShapedJ`, `LgInnerJ`), with `Out64` `Claims.Complete`'s own
 antecedent. -/
-theorem complete_jsonJ (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_jsonJ (H : Claims.Msg → Claims.Msg) 
     (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
     (hLg : FlockComplete.LigeritoZk H Readable.relation) (hIn : FlockComplete.Inner H Readable.relation)
     (hPRJ : ProverRunsJ H Readable.relation) (hRJ : RepShapedJ H Readable.relation)
     (hCJ : LgInnerJ H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  fun h64 => completeJRelS H S h64 hR hPR hLg hIn hPRJ hRJ hCJ hMR h64
+  fun h64 => completeJRelS H h64 hR hPR hLg hIn hPRJ hRJ hCJ hMR h64
 
 /-- **Flock's masked verifier is complete at the deployed relation** for `honestPZk` with error `δcZk H`:
 `complete_zk_relation`, which proves `StmtOkZk` from `S` itself. -/
-theorem complete_zk_relationS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec)
+theorem complete_zk_relationS (H : Claims.Msg → Claims.Msg) 
     (hR : JsonRT.RepShapedZk H Readable.relation)
     (hPR : JsonRT.ProverRunsZk H Readable.relation) (hLg : FlockComplete.LigeritoZk H Readable.relation)
     (hIn : FlockComplete.Inner H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     CompleteWith H (deployZk Readable.relation) honestPZk (δcZk H) :=
-  FlockComplete.complete_zk_relation H S hR hPR hLg hIn hMR
+  FlockComplete.complete_zk_relation H hR hPR hLg hIn hMR
 
 end FlockComplete.ZkTables

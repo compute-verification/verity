@@ -1,7 +1,7 @@
-"""The firewall's contract (`Flock/Firewall/Contract.lean`, `flock-firewall contract`) against the inner phase's firewall
+"""The ZK server's contract (`Flock/Firewall/Contract.lean`, `flock-firewall contract`) against the inner phase's ZK server
 (`verity_flock.rec_live.Proxy`), on the transcripts `verity_flock.firewall_transcript` records (`firewall_agree.py`):
-honest sessions accepted by both, the red team's six sessions on #1270 refused by both or sent as the schedule has them,
-tamper controls (firewalls that let out what the contract forbids) refused by the contract, review r6's leaks on #1323
+honest sessions accepted by both, the red team's six sessions against the ZK server refused by both or sent as the schedule has them,
+tamper controls (firewalls that let out what the contract forbids) refused by the contract, the ZK server review's leaks
 each cut at its item, every session `test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on, the inner
 session's live coins, coins that do not open a challenger's commitment refused by both, and no salt used twice."""
 from __future__ import annotations
@@ -20,7 +20,7 @@ from verity_flock import firewall_transcript as FT
 from verity_flock import rec_live as RL
 
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
-LEAN = VERIFIER.parents[2] / "core" / "service" / "flock"
+LEAN = VERIFIER.parents[3] / "verity/core/service/flock"
 BIN = LEAN / ".lake/build/bin/flock-firewall"
 
 
@@ -43,7 +43,7 @@ def lean():
 
 
 def test_a_commit_item_is_the_row_the_coin_server_receives():
-    """A commit item's message is the bytes the registered row's digest hashes, and the firewall's ``b || c`` is hm96-sha512's
+    """A commit item's message is the bytes the registered row's digest hashes, and the ZK server's ``b || c`` is hm96-sha512's
     commit string of that digest: what `Flock.Firewall.Contract.commitBC` recomputes."""
     s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
     t = s.transcript()
@@ -78,8 +78,8 @@ def test_the_transcript_is_the_schedule_in_its_order():
 
 
 def test_the_contract_and_the_firewall_agree_on_every_case(lean, tmp_path):
-    """Every case meets its expectation (`firewall_agree.cases`): the honest sessions accepted by both; the red team's six on
-    #1270 a stop for both, or the schedule's value sent in its place (a Hello spelled with its keys in another order, each
+    """Every case meets its expectation (`firewall_agree.cases`): the honest sessions accepted by both; the red team's six
+    a stop for both, or the schedule's value sent in its place (a Hello spelled with its keys in another order, each
     stream's Open wherever the prover sent it); each tamper control refused by the contract alone."""
     assert FA.main(["--lean", lean, "--out", str(tmp_path), "--cases"]) == 0
     rows = [r.split("\t") for r in (tmp_path / "agreement.tsv").read_text().splitlines()[1:]]
@@ -99,10 +99,10 @@ def test_the_contract_holds_on_every_session_of_the_agreement_test(lean, tmp_pat
     """`test_firewall_agreement`'s sessions (its cases: each schedule edit, prefix, drop, duplicate and swap of a request,
     requests after Finish, forgeries, byte flips; and every placement of the Opens) through the proxy: the contract accepts
     each session the proxy
-    finishes, and of each one it stops releases every item, save where the proxy hands the coin server a call the coin server
-    refuses (a Commit before Hello or a second one, a Link before Commit or a second one). Such a call reaches the coin
-    server, so the contract's cut is that call; `Flock.Firewall.run` refuses it before it sends anything, and
-    `test_firewall_agreement` compares the calls the coin server takes."""
+    finishes, and of each one it stops releases every item, save where the proxy hands the challenger a call the challenger
+    refuses (a Commit before Hello or a second one, a Link before Commit or a second one). Such a call reaches the challenger's
+    live-coin part, so the contract's cut is that call; `Flock.Firewall.run` refuses it before it sends anything, and
+    `test_firewall_agreement` compares the calls the challenger takes."""
     from test_firewall_agreement import SALTS, _coins, cases, placements
 
     sessions = []
@@ -129,7 +129,7 @@ def test_the_contract_holds_on_every_session_of_the_agreement_test(lean, tmp_pat
 
 
 def test_a_firewall_that_lets_out_what_the_contract_forbids_fails_the_check(lean, tmp_path, monkeypatch):
-    """Negative control of the check itself: a tamper control expected to agree (as a firewall that reused salts would be,
+    """Negative control of the check itself: a tamper control expected to agree (as a ZK server that reused salts would be,
     if the contract missed it) is a miss, and the check exits 1."""
     name, reqs, proxy, fresh, _, challenger = next(c for c in FA.cases() if c[0] == "tamper-reused-salt")
     monkeypatch.setattr(FA, "cases", lambda: [(name, reqs, proxy, fresh, {"firewall": True, "lean": True, "why": None}, challenger)])
@@ -139,9 +139,9 @@ def test_a_firewall_that_lets_out_what_the_contract_forbids_fails_the_check(lean
 
 
 def test_the_contract_cuts_every_leak_of_review_r6_at_its_item(lean, tmp_path):
-    """Review r6's leaks on #1323 (`firewall_agree.leaks`), each a bit the firewall could choose and each accepted before:
+    """The ZK server review's leaks (`firewall_agree.leaks`), each a bit the ZK server could choose and each accepted before:
     the commitments' count and place (B1), a tape number naming another's value (B2), the public input taken from the
-    transcript (B3) and a value of the firewall's own under a name it chose (N1). Each is cut at its item for its reason;
+    transcript (B3) and a value of the ZK server's own under a name it chose (N1). Each is cut at its item for its reason;
     the honest transcript and a masked value checked against the verifier's relation are accepted."""
     cases = FA.leaks()
     got = FA.decide(lean, tmp_path, [(n, t, p) for n, t, p, _ in cases])
@@ -158,7 +158,7 @@ def test_the_contract_reads_a_round_only_in_rec_step3s_form(lean, tmp_path):
     """The public schedule's rounds are read in `rec_live.check_schedule`'s form and no other, and every field of one is
     pinned: the honest transcript under a schedule whose round 1 has v0's ``caps``, no ``level0``, another key or two
     message rows is cut at that round's item, as it is when the round's ``tops`` or ``level0`` differ from what the
-    firewall sent; under v0's kind it is cut at Hello."""
+    ZK server sent; under v0's kind it is cut at Hello."""
     s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
     t, sched = s.transcript(), s.public()["schedule"]
     at = {it["fixed"]["what"]: i for i, it in enumerate(t["items"]) if "fixed" in it}
@@ -194,7 +194,7 @@ def test_a_public_input_the_contract_cannot_read_decides_nothing(lean, tmp_path)
 @pytest.mark.parametrize("commit", [False, True], ids=["live", "committed"])
 def test_a_recorded_session_replays_to_its_record(lean, tmp_path, commit):
     """`firewall_agree.replay` on a session `rec_live` wrote, on live coins or on coins the challenger committed to (then
-    with its ``coins.json``): the same coin server record from its own coins and salts, and both accept it."""
+    with its ``coins.json``): the same challenger's record from its own coins and salts, and both accept it."""
     s = FA.run_case("honest", FA.requests(), RL.Proxy, None, challenger={"commit": commit})
     d = tmp_path / "s"
     s.proxy.write(d)
@@ -208,7 +208,7 @@ def test_a_recorded_session_replays_to_its_record(lean, tmp_path, commit):
 def test_the_inner_sessions_coins_are_live():
     """The inner session's challenger commits to no coin (`rec_live.serve`'s, `firewall_transcript.Session`'s by default):
     its public input holds no commitment, no coin item of the honest transcript carries an opening, and each coin item
-    comes after every commitment the schedule owes before it, so each round's coins are drawn after its commitments."""
+    comes after every commitment the schedule owes before it, so each round's coins are flipped after its commitments."""
     s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
     t, pub = s.transcript(), s.public()
     assert s.commitments is None and s.coins.committed is None and "coins" not in pub
@@ -227,7 +227,7 @@ def test_each_coin_item_opens_its_commitment_in_the_public_input():
     """A challenger that commits to every round's coins before the session (`rec_live.CoinServer.commit_coins`): the public
     input holds one commitment a round, the link points as round 0 of ``link``, and each coin item of the committed
     transcript opens its own under the salt sent with it (`rec_live.coin_commitment`, `Flock.Firewall.Contract.commitBC` of
-    `coinMsg`). The challenger's salts are its own: none is the firewall's, and none opens two rounds."""
+    `coinMsg`). The challenger's salts are its own: none is the ZK server's, and none opens two rounds."""
     s = FA.run_case("honest-committed", FA.requests(), RL.Proxy, None, challenger={"commit": True})
     t, pub = s.transcript(), s.public()
     items = [i["coins"] for i in t["items"] if "coins" in i]
@@ -243,9 +243,9 @@ def test_each_coin_item_opens_its_commitment_in_the_public_input():
 
 
 def test_coins_that_do_not_open_the_challengers_commitment_are_refused(lean, tmp_path):
-    """The firewall stops a session whose live coins come with an opening, or whose committed coins come with a salt that
+    """The ZK server stops a session whose live coins come with an opening, or whose committed coins come with a salt that
     does not open their round's commitment, or with none (before those coins reach the workers); the contract refuses each
-    such session, and refuses it at the coin item when a firewall serves it anyway; it accepts the honest session on live
+    such session, and refuses it at the coin item when a ZK server serves it anyway; it accepts the honest session on live
     coins and the honest committed session."""
     named = {c[0]: c for c in FA.cases()}
     stops = {"challenger-stray-opening": "link round 0: an opening of coins the challenger never committed to",
@@ -272,7 +272,7 @@ def test_coins_that_do_not_open_the_challengers_commitment_are_refused(lean, tmp
 
 
 def test_a_salt_used_twice_in_a_session_is_refused(lean, tmp_path):
-    """Within a session the contract refuses any salt used twice, whoever drew it: a firewall whose salt source repeats (its
+    """Within a session the contract refuses any salt used twice, whoever drew it: a ZK server whose salt source repeats (its
     tape's salts not pairwise distinct), two commitments under one salt number, and one salt's bytes under two numbers."""
     _, reqs, proxy, fresh, expect, challenger = next(c for c in FA.cases() if c[0] == "tamper-reused-salt")
     s = FA.run_case("tamper-reused-salt", reqs, proxy, fresh, challenger=challenger)
@@ -285,9 +285,9 @@ def test_a_salt_used_twice_in_a_session_is_refused(lean, tmp_path):
 
 
 def test_no_salt_repeats_across_a_thousand_sessions():
-    """Across 1,000 honest sessions, each on the firewall's own salt source (`hm96.SHA512.fresh_salt`, 192 bytes from the
+    """Across 1,000 honest sessions, each on the ZK server's own salt source (`hm96.SHA512.fresh_salt`, 192 bytes from the
     operating system's generator) and that of a challenger that commits to its coins, every salt either drew is distinct
-    from every other: the firewall's tapes and the challenger's openings, within and across sessions."""
+    from every other: the ZK server's tapes and the challenger's openings, within and across sessions."""
     salts: list[str] = []
     for _ in range(1000):
         s = FT.Session(FA.SCHEDULE, commit=True)

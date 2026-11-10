@@ -7,7 +7,7 @@ gate's regression test: it must be refused, by that check. `run` gates first and
 the one declared; then it times the passed probes interleaved (gpu_kit/bench.cuh, after each sink's poisoned pass and
 its no-write control) and writes, under --out:
 
-- `census.csv`: in RS-W′'s census schema (rows.py), a line for each (kind, row) a timed probe prices, the fastest of
+- `census.csv`: in the machine model's census schema (rows.py), a line for each (kind, row) a timed probe prices, the fastest of
   its probes (the class costs what its cheapest form does), its `runs` the run id;
 - `rows.jsonl`: one line a timed probe: class, rate, MACs a word, run id, SASS hash, its census line, clocks and tags;
 - `gate.json`, the verdicts, and `times.jsonl`, the binary's own lines (every block's cycles, every rep).
@@ -67,12 +67,15 @@ def nvcc() -> str:
 
 
 def build(out: Path, sources: list[Path], arch: str = "sm_120a") -> list[Path]:
+    """Each source for `arch`'s SASS. The host side sees the target as PROBE_ARCH (90, 100, 120), so a probe table can
+    declare the counts that target's ptxas lowers to."""
     out.mkdir(parents=True, exist_ok=True)
     gencode = f"arch=compute_{arch.removeprefix('sm_')},code={arch}"
+    define = f"-DPROBE_ARCH={arch.removeprefix('sm_').rstrip('a')}"
     built = []
     for src in sources:
         dst = out / src.stem
-        subprocess.run([nvcc(), *NVCC_FLAGS, "-gencode", gencode, "-o", str(dst), str(src)], check=True)
+        subprocess.run([nvcc(), *NVCC_FLAGS, define, "-gencode", gencode, "-o", str(dst), str(src)], check=True)
         built.append(dst)
     return built
 

@@ -3,7 +3,7 @@
 # `idle` (the H200 rule) and `lease` (a vy-dc-* VM's ~/.research/lease); vm_stop.py's docstring states each. A VM launched for a
 # few hours can be appended on the pod at once; put it here in the next PR.
 
-# circuits' eu-north1 H200s, which can't stop themselves (INF-58); s1 was deleted 15:13Z 19 Oct with its disks (top, CIR-52)
+# circuits' eu-north1 H200s, which can't stop themselves
 [[vm]]
 name = "vy-glm53-eu"
 rules = ["idle", "deadline"]
@@ -17,7 +17,7 @@ rules = ["idle", "deadline"]
 name = "vy-glm53-cpu-2"
 rules = ["deadline"]
 
-# kernels INF-122 (Daniel 9:54 AM PDT 19 Oct): the registry has neither its id nor its deadline
+# the registry has neither its id nor its deadline
 [[vm]]
 name = "vy-dc-l40s"
 rules = ["lease", "deadline"]

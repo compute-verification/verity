@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from verity_bench import breakdown, jobs, served_table
+from verity_bench import breakdown, jobs, overhead, overhead_records, served_table, settings
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
@@ -57,11 +57,11 @@ def _point(args: Any) -> int:
         raise ValueError(f"point {args.point!r} is not in spec {args.spec!r}")
     if item.identity != args.identity:
         raise ValueError(f"point identity changed: expected {item.identity}, invocation named {args.identity}")
-    run_dir = Path(os.environ.get("RESEARCH_RUN_DIR", ".")).resolve()
+    run_dir = Path(settings.RESEARCH_RUN_DIR).resolve()
     # A requeued (preempted) point reruns in its run directory: an earlier attempt's verdict must not outlive it.
     (run_dir / "result.json").unlink(missing_ok=True)
     spec = plan.spec
-    jobs.check_point_environment(spec, os.environ)
+    jobs.check_point_environment(spec, settings.environ())
     if spec.preset.model_digest is not None:
         found = local_checkpoint(spec.preset, spec.preset.model).model_digest
         if found != spec.preset.model_digest:
@@ -85,16 +85,17 @@ def _point(args: Any) -> int:
             "uv_lock_sha256": plan.toolchain.uv_lock_sha256,
         },
     )
-    out = Path(os.environ.get("OUT", run_dir / "out")).resolve()
+    out = Path(settings.OUT or run_dir / "out").resolve()
     out.mkdir(parents=True, exist_ok=True)
     write(doc, out / "benchmark.json")
     (out / "table.md").write_text(render(doc), encoding="utf-8")
     jobs.write_resolved(plan, out / "resolved-spec.json")
+    (out / "settings.json").write_text(json.dumps(settings.record(), indent=1, sort_keys=True) + "\n", encoding="utf-8")
     passed = all(g["passed"] for g in doc["gates"])
     envelope = {
         "schema": "research/result/v0.1",
         "kind": "verity-vllm-benchmark/v1",
-        "run_id": os.environ.get("RESEARCH_RUN_ID", "local"),
+        "run_id": settings.RESEARCH_RUN_ID,
         "workload_fingerprint": {
             "identity": item.identity,
             "resolved_spec_sha256": plan.spec_sha256,
@@ -108,7 +109,7 @@ def _point(args: Any) -> int:
         },
         "measurements": [],
         "measurement_files": ["out/benchmark.json"],
-        "artifacts": ["out/table.md", "out/resolved-spec.json"],
+        "artifacts": ["out/table.md", "out/resolved-spec.json", "out/settings.json"],
     }
     target = run_dir / "result.json"
     temporary = run_dir / f"result.json.tmp.{os.getpid()}"
@@ -144,9 +145,86 @@ def _breakdown(args: Any) -> int:
     return 0
 
 
+def _overhead_store(args: Any) -> Any:
+    completion = jobs.StoreCompletion(root=jobs.repository_root(), local_only=args.local_only)
+    if not args.local_only:
+        completion.pull_labels()
+    return completion.store
+
+
+def _overhead_node(args: Any) -> str:
+    node = args.on or overhead_records.NODES.get(args.card)
+    if node is None:
+        raise ValueError(f"--on NODE: the {args.card} has no default node")
+    return node
+
+
+def _overhead_points(args: Any) -> int:
+    if args.store:
+        print(overhead_records.store_points(_overhead_store(args), args.store, by=args.by))
+        return 0
+    return overhead_records.launch_points(jobs.repository_root(), _overhead_node(args), args.card, args.model,
+                                          args.precision, args.minutes)
+
+
+def _overhead_run(args: Any) -> int:
+    if args.record:
+        for why in overhead_records.record_run(_overhead_store(args), args.record, by=args.by):
+            print(f"not of record at {why}")
+        print(f"{args.record}: {served_table.RUN_OF_RECORD}={overhead_records.RUN_RECORD}")
+        return 0
+    if args.scheme is None:
+        raise ValueError("--scheme S, or --record RUN")
+    return overhead_records.launch_run(_overhead_store(args), jobs.repository_root(), _overhead_node(args), args.card,
+                                       args.scheme, args.point, args.points, args.minutes, cubin=args.cubin)
+
+
+def _overhead_table(args: Any) -> int:
+    table = overhead_records.build(local_only=args.local_only)
+    if args.json:
+        print(json.dumps(table, indent=1, sort_keys=True))
+    else:
+        print(overhead_records.render(table), end="")
+    return 0
+
+
+def _overhead_parser(commands: Any) -> None:
+    door = commands.add_parser("overhead", help="the one front door for overhead: operating points, timed γ, the table")
+    sub = door.add_subparsers(dest="overhead_command", required=True, metavar="STEP")
+
+    def common(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--card", default="h200", choices=list(overhead.CARDS))
+        p.add_argument("--on", metavar="NODE", help="the GPU node (default: the card's, overhead_records.NODES)")
+        p.add_argument("--minutes", type=float, help="the run's bound, which its GPU lease enforces")
+        p.add_argument("--as", dest="by", default=overhead_records.BY, help="who labels the store")
+        p.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
+
+    points = sub.add_parser("points", help="sweep m on the card for C and L (a research run), or --store a finished sweep")
+    common(points)
+    points.add_argument("--model", default=overhead.KERNEL_MODEL, choices=list(overhead.MODELS))
+    points.add_argument("--precision", default="fp8")
+    points.add_argument("--store", metavar="RUN", help="store RUN's points as the next version of the card's, of record")
+    points.set_defaults(run=_overhead_points, command_parser=points)
+
+    run = sub.add_parser("run", help="time a scheme against stock at the stored points (a research run), or --record one")
+    common(run)
+    run.add_argument("--scheme", choices=list(overhead.SCHEMES))
+    run.add_argument("--point", default="all", choices=[*overhead.POINTS, "all"])
+    run.add_argument("--points", metavar="ART", help="time at this points art instead of the card's of record")
+    run.add_argument("--cubin", metavar="ART", help="the art of the cubin the scheme's arm loads, sent with the run (its "
+                                                    "arm reads $VERITY_BENCH_CUBIN); without it the run is development only")
+    run.add_argument("--record", metavar="RUN", help="label RUN a run of record, once it stands as a whole")
+    run.set_defaults(run=_overhead_run, command_parser=run)
+
+    table = sub.add_parser("table", help="γ per scheme, point and card from labelled runs of record alone")
+    table.add_argument("--json", action="store_true", help="the rows as JSON (each with of_record and why)")
+    table.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
+    table.set_defaults(run=_overhead_table, command_parser=table)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="verity-bench")
-    commands = parser.add_subparsers(dest="command", required=True, metavar="BACKEND")
+    commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
     vllm = commands.add_parser("vllm", help="measure serving overhead through the vLLM integration")
     vllm_cli.add_arguments(vllm)
@@ -189,6 +267,8 @@ def _parser() -> argparse.ArgumentParser:
                        help="read this machine's catalog alone, not the store's remote")
     split.set_defaults(run=_breakdown, command_parser=split)
 
+    _overhead_parser(commands)
+
     point = commands.add_parser("_vllm-point", help=argparse.SUPPRESS)
     point.add_argument("--spec", required=True)
     point.add_argument("--point", required=True)
@@ -200,6 +280,7 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        settings.validate(of_record=args.command == "_vllm-point")
         return int(args.run(args))
     except ValueError as error:
         args.command_parser.error(str(error))

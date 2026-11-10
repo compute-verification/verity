@@ -1,7 +1,7 @@
 """kappa for frontier training: twice the counted multiplications over the reference training circuit's computed gates,
 per token at a context length, over a model's pretraining schedule, and for the board's other rows (``ROWS``).
 
-``Nci.SecurityProofs.ThreadedTraining`` (``Security/Models/Nci/Guarantees/Threads.lean``) takes kappa through its
+``Nci.SecurityProofs.ThreadedTraining`` (``Security/Definitions/Nci/Guarantees/Threads.lean``) takes kappa through its
 hypothesis ``kappa * c.D.size c.D.computed <= 2 * T.M.card``: every computed gate of the reference circuit ``c``
 against twice its counted multiplications ``M``, the gates that multiply an updated weight by an activation or an
 activation gradient (``Nci.Threading``). A gate is one scalar operation and an addition reads two values, so a matmul's
@@ -101,12 +101,6 @@ MODELS = {
                     + [(800e9 / 6, round(8192 * 16 ** (k / 6))) for k in range(1, 7)],
     },
 }
-
-#: the products of the Kimi K2 rows' chain (``rows.json``): per layer q_a, q_b, o and the shared expert's up and down,
-#: over 61 layers
-KIMI_CHAIN_PRODUCTS = 7.2e9
-#: the dense-100b row's chain: q, o, up and down, 10 d^2 of a layer's 12 d^2, over its layers
-DENSE_CHAIN_PRODUCTS = 10 * 12288 ** 2 * 55
 
 #: RL's rollouts: R1-Zero's 512 sampled sequences a step at the 32,768-token cap it kept for its first 8.2k steps
 #: (DeepSeek-R1, arXiv 2501.12948, 2.2)
@@ -276,12 +270,6 @@ def row(rid: str) -> tuple[float, float]:
     """A ``ROWS`` row's kappa and gates per token."""
     m, seq, forwards, backward = ROWS[rid]
     return kappa(m, seq, forwards, backward), sum(per_token(m, seq, forwards, backward).values())
-
-
-def matmul_flops(m: dict, seq: int) -> float:
-    """Model flops per token as the reports count them: the weight matmuls and attention's products."""
-    p = per_token(m, seq)
-    return sum(v for k, v in p.items() if k not in ("softmax, norms, SwiGLU, routing, loss", "optimizer step"))
 
 
 def table(m: dict, seqs: list[int], forwards: float = 1, backward: float = 1) -> None:

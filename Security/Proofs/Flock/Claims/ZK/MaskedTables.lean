@@ -1,14 +1,56 @@
-import Proofs.Flock.Claims.ZK.Session
-import Proofs.Flock.Claims.Scope.Split
-import Proofs.Flock.Claims.Scope.StmtOf
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+module
+
+public import Proofs.Flock.Claims.Scope.StmtOf
+public import Proofs.Flock.Claims.ZK.Deployed
+public import Std.Tactic.BVDecide.Normalize.Prop
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Scope.InScope
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Claims.Scope.Sizes
+import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
 /-!
 # The deployed masked session's tables: `Tables`, `DummyReg` and `Complete`
 
 The masked session's tables are `setupOf true x`'s (`stsOf`). Each is a `--zk` table built from its statement alone
 (`ZkHidden.ZkTab`, `ZkTab.table`: the plan of the single-input-group form, which the tree had only at a hidden-output
-draw, `DrawSetupZHJ.table`), so every table is a table the session sets up (`setupTable_zkTab`).
+sample, `DrawSetupZHJ.table`), so every table is a table the session sets up (`setupTable_zkTab`).
 
 * `ZkHidden.schedule_ok_of_shapeOk`: a statement the `--zk` shape check passes has a `--zk` schedule (`queries0` puts
   `m` in `[25, 35]`, where `Zk.schedule` accepts, `scheduleOkB_all`).
@@ -27,6 +69,8 @@ draw, `DrawSetupZHJ.table`), so every table is a table the session sets up (`set
   (`dummyReg_tabC`, `coinedOf_reg_of`) hold at every statement, and `Complete` (`complete_tabC`) at every statement with
   a witness.
 -/
+
+@[expose] public section
 
 /-! ## A `--zk` table from its statement alone -/
 
@@ -264,7 +308,7 @@ theorem parsed_zk {rel : Parsed → Relation} {x : Claims.Msg} {w : Claims.Flock
     rw [ht]
     exact FlockDeploy.readOf_zk h1
   obtain ⟨hc, -⟩ := (scope_ok_iff p).1 hsc'
-  obtain ⟨hRu, c, pub, hcirc, -, -, -, hok⟩ := (check_ok_iff _ _ _ _ _ _ _ _).1 hc
+  obtain ⟨hRu, c, pub, hcirc, -, -, hok⟩ := (check_ok_iff _ _ _ _ _ _ _ _).1 hc
   have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hRu.2.2.2.2.2])
   obtain ⟨spec', hset'⟩ := setup_of_tablesOf (tablesOf_of_parses hps)
   rw [ht] at hset'
@@ -273,6 +317,11 @@ theorem parsed_zk {rel : Parsed → Relation} {x : Claims.Msg} {w : Claims.Flock
     simp only [Except.ok.injEq, Prod.mk.injEq] at this
     exact this.2
   have ho : p.tags.hiddenOutputs = false → c.outNet = c.unitNet := fun hh => by
+    unfold FormOk at hok
+    split at hok
+    · simp only [ProvedScope.scopeOkT, Bool.and_eq_true, beq_iff_eq] at hok
+      first | exact hok.1.1.2 | simp_all
+    obtain ⟨-, hok⟩ := hok
     split at hok
     · rename_i hh'
       cases hh'.symm.trans hh

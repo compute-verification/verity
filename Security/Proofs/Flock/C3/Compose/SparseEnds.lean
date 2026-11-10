@@ -1,6 +1,20 @@
-import Proofs.Flock.C3.Compose.PartRead
-import Proofs.Flock.C3.Reps.Tie
-import Proofs.Flock.C3.Sparse.SrcTie
+module
+
+public import Proofs.Flock.C3.Compose.PartRead
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.HoloValues.Shape
 
 /-!
 # n10: the sparse phases' part ends in a coin, at a count the class fixes; R's ring switches are read at their rounds
@@ -16,6 +30,8 @@ the statement, the extra claims' number (two per region) and the reps' schedule 
 wires of their rounds' commit strings (`RsSk`, `RsIo`). The layers are good at an accepted outer proof, so each bit of
 w's element at a ring switch's slot is the layer's at one wire in both runs.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

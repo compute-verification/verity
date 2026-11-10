@@ -1,7 +1,25 @@
-import Proofs.Flock.Soundness.LigeritoMCA
+module
+
+public import ArkLib.Data.CodingTheory.ProximityGenerator.Basic
+public import Definitions.Core.Game
+public import Definitions.Flock.Accounting.Fast100
+public import Proofs.Flock.Soundness.LigeritoMCA
+public import Proofs.Flock.Soundness.ListSize
+import ArkLib.Data.CodingTheory.JohnsonBound.Family
+import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Accounting.Numbers
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.Rounds
+import Proofs.Flock.Soundness.ZerocheckPhase
 
 /-!
-# Ligerito's levels meet the Johnson-range MCA bound (PROTOCOL.md §13, §15)
+# Ligerito's levels meet the Johnson-range MCA bound (`Flock.Ligerito`, `Flock.Schedule`)
 
 Each level's folds happen over `K`, in the level's Reed–Solomon code embedded from `F`
 (`codeK`: `2^logCols` coefficients on the `2^logLen` points `ω_q`). For every level of a
@@ -12,6 +30,8 @@ bound is the accounting's `Level.mcaA / qK` (`prCoin_level_mca_le`):
 * the radius is in the Johnson range `< 1 − √((k − 1)/n)`, since `(k − 1)/n < ρ`;
 * the bound's numerator, at `n = 2^logLen`, `k = 2^logCols` and `δ` the radius, is `mcaA`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

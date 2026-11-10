@@ -10,7 +10,7 @@
                                                  # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given;
                                                  # a suites.py run of named suites: their [tool.verity.tests] worker_gb and timeout_s),
                                                  # on whole cores of its own, waiting on the node while none are free; or, when it starts
-                                                 # sooner there, a slot of vy-nebius-cpu-1's research pool (research/auto.py)
+                                                 # sooner there, a slot of a CPU node's research pool (research/auto.py's SPILL)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -45,8 +45,10 @@
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
-  research queue status|sync|land|eject|ready|judge|review [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `main`
-                                                 # fast-forwarded to its reviewed prefix, checked after landing (research/queue.py)
+  research queue status|sync|land|eject|ready|judge|review [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `checked`
+                                                 # fast-forwarded to its reviewed prefix, `main` to what passed the gated steps (research/queue.py)
+  research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page, written with this agent's Cursor identity
+                                                 # (research/goals.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
@@ -71,6 +73,8 @@
   research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
                                                  # GPU-h held, busy and useful per node and UTC hour, and the holdings that held GPUs
                                                  # idle: `cluster usage` (infra/cluster usage.py) over the console's record on vy-nebius-1
+  research lean-times [--hours 24] [--until T] [--over 15] [--json]   # each Lean task's wall time, from the store's attempts: records
+                                                 # runs and checks' Lean steps, p50/p95/max per kind and package (research/lean_times.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -114,8 +118,9 @@ import math
 import os
 import subprocess
 import sys
+import tarfile
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 from . import clone
@@ -193,7 +198,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--on", default=None, metavar="MACHINE",
                     help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
                          "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise, or "
-                         "a slot of vy-nebius-cpu-1's research pool when it starts sooner there (research/auto.py)")
+                         "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's SPILL)")
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
@@ -203,7 +208,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--wait", action="store_true",
                     help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused), for at most "
-                         f"{waitcap.WAIT_CAP_S} s with the launch (20 minutes: no tool call blocks longer, Daniel, 19 Oct): then it stops waiting, "
+                         f"{waitcap.WAIT_CAP_S} s with the launch (20 minutes: no tool call blocks longer): then it stops waiting, "
                          f"cancels nothing, names the check-back command (`research status RUN`) and exits {waitcap.STILL_GOING}. "
                          "Without it, run returns once the machine has started the run, so a loop of launches doesn't serialize them")
     ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
@@ -257,10 +262,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     q.add_argument("--preemptible", action="store_true", help="it may be stopped for higher-ranked work and requeued (a guest's must be)")
     q.add_argument("--gpu-host", action="store_true",
                    help="a job without --gpus whose workload takes its GPUs with gpu-lease itself, around each GPU step: its CPU "
-                        "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle)")
+                        "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle), with GPU_LEASE naming the node's "
+                        "lease tool")
     q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
     q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
-    ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
+    ap.add_argument("--id", default=None, help="use this run id (rYYYYMMDD-HHMMSS-xxxx) instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--remote-json", default=None, help=argparse.SUPPRESS)
@@ -276,8 +282,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "store's remote with a key minted here, so custody does not depend on this machine (store.custody)")
     ap.add_argument("--no-custody-r2", dest="custody_r2", action="store_false",
                     help="with --on: no run custody on the remote; the records stay on the machine until `research fetch --all`")
-    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime (default 6h, at most 24h; it must outlast "
-                                                                       "the run and its upload: a --timeout over 6h needs it)")
+    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime, <n>[s|m|h|d], a bare number in seconds "
+                                                                       "(default 6h, at most 24h; it must outlast the run and its upload: a --timeout over "
+                                                                       "6h needs it, and one the --timeout outlives is refused)")
     ap.add_argument("--run-record", action="store_true",
                     help="a local run: the attempt also carries every run file (logs included; what custody keeps) as its run record, as an "
                          "--on run's custody does: for a pod whose run dir nothing else preserves (store.custody)")
@@ -298,6 +305,14 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
+    if ns.id is not None and not ns.claimed:
+        from .store import ids as store_ids
+
+        if not store_ids.is_run_id(ns.id):
+            print(f"research run: --id {ns.id!r} is not a run id (rYYYYMMDD-HHMMSS-xxxx, x hex): the store refuses its "
+                  "attempt, so nothing the run writes, its coins included, would be preserved; omit --id to get one",
+                  file=sys.stderr)
+            return 2
     if ns.wait_max is not None:
         try:
             if not ns.wait:
@@ -311,7 +326,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
-        harness_opts = _auto_spill(ns, harness_opts)
+        if (harness_opts := _auto_spill(ns, harness_opts)) is None:
+            return 2
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
@@ -347,8 +363,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                   f"up to {wait_s / 60:g} min for one (--pool-wait), then exits 75 without running", file=sys.stderr)
         if ns.mem_gb is not None:
             # the slot admits and reserves the run, not a launch-time reservation, which was held through the wait for a slot
-            # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB); the
-            # slot takes the larger of its mem= and this (24 Oct: a 450 GB run in proofs' 193 GB slot p5 reserved 193)
+            # beside the slot's once it ran, so a few waiting runs drove admission below zero; the slot takes the larger of its
+            # mem= and this (a 450 GB run in a 193 GB slot reserves 450)
             ns.env = [*ns.env, f"CHECK_RUN_MEM_GB={ns.mem_gb:g}"]
             print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} goes to the slot, which waits for and reserves the larger of "
                   "its own mem= and that", file=sys.stderr)
@@ -568,7 +584,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     return out
 
 
-#: The longest custody key ``research run`` mints on request (root's ruling 2026-09-26): the default stays 6 h.
+#: The longest custody key ``research run`` mints on request; the default stays 6 h.
 CUSTODY_TTL_CAP_S = 24 * 3600
 
 
@@ -595,7 +611,7 @@ def _normalize_timeout(harness_opts: list[str]) -> list[str]:
 
 def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
     """Why a custody launch is refused: an explicit ``--custody-ttl`` over :data:`CUSTODY_TTL_CAP_S`, or a ``--timeout`` longer than
-    the default key's lifetime without an explicit ``--custody-ttl`` (the key would expire before the run's upload)."""
+    the key's lifetime, the explicit ``--custody-ttl``'s or the default's (the key would expire before the run's upload)."""
     from research.store import credentials as C  # noqa: PLC0415
     from research.store.custody import DEFAULT_TTL  # noqa: PLC0415
 
@@ -606,9 +622,13 @@ def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> st
     if custody_ttl and ttl > CUSTODY_TTL_CAP_S:
         return f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap"
     timeout = _harness_timeout(harness_opts)
-    if not custody_ttl and timeout is not None and timeout > ttl:
+    if timeout is not None and timeout > ttl:
+        hours = -(-int(timeout) // 3600) + 1
+        if custody_ttl:
+            return (f"--timeout {timeout:g} s outlives --custody-ttl {custody_ttl} ({ttl} s; a bare number is seconds): the upload "
+                    f"would fail; pass a longer one, at most {CUSTODY_TTL_CAP_S // 3600}h, such as --custody-ttl {hours}h")
         return (f"--timeout {timeout:g} s outlives the custody key's default lifetime ({DEFAULT_TTL}): the upload would fail; "
-                f"pass --custody-ttl (at most {CUSTODY_TTL_CAP_S // 3600}h) longer than the run")
+                f"pass --custody-ttl (at most {CUSTODY_TTL_CAP_S // 3600}h) longer than the run, such as --custody-ttl {hours}h")
     return None
 
 
@@ -979,7 +999,7 @@ GPU_WAIT_MIN = 120
 THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 
 
-#: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM (every handle, at Daniel's request, 18 Oct). It is
+#: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM. It is
 #: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: whole cores of its own inside its check slots,
 #: never a slot a train waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml),
 #: or spills to a CPU node's pool where it starts sooner (research.auto). Not node 1, whose CPUs trains and lanes' direct runs
@@ -1008,16 +1028,16 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
     ns.auto = True
     ns.project = ns.project or AUTO_PROJECT
     if remote.flag_value(harness_opts, "--cwd") is None:
-        harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests (INF-65), not its run dir
+        harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests, not its run dir
     if ns.queue_kind == "adhoc":
         ns.queue_kind = AUTO_KIND
     return None
 
 
-def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str]:
+def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str] | None:
     """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
     a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
-    kind's time as its --timeout. The harness options it runs with."""
+    kind's time as its --timeout. The harness options it runs with, or None when it is refused (`auto.Unplaceable`)."""
     from . import auto
 
     cpus = ns.cpus or AUTO_CPUS
@@ -1025,7 +1045,11 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str]:
     gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
     target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
     if why is None:
-        target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)
+        try:
+            target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)
+        except auto.Unplaceable as e:
+            print(f"research run --on auto: refused: {e}", file=sys.stderr)
+            return None
     if target is None:
         print(f"research run --on auto: queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", file=sys.stderr)
         return harness_opts
@@ -1033,7 +1057,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str]:
     if remote.flag_value(harness_opts, "--timeout") is None:
         harness_opts = [*harness_opts, "--timeout", f"{(ns.max_min or AUTO_MAX_MIN) * 60}"]
     ns.queue, ns.on, ns.pool, ns.lane = False, machine, pool, ns.lane or "auto"
-    ns.cpus = ns.max_min = ns.mem_gb = ns.question = ns.disk_gb = None     # the slot's cores and mem= are the run's
+    ns.cpus = ns.max_min = ns.question = ns.disk_gb = None     # the slot's cores are the run's
+    ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
     return harness_opts
@@ -1354,7 +1379,7 @@ def _utc(text: str | None) -> datetime | None:
 
 def _ran_text(s: dict, now: datetime) -> str:
     """How long a run ran, and how much of that its check waited for a check slot (runs.SLOT_FILE): its state reads `running` from
-    launch, so a check that waited 95 min for a slot and checked 12 was taken for 107 min in (af2d, 10 Oct)."""
+    launch, so a check that waited 95 min for a slot and checked for 12 would otherwise read as 107 min in."""
     if not (start := _utc(s.get("started_utc"))):
         return ""
     sl, mins = s.get("slot") or {}, lambda a, b: f"{max(0.0, (b - a).total_seconds()) / 60:.0f} min"
@@ -1504,6 +1529,8 @@ def _fmt(s: dict) -> str:
 
 
 def cmd_status(argv: list[str]) -> int:
+    from . import checkview
+
     ap = argparse.ArgumentParser(prog="research status")
     ap.add_argument("ref", nargs="?", help="just this run, its records fetched first while it is remote and not finished (a full run "
                                            "id another VM launched is found on its machine)")
@@ -1516,6 +1543,9 @@ def cmd_status(argv: list[str]) -> int:
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--also", action="append", default=[], metavar="FILE",
                     help="with RUN: fetch this file of its run dir with its records (repeatable): a workload's own progress file")
+    ap.add_argument("--basis", default=None, metavar="RUN",
+                    help="with RUN, a check: time its steps against this finished check (default: the newest other finished "
+                         "check on its machine)")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
     ledger = None
@@ -1537,9 +1567,10 @@ def cmd_status(argv: list[str]) -> int:
             return 1
     if ns.refresh or one:
         for s in [R.summarize(one)] if one else R.list_runs(root):
-            if s.get("remote_rec") and (s["state"] not in R.TERMINAL or (one and ns.also)) and (s["remote_rec"].get("remote_run_dir")):
+            if s.get("remote_rec") and (s["state"] not in R.TERMINAL or (one and (ns.also or not (Path(s["dir"]) / checkview.SPANS).exists()))) \
+                    and (s["remote_rec"].get("remote_run_dir")):
                 try:
-                    remote.fetch(Path(s["dir"]), also=tuple(ns.also) if one else ())
+                    remote.fetch(Path(s["dir"]), also=(*ns.also, *checkview.CHECK_FILES) if one else ())
                 except remote.Refused as e:
                     print(f"research status: {s['id']}: {e}", file=sys.stderr)
     rows = [R.summarize(one)] if one else R.list_runs(root)
@@ -1556,8 +1587,10 @@ def cmd_status(argv: list[str]) -> int:
             continue
         live.append(s)
     _read_holds(live)
+    check = _check_view(root, one, ns.basis) if one and checkview.is_check(one) else None
     if ns.json:
-        print(json.dumps({"runs_root": str(root), "runs": rows, "ledger": ledger}, indent=2, sort_keys=True))
+        print(json.dumps({"runs_root": str(root), "runs": rows, "ledger": ledger, **({"check": check} if check else {})},
+                         indent=2, sort_keys=True))
         return 0
     if ledger:
         if ledger.get("error"):
@@ -1575,12 +1608,44 @@ def cmd_status(argv: list[str]) -> int:
             print(f"{'':<26}{label:<4} {text}")
         if s.get("scope_memory_error"):
             print(f"{'':<26}mem  unread: {s['scope_memory_error']}")
+        for line in check or []:
+            print(f"{'':<26}{line}")
     active = sum(1 for s in rows if s["state"] in R.ACTIVE)
     unfetched = sum(1 for s in rows if s.get("remote_rec") and not s["has_job"] and s["state"] != "refused")
     print(f"\n{len(rows)} shown ({active} active" + (f", {unfetched} remote not yet fetched: `research status --refresh`" if unfetched else "")
           + (f", memory of {unread} active remote run(s): `--refresh` or `research status RUN`" if unread else "") + f") under {root}"
           f"   res: result.json ok/BAD/-absent   valid: the workload's own checker")
     return 0
+
+
+def _check_view(root: Path, run_dir: Path, basis_ref: str | None) -> list[str]:
+    """`checkview.view` of a check run: against ``basis_ref`` (a finished check, fetched when it is remote), else the newest
+    other finished check on the run's machine, else none; its first line names the basis."""
+    from . import checkview
+
+    basis, why = None, ""
+    if basis_ref:
+        try:
+            basis = _run_dir(root, basis_ref, None)
+        except (FileNotFoundError, LookupError) as e:
+            why = f"--basis {basis_ref}: {e}"
+        else:
+            if (remote._read_json(basis / "remote.json") or {}).get("remote_run_dir") and not checkview.finished(basis):
+                try:
+                    remote.fetch(basis, also=checkview.CHECK_FILES)
+                except remote.Refused as e:
+                    why = f"--basis {basis_ref}: {e}"
+            if not checkview.finished(basis):
+                basis, why = None, why or f"--basis {basis_ref} is no finished check"
+    elif not checkview.finished(run_dir) and (rec := remote._read_json(run_dir / "remote.json") or {}).get("remote_run_dir"):
+        ssh = remote.ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
+        try:
+            basis = checkview.remote_basis(rec, ssh, root / ".check-basis", remote.ssh_read)
+        except (tarfile.TarError, OSError) as e:
+            why = f"the machine's newest finished check couldn't be read: {type(e).__name__}: {e}"
+    head = [] if checkview.finished(run_dir) and not basis_ref else [
+        f"basis   {basis.name}" if basis else f"basis   none{f' ({why})' if why else ''}"]
+    return head + checkview.view(run_dir, datetime.now(UTC), basis)
 
 
 def _slot_text(sl: dict) -> str:
@@ -1729,6 +1794,11 @@ def hand_to_ops(cmd: str, rest: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # A test's `python -m research` runs its tree's code, and doesn't read at_main.py, which suites don't declare.
+    if argv is None and not os.environ.get("PYTEST_CURRENT_TEST"):
+        from .at_main import reexec
+
+        reexec(sys.argv[1:])
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__.strip())
@@ -1820,6 +1890,10 @@ def main(argv: list[str] | None = None) -> int:
         from .queue import main as queue_main
 
         return queue_main(rest)
+    if cmd == "goals":
+        from .goals import main as goals_main
+
+        return goals_main(rest)
     if cmd == "jobs":
         from .jobs.cli import main as jobs_main
 
@@ -1840,6 +1914,10 @@ def main(argv: list[str] | None = None) -> int:
         return slack_main(rest, prog="research msg")
     if cmd == "usage":
         return cmd_usage(rest)
+    if cmd == "lean-times":
+        from .lean_times import main as lean_times_main
+
+        return lean_times_main(rest)
     if cmd == "agents":
         from .agents import main as agents_main
 

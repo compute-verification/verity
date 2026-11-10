@@ -1,11 +1,26 @@
+module
+
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.VBridge.Sparse.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.Compose.HoloEncoded
-import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.VBridge.Sparse.Defs
 
 /-!
 # The sparse phases' rounds at the map read
 
-`heldBefore_sparse_size`: a sparse phase's stream rounds take `nc` history rounds in all, one per coin its phase draws
+`heldBefore_sparse_size`: a sparse phase's stream rounds take `nc` history rounds in all, one per coin its phase samples
 (`FlockVBridge.Sparse.nc` at `sparseOf`), from `holoSizes_sparse`'s count.
 `roundAt_sparse`: the history order of a sparse phase's rounds at the map read, in `holoStreams`' order: sparse phase
 `x`'s round `q` is past the link points, both reps' coin rounds and, for phase 1, phase 0's rounds, plus phase `x`'s
@@ -14,6 +29,8 @@ own before `q`; `roundAt_sparseRounds` at `sparseRounds`, phase 0's being `nc`.
 where each holds coins and they are as many, as `RecCoins.sparseCoins` reads a sparse stream (its `filter`);
 `coinRounds_held` at a schedule's coin rounds (`filter_range_sublist`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 
@@ -30,7 +47,7 @@ theorem heldBefore_size (s : HoloStream) (rs : Array SchedRound) :
   simp [hn]
 
 /-- **A sparse phase's rounds take `nc` history rounds**: its stream rounds' coin counts sum to the coins its phase
-draws, ζ_c's and ζ_r's twelve, H3's `ν + S_LOG`, ζ_p's `P_LOG` and ρ_t's `T_LOG` (`holoSizes_sparse`). -/
+samples, ζ_c's and ζ_r's twelve, H3's `ν + S_LOG`, ζ_p's `P_LOG` and ρ_t's `T_LOG` (`holoSizes_sparse`). -/
 theorem heldBefore_sparse_size (x : Fin 2) (sp : RecSparse.Shape) :
     heldBefore (.sparse x) (sparseRounds sp) (sparseRounds sp).size = FlockVBridge.Sparse.nc (sparseOf sp) := by
   have hs : holoSizes [(.sparse x, sparseRounds sp)] =

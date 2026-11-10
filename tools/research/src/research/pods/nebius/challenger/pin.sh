@@ -1,10 +1,10 @@
 #!/bin/bash
-# vy-challenger-pin COMMIT < TAR: pin the tree the challenger runs from, as root. COMMIT must be on origin/main's first-parent
-# history, which this script fetches from GitHub itself (a commits-only partial clone in /var/cache/vy-challenger/main.git), so the
-# host pins only what drive landed. TAR is infra's `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces
+# vy-challenger-pin COMMIT < TAR: pin the tree the challenger runs from, as root. COMMIT must be on origin/main's or
+# origin/next's first-parent history, which this script fetches from GitHub itself (a commits-only partial clone in
+# /var/cache/vy-challenger/main.git), so the host pins only what drive landed or put on next. TAR is infra's `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces
 # integrations/vllm/manifests/checkpoints-int8.json` of that commit (the manifest pins the checkpoints `model-register` takes, and
 # network_traces is the certifier rehearsal's, `certifier-rehearse`); it is
-# unpacked root-owned at /opt/vy-challenger/COMMIT, never changed after. The Lean toolchain its sampled_proofs package names is
+# unpacked root-owned at /opt/vy-challenger/COMMIT, never changed after. The Lean toolchain its spot package names is
 # installed under /opt/elan (root's) and linked as COMMIT/.lean-bin; elan itself is release ELAN, its archive checked against
 # ELAN_SHA256 before it runs. Each Lake package's .lake is auditor's, and `lake build sampled-proofs-verifier` (and
 # `network-records`, the certifier rehearsal's check) runs there as auditor, so a session's first coin doesn't wait on a build. The pin (COMMIT, the main it was checked against, UTC time) is
@@ -32,7 +32,16 @@ fi
 git -C "$G" fetch -q origin +refs/heads/main:refs/heads/main || die "can't fetch $REPO's main"
 m=$(git -C "$G" rev-parse refs/heads/main)
 git -C "$G" rev-list --first-parent refs/heads/main > "$G/first-parent"
-grep -qx "$c" "$G/first-parent" || die "$c is not on origin/main's first-parent history (main is $m): pin a commit drive landed"
+if ! grep -qx "$c" "$G/first-parent"; then
+  # Unlanded work runs from next: a commit on next's first-parent history pins too, its log line naming next's tip. A
+  # verifier that credits such a session reads next's first-parent history as its own `main` list.
+  git -C "$G" fetch -q origin +refs/heads/next:refs/heads/next || die "can't fetch $REPO's next"
+  n=$(git -C "$G" rev-parse refs/heads/next)
+  git -C "$G" rev-list --first-parent refs/heads/next > "$G/next-first-parent"
+  grep -qx "$c" "$G/next-first-parent" \
+    || die "$c is on neither origin/main's (main is $m) nor origin/next's (next is $n) first-parent history: pin a commit drive put on either"
+  m=$n
+fi
 install -d -m 0755 -o root -g root "$O"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")
@@ -42,7 +51,7 @@ if [ ! -d "$T" ]; then
   chmod -R u+rwX,go+rX,go-w "$tmp"
   mv "$tmp" "$T"
 fi
-pkg=$T/verity/core/service/sampled_proofs
+pkg=$T/verity/core/service/spot
 tc=$(tr -d '[:space:]' < "$pkg/lean-toolchain")
 [[ $tc =~ ^leanprover/lean4:v[0-9A-Za-z.-]+$ ]] || die "$pkg/lean-toolchain: $tc"
 if [ ! -x "$ELAN_HOME/bin/elan" ]; then

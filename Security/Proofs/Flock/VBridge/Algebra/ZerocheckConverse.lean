@@ -1,12 +1,17 @@
-import Proofs.Flock.VBridge.Algebra.Zerocheck
-import Proofs.Flock.Soundness.Refine.Frames
+module
+
+public import Proofs.Flock.VBridge.Algebra.Zerocheck
+public import Proofs.Flock.Soundness.Refine.Frames
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The zerocheck stage returns when its checks pass
 
 `bindAndZerocheck_of_checks` is `Refine.zerocheck_refines`'s converse: when the transcript's rounds from `t.k` on issue
-the zerocheck's coin counts and answer the framed bytes its squeezes frame (`AnswersL`, the bytes `Refine.zerocheck_frames`
-says they retained), and the proof's messages pass the two `check`s of `bindAndZerocheck` (Piop.lean:85, 99) in the
+the zerocheck's coin counts and answer the framed bytes its squeezes frame (`AnswersL`), and the proof's messages pass the two `check`s of `bindAndZerocheck` (Piop.lean:85, 99) in the
 terms `zerocheck_of_residuals` concludes them (`zcStart`, `zcFold`) at the rounds' coins, the verifier's statement
 binding and zerocheck (Piop.lean:72–102) return `.ok`, with the points those coins give and the final values left
 pending. `zerocheck_plays_of_checks` then applies `zerocheck_refines`: the model's zerocheck plays on the consumed coins.
@@ -15,6 +20,8 @@ The steps run forward one at a time: `bind_of_ok`, each absorb's state (`label_e
 `absorbF_eq`), a passing `check` (`check_eq`), a squeeze whose round answers (`squeeze_of_answers`), and a loop whose
 every step does (`forIn_rounds_of`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

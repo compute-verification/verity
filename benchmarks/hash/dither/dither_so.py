@@ -1,7 +1,7 @@
-"""dither-a in the statement's order (RT4-INT-12; CA's decision, thread 1792447454.296229): the arms
+"""dither-a in the statement's order: the arms
 `dither-a-{hbk,hbr}-zy-{aom,aomn,ab,abn}[-pt]-so<D>[-ov|-ov1|-ovp][-we|-wea]`, labelled as every arm by
-`forms.form_of` (`SoSide.label`): -aom/-aomn without -ov form=ASK-71 A (provisional), since the served epilogue commits
-#3018's per-unit z/y records under round s's root before coin s; -ab/-abn and -ov (-ov1, -ovp) form=beside (unadopted
+`forms.form_of` (`SoSide.label`): -aom/-aomn without -ov form=`forms.FORM_A`, since the served epilogue commits
+the per-unit z/y records under round s's root before coin s; -ab/-abn and -ov (-ov1, -ovp) form=beside (unadopted
 arm), neither ruled in (`SoSide.unadopted`).
 
 A step's A, scales and z/y leaves go under its round's root before its round's coin; its units read that coin and run
@@ -12,11 +12,11 @@ after it, beside a later step's forward; their receipts go under a later round. 
                      graphs), exactlin's GEMM with the z/y records (dither-a's -zy) and the served y's records
                      (`dithera_ycommit`).  No seeds and no units: nothing in the forward reads a coin.
     between steps    under -ab, every call's rows >= m cleared and the step's A tables in one h1c_build (h1agate.py's
-                     `batch`: a per-step A commitment, a scheme change CA has not ruled in, so a separate arm); the step's
+                     `batch`: a per-step A commitment, a scheme change not ruled in, so a separate arm); the step's
                      A slots, scales, A roots, live rows and step into ring slot s mod D; the admit tables (under -pt on
-                     their own stream), the z/y leaf tables and the served y's tables (RT4-INT-11's run-time compare);
+                     their own stream), the z/y leaf tables and the served y's tables (their run-time compare);
                      round s over a-step, admit-step, z-step, y-step and receipt-step, whose leaf is the receipt-table
-                     roots of step s - D + 1 (each table's domain names its own step; zeros before the window's first
+                     roots of step s - D + 1 (each table's domain names its own step; zeros before the execution phase's first
                      D - 1 steps); round s's root sent (`coins.RoundPipe`), after which alone the challenger opens coin s.
     units of step s  at the end of step s + D - 2's between-steps (D = 2: step s's own, just after its root is sent), once
                      coin s is back (the host waits for it there: coin_wait_ms): on the units stream, after the ring slot
@@ -29,7 +29,7 @@ after it, beside a later step's forward; their receipts go under a later round. 
 So D is the ring's depth: the A slots of D steps live at once (the forward's own, and D - 1 steps' whose units are pending
 or running), and the units of a step wait D - 2 steps for their coin.  In process (``coins: in-process (not certified)``)
 a coin is back once its root is sent; off the node round s + D - 1 waits for step s's units unless (D - 1) * step >= R +
-their span (R the round trip, the span about 10 ms), so the served T64 row on the RTX PRO 6000 (R about 100 ms) is -so8,
+their span (R the round trip), so the served T64 row on the RTX PRO 6000 is -so8,
 at 54.6 MB of GPU memory a slot past -so6 (T * sum K bytes of A codes, and their scales).
 
 `check` holds a capture to dither_a's checks with its own round s for the A, admit, z and y leaves (the receipt-step leaf
@@ -41,8 +41,8 @@ fault, fault_y and fault_rr (here: round s + D - 1 recorded without step s's rec
 itself, each refused: "fault_rearly" (step s's units under the salt of coin s - 1, a coin the prover held before round
 s's root: refused on every receipt) and "fault_zlate" (step s's z/y leaves withheld from round s, 0xA5 in their place,
 and committed under round s + 1, after coin s: refused on round s's z-step and y-step leaves).  $DITHER_SO_UNITS=j10r
-(`UNITS_ENV`; RT-ALGO-16's verifier form, #3574, at $DITHER_SO_J10R_M=slot on a slot T with every row block computed:
-`forms.j10r_part`) runs the units under J10-R's call-scale noise, every check here and at the window's end on j10r_so's
+(`UNITS_ENV`; the verifier's form, at $DITHER_SO_J10R_M=slot on a slot T with every row tile computed:
+`forms.j10r_part`) runs the units under J10-R's call-scale noise, every check here and at the execution phase's end on j10r_so's
 references in h1r v1's place, and the gate step's units held to J10R's Definition.
 
 -ov (`-so<D>-ov`, ring R = 2; `-ov1`, R = 1; `-ovp`, R = 2 with the engine serving on a stream above the trees' and the
@@ -58,33 +58,33 @@ round s as built from the ring once forward s + 1 had started (a captured step's
 give how long the build ran beside it), and "fault_ring" overwrites a bit of step s's ring copy of call 0's z on the
 serving stream as forward s + 1 starts, before round s's tables: refused on round s's z-step leaf and root alone.
 
-A window's open and end (RT4-INT-37; served_h1's window close, since dither-a has none).  Every window opens with the salt
-coin after its root (off the node the root the gate's open names, for development `coins.stand_in_root` of the session;
-in process the epoch root), then the epoch round (round 0) over the B tables' roots.  Without -we a window has no end: its
+An execution phase's open and end (served_h1's execution-phase close, since dither-a has none).  Every execution phase opens with the salt
+coin after its root (off the node the root the gate's open names, for development `coins.stand_in_root` of the challenge phase;
+in process the execution-phase root), then the execution-phase round (round 0) over the B tables' roots.  Without -we an execution phase has no end: its
 last D - 1 steps' receipts lie under no round, and its last D - 2 steps' units never run.  With -we
-(`-so<D>[-ov|-ov1|-ovp]-we`) each window ends (`SoWindow.end`) after its last step S - 1: the remaining coins awaited and
+(`-so<D>[-ov|-ov1|-ovp]-we`) each execution phase ends (`SoWindow.end`) after its last step S - 1: the remaining coins awaited and
 the tail's units run (steps S - D + 2 to S - 1; under -ov the dispatcher's, drained), the receipt-tail roots of steps
 S - D + 1 to S - 1 (each the tree over a step's receipt-table roots, its domain naming that step) under one final round
 sent after the last step's coin, whose coin comes back; then the manifest root, the tree over every round root of the
-window in order (epoch, steps, final; its domain naming the window, its root and its steps), which binds each step's
-round leaves and every call's A, admit, z, y and receipt roots under them; then the draw coin opened after the manifest
-root, and the session closed.  Until the draw the prover keeps what it must open a drawn unit from: each step's live A
-rows and scales and its z/y records' live row blocks (-wea: A and the scales alone, z/y recomputed from them), copied
+execution phase in order (execution-phase round, steps, final; its domain naming the execution phase, its root and its steps), which binds each step's
+round leaves and every call's A, admit, z, y and receipt roots under them; then the sampling coin opened after the manifest
+root, and the challenge phase closed.  Until the sample the prover keeps what it must open a sampled proof block from: each step's live A
+rows and scales and its z/y records' live row tiles (-wea: A and the scales alone, z/y recomputed from them), copied
 to pinned host memory on a stream of their own from the ring slot that holds them, a slot rewritten only once its copy is
-out (`Spill`).  In process the window ends after each of sbench's generates (and a new one opens at the
-next step on a challenger made beforehand, `prepare`, as the gate makes an off-node session's); off the node the
-session's window ends at its layout's last step (R rounds: R - 2 steps), so sbench serves it full before it stops, and
-every family releases all its coins.  `check_end` holds an ended window to: the salt coin after the window's root, every
-round's coin after its root, the draw coin after the manifest root recomputed from the rounds the challenger received;
+out (`Spill`).  In process the execution phase ends after each of sbench's generates (and a new one opens at the
+next step on a challenger made beforehand, `prepare`, as the gate makes an off-node challenge phase's); off the node the
+run's execution phase ends at its layout's last step (R rounds: R - 2 steps), so sbench serves it full before it stops, and
+every family releases all its coins.  `check_end` holds an ended execution phase to: the salt coin after the execution phase's root, every
+round's coin after its root, the sampling coin after the manifest root recomputed from the rounds the challenger received;
 each step's round recomputed from its manifest row (the round's leaves and each call's roots), the final round from the
 tail's receipt roots; every step's units dispatched after its coin came back, and its receipts' round (round s + D - 1,
-or the final round) sent after that and before the draw coin, no round after it; and the last step's receipts, from its
+or the final round) sent after that and before the sampling coin, no round after it; and the last step's receipts, from its
 ring slot, against h1r v1 under its coin's salt, up to 16 calls' A tables and receipt tables rehashed on the CPU
-(`rehashed_calls`); and three steps opened from the spill (`open_spill`).  The draw coin's time is read under the
-round pipe's lock (`coins.RoundPipe.draw`), so no round goes out between it and the draw.  Two end faults, each
-in a window of its own (`end_steps`: 2D + 2 steps) and refused: "fault_tail" (the last step's units dropped: refused on
+(`rehashed_calls`); and three steps opened from the spill (`open_spill`).  The sampling coin's time is read under the
+round pipe's lock (`coins.RoundPipe.draw`), so no round goes out between it and the sample.  Two end faults, each
+in an execution phase of its own (`end_steps`: 2D + 2 steps) and refused: "fault_tail" (the last step's units dropped: refused on
 its order and every call's receipts) and "fault_late_receipt" (the last step's receipt-tail root withheld from the final
-round and sent in a round after the draw coin: refused on that leaf and that round alone).  An off-node window's
+round and sent in a round after the sampling coin: refused on that leaf and that round alone).  An off-node execution phase's
 manifest (`dither_manifest`: every round's root and leaves, the final round, the manifest root, the coins) goes to
 $DITHER_MANIFEST_DIR, which `dither_manifest.py check` holds to the challenger's own run.
 
@@ -99,15 +99,16 @@ import contextlib
 import ctypes as C
 import dataclasses
 import hashlib
-import os
 import queue
 import threading
 import time
 import traceback
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
 import triton
+from verity_config.settings import of
 
 import dither_a as DA
 import dither_fused as DF
@@ -115,22 +116,27 @@ import dither_manifest as MF
 import dither_one as DO
 import forms as F
 import h1c as H1CM
+import j10r_ws as JWS
+from dither_a import auto_j
 from dither_fused import CM, CO, H1R, Call, Dom, Tab, unwords, words
-from hb_side import auto_j
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+
+settings = of(__file__)
 LIB_ENV = DA.LIB_ENV
 CG = None
-ORDER = "statement (RT4-INT-12): A, scales, z/y under round s before coin s; units after coin s; receipts under round s + D - 1"
+ORDER = "statement: A, scales, z/y under round s before coin s; units after coin s; receipts under round s + D - 1"
 OV_ORDER = ("-ov: round s built beside forward s + 1 from ring copies taken after forward s, its root sent before coin s; "
             "step s's units dispatched once coin s is back")
 # the faults of the order last: fault_zlate moves round s + 1's z/y leaves, so the step after it is no capture's
 CAPTURES = ("gate", "control", "fault", "fault_y", "fault_rr", "fault_rearly", "fault_zlate")
 CAPTURES_OV = ("gate", "control", "fault", "fault_y", "fault_rr", "fault_ring", "fault_rearly", "fault_zlate")
-END_ORDER = ("-we: at the window's end the tail's units after their coins, their receipt-tail roots under one final round "
-             "sent after the last coin, the manifest root over every round root, then the draw coin after it")
-NO_END = "none: the last D - 1 steps' receipts lie under no round and no draw coin opens (RT4-INT-37); rows pending"
+END_ORDER = ("-we: at the execution phase's end the tail's units after their coins, their receipt-tail roots under one final "
+             "round sent after the last coin, the manifest root over every round root, then the sampling coin after it")
+NO_END = "none: the last D - 1 steps' receipts lie under no round and no sampling coin opens; rows pending"
 END_FAULTS = ("fault_tail", "fault_late_receipt")
-MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node window's manifest.json goes there (its per-call roots to scratch)
+MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node execution phase's manifest.json goes there (its per-call roots to scratch)
 GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph
 PRIO_ENV = "DITHER_SO_PRIO"             # "1": any -so arm serves as -ovp does, on a stream above the units' (`patch`)
 # "1": under the serving priority, vLLM's graphs captured on a stream at that priority too (`capture_at`): vLLM's
@@ -151,30 +157,29 @@ COIN_ASYNC_ENV = "DITHER_SO_COIN_ASYNC"
 # to them; the same receipts.  den at most SMQ_DEN_MAX (h1u.cu's), past every %smid, so q/256 keeps the SMs below q
 UNITS_SMQ_ENV = "DITHER_SO_UNITS_SMQ"
 SMQ_DEN_MAX = 256
-# "1": the receipt tables' rows in a dead row block (the zero receipt) take their x from one hash of that row, against
+# "1": the receipt tables' rows in a dead row tile (the zero receipt) take their x from one hash of that row, against
 # the step's live flags (`SoSide._units`), and hash no segments; the same leaves and roots
 RDEAD_ENV = "DITHER_SO_RDEAD"
-# "j10r": a step's units under J10-R's call-scale noise (j10r_so.LABEL; #3574's form, forms.j10r_part): in h1r_launch's
+# "j10r": a step's units under J10-R's call-scale noise (j10r_so.LABEL; forms.j10r_part): in h1r_launch's
 # version 0 place every call's seed_c at its first position and each unit's sigma_R at its own (h1u.cu's
-# kh_seeds_j10r_h1r, on the same call table), then each call's row blocks hashed once and its units on them
+# kh_seeds_j10r_h1r, on the same call table), then each call's row tiles hashed once and its units on them
 # (kh_units_multi_j10r, under $DITHER_SO_UNITS_SMQ kh_units_multi_j10r_sm); needs $DITHER_SO_FUSED=1.  The gate holds it
-# to j10r_so's references (h1r's J10-R version 1 on every capture and the window's end, J10R's Definition on the gate step)
+# to j10r_so's references (h1r's J10-R version 1 on every capture and the execution phase's end, J10R's Definition on the gate step)
 UNITS_ENV = "DITHER_SO_UNITS"
 UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each call's seed_c stream at call scale"}
 # R (with $DITHER_SO_UNITS=j10r and $DITHER_SO_FUSED=1): a step whose units compute at least R rows (the layout's M, its
-# live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column blocks once too, beside its rows, and its units
+# live rows under $DITHER_UNITS_SKIP_DEAD=1) hashes each call's column tiles once too, beside its rows, and its units
 # read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace kh_j10r_ws_bytes at T
 # rows; under $DITHER_SO_UNITS_SMQ without a cap, kh_units_multi_j10rc_sm); the same receipts.  Unset, never: J10-R's
-# units hash a column block once in each row tile
-# they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference (unitsbench
-# --j10r, H1U_JSWZ 32: T 2048 step 287.1 -> 233.1 ms, T 512 71.9 -> 59.8 ms; T 64 M 32 5.11 -> 7.16 ms unswizzled)
+# units hash a column tile once in each row tile
+# they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference
 J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
 # J10-R's layout rows of a call (h1tile.j10r_blocks' m; j10r_so.M_MODES), open until J10R rules: "slot" (default) or "live"
 J10R_M_ENV = "DITHER_SO_J10R_M"
-# "1" (with $DITHER_SO_UNITS=j10r): a row block wholly past the step's live rows is skipped, h1tile's canonical dead tile
+# "1" (with $DITHER_SO_UNITS=j10r): a row tile wholly past the step's live rows is skipped, h1tile's canonical dead tile
 # (PouwH1Tile_v4's: the zero receipt, no noise derived), as today's units always do; unset, every unit of the call's M
-# layout rows is computed in full, as J10R's PouwH1Tile_v5 / v6 define it (compute-accounting on CMP-76, 24 Oct: the
-# skip stays off by default until CREDITFIX and LIVEUNIT land).  Unset, $DITHER_SO_RDEAD's zero-receipt rows don't hold
+# layout rows is computed in full, as J10-R's PouwH1Tile_v5 / v6 define it (the skip stays off by default until the
+# credit counts only live units).  Unset, $DITHER_SO_RDEAD's zero-receipt rows don't hold
 SKIP_DEAD_ENV = "DITHER_UNITS_SKIP_DEAD"
 # "1" (without -ov, D >= 3): a step that holds no capture leaves its round on the serving stream with its root and y
 # check copied to pinned memory, and returns to the engine; the next step's `before` waits for that copy, then sends
@@ -191,20 +196,20 @@ ZSIDE_ENV = "DITHER_SO_ZSIDE"
 # DO.A_STEP_ENV's tables' level schedule (`H1C.set`'s lvf: their levels from L up in one block a table, on an H1C_HB
 # build).  A K a table makes a step's tables few and deep (Llama-8B at T = 64: 2 tables of 2^13 leaves), so the build's
 # H1C_LVF = 2 would run 11 of their levels on two blocks of the GPU.  Unset: from depth - A_LVF_TOP (at least 0), the
-# level of 128 nodes a table (n1, RTX PRO 6000, T = 64: L = 4 to 7 within 0.01 ms, 0.16 ms under L = 2); "L": from L;
+# level of 128 nodes a table (on the RTX PRO 6000 at T = 64, L = 4 to 7 time alike and beat L = 2); "L": from L;
 # "": the build's H1C_LVF, as every other set.  The roots are the same at every L
 A_LVF_ENV = "DITHER_A_LVF"
 A_LVF_TOP = 8
-ROUNDS_ENV = "DITHER_ROUNDS"            # the window's layout (its round coins), the session's when off the node
+ROUNDS_ENV = "DITHER_ROUNDS"            # the execution phase's layout (its round coins), the challenge phase's when off the node
 MF_CHUNK = 64                           # manifest rows a pinned host chunk
-# -we's spill (`Spill`): what each step keeps past the ring until its window's draw, so the prover can open a drawn unit
+# -we's spill (`Spill`): what each step keeps past the ring until its execution phase's sample, so the prover can open a sampled proof block
 SPILLS = {"azy": "A rows and scales, and the z/y records (live rows; the rest are zero)",
           "a": "A rows and scales (live rows); z/y recomputed from them at an opening (z = A B^T, y = dequant(z))"}
 SPILL_CHUNK = 2 << 30                   # pinned host bytes a chunk of the spill's pool
-SPILL_MAX_ENV = "DITHER_SPILL_MAX_GB"   # the pool's bound, past which a window's spill refuses (default SPILL_MAX_GB)
+SPILL_MAX_ENV = "DITHER_SPILL_MAX_GB"   # the pool's bound, past which an execution phase's spill refuses (default SPILL_MAX_GB)
 SPILL_MAX_GB = 128
 # "1": a step's GEMMs and y commits write a row past m's z/y records only where an earlier step left something else
-# (a live row, a captured step's poison, a control's unwritten records, a new window): the same bytes in every record,
+# (a live row, a captured step's poison, a control's unwritten records, a new execution phase): the same bytes in every record,
 # without the dead rows' ~350 MB of stores a step at m = 32 of T = 64 (`dead_from`, S[2], dither_a._rows_written); and
 # `after` clears the A slots' and scales' rows past m only below that row (the quantizer writes rows below m alone)
 DEAD_ONCE_ENV = "DITHER_DEAD_ONCE"
@@ -215,7 +220,7 @@ PUT_ASYNC_ENV = "DITHER_SO_PUT_ASYNC"
 # a pinned host word (cuStreamWaitValue32) that `SoSide.dispatch` sets once round s is sent, the coin is back and the
 # salt is written: the same order (round s, coin, units), without the host's dispatch between them and the units' start.
 # Their salt (their coin, back steps ago, and its round's root) is taken and staged with them (`_salt_early`), so the
-# flag is the dispatch's one write. Graph steps only, and never a step that holds a capture or a fault, nor a window's
+# flag is the dispatch's one write. Graph steps only, and never a step that holds a capture or a fault, nor an execution phase's
 # last step's units
 PREQ_ENV = "DITHER_SO_PREQ"
 # "1": a step's mid and round trees through h1c's `Tail`: their domains, pads and node Snaps (no leaf read) before the
@@ -239,11 +244,11 @@ CAP_HOST_ENV = "DITHER_SO_CAP_HOST"
 
 def keep(x: torch.Tensor) -> torch.Tensor:
     """A capture's copy of x: on the host under CAP_HOST_ENV, else a device clone."""
-    return x.to("cpu") if os.environ.get(CAP_HOST_ENV) == "1" else x.clone()
+    return x.to("cpu") if settings.get(CAP_HOST_ENV) else x.clone()
 
 
 def end_steps(depth: int) -> int:
-    """An end fault's window: a full tail (D - 1 steps) after at least D + 3 steps whose receipts went under rounds."""
+    """An end fault's execution phase: a full tail (D - 1 steps) after at least D + 3 steps whose receipts went under rounds."""
     return 2 * depth + 2
 
 
@@ -258,25 +263,25 @@ def smq_of(v: str) -> tuple[int, int, int]:
 # the A tables: "m" per call in the forward on NA_MULTI streams; "b" once a step between steps (not ruled in); "n" after
 # either: each call's noise on NA_MULTI streams beside the units
 AO = {"m": "per call, in the forward", "mn": "per call, in the forward; noise on its own streams",
-      "b": "once a step (h1agate's batch; not ruled in by CA)", "bn": "once a step (not ruled in by CA); noise on its own streams"}
+      "b": "once a step (h1agate's batch; not ruled in)", "bn": "once a step (not ruled in); noise on its own streams"}
 NA = DA.NA_MULTI
 
 
-class SoWindow(DO.Window):
-    """dither_one's window with the rounds in the statement's order (the module docstring): its round coins through a
+class SoWindow(DO.DitherState):
+    """dither_one's execution phase with the rounds in the statement's order (the module docstring): its round coins through a
     `coins.RoundPipe`, its slots grouped a K so the ring copies them in a launch a K, the units of step s dispatched at
     the end of step s + D - 2's `after`."""
     group_slots = True
     depth = 2
     a_once = False
     overlap = 0     # -ov: the round ring's depth (`Ov`), 0 without
-    window_end = False  # -we: each window ends (`end`)
-    spill_mode: str | None = None   # -we: what each step keeps until the draw (SPILLS), held by `SoSide.spill`
+    window_end = False  # -we: each execution phase ends (`end`)
+    spill_mode: str | None = None   # -we: what each step keeps until the sample (SPILLS), held by `SoSide.spill`
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         if self.depth < 2:
             raise ValueError(f"dither-a-so's ring depth is at least 2, not {self.depth}")
-        # the window's own state (`_start` sets it at each open, the first from `_epoch` at the build)
+        # the execution phase's own state (`_start` sets it at each open, the first from `_epoch` at the build)
         self.k, self.open, self.s0, self.prepared = -1, False, 0, None
         self.next_end: tuple | None = None
         self.end_name = self.end_fault = self.end_at = None
@@ -295,24 +300,24 @@ class SoWindow(DO.Window):
         self.zlate: tuple | None = None
         self.coin_waits: list[float] = []
         self.order_why = None
-        self.coin_async = int(os.environ.get(COIN_ASYNC_ENV) or 0)
+        self.coin_async = settings.get(COIN_ASYNC_ENV)
         if self.coin_async not in (0, 1, 2):
             raise RuntimeError(f"{COIN_ASYNC_ENV}={self.coin_async}: 0, 1 or 2")
         self.deferred: int | None = None
         self.deferrals = {"deferred": 0, "in_forward": 0, "in_after": 0, "after_forward": 0}
-        self.z_side = os.environ.get(ZSIDE_ENV) == "1"
+        self.z_side = settings.get(ZSIDE_ENV)
         self.ev_z = (torch.cuda.Event(), torch.cuda.Event())
         self.late_waits: list[float] = []
-        self.a_step = os.environ.get(DO.A_STEP_ENV) == "1"
+        self.a_step = settings.get(DO.A_STEP_ENV)
         if self.a_step and (self.a_once or self.overlap):
             raise RuntimeError(f"{DO.A_STEP_ENV}=1 serves -aom/-aomn without -ov (its A tables after the forward, on "
                                f"the serving stream)")
-        self.dead_once = os.environ.get(DEAD_ONCE_ENV) == "1"
+        self.dead_once = settings.get(DEAD_ONCE_ENV)
         if self.dead_once and self.overlap:
             raise RuntimeError(f"{DEAD_ONCE_ENV}=1 serves an -so arm without -ov")
         self.clean_from: int | None = None
         self.dead_c: int | None = None
-        self.put_async = os.environ.get(PUT_ASYNC_ENV) == "1"
+        self.put_async = settings.get(PUT_ASYNC_ENV)
         super().__init__(*args, **kwargs)
         if self.a_step:
             self._a_step_set()
@@ -323,14 +328,14 @@ class SoWindow(DO.Window):
         self.ev_w = [torch.cuda.Event(enable_timing=True) for _ in range(4)]
         self.ev_fwd = torch.cuda.Event()
         self.tail: H1CM.Tail | None = None
-        tm = os.environ.get(TAIL_ENV) or "0"
+        tm = settings.get(TAIL_ENV)
         if tm not in ("0", "1", "2"):
             raise RuntimeError(f"${TAIL_ENV}={tm}: 0, 1 or 2")
         if tm != "0":
             if self.overlap:
                 raise RuntimeError(f"${TAIL_ENV}={tm} serves an -so arm without -ov (whose rounds build on the sender's ring)")
             self.tail = H1CM.Tail(self.c, self.pre["mid"], self.pre["round"], host_root=tm == "2")
-        self.hmark = os.environ.get(HMARK_ENV) == "1"
+        self.hmark = settings.get(HMARK_ENV)
         if self.hmark:
             self.hm_stream = torch.cuda.Stream()
             # 0 the tail's launch, 1 the root read, 2 + s % 2 step s's units' flag, 4 the root read's return
@@ -338,7 +343,7 @@ class SoWindow(DO.Window):
             self.h_flagged: set[int] = set()
             # perf_counter at dispatch_units' salt and at its SoSide.dispatch call
             self.h_t = [0.0, 0.0]
-        self.root_lag = int(os.environ.get(ROOT_LAG_ENV) or 0)
+        self.root_lag = settings.get(ROOT_LAG_ENV)
         if self.root_lag not in (0, 1, 2):
             raise RuntimeError(f"${ROOT_LAG_ENV}={self.root_lag}: 0, 1 or 2")
         self.h2d_pinned = self.root_lag == 2
@@ -366,7 +371,7 @@ class SoWindow(DO.Window):
                             tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, chunks=c,
                             lab=(f"a/{k}@", "")))
             at += n
-        v = os.environ.get(A_LVF_ENV)
+        v = settings.get(A_LVF_ENV)
         lvf = max(0, max(H1CM.merkle_depth(t.count) for t in tabs) - A_LVF_TOP) if v is None else int(v) if v else None
         self.pre["ak"] = self.c.set(tabs, lvf=lvf)
         self.a_gidx = torch.tensor([ks.index(k) for _, k in self.nk], dtype=torch.long, device=self.dev)
@@ -392,18 +397,18 @@ class SoWindow(DO.Window):
         self._start()
 
     def _start(self) -> None:
-        """A window opens at step s (its first, s0): its coins (made beforehand by `prepare`, else now), the salt coin
-        opened after the window's root, the epoch round (round 0) over the B tables' roots, and the round pipe; under -we
-        its last step (`end_at`): the layout's (R rounds: R - 2 steps), or an `arm_end` window's."""
-        from verity.core.protocols.pouw.circuit import h1tile as HT
+        """An execution phase opens at step s (its first, s0): its coins (made beforehand by `prepare`, else now), the salt coin
+        opened after the execution phase's root, the execution-phase round (round 0) over the B tables' roots, and the round pipe; under -we
+        its last step (`end_at`): the layout's (R rounds: R - 2 steps), or an `arm_end` execution phase's."""
+        from verity.ml.protocols.pouw.circuit import h1tile as HT
         t0 = time.perf_counter()
         self.HT = HT
         self.clean_from = None
         at = CO.session()
         if at is not None and self.k >= 0:
-            raise RuntimeError(f"dither-a-so: session {at.id} served this process's one off-node window, which ended at "
-                               f"step {self.s - 1}; a window after it needs a session of its own (more rounds: "
-                               f"${ROUNDS_ENV})")
+            raise RuntimeError(f"dither-a-so: challenge phase {at.id} served this process's one off-node execution phase, "
+                               f"which ended at step {self.s - 1}; an execution phase after it needs a challenge phase of "
+                               f"its own (more rounds: ${ROUNDS_ENV})")
         coins = self.prepared if self.prepared is not None else CO.open_coins(at, 1, rounds_of())
         self.prepared = None
         self.k += 1
@@ -440,26 +445,26 @@ class SoWindow(DO.Window):
         self.starts_ms.append(1e3 * (time.perf_counter() - t0))
 
     def prepare(self) -> None:
-        """In process, the next window's challenger made now, outside a timed generate (its commitment over 16384 rounds
-        takes 1.7 s), as infra's gate makes an off-node session's before its window."""
+        """In process, the next execution phase's challenger made now, outside a timed generate (its commitment covers 16384
+        rounds), as the challenger's gate makes an off-node challenge phase's before its execution phase."""
         if not self.open and self.prepared is None and CO.session() is None:
             self.prepared = CO.open_coins(None, 1, rounds_of())
 
     def arm_end(self, name: str, fault: str | None = None, steps: int | None = None) -> None:
-        """The next window opened is `name`'s: its end kept for `check_end`, under `fault` (one of END_FAULTS), and with
+        """The next execution phase opened is `name`'s: its end kept for `check_end`, under `fault` (one of END_FAULTS), and with
         `steps` it ends at its steps-th step."""
         if fault is not None and fault not in END_FAULTS:
             raise ValueError(f"dither-a-so: an end fault is one of {END_FAULTS}, not {fault!r}")
         self.next_end = (name, fault, steps)
 
     def ix(self, s: int) -> int:
-        """Step s's round: its index in its window's round coins (round 0 the epoch round)."""
+        """Step s's round: its index in its execution phase's round coins (round 0 the execution-phase round)."""
         return s - self.s0 + 1
 
     def steps_left(self) -> int:
         return self.end_at - self.s + 1 if self.open and self.end_at is not None else 0
 
-    def put_row(self, s: int, mid, rnd) -> None:
+    def put_row(self, s: int, mid: H1CM.Set, rnd: H1CM.Set) -> None:
         """Under -we, step s's manifest row on the current stream once its round is built: each round leaf's per-call
         roots (mid's leaves) and the round's leaves, to pinned host memory without a wait."""
         if not self.window_end:
@@ -477,7 +482,7 @@ class SoWindow(DO.Window):
 
     def dispatch_units(self, j: int) -> float:
         """Step j's units once its coin is back (`SoSide.dispatch`, under its coin's salt; fault_rearly's under the coin
-        before), unless fault_tail drops the window's last step's; when the coin came back (perf_counter)."""
+        before), unless fault_tail drops the execution phase's last step's; when the coin came back (perf_counter)."""
         i = self.ix(j)
         t0 = time.perf_counter()
         opening = self.pipe.opening(i)
@@ -508,7 +513,7 @@ class SoWindow(DO.Window):
         DA.SIDE[0].dispatch(j, salt, m, g)
         return t_coin
 
-    def _salt_early(self, sd, j: int) -> None:
+    def _salt_early(self, sd: SoSide, j: int) -> None:
         """At step j's units' prequeue (before the root read, the host well ahead of the GPU), its salt from its coin if
         that is back, and the salt's words staged in its ring slot: its dispatch, after the round's root is sent, then
         sets the flag alone.  The salt is `live_salt` of a coin and a root both already recorded, as at dispatch."""
@@ -580,8 +585,8 @@ class SoWindow(DO.Window):
         self.round_log.append({"s": lag["s"], "m": lag["m"], "root": root.hex()[:32]})
 
     def end(self) -> dict | None:
-        """The window's end (the module docstring): the tail's units after their coins, the receipt-tail roots under the
-        final round, its coin back, the manifest root, the draw coin after it, the session closed."""
+        """The execution phase's end (the module docstring): the tail's units after their coins, the receipt-tail roots under the
+        final round, its coin back, the manifest root, the sampling coin after it, the challenge phase closed."""
         self._lag_finish()
         if not self.open:
             return None
@@ -621,7 +626,7 @@ class SoWindow(DO.Window):
         t_rr = time.perf_counter()
         i_f = self.pipe.send(froot)
         if i_f != self.ix(s1):
-            raise RuntimeError(f"window {self.k}'s final round went out as round {i_f}, not {self.ix(s1)}")
+            raise RuntimeError(f"execution phase {self.k}'s final round went out as round {i_f}, not {self.ix(s1)}")
         self.pipe.opening(i_f)
         t_final = time.perf_counter()
         mroot = MF.manifest_root(W, self.k, self.open_root, s0, s1, list(self.pipe.roots[:i_f + 1]))
@@ -670,12 +675,12 @@ class SoWindow(DO.Window):
                           "close": 1e3 * (t_close - t_draw), "record": 1e3 * (t_end - t_close)}}
         e["amortized_ms_per_step"] = e["end_ms"] / n
         self.ends.append(e)
-        if live and os.environ.get(MANIFEST_ENV):
-            e["manifest"] = write_manifest(self, rec, os.environ[MANIFEST_ENV])
+        if live and settings.get(MANIFEST_ENV):
+            e["manifest"] = write_manifest(self, rec, settings.get(MANIFEST_ENV))
         return e
 
     def close(self) -> dict | None:
-        """At the arm's stop: an open window with steps ended under -we, else its rounds drained and its coins closed."""
+        """At the arm's stop: an open execution phase with steps ended under -we, else its rounds drained and its coins closed."""
         self._lag_finish()
         if not self.open:
             return None
@@ -689,7 +694,7 @@ class SoWindow(DO.Window):
         return None
 
     def _harvest(self, now: bool = True) -> None:
-        """The round trips of each coin come back since the last harvest of this window's pipe, and each one's order
+        """The round trips of each coin come back since the last harvest of this execution phase's pipe, and each one's order
         (`live_reason`) now, or at the next `stats` (`order_due`: a timed end leaves this check of its own coins out)."""
         pipe = self.pipe
         n = len(pipe.openings)
@@ -733,7 +738,7 @@ class SoWindow(DO.Window):
 
     def dead_from(self, m: int) -> int:
         """Under DEAD_ONCE_ENV the row from which every row already holds a row past m's z/y records (T after a capture,
-        a control's no-write step or a window's start), and from the next step on m, or T after a step that writes
+        a control's no-write step or an execution phase's start), and from the next step on m, or T after a step that writes
         none; else 0, every row past m written."""
         if not self.dead_once:
             return 0
@@ -1015,7 +1020,7 @@ class SoWindow(DO.Window):
         self.steps += 1
         self._step_end(s)
 
-    def _ybad_copy(self, sd, put: bool = False) -> None:
+    def _ybad_copy(self, sd: SoSide, put: bool = False) -> None:
         """sd.ybad into ybad_pin on the serving stream: a copy, or (put) h1c's kernel stores, which no other stream's
         transfers hold up."""
         if self.ybad_pin is None:
@@ -1036,7 +1041,7 @@ class SoWindow(DO.Window):
         if s == self.end_at:
             self.end()
         elif self.ix(self.s) >= self.layout_rounds:
-            raise RuntimeError(f"the window's {self.layout_rounds} rounds are spent")
+            raise RuntimeError(f"the execution phase's {self.layout_rounds} rounds are spent")
 
     def _after_ov(self) -> None:
         """-ov's step end: step s's ring copies on the serving stream (once the rings' last readers are past them), a
@@ -1115,8 +1120,8 @@ class SoWindow(DO.Window):
         doc["salt"] = "round (the step's own coin)"
         doc["so"] = {"order": ORDER, "depth": self.depth, "units_lag_steps": self.depth - 2,
                      "receipts_round_lag": self.depth - 1, "a_tables": "once a step (not ruled in)" if self.a_once
-                     else ("a/<K>@<s> once a step after the forward (DITHER_A_STEP: CA's 23 Oct ruling, core's form "
-                           "pending)" if self.a_step else "per call, in the forward"),
+                     else ("a/<K>@<s> once a step after the forward (DITHER_A_STEP: ruled in, core's form pending)"
+                           if self.a_step else "per call, in the forward"),
                      "coins": self.coins.label, "coins_record": self.coins.record(),
                      "coin_rtt_ms": {"n": len(rtt), "p50": _q(rtt, 0.5), "p90": _q(rtt, 0.9), "max": _q(rtt, 1.0)},
                      "coin_wait_ms": {"n": len(waits), "p50": _q(waits, 0.5), "p90": _q(waits, 0.9), "max": _q(waits, 1.0)},
@@ -1127,7 +1132,7 @@ class SoWindow(DO.Window):
                                   "wait_ms": {"p50": _q(lagw, 0.5), "p90": _q(lagw, 0.9), "max": _q(lagw, 1.0)}},
                      "order_reason": self.order_why, "windows": self.k + 1, "window_open": self.open,
                      "coins_back": len(pipe.openings), "rounds_sent": len(sent),
-                     # the challenger's log holds these round roots in this order (its published session's record)
+                     # the challenger's log holds these round roots in this order (its published challenge phase's record)
                      "roots_sha512": hashlib.sha512(b"".join(sent)).hexdigest(),
                      "window_end": self.end_stats(),
                      "dead_once": self.dead_once, "put_async": self.put_async,
@@ -1141,7 +1146,7 @@ class SoWindow(DO.Window):
         return doc
 
     def end_stats(self) -> dict:
-        """The windows ended since the last call: each end's time (in the generate that served its last step), split,
+        """The execution phases ended since the last call: each end's time (in the generate that served its last step), split,
         and over its steps."""
         if not self.window_end:
             return {"on": False, "status": NO_END}
@@ -1158,19 +1163,20 @@ class SoWindow(DO.Window):
                 "spill": DA.SIDE[0].spill.stats() if DA.SIDE and DA.SIDE[0].spill is not None else None}
 
 
-def _q(xs: list, f: float):
+def _q(xs: list, f: float) -> float | None:
     return round(xs[min(len(xs) - 1, int(f * len(xs)))], 3) if xs else None
 
 
 def rounds_of() -> int:
-    """A window's round coins: the session's layout off the node (`$DITHER_ROUNDS`, which its open reserved), else
+    """An execution phase's round coins: the challenge phase's layout off the node (`$DITHER_ROUNDS`, which its open reserved), else
     DF.ROUNDS."""
-    return int(os.environ.get(ROUNDS_ENV) or DF.ROUNDS)
+    r = settings.get(ROUNDS_ENV)
+    return DF.ROUNDS if r is None else r
 
 
 class SoSide(DA.Side):
     """dither-a's serving-stream GEMM state with the forward in the statement's order (no seeds, no units) and the
-    units of a step dispatched after its coin (`dispatch`) on a ring of the window's depth (`stash`)."""
+    units of a step dispatched after its coin (`dispatch`) on a ring of the execution phase's depth (`stash`)."""
 
     in_order = True
 
@@ -1184,7 +1190,7 @@ class SoSide(DA.Side):
     def adopted(self) -> tuple[str, ...]:
         return ("j10r",) if self._j10r_part() == "j10r" else ()
 
-    def __init__(self, win: SoWindow, unit: str, h1u: str, ao: str, pt: bool):
+    def __init__(self, win: SoWindow, unit: str, h1u: str, ao: str, pt: bool) -> None:
         if unit not in DA.KONE or ao not in AO:
             raise ValueError(f"dither-a-so's unit: one of {DA.KONE}, not {unit!r}; its A tables: one of {tuple(AO)}, not {ao!r}")
         super().__init__(win, unit, h1u, "zy", "", pt)
@@ -1231,7 +1237,7 @@ class SoSide(DA.Side):
         self.tables = [win.r.plan([Call(self.ring_slot[p][w], win.wt[w], win.offs[w], self.ring_aroots[p].data_ptr() + 64 * w,
                                         self.ring_live[p], root_b=win.bset.roots.data_ptr() + 64 * w) for w in range(L)],
                                   seeds=win.plan.seeds, out=win.plan.out) for p in range(D)]
-        self.rdead = os.environ.get(RDEAD_ENV) == "1"
+        self.rdead = settings.get(RDEAD_ENV)
         if self.rdead:
             self.r_live, nrb = torch.empty_like(win.live), win.t // 32
             win.rset = win.c.set([dataclasses.replace(t, xd=H1CM.dead_x([bytes(t.length)] * (t.count // nrb), dev),
@@ -1239,21 +1245,21 @@ class SoSide(DA.Side):
         self.a_off = win.pre["mid"].level_off[0]
         self.dispatched: dict[int, int] = {}
         self.unit_steps = 0
-        self.graph = os.environ.get(GRAPH_ENV, "1") != "0"
-        self.fused = os.environ.get(FUSED_ENV) == "1"
-        self.units_smq, self.units_smd, self.units_cap = smq_of(os.environ.get(UNITS_SMQ_ENV) or "0")
-        self.units_form = os.environ.get(UNITS_ENV) or "today"
+        self.graph = settings.get(GRAPH_ENV)
+        self.fused = settings.get(FUSED_ENV)
+        self.units_smq, self.units_smd, self.units_cap = smq_of(settings.get(UNITS_SMQ_ENV) or "0")
+        self.units_form = settings.get(UNITS_ENV)
         self.j10r = self.units_form == "j10r"
-        self.j10r_m = os.environ.get(J10R_M_ENV) or "slot"
-        self.j10rc_min_t = int(os.environ.get(J10RC_MIN_T_ENV) or 0)
+        self.j10r_m = settings.get(J10R_M_ENV)
+        self.j10rc_min_t = settings.get(J10RC_MIN_T_ENV)
         if self.units_form not in UNITS_FORMS:
             raise ValueError(f"${UNITS_ENV}={self.units_form}: one of {tuple(UNITS_FORMS)}")
         if self.j10rc_min_t and not self.j10r:
             raise ValueError(f"${J10RC_MIN_T_ENV}: needs ${UNITS_ENV}=j10r")
-        self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={os.environ.get(UNITS_SMQ_ENV)}",
+        self._check_smq(self.units_smq, self.units_smd, f"${UNITS_SMQ_ENV}={settings.raw(UNITS_SMQ_ENV)}",
                         self.units_cap)
-        self.skip_dead = not self.j10r or os.environ.get(SKIP_DEAD_ENV) == "1"
-        if os.environ.get(SKIP_DEAD_ENV) and not self.j10r:
+        self.skip_dead = not self.j10r or settings.get(SKIP_DEAD_ENV)
+        if settings.is_set(SKIP_DEAD_ENV) and not self.j10r:
             raise ValueError(f"${SKIP_DEAD_ENV}: needs ${UNITS_ENV}=j10r (today's units are PouwH1Tile_v4's, whose dead "
                              "tile is always the zero receipt)")
         if not self.skip_dead and self.rdead:
@@ -1273,7 +1279,7 @@ class SoSide(DA.Side):
                    *(("kh_units_multi_j10r_sm",) if self.units_smq else ()),
                    *(("kh_units_multi_j10rc", "kh_j10r_ws_bytes") if self.j10rc_min_t else ()))
             missing = [f for f in fns if not hasattr(self.h, f)]
-            if not self.fused or missing or os.environ.get(DA.LANE_REFS_ENV) or not os.environ.get(JS.TREE_ENV):
+            if not self.fused or missing or settings.get(DA.LANE_REFS_ENV) or not settings.get(JS.TREE_ENV):
                 raise ValueError(f"${UNITS_ENV}=j10r: needs ${FUSED_ENV}=1, J10R's tree at ${JS.TREE_ENV} (sbench.sh's "
                                  f"J10R_SHA={JS.J10R_SHA}), no ${DA.LANE_REFS_ENV} (its lane records are today's form) "
                                  f"and an h1u build with {', '.join(fns)} (missing: {missing})")
@@ -1299,7 +1305,7 @@ class SoSide(DA.Side):
             self.unit_next = torch.zeros(words, dtype=torch.int32, device=dev)
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = {}
         self.warm: set[int] = set()
-        self.preq = os.environ.get(PREQ_ENV) == "1"
+        self.preq = settings.get(PREQ_ENV)
         self.queued: dict[int, tuple[int, int]] = {}
         # step -> the salt `stage_salt` wrote into its ring slot's pinned words ahead of its dispatch
         self.staged: dict[int, bytes] = {}
@@ -1405,13 +1411,10 @@ class SoSide(DA.Side):
         order = sorted(range(win.L), key=lambda w: -md[w])
         rws = []
         if self.j10r:
-            # each call's row blocks at T rows (the most a layout takes), one workspace for every ring slot: a step's
-            # units run on the units stream after the step before's
-            h.kh_j10r_rows_bytes.argtypes, h.kh_j10r_rows_bytes.restype = [u32, u32], C.c_ulonglong
-            nbytes = [int(h.kh_j10r_rows_bytes(win.t, k)) for _, k in win.nk]
-            if self.j10rc_min_t:
-                h.kh_j10r_ws_bytes.argtypes, h.kh_j10r_ws_bytes.restype = [u32, u32, u32], C.c_ulonglong
-                nbytes = [int(h.kh_j10r_ws_bytes(win.t, n, k)) for n, k in win.nk]
+            # each call's workspace at T rows (the most a layout takes) as the build sizes it (j10r_ws: an H1U_JW
+            # build's column tiles and W' too, RC's under $DITHER_SO_J10RC_MIN_T), one workspace for every ring slot:
+            # a step's units run on the units stream after the step before's
+            nbytes = [JWS.workspace_bytes(h, win.t, n, k, rc=bool(self.j10rc_min_t)) for n, k in win.nk]
             self.j10r_ws = torch.empty(sum(nbytes), dtype=torch.uint8, device=win.dev)
             rws = [self.j10r_ws.data_ptr() + sum(nbytes[:w]) for w in range(win.L)]
         tabs = []
@@ -1516,7 +1519,7 @@ class SoSide(DA.Side):
         return 0
 
     @staticmethod
-    def _cu_ok(res):
+    def _cu_ok(res: Any) -> Any:
         err, *out = res if isinstance(res, tuple) else (res,)
         if int(err) != 0:
             raise RuntimeError(f"${PREQ_ENV}=1: {err!r}")
@@ -1625,7 +1628,7 @@ class SoSide(DA.Side):
                 "overlap": None if self.ov is None else {"order": OV_ORDER, "ring": self.ov.R}}
 
 
-def _remap(c, st, data: list | None = None, out: list | None = None):
+def _remap(c: H1CM.H1C, st: H1CM.Set, data: list | None = None, out: list | None = None) -> H1CM.Set:
     """A set of `st`'s tables over its own levels and roots, table w's rows at data[w] and its root at out[w] where
     given."""
     return c.set([dataclasses.replace(t, data=t.data if data is None else data[w], out=t.out if out is None else out[w])
@@ -1641,7 +1644,7 @@ class Ov:
 
     EV = 8      # the GPU's events a step, in a ring of this many steps (the host's waits keep them that far apart)
 
-    def __init__(self, win: SoWindow, sd: SoSide, ring: int):
+    def __init__(self, win: SoWindow, sd: SoSide, ring: int) -> None:
         if not 1 <= ring < self.EV - 1:
             raise ValueError(f"dither-a-so -ov: the round ring's depth is 1 to {self.EV - 2}, not {ring}")
         self.win, self.sd, self.R = win, sd, ring
@@ -1664,14 +1667,14 @@ class Ov:
         self.stepv_r = [torch.empty_like(win.stepv) for _ in range(ring)]
         self.a_off = win.pre["mid"].level_off[0]
         self.sets = []
-        def leaves(st, at: int) -> list[int]:
+        def leaves(st: H1CM.Set, at: int) -> list[int]:
             return [at + 64 * w for w in range(len(st.tabs))]
         for q in range(ring):
             zv, yv = self.zy_r[q].split(self.zl), self.ysv_r[q].split(self.yl)
             rnd = c.set(list(win.pre["round"].tabs))
             mid = _remap(c, win.pre["mid"], out=leaves(win.pre["mid"], rnd.leaves_addr(0)))
             if mid.level_off != win.pre["mid"].level_off:
-                raise RuntimeError("dither-a-so -ov: the ring's step trees are not laid out as the window's")
+                raise RuntimeError("dither-a-so -ov: the ring's step trees are not laid out as the execution phase's")
             ad = win.pre["admit"]
             self.sets.append({
                 "round": rnd, "mid": mid,
@@ -1706,7 +1709,7 @@ class Ov:
 
     # -- the host's order -------------------------------------------------------------------------------------------
 
-    def wait(self, ready) -> None:
+    def wait(self, ready: Callable[[], bool]) -> None:
         with self.cv:
             while self.error is None and not ready():
                 self.cv.wait()
@@ -1742,7 +1745,7 @@ class Ov:
             self._set(draining=False)
         torch.cuda.synchronize()
 
-    def _loop(self, qu: queue.SimpleQueue, fn) -> None:
+    def _loop(self, qu: queue.SimpleQueue, fn: Callable[[int], None]) -> None:
         torch.cuda.set_device(self.dev_index)
         while True:
             s = qu.get()
@@ -1755,8 +1758,8 @@ class Ov:
                 return
 
     @contextlib.contextmanager
-    def phase(self, name: str):
-        """`Window.phase`'s NVTX range on this thread (stepprof joins a launch to its own thread's phase)."""
+    def phase(self, name: str) -> Iterator[None]:
+        """`DitherState.phase`'s NVTX range on this thread (stepprof joins a launch to its own thread's phase)."""
         if not self.win.nvtx:
             yield
             return
@@ -1938,16 +1941,16 @@ class Ov:
 
 
 class Spill:
-    """-we: each step's live A rows and scales and (mode "azy") its z/y records' live row blocks, the values the prover
-    opens a drawn unit from after the draw, copied on a stream of their own into pinned host memory from the ring slot
-    that holds them, and held until the window's end (`take_window`).  The serving stream rewrites a slot only once its
+    """-we: each step's live A rows and scales and (mode "azy") its z/y records' live row tiles, the values the prover
+    opens a sampled proof block from after the sample, copied on a stream of their own into pinned host memory from the ring slot
+    that holds them, and held until the execution phase's end (`take_window`).  The serving stream rewrites a slot only once its
     copy is out (`wait_a`, `wait_z`): ring slot s mod D at stash s + D; the z/y records at forward s + 1 (under -ov round
     slot s mod R at its copy s + R).  The records' live prefixes go through one device buffer and one transfer.  The
-    pool's chunks are never freed: a window's go back to it at its end, a named or off-node window's after `check_end`
-    (`release`).  An off-node window's pool is pinned whole when the spill is made, at its open (`reserve`); an
+    pool's chunks are never freed: an execution phase's go back to it at its end, a named or off-node execution phase's after `check_end`
+    (`release`).  An off-node execution phase's pool is pinned whole when the spill is made, at its open (`reserve`); an
     in-process arm's grows in sbench's warm-up."""
 
-    def __init__(self, win: SoWindow, sd: SoSide, mode: str):
+    def __init__(self, win: SoWindow, sd: SoSide, mode: str) -> None:
         if mode not in SPILLS:
             raise ValueError(f"dither-a-so -we: a spill is one of {tuple(SPILLS)}, not {mode!r}")
         self.win, self.sd, self.mode, self.zy = win, sd, mode, mode == "azy"
@@ -1968,7 +1971,8 @@ class Spill:
         self.free: list[torch.Tensor] = []
         self.chunks: list[torch.Tensor] = []
         self.at, self.n_chunks, self.grown, self.alloc_ms = 0, 0, 0, 0.0
-        self.max_bytes = int(float(os.environ.get(SPILL_MAX_ENV) or SPILL_MAX_GB) * (1 << 30))
+        gb = settings.get(SPILL_MAX_ENV)
+        self.max_bytes = int((SPILL_MAX_GB if gb is None else gb) * (1 << 30))
         self.held: dict[int, dict] = {}
         self.log: list[tuple] = []
         self.unfinished = {"a": 0, "z": 0}
@@ -1987,18 +1991,19 @@ class Spill:
         return out
 
     def reserve(self, steps: int) -> None:
-        """An off-node window's pool, pinned when the window opens, before any step it times: the chunks `take` fills
+        """An off-node execution phase's pool, pinned when the execution phase opens, before any step it times: the chunks `take` fills
         with `steps` steps at m = T, the most a step copies.  Refused there when that passes the bound, rather than
-        partway through the window."""
+        partway through the execution phase."""
         at, n = SPILL_CHUNK, 0
         for b in self.step_bytes(self.win.t) * steps:
             if at + b > SPILL_CHUNK:
                 n, at = n + 1, 0
             at += -(-b // 512) * 512
         if (self.n_chunks + n) * SPILL_CHUNK > self.max_bytes:
-            raise RuntimeError(f"dither-a-so -we: an off-node window of {steps} steps holds up to {n * SPILL_CHUNK >> 30} "
-                               f"GiB of spill at m = {self.win.t}, past {self.max_bytes >> 30} GiB: open a session of "
-                               f"fewer rounds, spill A alone (-wea), or raise ${SPILL_MAX_ENV} with the lease's memory")
+            raise RuntimeError(f"dither-a-so -we: an off-node execution phase of {steps} steps holds up to "
+                               f"{n * SPILL_CHUNK >> 30} GiB of spill at m = {self.win.t}, past {self.max_bytes >> 30} GiB: "
+                               f"open a challenge phase of fewer rounds, spill A alone (-wea), or raise ${SPILL_MAX_ENV} "
+                               f"with the lease's memory")
         t0 = time.perf_counter()
         self.free += [torch.empty(SPILL_CHUNK, dtype=torch.uint8, pin_memory=True) for _ in range(n)]
         self.n_chunks += n
@@ -2006,12 +2011,12 @@ class Spill:
                          "ms": round(1e3 * (time.perf_counter() - t0), 1)}
 
     def prefix(self, w: int, m: int) -> int:
-        """Call w's records' live bytes at m rows: its row blocks below m."""
+        """Call w's records' live bytes at m rows: its row tiles below m."""
         ur, per = self.row_block[w]
         return -(-m // ur) * per
 
     def take(self, n: int) -> torch.Tensor:
-        """n bytes of the window's pinned chunks, 512-aligned, a chunk from the pool (or a new one) when the last is full."""
+        """n bytes of the execution phase's pinned chunks, 512-aligned, a chunk from the pool (or a new one) when the last is full."""
         if not self.chunks or self.at + n > SPILL_CHUNK:
             if n > SPILL_CHUNK:
                 raise RuntimeError(f"dither-a-so -we: a spill copy of {n} bytes outgrows a chunk ({SPILL_CHUNK})")
@@ -2020,8 +2025,9 @@ class Spill:
             else:
                 if (self.n_chunks + 1) * SPILL_CHUNK > self.max_bytes:
                     raise RuntimeError(f"dither-a-so -we: the spill's pool would pass {self.max_bytes >> 30} GiB at step "
-                                       f"{self.win.s}, {len(self.held)} steps into its window: serve a shorter window, "
-                                       f"spill A alone (-wea), or raise ${SPILL_MAX_ENV} with the lease's memory")
+                                       f"{self.win.s}, {len(self.held)} steps into its execution phase: serve a shorter "
+                                       f"execution phase, spill A alone (-wea), or raise ${SPILL_MAX_ENV} with the lease's "
+                                       f"memory")
                 t0 = time.perf_counter()
                 c = torch.empty(SPILL_CHUNK, dtype=torch.uint8, pin_memory=True)
                 self.alloc_ms += 1e3 * (time.perf_counter() - t0)
@@ -2084,7 +2090,7 @@ class Spill:
         self.log.append((na, nz, e0, e1, 1e3 * (time.perf_counter() - t0)))
 
     def take_window(self) -> dict:
-        """The ended window's held steps and their chunks; the next window's from none."""
+        """The ended execution phase's held steps and their chunks; the next execution phase's from none."""
         w = {"mode": self.mode, "steps": self.held, "chunks": self.chunks}
         self.held, self.chunks, self.at = {}, [], 0
         return w
@@ -2128,11 +2134,11 @@ def side() -> SoSide:
 def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, depth: int, key: bytes | None = None,
           ov: int = 0, serve_prio: bool = False, window_end: bool = False, spill: str | None = "azy") -> None:
     """dither_a's patch with z/y leaves (its op, `dithera::mm`, and the round's y-step and receipt-step leaves), then its
-    window this module's (ring depth `depth`; `ov` > 0: -ov with a round ring that deep, and CAPTURES its) and its op's
+    execution phase this module's (ring depth `depth`; `ov` > 0: -ov with a round ring that deep, and CAPTURES its) and its op's
     calls this module's Side (before the engine is built).  `serve_prio` (or $DITHER_SO_PRIO=1): the engine serves on a
     stream at the A tables' priority, above the trees' and the units' (so the next forward's blocks take the SMs first as
     theirs retire); without -ov the admit tables too, since the serving stream waits on them between steps.
-    `window_end`: -we, each window ends (`SoWindow.end`), each step's values held until it under `spill` (SPILLS;
+    `window_end`: -we, each execution phase ends (`SoWindow.end`), each step's values held until it under `spill` (SPILLS;
     -we "azy", -wea "a")."""
     global CAPTURES
     if window_end and spill not in SPILLS:
@@ -2141,7 +2147,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
         raise ValueError(f"dither-a-so: unit one of {DA.KONE} (not {unit!r}), A tables one of {tuple(AO)} (not {ao!r}), "
                          f"depth at least 2 (not {depth}), round ring 0 (no -ov) or more (not {ov})")
     DA.patch(t=t, h1c=h1c, h1o=h1o, unit=unit, h1u=h1u, key=key, z="zy", ao="", pt=pt, ls=False)
-    serve_prio = serve_prio or os.environ.get(PRIO_ENV) == "1"
+    serve_prio = serve_prio or settings.get(PRIO_ENV)
     CONF.update(unit=unit, h1u=h1u, ao=ao, pt=pt, depth=depth, ov=ov, serve_prio=serve_prio, window_end=window_end)
     SoWindow.depth, SoWindow.a_once, SoWindow.overlap = depth, ao.startswith("b"), ov
     SoWindow.window_end = window_end
@@ -2152,9 +2158,9 @@ def patch(t: int, h1c: str, h1o: str, unit: str, h1u: str, ao: str, pt: bool, de
         # vLLM serves (replays its graphs) on the stream its patched set_stream last recorded
         from vllm.utils import torch_utils  # noqa: F401
         torch.cuda.set_stream(torch.cuda.Stream(priority=-1))
-        if os.environ.get(CAPTURE_PRIO_ENV) == "1":
+        if settings.get(CAPTURE_PRIO_ENV):
             capture_at(-1)
-    DO.Window = SoWindow
+    DO.DitherState = SoWindow
     DA.side = side
 
 
@@ -2169,7 +2175,8 @@ def capture_at(priority: int) -> None:
     class graph(base):
         so_priority = priority
 
-        def __init__(self, cuda_graph, pool=None, stream=None, *args, **kwargs):
+        def __init__(self, cuda_graph: torch.cuda.CUDAGraph, pool: tuple[int, int] | None = None,
+                     stream: torch.cuda.Stream | None = None, *args, **kwargs) -> None:
             if stream is None or stream.priority > priority:
                 dev = torch.cuda.current_device()
                 if dev not in streams:
@@ -2180,7 +2187,7 @@ def capture_at(priority: int) -> None:
     torch.cuda.graph = graph
 
 
-def stats(win: SoWindow):
+def stats(win: SoWindow) -> Callable[[], dict]:
     def doc() -> dict:
         return {**win.stats(), **DA.arm_label(), "dither_a": DA.SIDE[0].info() if DA.SIDE else None}
     return doc
@@ -2292,20 +2299,20 @@ def gate_verdict(gate: dict, control: dict, fault: dict, *more: dict) -> dict:
     return v
 
 
-# -- the window's end ----------------------------------------------------------------------------------------------------------
+# -- the execution phase's end -------------------------------------------------------------------------------------------------
 
 def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
-    """Ended window `name` (`SoWindow.end_recs`) against the module docstring's list: its coins; each step's round
+    """Ended execution phase `name` (`SoWindow.end_recs`) against the module docstring's list: its coins; each step's round
     recomputed from its manifest row (fault_zlate's two steps' z-step and y-step leaves expected off); each step's units
     under its coin's salt (fault_rearly's expected not) and dispatched after its coin came back, its receipts' round sent
-    after that and before the draw coin, no round after it; the final round from the tail's receipt roots; and the last
+    after that and before the sampling coin, no round after it; the final round from the tail's receipt roots; and the last
     step's receipts against h1r v1 under its coin's salt, `rehashed_calls`' A tables and receipt tables rehashed; under -we
     three steps opened from its spill (`open_spill`).  Under fault_tail and fault_late_receipt, ``conforming`` holds
     when it is refused exactly where its fault is."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
     rec = win.end_recs.get(name)
     if rec is None or rec.get("rows") is None or "last" not in rec:
-        return {"which": name, "ok": False, "complete": False, "why": f"no ended window {name!r} with its rows"}
+        return {"which": name, "ok": False, "complete": False, "why": f"no ended execution phase {name!r} with its rows"}
     pipe, com, rows, kinds = rec["pipe"], rec["coins"].commitment, rec["rows"], win.round_kinds
     W, L, D, key, t = win.window, win.L, win.depth, win.key, win.t
     s0, s1, i_f, li, draw_at = rec["s0"], rec["s1"], rec["i_f"], rec["late_index"], rec["draw_at"]
@@ -2410,7 +2417,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
         doc["conforming"] = bool(base and order_bad == [s] and not after and not tail_bad and not late_steps
                                  and len(rc_bad) == L and not a_bad)
     elif rec["fault"] == "fault_late_receipt":
-        # the last step's receipt-tail root withheld from the final round and sent after the draw coin: refused on that
+        # the last step's receipt-tail root withheld from the final round and sent after the sampling coin: refused on that
         # leaf and that round alone
         doc["conforming"] = bool(base and not order_bad and tail_bad == [s] and late_steps == [s] and after == [li]
                                  and not rc_bad and not a_bad and not rr_bad)
@@ -2419,16 +2426,16 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
 
 def rehashed_calls(L: int, coin: bytes, drawn: int = 8) -> list[int]:
     """The last step's calls whose A table and receipt table `check_end` rehashes on the CPU: the first and last layers'
-    four (every linear's shape) and `drawn` the draw coin picks: at most 16 of Llama 3.1 8B's 128, about half a second
-    where all 128 take about 4 s (under DO.A_STEP_ENV the A side is every K's table, so all 128 calls' rows)."""
+    four (every linear's shape) and `drawn` the sampling coin picks: at most 16 of Llama 3.1 8B's 128, an eighth of rehashing
+    them all (under DO.A_STEP_ENV the A side is every K's table, so all 128 calls' rows)."""
     h = hashlib.sha512(b"verity/kernels-int12/end-rehash/v1" + coin).digest()
     return sorted({*range(min(4, L)), *range(max(0, L - 4), L),
                    *(int.from_bytes(h[8 * j:8 * j + 8], "big") % L for j in range(drawn))})
 
 
 def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
-    """After the draw, the prover's openings from an ended window's spill (`Spill`): three uncaptured steps (its first,
-    its last, and one its draw coin picks), each at a call the draw coin picks.  The call's A table rehashed from the
+    """After the sample, the prover's openings from an ended execution phase's spill (`Spill`): three uncaptured steps (its first,
+    its last, and one its sampling coin picks), each at a call the sampling coin picks.  The call's A table rehashed from the
     held rows and scales (zero past m) against its manifest row's A root; its z/y records recomputed from them (z = A B^T
     by int_mm, y = dequant(z) at the slot's s_a, so past m z 0 and y dq(0, +0, s_w)) against the row's z root; and under
     "azy" the held records against both."""
@@ -2442,7 +2449,7 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
     held = [s for s in range(s0, s1) if s not in near and s in sp["steps"]]
     doc: dict = {"mode": sp["mode"], "what": SPILLS[sp["mode"]], "held_steps": len(sp["steps"]), "steps": s1 - s0}
     if not held or len(sp["steps"]) != s1 - s0:
-        return {**doc, "ok": False, "why": "the spill holds not every step of the window, or none uncaptured"}
+        return {**doc, "ok": False, "why": "the spill holds not every step of the execution phase, or none uncaptured"}
     h = hashlib.sha512(b"verity/kernels-int12/spill-open/v1" + rec["draw"].coin).digest()
     steps = sorted({held[0], held[int.from_bytes(h[:8], "big") % len(held)], held[-1]})
     ai, zi, L8 = kinds.index("a-step"), kinds.index("z-step"), 8 * L
@@ -2452,13 +2459,13 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
         x, row = sp["steps"][s], rows[s - s0]
         m, n, u = x["m"], win.nk[w][0], sd.unit_of[w]
 
-        def q_of(v: int, x=x, m=m) -> np.ndarray:
+        def q_of(v: int, x: dict = x, m: int = m) -> np.ndarray:
             kv, iv = sd.spill.slot_of[v]
             q = np.zeros((t, win.nk[v][1]), dtype=np.int8)
             q[:m] = x["a"][kv][iv].numpy()
             return q
 
-        def sc_of(v: int, x=x, m=m) -> np.ndarray:
+        def sc_of(v: int, x: dict = x, m: int = m) -> np.ndarray:
             sc = np.zeros(t, dtype=np.float32)
             sc[:m] = x["sa"][win.spos[v]].numpy()
             return sc
@@ -2471,7 +2478,7 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
         cnt = recs.shape[0]
         zd = CM.domain(DA.zy_fields(win, w, s, u), cnt, DA.ZY_KIND)
 
-        def root(r: np.ndarray, s=s, w=w, zd=zd, cnt=cnt) -> bytes:
+        def root(r: np.ndarray, s: int = s, w: int = w, zd: CM.CommitmentDomain = zd, cnt: int = cnt) -> bytes:
             return CM.levels(zd, [CM.leaf(zd, key, f"zy/{s}/{w}", e, bytes(r[e]))[0] for e in range(cnt)])[-1][0]
         want = unwords(row[zi * L8 + 8 * w:zi * L8 + 8 * w + 8])
         o = {"s": s, "call": w, "module": win.names[w], "m": m, "a_root": a_ok, "zy_recomputed_root": root(recs) == want}
@@ -2489,8 +2496,8 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
 
 
 def end_verdict(docs: dict) -> dict:
-    """The window end's verdict: the gate's ended window passes and each end fault's window is refused where its fault
-    is; a live window's alone when it is the arm's one window."""
+    """The execution-phase end's verdict: the gate's ended execution phase passes and each end fault's execution phase is refused where its fault
+    is; a live execution phase's alone when it is the arm's one execution phase."""
     v: dict = {"order": END_ORDER}
     if "end_gate" in docs:
         v["gate_ok"] = bool(docs["end_gate"].get("ok"))
@@ -2504,8 +2511,8 @@ def end_verdict(docs: dict) -> dict:
     return v
 
 
-def end_gate(win: SoWindow, generate) -> None:
-    """The end faults, each in a window of its own `end_steps` steps that ends on its own inside `generate(n)`."""
+def end_gate(win: SoWindow, generate: Callable[[int], object]) -> None:
+    """The end faults, each in an execution phase of its own `end_steps` steps that ends on its own inside `generate(n)`."""
     n = end_steps(win.depth)
     for f in END_FAULTS:
         win.arm_end(f, f, n)
@@ -2513,7 +2520,7 @@ def end_gate(win: SoWindow, generate) -> None:
 
 
 def end_checks(win: SoWindow, lib_h1o: str) -> dict:
-    """Every named ended window's `check_end` and their verdict (`end_verdict`); their records released."""
+    """Every named ended execution phase's `check_end` and their verdict (`end_verdict`); their records released."""
     names = [x for x in ("end_gate", *END_FAULTS, "live") if x in win.end_recs]
     with torch.inference_mode():
         docs = {x: check_end(win, x, lib_h1o) for x in names}
@@ -2527,7 +2534,7 @@ def end_checks(win: SoWindow, lib_h1o: str) -> dict:
 
 
 def write_manifest(win: SoWindow, rec: dict, out_dir: str) -> dict:
-    """An off-node window's manifest (`dither_manifest`): its window, coins in `coins.check`'s form, every round root,
+    """An off-node execution phase's manifest (`dither_manifest`): its execution phase, coins in `coins.check`'s form, every round root,
     each step's round leaves and unit salt (a fault_rearly capture's apart, under its name), the final round, the
     manifest root; its per-call roots to the temporary directory."""
     import tempfile
@@ -2539,7 +2546,7 @@ def write_manifest(win: SoWindow, rec: dict, out_dir: str) -> dict:
     doc = {"schema": MF.SCHEMA, "window": win.window, "index": rec["k"], "depth": win.depth, "first": s0,
            "steps": s1 - s0, "linears": win.L, "round_kinds": list(kinds),
            "open_root": rec["open_root"].hex(),
-           "open_root_is": CO.STAND_IN if coins.source == "off-node" else "the epoch root (in process)",
+           "open_root_is": CO.STAND_IN if coins.source == "off-node" else "the execution-phase root (in process)",
            "b_roots": [x.hex() for x in rec["b_roots"]],
            "rounds": [x.hex() for x in pipe.roots[:i_f + 1]],
            "round_leaves": [[unwords(rows[r][nr * L8 + 8 * i:nr * L8 + 8 * i + 8]).hex() for i in range(nr)]

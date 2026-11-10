@@ -1,11 +1,16 @@
-import Proofs.Flock.Soundness.Refine.Paths
-import Proofs.Flock.Soundness.Refine.Exec
+module
+
+public import Proofs.Flock.Soundness.Refine.Paths
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Verifier.Transcript
+import VCVio.Prelude.Core
 
 /-!
-# The transcript's frames (R11b, framing)
+# The transcript's frames (framing, for the decoder premise)
 
-The replay transcript (PROTOCOL.md §6) appends one frame per domain, label, absorb or zero-coin squeeze to its pending
+The replay transcript (`Flock.Transcript`) appends one frame per domain, label, absorb or zero-coin squeeze to its pending
 bytes, and a squeeze answers the pending bytes and its own header; on the unsalted path the server retained each round's
 bytes, and the replay compares them exactly. This file models those bytes.
 
@@ -17,6 +22,8 @@ bytes, and the replay compares them exactly. This file models those bytes.
 * `squeeze_bindA`, `sample_bindA`, `sampleVec_bindA`, `sampleK_bindA`, `forIn_answers`: a squeeze, or a loop of them,
   consumes rounds that retained the pending bytes and the squeeze's header.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
@@ -56,7 +63,7 @@ theorem padded_data (b : ByteArray) :
   congr 2
   omega
 
-/-- **A frame** of the replay transcript (PROTOCOL.md §6.1): the bytes one domain, label, absorb or zero-coin squeeze
+/-- **A frame** of the replay transcript (`Flock.Transcript`): the bytes one domain, label, absorb or zero-coin squeeze
 appends to the pending bytes, or the header a squeeze answers. -/
 inductive Frame where
   | dom (b : ByteArray)

@@ -1,6 +1,21 @@
-import Proofs.Flock.C3.Reps.AlgL
-import Proofs.Flock.C3.Reps.Vals
-import Proofs.Flock.VBridge.Family
+module
+
+public import Proofs.Flock.C3.Reps.AlgL
+public import Proofs.Flock.C3.Reps.Vals
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.VBridge.Algebra.BitsOk
 
 /-!
 # C3's rep decoder: the reps' unit maps, openings and values over a list of V*'s statements
@@ -18,6 +33,8 @@ coins) and those read off V*'s layers (`rep₀`'s `w` and `comb`, `rows`, `acc`)
   `proofOfVals_of_src` takes (`proofOfVals`). `rep`'s rounds and extras are the history's and its comb `rep₀`'s,
   which this file leaves fields.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 
@@ -207,9 +224,9 @@ from coin `k₀` of the rounds `c`. `RecOpening.run`'s and `RecCoins.opening`'s 
 (`ringSwitch_sim`, `ligerito_sim` at `homUnit`). -/
 def runAlpha (sh : Shape) (cl : Array (RecAlgebra.AClaim Unit)) (k₀ : ℕ) (c : Array (Array F128)) (ℓ : ℕ) :
     Array F128 :=
-  match RecAlgebra.ringSwitch (skel sh) cl k₀ (RecAlgebra.Coins.ofRounds c) with
+  match RecAlgebra.ringSwitch (skel sh) cl k₀ (RecAlgebra.CoinSource.ofRounds c) with
   | .ok ((_, rs), k₂) =>
-    match RecAlgebra.ligerito sh.sched (skel sh) () rs.sws k₂ (RecAlgebra.Coins.ofRounds c) with
+    match RecAlgebra.ligerito sh.sched (skel sh) () rs.sws k₂ (RecAlgebra.CoinSource.ofRounds c) with
     | .ok ((_, lg), _) => (lg.conss[ℓ]!).alpha
     | .error _ => #[]
   | .error _ => #[]

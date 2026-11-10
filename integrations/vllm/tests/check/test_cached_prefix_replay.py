@@ -10,7 +10,7 @@ import pytest
 
 from verity_vllm.check.replay import cached_prefix as CP, evaluate as EV, linkage as LK
 from verity_vllm.pipeline import c2_replay as C2
-from verity_vllm.program.kernels.kernel_registry import Declined
+from verity.ml.definitions.numerics.kernel_registry import Declined
 
 C, RL, BS = 4, 4, 2          # cached rows, key / value leaves per row (KVH*D), block size
 ROPE, QKV = "model.layers.{l}.self_attn.rotary_emb", "model.layers.{l}.self_attn.qkv_proj"

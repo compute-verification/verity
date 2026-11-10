@@ -1,8 +1,11 @@
-import Models.Pouw.Assumptions.NCP.RouteUGame
-import Proofs.Pouw.NCP.GameProofs
-import Proofs.Pouw.Sanity
-import Proofs.Pouw.NCP.ChainProofs
-import Models.Pouw.Guarantees.NCP
+module
+
+public import Definitions.Pouw.Assumptions.NCP.RouteUGame
+public import Proofs.Pouw.NCP.GameProofs
+public import Proofs.Pouw.Sanity
+public import Proofs.Pouw.NCP.ChainProofs
+public import Definitions.Pouw.Guarantees.NCP
+public import Proofs.Pouw.Lemmas.NCP
 
 /-!
 # NCP's checked values on route U: proofs
@@ -11,6 +14,8 @@ import Models.Pouw.Guarantees.NCP
   `mmWU_eq` and `wrapU` (the int32 reading), `int7Int32U` (signed `R`, `k ≤ 2^15`), `int7Int32UUnsigned`
   (permutation matrix, `k ≤ 2^16`: `runU_cells`, `cell_bound`), `mmWUExact`, `leadCompleteU` and `yuChecked`.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.RouteUProofs
 
@@ -376,33 +381,33 @@ theorem wrefU_le (f : ℕ) {n₀ : ℕ} (hn₀ : 0 < n₀) {sh : Shape} (hn : n�
     exact h2
   linarith
 
-/-- **`G_γ` from TT_NCP_U.** -/
-theorem gammaFromTTNCP_U : GammaFromTTNCP_U := by
-  intro Q R S _ _ _ _ CM P β f D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
+/-- **`G_g` from TT_NCP_U.** -/
+theorem gapFromTTNCP_U : GapFromTTNCP_U := by
+  intro Q R S _ _ _ _ CM P β f D g₀ n₀ δ hg₀ hn₀ hW hn hside hTT
   have hΩ : (0 : ℝ) < 1 + f / (3 * n₀) := by positivity
-  refine GameProofs.gammaFromTTNCP Q R S CM (P.toProtocolU β) P.d D γ₀ (1 + f / (3 * n₀)) ε hγ₀ hΩ
+  refine GameProofs.gapFromTTNCP Q R S CM (P.toProtocolU β) P.d D g₀ (1 + f / (3 * n₀)) δ hg₀ hΩ
     (fun U hU u hu => ?_) hside hTT
   show ((P.Wref U.layout u : ℕ) : ℝ) ≤ _
   rw [hW, wrefU]
   exact wrefU_le f hn₀ (hn U hU u hu)
 
-/-- **`G_γ` from TT_NCP_U at ncp-v1.** -/
-theorem gammaFromTTNCP_U_v1 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_v1 := by
-  intro Q R S _ _ _ _ CM P D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
+/-- **`G_g` from TT_NCP_U at ncp-v1.** -/
+theorem gapFromTTNCP_U_v1 : Pouw.Guarantees.NCP.GapFromTTNCP_U_v1 := by
+  intro Q R S _ _ _ _ CM P D g₀ n₀ δ hg₀ hn₀ hW hn hside hTT
   have e : (1 : ℝ) + ((24 : ℕ) : ℝ) / (3 * n₀) = 1 + 8 / n₀ := by
     have : (0 : ℝ) < n₀ := by exact_mod_cast hn₀
     field_simp
     push_cast
     ring
   rw [← e]
-  exact gammaFromTTNCP_U Q R S CM P 128 24 D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
+  exact gapFromTTNCP_U Q R S CM P 128 24 D g₀ n₀ δ hg₀ hn₀ hW hn hside hTT
 
-/-- **`G_γ` from TT_NCP_U at C2.** -/
-theorem gammaFromTTNCP_U_C2 : Pouw.Guarantees.NCP.GammaFromTTNCP_U_C2 := by
-  intro Q R S _ _ _ _ CM P D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
+/-- **`G_g` from TT_NCP_U at C2.** -/
+theorem gapFromTTNCP_U_C2 : Pouw.Guarantees.NCP.GapFromTTNCP_U_C2 := by
+  intro Q R S _ _ _ _ CM P D g₀ n₀ δ hg₀ hn₀ hW hn hside hTT
   have e : (1 : ℝ) + ((20 : ℕ) : ℝ) / (3 * n₀) = 1 + 20 / (3 * n₀) := by norm_num
   rw [← e]
-  exact gammaFromTTNCP_U Q R S CM P 129 20 D γ₀ n₀ ε hγ₀ hn₀ hW hn hside hTT
+  exact gapFromTTNCP_U Q R S CM P 129 20 D g₀ n₀ δ hg₀ hn₀ hW hn hside hTT
 
 section Honest
 
@@ -411,18 +416,18 @@ variable (P : Params Q R S) (β : ℤ)
 /-- Unit `u`'s honest commitment on route U from the answers `a` to `qAct` and `b` to `qWt`. -/
 def commitAnsU (U : Workload) (u : ℕ) (A : Mat) (a b : List R) : Commit :=
   let sh := U.layout.shape u
-  let B := U.weight (U.layout.wid u)
+  let B := U.fixed (U.layout.fixedId u)
   ⟨A, fun t => mmWU β sh.k A B (P.expAct sh a) (P.expWt sh b).1 (P.expWt sh b).2 (D1.blockEnd P.d (3 * sh.k) t),
     mmWU β sh.k A B (P.expAct sh a) (P.expWt sh b).1 (P.expWt sh b).2 (3 * sh.k)⟩
 
 theorem commitAnsU_eq (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) :
-    commitAnsU P β U u A ((P.qAct s u A (U.layout.wid u)).map H) ((P.qWt s (U.layout.wid u)).map H)
+    commitAnsU P β U u A ((P.qAct s u A (U.layout.fixedId u)).map H) ((P.qWt s (U.layout.fixedId u)).map H)
       = ⟨A, (P.toProtocolU β).refChecked H s U u A, (P.toProtocolU β).refOut H s U u A⟩ := rfl
 
 /-- Unit `u`'s honest program on route U: query its noise, then commit. -/
 def unitProgU (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R Commit :=
-  (queryAll (P.qAct s u (act u) (U.layout.wid u))).bind fun a =>
-    (queryAll (P.qWt s (U.layout.wid u))).bind fun b => done (commitAnsU P β U u (act u) a b)
+  (queryAll (P.qAct s u (act u) (U.layout.fixedId u))).bind fun a =>
+    (queryAll (P.qWt s (U.layout.fixedId u))).bind fun b => done (commitAnsU P β U u (act u) a b)
 
 /-- Route U's honest reference as an oracle program. -/
 def honestProgU (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
@@ -439,14 +444,14 @@ theorem calls_honestProgU (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : 
     (honestProgU P β U act s).calls H ≤ U.layout.N * c := by
   refine calls_upTo_le H _ _ c fun u _ => ?_
   simp only [unitProgU, calls_bind, calls_queryAll, eval_queryAll, calls]
-  have := hc s u (act u) (U.layout.wid u)
+  have := hc s u (act u) (U.layout.fixedId u)
   omega
 
 end Honest
 
 /-- **TT_NCP_U's satisfiability witness.** -/
 theorem ttncpUWitness : Pouw.Guarantees.NCP.TTNCPUWitness := by
-  intro Q R _ _ _ P β c γ₀ h0 h1 hc hW
+  intro Q R _ _ _ P β c g₀ h0 h1 hc hW
   refine ⟨GameProofs.ttncp_outputPriced3 _ _ _ h0 h1, fun U act _ s => honestProgU P β U act s, fun U hU act _ H s =>
     ⟨eval_honestProgU P β H U act s, ?_, calls_honestProgU P β H U act s hc⟩⟩
   refine (GameProofs.outputPriced3_cost_le _ H U act [] s).trans (Finset.sum_le_sum fun u hu => ?_)
@@ -472,7 +477,7 @@ theorem shiftBy_unsigned {c k : ℕ} (hc : c < k) : Unsigned k (GameProofs.shift
 def leadParamsU (f : ℕ) : Params Unit Unit Salt :=
   ⟨16, fun _ _ _ _ => [], fun _ _ => [], fun _ _ => 0, fun sh _ => (0, GameProofs.shiftBy 24 sh.k), wrefU f⟩
 
-/-- **The hypotheses of `GammaFromTTNCP_U` hold jointly at the lead.** -/
+/-- **The hypotheses of `GapFromTTNCP_U` hold jointly at the lead.** -/
 theorem leadUWitness : LeadUWitness := by
   intro β f
   have hN : (leadParamsU f).NoiseRange :=
@@ -493,7 +498,7 @@ theorem leadUWitness : LeadUWitness := by
   simp only [mul_zero] at hadmit
   exact ⟨leadParamsU f, GameProofs.leadLayout, ⟨rfl, hN, hadm⟩, hS, hU, hq, fun _ _ => rfl,
     leadCompleteU Unit Unit Salt (leadParamsU f) β, hadmit,
-    fun γ₀ h0 h1 => (ttncpUWitness Unit Unit (leadParamsU f) β 0 γ₀ h0 h1 hq hW).1,
+    fun g₀ h0 h1 => (ttncpUWitness Unit Unit (leadParamsU f) β 0 g₀ h0 h1 hq hW).1,
     fun U hU u hu => (hU.2.1.1 u hu).2.2.2.2.2.1, GameProofs.leadLayout_inDomain, one_pos, fun _ _ => ⟨64, rfl⟩⟩
 
 end Pouw.NCP.RouteUProofs

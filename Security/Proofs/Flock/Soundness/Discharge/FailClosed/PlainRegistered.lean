@@ -1,7 +1,25 @@
-import Proofs.Flock.Soundness.Discharge.PlainReg
-import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
-import Proofs.Flock.Soundness.Discharge.FailClosed.General
-import Proofs.Flock.Soundness.Discharge.FailClosed.Design
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Design
+public import Proofs.Flock.Soundness.Discharge.PlainReg
+public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
+public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Registered.ReadsX
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 
 /-!
 # The hidden-output headlines without `--zk`, over what `verify --registered F` accepts
@@ -9,7 +27,7 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Design
 `flock-verify verify --registered F` without `--zk` (`VerifiesR`: the verdict `PlainReg.AcceptsR` models and the statement
 check with the verifier's registered reads, `ScopeR`) accepts, at hidden outputs and `hm96-sha512/v1` leaves, a statement
 whose population's public file carries shared rows, which `verify` without `--registered` refuses. Each headline here is
-`FailClosed.Design`'s over `VerifiesR`, at any draw design (`DrawDesign`: the stratified draw or the live subset draw),
+`FailClosed.Design`'s over `VerifiesR`, at any sample design (`DrawDesign`: the stratified sample or the live subset sample),
 with the registered reads checked:
 
 * `flock_headline_exec_hiddenR`: where the wires feed neither the unit nor the outputs, `HiddenExec.flock_headline_hidden_design`
@@ -21,6 +39,8 @@ with the registered reads checked:
 At public outputs the check with `--registered F` is the check without it (`ScopeR.scope`), so what `verify --registered
 F` accepts there `verify` accepts (`verifies_of_R`), and `FailClosed.Exec`'s public headlines cover it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 
@@ -58,7 +78,7 @@ open FlockSoundness.Discharge.General (rsAtG rsAtG_computes)
 
 /-- **One hidden-output non-ZK sampled session that `flock-verify verify --registered F` accepts is sound, and its
 registered reads are checked.** The first conjunct is `FailClosed.flock_headline_exec_hidden_design_dec`'s bound
-over `VerifiesR` at a draw design, at a public file with or without shared rows (`rsAtHS`); the second, the registered check's consequence at
+over `VerifiesR` at a sample design, at a public file with or without shared rows (`rsAtHS`); the second, the registered check's consequence at
 every accepted outcome (`PlainReg.checked_of_acceptsRH`). -/
 theorem flock_headline_exec_hiddenR
     {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false)
@@ -105,7 +125,7 @@ theorem flock_headline_exec_hiddenR
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : ScopeR I, (D.ideal.miss K +
+      ⨆ hs : ScopeR I, (D.idealMiss K +
         StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -142,7 +162,7 @@ theorem flock_headline_exec_hiddenR
 
 /-- **One hidden-output non-ZK sampled session that `flock-verify verify --registered F` accepts, where the wires feed,
 is sound, and its registered reads are checked.** The first conjunct is `FailClosed.flock_headline_exec_hiddenG_design`'s
-bound over `VerifiesR` at a draw design (its rows `rsAtG` read no `pub.tables`); the second, the registered check's consequence at every
+bound over `VerifiesR` at a sample design (its rows `rsAtG` read no `pub.tables`); the second, the registered check's consequence at every
 accepted outcome (`PlainReg.checked_of_acceptsRHI`). -/
 theorem flock_headline_exec_hiddenRG
     {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true)
@@ -191,7 +211,7 @@ theorem flock_headline_exec_hiddenRG
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ))
               k Rw))).card)
         (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : ScopeR I, (D.ideal.miss K +
+      ⨆ hs : ScopeR I, (D.idealMiss K +
         StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
@@ -210,9 +230,9 @@ theorem flock_headline_exec_hiddenRG
   ⟨prob_scope (A := LiveAccepts I) (fun _ h => PlainReg.accepts_of_R h.1) (fun _ h => h.2) _ _ _ _ fun hs =>
       flock_headline_hidden_design dj x₀ (instProg (circS I) n) (outsOfI (circS I) n) D Lb src hA3
         (ppHI hs.typed (hs.parseH hh) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)) dj x₀)
-        {instOneG (c := circS I) (n := n)} (constCols_instProgH (sitesAtH_parse hs.typed (hs.parseH hh)
+        {instOneG (c := circS I) (n := n)} (constCols_instProgH (sitesAtH_c hs.typed (hs.parseH hh)
           (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)) dj x₀) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)).1 (outsOfI (circS I) n))
-        {instZeroG (c := circS I) (n := n)} (zeroCols_instProgH (sitesAtH_parse hs.typed (hs.parseH hh)
+        {instZeroG (c := circS I) (n := n)} (zeroCols_instProgH (sitesAtH_c hs.typed (hs.parseH hh)
           (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)) dj x₀) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)).1 (outsOfI (circS I) n))
         (layAtHI hs.typed (hs.parseH hh) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf)) dj x₀ (pub := pubS I))
         (rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built)

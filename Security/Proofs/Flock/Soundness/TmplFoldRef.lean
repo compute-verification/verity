@@ -1,10 +1,16 @@
-import Proofs.Flock.Level3.FoldedBase
-import Proofs.Flock.Soundness.SparseRows
-import Flock.TmplFold
-import Flock.NetAt
+module
+
+public import Proofs.Flock.Level3.Fold
+public import Proofs.Flock.Level3.FoldStmt
+public import Proofs.Flock.Level3.FoldedBase
+public import Proofs.Flock.Soundness.SparseRows
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.Nodes
 
 /-!
-# The template fold's reference, in closed form (PRF-133, part 3)
+# The template fold's reference, in closed form
 
 `Tmpl.foldRef` is the lincheck fold of a templated unit summed over its unrolled rows at their committed positions
 `π = Tmpl.posMap`: entry `s < 64` is `Σ_x Σ_{v ∈ A_x} [π v mod 64 = s] · α · e(π x) · g(π v)` plus the same over `B`
@@ -13,6 +19,8 @@ without `α`, with `e(q) = lw[q mod 64] · eq(ρ, ⌊q/64⌋)` and `g(q) = eq(r,
 - `foldRef_eq_rows`: its loops are a `foldl` over the rows (`foldRefRows`).
 - `of_eqAt`, `eqTail_halves`: the fold point's `eq` tables, read in two halves, are `eqTable`'s entries.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

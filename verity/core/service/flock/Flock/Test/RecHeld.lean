@@ -1,10 +1,17 @@
 /-
-What a part holds whole after the link is the coin server's message there (`RecDeploy.cmt_of_rep`, `held_cmt`): at the
+What a part holds whole after the link is the challenger's live-coin part's message there (`RecDeploy.cmt_of_rep`, `held_cmt`): at the
 plain session's inner shape, on a record whose every `c_k` differs (`node j` at its `j`-th round) and that
 `checkReads` passes, rep `x`'s `kc`-th `c_k` as `innerCommits` holds it is the record's message `x · R + k + 1`, at each
 commit round `k` with no salted tops, the `kc`-th commit round of the rep schedule.
 -/
-import Flock.Test.RecReads
+module
+
+public import Flock.JsonParse
+public import Flock.Test.RecReads
+meta import Flock.JsonParse
+meta import Flock.Test.RecReads
+
+@[expose] public section
 
 namespace Flock.Test.RecHeld
 
@@ -15,7 +22,7 @@ def distinct : Record :=
   { honest with
     rounds := honest.rounds.mapIdx fun j x => if x.commits.isEmpty then x else { x with commits := [node j] } }
 
-def trD : Json := (Json.parse (text distinct)).toOption.getD Json.null
+def trD : Json := (JsonParse.parse (text distinct)).toOption.getD Json.null
 
 /-- Each rep's `c_k` as `innerCommits` holds them, off `distinct`. -/
 def csD : InnerCommits :=

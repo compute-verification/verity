@@ -1,5 +1,7 @@
-import PousCheck.TimedAudit
-import Properties.Pous
+module
+
+public import PousCheck.TimedAudit
+public import Properties.Pous
 
 /-!
 # The timed audit's property, stated against the Lean code
@@ -19,8 +21,10 @@ leaves (`leaves`, as setup publishes them: `PublishesRoot`) have the document's 
 
 It takes the binding form: the conclusion holds, or the run hashed two distinct strings to one SHA-512 digest
 (`runStrings`: the inner nodes of the tree over `LEAVES.bin` the audit computes, and of the tree over `C*`'s leaves setup
-computes). Proved (`Properties.Proofs.Pous.TimedAudit`).
+computes). Proved (`Proofs.Properties.Pous.TimedAudit`).
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties
 
@@ -45,7 +49,8 @@ def challengesOf (s : Certificate.Store) (doc : Json) (k : Nat) : Prop :=
 
 /-- Round `j`'s challenged index in an audit keyed by `source`. -/
 def challenged (s : Certificate.Store) (salt root source : ByteArray) (j : Nat) : Nat :=
-  (Challenge.index (Randomness.derive source TimedAudit.CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)])
+  (Challenge.index
+    (FlockSoundness.Randomness.derive source TimedAudit.CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)])
     s.blocks j).getD s.blocks
 
 /-- The inner nodes' inputs of `Merkle.mth leaves lo n`: what SHA-512 hashes for the tree beyond the leaves. -/

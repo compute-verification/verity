@@ -1,4 +1,4 @@
-"""FOLD-OPT's two-word search at the full 32-bit word, for the forms width 4 doesn't carry (RT-MACHINE-17).
+"""FOLD-OPT's two-word search at the full 32-bit word, for the forms width 4 doesn't carry.
 
 `fold_opt_fx.py --wide3` runs `fold_wide3.c` at width 4. Reducing mod 2^4 commutes with LOP3, IADD3, IMAD and LEA, so
 there it covers 32 bits for programs of those forms; it doesn't commute with IMAD.HI, LEA.HI's rotate, IMAD.WIDE's high
@@ -52,11 +52,6 @@ PARTS = ((1, "a last IADD.64", ("ctl_add64_pre", "ctl_add64_live", "ctl_mnmx_fir
          (4, "a last IMAD.WIDE with p and q before it", ("ctl_pre_chi", "ctl_pre_clo")),
          (5, "a second instruction's words in le2", ("le2_add64_hi",)),
          (6, "IADD.64 and IMNMX.64 before the last instruction", ("ctl_add64_first", "ctl_mnmx_first")))
-
-
-def rotl(x: int, r: int) -> int:
-    r %= W
-    return ((x << r) | (x >> (W - r))) & MASK if r else x
 
 
 def points(seed: int):

@@ -1,6 +1,14 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Site
-import Proofs.Flock.Soundness.Discharge.Layout.OfRows
-import Proofs.Flock.Soundness.Discharge.Layout.QSort
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.OfRows
+public import Proofs.Flock.Soundness.Discharge.Layout.QSort
+public import Proofs.Flock.Soundness.Discharge.Layout.Site
+public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -11,14 +19,14 @@ set_option Elab.async false
 of its Δ key (`Aliased.keyIdx`): gate `2 + u·B + b` for unit `u` and the first input `b` with `x`'s key, gate 1 for the
 zero, gate 0 for the constant. Its row bits (`keyRowOf`) are the input gates whose key is message bit `bit` of byte
 `byte` of a row port `q` (`Aliased.Src.msg`): bit `8·byte + bit` of unit `u`'s row `q`. Every other wire is a single
-gate. At [e2e-placed]'s places (`Placed.Sites.progPlaces_keyProg`):
+gate. At `Discharge/Placed`'s places (`Placed.Sites.progPlaces_keyProg`):
 
 * `keyRowOf_wire`: a column of unit `u`'s own instance on a row bit of unit `u'` is an input column of `u = u'` with that
   message key;
-* `keyProg_copies`: Δ's copies (`copy_site` at each drawn unit's template instance and block; each message column is in
+* `keyProg_copies`: Δ's copies (`copy_site` at each sampled proof block's template instance and block; each message column is in
   the block by the parse, `msgCol_lt_of_parse`);
-* `keyProg_bcPinned`: the rows' `b ‖ c` is the registration's, the population's public file (`bc_site`), at each drawn
-  unit's site (`BcSite`: the site's rank is the unit, and `bc_site`'s conditions; `bcSite_keyProg` gives the template
+* `keyProg_bcPinned`: the rows' `b ‖ c` is the registration's, the population's public file (`bc_site`), at each sampled
+  proof block's site (`BcSite`: the site's rank is the unit, and `bc_site`'s conditions; `bcSite_keyProg` gives the template
   instance's bound from the parse when the unit returns the outputs, `vu_lt_pow2`);
 * `keyProg_valPinned`: the single gates hold the registration's bits: 1 at the constant, 0 at the zero, and at the units'
   committed gates the registration's bit (`hout`, the returned outputs' pin), when every input a computed row reads has
@@ -65,12 +73,23 @@ theorem oneAt_uniform_val : ∀ (n : ℕ) (u : Fin n),
 
 end uniform
 
-/-- **A message column is in the block**, in a circuit `HmRow.parse` accepted: message bit `b < 8` of byte `byte` of row
-port `p` at template instance `g` (`Typed.msgCol`), the untyped twin of the typed path's `msgCol_lt`. -/
-theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
-    (h : HmRow.parse tags bytes tables = .ok c) {g : ℕ} (hg : g < c.g) {p : ℕ} (hp : p < c.ports.size) (byte b : ℕ)
-    (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog := by
-  have P := parse_facts h
+/-- **A net of a circuit `HmRow.parse` accepted with nets `pre` first fits its slot**, when `pre`'s nets do. -/
+theorem netOK_ofPre {tags : Tags} {pre : Array (String × Net)} {c : Flock.Circuit} (P : ParseFactsPre tags pre c)
+    (hpre : ∀ x ∈ pre.toList, NetOK x.2 ∧ 7 ≤ x.2.unitLog ∧ (x.2.unitLog ≤ 32 → ConstRow x.2)) {i : ℕ}
+    (hi : i < c.nets.size) : NetOK (c.nets.getD i default).2 := by
+  rcases P.nets _ (getD_mem_toList hi) with hx | hx | ⟨_, _, _, _, _, hx⟩
+  · exact (hpre _ hx).1
+  · exact (netOK_built hx).1
+  · exact (netOK_lookup hx).1
+
+/-- **A message column is in the block**, in a circuit `HmRow.parse` accepted with nets `pre` first (a templated file's
+unit net), when `pre`'s nets fit their slots: message bit `b < 8` of byte `byte` of row port `p` at template instance
+`g` (`Typed.msgCol`), the untyped twin of the typed path's `msgCol_lt`. -/
+theorem msgCol_lt_of_parsePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} {c : Flock.Circuit} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c)
+    (hpre : ∀ x ∈ pre.toList, NetOK x.2 ∧ 7 ≤ x.2.unitLog ∧ (x.2.unitLog ≤ 32 → ConstRow x.2)) {g : ℕ} (hg : g < c.g)
+    {p : ℕ} (hp : p < c.ports.size) (byte b : ℕ) (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog := by
+  have P := (parse_factsPre_nets h).1
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
   have hws := rowSlots_spec c.ports
@@ -88,7 +107,7 @@ theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Str
   · obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range _ P.hmNet)
     have hc := C.count _ hm _ hk
     have hsl := ((C.bound_slotLog _ hm).2 _ hk).symm
-    obtain ⟨-, hW, hports⟩ := (nets_ok P c.hmNet).1
+    obtain ⟨-, hW, hports⟩ := netOK_ofPre P hpre P.hmNet
     have hin := C.hm_in
     have hsz : (portCols (c.nets.getD c.hmNet default).2.inGroups).size = 3 := by
       simpa using congrArg Array.size hin
@@ -119,7 +138,7 @@ theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Str
   obtain ⟨hm, hk, -⟩ := rangeOf_spec (C.one_range _ P.shaNet)
   have hc := C.count _ hm _ hk
   have hsl := ((C.bound_slotLog _ hm).2 _ hk).symm
-  obtain ⟨-, hW, hports⟩ := (nets_ok P c.shaNet).1
+  obtain ⟨-, hW, hports⟩ := netOK_ofPre P hpre P.shaNet
   obtain ⟨hsz, hsin⟩ := C.sha_in
   generalize hE : (where_[p]!)[kk]! = e at hent ⊢
   obtain ⟨slot, sub⟩ := e
@@ -144,6 +163,13 @@ theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (Str
       have h2 : 8 * (byte % 128 % 8) ≤ 56 := by omega
       omega
   exact hat.lt (fun r hr => (C.bound_slotLog r hr).1) hm
+
+/-- **A message column is in the block**, in a circuit `HmRow.parse` accepted (`msgCol_lt_of_parsePre` with no net
+ahead of the file). -/
+theorem msgCol_lt_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
+    (h : HmRow.parse tags bytes tables = .ok c) {g : ℕ} (hg : g < c.g) {p : ℕ} (hp : p < c.ports.size) (byte b : ℕ)
+    (hb : b < 8) : Typed.msgCol c g p byte b < 2 ^ c.kLog :=
+  msgCol_lt_of_parsePre h (fun _ hx => by simp at hx) hg hp byte b hb
 
 private theorem ite_throw_ok {α β : Type} {c : Prop} [Decidable c] {e : String} {f : α → Except String β}
     {g : Except String β} {v : β} (h : (if c then (throw e >>= f) else g) = .ok v) : ¬c ∧ g = .ok v := by
@@ -193,12 +219,6 @@ theorem vu_lt_pow2_of {c : Flock.Circuit} (C : CheckFacts c) {g : ℕ} (hg : g <
   exact hg
 
 variable (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
-
-/-- The number of input columns of the circuit's template instance rows. -/
-noncomputable abbrev keyB : ℕ := (Placed.circuitRows c hU).nIn
-
-/-- The gates of `keyProg c hU n`. -/
-noncomputable abbrev keyN : ℕ := Placed.gates (Placed.inGates n (keyB c hU)) (Placed.circuitRows c hU) n
 
 theorem keyN_pos : 0 < keyN c hU n :=
   lt_of_lt_of_le (by show 0 < 2 + n * keyB c hU; omega) (Placed.le_gates _ _ n)
@@ -369,7 +389,7 @@ variable {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabS
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   (si : Placed.Sites plan tab)
 
-/-- **Bit `k` of row port `q` at a drawn unit's site**: message bit `k % 8` of byte `k / 8` (`Typed.msgCol`) at the
+/-- **Bit `k` of row port `q` at a sampled proof block's site**: message bit `k % 8` of byte `k / 8` (`Typed.msgCol`) at the
 unit's template instance, in its block. -/
 noncomputable def keyRowAddr (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (k : ℕ) :
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
@@ -378,7 +398,7 @@ noncomputable def keyRowAddr (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin
       (Typed.msgCol (si.acc S R u h).st.c (si.vu S R u h) q.val (k / 8) (k % 8))
   else ⟨0, Nat.two_pow_pos _⟩
 
-/-- **Row port `q`'s `b ‖ c` at a drawn unit's site**: its `hm96` slot's output (`bcAddr`) at the unit's template
+/-- **Row port `q`'s `b ‖ c` at a sampled proof block's site**: its `hm96` slot's output (`bcAddr`) at the unit's template
 instance, in its block. -/
 noncomputable def keyBcAddr (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (j : Fin 128)
     (t : Fin 8) : Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
@@ -386,7 +406,7 @@ noncomputable def keyBcAddr (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin 
     siteAddr (si.acc S R u h) (si.o S R u h) (bcAddr (si.acc S R u h).st.c (si.vu S R u h) q.val j.val t.val)
   else ⟨0, Nat.two_pow_pos _⟩
 
-/-- **Row port `q`'s salt at a drawn unit's site**: `saltCol` (the `hm96` slot's salt input, [e2e-hm]'s
+/-- **Row port `q`'s salt at a sampled proof block's site**: `saltCol` (the `hm96` slot's salt input,
 `Discharge.Hm.saltCol`) at the unit's template instance, in its block. -/
 noncomputable def keySaltAddr (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ) (S : Finset (Fin n)) (R : Reg)
     (u : Fin n) (q : (Fin n × Fin c.ports.size) ⊕ Fin (keyN c hU n)) (j : Fin 192) (t : Fin 8) :
@@ -403,7 +423,7 @@ variable (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
     HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
   (outs : Finset (Fin (keyN c hU n)))
 
-/-- [e2e-placed]'s places of the circuit's program on Δ's source keys. -/
+/-- `Discharge/Placed`'s places of the circuit's program on Δ's source keys. -/
 noncomputable abbrev keyPlace := (Placed.Sites.progPlaces_keyProg hU hparse outs).derived.place
 
 variable (rowW) (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ) (popOf : Reg → Public)
@@ -421,7 +441,7 @@ noncomputable def keyReaders : Readers ((keyProg c hU n).circuit outs) plan tab 
 variable {rowW}
 
 include hparse in
-/-- **Δ's copies at `keyProg`'s sites**: each column of a drawn unit on a row bit holds the witness's bit at the
+/-- **Δ's copies at `keyProg`'s sites**: each column of a sampled proof block on a row bit holds the witness's bit at the
 message column of its key (`copy_site`), in the block by the parse (`msgCol_lt_of_parse`). -/
 theorem keyProg_copies :
     (keyReaders rowW hparse outs saltCol popOf outBit).Copies (keyPlace hparse outs) := by
@@ -446,7 +466,7 @@ theorem keyProg_copies :
   exact this
 
 include hparse in
-/-- **The rows' `b ‖ c` at `keyProg`'s sites is the registration's**: at each row port a drawn unit reads, the bytes at
+/-- **The rows' `b ‖ c` at `keyProg`'s sites is the registration's**: at each row port a sampled proof block reads, the bytes at
 its `hm96` output are the population's `b ‖ c` of the unit (`bc_site`), at every site whose rank is the unit
 (`BcSite`, at the sites whose table some witness satisfies). -/
 theorem keyProg_bcPinned
@@ -468,7 +488,7 @@ theorem keyProg_bcPinned
 include hparse in
 set_option linter.unusedVariables false in
 /-- **`BcSite` at a site of `keyProg`'s places** in a circuit whose unit returns the outputs: the template instance is
-below `2^⌊log₂ c.g⌋` by the parse (`vu_lt_pow2`), the proved units are in the population by the draw's decoding
+below `2^⌊log₂ c.g⌋` by the parse (`vu_lt_pow2`), the proved units are in the population by the sample's decoding
 (`proved_lt_population`), and the other conditions are `BcSite`'s. -/
 theorem bcSite_keyProg (ho : c.outNet = c.unitNet) {S : Finset (Fin n)} {R : Reg} {u : Fin n} (h : u ∈ S)
     {pop : Public} {d : Lean.Json} {D : Draw.UnitDraw} (hd : (si.acc S R u h).draw = some d)
@@ -567,8 +587,8 @@ theorem single_gate (outs : Finset (Fin (keyN c hU n))) (hkeys : KeysRow c hU ro
         cases hm
 
 include hparse in
-/-- **The single gates hold the registration's bits** at `keyProg`'s sites: 1 at the constant (`hc1`, [e2e-const]'s
-`hConst`), 0 at the zero (`hz1`, [e2e-zero]'s `hZero`), and at a unit's committed gate the registration's bit
+/-- **The single gates hold the registration's bits** at `keyProg`'s sites: 1 at the constant (`hc1`, `Discharge/Const`'s
+`hConst`), 0 at the zero (`hz1`, `Discharge/Zero`'s `hZero`), and at a unit's committed gate the registration's bit
 (`hout`), when every input a row reads has the zero or a row bit as its key (`KeysRow`), so that no other input is a
 committed single gate. -/
 theorem keyProg_valPinned (hkeys : KeysRow c hU rowW)

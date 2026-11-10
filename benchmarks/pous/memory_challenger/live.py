@@ -1,5 +1,5 @@
 """The memory challenger's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.core.protocols.pous.
-memory_challenger` against the responder, over the harness's responder wire (`band_gpu/memory_challenger.py`).
+memory_challenger` against the responder, over the harness's responder wire (`verity/core/devices/memory_challenger/timed_audit.py`).
 
     python benchmarks/pous/memory_challenger/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
         [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
@@ -10,9 +10,9 @@ digest of every block of `C` (`memory_challenger.block_digest`), in block order:
 each round's `H(block)` against, the table a proof will replace (`answer_circuit.PousAnswerOpens_v1` opens `H(block)`
 against C's leaf).
 
-- **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (spec v1.1's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
+- **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (P2's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
   calibration (`--calibrate-only`) still measures the loopback round trip and records whether its p99.9 fits under the cap.
-- **A session** draws a fresh session id (the auditor's designation: here the harness is the auditor) and challenger
+- **A session** samples a fresh session id (the auditor's designation: here the harness is the auditor) and challenger
   secret and commits its coin tree, every session's before the first round of any; it runs `k` rounds (the certificate's
   `k`) after `WARMUP_PINGS` pings, signs once and opens its coins.  `--strict` refuses a `k` or limit no
   certificate covers (`covering_certificate`) before any round.  Every session's binding is `setup_root`, the root the setup
@@ -63,7 +63,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from band_gpu.memory_challenger import (  # noqa: E402
+from verity.core.devices.memory_challenger.timed_audit import (  # noqa: E402
     ALLOWANCE_KIND,
     HEADER,
     OP_CHALLENGE,
@@ -87,7 +87,7 @@ RECORD_VERDICT = "lean"
 DISAGREE = "the Lean and Python verdicts disagree"
 WARMUP_PINGS = 8
 """Pings before each session's first round, after the previous session's signature: a session's round 0 otherwise follows
-the challenger's own Python work (one 655.8 µs round 0 of 26 µs at the responder in `r20261006-061825-bba8`)."""
+the challenger's own Python work (one measured round 0 took 655.8 µs, 26 µs of it at the responder)."""
 
 
 def test_signer() -> Any:
@@ -171,7 +171,7 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
     if not state_p.exists():
         lms.LeafState.create(state_p, lms.public_key(key), p.H)
     scheme = mc.LMS if p == lms.DEPLOYED else mc.TEST_PREFIX + f"lms-sha512/n{p.N}-w{p.W}-h{p.H}/v0"
-    return mc.LmsSigner(key, lms.LeafState(state_p, lms.public_key(key), p.H), scheme=scheme)
+    return mc.LmsSigner(key, state_p, scheme=scheme)
 
 
 def session_log(path: str | os.PathLike, new_key: bool) -> Any:
@@ -366,7 +366,6 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
             gc.enable()
             if sessions_out is not None:
                 write_sessions(sessions_out, sig, sessions)
-        sig.state.close()
     expected = lambda i: digests[64 * i:64 * (i + 1)]  # noqa: E731
     records = judge(sessions, expected, {sig.public_key}, signer_schemes(sig.scheme))
     answers = [a for rec in records for a in rec["answers"]]

@@ -1,4 +1,4 @@
-"""Batch decomposition (M-BATCH-DECOMP, R13 X-09): Match at B>1 by projecting the batched eager fold onto its requests.
+"""Batch decomposition (M-BATCH-DECOMP, X-09): Match at B>1 by projecting the batched eager fold onto its requests.
 
 Under batch invariance a batched kernel launch (one GEMM with M = Σ tokens of the co-scheduled requests, one fused norm over
 the step's token rows, ...) is the token-row-wise union of the per-request Calls the padded per-request Programs describe. The
@@ -13,7 +13,7 @@ name the same request, else the Call is AMBIGUOUS. Any other row count is UNATTR
 no Call is dropped, guessed or shared.
 
 Projection: request r's Calls in fold order, segmented at r's own `TokenSelect` Calls into r's steps (prefill,
-then one per decode). Operand sources are canonicalised exactly as `compare.Prog.canon` does, relative to the projection:
+then one per decode). Operand sources are canonicalised exactly as `compare.RootView.canon` does, relative to the projection:
 `(TOK, lo, hi)` for r's OWN prompt parameter, `(W, field, lo, hi)` for weights, `(N, step_r, index_r, lo, hi)` for a node
 produced by one of r's Calls. A read of ANOTHER request's prompt parameter or of a node resolved to another request
 is a cross-request dependency (`XREQ`): it is counted, reported with examples, and fails the sweep row — token-row independence is
@@ -41,7 +41,6 @@ PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched
     request's prompt or node is XREQ and fails the sweep row; a request is compared at (LP_r, T_r) = (its prompt length, its served decode
     steps), never at the row envelope; the operand counts are the positional comparison, the verdict follows --within-step (dag of
     record; sequence recorded beside it).  Inside GM-01 (MATCH_PIPELINE=shared) the same decompose() writes this document via --decomp-out.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 from __future__ import annotations
@@ -52,12 +51,14 @@ import os
 import time
 from dataclasses import dataclass
 
+from verity_vllm import settings
+from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.check.match.capture_log import read_steps, request_params
+from verity_vllm.observe.capture_log import read_steps, request_params
 from verity_vllm.check.match.dag_form import dag_hashes, live_cone
-from verity_vllm.check.match.decomp_profile import (FORCE_DAG_ENV, PROFILE_ENV, _fast_stats, _install_profile_counters, _n_runs_of, _NoPhase,
+from verity_vllm.check.match.decomp_profile import (FORCE_DAG_ENV, PROFILE_ENV, _memo_stats, _install_profile_counters, _n_runs_of, _NoPhase,
                                                     _Phase, _profile_on)
 from verity_vllm.check.match.derived_index import derived_shape
 from verity_vllm.check.match.input_layout import request_inputs, weights_input_nodes  # noqa: F401  (weights_input_nodes re-exported: tests)
@@ -66,12 +67,12 @@ from verity_vllm.check.match.projection import Projection, engine_steps_of
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.config import option
 from verity_vllm.program import prefix_plan as PP
-from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch]
+from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  #
 # Imported from here by a test an open PR edits (tests/pipeline/test_global_program_regress.py); it moves to dag_form after that lands.
 from verity_vllm.check.match.dag_form import dag_multiset  # noqa: F401
 
 
-# [COORD ruling M-0177 on DECISION M-0021] the within-step criterion of record from r15-int-2: `dag` accepts a request whose projection
+# the within-step criterion of record: `dag` accepts a request whose projection
 # is the same live-cone DAG multiset as its Program although the fold's emission SEQUENCE differs (a co-scheduled prefill displaced
 # by a running decode, M-ARRIVAL-ORDER); `sequence` is the r14-v1 criterion (dag accepted for a chunked prefill only). Both facts are
 # recorded per request either way (`sequence_equal`, `dag_multiset_equal`); the global checker (GM-01) applies the per-step form and gates.
@@ -84,13 +85,13 @@ def record_ops() -> Ops:   # the checker of record's operations: X-09's default,
 
 
 def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = None, within_step: str = DEFAULT_WITHIN_STEP,
-              oracle: "C.Prog | None" = None, components: "dict[str, C.Prog] | None" = None, ops: Ops | None = None) -> dict:
+              oracle: "C.RootView | None" = None, components: "dict[str, C.RootView] | None" = None, ops: Ops | None = None) -> dict:
     if within_step not in WITHIN_STEP_CRITERIA:
         raise ValueError(f"within_step must be one of {WITHIN_STEP_CRITERIA}, got {within_step!r}")
     ops = ops or record_ops()
     t0 = time.time()
     profiling = _profile_on()
-    force_dag = os.environ.get(FORCE_DAG_ENV, "").strip() == "1"
+    force_dag = (settings.get(FORCE_DAG_ENV) or "").strip() == "1"
     run_prof: dict = {"schema": "cb-a/x09-profile/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
                       "force_dag": force_dag, "pid": os.getpid(), "phases": {}, "requests": []}
     if profiling:
@@ -98,11 +99,13 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     log_path = log_path or os.path.join(oracle_dir, "capture", "log.jsonl.gz")
     header, steps = read_steps(log_path)
     reqs, param_of, parent_of = request_params(header)
-    # [R15 global, GM-01 memory] the caller (global_match.check) may pass the fold it has already decoded: the fold Prog is read-only
+    # the caller (global_match.check) may pass the fold it has already decoded: the fold RootView is read-only
     # after load_oracle and at B16 1024/128 it is ~40 GB of Python objects -- decoding it a second time in the same process doubled
     # GM-01's peak RSS (87 GB on cp-dev1) for nothing
     with _Phase(run_prof, "fold_load") if profiling else _NoPhase():
         B = oracle if oracle is not None else ops.load_oracle(oracle_dir, "oracle")
+        if oracle is None:
+            CF.fold_in_form(B, derived_dirs)
     if profiling:
         run_prof["fold_preloaded"] = oracle is not None
         run_prof["fold_instances"] = len(B.inst)
@@ -110,11 +113,10 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     n_in = B.n_input_nodes
     _attr_phase = _Phase(run_prof, "attribution") if profiling else _NoPhase()
     _attr_phase.__enter__()
-    # the request-owned parameters after the prompts: [R15 stoch] a stochastic fold's `seed_<i>` per seeded request (every request of a
-    # stochastic row is seeded, derive_step.sampler_geometry refuses otherwise), [R17 D90] a TP rank fold's `peers_<i>` per request and a
-    # profile's witness parameters; [R16 global, F-fp8-GM1 / M-0823] the shared weights are the Input nodes no request owns -- ONE node for
-    # a homogeneous bf16 Record, one per leaf field for a mixed-width one (FP8: 435) -- never `n_input_nodes - 1`; refused by name when
-    # the layout does not hold
+    # the request-owned parameters after the prompts: a stochastic fold's `seed_<i>` per seeded request (every request of a stochastic
+    # row is seeded, derive_step.sampler_geometry refuses otherwise), a TP rank fold's `peers_<i>` per request and a profile's witness
+    # parameters; the shared weights are the Input nodes no request owns -- ONE node for a homogeneous bf16 Record, one per leaf field
+    # for a mixed-width one (FP8: 435) -- never `n_input_nodes - 1`; refused by name when the layout does not hold
     seed_node_of, peer_node_of, witness_owners, weights_nodes = request_inputs(B, reqs)
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
 
@@ -122,7 +124,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     #   meta     -- the fold recorded `request` on the instance (fold._compute_emit, X-09+);
     #   dataflow -- every request-owned operand the instance reads (its own prompt parameter / a node attributed earlier) names ONE request
     #               (row independence: an instance over one request's data is that request's; several requests -> non-separable, refused);
-    #   weight-only -- [R19, F-r19-int-15] every node operand is a shared weight or an earlier weight-only instance (and there is at least
+    #   weight-only -- every node operand is a shared weight or an earlier weight-only instance (and there is at least
     #               one): the instance carries no request's data -- gemma2's RMSNorm scale `1 + w` (AddScalarBf16 N=2304, rows=1, per norm
     #               per step; 11235 on #57 B8 1024/128) is the first such node in the table (llama/mistral/olmoe/qwen norms multiply by w
     #               directly).  It is SHARED: owned by no request, read like a weight, and projected into the leg of every request that has
@@ -132,7 +134,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     # A per-position Attention group (rows=|positions sharing T|) is the case only dataflow gets right on pre-X-09 folds.
     shared_idx: list[tuple[int, int]] = []   # (instance index, engine step) of every weight-only instance (owner SHARED, module level)
     owners_of_param: dict[int, set[str]] = collections.defaultdict(set)
-    # request-owned inputs: its prompt, seed, [R17 D90] peers (a collective instance reading request r's peers node is r's), witnesses
+    # request-owned inputs: its prompt, seed, peers (a collective instance reading request r's peers node is r's), witnesses
     # and run values
     for rid, k in [*param_of.items(), *seed_node_of.items(), *peer_node_of.items(), *witness_owners, *SI.run_owners(B, reqs)]:
         owners_of_param[k].add(rid)
@@ -214,19 +216,19 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             bad_derived.append(d)
         else:
             derived.setdefault(sh, d)
-    A_cache: dict[tuple[int, ...], C.Prog] = {}
+    A_cache: dict[tuple[int, ...], C.RootView] = {}
     components = components if components is not None else {}  # decoded component Progs keyed by dir, shared with the caller
 
     res = {"schema": "cb-a/batch-decomp/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
            "log": log_path, "n_requests_header": len(reqs), "n_output_sequences": len(per_req), "engine_steps": len(steps),
-           "oracle": {"digest": B.digest, "instances": len(B.inst), "n_input_nodes": n_in,
-                      # [R16 global, F-fp8-GM1] the shared weights as a node RANGE (contiguous after the request-owned parameters)
+           "oracle": {"digest": B.digest, "instances": len(B.inst), "n_input_nodes": n_in, "fold_form": getattr(B, "fold_form", None),
+                      # the shared weights as a node RANGE (contiguous after the request-owned parameters)
                       "weights_input_nodes": {"n": len(weights_nodes), "first": min(weights_nodes), "last": max(weights_nodes),
                                               "request_owned_inputs": len(reqs) + len(seed_node_of)},
                       "weight_map": {"n_ranges": len(B.oracle_wmap), "n_overlaps": len(B.oracle_wmap_overlaps)}},
            "attribution": {"how": dict(how), "unattributed": len(unattributed), "unattributed_examples": unattributed[:12],
                            "attributed": sum(len(v) for v in per_req.values()), "row_rule_disagreements": disagree,
-                           # [R19, F-r19-int-15] weight-only instances: owned by no request, projected into every participating leg
+                           # weight-only instances: owned by no request, projected into every participating leg
                            "weight_only_shared": len(shared_idx),
                            "weight_only_specs": dict(collections.Counter(B.inst[i]["spec"].split("{")[0] for i, _ in shared_idx).most_common(6))},
            "derived_available": {PP.shape_name(s): d for s, d in sorted(derived.items())}, "derived_unreadable": bad_derived,
@@ -245,7 +247,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         return PP.shape(LP, n_ts - chunks, PX.cached_rows(header, steps, rid))
 
     def leg(item) -> tuple:
-        """[R17 mfast] X-09 for ONE request: its Projection of the fold, the comparison with its component (sequence + DAG criteria),
+        """X-09 for ONE request: its Projection of the fold, the comparison with its component (sequence + DAG criteria),
         its cross-request reads.  Reads the shared fold / components / attribution, writes nothing shared: the record's loop body,
         returning (entry, missing shape | None) instead of appending.  Runs in this process, or on a forked worker (fast path)."""
         rid, idxs = item
@@ -338,7 +340,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             if not seq_equal and not diff and chunked:
                 ent["criterion"] = "dag-multiset over the live cone (chunked prefill)"
             elif not seq_equal and not diff and within_step == "dag":
-                ent["criterion"] = "dag-multiset over the live cone (within-step criterion of record, COORD M-0177; sequence differs)"
+                ent["criterion"] = "dag-multiset over the live cone (within-step criterion of record; sequence differs)"
         ent["canonical_equal"] = (seq_equal or (ent.get("dag_multiset_equal") is True and (chunked or within_step == "dag"))) and (cmp.get("splits_values") or {}).get("equal", True)
         ent["totals"] = cmp["totals"]
         ent["a_steps"], ent["b_steps"] = cmp["a"]["steps"], cmp["b"]["steps"]
@@ -351,14 +353,14 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         return ent, None
 
     if shared_idx:
-        # [R19, F-r19-int-15] a weight-only instance of engine step s belongs to the projection of every request with rows in s (the
+        # a weight-only instance of engine step s belongs to the projection of every request with rows in s (the
         # request's own derive computes that node inside its forward at that step); a request with no rows in s does not see it.
         # Legs stay in request order; each leg's indices stay in node order (producers precede consumers).  GM-01 builds the same legs.
         items = list(shared_legs(per_req, shared_idx, steps).items())
     else:
         items = list(per_req.items())
     if ops.legs is not None:
-        # [R17 mfast, BRIEF §5 step 3] the per-request comparisons are separable once attribution is done (above, single and exact): the
+        # the per-request comparisons are separable once attribution is done (above, single and exact): the
         # fast path runs the legs on forked workers over the SAME fold / components (copy-on-write) -- every component is loaded here
         # first so no worker loads its own copy; the aggregation below is the record's loop, in request order
         to_load: list[tuple[str, str]] = []
@@ -407,15 +409,15 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         run_prof["seconds"] = res["seconds"]
         run_prof["verdict"] = res["verdict"]
         run_prof["x09_legs"] = "forked" if ops.legs is not None else "inline"
-        st = _fast_stats()
+        st = _memo_stats()
         if st is not None:
             run_prof["fast_stats_final"] = {k: int(v) for k, v in sorted(st.items())}
         try:
             import resource
             run_prof["max_rss_mib_parent"] = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024)
             run_prof["max_rss_mib_children"] = int(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024)
-        except Exception:   # noqa: BLE001 - telemetry only
-            pass
+        except Exception as e:   # noqa: BLE001 - telemetry only
+            run_prof["max_rss_error"] = repr(e)[:200]
         out = os.environ[PROFILE_ENV]
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         json.dump(run_prof, open(out, "w"), indent=1, default=str)
@@ -430,7 +432,7 @@ class Options:
     log: str | None = option("--log", default=None, help="capture log (default <oracle>/capture/log.jsonl.gz)")
     out: str = option("--out")
     within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP,
-                              help="within-step criterion of record: dag (COORD M-0177; live-cone DAG multiset accepted for every request) | sequence (r14-v1)")
+                              help="within-step criterion of record: dag (live-cone DAG multiset accepted for every request) | sequence (r14-v1)")
 
 
 def main(a: Options) -> int:

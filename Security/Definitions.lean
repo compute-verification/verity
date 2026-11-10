@@ -1,29 +1,114 @@
-import Definitions.Core
-import Definitions.Nci
-import Definitions.Nci.Support
-import Definitions.Nci.Reads
-import Definitions.Nci.Transfers
-import Definitions.Nci.Dark
-import Definitions.Nci.Packed
-import Definitions.Nci.Covering
-import Definitions.Pous
-import Definitions.Pouw
-import Definitions.NetworkCertifier
-import Definitions.NetworkCertifier.Guarantees.SampledAudit
-import Definitions.NetworkCertifier.Guarantees.SampledCharge
-import Definitions.NetworkCertifier.AdviceString
-import Definitions.NetworkCertifier.Guarantees.AdviceV1
-import Definitions.NetworkCertifier.Guarantees.WindowCharge
-import Definitions.NetworkCertifier.Warden
-import Definitions.Accounting.Sheets
-import Definitions.Accounting
-import Definitions.Population
-import Definitions.Claims
-import Definitions.Claims.IndexedTapes
-import Definitions.Claims.Recursion
-import Definitions.Claims.RecursionLin
-import Definitions.Claims.Sampling
-import Definitions.Hash
-import Definitions.Flock
+module
 
-/-! The trusted vocabulary: each component's definitions. -/
+public import Definitions.Core
+public import Definitions.Core.Formalism.Instances
+public import Definitions.Core.Accel
+public import Definitions.Core.Assumptions.Accel
+public import Definitions.Core.Assumptions.DeviceFigures
+public import Definitions.Core.Blocks
+public import Definitions.Core.DeviceFigures
+public import Definitions.Core.Site
+public import Definitions.Core.Period
+public import Definitions.Core.Structure
+public import Definitions.Core.Rec
+public import Definitions.Nci
+public import Definitions.Nci.Support
+public import Definitions.Nci.Reads
+public import Definitions.Nci.Transfers
+public import Definitions.Nci.Dark
+public import Definitions.Nci.Packed
+public import Definitions.Nci.Covering
+public import Definitions.Nci.Capability
+public import Definitions.Nci.Cut
+public import Definitions.Nci.Formalism
+public import Definitions.Nci.Formalism.Instances
+public import Definitions.Pous
+public import Definitions.Pous.Guarantees.StreamedWipeFamily
+public import Definitions.Pous.Guarantees.StreamedWipeReads
+public import Definitions.Pous.Guarantees.StreamedWipeServer
+public import Definitions.Pous.Guarantees.StreamedWipeDisk
+public import Definitions.Pouw
+public import Definitions.NetworkCertifier
+public import Definitions.NetworkCertifier.Guarantees.SampledAudit
+public import Definitions.NetworkCertifier.Guarantees.SampledCharge
+public import Definitions.NetworkCertifier.WindowCharge
+public import Definitions.NetworkCertifier.Warden
+public import Definitions.NetworkCertifier.Tap
+public import Definitions.NetworkCertifier.RecordRows
+public import Definitions.NetworkCertifier.Period
+public import Definitions.NetworkCertifier.Witness
+public import Definitions.Accounting.Sheets
+public import Definitions.Accounting
+public import Definitions.Spot
+public import Definitions.Claims
+public import Definitions.Claims.Encodings
+public import Definitions.Claims.Recursion
+public import Definitions.Claims.RecursionGeneric
+public import Definitions.Claims.RecursionLin
+public import Definitions.Claims.Sampling
+public import Definitions.Claims.SamplingGeneric
+public import Definitions.Claims.SamplingTwo
+public import Definitions.Claims.SamplingServed
+public import Definitions.Claims.Guarantees.SamplingTwo
+public import Definitions.Claims.SamplingTwoRankin
+public import Definitions.Claims.ZKOut
+public import Definitions.Hash
+public import Definitions.Flock
+public import Definitions.Core.Assumptions
+public import Definitions.Core.Guarantees
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Guarantees.Threads
+public import Definitions.Nci.Guarantees.Layered
+public import Definitions.Nci.Guarantees.Fit
+public import Definitions.Nci.Guarantees.FitRate
+public import Definitions.Nci.Guarantees.Dampener
+public import Definitions.Nci.Guarantees.Remote
+public import Definitions.Nci.Guarantees.RemotePeriod
+public import Definitions.Nci.Guarantees.Info
+public import Definitions.Nci.Assumptions.Capability
+public import Definitions.Nci.Guarantees.Capability
+public import Definitions.Accounting.Guarantees.Coverage
+public import Definitions.Nci.Guarantees.Fmt2
+public import Definitions.Nci.Guarantees.Training
+public import Definitions.Nci.Guarantees.PackedTraining
+public import Definitions.Nci.Guarantees.Activations
+public import Definitions.Nci.Guarantees.Covering
+public import Definitions.Nci.Guarantees.CoveringTwoCosts
+public import Definitions.Nci.Guarantees.Cut
+public import Definitions.Nci.Guarantees.CoverTraining
+public import Definitions.Nci.Guarantees.PartitionCovers
+public import Definitions.Nci.Guarantees.CompliesCK
+public import Definitions.Nci.Guarantees.Witnesses
+public import Definitions.Nci.Guarantees.Formalism
+public import Definitions.Nci.Guarantees.Formalism.Witnesses
+public import Definitions.Pous.Assumptions
+public import Definitions.Pous.Guarantees
+public import Definitions.Pouw.Assumptions
+public import Definitions.Pouw.Guarantees
+public import Definitions.NetworkCertifier.Assumptions
+public import Definitions.NetworkCertifier.Guarantees
+public import Definitions.NetworkCertifier.Guarantees.Pooled
+public import Definitions.Flock.Guarantees
+public import Definitions.Accounting.Assumptions.Remote
+public import Definitions.Accounting.Assumptions.RemoteOutside
+public import Definitions.Accounting.Assumptions.CreditedWords
+public import Definitions.Accounting.Assumptions.RemoteP2
+public import Definitions.Accounting.Assumptions.Parties
+public import Definitions.Accounting.Assumptions.TS.Fixed
+public import Definitions.Accounting.Guarantees
+public import Definitions.Hash.Assumptions
+public import Definitions.Hash.Guarantees
+public import Definitions.NetworkCertifier.Guarantees.Period
+public import Definitions.NetworkCertifier.Guarantees.PooledLeak
+public import Definitions.NetworkCertifier.Guarantees.Checked
+public import Definitions.WeightSecurity.Assumptions
+public import Definitions.WeightSecurity.Guarantees
+public import Definitions.WeightSecurity
+public import Definitions.WeightSecurity.Served
+public import Definitions.WeightSecurity.Toy
+public import Definitions.WeightSecurity.ToyServed
+public import Definitions.Assumptions
+
+/-! The spec: each component's vocabulary, named assumptions and guarantee statements. -/
+
+@[expose] public section

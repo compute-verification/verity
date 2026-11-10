@@ -1,6 +1,6 @@
 """The GLM-5.3 capture map (`manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json`) against the meta-device inventory of
-the same `config.json` at TP8 for the map's target (`verity-vllm meta-inventory`, run r20261003-072626-b966, ranks 0-7, with
-the default dynamic dense-FP8 kernel facts refreshed from the pinned source and H200 GO run r20261013-115825-d357):
+the same `config.json` at TP8 for the map's target (`verity-vllm meta-inventory`, ranks 0-7, with
+the default dynamic dense-FP8 kernel facts refreshed from the pinned source and an H200 GO run):
 every module the pinned vLLM builds has exactly one entry, so a module the map misses fails here; every tap reads tensors of
 the shape the inventory gives a rank; each rank built for the target's profile and switches; and the counts the H200 runbook
 cites are pinned."""
@@ -22,7 +22,7 @@ from verity_vllm.check.capture_map import check, check_target
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.engine import meta_inventory as MI
 from verity_vllm.pipeline import cli
-from verity_vllm.program.registry import catalog
+from verity.ml.definitions.registry import catalog
 
 HERE = Path(__file__).parent
 FIX = HERE / "fixtures" / "glm_moe_dsa"
@@ -171,7 +171,7 @@ def test_every_tap_names_a_program_of_a_known_status():
     assert {statuses[t["program"]] for t in CMAP["taps"]} <= set(CM.STATUSES)
     for p in CMAP["programs"].values():
         assert p["status"] != "exists" or p["definitions"]
-        assert p["status"] != "tonight" or p["branch"].startswith("cursor/")
+        assert p["status"] != "pending" or p["branch"].startswith("cursor/")
 
 
 def test_the_target_only_taps_are_the_indexer_and_the_sparse_attention_and_name_their_programs(registry):
@@ -208,11 +208,11 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        40, 29, {"exists": 18, "tonight": 0, "port": 35, "copy": 2, "committed-only": 0})
+        40, 29, {"exists": 18, "pending": 0, "port": 35, "copy": 2, "committed-only": 0})
     assert brief(CM.counts(CMAP, ENV, ("dense-mha",))) == (
-        51, 2593, {"exists": 796, "tonight": 0, "port": 1718, "copy": 79, "committed-only": 0}, 84)
+        51, 2593, {"exists": 796, "pending": 0, "port": 1718, "copy": 79, "committed-only": 0}, 84)
     assert brief(CM.counts(CMAP, ENV, ("sparse-mqa",))) == (
-        53, 2635, {"exists": 718, "tonight": 0, "port": 1838, "copy": 79, "committed-only": 0}, 204)
+        53, 2635, {"exists": 718, "pending": 0, "port": 1838, "copy": 79, "committed-only": 0}, 204)
 
 
 def test_the_bound_tap_counts():

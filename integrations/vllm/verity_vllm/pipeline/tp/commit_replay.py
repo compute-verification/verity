@@ -57,7 +57,7 @@ class Options:
     required_manifest: str | None = option("--required-manifest", default=None, help="the Commit's required manifest (default: its recorded path)")
     threads: int = option("--threads", type=int, default=8, help="threads opening the weights")
     replay_workers: int | None = option("--replay-workers", type=int, default=None,
-                                        help="the forked pool's workers (default: the Commit's own; the draw does not depend on it)")
+                                        help="the forked pool's workers (default: the Commit's own; the sample does not depend on it)")
     worker_peak_gb: float | None = option("--worker-peak-gb", type=float, default=None,
                                           help="a forked worker's peak memory beyond what the row evaluator states for its pick, GiB (`cpu_replay.worker_peak`)")
     fold_only: bool = option("--fold-only", default=False, action="store_true", help="replay nothing: decide the record from the ranks' replays on it")
@@ -296,7 +296,7 @@ def fold(out: Path) -> bool | None:
 
 def main(o: Options) -> int:
     from verity_vllm.check.replay.driver import PoolDoesNotFit
-    from verity_vllm.program.kernels.compiled_relations import warm_vml
+    from verity_vllm.program.compiled_relations import warm_vml
 
     out = Path(o.commit_out)
     try:

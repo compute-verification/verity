@@ -11,12 +11,13 @@
 # Programs and manifest there. Each task runs its `row stage` as one `research run --tool vllm.<stage>` Attempt (the Commit citing the
 # Build's artifact); the gpu task's carries ov.noisy (it runs beside Builds).
 # Full rows (Build, Match, Commit) use config-run-row.yaml. This is the coverage default: the GPU is held only for the Commit.
-# Needs #536 in the submitted tree: without it the GPU-less Build fails with "Device string must not be empty". Its build task
+# The submitted tree's Build must load vLLM's CUDA platform: without it the GPU-less Build fails with "Device string must not be
+# empty". Its build task
 # finds libcuda.so.1 in /workspace/jobs/cuda-driver, which cluster_up.sh keeps in step with the host's driver.
 #
 #   VY_ROW_CLASS=dense tools/research/src/research/pods/nebius/sky/submit.sh config-run cov-k07 \
 #     --env ROW=<row> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha>
-#   (or VY_BUILD_MEMORY=<GB> VY_GPU_MEMORY=<GB>, e.g. from `verity-vllm sweep plan`'s ram_gb, instead of a class)
+#   (or VY_BUILD_MEMORY=<GB> VY_GPU_MEMORY=<GB> instead of a class)
 #
 # Build memory per class, provisional (the coordinator's table; epoch-run's measured peaks replace it: a 4k-context Build uses
 # 100-127 GiB). The gpu task requests 64 GB below batch 8 (a Commit uses ~6 GiB there); batch 8 and up use ~130 GiB (the pinned
@@ -24,10 +25,10 @@
 #   class   build task   gpu task          vLLM deployments
 #   small   64 GB        64 GB             small dense, B < 8 (bounded staging)
 #   dense   160 GB       170 GB            1-7B dense, B 8-32
-#   long    160 GB       170 GB            long context 4096/512 (the measured Build peak is 124.5 GB, #11)
+#   long    160 GB       170 GB            long context 4096/512 (the measured Build peak is 124.5 GB)
 #   moe     256 GB       170 GB            OLMoE, Qwen3-30B-A3B
 #   b64     256 GB       170 GB            batch 64
-#   tp2     160 GB       340 GB, 2 GPUs    TP2 (per-rank Builds in one task; #499, until then TP deployments are unsupported)
+#   tp2     160 GB       340 GB, 2 GPUs    TP2 (per-rank Builds in one task, on a tree that supports TP deployments)
 name: config-run
 
 ---
@@ -93,7 +94,7 @@ run: |
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
   export PATH=$CUDA_HOME/bin:$PATH
   export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
-  # a pod with no GPU has no driver libraries, but importing vLLM's CUDA platform (#536) loads libcuda.so.1: the host's copy, which
+  # a pod with no GPU has no driver libraries, but importing vLLM's CUDA platform loads libcuda.so.1: the host's copy, which
   # can't reach a GPU without the /dev/nvidia* devices a GPU-less pod lacks (cluster_up.sh keeps it in step with the driver)
   export LD_LIBRARY_PATH=/workspace/jobs/cuda-driver${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
   # one Attempt per task, as `row chain` runs a stage: the workload is plain argv, from which the Tool reads the row's key params.
@@ -182,8 +183,8 @@ run: |
   export PATH=$CUDA_HOME/bin:$PATH
   export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src
   # compiled kernels persist per tree on the host, so every cell of a tree after the first skips Triton's JIT of vLLM's
-  # batch-invariant kernels (the TP2 lane's lines, 14:45Z). Eager rows only: a compiled row records triton_cache_dir in its
-  # generated_kernels header. The fixed JIT build dirs only for trees whose native_jit stages its sources (#561); an older tree would
+  # batch-invariant kernels. Eager rows only: a compiled row records triton_cache_dir in its
+  # generated_kernels header. The fixed JIT build dirs only for trees whose native_jit stages its sources; an older tree would
   # rewrite their build.ninja and cost fixed trees a rebuild
   case "$ROW" in *__bi-eager) export TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$(basename "$SRC") VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$(basename "$SRC");; esac
   if grep -q staged_sources "$SRC/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
@@ -204,7 +205,7 @@ run: |
   fi
   research=(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research)
   # >>> commit watchdog: stop a Commit whose commit.log hasn't changed for COMMIT_STALL_S (default 15 min), so a hung Commit frees
-  # its GPU (Gemma-2-2B Commits held GPUs 50-90 min with no output, 2 PM PDT Sep 30). The runner starts the workload in a session of
+  # its GPU (a hung Commit can hold one for an hour with no output). The runner starts the workload in a session of
   # its own, so the watchdog lowers the run's timeout (tele set-timeout) and the harness stops that session and records the attempt
   # as cancelled; only if the run is still alive COMMIT_STALL_GRACE_S later are the workload's group and the runner killed. Exit 86,
   # so the replay task doesn't run

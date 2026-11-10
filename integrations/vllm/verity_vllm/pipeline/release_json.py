@@ -1,23 +1,21 @@
-"""RELEASE.json of a shipped worker package (schema verity-sweep/release/v1) -- writer, reader and the REL-09 release line.
+"""RELEASE.json of a shipped worker package (schema verity-sweep/release/v1) -- writer, reader and the release line.
 
-[R17 rel, exec M-0477 / M-0709 (R16)] The `tree` field names the tree THIS ship installed.  Twice in R16 a pod's RELEASE.json said
-tag r16-int-N but named the pod's shared default tree while the release had been installed as its OWN tree (/workspace/cp/r16-int-2 on
-cp-h100 07:49Z, /workspace/cp/r16-int-3 on cp-r1 10:08Z): a row from the own tree read UNRELEASED by row_pod's REL-09 rule ("pod release
-... is the tree <default tree>, not this one") and a row from the default tree would have cited the release falsely.  The first time
-the field was a constant; the second time an older tag's pod_release.sh (which still had the constant) was shipped.  There is no
-default tree: a record names its tree or none.  Rules:
+The `tree` field names the tree THIS ship installed.  A RELEASE.json naming the pod's shared default tree for a release installed as its
+OWN tree makes a row from the own tree read UNRELEASED by row_pod's release rule ("pod release ... is the tree <default tree>, not this
+one") and lets a row from the default tree cite the release falsely, so the field is never a constant and there is no default tree:
+a record names its tree or none.  Rules:
 
   * the writer takes the tree EXPLICITLY (the REMOTE_TREE the ship installed into) and refuses when it is not the process cwd;
   * the record is written pod-wide (/workspace/cp/RELEASE.json, the latest ship on the pod) AND tree-local (<tree>/RELEASE.json), so a
     second tree on the pod never erases the first tree's citation;
   * `check` re-reads the written file after the ship and fails the release (RELEASE-FAIL) when tree / tag / commit do not name the
     installed tree -- the ship never ends with a RELEASE.json that no row can cite;
-  * `line` is row_pod's REL-09 / REL-14 release line: the tree-local record when it names this tree, else the pod-wide one, else
+  * `line` is row_pod's release line: the tree-local record when it names this tree, else the pod-wide one, else
     UNRELEASED -- a record applies only when its `tree` == realpath(cwd) AND its commit + dirty-patch digest equal this tree's EXPORT.json.
 
 Stdlib only at import time; `write` imports torch/vllm lazily for the env identity.
 
-  verity-vllm release-json write --tag <tag> --tree <tree> --hg "HIDDEN-GPU-OK ..." --tp "FA2-TAP-OK ..." --nc "<sha> <path>" [--tp3 "FA3-TAP-OK ..."] [--nc-build <dir>]
+  verity-vllm release-json write --tag <tag> --tree <tree> --tp "FA2-TAP-OK ..." --nc "<sha> <path>" [--tp3 "FA3-TAP-OK ..."] [--nc-build <dir>]
   verity-vllm release-json check --tree <tree> --tag <tag> --commit <sha>      -> RELEASE-TREE-OK ... | RELEASE-TREE-FAIL <why> (exit 1)
   verity-vllm release-json line <tree>                                          -> "<release line>\t<record path or ->"
 """
@@ -45,24 +43,21 @@ def _real(p: str) -> str:
 
 
 def native_collect_build_dir(tree: str) -> str:
-    """[R17 rel] the collector JIT build dir of a tree: one directory per tree (/workspace/cp/nc_build-<name>) so two ships / two trees
+    """The collector JIT build dir of a tree: one directory per tree (/workspace/cp/nc_build-<name>) so two ships / two trees
     never build in one directory."""
     t = _real(tree)
     return f"{DEFAULT_NC_BUILD}-{os.path.basename(t.rstrip('/')) or 'tree'}"
 
 
-def parse_artifacts(hg: str, tp: str, nc: str, tp3: str = "") -> dict:
-    """The three (four on cc 9.x) built artifacts from the pod-side OK lines."""
-    hg_f, tp_f, nc_f = hg.split(), tp.split(), nc.split()
-    if len(hg_f) < 3 or not hg_f[0].startswith("HIDDEN-GPU-OK"):
-        raise ValueError(f"hidden_gpu line not OK: {hg!r}")
+def parse_artifacts(tp: str, nc: str, tp3: str = "") -> dict:
+    """The two (three on cc 9.x) built artifacts from the pod-side OK lines."""
+    tp_f, nc_f = tp.split(), nc.split()
     if len(tp_f) < 3 or not tp_f[0].startswith("FA2-TAP-OK"):
         raise ValueError(f"fa2 tap line not OK: {tp!r}")
     if len(nc_f) < 2:
         raise ValueError(f"native collector line malformed: {nc!r}")
-    arts = {"hidden_gpu_tree.so": {"sha256": hg_f[1], "path": hg_f[2], "arch": hg_f[3] if len(hg_f) > 3 else None},
-            "verity_fa2_matReq.so": {"sha256": tp_f[1], "path": tp_f[2], **dict(kv.split("=", 1) for kv in tp_f[3:] if "=" in kv)},
-            # [R17 rel M-0803] source_digest = the key of the JIT dir the .so was built in (native_jit); bindings = the pybind names checked
+    arts = {"verity_fa2_matReq.so": {"sha256": tp_f[1], "path": tp_f[2], **dict(kv.split("=", 1) for kv in tp_f[3:] if "=" in kv)},
+            # source_digest = the key of the JIT dir the .so was built in (native_jit); bindings = the pybind names checked
             "verity_native_collect.so": {"sha256": nc_f[0], "path": nc_f[1], **dict(kv.split("=", 1) for kv in nc_f[2:] if "=" in kv)}}
     if tp3:
         f3 = tp3.split()
@@ -75,7 +70,7 @@ def parse_artifacts(hg: str, tp: str, nc: str, tp3: str = "") -> dict:
 def release_record(*, tag: str, export: dict, tree: str, cwd: str, artifacts: dict, env: dict, gpu: dict,
                    installed_utc: str | None = None, build_dirs: dict | None = None) -> dict:
     """The RELEASE.json record.  `tree` is the tree the ship installed into (REMOTE_TREE); it must be the directory this runs in --
-    a mismatch is refused, never written (M-0477 class fail-closed)."""
+    a mismatch is refused, never written (fail-closed)."""
     t, c = _real(tree), _real(cwd)
     if t != c:
         raise ValueError(f"release tree {tree} (realpath {t}) is not the installing cwd {cwd} (realpath {c}) -- refusing to write RELEASE.json")
@@ -92,8 +87,8 @@ def release_record(*, tag: str, export: dict, tree: str, cwd: str, artifacts: di
 
 
 def release_names_tree(rel: dict, tree: str) -> bool:
-    """row_pod REL-09: a RELEASE.json applies to a tree only when its `tree` is that tree.  A record without a tree field (the
-    pre-R16 pod-wide form) names no tree."""
+    """row_pod's rule: a RELEASE.json applies to a tree only when its `tree` is that tree.  A record without a tree field (the
+    older pod-wide form) names no tree."""
     if not rel or not rel.get("tree"):
         return False
     return _real(rel["tree"]) == _real(tree)
@@ -131,7 +126,7 @@ def check_installed(tree: str, tag: str, commit: str, pod_path: str = POD_RELEAS
             problems.append(f"{label} {p}: unreadable ({e})")
             continue
         if not release_names_tree(rel, t):
-            problems.append(f"{label} {p}: tree {rel.get('tree')!r} != installed tree {t} (M-0477 class)")
+            problems.append(f"{label} {p}: tree {rel.get('tree')!r} != installed tree {t} (the record names another tree)")
         if rel.get("tag") != tag:
             problems.append(f"{label} {p}: tag {rel.get('tag')!r} != {tag}")
         rc = str(rel.get("commit") or "")
@@ -141,7 +136,7 @@ def check_installed(tree: str, tag: str, commit: str, pod_path: str = POD_RELEAS
 
 
 def release_line(tree: str, export_path: str | None = None, pod_path: str = POD_RELEASE_JSON) -> tuple[str, str]:
-    """row_pod's release line + the record path it came from ('-' when UNRELEASED).  Tree-local record first (REL-14: the tree whose
+    """row_pod's release line + the record path it came from ('-' when UNRELEASED).  Tree-local record first (the tree whose
     code runs), then the pod-wide one; each applies only when it names this tree and matches its EXPORT.json."""
     t = _real(tree)
     exp_p = export_path or os.path.join(t, "EXPORT.json")
@@ -168,9 +163,9 @@ def release_line(tree: str, export_path: str | None = None, pod_path: str = POD_
 
 
 def _env_identity() -> tuple[dict, dict, str]:
-    import torch  # noqa: PLC0415  (pod only)
+    import torch  # pod only
     try:
-        import vllm  # noqa: PLC0415
+        import vllm
         vllm_v = vllm.__version__
     except Exception as e:  # noqa: BLE001
         vllm_v = f"unavailable: {e}"
@@ -189,7 +184,6 @@ class WriteOptions:
 
     tag: str = option("--tag")
     tree: str = option("--tree")
-    hg: str = option("--hg")
     tp: str = option("--tp")
     nc: str = option("--nc")
     tp3: str = option("--tp3", default="")
@@ -215,7 +209,7 @@ class CheckOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class LineOptions:
-    "row_pod's REL-09 release line for <tree>"
+    "row_pod's release line for <tree>"
 
     tree: str = option("tree")
     pod_path: str = option("--pod-path", default=POD_RELEASE_JSON)
@@ -240,7 +234,7 @@ def main(a: WriteOptions | CheckOptions | LineOptions | NcBuildOptions) -> int:
     if a.cmd == "write":
         export = json.load(open(a.export))
         env, gpu, freeze = _env_identity()
-        arts = parse_artifacts(a.hg, a.tp, a.nc, a.tp3)
+        arts = parse_artifacts(a.tp, a.nc, a.tp3)
         bd = {"native_collect": a.nc_build} if a.nc_build else None
         rel = release_record(tag=a.tag, export=export, tree=a.tree, cwd=os.getcwd(), artifacts=arts, env=env, gpu=gpu, build_dirs=bd)
         paths = write_record(rel, a.tree, a.out)

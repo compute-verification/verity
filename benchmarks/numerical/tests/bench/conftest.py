@@ -12,7 +12,6 @@ import pytest
 from verity_numerical.bench import contract
 
 REPO = Path(__file__).resolve().parents[4]
-VECTOR_RUN = REPO / "archive" / "sp1" / "benchmarks" / "dot_product" / "vector_run.py"
 JUDGE = REPO / "benchmarks" / "judge.py"
 
 CONFORMING_FINGERPRINT: dict[str, Any] = {
@@ -28,7 +27,7 @@ CONFORMING_FINGERPRINT: dict[str, Any] = {
     "software": {"backend": {"name": "synthetic", "version": "0", "commit": None}, "toolchain": {"python": "3.12"}},
     "preprocessing": "none",
     "retention": "retained",
-    # null: not measured on the shared input set (bench-instances/v1); see contract.instances_ref
+    # null: not measured on the shared input set (bench-instances/v1); see contract.input_set_ref
     "instances": None,
 }
 

@@ -80,7 +80,7 @@ def test_the_lock_covers_every_family_set_and_context():
 
 
 def test_llama_c4_2048_is_tonights_window_list():
-    """D4-70B's c4val2048x16.npy and c4cal2048x16.npy (c4_windows.py), by their sha256."""
+    """The earlier linears harness's c4val2048x16.npy and c4cal2048x16.npy (c4_windows.py), by their sha256."""
     lock = windows.lock()["llama3"]
     assert lock["c4/2048"]["sha256"] == "1ca575b1129dc9262d4e9882795f5cfb1decb7952fb8b9c383ea9691399a0664"
     assert lock["c4/2048/calibration"]["sha256"] == "d9788b2e4d3c48bd5fa425cf3cee1049cfe6088ec57c9fe9b37b86b0bfe42331"

@@ -16,13 +16,15 @@ from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.cut import derived_committed
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.circuits.units import PartitionUnits
 from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Add
+
+from test_partition_object import _fan
 
 F32 = I32 = Value(32)
 
@@ -41,12 +43,6 @@ Rows = _c("URows", (("x", Array(2, Array(3, F32))),), Array(2, F32), lambda B, S
 #: x0 + (1 + 2): the sum of constants is structure
 AddOne = _c("UAddOne", (("x", Array(1, I32)),), I32,
             lambda B, S, x: B.call(I32Add, x[0], B.call(I32Add, B.call(const(32, 1)), B.call(const(32, 2)))))
-
-
-def _fan(B, S, x):
-    a = B.call(I32Add, x[0], x[1])
-    B.call(I32Add, x[0], x[2])                                         # dead
-    return tuple_of(B.call(I32Add, a, x[2]), B.call(I32Add, a, x[3]))
 
 
 Fan = _c("UFan", (("x", Array(4, I32)),), Tuple(I32, I32), _fan)
@@ -123,8 +119,8 @@ def test_equal_shapes_are_equal_circuits(program):
 
 
 def test_a_unit_computes_its_calls_values(program):
-    """Each unit's gates, evaluated on the values its flat Definition's transcript gives its inputs, reproduce that transcript at
-    the unit's outputs."""
+    """Each proof block's gates, evaluated on the values its flat Definition's trace gives its inputs, reproduce that trace
+    at the proof block's outputs."""
     rng = random.Random(7)
     units = PartitionUnits(program, PO.query(16, 32))
     seen = set()
@@ -148,7 +144,7 @@ def test_a_unit_computes_its_calls_values(program):
 
 
 def test_pinned_shapes(program):
-    """The shapes of the test program's `Q_word` units: a change here changes every class digest a backend has recorded."""
+    """The shapes of the test program's `Q_word` units: a change here changes every class digest a proof system has recorded."""
     got = sorted(c.representative.form for c in PartitionUnits(program, PO.query(16, 32)).classes().values())
     assert len(got) == len(set(got))
     assert hashlib.sha512(codec.canonical_json(got)).hexdigest() == "94f3cb71f5e3cd2637f39cd3df9998db80f1ef692a3aa5d77bab14516564452ac26ab702b5a520ced5ab3c6a2eaa9a41fa1102c273be1b1846c03fea86ada2db"

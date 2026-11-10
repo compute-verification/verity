@@ -1,23 +1,24 @@
-import Proofs.Accounting.TS.Fork
+module
+
+public import Proofs.Accounting.TS.Fork
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # (I8) for a sampled window
 
-Stated after RT-I8 (note:20261018T0728Z-draft-rt-i8, decisions 114 and 119) and RT-COMPOSE r2's R2-B1
-(note:20261018T1200Z-draft-rt-compose-r2: good reads the run's modes), with E1(c) per unit (`UnitFixed`) as decided
-(ASK-17 = A). `DrawnRightOff` and `DrawnBindingOfFork` don't read `UnitFixed`; `DrawnLayer.covers_of_cone` is the
-share's side of `Covers`: a share that charges each unit the run didn't pay for its late cone's weight covers every unit
-that isn't good.
+A unit's `Good` reads the run's modes, and E1(c) is per unit (`UnitFixed`). `SampledRightOff` and `SampledBindingOfFork`
+don't read `UnitFixed`; `SampledLayer.covers_of_cone` is the share's side of `Covers`: a share that charges each unit the
+run didn't pay for its late cone's weight covers every unit that isn't good.
 
-`DrawnRightOff`: the event is "in some round, binding fails (`MovedIn`) or some drawn unit's proof is unsound", which
+`SampledRightOff`: the event is "in some round, binding fails (`MovedIn`) or some sampled proof block's proof is unsound", which
 the union bound puts at `S·(δ_bind + δ_ks)`. Off it, an accepted proof opens its unit's committed values (not
 `MovedIn`), which satisfy its relation (not `Unsound`), so they are right (`Pins`).
 
-`ProofsSoundOfDrawn`: `DrawnRightOff`'s event; off it, on an accepted path every drawn unit's proof is accepted (`Of`),
+`ProofsSoundOfSampled`: `SampledRightOff`'s event; off it, on an accepted path every sampled proof block's proof is accepted (`Of`),
 so the ideal game accepts (`Of`), and the good units' words over `S` (`UnitFixed`) are at least
 `(S·N_w − d·N_w)/S` by `Covers` and `Σ wt = S·N_w`.
 
-`DrawnBindingOfFork`: a round's binding failure moves one of its positions (`Moved`). Per position, the moved mass
+`SampledBindingOfFork`: a round's binding failure moves one of its positions (`Moved`). Per position, the moved mass
 squared is at most the forked mass at its cut (`Plurality.moved_le_forked`, for any continuation map with
 `spliceAt`'s two laws): fix the coins before the cut; of its continuations, `A` open the position, `E_v` open it to `v`
 alone, and the plurality `c` has the most, so the moved are `M = A − E_c`. A continuation that opens some `v₁` forks
@@ -25,6 +26,8 @@ with every continuation that opens the position, except those opening `v₁` alo
 (`moved_sq_le`), and the moved alone give `M²` forked pairs. Cauchy–Schwarz over the coins before the cut, then over
 `L`, gives `|L|²`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 
@@ -194,7 +197,7 @@ theorem moved_le_forked [Nonempty V] (hl : ∀ x z z', sp (sp x z) z' = sp x z')
   have hcM : (Finset.univ.filter fun x => Mov sp opens x).card = M := by rw [Finset.card_filter]
   have hcF : (Finset.univ.filter fun p : X × X => Frk sp opens p.1 p.2).card = Fk := by
     rw [Finset.card_filter, Fintype.sum_prod_type]
-  unfold prob
+  unfold prob Claims.prUniform
   rw [hcM, hcF, Fintype.card_prod, ← hC]
   rcases Nat.eq_zero_or_pos C with h0 | hpos
   · simp [h0]
@@ -206,10 +209,10 @@ theorem moved_le_forked [Nonempty V] (hl : ∀ x z z', sp (sp x z) z' = sp x z')
 
 end Plurality
 
-namespace DrawnLayer
+namespace SampledLayer
 
 variable {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V : Type} [Nonempty V]
-  (pf : Accounting.TS.DrawnLayer C B S m s J Q Pos V)
+  (pf : Accounting.TS.SampledLayer C B S m s J Q Pos V)
 
 /-- Binding's failure at one position, squared, is at most its fork form's at the position's cut. -/
 theorem moved_le_forked (ℓ : Pos) :
@@ -228,8 +231,7 @@ theorem moved_of_movedIn {x : Paths (Paths C m × B) S} {w : Fin S} (h : pf.Move
 omit [Fintype C] [Fintype B] [Nonempty V] in
 open Classical in
 /-- **A share that charges each unit the run didn't pay for its late cone's weight covers**: a unit that isn't good has
-a unit of its late cone the run didn't pay for, whose cone weight counts it. RT-I8 r2's `covers_of_cone`, at the run's
-modes (RT-COMPOSE r2's R2-B1). -/
+a unit of its late cone the run didn't pay for, whose cone weight counts it, at the run's modes. -/
 theorem covers_of_cone [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S K T L U)
     (mode : Paths (Paths C m × B) S → Fin S × J → Mode) (wt : Fin S → J → ℝ) (Nw : ℝ) (hw : ∀ w j, 0 ≤ wt w j)
     (h : ∀ x, P.accepts x →
@@ -265,12 +267,12 @@ theorem covers_of_cone [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S
         refine Finset.sum_congr rfl fun u _ => ?_
         by_cases hb : mode x u = .paid
         · simp [hb]
-        · simp [hb, Accounting.TS.DrawnLayer.coneWt]
+        · simp [hb, Accounting.TS.SampledLayer.coneWt]
 
-end DrawnLayer
+end SampledLayer
 
-/-- A sampled window's drawn units are right at their committed values, outside binding and joint soundness failures. -/
-theorem DrawnRightOff : Accounting.Guarantees.TS.DrawnRightOff := by
+/-- A sampled window's sampled proof blocks are right at their committed values, outside binding and joint soundness failures. -/
+theorem SampledRightOff : Accounting.Guarantees.TS.SampledRightOff := by
   intro J Q Pos V _ C B _ _ S m s pf δbind δks hB hZ hPin
   refine ⟨fun x => ∃ w ∈ (Finset.univ : Finset (Fin S)), pf.MovedIn x w ∨ ∃ i, pf.Unsound x w i, ?_, ?_⟩
   · calc prob _ ≤ ∑ w : Fin S, prob (fun x => pf.MovedIn x w ∨ ∃ i, pf.Unsound x w i) := prob_exists_le _ _
@@ -287,11 +289,11 @@ theorem DrawnRightOff : Accounting.Guarantees.TS.DrawnRightOff := by
     exact hE ⟨w, Finset.mem_univ _, Or.inr ⟨i, hacc, hr⟩⟩
 
 open Classical in
-/-- (I8) for a sampled window, from `DrawnRightOff`'s pieces, the share's cover and E1(c) per unit. -/
-theorem ProofsSoundOfDrawn : Accounting.Guarantees.TS.ProofsSoundOfDrawn := by
+/-- (I8) for a sampled window, from `SampledRightOff`'s pieces, the share's cover and E1(c) per unit. -/
+theorem ProofsSoundOfSampled : Accounting.Guarantees.TS.ProofsSoundOfSampled := by
   intro K T L U J Q Pos V _ _ _ _ _ _ C B _ _ S m s P pf mode wt folded Nw δbind δks hS hsum hWR hOf hB hZ hPin hCov
     hUF
-  obtain ⟨E, hE, hoff⟩ := DrawnRightOff C B S m s pf δbind δks hB hZ hPin
+  obtain ⟨E, hE, hoff⟩ := SampledRightOff C B S m s pf δbind δks hB hZ hPin
   refine ⟨E, by simpa only [Nat.cast_one, one_mul] using hE, fun x hx hEx => ⟨?_, ?_⟩⟩
   · exact hOf.2 x fun w i => hoff x hEx w i (hOf.1 x hx w i)
   · have hSpos : (0 : ℝ) < S := by exact_mod_cast hS
@@ -307,16 +309,16 @@ theorem ProofsSoundOfDrawn : Accounting.Guarantees.TS.ProofsSoundOfDrawn := by
           div_le_div_of_nonneg_right (by linarith [hCov x hx]) hSpos.le
       _ ≤ (P.run x).fixed := (hUF hWR x hx).1
 
-/-- Binding at every position's cut from the fork form: per position (`DrawnLayer.moved_le_forked`), then the union
+/-- Binding at every position's cut from the fork form: per position (`SampledLayer.moved_le_forked`), then the union
 over `L` and Cauchy–Schwarz. -/
-theorem DrawnBindingOfFork : Accounting.Guarantees.TS.DrawnBindingOfFork := by
+theorem SampledBindingOfFork : Accounting.Guarantees.TS.SampledBindingOfFork := by
   intro J Q Pos V _ C B _ _ S m s pf w L hL
   set F := prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => ∃ ℓ ∈ L, pf.Forked ℓ p.1 p.2) with hF
   have hm : ∀ ℓ ∈ L, prob (fun x => pf.Moved x ℓ) ^ 2 ≤ F := fun ℓ hℓ =>
-    (DrawnLayer.moved_le_forked pf ℓ).trans (prob_mono fun p h => ⟨ℓ, hℓ, h⟩)
+    (SampledLayer.moved_le_forked pf ℓ).trans (prob_mono fun p h => ⟨ℓ, hℓ, h⟩)
   have h1 : prob (fun x => pf.MovedIn x w) ≤ ∑ ℓ ∈ L, prob (fun x => pf.Moved x ℓ) := by
     refine (prob_mono fun x hx => ?_).trans (prob_exists_le L fun ℓ x => pf.Moved x ℓ)
-    obtain ⟨i, k, h⟩ := DrawnLayer.moved_of_movedIn pf hx
+    obtain ⟨i, k, h⟩ := SampledLayer.moved_of_movedIn pf hx
     exact ⟨_, hL _ k, h⟩
   have h2 : (∑ ℓ ∈ L, prob (fun x => pf.Moved x ℓ)) ^ 2 ≤ L.card * ∑ ℓ ∈ L, prob (fun x => pf.Moved x ℓ) ^ 2 :=
     sq_sum_le_card_mul_sum_sq

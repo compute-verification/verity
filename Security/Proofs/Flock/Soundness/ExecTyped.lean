@@ -1,7 +1,13 @@
-import Proofs.Flock.Soundness.ExecParse
+module
+
+public import Proofs.Flock.Soundness.ExecParse
+public import Properties.Flock.Circuit.Keys
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 /-!
-# A typed template's Δ (#277), and the rows it makes copies
+# A typed template's Δ, and the rows it makes copies
 
 `HmRow.delta` writes a flat statement's entries (`delta_split`'s forms), then, for a typed template
 (`c.typed = some tb`), per template instance `g`:
@@ -16,6 +22,8 @@ with `i = col g r` and `col` the unit column's block position (`Typed.col`).
 - `CopyRow S r src` and `ZeroRow S r`: the block rows at `r` read exactly `src`, or nothing, in `A` and `B`. A
   satisfying witness then carries at `r` what it carries at `src` (`CopyRow.block_eq`), or 0 (`ZeroRow.block_eq`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -64,10 +72,6 @@ end rows
 /-! ## The typed tail, as lists -/
 
 namespace Typed
-
-/-- Each row word's first message leaf (`HmRow.delta`'s `starts`). -/
-def starts (c : Circuit) : Array ℕ :=
-  (c.ports.foldl (fun (acc : Array ℕ × ℕ) p => (acc.1.push acc.2, acc.2 + p.words)) (#[], 0)).1
 
 /-- Message bit `t` of byte `byte` of row `p`'s message in template instance `g` (`HmRow.delta`'s `msgCol`): in its
 chain's `sha512x3` slot, or past the chain in its hm96 slot's `pad`. -/
@@ -165,7 +169,7 @@ def TailQ (c : Circuit) (pin : ℕ) (tb : TypedBlock) (r : Array (ℕ × ℕ) ×
   ∃ d : Array (ℕ × ℕ), ExtL (constPairs c pin) (DeltaIn c) d ∧
     r.1.toList = d.toList ++ Typed.tail c tb true ∧ r.2.toList = d.toList ++ Typed.tail c tb false
 
-/-- **A typed template's Δ** (#277): the flat statement's entries, then the typed tail, in Δ_A and in Δ_B. -/
+/-- **A typed template's Δ**: the flat statement's entries, then the typed tail, in Δ_A and in Δ_B. -/
 theorem delta_typed (c : Circuit) (pin : ℕ) {tb : TypedBlock} (ht : c.typed = some tb) :
     TailQ c pin tb (HmRow.delta c pin) := by
   unfold HmRow.delta

@@ -1,5 +1,5 @@
 """`HmRow.parse` calls `RecOpening.check`: a statement's unit named `rec-opening/m<m>-c<claims>-p<j>` must be the net the
-verifier builds for that part of the opening's algebra (PROTOCOL.md §16.10). `flock-verify statement` accepts the files
+verifier builds for that part of the opening's algebra (`Flock.HmRow`). `flock-verify statement` accepts the files
 `rec_residuals.stage_opening` writes, and refuses them with one row of the unit changed and with the unit renamed out of
 the name's form."""
 from __future__ import annotations
@@ -9,12 +9,12 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+from verity.core.protocols.spot.one_stage import registered as RG
 from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 from verity_flock.rec_outer import CLAIM_VALUE
 
-BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-verify"
 
 
 def _statement(d: Path, circuit: Path):

@@ -1,15 +1,20 @@
-import Models.Pouw.Assumptions.Pinned
-import Proofs.Pouw.Prob
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Algebra.Order.Field.Power
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Ring
-import Models.Pouw.Guarantees.Game
+module
+
+public import Definitions.Pouw.Assumptions.GameStatements
+public import Proofs.Pouw.Prob
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Algebra.Order.Field.Power
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Ring
+public import Definitions.Pouw.Guarantees.Game
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # (c) Work-weighted sampling: `δ_s = (1 − ε_s)^t`
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

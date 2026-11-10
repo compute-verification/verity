@@ -1,7 +1,8 @@
 """vLLM's labels of a window's units (``index.json``): per member, one entry per served row, unit -> served identity.
 
-The window's commit (`serving_rows.write`) writes whatever index it is given and binds its SHA-512 in the registration's
-provenance; what the columns mean is vLLM's alone.  Each entry is a served row's global units ``[lo, hi)``, its request,
+The window's commit (`serving_rows.write`) writes whatever index it is given as a prover-only file and binds only its
+hiding leaf (`rows.index_leaf`) in the registration's provenance, since its columns name what was served; what they mean
+is vLLM's alone.  Each entry is a served row's global units ``[lo, hi)``, its request,
 engine step, layer, op path, member, token row and program row, instance ``i - lo`` of the row (a RoPE head, or 0 for a
 template that is the row itself).
 """
@@ -10,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from .serving_rows import ORDER, Member
+from verity.ml.windows.rows import ORDER, Member
 
 INDEX_SCHEMA = "verity-vllm/serving-rows/index/v0"
 COLUMNS = ("lo", "hi", "request", "engine_step", "layer", "op_path", "member", "token_row", "program_row")

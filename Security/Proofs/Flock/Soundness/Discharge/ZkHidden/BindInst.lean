@@ -1,6 +1,25 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -42,6 +61,9 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
 
 /-- **The public plan's sites** (`sitesShH`'s, each acceptance at the rows' fit `hrf`). -/
 noncomputable def sitesShHI : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y₀) where
+  A S _ _ _ := (tableShH dj y₀ S).twinA
+  B S _ _ _ := (tableShH dj y₀ S).twinB
+  sat S _ _ _ := (tableShH dj y₀ S).sat (zkTyped ht) hc hrf
   acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc hrf
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
@@ -49,15 +71,15 @@ noncomputable def sitesShHI : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y
 
 theorem sitesShHI_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse ((sitesShHI dj y₀ ht hc hrf).acc S R u h).tags ((sitesShHI dj y₀ ht hc hrf).acc S R u h).cf
-        ((sitesShHI dj y₀ ht hc hrf).acc S R u h).tables = .ok c :=
-  fun _ _ _ _ => (parse_untyped (zkTyped ht) hc).1
+      ((sitesShHI dj y₀ ht hc hrf).acc S R u h).st.c = c :=
+  fun S R u h => ((sitesShHI dj y₀ ht hc hrf).acc S R u h).c_eq (HmOut.parse_isTmpl hc)
+    (parse_untyped (zkTyped ht) hc).1
 
 variable {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
 include hpub in
-/-- **`BcSiteH` at every satisfiable site** of the public plan: at a draw `verify --zk` sets up by `tableH_bcSiteI`; at
-a refused draw no message satisfies the table. -/
+/-- **`BcSiteH` at every satisfiable site** of the public plan: at a sample `verify --zk` sets up by `tableH_bcSiteI`; at
+a refused sample no message satisfies the table. -/
 theorem sitesShHI_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShH dj y₀) (tabShH dj y₀) S R u), Binding.Sat (planShH dj y₀) (tabShH dj y₀) S R u M →
@@ -101,7 +123,7 @@ theorem rsShHI_computes : (rsShHI dj y₀ ht hc hrf hpub hU hpr hw (Reg := Reg))
     (checkFactsH (zkTyped ht) hc).upv_pos (sitesShHI_bcSite dj y₀ ht hc hrf hpub)
     (instKeysRowH (zkTyped ht) hc dj y₀.x hU hpr hw)
 
-/-- **Each drawn unit's place in its hidden-output `--zk` table, at `instProg`**: `instPlaceH`'s place in the public
+/-- **Each sampled proof block's place in its hidden-output `--zk` table, at `instProg`**: `instPlaceH`'s place in the public
 table, along `planAtZKH_S`. -/
 noncomputable def placeZHI (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     UnitPlace ((instProg c n).partition (outsOfI c n)) (tabOfZ (planAtZKH dj y₀) (tabAtZKH dj y₀) S R u).S u :=
@@ -185,6 +207,12 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.
 
 /-- **The public plan's sites at `J` tables** (`sitesShHJ`'s, each acceptance at the rows' fit `hrf`). -/
 noncomputable def sitesShHJI : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj y₀) where
+  A S R u _ := castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinA
+  B S R u _ := castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinB
+  sat S R u _ := twin_sat_cast (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.sat (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _) hrf)
   acc S R u _ := recastAccH ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.acc
     (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _) hrf)
     (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
@@ -195,9 +223,10 @@ noncomputable def sitesShHJI : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ d
 
 theorem sitesShHJI_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).tags ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).cf
-        ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).tables = .ok c :=
-  fun S _ _ _ => (parse_untyped (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)).1
+      ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).st.c = c :=
+  fun S R u h => ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).c_eq
+    (HmOut.parse_isTmpl (tableShHJ_parse dj y₀ ht hc S (partOf I (dj S) u.val)))
+    (parse_untyped (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)).1
 
 variable {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
@@ -258,7 +287,7 @@ theorem rsShHJI_computes : (rsShHJI dj y₀ ht hc hrf hpub hU hpr hw (Reg := Reg
   instRowsH_computes (sitesShHJI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
     (checkFactsH (zkTyped ht) hc).upv_pos (sitesShHJI_bcSite dj y₀ ht hc hrf hpub) (instKeysRowHJ y₀ ht hc hU hpr hw)
 
-/-- **Each drawn unit's place in its hidden-output `--zk` table at `J` tables, at `instProg`**: `instPlaceH`'s place
+/-- **Each sampled proof block's place in its hidden-output `--zk` table at `J` tables, at `instProg`**: `instPlaceH`'s place
 in the public table, along `planZHJ_S`. -/
 noncomputable def placeZHJI (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     UnitPlace ((instProg c n).partition (outsOfI c n)) (tabOfZ (planZHJ dj y₀) (tabZHJ dj y₀) S R u).S u :=

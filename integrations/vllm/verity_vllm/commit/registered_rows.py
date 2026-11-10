@@ -5,7 +5,7 @@ takes the parameter's leaves as one unsigned array, in the parameter's leaf orde
 entry: row `r` is leaves `[r * words, (r + 1) * words)`, each leaf `word_bits / 16` u16 words low first, zero-padded to
 whole SHA-512 blocks (`registered.row_words`), hashed as `registered.row_digest` hashes it, committed under the row's salt
 (`hm96.SHA512.commit_string`) and framed as `registered.leaf` frames it, under `registered.domain`. The salts are the
-prover's: drawn from the operating system, one per row, unless given, and returned beside the entry, which is all a
+prover's: sampled from the operating system, one per row, unless given, and returned beside the entry, which is all a
 registration names. Only `hm96-sha512/row/v1` rows, the format of a value no bit-row port reads.
 """
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_layout

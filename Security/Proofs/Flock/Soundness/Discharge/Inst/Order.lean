@@ -1,6 +1,16 @@
+module
+
+public import Flock.ProvedScope
+import all Init.Data.Nat.Fold
+public import Proofs.Flock.Soundness.Discharge.Inst.Rows
+public import Proofs.Flock.Soundness.ExecCheck
+public import Proofs.Flock.Soundness.ExecCircuit
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Level3.LookupRows
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.Soundness.Discharge.Inst.Place
 import Proofs.Flock.Soundness.ExecLookup
-import Flock.ProvedScope
+import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # Every column with a row is in the order, once the wires are acyclic
@@ -15,6 +25,8 @@ every slot's rows read only port bits and earlier rows. Then every column with a
   ports `outReads` names (`ok_mem_order`, a lookup slot's from its input port, `lookup_mem_order`);
 - a computed row reads only filled ports' bits, earlier rows and the constant.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

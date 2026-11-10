@@ -15,7 +15,7 @@ import pytest
 from test_network_certifier_advice import FIXTURE, RANDOM, packed, rebuild
 
 from verity.core.protocols.certifier import advice as V
-from verity.core.protocols.certifier.advice_check import (DEFERRED, _sort_net, ands, arguments, comparators, decodes,
+from verity.ml.protocols.certifier.advice_check import (DEFERRED, _sort_net, ands, arguments, comparators, decodes,
                                                           evaluate, evaluate_bits, reference, size, unit)
 
 P, D = "prefill", "decode"
@@ -192,7 +192,7 @@ def test_the_sort_sorts():
 
 
 def test_size_counts_the_unit():
-    """`size` is the unit's AND count, and at the 60 s llama8b-shape window (10.6 Mbit, PROTOCOL.md "Advice v0's
+    """`size` is the proof block's AND count, and at the 60 s llama8b-shape window (10.6 Mbit, PROTOCOL.md "Advice v0's
     validity") the count PROTOCOL.md cites."""
     for L in (40, 240):
         assert size(L)["ands"] == ands(unit(L)), L

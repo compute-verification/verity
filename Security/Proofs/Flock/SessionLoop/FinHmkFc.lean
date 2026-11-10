@@ -1,5 +1,51 @@
-import Proofs.Flock.SessionLoop.FinHmkCut
-import Proofs.Flock.Claims.ZK.FinishLigEnd
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.InnerGo
+public import Proofs.Flock.Claims.ZK.FinishSwSrc
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.SessionLoop.FinHmkCut
+public import Proofs.Flock.SessionLoop.FinRep
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.ZK.CausalExe
+import Proofs.Flock.Claims.ZK.CutPrefix
+import Proofs.Flock.Claims.ZK.FrameFree
+import Proofs.Flock.Claims.ZK.L0PinCut
+import Proofs.Flock.Claims.ZK.L0PinLoop
+import Proofs.Flock.SessionLoop.FinRepView
+import Proofs.Flock.SessionLoop.FinRounds
 
 /-!
 # `final_c` from the history: the views' masked `final_c`, read off the inner proof's round 0
@@ -16,6 +62,8 @@ The loop's frame reads `final_c'` there (`finalCOf`) and adds its pad (`valsOf_f
 * **`finalCOf_inner`**: `final_c'` of the inner proof's round 0 is its `final_c`, from no pending bytes.
 * **`Loop.swSrcE_hmk_cut_fc`**: the views' masked `final_c` is the request's plus its pad.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
@@ -123,7 +171,7 @@ theorem runCut_cutRep {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.
       FlockComplete.MaskRank.roundPoints (FlockDeploy.tabsOf (stsOf x))[k / 2]!.m
         (FlockDeploy.tabsOf (stsOf x))[k / 2]!.kLog b.1.back! = ptsOpen c (stsOf x)[k / 2]! (2 * (k / 2))))
     (2 * j.val + r.val) (by simpa using hk) ?_ ⟨?_, fun h => absurd h (by norm_num)⟩ ?_
-  · -- the reps before `2j + r` return by `n`, as at the firewall's stop
+  · -- the reps before `2j + r` return by `n`, as at the ZK server's stop
     rintro k hk' ⟨streams, proofs⟩ ls ⟨hls, hpts⟩
     obtain ⟨extras', hxe'⟩ := hexts k hk'
     obtain ⟨ic', hic'⟩ := padsTreeCut_go
@@ -332,8 +380,8 @@ no pending bytes, with that round's body (`hin`), the masked `final_c` of the vi
 theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
-    (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs)
+    (hE : LeanRelease.LiveRoundEqOwn finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
@@ -343,7 +391,7 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
     (hcms : ∀ l, ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
       FlockComplete.commit0Cut Masked.hsE (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle
         (schs[i]!.1.levels.getD 0 default)
-        (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t i)).go l = (.ok cms, l))
+        (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t i)).go l = (.ok cms, l))
     (j : Fin (Masked.jOf x)) (r : Fin 2)
     (hexts : ∀ k < 2 * j.val + r.val, ∃ extras,
       (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.extra (viewPoints x ops spec) = .ok extras)
@@ -353,13 +401,13 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
         (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.m
           (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.kLog schs[k / 2]!.1.k0).len +
           _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2))).go l =
+        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2))).go l =
           (.ok ic, l)) →
       ∀ l : Array Msg, l.size = Masked.repBase x k →
       ∃ p tr l', ((FlockComplete.repCut (FlockComplete.asksCut (Masked.ligCoin (finCoins x ops)) (refK x)) Masked.hsE
           (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]! schs[k / 2]!.1 (k % 2)
           (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 cms[k / 2]! extras ic
-          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2))
+          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2))
           (Masked.priorE (finCoins x ops) (k / 2) (k % 2)) (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[k / 2]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l =
           (.ok (p, tr), l') ∧ l'.size = Masked.repBase x (k + 1))
@@ -372,21 +420,21 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
       (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
         (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0).len +
         _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val)).go l = (.ok ic, l))
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val)).go l = (.ok ic, l))
     {l : Array Msg} (hl : l.size = Masked.repBase x (2 * j.val + r.val))
     (hin : ∃ (e : String) (L : Array Msg) (t₄ : _root_.Flock.Transcript), t₄.pending = ByteArray.empty ∧
       L.size = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff 0) ∧
       ((FlockComplete.repCut (FlockComplete.asksCut (Masked.ligCoin (finCoins x ops)) L.size) Masked.hsE
           (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]! (Masked.zkTab x j).sch r.val
           (spec.domain spec.tables[j.val]! r.val).toUTF8 cms[j.val]! extras ic
-          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val)
+          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val)
           (Masked.priorE (finCoins x ops) j.val r.val) (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[j.val]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[j.val]! r.val).toUTF8)).go l =
         (.error e, L.push (Claims.toMsg (_root_.Flock.Transcript.framed (FlockComplete.Replay.InZ.t₁
-          (((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val).masked
+          (((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked
             (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
               (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0).fc) t₄) 1 1)))) :
-    ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val).masked
+    ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked
         (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).fc =
       q.vals[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).fc]! +
         (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog
@@ -454,17 +502,17 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
   have hLN : L.size < refK x := by omega
   -- the cut session's body there
   have hW := Masked.runCut_cutRep_of_ret hx (finCoins x ops)
-    (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t) hsx hs hcms j r hexts hprev hext hic hl hrun
+    (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t) hsx hs hcms j r hexts hprev hext hic hl hrun
     (by omega) hLN.le
   rw [getElem!_push_size] at hW
   have hlast : (LeanRelease.ofLoopLink L₀ src (realOf src)).last x = refK x + 1 :=
     LeanRelease.loop_last loopNr Masked.dataE _ x
-  have hsrc : Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t =
+  have hsrc : Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t =
       Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
         (finS.swCutOf x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t) := rfl
   have hlen : ops.length = refK x := hF.1
   obtain ⟨s', spec', hsx', hm⟩ := msg_runCut vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w
-    hE hc hlast ν t κ m₀ ρ₀ ops hF.1 hF.2.1 hF.2.2.1 hF.2.2.2.2.2 (L.size + 1) (by omega) (by omega)
+    hE hc hlast ν t κ m₀ ρ₀ ops hF.1 (swOk_take_of_finCtx hF) hF.2.1 hF.2.2.1 hF.2.2.2.2.2 (L.size + 1) (by omega) (by omega)
   rw [hsx] at hsx'
   cases hsx'
   rw [← hsrc, Nat.add_sub_cancel, hW] at hm
@@ -485,7 +533,7 @@ theorem swSrcE_hmk_cut_fc (vs : finS.SwVals)
       ((seenRounds x ((m₀, ρ₀) :: ops) (roundsOf spec (Masked.stsOf x)) (2 * j.val + r.val)).length -
         _root_.Flock.Firewall.Frame.INNER_ROUNDS) (.empty, 0, #[])).1 =
       ⟨(dropDom (0 :: Claims.toMsg (_root_.Flock.Transcript.framed (FlockComplete.Replay.InZ.t₁
-        (((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val).masked lay.fc) t₄)
+        (((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked lay.fc) t₄)
         1 1))).tail.toArray⟩ := by
     have hp : L.size < ops.length := by omega
     unfold seenRounds

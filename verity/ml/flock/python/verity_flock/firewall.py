@@ -1,4 +1,4 @@
-"""``firewall/v0``: the firewall's release side (live PROTOCOL.md §10.5). It sits between the workers' outer prover
+"""``firewall/v0``: the ZK server's release side (live PROTOCOL.md §10.5). It sits between the workers' outer prover
 (``flock-circuit prove --zk`` with its send check, ``FC_FIREWALL=1``, §10.4) and the challenger, beside the inner phase's
 proxy (`verity_flock.rec_live`, §10.3).
 
@@ -10,8 +10,8 @@ session through ``core-firewall session`` (``Core.Firewall.Loop`` around the Lea
 byte for byte, and the rules below (``live/src/firewall_record_vectors.json``, which both sides' tests run). This module is the inner side's (`rec_live`'s ``serve`` opens and ends recursive sessions
 here) and the tests' relay.
 
-Every process of one firewall shares its state directory: ``record.jsonl``, its events in order (each with its ``seq``),
-appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules hold through it:
+Every process of one ZK server shares its state directory: ``record.jsonl``, its events in order (each with its ``seq``),
+appended under ``record.lock``, and ``slot.lock``, the outer slot. Five rules hold through it:
 
 * **A recursive session's statements go in their order, each once, and it ends at its first stop.** The inner phase opens
   a recursive session (`Firewall.open`: `rec_live`'s ``serve`` opens one for each session it serves) with its V*
@@ -29,32 +29,40 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules ho
   session's outcome before the next one. A holder that ended before its outcome (killed, say) is recorded as its session's
   stop by the next session to take the slot.
 * **A stream stops at its failure budget.** A stream opened with ``budget`` b (the challenger's stream's ``budget``, P1)
-  refuses every outer session and every open after its b-th failure: a recursive session's stop, or a refusal of a recursive
-  session that had neither stopped nor released its last statement, on a stream that had not stopped.
+  refuses every outer session and every open after its b-th failure: a recursive session's stop, a registration one of its
+  outer sessions skipped, or a refusal of a recursive session that had neither stopped nor released its last statement, on
+  a stream that had not stopped.
+* **Each registration is admitted once, oldest first.** The value service numbers its registrations on the record
+  (``register``, 0, 1, 2, … with no gap: ``core-firewall values``), and the Lean ZK server admits them at the outer
+  sessions whose statements' value commitments read them (``core-firewall session --salt-key``): each registration up to
+  the last a statement reads is admitted (``admit``) if it reads it and skipped (``skip``, a failure of its stream)
+  otherwise, in order, and a statement that reads one skipped before, or whose commitments no registration of the
+  server's holds, is its recursive session's stop (`Firewall.register`, `Firewall.admit_reads`).
 * **Proofs leave at public times.** A recursive session opened with a ``release`` schedule (``start_ms``, and one window a
   statement, ``windows_ms``) releases statement j's proofs at ``start_ms + windows_ms[0] + ... + windows_ms[j]``: proofs
-  ready early wait, and proofs not ready by then are a stop. Only the Lean firewall keeps the times; this module's relay
+  ready early wait, and proofs not ready by then are a stop. Only the Lean ZK server keeps the times; this module's relay
   refuses a scheduled session rather than release it early.
 
 An outer session stops when the worker cuts it, when the worker sends ``Finish`` before all of the session's proofs (the
 send check refused: ``flock-circuit`` then sends ``Finish`` at once), when the challenger's verdict rejects it, or on any
 fault of the relay's. Except for a rejecting verdict, which the challenger reached itself, the relay then cuts the
-challenger's connection without sending ``Finish``. So every stop the firewall makes looks the same to the challenger: a
+challenger's connection without sending ``Finish``. So every stop the ZK server makes looks the same to the challenger: a
 session cut after some message, never why. A refused or stopped session's worker is answered outside the slot, so it
 can't hold up another session's.
 
 What the rules read of the record is kept beside it in ``index-py/`` (`_Index`: each recursive session's open, stop,
 finish and releases, each stream's first open and failures, the last ``slot``, the counts), and a call reads only what
-was appended to the record since the index last read it, by whichever process. The Lean firewall keeps none and reads
-the record whole. The index is rebuilt from the record's start when
+was appended to the record since the index last read it, by whichever process; rule 5's two calls read the record whole
+(only the Lean ZK server numbers and admits registrations: here they keep the shared vectors). The Lean ZK server keeps
+no index and reads the record whole. The index is rebuilt from the record's start when
 the record was replaced, cut shorter or no longer holds the last bytes the index read, when the machine has booted since
 the index was written, when a writer of it ended mid-write, or when a file of it won't read; an edit further back that
-leaves the record no shorter isn't seen, nor is a file of the index edited by hand that still reads. Since the firewall
+leaves the record no shorter isn't seen, nor is a file of the index edited by hand that still reads. Since the ZK server
 only appends, the verdicts are the ones a read of the whole record gives.
 A record the index can't answer is read whole at every call, as
 before, and each rule's read is a scan of it (`_Scan`): one whose last line has no newline yet, or one holding a line
-the firewall doesn't write or a name over `KEY_MAX` bytes. A torn last line (a writer killed inside its append) fails
-every call, so the firewall serves nothing until the developer repairs the record: it fails closed, never by skipping an
+the ZK server doesn't write or a name over `KEY_MAX` bytes. A torn last line (a writer killed inside its append) fails
+every call, so the ZK server serves nothing until the developer repairs the record: it fails closed, never by skipping an
 event it can't read.
 """
 from __future__ import annotations
@@ -80,11 +88,11 @@ PROOFS = 2
 
 
 class Refused(Exception):
-    """The firewall serves nothing of this outer session (its message is the refusal)."""
+    """The ZK server serves nothing of this outer session (its message is the refusal)."""
 
 
 class Firewall:
-    """The state every process of one firewall shares (``state``, a directory)."""
+    """The state every process of one ZK server shares (``state``, a directory)."""
 
     def __init__(self, state: Path):
         self.state = Path(state)
@@ -178,7 +186,7 @@ class Firewall:
 
     def open(self, stream: str, parts: list[str], budget: int | None = None, release: dict | None = None) -> str:
         """A new recursive session on ``stream``, opened by its inner session, with its V* statements in their order
-        (``parts``, public: the firewall's rule 1): its id. ``budget`` is the stream's failure budget (P1's ``budget``,
+        (``parts``, public: the ZK server's rule 1): its id. ``budget`` is the stream's failure budget (P1's ``budget``,
         b), the same at every open of the stream; once the stream has ``budget`` failures, `Refused`. ``release`` is the
         recursive session's release schedule, public and fixed here, before the session: statement ``j`` is released at the
         end of its window, ``start_ms + sum(windows_ms[:j + 1])`` (rule 3)."""
@@ -224,7 +232,7 @@ class Firewall:
         stopped, has a statement not yet released, its stream has not stopped at its budget, its inner session finished,
         and ``part`` is its next statement. A request for any other statement is the recursive session's stop at the next
         one (never opened), then refused. A refusal is recorded (``refused``). Returns ``part``'s release time (rule 3), or
-        None. Only a ``timed`` caller (one that holds the proofs to that time: the Lean firewall, or a test of its rules)
+        None. Only a ``timed`` caller (one that holds the proofs to that time: the Lean ZK server, or a test of its rules)
         is admitted to a scheduled session; this module's relay is not."""
         with self._locked((session,)) as rec:
             why, at = None, None
@@ -253,19 +261,60 @@ class Firewall:
                 raise Refused(refused(why))
             return at
 
+    def register(self, record_of: Callable[[int], bytes]) -> tuple[int, bytes]:
+        """The value service's next registration (rule 5), its record at each number ``record_of``: the number it takes, the
+        next after the record's last, and its record, appended."""
+        with self._locked() as rec:
+            n = sum(e.get("event") == "register" for e in self._events())
+            r = record_of(n)
+            self._append(rec, {"event": "register", "n": n, "record": r.hex()})
+            return n, r
+
+    def admit_reads(self, session: str, part: str, reads: list[int] | str) -> None:
+        """Rule 5 at an outer session of ``session`` at ``part`` that `admit` served: ``reads`` the registrations its
+        statement's value commitments read, by number, or why they are none of the server's. Every registration from the next
+        not yet admitted or skipped up to the last it reads is admitted if it reads it, else skipped, in order, each skip a
+        failure of the stream; if they bring the stream to its budget, `Refused`. A statement that reads a registration not
+        on the record or one skipped before, or whose commitments are none of the server's, is the recursive session's stop
+        at ``part``, then `Refused`. A refusal is recorded (``refused``)."""
+        with self._locked((session,)) as rec:
+            ev = self._events()
+            regs = sum(e.get("event") == "register" for e in ev)
+            u = sum(e.get("event") in ("admit", "skip") for e in ev)
+            skipped = {e.get("n") for e in ev if e.get("event") == "skip"}
+            why = reads if isinstance(reads, str) else None
+            if why is None and (k := next((k for k in reads if k >= regs), None)) is not None:
+                why = f"registration {k} is not on the ZK server's record"
+            if why is None and (k := next((k for k in reads if k < u and k in skipped), None)) is not None:
+                why = f"registration {k} was skipped: one passed over is never admitted"
+            if why is not None:
+                if rec.stopped(session) is None:
+                    self._append(rec, {"event": "stop", "session": session, "part": part, "why": why})
+                self._append(rec, {"event": "refused", "session": session, "part": part})
+                raise Refused(refused(f"recursive session {session} stopped at {part}: {why}"))
+            fresh = {k for k in reads if k >= u}
+            if not fresh:
+                return
+            for k in range(u, max(fresh) + 1):
+                self._append(rec, {"event": "admit" if k in fresh else "skip", "session": session, "part": part, "n": k})
+            open_ = rec.opened(session)
+            if open_ is not None and (b := rec.budget(open_["stream"])) is not None and (n := rec.failures(open_["stream"])) >= b:
+                self._append(rec, {"event": "refused", "session": session, "part": part})
+                raise Refused(refused(f"stream {open_['stream']} stopped at its failure budget ({n} of {b})"))
+
     def stopped(self, session: str) -> dict | None:
         with self._locked((session,)) as rec:
             return rec.stopped(session)
 
     def failures(self, stream: str) -> int:
-        """The failures on ``stream`` so far (rule 4): its recursive sessions' stops, and each refusal of one that had not
-        stopped while the stream had not."""
+        """The failures on ``stream`` so far (rule 4): its recursive sessions' stops, the registrations their outer sessions
+        skipped, and each refusal of one that had not stopped while the stream had not."""
         with self._locked(streams=(stream,)) as rec:
             return rec.failures(stream)
 
     @contextmanager
     def slot(self, session: str, part: str, waiting: Callable[[], None] | None = None) -> Iterator[None]:
-        """The firewall's one outer slot, held for the block. A session that finds it taken records ``wait``, calls
+        """The ZK server's one outer slot, held for the block. A session that finds it taken records ``wait``, calls
         ``waiting``, and blocks until the holder leaves it. Once it holds the slot, a ``slot`` event whose session has no
         outcome after it (its holder died) is recorded as that session's stop, and then ``slot`` is recorded."""
         with open(self.state / "slot.lock", "a") as f:
@@ -305,13 +354,15 @@ def _next(ev: list[dict], open_: dict) -> int | None:
 def _failures(ev: list[dict], stream: str) -> int:
     budget, mine, released, stopped, n = _budget(ev, stream), {}, set(), set(), 0
     for e in ev:
-        s = e["session"]
+        s = e.get("session")
         if e["event"] == "open" and e["stream"] == stream:
             mine[s] = e["parts"]
         elif e["event"] == "release" and s in mine:
             released.add((s, e["part"]))
         elif e["event"] == "stop" and s in mine:
             stopped.add(s)
+            n += 1
+        elif e["event"] == "skip" and s in mine:
             n += 1
         elif (e["event"] == "refused" and s in mine and not all((s, p) in released for p in mine[s]) and s not in stopped
               and (budget is None or n < budget)):
@@ -325,7 +376,7 @@ def _orphan(ev: list[dict]) -> dict | None:
     if k is None:
         return None
     s = ev[k]
-    done = any(e["session"] == s["session"] and (e["event"] in ("release", "refused") and e["part"] == s["part"] or e["event"] == "stop")
+    done = any(e.get("session") == s["session"] and (e["event"] in ("release", "refused") and e["part"] == s["part"] or e["event"] == "stop")
                for e in ev[k + 1:])
     return None if done else s
 
@@ -339,7 +390,7 @@ _INDEX = "index-py"
 KEY_MAX = 100
 #: how many of the last bytes it read the index keeps, to tell that the record still holds them
 _LAST = 256
-_KINDS = ("finish", "stop", "release", "refused", "wait", "slot")
+_KINDS = ("finish", "stop", "release", "refused", "wait", "slot", "admit", "skip")
 #: what a file of the index that won't read raises
 _BAD = (OSError, ValueError, KeyError, TypeError, RecursionError)
 #: the head's fields of one type (besides ``file``, ``last`` and ``slot``)
@@ -396,15 +447,20 @@ def _key(name: str) -> str | None:
 
 
 def _regular(e: Any) -> bool:
-    """Whether ``e`` is an event as the firewall writes it, one whose reads `_Index` answers as `_Scan` does: an object with
-    a ``seq`` and a string ``session``, and either an ``open`` with a string ``stream``, a list of string ``parts`` and an
-    integer ``budget`` or none, or one of the other events with a string ``part``; every name at most `KEY_MAX` bytes."""
+    """Whether ``e`` is an event as the ZK server writes it, one whose reads `_Index` answers as `_Scan` does: an object with
+    a ``seq``, and either a ``register`` with an integer ``n`` and a string ``record``, or one with a string ``session`` and
+    either an ``open`` with a string ``stream``, a list of string ``parts`` and an integer ``budget`` or none, or one of the
+    other events with a string ``part`` (and an ``admit`` or ``skip`` an integer ``n``); every name at most `KEY_MAX`
+    bytes."""
+    if type(e) is dict and "seq" in e and e.get("event") == "register":
+        return type(e.get("n")) is int and type(e.get("record")) is str
     if not (type(e) is dict and "seq" in e and type(e.get("session")) is str and _key(e["session"]) is not None):
         return False
     if e.get("event") == "open":
         return (type(e.get("stream")) is str and _key(e["stream"]) is not None and type(e.get("parts")) is list
                 and all(type(p) is str for p in e["parts"]) and (e.get("budget") is None or type(e["budget"]) is int))
-    return e.get("event") in _KINDS and type(e.get("part")) is str
+    return (e.get("event") in _KINDS and type(e.get("part")) is str
+            and (e["event"] not in ("admit", "skip") or type(e.get("n")) is int))
 
 
 def _strings(v: Any) -> bool:
@@ -545,6 +601,9 @@ class _Index:
         if not (self.regular and _regular(e)):
             self.count, self.regular, self.moved = self.count + 1, False, True
             return
+        if e["event"] == "register":
+            self.count, self.moved = self.count + 1, True
+            return
         kind, s = e["event"], e["session"]
         if kind not in ("wait", "slot"):
             self.members(s)
@@ -560,6 +619,11 @@ class _Index:
         if kind == "wait":
             return
         sess, tallies = self._sessions[s], self._streams
+        if kind in ("admit", "skip"):
+            for m in sess.member if kind == "skip" else ():
+                tallies[m["stream"]]["n"] += 1
+                self._changed[1].add(m["stream"])
+            return
         if kind == "open":
             self.opens += 1
             if sess.open is None:
@@ -745,7 +809,7 @@ def _relay_admitted(fw: Firewall, session: str, part: str, req: bytes, worker_r,
                 why = "the worker ended the session before Finish"
                 fw.stop(session, part, why)
                 return {"outcome": "stop", "why": why}, None
-    except Exception as e:  # noqa: BLE001 - any fault of the relay's stops the session, never the firewall
+    except Exception as e:  # noqa: BLE001 - any fault of the relay's stops the session, never the ZK server
         why = f"the relay's fault ({type(e).__name__}: {e})"
         fw.stop(session, part, why)
         return {"outcome": "stop", "why": why}, (req, refused(f"{why}: recursive session {session} stopped at {part}"))
@@ -791,9 +855,9 @@ def tcp(addr: str) -> Callable[[], Conn]:
 def relay(fw: Firewall, session: str, part: str, listen: str, to: str, sessions: int = 1,
           ready: Callable[[str], None] | None = None, done: Callable[[dict], None] | None = None, proofs: int = PROOFS) -> list[dict]:
     """Accept ``sessions`` connections from workers on ``listen``, each an outer session of ``session`` at ``part``, relayed to
-    the challenger at ``to`` (`relay_session`), each on its own thread, and the slot orders them. The firewall serves
+    the challenger at ``to`` (`relay_session`), each on its own thread, and the slot orders them. The ZK server serves
     ``part`` once: a connection cut before its first request leaves it to the next, and any after its release is refused.
-    Returns their outcomes in the order accepted; a fault of the firewall's own (its record unreadable, say) is the outcome
+    Returns their outcomes in the order accepted; a fault of the ZK server's own (its record unreadable, say) is the outcome
     ``error``, with nothing served."""
     host, port = listen.rsplit(":", 1)
     res: list[dict | None] = [None] * sessions
@@ -836,7 +900,7 @@ def main(argv=None) -> int:
     r.add_argument("--listen", default="127.0.0.1:0")
     r.add_argument("--sessions", type=int, default=1)
     r.add_argument("--proofs", type=int, default=PROOFS, help="the session's proofs, one a rep: Finish is forwarded only after them")
-    rc = sub.add_parser("record", help="print the firewall's record")
+    rc = sub.add_parser("record", help="print the ZK server's record")
     rc.add_argument("--state", required=True)
     a = ap.parse_args(argv)
     fw = Firewall(Path(a.state))

@@ -10,7 +10,7 @@
    "cr/sha-512",
    "live-verifier",
    "designated-verifier",
-   "trusted-nebius-host"
+   "trusted-host"
   ],
   "cliff": null,
   "delta": "1/100",

@@ -1,16 +1,18 @@
-import Mathlib.Analysis.SpecialFunctions.Exp
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Logic.Equiv.Fin.Basic
-import Mathlib.Order.ConditionallyCompleteLattice.Indexed
-import Definitions.Pous.Game.Prob
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Definitions.Pous.Game.Prob
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Pous.Sanity
+import Proofs.Pous.Prob
 
 /-!
 # The counting step of the continuous audit
 
-Pure probability, about no scheme. Round `j` draws `I j` uniformly from a finite `α`, independently of the rounds
-before; `X h a` says that round `|h|` misses when the history is `h` and the draw is `a`, and `q h` is a lower bound on
+Pure probability, about no scheme. Round `j` samples `I j` uniformly from a finite `α`, independently of the rounds
+before; `X h a` says that round `|h|` misses when the history is `h` and the sample is `a`, and `q h` is a lower bound on
 that round's conditional miss probability, `q h ≤ Pr_a[X h a]`, fixed by the history. Then for every `θ > 0`
 
   `Pr[#misses ≤ f ∧ s ≤ Σ_j q_j] ≤ exp(θ·f − (1 − e^−θ)·s)`   (`pr_misses_le`),
@@ -21,9 +23,11 @@ and at `s` just above `G(f) = inf_{θ > 0} (θ·f + ln(1/β)) / (1 − e^−θ)`
 
 The proof is the exponential supermartingale `exp(−θ·#misses + (1 − e^−θ)·Σ q)`: one round multiplies its mean by
 `e^{(1 − e^−θ) q}·(1 − (1 − e^−θ)·p) ≤ 1` when `q ≤ p` (`sum_exp_le`), and Markov's inequality does the rest. A history
-`h` is the list of earlier draws, oldest first, so round `j`'s is `(List.ofFn I).take j`. `q` may take any real values,
+`h` is the list of earlier samples, oldest first, so round `j`'s is `(List.ofFn I).take j`. `q` may take any real values,
 and `q h` and `X h` may be any functions of `h`: the bound holds for every adapted choice.
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 
@@ -37,7 +41,7 @@ theorem pr_toReal (P : α → Prop) [DecidablePred P] :
   rw [pr_def, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
 theorem pr_ne_top [Nonempty α] (P : α → Prop) : pr P ≠ ⊤ := by
-  unfold pr
+  simp only [Pous.pr_eq_card]
   exact ENNReal.div_ne_top (ENNReal.natCast_ne_top _) (by exact_mod_cast Fintype.card_ne_zero)
 
 open Classical in
@@ -165,10 +169,10 @@ theorem pr_misses_le [Nonempty α] (n : ℕ) (X : List α → α → Prop) (q : 
     _ = Real.exp (θ * f - (1 - Real.exp (-θ)) * s) * (Fintype.card α : ℝ) ^ n := mul_comm _ _
 
 open Classical in
-/-- **The counting step** (the PoUS explorer note, §1). Indicators `X` of misses, each round's conditional miss
+/-- **The counting step.** Indicators `X` of misses, each round's conditional miss
 probability at least `q` given the history, and any `β > 0`: the misses are at most `f` and `Σ_j q_j` exceeds
 `G(f) = inf_{θ > 0} (θ·f + ln(1/β)) / (1 − e^−θ)` with probability at most `β`. With `n` rounds,
-`G(f) = n·g(f)` for the explorer's `g(f) = min_{θ > 0} (θ·f + ln(1/β)) / ((1 − e^−θ)·n)`. -/
+`G(f) = n·g(f)` for `g(f) = min_{θ > 0} (θ·f + ln(1/β)) / ((1 − e^−θ)·n)`. -/
 theorem pr_misses_gt_le [Nonempty α] (n : ℕ) (X : List α → α → Prop) (q : List α → ℝ)
     (hq : ∀ h : List α, h.length < n → q h ≤ (pr (X h)).toReal) (f β : ℝ) (hβ : 0 < β) :
     pr (fun I : Fin n → α =>

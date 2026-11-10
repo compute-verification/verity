@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.boolean_norms`: the served RMSNorms on bits.
+"""`verity.ml.definitions.registry.boolean_norms`: the served RMSNorms on bits.
 
 The leaf pieces are Boolean and pinned; the split output word keeps every AND, and the squares pay none for the decodes they
 return. Each piece agrees with its word primitives on special words (every bf16 word for the squares) and on random ones. Both
@@ -28,11 +28,11 @@ from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.ops.boolean import mufu as MU
 from verity.ml.circuits.boolean import trace as TR
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import boolean_norms as BN
-from verity_vllm.program.registry import prims as P
-from verity_vllm.query import word as QW
-from verity_vllm.query.cross_call import members_check
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import boolean_norms as BN
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions import word as QW
+from verity.ml.definitions.cross_call import members_check
 
 FULL = os.environ.get("VERITY_VLLM_BOOLEAN_NORMS_FULL")
 
@@ -467,7 +467,7 @@ def test_on_proofs_boolean_mufu_the_norm_is_boolean_and_pinned(which) -> None:
 @pytest.mark.parametrize("which", ["cuda", "triton"])
 def test_on_proofs_boolean_mufu_only_the_divisions_mufu_share_a_gate(which) -> None:
     """`DivFullRcp_v2` recomputes one gate of `DivFullScaleA_v3` (both read the divisor): a recompute across two opaque Boolean
-    Calls, which `Q_word` v2 allows (#667); no other value is computed twice."""
+    Calls, which `Q_word` v2 allows; no other value is computed twice."""
     r = members_check(_on_bits(which, 16, 1e-5, CUDA_BITS if which == "cuda" else TRITON_BITS))
     if which == "cuda":
         assert r["ok"] and r["recomputed_gates"] == 0, r["recomputes"]

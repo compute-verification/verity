@@ -1,6 +1,6 @@
-"""CA's H1V3 itself on a few units: `h1tile.reference(..., stream=True)` from the tree on PYTHONPATH (this source's own,
+"""H1V3 itself on a few units: `h1tile.reference(..., stream=True)` from the tree on PYTHONPATH (this source's own,
 PouwH1Tile_v4 ungated, unless a launcher's H1V3_SHA extracted another commit's `verity/`), so the gate holds the served
-kernel's z and receipts to the Definition's own code, not only to this lane's CPU twin.
+kernel's z and receipts to the Definition's own code, not only to dither_one's CPU twin.
 
     PYTHONPATH=TREE python h1v3_ref.py IN.json OUT.json
 
@@ -18,7 +18,10 @@ import json
 import os
 import sys
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
+try:
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+except ModuleNotFoundError:  # a pinned TREE (H1V3_SHA, J10R_SHA) from before the builders left core has h1tile there
+    from verity.core.protocols.pouw.circuit import h1tile as HT
 
 
 def main() -> int:

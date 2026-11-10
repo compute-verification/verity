@@ -13,15 +13,15 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
 from verity.ml.circuits.evaluation.reference import signature_of, statics_of
-from verity_vllm.program.kernels import dsv4_rows, rows
-from verity_vllm.program.kernels.dsa_norm_rows import block_rmsnorm_rows
-from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.program.registry import (dsa_norm, dsv4_compressor, dsv4_decode_indices, dsv4_indexer, dsv4_moe, dsv4_qnorm_insert,
+from verity.ml.definitions.numerics import dsv4_rows, rows
+from verity.ml.definitions.numerics.dsa_norm_rows import block_rmsnorm_rows
+from verity.ml.definitions.numerics.kernel_registry import Declined
+from verity.ml.definitions.registry import (dsa_norm, dsv4_compressor, dsv4_decode_indices, dsv4_indexer, dsv4_moe, dsv4_qnorm_insert,
                                           flashmla, flashmla_prefill, mhc)
-from verity_vllm.program.registry.hopper import HopperBF16WgmmaDot16
+from verity.ml.definitions.registry.hopper import HopperBF16WgmmaDot16
 from verity_vllm.query.manifest import format as RM
 
-#: the 19 families the per-rank no-evaluator rule failed DeepSeek-V4-Pro B1's deferred replay r20261021-114900-5d55 on
+#: the 19 families the per-rank no-evaluator rule failed DeepSeek-V4-Pro B1's deferred replay on
 DSV4_B1_FAMILIES = ("SiluMulClamp_v1", "TritonBlockRMSNorm_v1", "MhcPostPreTf32_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1",
                     "MoeRouterSqrtSoftplus_v1", "FlashMlaPrefill_v1", "GatherI32x129280_v1", "MhcFusedPostPre_v1",
                     "Dsv4MlaCompressC4_v1", "FlashMlaDecode_v1", "MoeRouterHash_v1", "MhcPreBroadcast_v1", "MhcResidualBroadcast_v1",
@@ -69,7 +69,7 @@ CASES = [
     (HEAD_SPEC, bind(dsv4_indexer.Dsv4InvRopeQuantHead, CHUNKS=4, QG=128, ROPE=64)),
 ]
 
-#: the families whose operands are drawn with their twin's sampler (indices, lengths, e4m3 / e8m0 bytes and edge words a uniform draw
+#: the families whose operands are sampled with their twin's sampler (indices, lengths, e4m3 / e8m0 bytes and edge words a uniform sample
 #: rarely makes)
 DRAWN = ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1", "MoeRouterSqrtSoftplus_v1",
          "MoeRouterHash_v1", "SiluMulClamp_v1", "Dsv4CompressorScore_v1", "Dsv4InvRopeQuantHead_v1")
@@ -131,7 +131,7 @@ def test_a_flashmla_row_at_another_dot_step_is_declined(family):
 
 def test_the_block_norm_row_is_the_definitions_reduction_tree():
     """A served q row (1536 of a 2048 block on 8 warps) rarely shows its reduction tree through the bf16 output, so the rows here are
-    ones of a seeded draw whose output differs between 8, 4 and 2 warps: the row kernel is the Definition on each, and the other trees
+    ones of a seeded sample whose output differs between 8, 4 and 2 warps: the row kernel is the Definition on each, and the other trees
     are not (which keeps the rows discriminating)."""
     N, BLOCK, R, pick = 1536, 2048, 400, [166, 287, 347]
     rng = np.random.default_rng(11)

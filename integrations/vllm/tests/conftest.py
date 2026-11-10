@@ -1,6 +1,6 @@
 """Known failures on `main`, marked expected to fail so that `check` gates every other test of this suite.
 
-Each one failed on `main` a8e72c81 (with #331's dead-module fix) with torch 2.14 and 2.4.1 on CPU, before this suite joined
+Each one failed on `main` with torch 2.14 and 2.4.1 on CPU, before this suite joined
 `check`; the reason says what it found. They are not strict: the check machines' torch and numpy differ from the lock's,
 and a strict mark that passed there would fail `check`. Fix the test or the code, then delete its entry.
 
@@ -11,6 +11,8 @@ its word Definition on every merge, and each file's special-word and edge cases 
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 
 import pytest
 
@@ -62,7 +64,35 @@ def pytest_collection_modifyitems(items) -> None:
 
 @pytest.fixture(autouse=True)
 def _sweep_dir_in_tmp(tmp_path_factory, monkeypatch):
-    """The row driver's sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
-    SWEEP_DIR unset would write rows there (VLLM-21); every test gets its own instead, which a test can still override."""
+    """`verity-vllm row`'s sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
+    SWEEP_DIR unset would write its workload dirs there; every test gets its own instead, which a test can still override."""
     monkeypatch.setenv("SWEEP_DIR", str(tmp_path_factory.mktemp("sweep")))
 
+
+@pytest.fixture
+def code_versions_stood_in(monkeypatch):
+    """The code versions the library stamps on what it writes or keys it by (`score.code_version`, `experiment.code_version`,
+    `source_identity.code_identity`) fixed, for a test that writes a stamp or a key but never checks it: each runs git, which the
+    suite's read guard can't trace, and reads the whole tree."""
+    from verity_vllm.pipeline import experiment, source_identity
+    from verity_vllm.program.predict import score
+    monkeypatch.setattr(score, "code_version", lambda: "0" * 16)
+    monkeypatch.setattr(experiment, "code_version", lambda repo: {"source": "git", "commit": "0" * 40, "dirty": False})
+    monkeypatch.setattr(source_identity, "code_identity", lambda root: {"sha256": "0" * 64, "files": 1})
+
+
+@pytest.fixture
+def outside_a_checkout(monkeypatch):
+    """A tree a test builds under its tmp_path is no git checkout. With no git to find (`shutil.which`), the code identity's file
+    listing walks it as it walks any tree outside a checkout, and starts no git, which the suite's read guard can't trace."""
+    which = shutil.which
+    monkeypatch.setattr(shutil, "which", lambda cmd, *a, **k: None if cmd == "git" else which(cmd, *a, **k))
+
+
+@pytest.fixture
+def gnu_timeout() -> None:
+    """Skips where the machine has no GNU timeout, for a test that starts one. A fixture, not a check at import, so a test file
+    that doesn't ask for it starts no program the suite's read guard can't trace."""
+    t = shutil.which("timeout")
+    if t is None or b"GNU" not in subprocess.run([t, "--version"], capture_output=True).stdout:
+        pytest.skip("GNU timeout (coreutils) required -- the pods have it, macOS does not")

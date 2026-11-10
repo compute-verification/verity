@@ -1,9 +1,12 @@
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Proofs.Pouw.PearlC.Forming
-import Proofs.Pouw.PearlC.Freeze
+module
+
+public import Proofs.Pouw.PearlC.Forming
+public import Proofs.Pouw.PearlC.Freeze
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 
 /-!
 # P3: the atom-mix's `PairErr` (staging)
@@ -22,6 +25,8 @@ This file proves it on Pearl's flat pairs, at `ε = 1/64`.
 * **The instances without `PairErr`**: `atomMixChain_saltLive_flat` and `rhoD_atomMix_pi_flat`, modulo the noise floor
   and `FlatPairs`. `lineCode_err` bounds `E′` against `44β`, for computing the pair's `c`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.AtomErr
 
@@ -621,12 +626,12 @@ theorem atomMixChain_saltLive_flat {S : Support 32} (hS : FlatPairs S) {α x β 
 
 /-- **`rhoD_atomMix_pi` on flat pairs, without `PairErr`.** With `FlatPairs S`, the noise floor and §5's scale, per row
 a sign pattern `s' i` whose flat-pair noise is `flatNoise (β i) (s' i) = c_i·α_iρ_i` with `648/943 ≤ c_i ≤ 4`: the
-liveness rule gives the forming budget with `ρ_D = 1/64`, as for #311's chain (`rhoD_bf16_pi`). -/
+liveness rule gives the forming budget with `ρ_D = 1/64`, as for Pearl's chain (`rhoD_bf16_pi`). -/
 theorem rhoD_atomMix_pi_flat (fs : ℕ) (s : Shape) {S : Support Params.pi.r} (hS : FlatPairs S)
     {α β ρ c : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} (s' : Fin s.m → Fin 32 → Bool)
     (hN : ∀ i, flatNoise (β i) (s' i) = c i * (α i * ρ i)) (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)
     (hsat : ∀ i l, α i * (|X i l| + 4 * ρ i) ≤ 448) (hc : ∀ i, 648 / 943 ≤ c i) (hc4 : ∀ i, c i ≤ 4)
-    (hlive : LiveOperand Params.pi.δ ρ X) :
+    (hlive : LiveOperand Params.pi.σ ρ X) :
     (fs : ℚ) * s.m * s.k - rhoD * fs * s.m * s.k ≤ fs * (live FormChain.atomMix.value S α β X).card := by
   refine rhoD_atomMix_pi fs s (ε := 1 / 64) (c := c)
     (p := fun i => (flat fun _ => false, flatF fun t => !s' i t)) (q := fun i => (flat fun _ => false, flatF (s' i)))

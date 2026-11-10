@@ -1,10 +1,24 @@
-import Proofs.Flock.C3.RegLevels.TopTie
-import Proofs.Flock.C3.RegLevels.TopRead
-import Proofs.Flock.C3.RegLevels.AccReads
-import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.C3.Reps.RoundLinks
-import Proofs.Flock.Recursive.Registrants
-import Proofs.Flock.Recursive.HPortTie
+module
+
+public import Proofs.Flock.C3.RegLevels.SharedRows
+public import Proofs.Flock.C3.RegLevels.TopRead
+public import Proofs.Flock.C3.RegLevels.TopTie
+public import Proofs.Flock.C3.Reps.RoundLinks
+public import Proofs.Flock.Recursive.HPortTie
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # `hT_of_leaf`'s `hleaf` at R's levels' `out` reads, and two sessions' reads of one row
@@ -18,7 +32,7 @@ import Proofs.Flock.Recursive.HPortTie
 * `digest_top`: the public file's row at such a read is the node's commit string (`HPubRows` at the verifier's hold,
   `hrow`);
 * `leaf_top`: so the read's leaf is `treeLeaf` of that string, or its two openings conflict (`leaf_of_accepts` at the
-  outcome, with `ReadsOwnAt`'s port); `leaf_drawn`: `leaf_of_accepts` at a drawn outcome, whose reads the session's
+  outcome, with `ReadsOwnAt`'s port); `leaf_drawn`: `leaf_of_accepts` at a sampled outcome, whose reads the session's
   `hown` gives.
 
 Two registrant records' reads at one root, leaf count, domain and leaf schema, at one position, have one row, or the
@@ -29,18 +43,20 @@ entries for it share their root, leaf count, domain and leaf schema (`SharedOwnR
 `sharedOwnRoot_checked`; `row_agree`).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Registered
 
 open Game Refine Binding Audit
 
 section Agree
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : Binding.Layout P plan tab decode} {rs : HmRowsX lay}
-  {C' : Circuit} {n' : ℕ} {P' : Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
+  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
   {plan' : Finset (Fin n') → Reg₁ → List (TabSpec mPts')}
   {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
   {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
@@ -140,14 +156,14 @@ theorem read_of_topRead {qq H u x : ℕ} {pos : Array ℕ} {reads : Array (Optio
     exact ⟨hu, hx.symm⟩
   · simp [hu] at hx
 
-/-! ## At a drawn outcome -/
+/-! ## At a sampled outcome -/
 
 section Session
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **`leaf_of_accepts` at a drawn outcome**: the session's `hown` gives the drawn units' reads. -/
+/-- **`leaf_of_accepts` at a sampled outcome**: the session's `hown` gives the sampled proof blocks' reads. -/
 theorem leaf_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : ZkReg.LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv}
     (hu : u ∈ Lv.draw ω) {q : Fin c.ports.size} (hp : zo.rd.isRead (.inl (u, q))) :
@@ -240,8 +256,8 @@ theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Opti
   exact FlockSoundness.Registered.enc_eq_of_not_clash (fun hc => h.2.1 ⟨j, j', hc⟩) hp hp' hroot hn hdom hsch hpos
 
 /-- **A chosen row for one read of R's level-`l` tops is the row at every other read of that node**:
-`row_agree` at the shared value `rec-top-stacked-L<l>`. This lets `MapsLeft` choose recursive cap entry `e l x`
-from one registrant read of node `x`; every opening at that node has the same encoded row off `RegColl`. -/
+`row_agree` at the shared value `rec-top-stacked-L<l>`: every opening at that node has the same encoded row off
+`RegColl`. -/
 theorem top_row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {rows : Option (Array Flock.Registered.Port)} (hsh : SharedOwnRoot rows F)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : FlockC3.HPort.ReadsOwnAt F dg N k Rw)

@@ -26,7 +26,7 @@ Arms, each one linear's call on a BF16 x of M rows:
 A stock arm that can't be built (not importable, refused, or outside 0.08 rel RMS of x·Wᵀ) is recorded with its error and
 left out.  Each rep times every arm once, in an order rotated each rep, each sample `INNER` calls back to back between CUDA
 events on the current stream, so a host-bound call's gaps count.  The slowdown is ``pearlc`` over the fastest stock arm's
-median, at each (n, k, M), beside γ at both FADD readings (`glm53.gamma`); ``slowdowns`` gives each pearlc arm's.  Every
+median, at each (n, k, M), beside the gap at both FADD readings (`glm53.gamma`); ``slowdowns`` gives each pearlc arm's.  Every
 hashing pearlc arm's passes must commit what ``pearlc``'s commit (`COMMITMENT`) and serve y's bytes, and so must one pass of
 each from poisoned outputs (``agree``).  Writes ``timing.json`` in DIR, one row a point; exits non-zero when any arm differs.
 
@@ -174,7 +174,7 @@ def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin:
     from verity.core.protocols.pouw.audit import weights_root
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import Challenger
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     dev = torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261023)
@@ -367,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--whole", action="store_true", help="decode's forward captured whole, serial and deferred (whole.json)")
     a = p.parse_args(argv)
     import torch
-    from verity_vllm.protocol_options.pouw_pearl_c_graphs import GRAPH_ROWS
+    from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS
 
     out, dev = Path(a.out), torch.device("cuda")
     table = glm53.in_domain(a.scheme)

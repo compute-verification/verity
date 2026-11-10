@@ -1,4 +1,4 @@
-"""PyTorch authoring frontend to `Program` (lane FE, thin prototype; frontend design §2–§3).
+"""PyTorch authoring frontend to `Program` (thin prototype).
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.
@@ -26,7 +26,6 @@ translation into a body) and `program_identity` (§8.1 over a program).
 
 from __future__ import annotations
 
-import hashlib
 import inspect
 import warnings
 from dataclasses import dataclass
@@ -35,7 +34,7 @@ from typing import Any, Callable, Sequence
 import torch
 from torch.utils import _pytree as pytree
 
-from verity.ml.circuits.codec import _encode_body, canonical_json, descriptor_id, program_digest
+from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition,
                     SpecializedDefinition, _static_key)
 from verity.ml.circuits.defs import bind as ir_bind
@@ -249,7 +248,7 @@ class Function(_Callable):
             out = self.fn(*ex, **kw)
         except FrontendError:
             raise
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise FrontendError(_classify(e), f"{type(e).__name__}: {str(e).splitlines()[0][:200]}", self.id) from e
         ret_type = type_of(out, self.id)
         if self.ret_schema is not None:
@@ -264,7 +263,7 @@ class Function(_Callable):
             ep = torch.export.export(_Wrap(self.fn, in_spec, kw), tuple(flat), strict=False)
         except FrontendError:
             raise
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise FrontendError(_classify(e), f"{type(e).__name__}: {str(e).splitlines()[0][:200]}", self.id) from e
         _guard(ep, self.id)
         return _Spec(param_types, ret_type, ep, erased)
@@ -403,11 +402,11 @@ class Ops:
 
     def const(self, w: int, bits: int, name: str = ""):
         """`Const<w>[0x..]`: a zero-arity gate with a fixed correct output (emitted immediately)."""
-        from verity_vllm.program.registry.b1 import const
+        from verity.ml.definitions.registry.b1 import const
         return Prim(const(w, bits))(name=name)
 
     def gather_bf16(self, vocab: int) -> Prim:
-        from verity_vllm.program.registry.prims import gather_bf16
+        from verity.ml.definitions.registry.prims import gather_bf16
         return Prim(gather_bf16(vocab))
 
     def __getitem__(self, fid: str) -> _Callable:
@@ -530,11 +529,5 @@ def export_report(fn: Function | Bound | Callable | torch.nn.Module, example_inp
     return ExportReport(program, digest, descriptor_id(sd), program.gates, program.input_gates, dead, unreachable, prov, dead_gates)
 
 
-def definition_digest(sd: SpecializedDefinition) -> str:
-    """SHA-256 of one specialisation's canonical body encoding (id + bindings + body; no annotations)."""
-    d = {"id": sd.base_id, "bindings": {k: str(_static_key(sd.bindings[k])) for k in sd.defn.statics}, "body": _encode_body(sd.body)}
-    return hashlib.sha256(canonical_json(d)).hexdigest()
-
-
 __all__ = ["Function", "function", "bind", "batch", "scan", "export", "export_report", "ExportReport", "DEAD_GATE_POLICIES", "Ops",
-           "ops", "Prim", "Registered", "Bound", "definition_digest", "FRONTEND_VERSION"]
+           "ops", "Prim", "Registered", "Bound", "FRONTEND_VERSION"]

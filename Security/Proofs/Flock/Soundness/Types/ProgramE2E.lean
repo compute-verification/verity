@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Types.ProgramPlaces
-import Proofs.Flock.Soundness.Audit.FlockPublic
+module
+
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The end-to-end theorem on a program of units, carried to its Boolean circuit (verified-lowering phase 1, S4d)
@@ -11,16 +14,18 @@ import Proofs.Flock.Soundness.Audit.FlockPublic
   circuit is wrong on its rows. The committed values are 1 on `one` and the plurality elsewhere (`Xpub`), and `hConst`
   says that only a unit's constant column sits on `one`.
 
-The other gaps stay named, as in `E2E.lean`: `hExec`, `dp` and `vb`. The `_classes` forms build `dp` from each drawn
-unit's table class (`UProg.derivedPlaces_of_classes`), what 1d and 1e give for an accepted statement, and discharge
+The other gaps stay named, as in `E2E.lean`: `hExec`, `dp` and `vb`. The `_classes` forms build `dp` from each sampled
+proof block's table class (`UProg.derivedPlaces_of_classes`), what 1d and 1e give for an accepted statement, and discharge
 `hConst` (`UProg.constCols_of_classes`): each unit's constant column is wired to `one` (`pairs_oneGate`).
 
-The statement's zero is a program input like `one` (#316). The `_classes` forms leave it at the plurality (`zeros = ∅`),
+The statement's zero is a program input like `one`. The `_classes` forms leave it at the plurality (`zeros = ∅`),
 so no claim may read their profile as being about the zero padding. The `_classes_zero` forms make the program input
 `zer` public at 0 and discharge `hZero` (`UProg.zeroCols_of_classes`) when each slot input that reads `zer` copies a
 forced-zero row of its class (`hzr`, what 1d and 1e give from the verifier's Δ): a column on `zer` is an input column,
 since computed columns are the unit's own gates and the constant's is on `one`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -73,7 +78,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count
       (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht K σ hCR)
 
 /-- **The end-to-end drawn-unit bound on a program of units.** `flock_e2e_drawn`, carried by
-`UProg.rowsL1`: if `execAccept` holds, the probability that a drawn unit is wrong on the program's Boolean circuit is at
+`UProg.rowsL1`: if `execAccept` holds, the probability that a sampled proof block is wrong on the program's Boolean circuit is at
 most `ε_ks(σ) + δ_link`, when only a unit's constant column sits on the constant's gate. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_drawn
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
@@ -159,7 +164,7 @@ theorem _root_.FlockSoundness.UProg.zeroCols_of_classes
       cases hm
 
 /-- **The end-to-end count curve on a program of units, from its tables' classes.** `UProg.flock_e2e_count` with `dp`
-built from each drawn unit's table class: unit `u`, drawn in `S` under `R`, sits at slot `slot` of block `blk` of its
+built from each sampled proof block's table class: unit `u`, sampled in `S` under `R`, sits at slot `slot` of block `blk` of its
 table's class `cls`, whose derivation inputs it reads, and the slot's inputs that read one of its sources copy one
 position, or forced-zero rows (`hcp`). -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes
@@ -185,7 +190,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes
     (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) vb hk hRw hM hρ hr ht K σ hCR
 
 /-- **The end-to-end drawn-unit bound on a program of units, from its tables' classes.** `UProg.flock_e2e_drawn` with
-`dp` built from each drawn unit's table class, as in `UProg.flock_e2e_count_classes`. -/
+`dp` built from each sampled proof block's table class, as in `UProg.flock_e2e_count_classes`. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (tabOf plan tab S R u).S)

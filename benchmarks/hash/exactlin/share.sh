@@ -4,8 +4,8 @@
 # `share.py --analyse`, then `share.py --summary` over the arms; the clocks read before and after.  The leased half runs on
 # the leased GPU's NUMA node, as dither's sbench.sh runs (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound;
 # env/numa.json says which).
-#   research run --on vy-nebius-2 --project verity --campaign exactlin --source . --cwd source \
-#     --env GPU_LEASE_WHO=kernels-exactlin -- bash benchmarks/hash/exactlin/share.sh
+# On an RTX PRO 6000 under a GPU lease:
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/exactlin/share.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"
 ROOT=${SHARE_ROOT:-$PWD}
@@ -28,7 +28,7 @@ if [ "${1:-}" != --leased ]; then
 fi
 S=${SHARE_S:?}; NSYS=${NSYS:?}
 CUDA=${CUDA:-/usr/local/cuda-13.0}
-for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
+PY=${PY:-$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python3")} || exit 2
 CC=$(nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=compute_cap --format=csv,noheader | head -1)
 case $CC in
   12.0) export FLASHINFER_CUDA_ARCH_LIST=12.0f ;;
@@ -40,7 +40,7 @@ echo "compute_cap $CC python $PY" > "$OUT/env/node.txt"
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache TRITON_CACHE_DIR=$S/triton
 export VLLM_DISABLE_COMPILE_CACHE=1 HF_HOME=${HF_HOME:-/workspace/hf}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/hash/dither
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/hash/dither
 SHARE=$ROOT/benchmarks/hash/exactlin/share.py
 q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
 nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.before.csv"

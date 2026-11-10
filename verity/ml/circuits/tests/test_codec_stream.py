@@ -27,9 +27,9 @@ from verity.ml.circuits.codec import (
     _as_specialized,
     _encode_definition,
     _program_fn_functions,
-    _spec_id,
     _static_functions,
     _Tables,
+    descriptor_id,
 )
 from verity.ml.circuits.defs import (
     REGISTRY,
@@ -62,7 +62,7 @@ def old_encode_program(program, schema: str = C.SCHEMA) -> dict:
         if visited.get(id(fn)) is fn:
             return
         visited[id(fn)] = fn
-        fid = _spec_id(fn)
+        fid = descriptor_id(fn)
         prev = seen.get(fid)
         if prev is not None:
             if prev is not fn and (fid, id(fn)) not in dup_objects:
@@ -91,8 +91,8 @@ def old_encode_program(program, schema: str = C.SCHEMA) -> dict:
             raise IdentityConflict(f"E_IDENTITY: two different definitions claim the specialization {fid!r}")
     desc = {
         "schema": schema,
-        "root": _spec_id(root),
-        "program_fn": getattr(program, "program_fn_id", None) or _spec_id(program.fn),
+        "root": descriptor_id(root),
+        "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
         "definitions": defs,
         "annotations": dict(program.annotations),
     }
@@ -199,7 +199,7 @@ STEP = CompositeDefinition("CodecStreamStep", 1, (), lambda S: ((("c", V16), ("x
 
 
 class _Gen:
-    """A random root over two arrays of 16-bit words: sums of element lists drawn from what is in scope (runs, reversed runs,
+    """A random root over two arrays of 16-bit words: sums of element lists sampled from what is in scope (runs, reversed runs,
     one element repeated, scattered picks, or an earlier list extended, so a later argument's leading parts are an earlier
     one's whole sequence), batches of sums, scans, and a composite with int, string, float, function-bundle and tuple statics,
     returning picks from scope."""
@@ -250,7 +250,9 @@ class _Gen:
                 seqs.append(els)
             return array_of([r.choice(pool) for _ in range(k)])
 
-        sig = lambda S: ((("x", Array(p, V16)), ("y", Array(q, V16))), Array(k, V16))
+        def sig(S):
+            return ((("x", Array(p, V16)), ("y", Array(q, V16))), Array(k, V16))
+
         return Program(CompositeDefinition(f"CodecStreamRoot{self.seed}", 1, (), sig, body, register=False))
 
 
@@ -272,7 +274,7 @@ def test_random_programs_have_the_old_codecs_bytes():
 
 # -- the other tests' Programs ----------------------------------------------------------------------------------------
 
-MODULES = ("test_codec", "test_running_example", "test_annotations", "test_ports", "test_ports_one_use", "test_stacking",
+MODULES = ("test_codec", "test_running_example", "test_metadata", "test_ports", "test_ports_one_use", "test_stacking",
            "test_format_spec", "test_template_instance")
 
 
@@ -300,8 +302,8 @@ def recorded(monkeypatch):
             del REGISTRY.defs[fid]
 
 
-def test_the_other_tests_programs_have_the_old_codecs_bytes(recorded):
-    """Every Program the circuits tests' zero-argument tests build (`MODULES`): old and new agree on each, bytes or refusal."""
+def run_the_other_tests() -> None:
+    """Run each zero-argument test of `MODULES`, for the Programs it builds (`recorded` keeps them)."""
     for name in MODULES:
         mod = importlib.import_module(name)
         for fname, f in inspect.getmembers(mod, inspect.isfunction):
@@ -309,6 +311,11 @@ def test_the_other_tests_programs_have_the_old_codecs_bytes(recorded):
                 continue
             with contextlib.suppress(Exception):  # only the Programs it built are wanted
                 f()
+
+
+def test_the_other_tests_programs_have_the_old_codecs_bytes(recorded):
+    """Every Program the circuits tests' zero-argument tests build (`MODULES`): old and new agree on each, bytes or refusal."""
+    run_the_other_tests()
     assert len(recorded) > 50
     assert sum(assert_same(p, batches=(1, C._NODE_BATCH)) for p in recorded) > 50
 

@@ -1,25 +1,68 @@
-import Proofs.Flock.Claims.KS.PlainEvent
+module
+
+public import Proofs.Flock.Claims.KS.Joint
+public import Proofs.Flock.Claims.KS.PlainEvent
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Claims.KS.ConflictTied
+import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
-# The plain verdict at the statement's draw
+# The plain verdict at the statement's sample
 
-`plainVerdict` reads flock-verify's acceptance of what `wrP` writes, and `wrP` asks for a record whose draw is the
-statement's as the same term (`RecordsLiveAtP`), since `Exec.Accepts` sets the session up at the record's own draw.
-`Deploy.V false` sets the session up at the statement's draw and runs `verify` on the record against that setup; its
-checks compare the two draws only up to key order (`drawEq_ne`). So the verdict here reads the setup at the statement's
-draw `d`, and no draw in the record is read, as the masked side does (`Composed.AcceptsAt`):
+`plainVerdict` reads flock-verify's acceptance of what `wrP` writes, and `wrP` asks for a record whose sample is the
+statement's as the same term (`RecordsLiveAtP`), since `Exec.Accepts` sets the session up at the record's own sample.
+`Deploy.V false` sets the session up at the statement's sample and runs `verify` on the record against that setup; its
+checks compare the two samples only up to key order (`drawEq_ne`). So the verdict here reads the setup at the statement's
+sample `d`, and no sample in the record is read, as the masked side does (`Composed.AcceptsAt`):
 
-* `setupAtD`, `AcceptsAtD`: `Exec.setupOf` and `Exec.Accepts` at a draw value rather than a record's
+* `setupAtD`, `AcceptsAtD`: `Exec.setupOf` and `Exec.Accepts` at a sample value rather than a record's
   (`setupOf_eq_setupAtD`, `accepts_iff_acceptsAtD`).
-* `RecordsLiveAtD`, `TxNoOffAt`: `RecordsLiveAtP` and `TxNoOff` at the setup at `d`, without the record's draw.
-* `wrPD`, `recordsLiveAtD_wrPD`, `acceptsAtD_wrPD`: the writer at `d` (`wrP` without the draw clause).
+* `RecordsLiveAtD`, `TxNoOffAt`: `RecordsLiveAtP` and `TxNoOff` at the setup at `d`, without the record's sample.
+* `wrPD`, `recordsLiveAtD_wrPD`, `acceptsAtD_wrPD`: the writer at `d` (`wrP` without the sample clause).
 * `setupAtD_plainInputs`, `recordsLiveAtD_of_checks`, `acceptsAtD_of_decide`: an accepting decision of `Deploy.V false`
-  is accepted at the setup at its statement's draw and records its live outcome there, with no premise on the record's
-  draw (`setupOf_plainInputs`, `recordsLiveAtP_of_checks` and `accepts_of_decide_plain` without `hdraw`).
+  is accepted at the setup at its statement's sample and records its live outcome there, with no premise on the record's
+  sample (`setupOf_plainInputs`, `recordsLiveAtP_of_checks` and `accepts_of_decide_plain` without `hdraw`).
 * `plainVerdictAt`, `plainVerdictAt_of_run`: `plainVerdict` at `wrPD`, which every accepting run of `V false` with no
   column off `C` has at its live outcome, on every draw-carrying record (`plainVerdict_of_run` without its premise
-  that the record carry the statement's draw verbatim).
+  that the record carry the statement's sample verbatim).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 
@@ -29,7 +72,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **`verify`'s setup at a draw value**: `Exec.setupOf` at the draw `dr` itself rather than a record's
+/-- **`verify`'s setup at a sample value**: `Exec.setupOf` at the sample `dr` itself rather than a record's
 (`setupOf_eq_setupAtD`). -/
 def setupAtD (I : Exec.Inputs) (dr : Option Json) : _root_.Flock.V (SessionSpec × Array Stmt) :=
   Stmt.setupTables I.tags I.circuitFile I.publicFile I.coins I.count I.tables dr I.partition I.program I.work
@@ -38,8 +81,8 @@ def setupAtD (I : Exec.Inputs) (dr : Option Json) : _root_.Flock.V (SessionSpec 
 theorem setupOf_eq_setupAtD (I : Exec.Inputs) (record : String) :
     Exec.setupOf I record = setupAtD I (Exec.recordDraw record) := rfl
 
-/-- **flock-verify accepts at the session it sets up at the draw `dr`**: `Exec.Accepts` with the setup at `dr` for the
-setup at the record's draw. -/
+/-- **flock-verify accepts at the session it sets up at the sample `dr`**: `Exec.Accepts` with the setup at `dr` for the
+setup at the record's sample. -/
 def AcceptsAtD (I : Exec.Inputs) (dr : Option Json) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupAtD I dr = .ok (spec, sts) ∧
     _root_.Flock.verify spec (sts.map _root_.Flock.Setup.ofCircuit) t.record t.proofs = .ok ()
@@ -47,7 +90,7 @@ def AcceptsAtD (I : Exec.Inputs) (dr : Option Json) (t : Exec.Transcript) : Prop
 theorem accepts_iff_acceptsAtD (I : Exec.Inputs) (t : Exec.Transcript) :
     Exec.Accepts I t ↔ AcceptsAtD I (Exec.recordDraw t.record) t := Iff.rfl
 
-/-- **`RecordsLiveAtP` at the setup at the draw `d`**: where `verify` accepts the transcript `t` at the session it sets
+/-- **`RecordsLiveAtP` at the setup at the sample `d`**: where `verify` accepts the transcript `t` at the session it sets
 up at `d`, its proof files are the outcome `o`'s, and the session its record decodes to there has `o`'s link points
 and, at each of `o`'s tables, `o`'s `root_B` and rep streams' rounds. -/
 def RecordsLiveAtD (I : Exec.Inputs) (d : Json) {J mPts : ℕ} (o : Tables.LiveOutJ J mPts) (t : Exec.Transcript) :
@@ -61,10 +104,10 @@ def RecordsLiveAtD (I : Exec.Inputs) (d : Json) {J mPts : ℕ} (o : Tables.LiveO
         sess.streams.find? (fun x => x.name == toString spec.tables[j.val]! ++ toString "/rep" ++ toString r.val) =
           some s ∧ s.rounds.toList = o.reps j r
 
-/-- **No column off `C` in a transcript, at the setup at the draw `d`**: `TxNoOff` with the setup at `d` for the setup
-at the record's draw. -/
+/-- **No column off `C` in a transcript, at the setup at the sample `d`**: `TxNoOff` with the setup at `d` for the setup
+at the record's sample. -/
 def TxNoOffAt (I : Exec.Inputs) (d : Json) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Transcript) : Prop :=
-  ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
+  ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
     setupAtD I (some d) = .ok (spec, #[st]) → Record.decode spec t.record = .ok sess →
     _root_.Flock.fast100 st.m = some sch →
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ →
@@ -75,7 +118,7 @@ def TxNoOffAt (I : Exec.Inputs) (d : Json) {N : ℕ} (C : Fin N → List 𝔽) (
           t.proofs[1]!)) p.val = some u ∧ u ≠ C p
 
 open Classical in
-/-- **The record writer at the draw `d`**: at the live outcome `o`, a transcript `verify` accepts at the setup at `d`
+/-- **The record writer at the sample `d`**: at the live outcome `o`, a transcript `verify` accepts at the setup at `d`
 that records `o` there (`RecordsLiveAtD`), where one exists, else a session without proof files, which `verify`
 refuses (`verify_nil_plain`). -/
 noncomputable def wrPD (I : Exec.Inputs) (d : Json) {J mPts : ℕ} (o : Tables.LiveOutJ J mPts) : Exec.Transcript :=
@@ -104,7 +147,7 @@ theorem acceptsAtD_wrPD {I : Exec.Inputs} {d : Json} {J mPts : ℕ} {o : Tables.
   rw [dite_eq_left_of_eq_true (eq_true hex)]
   exact (Classical.choose_spec hex).1
 
-/-- **`verify`'s setup at the statement's draw is `Deploy.V`'s**, where the statement is plain and carries no
+/-- **`verify`'s setup at the statement's sample is `Deploy.V`'s**, where the statement is plain and carries no
 `--public-inputs`: `setupOf_plainInputs` with no record. -/
 theorem setupAtD_plainInputs {r : Readable.Read} {spec : SessionSpec} {sts : Array Stmt} {d : Json}
     (hs : r.setup = .ok (spec, sts)) (hzk : r.zk = false) (hpi : r.publicInputs = none) (hd : r.draw = some d) :
@@ -114,8 +157,8 @@ theorem setupAtD_plainInputs {r : Readable.Read} {spec : SessionSpec} {sts : Arr
     Bool.false_eq_true, ↓reduceIte]
 
 /-- **Custody gives `RecordsLiveAtD`**: where `Deploy.V false`'s checks pass on a plain statement that sets up at its
-draw `d` with no `--public-inputs`, the last message's record and proof files are a record of the run's live outcome
-(`viewOf`) at the setup at `d`, at any `J` of the session's tables, whatever draw the record carries
+sample `d` with no `--public-inputs`, the last message's record and proof files are a record of the run's live outcome
+(`viewOf`) at the setup at `d`, at any `J` of the session's tables, whatever sample the record carries
 (`recordsLiveAtP_of_checks` without `hdraw`). -/
 theorem recordsLiveAtD_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
@@ -152,7 +195,7 @@ theorem recordsLiveAtD_of_checks {s : Ins} {spec : SessionSpec} {sts : Array Stm
     simp [withSha, hsha _ rfl]
 
 /-- **An accepting decision of `Deploy.V false` at SHA-512 is an accepting `verify` at the setup at its statement's
-draw**, on a record of its live outcome there, whatever draw the record carries (`accepts_of_decide_plain` without
+sample**, on a record of its live outcome there, whatever sample the record carries (`accepts_of_decide_plain` without
 `hdraw`). -/
 theorem acceptsAtD_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
@@ -179,16 +222,16 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The plain verdict at the draw `d`**: `verify` accepts what `wrPD` writes for the outcome at the setup at `d`, the
+/-- **The plain verdict at the sample `d`**: `verify` accepts what `wrPD` writes for the outcome at the setup at `d`, the
 outcome's root is `rootB₀`'s, and the deployed plain reader looks up no column off `C` in that transcript there
-(`TxNoOffAt`). `plainVerdict` with the setup at `d` for the setup at the record's draw. -/
+(`TxNoOffAt`). `plainVerdict` with the setup at `d` for the setup at the record's sample. -/
 def plainVerdictAt (I : Exec.Inputs) (d : Json) {N mPts : ℕ} (C : Fin N → List 𝔽) (rootB₀ : Array ByteArray)
     (o : Tables.LiveOutJ 1 mPts) : Prop :=
   AcceptsAtD I (some d) (wrPD I d o) ∧ o.rootB[0]! = rootB₀[0]! ∧ TxNoOffAt I d C (wrPD I d o)
 
-/-- **The deployed event gives the verdict at the draw**: an accepting run of `V false` at SHA-512 decides on its
-messages and coins, and at its statement's draw `d`, if the run's reader looks up no column off `C` at table 0,
-`plainVerdictAt` holds at the run's live outcome (`viewOf`, at any `mPts`) and its link's root, whatever draw its record
+/-- **The deployed event gives the verdict at the sample**: an accepting run of `V false` at SHA-512 decides on its
+messages and coins, and at its statement's sample `d`, if the run's reader looks up no column off `C` at table 0,
+`plainVerdictAt` holds at the run's live outcome (`viewOf`, at any `mPts`) and its link's root, whatever sample its record
 carries: `verify` accepts the last message at the setup at `d` (`acceptsAtD_of_decide`), so it accepts what `wrPD`
 writes, which records the run's streams and proof files there, whose columns are the reader's (`cols_plain`). -/
 theorem plainVerdictAt_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}

@@ -1,13 +1,13 @@
-"""served.py extract|prepare|summarize: one unit a served H1 window's own draw selected (`h1_prove/served.py`, core's
-`credit.drawn` on the window's signed draw coin), proved as its 32 lanes (`h1zy.PouwH1LaneZy_v1`, option A, run.py's lane
-statement) from the window's committed values, each lane one C-Flock --zk statement whose rows open the window's own
+"""served.py extract|prepare|summarize: one unit a served H1 window's own sample selected (`h1_prove/served.py`, core's
+`credit.drawn` on the window's signed sampling coin), proved as its 32 lanes (`h1zy.PouwH1LaneZy_v1`, option A, run.py's lane
+statement) from the window's trace, each lane one Flock --zk statement whose rows open the window's own
 registered tables at the rows the verifier reads them.
 
 * **extract** (the H1 venv: it unpickles the prover's saved window, whose classes import torch). From the window's record
   (``pouw-h1-calls.json``: its manifest checked by `pouw_h1_challenger.manifest_reason`, so the served trees' entries
-  are the ones its ``calls_root`` binds), the drawn units (``--drawn``, `h1_prove/served.py`'s), the period's
+  are the ones its ``calls_root`` binds), the sampled proof blocks (``--drawn``, `h1_prove/served.py`'s), the period's
   descriptor and the prover's private directory (``--prover``, `pouw_h1_prover`: its salt key, each call's kept values
-  and the saved window ``state/`` `pouw_h1_handoff.FILE`): the verifier's own reads of the drawn unit's call
+  and the saved window ``state/`` `pouw_h1_handoff.FILE`): the verifier's own reads of the sampled proof block's call
   (`credit.registered_file` at the record's roots, the window's root, steps and Program salt), and for each of its data
   ports (the unit's 32 A rows, its 32 B rows and its z/y record; ``pub`` and ``o1`` are the verifier's own rows, which no
   lane reads) the prover's opening of that row in the tree the window registered, each held to the entry's root and
@@ -17,14 +17,14 @@ registered tables at the rows the verifier reads them.
   the unit, the entries and the checks.
 * **prepare** (hidden_zk's venv): the unit's leaf from those rows, the lane statement's Program (`h1window.leaf_program`
   of the window Program rebuilt from ``--descriptor`` and held to its bytes, run.py's `derived`; without one, run.py's
-  one-call window: each statement is unit 0 of it), the lanes' partials committed after the draw
+  one-call window: each statement is unit 0 of it), the lanes' partials committed after the sample
   (`produced`, under a registration record of the lane Program that names the window's three entries), and each lane
   staged with its ports read through ``--registered`` at the window's rows: ``a<s>`` row M·j + 32 rb + i of
   ``h1/a/<K>@<s>`` (j the call's place among its step's calls of K), ``b<t>`` row b0 + 32 cb + j of ``h1/b/<K>``,
   ``zy`` row t of ``h1/zy@<c>`` (the window's roots and
   domains, `credit.registered_file`'s), ``partials`` row l of the produced tree, and ``pub``, ``admit`` and ``o0`` known
   rows (run.py's `known_rows`). The lane's public values are conventions of this harness, named in its report: salt
-  `pouw_h1_challenger.program_salt_of` of the window's commitment, position the drawn unit u, roots (root of the call's
+  `pouw_h1_challenger.program_salt_of` of the window's commitment, position the sampled proof block u, roots (root of the call's
   A table, root of ``h1/b/<K>``), admit bit i 1 exactly when slot 32 rb + i is one of the call's served rows.
   The negatives, each proved and checked like the lanes: ``tampered-zy`` (lane 0 given the record with cell 2's z low
   bit flipped, a cell lane 0 doesn't check, so its ok is still 1, under the honest salt and path, its public
@@ -62,11 +62,11 @@ import run as L  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.spot.one_stage import produced as PR  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
+from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
 
 RC = L.RC
 EXPECT = {"tampered-zy": "REJECT", "other-call-a": "REJECT"}
@@ -87,7 +87,7 @@ def _window(path: str):
     is parsed, never re-encoded), and its digest: the lane statement is `h1window.leaf_program`'s of it, which reads only
     the template at K, as a served window's verifier derives it."""
     from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     from verity.ml.circuits.codec import descriptor_id
 
     raw = _descriptor(path)
@@ -119,10 +119,10 @@ def extract(a) -> None:
     import pickle
 
     from verity.core.protocols.pouw import credit as CR
-    from verity_vllm.protocol_options import pouw_h1_challenger as PHC
-    from verity_vllm.protocol_options import pouw_h1_handoff as HO
-    from verity_vllm.protocol_options import pouw_h1_prover as PV
-    from verity_vllm.protocol_options import pouw_h1_kept as KP
+    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity_vllm.protocols.pouw.h1 import handoff as HO
+    from verity_vllm.protocols.pouw.h1 import prover as PV
+    from verity_vllm.protocols.pouw.h1 import kept as KP
 
     t0 = time.time()
     doc = json.loads(Path(a.calls).read_text())
@@ -217,7 +217,7 @@ def extract(a) -> None:
 def smoke(a) -> None:
     """A stand-in window at ``--k`` in `extract`'s form: its A, B and z/y tables of random rows, committed as a served
     window's (the record's tables under a random window root and Program digest, B under none), unit 3 of a 64 × 64 call
-    drawn: the harness's own check, never a served result."""
+    sampled: the harness's own check, never a served result."""
     rng = np.random.default_rng(a.seed)
     k, rb, cb, t, u = a.k, 1, 1, 3, 7
     root, program = os.urandom(64).hex(), os.urandom(64).hex()
@@ -258,7 +258,7 @@ def smoke(a) -> None:
 
 @dataclass
 class Served:
-    """The verifier's view of the drawn unit: its leaf, the roots its seeds read, the produced partials and the window's
+    """The verifier's view of the sampled proof block: its leaf, the roots its seeds read, the produced partials and the window's
     ports (``ports``: port name -> its entry and the prover's opening)."""
 
     leaf: L.Leaf
@@ -312,7 +312,7 @@ def statement(ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> d
     kr = L.known_rows(ctx, sw, LL.LANE, ln, ln)
     vk = {p: PR.known_port(ctx.prog, v, row, salt, sw.registration, schema=V2) for p, (v, row, salt) in kr.items()}
     reads = {"format": G.READS, "ports": {**{p: PR.port(v, e, e["root"], [row], V2) for p, (v, e, row) in entries.items()},
-                                          **{p: kp for p, (kp, _) in vk.items()}}, LL.COMPLETE: True}
+                                          **{p: kp for p, (kp, _) in vk.items()}}}
     want = expected(sw, ln, ins)
     v_ok, row_ok, salt_ok = kr[LL.OK]
     outs = {LL.OK: L.known_opening(ctx, sw, v_ok, row_ok, salt_ok)}
@@ -528,7 +528,7 @@ SHARED = ("k", "unit", "window", "draw_root", "roots", "lane_program", "registra
 
 def merge(a) -> int:
     """The summaries of jobs that each proved a share of one unit's lanes (H1L_LANES), as one: every share read the same
-    window, draw, unit, registration and produced tree, each lane and negative was checked once, every lane accepted and
+    window, sample, unit, registration and produced tree, each lane and negative was checked once, every lane accepted and
     both negatives were refused."""
     parts = [(p, json.loads(Path(p).read_text())) for p in a.summaries]
     head, problems, checks, opened = parts[0][1], [], {}, {}

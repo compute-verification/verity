@@ -35,7 +35,7 @@ from collections.abc import Sequence
 from typing import Any, Callable
 
 from ..secret_hint import FRESH_SHELL, lost
-from . import canon, ids, kinds
+from . import canon, ids, kinds, vocab
 from .index import Index
 from .model import ArtifactManifest, Label, Payload, TreeFile, utc_now, validate_attempt_doc
 from .remote import ConfigError, Remote, config_path, load_remote
@@ -737,6 +737,8 @@ class LocalStore:
         m = self.get_manifest(art_id)
         hex_ = ids.hex_of(art_id)
         r = self._require_remote()
+        if why := self.withdrawn(art_id):
+            raise StoreError(f"{art_id} was withdrawn from the shared store ({why}); a copy here is never pushed back")
         files = m.payload.files if m.payload and m.payload.type == "tree" else []
         rel = {f.sha256: f.path for f in files or []}
         blobs = [(object_key(h), self._resolve_blob(h, art_id, rel.get(h)), n, h) for h, n in m.blobs()]
@@ -777,6 +779,12 @@ class LocalStore:
             elif "remote" not in self.index.replicas(art_id):
                 self.index.set_replica(art_id, "remote", None, r.describe())
         return rep
+
+    def withdrawn(self, art_id: str) -> str | None:
+        """Why `art_id` was withdrawn (`research data withdraw`: its newest `withdrawn` label's value and who set it), or None, by
+        this store's labels: `research data push` pulls the remote's first, since a withdrawal is often made on another machine."""
+        labs = self.labels(art_id, key=vocab.WITHDRAWN)
+        return f"{labs[-1].value!r}, by {labs[-1].by}" if labs else None
 
     def push_attempt(self, run_id: str) -> None:
         r = self._require_remote()
@@ -822,13 +830,14 @@ class LocalStore:
 
     def refresh(self, *, jobs: int = REFRESH_JOBS, log: Callable[[str], None] | None = None,
                 progress: Callable[[str, int, int], None] | None = None, payload_kinds: Sequence[str] = (),
-                payload_max_bytes: int = REFRESH_PAYLOAD_MAX, attempts_only: bool = False) -> dict:
+                payload_max_bytes: int = REFRESH_PAYLOAD_MAX, attempts_only: bool = False, since: str | None = None) -> dict:
         """Bring this store up to date from the remote without wiping anything: list `manifests/`, `attempts/` and `labels/`, fetch
         only what is missing (`jobs` concurrent GETs; each manifest re-hashed to its id, each attempt parsed and named by its id),
         and index just those.  The way a fresh machine builds its catalog from the remote alone.  `payload_kinds`: also make
         local the file payloads (at most `payload_max_bytes` each) of every catalogued artifact of those kinds whose blob is not
         here yet -- what a reader of payloads (a render) needs; the count is `payloads`.  `attempts_only`: the attempts alone (what
-        `research merge` reads), one listing instead of three."""
+        `research merge` reads), one listing instead of three.  `since` (a run id or its prefix, `rYYYYMMDD-HHMMSS`): only the
+        attempts whose ids sort after it, listed from there (`research queue ready`'s records gate)."""
         from . import labels_sync as LS  # noqa: PLC0415
 
         t0 = time.monotonic()
@@ -836,7 +845,8 @@ class LocalStore:
         want_m = [] if attempts_only else \
             [k for k in r.list("manifests/") if k.endswith(".json") and ids.is_sha256(k[len("manifests/"):-len(".json")])]
         want_m = [k for k in want_m if not (self.root / k).exists()]
-        want_a = [k for k in r.list("attempts/") if k.endswith(".json") and ids.is_run_id(k[len("attempts/"):-len(".json")])]
+        listed = r.list("attempts/") if since is None else [k for k, _ in r.list_times("attempts/", start_after=f"attempts/{since}")]
+        want_a = [k for k in listed if k.endswith(".json") and ids.is_run_id(k[len("attempts/"):-len(".json")])]
         want_a = [k for k in want_a if not (self.root / k).exists()]
         rep: dict[str, Any] = {"remote": r.describe(), "manifests": 0, "attempts": 0, "labels": 0, "errors": []}
         tmpdir = self.root / "scratch"

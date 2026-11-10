@@ -1,4 +1,0 @@
-A real record of the other live protocol sharing the kept RO verifier's store (pod vy-live2b-verifier-ro,
-tcp://213.173.105.92:56412): live.Session, the sub-batch Ligero verifier; session.json = {"verdict", "subbatches"}, no
-"batches". Copied unchanged from art:ef6b9392 ro-store2/sessions/s20260923T210807Z-dac0 (ligerito-relation-3's read-only
-copy of that store).

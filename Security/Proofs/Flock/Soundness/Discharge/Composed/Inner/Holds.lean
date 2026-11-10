@@ -1,16 +1,36 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Coined
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lane
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.RingSwitch
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lane
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.RingSwitch
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
+public import Proofs.Flock.Soundness.Refine.Setup
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
-# `innerOf_holds`: the honest prover's pads satisfy the inner proof's constraint at the draw
+# `innerOf_holds`: the honest prover's pads satisfy the inner proof's constraint at the sample
 
 `InnerHolds` is `⟨λ, h⟩ = θ` for `verifyInner`'s batch of rep `r`'s ten rows (`lamOf`, `thetaOf`), at the honest pads
 `hFull` (`h_ab = h_fa·h_fb`, `h_tw = h_tx·h_ty`). By `batch_eval` it holds once every row vanishes at the pads by layout
 index (`batch_of_rows`). The triple's three rows vanish at the honest `(ρ_in, σ_in)` (`triple_rows_zero`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -1048,10 +1068,10 @@ theorem regions_layout_of {st : Stmt} (hdm : avoidsMask st = true) :
   rw [maskCol_iff_B] at hmc
   simp [hmc] at this
 
-/-- **What the mask layout reads of a setup**: `Layout`, `HmRow.check` on its circuit, and `m`. Both `Stmt.setupH` and
-`Stmt.setupHidden` (untyped) give it. -/
+/-- **What the mask layout reads of a setup**: `Layout` of it at some Δ (it reads the ranges and the pin), `HmRow.check`
+on its circuit, and `m`. Both `Stmt.setupH` and `Stmt.setupHidden` (untyped; its flat twin's Δ) give it. -/
 structure MaskSetup (st : Stmt) : Prop where
-  layout : Layout st
+  layout : ∃ da db, Layout { st with da := da, db := db }
   check : ∃ tags ls, HmRow.check st.c tags ls = .ok ()
   m : st.m = st.c.kLog + st.nbl
 
@@ -1063,13 +1083,13 @@ theorem maskSetup_of_setupH {tags : Tags} {circuitFile publicFile : ByteArray} {
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (ht : tags.typed = false)
     (h : Stmt.setupH tags circuitFile publicFile coins tables draw partition program = .ok st) : MaskSetup st :=
-  ⟨setupH_layout ht h, let ⟨ls, hc⟩ := Refine.hm_parse_check (setupH_spec ht h).1; ⟨_, ls, hc⟩,
+  ⟨⟨st.da, st.db, setupH_layout ht h⟩, let ⟨ls, hc⟩ := Refine.hm_parse_check (setupH_spec ht h).1; ⟨_, ls, hc⟩,
     (Refine.setupH_mask h).2⟩
 
 /-- **A setup's layout facts**: `HmRow.check`'s mask range is one slot of at least a word, apart from every other range
 (`Layout`); the pin is a net slot's constant; Δ and the regions avoid the mask (`avoidsMask`). -/
 theorem maskLayout_of {st : Stmt} (M : MaskSetup st) (hdm : avoidsMask st = true) : MaskLayout st := by
-  have L := M.layout
+  obtain ⟨da, db, L⟩ := M.layout
   obtain ⟨_, _, hc⟩ := M.check
   have hmask := M.mask
   have hslot : ∀ m, st.c.ranges.toList.find? (fun r => r.kind == Kind.mask) = some m →
@@ -1118,7 +1138,7 @@ end Mask
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
-/-- The `--zk` tables at a draw `verify --zk` sets up are its table. -/
+/-- The `--zk` tables at a sample `verify --zk` sets up are its table. -/
 theorem tablesAtZK_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
     tablesAtZK (Reg := Reg) dj y₀ S R = y.table := by
@@ -1129,7 +1149,7 @@ theorem tablesAtZK_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : F
 /-- **The inner relation at one rep of a `--zk` table of a setup** (`innerOf_holds_of` at rep `r`): at every coin vector
 whose rep-`r` outer coins aren't `1` (`Admits`' last clause at `r`, the only part of `Admits` rep `r`'s constraint
 reads), every valid witness whose registered values are the public ones satisfies rep `r`'s batched constraint at every
-draw. -/
+sample. -/
 theorem innerOf_holds_rep_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : StmtWF st)
     (hS : Tz.S = stmtOf st hwf (regionsOf st)) (M : MaskSetup st) (hdm : avoidsMask st = true) :
     let C := coinedOf P Tz st
@@ -1336,7 +1356,7 @@ theorem innerOf_holds_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : 
   intro C c hc w hw hreg ω r
   exact innerOf_holds_rep_of P Tz st hwf hS M hdm c r (hc.2.2.2 r) w hw hreg ω
 
-/-- **The inner relation at the draw** (open, inner lane): at every coin vector the honest prover doesn't refuse, every
+/-- **The inner relation at the sample** (open, inner lane): at every coin vector the honest prover doesn't refuse, every
 valid witness whose registered values are the public ones satisfies `Table.InnerHolds` (§2.4 line 16's ten
 constraints). -/
 theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}

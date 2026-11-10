@@ -16,8 +16,8 @@ from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.check.match import program_compare as CMP
 from verity_vllm.check.match.canonical_operands import as_progression
-from verity_vllm.program.registry import b1, b1_tp2
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import b1, b1_tp2
+from verity.ml.definitions.registry import prims as P
 
 H, V = 8, 8
 BF16, I32 = Value(16), Value(32)
@@ -50,7 +50,7 @@ def _derived(tmp_path, links: dict) -> str:
     return str(tmp_path)
 
 
-def _adds(p: CMP.Prog) -> list[list[list[tuple]]]:
+def _adds(p: CMP.RootView) -> list[list[list[tuple]]]:
     return [p.canon(i) for i, r in enumerate(p.inst) if r["spec"].startswith("I32Add")]
 
 

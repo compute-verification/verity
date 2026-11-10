@@ -1,4 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegDelta
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegDelta
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
 /-!
 # Δ's copies at the rows, for rows of every kind
@@ -10,6 +28,8 @@ slots (`Dst`), so Δ's copies at a column of row `p` are row `p`'s (`filter_rows
 `filter_rows`' of `Wide.Copies`, whatever the other rows. `Any` restates `Wide.Copies`' copies at an unsegmented row's own
 columns (`cv0_filterAll` … `msg_filterAll`) for circuits whose other rows may be segmented.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

@@ -1,4 +1,4 @@
-description = "plain int8 everywhere: int8-linears and int8-attention (tonight's (a), `int8-rot-lin8r`)"
+description = "plain int8 everywhere: int8-linears and int8-attention"
 
 [[linear]]
 step = "rotate"

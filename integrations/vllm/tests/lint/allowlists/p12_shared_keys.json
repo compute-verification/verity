@@ -7,11 +7,6 @@
     {"file": "verity_vllm/pipeline/match.py", "kind": "row-id-split", "symbol": "_workload_execution", "detail": "rsplit('__')"},
     {"file": "verity_vllm/pipeline/research_outputs.py", "kind": "row-id-regex", "symbol": "row_batch", "detail": "__b(\\d+)__"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "row-id-split", "symbol": "row_config", "detail": "split('__')"},
-    {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "row-id-regex", "symbol": "row_config_from_attempt", "detail": "workloads/([\\w\\-]+__[\\w\\-]+__[\\w\\-]+__tp\\d+__b\\d+__i\\d+__o\\d+__\\w+__\\w+__[\\w\\-]+"},
-    {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "row-id-split", "symbol": "model_key_for_row", "detail": "split('__')"},
-    {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "row-id-split", "symbol": "row_config_from_attempt", "detail": "split('__')"},
-    {"file": "verity_vllm/pipeline/workload.py", "kind": "row-id-split", "symbol": "main", "detail": "rsplit('__')"},
-    {"file": "verity_vllm/properties/protected.py", "kind": "root-list", "symbol": "<module>", "detail": "verity_vllm/check/gates.py, verity_vllm/pipeline/report.py, verity_vllm/check/root_policy.py, verity_vllm/properties/gol"},
-    {"file": "verity_vllm/properties/protected.py", "kind": "root-list", "symbol": "<module>", "detail": "verity_vllm/engine/profiles/*, verity_vllm/ops/*, verity_vllm/observe/*.py, verity_vllm/observe/*"}
+    {"file": "verity_vllm/pipeline/workload.py", "kind": "row-id-split", "symbol": "main", "detail": "rsplit('__')"}
   ]
 }

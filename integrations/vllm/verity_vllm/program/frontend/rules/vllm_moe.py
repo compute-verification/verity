@@ -1,8 +1,8 @@
-"""[R13 MOE-01] Bet A rules for vLLM's fused-MoE block under the batch-invariant profile — the leaf kernels `export_compat.moe_ops_traced`
-makes visible in place of the opaque `vllm.moe_forward` dispatcher (R12 F-moe-02 / B-MOE): generic in the block's shape parameters
+"""Bet A rules for vLLM's fused-MoE block under the batch-invariant profile — the leaf kernels `export_compat.moe_ops_traced`
+makes visible in place of the opaque `vllm.moe_forward` dispatcher: generic in the block's shape parameters
 (E experts, TOPK, hidden H, intermediate I, tokens M), nothing about a model.
 
-The block, in launch order, and what each rule binds (numerics: `verity_vllm.program.registry.moe`, difftested bit-exact in
+The block, in launch order, and what each rule binds (numerics: `verity.ml.definitions.registry.moe`, difftested bit-exact in
 `verity_vllm/check/moe_kernel_xcheck.py` against the same kernels on cp-moe):
 
     _moe_C.topk_softmax(w!, ids!, tei!, logits, renormalize, bias=None, is_padding=None)
@@ -23,7 +23,7 @@ Both fused_moe_kernel schedules are accepted: the sorted one (`sorted_token_ids_
 Everything else the launch could be (SPLIT_K > 1, fused bias, fp8/int8 paths, SWAP_AB, group quant, another compute_type, another source
 body) refuses with the pinned field named, as `TritonGemm[vllm-bi]` does.
 
-[R17-42 / R17-45 (a) route A (3): `TargetProfile.moe_construction`] TWO rule families own the same six leaf kernels, exclusively, by the
+[route A (3): `TargetProfile.moe_construction`] TWO rule families own the same six leaf kernels, exclusively, by the
 DECLARED construction (`vllm_bindings.active_target_profile().effective_moe_construction()`; a Program static, never attested):
 
   * `indexed-read` (the default; MOE-01, the four rules above): the block as SIX kinds -- router, the pair-major expert GEMMs with the
@@ -39,7 +39,7 @@ DECLARED construction (`vllm_bindings.active_target_profile().effective_moe_cons
     Any OTHER reader of an intermediate meets a marker and refuses (`Ctx.coll`: "is not a tensor value (Padded...)") -- the block's
     interior is the Definition's, not the Program's (fail closed, never a silent mix).  Under `padded` the MOE-01 rules decline by name
     (and vice versa), so a Program is of ONE construction; two Programs of the same trace differ in digest by construction (G1 by name).
-    N-pad-09: the schedule's shapes (blocks per expert, `num_tokens_post_padded`) are read as the marker and never enter the statics.
+    The schedule's shapes (blocks per expert, `num_tokens_post_padded`) are read as the marker and never enter the statics.
 """
 
 from __future__ import annotations
@@ -115,7 +115,7 @@ def _val_matches(v, node) -> bool:
     return isinstance(v, torch.fx.Node) and v is node
 
 
-# -- [R17-42] the declared construction: which family owns the block ------------------------------------------------------------------
+# -- the declared construction: which family owns the block ------------------------------------------------------------------
 
 INDEXED_READ, INDEXED_READ_ORDERED = "indexed-read", "indexed-read-ordered"   # MOE-01 with the router in selection order
 PADDED = "padded"
@@ -235,7 +235,7 @@ class TopkSoftmaxRule(InPlaceRule):
         M, E = shape(ctx, logits)
         TOPK = shape(ctx, w)[1]
         VPT = TOPK_SOFTMAX_VPT[ctx.dtype_of(logits)]
-        # [MOE-04] renormalize=True (Qwen3-MoE / Mixtral norm_topk_prob) is the same kernel with the lead thread's 1/sum epilogue:
+        # renormalize=True (Qwen3-MoE / Mixtral norm_topk_prob) is the same kernel with the lead thread's 1/sum epilogue:
         # MoeRouterTopKNorm_v1 (registry.moe); the ids are unchanged, the weights are the normalised probabilities.
         renorm = node.args[4]
         fn = ctx.kind("moe_router_topk" + ("_ordered" if active_moe_construction() == INDEXED_READ_ORDERED else "") + ("_norm" if renorm else ""), node, E=E, TOPK=TOPK, VPT=VPT)
@@ -399,7 +399,7 @@ class FusedMoeKernelRule(InPlaceRule):
             ids_node = launch_tensor(node, meta, "expert_ids_ptr")
         else:
             ids_node = ctx.val(launch_tensor(node, meta, "sorted_token_ids_ptr")).ids_node
-        from verity_vllm.program.registry.prims import F32, I32
+        from verity.ml.definitions.registry.prims import F32, I32
         ids = _flat_pairs(ctx.coll(ids_node), nv, I32)
         ws = _flat_pairs(ctx.coll(launch_tensor(node, meta, "topk_weights_ptr")), nv, F32) if mrw else None
         role, dot = moe_expert_role(mrw)
@@ -453,7 +453,7 @@ class MoeSumRule(InPlaceRule):
     def emit(self, node, ctx):
         y, out = node.args[:2]
         M, TOPK, H = shape(ctx, y)
-        from verity_vllm.program.registry.prims import BF16
+        from verity.ml.definitions.registry.prims import BF16
         yc = ctx.coll(y).reshape(Array(M, Array(TOPK, Array(H, BF16))))
         fn = ctx.kind("moe_sum", node, TOPK=TOPK, H=H)
         outs = [ctx.call(fn, yc[t], node=node, rule=self, name=f"{ctx.hint_name(node)}[{t}]") for t in range(M)]
@@ -462,7 +462,7 @@ class MoeSumRule(InPlaceRule):
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# [R17-42 route A (3)] the PADDED family: the same six launches, ONE `MoeFfnFixedL_v1` per token, the interior as markers (module doc)
+# the PADDED family: the same six launches, ONE `MoeFfnFixedL_v1` per token, the interior as markers (module doc)
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -753,7 +753,7 @@ class PaddedViewRule(ViewRule):
                     evidence_domain="structural (no gates): a marker's alias is the marker")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.views import _RESHAPE  # noqa: PLC0415
+        from verity_vllm.program.frontend.rules.views import _RESHAPE
         return _RESHAPE
 
     def applies(self, node, ctx):
@@ -762,7 +762,7 @@ class PaddedViewRule(ViewRule):
         v = ctx.val(node.args[0]) if node.args and isinstance(node.args[0], torch.fx.Node) else None
         if not isinstance(v, (PaddedUp, PaddedAct, PaddedDown, PaddedStage)):
             return f"operand is {type(v).__name__}, not a padded-block marker"
-        import math  # noqa: PLC0415
+        import math
         a, b = shape(ctx, node.args[0]), shape(ctx, node)
         if a is None or b is None or math.prod(a) != math.prod(b):
             return f"view {a} -> {b} does not preserve the element count"
@@ -783,7 +783,7 @@ class PaddedSiluAndMulRule(InPlaceRule):
                     evidence_domain="structural; numerics: inside MoeFfnFixedL_v1 (SiluMul_v1{I} of MoeExpertBody_v1)")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.vllm_iface import targets_for  # noqa: PLC0415
+        from verity_vllm.program.frontend.rules.vllm_iface import targets_for
         return targets_for("silu_and_mul")
 
     def applies(self, node, ctx):
@@ -860,7 +860,7 @@ class PaddedMoeSumRule(InPlaceRule):
                    emitted=f"{fn.id} x{M}")
 
 
-#: [R17-42] both families in one list; each rule applies only under its own declared construction (`_not_owned`), so the block is bound by
+#: both families in one list; each rule applies only under its own declared construction (`_not_owned`), so the block is bound by
 #: exactly one family per Program.  The padded family is listed first: under `padded` the MOE-01 rules decline by name, under
 #: `indexed-read` the padded rules do -- the order never decides.
 VLLM_MOE_RULES = [PaddedTopkSoftmaxRule(), PaddedMoeAlignBlockSizeRule(), PaddedFusedMoeKernelRule(), PaddedViewRule(), PaddedSiluAndMulRule(),

@@ -1,4 +1,37 @@
-import Definitions.Accounting.TS.Sheet
+module
+
+public import Definitions.Accounting.TS.Sheet
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The B200's data sheet (generated)
@@ -12,12 +45,13 @@ over the SM's four SMSPs.
 
 Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over NVLink or NVSwitch and sends back (whole
 tiles as 64-byte digests) is outside it: the sheet bounds what the credited GPU's SMs compute, not which GPU computed a
-tile, and `Device.lean`'s side channels don't list NVLink peer offload (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).
+tile, and `Device.lean`'s side channels don't list NVLink peer offload.
 
 `uv run machine-model --device sm_100 sheet --lean` prints this file from
 `benchmarks/pouw/machine_model/data/devices/sm_100/sheet.toml`, and the machine model's tests hold it to that output.
-The grades, and where the sm_120 sheet's structure doesn't fit this device: note:20261019T0511Z-draft-mm-sheets.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Sheets.B200
 
@@ -117,9 +151,9 @@ inductive Ty
 
 /-- A1, f_max: 1965 MHz. Grade: measured only (the driver's maximum). Source: no NVIDIA document read states a B200
 clock (Blackwell Architecture Technical Brief V2.1, the Lenovo HGX B200 Product Guide, nvidia.com's HGX page); the
-driver's maximum at default clocks on vy-dc-b200 is 1965 MHz (sm_100/table.toml, EPS1 DC), RT-ISA and RT-CLOCK saw at
-most 1957.1 MHz; the brief's 'FP64 Tensor Core 37 teraFLOPS' at the Guide's 64 FP64 results an SM clock over 148 SMs
-puts the FP64 clock at 1927 to 1980 MHz. -/
+driver's maximum at default clocks on the deployed B200 is 1965 MHz (sm_100/table.toml), and the tensor and clock probes
+saw at most 1957.1 MHz; the brief's 'FP64 Tensor Core 37 teraFLOPS' at the Guide's 64 FP64 results an SM clock over 148
+SMs puts the FP64 clock at 1927 to 1980 MHz. -/
 def fmaxMHz : ℝ := 1965
 
 /-- The SMs A3's per-SM peaks multiply: 148. Grade: measured only. Source: no NVIDIA document read gives the B200's SM
@@ -131,8 +165,7 @@ def smCount : ℝ := 148
 figures are quoted: 1854 MHz. Grade: none (derived: no document states it). Source: the clock at which every per-clock
 peak below reproduces the Technical Brief's dense figure to within half its last digit, which holds from 1835 to 1855
 MHz, and the Lenovo guide's FP16 2.25 too from 1852 MHz; 111 MHz under f_max, as the H200's tensor clock is 150 MHz
-under its f_max (open premise B200-PEAK-PER-CLOCK: the per-clock peaks are measured, the clock they are quoted at is
-nowhere). -/
+under its f_max (an open premise: the per-clock peaks are measured, the clock they are quoted at is nowhere). -/
 def impliedMHz : ℝ := 1854
 
 /-- The FP64 clock (no document states one), at which the f64 figure is quoted: 1965 MHz. Grade: none (derived: no
@@ -190,9 +223,8 @@ def peakTf32 : ℝ := 2048
 implied clock (no document states one), 1854 MHz (A1's f_max is 1965 MHz). Grade: data sheet per second; per clock
 measured. Source: Technical Brief V2.1 Table 3, HGX B200: 'FP4 Tensor Core 9 | 18 petaFLOPS'; PTX ISA 9.4 tcgen05.mma
 .kind::mxf4 and .kind::mxf4nvf4 take twice .kind::f8f6f4's K; the Programming Guide 12.9 §18.9.1 lists no FP4, and
-DC-100's census measures no FP4 class; RT-ISA's probe timed kind::mxf4 (UTCOMMA) and kind::mxf4nvf4 (UTCOMMA.4X) alone
-at 16390 MACs an SM clock, 2.000 times kind::i8's 8195 at the same instruction rate (RT-ISA-4, unpriced_fp4.cu,
-r20261019-090041-1ef5, note:20261019T0520Z-draft-rt-isa). -/
+DC-100's census measures no FP4 class; a probe timed kind::mxf4 (UTCOMMA) and kind::mxf4nvf4 (UTCOMMA.4X) alone at 16390
+MACs an SM clock, 2.000 times kind::i8's 8195 at the same instruction rate (unpriced_fp4.cu). -/
 def peakFp4 : ℝ := 16384
 
 /-- A3, fp4_f8f6f4: 8192 dense MACs an SM clock, the document's dense figure, 4500 × 10¹² a second, over 2 · 148 SMs at
@@ -201,9 +233,8 @@ the implied clock (no document states one), 1854 MHz (A1's f_max is 1965 MHz). G
 (media/docs/cpp/blackwell_functionality.md at 1b5b7d3062): 'tcgen05.mma(.sp).cta_group::[1|2].kind::f8f6f4 | 2x Hopper
 Fp8 Tensor Core | Mixed precision MMA with A={f4,f6,f8} x B={f4,f6,f8}', against 'kind::mxf4.block_scale | 4x Hopper Fp8
 Tensor Core'; so the kind's rate is the FP8 one, Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9
-petaFLOPS'; measured alone, kind::f8f6f4 with E2M1 operands at 8195 MACs an SM clock, E4M3's rate (RT-ISA-4,
-r20261019-090041-1ef5, note:20261019T0520Z-draft-rt-isa). On sm_120, all five kind::f8f6f4 types run at one QMMA rate
-(r20261019-052144-b4a4, note:20261019T0456Z-draft-rt-machine). -/
+petaFLOPS'; measured alone, kind::f8f6f4 with E2M1 operands at 8195 MACs an SM clock, E4M3's rate (unpriced_fp4.cu). On
+sm_120, all five kind::f8f6f4 types run at one QMMA rate. -/
 def peakFp4_f8f6f4 : ℝ := 8192
 
 /-- A3, f64: 64 dense MACs an SM clock, the document's dense figure, 37 × 10¹² a second, over 2 · 148 SMs at the FP64
@@ -211,7 +242,7 @@ clock (no document states one), 1965 MHz (A1's f_max is 1965 MHz). Grade: data s
 Source: Technical Brief V2.1 Table 3, HGX B200: 'FP64 Tensor Core 37 teraFLOPS'; the Programming Guide 12.9 §6.4.1 Table
 7, CC 10.0: 64 64-bit floating-point results a clock a multiprocessor; measured alone, DMMA.8x8x4 at 64 MACs an SM
 clock, and beside a saturated tcgen05 kind::i8 form t + s = 0.939 to 0.952, so f64 shares the tensor pipe's time with
-the other types (RT-ISA-1, unpriced.cu, r20261019-083352-2e24, note:20261019T0520Z-draft-rt-isa). -/
+the other types (unpriced.cu). -/
 def peakF64 : ℝ := 64
 
 /-- A3: each type's dense MACs an SM clock. -/
@@ -244,9 +275,8 @@ def widthShfl : ℝ := 32
 
 /-- A4, the uniform pipe: 65.3965 results an SM clock, 1.95729 SMSP-cycles a warp instruction. Grade: measured only (no
 vendor document states the uniform datapath's rate). Source: Nsight Compute §2.3.6 defines the uniform pipe ('a scalar
-unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest form alone (uz_128x) at 0.5009
-uniform instructions a SMSP-cycle, at decision 76's 2% margin 1.9572915 SMSP-cycles each (r20261017-095350-0a80,
-r20261017-103944-35c5, r20261017-112709-ec87, r20261017-113207-4cb8, r20261017-113541-9d33); the width counts a uniform
+unit') with no rate; the census's UP line (rows.csv): dc/probes/uniform.cuh, the fastest form alone (uz_128x) at 0.5009
+uniform instructions a SMSP-cycle, at a 2% margin 1.9572915 SMSP-cycles each (five runs); the width counts a uniform
 instruction as a warp instruction's 32 results, as the pipe row reads a width. -/
 def widthUniform : ℝ := 256000000 / 3914583
 
@@ -738,9 +768,8 @@ assigned warps'. A2u (a uniform instruction, `UNI`, takes that slot too). Grade:
 states it). Source: no vendor document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the
 uniform pipe with no rate, and CUDA Binary Utilities §4.4 lists the uniform opcodes CC 10.0 to 12.0 share; measured at
 saturation beside 4 tcgen05.mma in flight: with the uniform chain in, issue stays at 0.998 to 0.9996 warp instructions a
-SMSP-cycle and each uniform instruction displaces 0.95 to 1.10 lane instructions, with no dual issue (RT-B200-EMP,
-dc/probes/sm100_a2u.cu, r20261019-055605-6cc2, note:20261019T0520Z-draft-rt-b200-emp), and 0.924 of a slot beside a
-saturated lane stream (the census's UNI issue line, DC-100). -/
+SMSP-cycle and each uniform instruction displaces 0.95 to 1.10 lane instructions, with no dual issue
+(dc/probes/sm100_a2u.cu), and 0.924 of a slot beside a saturated lane stream (the census's UNI issue line, DC-100). -/
 theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by
   simp [Sheet.machine, census]
 

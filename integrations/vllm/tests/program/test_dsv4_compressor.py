@@ -26,15 +26,15 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.circuits.silicon import fp as FP
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import dsv4_compressor_twin as T
-from verity_vllm.program.kernels import flashmla_twin as FT
-from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat
-from verity_vllm.program.registry import boolean_dsv4_compressor as BC
-from verity_vllm.program.registry import boolean_dsv4_indexer as BI
-from verity_vllm.program.registry import dsv4_compressor as C
-from verity_vllm.program.registry import dsv4_indexer as I
-from verity_vllm.program.registry import flashmla as F
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import dsv4_compressor_twin as T
+from verity.ml.definitions.numerics import flashmla_twin as FT
+from verity.ml.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
+from verity.ml.definitions.registry import boolean_dsv4_compressor as BC
+from verity.ml.definitions.registry import boolean_dsv4_indexer as BI
+from verity.ml.definitions.registry import dsv4_compressor as C
+from verity.ml.definitions.registry import dsv4_indexer as I
+from verity.ml.definitions.registry import flashmla as F
 
 U = np.uint32
 S = C.DSV4_COMPRESSOR

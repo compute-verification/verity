@@ -1,5 +1,5 @@
 """A window's ``coord`` units in chunks (`pipeline.serving_rows`, ``CHUNKED``): the expert-indexed pair GEMMs' coordinates
-(``COORDS``) are consecutive chunks of at most the partition's ``chunk_cap``, each a member on the bit rows C-Flock's `UnitStager`
+(``COORDS``) are consecutive chunks of at most the partition's ``chunk_cap``, each a member on the bit rows Flock's `UnitStager`
 stages (`chunk_rows.unit_rows`: ``in<g>`` per parameter, ``o0``), and the chunks are the template's units read once, so that
 the coordinate on each chunk's rows, parsed as the stager parses them, is the rows' committed words, and a flipped word is not."""
 from __future__ import annotations
@@ -14,11 +14,11 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock.class_statement import UnitStager
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program.registry import boolean_fp8_moe as BFM
-from verity_vllm.program.registry import fp8_moe_experts as X
+from verity.ml.definitions.registry import boolean_fp8_moe as BFM
+from verity.ml.definitions.registry import fp8_moe_experts as X
 
 E, K, N, G, KB = 3, 64, 40, 32, 32
 NB, KG = -(-N // G), K // G
@@ -107,5 +107,5 @@ def test_a_chunk_on_its_rows_computes_the_committed_words_and_a_flipped_word_is_
     g, _entries = got[1]
     with pytest.raises(AssertionError, match="outputs are not the IR reference's"):
         st.reference_check(g["rows"], {"o0": g["outs"]["o0"] ^ np.uint16(1)})
-    w = CS.Window(*CS.population_program([(SRW.template(T).fn, 2 * N)], several=True), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
+    w = CS.Binding(*CS.population_program([(SRW.template(T).fn, 2 * N)], several=True), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
     assert CS.commit(w, [g for g, _e in got], salt_key=bytes(32)).window.population == 2 * N

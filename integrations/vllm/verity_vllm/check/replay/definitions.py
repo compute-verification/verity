@@ -5,8 +5,8 @@ compiled from the Build's tree.  A Definition whose body moved between the two t
 words against a circuit the Commit never bound, and the Program digest the loaders check is the Build's recorded string, which no
 tree change moves.  `refusal` reads the Build's ``descriptor.json.gz``, holds it to the digest of record, and holds each
 specialization the replay evaluates, with every Definition it reaches, to the descriptor's entry for it
-(`verity.ml.circuits.annotations.definition_digest`: the entry with the v1 interning resolved, the same for one Definition in any
-Program).
+(`verity.ml.circuits.codec.definition_digest`: the entry with the v1 interning and aliases resolved, the same for one Definition
+in any Program).
 
 That holds the Definitions, not the code that grades by them.  A primitive is held to its entry, its signature and ports only:
 its evaluator is code, named by its id.  And the replay grades a row by its family's row kernel, not by the Definition.  So
@@ -33,7 +33,7 @@ _KERNEL_CHECKS: dict[str, list[str]] = {}
 def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[str]:
     """The specializations of the rows the replay evaluates: a family with a row kernel (`rows.ROWS`) or a protocol's delegate."""
     from verity_vllm.check.replay.delegate import DELEGATES
-    from verity_vllm.program.kernels.rows import ROWS
+    from verity.ml.definitions.numerics.rows import ROWS
     from verity_vllm.query.manifest.format import spec_family
 
     return sorted({str(r["spec"]) for r in rows if spec_family(str(r["spec"])) in ROWS or spec_family(str(r["spec"])) in DELEGATES})
@@ -58,14 +58,15 @@ def of_record(dirs: dict[str, str], digs: dict[str, str], rows: dict[str, list[d
 def kernel_refusal(specs: Iterable[str]) -> str | None:
     """Why a row kernel this tree grades ``specs`` by is not its family's Definition, or None: each family's row kernel against
     the reference by core `self_check` (`kernel_registry.check`; module docstring), once a family per process."""
-    from verity_vllm.program.kernels import kernel_registry as KR
-    from verity_vllm.program.kernels.rows import KERNEL, ROWS
+    from verity_vllm.commit import challenge as CH
+    from verity.ml.definitions.numerics import kernel_registry as KR
+    from verity.ml.definitions.numerics.rows import KERNEL, ROWS
     from verity_vllm.query.manifest.format import spec_family
 
     bad: list[str] = []
     for family in sorted({spec_family(str(s)) for s in specs} & set(ROWS)):
         if family not in _KERNEL_CHECKS:
-            _KERNEL_CHECKS[family] = KR.check(family, KERNEL)
+            _KERNEL_CHECKS[family] = KR.check(family, KERNEL, CH.generator)
         bad += [f"{family}: {why}" for why in _KERNEL_CHECKS[family]]
     if not bad:
         return None
@@ -77,7 +78,7 @@ def refusal(program_dir: str, digest: str, specs: Iterable[str]) -> str | None:
     """Why the Definitions this tree evaluates ``specs`` by are not the ones the Build at ``program_dir`` bound into Program
     ``digest``, or None.  With no ``specs`` nothing is evaluated, so nothing is read."""
     from verity.ml.circuits.codec import program_digest
-    from verity_vllm.program.registry.catalog import load
+    from verity.ml.definitions.registry.catalog import load
 
     specs = list(specs)
     if not specs:
@@ -143,8 +144,7 @@ def _static(desc: dict[str, Any], v: Any, registry: Any, ours: dict[str, Any]) -
 
 def _differs(desc: dict[str, Any], fn: Any, seen: dict[str, str | None]) -> list[str]:
     """Each Definition ``fn`` reaches in this tree whose entry is not the Build's descriptor's, named."""
-    from verity.ml.circuits.annotations import definition_digest
-    from verity.ml.circuits.codec import encode_program
+    from verity.ml.circuits.codec import definition_digest, encode_program
 
     # encode_program reads a program's root, fn and annotations: here the specialization alone, in the Build's schema
     mine = encode_program(SimpleNamespace(root=fn, fn=fn, annotations={}), desc["schema"])
@@ -153,9 +153,8 @@ def _differs(desc: dict[str, Any], fn: Any, seen: dict[str, str | None]) -> list
         if g not in seen:
             if g not in desc["definitions"]:
                 seen[g] = f"this tree's reaches {g}, which the Build's descriptor does not hold"
-            elif definition_digest(mine, g) != definition_digest(desc, g):
-                seen[g] = f"{g} is not the Definition the Build bound (entry {definition_digest(mine, g)[:16]}, the Build's " \
-                          f"{definition_digest(desc, g)[:16]})"
+            elif (ours := definition_digest(mine["definitions"][g], mine)) != (theirs := definition_digest(desc["definitions"][g], desc)):
+                seen[g] = f"{g} is not the Definition the Build bound (entry {ours[:16]}, the Build's {theirs[:16]})"
             else:
                 seen[g] = None
         if seen[g]:

@@ -1,20 +1,20 @@
-"""An H1 period's registered weights (VLLM-71, RT4-INT's model registry): each contraction K's ``<prefix>b/<K>``, the B
-rows of the window Program's linears of that K, and `weights_root`, their fold, the weights' root a period-open signs.
+"""An H1 credit period's registered weights (the model registry): each contraction K's ``<prefix>b/<K>``, the B
+rows of the execution phase Program's linears of that K, and `weights_root`, their fold, the weights' root a period-open signs.
 
 * **A B row** (`row_bytes`) is one output row of a linear: its K int8 codes, then the 4 bytes of its f32 scale s_w,
   little-endian (`h1zy.ROW`): `b_words(K)` u16 words, as a ``hm96-sha512/row/v2`` bit row is its bytes.
-* **``<prefix>b/<K>``** is the rows of K's linears, linear after linear in the window's order, committed as
+* **``<prefix>b/<K>``** is the rows of K's linears, linear after linear in the execution phase's order, committed as
   `registered.Registered.commit` commits them: under `registered.domain` of the circuit's SHA-512, the name, `b_words(K)`
-  words and Σn leaves, binding no window (a value held across windows), in ``hm96-sha512/row/v2``, row j's salt
+  words and Σn leaves, binding no execution phase (a value held across execution phases), in ``hm96-sha512/row/v2``, row j's salt
   `audit.hm96_salt` of the registration's 32-byte key at `B_NONCE` plus K's place among the Ks, ascending. The auditor
-  hands that key to every lane serving the model (`model-key`), so it salts these rows only, never a window's A or z/y:
+  hands that key to every lane serving the model (`model-key`), so it salts these rows only, never an execution phase's A or z/y:
   those stay under the prover's own key.
 * `weights_roots` computes each K's root streaming, in memory independent of the row count: it cuts K's rows into aligned
   chunks of at most `CHUNK_BYTES` (a power of two rows each), and each chunk's subtree root, pads past Σn included, is
   folded in order as `tree_levels` folds the leaves. The caller's process copies each row into one of ``2 * workers + 1``
   shared slots of a chunk each, which `workers` forked processes read in place, so the auditor's host holds about
-  ``(2 * workers + 1) * CHUNK_BYTES`` and `workers` processes: the default, `DEFAULT_WORKERS`, fits vy-challenger-1
-  (4 vCPU, 15 GB). A chunk's salts are ChaCha20's keystream in numpy (`verity.ml.crypto.chacha20`, the
+  ``(2 * workers + 1) * CHUNK_BYTES`` and `workers` processes: the default, `DEFAULT_WORKERS`, fits a challenger host
+  of 4 vCPU and 15 GB. A chunk's salts are ChaCha20's keystream in numpy (`verity.ml.crypto.chacha20`, the
   blocks `audit.hm96_salt` concatenates) and its hm96 leaves `verity.ml.commitments.hm96.batch`'s. Its roots are
   `Registered.commit`'s for any `workers`, and `entry` is the registration's entry (`Registered.entry`), which credit's
   `_weights` checks.
@@ -36,15 +36,15 @@ from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.core.protocols.pouw.protocol import tagged
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.ml.commitments import hm96
+from verity.core.protocols.spot.one_stage import registered as G
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 from verity.ml.crypto import chacha20
 
-#: an H1 window's weights' root: each K's registered ``…/b/<K>`` root
-WEIGHTS_TAG = "verity/pouw/h1/weights/v1"
+#: an H1 execution phase's weights' root: each K's registered ``…/b/<K>`` root
+WEIGHTS_TAG = domains.POUW_H1_WEIGHTS
 #: ``b/<K>``'s first salt nonce, past every round's and call's tables in the prover's salt stream (vllm's
 #: ``REQUESTS_NONCE + 2^42 + 2^40``), so a key that salts both never repeats a (nonce, leaf)
 B_NONCE = (1 << 61) + (1 << 42) + (1 << 40)
@@ -63,7 +63,7 @@ def b_words(k: int) -> int:
     return (k + 5) // 2
 
 
-#: the largest K an H1 lane is proved at whole, and a chunk's largest: K = 4096's lane fills C-Flock's 2^27 block
+#: the largest K an H1 lane is proved at whole, and a chunk's largest: K = 4096's lane fills Flock's 2^27 block
 CHUNK_MAX = 4096
 #: a chunk is whole blocks of its rows' and columns' noise streams (`circuit.seeds.BLOCK_BITS`, 512 bits)
 CHUNK_ALIGN = 512
@@ -111,7 +111,7 @@ def row_words(row: bytes) -> list[int]:
 
 
 def ks(linears: Sequence[tuple[int, int]]) -> list[int]:
-    """The Ks of the window's linears (``(n, K)`` each), ascending; ValueError on an odd K or an empty linear."""
+    """The Ks of the execution phase's linears (``(n, K)`` each), ascending; ValueError on an odd K or an empty linear."""
     if not linears or any(type(n) is not int or type(k) is not int or n < 1 or k < 2 or k % 2 for n, k in linears):
         raise ValueError("the window's linears are (n, K), n >= 1 and K a positive even number each")
     return sorted({k for _n, k in linears})
@@ -195,7 +195,7 @@ def _shape(linears, k: int) -> tuple[list[int], int, int, int, int]:
 def weights_roots(circuit: str, prefix: str, linears: Sequence[tuple[int, int]], rows: Callable[[int], Iterable[bytes]],
                   key: bytes, *, progress: Callable[[int, int], None] | None = None,
                   workers: int | None = None) -> dict[int, bytes]:
-    """Each K's ``<prefix>b/<K>`` root: `linears` the window's linears in its order, ``(n, K)`` each; ``rows(w)`` linear w's
+    """Each K's ``<prefix>b/<K>`` root: `linears` the execution phase's linears in its order, ``(n, K)`` each; ``rows(w)`` linear w's
     n rows, each `row_bytes` (any bytes-like object); `key` the registration's 32-byte salt key; `workers` the processes
     that commit chunks (`DEFAULT_WORKERS` when None; at 1, or where processes can't fork, the caller's own alone). Equal to
     `Registered.commit`'s root over the same rows and salts. ValueError on a row of another width, a linear of another

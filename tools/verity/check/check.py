@@ -1,4 +1,7 @@
-"""`check`: the repository's one check, what a merge into `main` requires (`research merge`).
+"""`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs drive's policy
+takes off the merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate), which run after landing, in drive's
+after-landing run on `checked`'s tip.  It reports each step's real verdict; what gates and what may stay red is drive's
+(`research.policy`).
 
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -6,28 +9,55 @@
                                                             ci.toml) and what their jobs need, after the preflight; outside a
                                                             recorded run, since no gate takes part of a check
     ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
-                                                            post-landing run drive launches on `main`'s tip (`train.sh
-                                                            --deferred`), recorded as `DEFERRED_KIND`, which no gate takes
+                                                            after-landing run drive launches on `checked`'s tip (`train.sh
+                                                            --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
+                                                            with --shard K/N, only those of shard K's parts, the last
+                                                            shard's with those no shard holds (ratchet-gate) (drive's
+                                                            `after_landing_shards`: one run per shard, at once, once the
+                                                            records step passed: `--cc-records`)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
                                                             a regenerated record (drive's after-landing run)
+    ... --bookkeeping-warn                                  with --deferred and without --no-regenerate (drive's lock run):
+                                                            lean-audit repairs a lock's bookkeeping and the caps it breaks and
+                                                            warns rather than failing (`lean_audit.py --bookkeeping warn`)
+    ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
+                                                            nightly `audit-main`, which gates nothing); with --circuit-cache,
+                                                            circuit-check alone still reuses and stores its per-target passes,
+                                                            and only its entries of a pack are imported: drive's after-landing
+                                                            run, where a cold `--all` (~4 h) outlasted every run
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
-                                                            multi-core CPU pod): an Attempt of the clean commit checked out, the
-                                                            record `research merge` reads; with the pinned upstream build and
-                                                            inputs when the commit changes verity/ml/flock/ against --base REF
-                                                            (default origin/main), and presigned URLs for the pinned Lean
-                                                            dependency bundles; with --on, in a free check slot of M
-                                                            (`tools/verity/check/slot.py`), the lock and cores the train checks take;
-                                                            --priority takes the next free slot ahead of waiting lane checks;
+                                                            multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
+                                                            policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
+                                                            `--deferred` and `--no-cache` run: an Attempt of the clean commit
+                                                            checked out, the record `research merge` reads; with the pinned
+                                                            upstream build and inputs when the commit changes verity/ml/flock/
+                                                            against --base REF (default origin/main; also ratchet-gate's base
+                                                            unless --ratchet-base REF is given), and presigned URLs for
+                                                            the pinned Lean dependency bundles; with --on, in a free check slot of M
+                                                            (`tools/verity/check/slot.py`), the lock and cores the train checks take,
+                                                            and in the run's own clone of the shipped tree (`--cwd clone`);
+                                                            --priority takes the next free slot ahead of waiting lane checks,
+                                                            and one of TRAIN_GB or more when it runs pytest, lean-suites or
+                                                            circuit-check
+                                                            (`train_gb`: a machine without one is skipped or refused, exit 75);
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is;
-                                                            --on auto (AUTO: vy-nebius-2) or --on M1,M2 picks M
+                                                            --on auto (the machines in AUTO) or --on M1,M2 picks M
                                                             from `--slots` (`choose`): the first where a check slot no window
                                                             blocks and a Lean `check` slot are free, else the one with the
                                                             fewest waiters ahead (priority ones only, with --priority), and
                                                             refuses when no machine's slots can be read; with no slot free on
                                                             any, twins: the check on each machine it can run on (`twins`),
                                                             the first to take a slot runs; exit 75 when none ran: rerun
+    uv run python tools/verity/check/check.py --record --on auto|M --pool NAME [--deferred STEP,...]
+                                                            the same in a slot of M's NAME pool (`research run --pool`'s pools),
+                                                            not its merge-check slots, which on the CPU nodes take train checks
+                                                            alone: a lane's own recorded check.  `--on auto --pool research`
+                                                            (any lane's) takes the machine whose research pool `research run
+                                                            --on auto` would spill to (`lane_machine`).  Launch it from a
+                                                            checkout, never inside a `research run`, where --record is refused
+                                                            with the command to run
     uv run python tools/verity/check/check.py --slots [M ...]      each machine's check slots (holders, blocking and upcoming
                                                             windows), check line, and Lean audit slots and their waiters, read
                                                             over ssh by this tree's slot.py and lean_slot.py (`--status --json`);
@@ -45,21 +75,51 @@
     uv run python tools/verity/check/check.py --record --shard K/N --on M
                                                             shard K of ci.toml's plan with N shards, on machine M (each shard
                                                             on a pod of the lander's choosing): an Attempt no gate takes alone
+    uv run python tools/verity/check/check.py --shard auto:K/N --shard-plan-file PLAN
+                                                            shard K of the auto plan PLAN (`shards.py`, `--shard-plan --out`);
+                                                            with --record --on M, PLAN goes as the run's input (drive's
+                                                            `after_landing_shards = "auto"`, one plan for every shard)
+    uv run python tools/verity/check/check.py --shard-plan [--max-shards M] [--n N] [--deferred STEP,...] [--costs FILE]
+               [--no-gather] [--split-s S] [--json] [--out FILE]
+                                                            the auto plan of this tree, run nothing: its tasks' costs from the
+                                                            newest recorded checks (none with --no-gather) and this machine's
+                                                            caches, or FILE's {part: seconds} over them
     uv run python tools/verity/check/check.py --record --combine RUN...
                                                             the shards RUN..., one per K, recorded as one check of this commit
                                                             when they are together a passing one (`research merge` reads them)
+    uv run python tools/verity/check/check.py --record --cc-records --on M
+                                                            circuit-check's records step (`cc_records`): every catalog binding's
+                                                            record built once and tarred into the run's $OUT, recorded without
+                                                            the tool; drive's sharded after-landing run runs it before its
+                                                            shards and gives each its artifact (`--cc-records-from ART@SHA256`:
+                                                            unpacked into circuit-check's cache, and the shard refused unless
+                                                            its bytes have that sha256 and it was built from this tree)
 
 Sharding.  `check.py --shard K/N` runs the preflight and then only shard K's parts of the plan with N shards that `ci.toml`
-declares (`declaration.py`: each job in one shard, `lean-audit` split by Lake package), so one commit's check runs on N pods at
-once and takes about as long as its longest shard. Its result is a `check-shard/v1` (`SHARD_KIND`) that names the shard, the
-commit, the config (the tree of `tools/verity/check/` at that commit), the shard's parts and every part an unsharded check covers, and
+declares (`declaration.py`: each job in one shard, `lean-audit` split by Lake package, `circuit-check` into its `shards`, its
+targets by the hash of each one's id, `lean-suites` by suite, one that declares `[tool.verity.tests] parts = P` into its P
+parts by test id, `lean-suites:SUITE:K/P`, with lean-build again on each shard that holds some of them and not it), so one
+commit's check runs on N pods at once and takes about as long as its longest shard. Its result is a `check-shard/v1`
+(`SHARD_KIND`) that names the shard, the commit, the config (the tree of `tools/verity/check/` at that commit), the shard's parts and every part an unsharded check covers, and
 each step the parts it ran. `--record --combine RUN...` records, on the clean commit, a `check/v1` whose steps are the shards'
 parts, each once (the preflight's steps once, passed in every shard), when `research.merge.shard_set` accepts them: the
 shards' Attempts are passing runs of the declared command with `--shard K/N` on that clean commit, their results passed with
 no step failed or stopped, all of one plan (one N, K = 1..N once each) and one config (the commit's), and their parts are
-every part, each once, covering every job the commit's `ci.toml` declares. `research merge` takes the combined Attempt only
+every part, each once, covering every job the commit's `ci.toml` puts on the gate (a shard skips a job off it, which a plan
+may still name: circuit-check and ratchet-gate run after landing alone). `research merge` takes the combined Attempt only
 after judging its shards again the same way and finding its steps theirs, so a missing, repeated, failed or mismatched shard
 passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
+When circuit-check is on the gate and its parts ran in more than one shard, the combine also joins their records
+(`circuit_join`: each shard's `CC_SHARDS` from its Attempt's run files, through `circuit-check --combine`), and fails unless
+that gives the verdict the unsharded `--all` gives: a by-calls root whose callee another shard checked is judged only there.
+An auto plan (`--shard auto:K/N`, `shards.py`) has finer parts: each suite of pytest and lean-suites (`pytest:SUITE`,
+`lean-suites:SUITE`), or each of the parts by test id one declares, is a part of its own, packed by measured cost, and one
+measured past `shards.SPLIT_S` (`--split-s`) is M parts by test file (`pytest:SUITE:K/M`, `suite_splits`), whose partition and timing record the plan carries (`splits`), so
+each shard runs `suites.py SUITE:K/M@DIGEST --timings` of the planner's partition; the plan travels with each shard as its run's input
+(`AUTO_PLAN`; unrecorded, `--shard-plan-file PLAN`), which refuses one whose parts aren't its tree's, and its result names the plan's digest, floor and predicted wall time
+(`shard.plan`), so a combine joins only shards of one plan.  The combine also joins a split suite's parts across shards
+(`suite_join`, `suites.combine_parts`), and fails unless every part of one partition passed once; a shard that holds every
+part of a suite runs it whole (`suites.py`), and that pass is its verdict.
 
 First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
 tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
@@ -71,12 +131,23 @@ step's status is `stopped`. `--keep-going` lets every group run to its end inste
 except after a failed preflight, which starts no group, or a step in `HALTS`: a Lean module that doesn't compile, or a guarantee whose
 record is stale, fails the audit too, so nothing still running is worth the slot; likewise a Rust crate that doesn't compile
 (`HALTS_ON`: flock-circuit-build's log says `could not compile`) fails flock-rust-tests.
+A step whose outputs (its log, the run dir's files named after it, `WATCH`'s) haven't changed for `IDLE_S`, or that is still
+running after `STEP_BUDGET_S`, is stopped the same way (SIGTERM, then SIGKILL) and fails, `hung: no output for N min` or `over
+budget`, so a hung test can't hold a check slot for a day; each suite is bounded first by its own `--timeouts`.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run, and mirrored
-as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step is a completed child, the run's end
-completes the root), the frozen shape the observability watcher reads.  A SIGTERM
-(`research cancel`, a runner's timeout) stops the steps the same way, and a recorded run still writes its result, validation
-`not_run`, and the pack of the passes its steps stored before it, then exits 143: a cancelled check's passes are reused.
+as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step a child as it starts that its
+record completes, the run's end completes the root), the frozen shape the observability watcher reads.  The run's live record
+(`live.py`, `check-live.json`) holds every planned step's state, elapsed time and progress, and a recorded run publishes it on the
+store's remote with its custody key as each step ends and every few minutes, so `verity ci ls` and `verity ci inspect RUN` read a
+running check from anywhere without its node.  A SIGTERM
+(`research cancel`, a runner's timeout) stops the steps the same way (a step it reaches first and kills is `stopped` too, not
+failed), and a recorded run still writes its result, validation `not_run`, and the pack of the passes its steps stored before
+it, then exits 143: a cancelled check's passes are reused.
+
+After the preflight the C++ models are built once (`prebuild`, its output in `prebuild.log`): a prebuild that fails refuses the
+run, a failed `prebuild` record and no group started, since each step would otherwise compile them untraced the first time it
+ran one.
 
 Then the independent groups run at once, the cores split between the first two (`--cores N`, default the CPUs this process may
 use). Which group a step is in, its order there, a step in another group it waits on, and whether its failure halts the run
@@ -94,8 +165,10 @@ doesn't name:
                     slot.py's CHECK_SLOT_MEM_GB) less `SIBLINGS_GB` when pytest or Lean runs beside it, less pytest's share
                     alone when no Lean step does (`cc_mem_gb`), and all of it once every step beside it has ended
                     (`grant_when_alone`): every registered Definition and template
-                    (`tools/verity/circuit_check`),
-                    its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
+                    (`tools/verity/circuit_check`), or in a shard that holds some of its parts (`circuit-check:K/N`) only
+                    those shards of them (`--shard K/N`, records under `CC_SHARDS`),
+                    its report beside the run's result (off the gate: a recorded check skips it, and the after-landing
+                    run, `--deferred` with every job, runs it); then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`verity/core/service/flock`), then its partition check against
                     `verity.ml.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
@@ -113,6 +186,16 @@ doesn't name:
                     kernel replay, so a module that no longer compiles or a guarantee's record a merge left stale ends the
                     run in minutes, not when the audit's cold build reaches it; it skips what it can't build or read here and
                     vouches for nothing: the audit decides
+    ratchet-gate    `integrations/vllm/tools/ratchet_gate.py BASE HEAD`, the gate as BASE has it: no change above BASE (the
+                    commit in the run's `check-ratchet-base.txt` or else `check-base.txt`, which `--record --on` sends: its
+                    --ratchet-base REF's and its --base REF's; else origin/main)
+                    grows the vLLM integration's lint ratchets.  On a train each `Queue: #N` merge is judged against the one
+                    below, so its log names the PR whose merge fails (`  #N (COMMIT): failed: ...`), which drive takes as
+                    the culprit.  A BASE at or above HEAD fails it, since it would judge nothing (drive's after-landing
+                    run sends one below the tip: the tip of the last run whose ratchet-gate gave a verdict, else the last
+                    verified `main`); one that names no commit here skips it.  Off the
+                    gate and in no plan: a recorded check skips it, and the after-landing run, `--deferred` with every
+                    job, runs it
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 
@@ -122,7 +205,7 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
                     existence probe and loaded library its own check read or resolved (the Definitions it reached, their builds
                     and modules' import closures, its bindings and its pins, in `targets.py` or a Definition module's sidecar) is
                     unchanged, with the checker's own version; one after a read the tracer cannot see (a program it starts) is
-                    not stored (`circuit_check.cache`)
+                    not stored (`circuit_check.cache`); `--no-cache --circuit-cache` keeps this one cache on
     lean-audit      per package (`lean_audit.py`): a pass is reused while the content of the package, its path dependencies,
                     `tools/verity/lean/` and its toolchain and manifest is unchanged, wherever the package is (a move is no miss, and
                     its kept build follows it); a miss is audited on a scratch tree holding only those, so a read outside them
@@ -134,19 +217,23 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
     lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
                     what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: verity/ml/flock/verifier/'s
-                    tracked files, which pin the upstream build and inputs, the interpreter, the environment)
+                    tracked files, which pin the upstream build and inputs, the interpreter, the platform, the environment)
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
-                    the live crate, that toolchain's `rustc -vV`, the environment), so only a change to those pays for the Rust
-                    tests
-    preflight-lints likewise (`lints_key`: the commit's tree, which they read whole, the interpreter, the environment); a tree
-                    with uncommitted changes has no key, and runs them
+                    the live crate, that toolchain's `rustc -vV`, the platform, the environment), so only a change to those pays
+                    for the Rust tests
+    preflight-lints likewise (`lints_key`: the commit's tree, which they read whole, the interpreter, the platform, the
+                    environment); a tree with uncommitted changes has no key, and runs them
+                    The platform is `suites.platform_id` (not the kernel release) and the environment `_env_key` (the
+                    switches and the locale, not paths), so a pass is reused on any node for the same inputs, as a suite's is
+    ratchet-gate    the gate's own, under `ratchet-gate/` ($RATCHET_GATE_CACHE): each change's verdict, keyed by the gate's bytes
+                    and the change's commits (and BASE, for a verdict that read it)
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
 `--verdicts-in`, written again as each step ends, every few minutes and on SIGTERM (`Packs`), so a cancelled check's pack holds
 what its steps had passed.  `--record` declares it an output, so custody uploads it however the run ends: a cancel's SIGKILL
 leaves no result.json, and the pack is then in the attempt's run record alone (`attempt_pack` reads either).  Custody misses it only
-where it uploads nothing: `--no-custody-r2` and a run without `--on`, and a run whose runner is killed or whose machine is lost.  `--record` without `--no-cache` sends one pack of the newest recorded checks' packs, failed and cancelled
+where it uploads nothing: `--no-custody-r2` and a run without `--on`, and a run whose runner is killed or whose machine is lost.  `--record` without `--no-cache` (or with `--circuit-cache` beside it, for circuit-check's entries alone) sends one pack of the newest recorded checks' packs, failed and cancelled
 ones' too, since a pack holds only passes (`gather_verdicts`), with a
 `--verdicts-in` pack added to them, never in their place, so every machine reuses every pass a recorded check earned; the pack
 imported is named in the result's `verdicts`.
@@ -155,10 +242,11 @@ The evidence store.  A recorded check runs the store-backed tests (integrations/
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
 dir (`research run --custody-r2`, the default with --on: a delete-free key with GetObject), which `store_io` hands to its store
 CLI only.  So `--record --on` must be launched where the parent R2 key is (the Cursor secrets, or `~/.config/verity/r2.env` when it
-holds no AWS_SESSION_TOKEN): a temporary credential cannot mint the custody key, and `research run` refuses.  VERITY_SKIP_STORE=1
-is refused inside a recorded run.  Outside one, the store-backed tests skip where no remote is configured.  Under
+holds no AWS_SESSION_TOKEN): a temporary credential cannot mint the custody key, and `research run` refuses.  VERITY_SKIP_STORE,
+a debug setting (`settings.py`), is refused inside a recorded run.  Outside one, the store-backed tests skip where no remote is
+configured.  Under
 VERITY_STORE_REQUIRED=1 the suites' guard fails any skip whose reason says "the evidence store is not reachable", whichever helper
-fetched (C-Flock's `verifier/ci.py` hands the custody key to its store CLI too).
+fetched (Flock's `verifier/ci.py` hands the custody key to its store CLI too).
 
 The vLLM reference regression.  A recorded run's steps also get VERITY_REGRESSION=1, so integrations/vllm's suite runs
 `tests/regression`'s T0 tier against the frozen rows in the store (about four minutes of tests): every check but the manifest
@@ -167,47 +255,44 @@ input or contract that doesn't resolve fails there; only a check `fixtures.toml`
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
 import json
 import os
-import platform
 import re
 import shlex
 import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
 import time
 import weakref
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 #: `ci.py`, the agreement job of the Lean verifier against upstream's Rust verifier, and its other scripts
 FLOCK_VERIFIER = ROOT / "verity" / "ml" / "flock" / "verifier"
-#: the Lean verifier of record, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
+#: the Lean verifier, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
 #: the Lean package away from the scripts rewrites it)
 FLOCK_LEAN = ROOT / "verity" / "core" / "service" / "flock"
-#: environment variables that say nothing about what a step computes (the shell's own bookkeeping)
-VOLATILE = frozenset({"_", "OLDPWD", "PWD", "SHLVL", "TERM", "COLUMNS", "LINES", "TMUX", "TMUX_PANE", "SSH_CLIENT", "SSH_CONNECTION",
-                      "SSH_TTY", "SSH_AUTH_SOCK", "XDG_SESSION_ID", "MAIL", "LOGNAME", "USER", "HOSTNAME", "PUBLIC_KEY",
-                      "CHECK_STORE_CUSTODY"})
-#: variables naming the machine rather than what a step computes: a pod's id, address and pod-scoped key (so a verdict one pod
-#: stored stays valid on another; `verdicts.py`)
-MACHINE_PREFIXES = ("RUNPOD_",)
 #: the recording run's custody dir, for `store_io` (not VERITY_-prefixed: the suites' cache keys on those, and the path is per run)
 CUSTODY_ENV = "CHECK_STORE_CUSTODY"
 STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"
 #: integrations/vllm's reference regression (`tests/regression`): on in a recorded run, its T0 tier less the manifest rebuilds
 REGRESSION_ENV = "VERITY_REGRESSION"
+#: the vLLM integration's ratchet gate, which ratchet-gate runs as its base has it, so no change it judges can weaken it
+RATCHET_GATE = "integrations/vllm/tools/ratchet_gate.py"
 
 
 def custody_dir() -> Path | None:
     """The recording run's custody dir (`<root>/requests/<run id>/custody/`, beside `<root>/runs/<run id>/`) when it holds a key."""
-    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    run_dir, run_id = SETTINGS.RESEARCH_RUN_DIR, SETTINGS.RESEARCH_RUN_ID
     if not run_dir or not run_id:
         return None
     d = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
@@ -222,6 +307,8 @@ def _load(name: str, d: Path | None = None):
     return m
 
 
+#: every environment variable check reads, declared once (`settings.py`)
+SETTINGS = _load("settings")
 DECLARATION = _load("declaration")
 #: the jobs `tools/verity/check/ci.toml` declares: their groups, order within a group, and what halts the run (`groups`, `HALTS`)
 JOBS = DECLARATION.load()
@@ -233,8 +320,12 @@ VERDICTS = _load("verdicts")
 COMMON = _load("common")
 #: trace/v1 spans over the run (`spans.py`): `spans.jsonl` beside `steps.jsonl`, the frozen shape the watcher reads
 SPANS = _load("spans")
+#: the run's live record (`live.py`): `check-live.json` beside `steps.jsonl`, published on the store's remote as the run goes
+LIVE = _load("live")
 #: the test runner (`suites.py`), for where the steps' Python imports this tree's packages from
 SUITES = _load("suites")
+#: the shard planner (`shards.py`): auto plans
+SHARDS = _load("shards")
 cache_dir = COMMON.cache_dir
 cores = COMMON.cores
 _sha256 = COMMON.sha256
@@ -255,7 +346,7 @@ def agreement_files(out: Path) -> dict[str, Path]:
     ``$FLOCK_AGREEMENT_INPUTS``, found by sha256: {"upstream": path, "inputs": path} for those present."""
     pin = json.loads(UPSTREAM_PIN.read_text())
     want = {pin[k]["sha256"]: k for k in ("upstream", "inputs")}
-    dirs = [out / "inputs", *([Path(os.environ[AGREEMENT_DIR_ENV])] if os.environ.get(AGREEMENT_DIR_ENV) else [])]
+    dirs = [out / "inputs", *([Path(d)] if (d := SETTINGS.get(AGREEMENT_DIR_ENV)) else [])]
     found = {}
     for p in (q for d in dirs if d.is_dir() for q in sorted(d.iterdir()) if q.is_file()):
         if p.stat().st_size and (k := want.get(_sha256(p))):
@@ -270,47 +361,71 @@ LEAN_DEPS_URLS_ENV = "CHECK_LEAN_DEPS_URLS"
 #: the parts a recorded shard runs (none for a combine), among its inputs: the preflight asks only for the Lean dependencies of
 #: the packages it audits, since it carries URLs for no others
 SHARD_PARTS = "check-shard-parts.json"
+#: the commit a `--record --on` check's --base REF names, among its inputs: ratchet-gate judges the merges above it
+BASE_FILE = "check-base.txt"
+#: the commit a `--record --on` check's --ratchet-base REF names, among its inputs: ratchet-gate's base in place of `BASE_FILE`'s
+RATCHET_BASE_FILE = "check-ratchet-base.txt"
+#: an auto shard's plan (`shards.py`), among its inputs (unrecorded: `--shard-plan-file`)
+AUTO_PLAN = "check-shard-plan.json"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
 SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
+#: the least slot memory a train check that runs pytest, lean-suites or circuit-check takes (slot.py's MIN_MEM_ENV): the train
+#: slots' mem=. In a lane slot every parallel suite gets one test worker, the one-process suites share one process and circuit-check
+#: runs one target at a time: two to four times a train slot's wall time
+TRAIN_GB = 300
+#: the steps that need a train slot's memory
+TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check")
+
+
+def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combining: bool) -> int | None:
+    """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs pytest,
+    lean-suites or circuit-check, all of a check (``parts`` None) or a shard or after-landing run holding one; else None."""
+    if not priority or pool is not None or combining:
+        return None
+    return TRAIN_GB if parts is None or any(p.partition(":")[0] in TRAIN_STEPS for p in parts) else None
 
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's train position, so the train that lands
-    next takes the next slot; CI-110) and --twin for one of a check's twins."""
-    by = os.environ.get("RESEARCH_LANE") or os.environ.get("RESEARCH_AGENT_URL")
-    rank = os.environ.get("CHECK_SLOT_RANK", "")
+    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's and lock run's, so
+    they take the next slot ahead of unranked priority checks) and --twin for one of a check's twins."""
+    by = SETTINGS.RESEARCH_LANE or SETTINGS.RESEARCH_AGENT_URL
+    rank = SETTINGS.CHECK_SLOT_RANK
     return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),
             *(["--rank", rank] if priority and re.fullmatch(r"\d{1,6}", rank) else []), *(["--by", by] if by else []),
             *(["--twin", twin] if twin else []), SLOT_WRAP[-1]]
 
 
-def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bool = False) -> list[str]:
+def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bool = False,
+          min_mem: int | None = None) -> list[str]:
     """The machines among ``names`` to launch twins of a check on (`slot.py --twin`), ``home`` first: every one a check can run
     on (`placement` refuses none) when ``home``, `choose`'s pick, has no slot free for it; else none, and it runs on ``home``."""
     def runs(name: str) -> bool:
         try:
-            placement(docs[name], priority)
+            placement(docs[name], priority, min_mem)
         except (ValueError, KeyError, TypeError, AttributeError):
             return False
         return True
 
-    if placement(docs[home], priority)[0]:
+    if placement(docs[home], priority, min_mem)[0]:
         return []
     out = [home, *(n for n in names if n != home and runs(n))]
     return out if len(out) > 1 else []
 
 
 #: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
-#: only=trains, and vy-nebius-1's went with its draining, 23 Oct; CI-152)
+#: only=trains)
 AUTO = ("vy-nebius-2",)
+#: the pool a lane's own recorded check takes when it names none (`nested_record`): any lane's, research.auto's SPILL pool, on
+#: the machine `lane_machine` picks
+LANE_POOL = "research"
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
 FULL_CHECK_S = 9000
-#: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
-LANE_RUN = ("`research run --on vy-nebius-cpu-K --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && "
-            "uv run tools/verity/check/suites.py --changed origin/main --quick'`")
+#: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
+LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+            'uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
 #: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
 SLOTS_PROGRAM = '''
@@ -391,12 +506,13 @@ def read_slots(names: list[str], reach=reach, run=_ssh) -> dict[str, dict | str]
         return dict(zip(names, ex.map(one, names)))
 
 
-def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
+def placement(doc: dict, priority: bool = False, min_mem: int | None = None) -> tuple[bool, int, str]:
     """A check's prospects on a machine whose `read_slots` documents are ``doc``: whether a check slot and a Lean `check` slot
     are free for it (more free than live waiters ahead of it), how many live waiters are ahead of it in the check line (with
-    ``priority``, a train check's, only the priority ones), and the state in a few words. ValueError when no check can run
-    there: a document has an error, the slots file lists no slot, the Lean slots file grants check's lean-audit step none, or the
-    machine's deadline is nearer than FULL_CHECK_S."""
+    ``priority``, a train check's, only the priority ones), and the state in a few words; with ``min_mem`` (`train_gb`), only
+    the slots whose mem= holds it count. ValueError when no check can run there: a document has an error, the slots file lists
+    no slot (or none that holds ``min_mem``), the Lean slots file grants check's lean-audit step none, or the machine's deadline
+    is nearer than FULL_CHECK_S."""
     check, lean = doc["check"], doc["lean"]
     for d, what in ((check, "check slots"), (lean, "Lean audit slots")):
         if "error" in d:
@@ -412,8 +528,11 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     else:
         mine = [s for s in check["slots"] if priority or not s.get("trains")]
         if not mine:
-            raise ValueError(f"every slot in {check['file']} is for train checks (only=trains). A PR lands on an eyeball review, "
-                             "and no lane check is required; to run its tests anyway: " + LANE_RUN)
+            raise ValueError(f"every slot in {check['file']} is for train checks (only=trains). A PR lands on review, and drive's "
+                             "full check decides what reaches `main`, so no lane check is required; to run its tests anyway: " + LANE_RUN)
+        if min_mem and not (mine := [s for s in mine if s.get("mem") is None or s["mem"] >= min_mem]):
+            raise ValueError(f"no slot in {check['file']} holds this check's {min_mem} GB (" + ", ".join(
+                f"{s['name']} {s.get('mem')} GB" for s in check["slots"]) + "): it takes a train slot")
         free = [s for s in mine if s["holder"] is None and not s["blocked"]]
         room = len(free) > ahead
         why = "check slots: " + ", ".join(f"{s['name']} " + ("held" if s["holder"] else "blocked" if s["blocked"] else "free")
@@ -429,27 +548,8 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     return room and free_lean > len(p["waiters"]), ahead, why
 
 
-def spare(doc: dict, priority: bool = False) -> int:
-    """How many more checks could take a slot now on a machine whose `read_slots` documents are ``doc``: its free check slots no
-    window or memory gate blocks, less the live waiters ahead (`placement`), and no more than its free Lean `check` slots less
-    their waiters; 0 where none can run.  A machine without check slots counts one.  Drive moves a train still waiting in
-    another machine's line onto it (`research.drive.free_slots`)."""
-    try:
-        room, ahead, _ = placement(doc, priority)
-    except (ValueError, KeyError, TypeError, AttributeError):
-        return 0
-    if not room:
-        return 0
-    check, lean = doc["check"], doc["lean"]
-    n = 1 if check["slots"] is None else len([s for s in check["slots"] if (priority or not s.get("trains"))
-                                                and s["holder"] is None and not s["blocked"]]) - ahead
-    if lean["pools"] is not None:
-        p = lean["pools"][next(k for k in ("check", "any") if k in lean["pools"])]
-        n = min(n, len([s for s in p["slots"] if s["holder"] is None and not s["past_n"]]) - len(p["waiters"]))
-    return max(n, 0)
-
-
-def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False) -> tuple[str | None, str, list[str]]:
+def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False,
+           min_mem: int | None = None) -> tuple[str | None, str, list[str]]:
     """`--on auto`'s machine among ``names``, its reason, and each machine skipped with why. The first machine where a check slot
     with no window blocking it and a Lean `check` slot are free for this request (`placement`); else the one with the fewest
     live waiters ahead of it, the first listed among those tied. A machine whose documents can't be read is skipped; with none
@@ -460,7 +560,7 @@ def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False
         try:
             if not isinstance(doc, dict):
                 raise ValueError(doc or "not read")
-            room, ahead, why = placement(doc, priority)
+            room, ahead, why = placement(doc, priority, min_mem)
         except ValueError as e:
             skipped.append(f"{name}: {e}")
             continue
@@ -478,21 +578,22 @@ def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False
 
 #: the checks `--on auto` or `--on M1,M2` placed from this launcher and hasn't yet seen in their machine's check line, by commit:
 #: until one shows there (or PLACED_S passes: train.sh's wait for a launch), it counts as a priority waiter on its machine, so
-#: checks placed at once go to different machines (23 Oct 13:04Z: drive's four parallel launches all read cpu-1's one free
-#: slot as theirs, and three queued there for an hour while cpu-4's stood free)
+#: checks placed at once go to different machines (without it, parallel launches all read one machine's one free slot as
+#: theirs, and queued there while another machine's slot stood free)
 PLACED = Path(tempfile.gettempdir()) / "verity-check-placed.json"
 PLACED_S = 1800
 
 
 def _trees(doc: dict) -> set[str]:
-    """The shortened commits a machine's check slots hold or wait for."""
+    """The shortened commits a machine's check slots hold or wait for: each one's commit, else its tree's name (<root>/src/<sha>,
+    from a slot.py that records no commit)."""
     check = doc.get("check") or {}
     who = [s["holder"] for s in check.get("slots") or [] if s.get("holder")] + list(check.get("waiters") or [])
-    return {Path(h["tree"]).name[:12] for h in who if h.get("tree")}
+    return {(h.get("commit") or Path(h["tree"]).name)[:12] for h in who if h.get("commit") or h.get("tree")}
 
 
 def place(names: list[str], commit: str, priority: bool = False, read=None, path: Path | None = None,
-          now=time.time) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
+          now=time.time, min_mem: int | None = None) -> tuple[dict[str, dict | str], str | None, str, list[str]]:
     """`read_slots` and `choose` for ``commit``, one launcher process at a time, with the other checks this launcher placed and
     no machine shows yet (PLACED) as waiters on theirs; ``commit`` is recorded on its pick."""
     import fcntl
@@ -512,7 +613,7 @@ def place(names: list[str], commit: str, priority: bool = False, read=None, path
             if isinstance(d := docs.get(p["on"]), dict) and isinstance((d.get("check") or {}).get("waiters"), list):
                 d["check"]["waiters"].append({"priority": True, "pid": 0, "since": time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime(p["at"])),
                                               "minutes": int((t - p["at"]) // 60), "tree": c, "by": "a launch placed here"})
-        got, why, skipped = choose(names, docs, priority)
+        got, why, skipped = choose(names, docs, priority, min_mem)
         if got:
             placed[commit] = {"on": got, "at": t}
             path.write_text(json.dumps(placed))
@@ -523,7 +624,7 @@ def _who(h: dict) -> str:
     """A holder or waiter in a few words: since when, its run, its tree (a commit's, shortened) and who asked (a URL's last part)."""
     parts = [f"since {h['since']} ({h['minutes']} min)" if h.get("since") else f"pid {h['pid']}"]
     parts += [f"run {h['run']}"] if h.get("run") else []
-    tree = Path(h["tree"]).name if h.get("tree") else ""
+    tree = h.get("commit") or (Path(h["tree"]).name if h.get("tree") else "")
     parts += [f"tree {tree[:12] if re.fullmatch(r'[0-9a-f]{40}', tree) else tree}"] if tree and tree != h.get("run") else []
     parts += [f"by {h['by'].rstrip('/').rsplit('/', 1)[-1]}"] if h.get("by") else []
     return ", ".join(parts if len(parts) > 1 or not h.get("cmd") else [*parts, h["cmd"][:60]])
@@ -587,7 +688,7 @@ def take_lean_deps_urls(out: Path) -> Path | None:
     (`research.store.custody.CREDENTIALS`)."""
     sent = out / "inputs" / LEAN_DEPS_URLS
     if not sent.is_file():
-        return Path(os.environ[LEAN_DEPS_URLS_ENV]) if os.environ.get(LEAN_DEPS_URLS_ENV) else None
+        return Path(u) if (u := SETTINGS.get(LEAN_DEPS_URLS_ENV)) else None
     fd, tmp = tempfile.mkstemp(prefix="lean-deps-urls-", suffix=".json")
     with os.fdopen(fd, "wb") as f:
         f.write(sent.read_bytes())
@@ -617,8 +718,8 @@ LEAN_SLOT_WRAP = [sys.executable, str(ROOT / "tools" / "verity" / "check" / "lea
 
 def lean_regenerates() -> bool:
     """Whether this tree's lean-audit job takes `--regenerate`: a package whose only failures are record differences passes,
-    and its report names the regenerated lock, which drive commits onto the train it lands (CI-64).  Read from the job, so a
-    tree from before it runs as it always did."""
+    and its report names the regenerated lock, which drive commits after its lock run (`research.drive.Driver._commit_locks`).
+    Read from the job, so a tree from before it runs as it always did."""
     try:
         return '"--regenerate"' in (LEAN_JOBS / "lean_audit.py").read_text()
     except OSError:
@@ -627,13 +728,13 @@ def lean_regenerates() -> bool:
 
 def lean_audit_misses(cache: bool = True, only: list[str] | None = None) -> bool:
     """Whether the lean-audit step will audit a package (of ``only``, its `--package`s, when given): one whose pass isn't kept
-    here under its key (`lean_audit.run`'s test)."""
+    here under its key with what its reuse needs (`lean_audit.reusable`, `lean_audit.run`'s test)."""
     la = _lean_audit()
     files = tracked_files(ROOT)
     if not cache or files is None:
         return True
     pkgs = [p for p in la.packages(files) if not only or p in only]
-    return any(not (cache_dir() / "lean-audit" / f"{la.key(p, files, la.FLAGS)}.json").is_file() for p in pkgs)
+    return any(not la.reusable(cache_dir() / "lean-audit", p, la.key(p, files, la.FLAGS)) for p in pkgs)
 
 
 def lean_fast(out: Path) -> str | None:
@@ -654,6 +755,32 @@ def lean_fast(out: Path) -> str | None:
         return (f"refused: {', '.join(fast) or p}: a {kind} result (the fast path: no kernel replay, no tests), which no merge "
                 "check accepts")
     return None
+
+
+def lean_passes(out: Path, done: list[dict], lc=None) -> dict[str, str]:
+    """{inputs key: package} for each package the lean-audit step audited and passed on this tree's own lock (no failure, the
+    kernel replay, not passed on a record it regenerated), each key `lean_changed.inputs_key` (``lc``, the module) of this tree:
+    the key a records run of the commit keeps and `lean_changed.py --inputs-key` prints, so `research queue`'s records gate
+    finds a check's passes as it finds a records run's.  None from a step that didn't end with the audit's verdict
+    (refused, hung, stopped) or from an audit that failed without reporting a package (check.py crashed)."""
+    step = next((s for s in done if s.get("step") == "lean-audit"), None)
+    if step is None or step.get("status") not in ("passed", "failed") or step.get("rc") not in (0, 1) or step.get("detail"):
+        return {}
+    try:
+        doc = json.loads((out / "lean-audit" / "audit.json").read_text())
+        reports = {r["package"]: r for r in doc["packages"] if isinstance(r.get("package"), str)}
+        if any(f not in reports for f in doc.get("failed") or []):
+            return {}
+        regenerated = doc.get("regenerated") or {}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        print(f"check: lean-audit's report can't be read ({type(e).__name__}: {e}), so the result lists no Lean passes",
+              file=sys.stderr)
+        return {}
+    lc = lc or _load("lean_changed", LEAN_JOBS)
+    ok = [p for p, r in sorted(reports.items()) if r.get("failures") == [] and not r.get("settled") and p not in regenerated
+          and r.get("kind") != lc.FAST_KIND and isinstance(r.get("seconds"), dict) and "replay" in r["seconds"]]
+    files = tracked_files(ROOT) if ok else None
+    return {lc.inputs_key(p, files): p for p in ok} if files is not None else {}
 
 
 def lean_slot(cmd: list[str]) -> list[str]:
@@ -678,12 +805,14 @@ def requires_outside(lean: Path) -> list[str]:
 
 
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
-               regenerate: bool = True) -> list[tuple[str, list[str] | str, Path]]:
+               regenerate: bool = True, bookkeeping: bool = False) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
     is skipped by name.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
-    drive's after-landing run, where a record difference fails).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
+    drive's after-landing run, where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, drive's lock run)
+    repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
+    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
     `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
     directory (`requires_outside`)."""
     lean = FLOCK_LEAN
@@ -710,13 +839,18 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
                             sys.executable, str(LEAN_JOBS / "lean_audit.py"), "--out", str(out / "lean-audit"),
                             "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
                             *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else []),
-                            *(["--regenerate"] if regenerate and lean_regenerates() else [])], ROOT),
+                            *(["--bundle"] if SETTINGS.RESEARCH_RUN_ID else []),
+                            *(["--regenerate"] if regenerate and lean_regenerates() else []),
+                            *(["--bookkeeping", "warn"] if bookkeeping and regenerate and lean_regenerates() else [])], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 
 def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use: the least of MemAvailable and what each cgroup limit over it leaves, v2 or v1 (a pod's
-    /proc/meminfo is the host's; on a VM the limits are on its own cgroup's ancestors, such as a run's session scope)."""
+/proc/meminfo is the host's; on a VM the limits are on its own cgroup's ancestors, such as a run's session scope). A v2
+cgroup's page cache (active_file and inactive_file in its memory.stat) is in its memory.current, but the kernel reclaims it at
+the limit, so it counts as left, as in slot.py's `memory_gb`: a user slice can hold hundreds of GB of cache near its limit,
+and counted as used it leaves a step refusing to run with "0 GB"."""
     def read(p: Path) -> str | None:
         try:
             return p.read_text().strip()
@@ -731,7 +865,9 @@ def memory_gb(root: Path = Path("/")) -> int:
             for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
                 m, used = read(c / "memory.max"), read(c / "memory.current")
                 if m and m.isdigit():
-                    left.append(int(m) - int(used if used and used.isdigit() else 0))
+                    stat = dict(ln.split()[:2] for ln in (read(c / "memory.stat") or "").splitlines() if len(ln.split()) >= 2)
+                    cache = sum(int(stat[k]) for k in ("active_file", "inactive_file") if stat.get(k, "").isdigit())
+                    left.append(int(m) - int(used if used and used.isdigit() else 0) + cache)
     v1 = root / "sys/fs/cgroup/memory"
     m, used = read(v1 / "memory.limit_in_bytes"), read(v1 / "memory.usage_in_bytes")
     if m and m.isdigit() and int(m) < 1 << 60:         # v1 writes "no limit" as a number near 2^63
@@ -744,7 +880,6 @@ def memory_gb(root: Path = Path("/")) -> int:
 
 #: the share of this process's memory the agreement's verifier processes may count on: lean-suites (and, unsharded, the
 #: suites and circuit-check) run beside it, and on a 128 GB pod the whole budget for the agreement OOM-killed 36 of them
-#: (tip 38's shard 2/3, 6 Oct)
 AGREEMENT_MEMORY_SHARE = 2
 
 
@@ -765,7 +900,9 @@ def _version(v: str) -> tuple[int, ...]:
 
 def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
     """One real replay per upstream binary that `vectors.json` gives a stored honest session (a set without lookup tables):
-    (its PR #83 commit, the command `agree.py` would run, the verdict expected), over the unpacked build and inputs in ``w``."""
+    (its pinned commit, the command `agree.py` would run, upstream's expected verdict), over the unpacked build and inputs in
+    ``w``. Upstream's verdict is the case's `upstream_accepted` where it records an intended divergence (`agree.py`), as set
+    16's honest session does: Lean refuses it for completeness, upstream accepts it."""
     import argparse
 
     spec = importlib.util.spec_from_file_location("check_flock_agree", FLOCK_VERIFIER / "agree.py")
@@ -787,7 +924,9 @@ def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
                                circuit=str(fetch(st["circuit"])), tables=None)
         public = honest / "pub.bin" if (honest / "pub.bin").exists() else fetch(st["public"])
         extra = ["--drawn-only"] if agree.drawn(str(honest)) else []
-        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)], s["sessions"][0]["expect"])
+        e = s["sessions"][0]["expect"]
+        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)],
+                          {"accepted": e.get("upstream_accepted", e["accepted"])})
     return list(out.values())
 
 
@@ -836,16 +975,16 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
     return None
 
 
-def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
+def lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None = None) -> int:
     """Unpack the pinned upstream build and inputs, check every binary against the pin and that this machine can run them, and
-    run `ci.py` on every replayable set."""
+    run `ci.py` on every replayable set with ``verify`` (default: this tree's build of flock-verify)."""
     import tarfile
 
     pin = json.loads(UPSTREAM_PIN.read_text())
     w = out / "flock-agreement"
     for name, src in (("upstream", upstream), ("inputs", inputs)):
         if _sha256(src) != pin[name]["sha256"]:
-            print(f"check: {src} is not the pinned {name} ({pin[name]['art']})", file=sys.stderr)
+            print(f"check: lean-agreement: error: {src} is not the pinned {name} ({pin[name]['art']})", file=sys.stderr)
             return 1
         with tarfile.open(src) as t:
             t.extractall(w / name, filter="data")
@@ -853,20 +992,26 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
     for c, h in sorted(pin["upstream"]["binaries"].items()):
         b = w / "upstream" / f"upstream-{c}"
         if not b.is_file() or _sha256(b) != h:
-            print(f"check: upstream-{c} does not match the pin", file=sys.stderr)
+            print(f"check: lean-agreement: error: upstream-{c} does not match the pin", file=sys.stderr)
             return 1
         b.chmod(0o755)
         ups += ["--upstream", f"{c}={b}"]
+    print(f"check: lean-agreement: unpacked the pinned upstream build ({len(ups) // 2} binaries) and inputs; preflight: one "
+          f"stored honest session replayed per binary", flush=True)
     if why := agreement_preflight(pin, [w / "upstream" / f"upstream-{c}" for c in sorted(pin["upstream"]["binaries"])], w):
-        print(f"check: lean-agreement cannot run here: {why}", file=sys.stderr)
+        print(f"check: lean-agreement: error: cannot run here: {why}", file=sys.stderr)
         return 1
     ci = pin.get("ci", {})
     sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
-    argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(FLOCK_LEAN / ".lake" / "build" / "bin" / "flock-verify"),
+    argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(verify or FLOCK_LEAN / ".lake" / "build" / "bin" / "flock-verify"),
             *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
             "--session-jobs", str(session_jobs()),
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
-    return subprocess.run(argv, cwd=ROOT).returncode
+    print(f"check: lean-agreement: preflight passed; ci.py on {len(sets)} sets (it prints its results when every set ends)",
+          flush=True)
+    if rc := subprocess.run(argv, cwd=ROOT).returncode:
+        print(f"check: lean-agreement: error: ci.py exited {rc}; its verdicts are in {w}", file=sys.stderr, flush=True)
+    return rc
 
 
 def landable(base: str) -> bool:
@@ -879,36 +1024,129 @@ def landable(base: str) -> bool:
     return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == head
 
 
+def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
+    """The `research run` options that put a `--record --on MACHINE --pool NAME` check in a slot of MACHINE's NAME pool, the
+    pool `research run --pool NAME` takes (`slot_only.pool_slots`), rather than its merge-check slots, which on the CPU nodes are
+    only=trains: slot.py reads the pool's slots file from CHECK_SLOTS.  The command stays `slot_wrap`'s around the declared one,
+    not `slot_only.in_pool`'s (`env ... nice -n 19`), so `research merge` and `gather_verdicts` read the attempt as a check of its
+    commit.  ValueError when the pool can't be taken so; with --on auto or none, `lane_machine` picks the machine."""
+    if pool is None:
+        return []
+    from research.pods.nebius import slot_only
+
+    if not slot_only.POOL_NAME.fullmatch(pool):
+        raise ValueError(f"{pool}: no such pool; a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
+                         f"{', '.join(sorted(slot_only.POOLS))}; a node's own are under {slot_only.LOCKS})")
+    if on and "," in on:
+        raise ValueError(f"{pool} waits in one machine's pool: `--on auto --pool {LANE_POOL}` or --on MACHINE, not a list, which "
+                         f"chooses among merge-check slots")
+    if priority:
+        raise ValueError(f"{pool} takes no --priority: that is the lander's train checks' place in the merge-check slots' line")
+    return ["--env", f"CHECK_SLOTS={slot_only.pool_slots(pool)}"]
+
+
+def lane_machine(pool: str) -> str:
+    """The machine a `--record --on auto --pool NAME` check waits on: the one whose NAME pool `research run --on auto` would
+    spill a run to now (`research.auto.choose` on the SPILL machines' lines, read as it reads them).  ValueError when NAME is
+    no SPILL pool (a node's own pool takes --on MACHINE) or no SPILL machine's pool can take it."""
+    from research import auto
+
+    spill = sorted({p for _, p in auto.SPILL})
+    if pool not in spill:
+        raise ValueError(f"{pool}: --on auto takes only research.auto's pools ({', '.join(spill)}); a node's own pool takes "
+                         f"--on MACHINE, the machine that keeps it")
+    try:
+        target, why = auto.choose(auto.read(ROOT, 1), 1, 0)
+    except auto.Unplaceable as e:
+        raise ValueError(f"{pool}: --on auto: {e}") from None
+    if target is None or target[1] != pool:
+        raise ValueError(f"{pool}: --on auto: no machine's {pool} pool can take it ({why}); name one with --on MACHINE")
+    print(f"check: --on auto --pool {pool}: {target[0]} ({why})", flush=True)
+    return target[0]
+
+
+def nested_record(argv: list[str]) -> str:
+    """The command that records ``argv``'s check from outside a `research run`: `record` launches a `research run` of its own,
+    so inside one it is refused with this.  With no --on, `--on auto` in its --pool, else `LANE_POOL`."""
+    where = [] if "--on" in argv else ["--on", "auto", *([] if "--pool" in argv else ["--pool", LANE_POOL])]
+    return shlex.join(["uv", "run", "python", "tools/verity/check/check.py", "--record", *where,
+                       *(a for a in argv if a != "--record")])
+
+
 def record(argv: list[str]) -> int:
-    """`--record [--on MACHINE|auto|M1,M2] [--base REF] [--agreement]`: `research run --tool check` on this clean commit, with the
-    pinned upstream build and inputs (fetched from the store) when the commit changes a path `tools/verity/check/tool.py` names against
-    REF (default origin/main, fetched first), or whenever --agreement is given, and the newest recorded checks' verdicts
-    (`gather_verdicts`) unless it is given a pack or --no-cache. A commit that can't land on REF as it is
-    (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
+    """`--record [--on MACHINE|auto|M1,M2] [--base REF] [--ratchet-base RREF] [--agreement]`: `research run --tool check` on this
+    clean commit, with the pinned upstream build and inputs (fetched from the store) when the commit changes a path
+    `tools/verity/check/tool.py` names against REF (default origin/main, fetched first), or whenever --agreement is given, with
+    `--on` REF's commit (`BASE_FILE`, ratchet-gate's base unless RREF's commit, `RATCHET_BASE_FILE`, is), and the newest recorded checks' verdicts (`gather_verdicts`) unless it is given a pack or
+    --no-cache without --circuit-cache. A commit that can't land on REF as it is (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
-    gathered verdicts and no upstream build or Lean dependencies."""
-    on = base = None
+    gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`, or `--on auto` or none for
+    the machine `lane_machine` picks) waits for a slot of that machine's NAME pool instead of its merge-check slots (`pool_env`);
+    `--timeout S` is the run's (`research run --timeout`, custody 24 h).
+    `--shard auto:K/N --shard-plan-file PLAN` (with --on) is shard K of the auto plan PLAN, sent as the run's `AUTO_PLAN` input."""
+    on = base = ratchet_base = pool = timeout = plan_file = None
     agreement = priority = False
     rest = []
     it = iter(argv)
     for x in it:
         if x == "--on":
             on = next(it)
+        elif x == "--pool":
+            pool = next(it)
         elif x == "--base":
             base = next(it)
+        elif x == "--ratchet-base":
+            ratchet_base = next(it)
         elif x == "--agreement":
             agreement = True
         elif x == "--priority":
             priority = True
+        elif x == "--timeout":
+            timeout = next(it)
+        elif x == "--shard-plan-file":
+            plan_file = Path(next(it)).resolve()
         else:
             rest.append(x)
+    try:
+        pooled = pool_env(pool, on, priority) + (["--timeout", timeout, "--custody-ttl", "24h"] if timeout else [])
+        if pool is not None and on in (None, "auto"):
+            on = lane_machine(pool)
+    except ValueError as e:
+        print(f"check: --pool {e}", file=sys.stderr)
+        return 2
+    combining = rest[:1] == ["--combine"]
+    records = "--cc-records" in rest
+    parts = None
+    deferred = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
+    spec = rest[rest.index("--shard") + 1] if "--shard" in rest[:-1] and not records else None
+    if (spec or "").startswith("auto:") != (plan_file is not None) or (plan_file is not None and not on):
+        print(f"check: --shard {spec or 'K/N'}{' --shard-plan-file' * (plan_file is not None)} refused: an auto shard is "
+              "`--shard auto:K/N --shard-plan-file PLAN --on M`, PLAN made once for all N (`--shard-plan --out PLAN`) and "
+              "sent as the run's input, and only an auto shard takes a plan file", file=sys.stderr)
+        return 2
+    try:
+        if records:                                    # circuit-check's records alone: its memory, no Lean
+            parts = ["circuit-check"]
+        elif plan_file is not None:                    # its plan is of those steps' jobs alone (`auto_shard`)
+            jobs = DECLARATION.needed(JOBS, [s for s in deferred.split(",") if s]) if deferred is not None else None
+            parts = shard(spec, gated=deferred is None, jobs=jobs, plan_file=plan_file)["parts"]
+        elif spec is not None:
+            parts = shard(spec, gated=deferred is None)["parts"]
+            if deferred is not None:
+                parts = [p for p in parts if p in deferred_parts(deferred)]
+        elif deferred is not None:
+            parts = deferred_parts(deferred)
+    except DECLARATION.DeclarationError as e:
+        print(f"check: {e}", file=sys.stderr)
+        return 2
+    min_mem = train_gb(priority, pool, parts, combining)
     pair, both = None, []
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
-        docs, got, why, skipped = place(names, head, priority)
+        docs, got, why, skipped = place(names, head, priority, min_mem=min_mem)
         for s in skipped:
             print(f"check: --on {on}: skipping {s}", flush=True)
         if got is None:
@@ -916,24 +1154,13 @@ def record(argv: list[str]) -> int:
             return 2
         print(f"check: --on {on}: {got}: {why}", flush=True)
         on = got
-        if both := twins(names, docs, got, priority):
+        if both := twins(names, docs, got, priority, min_mem):
             pair = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.urandom(2).hex()}"
             print(f"check: --on: twins {pair} on {', '.join(both)}: the first to take a check slot runs, and the others leave "
                   f"their line (exit {SLOT.NOT_STARTED}, not started)", flush=True)
     spec = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
-    combining = rest[:1] == ["--combine"]
-    parts = None
-    deferred = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
-    try:
-        if "--shard" in rest[:-1]:
-            parts = shard(rest[rest.index("--shard") + 1])["parts"]
-        elif deferred is not None:
-            parts = deferred_parts(deferred)
-    except DECLARATION.DeclarationError as e:
-        print(f"check: {e}", file=sys.stderr)
-        return 2
     if base is None:
         subprocess.run(["git", "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main"], cwd=ROOT, capture_output=True)
         base = "origin/main"
@@ -947,9 +1174,12 @@ def record(argv: list[str]) -> int:
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
-    # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it
-    cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
-           "--cwd", "source", *(x for p in PACK_FILES for x in ("--declared-output", p))]
+    # an after-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
+    # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake,
+    # so each runs in its own clone of it
+    cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None and not records else []), "--project", "verity",
+           "--cwd", "clone" if on else "source", *(x for p in DECLARED for x in ("--declared-output", p)), *pooled,
+           *(["--env", f"{SLOT.MIN_MEM_ENV}={min_mem}"] if on and min_mem else [])]
     env = dict(os.environ)
     if "lean-agreement" in need:
         from research.store.local import LocalStore
@@ -982,7 +1212,10 @@ def record(argv: list[str]) -> int:
     if on and (combining or parts is not None):
         (d / SHARD_PARTS).write_text(json.dumps(parts or []))
         cmd += ["--send", str(d / SHARD_PARTS)]
-    if not combining and "--no-cache" not in rest:
+    if plan_file is not None:
+        shutil.copyfile(plan_file, d / AUTO_PLAN)
+        cmd += ["--send", str(d / AUTO_PLAN)]
+    if not combining and not records and ("--no-cache" not in rest or "--circuit-cache" in rest):
         given = None
         if "--verdicts-in" in rest[:-1]:
             i = rest.index("--verdicts-in")
@@ -993,6 +1226,11 @@ def record(argv: list[str]) -> int:
         cmd += ["--on", on, "--source", "."]
         if "--verdicts-in" in rest:                    # the pack travels with the run; on the machine it's found in the run's inputs/
             cmd += ["--send", str(Path(rest[rest.index("--verdicts-in") + 1]).resolve())]
+        (d / BASE_FILE).write_text(f"{_rev(base) or base}\n")
+        cmd += ["--send", str(d / BASE_FILE)]
+        if ratchet_base is not None:
+            (d / RATCHET_BASE_FILE).write_text(f"{_rev(ratchet_base) or ratchet_base}\n")
+            cmd += ["--send", str(d / RATCHET_BASE_FILE)]
     try:
         if both:
             procs = []
@@ -1046,6 +1284,8 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
 #: those it found before they ran (`Reused`)
 REUSED_PACK = "verdicts-reused.tar.xz"
 PACK_FILES = ("verdicts.tar.gz", REUSED_PACK)
+#: what `record` declares outputs, which custody uploads however the run ends: the packs and the final live record
+DECLARED = (*PACK_FILES, LIVE.LIVE_FILE)
 
 
 def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Path | None:
@@ -1063,8 +1303,8 @@ def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]
     (`gather_verdicts`); one it refuses is passed over by name.  The store's attempts are refreshed first when it has a remote."""
     if store.remote is not None:
         store.refresh(attempts_only=True)
-    rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?",
-                           (4 * limit,))
+    rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
+                           "ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?", (4 * limit,))
     packs = []
     for (rid,) in rows:
         if (pack := attempt_pack(store, rid, d)) is None:
@@ -1078,13 +1318,18 @@ def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]
     return packs
 
 
-def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
-    """Import a verdict pack before the steps run (`verdicts.py`): the path given, else its name in a recorded run's `inputs/`."""
+#: the pack paths of circuit-check's per-target cache (`groups`' `--cache`), all a run with `--no-cache --circuit-cache` imports
+CIRCUIT_ENTRIES = "check/circuit-check/"
+
+
+def verdicts_in(pack: Path, run_dir: Path | None, only: str | None = None) -> dict:
+    """Import a verdict pack before the steps run (`verdicts.py`): the path given, else its name in a recorded run's `inputs/`;
+    with ``only``, just its entries under that pack path."""
     if not pack.exists() and run_dir is not None and (run_dir / "inputs" / pack.name).exists():
         pack = run_dir / "inputs" / pack.name
-    added, kept = VERDICTS.import_(pack)
-    print(f"check: verdicts: {added} imported, {kept} already here, from {pack.name}", flush=True)
-    return {"pack": pack.name, "sha256": _sha256(pack), "added": added, "already": kept}
+    added, kept = VERDICTS.import_(pack, only)
+    print(f"check: verdicts: {added} imported, {kept} already here, from {pack.name}{f' (only {only})' if only else ''}", flush=True)
+    return {"pack": pack.name, "sha256": _sha256(pack), "added": added, "already": kept, **({"only": only} if only else {})}
 
 
 #: The suites whose tests run `lake` or what the Lean steps build under `.lake/`: a step of the Lean group once `lean-build` has
@@ -1095,14 +1340,14 @@ def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
 AFTER_LEAN = SUITES.AFTER_LEAN
 
 
-#: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: in r20261012-155204-6475, pytest and lean-audit
-#: held 160 to 350 between them, and circuit-check, given the slot's whole mem=, took the run's scope to its cap (an OOM kill)
+#: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: pytest and lean-audit have held 160 to 350
+#: between them, and circuit-check, given the slot's whole mem=, took the run's scope to its cap (an OOM kill)
 SIBLINGS_GB = 350
 
 
 def cc_mem_gb(slot_gb: int, beside: bool, lean: bool = True) -> int:
     """circuit-check's --mem-gb in a slot of ``slot_gb``: all of it alone (a shard without pytest or Lean), else what
-    `SIBLINGS_GB` leaves, but never under a quarter of the slot; beside pytest without ``lean`` (a post-landing run of
+    `SIBLINGS_GB` leaves, but never under a quarter of the slot; beside pytest without ``lean`` (an after-landing run of
     circuit-check and pytest), what pytest's share of that (`tests_gb`, half, the other half lean-suites') leaves."""
     if not beside:
         return slot_gb
@@ -1112,10 +1357,119 @@ def cc_mem_gb(slot_gb: int, beside: bool, lean: bool = True) -> int:
 
 #: where circuit-check finds the memory it is granted once it runs alone in the slot (its ``--mem-gb-file``, `grant_when_alone`)
 CC_GRANT = "circuit-check.mem-gb"
+#: where a check that holds some of circuit-check's parts writes each one's records and manifest, ``K`` of ``K/N`` (its
+#: ``--shard-dir``), published with the result for `circuit_join` to read
+CC_SHARDS = "circuit-check-shards"
+
+
+def circuit_shards(only: list[str] | None) -> list[str] | None:
+    """The shards of circuit-check's targets (``K/N``) a check of the parts ``only`` runs, or None when it runs `--all` whole
+    (unsharded, or holding all of circuit-check's parts) or not at all."""
+    if only is None:
+        return None
+    held = [p.partition(":")[2] for p in only if p.partition(":")[0] == "circuit-check" and p.partition(":")[2]]
+    every = DECLARATION.job_parts(next(j for j in JOBS if j.name == "circuit-check"), {}) or []
+    return held if held and sorted(held) != sorted(every) else None
+
+
+#: the records step (`--cc-records`): every catalog binding's record, built once (`circuit-check --all --records-only`) and tarred
+#: under the run's $OUT with the tree it was built from (`CC_RECORDS_TREE`), its sha256 in the result (`CC_RECORDS_KIND`'s
+#: ``records``); drive's sharded after-landing run builds it before the shards and gives each its artifact
+#: (`--cc-records-from ART@SHA256`), so no shard's circuit-check builds the bindings itself
+CC_RECORDS = "out/circuit-records.tar.gz"
+CC_RECORDS_KIND = "circuit-records/v1"
+CC_RECORDS_TREE = "tree"
+
+
+def cc_records(run_dir: Path, n: int | None = None) -> int:
+    """`--cc-records`, inside a recorded run: `circuit-check --all --records-only` into a fresh cache, its report
+    `circuit-records.json`, then the cache and this tree's id tarred to `CC_RECORDS`, and ``result.json`` (`CC_RECORDS_KIND`)
+    naming the tarball's path, sha256 and tree; exit circuit-check's, and no tarball unless it passed."""
+    tree, t0 = _rev("HEAD^{tree}"), time.monotonic()
+    d = Path(tempfile.mkdtemp(prefix="check-cc-records-"))
+    try:
+        gb = slot_mem_gb()
+        cmd = [sys.executable, "-m", "circuit_check", "--all", "--records-only", "-q", "--cache", str(d / "cache"),
+               "--jobs", str(n or cores()), *(["--mem-gb", str(gb)] if gb is not None else []),
+               "--out", str(run_dir / "circuit-records.json")]
+        rc = subprocess.run(cmd, cwd=ROOT, env=env()).returncode
+        records = None
+        if rc == 0 and tree:
+            (d / CC_RECORDS_TREE).write_text(tree + "\n")
+            (tar := run_dir / CC_RECORDS).parent.mkdir(parents=True, exist_ok=True)
+            with tarfile.open(tar, "w:gz") as t:
+                t.add(d / CC_RECORDS_TREE, CC_RECORDS_TREE)
+                t.add(d / "cache", "cache")
+            records = {"path": CC_RECORDS, "sha256": _sha256(tar), "tree": tree}
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    secs = round(time.monotonic() - t0, 1)
+    doc = {"schema": "research/result/v0.1", "kind": CC_RECORDS_KIND, "run_id": SETTINGS.require("RESEARCH_RUN_ID"),
+           "workload_fingerprint": {"tree": tree},
+           "validation": {"status": "passed" if records else "failed", "checker": "tools/verity/check/check.py --cc-records",
+                          "detail": f"circuit-check --all --records-only exited {rc}" + ("" if tree else "; no tree")},
+           "measurements": [{"name": "circuit-records_wall", "value": secs, "unit": "s"}],
+           "artifacts": [p for p in (CC_RECORDS, "circuit-records.json") if (run_dir / p).exists()],
+           **({"records": records} if records else {})}
+    (run_dir / "result.json.tmp").write_text(json.dumps(doc, indent=1) + "\n")
+    os.replace(run_dir / "result.json.tmp", run_dir / "result.json")
+    print(f"check: --cc-records: {'records ' + records['sha256'][:12] + ' in ' + CC_RECORDS if records else 'FAILED'} in {secs} s",
+          flush=True)
+    return 0 if records else rc or 1
+
+
+def fetch_records(art: str, d: Path) -> Path:
+    """The records tarball (`CC_RECORDS`) of the run record ``art``, fetched under ``d`` through the run's custody key (the
+    module docstring's "The evidence store") or, outside a recorded run, this machine's store."""
+    from research.store.custody import custody_env
+    from research.store.local import LocalStore
+
+    with custody_env(c) if (c := custody_dir()) else contextlib.nullcontext():
+        return Path(LocalStore().fetch(art, d, paths=[CC_RECORDS])) / CC_RECORDS
+
+
+def cc_records_in(spec: str, cache: Path, fetch=fetch_records) -> str | None:
+    """`--cc-records-from ART@SHA256`: the records step's tarball (`cc_records`), from the run record ART, unpacked into
+    circuit-check's cache ``cache`` once its bytes have that sha256 and the tree it was built from is this one; else why it is
+    refused, and nothing unpacked.  Each record goes in by rename, so a circuit-check reading the cache meanwhile sees it whole
+    or not at all, and one counts only while its own reads still match (`circuit_check.units`).  The tarball is fetched and
+    unpacked in a hidden directory inside the cache as its path resolves, so no rename crosses a filesystem when that path is a
+    link or mount onto another disk; circuit-check lists records only in their key's directory and `verdicts` walks no hidden
+    directory, so neither reads it."""
+    art, _, sha = spec.partition("@")
+    if not art.startswith("art:") or not re.fullmatch(r"[0-9a-f]{64}", sha):
+        return f"{spec} is not ART@SHA256"
+    cache.mkdir(parents=True, exist_ok=True)
+    root = cache.resolve()
+    d = Path(tempfile.mkdtemp(prefix=".cc-records-", dir=root))
+    try:
+        try:
+            tar = fetch(art, d)
+        except Exception as e:  # noqa: BLE001  (refused, and the reason named)
+            return f"{art} can't be fetched ({type(e).__name__}: {e})"
+        if (got := _sha256(tar)) != sha:
+            return f"its bytes' sha256 is {got}, not {sha}"
+        with tarfile.open(tar) as t:
+            try:
+                built = t.extractfile(CC_RECORDS_TREE).read().decode().strip()
+            except (KeyError, AttributeError):
+                return f"it holds no {CC_RECORDS_TREE}, the tree it was built from"
+            if built != (tree := _rev("HEAD^{tree}")):
+                return f"it was built from tree {built[:12]}, and this tree is {(tree or 'unknown')[:12]}"
+            t.extractall(d / "x", filter="data")
+        n = 0
+        for p in sorted((d / "x" / "cache").rglob("*.json")):
+            (to := root / p.relative_to(d / "x" / "cache")).parent.mkdir(parents=True, exist_ok=True)
+            os.replace(p, to)
+            n += 1
+        print(f"check: circuit-check: {n} binding record(s) from {art} ({sha[:12]}) into {cache}", flush=True)
+        return None
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def slot_mem_gb() -> int | None:
-    return int(m) if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else None
+    return int(m) if (m := SETTINGS.get(SLOT.SLOT_MEM_ENV)).isdigit() else None
 
 
 def grant_when_alone(path: Path, beside: list[threading.Event], gb: int) -> None:
@@ -1128,16 +1482,69 @@ def grant_when_alone(path: Path, beside: list[threading.Event], gb: int) -> None
     os.replace(tmp, path)
 
 
+def ratchet_gate(out: Path, cache: bool) -> list[str] | str:
+    """ratchet-gate's command: `ratchet_gate.py BASE HEAD` as BASE has it, BASE being the commit in the run's `RATCHET_BASE_FILE`,
+    else its `BASE_FILE` (`--record --on` sends them), else origin/main, with its verdicts kept under the check's cache unless
+    ``cache`` is off.  A BASE at or above HEAD would judge nothing, so the step fails (`_step`: a reason that isn't a skip)."""
+    sent = next((f for f in (out / "inputs" / RATCHET_BASE_FILE, out / "inputs" / BASE_FILE) if f.is_file()), None)
+    named = sent.read_text().strip() if sent else "origin/main"
+    if not (base := _rev(f"{named}^{{commit}}")):
+        return f"skipped: no base: {named} names no commit here"
+    if subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", base], cwd=ROOT, capture_output=True).returncode == 0:
+        return (f"failed: its base {named} is HEAD or above it, so no change lies above the base to judge: check this commit "
+                "against one below it (`--record --base REF` or `--ratchet-base REF`; drive's after-landing run sends one below "
+                "its tip)")
+    keep = str(cache_dir() / "ratchet-gate") if cache else ""
+    script = ('g=$(mktemp -d) && trap \'rm -rf "$g"\' EXIT && git show "$1:$2" > "$g/ratchet_gate.py" && '
+              'RATCHET_GATE_CACHE="$3" "$4" "$g/ratchet_gate.py" "$1" HEAD')
+    return ["bash", "-c", script, "ratchet-gate", base, RATCHET_GATE, keep, sys.executable]
+
+
+def suite_args(held: list[str], splits: dict[str, dict] | None, out: Path) -> list[str]:
+    """`suites.py`'s arguments for a shard's suites of one step (``held``: `SUITE` or `SUITE:K/M`): each suite once, a split one
+    as `SUITE:K1,K2/M` with the parts it holds, pinned to the partition ``splits`` names (`@` its digest) when it names one; and
+    `--timings` for those whose timing record ``splits`` carries (an auto plan's), written under ``out``, so each shard of the
+    plan partitions as the planner did."""
+    ks: dict[str, list[int]] = {}
+    ms: dict[str, int] = {}
+    for x in held:
+        name, _, spec = x.rpartition(":")
+        if name and re.fullmatch(r"[1-9]\d*/[1-9]\d*", spec):
+            ks.setdefault(name, []).append(int(spec.partition("/")[0]))
+            ms[name] = int(spec.partition("/")[2])
+        else:
+            ks.setdefault(x, [])
+    splits = splits or {}
+    args = []
+    for name, k in ks.items():
+        pin = f"@{splits[name]['digest'][:12]}" if name in splits and splits[name].get("m") == ms.get(name) else ""
+        args.append(f"{name}:{','.join(map(str, sorted(k)))}/{ms[name]}{pin}" if k else name)
+    timings = {name: v["timings"] for name, v in splits.items() if name in ms and isinstance(v.get("timings"), dict)}
+    if timings:
+        f = out / f"suite-timings-{hashlib.sha256(json.dumps(timings, sort_keys=True).encode()).hexdigest()[:12]}.json"
+        out.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(timings, sort_keys=True) + "\n")
+        args += ["--timings", str(f)]
+    return args
+
+
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
-           only: list[str] | None = None, regenerate: bool = True) -> list[list[tuple[str, list[str] | str, Path]]]:
+           only: list[str] | None = None, regenerate: bool = True,
+           circuit_cache: bool | None = None, splits: dict[str, dict] | None = None,
+           bookkeeping: bool = False) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
     shard's parts (`shard`), just the jobs those name, lean-audit on its packages there, and all the cores to pytest or to
-    circuit-check when the other isn't among them."""
+    circuit-check when the other isn't among them.  ``circuit_cache`` (default ``cache``) is whether circuit-check reuses its
+    per-target passes.  A split suite's parts (`pytest:SUITE:K/M`) run as `suites.py SUITE:K/M` (`suite_args`, with ``splits``,
+    an auto plan's or the task list's partitions)."""
+    circuit_cache = cache if circuit_cache is None else circuit_cache
     py = sys.executable
     a = max(1, n // 2)
     b = max(1, n - a)
     if only is not None:
-        names = {p.partition(":")[0] for p in only}
+        # and the builds they need, beside its parts when another shard holds them (an auto plan's, `shards.py`; a hand-written
+        # plan's lean-build, beside some of lean-suites' parts)
+        names = DECLARATION.needed(JOBS, sorted({p.partition(":")[0] for p in only}))
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     with_lean = only is None or any(x.startswith("lean") for x in names)
     beside = with_lean or "pytest" in names
@@ -1146,23 +1553,33 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     with_cc = only is None or "circuit-check" in names
     # pytest and lean-suites run at once, each with this share: what circuit-check beside them both leaves, halved
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
-    tail = ["--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
-            *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
-    lean = lean_steps(out, cache, urls, regenerate)
+    tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
+            *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else [])]
+    lean = lean_steps(out, cache, urls, regenerate, bookkeeping)
+    # an auto shard's suites (`pytest:SUITE`, `lean-suites:SUITE`): only those
+    held = {job: [p.partition(":")[2] for p in only or () if p.partition(":")[0] == job and p.partition(":")[2]]
+            for job in SHARDS.SUITE_JOBS}
     after_lean: list[str] = []
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
-        lean_suites = [*suites, *AFTER_LEAN, "--lean-built", "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
+        lean_suites = [*suites, *(suite_args(held["lean-suites"], splits, out) or AFTER_LEAN), "--lean-built",
+                       "--json", str(out / "suites-lean.json"),
+                       "--logs", str(out / "suites"), *tail]
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
-    pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
+    pytest = [*suites, *suite_args(held["pytest"], splits, out), "--json", str(out / "suites.json"), "--logs", str(out / "suites"),
+              *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
-          *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if cache else []),
+          *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if circuit_cache else []),
           *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
           *(["--mem-gb-file", str(out / CC_GRANT)] if slot_gb is not None and beside else [])]
+    if held := circuit_shards(only):
+        each = [[*cc, "--shard", s, "--shard-dir", str(out / CC_SHARDS / s.partition("/")[0])] for s in held]
+        cc = each[0] if len(each) == 1 else ["bash", "-c", "rc=0; " + "; ".join(f"{shlex.join(c)} || rc=$?" for c in each) + "; exit $rc"]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
-             "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT)}
+             "circuit-check": ("circuit-check", cc, ROOT), "flock-rust-tests": ("flock-rust-tests", rust, ROOT),
+             "ratchet-gate": ("ratchet-gate", ratchet_gate(out, cache), ROOT)}
     if len(lean) > 1:
         built |= {s[0]: s for s in lean}
         changed: list[str] | str = ([py, str(LEAN_JOBS / "lean_changed.py"), "--cache", str(cache_dir() / "lean-audit"),
@@ -1194,7 +1611,7 @@ def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
 
 #: a shard's result kind, which the tool doesn't produce: no gate takes a shard alone, only a `--combine` check of its set
 SHARD_KIND = "check-shard/v1"
-#: a post-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to revert a landing
+#: an after-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to name a red's culprit
 DEFERRED_KIND = "check-deferred/v1"
 
 
@@ -1205,30 +1622,320 @@ def deferred_parts(steps: str) -> list[str]:
     return [p for p in shard_parts() if p.partition(":")[0] in chosen]
 
 
-def shard(spec: str) -> dict:
-    """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, "all": every part an unsharded
-    check covers}, on this tree's Lake packages (`declaration.resolve`).  DeclarationError when there is no such plan or shard,
-    or the tree can't be listed."""
+def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file: Path | None = None) -> dict:
+    """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
+    gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
+    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
+    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages, each spec's audit on its
+    provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree
+    can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
+    if spec.startswith("auto:"):
+        return auto_shard(spec, gated, plan_file, jobs)
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
     plans = DECLARATION.plans()
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
     parts_of = _parts_of()
-    return {"k": k, "n": n, "parts": DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1],
-            "all": DECLARATION.all_parts(JOBS, parts_of)}
+    shards = DECLARATION.resolve(plans[n], JOBS, parts_of, audit_provers(parts_of["lean-audit"]))
+    held = {p for s in shards for p in s}
+    mine = set(shards[k - 1]) | ({p for p in DECLARATION.all_parts(JOBS, parts_of) if p not in held} if k == n and not gated else set())
+    return {"k": k, "n": n,
+            "parts": [p for p in DECLARATION.all_parts(JOBS, parts_of)
+                      if p in mine and (not gated or p.partition(":")[0] not in OFF_GATE)],
+            "all": DECLARATION.all_parts(DECLARATION.gated(JOBS), parts_of)}
+
+
+#: `--shard auto:K/N`, an auto plan's shard
+AUTO_SHARD = re.compile(r"auto:([1-9]\d*)/([1-9]\d*)")
+
+
+def auto_parts(gated: bool = True, jobs: set[str] | None = None, circuit_shards: int | None = None,
+               splits: dict[str, int] | None = None) -> list[str]:
+    """The auto plan's parts on this tree (`shards.parts`): those of the jobs on the gate (or, not ``gated``, of every job),
+    of ``jobs`` alone when given; circuit-check in ``circuit_shards`` parts when given, else its ci.toml `shards`; each suite
+    ``splits`` names in its M parts, and each that declares parts in those (`suite_parts`)."""
+    js = [replace(j, shards=circuit_shards) if circuit_shards and j.name == "circuit-check" else j
+          for j in (DECLARATION.gated(JOBS) if gated else JOBS) if jobs is None or j.name in jobs]
+    return SHARDS.parts(DECLARATION.all_parts(js, _parts_of()), [s.name for s in SUITES.discover()], list(AFTER_LEAN),
+                        (FLOCK_LEAN / "lakefile.toml").exists(), splits, suite_parts())
+
+
+def suite_splits(suite_s: dict[str, float], times: dict[str, dict[str, float]], split_s: float = SHARDS.SPLIT_S) -> dict[str, dict]:
+    """The suites of this tree measured past ``split_s`` (``suite_s``, by name) split by test file (`shards.split_m`), but those
+    that declare parts by test id: {name: {"m", "seconds", "digest": its partition's (`suites.partition` by ``times``, its files'
+    recorded seconds), "timings": those of its files, "shares": each part's share of its seconds, "files": each part's test files}}."""
+    out: dict[str, dict] = {}
+    if not any(v is not None and v > split_s for v in suite_s.values()):
+        return out
+    tree, pkgs = SUITES.worktree(), SUITES.members()
+    for s in SUITES.discover():
+        if s.parts or suite_s.get(s.name) is None or suite_s[s.name] <= split_s:
+            continue
+        files = SUITES.test_files(s, tree, SUITES.dropped(s, SUITES.inputs_of(s, pkgs)))
+        m = SHARDS.split_m(suite_s[s.name], len(files), split_s)
+        if m < 2:
+            continue
+        mine = {f: v for f, v in (times.get(s.name) or {}).items() if f in set(files)}
+        parts = SUITES.partition(files, mine, m)
+        cost = SUITES.file_costs(files, mine)
+        total = sum(cost.values()) or 1.0
+        out[s.name] = {"m": m, "seconds": round(suite_s[s.name], 1), "digest": SUITES.partition_digest(parts), "timings": mine,
+                       "shares": [round(sum(cost[f] for f in p) / total, 6) for p in parts], "files": parts}
+    return out
+
+
+def split_shares(splits: dict[str, dict]) -> dict[str, float]:
+    """{part id: its share of its suite's seconds} for both test steps' ids of each suite ``splits`` names."""
+    return {f"{job}:{name}:{k}/{v['m']}": x for name, v in splits.items() for k, x in enumerate(v["shares"], 1)
+            for job in SHARDS.SUITE_JOBS}
+
+
+def audit_provers(packages: list[str]) -> dict[str, list[str]]:
+    """{`lean-audit:PKG`: its provers' audits} for each of ``packages`` whose `proved_in` names some (`lean_audit.provers`): its
+    audit audits them beside it, from one build of theirs, so a plan puts them on one shard."""
+    la = _lean_audit()
+    return {f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p in packages if (qs := la.provers(p))}
+
+
+def shard_needs() -> dict[str, list[str]]:
+    """What a shard runs beside a part (`shards.builds`): each job's `needs` and `after`, and each audited package's provers
+    (`audit_provers`), which `shards.units` holds on its shard."""
+    return {**{j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS}, **audit_provers(_parts_of()["lean-audit"])}
+
+
+def given_suites(suites: dict[str, float], given: dict[str, float] | None) -> dict[str, float]:
+    """``suites`` (each suite's seconds) with a suite's whole part's in ``given`` ({part: seconds}) over them."""
+    out = dict(suites)
+    for p, s in (given or {}).items():
+        job, name, spec = SHARDS.suite_part(p)
+        if job in SHARDS.SUITE_JOBS and name and spec is None:
+            out[name] = float(s)
+    return out
+
+
+def auto_plan(costs: tuple, max_shards: int = SHARDS.MAX_SHARDS, deferred: str | None = None,
+              n: int | None = None, given: dict[str, float] | None = None, split_s: float = SHARDS.SPLIT_S) -> dict:
+    """The auto plan (`shards.plan`) of this tree's parts (`auto_parts`: of the jobs on the gate, or with ``deferred``, of those
+    steps and what they need) at ``costs`` (`measure`'s suites, audits, steps and test files' seconds, `shards.priced`),
+    ``given``'s {part: seconds} over them, read as steps' seconds too (a job's whole, spread over its parts); each suite past
+    ``split_s`` split by test file (`suite_splits`)."""
+    jobs = DECLARATION.needed(JOBS, [s for s in deferred.split(",") if s]) if deferred else None
+    given = {p: float(s) for p, s in (given or {}).items()}
+    suites = given_suites(costs[0], given)
+    splits = suite_splits(suites, costs[3] if len(costs) > 3 else {}, split_s)
+    names = auto_parts(deferred is None, jobs, splits={k: v["m"] for k, v in splits.items()})
+    measured = {**SHARDS.priced(names, suites, costs[1], {**costs[2], **given}, split_shares(splits)),
+                **{p: s for p, s in given.items() if p in names}}
+    kept = {k: {f: v[f] for f in ("m", "seconds", "digest", "timings")} for k, v in splits.items()
+            if any(SHARDS.suite_part(p)[1] == k for p in names)}
+    return SHARDS.plan(SHARDS.tasks(names, measured), shard_needs(), max_shards, n, kept)
+
+
+def _cost_json(f: Path, skipped: list[str]):
+    """``f``'s JSON, or None when it can't be read, said in ``skipped``."""
+    try:
+        return json.loads(f.read_text())
+    except (OSError, ValueError) as e:
+        skipped.append(f"{f}: {type(e).__name__}")
+        return None
+
+
+def measured_costs(check_roots: list[Path], test_roots: list[Path],
+                   skipped: list[str] | None = None) -> tuple[dict[str, float], dict[str, float]]:
+    """(each suite's seconds, each Lake package's audit seconds) in these verdict caches: a suite's newest kept pass (its
+    `seconds`), else a `durations.json` of one of ``test_roots`` (`suites.py`'s last run there); a package's newest passing audit
+    with the kernel replay (its report's `seconds.total`).  A file that can't be read prices nothing and is named in
+    ``skipped``."""
+    skipped = [] if skipped is None else skipped
+    suites: dict[str, float] = {}
+    when: dict[str, str] = {}
+    for root in test_roots:
+        for f in [*root.glob("*.json"), *root.glob(f"{SUITES.PER_TEST}/*/{SUITES.WHOLE}--*.json")]:
+            e = _cost_json(f, skipped)
+            if (isinstance(e, dict) and isinstance(e.get("suite"), str) and isinstance(e.get("seconds"), (int, float))
+                    and e["seconds"] > 0 and str(e.get("when") or "") >= when.get(e["suite"], "")):
+                # a part's pass (`suites.py --files`) prices its suite at its seconds over its share of the suite's
+                share = (e.get("part") or {}).get("share", 1.0) if isinstance(e.get("part"), dict) else 1.0
+                if isinstance(share, (int, float)) and share > 0:
+                    suites[e["suite"]], when[e["suite"]] = float(e["seconds"]) / share, str(e.get("when") or "")
+    for root in test_roots:
+        durations = _cost_json(root / "durations.json", skipped) if (root / "durations.json").is_file() else None
+        for s, v in durations.items() if isinstance(durations, dict) else ():
+            if s not in suites and isinstance(v, (int, float)) and v > 0:
+                suites[s] = float(v)
+    audits: dict[str, float] = {}
+    at: dict[str, float] = {}
+    for root in check_roots:
+        for f in (root / "lean-audit").glob("*.json"):
+            doc = _cost_json(f, skipped)
+            rep = doc.get("report") if isinstance(doc, dict) else None
+            pkg, sec = (rep.get("package"), rep.get("seconds")) if isinstance(rep, dict) else (None, None)
+            if not (isinstance(pkg, str) and isinstance(sec, dict) and "replay" in sec and not rep.get("failures")
+                    and isinstance(sec.get("total"), (int, float))):
+                continue
+            if (mtime := f.stat().st_mtime) >= at.get(pkg, -1.0):
+                audits[pkg], at[pkg] = float(sec["total"]), mtime
+    return suites, audits
+
+
+def recorded_steps(store, rids: list[str], skipped: list[str] | None = None) -> dict[str, float]:
+    """The seconds each step took in the newest of the recorded runs ``rids`` (newest first) where it passed, from their results'
+    steps: under the step's name, or under its part when it ran one part (a shard's), circuit-check's spread over its parts.  A
+    run whose result can't be read prices nothing and is named in ``skipped``."""
+    skipped = [] if skipped is None else skipped
+    out: dict[str, float] = {}
+    for rid in rids:
+        try:
+            art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("result")
+            meta = store.get_manifest(art).meta if art else None
+        except Exception as e:  # noqa: BLE001  (a run whose result can't be read prices nothing)
+            skipped.append(f"{rid}: {type(e).__name__}: {e}")
+            continue
+        for s in (meta or {}).get("steps") or [] if isinstance(meta, dict) else []:
+            sec, ps = s.get("seconds"), s.get("parts") or []
+            if s.get("status") != "passed" or not isinstance(sec, (int, float)) or sec <= 0:
+                continue
+            if len(ps) == 1:
+                out.setdefault(ps[0], float(sec))
+            elif not ps:
+                out.setdefault(s["step"], float(sec))
+            elif s["step"] == "circuit-check":
+                for p in ps:
+                    out.setdefault(p, float(sec) / len(ps))
+    return out
+
+
+def measure(d: Path, gather: bool = True, store=None, split_s: float = SHARDS.SPLIT_S,
+            given: dict[str, float] | None = None) -> tuple[tuple[dict, dict, dict, dict], list[str]]:
+    """((suites, audits, steps, times), notes): the costs the newest recorded checks measured, their verdict packs
+    (`gathered_packs`, unpacked under ``d``) and their results' step seconds (`recorded_steps`), unless not ``gather``, and this
+    machine's caches (`measured_costs`); and for each suite past ``split_s`` (``given``'s seconds over the measured), its test
+    files' recorded seconds (`suites.file_times`, from every per-test record those hold)."""
+    check_roots = [cache_dir()]
+    test_roots = [VERDICTS.roots()["tests"], *sorted((Path.home() / ".cache" / "verity").glob("tests-slot-*"))]
+    steps: dict[str, float] = {}
+    notes, skipped = [], []
+    if gather:
+        try:
+            from research.store.local import LocalStore
+
+            store = store or LocalStore()
+            packs = gathered_packs(d, store)
+            for i, (_rid, pack) in enumerate(packs):
+                roots = {"check": d / f"pack-{i}" / "check", "tests": d / f"pack-{i}" / "tests"}
+                was = VERDICTS.roots
+                VERDICTS.roots = lambda r=roots: r
+                try:
+                    VERDICTS.import_(pack)
+                finally:
+                    VERDICTS.roots = was
+                check_roots.insert(0, roots["check"])
+                test_roots.insert(0, roots["tests"])
+            steps = recorded_steps(store, [rid for rid, _ in packs], skipped)
+            notes.append(f"costs from the {len(packs)} newest recorded checks ({', '.join(rid for rid, _ in packs)}) and this "
+                         "machine's caches")
+        except Exception as e:  # noqa: BLE001  (no store: price from this machine's caches, and say so)
+            notes.append(f"no recorded checks' costs ({type(e).__name__}: {e}): this machine's caches alone")
+    suites, audits = measured_costs(check_roots, test_roots, skipped)
+    long = {s.name: s for s in SUITES.discover() if (given_suites(suites, given).get(s.name) or 0) > split_s}
+    times = {n: SUITES.file_times(s, [r / SUITES.PER_TEST / s.name.replace("/", "_") for r in test_roots]) for n, s in long.items()}
+    costs = (suites, audits, steps, times)
+    if skipped:
+        notes.append(f"{len(skipped)} unreadable cost source(s) priced nothing: {', '.join(skipped[:3])}")
+    return costs, notes
+
+
+def shard_plan_main(argv: list[str]) -> int:
+    """`--shard-plan`: print the auto plan of this tree (`auto_plan`), running nothing."""
+    import argparse
+
+    ap = argparse.ArgumentParser(prog="check.py --shard-plan", description="the auto plan of this tree, running nothing")
+    ap.add_argument("--max-shards", type=int, default=SHARDS.MAX_SHARDS, help="the most shards (default %(default)s)")
+    ap.add_argument("--n", type=int, help="this many shards, not the planner's N")
+    ap.add_argument("--deferred", metavar="STEP,...", help="plan these steps and what they need (drive's after-landing run)")
+    ap.add_argument("--costs", type=Path, help="a JSON {part: seconds} over the measured costs")
+    ap.add_argument("--split-s", type=float, default=SHARDS.SPLIT_S, metavar="S",
+                    help="split a suite measured past S seconds by test file (default %(default)s)")
+    ap.add_argument("--no-gather", action="store_true", help="price from this machine's caches alone, not the recorded checks")
+    ap.add_argument("--json", action="store_true", help=f"print the plan as {SHARDS.KIND}")
+    ap.add_argument("--out", type=Path, help="also write the plan here")
+    a = ap.parse_args(argv)
+    try:
+        given = json.loads(a.costs.read_text()) if a.costs else None
+    except (OSError, ValueError) as e:
+        print(f"check: --shard-plan: --costs: {e}", file=sys.stderr)
+        return 2
+    with tempfile.TemporaryDirectory(prefix="check-shard-plan-") as d:
+        costs, notes = measure(Path(d), not a.no_gather, split_s=a.split_s, given=given)
+    try:
+        doc = {**auto_plan(costs, a.max_shards, a.deferred, a.n, given, a.split_s), "notes": notes}
+    except (DECLARATION.DeclarationError, ValueError, OSError) as e:
+        print(f"check: --shard-plan: {e}", file=sys.stderr)
+        return 2
+    if a.out:
+        a.out.write_text(json.dumps(doc, indent=1) + "\n")
+    print(json.dumps(doc, indent=1) if a.json else "\n".join([*(f"shard plan: note: {x}" for x in notes), *SHARDS.lines(doc)]))
+    return 0
+
+
+def auto_shard(spec: str, gated: bool = True, plan_file: Path | None = None, jobs: set[str] | None = None) -> dict:
+    """`--shard auto:K/N`: {"k", "n", "parts": shard K's parts of the auto plan, "all": the plan's parts, "plan": its summary}.
+    The plan is ``plan_file`` (in a recorded run, its `AUTO_PLAN` input); DeclarationError when there is none, or its parts aren't exactly this tree's: every part of the jobs on the gate (not ``gated``: of every job), of
+    ``jobs`` alone when given (an after-landing run's steps and what they need)."""
+    m = AUTO_SHARD.fullmatch(spec)
+    if not m or not 1 <= int(m.group(1)) <= int(m.group(2)):
+        raise DECLARATION.DeclarationError(f"--shard {spec}: an auto shard is auto:K/N, K in 1..N")
+    k, n = int(m.group(1)), int(m.group(2))
+    path = plan_file if plan_file is not None and plan_file.is_file() else None
+    if path is None:
+        raise DECLARATION.DeclarationError(f"--shard {spec}: no auto plan ({AUTO_PLAN} among the run's inputs, or "
+                                           "--shard-plan-file): `--record --shard auto` plans once and launches every shard with it")
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        raise DECLARATION.DeclarationError(f"--shard {spec}: {path} can't be read ({type(e).__name__}: {e})") from None
+    splits = doc.get("splits") if isinstance(doc, dict) and isinstance(doc.get("splits"), dict) else {}
+    want = auto_parts(gated, jobs, splits={s: v["m"] for s, v in splits.items()})
+    if why := SHARDS.check(doc, n, want):
+        raise DECLARATION.DeclarationError(f"--shard {spec}: {path.name} is no auto plan of this tree: {why}")
+    return {"k": k, "n": n, "parts": doc["shards"][k - 1]["parts"], "all": want, "plan": SHARDS.summary(doc),
+            **({"splits": splits} if splits else {})}
+
+
+def suite_parts() -> dict[str, int]:
+    """{suite: P} for each suite of this tree that declares `[tool.verity.tests] parts = P`: its P parts by test id
+    (`suites.id_part_of`) are parts of the check's plans.  DeclarationError when a suite declares another `parts`."""
+    try:
+        return {s.name: s.parts for s in SUITES.discover() if s.parts}
+    except ValueError as e:
+        raise DECLARATION.DeclarationError(str(e)) from None
 
 
 def _parts_of() -> dict[str, list[str]]:
+    """The split jobs' parts on this tree (`declaration.job_parts`): lean-audit's Lake packages, lean-suites' suites (`AFTER_LEAN`),
+    each one in `suite_parts` as its parts `SUITE:K/P`."""
     files = tracked_files(ROOT)
     if files is None:
         raise DECLARATION.DeclarationError("this tree's files can't be listed, so its Lake packages aren't known")
-    return {"lean-audit": _lean_audit().packages(files)}
+    by = suite_parts()
+    return {"lean-audit": _lean_audit().packages(files),
+            "lean-suites": [x for s in AFTER_LEAN for x in ([f"{s}:{k}/{by[s]}" for k in range(1, by[s] + 1)] if s in by else [s])]}
 
 
 def shard_parts() -> list[str]:
     """Every part an unsharded check covers on this tree (`declaration.all_parts`)."""
     return DECLARATION.all_parts(JOBS, _parts_of())
+
+
+#: the jobs off the merge gate (drive's policy, policy.toml's `off_gate`), which a recorded check leaves to drive's after-landing run
+OFF_GATE = tuple(j.name for j in JOBS if not j.gate)
+
+
+def gated_parts() -> list[str]:
+    """Every part of the jobs on the merge gate (`declaration.gated`): what a recorded check runs, unsharded or as a plan's
+    shards together, and what `research merge` requires of it."""
+    return DECLARATION.all_parts(DECLARATION.gated(JOBS), _parts_of())
 
 
 def _rev(rev: str) -> str | None:
@@ -1257,26 +1964,103 @@ def combine(ids: list[str], run_dir: Path | None) -> int:
     done, why = shard_set(store, ROOT, commit, ids, tool.CHECK.name, tuple(tool.CHECK.command))
     if dirty:
         why = "the checkout has uncommitted changes"
+    if not why:
+        why = circuit_join(store, done, run_dir or Path(tempfile.mkdtemp(prefix="check-combine-")))
+    if not why:
+        why = suite_join(store, done, Path(tempfile.mkdtemp(prefix="check-combine-suites-")))
     if run_dir is not None:
-        doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
-               "workload_fingerprint": {"steps": [s["step"] for s in done or []], "shards": ids},
+        doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": SETTINGS.require("RESEARCH_RUN_ID"),
+               "settings": SETTINGS.record(), "workload_fingerprint": {"steps": [s["step"] for s in done or []], "shards": ids},
                "validation": {"status": "failed" if why else "passed", "checker": "tools/verity/check/check.py --combine",
                               "detail": why or f"{len(ids)} shards of {commit[:12]}"},
-               "steps": done or [], "shards": ids}
+               "steps": done or [], "shards": ids,
+               **({"artifacts": ["circuit-check.json"]} if (run_dir / "circuit-check.json").exists() else {})}
         (run_dir / "result.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(f"check: --combine {' '.join(ids)}: " + (f"refused: {why}" if why else f"a passing check of {commit[:12]} "
                                                     f"({len(done)} steps)"), flush=True)
     return 1 if why else 0
 
 
+def circuit_join(store, steps: list[dict], into: Path) -> str | None:
+    """Why the circuit-check parts of a set of shards (``steps``, `shard_set`'s, each part with the run that ran it), joined, are
+    not the passing `--all` each part's own pass makes them look, or None.  Joined only when they ran in more than one shard
+    (one that holds every part runs `--all` whole): each shard's `CC_SHARDS`, from its Attempt's run files into ``into``, goes
+    to `circuit-check --combine` (`circuit_combine`, its report ``into``'s circuit-check.json), which refuses shards that are not
+    every one of one list exactly and otherwise fails as the unsharded run does."""
+    held: dict[str, list[str]] = {}
+    for s in steps:
+        job, _, part = s["step"].partition(":")
+        if job == "circuit-check" and part:
+            held.setdefault(s["run_id"], []).append(part)
+    if len(held) < 2:
+        return None
+    dirs = []
+    for rid, parts in held.items():
+        try:
+            files = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
+            if not files:
+                return f"circuit-check: {rid} published no run files, so its shards' records can't be joined"
+            (into / rid).mkdir(parents=True, exist_ok=True)
+            got = Path(store.fetch(files, to=into / rid, paths=[CC_SHARDS]))
+        except Exception as e:  # noqa: BLE001  (a guard never fails open)
+            return f"circuit-check: {rid}'s shards' records can't be read ({type(e).__name__}: {e})"
+        dirs += [got / CC_SHARDS / p.partition("/")[0] for p in parts]
+    r = circuit_combine(dirs, into / "circuit-check.json")
+    if r.returncode == 0:
+        return None
+    said = [line for line in (r.stderr + r.stdout).splitlines() if line.strip()][-3:]
+    return (f"circuit-check --combine of its {len(dirs)} shards {'refused them' if r.returncode == 2 else f'exited {r.returncode}'}"
+            + (f": {' / '.join(said)}" if said else ""))
+
+
+def suite_join(store, steps: list[dict], into: Path) -> str | None:
+    """Why the parts of the suites a set of shards split (``steps``, `shard_set`'s: `pytest:SUITE:K/M` by test file,
+    `lean-suites:SUITE:K/P` by test id, each with the run that ran it) don't make each suite's passing verdict, or None: each
+    run's suite reports (its `suites.json` and `suites-lean.json`), from its Attempt's run files into ``into``, joined
+    (`suites.combine_parts`), must hold every part of one partition once, each passed, so a part run on another partition (a
+    machine with another timing record) passes nothing; or the suite's own pass, from the shard that held every part and ran it
+    whole."""
+    runs = sorted({s["run_id"] for s in steps if SHARDS.suite_part(s["step"])[2] and s.get("run_id")})
+    if not runs:
+        return None
+    split = {SHARDS.suite_part(s["step"])[1] for s in steps if SHARDS.suite_part(s["step"])[2]}
+    rows = []
+    for rid in runs:
+        try:
+            files = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
+            if not files:
+                return f"suites: {rid} published no run files, so its suites' parts can't be joined"
+            names = [n for n in ("suites.json", "suites-lean.json") if any(f["path"] == n for f in store.listing(files))]
+            got = Path(store.fetch(files, to=into / rid, paths=names))
+            rows += [r for n in names for r in json.loads((got / n).read_text())
+                     if isinstance(r.get("part"), dict) or r.get("name") in split]
+        except Exception as e:  # noqa: BLE001  (a guard never fails open)
+            return f"suites: {rid}'s suite reports can't be read ({type(e).__name__}: {e})"
+    joined = {r["name"]: r for r in SUITES.combine_parts(rows)}
+    bad = [f"{n}: {'; '.join(joined[n].get('why') or [str(joined[n].get('status'))])}" if n in joined
+           else f"{n}: no shard reported its parts" for n in sorted(split)
+           if n not in joined or joined[n]["status"] not in ("passed", "cached")]
+    return f"split suites don't make their suites' verdicts: {' / '.join(bad)}" if bad else None
+
+
+def circuit_combine(dirs: list[Path], out: Path) -> subprocess.CompletedProcess:
+    """`circuit-check --combine` of the shard directories ``dirs``, its report to ``out``: exit 0 for the unsharded run's pass,
+    1 for its failure, 2 when it refuses the shards."""
+    r = subprocess.run([sys.executable, "-m", "circuit_check", "--combine", *map(str, dirs), "--out", str(out)], cwd=ROOT,
+                       capture_output=True, text=True)
+    print(r.stdout + r.stderr, end="", flush=True)
+    return r
+
+
 #: What reaches the steps from this process's environment, Turborepo's strict mode being the model: where things are (PATH, HOME,
 #: the temporary and XDG directories, the Rust and Lean toolchains' homes), the locale, how this machine reaches the network (its
-#: proxies and certificate bundles), uv and the environment it runs in, and the switches tests read (`VERITY_*`, `FLOCK_*`).
+#: proxies and certificate bundles), uv and the environment it runs in, the GPUs the run may use (`research run` hides those
+#: gpu-lease hands out), and the switches tests read (`VERITY_*`, `FLOCK_*`).
 #: Nothing else: not the store's, RunPod's or GitHub's credentials, not what the recording run gives its workload (`RESEARCH_*`,
 #: the machine's PYTHONPYCACHEPREFIX; the tests start runs of their own, which would inherit them).
 ENV_PASS = frozenset({"PATH", "HOME", "TMPDIR", "TEMP", "TMP", "LANG", "LANGUAGE", "VIRTUAL_ENV", "CARGO_HOME", "RUSTUP_HOME",
                       "ELAN_HOME", "SSL_CERT_FILE", "SSL_CERT_DIR", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
-                      "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY"})
+                      "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "CUDA_VISIBLE_DEVICES"})
 ENV_PASS_PREFIXES = ("LC_", "XDG_", "UV_", "VERITY_", "FLOCK_")
 #: What check sets for its steps from its own state, never from the environment: a check run inside a step (its own tests) would
 #: otherwise pass its parent's on.
@@ -1288,13 +2072,13 @@ def env() -> dict[str, str]:
     entries inside this tree only (a machine's runner puts its shipped `research` first); and a git identity.  Inside a recorded
     run, the store is required, the run's custody dir is passed on and the vLLM reference regression runs (the module docstring's
     "The evidence store")."""
-    out = {k: v for k, v in os.environ.items() if (k in ENV_PASS or k.startswith(ENV_PASS_PREFIXES)) and k not in ENV_OWN}
-    if os.environ.get("RESEARCH_RUN_ID"):
+    out = {k: v for k, v in SETTINGS.environ().items() if (k in ENV_PASS or k.startswith(ENV_PASS_PREFIXES)) and k not in ENV_OWN}
+    if SETTINGS.RESEARCH_RUN_ID:
         out[STORE_REQUIRED_ENV] = "1"
         out[REGRESSION_ENV] = "1"
         if custody := custody_dir():
             out[CUSTODY_ENV] = str(custody)
-    keep = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
+    keep = [p for p in SETTINGS.PYTHONPATH.split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
     if keep:
         out["PYTHONPATH"] = os.pathsep.join(keep)
     else:
@@ -1306,10 +2090,19 @@ def env() -> dict[str, str]:
     return out
 
 
+#: what a step's key holds of its environment beside the switches tests read (`SUITES.keyed_variables`): the locale's, which say
+#: what encoding text without a declared one is read in, and the tree's own PYTHONPATH entries (`env`), which say what is imported
+KEYED_ENV = ("LANG", "LC_ALL", "LC_CTYPE", "PYTHONPATH")
+
+
 def _env_key(e: dict[str, str]) -> dict[str, str]:
-    """The environment as a key: without the shell's bookkeeping or the machine's identity, and with this tree's path written `<tree>`
-    (a machine keeps each commit's tree at its own path, and `uv run` puts that path in PATH, VIRTUAL_ENV and PYTHONPATH)."""
-    return {k: v.replace(str(ROOT), "<tree>") for k, v in sorted(e.items()) if k not in VOLATILE and not k.startswith(MACHINE_PREFIXES)}
+    """The environment as a key: what a step's verdict can turn on (`KEYED_ENV`, `SUITES.keyed_variables`), with this tree's path
+    written `<tree>` (a machine keeps each commit's tree at its own path). Not where a machine keeps things (PATH, HOME, the
+    temporary and XDG directories, uv's and the toolchains' homes, a check slot's test cache), how it reaches the network or what
+    names it, which differ between nodes for the same inputs: what a step runs that the PATH finds is keyed by itself (the
+    interpreter, `rustc -vV`, the Lean toolchain's pin in the tree)."""
+    keep = {k: v for k, v in e.items() if k in KEYED_ENV} | SUITES.keyed_variables(e)
+    return {k: v.replace(str(ROOT), "<tree>") for k, v in sorted(keep.items())}
 
 
 def agreement_key(e: dict[str, str]) -> str | None:
@@ -1320,7 +2113,7 @@ def agreement_key(e: dict[str, str]) -> str | None:
     files = tracked_files()
     if files is None:
         return None
-    h = hashlib.sha256(json.dumps([sys.version, platform.platform(), _env_key(e)]).encode())
+    h = hashlib.sha256(json.dumps([sys.version, SUITES.platform_id(), _env_key(e)]).encode())
     for f in agreement_closure(files):
         p = ROOT / f
         h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() else b"-") + b"\0")
@@ -1356,7 +2149,7 @@ def rust_tests_key(e: dict[str, str]) -> str | None:
                        capture_output=True, text=True)
     if r.returncode:
         return None
-    h = hashlib.sha256(json.dumps([r.stdout, platform.platform(), _env_key(e)]).encode())
+    h = hashlib.sha256(json.dumps([r.stdout, SUITES.platform_id(), _env_key(e)]).encode())
     for f in rust_tests_inputs(files):
         p = ROOT / f
         h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() else b"-") + b"\0")
@@ -1371,7 +2164,7 @@ def lints_key(e: dict[str, str]) -> str | None:
     tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, capture_output=True, text=True)
     if st.returncode or st.stdout.strip() or tree.returncode:
         return None
-    return hashlib.sha256(json.dumps([tree.stdout.strip(), list(LINTS), sys.version, platform.platform(), _env_key(e)]).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([tree.stdout.strip(), list(LINTS), sys.version, SUITES.platform_id(), _env_key(e)]).encode()).hexdigest()
 
 
 #: the steps whose pass is kept under a key of everything they read, and reused while it holds
@@ -1380,7 +2173,7 @@ STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key
 
 def agreement_closure(files: list[str]) -> list[str]:
     """The tracked files the agreement job can read: verity/ml/flock/verifier/, less any Lake package nested in its Lean package
-    (C-Flock's proofs are under `Security/Proofs/`), which `flock-verify` is not built from as long as the Lean package
+    (Flock's proofs are under `Security/Proofs/`), which `flock-verify` is not built from as long as the Lean package
     requires nothing (a `require` in its lakefile keeps them all in), and less that package's `lean-audit.json`, which only
     `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the package's lakefile mention it)."""
     pre, lean = "verity/ml/flock/verifier/", "verity/core/service/flock/"
@@ -1403,7 +2196,7 @@ STEPS_LOG = "steps.jsonl"
 def preflight() -> list[tuple[str, list[str] | str, Path]]:
     """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
     pytest's cache, so they leave nothing in the tree), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
-    uv = os.environ.get("UV") or shutil.which("uv")
+    uv = SETTINGS.UV or shutil.which("uv")
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
     return [("preflight-lock", lock, ROOT),
             ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
@@ -1417,10 +2210,10 @@ ON_NODE = ("preflight-fixtures",)
 def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, store=None) -> tuple[dict[str, str], list[str]]:
     """({id: where}, [id]): where each fetched fixture (a `fixtures/artifacts.json` entry whose path git doesn't hold) can come
     from on this machine, and those that can come from nowhere: the public export, asked for its manifest only (one HEAD, no
-    blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  The closing
-    train's check (cb20, 10 Oct) failed `lean-suites` after its launch on #1716's rec-coins fixture, preserved privately and
-    never exported: node 1 fetches from the public export and its own store, and had it in neither.  A copy put in the node's
-    store keeps a train moving before the export (top, 10 Oct).  Raises when the public export is needed and there is none."""
+    blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  A fixture
+    preserved privately and never exported is in neither the public export nor a node's own store, so a check there fails
+    after its launch; a copy put in the node's store keeps a train moving before the export.  Raises when the public export
+    is needed and there is none."""
     from concurrent.futures import ThreadPoolExecutor
 
     from research.store.fetchset import public_url
@@ -1526,6 +2319,67 @@ def _kill_after_grace(p: subprocess.Popen) -> None:
         _signal_tree(p.pid, signal.SIGKILL)
 
 
+#: a running step none of whose outputs (`outputs`) has changed for this long is hung. pytest sat 23-24 h on one hung test after
+#: lean-suites failed, holding its train slot, and circuit-check beside it its share of memory; a passing step's longest
+#: quiet stretch is about an hour (circuit-check's plan before its first target, one 35-minute target, a cold Lean package's
+#: build)
+IDLE_S = 3 * 3600
+#: and one still running after this long is over its budget, whatever it writes (the longest steps passed in 3-4 h)
+STEP_BUDGET_S = 12 * 3600
+#: how often a running step's outputs are looked at
+WATCH_EVERY_S = 60
+#: where a step writes as it runs besides the run dir's files named after it: the suites' own logs
+WATCH = {"pytest": ("suites",), "lean-suites": ("suites",)}
+#: the clock `watch` reads (a test injects one)
+CLOCK = time.monotonic
+
+
+def _exit_within(p: subprocess.Popen, seconds: float) -> int | None:
+    try:
+        return p.wait(timeout=seconds)
+    except subprocess.TimeoutExpired:
+        return None
+
+
+#: `watch`'s wait for a step's exit code, None while it runs on (a test injects one)
+WAIT = _exit_within
+
+
+def outputs(out: Path, name: str) -> tuple[int, int, int]:
+    """What step ``name`` has written so far, as (files, bytes, newest mtime): the run dir's files and directories named after it
+    (its log, circuit-check's progress, lean-audit's build logs), and those `WATCH` names for it."""
+    roots = [*out.glob(f"{name}*"), *(out / d for d in WATCH.get(name, ()))]
+    sizes, newest = [], 0
+    for root in roots:
+        for f in [root, *(root.rglob("*") if root.is_dir() else ())]:
+            try:
+                st = f.stat()
+            except OSError:
+                continue
+            sizes.append(st.st_size)
+            newest = max(newest, st.st_mtime_ns)
+    return len(sizes), sum(sizes), newest
+
+
+def watch(name: str, p: subprocess.Popen, out: Path) -> tuple[int, str | None]:
+    """``p``'s exit code, and why it was stopped: a step quiet for `IDLE_S` or running past `STEP_BUDGET_S` gets SIGTERM (suites.py
+    then kills its suites' groups and writes what it has), what is left of it SIGKILL after `STOP_GRACE_S`."""
+    start = last = CLOCK()
+    seen = outputs(out, name)
+    while (rc := WAIT(p, WATCH_EVERY_S)) is None:
+        now = CLOCK()
+        if (o := outputs(out, name)) != seen:
+            seen, last = o, now
+        why = (f"hung: no output for {(now - last) / 60:.0f} min" if now - last >= IDLE_S
+               else f"over budget: still running after {(now - start) / 3600:.1f} h" if now - start >= STEP_BUDGET_S else None)
+        if why:
+            print(f"check: {name}: {why}; stopping its processes", flush=True)
+            _signal_tree(p.pid, signal.SIGTERM)
+            _kill_after_grace(p)
+            return p.wait(), why
+    return rc, None
+
+
 #: the steps whose failure stops the run even under --keep-going (`halts` in ci.toml)
 HALTS = frozenset(j.name for j in JOBS if j.halts)
 #: ... and those whose failure does when their log has this text (`halts_on`); without it (a failed clone or toolchain download)
@@ -1617,14 +2471,15 @@ class Reused:
     """The passes a recorded check reuses, packed as `REUSED_PACK` beside `verdicts.tar.gz` (which holds only those its steps
     stored), so one recent check's two packs answer for every part it passed, each entry still naming the run that earned it.
     They are what its plan of its own tree (`plan.py --own`: this run's caches, the gathered pack imported) finds passed, of the
-    entries here before its steps ran (``before``).  The plan runs once the twins are built (`run`'s `PREBUILD`, which no other
+    entries here before its steps ran (``before``).  The plan runs once the twins are built (`run`'s `prebuild`, which no other
     process may import while it compiles them), beside the steps; it runs again once circuit-check ends when it found no task
     list to read circuit-check's targets from.  xz with a dictionary spanning many entries (`verdicts.XZ_FILTERS`): one tree's
     circuit-check entries run past a GB, and pack to a few MB.  `gather_verdicts` never takes it; `plan.py` does, for a check
-    of the commit it plans and each `--from`."""
+    of the commit it plans and each `--from`.  With ``only`` (`--no-cache --circuit-cache`), just its entries under that pack
+    path: the plan also finds suites' passes here, which such a run runs again."""
 
-    def __init__(self, run_dir: Path, before: dict[str, str]):
-        self.out, self.before = run_dir / REUSED_PACK, before
+    def __init__(self, run_dir: Path, before: dict[str, str], only: str | None = None):
+        self.out, self.before, self.only = run_dir / REUSED_PACK, before, only
         self.lock = threading.Lock()
         self.circuit_unkeyed = self.circuit_ended = False
         self.entries: int | None = None
@@ -1661,7 +2516,7 @@ class Reused:
                 if self.circuit_unkeyed and self.circuit_ended and not late:
                     self.start()                     # circuit-check ended while this plan ran: its targets are keyed now
                 paths = {x for p in doc["parts"] for f in p.get("found") or [] if f.get("source") == "own"
-                         for x in f.get("paths") or [] if x in self.before}
+                         for x in f.get("paths") or [] if x in self.before and (self.only is None or x.startswith(self.only))}
                 n = VERDICTS.export_paths(self.out, paths, xz=True)
                 size = self.out.stat().st_size
                 if size > REUSED_CAP:
@@ -1683,10 +2538,12 @@ class Reused:
 class Steps:
     """The steps of one run: their processes while they run, so that the first failure stops the others (unless ``keep_going``,
     and a step in `HALTS`, or one `HALTS_ON` marks `halts`, stops them even then), and each step's record appended to `STEPS_LOG`
-    as it ends."""
+    as it ends, and each start and end to the run's live record (`LIVE`)."""
 
-    def __init__(self, out: Path, keep_going: bool = False, packs: Packs | None = None, reused: Reused | None = None):
+    def __init__(self, out: Path, keep_going: bool = False, packs: Packs | None = None, reused: Reused | None = None,
+                 live=None):
         self.log, self.keep_going, self.packs, self.reused = out / STEPS_LOG, keep_going, packs, reused
+        self.live = live or LIVE.Live(out)
         self.lock = threading.RLock()
         self.running: dict[str, subprocess.Popen] = {}
         self.stopped: set[str] = set()
@@ -1717,6 +2574,8 @@ class Steps:
             if self.stopping:
                 return None
             self.running[name] = p = subprocess.Popen(argv, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT)
+            self.spans.open(name)
+            self.live.started(name)
             return p
 
     def end(self, rec: dict) -> dict:
@@ -1728,6 +2587,7 @@ class Steps:
             with open(self.log, "a") as f:
                 f.write(json.dumps(rec) + "\n")
             self.spans.step(rec)
+            self.live.ended(rec)
             if self.packs is not None:
                 self.packs.request()
             if self.reused is not None:
@@ -1757,9 +2617,16 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
     else:
         with open(log, "wb") as f:
             p = steps.start(name, argv, cwd, e, f)
-            rc = p.wait() if p is not None else None
+            rc, hung = watch(name, p, out) if p is not None else (None, None)
         if rc is None:
             rec = {"step": name, "status": "stopped", "detail": f"not started: {steps.why}"}
+        elif hung:
+            rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": hung}
+        elif rc == -signal.SIGTERM:
+            # a cancel (`research cancel`) signals the run's whole process group, so a step can die of it before this check's
+            # handler marks it stopped: it found nothing (it would otherwise read as "failed" with an empty log)
+            rec = {"step": name, "status": "stopped", "rc": rc, "log": log.name,
+                   "detail": "stopped: killed by a SIGTERM this check did not send (a cancel of the run)"}
         elif rc == 0 and name == "lean-audit" and (why := lean_fast(out)):
             print(f"check: {name}: {why}", flush=True)
             rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": why}
@@ -1786,16 +2653,41 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
 
 #: vLLM's C++ twin models, compiled on first use: built once before the groups start, so that no step compiles them while
 #: another loads them (a check that compiles mid-run is untraceable, and circuit-check stores none of its results)
-PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept ImportError:\n    twins = None\n"
-            "if twins:\n    twins.preload()\n")
+PREBUILD = "import json\nfrom verity.ml.definitions.numerics import twins\nprint(json.dumps(twins.preload()))\n"
+#: the prebuild's output, in the output directory beside the steps' logs
+PREBUILD_LOG = "prebuild.log"
+
+
+def prebuild(out: Path, steps: Steps) -> dict | None:
+    """`PREBUILD` in a process of its own, its output in `PREBUILD_LOG`: None once it built every model, else its record, a
+    `prebuild` step that failed with its exit status (or was stopped by the run's stop), which refuses the run: no group
+    starts, since each would compile the models the first time it ran one."""
+    t0 = time.monotonic()
+    log = out / PREBUILD_LOG
+    with open(log, "wb") as f:
+        rc = subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), stdout=f, stderr=subprocess.STDOUT).returncode
+    seconds = round(time.monotonic() - t0, 1)
+    if rc == 0:
+        print(f"check: prebuild: the C++ models are built in {seconds} s ({PREBUILD_LOG})", flush=True)
+        return None
+    if steps.stopping or rc == -signal.SIGTERM:
+        return steps.end({"step": "prebuild", "status": "stopped", "rc": rc, "log": PREBUILD_LOG, "seconds": seconds,
+                          "detail": f"stopped: {steps.why or 'killed by a SIGTERM this check did not send'}"})
+    tail = log.read_bytes().decode(errors="replace").splitlines()
+    print("\n".join(f"  prebuild| {line}" for line in tail[-40:]), flush=True)
+    why = (f"refused: the C++ models' prebuild exited {rc} ({(tail[-1:] or ['it wrote nothing'])[0].strip()}; {PREBUILD_LOG}), "
+           "so a step would compile them untraced")
+    print(f"check: prebuild: {why}", flush=True)
+    return steps.end({"step": "prebuild", "status": "failed", "rc": rc, "log": PREBUILD_LOG, "seconds": seconds, "detail": why})
 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
         only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None,
-        regenerate: bool = True) -> tuple[bool, list[dict]]:
+        regenerate: bool = True, circuit_cache: bool | None = None, live=None,
+        splits: dict[str, dict] | None = None, bookkeeping: bool = False) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
-    steps = Steps(out, keep_going, packs, reused)
+    steps = Steps(out, keep_going, packs, reused, live)
 
     ended: dict[str, threading.Event] = {}
     status: dict[str, str] = {}
@@ -1821,12 +2713,18 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         return done
 
     try:
-        results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
+        pre = preflight()
+        steps.live.plan([name for name, _, _ in pre])
+        results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in pre]
+        if not steps.stopping and all(r["status"] == "passed" for r in results) and (refused := prebuild(out, steps)):
+            results.append(refused)
         if not steps.stopping and all(r["status"] == "passed" for r in results):
-            subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             if reused is not None:
                 reused.start()
-            gs = groups(out, n, cache, urls, regenerate=regenerate) if only is None else groups(out, n, cache, urls, only, regenerate)
+            gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache, splits=splits,
+                        bookkeeping=bookkeeping)
+            steps.live.plan([name for g in gs for name, _, _ in g])
+            steps.live.request()
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
             beside = [ended[name] for g in gs if all(s[0] != "circuit-check" for s in g) for name, _, _ in g]
             grant = None
@@ -1917,23 +2815,25 @@ def reuse_lines(r: dict) -> list[str]:
 def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
                  nondeterministic: list[dict] = (), shard: dict | None = None, stopped_by: str | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
-    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran); for a
-    post-landing run (`--deferred`), `DEFERRED_KIND`, the same under `deferred`.  A run
-    ``stopped_by`` a signal is `not_run`: no verdict, so a job queue runs it again."""
+    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran); for an
+    after-landing run (`--deferred`), `DEFERRED_KIND`, the same under `deferred`.  Its `passes` are the lean-audit step's
+    (`lean_passes`), which the store indexes as `passes.<key>`.  A run ``stopped_by`` a signal is `not_run`: no verdict and
+    no passes, so a job queue runs it again."""
     if shard is not None:
         done = [{**s, "parts": got} if (got := [p for p in shard["parts"] if p.partition(":")[0] == s["step"]]) else s
                 for s in done]
         shard = {**shard, "commit": _rev("HEAD"), "config": _rev("HEAD:tools/verity/check")}
     deferred = bool(shard and shard.get("deferred"))
     kind = DEFERRED_KIND if deferred else SHARD_KIND if shard else "check/v1"
-    doc = {"schema": "research/result/v0.1", "kind": kind, "run_id": os.environ["RESEARCH_RUN_ID"],
-           "reuse": reuse(run_dir, done), "workload_fingerprint": {"steps": [s["step"] for s in done]},
+    doc = {"schema": "research/result/v0.1", "kind": kind, "run_id": SETTINGS.require("RESEARCH_RUN_ID"),
+           "reuse": reuse(run_dir, done), "settings": SETTINGS.record(), "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "not_run" if stopped_by else "passed" if ok else "failed", "checker": "tools/verity/check/check.py",
                           "detail": (f"stopped by {stopped_by}: " if stopped_by else "")
                                     + "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
-           "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", "lean-audit/",
-                                                    *PACK_FILES, STEPS_LOG, SPANS.SPANS_LOG,
+           "passes": {} if stopped_by else lean_passes(run_dir, done),
+           "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", f"{CC_SHARDS}/", "lean-audit/",
+                                                    *PACK_FILES, STEPS_LOG, SPANS.SPANS_LOG, LIVE.LIVE_FILE,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     if shard:
@@ -1949,7 +2849,31 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
     os.replace(tmp, run_dir / "result.json")
 
 
-def main(argv: list[str]) -> int:
+def live_record(out: Path, run_dir: Path | None, sharded: dict | None, picked: list[str]):
+    """The run's `LIVE.Live`: what it checks (a shard, an after-landing run's steps, parts, or the whole check) of which commit, published
+    with the run's custody key when it has one (`custody_dir`)."""
+    what = (f"shard {sharded['k']}/{sharded['n']}" if sharded and "k" in sharded else
+            f"deferred {','.join(sharded['deferred'])}" if sharded and sharded.get("deferred") else
+            f"parts {','.join(picked)}" if picked else "check")
+    put, custody = None, custody_dir() if run_dir is not None else None
+    if custody is not None:
+        try:
+            put = LIVE.custody_put(custody)
+        except Exception as e:  # noqa: BLE001  (unpublished, the record stays in the run dir)
+            print(f"check: live: no publishing ({type(e).__name__}: {e}); {LIVE.LIVE_FILE} stays in the run dir", flush=True)
+    run_id = custody.parent.name if custody is not None else run_dir.name if run_dir is not None else None
+    return LIVE.Live(out, run_id=run_id, put=put, commit=_rev("HEAD"), what=what)
+
+
+def resync(argv: list[str]) -> None:
+    """Install the workspace into this fresh environment (`SUITES.SYNC`) and run check again with ``argv``, unless the sync left it
+    fresh (`SUITES.fresh`), which would sync again."""
+    print(f"check: {sys.prefix} holds none of the workspace yet: `{' '.join(SUITES.SYNC)}`", file=sys.stderr)
+    if subprocess.run(SUITES.SYNC, cwd=ROOT).returncode == 0 and not SUITES.fresh(env()):
+        os.execv(sys.executable, [sys.executable, sys.argv[0], *argv])
+
+
+def main(argv: list[str], script: bool = False) -> int:
     if argv == ["--agreement-files"]:
         from research.store.local import LocalStore
 
@@ -1960,7 +2884,7 @@ def main(argv: list[str]) -> int:
         urls = lean_deps_url_file(Path(tempfile.mkdtemp(prefix="check-lean-deps-")))
         print(f"--send {urls}" if urls else "")
         return 0
-    if argv[:1] == ["--lean-agreement"] and len(argv) == 4:
+    if argv[:1] == ["--lean-agreement"] and len(argv) in (4, 5):
         return lean_agreement(*map(Path, argv[1:]))
     if argv[:1] == ["--lean-slot"] and len(argv) > 1:
         cmd = lean_slot(argv[1:])
@@ -1973,35 +2897,61 @@ def main(argv: list[str]) -> int:
         return slots_view(argv[1:])
     if argv[:1] == ["--plan"]:
         return _load("plan").main(argv[1:], sys.modules[__name__])
+    if argv[:1] == ["--shard-plan"]:
+        return shard_plan_main(argv[1:])
     if "--record" in argv:
-        if os.environ.get("RESEARCH_RUN_ID"):
-            print("check: --record inside a recorded run", file=sys.stderr)
+        if rid := SETTINGS.RESEARCH_RUN_ID:
+            print(f"check: --record inside a recorded run ({rid}): it launches its own `research run`, which places the check "
+                  f"and records it as an Attempt of the clean commit, so launch it from your checkout instead, outside `research "
+                  f"run` (the launch is light; an agent VM runs it): `{nested_record(argv)}`", file=sys.stderr)
             return 2
         return record([a for a in argv if a != "--record"])
-    if os.environ.get("RESEARCH_RUN_ID") and os.environ.get("VERITY_SKIP_STORE") == "1":
-        print("check: VERITY_SKIP_STORE=1 inside a recorded run: a recorded check runs the store-backed tests (the module docstring's "
-              "\"The evidence store\")", file=sys.stderr)
+    if why := SETTINGS.refusals():
+        print("\n".join(f"check: {w}" for w in why), file=sys.stderr)
         return 2
+    run_dir = Path(d) if (d := SETTINGS.RESEARCH_RUN_DIR) else None
     if argv[:1] == ["--combine"] and len(argv) > 1:
-        return combine(argv[1:], Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None)
+        return combine(argv[1:], run_dir)
+    if "--cc-records" in argv:
+        if [a for a in argv if a not in ("--cc-records", "--keep-going")] or run_dir is None:
+            print("check: --cc-records takes no other flag and runs inside a recorded run: `check.py --record --cc-records --on M`",
+                  file=sys.stderr)
+            return 2
+        return cc_records(run_dir)
     cache = "--no-cache" not in argv
+    circuit_cache = cache or "--circuit-cache" in argv
     keep_going = "--keep-going" in argv
     regenerate = "--no-regenerate" not in argv
-    rest = [a for a in argv if a not in ("--no-cache", "--keep-going", "--no-regenerate")]
+    bookkeeping = "--bookkeeping-warn" in argv
+    rest = [a for a in argv if a not in ("--no-cache", "--circuit-cache", "--keep-going", "--no-regenerate", "--bookkeeping-warn")]
     pack = None
     if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
         i = rest.index("--verdicts-in")
         pack, rest = Path(rest[i + 1]), rest[:i] + rest[i + 2:]
+    records = None
+    if "--cc-records-from" in rest and rest.index("--cc-records-from") + 1 < len(rest):
+        i = rest.index("--cc-records-from")
+        records, rest = rest[i + 1], rest[:i] + rest[i + 2:]
     sharded = None
+    plan_file = run_dir / "inputs" / AUTO_PLAN if run_dir is not None else None
+    if "--shard-plan-file" in rest[:-1] and run_dir is None:
+        i = rest.index("--shard-plan-file")
+        plan_file, rest = Path(rest[i + 1]), rest[:i] + rest[i + 2:]
     if "--shard" in rest and rest.index("--shard") + 1 < len(rest):
         i = rest.index("--shard")
+        later = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
         try:
-            sharded = shard(rest[i + 1])
+            sharded = shard(rest[i + 1], gated=later is None, plan_file=plan_file,
+                            jobs=DECLARATION.needed(JOBS, [s for s in later.split(",") if s]) if later else None)
         except DECLARATION.DeclarationError as e:
             print(f"check: {e}", file=sys.stderr)
             return 2
         rest = rest[:i] + rest[i + 2:]
         print(f"check: shard {sharded['k']}/{sharded['n']}: {', '.join(sharded['parts'])}", flush=True)
+        if p := sharded.get("plan"):
+            print(f"check: shard plan {p['digest'][:12]}: N = {p['n']}, floor {p['floor_s'] / 60:.1f} min, predicted wall "
+                  f"{p['predicted_s'] / 60:.1f} min, this shard {p['seconds'][sharded['k'] - 1] / 60:.1f} min", flush=True)
+    splits = sharded.pop("splits", None) if sharded else None
     deferred = None
     if "--deferred" in rest and rest.index("--deferred") + 1 < len(rest):
         i = rest.index("--deferred")
@@ -2009,17 +2959,29 @@ def main(argv: list[str]) -> int:
     picked = [a for a in rest if a in DECLARATION.PARTS]
     rest = [a for a in rest if a not in DECLARATION.PARTS]
     if deferred is not None:
-        if sharded or picked:
-            print("check: --deferred runs the post-landing steps alone, without --shard or a part", file=sys.stderr)
+        if picked:
+            print("check: --deferred runs the post-landing steps alone, without a part", file=sys.stderr)
             return 2
         try:
-            sharded = {"parts": deferred_parts(deferred), "deferred": deferred.split(",")}
+            mine = deferred_parts(deferred)
         except DECLARATION.DeclarationError as e:
             print(f"check: {e}", file=sys.stderr)
             return 2
+        if sharded:
+            chosen = {p.partition(":")[0] for p in mine}
+            if not (mine := [p for p in sharded["parts"] if p.partition(":")[0] in chosen]):
+                print(f"check: --deferred {deferred} --shard {sharded['k']}/{sharded['n']}: that shard holds none of those steps",
+                      file=sys.stderr)
+                return 2
+            sharded = {**sharded, "parts": mine}
+        sharded = {**(sharded or {}), "parts": mine, "deferred": deferred.split(",")}
         print(f"check: deferred {deferred}: {', '.join(sorted({p.partition(':')[0] for p in sharded['parts']}))}", flush=True)
+    if bookkeeping and (deferred is None or not regenerate or "--shard" in argv):
+        print("check: --bookkeeping-warn is drive's lock run: with --deferred, unsharded and without --no-regenerate",
+              file=sys.stderr)
+        return 2
     if picked:
-        if sharded or os.environ.get("RESEARCH_RUN_ID"):
+        if sharded or SETTINGS.RESEARCH_RUN_ID:
             print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
                   file=sys.stderr)
             return 2
@@ -2037,21 +2999,40 @@ def main(argv: list[str]) -> int:
         print(__doc__.strip(), file=sys.stderr)
         return 2
     if away := SUITES.foreign(SUITES.members(), env()):
+        if script and SUITES.fresh(env()):
+            resync(argv)
         print(f"check: {sys.executable} would run this tree's steps against another checkout's code ({away}); run check with "
-              f"{ROOT}'s own environment: `uv run --extra torch-cpu python tools/verity/check/check.py` there", file=sys.stderr)
+              f"{ROOT}'s own environment: `{' '.join(SUITES.SYNC)} && uv run --extra torch-cpu python tools/verity/check/check.py` "
+              f"there", file=sys.stderr)
         return 2
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None
+    only = sharded["parts"] if sharded else None
+    if only is None and OFF_GATE and cache and run_dir is not None:
+        try:
+            only = gated_parts()
+        except DECLARATION.DeclarationError as e:
+            print(f"check: {e}", file=sys.stderr)
+            return 2
+        print(f"check: off the merge gate, left to the after-landing run (`--deferred`): {', '.join(OFF_GATE)}", flush=True)
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))
-    verdicts = {"in": verdicts_in(pack, run_dir)} if pack and cache else {}
-    before = VERDICTS.snapshot() if run_dir is not None and cache else None
+    verdicts = {"in": verdicts_in(pack, run_dir, None if cache else CIRCUIT_ENTRIES)} if pack and circuit_cache else {}
+    if records is not None and (only is None or any(p.partition(":")[0] == "circuit-check" for p in only)):
+        why = (cc_records_in(records, cache_dir() / "circuit-check") if circuit_cache
+               else "circuit-check reuses no cache here (--no-cache without --circuit-cache)")
+        if why:
+            print(f"check: --cc-records-from {records} refused: {why}", file=sys.stderr, flush=True)
+            return 2
+    before = VERDICTS.snapshot() if run_dir is not None and circuit_cache else None
     t0 = time.monotonic()
     TERMINATED.clear()
     main_thread = threading.current_thread() is threading.main_thread()
     prior = signal.signal(signal.SIGTERM, _terminated) if main_thread else None
     packs = Packs(run_dir / "verdicts.tar.gz", before) if before is not None else None
-    reused = Reused(run_dir, before) if before is not None else None
+    reused = Reused(run_dir, before, None if cache else CIRCUIT_ENTRIES) if before is not None else None
+    live = live_record(out, run_dir, sharded, picked)
+    live.start()
     try:
-        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, packs, reused, regenerate)
+        ok, done = run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache, live, splits,
+                       **({"bookkeeping": True} if bookkeeping else {}))
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)
@@ -2071,6 +3052,8 @@ def main(argv: list[str]) -> int:
             if (got := reused.close()) is not None:
                 verdicts["reused"] = {"file": REUSED_PACK, "entries": got}
         write_result(run_dir, ok, done, verdicts, bad, flaky, sharded, stopped_by)
+    # after the result: a cancel's SIGKILL follows its SIGTERM in seconds, and the publish may take that long
+    live.close("stopped" if stopped_by else "passed" if ok else "failed")
     print("\n".join(reuse_lines(reuse(out, done))), flush=True)
     if stopped_by:
         print(f"check: stopped by {stopped_by} in {time.monotonic() - t0:.1f} s"
@@ -2082,4 +3065,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:], script=True))

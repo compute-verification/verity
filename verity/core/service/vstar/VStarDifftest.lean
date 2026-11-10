@@ -1,7 +1,10 @@
-import Difftest
-import VStar
-import Flock.RecResiduals
-import Flock.RecSetup
+module
+
+public import Difftest
+public import VStar
+public import Flock.RecResiduals
+public import Flock.RecSetup
+public import Flock.RecLinkRef
 
 /-!
 # V*'s difftest executable
@@ -14,8 +17,13 @@ SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`)
 `inner_circuit_holo` and `verifier_parts_holo` are those over a holo inner session (`VStar.Holo`). `verifier_parts` holds the Lean
 verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units, and `verifier_algebra` the verifier's own algebra
 (`Flock.RecAlgebra`, its parts and their nets, holo shapes included) to `rec_algebra` and `rec_residuals`. `inner_draw`
-holds `rec_live.inner_draw`, the prover's reading of the inner session's draw, to the verifier's (`Flock.RecSetup.innerDrawn`).
+holds `rec_live.inner_draw`, the prover's reading of the inner session's sample, to the verifier's (`Flock.RecSetup.innerDrawn`).
+`link_unit` holds V*'s link unit (`VStar.linkUnit`) to `rec_link.lowering`, `link_tree` the verifier's rows trees
+(`Flock.RecLinkTree`) to `rec_link.Tree`, and `link_ref` the unit's Lean reference (`Flock.RecLinkRef.linkRef`) to
+`rec_link.link_ref`.
 -/
+
+@[expose] public section
 
 namespace VStar.DT
 
@@ -221,7 +229,7 @@ def verifierAlgebraFn (j : Json) : Except String Json := do
       ("v", natsJson Vs.toList), ("unit", unit)])
   pure (Json.mkObj ([("parts", Json.arr out)] ++ (← gfSummary (algGfS S))))
 
-/-- `rec_live.inner_draw` on an inner session's record: its draw, or the verifier's refusal of a session over it
+/-- `rec_live.inner_draw` on an inner session's record: its sample, or the verifier's refusal of a session over it
 (`Flock.RecSetup.innerDrawn`, the same at the inner statement's files and at the verifier's inner coins). -/
 def innerDraw (j : Json) : Except String Json := do
   let o ← input' j ["record"]
@@ -229,6 +237,142 @@ def innerDraw (j : Json) : Except String Json := do
   pure <| match Flock.RecSetup.innerDrawn (some (.coins Json.null record)) with
     | .ok () => Json.mkObj [("draw", (Flock.RecCoins.recordDraw record).getD Json.null)]
     | .error e => Json.mkObj [("refused", (e : Json))]
+
+def hexB (j : Json) (ctx : String) : Except String ByteArray := do Flock.unhex (← jStr j ctx)
+
+def f128 (j : Json) (ctx : String) : Except String Flock.F128 := do Flock.f128OfHex (← jStr j ctx)
+
+def arrOf {α : Type} (f : Json → String → Except String α) (j : Json) (ctx : String) : Except String (Array α) := do
+  (← jArr j ctx).mapM (f · ctx)
+
+def pair (j : Json) (ctx : String) : Except String (Json × Json) := do
+  let a ← jArr j ctx
+  unless a.size == 2 do throw s!"{ctx}: a pair"
+  pure (a[0]!, a[1]!)
+
+/-- `VStar.In.Src` as the test writes it: F elements and bytes as hex (`{hi:016x}{lo:016x}` an element), a message row and
+a top node as `[words, salt]` and `[node, salt]`, the fresh salts as `{dir: {port: [salt, ...]}}`; with `links`, the link
+table's rows (`{"trow": [words, salt], "xr", "yr", "rsibs": [..], "xw", "yw", "wsibs": [..]}` each) and `link_roots`, the
+input and output rows' trees' roots `[in, out]`. -/
+def srcOf (j : Json) : Except String In.Src := do
+  let base := ["msgs", "openings", "tops", "acc_salts", "kappa", "eq_a", "vs", "fresh"]
+  let linked := (j.getObjVal? "links").toOption.isSome
+  let o ← jObj j (if linked then base ++ ["links", "link_roots"] else base) "src"
+  let row : Json → String → Except String In.Row := fun x ctx => do
+    let (w, s) ← pair x ctx
+    pure { words := ← arrOf jNat w ctx, salt := ← hexB s ctx }
+  let linkRow : Json → String → Except String In.LinkRow := fun x ctx => do
+    let l ← jObj x ["trow", "xr", "yr", "rsibs", "xw", "yw", "wsibs"] ctx
+    pure { trow := ← row (l "trow") ctx, xr := ← hexB (l "xr") ctx, yr := ← hexB (l "yr") ctx,
+           rsibs := ← arrOf hexB (l "rsibs") ctx, xw := ← hexB (l "xw") ctx, yw := ← hexB (l "yw") ctx,
+           wsibs := ← arrOf hexB (l "wsibs") ctx }
+  let links ← if linked then arrOf linkRow (o "links") "links" else pure #[]
+  let linkRoots ← if linked then do
+      let (a, b) ← pair (o "link_roots") "link_roots"
+      pure (← hexB a "link_roots", ← hexB b "link_roots")
+    else pure (ByteArray.empty, ByteArray.empty)
+  let opening : Json → String → Except String In.Query := fun x ctx => do
+    let q ← jObj x ["rep", "level", "j", "pos", "row", "sibs"] ctx
+    pure { rep := ← jNatAt q "rep" ctx, level := ← jNatAt q "level" ctx, j := ← jNatAt q "j" ctx,
+            pos := ← jNatAt q "pos" ctx, row := ← arrOf f128 (q "row") ctx, sibs := ← arrOf hexB (q "sibs") ctx }
+  let node : Json → String → Except String (ByteArray × ByteArray) := fun x ctx => do
+    let (n, s) ← pair x ctx
+    pure (← hexB n ctx, ← hexB s ctx)
+  let fj := o "fresh"
+  let fresh : String → String → Nat → ByteArray := fun d p i => match (fj.getObjValD d).getObjValD p with
+    | .arr a => match a[i]? with
+      | some (.str s) => (Flock.unhex s).toOption.getD .empty
+      | _ => .empty
+    | _ => .empty
+  pure { msgs := ← arrOf (arrOf row) (o "msgs") "msgs", openings := ← arrOf opening (o "openings") "openings",
+         tops := ← arrOf (arrOf (arrOf node)) (o "tops") "tops", accSalts := ← arrOf hexB (o "acc_salts") "acc_salts",
+         kappa := ← arrOf (arrOf (arrOf (arrOf f128))) (o "kappa") "kappa",
+         eqA := ← arrOf (arrOf (arrOf f128)) (o "eq_a") "eq_a", vs := ← arrOf (arrOf f128) (o "vs") "vs", fresh, links,
+         linkRoots }
+
+/-- Bytes' SHA-512, its first 8 bytes as hex: one row's or one salt's fingerprint. -/
+def short (b : ByteArray) : Json := Flock.hexOf ((Flock.Sha512.hash b).extract 0 8)
+
+def u16le (ws : Array Nat) : ByteArray := ws.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) .empty
+
+/-- One V* part's port inputs (`VStar.In`) on the stager's inputs `src`: `stmt` a level's statement (`{"kind": "level",
+"level", "LANES", "H", "n"}`), a part of the algebra's (`{"kind": "inner", "ports": [[name, n], ..], "v": [..]}`), a
+cap's (`{"kind": "cap", "level", "N"}`) or the link table's (`{"kind": "link", "UB", "PB", "N"}`), `prog` its program's
+SHA-512 hex. Each port, in the circuit's order, as its table rows' and salts' fingerprints (`short` of a row's u16
+little-endian words, of a salt) and its refs. -/
+def partInFn (j : Json) : Except String Json := do
+  let o ← input' j ["src", "prog", "stmt"]
+  let src ← srcOf (o "src")
+  let prog ← jStr (o "prog") "prog"
+  let st := o "stmt"
+  let p ← match ← jStr (st.getObjValD "kind") "stmt.kind" with
+    | "level" => do
+      let q ← jObj st ["kind", "level", "LANES", "H", "n"] "stmt"
+      In.levelIn src prog (← jNatAt q "level" "stmt") (← jNatAt q "LANES" "stmt") (← jNatAt q "H" "stmt") (← jNatAt q "n" "stmt")
+    | "inner" => do
+      let q ← jObj st ["kind", "ports", "v"] "stmt"
+      let ports ← (← jArr (q "ports") "ports").mapM fun x => do
+        let (nm, n) ← pair x "port"
+        pure (← jStr nm "port", ← jNat n "port")
+      In.algebraIn src prog ports.toList (← arrOf jNat (q "v") "v").toList
+    | "cap" => do
+      let q ← jObj st ["kind", "level", "N"] "stmt"
+      In.capIn src (← jNatAt q "level" "stmt") (← jNatAt q "N" "stmt")
+    | "link" => do
+      let q ← jObj st ["kind", "UB", "PB", "N"] "stmt"
+      pure (In.linkIn src prog (← jNatAt q "UB" "stmt") (← jNatAt q "PB" "stmt") (← jNatAt q "N" "stmt"))
+    | k => throw s!"stmt.kind: level, inner, cap or link, not {k}"
+  let port : String × In.PortIn → Json := fun (nm, q) => Json.arr #[(nm : Json), Json.mkObj [
+    ("rows", Json.arr (q.rows.map fun (r : In.Row) => short (u16le r.words))),
+    ("salts", Json.arr (q.rows.map fun (r : In.Row) => short r.salt)), ("refs", natsJson q.refs.toList)]]
+  pure (Json.mkObj [("ports", Json.arr (p.map port))])
+
+/-- A rep's tops in the order `VStar.In.Src.tops` lists them: `level0`, the node count of level 0's top (`root_B`, at
+`fast100(m)`'s first cap), then `later`, each later level's top's, in the order the rep's schedule commits them
+(`RecVStar.topSizes` of `repRounds`, or `holoRepRounds` with `holo`). -/
+def topSizesFn (j : Json) : Except String Json := do
+  let o ← input' j ["m", "k_log", "claims", "holo"]
+  let m ← jNatAt o "m" "input"
+  let kLog ← jNatAt o "k_log" "input"
+  let claims ← jNatAt o "claims" "input"
+  let holo ← match o "holo" with
+    | .bool b => pure b
+    | _ => throw "input.holo: not a boolean"
+  let some s := Flock.fast100 m | throw s!"m = {m}: no fast100 schedule"
+  let some rs := (if holo then Flock.RecVStar.holoRepRounds else Flock.RecVStar.repRounds) m kLog claims
+    | throw s!"m = {m}, k_log = {kLog}: no rep schedule"
+  pure (Json.mkObj [("level0", ((2 ^ (s.levels.getD 0 default).cap : Nat) : Json)),
+    ("later", natsJson (Flock.RecVStar.topSizes rs))])
+
+/-- `rec_link.lowering(UB, PB).text`. -/
+def linkLowering (j : Json) : Except String Json := do
+  let o ← input' j ["UB", "PB"]
+  unitJson (← linkUnit (← jNat (o "UB") "UB") (← jNat (o "PB") "PB"))
+
+/-- `rec_link.Tree` at depth `UB + PB` over `rows`, `[unit, row, b ‖ c]` each (`b ‖ c` hex), in increasing order: its root
+and the opening of `pos`, `[unit, row]` (`Flock.RecLinkTree.rowsRoot`, `rowsPath`). -/
+def linkTree (j : Json) : Except String Json := do
+  let o ← input' j ["UB", "PB", "rows", "pos"]
+  let UB ← jNat (o "UB") "UB"
+  let PB ← jNat (o "PB") "PB"
+  let rows ← (← jArr (o "rows") "rows").mapM fun x => do
+    let a ← jArr x "row"
+    unless a.size == 3 do throw "row: [unit, row, bc]"
+    pure ((← jNat a[0]! "unit", ← jNat a[1]! "row"), ← hexB a[2]! "bc")
+  let p ← jArr (o "pos") "pos"
+  unless p.size == 2 do throw "pos: [unit, row]"
+  let root ← Flock.RecLinkTree.rowsRoot UB PB rows.toList
+  let path ← Flock.RecLinkTree.rowsPath UB PB rows.toList (← jNat p[0]! "pos") (← jNat p[1]! "pos")
+  pure (Json.mkObj [("root", (Flock.hexOf root : Json)), ("path", Json.arr (path.toArray.map fun s => (Flock.hexOf s : Json)))])
+
+/-- `rec_link.link_ref` on `{"UB", "PB", "ports"}`, the seven ports' u16 words in `rec_link.PORTS`' order: `{"rin", "rout"}`
+(`Flock.RecLinkRef.linkRef`). -/
+def linkRefFn (j : Json) : Except String Json := do
+  let o ← input' j ["UB", "PB", "ports"]
+  let ps ← (← jArr (o "ports") "ports").mapM fun p => do pure (← arrOf jNat p "port").toList
+  let [a, b, c, d, e, f, g] := ps.toList | throw "ports: seven"
+  let (rin, rout) ← Flock.RecLinkRef.linkRef (← jNat (o "UB") "UB") (← jNat (o "PB") "PB") a b c d e f g
+  pure (Json.mkObj [("rin", natsJson rin), ("rout", natsJson rout)])
 
 end VStar.DT
 
@@ -239,4 +383,6 @@ def main : IO Unit := Difftest.serve (Difftest.table [
   ("structure", structureFn), ("spec", specFn false), ("parts", partsFn), ("statements", statementsFn false),
   ("verifier_parts", verifierPartsFn false), ("verifier_algebra", verifierAlgebraFn), ("spec_holo", specFn true),
   ("statements_holo", statementsFn true), ("inner_circuit_holo", innerCircuit true),
-  ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerDraw)])
+  ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerDraw), ("part_in", partInFn),
+  ("top_sizes", topSizesFn), ("link_unit", linkLowering), ("link_tree", linkTree),
+  ("link_ref", linkRefFn)])

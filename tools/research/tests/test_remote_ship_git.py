@@ -67,7 +67,7 @@ def test_first_and_delta_ships_go_as_git_objects_and_verify_per_file(repo, tmp_p
     man = remote.archive_manifest_git(repo)
     assert doc["archive_sha256"] == man["archive_sha256"] and doc["files"] == 4 and doc["pod_archive_sha256"]
     assert _tree(Path(dest)) == man["files"], "the tree on the machine is the commit, file by file"
-    assert min(p.stat().st_mtime for p in Path(dest).rglob("*") if p.is_file()) >= 1_609_459_200, "extraction mtimes, not the 2020 commit time"   # 2021-01-01
+    assert min(p.stat().st_mtime for p in Path(dest).rglob("*") if p.is_file()) >= 1_609_459_200, "extraction mtimes, not the 2020 commit time"   # the start of 2021, UTC
     bare = root / remote.POD_GIT_REPO
     assert _git(bare, "rev-parse", f"refs/research/src/{sha}") == sha
     assert [p.name for p in (root / "src").iterdir()] == [sha] and "archive stream" not in capsys.readouterr().err
@@ -114,6 +114,32 @@ def test_a_machine_without_git_gets_the_archive_stream_with_one_line(repo, tmp_p
     assert not (Path(dest) / ".git").exists() and "checkout" not in doc
 
 
+def test_a_clone_launch_makes_a_stream_shipped_tree_a_checkout_and_a_source_launch_leaves_it(repo, tmp_path, monkeypatch, capsys):
+    """`checkout` (a `--cwd clone` launch) gives a READY tree the archive stream shipped a .git in place; a `--cwd source`
+    launch reuses it as it is.  A tree a run edited is not made a checkout of the commit: it is set aside and shipped afresh."""
+    root = tmp_path / "root"
+    monkeypatch.setenv(remote.SHIP_ENV, "stream")
+    sha, dest, doc = remote.ship_source(LOCAL, str(root), repo)
+    assert remote.ship_source(LOCAL, str(root), repo, checkout=True) == (sha, dest, doc), "RESEARCH_SHIP=stream: no git added"
+    monkeypatch.delenv(remote.SHIP_ENV)
+    assert remote.ship_source(LOCAL, str(root), repo) == (sha, dest, doc) and not (Path(dest) / ".git").exists()
+    _, _, doc2 = remote.ship_source(LOCAL, str(root), repo, checkout=True)
+    assert doc2 == {**doc, "checkout": True, "transport": "stream+git", "git_added_utc": doc2["git_added_utc"]}
+    assert _git(Path(dest), "rev-parse", "HEAD") == sha and _git(Path(dest), "status", "--porcelain") == ""
+    assert remote.require_ready_source(dest, sha) == doc2 and remote.ship_source(LOCAL, str(root), repo, checkout=True)[2] == doc2
+    assert sorted(p.name for p in (root / "src").iterdir()) == [sha]
+
+    other = tmp_path / "other"
+    monkeypatch.setenv(remote.SHIP_ENV, "stream")
+    _, dest3, _ = remote.ship_source(LOCAL, str(other), repo)
+    monkeypatch.delenv(remote.SHIP_ENV)
+    (Path(dest3) / "pkg" / "b.py").write_text("B = 99\n")
+    _, _, doc3 = remote.ship_source(LOCAL, str(other), repo, checkout=True)
+    assert doc3["transport"] == "git" and (Path(dest3) / "pkg" / "b.py").read_text() == "B = 2\n"
+    (moved,) = (other / "src" / ".quarantine").iterdir()
+    assert (moved / "pkg" / "b.py").read_text() == "B = 99\n" and "an earlier run edited (pkg/b.py)" in capsys.readouterr().err
+
+
 def test_a_tampered_extraction_is_never_marked_ready_and_the_stream_ships_instead(repo, tmp_path, monkeypatch, capsys):
     root = tmp_path / "root"
     real = remote._git_ship_script
@@ -158,8 +184,8 @@ def _replica_test_in(tree: Path) -> subprocess.CompletedProcess:
 
 
 def test_a_shipped_tree_answers_git_as_the_launchers_checkout_does(tmp_path, monkeypatch):
-    """#371: the replica test skips a fetched fixture only where `git ls-files` answers.  A shipped `git archive` had no .git, so in a
-    recorded check every migrated fixture read as missing.  Shipped over git, the tree is a checkout, and the same test passes there."""
+    """The replica test skips a fetched fixture only where `git ls-files` answers.  A shipped `git archive` has no .git, so in a
+    recorded check every migrated fixture would read as missing.  Shipped over git, the tree is a checkout, and the same test passes there."""
     repo = _replica_repo(tmp_path)
     _, dest, _ = remote.ship_source(LOCAL, str(tmp_path / "git-root"), repo)
     p = _replica_test_in(Path(dest))
@@ -182,3 +208,23 @@ def test_nothing_credential_like_is_left_on_the_machine(repo, tmp_path):
     keys = [line.split("=", 1)[0] for line in _git(tree, "config", "--local", "--list").splitlines()]
     assert _git(tree, "remote", "get-url", "origin") == str(bare), "the checkout's one remote is the machine's own bare repository"
     assert not [k for k in keys if k.startswith("credential") or "extraheader" in k], keys
+
+
+def test_a_run_that_edits_the_shared_tree_is_not_what_the_next_run_of_that_commit_gets(repo, tmp_path, capsys):
+    """A probe that runs `git checkout origin/main -- FILE` inside the node's shared tree for a commit would make every later run of
+    that commit run main's file.  The machine refuses such a tree, and the next ship sets it aside and ships the commit afresh."""
+    root = tmp_path / "root"
+    sha, dest, doc = remote.ship_source(LOCAL, str(root), repo)
+    (Path(dest) / ".lake").mkdir()
+    (Path(dest) / ".lake" / "build.olean").write_text("built\n")
+    assert remote.tracked_dirt(Path(dest)) == [], "untracked build output is not dirt"
+    (Path(dest) / "pkg" / "b.py").write_text("B = 99\n")
+    assert remote.tracked_dirt(Path(dest)) == ["pkg/b.py"]
+    with pytest.raises(remote.SourceNotReady, match=r"edited its tracked files \(pkg/b\.py\)"):
+        remote.require_ready_source(dest, sha)
+    sha2, dest2, doc2 = remote.ship_source(LOCAL, str(root), repo)
+    assert (sha2, dest2) == (sha, dest) and (Path(dest) / "pkg" / "b.py").read_text() == "B = 2\n"
+    assert remote.require_ready_source(dest, sha) == doc2 and remote.tracked_dirt(Path(dest)) == []
+    (moved,) = (root / "src" / ".quarantine").iterdir()
+    assert moved.name.startswith(f"{sha}-") and (moved / "pkg" / "b.py").read_text() == "B = 99\n", "kept for inspection"
+    assert "an earlier run edited (pkg/b.py)" in capsys.readouterr().err

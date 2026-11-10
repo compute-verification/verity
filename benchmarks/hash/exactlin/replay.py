@@ -3,8 +3,9 @@ on each dumped x against the kernel's xq and s_a, and `ScaledMmS8_v1` (int8_rows
 on the kernel's xq and s_a, row by row, against its y.  The npz files are `kgate.py --dump`'s (OUT/replay/), words
 throughout; CPU only.
 
-`--evaluators` is an int8_rows.py (default: the installed verity_vllm's), e.g. #2694's, which has ScaledMmS8_v1:
-    git show origin/cursor/vllm-int8-build-8350:integrations/vllm/verity_vllm/program/kernels/int8_rows.py > /tmp/int8_rows.py
+`--evaluators` is an int8_rows.py to load in place of the installed `verity.ml.definitions.numerics.int8_rows`, e.g. a
+commit's:
+    git show REV:verity/ml/definitions/numerics/int8_rows.py > /tmp/int8_rows.py
     python replay.py RUN/out/replay --evaluators /tmp/int8_rows.py
 """
 from __future__ import annotations
@@ -21,9 +22,9 @@ import numpy as np
 def load(path: str | None):
     if path is None:
         try:
-            from verity_vllm.program.kernels import int8_rows
+            from verity.ml.definitions.numerics import int8_rows
         except ImportError as e:
-            raise SystemExit(f"replay.py: {e}; int8_rows is PR #2694's: pass --evaluators (see the docstring)") from e
+            raise SystemExit(f"replay.py: {e}; install verity, or pass --evaluators (see the docstring)") from e
         return int8_rows
     spec = importlib.util.spec_from_file_location("exactlin_int8_rows", path)
     mod = importlib.util.module_from_spec(spec)
@@ -54,14 +55,14 @@ def check(ev, f: Path) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("dump", help="a directory of kgate.py --dump's npz files")
-    ap.add_argument("--evaluators", help="an int8_rows.py to load (default: verity_vllm's)")
+    ap.add_argument("--evaluators", help="an int8_rows.py to load (default: verity.ml.definitions.numerics.int8_rows)")
     a = ap.parse_args()
     ev = load(a.evaluators)
     rows = [check(ev, f) for f in sorted(Path(a.dump).glob("*.npz"))]
     for r in rows:
         print(json.dumps(r), flush=True)
     doc = {"ok": bool(rows) and all(r["ok"] for r in rows), "files": len(rows), "scaled_mm": hasattr(ev, "scaled_mm"),
-           "evaluators": a.evaluators or "verity_vllm.program.kernels.int8_rows"}
+           "evaluators": a.evaluators or "verity.ml.definitions.numerics.int8_rows"}
     print(json.dumps(doc), flush=True)
     return 0 if doc["ok"] else 4
 

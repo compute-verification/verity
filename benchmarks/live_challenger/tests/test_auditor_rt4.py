@@ -1,31 +1,33 @@
-"""RT4-INT's witnesses against the auditor ledger v1 (`test_rt4_auditor.py` on cursor/ca-rt4-int-ea24 @ 116856a03a), ported to
-v2 as the refusals they now meet, where they hit infra's code: the gate, the ledger and its publisher.
+"""The witnesses against the auditor ledger v1, ported to v2 as the refusals they now meet, where they hit the auditor
+host's code: the gate, the ledger and its publisher.
 
-* RT4-INT-24: a root gets one session, whatever period a v1 open named for it, and an open's `by` is its gate key's lane;
-  `serve.py` is told the window's root (its refusal of a salt after any other root is proofs').
-* RT4-INT-25: `end` counts the coins each family released, so a client that takes the salt and one of three round coins and
-  then closes ends `complete: false`.
-* RT4-INT-27: a restored key state signs at a leaf the ledger has passed, which `append` and `verify_ledger` refuse; a restored
-  key state and ledger fork the chain, which `extends` and `publish.sh` refuse.
-* RT4-INT-30: the gate's checks are whole-string, so a trailing newline opens nothing, and a root is kept in lowercase.
+* A root gets one session, whatever period a v1 open named for it, and an open's `by` is its gate key's lane; `serve.py` is
+  told the window's root (its refusal of a salt after any other root is `test_serve.py`'s).
+* `end` counts the coins each family released, so a client that takes the salt and one of three round coins and then closes
+  ends `complete: false`.
+* A restored key state signs at a leaf the ledger has passed, which `append` and `verify_ledger` refuse; a restored key state
+  and ledger fork the chain, which `extends` and `publish.sh` refuse.
+* The gate's checks are whole-string, so a trailing newline opens nothing, and a root is kept in lowercase.
 
-RT4-INT-26 (one `verify_window` joining the ledger, the end's seal of out/ and the key pin) and the verifier halves of -24, -25
-and -27 are proofs' (CHAL1, PRF-117)."""
+The verifier's halves of the first three, and one `verify_window` joining the ledger, the end's seal of out/ and the key pin,
+are the verifier's tests."""
 
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.spot import challenger as Ch, remote as R
 from verity.ml.crypto import lms
 
 HERE = Path(__file__).resolve().parent
@@ -46,6 +48,7 @@ SECRET = bytes(range(32))
 def host(tmp_path) -> A.Host:
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("# peers\nvy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
+    (tmp_path / "coin-ports").write_text("vy-nebius-1 7811-7899\n")
     (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
     return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
@@ -99,8 +102,6 @@ def serve(host, signer, session, client, tmp_path, monkeypatch) -> dict:
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))
     body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
     argv = A.serve_argv(host, session, body)
-    i = argv.index("--peer")
-    del argv[i:i + 2]
     argv[argv.index("--port") + 1] = "0"
     argv = [sys.executable, str(HERE / "stub_serve.py"), *argv[2:], "--params", "4,4", "--keygen-workers", "1"]
     out = host.sessions / session / "out"
@@ -170,7 +171,7 @@ def test_rt4_int_25_a_client_that_takes_the_salt_and_one_round_coin_then_closes_
 
 
 def test_the_open_answer_status_and_end_carry_the_coin_commitment_the_hello_answers(host, signer, tmp_path, monkeypatch):
-    """vllm's ask (VLLM-58): the serving side checks, before its first coin, that the challenger it reached is its session's."""
+    """The serving side checks, before its first coin, that the challenger it reached is its session's."""
     session = reserve(host, signer, token="ab12")
     rc, out = ssh(host, signer, f"open --session {session} --root {COMMIT}", ready=lambda s: "ef" * 64)
     assert rc == 0 and json.loads(out)["commitment"] == "ef" * 64
@@ -180,6 +181,53 @@ def test_the_open_answer_status_and_end_carry_the_coin_commitment_the_hello_answ
     assert end["body"]["commitment"] == hello[0] == A.await_commitment(host, session, active=lambda s: True)
     rc, out = ssh(host, signer, f"status {session}")
     assert rc == 0 and json.loads(out)["commitment"] == hello[0]
+
+
+def test_a_withheld_sessions_gate_gives_no_coin_commitment_root_and_fetches_no_record_before_its_end(host, signer, tmp_path,
+                                                                                                    monkeypatch):
+    """A sampled-proofs window's session (`reserve --withhold`): its reserve and open say `withheld: true` (so
+    `challenger.withheld_on` takes its window), serve.py runs it `--withhold`, and its hello answers the layout alone.
+    Until its end entry the gate hands out no root: the open's answer, though `ready` has one, and `status` carry
+    `commitment` null, and `fetch` refuses, though serve.py has written out/record.json. Once its end is in, `status`
+    gives the root the challenger released at the client's close, and `fetch` the directory with its record."""
+    rc, out = ssh(host, signer, RESERVE + " --withhold")
+    assert rc == 0 and json.loads(out)["withheld"] is True, out
+    session = json.loads(out)["session"]
+    rc, out = ssh(host, signer, f"open --session {session} --root {COMMIT}", ready=lambda s: "ef" * 64)
+    got = json.loads(out)
+    assert rc == 0 and got["withheld"] is True and got["signed"] is True and got["commitment"] is None, got
+    assert "ef" * 64 not in out.decode()
+    lines = A.read_ledger(host.ledger)
+    s = A.sessions_of(lines)[session]
+    assert s["reserve"]["body"]["withheld"] is True and s["open"]["body"]["withheld"] is True
+    assert Ch.withheld_on([ln.decode() for ln in lines], COMMIT)
+    assert A.serve_argv(host, session, s["open"]["body"])[-1] == "--withhold"
+
+    seen = {}
+
+    def client(c):
+        seen.update(client=c, hello=(c.withheld, c.commitment))
+        c.open(SALT, 0, bytes.fromhex(COMMIT))
+        seen["record"] = (host.sessions / session / "out" / R.RECORD).is_file()
+        seen["status"] = json.loads(ssh(host, signer, f"status {session}")[1])
+        seen["fetch"] = ssh(host, signer, f"fetch {session}")
+
+    end = serve(host, signer, session, client, tmp_path, monkeypatch)
+    assert seen["hello"] == (True, None) and seen["record"]
+    assert seen["status"]["end"] is None and seen["status"]["commitment"] is None, seen["status"]
+    rc, out = seen["fetch"]
+    assert rc == 3 and "withheld, and its end is not in the ledger" in json.loads(out)["refused"]
+
+    released = seen["client"].commitment.root.hex()
+    assert end["body"]["closed"] is True and end["body"]["commitment"] == released
+    rc, out = ssh(host, signer, f"status {session}")
+    assert rc == 0 and json.loads(out)["commitment"] == released
+    rc, out = ssh(host, signer, f"fetch {session}")
+    assert rc == 0
+    with tarfile.open(fileobj=io.BytesIO(out)) as tar:
+        assert f"{session}/out/{R.RECORD}" in tar.getnames()
+    I, verify = verify_under(host)
+    assert A.verify_ledger(A.read_ledger(host.ledger), I, verify)[COMMIT]["end"] == end
 
 
 def test_rt4_int_30_a_trailing_newline_or_a_period_opens_nothing_and_an_uppercase_root_is_refused(host, signer, capsys):

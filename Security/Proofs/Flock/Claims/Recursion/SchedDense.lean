@@ -1,6 +1,39 @@
-import Proofs.Flock.Claims.Recursion.SchedCount
-import Proofs.Flock.Claims.Recursion.InnerAccepts
-import Proofs.Flock.Claims.Recursion.InnerForm
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployLayout
+public import Proofs.Flock.Claims.Recursion.InnerForm
+public import Proofs.Flock.Claims.Recursion.SchedCount
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.VStarList.Shape
 
 /-!
@@ -19,6 +52,8 @@ import Proofs.Flock.C3.VStarList.Shape
   the dense form (`schedMatches_dense`).
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock
@@ -26,7 +61,7 @@ open Claims (Msg)
 
 /-- **What `parse` read**: a statement `parse` accepts is `readX`'s reading, which the setup's checks accept
 (`RecScope.accepts`), made readable (`RecScope.toStmt`). -/
-theorem parse_read {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) :
+theorem parse_read {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) :
     ∃ r, readX x = some r ∧ RecScope.accepts (readOf r) = true ∧ st = RecScope.toStmt (readOf r) := by
   obtain ⟨r', hr', rfl⟩ := Option.map_eq_some_iff.1 hst
   obtain ⟨hd, ha⟩ := Option.filter_eq_some_iff.1 hr'
@@ -35,7 +70,7 @@ theorem parse_read {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some 
 
 /-- **No statement the reader reads is at the sparse form**: the verifier's list refuses a RecSparse shape at public
 circuits (`holo_of_list`). -/
-theorem not_parse_sparse {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) :
+theorem not_parse_sparse {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) :
     ¬ Claims.Recursion.Form.Sparse st.form := by
   obtain ⟨r, -, ha, rfl⟩ := parse_read hst
   rintro ⟨hh, hs⟩
@@ -55,7 +90,7 @@ theorem schedMatches_sparse : SchedMatches Claims.Recursion.Form.Sparse :=
 /-- **The inner shape the verifier's list accepts has a rep schedule**: `RecVStar.checkTopsListed` refuses one without. -/
 theorem repSched_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     ∃ rs, repSched i = some rs := by
-  obtain ⟨_, _, _, _, _, -, -, -, ht, -, -, -⟩ := FlockC3.VStarList.statements_ok h
+  obtain ⟨_, _, _, _, _, _, -, -, -, ht, -, -, -, -⟩ := FlockC3.VStarList.statements_ok h
   unfold RecVStar.checkTopsListed at ht
   unfold repSched
   cases hrs : (if i.holo then RecVStar.holoRepRounds else RecVStar.repRounds) i.m i.kLog i.claims with
@@ -69,7 +104,7 @@ theorem schedMatches_dense : SchedMatches Claims.Recursion.Form.Dense := by
   intro x st hst hf
   obtain ⟨r, hr, ha, rfl⟩ := parse_read hst
   have hh : r.shape.holo = false := hf.1
-  obtain ⟨f, spec', st', s, spec, st, hfs, hstm, hset, hm, hk, hreg, hpts⟩ := innerSetup_files hr ha
+  obtain ⟨f, spec', st', s, spec, st, hfs, hstm, hset, hm, hk, hreg, hpts, -, -⟩ := innerSetup_files hr ha
   unfold RecScope.accepts at ha
   simp only [Bool.and_eq_true, RecScope.isOk_iff] at ha
   obtain ⟨⟨⟨⟨ss, hss⟩, -⟩, ⟨u, hsh⟩⟩, -⟩ := ha

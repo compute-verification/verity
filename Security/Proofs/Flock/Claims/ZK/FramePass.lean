@@ -1,4 +1,25 @@
-import Proofs.Flock.Claims.ZK.FrameShape
+module
+
+public import Proofs.Flock.Claims.ZK.FrameShape
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+import VCVio.Prelude.Core
 
 /-!
 # A device round that passes the frame's check
@@ -12,6 +33,8 @@ frames `fs` and its squeeze, this file shows `v` is the bytes of frames alike to
 * any bytes agreeing with frames' outside their values are alike frames' (`encs_refill`, `frame_refill`), since any 16
   bytes are a value's as the frame reads them (`toBytes_readWord`, `u64OfLE_byte`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

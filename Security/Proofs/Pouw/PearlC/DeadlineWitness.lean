@@ -1,11 +1,13 @@
-import Models.Pouw.Assumptions.PearlC.Deadline
-import Definitions.Pouw.PearlC.Device
-import Definitions.Pouw.PearlC.DevicePricesLoop
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.Deadline
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.Deadline
 
 /-!
 # The deadline guarantees' premises are satisfiable (non-vacuity witnesses)
 
-`Models/Pouw/Guarantees/Deadline.lean`'s sm_120 guarantees (`PearlCSm120Rev1Cap1000ByDeadline_8192` and the others)
+`Definitions/Pouw/Guarantees/Deadline.lean`'s sm_120 guarantees (`PearlCSm120Rev1Cap1000ByDeadline_8192` and the others)
 take, besides TT_OUT, a workload in `pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh`, the honest clock
 `HonestClock CM U A run td` and the budget `A.BoundedBy U run td T q`. These witnesses meet all three, together with
 delivery by the deadline:
@@ -19,6 +21,8 @@ They are generic in the cost model, so they cover the honest W1 program at `W1.w
 salt`, the guarantees' cost model at W1. The run is constructed: these show the premises consistent, not that a
 physical run's record meets `HonestClock`, which stays the named assumption.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

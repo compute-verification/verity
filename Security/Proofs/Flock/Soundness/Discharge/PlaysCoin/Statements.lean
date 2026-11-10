@@ -1,8 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
-# The coin half of `DecodesAll` and `DecodesOn` (R11b): statements
+# The coin half of `DecodesAll` and `DecodesOn`: statements
 
 `Decodes` (`Refine/LiveSim.lean`) asks for each rep's run on the tape `repTape`: each round's messages, decoded from its
 bytes, then the round's coin step `coinMsg (one j)`; after the last round, the messages `fin` decodes from the proof
@@ -25,6 +28,8 @@ messages, cut at the coins of the rep's spine, must be the decoder's groups.
   is chosen at the outcome and holds along the runs that end where its `RepRun` ends (`SpineAt`).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.PlaysCoin
 
 open Flock FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge.Exec Model Accounting Audit
@@ -37,7 +42,7 @@ local notation "𝕂" => FlockLevel3.GF256
 
 /-- A coin array as a run's coin step: its one word as a scalar, or else the vector of its words. -/
 def coinArr {W F : Type} [Inhabited W] (ι : W → F) (c : Array W) : Msg :=
-  if c.size = 1 then ⟨F, ι c[0]!⟩ else ⟨Fin c.size → F, fun i => ι c[i.val]!⟩
+  if c.size = 1 then ⟨F, ι (c)[0]!⟩ else ⟨Fin c.size → F, fun i => ι (c)[i.val]!⟩
 
 /-- `m` put at the front of the first group. -/
 def consHead (m : Msg) : List (List Msg) → List (List Msg)
@@ -142,8 +147,8 @@ def DecodesOfRunsAt : Prop :=
       pg (out (capOf o.rootB) pend (opn o.proofs))) →
     Decodes out pL pg opn dec (fun _ => true) fin capOf G
 
-/-- **`DecodesAll` from the reps' runs** (R11b's coin half). With `one := fun _ _ _ => true`, `DecodesAll` holds when,
-at every draw and registration, on every live outcome whose session directory flock-verify accepts, each rep of the
+/-- **`DecodesAll` from the reps' runs** (the decoder premise's coin half). With `one := fun _ _ _ => true`, `DecodesAll` holds when,
+at every sample and registration, on every live outcome whose session directory flock-verify accepts, each rep of the
 table has a `RepRun` on its rounds along its spine `repSpine`, with `fin`'s messages as the tail, and the salted
 table's verdict holds at the two runs' ends. -/
 def DecodesAllOfRuns : Prop :=
@@ -162,8 +167,8 @@ def DecodesAllOfRuns : Prop :=
       (tableOutL H E Lf (capOf S R o.rootB 0) pend (opn S R o.proofs)).accepted = true) →
     DecodesAll H E Lf T I wr opn dec (fun _ _ _ => true) fin capOf
 
-/-- **`DecodesOn` from the reps' runs** (R11b's coin half, at the law's draws). With `one := fun _ _ _ => true`,
-`DecodesOn L` holds when, at every draw `L.draw ω` and registration, on every live outcome whose session directory
+/-- **`DecodesOn` from the reps' runs** (the decoder premise's coin half, at the sampling design's samples). With `one := fun _ _ _ => true`,
+`DecodesOn L` holds when, at every sample `L.draw ω` and registration, on every live outcome whose session directory
 flock-verify accepts, each rep of the table has a `RepRun` on its rounds along its spine `repSpine`, with `fin`'s
 messages as the tail, and the salted table's verdict holds at the two runs' ends. -/
 def DecodesOnOfRuns : Prop :=

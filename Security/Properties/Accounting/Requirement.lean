@@ -1,5 +1,7 @@
-import Definitions.Accounting.Requirement
-import CircuitRequirement
+module
+
+public import Definitions.Accounting.Requirement
+public import CircuitRequirement
 
 /-!
 # The requirement's code: each function is the definition it computes
@@ -8,13 +10,15 @@ import CircuitRequirement
 of `Security/`: on one instance it computes `Accounting.Requirement`'s definitions, a set as a list. These are those
 equalities, each a `Prop` stated against the code's function and the definition it computes, on the wiring, execution,
 layout, store and placement the instance denotes (`wiring`, `execution`, `layout`, `store`, `placement`), and
-`Properties.Proofs.Accounting.Requirement` proves every one. The code's difftest holds it to
+`Proofs.Properties.Accounting.Requirement` proves every one. The code's difftest holds it to
 `verity.ml.circuits.requirement`, so these carry the Python requirement to the definitions that
-`Models/Accounting/Guarantees/Requirement.lean`'s guarantees are stated over.
+`Definitions/Accounting/Guarantees/Requirement.lean`'s guarantees are stated over.
 
 An instance's values are the natural numbers, of which it describes `0 … n - 1`, and a gate uses, at any circuit's
 values, the operands it uses at the execution's: the definitions read `uses` only at `Execution.value`.
 -/
+
+@[expose] public section
 
 namespace Properties.Requirement
 
@@ -35,7 +39,7 @@ def execution (i : Instance) : Accounting.Requirement.Execution ℕ where
   value := i.valueOf
 
 /-- The layout an instance denotes. -/
-def layout (i : Instance) : Accounting.Requirement.Layout ℕ where
+def layout (i : Instance) : Accounting.Requirement.Store.Placement ℕ where
   block := i.blockOf
   offset := i.offsetOf
   encoded := i.encodedOf

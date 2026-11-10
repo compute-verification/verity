@@ -1,7 +1,11 @@
-import Proofs.Flock.Claims.ZkDecode
-import Proofs.Flock.Claims.DecodeFamily
-import Proofs.Flock.Soundness.Instance
-import Flock.Zk
+module
+
+public import Proofs.Flock.Claims.ZkDecode
+public import Proofs.Flock.Claims.DecodeFamily
+public import Proofs.Flock.Soundness.Instance
+public import Flock.Zk
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The deployed masked level-0 code, its decoder and read step
@@ -27,6 +31,8 @@ statement's `m` and a masked message (`ZkTrace`), a column a list of GF(2^128) s
 level-0 columns than that (`zkQueries_lt_zkNMinD`). Its read step (`zkReadD`) is `zkRead` at the candidate's `m`: the
 witness lanes' trace, `2^m` bits (`zkReadD_hid_length`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 
@@ -60,11 +66,6 @@ def zkLen (i : ZkIdx) : ℕ := (zkLevel0 i.m).d
 abbrev zkWidth (i : ZkIdx) : ℕ := 2 ^ zkLanes i
 
 theorem zkShape_fits : ∀ i : ZkIdx, zkLen i ≤ 40 ∧ 2 ^ zkCols i + zkPad i ≤ 2 ^ zkLen i := by
-  decide +kernel
-
-/-- The padding fits under the message, `t ≤ 2^cols`, so a deployed masked lane is the plain lane plus the padding's
-codeword (`zkEnc_eq_add_pad`). -/
-theorem zkPad_le : ∀ i : ZkIdx, zkPad i ≤ 2 ^ zkCols i := by
   decide +kernel
 
 /-- **The masked shapes**: `Zk.schedule` accepts every `m = 25 + i`; level 0 has `k0` lanes (log), `m − 7 − k0`
@@ -132,12 +133,5 @@ noncomputable def zkReadD (M : ZkTrace) : Wit :=
 /-- The read covers the statement's trace: `2^m` hidden values. -/
 theorem zkReadD_hid_length (M : ZkTrace) : (zkReadD M).hid.length = 2 ^ M.1.m :=
   readTrace_hid_length _ _ _ _ _
-
-/-- The witness lanes pack exactly the `2^m` trace bits: `128 · 2^k0 · 2^cols = 2^m`. -/
-theorem zkPack_covers (i : ZkIdx) : 128 * 2 ^ zkLanes i * 2 ^ zkCols i = 2 ^ i.m := by
-  have h := (zkShape_table i).2.2.1
-  rw [← h, show (128 : ℕ) = 2 ^ 7 from rfl, ← pow_add, ← pow_add]
-  congr 1
-  omega
 
 end Claims.Flock

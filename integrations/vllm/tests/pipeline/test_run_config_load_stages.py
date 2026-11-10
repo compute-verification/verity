@@ -1,7 +1,7 @@
-"""[F-r19-int-17] run_config.load_stages tolerates a stage record an interrupted save left unreadable.
+"""run_config.load_stages tolerates a stage record an interrupted save left unreadable.
 
-#69 (OLMoE B128, l40s4) died at ENOSPC mid-fold with a 0-byte match/stages.json; the MATCH_PHASE=cpu resume over its preserved 72 GB
-capture then failed in 2 s on json.loads(''). The unreadable record is set aside under a stamped name and the resume starts with an
+A run that dies mid-fold (ENOSPC) can leave a 0-byte match/stages.json, and the MATCH_PHASE=cpu resume over its preserved capture
+must not fail on json.loads(''). The unreadable record is set aside under a stamped name and the resume starts with an
 empty stage list -- every stage of the CPU half re-runs and rewrites the record.
 """
 from __future__ import annotations

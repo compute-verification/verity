@@ -1,49 +1,55 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Link
-import Proofs.Flock.Soundness.Binding.Rows
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
+public import Proofs.Flock.Soundness.Binding.Layout
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
-# `--zk` value binding: the committed values are the drawn units' own
+# `--zk` value binding: the committed values are the sampled proof blocks' own
 
 The compiled `--zk` count curve (`ZkLink.zk_flock_countC_execOS_cr`) takes the binding of wires to registered commit
 strings for `--zk` tables as a named structure (`vb : ZkLink.ValueBindingZ … (decodeOfPlace … place) Hc`). This is
 `Binding.Layout` and `Binding.HmRows` (the public path's `HmRows.binding`) for plans of `TabZK` tables:
 
-* `LayoutZ`: the commit strings and their values, where a drawn unit's `--zk` table's witness holds each one's value and
+* `LayoutZ`: the commit strings and their values, where a sampled proof block's `--zk` table's witness holds each one's value and
   salt, and `decode_row` (in a satisfying witness the decoder's bit on each of the unit's wires is the bit of the row
   the witness holds at the wire's commit string);
 * `HmRowsZ`: its `hm96-sha512/row/v1` or `/row/v2` rows, with `HmRowsZ.Computes`, `Assumptions.HmRowComputes` at the
-  drawn units' rows of `--zk` tables;
+  sampled proof blocks' rows of `--zk` tables;
 * `HmRowsZ.bindingZ`: the `ValueBindingZ`, with `collide_spec` proved (explicit SHA-512 collisions, `Refine.H512`), and
   the registration fact from `HmRowComputes` (`HmRowsZ.registered`).
 
-`bindingZ_bit` says what the binding binds: at a placed drawn unit, the value every satisfying witness opens a wire's
+`bindingZ_bit` says what the binding binds: at a placed sampled proof block, the value every satisfying witness opens a wire's
 commit string to carries, on that wire, the bit of the unit's own column in its block, and its commitment is the
 registered one.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 
 open Game Model Accounting Refine Audit ZkSession ZkLink Binding
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
-  (A : Arith F K) {C : Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type}
+  (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- The message type of drawn unit `u`'s `--zk` table. -/
+/-- The message type of sampled proof block `u`'s `--zk` table. -/
 abbrev MsgZ (S : Finset (Fin n)) (R : Reg) (u : Fin n) : Type :=
   Message F (tabOfZ planZ tab S R u).sch.k0 (tabOfZ planZ tab S R u).sch.level₀.logCols
 
-/-- The witness a message of drawn unit `u`'s `--zk` table packs. -/
+/-- The witness a message of sampled proof block `u`'s `--zk` table packs. -/
 abbrev witZ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : MsgZ planZ tab S R u) :
     Witness (tabOfZ planZ tab S R u).S.m :=
   wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M
 
-/-- A message of drawn unit `u`'s `--zk` table packs a witness that satisfies the table's statement. -/
+/-- A message of sampled proof block `u`'s `--zk` table packs a witness that satisfies the table's statement. -/
 def SatZ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : MsgZ planZ tab S R u) : Prop :=
   (tabOfZ planZ tab S R u).S.Satisfies (witZ A planZ tab S R u M)
 
-/-- **The layout of the drawn units' committed wires in registered leaves, for `--zk` tables** (`Binding.Layout`'s
+/-- **The layout of the sampled proof blocks' committed wires in registered leaves, for `--zk` tables** (`Binding.Layout`'s
 fields over `TabZK` plans). `decode_row`: in a satisfying witness the decoder's bit on each of the unit's wires is the bit
 of the value the witness holds at the wire's commit string. -/
 structure LayoutZ (decode : DecoderZK (C := C) planZ tab) where
@@ -75,7 +81,7 @@ namespace LayoutZ
 
 variable (lay : LayoutZ A P planZ tab decode) (scheme : lay.Pos → ExplicitLeaf lay.Val)
 
-/-- The value a drawn unit's `--zk` table's message holds at commit string `p`. -/
+/-- The value a sampled proof block's `--zk` table's message holds at commit string `p`. -/
 noncomputable def row (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : MsgZ planZ tab S R u) (p : lay.Pos) : lay.Val :=
   lay.rowOf p (bitsAt (witZ A planZ tab S R u M) (lay.rowAt S R u p))
 
@@ -84,7 +90,7 @@ noncomputable def salt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : MsgZ plan
     List UInt8 :=
   bytesAt (witZ A planZ tab S R u M) (lay.saltAt S R u p)
 
-/-- **The registration fact**: in a satisfying witness of a drawn unit's `--zk` table, the leaf of the value and salt
+/-- **The registration fact**: in a satisfying witness of a sampled proof block's `--zk` table, the leaf of the value and salt
 the witness holds at each of the unit's commit strings is the registered leaf there. -/
 def Registered : Prop :=
   ∀ S R u, u ∈ S → ∀ M, SatZ A planZ tab S R u M → ∀ g ∈ P.io u,
@@ -132,7 +138,7 @@ structure HmRowsZ (lay : LayoutZ A P planZ tab decode) where
 
 attribute [instance] HmRowsZ.decRow
 
-/-- A place a `--zk` circuit hashes a row: a drawn unit, a message of its table, and one of its wires. -/
+/-- A place a `--zk` circuit hashes a row: a sampled proof block, a message of its table, and one of its wires. -/
 structure RowSiteZ (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
     (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) (N : ℕ) where
   S : Finset (Fin n)
@@ -149,7 +155,7 @@ variable {lay : LayoutZ A P planZ tab decode} (rs : HmRowsZ lay)
 def scheme (p : lay.Pos) : ExplicitLeaf lay.Val :=
   if rs.isRow p then ExplicitLeaf.hm96 rs.enc rs.enc_inj else rs.other p
 
-/-- **`HmRowComputes` at the drawn units' rows of `--zk` tables**: at each wire of a drawn unit held by a row, in a
+/-- **`HmRowComputes` at the sampled proof blocks' rows of `--zk` tables**: at each wire of a sampled proof block held by a row, in a
 satisfying witness of the unit's table, the `b ‖ c` the row's `hm96` slot outputs is the commit string of the row's
 bytes and the salt the witness holds, under SHA-512 and the executable's key (`K512`). -/
 def Computes : Prop :=
@@ -179,8 +185,8 @@ noncomputable def bindingZ (hHm : rs.Computes) : ValueBindingZ A P planZ tab dec
 
 end HmRowsZ
 
-/-- **What the `--zk` value binding binds: a placed drawn unit's own columns.** With the decoder of the drawn units'
-places (`decodeOfPlace`), in every witness of drawn unit `u`'s `--zk` table that satisfies its statement, the opening of
+/-- **What the `--zk` value binding binds: a placed sampled proof block's own columns.** With the decoder of the sampled proof blocks'
+places (`decodeOfPlace`), in every witness of sampled proof block `u`'s `--zk` table that satisfies its statement, the opening of
 the commit string of each of `u`'s wires (`inst.wire x`, the wire of the unit's column `x`) has the registered
 commitment, and its value's bit on that wire is the witness's bit at the unit's column `x` in its block. -/
 theorem bindingZ_bit (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)

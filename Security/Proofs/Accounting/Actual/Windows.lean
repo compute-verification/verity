@@ -1,6 +1,10 @@
-import Models.Accounting.Guarantees.Actual
-import Proofs.Accounting.Actual.Physical
-import Proofs.Nci.ReadsIn
+module
+
+public import Definitions.Accounting.Guarantees.Actual
+public import Proofs.Accounting.Actual.Physical
+public import Proofs.Nci.ReadsIn
+import Mathlib.Data.NNRat.Floor
+import Proofs.Accounting.Actual.Split
 
 /-!
 # The capacity form: the windows divide the developer's region
@@ -15,6 +19,8 @@ cut is what it reads in `A`, and the split in `G` (`width_into_region_inter_le`)
 `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, at most `ω` long, its novel reads are at most its reads
 (`Nci.SecurityProofs.novelReads_le_readsIn`), and memory bounds the state at its start by `M_{X i}`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Actual
 

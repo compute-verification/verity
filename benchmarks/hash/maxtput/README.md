@@ -1,48 +1,39 @@
-# maxtput: the Commit at vLLM's maximum throughput
+# maxtput: a Build of record from the served match alone
 
-The hash loop (`benchmarks/hash/loop/`) measures the Commit at a fixed batch (B32). This measures it where vLLM is fastest:
-native compiled vLLM at saturation on one GPU, against the Commit's arms on the same load, each as a hash-loop workload row.
+`build_job.sh` writes a Build of record for a model that has none, Llama-3.1-8B on the RTX PRO 6000. It runs the vLLM
+integration's served match (`verity-vllm served-match`, `integrations/vllm/verity_vllm/pipeline/served_match.py`) with no
+Commit stage after it. vLLM serves the match workload with every value of every engine step committed. The Build is derived
+from the serving process's own compile artifact, and its Program is checked word for word against the committed values.
 
-- `maxtput.py`, the driver: `verity_vllm.LLM` compiled, vLLM's scheduler defaults for the card (max_num_seqs 1024,
-  max_num_batched_tokens 16384, gpu_memory_utilization 0.9), prefix caching off, every request at t=0 in served_commit's mixed
-  rule at `vllm bench serve`'s random lengths (1024 in, 128 out). Each arm runs in its own engine process, interleaved by cycle,
-  on one KV pool, and its tokens are gated against stock's. Its docstring has the measures (the steady window, TTFT, TPOT, and
-  the saturation evidence).
-- `job.sh`, one run on one GPU: the Build pin (`served-pin seed/check`, as `served_commit/prof.sh`), an nvidia-smi log, the
-  driver, then `row.py`.
-- `row.py`: the run's result, one result per arm (`arm=maxtput:<arm>`) for `benchmarks/hash/loop/plot.py`, and `--table`, a
-  row's published arms from the store.
-- `launch.sh`: the three cards from the pushed HEAD through `research run`, then the per-arm results published and labeled.
-  The arms are circuits' committer on main (`served_commit`'s arms, `harness/env.sh` and the committer's GPU tests) with the
-  hash loop's iterations; `launch.sh` refuses a tree whose committer predates them.
-- `build_job.sh`: `served-match` alone, for a Build of record on a model that has none (run it from a tree whose `served-match`
-  accepts the card).
+## Running
+
+From the source tree's root, on one RTX PRO 6000, with the match workload in `$RESEARCH_RUN_DIR/inputs/match.json`:
 
 ```text
-bash benchmarks/hash/maxtput/launch.sh 11                                        # Qwen3-8B, every card
-MACHINES=vy-nebius-2 MAXTPUT_ARGS="--kv-bytes 58000000000" bash benchmarks/hash/maxtput/launch.sh 11
-uv run --with matplotlib python3 benchmarks/hash/loop/plot.py --table             # the rows, from the store
-python3 benchmarks/hash/maxtput/row.py --table --row 11                           # every arm's absolutes and saturation evidence
+RESEARCH_RUN_DIR=DIR VERITY_BENCH_VENV=VENV CASE=LLAMA31_8B CKPT_REPO=unsloth--Llama-3.1-8B CKPT_REV=REV \
+  bash benchmarks/hash/maxtput/build_job.sh
 ```
 
-On the RTX PRO 6000 (96 GB) the full Commit doesn't fit beside stock's KV pool at 0.9, so its runs pin every engine's pool
-lower (`--kv-bytes`), and a stock-only run at vLLM's own sizing gives the native number. A pinned B200 run takes its Build's
-attention backend (`--attention-backend FLASH_ATTN`); vLLM's default there is FlashInfer.
+| Variable | What it gives |
+|---|---|
+| `CASE` | the checkpoint role (`verity_vllm.config.CHECKPOINTS`), `LLAMA31_8B` |
+| `CKPT_REPO`, `CKPT_REV` | the checkpoint's directory and revision under `$HF_HOME/hub`, read offline |
+| `VERITY_BENCH_VENV` | the Python environment with CUDA torch and vLLM |
+| `HF_HOME` | the Hugging Face cache, default `/workspace/hf` |
+| `NATIVE_COLLECT_BUILD` | the parent directory of the native collector's builds (the vLLM integration's settings) |
+| `MATCH_EXTRA` | further `served-match` arguments, such as `--build-of-record BUILD.json` or `--max-num-seqs N` |
 
-Each arm's result carries two losses: `throughput_overhead_pct`, against the same cycle's stock (the cost of the Commit on one
-engine configuration), and `native_loss_pct`, against the native reference run's stock (what the arm gives up against native
-compiled vLLM on that card and model). The native reference is a run's own stock when that runs at vLLM's own KV sizing and
-attention backend, else `row.py --publish --native RUN`'s stock-only run; the loop plot's maxtput throughput panels plot
-`native_loss_pct`.
+## Output
 
-```text
-python3 benchmarks/hash/maxtput/row.py --publish RUN... --row 11                            # each run's own stock is native
-python3 benchmarks/hash/maxtput/row.py --publish RUN... --row 11 --native REF               # RTX pinned pool, B200 FLASH_ATTN
-```
+`$RESEARCH_RUN_DIR/out` gets:
 
-A republished run's earlier results are labeled `superseded_by` the new ones, and neither table nor plot reads them.
+- `build.json`: the Build, with its compile artifact pinned;
+- `match.json`: the Match's verdict;
+- `facts.json`, `launch_configs.json`, `routes.json` and, with fused-MoE layers, `moe.json`, as `served-match` writes them;
+- `triton_ptx.tgz`: the Inductor directory's autotune configs and PTX.
 
-`XCHECK=1` checks the driver's stock engine against vLLM's own entry point: `vllm bench throughput` at the same engine settings
-on its random dataset at 1024/128 exactly, before and after the driver run on the same fixed load (`--load fixed`), compared over
-the whole run (`driver_vs_vllm_bench_pct` in the run's result; the launch line is in `launch.sh`). vLLM's figure samples at
-temperature 1 where the driver is greedy, and its timer starts before it adds the requests.
+The exit code is `served-match`'s: 0 when the Match passes, 1 when it fails, and 3 when the Build refuses the artifact, the
+device or the served switches. It is 8 when the checkpoint's snapshot is absent.
+
+The script has no tests of its own. What `served-match` runs, the served Build's derivation and its check, is tested in
+the vLLM integration (`integrations/vllm/tests/acquire/`, `integrations/vllm/tests/check/`).

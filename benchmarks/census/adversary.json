@@ -1,0 +1,30 @@
+[
+  {
+    "id": "world-inference-2027",
+    "label": "all inference worldwide over a one-year monitoring period, at its Sept 2027 rate (the 3-pager in its sources)",
+    "role": "reference",
+    "monitoring_period_s": 31536000,
+    "requests": 21224489795918368,
+    "tokens_per_request": 4500,
+    "model": "DeepSeek-V4-Pro",
+    "active_params": 49e9,
+    "datatype": "e4m3",
+    "flop_per_active_param_per_token": 2,
+    "flop_per_request": 4.41e14,
+    "total_flop": 9.36e30,
+    "h100_hour_flop": 7.1244e18,
+    "h100_equivalents": 3e7,
+    "flop_per_s_per_h100": 2e15,
+    "growth_per_year": 3.3,
+    "note": "The base, 3e7 H100-equivalents x 2e15 FLOP/s x one year = 1.89e30 FLOP, is the rate at the base date; grown 3.3x a year for about 16 months to Sept 2027 (x4.95, 3.3^1.34), it gives requests x flop_per_request = 9.36e30 FLOP a year, the annual rate at Sept 2027 and the figure of record.",
+    "sources": [
+      {
+        "label": "the 3-pager \"Computational integrity via sampled zero-knowledge proofs\", workload model: all inference worldwide, one-year horizon: the adversary's compute is the whole world's compute",
+        "href": "https://app.notion.com/p/3e6399515d9e80bb86a6fea6920829ec"
+      },
+      {
+        "label": "its figure script exfiltration_and_skipped_work.py (art:3a91517e8ac10b37c2fd248ac2d0cb32f19c06ee93b4a88a39999a02a5a314f6): R = int(1e16*104/49) requests over the one-year horizon, FLOP_REQ = 4500 * 2 * 49e9 (DeepSeek-V4-Pro, ~2 FLOP/active param/token), H100_HOUR_FLOP = 1979e12 * 3600 (FP8 dense peak at 100% utilization); the base (30M H100-equivalents at 2e15 FP8 FLOP/s, 3.3x/yr growth to Sept 2027) is its docstring's; total_flop = R * FLOP_REQ and monitoring_period_s = 365 * 86400 are this entry's"
+      }
+    ]
+  }
+]

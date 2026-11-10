@@ -1,10 +1,10 @@
-"""The NCI slowdown bracket for a board row: a proven lower bound and the cost of an explicit compliant construction.
+"""The inference-only policy's slowdown bracket for a board row: a proven lower bound and the cost of an explicit compliant construction.
 
 A policy is a calibration: blocks of at most ``Gamma`` gates, each reading at most ``K`` bits besides the committed
 parameters, so ``alpha = K / Gamma`` bits per gate. A row (one training method in one configuration) gives the inputs
 in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
 
-* ``lower``: the thread theorem, ``Nci.SecurityProofs.ThreadedTraining`` (``Security/Models/Nci/Guarantees/Threads.lean``):
+* ``lower``: the thread theorem, ``Nci.SecurityProofs.ThreadedTraining`` (``Security/Definitions/Nci/Guarantees/Threads.lean``):
   ``rho >= kappa * b_a / (2 alpha Lambda)`` with ``Lambda = max(e, c K / (4 d b_w))``, and ``rho >= 1`` since a
   containing circuit is no smaller. The weight rate is capped at ``U_bits / n_updated``: a block that uses ``p`` updated
   weights can always read the whole update instead, so no larger rate is a valid charge. A seed-described update
@@ -17,10 +17,10 @@ in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
   data and no decoding, kept as a check.
 * ``theta_cap``: a calibration without a cap on the committed parameters' size lets a row decode from a committed table
   (its ``decode_flops_table``) instead of regenerating it, as a seed-based method's noise.
-* ``chain``: the partial-sum law, ``Nci.SecurityProofs.ContainedTraining``
-  (``Security/Models/Nci/Guarantees/Contained.lean``): ``rho >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
-  factor of ``b_w``, ``b_a`` and the chain's smallest inner dimension. Its assumptions are the support-form
-  incompressibility of one chain of the reference circuit at ``b_w`` and ``b_a``, and nothing structural. A chain charges
+* ``chain``: the partial-sum rule, ``Nci.SecurityProofs.IncompressibleContainedTraining``
+  (``Security/Definitions/Nci/Guarantees/Training.lean``): ``rho >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
+  factor of ``b_w``, ``b_a`` and the chain's smallest inner dimension. Its assumption is training's incompressibility
+  (``TrainingIncompressible``) of one chain of the reference circuit at ``b_w`` and ``b_a``, and nothing structural. A chain charges
   each weight once per layer of it, so it is one forward path: ``kappa_chain`` (a row's optional ``chain``) is that
   path's share of the work, below ``kappa``. Rows without a ``chain`` get none.
 """
@@ -53,15 +53,8 @@ INPUTS = {
     "flops_per_token": "the reference circuit's work per token",
 }
 
-CHAIN = {
-    "kappa": "share of the reference circuit's work in one chain's products, 2 flops each: a forward path of updated "
-             "matrix multiplications linked by injective maps",
-    "d": "the chain's smallest inner dimension",
-    "path": "the multiplications the chain runs through, per layer",
-}
-
 THREAD_THEOREM = "Nci.SecurityProofs.ThreadedTraining"
-CHAIN_THEOREM = "Nci.SecurityProofs.ContainedTraining"
+CHAIN_THEOREM = "Nci.SecurityProofs.IncompressibleContainedTraining"
 
 
 def rates(i: dict, K: float, b_tok: float) -> tuple[float, float, float, float]:
@@ -100,7 +93,7 @@ def read_factor(K: float, b_w: float, b_a: float, d: float, steps: int = 4000) -
 
 
 def chain_lower(i: dict, chain: dict, K: float, Gamma: float, b_tok: float, d_model: float) -> float:
-    """The partial-sum law at ``rates``'s weight rate, the activation rate capped by a token and by a boundary crossing
+    """The partial-sum rule at ``rates``'s weight rate, the activation rate capped by a token and by a boundary crossing
     spread over the residual's ``d_model`` entries, since every activation the chain charges is computed from one."""
     alpha = K / Gamma
     b_w = rates(i, K, b_tok)[0]
@@ -221,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--calibration", help="a calibrations.json id (default: every calibration)")
     ap.add_argument("--row", action="append", help="a rows.json id (repeatable; default: every row)")
     ap.add_argument("--sweep", action="store_true", help="the proven bounds over a grid of b_w and b_a, per row")
-    ap.add_argument("--efficiency", action="store_true", help="m / rho for each training recipe, per row")
+    ap.add_argument("--efficiency", action="store_true", help="m over the slowdown for each training recipe, per row")
     args = ap.parse_args(argv)
     parameters, rows = catalog.load("parameters"), catalog.load("rows")
     cals = [c for c in catalog.load("calibrations") if args.calibration in (None, c["id"])]

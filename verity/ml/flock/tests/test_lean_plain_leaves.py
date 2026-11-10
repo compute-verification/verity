@@ -3,7 +3,7 @@
 so the Lean verifier's `verity/flock-circuit+plain-leaves` (`Tags.withPlainLeaves`) writes both as upstream's `identity`
 does, pins META `leaf_scheme` to the staged object, and decodes each opening's empty `opened_salts`. Upstream's `--zk`
 refuses such a statement, and so does Lean's `verify --zk`; without `--zk` the hidden-output headlines cover plain leaves
-(`ProvedScope.leafOk`), so `verify` checks its sessions."""
+(`ProvedScope.leafOk`), and the recursive verifier checks the inner statement's sessions."""
 from __future__ import annotations
 
 import json
@@ -17,7 +17,7 @@ import pytest
 from verity_flock import circuit as FC
 
 FLOCK = Path(__file__).resolve().parents[1]
-LEAN = FLOCK.parents[1] / "core" / "service" / "flock"
+LEAN = FLOCK.parents[2] / "verity/core/service/flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 STATEMENT = "verity/flock-circuit+plain-leaves"
 
@@ -66,7 +66,15 @@ def test_the_plain_leaf_identity_is_the_provers():
     assert '"leaf_scheme": c.leaf_scheme,' in rust
     assert 'setObjVal! "leaf_scheme" leafSchemePlain' in body
     assert 'merkleLeaf := "flock-leaf/sha512-unsalted", pinnedLeafScheme := some leafSchemePlain, identity }' in body
-    assert "t.pinnedLeafScheme == some leafSchemePlain" in _lean_def("plainLeaves")
+    assert "t.pinnedLeafScheme.map Firewall.canonForm == some (Firewall.canonForm leafSchemePlain)" in _lean_def("plainLeaves")
+
+
+def test_the_pinned_leaf_scheme_is_a_constant():
+    """`plainLeaves` compares by `canonForm`, which is coarser than `Json`'s `==` on numbers (`0.0` prints as `0`), and the
+    two agree on the constants `pinnedLeafScheme` takes. A scheme read from input would widen the plain-leaves refusal."""
+    sets = [m.strip() for p in LEAN.rglob("*.lean") if ".lake" not in p.parts
+            for m in re.findall(r"pinnedLeafScheme := ([^,}\n]+)", p.read_text())]
+    assert sets and all(re.fullmatch(r"some leafScheme\w+", m) for m in sets), sets
 
 
 def test_a_plain_leaf_opening_carries_an_empty_salt_vector():
@@ -101,17 +109,18 @@ def test_verify_refuses_the_plain_leaf_statement_under_zk(tmp_path):
 
 
 @pytest.mark.slow
-def test_verify_checks_a_plain_leaf_session_without_zk():
-    """Without `--zk`, `verify` checks rec-coins' inner session (`fixtures/rec-coins`: a plain-leaf statement staged with a
-    shared-row public file) through every check. Its refusal is the shared-row file's (`ProvedScope.sharedRowsOk`, a form
-    the proof covers only under `--zk`), which `verify` gives only once every check has passed, not the leaves'."""
+def test_verify_refuses_the_recursive_inner_session_at_its_coins():
+    """Without `--zk`, `verify --coins tree` reads a session on the challenger's tree of the statement's own streams
+    (`Zk.coinSpec`), so rec-coins' inner session (`fixtures/rec-coins`' `inner-honest`: a plain-leaf statement on the tree
+    of the recursive verifier's streams, `rec_live.INNER_COIN_SPEC`) is refused at S2, before any check reads its leaves;
+    the recursive verifier checks that session (`test_lean_rec_coins.py`)."""
     d = Path(__file__).resolve().parent / "fixtures" / "rec-coins" / "16-16-8-n64"
     assert (d / "inner-honest" / "session").is_dir(), (
         f"{d} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/rec-coins`")
     p = _verify("--circuit", str(d / "u" / "stage" / "circuit.txt"), "--public", str(d / "u" / "stage" / "pub-64.bin"),
-                "--partition", str(d / "u" / "stage" / "partition.json"), "--coins", "os",
+                "--partition", str(d / "u" / "stage" / "partition.json"), "--coins", "tree",
                 "--session", str(d / "inner-honest" / "session"))
     verdicts = [json.loads(line[len("VERDICT "):]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     assert p.returncode == 1 and len(verdicts) == 1, p.stdout + p.stderr
     assert not verdicts[0]["accepted"]
-    assert verdicts[0]["why"].startswith("refused: a shared-row public file (header shared_rows): "), verdicts[0]["why"]
+    assert verdicts[0]["why"].startswith("S2"), verdicts[0]["why"]

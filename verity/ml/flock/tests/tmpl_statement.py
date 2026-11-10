@@ -1,11 +1,13 @@
-"""A templated statement (`verity/flock-circuit/tmpl`, PRF-133) staged from a flat one: the fixture `pod/90-tmpl-unit.sh`
+"""A templated statement (`verity/flock-circuit/tmpl`) staged from a flat one: the fixture `pod/90-tmpl-unit.sh`
 proves and hands to the Lean verifier.
 
-``template`` composes the flat hidden-output statement of ``N`` RoPE d64 instances (``flat.txt``) and writes its unit as a
+``template`` composes the flat hidden-output statement of ``N`` RoPE d64 instances (``flat.txt``), bound to the
+`verity/partition/v1` object `Q_template_instance` over `population_program` of the set's template at ``N`` (instance i is
+unit i), which the verifier holds (``partition.json``, with its program, ``program.json``), and writes its unit as a
 `flock-ir-tmpl/v2` template (``unit.tmpl``, :func:`verity_flock.tmpl.emit`). ``stage`` then writes the templated statement
-(``circuit.txt``): head ``flock-circuit/tmpl NAME``, META's ``format`` and ``statement`` the templated statement's, its
-``template`` the template's lines and its ``layout`` the layout mode, and every section but ``CIRCUIT unit``, which the
-verifier reads from the template. The unit's range stays where the flat statement put it, so ``stage`` refuses a layout
+(``circuit.txt``): head ``flock-circuit/tmpl NAME``, META's ``format`` and ``statement`` the templated statement's and its
+``layout`` the layout mode, the template's section (:func:`verity_flock.circuit.template_section`), and every section but
+``CIRCUIT unit``, which the verifier reads from the template. The unit's range stays where the flat statement put it, so ``stage`` refuses a layout
 whose committed unit (``flock-tmpl-unit``'s (``tests/lean/TmplUnit.lean``) ``TMPL`` line, ``--tmpl``) needs a larger slot. It then writes the
 prover's ``inst-N.bin`` and the verifier's ``pub-N.bin`` against that text (:func:`verity_flock.circuit.write`).
 
@@ -25,12 +27,12 @@ STATEMENT = "verity/flock-circuit/tmpl"
 
 
 def _set(out: Path):
-    from verity_numerical.bench import templates as TM
-    from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock import subcircuit_templates as TM
+    from verity_flock.input_sets import InputSet
+    from synthetic_sets import synthetic_set
 
     if not (out / "set.json").exists():
-        (out / "set.json").write_text(json.dumps({"path": str(generate(TM.rope_head(64), N, SEED, out / "set")["path"])}))
+        (out / "set.json").write_text(json.dumps({"path": str(synthetic_set(TM.rope_head(64), N, SEED, out / "set")["path"])}))
     return InputSet.open(json.loads((out / "set.json").read_text())["path"])
 
 
@@ -46,13 +48,20 @@ def sections(text: str) -> tuple[str, dict, list[tuple[str, str]]]:
 
 
 def template(out: Path) -> dict:
+    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.ml.circuits.codec import canonical_json, encode_program
     from verity_flock import circuit as FC
     from verity_flock import tmpl as T
 
     out.mkdir(parents=True, exist_ok=True)
     s = _set(out)
     low = FC.lowering_for_set(s)
-    text = FC.compose(low, s.subcircuit, statics=FC.set_statics(s))
+    definition = s.subcircuit.definition(**FC.set_statics(s))
+    program = P.population_program(definition, N)
+    part = P.partition(program, P.template_instance_query(definition))
+    text = FC.compose(low, s.subcircuit, partition=P.digest(part), program=part["program"], statics=FC.set_statics(s))
+    (out / "partition.json").write_text(json.dumps(part))
+    (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     (out / "flat.txt").write_text(text)
     unit = dict(sections(text)[2])["unit"]
     t, stats = T.emit(T.parse_flat(unit.rstrip("\n").split("\n")))
@@ -68,8 +77,9 @@ def stage(out: Path, tmpl: dict, layout: str = "iv") -> dict:
     head, meta, secs = sections((out / "flat.txt").read_text())
     if not tmpl.get("ok") or tmpl["unit_log"] != meta["unit_log"]:
         raise ValueError(f"the committed unit ({tmpl}) is not in the flat unit's 2^{meta['unit_log']} slot")
-    meta.update(format=FORMAT, statement=STATEMENT, template=(out / "unit.tmpl").read_text().rstrip("\n").split("\n"), layout=layout)
+    meta.update(format=FORMAT, statement=STATEMENT, layout=layout)
     text = (f"{FORMAT} {head.split(' ', 1)[1]}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
+            + FC.template_section((out / "unit.tmpl").read_text())
             + "".join(f"CIRCUIT {nm} {body.count(chr(10))}\n{body}" for nm, body in secs if nm != "unit"))
     (out / "circuit.txt").write_text(text)
     FC.write(text, _set(out), 0, N, out / f"inst-{N}.bin", out / f"pub-{N}.bin")

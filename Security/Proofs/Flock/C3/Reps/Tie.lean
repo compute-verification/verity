@@ -1,4 +1,19 @@
-import Proofs.Flock.C3.Compose.Decoder
+module
+
+public import Proofs.Flock.C3.Compose.Decoder
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The reps' tie: each rep's steps are a rep unit V*'s layers check
@@ -16,10 +31,12 @@ source's runs are tied so at every accepted outer proof.
   which are committed ones, is a fact of the reps' parts alone (`RepsMsgsRead`).
 * `srcRepTie_of_alg`: the tie from G's items 1–4 at a rep decoder of V*'s layers (`AlgebraDecodes`, `AccChains`, which
   give a unit's `alg` and `acc`) and `RepUnitOfAlg`, the rest of the unit at those values, which is not proved here.
-  `repUnitOfAlg_of_parts` assembles it (`unitOfParts`) from four stubs at values `vals` of the layers, each sized in
-  its docstring: the proof's part (`ProofOfVals`), the setup's and schedule's (`SetupOfVals`), the record's frames
-  (`FramesOfVals`, beside c1) and the source's rep steps (`StepsOfVals`).
+  `repUnitOfAlg_of_parts` assembles it (`unitOfParts`) from four parts at values `vals` of the layers: the proof's
+  part (`ProofOfVals`), the setup's and schedule's (`SetupOfVals`), the record's frames (`FramesOfVals`) and the
+  source's rep steps (`StepsOfVals`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 
@@ -69,7 +86,7 @@ structure UnitProof (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop where
 
 /-- **The setup's and schedule's part**: the setup's `m`, `k_log` and circuit fold are the shape's and `S`'s, its
 schedule is `fast100`'s and the model's `sch₀`, and its extra claims are `extra` claim by claim. -/
-structure UnitSetup (S : Model.Statement) (sch₀ : Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
+structure UnitSetup (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
     (sh : Flock.Shape) (v : UnitVals) : Prop where
   m : v.st.m = sh.m
   kL : v.st.fold.kLog = sh.kLog
@@ -117,7 +134,7 @@ structure UnitFrames (sh : Flock.Shape) (d : RepData) (v : UnitVals) : Prop wher
 /-- **The steps' part**: the steps take the kinds of `holoRepC`'s shape, their messages are the proof's
 (`holoRepMsgs`) and their coin steps the record's rounds the program consumes, the proof's level-0 cap is `cap₀` and
 the openings at rep `r` are the proof's rows (`openRow`). -/
-structure UnitSteps (S : Model.Statement) (sch₀ : Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
+structure UnitSteps (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (extra : List (Model.Claim 𝔽 S.m))
     (cap₀ : Model.Cap Dig) (os : Model.Opens 𝔽 Dig) (r : ℕ) (ts : List Game.Step) (sh : Flock.Shape) (d : RepData)
     (v : UnitVals) : Prop where
   kinds : ts.map kindOf <+: holoRepShape 𝔽 𝕂 Dig S.m S.kLog extra.length sch₀
@@ -129,7 +146,7 @@ structure UnitSteps (S : Model.Statement) (sch₀ : Accounting.Schedule) (extra 
   opens : ∀ ℓ j, os r ℓ j = openRow v.p.ligerito v.sch ℓ j
 
 /-- **A rep unit from its parts** at values `d`, `v` meeting E's preconditions. -/
-def unitOfParts {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+def unitOfParts {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} {sh : Flock.Shape} {d : RepData}
     (v : UnitVals) (alg : AlgebraHolds sh d) (acc : AccHolds sh d) (hp : UnitProof sh d v)
     (hs : UnitSetup S sch₀ extra sh v) (hf : UnitFrames sh d v) (hst : UnitSteps S sch₀ extra cap₀ os r ts sh d v) :
@@ -313,17 +330,17 @@ def RepUnitOfAlg (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (
         (src R ω t Lb).cap₀ (src R ω t Lb).os.1 i ((src R ω t Lb).ts i),
       U.sh = sh ∧ U.d = rep R ω t Lb i
 
-/-- **Stub: the proof's part** (80–120 lines) at values `vals R ω t Lb i`: the proof's messages, the circuit fold and
-the ring switches from the rep's values, and the record's coins, as G's `RunsFrom` gives them at the table files'
-decode. -/
+/-- **The proof's part** at values `vals R ω t Lb i`: the proof's messages,
+the circuit fold and the ring switches from the rep's values, and the record's coins, as G's `RunsFrom` gives them at
+the table files' decode. -/
 def ProofOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
     (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals) : Prop :=
   AtRep zs dg N k Rw sh rep fun R ω t Lb i => UnitProof sh (rep R ω t Lb i) (vals R ω t Lb i)
 
-/-- **Stub: the setup's and schedule's part** (40–60 lines) at the run's statement, schedule and extra claims, as G's
-`SetupRealizes` and `ShapeIs` give them in the plain case. -/
+/-- **The setup's and schedule's part** at the run's statement, schedule and
+extra claims, as G's `SetupRealizes` and `ShapeIs` give them in the plain case. -/
 def SetupOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))
@@ -334,16 +351,16 @@ def SetupOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j
       (extraClaims ((holoAt st hp).cls.pubStatement (holoAt st hp).regs) (holoAt st hp).cls.ptLocal
         (holoAt st hp).cls.mPts (src R ω t Lb).pts) sh (vals R ω t Lb i)
 
-/-- **Stub: the record's frames at the holo shape** (150–250 lines beside c1, the holo generalization of
-`run_of_frames` and `hlg_of_frames`, about 600): `framed_frames` and `hlg_of_frames` at holo. -/
+/-- **The record's frames at the holo shape**: `framed_frames` and `hlg_of_frames` at holo. -/
 def FramesOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (sh : Flock.Shape)
     (rep : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → RepData)
     (vals : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → Fin 2 → UnitVals) : Prop :=
   AtRep zs dg N k Rw sh rep fun R ω t Lb i => UnitFrames sh (rep R ω t Lb i) (vals R ω t Lb i)
 
-/-- **Stub: the source's rep steps** (about 60 lines): rep `i`'s steps in the source's run are `holoRepMsgs` of the
-proof woven with the record's coins, and the run's cap and openings are the proof's. -/
+/-- **The source's rep steps**: rep `i`'s steps in the
+source's run are `holoRepMsgs` of the proof woven with the record's coins, and the run's cap and openings are the
+proof's. -/
 def StepsOfVals (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp))

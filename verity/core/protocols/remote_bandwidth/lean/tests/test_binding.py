@@ -4,12 +4,12 @@ so that both sides' reasons are compared word for word: the pin from a pin file'
 `models.json`, and that file itself) and each refusal (not UTF-8, neither JSON nor JSON lines, a registry without one
 checkpoint of the role, a role core's pin lacks, a malformed pin, a `checkpoint_sha512` that isn't its files', no
 config.json or no .safetensors file, another model's pin); canonical JSON and `checkpoint_sha512`; the payload salts;
-the expected root from the weights blocks' digests, held also to `audit.payload_tree` over the store's payloads; and
+the expected root from the weights chunks' digests, held also to `audit.payload_tree` over the store's payloads; and
 `Binding.hold` on hellos of the pinned model's store and on each refusal (a store short of the arenas, another
 layout, a malformed node, the root under another key, of another checkpoint, of another size, or not a root), with
 the expected root its record keeps; and `binding`, the binding as the verifier's Lean process starts it (`bind`: the
 pin from its file's bytes, then the store's shape) and holds each hello to it (`hold`), on the honest binding and each
-refusal. The verifier decides `bound` with the Lean's `bind` and `hold` (`benchmarks/remote_session/verifier.py`), so
+refusal. The verifier decides `bound` with the Lean's `bind` and `hold` (`verity/core/protocols/remote_bandwidth/session/verifier.py`), so
 the Lean is of record for the binding, the hello's decision and the expected root; the pin's other readers
 (`read_pin`) are Python's."""
 
@@ -288,6 +288,15 @@ def test_store_salt(server) -> None:
     assert stats.outputs > 60, stats
 
 
+def test_store_salt_at_every_message_length_modulo_a_sha512_block(server) -> None:
+    """Keys of 0 to 128 bytes make the salt's message every length modulo SHA-512's 128-byte block, so the Lean's
+    counter mode (`Unboxed.xof`) meets each boundary its shared blocks, its counter and its padding can cross, which
+    random keys rarely reach."""
+    for n in range(129):
+        value = {"key": bytes(range(n)).hex(), "label": store.PAYLOAD_LABEL.hex(), "c": 2 ** 64 - 1}
+        assert D.replay(port("store_salt", store_salt), value, server)[0] == "output"
+
+
 # --- the expected root and the hello's decision -----------------------------------------------------------------------
 
 def _digests(v) -> list[bytes]:
@@ -353,8 +362,8 @@ def test_expected_root(server, tmp_path) -> None:
                          [(1, 0, 0, 1, 16), (2, 3, 5, 3, 1), (3, 1, 2, 2, 2), (3, 1, 2, 8, 0)])
 def test_the_expected_root_is_the_payload_trees_over_the_stores_payloads(server, engines, extra, host, workers,
                                                                          chunk_log2) -> None:
-    """Independently of `store.expected_root`: `audit.payload_tree` over the store's payloads, block j salted with
-    `store_salt(key, PAYLOAD_LABEL, j)`, is the Lean's root from the weights blocks' digests alone, whole or as
+    """Independently of `store.expected_root`: `audit.payload_tree` over the store's payloads, chunk j salted with
+    `store_salt(key, PAYLOAD_LABEL, j)`, is the Lean's root from the weights chunks' digests alone, whole or as
     subtrees of `2^chunk_log2` leaves on `workers` threads."""
     weights = [expand(b"weights %d" % u, codec.BLOCK_BYTES) for u in range(3)]
     arena = weights + [bytes(codec.BLOCK_BYTES)] * extra
@@ -383,7 +392,7 @@ def _hello(v) -> tuple:
 
 
 def _binding(tmp: Path, role: str, digests: list[bytes], engines: int, arena_blocks: int) -> store.Binding:
-    """A `Binding` of `role` over an arena of the weights blocks' digests `digests`, past what it reads of the files,
+    """A `Binding` of `role` over an arena of the weights chunks' digests `digests`, past what it reads of the files,
     once `Store`'s check of its arenas passed."""
     b = object.__new__(store.Binding)
     b.role, b.arena, b.engines, b.arena_blocks, b.workers = role, _arena(digests), engines, arena_blocks, 1

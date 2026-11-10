@@ -1,10 +1,10 @@
-"""A slice of the in-proof compile unit as one Boolean Definition: the pieces of PRF-143's statement (the certifier
-PROTOCOL's "Advice v1") composed whole for one window of a few steps, so the composition is proved end to end before the
-chain splits it into one unit a step.
+"""Part of the compile slice's proof block as one Boolean Definition: the pieces of its statement (the
+certifier PROTOCOL's "Advice v1") composed whole for one window of a few steps, so the composition is proved end to
+end before the chain splits it into one proof block a step.
 
     CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW, Q, D, P, K, CN, CTW, CU}
         (pub, adv, cert, srv, cin, cout, wit) -> verdict[16]
-    CompileSliceBlocks_v1{R, …, CU, G}
+    CompileSliceRowGroups_v1{R, …, CU, G}
         (pub, adv, cert, srv0, …, srv{P/G − 1}, cin, cout, wit) -> verdict[16]
 
 The second is the first with its served rows in P / G rows of G steps (G < P), as the served rows' registration commits a
@@ -20,7 +20,7 @@ window's blocks (`served_rows.register`'s G); at G = P the unit is the first, so
   the certified record's commitment (its b‖c);
 - ``srv``, the served rows: the step rows the served window ran (P steps of `rows_bits`, idle ones zero; `srv_row`;
   each step's rows at the runner's batch positions), a row the verifier holds by its b‖c to the window's row of the
-  served rows' registration (`served_rows`), committed on the Commit side before the draw. At G < P they are P / G
+  served rows' registration (`served_rows`), committed on the Commit side before the sample. At G < P they are P / G
   rows ``srv0`` … (`srv_rows`), row j steps [j·G, (j + 1)·G) and held to window w's leaf w·(P / G) + j
   (`served_rows.leaf`); step u is checked against row u // G;
 - ``cin`` and ``cout``, the charge's carry-in and carry-out (`charge_chain.encode`'s 96 bits): the window's reads of
@@ -60,7 +60,7 @@ the steps' rows are ``srv``'s (through ``map`` at AS = 1); bit 5 ``cache``, C_0 
 The rest are 0.
 
 **The reference** is `check`, the flags the circuit's pieces' references give any unit's rows; `case` builds the rows of
-a prover's run (`scan`, with the choices REDTEAM's phases 9, 10 and 14 found free in a piece alone: the prefix hits and
+a prover's run (`scan`, with the choices free in a piece alone: the prefix hits and
 the heads' moves, a made-up table or made-up tokens, the advice it commits and the carry it charges from) against the
 served rows it puts in ``srv``, and `check`'s verdict on them. No witness field carries a context, a frequency, an
 enable, a consumed count or a carry, and the hits are the cache's: ChargeLink_v1 reads its contexts and estimates from
@@ -70,16 +70,16 @@ certified tokens at the table the step reads, which chains from the empty one. O
 with the served rows in ``srv``, a prefix hit is refused by ``cache`` and ``rows`` (0x0F); made-up tokens by ``rows``
 (0x2F); a decision read again and an arrival left queued by ``steps`` and ``rows`` (0x2D). A made-up table that buys
 request 1 a free 16-token hit at step 6 is refused by ``cache`` alone (0x1F) even where the server served that hit, its
-own rows in ``srv``. Advice that drops a decision the scan asks (REDTEAM phase 14's cleared enable) is refused by
-``load`` when the window row keeps it and by ``steps`` when the scan reads past the count; a carry-out other than the
-charge's carry' by ``code``. Free returns aren't expressible on the slice: it has no stopping request. REDTEAM phase
-10's six passes (advice that registers six passes where the served window admitted user-1 at the sixth ask) are
-refused by ``rows`` (0x2F) with the served rows in ``srv``; with its own rows there, the circuit accepts and the native
+own rows in ``srv``. Advice that drops a decision the scan asks (a cleared enable) is refused by ``load`` when the
+window row keeps it and by ``steps`` when the scan reads past the count; a carry-out other than the charge's carry' by
+``code``. Free returns aren't expressible on the slice: it has no stopping request. Advice that registers six passes
+where the served window admitted user-1 at the sixth ask is refused by ``rows`` (0x2F) with the served rows in
+``srv``; with its own rows there, the circuit accepts and the native
 b‖c check refuses ``srv``. A restarted carry-in (the priors, or counts fitted to the window) is accepted by the unit,
 which takes any carry-in, and refused by `charge_chain.check_chain` (``CH-carry``) on its b‖c.
 
 **Stand-ins** (named, each a piece not ready):
-- *the evictable and returned counts*: ENC-DERIVED's evictable and returned-block counts are held at 0 (ReplayStep_v1's
+- *the evictable and returned counts*: the derived evictable and returned-block counts are held at 0 (ReplayStep_v1's
   ``evict`` and ``ret``), true of a slice that stops or preempts nothing; on one that does, the rows differ from the
   clear recompile's and ``rows`` refuses. `compile_slice_v2.CompileSlice_v2` derives them from vLLM's block pool;
 - *the still-sent fields*: ``adv`` holds only the decisions, the count and the step count, so ChargeLink_v1 codes the
@@ -109,13 +109,13 @@ below P. The served bits and the unit's ANDs are the same at every G: a block's 
 ANDs (`cache_step`'s cost; a lookup, which writes nothing, about half), and each step's three lookups walk min(CN + 1, CU)
 units and its two computes ⌊(B − 1 + T) / B⌋. On corpus-smallkv's class (CN 24, CU 25, B 16) a step's calls are 1.06M
 ANDs and the unit about 7.6M, past circuit-check's lowering: its circuit = reference tests, sidecar and ZK run
-(`benchmarks/network_traces/compile_slice_zk.py`) are at the demonstration class (`demo`, 59,341 ANDs) and at vLLM
-8eb1's sizes under a sync scheduler (the sync class, no prefix caching: 857,866 ANDs, ChargeLink_v1{32}'s 97,159 and
-its 5,509 copies of the words it carries among them, `charge_chain.size`'s ``carry``), and at the corpus class the
-run's staged verdict words are the reference's. 8eb1's engine class is AS = 1, its AsyncScheduler, where the ZK run
-proves w212. At AS = 1 ``rows`` is ``map``'s: R² products of a slot's row and 2·R·(R − 1) one-to-one ANDs a step in
-place of the slot-for-slot comparison (`demo_async`, 32,236 ANDs; 8eb1's async window 1 at its own statics, 314,936,
-and at its engine class 1,021,302, of them 123,120 the map's).
+(`benchmarks/network_traces/compile_slice_zk.py`) are at the demonstration class (`demo`, 59,341 ANDs) and at the
+served vLLM run's sizes under a sync scheduler (the sync class, no prefix caching: 857,866 ANDs, ChargeLink_v1{32}'s
+97,159 and its 5,509 copies of the words it carries among them, `charge_chain.size`'s ``carry``), and at the corpus
+class the run's staged verdict words are the reference's. That run's engine class is AS = 1, its AsyncScheduler, where
+the ZK run proves w212. At AS = 1 ``rows`` is ``map``'s: R² products of a slot's row and 2·R·(R − 1) one-to-one ANDs a
+step in place of the slot-for-slot comparison (`demo_async`, 32,236 ANDs; its async window 1 at its own statics,
+314,936, and at its engine class 1,021,302, of them 123,120 the map's).
 """
 from __future__ import annotations
 
@@ -134,7 +134,7 @@ from verity.core.protocols.certifier import replay_chain as RC, replay_step as R
 from verity.core.protocols.certifier.head_check import BIT, _part
 
 STATICS = RS.STATICS + ("Q", "D", "P", "K", "CN", "CTW", "CU")
-#: the statics of the slice whose ``srv`` is P / G rows (`CompileSliceBlocks`), G < P
+#: the statics of the slice whose ``srv`` is P / G rows (`CompileSliceRowGroups`), G < P
 BLOCK_STATICS = STATICS + ("G",)
 CW = AE.CW
 FLAGS = ("load", "steps", "code", "charge", "rows", "cache")
@@ -261,7 +261,7 @@ def _build(C, S, *ins):
     p, a, c, ci, co, w = (split[r] for r in ("pub", "adv", "cert", "cin", "cout", "wit"))
     served = [e for r in srv_names(S) for e in split[r]["rows"]]
     states, win = w["state"], w["window"][0]
-    load_ok = RC._build_load(C, Sc, _consts(RC.encode(RC.empty(Sc), Sc)), _consts(RC.encode_window(RC.Window(), Sc)),
+    load_ok = RC._build_load(C, Sc, _consts(RC.encode(RC.empty(Sc), Sc)), _consts(RC.encode_window(RC.QueueRow(), Sc)),
                              RC._flat(c, RC.arrival_fields(Sc)), [e[0] for e in a["dec"]], a["count"][0], a["steps"][0],
                              states[0], win)[0]
     CA = S.W + S.A
@@ -331,9 +331,9 @@ _DOC = ("a slice of the compile unit, one window whole: ReplayLoad, then per ste
         "load, steps, code, charge, rows, cache)")
 CompileSlice = _part("CompileSlice", STATICS, _sig, _build, _DOC)
 CompileSlice.build = _build  # type: ignore[attr-defined]
-CompileSliceBlocks = _part("CompileSliceBlocks", BLOCK_STATICS, _sig, _build,
+CompileSliceRowGroups = _part("CompileSliceRowGroups", BLOCK_STATICS, _sig, _build,
                            _DOC + "; its served rows are P / G rows of G steps each, step u held to row u // G")
-CompileSliceBlocks.build = _build  # type: ignore[attr-defined]
+CompileSliceRowGroups.build = _build  # type: ignore[attr-defined]
 
 
 def _refuse_blocks(b: dict) -> str | None:
@@ -342,7 +342,7 @@ def _refuse_blocks(b: dict) -> str | None:
     return None
 
 
-CompileSliceBlocks.refuse = _refuse_blocks
+CompileSliceRowGroups.refuse = _refuse_blocks
 
 
 def statics(R: int, W: int, A: int, engine: dict, IW: int, Q: int, D: int, P: int, K: int, CN: int = 0, CTW: int = 0,
@@ -361,8 +361,8 @@ def with_block(st: dict, G: int | None) -> dict:
 
 
 def unit(**st):
-    """The unit at statics `st`: CompileSlice_v1 at G = P (`st` without G), else CompileSliceBlocks_v1{…, G}."""
-    return bind(CompileSliceBlocks if "G" in st else CompileSlice, **st)
+    """The unit at statics `st`: CompileSlice_v1 at G = P (`st` without G), else CompileSliceRowGroups_v1{…, G}."""
+    return bind(CompileSliceRowGroups if "G" in st else CompileSlice, **st)
 
 
 #: a synthetic engine small enough to trace and to prove in about a minute: 4-token blocks, 16 tokens a step
@@ -551,7 +551,7 @@ def scan(S, sl: Slice, window: Sequence[int] | None = None, cert: Sequence[RC.Ar
     Sc, St = chain(S), step_statics(S)
     arrivals = tuple(map(tuple, cert if cert is not None else sl.arrivals))
     toks = {a[0]: tuple(t) for a, t in zip(arrivals, tokens if tokens is not None else sl.tokens)}
-    loaded = RC.load(Sc, RC.empty(Sc), RC.Window(), arrivals, sl.decisions, sl.steps)
+    loaded = RC.load(Sc, RC.empty(Sc), RC.QueueRow(), arrivals, sl.decisions, sl.steps)
     if loaded is None:
         raise ValueError("the load refuses the slice")
     cur, win = loaded
@@ -644,7 +644,7 @@ def check(S, rows: dict) -> dict[str, bool | None]:
     dec = [e[0] for e in a["dec"]]
     if count > S.D or any(dec[count:]):
         raise RC.MalformedRow(f"the advice's count {count} with a decision past it")
-    loaded = RC.load(Sc, RC.empty(Sc), RC.Window(), cert, dec[:count], _int(a["steps"][0]))
+    loaded = RC.load(Sc, RC.empty(Sc), RC.QueueRow(), cert, dec[:count], _int(a["steps"][0]))
     flags: dict[str, bool | None] = {"load": loaded == (states[0], win)}
     ok, length, carried = AE.reference_charge(S.D, _book(S, p), CC.carry_of([int(b) for b in rows["cin"]]),
                                               [int(k < count) for k in range(S.D)], dec)
@@ -723,7 +723,7 @@ def case(S, sl: Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE.Ca
             "adv": _pack(S, "adv", {"dec": padded, "count": [len(dec)], "steps": [sl.steps]}),
             **srv_rows(S, served),
             "cin": list(CC.encode(carry)), "cout": list(CC.encode(cout))}
-    cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.Window(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
+    cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.QueueRow(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
                                   RC.encode(sc.states[0], Sc), RC.encode_window(sc.window, Sc))[2]
     if S.PC:
         n = S.CU * S.B
@@ -749,12 +749,12 @@ PHASE9 = ("hit", "reread", "untaken")
 
 
 def phase9(S, sl: Slice) -> dict[str, dict]:
-    """REDTEAM's phase 9 interfaces (`note:network-accounting/20261024T0558Z-finding-redteam-v3`, "PHASE 9 RESULTS") the
-    slice still has, as `case`'s keywords, each the prover's run of `sl` with that interface chosen to lower its charge
-    or its schedule: ``hit``, the first step's first candidate takes a 2-block prefix hit; ``reread``, step 2 leaves the
-    decision head in place, so step 3 reads its decision again; ``untaken``, step 0 leaves the arrival head in place.
-    ``srv``'s rows are the caller's (the served ones). Its context and frequency choices have no input: ChargeLink_v1
-    computes both from ``cin`` and the committed decisions."""
+    """The interfaces free in a piece alone that the slice still has, as `case`'s keywords, each the prover's run of
+    `sl` with that interface chosen to lower its charge or its schedule: ``hit``, the first step's first candidate
+    takes a 2-block prefix hit; ``reread``, step 2 leaves the decision head in place, so step 3 reads its decision
+    again; ``untaken``, step 0 leaves the arrival head in place. ``srv``'s rows are the caller's (the served ones).
+    Its context and frequency choices have no input: ChargeLink_v1 computes both from ``cin`` and the committed
+    decisions."""
     return {"hit": {"hits": {0: (2,) + (0,) * (S.W + S.A - 1)}},
             "reread": {"consume": {2: (0, 0)}},
             "untaken": {"consume": {0: (0, 0)}}}

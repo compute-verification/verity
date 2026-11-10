@@ -1,6 +1,57 @@
-import Proofs.Flock.Claims.Recursion.SlotsCommit
-import Proofs.Flock.Claims.Recursion.VStarLinks
-import Proofs.Flock.Claims.Recursion.DeployComplete
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployComplete
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+import all Init.Data.String.Basic
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Slice
+import all Init.Data.String.TakeDrop
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Recursive.VStarCheck
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Hm.Bc
+import Proofs.Flock.Soundness.Discharge.Hm.Site
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Std.Data.String.ToNat
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The hm96 slots' commit strings at the outer relation
@@ -18,6 +69,8 @@ row or RecCap reads is an input row (`in_block`, `ownPorts_held`), and a held ro
 is one table holding its whole population (`oneFull_staged`, `capFull_staged`), which the verifier's setup refuses
 otherwise (`RecSetup.oneFull`). `ksLin2_deployed_full` and `bitsLin2_deployed_full` drop `HmSlotsCommit`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -209,7 +262,7 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
   have hsrc : FlockSoundness.flatSrcAt st.c (g * st.c.upv) ((Flock.portCols st.c.unit.inGroups)[x]!.1 + t) =
       FlockSoundness.Typed.msgCol st.c g q (i / 8) (i % 8) := by
     unfold FlockSoundness.flatSrcAt
-    rw [FlockSoundness.portOf_eq (FlockSoundness.Discharge.Aliased.portBits_nodup L.unit_built) hxp ht16,
+    rw [FlockSoundness.portOf_eq (FlockSoundness.Discharge.Aliased.unit_nodup L) hxp ht16,
       Nat.add_sub_cancel_left]
     unfold FlockSoundness.Flat.flatSrc FlockSoundness.Flat.leafSrc
     rw [ite_eq_left hxg, Nat.mul_mod_left, hl]
@@ -285,20 +338,19 @@ theorem table_rows {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables :
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
     have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd
-    obtain ⟨hp, hcr⟩ := FlockSoundness.Discharge.Hidden.parse_untyped ht s.parse
-    have P := FlockSoundness.parse_facts hp
-    have L0 : FlockSoundness.Layout (FlockSoundness.Discharge.Hidden.flatTwin st) :=
-      FlockSoundness.layout_of (st := FlockSoundness.Discharge.Hidden.flatTwin st) P s.pin rfl rfl s.m s.kLog
+    have sc := FlockSoundness.Discharge.Hidden.setupHidden_specCC hd
+    obtain ⟨hty, ⟨ls, hcheck⟩, -⟩ := sc.committed.check ht
+    have L0 : FlockSoundness.Layout (FlockSoundness.Discharge.Hidden.flatTwin st) := sc.flatLayout ht
     have F0 : FlockSoundness.Discharge.Aliased.UnitFacts tags (FlockSoundness.Discharge.Hidden.flatTwin st) :=
-      FlockSoundness.Discharge.Hidden.unitFacts_of_parse (st := FlockSoundness.Discharge.Hidden.flatTwin st) hp rfl
+      sc.unitFacts ht
     have hda : st.da = (Flock.HmRow.delta st.c st.pin).1 ++
         (FlockSoundness.Discharge.Hidden.outPairs st.c).toArray := by
-      rw [s.da, FlockSoundness.Discharge.Hidden.hidden_delta']
-    have hrows := FlockSoundness.Discharge.Hidden.out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
+      rw [s.da, FlockSoundness.Discharge.Hidden.hidden_delta_unpinned
+        (sc.committed.unpinned_of_rep ht (sc.committed.outRows ht fun p hp => (hv1 p hp).1).2.1)]
+    have hrows := sc.committed.outRows ht fun p hp => (hv1 p hp).1
     have hz0 := FlockSoundness.Discharge.Hidden.sat_flat L L0 F0 hv1 hda hrows hz
-    obtain ⟨ls, hcheck⟩ := P.check
     refine ⟨FlockSoundness.Discharge.Hm.RowRanges.ofL (st := FlockSoundness.Discharge.Hidden.flatTwin st) L0 F0.parse
-      F0.check, (FlockSoundness.Discharge.Layout.check_cuts P.typed hcheck).2,
+      F0.check, (FlockSoundness.Discharge.Layout.check_cuts hty hcheck).2,
       (FlockSoundness.Discharge.HiddenExec.setupHidden_n hd).2, fun o g p hg hp => ?_,
       fun o N g q i hl hg hq hbw hN hi => ?_⟩
     · exact FlockSoundness.Discharge.Hm.row_bc_flat L0 F0 rfl hupv hv1 hz0 o hg hp
@@ -547,6 +599,7 @@ theorem ownPorts_held {sv : VStar.Stmt} {q : String × String × Array (Option �
   | recOpen _ _ _ _ => simp [Flock.RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [Flock.RecVStar.ownPorts] at hq
   | cap _ _ => simp [Flock.RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [Flock.RecVStar.ownPorts] at hq
 
 /-- What `heldRows` holds: a row a statement's own port reads, at the port's index among its circuit's ports. -/
 theorem mem_heldRows {r : XR} {s : ℕ} {sv : VStar.Stmt} {c : Flock.Circuit}
@@ -673,8 +726,8 @@ theorem oneFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {
   exact oneFull_ok h1
 
 /-- **A staged RecCap part's table holds all its `N` instances**: `checkStmt` makes its population `N`
-(`staged_scope`), and `RecSetup.oneFull` its instances at least its population's (`oneFull_staged`), so a table drawn
-short, which proves only its drawn units (`HmRow.drawn`), never stages. -/
+(`staged_scope`), and `RecSetup.oneFull` its instances at least its population's (`oneFull_staged`), so a table sampled
+short, which proves only its sampled proof blocks (`HmRow.drawn`), never stages. -/
 theorem capFull_staged {st : Stage} {s : ℕ} {x xO : Claims.Msg} {i : RecIns} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} {r : XR} {l N : ℕ} (hS : StagedPart st s x xO) (hsu : setupO xO = some (i, spec, sts))
     (hr : readX x = some r) (hcap : (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N))
@@ -771,7 +824,7 @@ open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`KSLin2` at the model of the coin server's record (`recTr`), with the slots' commit strings proved**:
+/-- **`KSLin2` at the model of the challenger's live-coin part's record (`recTr`), with the slots' commit strings proved**:
 `ksLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
@@ -785,7 +838,7 @@ theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord
     let bL : Brings := { bR with rd := L.readers }
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead bR) (cmtTr recRead) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead bR) (cmtTr recRead) s) ∧
@@ -795,7 +848,7 @@ theorem ksLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord
   intro bR L Bd D bL hP
   exact ksLin2_deployed_slots b aux nOf hd rest fin wE join final w hP hmSlotsCommit_of_full
 
-/-- **`BitsLin2` at the model of the coin server's record (`recTr`), with the slots' commit strings proved**:
+/-- **`BitsLin2` at the model of the challenger's live-coin part's record (`recTr`), with the slots' commit strings proved**:
 `bitsLin2_deployed_slots` with `HmSlotsCommit` from `hmSlotsCommit_of_full`. -/
 theorem bitsLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
@@ -809,7 +862,7 @@ theorem bitsLin2_deployed_full (b : Brings) (aux : Msg → ℕ → Flock.RecReco
     let bL : Brings := { bR with rd := L.readers }
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead bR) (cmtTr recRead) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead bR) (cmtTr recRead) s) ∧

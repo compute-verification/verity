@@ -1,11 +1,10 @@
 """GLM-5.3 under Pearl-C's registered stack, the keyed 8-block rotation then the keyed latent rotation
-(`registration.ROTATION_8`, `LATENT_ROTATION`; Daniel's card b50e7597), on its real weights: does the registration accept,
+(`registration.ROTATION_8`, `LATENT_ROTATION`), on its real weights: does the registration accept,
 does the rotated model compute the same function through every consumer of each rotated tensor (MLA's fused q_a/kv_a,
 q_b, kv_b as a linear and as the absorbed W_UK_T / W_UV BMMs, the DSA indexer, the router, the MoE, the MTP layer,
 lm_head), and which of the linears Pearl-C admits at TP8 each registered stack never reaches.
 
-The rotation is rung 3 of the approved-weights lane (research store docs/pouw/approved-weights.md §8j; its code,
-``aw_fold.block_rotation`` on the archived branch ``cursor/approved-weights-gpu-cc03``): an orthogonal Q on the residual
+The rotation is rung 3 of the approved-weights design (``aw_fold.block_rotation``): an orthogonal Q on the residual
 stream's d channels, the |S| <= d/1024 massive channels unmixed at keyed positions off every 8th, the rest in 8 blocks of
 consecutive calibrated activation magnitude, each a keyed Haar rotation onto keyed positions.  Every linear that reads the
 residual stream takes W·diag(γ/γ_keep)·Q, every one that writes it Qᵀ·W, the embedding E·Q, and each RMSNorm keeps γ on S and
@@ -17,7 +16,7 @@ kv_b's columns, so into the absorbed W_UK_T and W_UV.
 
 The key is `registration.rotation_key` over an epoch started from a challenger's salt coin; the weights' root is a stand-in
 (SHA-512 over the checkpoint's index), since this measures the transform and not a commitment.  S and the blocks are
-calibrated on `--tokens` tokens of README.md through layers 0 … max(--layers) in FP64.
+calibrated on `--tokens` tokens of ARCHITECTURE.md through layers 0 … max(--layers) in FP64.
 
 Checked (all on the checkpoint's dequantized weights, `--layers` and the MTP layer, every TP8 rank's slice):
   registration   `PearlC.check_registration` on every adopted stack and the refused ones
@@ -35,7 +34,7 @@ Checked (all on the checkpoint's dequantized weights, `--layers` and the MTP lay
   cast           how far Pearl-C's v1 cast (e4m3(α·x) per row, both operands, per rank's k on row-parallel linears) moves
                  each layer's update, unrotated and under `STACK` (the measure registration's docstring states: 158% / 4%)
   lm_head        n = 19360 padded to whole 64-column tiles with zero rows, the last tile's rows voluntary: the domain, that
-                 no other tile goes undrawn, V-EX's cap, and the credit on the full tiles' real columns
+                 no other tile goes unsampled, V-EX's cap, and the credit on the full tiles' real columns
   shares         the credit map's shares (`--map`, glm53_credit_map's JSON), then per registered stack with its unreached
                  linears uncredited under Pearl-C and lm_head padded
 
@@ -70,9 +69,9 @@ import run_result  # noqa: E402
 from verity.core.protocols.pouw import registration as REG  # noqa: E402
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root  # noqa: E402
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_work import Split, UnitRecord, pad_weight  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120  # noqa: E402
+from verity.ml.protocols.pouw.schemes.pearl_c_work import Split, UnitRecord, pad_weight  # noqa: E402
 
 SNAP = "/workspace/hf/hub/models--zai-org--GLM-5.3/snapshots/aca966e4e02791568aa6a4ced368624b3d897f42"
 TP = 8
@@ -82,7 +81,7 @@ RATIO = 20.0
 EXACT = 1e-9
 SCHEMES = {"pearl-c-h100-v1-h3": C.PearlC(forming="v1", hashing="h3"),
            "pearl-c-sm120-v1-h3": C.PearlC(forming="v1", device=SM120, hashing="h3")}
-#: Pearl-C's admitted linears per the credit map (art:5f07f86d…), by this tool's names
+#: Pearl-C's admitted linears per the credit map, by this tool's names
 ADMITTED = ("qa", "kva", "qb", "o", "wqb", "gate", "up", "down", "router", "sgate", "sup", "egate", "eup", "eh", "lm")
 #: the linears that read the residual stream (columns take Q) and write it (rows take Qᵀ)
 READS = ("qa", "kva", "wk", "wp", "gate", "up", "router", "sgate", "sup", "egate", "eup", "lm")
@@ -91,7 +90,7 @@ ROW_PARALLEL = ("o", "down", "sdown", "edown")
 #: each linear's `registration.check_linear` side; eh_proj reads the MTP layer's two rotated inputs and writes its stream
 SIDES = {**{n: REG.READS_RESIDUAL for n in READS + ("eh",)}, **{n: REG.WRITES_RESIDUAL for n in WRITES},
          **{n: REG.READS_LATENT for n in ("qb", "kvb", "wqb")}}
-#: the registered stack (Daniel's card b50e7597), and the one before it
+#: the registered stack, and the one before it
 STACK, R8_ONLY = (REG.ROTATION_8, REG.LATENT_ROTATION), (REG.ROTATION_8,)
 MAP_IDS = {"attn.fused_qkv_a (q_a + kv_a_mqa)": ("qa", "kva"), "attn.q_b": ("qb",), "attn.o": ("o",),
            "indexer.wq_b": ("wqb",), "dense.gate_up": ("gate", "up"), "dense.down": ("down",), "moe.router": ("router",),
@@ -931,7 +930,7 @@ def main() -> int:
     else:
         from tokenizers import Tokenizer
         tok = Tokenizer.from_file(str(Path(a.snapshot) / "tokenizer.json"))
-        ids = torch.tensor(tok.encode((ROOT / "README.md").read_text()).ids[: a.tokens])
+        ids = torch.tensor(tok.encode((ROOT / "ARCHITECTURE.md").read_text()).ids[: a.tokens])
     T = len(ids)
     pos = torch.arange(T)
     cal = calibrate(ck, D, ids, max(layers), log, 2 if a.synthetic else None)

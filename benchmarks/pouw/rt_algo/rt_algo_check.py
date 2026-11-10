@@ -1,17 +1,17 @@
-"""RT-ALGO: bit-exact check of the algebra of H1 Dither's credited words against `h1tile.reference`.
+"""Bit-exact check of the algebra of H1 Dither's credited words against `h1tile.reference`.
 
 Tests the premise that each credited word needs a fresh write that costs what the honest GEMM costs, by trying the
 algebraic shortcuts (reuse the served AB, low-rank in the coins/noise, U's linear structure, fold-before-multiply,
 precompute before the coin) and showing each produces 0% of the credited work below the floor. Every claim is checked
 against the reference, not asserted. `collect()` returns (passed, failed); the CLI prints them and a floor-sizing table
-(RT-ALGO, note:20261019T0520Z-draft-rt-algo).
+.
 """
 from __future__ import annotations
 
 import random
 
-from verity.core.protocols.pouw.circuit import h1tile, segment as SG, seeds as SD
-from verity.core.protocols.pouw.circuit.h1tile import Layout, fold_keys, noise, reference
+from verity.ml.protocols.pouw.circuit import h1tile, segment as SG, seeds as SD
+from verity.ml.protocols.pouw.circuit.h1tile import Layout, fold_keys, noise, reference
 
 M32 = (1 << 32) - 1
 #: (r, c, K, adversarial) tiles the check runs; adversarial forces the s8 wrap on both operands.

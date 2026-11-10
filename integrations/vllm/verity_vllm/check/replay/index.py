@@ -16,14 +16,16 @@ from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import moe_plane_kind
 from verity_vllm.program.compact import expanded_file_args, p_item_indices, runs_from_file_items
-from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
+from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 
 
 SAMPLER_OP = "runner.sampler"
 IDS_MEMBER = "in"
 SEED_PARAM = "seed"                     # the stochastic Program's seed input (Param name; committed as runner.sampler/seed per (step, request))
 VALUES_PARAM = "values"                 # a `registered_values` Program's registered values (the norms' eps, the attention scale)
-_RUN_PARAM = re.compile(r"^run(_\d+)?$")  # its run values, one parameter per request (the sampler's temperature and top_p, a Philox position)
+#: the values a request's run decides: a `registered_values` Program's per request (the sampler's temperature and top_p, a Philox
+#: position), or a DSA row's top-k order past INDEX_TOPK (`RunInputs`), which the run commits
+_RUN_PARAM = re.compile(r"^run(_\d+)?$")
 
 _CONST_ROW = re.compile(r"^Const(32|64)\[0x([0-9a-fA-F]+)\]_v\d+$")
 
@@ -89,6 +91,18 @@ def parse_struct(type_str: str) -> list[tuple[str, int, list[int], int]]:
     return out
 
 
+def _supplied_field(binding: str, f: dict, impl) -> dict:
+    """A supplied field as the replay reads it: one whose bits the build states (a registered value), or a `run` field
+    `<op_path>/<member>` the run commits (`RunInputs.layout`: its `leaves`, no bits), the manifest's `run_values` identity of that
+    name, its op_path the implementation's as the manifest's (`impl`, `Correspondence.implementation_path`)."""
+    if "bits" in f:
+        return dict(f, bits=int(f["bits"], 16), leaves=1)
+    if binding != "run" or "/" not in str(f["name"]):
+        raise ValueError(f"supplied {binding} field {f['name']!r} states no bits and is no `<op_path>/<member>` run value")
+    op, member = str(f["name"]).rsplit("/", 1)
+    return dict(f, leaves=int(f["leaves"]), op_path=impl(op), member=member)
+
+
 #: the query engine whose population addresses a Call's committed output (`addresses.rule` on the record)
 V2_QUERY = "v2-query"
 #: the query a `ProgramIndex` addresses under when its caller names none (None: the query of record)
@@ -133,7 +147,7 @@ class ProgramIndex:
         # TP-04 policy (the rank-local partials `part_rank<r>` / `shard_rank<r>` beside every collective output), the one the rank's
         # manifest was built with.  `tp` = {"rank": r, "world": W}.
         self.tp: dict[str, Any] | None = _tp_of(tp)
-        # [v2 flip, P2] Call id -> [(member, width, dtype)] of the required Values it produces, and the Program path they are spelt under
+        # Call id -> [(member, width, dtype)] of the required Values it produces, and the Program path they are spelt under
         # (`Population.program_path`: its owning module, a collective site's site path)
         self._v2: dict[int, list[tuple[str, int, str]]] = {}
         self._v2_ports: dict[int, dict[str, str]] = {}
@@ -155,13 +169,14 @@ class ProgramIndex:
                 self._v2_ports[cid] = dict(reversed([(m.port, m.member) for m in mem]))      # a port's own member, before a partial on it
                 self._v2_module[cid] = pop.program_path(cid)
         self.correspondence: dict[str, Any] | None = corr.provenance()
+        impl = corr.implementation_path
         del P, corr, pop
         self.params: list[list] = [list(p) for p in inst.get("params", [])]
         self.prefix = RM.wrapper_prefix_of(self.rows, attention_paths or []) if prefix is None else prefix
         # a warm Program's cached-prefix input (`cached_prefix.layout_of`), and per request reading it the producers' rows (`populate`)
         self.kv_prefix: dict[str, Any] | None = CP.layout_of(program_dir)
         self.cached_prefix: dict[str, CP.CachedPrefix] = {}
-        self.segs = RM.segment_steps(self.rows)
+        self.segs = RM.segment_steps(self.rows, inst.get("checks"))
         self._seg_lo = [lo for lo, _hi in self.segs]
         self.by_i = {int(r["i"]): r for r in self.rows}
         self.pnames = [p[0] for p in self.params]
@@ -174,7 +189,9 @@ class ProgramIndex:
                 if a >= len(self.pnames) or self.pnames[a] != ent["name"]:
                     raise ValueError(f"supplied {binding} parameter {ent['name']!r} at index {a} is not the Program's parameter "
                                      f"{self.pnames[a] if a < len(self.pnames) else None!r}")
-                self.supplied[a] = (binding, {int(f["offset"]): dict(f, bits=int(f["bits"], 16)) for f in ent.get("fields") or []})
+                self.supplied[a] = (binding, {int(f["offset"]): _supplied_field(binding, f, impl) for f in ent.get("fields") or []})
+        del impl
+        self._supplied_offs = {a: sorted(fields) for a, (_b, fields) in self.supplied.items()}
         for a, n in enumerate(self.pnames):
             if (n == VALUES_PARAM or _RUN_PARAM.match(n)) and a not in self.supplied:
                 raise ValueError(f"parameter {n!r} is a supplied input but the instances header states no layout for it")
@@ -188,7 +205,7 @@ class ProgramIndex:
                 self.foff.append(off)
                 off += c
         self._desc: dict[int, dict | None] = {}
-        # [MAN-06f v3, moe R16] the fused-MoE block rows of each step: per MoE module its geometry (M routed tokens, TOPK, E, H, I, N_up --
+        # the fused-MoE block rows of each step: per MoE module its geometry (M routed tokens, TOPK, E, H, I, N_up --
         # `manifest_format.moe_geometry`, the same numbers the manifest sizes the `moe_block_stream` planes with) and, per row, its
         # PAIR / TOKEN ordinal among the rows of its plane kind in Program order (router / sum rows: token t; up / act / down rows: pair
         # p = t*TOPK + k).  `describe` addresses these rows at their PLANE (op_path `moe/L<k>`, member = the plane).
@@ -234,6 +251,15 @@ class ProgramIndex:
                 else:
                     self._v2_fault[i] = f"members {[m[0] for m in mem2]} sit at request-local rows {ords}: not one row"
 
+    def supplied_field(self, a: int, lo: int, hi: int) -> dict | None:
+        """The field of supplied parameter `a` that holds leaves [lo, hi), with its leaf offset; None when no one field holds them."""
+        fields, offs = self.supplied[a][1], self._supplied_offs[a]
+        k = bisect.bisect_right(offs, lo) - 1
+        if k < 0 or hi <= lo:
+            return None
+        f = fields[offs[k]]
+        return f if hi <= offs[k] + int(f["leaves"]) else None
+
     @property
     def n_steps(self) -> int:
         return len(self.segs)
@@ -278,7 +304,7 @@ class ProgramIndex:
         mod, node, hint, row = RM.split_name(r.get("name") or "")
         d: dict | None
         kind = self._moe_kind.get(i)
-        # [F-r19-int-24] FusedMoE.forward returns the MoeSum: a boundary Value (`<experts>/out`) beside its plane copy (MOE-TP-02 below)
+        # FusedMoE.forward returns the MoeSum: a boundary Value (`<experts>/out`) beside its plane copy (MOE-TP-02 below)
         tp_sum = kind == "sum" and bool(self._v2.get(i))
         if tp_sum:
             kind = None
@@ -293,28 +319,28 @@ class ProgramIndex:
             d = None if fault else {"family": fam, "statics": st, "module": mod2, "op_path": RM.collector_path(mod2, self.prefix), "hint": hint,
                                     "row": int(self._ordinal.get(i, 0)), "name_row": row, "members": list(self._v2.get(i, ())), "step": self.step_of(i)}
         if tp_sum and d is not None and d["members"]:
-            # [MOE-TP-02 / moe, tp M-1528] on a TP rank the MoeSum row's ONE output is committed under TWO required names: the module's
+            # on a TP rank the MoeSum row's ONE output is committed under TWO required names: the module's
             # `part_rank<r>` (tp_rank_partials, TP-04/TP-06: the all-reduce input) AND the MOE-01 plane `moe/L<k>/sum` (moe_block_stream,
             # staged by MoeBlockSource on the rank exactly as at TP1).  The manifest requires both (TP-06); the
-            # replay addressed the row at the partial only, so F-r17b-38's reconciliation read every `moe/L<k>/sum` identity as
-            # `identities_without_rows` (OLMoE TP2 B8 int-6: 6,944 per rank, COMMIT FAIL).  `copies` = the plane address of the same
+            # replay addressed the row at the partial only, so the reconciliation read every `moe/L<k>/sum` identity as
+            # `identities_without_rows` (OLMoE TP2 B8: 6,944 per rank, COMMIT FAIL).  `copies` = the plane address of the same
             # output: recorded in the population under the plane identity AND read back and compared against the same evaluated words
             # (two committed copies, one relation, both checked).  The plane mapping is the checked one (_describe_plane: geometry,
             # ordinal, dataflow); a mapping failure is NAMED here and the plane identity stays without rows -- fail closed, never aliased.
-            # The same holds at TP1: the MoeSum is the module's returned tensor `<experts>/out` (F-r19-int-24).
+            # The same holds at TP1: the MoeSum is the module's returned tensor `<experts>/out`.
             pd = self._describe_plane(i, fam, st, mod, hint, row, "sum")
             if pd.get("plane_error") or not pd["members"]:
                 d["copy_error"] = pd.get("plane_error") or "sum plane has no member"
             else:
                 pm = pd["members"][0]
-                why = "F-r19-int-24: the MoeSum output = the MoE module's returned tensor (a boundary Value) = its moe_block_stream sum plane"
+                why = "the MoeSum output = the MoE module's returned tensor (a boundary Value) = its moe_block_stream sum plane"
                 d["copies"] = [{"op_path": pd["op_path"], "member": pm[0], "width": int(pm[1]), "dtype": str(pm[2]), "row": int(pd["row"]),
                                 "of": d["members"][0][0], "why": why}]
         self._desc[i] = d
         return d
 
     def _describe_plane(self, i: int, fam: str, st: dict[str, Any], mod: str, hint: str, name_row: int | None, kind: str) -> dict:
-        """[MAN-06f v3] a fused-MoE block row -> its `moe_block_stream` PLANE address: op_path `moe/L<layer>`, members = the plane(s) the row
+        """A fused-MoE block row -> its `moe_block_stream` PLANE address: op_path `moe/L<layer>`, members = the plane(s) the row
         produces (router: `router_w` f32[TOPK] + `router_ids` i32[TOPK] per token; up: `up` bf16[N_up] per pair; act (the SiluMul under the
         MoE runner): `act` bf16[I] per pair; in_quant: `in_q` e4m3[H] + `in_scale` f32[H/G] per token; act_quant: `act_q` e4m3[I] +
         `act_scale` f32[I/G] per pair; down: `down` bf16[H] per pair; sum: `sum` bf16[H] per token), row = the row's token / pair
@@ -474,7 +500,7 @@ class ProgramIndex:
         return name, lo - base, hi - base, shape
 
     def weight_bits(self, field: str) -> int:
-        """[R16 fp8] the leaf width the Program declares for a `weights` field (`Value<16>` bf16, `Value<8>` e4m3, `Value<32>` f32 block scales)."""
+        """The leaf width the Program declares for a `weights` field (`Value<16>` bf16, `Value<8>` e4m3, `Value<32>` f32 block scales)."""
         for name, _count, _shape, bits in self.fields:
             if name == field:
                 return int(bits) or 16

@@ -17,12 +17,8 @@ GPUS = gpus()
 ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 # What the dispatcher, the queue or the launcher sets: a spec naming one would be overridden or would override them.
 RESERVED_ENV = re.compile(r"VERITY_BENCH_\w*|RESEARCH_\w*|GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES|CUDA_DEVICE_ORDER|PYTHONPATH|PATH")
-#: A sweep point's sampling, as vLLM `SamplingParams` fields. Every request also carries its own seed (its index in the
-#: point), so stochastic tokens are a function of the engine's numerics and an arm is gated against its control on them.
-SAMPLING: Mapping[str, Mapping[str, float]] = {
-    "greedy": {"temperature": 0.0},
-    "stochastic": {"temperature": 0.8, "top_p": 0.95},
-}
+#: Every point's sampling, as vLLM `SamplingParams` fields.
+GREEDY: Mapping[str, float] = {"temperature": 0.0}
 
 
 @dataclass(frozen=True)
@@ -39,7 +35,6 @@ class Preset:
     engine_settings: Mapping[str, Any] = field(default_factory=dict)
     vllm_pin: str = VLLM_PIN
     model_digest: str | None = None
-    unavailable_reason: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -48,6 +43,13 @@ class Preset:
 #: Engine precisions an arm may name (`runner.engine_args`). ``int8_exact`` is the eager exact-int8 engine on an int8 pin
 #: (`TargetProfile.int8_exact` ``"all"``: every linear and every attention layer on the plain exact-int8 arm)
 PRECISIONS = ("bfloat16", "fp8", "int8_exact")
+#: The keys a preset's `engine_settings` may set: those `runner.engine_args` reads, and the two `served` sets from the
+#: spec's `eager` (``cuda_graphs``, ``enforce_eager``), which a spec's own value doesn't change
+ENGINE_SETTINGS = (
+    "max_model_len", "max_num_seqs", "max_num_batched_tokens", "resident_gpu_memory_utilization",
+    "block_gpu_memory_utilization", "resident_kv_cache_memory_bytes", "block_kv_cache_memory_bytes", "capture_sizes",
+    "serving_defaults", "attention_backend", "attention_config", "cuda_graphs", "enforce_eager",
+)
 #: A protocol arm's `control` that gives it none: its tokens are checked by no other arm's, and the table names it
 NO_CONTROL = "none"
 #: The executions a served variant of a built-in arm (`BUILTIN@LABEL`, `arms.served_variant`) builds its engine in: vLLM's
@@ -101,6 +103,7 @@ class Sweep:
     prompt_tokens: tuple[int, ...]
     traffic: tuple[str, ...]
     output_tokens: Mapping[str, int]
+    # greedy only; a resolved spec's identity hashes it
     sampling: tuple[str, ...] = ("greedy",)
 
 
@@ -148,6 +151,9 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
         raise ConfigError(f"{path}: unknown GPU id {doc.preset.gpu_id!r}")
     if doc.preset.gpu_count < 1 or doc.preset.gpu_count > GPUS[doc.preset.gpu_id].count_per_node:
         raise ConfigError(f"{path}: gpu_count is outside {doc.preset.gpu_id!r}'s per-node capacity")
+    unknown = sorted(set(doc.preset.engine_settings) - set(ENGINE_SETTINGS))
+    if unknown:
+        raise ConfigError(f"{path}: unknown engine_settings {unknown}; known: {list(ENGINE_SETTINGS)}")
     if doc.reps < 1 or doc.warmups < 1 or not doc.arms:
         raise ConfigError(f"{path}: arms must be nonempty and reps and warmups must be positive")
     if doc.max_warmups is not None and doc.max_warmups < doc.warmups:
@@ -182,14 +188,13 @@ def load_sweep(name: str) -> Sweep:
     doc = load(path, Sweep)
     if doc.schema != "verity-bench/vllm-sweep/v0" or doc.id != name:
         raise ConfigError(f"{path}: expected sweep {name!r}")
-    if not doc.batches or not doc.prompt_tokens or not doc.traffic or not doc.sampling:
+    if not doc.batches or not doc.prompt_tokens or not doc.traffic:
         raise ConfigError(f"{path}: sweep axes must be nonempty")
     missing = sorted(set(doc.traffic) - set(doc.output_tokens))
     if missing:
         raise ConfigError(f"{path}: output_tokens has no value for {missing}")
-    unknown = sorted(set(doc.sampling) - set(SAMPLING))
-    if unknown:
-        raise ConfigError(f"{path}: unknown sampling {unknown}; known: {sorted(SAMPLING)}")
+    if tuple(doc.sampling) != ("greedy",):
+        raise ConfigError(f"{path}: sampling {list(doc.sampling)}: every point samples greedily; drop the key")
     return doc
 
 
@@ -215,18 +220,18 @@ def resolve_spec(spec: str | Path) -> ResolvedSpec:
 
 
 def served(preset: Preset, eager: bool) -> tuple[Preset, bool]:
-    """The preset as its engines are built, and whether they run eagerly: when asked, or when the preset requires it
-    (`enforce_eager`), and with CUDA graphs exactly when not."""
+    """The preset as its engines are built, and whether they run eagerly: when asked, and with CUDA graphs exactly when
+    not."""
 
-    eager = bool(eager or preset.engine_settings.get("enforce_eager", False))
+    eager = bool(eager)
     settings = {**preset.engine_settings, "cuda_graphs": not eager, "enforce_eager": eager}
     return replace(preset, engine_settings=settings), eager
 
 
 def checkpoint_files(root: Path) -> list[Path]:
     """The files of a local checkpoint that bind it: all but a Hub snapshot's repository metadata (dot-files such as
-    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (vy-nebius-2's
-    llama-3.1-8b-instruct gained ``.gitattributes`` and ``README.md`` on 19 Oct with every weight unchanged)."""
+    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (a node's
+    llama-3.1-8b-instruct gained ``.gitattributes`` and ``README.md`` with every weight unchanged)."""
 
     return sorted(p for p in root.iterdir() if p.is_file() and not p.name.startswith(".") and p.suffix != ".md")
 
@@ -255,7 +260,6 @@ def local_checkpoint(preset: Preset, path: str | Path) -> Preset:
         revision=None,
         case=None,
         model_digest=digest.hexdigest(),
-        unavailable_reason=None,
     )
 
 
@@ -271,22 +275,20 @@ class RequestShape:
 
 @dataclass(frozen=True)
 class SweepPoint:
-    """One batch, prompt envelope, traffic mix, and sampling."""
+    """One batch, prompt envelope and traffic mix, sampled greedily."""
 
     batch: int
     prompt_tokens: int
     traffic: str
     output_tokens: int
-    sampling: str = "greedy"
 
     @property
     def id(self) -> str:
-        suffix = "" if self.sampling == "greedy" else f"-{self.sampling}"
-        return f"b{self.batch}-p{self.prompt_tokens}-{self.traffic}{suffix}"
+        return f"b{self.batch}-p{self.prompt_tokens}-{self.traffic}"
 
     @property
     def headline(self) -> bool:
-        return self.batch == 32 and self.traffic == "mixed" and self.sampling == "greedy"
+        return self.batch == 32 and self.traffic == "mixed"
 
     def requests(self) -> tuple[RequestShape, ...]:
         if self.traffic == "decode-heavy":
@@ -312,7 +314,7 @@ class SweepPoint:
             "prompt_tokens": self.prompt_tokens,
             "traffic": self.traffic,
             "output_tokens": self.output_tokens,
-            "sampling": self.sampling,
+            "sampling": "greedy",  # a point's identity hashes this JSON
             "staggered_arrivals": any(r.arrive_step for r in self.requests()),
         }
 
@@ -322,9 +324,8 @@ def expand_sweep(name: str) -> tuple[SweepPoint, ...]:
 
     sweep = load_sweep(name)
     return tuple(
-        SweepPoint(batch, prompt, traffic, sweep.output_tokens[traffic], sampling)
+        SweepPoint(batch, prompt, traffic, sweep.output_tokens[traffic])
         for batch in sweep.batches
         for prompt in sweep.prompt_tokens
         for traffic in sweep.traffic
-        for sampling in sweep.sampling
     )

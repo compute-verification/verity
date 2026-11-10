@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Q_call v1's cost on Serve_v1 (PRF-72): `flock-verify qcall-program` at each X and the one-stage `partition` piece under
+# Q_call v1's cost on Serve_v1: `flock-verify qcall-program` at each X and the one-stage `partition` piece under
 # `Q_call` v1 at X = 16, on one config's word-level descriptor, each under `/usr/bin/time -v`, and a `perf` profile of
 # `qcall-program` at the first X where the node has perf. Run from a clone (the builds write .lake):
 #   research run --as proofs --project verity --on vy-nebius-cpu-4 --source . --cwd clone -- \
@@ -11,10 +11,10 @@ cfg=${1:?usage: qcall.sh CONFIG X...}
 shift
 uv sync -q --all-packages --extra torch-cpu
 { (cd verity/core/service/flock && lake build flock-verify) && \
-  (cd verity/core/service/sampled_proofs && lake build sampled-proofs-difftest); } > "$O/build.log" 2>&1 \
+  (cd verity/core/service/spot && lake build sampled-proofs-difftest); } > "$O/build.log" 2>&1 \
   || { tail -40 "$O/build.log" >&2; exit 1; }
 FV=$PWD/verity/core/service/flock/.lake/build/bin/flock-verify
-SP=$PWD/verity/core/service/sampled_proofs/.lake/build/bin/sampled-proofs-difftest
+SP=$PWD/verity/core/service/spot/.lake/build/bin/sampled-proofs-difftest
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
 uv run python - "$cfg" "$d" "$O" <<'EOF'

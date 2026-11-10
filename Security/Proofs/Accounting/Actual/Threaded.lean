@@ -1,6 +1,8 @@
-import Models.Accounting.Guarantees.Actual.Threaded
-import Proofs.Accounting.Actual.Windows
-import Proofs.Nci.Threads
+module
+
+public import Definitions.Accounting.Guarantees.Actual.Threaded
+public import Proofs.Accounting.Actual.Windows
+public import Proofs.Nci.Threads
 
 /-!
 # The memory cap over threads
@@ -22,12 +24,14 @@ proved per parameter slot, through Theorem 1 per slot (`Nci.SecurityProofs.Threa
 gates is its instance at one slot per weight gate (`Nci.SecurityProofs.Fit.idSlots`).
 -/
 
+@[expose] public section
+
 namespace Accounting.SecurityProofs.Actual
 
 open Verity Nci Finset
 
 /-- Every counted multiplication lies in exactly one unit of a division of the reference circuit. -/
-theorem card_M_eq_sum {c : Declaration} (T : Threading c) {m : ℕ} (Q : Partition c.D m) :
+theorem card_M_eq_sum {c : RegisteredCircuit} (T : Threading c) {m : ℕ} (Q : Partition c.D m) :
     T.M.card = ∑ u, (T.mults (Q.gates u)).card := by
   classical
   rw [← card_biUnion fun u _ v _ huv => disjoint_left.2 fun g hu hv => huv (by

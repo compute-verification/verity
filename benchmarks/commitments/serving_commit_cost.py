@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A cell's commitment time: the serving hook (``verity_vllm.commit.serving_rows.commit``, M0's ``frame-v3-sha512`` +
+"""A cell's commitment time: the serving hook (``verity.ml.windows.rows.commit``, M0's ``frame-v3-sha512`` +
 ``hm96-sha512/v1`` row leaves) committing the first ``--n`` instances of an input set afresh, as a Table 1 cell's
 ``commit.seconds``.
 
@@ -32,8 +32,8 @@ import numpy as np
 
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_layout
-from verity_numerical.bench.input_sets import InputSet
-from verity_vllm.commit import serving_rows as SR
+from verity_flock.input_sets import InputSet
+from verity.ml.windows import rows as SR
 
 RESULT_SCHEMA = "research/result/v0.1"
 
@@ -52,7 +52,7 @@ def parse(argv: list[str]) -> argparse.Namespace:
     return ns
 
 
-def batch(s: InputSet, n: int) -> tuple[SR.Window, list[dict[str, dict[str, np.ndarray]]]]:
+def batch(s: InputSet, n: int) -> tuple[SR.Binding, list[dict[str, dict[str, np.ndarray]]]]:
     """One member per run of consecutive instances with the same row widths (an attention class set: one per key count T, as
     serving commits each template instance's rows)."""
     sub = s.subcircuit
@@ -70,7 +70,7 @@ def batch(s: InputSet, n: int) -> tuple[SR.Window, list[dict[str, dict[str, np.n
                                  tuple((p, int(a.shape[1])) for p, a in outs.items()), hi - lo, lo))
         data.append({"rows": rows, "outs": outs})
         lo = hi
-    window = SR.Window({"program": s.content_digest}, f"input-set:{s.name}", n, f"serving-commit-cost:{s.content_digest[:16]}", tuple(members))
+    window = SR.Binding({"program": s.content_digest}, f"input-set:{s.name}", n, f"serving-commit-cost:{s.content_digest[:16]}", tuple(members))
     return window, data
 
 
@@ -126,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
                                      "rows": "one row per instance and row port, the output rows included (M0's per-instance statement, no shared rows); one member "
                                              "per run of instances with the same row widths (an attention class set: one per key count)",
                                      "members": len(ms),
-                                     "implementation": "verity_vllm.commit.serving_rows.commit (hashlib SHA-512, numpy ChaCha20, fork pool)",
+                                     "implementation": "verity.ml.windows.rows.commit (hashlib SHA-512, numpy ChaCha20, fork pool)",
                                      "workers": ns.workers, "reps": ns.reps, "cpu": platform.processor() or platform.machine(),
                                      "nproc": os.cpu_count(), "python": sys.version.split()[0]},
             "validation": {"status": "passed" if not bad else "failed",

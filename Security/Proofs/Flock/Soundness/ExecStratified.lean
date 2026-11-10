@@ -1,29 +1,33 @@
-import Proofs.Flock.Soundness.ExecDraw
-import Proofs.Flock.Soundness.Audit.Stratified
-import Proofs.Flock.Soundness.E2E
+module
+
+public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.Audit.Stratified
+public import Proofs.Flock.Soundness.E2E
 
 /-!
-# The executable stratified draw, and the e2e theorems at its law
+# The executable stratified sample, and the e2e theorems at its sampling design
 
-`Flock.Draw.stratified` is the verifier's executable stratified draw: `Flock.Draw.subset` on each stratum's own stream,
+`Flock.Draw.stratified` is the verifier's executable stratified sample: `Flock.Draw.subset` on each stratum's own stream,
 local indices mapped to the stratum's units (`Stratum.unit`), and the union sorted, or `none` if a stream runs out.
 `ExecStrata σ k S` says the executable strata `S` are the model's: the same `k`, the same sizes, and each stratum's
 units run over `σ`'s stratum.
 
-* `stratified_exec_escape_le`: over independent uniform streams, the executable draw misses `B` with probability at most
+* `stratified_exec_escape_le`: over independent uniform streams, the executable sample misses `B` with probability at most
   `Law.stratified`'s escape, the product over strata of `subset_exec_escape_le` (`ExecDraw.lean`).
-* `execStratified`: the executable draw as a law, a draw that runs out drawing every unit. `execStratified_escape_le`: it
+* `execStratified`: the executable sample as a sampling design, a sample that runs out sampling every unit. `execStratified_escape_le`: it
   misses each set with at most `Law.stratified`'s escape. `execStratified_miss_le`: its count curve is at most
   `Law.stratified`'s, which `stratified_miss_eq_greedy` computes.
-* `flock_e2e_drawn_exec`, `flock_e2e_count_exec`: `flock_e2e_drawn` and `flock_e2e_count` (`E2E.lean`) at that law, the
+* `flock_e2e_drawn_exec`, `flock_e2e_count_exec`: `flock_e2e_drawn` and `flock_e2e_count` (`E2E.lean`) at that sampling design, the
   count curve bounded by `Law.stratified`'s `miss`.
 
-The streams are uniform by assumption A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`). The live draw,
-`Flock.Draw.drawOS`, extends a stream that runs out and reruns, rather than drawing every unit; `ExecDrawOS.lean` proves the
-same bounds for it.
+The streams are uniform by assumption A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`). The live sample,
+`Flock.Draw.drawWith` on the challenger's coins, extends a stream that runs out and reruns, rather than sampling every
+unit; `ExecDrawOS.lean` proves the same bounds for it.
 
 `stratumK` is the count law's `k` by `rfl`: `countRule_eq_draw` (`Audit/FlockWork.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -34,14 +38,14 @@ namespace Law
 
 variable {n m : ℕ}
 
-/-- The executable strata `S` describe `σ`'s: stratum `s` draws `k s` of its units, has `σ`'s stratum's size, and its
+/-- The executable strata `S` describe `σ`'s: stratum `s` samples `k s` of its units, has `σ`'s stratum's size, and its
 `j`-th unit, for `j` below that size, runs over `σ`'s stratum `s`. -/
 def ExecStrata (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m → Flock.Draw.Stratum) : Prop :=
   ∀ s, (S s).k = k s ∧ (S s).size = (stratum σ s).card ∧
     (range (S s).size).image (S s).unit = (stratum σ s).map Fin.valEmbedding
 
-/-- The verifier's executable stratified draw as a law: stratum `s`'s stream is `L s` uniform bytes (A3), and a draw
-whose stream runs out draws every unit. The live draw extends such a stream and reruns instead: `execOS`
+/-- The verifier's executable stratified sample as a sampling design: stratum `s`'s stream is `L s` uniform bytes (A3), and a sample
+whose stream runs out samples every unit. The live sample extends such a stream and reruns instead: `execOS`
 (`ExecDrawOS.lean`). -/
 def execStratified (S : Fin m → Flock.Draw.Stratum) (L : Fin m → ℕ) : Law n where
   Ω := (s : Fin m) → Fin (L s) → Fin 256
@@ -75,8 +79,8 @@ theorem forIn_append (g : ℕ → Option (Array ℕ)) (u : ℕ → ℕ → ℕ) 
       · exact ⟨li, hg, fun j hj => hout _ (Array.mem_append_right _ (Array.mem_map_of_mem hj))⟩
       · exact his i' hi'
 
-/-- **What a successful stratified draw holds**: every stratum's `subset` succeeded, and each of its local indices'
-units is in the draw. -/
+/-- **What a successful stratified sample holds**: every stratum's `subset` succeeded, and each of its local indices'
+units is in the sample. -/
 theorem stratified_units (strata : Array Flock.Draw.Stratum) (streams : Array ByteArray) (D : Array ℕ)
     (h : Flock.Draw.stratified strata streams = some D) :
     ∀ i < strata.size, ∃ li, Flock.Draw.subset strata[i]!.k strata[i]!.size (streams.getD i ByteArray.empty) = some li ∧
@@ -100,9 +104,9 @@ theorem stratified_units (strata : Array Flock.Draw.Stratum) (streams : Array By
   rw [← hD', DrawExec.mem_qsort]
   exact hmem j hj
 
-/-- **The executable stratified draw escapes no more often than the model's.** Its probability space is independent
-uniform streams: that the verifier's bytes are uniform is A3 (`Assumptions.UniformRandomBytes`,
-`uniform/io-getrandombytes`), which `drawOS_stratified_escape_le` (`ExecDrawOS.lean`) takes for the live draw, reruns
+/-- **The executable stratified sample escapes no more often than the model's.** Its probability space is independent
+uniform streams: that the challenger's coins are uniform is A3 (`Assumptions.UniformRandomBytes`,
+`uniform/io-getrandombytes`), which `drawOS_stratified_escape_le` (`ExecDrawOS.lean`) takes for the live sample, reruns
 included. -/
 theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (B : Finset (Fin n)) :
@@ -167,7 +171,7 @@ theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
         rw [hden]
         exact ENNReal.div_le_div_right (by exact_mod_cast hnum) _
 
-/-- The executable draw as a law escapes no more often than `Law.stratified`: a draw that runs out draws every unit. -/
+/-- The executable sample as a sampling design escapes no more often than `Law.stratified`: a sample that runs out samples every unit. -/
 theorem execStratified_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (B : Finset (Fin n)) :
     (execStratified (n := n) S L).escape B ≤ (stratified σ k hk).escape B := by
@@ -189,7 +193,7 @@ theorem execStratified_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk 
       exact ⟨D, hD, fun u hu huD => Finset.disjoint_left.1 hd (Finset.mem_filter.2 ⟨Finset.mem_univ _, huD⟩) hu⟩
     · exact absurd hb (Finset.disjoint_left.1 hd (Finset.mem_univ b))
 
-/-- The executable draw's count curve is at most `Law.stratified`'s, which `stratified_miss_eq_greedy` computes. -/
+/-- The executable sample's count curve is at most `Law.stratified`'s, which `stratified_miss_eq_greedy` computes. -/
 theorem execStratified_miss_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (K : ℕ) :
     (execStratified (n := n) S L).miss K ≤ (stratified σ k hk).miss K :=
@@ -204,7 +208,7 @@ namespace Partition
 
 open Model Accounting Extract LinkFinder
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)

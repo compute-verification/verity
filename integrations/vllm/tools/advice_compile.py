@@ -5,7 +5,11 @@ Reads a run of `tools/advice_run.py`: `advice/private/advice.bin` (I1, the prove
 sampling parameters, which advice v0 doesn't carry: they come with the request's certified I/O; a stand-in, see the TODO in
 `main`), `requests.jsonl` (engine id to `user`) and `run.json` (the
 model pin, the device's target profile, the execution label and the server's default seed).  The registration is φ of that
-model on that target at that execution, without workload.  Writes, under `--out`:
+model, its config.json the pin's config of record (`dense_generic.pinned_hf_config`, as `prove_path.phi_of_serve` reads it) and
+its checkpoint dtype the one that config's `quantization_config` states (`checkpoint_dtype`), on that target at that execution,
+at the engine's tensor-parallel world and `--rank`, with the engine args class G states (`engine_of`; the whole φ is `phi_of`),
+without workload, and the public default seed (`engine.served_seed.DEFAULT_SEED`): a run whose server says it
+filled in another is refused (exit 2, `registered_seed`).  Writes, under `--out`:
 
     compiled.json     `Compiled.summary()`: the compiler digest, each request's Program digest and shape, each step's row refs
     traces/           one `verity-vllm build --wrapper request` per distinct request Program (`steps.trace_commands`)
@@ -21,11 +25,11 @@ execution and default seed from `serve.json`.  A window's advice is `window_advi
 one before it runs on at its carried state, and `carry_of` holds that state to the endpoint's records, the advice of the last
 window before K that ran steps (`windows.jsonl`), whose close K must open on (`window_advice.follows`); K is refused (exit 2) when
 it doesn't, or when it carries a request in and that advice isn't there.  The Build dirs go into `--out` itself (default the
-window's row dir, `windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `manifest.json`: each request's
+window's workload dir, `windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `manifest.json`: each request's
 Program digest and Build dir, the registration the advice is bound to, and the carry.
 
-    cd integrations/vllm; PYTHONPATH=.:../.. /workspace/jobs/venv312/bin/python tools/advice_compile.py RUN --out DIR [--partial]
-    ... tools/advice_compile.py RUN --window K [--out DIR] [--partial]
+    cd integrations/vllm; PYTHONPATH=.:../.. /workspace/jobs/venv312/bin/python tools/advice_compile.py RUN --out DIR [--partial] [--rank R]
+    ... tools/advice_compile.py RUN --window K [--out DIR] [--partial] [--rank R]
 """
 from __future__ import annotations
 
@@ -36,6 +40,9 @@ import sys
 from pathlib import Path
 
 MANIFEST = "verity-vllm/served-window-programs/v1"
+#: the engine args the registration carries from the run's engine: the ones class G states (`engine_classes.CLASS_G_LIMITS`, the
+#: prefix cache), none of which a request Program reads
+REGISTERED_ENGINE = ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold", "max_num_seqs", "enable_prefix_caching")
 
 
 def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
@@ -56,8 +63,62 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
                 raise ValueError(f"requests.jsonl: user {user!r} has two requests in window {window}")
             bodies[user] = {**((d.get("ingress") or {}).get("brought") or {}), "prompt": list(d["prompt_ids"])}
     meta = {"model": serve["model"], "revision": serve["revision"], "target": serve["target"], "execution": serve.get("execution"),
-            "default_seed": serve.get("default_seed")}
+            "default_seed": serve.get("default_seed"), "engine_record": serve.get("engine")}
     return adv / "private" / "advice.bin", meta, bodies, reg
+
+
+def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
+    """The registration's tensor-parallel world at ``rank`` and its engine args (`REGISTERED_ENGINE`), from the run's engine record
+    (`LLM.engine_record`'s ``engine_kwargs``), and, from a record of the environment its build set (``env_flags``), the DSA top-k's
+    (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK the engine served in the kernels'
+    own order; a ValueError for a rank the world doesn't have."""
+    from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
+
+    rec = meta.get("engine_record") or {}
+    kw = rec.get("engine_kwargs") or {}
+    world = int(kw.get("tensor_parallel_size") or 1)
+    if not 0 <= rank < world:
+        raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")
+    engine = {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
+    if "env_flags" in rec:
+        flags = rec["env_flags"] or {}
+        engine["env"] = {k: flags[k] for k in DSA_TOPK_ENV if k in flags}
+    return {"world": world, "rank": rank}, engine
+
+
+def checkpoint_dtype(hf_config: dict) -> str | None:
+    """The checkpoint dtype φ states (``model["dtype"]``, in `config.DTYPES`' names, as `predict.score` states a served row's from its
+    id), read from the pinned config's `quantization_config`: a block-FP8 checkpoint (``quant_method: fp8``, ``fmt: e4m3``) is
+    ``float8_e4m3fn``, the dtype `predict.dsa`'s domain requires. Any other config states none, and the decoder takes the dtype its
+    config's shape implies (bfloat16, or int8)."""
+    from verity_vllm.config import DTYPES
+
+    q = hf_config.get("quantization_config") or {}
+    return DTYPES["fp8"] if q.get("quant_method") == "fp8" and q.get("fmt", "e4m3") == "e4m3" else None
+
+
+def phi_of(meta: dict, hf_config: dict, rank: int):
+    """The registration's φ (module docstring): the run's model at its pinned config ``hf_config``, with the checkpoint dtype that
+    config states (`checkpoint_dtype`), on the run's target at its execution, at the engine's tensor-parallel world at ``rank`` with
+    the engine args class G states (`engine_of`, whose ValueError it raises)."""
+    from verity_vllm.program.predict.phi import Phi
+
+    tp, engine = engine_of(meta, rank)
+    dtype = checkpoint_dtype(hf_config)
+    return Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": hf_config, **({"dtype": dtype} if dtype else {})},
+               target=dict(meta["target"]), execution=meta.get("execution") or "eager", tp=tp, engine=engine)
+
+
+def registered_seed(meta: dict) -> int:
+    """The default seed the registration fixes, `engine.served_seed.DEFAULT_SEED`; a ValueError when the run's server says it
+    filled in another (or says none), since a request that sent no seed would be compiled under a seed its sample didn't use."""
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+
+    seed = meta.get("default_seed")
+    if type(seed) is not int or seed != DEFAULT_SEED:
+        raise ValueError(f"the run's server filled in default seed {seed!r}, and the registered one is "
+                         f"engine.served_seed.DEFAULT_SEED ({DEFAULT_SEED}): serve it under that rule")
+    return DEFAULT_SEED
 
 
 def carry_of(run: Path, window: int, data: bytes) -> dict:
@@ -92,6 +153,7 @@ def main() -> int:
     ap.add_argument("--out", default=None, help="where compiled.json and the traces go (default: --window's row dir)")
     ap.add_argument("--window", type=int, default=None, help="a serve-openai --seal run's Commit window")
     ap.add_argument("--max-model-len", type=int, default=2048)
+    ap.add_argument("--rank", type=int, default=0, help="the tensor-parallel rank whose request Programs to compile")
     ap.add_argument("--advice", default=None, help="the advice (default RUN/advice/private/advice.bin)")
     ap.add_argument("--partial", action="store_true",
                     help="refuse request by request (a measurement over served traffic) rather than the whole advice")
@@ -102,12 +164,11 @@ def main() -> int:
     out = Path(a.out) if a.out else run / "windows" / f"w{a.window}"
     out.mkdir(parents=True, exist_ok=True)
 
-    from verity_vllm.config import checkpoint_entries
     from verity_vllm.engine import step_trace as ST
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.pipeline import window_advice as WA
-    from verity_vllm.predict.build import Unexpressible
-    from verity_vllm.predict.phi import Phi
-    from verity_vllm.predict.steps import (
+    from verity_vllm.program.predict.build import Unexpressible
+    from verity_vllm.program.predict.steps import (
         CAP_BITS,
         Registered,
         compare,
@@ -138,12 +199,22 @@ def main() -> int:
     advice = WA.decode(data)
     ids = {q.id for q in advice.requests}
     ingress = {k: v for k, v in bodies.items() if k in ids}
-    entry = next(c for c in checkpoint_entries() if c["repo"] == meta["model"] and c["revision"] == meta["revision"])
-    hf_config = json.loads((Path(entry["local_path"]) / "config.json").read_text())
-    phi = Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": hf_config}, target=dict(meta["target"]),
-              execution=meta.get("execution") or "eager")
+    config = pinned_hf_config(meta["model"], meta["revision"])
+    if config is None:
+        raise SystemExit(f"[advice-compile] {meta['model']}@{meta['revision']} is pinned in no checkpoint manifest")
+    hf_config = json.loads(config.read_text())
+    try:
+        phi = phi_of(meta, hf_config, a.rank)
+    except ValueError as e:
+        raise SystemExit(f"[advice-compile] {e}") from None
     cap = int(((reg_doc or {}).get("compiler") or {}).get("cap_bits") or CAP_BITS)
-    reg = Registered.of(phi, default_seed=int(meta.get("default_seed") or 0), cap_bits=cap)
+    try:
+        seed = registered_seed(meta)
+    except ValueError as e:
+        (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+        print(f"[advice-compile] the run's default seed is refused: {e}", flush=True)
+        return 2
+    reg = Registered.of(phi, default_seed=seed, cap_bits=cap)
     try:
         compiled = compile_steps(reg, data, ingress, partial=a.partial)
     except Unexpressible as e:
@@ -165,7 +236,7 @@ def main() -> int:
     (out / "comparison.json").write_text(json.dumps(cmp, indent=1) + "\n")
     print(f"[advice-compile] equal {cmp['equal']}, different {cmp['different']}, no trace {cmp['no_trace']}", flush=True)
     if a.window is not None:
-        from verity_vllm.predict.steps import trace_dir
+        from verity_vllm.program.predict.steps import trace_dir
         man = {"schema": MANIFEST, "run": str(run), "window": a.window, "registration": reg_doc, "cap_bits": cap,
                "compiler": summary["compiler"], "workload_digest": summary["workload_digest"],
                "requests": {u["id"]: {"digest": u["digest"], "build_dir": trace_dir(u), "LP": u["LP"], "T": u["T"], "first_step": u["first_step"]}

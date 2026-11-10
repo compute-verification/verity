@@ -11,7 +11,8 @@ d_j = SHA-512(S(j, s, m_j) || segment j), segment j the row's bits [8192 j, 8192
 fill, s = ceil(N_BITS / 8192) and every m_j 8192 but the last (`rowleaf.sha512_row_seg_segments`). Every Q and S is one
 constant 128-byte block, so the circuit starts each hash from its prefix's midstate and compresses only what follows it.
 
-**The parts,** each its own traced Definition, so a unit of a proof holds at most one segment's hash:
+**The parts,** each its own traced Definition (`trace.part`, which Flock lowers by its builder), so a unit of a proof holds
+at most one segment's hash:
 
     Sha512RowSegSegment_v1{M}         (cv: Digest, segment: Array<M, Value<1>>) -> Digest, 1 <= M <= 8192
         SHA-512 from the chaining value cv over the segment's ceil(M / 8) bytes and the padding of a message of 128 + ceil(M / 8)
@@ -26,13 +27,12 @@ pin the gates.
 """
 from __future__ import annotations
 
-from functools import lru_cache
-from types import SimpleNamespace
-from typing import Callable, Sequence
+from typing import Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ZERO, const_bits
+from verity.ml.circuits.boolean.trace import part as _part
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
@@ -118,24 +118,6 @@ def outer_hash(C, n_bits: int, d: Sequence[Sequence]) -> list[list]:
 
 # --- traced Definitions ------------------------------------------------------------------------------------------------------
 
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str) -> CompositeDefinition:
-    """A Definition traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
-
-    @lru_cache(maxsize=None)
-    def traced(*key) -> TR.Traced:
-        S = SimpleNamespace(**dict(zip(statics, key)))
-        params, ret = signature(S)
-        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
-
-    def body(B, S, *colls):
-        params, ret = signature(S)
-        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
-
-    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    d.traced = traced  # type: ignore[attr-defined]
-    return d
-
-
 def _sig_segment(S):
     _check_segment(S.M)
     return (("cv", DIGEST), ("segment", Array(S.M, BIT))), DIGEST
@@ -144,7 +126,7 @@ def _sig_segment(S):
 Sha512RowSegSegment = _part(
     "Sha512RowSegSegment", ("M",), _sig_segment, lambda C, S, *e: segment_hash(C, S.M, e[:8], e[8]),
     "sha512/row-seg/v1's segment hash from its prefix's midstate cv: SHA-512 continued over the segment's M bits as "
-    "ceil(M / 8) bytes with zero fill, padded as a 128 + ceil(M / 8)-byte message")
+    "ceil(M / 8) bytes with zero fill, padded as a 128 + ceil(M / 8)-byte message", calls=True)
 
 
 def _segments(n_bits: int) -> list[int]:
@@ -158,7 +140,7 @@ def _sig_outer(S):
 
 Sha512RowSegOuter = _part(
     "Sha512RowSegOuter", ("N_BITS",), _sig_outer, lambda C, S, *e: outer_hash(C, S.N_BITS, e),
-    "sha512/row-seg/v1's outer hash: SHA-512(Q(N_BITS) || d_0 || ... || d_(s-1)) from Q's midstate")
+    "sha512/row-seg/v1's outer hash: SHA-512(Q(N_BITS) || d_0 || ... || d_(s-1)) from Q's midstate", calls=True)
 
 
 def _signature(S):

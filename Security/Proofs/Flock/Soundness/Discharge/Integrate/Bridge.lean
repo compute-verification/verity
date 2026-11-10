@@ -1,4 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecLookup
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The accepted statement `Placed.Accepted` reads is the one the refinement plays
@@ -16,8 +22,10 @@ import Proofs.Flock.Soundness.Discharge.Integrate.Sites
 * a compression-leaf range: `setupH`'s leaf is the default one, whose matrices are empty (`setupH_leaf`).
 
 `model_eq_stmtOf`: for a statement `Stmt.setupH` accepted on the untyped path, `Layout.model regs = stmtOf st hwf regs` at
-any regions. `table_stmtOf`, `tableAt_stmtOf`: a drawn table of `sitesAt` is `stmtOf` of its statement at `regionsOf`.
+any regions. `table_stmtOf`, `tableAt_stmtOf`: a sampled table of `sitesAt` is `stmtOf` of its statement at `regionsOf`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Integrate
 
@@ -147,6 +155,7 @@ theorem net_width {tags : Tags} {c : Circuit} (P : ParseFacts tags c) {n : ℕ} 
     exact ⟨ofRows_width ha, ofRows_width hb, fun lk h => by rw [hlk] at h; cases h⟩
   · exact build_width hb
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`Stmt.setupH`'s leaf is the default one**: an hm96 row statement has no compression leaf. -/
 theorem setupH_leaf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
@@ -165,14 +174,25 @@ theorem setupH_leaf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : 
 
 section Model
 
-variable {st : Stmt} {tags : Tags} (P : ParseFacts tags st.c) (L : Layout st) (hleaf : st.leaf = default)
-include P L hleaf
+/-- Every net stores `A` and `B` at its slot's width and reads at most 32 lookup bits (`net_width`). -/
+abbrev NetWidths (c : Circuit) : Prop :=
+  ∀ n < c.nets.size, (c.nets.getD n default).2.a.width = 2 ^ (c.nets.getD n default).2.unitLog ∧
+    (c.nets.getD n default).2.b.width = 2 ^ (c.nets.getD n default).2.unitLog ∧
+    ∀ lk, (c.nets.getD n default).2.lookup = some lk → lk.bits ≤ 32
 
-theorem slotA_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
+/-- Every net range names a net. -/
+abbrev NetKinds (c : Circuit) : Prop := ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
+
+theorem netWidths_of {tags : Tags} {c : Circuit} (P : ParseFacts tags c) : NetWidths c := fun _ hn => net_width P hn
+
+variable {st : Stmt} (hW : NetWidths st.c) (hK : NetKinds st.c) (L : Layout st) (hleaf : st.leaf = default)
+include hW hK L hleaf
+
+theorem slotA_eqW {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
     slotEntryA st rg.kind i c = (slotA st rg.kind i c : ZMod 2) := by
   cases hk : rg.kind with
   | net n =>
-      have hw := net_width P (P.kinds rg hrg n hk)
+      have hw := hW n (hK rg hrg n hk)
       rw [L.slotLog rg hrg n hk] at hc
       exact sparse_eq _ _ _ (Or.inl (by rw [hw.1]; exact hc))
   | mask =>
@@ -183,11 +203,11 @@ theorem slotA_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : �
       rw [hleaf]
       exact sparse_eq _ _ _ (Or.inr (Nat.zero_le _))
 
-theorem slotB_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
+theorem slotB_eqW {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
     slotEntryB st rg.kind i c = (slotB st rg.kind i c : ZMod 2) := by
   cases hk : rg.kind with
   | net n =>
-      have hw := net_width P (P.kinds rg hrg n hk)
+      have hw := hW n (hK rg hrg n hk)
       rw [L.slotLog rg hrg n hk] at hc
       show sparseEntry _ i c + lookupEntry _ i c = ((spCnt _ i c + lkSide _ _ i c : ℕ) : ZMod 2)
       rw [Nat.cast_add, sparse_eq _ _ _ (Or.inl (by rw [hw.2.1]; exact hc))]
@@ -205,7 +225,7 @@ theorem slotB_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : �
       rw [hleaf]
       exact sparse_eq _ _ _ (Or.inr (Nat.zero_le _))
 
-omit P L hleaf in
+omit hW hK L hleaf in
 theorem rangesEntry_eq (entry : Kind → ℕ → ℕ → ZMod 2) (side : Kind → ℕ → ℕ → ℕ)
     (hside : ∀ rg ∈ st.c.ranges.toList, ∀ i c, c < 2 ^ rg.slotLog → entry rg.kind i c = (side rg.kind i c : ZMod 2))
     (r j : ℕ) : rangesEntry st entry r j = (rangeCnt side st.c.ranges.toList r j : ZMod 2) := by
@@ -219,22 +239,47 @@ theorem rangesEntry_eq (entry : Kind → ℕ → ℕ → ZMod 2) (side : Kind �
       · exact hside rg (lastCover_spec _ _ _ h).1 _ _ (Nat.mod_lt _ (Nat.two_pow_pos _))
       · simp
 
-theorem placedA_eq (r j : Fin (2 ^ st.c.kLog)) : placedA st r j = matA st r.val j.val := by
+theorem placedA_eqW (r j : Fin (2 ^ st.c.kLog)) : placedA st r j = matA st r.val j.val := by
   unfold placedA matA
-  rw [Nat.cast_add, rangesEntry_eq _ _ (fun rg hrg i c hc => slotA_eq P L hleaf hrg i hc), deltaEntry_eq]
+  rw [Nat.cast_add, rangesEntry_eq _ _ (fun rg hrg i c hc => slotA_eqW hW hK L hleaf hrg i hc), deltaEntry_eq]
 
-theorem placedB_eq (r j : Fin (2 ^ st.c.kLog)) : placedB st r j = matB st r.val j.val := by
+theorem placedB_eqW (r j : Fin (2 ^ st.c.kLog)) : placedB st r j = matB st r.val j.val := by
   unfold placedB matB
-  rw [Nat.cast_add, rangesEntry_eq _ _ (fun rg hrg i c hc => slotB_eq P L hleaf hrg i hc), deltaEntry_eq]
+  rw [Nat.cast_add, rangesEntry_eq _ _ (fun rg hrg i c hc => slotB_eqW hW hK L hleaf hrg i hc), deltaEntry_eq]
 
-theorem model_eq (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
+theorem model_eqW (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
     L.model regs = stmtOf st hwf regs := by
   unfold Layout.model stmtOf
   congr 1 <;> funext r j
-  · exact placedA_eq P L hleaf r j
-  · exact placedB_eq P L hleaf r j
+  · exact placedA_eqW hW hK L hleaf r j
+  · exact placedB_eqW hW hK L hleaf r j
 
 end Model
+
+section ModelFlat
+
+variable {st : Stmt} {tags : Tags} (P : ParseFacts tags st.c) (L : Layout st) (hleaf : st.leaf = default)
+include P L hleaf
+
+theorem slotA_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
+    slotEntryA st rg.kind i c = (slotA st rg.kind i c : ZMod 2) :=
+  slotA_eqW (netWidths_of P) P.kinds L hleaf hrg i hc
+
+theorem slotB_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
+    slotEntryB st rg.kind i c = (slotB st rg.kind i c : ZMod 2) :=
+  slotB_eqW (netWidths_of P) P.kinds L hleaf hrg i hc
+
+theorem placedA_eq (r j : Fin (2 ^ st.c.kLog)) : placedA st r j = matA st r.val j.val :=
+  placedA_eqW (netWidths_of P) P.kinds L hleaf r j
+
+theorem placedB_eq (r j : Fin (2 ^ st.c.kLog)) : placedB st r j = matB st r.val j.val :=
+  placedB_eqW (netWidths_of P) P.kinds L hleaf r j
+
+theorem model_eq (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
+    L.model regs = stmtOf st hwf regs :=
+  model_eqW (netWidths_of P) P.kinds L hleaf hwf regs
+
+end ModelFlat
 
 /-- **The accepted statement is `stmtOf`'s.** For a statement `Stmt.setupH` accepted on the untyped path, the
 statement `Placed.Accepted` reads (`Layout.model`: `placedA`, `placedB`) is the one the executable's refinement plays
@@ -246,13 +291,13 @@ theorem model_eq_stmtOf {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     (setupH_layout ht h).model regs = stmtOf st hwf regs :=
   model_eq (parse_facts (setupH_spec ht h).1) (setupH_layout ht h) (setupH_leaf h) hwf regs
 
-/-- **A drawn table of `sitesAt` is `stmtOf` of its statement**, at the statement's own regions (`regionsOf`). -/
+/-- **A sampled table of `sitesAt` is `stmtOf` of its statement**, at the statement's own regions (`regionsOf`). -/
 theorem table_stmtOf {I : Exec.Inputs} {mPts n : ℕ} (ht : I.tags.typed = false) {S : Finset (Fin n)} {d : Lean.Json}
     (x : DrawSetup I mPts S d) : (x.table ht).T.S = stmtOf x.st x.wf.1 (regionsOf x.st) :=
   model_eq_stmtOf ht x.h x.wf.1 _
 
-/-- **`tableAt`'s table at a draw that sets up is `stmtOf` of a statement `Stmt.setupH` accepted** on the session's inputs
-and the draw's JSON, with the same statement as any other setup of that draw. -/
+/-- **`tableAt`'s table at a sample that sets up is `stmtOf` of a statement `Stmt.setupH` accepted** on the session's inputs
+and the sample's JSON, with the same statement as any other setup of that sample. -/
 theorem tableAt_stmtOf {I : Exec.Inputs} {mPts n : ℕ} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {S : Finset (Fin n)} (x : DrawSetup I mPts S (dj S)) :
     ∃ y : DrawSetup I mPts S (dj S), y.st = x.st ∧

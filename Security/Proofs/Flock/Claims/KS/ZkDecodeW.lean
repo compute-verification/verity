@@ -1,22 +1,59 @@
+module
+
+public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkOffSC
+public import Proofs.Flock.Claims.KS.ZkSessionW
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ZkDecJ
-import Proofs.Flock.Claims.KS.ZkOffSC
+import Proofs.Flock.Claims.KS.ZkPlanHJ
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 
 /-!
 # The deployed `--zk` decoders, with no witness-lane opening off the table
 
-`DecodeSC` at `--zk`, at the setup at the draw, with the level-0 event on the witness lanes (`OffW₀Z`, which
+`DecodeSC` at `--zk`, at the setup at the sample, with the level-0 event on the witness lanes (`OffW₀Z`, which
 `session_sound_of_table_accZ_w` reads). Where the deployed masked reader looks up no column of table `j` off `C`, every
 accepted output table `j`'s reps play to on the decoded tapes opens no level-0 position off `C` on a witness lane unless
 it self-clashes:
 
-* `ZkTxNoOff`: wherever the setup at the draw has table `j` with `Zk.schedule`'s schedule and the record decodes to a
+* `ZkTxNoOff`: wherever the setup at the sample has table `j` with `Zk.schedule`'s schedule and the record decodes to a
   session with table `j`'s two rep streams, the reader looks up no column off `C` in the reps' `zkRepColsOf` entries
   below level 0's `2^d`.
 * `not_offW_of_entries`: an output whose level-0 openings are those entries at its own cap (`OpensEntries`) opens no
   position off `C` on a witness lane without a self-clash, in a transcript with `ZkTxNoOff`
   (`Claims.Flock.exists_ne_of_zk_entries`).
 * `runsAtZCJ_live_offW`, `runsAtZCJH_live_offW`: `runsAtZCJ_live_entries` and `runsAtZCJH_live_entries` at that
-  verdict at table `j₀`, on the outcomes `verify --zk` accepts at the setup at the draw whose transcript has
+  verdict at table `j₀`, on the outcomes `verify --zk` accepts at the setup at the sample whose transcript has
   `ZkTxNoOff` at table `j₀`, at public and hidden outputs.
 * `decodes_of_runsOnZCJW`: a `RunsOnZCJW` gives the decoder table by table (`DecodesTable`) at any verdict its
   verdict implies; `DecodesTable.ok_of_plays`: such a decoder is right at every output its reps play to on the
@@ -28,6 +65,8 @@ it self-clashes:
   `decodesTable_deploy` are at `accepted`.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.Composed
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec
@@ -38,12 +77,12 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **No column of table `j` off `C` in a transcript**: wherever the setup at the draw `d` has a table `j`, whose
+/-- **No column of table `j` off `C` in a transcript**: wherever the setup at the sample `d` has a table `j`, whose
 schedule is `Zk.schedule`'s, and the record decodes to a session with table `j`'s two rep streams, the deployed masked
 reader looks up no column off `C` in the reps' `zkRepColsOf` entries at `2·|regions|` extra claims on the streams'
 rounds and table `j`'s proof files, below level 0's `2^d`. -/
 def ZkTxNoOff (I : Inputs) (d : Lean.Json) (j : ℕ) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Transcript) : Prop :=
-  ∀ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session) (sch : Flock.Schedule) (tPad : ℕ)
+  ∀ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord) (sch : Flock.Schedule) (tPad : ℕ)
     (s₀ s₁ : StreamRec) (h : j < sts.size),
     FlockDeploy.KS.setupAt (zkInputs I) (some d) = .ok (spec, sts) → Record.decode spec t.record = .ok sess →
     Zk.schedule sts[j].m = .ok (sch, tPad) →
@@ -68,7 +107,7 @@ theorem not_offW_of_entries {I : Inputs} {d : Lean.Json} {t : Exec.Transcript} {
     (Claims.Flock.exists_ne_of_zk_entries hs512 T cap out hN C _ _ hcap hver hent hoff hsc)
 
 /-- **`runsAtZCJ_live` with no witness-lane opening off `C` at table `j₀` unless it self-clashes**: on the outcomes
-`verify --zk` accepts at the setup at the law's draw whose transcript has `ZkTxNoOff` at table `j₀`, each table's
+`verify --zk` accepts at the setup at the sampling design's sample whose transcript has `ZkTxNoOff` at table `j₀`, each table's
 output is accepted and, at table `j₀` at its own cap, opens no level-0 position off `C` on a witness lane without a
 self-clash (`runsAtZCJ_live_entries`, `not_offW_of_entries`). -/
 theorem runsAtZCJ_live_offW (I : Inputs) (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
@@ -100,7 +139,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   {acc : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Prop}
 
 omit [Fintype K] [Inhabited D] [Inhabited Sl] in
-/-- **The decoder at the law's draws, table by table, from `RunsOnZCJW`**: right at a verdict `ok'` on the outcomes of
+/-- **The decoder at the sampling design's samples, table by table, from `RunsOnZCJW`**: right at a verdict `ok'` on the outcomes of
 `pL`, where each is in `acc` and its outputs of `ok` are accepted and of `ok'` (`decodes_of_runsOnZCJV`). -/
 theorem decodes_of_runsOnZCJW {ok : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts →
       Fin (planZ S R).length → OutZC 𝔽 D Sl → Prop}
@@ -135,8 +174,7 @@ variable {n mPts : ℕ} {Reg : Type}
 
 /-- **`runsAtZCJH_live` with no witness-lane opening off `C` at table `j₀` unless it self-clashes**, under hidden
 outputs: `runsAtZCJ_live_offW` from `runsAtZCJH_live_entries`. -/
-theorem runsAtZCJH_live_offW (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+theorem runsAtZCJH_live_offW (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
@@ -150,7 +188,7 @@ theorem runsAtZCJH_live_offW (I : Inputs) (ht : I.tags.typed = false) {c : Flock
           ¬ SelfClashZ hs512 ((planZHJ dj y₀ S R).get j) out))) := by
   intro ω R o ho j
   obtain ⟨hacc, hno⟩ := ho
-  obtain ⟨pend, h₀, h₁, hok, he⟩ := runsAtZCJH_live_entries I ht hc dj y₀ wr L hT hRec hDraw ω R o hacc j
+  obtain ⟨pend, h₀, h₁, hok, he⟩ := runsAtZCJH_live_entries I ht dj y₀ wr L hT hRec hDraw ω R o hacc j
   refine ⟨pend, h₀, h₁, hok, fun hj hN => ?_⟩
   subst hj
   exact not_offW_of_entries hN C rfl he hno
@@ -210,7 +248,7 @@ def OkOffWJ {mPts : ℕ} (ts : List (TabZK 𝔽 mPts)) (j₀ : ℕ) (rootB₀ : 
     ¬ OffNoClashWZ ZkExec.hs512 (ts.get j) (Exec.capOfRoot rootB₀[j₀]!) (Claims.Flock.oracleOf C) out)
 
 /-- **The deployed live verdict, with no column of table `j₀` off `C`**: `verify --zk` accepts at the setup at the
-draw `d` at `wrS` (`AcceptsAt`), the deployed masked reader looks up no column of table `j₀` off `C` in what `wrS`
+sample `d` at `wrS` (`AcceptsAt`), the deployed masked reader looks up no column of table `j₀` off `C` in what `wrS`
 writes (`ZkTxNoOff`), and the outcome's `root_B[j₀]` is `rootB₀[j₀]`. -/
 def AccTxJ (I : Exec.Inputs) (d : Lean.Json) (j₀ : ℕ) (rootB₀ : Array ByteArray) {N : ℕ} (C : Fin N → List 𝔽)
     {J mPts : ℕ} (o : LiveOutJ J mPts) : Prop :=
@@ -233,7 +271,7 @@ theorem okOffW_of_entries {mPts n : ℕ} {Reg : Type} {ts : Finset (Fin n) → R
   exact hw.2 rfl hN
 
 /-- **The deployed `--zk` decoders are right at `zkTabs` at the witness-lane verdict at table `j₀`**: where `verify
---zk` sets its session up at the empty draw `dj ∅`, on untyped inputs under `TagsOkZJ`, the openings `opnD` and
+--zk` sets its session up at the empty sample `dj ∅`, on untyped inputs under `TagsOkZJ`, the openings `opnD` and
 decoder `decD` at `tabsJ` of `zkTabs` are right at `OkOffWJ` on the outcomes of `AccTxJ` (`decodesTable_zkTabs` with
 `runsAtZCJ_live_offW`). -/
 theorem decodesTableW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : Composed.TagsOkZJ I) {n : ℕ}
@@ -264,8 +302,7 @@ theorem decodesTableW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT :
 
 /-- **The deployed hidden-output `--zk` decoders are right at `zkTabs` at the witness-lane verdict at table `j₀`**
 (`decodesTableH_zkTabs` with `runsAtZCJH_live_offW`). -/
-theorem decodesTableHW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : TagsOkZHJ I)
-    {c : Flock.Circuit} (hc : HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) {n : ℕ}
+theorem decodesTableHW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : TagsOkZHJ I) {n : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts)) (hshape : sts.forM Flock.Zk.shapeOk = .ok ())
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -281,13 +318,13 @@ theorem decodesTableHW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT 
       (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
   have hok := drawOkZKHJ_empty hT.1 dj hs
   obtain ⟨y₀, -, -, -⟩ :=
-    setupZHJ_of_setupAt hT.1 ht hc dj hs hshape hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
+    setupZHJ_of_setupAt hT.1 ht dj hs hshape hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
   have h := Composed.decodes_of_runsOnZCJW
-    (ZkHidden.runsAtZCJH_live_offW (Reg := Unit) I ht hc dj y₀ (fun S _ o => Claims.Bridge.Custody.wrS I (dj S) o)
+    (ZkHidden.runsAtZCJH_live_offW (Reg := Unit) I ht dj y₀ (fun S _ o => Claims.Bridge.Custody.wrS I (dj S) o)
       { Ω := Unit, draw := fun _ => ∅ } hT (fun S _ o => Claims.Bridge.Custody.recordsLiveAtS_wrS I (dj S) o)
       (fun _ => hok) j₀ C) () () (OkOffWJ (planZHJ dj y₀ ∅ ()) j₀ rootB₀ C) (AccTxJ I (dj ∅) j₀ rootB₀ C)
     (fun o ho => ⟨⟨ho.1, ho.2.1⟩, fun j out hw => okOffW_of_entries ho j out hw⟩)
-  have hp := planZHJ_eq_tabsJ hT.1 ht hc dj y₀ hs hshape hok h0 L hz hk hlay ()
+  have hp := planZHJ_eq_tabsJ hT.1 ht dj y₀ hs hshape hok h0 L hz hk hlay ()
   revert i
   rw [← hp, ← opnAtZHJ_eq_opnD (planZHJ dj y₀) dj hT.1 hs (by rw [hp, tabsJ_length])]
   exact h
@@ -327,11 +364,7 @@ theorem decodesTableW_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
   cases hh : ins.read.I.tags.hiddenOutputs
   · exact decodesTableW_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA h0 L hz hk hlay j₀ rootB₀ C
   · have hshape := Claims.Bridge.Custody.setup_shapeOk (setupOf_some hset).2 hzk
-    obtain ⟨-, hstJ⟩ := setupAt_tableJH hh hsA
-    have hp := (Hidden.setupHidden_spec' (hstJ 0 h0)).parse
-    have hc : HmOut.parse (ZkExec.zkTags ins.read.I) ins.read.I.circuitFile ins.read.I.tables = .ok sts[0].c :=
-      (ZkHidden.parseH_tagsAt ((ZkExec.zkTags_typed _).trans ht) _ _ _ _).symm.trans hp
-    exact decodesTableHW_zkTabs ht ⟨hh, hrr, hl⟩ hc (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay j₀
+    exact decodesTableHW_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay j₀
       rootB₀ C
 
 end Gen

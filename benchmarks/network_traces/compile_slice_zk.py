@@ -1,6 +1,6 @@
 """The compile slice (`compile_slice.CompileSlice_v1`) proved in zero knowledge: one window of a few steps as one unit,
-proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`, through N2-ZK's audit path
-(`n2_zk.py`: its stager, firewall and received-pieces scan).
+proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, through N2's audit path
+(`n2_zk.py`: its stager, ZK server and received-pieces scan).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--dry]
@@ -9,9 +9,9 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
 * **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 59,341 ANDs a
   unit), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven steps
   (`verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit), which `prove`
-  first checks is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the
-  replay's rows; `cache_vectors`' tokens of each arrival); or ``w212``, window 212 of vLLM's run
-  r20261024-141912-8eb1 padded into the run's public engine class, (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, no
+  first checks is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the replay's
+  rows; `cache_vectors`' tokens of each arrival); or ``w212``, window 212 of vLLM's served run (the encodings'
+  ``vllm-8eb1`` fixture) padded into the run's public engine class, (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, no
   prefix caching, under the run's AsyncScheduler (AS = 1; `fixtures/compile_slice_w212_class_async.json`), with the
   seal's rows as the served ones (`served_rows.step_rows`), which `prove` first checks is the run's (the window's
   decisions as its replay asks them, `RP.decisions` on `replay_vectors.served_window`). The scheduler is the engine
@@ -25,7 +25,7 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   `REFUSED`, or `--kinds`' in their order). ``honest``; ``flip``, a decision flipped in its window row (the advice row
   stays the registered one); ``charge``, the charge one below the advice's; ``arrival``, arrival 1's prompt one token
   longer in its ``cert`` row (an arrival not in the certified record); ``cleared``, advice that leaves the last asked
-  decision uncommitted (REDTEAM phase 14's cleared enable; on w212 also ``cleared-read``, the window row cut too, so the
+  decision uncommitted (a cleared enable; on w212 also ``cleared-read``, the window row cut too, so the
   scan reads past the count); ``carry``, a carry-out other than the charge's carry' (the priors on the demo and the
   corpus, counts fitted to the window on w212); ``restart``, the charge from a carry-in of its own (zero counts on the
   demo and the corpus, the fitted counts on w212, which charge 25 bits in place of 27) under a fresh salt. With prefix
@@ -33,14 +33,14 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   two blocks under ROOT on the demo, request 1's first block on the corpus, which gives it a 16-token hit at step 6);
   ``tokens``, request 1's first block made up in its ``cert`` row (9s on the demo, request 0's on the corpus); on the
   demo ``short``, request 1's admission hit claimed one block of its two, and ``unasked``, the waiting candidate's hit
-  claimed 0; REDTEAM's phase 9 choices the slice can take (`compile_slice.phase9`: a prefix hit, and on the corpus a
-  decision read again and an arrival left in the queue). On the corpus and w212, REDTEAM phase 10's six passes (advice
+  claimed 0; the adversarial choices the slice can take (`compile_slice.phase9`: a prefix hit, and on the corpus a
+  decision read again and an arrival left in the queue). On the corpus and w212, the passes (advice
   of a pass at every ask where the served window admitted: six on the corpus, twenty-one on w212, one an async unit), with the served rows in
   ``srv`` (``sixpass``) and with its own (``sixpass-own``). The rest are honest, enough of them that the statement fits
   `--zk`'s shape (`stage`).
 * **The served rows** (`served_rows`): the Commit side registers each unit's window under the run root (a stand-in: the
-  partition's digest) before the draw, a row each block of G steps (``--g``, P by default: one ``srv`` row a unit; at
-  G < P the unit is `compile_slice.CompileSliceBlocks_v1`, its rows ``srv0`` …): the served rows, but ``table``'s,
+  partition's digest) before the sample, a row each block of G steps (``--g``, P by default: one ``srv`` row a unit; at
+  G < P the unit is `compile_slice.CompileSliceRowGroups_v1`, its rows ``srv0`` …): the served rows, but ``table``'s,
   which are the schedule its server served (its own rows, the hit taken), so its ``cache`` check alone refuses it.
   Every unit's ``srv`` rows are its window's but ``sixpass-own``'s, which are its own run's.
 * **The bindings**, checked natively by the verifier on the row commitments b‖c the public file holds: each unit's
@@ -60,9 +60,9 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   priors, excepted); the prover's instance file, which holds those rows, is the control. A found piece fails the run
   when the lane's one rule calls it leaked (`leak_scan.scan`): there is no byte-count or witness-class exemption.
 * **rescan**: a finished ``prove``'s scan taken again under that rule (`leak_scan.rescan`) from the verifier's files it
-  kept, the pieces recomputed from its slice, kinds and partition (a salt the run drew isn't, so a found salt reads
+  kept, the pieces recomputed from its slice, kinds and partition (a salt the run sampled isn't, so a found salt reads
   leaked).
-* **Cost** (``--points``): sessions whose verifier draws the first k units, behind the firewall (`a8.cost`).
+* **Cost** (``--points``): sessions whose verifier samples the first k units, behind the ZK server (`a8.cost`).
 """
 from __future__ import annotations
 
@@ -210,8 +210,9 @@ def chain(x: SimpleNamespace, program: str, registration: str) -> SimpleNamespac
 
 
 def _corpus(tmp: Path) -> Path:
-    """corpus-smallkv unpacked as ENC-DERIVED's tests read it (`benchmarks/network_e2e/encodings/tests/test_v1.py`'s
-    `_corpus`, which imports pytest): each batch in Model Runner V2's order, each stop-id finish marked `eos`."""
+    """corpus-smallkv unpacked as the derived rules' tests read it
+    (`benchmarks/network_e2e/encodings/tests/test_v1.py`'s `_corpus`, which imports pytest): each batch in Model Runner
+    V2's order, each stop-id finish marked `eos`."""
     import gzip
     import shutil
 
@@ -340,7 +341,7 @@ def srv_leaves(S, record: dict, i: int) -> list[tuple[str, int]]:
     return [(r, SR.leaf(S, record, i, j)) for j, r in enumerate(CS.srv_names(S))]
 
 
-def advice_leaf_ok(reg: ADV.Registration, binding: bytes, n: int, i: int, bc: bytes, n_bits: int) -> bool:
+def advice_leaf_ok(reg: ADV.Committed, binding: bytes, n: int, i: int, bc: bytes, n_bits: int) -> bool:
     """The verifier's check of unit i's ``adv`` row: its leaf from the proof's b‖c, walked to the registered root."""
     d = ADV.domain(binding, n)
     kind = BitRowLeaf(n_bits)
@@ -371,7 +372,7 @@ def stage(M, sg: SimpleNamespace, units: list[SimpleNamespace], salt_key: bytes,
 
 
 def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Path, port: int) -> dict:
-    """The statement registered, every unit drawn by the verifier's Lean, proved --zk behind the firewall and held by
+    """The statement registered, every unit sampled by the verifier's Lean, proved --zk behind the ZK server and held by
     Lean; then the verifier's side per unit: ``pub`` opened to its own copy, the verdict read, the bindings checked on
     b‖c (`advice_leaf_ok`, `served_rows.leaf_ok`, `certified`, `charge_chain.check_chain`). Writes what the verifier
     received under ``out / "verifier"``."""
@@ -384,7 +385,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
         want[f"{name}/{p_}"] = w
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
+    law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the compile slice's {sg.slice} window (compile_slice_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "compile_slice: each unit's adv row is the advice registration's row, its cert row the certified "
@@ -613,7 +614,7 @@ def prove(a) -> int:
     port_ = {p.name: p for p in sg.st.ports}
     honest = units[0].words
     n_bits = 16 * len(honest["adv"])
-    reg = ADV.register([bit_row((u.words["adv"], 16))[0] for u in units], n_bits, binding, salts["adv"])
+    reg = ADV.commit([bit_row((u.words["adv"], 16))[0] for u in units], n_bits, binding, salts["adv"])
     served = SR.register(x.S, [u.registered for u in units], binding, G=CS.block(x.S), salts=srv_salts)
     binds = {"advice": reg, "binding": binding, "n_bits": n_bits, "served": served, "run_root": binding,
              "certified": certified(M, port_["cert"], honest["cert"], cert_salt), "chain": ch, "program": program}
@@ -676,7 +677,7 @@ def rescan(a) -> int:
     """`prove`'s scan under `--from` taken again (`leak_scan.rescan`) from the verifier's files it kept: its units rebuilt
     from its slice, kinds and partition (held to its staged verdict words), every piece of their rows found again less
     those its circuit holds (its summary's ``public_pieces``; the circuit isn't kept; `scan_pieces`, at the run's G), and
-    each carry row. A salt is drawn by `prove` and not recomputed, so a salt the run found reads leaked."""
+    each carry row. A salt is sampled by `prove` and not recomputed, so a salt the run found reads leaked."""
     src, out = Path(getattr(a, "from")), Path(a.out)
     summary = json.loads((src / "summary.json").read_text())
     vdir, M = src / "slice" / "verifier", N2._one_stage()
@@ -718,7 +719,7 @@ def main(argv=None) -> int:
     p.add_argument("--out", required=True)
     p.add_argument("--port", type=int, default=7781)
     p.add_argument("--delta", type=float, default=2.0 ** -20)
-    p.add_argument("--points", default="", help="cost points: the k drawn units of each session, comma-separated")
+    p.add_argument("--points", default="", help="cost points: the k sampled proof blocks of each session, comma-separated")
     p.add_argument("--slice", choices=tuple(REFUSED), default="demo", help="the window the units are of")
     p.add_argument("--g", type=int, default=None, help="the steps a served row holds, dividing P (P by default: one srv "
                    "row a unit)")

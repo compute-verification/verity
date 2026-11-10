@@ -1,10 +1,10 @@
 """Registered weights, one rule for every construction that serves a checkpoint (Pearl-C4, and served FP8's Pearl-C).
 
 The keyed 8-block rotation (rung 3) is the rule, keyed after the weights' root is recorded; an unrotated checkpoint
-registers only from the curated list, with γ folded where it needs it (Daniel, 1:36 PM and 5:52 PM PDT on 30 Sep, for
-Pearl-C4; compute-accounting, 8 Oct, for served FP8).  `check_registration` reads what a registration declares,
+registers only from the curated list, with γ folded where it needs it, for Pearl-C4 and for served FP8.
+`check_registration` reads what a registration declares,
 `check_linear` which of its linears the stack's rotations reach, and `rotation_key` is the only key its keyed transforms take:
-one drawn from the epoch's live salt coin (`Epoch.start`).
+one sampled from the execution phase's salt coin (`Epoch.start`).
 No Lean statement reads a registration.
 """
 
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from verity.ml.commitments import domains
 from verity.ml.randomness import derive
 
 from .audit import Epoch, salt_of
@@ -20,7 +21,7 @@ from .protocol import DomainError
 
 #: The keyed 8-block rotation is the rule, and the keyed V/O rotation (each KV head's v_proj rows and o_proj columns)
 #: plus the keyed head interleave (o_proj's heads) are adopted inside it, after it.  The keyed latent rotation (MLA's q
-#: and kv latents, Daniel's card b50e7597, 24 Oct) is adopted after either: each latent a keyed 8-block rotation of its
+#: and kv latents) is adopted after either: each latent a keyed 8-block rotation of its
 #: own, on the rows of the linear that writes it (q_a; kv_a's first kv_lora_rank rows), with its RMSNorm (q_a_layernorm,
 #: kv_a_layernorm) folded into the columns of the linears that read it (q_b and the DSA indexer's wq_b; kv_b, and with it
 #: the W_UK_T and W_UV the absorbed attention derives from kv_b at load).
@@ -36,7 +37,7 @@ REGISTRATION_STACKS = ((ROTATION_8,), (ROTATION_8, LATENT_ROTATION), (ROTATION_8
                        (ROTATION_8, VO_ROTATION, HEAD_INTERLEAVE, LATENT_ROTATION))
 #: The stacks of an unrotated checkpoint, which must be curated
 UNROTATED_STACKS = ((), (GAMMA_FOLD,))
-ROTATION_KEY_DOMAIN = "verity/pouw/rotation-key/v1"
+ROTATION_KEY_DOMAIN = domains.POUW_ROTATION_KEY
 #: Where a linear sits against the streams the rotations mix: it reads the residual stream (its columns take the keyed
 #: 8-block rotation), writes it (its rows take it), reads an MLA latent behind that latent's own RMSNorm (MLA's q_b and
 #: kv_b, the DSA indexer's wq_b: only the latent rotation reaches them), or none of these.
@@ -93,10 +94,10 @@ def check_linear(transforms: Sequence[str], side: str, curated: bool = False, ne
 
 def rotation_key(epoch: Epoch, opening: CoinOpening) -> bytes:
     """The 32-byte key of a registration's keyed transforms:
-    ``derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`` over the salt of an epoch
+    ``derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`` over the salt of an execution phase
     started from `opening`, the challenger's salt coin (`Epoch.start`).  The challenger opens that coin only after it
     recorded the weights' root, so no key exists before the weights are committed, and the prover chooses none.  Refuses
-    (`DomainError`) an epoch whose salt is not that coin's: an `Epoch.unverified` one, a beacon's or a fixed seed's."""
+    (`DomainError`) an execution phase whose salt is not that coin's: an `Epoch.unverified` one, a beacon's or a fixed seed's."""
     if epoch.coins is None:
         raise DomainError("rotation key: the epoch has no coin commitment; start it from the challenger's salt coin "
                           "(Epoch.start), not from a seed")

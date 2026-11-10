@@ -1,9 +1,9 @@
 """PoUW's check as a core protocol (`core_check`), the Python reference beside the Lean `pouw_check`.
 
-`verity/core/protocols/pouw/lean/check/tests/pouw_check_cases.py` generates `serve` cases (honest windows, and one
+`verity/core/protocols/pouw/lean/check/tests/pouw_check_cases.py` generates `serve` cases (honest execution phases, and one
 mutation each aimed at one refusal); that package's `tests/test_difftest.py` holds this module to `pouw-check serve` on
 them, on the shared harness. The tests here hold this module to PoUW's rule: each mutation reaches the refusal it aims
-at, and an accepted window publishes exactly `window.PUBLIC`."""
+at, and an accepted execution phase publishes exactly `window.PUBLIC`."""
 from __future__ import annotations
 
 import hashlib
@@ -20,21 +20,14 @@ import pytest
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import registration as R
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
 ROOT = Path(__file__).resolve().parents[5]
 PKG = ROOT / "verity/core/protocols/pouw/lean/check"
-_spec = importlib.util.spec_from_file_location("pouw_check_cases", PKG / "tests/pouw_check_cases.py")
-vectors = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(vectors)
-sys.modules["pouw_check_cases"] = vectors
-_spec = importlib.util.spec_from_file_location("pouw_opening_cases", PKG / "tests/pouw_opening_cases.py")
-openings = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(openings)
 _spec = importlib.util.spec_from_file_location("pouw_rounds_cases", PKG / "tests/pouw_rounds_cases.py")
 rounds_cases = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rounds_cases)
@@ -42,6 +35,14 @@ sys.modules["pouw_rounds_cases"] = rounds_cases
 _spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG / "tests/pouw_pass_cases.py")
 passes = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(passes)
+sys.modules["pouw_pass_cases"] = passes
+_spec = importlib.util.spec_from_file_location("pouw_check_cases", PKG / "tests/pouw_check_cases.py")
+vectors = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(vectors)
+sys.modules["pouw_check_cases"] = vectors
+_spec = importlib.util.spec_from_file_location("pouw_opening_cases", PKG / "tests/pouw_opening_cases.py")
+openings = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(openings)
 
 #: the refusal each mutation aims at: the reason's start
 EXPECT = {
@@ -136,7 +137,21 @@ EXPECT = {
     "case-commitment-type": "case: the case.commitment: not a string", "case-not-object": "case: the case: params missing",
     "noncanonical-record": "commitment: not canonical JSON",
     "noncanonical-answer": "evidence: not canonical JSON", "float-answer": "evidence: canonical JSON: a non-integer number",
-    "utf8-record": "commitment: not UTF-8", "honest": None,
+    "utf8-record": "commitment: not ASCII without DEL", "honest": None,
+    **{n: f"params: {CC.LIVE_PARAMS}" for n in ("live-missing", "live-null", "live-keys", "live-seeded")},
+    "live-other-key": "salt: the challenger's session is not trusted: ",
+    "live-incomplete": f"salt: {CC.INCOMPLETE}", "live-unreserved": f"salt: {CC.NO_RESERVE}",
+    "live-layout": "salt: the coin commitment's coins are not a Pearl-C salt session's",
+    "salt-missing": f"salt: {CC.NO_WINDOW_SALT}", "salt-type": "evidence: public.salt: not an object",
+    "salt-seeded": f"salt: {CC.SEEDED_SALT}", "salt-keys": f"salt: {CC.WINDOW_SALT_FORM}",
+    "salt-no-w": f"salt: {CC.WINDOW_NO_W}", "salt-two-w": f"salt: {CC.WINDOW_NO_W}",
+    "salt-no-x": f"salt: {CC.WINDOW_NO_X}", "salt-values-form": f"salt: {CC.WINDOW_NO_X}",
+    "salt-x-after": "salt: the challenger's session is not trusted: the auditor's ledger opens no challenger session",
+    "salt-epoch": f"salt: {CC.WINDOW_EPOCH}",
+    "salt-other-epoch": "salt: the challenger's session is not trusted: the auditor's ledger opens no challenger session",
+    "salt-coins-form": "salt: the salt's coins are malformed: ", "salt-coins": f"salt: {CC.WINDOW_NOT_SIGNED}",
+    "salt-opening": "salt: the salt's coin does not open against", "salt-value": f"salt: {CC.WINDOW_SALT}",
+    "salt-session": f"salt: {CC.WINDOW_SESSION}", "salt-secret": f"salt: {CC.WINDOW_SESSION}",
 }
 
 
@@ -149,7 +164,7 @@ def _answer(case) -> dict:
 
 
 def test_every_mutation_hits_its_refusal():
-    """Each mutation, over a few cases each, is answered with the refusal it aims at, and an honest window is accepted."""
+    """Each mutation, over a few cases each, is answered with the refusal it aims at, and an honest execution phase is accepted."""
     assert set(EXPECT) == set(vectors.NAMES) | {"honest"}
     for name, want in EXPECT.items():
         for seed in range(3):
@@ -286,8 +301,8 @@ def test_every_opening_mutation_hits_its_refusal():
 
 
 def _certified_pass(p: int) -> tuple[bytes, str, bytes, bytes, bytes, bytes]:
-    """A certified pass of PoUW window `p` (two certifier windows per PoUW window) under a stream and a prover: its
-    manifest, the window's context, and the verifier's reveal, record, stream and prover."""
+    """A certified pass of PoUW execution phase `p` (two certifier windows per PoUW execution phase) under a stream and a prover: its
+    manifest, the execution phase's context, and the verifier's reveal, record, stream and prover."""
     import hashlib
     from verity.core.protocols.pouw import salt as PS
     from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
@@ -303,12 +318,12 @@ def _certified_pass(p: int) -> tuple[bytes, str, bytes, bytes, bytes, bytes]:
 
 
 def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
-    """RT4-INT-10, at the opening of record. A certified window's pass passes `pass_epoch` under the certifier's reveal,
+    """At the opening of record. A certified execution phase's pass passes `pass_epoch` under the certifier's reveal,
     and `certified_salt` is the salt it checked, `salt.pouw_salt(reveal, p, stream, prover)`. A salted unit whose public
     row was formed under that salt opens under it (the honest twin: every rule of the opening met). The same unit with
     its public row formed under a salt the prover chose, which it can form before any certifier salt exists, is refused
     at its public row under the certified salt (and opens only under its own, which no verifier holds); with no salt, or
-    in a window the context doesn't certify, the opening refuses before it reads a row."""
+    in an execution phase the context doesn't certify, the opening refuses before it reads a row."""
     import hashlib
     from verity.core.protocols.pouw import salt as PS
     raw, ctx, reveal, committed, sid, prover = _certified_pass(1)
@@ -336,13 +351,28 @@ def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
         assert opened({**cases[salt], "params": other}, None).startswith("the window's template's unit reads a salt")
 
 
+#: `ok_salt("ab" * 64, 3)`, its first 32 bytes
+OK_SALT_3 = "41da7caf12c48dda02c2fc5ca1aba62e7c7325eb26fdc32e56a3e50d5a8a322b"
+
+
+def test_the_ok_salt_is_sha512_in_counter_mode():
+    """`core_check.ok_salt` is `SALT_BYTES` bytes of SHA-512 in counter mode over `OK_SALT_TAG` ‖ context ‖ 0 ‖
+    u64be(position), each block's counter a u32 big-endian (one hash, SHA-512, whole outputs), pinned so the Lean
+    `Credit.okSalt` and every registered ok row move with it."""
+    salt = CC.ok_salt("ab" * 64, 3)
+    assert salt[:32].hex() == OK_SALT_3
+    head = b"verity/pouw/h1-prove/ok-row-salt/v1\0" + b"ab" * 64 + b"\0" + (3).to_bytes(8, "big")
+    assert salt == b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(3))
+    assert len({CC.ok_salt("ab" * 64, 4), salt, CC.ok_salt("cd" * 64, 3), CC.public_row_salt("ab" * 64, 3)}) == 4
+
+
 def test_the_public_row_is_the_compiled_programs_salt_position_and_roots():
     """`core_check.public_row`'s bits are the leaves `Compiled.inputs` fills for one unit: `pouw.salt`, the unit's
     position, then its group's two roots (`seeds.leaves`, `seeds.position_leaves`, Boolean), bit t of the row bit t % 8
     of byte t // 8."""
     import hashlib
     import numpy as np
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import seeds as SD
     salt, roots = hashlib.sha512(b"s").digest(), (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
     for pos in (0, 1, 5, 1 << 39, (1 << 64) - 1):
         bits = np.unpackbits(np.frombuffer(CC.public_row(salt, pos, roots), np.uint8), bitorder="little").tolist()
@@ -356,7 +386,7 @@ def test_a_j10r_public_row_is_then_its_call_and_blocks():
     (`seeds.position_leaves`, `seeds.POS_BITS`)."""
     import hashlib
     import numpy as np
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import seeds as SD
     salt, roots = hashlib.sha512(b"s").digest(), (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
     for pos, call, blocks in ((5, 0, (0, 64)), (1 << 39, 7, (3, (1 << 33) + 1)), ((1 << 64) - 1, 1 << 63, (1, 2))):
         row = CC.public_row(salt, pos, roots, (call, blocks))
@@ -372,7 +402,7 @@ def test_a_j10r_public_row_is_then_its_call_and_blocks():
 def test_the_verifiers_j10r_blocks_are_the_tiles():
     """`core_check.j10r_blocks`, the verifier's arithmetic, is `h1tile.j10r_blocks` (`h1tile.Layout`'s row and column
     blocks at call scale) at every slot, K, tile and unit tried, and `core_check.n_digits` is `segment.n_digits`."""
-    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import h1tile as H
     for k in (32, 64, 384, 416, 896, 4096, 14336, 1 << 20):
         assert CC.n_digits(k) == H.SG.n_digits(k // 32), k
         for m, (r, c) in ((4, (4, 8)), (8, (4, 8)), (32, (32, 32)), (64, (32, 32))):
@@ -384,7 +414,7 @@ def test_the_verifiers_j10r_blocks_are_the_tiles():
 def test_the_opening_reads_what_served_zk_writes():
     """`core_check.opening`'s constants are the ones served_zk commits under: one-stage's served domain, and the fp8-p
     A and B rows' schemas."""
-    from verity.core.protocols.pouw.circuit import leaves as L
+    from verity.ml.protocols.pouw.circuit import leaves as L
     from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
     assert CC.SERVED_DOMAIN == R.WINDOW_DOMAIN
     assert CC.OPENED == (("a", L.ROW_SCHEMA["fp8-p", ROLE_X]), ("b", L.ROW_SCHEMA["fp8-p", ROLE_W]))
@@ -395,7 +425,7 @@ def test_the_opening_reads_what_served_zk_writes():
 
 
 def test_every_pinned_tiles_side_ports_sort_in_port_order():
-    """C-Flock reads port k's b ‖ c at the body's k-th place, in its circuit's port order, so the opening reads each side
+    """Flock reads port k's b ‖ c at the body's k-th place, in its circuit's port order, so the opening reads each side
     row's schema by port name and refuses a header whose keys, in key order, don't list the opened side rows first and in
     port order, rather than read the rows in key order (`schemas-between`, `salted-header-order`). It refuses no honest
     header of a pinned template: each one's side ports (Pc8's a0 and b0, the H1 unit's a0..a3 and b0..b7) sort in port
@@ -408,18 +438,18 @@ def test_every_pinned_tiles_side_ports_sort_in_port_order():
 
 def test_the_pinned_tiles_are_their_templates():
     """Each pinned template the code still builds has as its query one-stage's query digest of its Definition's instance
-    query: the served window's (`pc8.side_tile`) at the served K and the test window's, with tile work K, and the hiding
-    tile's. The leaf-H3 tile's Definition is retired, and its pin is its recorded windows'. The salted H1 tile unit at
+    query: the served execution phase's (`pc8.side_tile`) at the served K and the test execution phase's, with tile work K, and the hiding
+    tile's. The leaf-H3 tile's Definition is retired, and its pin is its recorded execution phases'. The salted H1 tile unit at
     K = 64 (4 x 8 dot products of K) is pinned salted, its R and C its Definition's. The served circuit is tied to the build
     by benchmarks/pouw's staged-unit test, and the H1 unit's by its pin test (`test_h1_pin.py`)."""
-    from verity.core.protocols.pouw.circuit import h1tile as H
-    from verity.core.protocols.pouw.circuit import pc8
-    from verity.core.protocols.sampled_proofs.one_stage import partition as PT
+    from verity.ml.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import pc8
+    from verity.core.protocols.spot.one_stage import partition as PT
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
     pairs = tuple((i, j) for i in range(4) for j in range(8))
     h1 = bind(H.PouwH1Tile, EXACT=bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8), R=4, C=8, PAIRS=pairs)
-    built = [pc8.side_tile(4096), pc8.side_tile(128), pc8.templates(4096, (1, 1), hidden=True)["tile"], h1]
+    built = [pc8.side_tile(4096), pc8.side_tile(128), pc8.templates(4096, (1, 1), hidden=True, hashing="h0")["tile"], h1]
     for d in built:
         assert CC.TILES[d.id].query == R.query_digest(PT.template_instance_query(d)), d.id
     assert set(CC.TILES) - {d.id for d in built} == {"Pc8TileLeafH3_v1{K=4096,DEV='sm120'}"}
@@ -431,8 +461,10 @@ def test_the_pinned_tiles_are_their_templates():
 
 def test_canonical_json_is_leans():
     assert CC.canonical(b'{"a":[1,null,true],"b":"x"}') == {"a": [1, None, True], "b": "x"}
+    assert CC.canonical(b'{"drawn":1,"d\\u007f":"d\\u00e9\\ud83d\\ude00"}') == {"drawn": 1, "d\x7f": "dé😀"}
     for b, why in ((b'{"b":1,"a":2}', "not canonical"), (b'{"a": 1}', "not canonical"), (b'{"a":1.5}', "non-integer"),
-                   (b"\xff", "not UTF-8"), (b"{", "not JSON")):
+                   (b"\xff", "not ASCII without DEL"), (b"{", "not JSON"), ('"dé"'.encode(), "not ASCII without DEL"),
+                   (b'"\x7f"', "not ASCII without DEL"), (b'"\\u00E9"', "not canonical"), (b'"\\u007e"', "not canonical")):
         with pytest.raises(CC.Refused, match=why):
             CC.canonical(b)
 
@@ -508,7 +540,7 @@ DRAW_EXPECT = {
     "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
     "early-coins-live": ("coin", "the draw's coin does not open"),
     "live-coins": ("coin", "the challenger record is malformed: "),
-    "live-not-epoch": ("coin", "the coin commitment's coins are not a live epoch's"),
+    "live-not-epoch": ("coin", "the coin commitment's coins are not a live window's draw session's"),
     "live-bare": ("coin", CC.SIGNED_LIVE),
     "live-key": ("coin", "the verifier's challenger key is malformed: a challenger key is {H, W, public}"),
     "live-no-record": ("coin", "no challenger record: the verifier holds no coin commitment"),
@@ -528,7 +560,7 @@ DRAW_EXPECT = {
 
 
 def test_every_pass_mutation_hits_its_refusal():
-    """`core_check.pass_epoch` re-starts an honest pass's epoch (each coin version, and a recorded beacon's) and refuses
+    """`core_check.pass_epoch` re-starts an honest pass's execution phase (each coin version, and a recorded beacon's) and refuses
     each mutation, over a few cases each, with the refusal it aims at."""
     assert set(PASS_EXPECT) == set(passes.PASS_NAMES) | {"honest"}
     for name, want in PASS_EXPECT.items():
@@ -541,9 +573,9 @@ def test_every_pass_mutation_hits_its_refusal():
 
 
 def test_each_honest_pass_is_had_as_it_was_salted():
-    """Each kind of honest pass is accepted, and says how its salt was had: by the epoch's coins (either version), a
+    """Each kind of honest pass is accepted, and says how its salt was had: by the execution phase's coins (either version), a
     recorded replay's beacon, the network certifier's reveal over the weights, stream and prover it recorded before
-    it, or a live Pearl-C pass's session of the auditor's challenger, opened on its salt epoch's root."""
+    it, or a live Pearl-C pass's session of the auditor's challenger, opened on its salt execution phase's root."""
     want = {"coin": "coin", "recorded-coin": "coin", "beacon": "recorded beacon", "certified": "certifier",
             "live": "live coin"}
     for kind, how in want.items():
@@ -554,12 +586,12 @@ def test_each_honest_pass_is_had_as_it_was_salted():
 
 
 def test_every_draw_mutation_hits_its_refusal():
-    """`core_check.draw` accepts an honest draw under seeded coins or a live epoch's (a certified window's, held as its
-    challenger's signed record with the key it is signed under, which must be the one the window's parameters pin) and
+    """`core_check.draw` accepts an honest sample under seeded coins or a live execution phase's (a certified execution phase's, held as its
+    challenger's signed record with the key it is signed under, which must be the one the execution phase's parameters pin) and
     refuses each mutation with the refusal it aims at: a bare live commitment, a malformed key, no record, a record
     signed under another key than the one its coins name, a tampered signature or a record whose commitment was
     swapped (``coin``); a record under a key of the prover's own, a pin of another key, no pin or a malformed one, and
-    seeded coins under a pin (``coin-key``). A live draw's coin is ``pouw/draw`` 0, so a seeded opening under live
+    seeded coins under a pin (``coin-key``). A live sample's coin is ``pouw/draw`` 0, so a seeded opening under live
     coins is refused, and so is a live opening under seeded coins."""
     assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
     for name, want in DRAW_EXPECT.items():
@@ -577,9 +609,9 @@ def test_every_draw_mutation_hits_its_refusal():
 
 
 def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: dict, n: int, k: int, pinned: dict) -> dict:
-    """The draw's check of record's input (`pouw_pass_cases.honest_live_draw`'s layout) for a challenger run on coins
-    `coins`, its record signed under `sk` and naming that key, in a window whose parameters pin challenger key `pinned`."""
-    ch = Wd.live_challenger(0, 1, random.Random(coins).randbytes)
+    """The sample's check of record's input (`pouw_pass_cases.honest_live_draw`'s layout) for a challenger run on coins
+    `coins`, its record signed under `sk` and naming that key, in an execution phase whose parameters pin challenger key `pinned`."""
+    ch = Wd.draw_challenger(0, random.Random(coins).randbytes)
     message = Ch.record_message(lms.public_key(sk)[:16], "provers-node", ch.commitment)
     record = Ch.ChallengerRecord(ch.commitment, "provers-node", lms.sign_at(sk, 0, message).encode())
     o = ch.open(Wd.DRAW, 0, bytes.fromhex(reg))
@@ -591,12 +623,12 @@ def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: d
 
 
 def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
-    """RT4-INT-5's witness, refused. A prover that runs a challenger on coins of its own and signs its record under a key
-    of its own sees each candidate registration's draw before it registers, and keeps one whose draw misses the unit it
-    can't prove (unit 0). The draw's check of record now verifies the record under the challenger key the window's
+    """A self-run challenger, refused. A prover that runs a challenger on coins of its own and signs its record under a key
+    of its own sees each candidate registration's sample before it registers, and keeps one whose sample misses the unit it
+    can't prove (unit 0). The sample's check of record now verifies the record under the challenger key the execution phase's
     parameters pin, not the key its coins name: the prover's record naming its own key is refused (``coin-key``), and
     naming the pinned key it doesn't verify under it (``coin``); with no key pinned, no live record is read
-    (``coin-key``). The verifier's own challenger's record, signed under the pinned key, passes on the same draw."""
+    (``coin-key``). The verifier's own challenger's record, signed under the pinned key, passes on the same sample."""
     verifier = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(b"the verifier's challenger").digest())
     prover = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(b"the prover's challenger key").digest())
     pinned = Ch.ChallengerKey(4, 2, lms.public_key(verifier)).to_json()
@@ -671,13 +703,13 @@ ROUNDS_EXPECT = {
 
 
 def test_every_rounds_mutation_hits_its_refusal():
-    """`core_check.rounds` accepts an honest live window's round coins, read through the challenger's signed session the
-    auditor's signed ledger opens and ends for the window, and refuses each mutation (an in-process challenger's coins,
+    """`core_check.rounds` accepts an honest live execution phase's round coins, read through the challenger's signed session the
+    auditor's signed ledger opens and ends for the execution phase, and refuses each mutation (an in-process challenger's coins,
     an unsigned or tampered log, a ledger signed under another key, cut before the session's end or at a reused leaf, a
-    second session for the window's root, a v1 ledger, an end naming another record leaf or no hellos, hellos
+    second session for the execution phase's root, a v1 ledger, an end naming another record leaf or no hellos, hellos
     it didn't seal, a session the host's pins log doesn't pin or pins off main's first-parent line, an open sealing no
     pins log, no pins log or copy of main, roots the challenger didn't receive, a coin opened twice,
-    one opened before its round's root was recorded, a foreign epoch's, …), over a few cases each, with the refusal it
+    one opened before its round's root was recorded, a foreign execution phase's, …), over a few cases each, with the refusal it
     aims at."""
     assert set(ROUNDS_EXPECT) == set(rounds_cases.ROUNDS_NAMES) | {"honest"}
     for name, want in ROUNDS_EXPECT.items():
@@ -709,14 +741,14 @@ SALT_EXPECT = {
 
 
 def test_every_salt_mutation_hits_its_refusal():
-    """`core_check.salt` accepts an honest live window's salt coin, read through the challenger's signed session the
-    auditor's signed ledger reserves, opens and ends for the window, and refuses each mutation with the refusal it aims
+    """`core_check.salt` accepts an honest live execution phase's salt coin, read through the challenger's signed session the
+    auditor's signed ledger reserves, opens and ends for the execution phase, and refuses each mutation with the refusal it aims
     at: the session's (no ledger, a forged one, an in-process challenger's coins, a log the ledger didn't seal, another
     session's files, a session not pinned to a logged commit on main's first-parent line), a session opened without a
     reserve, the open root under another session's id than the reserve's
-    or of another window's weights or requests (so one session salts one window), H1's salt before the open root (the
-    session opened on the weights' root, the same in every window), a log showing another root, and a coin that isn't
-    the epoch's salt coin opened after it."""
+    or of another execution phase's weights or requests (so one session salts one execution phase), H1's salt before the open root (the
+    session opened on the weights' root, the same in every execution phase), a log showing another root, and a coin that isn't
+    the execution phase's salt coin opened after it."""
     assert set(SALT_EXPECT) == set(rounds_cases.SALT_NAMES) | {"honest"}
     for name, want in SALT_EXPECT.items():
         for seed in range(6):
@@ -758,11 +790,11 @@ LIVE_SALT_EXPECT = {
 
 def test_every_live_salt_mutation_hits_its_refusal():
     """`core_check.live_salt` (LIVESALT2) accepts a live Pearl-C pass whose salt coin came from a salt-only session the
-    auditor's signed ledger reserved, opened on the pass's salt epoch's root R = `epoch_open_root(W, pass_index)` and
+    auditor's signed ledger reserved, opened on the pass's salt execution phase's root R = `epoch_open_root(W, pass_index)` and
     ended complete, read through the session's own files, and refuses each mutation with the refusal it aims at: the
     manifest's form and workload, a call index of 2^32 or more, a `pass_index` that isn't an integer in [0, 2^64), the
-    session's (as `salt`'s, a session opened on another root among them: W itself, another epoch's root, or the root of
-    an epoch other than the one the manifest names), a layout other than the salt coin alone (#3868's
+    session's (as `salt`'s, a session opened on another root among them: W itself, another execution phase's root, or the root of
+    an execution phase other than the one the manifest names), a layout other than the salt coin alone (an
     H1 layout, its salt alone released, among them), a session opened without a reserve or reserved for another layout,
     an end that isn't complete with the salt coin alone released, a log showing another root or none, coins other than
     the session's, a coin that isn't its salt coin opened after R, another salt, and a session the manifest misnames
@@ -785,10 +817,10 @@ def _live_pass(seed: str, name: str = "honest") -> tuple[str | None, tuple[str, 
 
 
 def test_a_live_pearl_c_pass_is_credited_only_from_its_complete_salt_only_session():
-    """CMP-81 under LIVESALT2. An honest live Pearl-C manifest is accepted: its salt coin came from the salt-only
-    session the auditor's ledger reserved, opened on its salt epoch's root and ended complete, having released that coin
+    """An honest live Pearl-C manifest is accepted: its salt coin came from the salt-only
+    session the auditor's ledger reserved, opened on its salt execution phase's root and ended complete, having released that coin
     alone, and the verifier's seeded coins play no part. Refused: a verifier that holds no ledger, the session opened on
-    another root (a random one, or H1's window-open root), #3868's session (H1's layout, ended incomplete), an end that
+    another root (a random one, or H1's execution phase-open root), an H1 session (H1's layout, ended incomplete), an end that
     isn't complete, a forged opening, and an in-process coin (seeded coins the prover ran) presented in place of the
     session's."""
     for seed in range(4):
@@ -810,10 +842,10 @@ def test_a_live_pearl_c_pass_is_credited_only_from_its_complete_salt_only_sessio
 
 
 def test_one_epoch_reads_one_session_and_one_salt():
-    """`OnePair` on the Python side: two passes of one salt epoch k over one weights' root W, the second's call indices
+    """`OnePair` on the Python side: two passes of one salt execution phase k over one weights' root W, the second's call indices
     continuing the first's, read the one session the ledger opened on `epoch_open_root(W, k)`, so they get one salt (a
     second open on that root is the ledger's own refusal, `rounds`' ``second-session``). Whether they share a call index
-    is the Pearl-C period's to refuse, not `live_salt`'s."""
+    is the Pearl-C credit period's to refuse, not `live_salt`'s."""
     for seed in range(4):
         d = passes.live_salt_instance(random.Random(f"one epoch, one session/{seed}"))
         salt, refused = CC.live_salt(*passes.live_salt_args(d))
@@ -827,8 +859,8 @@ def test_one_epoch_reads_one_session_and_one_salt():
 
 
 def test_two_epochs_over_one_weights_root_read_two_sessions_and_two_salts():
-    """`OneRoot` and `EpochRootBinding` on the Python side: epochs 0 and 1 over one weights' root W are opened on two
-    roots, so they read two sessions with two salts, and neither epoch's pass is accepted against the other's session."""
+    """`OneRoot` and `EpochRootBinding` on the Python side: execution phases 0 and 1 over one weights' root W are opened on two
+    roots, so they read two sessions with two salts, and neither execution phase's pass is accepted against the other's session."""
     rng = random.Random("two epochs")
     man = passes._live_manifest(rng)
     h0 = passes.honest_live(rng, json.loads(json.dumps(man)), k=0)
@@ -844,8 +876,8 @@ def test_two_epochs_over_one_weights_root_read_two_sessions_and_two_salts():
 
 
 def test_one_session_salts_one_window():
-    """Two windows of one model (one weights' root) with their own request tables: the salt opened in the first's
-    session passes the first and is refused for the second, and a second session for the first window has another open
+    """Two execution phases of one model (one weights' root) with their own request tables: the salt opened in the first's
+    session passes the first and is refused for the second, and a second session for the first execution phase has another open
     root."""
     from verity.core.protocols.pouw import salt as PS
 

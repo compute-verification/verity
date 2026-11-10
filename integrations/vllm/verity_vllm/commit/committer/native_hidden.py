@@ -3,10 +3,10 @@ replaced by one C++ callable each (`Fa2Wrap`, `Fa3Wrap` in native_collect.cpp, b
 bounded split driver, which taps a multi-sequence launch in sequence groups when its tap buffer would exceed the cap."""
 from __future__ import annotations
 
-import os
 import time
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.acquire.sources.hidden_source import (
     HiddenM1Source,
     HiddenM1SourceFA3,
@@ -19,23 +19,24 @@ from verity_vllm.acquire.sources.hidden_source import (
 
 
 class NativeHiddenM1Source(HiddenM1Source):
-    """R11 collector v2: the FA2 M1 tap glue as ONE C++ callable (`Fa2Wrap`, native_collect.cpp) in place of the Python `varlen_fwd`
+    """The FA2 M1 tap glue as ONE C++ callable (`Fa2Wrap`, native_collect.cpp) in place of the Python `varlen_fwd`
     wrapper.  Same tapped kernel, same per-geometry buffer rule, same names/order into the same collector; stats synced at uninstall."""
 
-    #: [R18 tap, F-r17-23] default cap on the FA2 tap's device residency (MiB); VERITY_FA2_TAP_CAP_MB=0 restores the unbounded buffers
+    #: default cap on the FA2 tap's device residency (MiB); VERITY_FA2_TAP_CAP_MB=0 restores the unbounded buffers
     DEFAULT_TAP_CAP_MB = 2048
 
     def __init__(self, committer: Any, so_path: str, ns: str = "verity_fa2_matAll") -> None:
         super().__init__(committer, so_path, ns)
         self._w = committer.native_ext().Fa2Wrap(committer._nc, self.orig_op, self.tapped_op, committer._intern, ns)
-        # R13 P0 (p0b): per-sequence compaction of multi-sequence launches (only the rows the kernel wrote are staged; B=1 unchanged)
-        self._w.compact = os.environ.get("VERITY_FA2_COMPACT", "1").strip() not in ("0", "false", "no")
-        self._w.zero_after = os.environ.get("VERITY_FA2_ZERO", "1").strip() not in ("0", "false", "no")
+        # per-sequence compaction of multi-sequence launches (only the rows the kernel wrote are staged; B=1 unchanged)
+        self._w.compact = settings.VERITY_FA2_COMPACT
+        self._w.zero_after = settings.VERITY_FA2_ZERO
         self.short_name, self._w.ms = "hidden_m1", self.ms              # the MS class sizes every buffer and is a seventh compacted plane
-        # [R18 tap, F-r17-23] bounded tap: one device buffer of <= cap bytes; a multi-sequence launch whose padded tap buffer exceeds it is
+        # bounded tap: one device buffer of <= cap bytes; a multi-sequence launch whose padded tap buffer exceeds it is
         # split into consecutive sequence groups (hidden_source.plan_fa2_tap_groups) tapped one after another into that buffer (C++ Fa2Wrap
         # seq_base / hold_launch / bound_words).  Names and bytes of the staged compacted rectangles are those of the unsplit launch.
-        cap_mb = int(os.environ.get("VERITY_FA2_TAP_CAP_MB", str(self.DEFAULT_TAP_CAP_MB)).strip() or 0)
+        cap = settings.VERITY_FA2_TAP_CAP_MB
+        cap_mb = self.DEFAULT_TAP_CAP_MB if cap is None else cap
         self.tap_cap_bytes = max(0, cap_mb) << 20
         self._w.bound_words = self.tap_cap_bytes // 4
         self.telemetry_path: str | None = None           # commit_delta: <out>/fa2_tap_windows.jsonl (one line per tapped window / group)
@@ -53,7 +54,7 @@ class NativeHiddenM1Source(HiddenM1Source):
         self._w.on_step_begin()
         self._groups_cache.clear()
 
-    # ------------------------------------------------------------------ [R18 tap] the split driver
+    # ------------------------------------------------------------------ the split driver
     def _tel_line(self, rec: dict) -> None:
         if not self.telemetry_path:
             return
@@ -83,7 +84,7 @@ class NativeHiddenM1Source(HiddenM1Source):
             try:
                 BN = fa2_kblock_n(D, num_splits)
             except RuntimeError:
-                return w(*args, **kwargs)                         # the C++ wrapper refuses it by name (X-03)
+                return w(*args, **kwargs)                         # the C++ wrapper refuses it by name
             h, M = H, max_q
             NB = (max_k + BN - 1) // BN
             per_seq = fa2_tap_words_per_seq(h, M, NB, BN, D, me.ms)
@@ -175,7 +176,12 @@ class NativeHiddenM1Source(HiddenM1Source):
                 merged.append(t)
         return type(first)(merged) if isinstance(first, (list, tuple)) else merged
 
+    #: a detached window's copy of the source (`window_views.window_source`): its stats stand as synced at the detach
+    stats_frozen = False
+
     def sync_stats(self) -> None:
+        if self.stats_frozen:
+            return
         st = self._w.stats()
         self.stats["launches"] = int(st["launches"])
         self.stats["bytes"] = int(st["bytes"])
@@ -183,9 +189,9 @@ class NativeHiddenM1Source(HiddenM1Source):
         self.stats["geometries"] = {str(k): int(v) for k, v in dict(st["geometries"]).items()}
         self.stats["compacted_launches"] = int(st.get("compacted_launches", 0))
         self.stats["compact"] = bool(st.get("compact", False))
-        self.stats["refused"] = int(st.get("refused", 0))       # R13 fa2: launches expected but not bound (uncovered tile / kernel skip) -> errors
+        self.stats["refused"] = int(st.get("refused", 0))       # launches expected but not bound (uncovered tile / kernel skip) -> errors
         self.stats["tap_layout"] = int(st.get("tap_layout", 7))
-        # [R18 tap, F-r17-23] the bounded-tap record: cap, the one bounded allocation, peaks, split counts (all bytes, all measured)
+        # the bounded-tap record: cap, the one bounded allocation, peaks, split counts (all bytes, all measured)
         self.stats["bounded_tap"] = {
             "cap_bytes": int(self.tap_cap_bytes), "bound_alloc_bytes": int(st.get("bound_alloc_bytes", 0)),
             "bound_used_peak_bytes": int(st.get("bound_used_peak_bytes", 0)), "geometry_buffers_bytes": int(st.get("geometry_buffers_bytes", 0)),
@@ -221,13 +227,13 @@ class NativeHiddenM1Source(HiddenM1Source):
         if self._tel_fh is not None:
             try:
                 self._tel_fh.close()
-            except Exception:  # noqa: BLE001
-                pass
+            except OSError as e:
+                self.c.errors.append(f"fa2 tap telemetry close: {e!r}"[:200])
             self._tel_fh = None
 
 
 class NativeHiddenM1SourceFA3(HiddenM1SourceFA3):
-    """R13 hopper: the FA3 M1 tap glue as ONE C++ callable (`Fa3Wrap`, native_collect.cpp) in place of the Python `fwd` wrapper of
+    """The FA3 M1 tap glue as ONE C++ callable (`Fa3Wrap`, native_collect.cpp) in place of the Python `fwd` wrapper of
     `hidden_source.HiddenM1SourceFA3` -- same tapped kernel (`verity_fa3_matReq.so`), same geometry / tile rule, same names into the same
     collector; stats synced at uninstall."""
 
@@ -235,7 +241,8 @@ class NativeHiddenM1SourceFA3(HiddenM1SourceFA3):
         super().__init__(committer, so_path, ns)
         self._w = committer.native_ext().Fa3Wrap(committer._nc, self.orig_op, self.tapped_op, committer._intern, ns)
         # P0-03's rule for the FA3 tap: zero the staged whole buffer after staging on multi-sequence launches (B=1 unchanged)
-        self._w.zero_after = os.environ.get("VERITY_FA3_ZERO", os.environ.get("VERITY_FA2_ZERO", "1")).strip() not in ("0", "false", "no")
+        zero = settings.VERITY_FA3_ZERO
+        self._w.zero_after = settings.VERITY_FA2_ZERO if zero is None else zero
         self.short_name, self._w.ms = "hidden_m1_fa3", self.ms
 
     def _wrapper(self):
@@ -244,7 +251,11 @@ class NativeHiddenM1SourceFA3(HiddenM1SourceFA3):
     def on_step_begin(self) -> None:
         self._w.on_step_begin()
 
+    stats_frozen = False          # as `NativeHiddenM1Source.stats_frozen`
+
     def sync_stats(self) -> None:
+        if self.stats_frozen:
+            return
         st = self._w.stats()
         self.stats["launches"] = int(st["launches"])
         self.stats["bytes"] = int(st["bytes"])

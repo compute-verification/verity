@@ -1,7 +1,6 @@
-"""padrev's adversarial tests for lane `pad`'s stage DENSE B1, Program side (lane/r16-pad fdebefec8) — **padded baseline
-(experimental)**.  Attack A5 (the 32-bit cap dropping the lifted bit) on the PAD-02 leaf layout, T-1 refusals, the exact-count
-arithmetic against the Program's own arity for EVERY `a_r`, and the PAD-03 deletion rule as a function — on the TINY shape (the
-laptop is at its memory/disk cap; pad's own suite measures the real B0 shape).  Skips on a tree without `verity_vllm.program.registry.lifted`.
+"""Adversarial tests for stage DENSE B1, Program side — **padded baseline (experimental)**.  Attack A5 (the 32-bit cap dropping
+the lifted bit) on the leaf layout, T-1 refusals, the exact-count arithmetic against the Program's own arity for EVERY `a_r`, and
+the deletion rule as a function — on the TINY shape (`test_lifted_dense_b1` measures the real B0 shape).  Skips on a tree without `verity.ml.definitions.registry.lifted`.
 """
 
 from __future__ import annotations
@@ -14,11 +13,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-L = pytest.importorskip("verity_vllm.program.registry.lifted")
-pytest.importorskip("verity_vllm.program.registry.lifted", reason="pad's module").leaf_words  # DENSE B1 additions present?
+L = pytest.importorskip("verity.ml.definitions.registry.lifted")
+pytest.importorskip("verity.ml.definitions.registry.lifted", reason="the lifted registry").leaf_words  # DENSE B1 additions present?
 
 from verity.ml.circuits import Program  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
+from verity.ml.definitions.registry import b1  # noqa: E402
 from tests.program.test_serve3 import LP, TINY  # noqa: E402
 
 RNG = np.random.default_rng(20260920)
@@ -69,7 +68,7 @@ def test_a_one_word_per_leaf_reader_misreads_a_mixed_width_lifted_store_and_the_
     """The attack in full: a store of leaves of widths [32, 16, 1, 32, 32] holding ⊥, Active, Active(1), Active(max), INV.  The
     lifted reader (offsets from `leaf_words`) round-trips exactly.  A legacy one-word-per-leaf reader reads the ⊥ as Active(0) and
     then every later leaf from the wrong offset; the ONLY thing that stops it is the size check `len(words) == Σ leaf_words(w)` —
-    which is therefore a required field of a lifted binding map (F-pad-06 condition for the record stage)."""
+    which is therefore a required field of a lifted binding map (a condition for the record phase)."""
     widths = [32, 16, 1, 32, 32]
     leaves = [L.enc_bot(32), L.enc_active(16, 0xBEEF), L.enc_active(1, 1), L.enc_active(32, (1 << 32) - 1), L.inv(32)]
     flat = [wd for w, x in zip(widths, leaves) for wd in L.pack_leaf(w, x)]
@@ -97,13 +96,13 @@ def test_a_one_word_per_leaf_reader_misreads_a_mixed_width_lifted_store_and_the_
 
 def test_lifted_request_refusals_and_population_on_tiny():
     sp = L.lifted_request(TINY, LP, CAP, (17,), lag=0)
-    steps_key = "STEPS" if "STEPS" in sp.bindings else "D_MAX"  # F-pad-12: renamed STEPS (= cap-1, as Serve_v2) at lane/r16-pad d40b22bb5
+    steps_key = "STEPS" if "STEPS" in sp.bindings else "D_MAX"  # STEPS (= cap-1, as Serve_v2)
     assert sp.bindings[steps_key] == CAP - 1 and sp.bindings["LP"] == LP and sp.bindings["EOS"] == (17,) and sp.bindings["GUARD"] == "in"
     assert "D_MAX" not in sp.bindings or steps_key == "D_MAX"  # never both names for one static
     for bad_T in (0, CAP - 2, CAP, 100):
         with pytest.raises(ValueError, match="never from a served length"):
             L.lifted_request(TINY, LP, CAP, (17,), lag=0, T=bad_T)
-    # F-pad-13 (closed d40b22bb5): the manifest-validity refusals fire EAGERLY at bind — and again at Program() for a direct bind(LServe)
+    # the manifest-validity refusals fire EAGERLY at bind — and again at Program() for a direct bind(LServe)
     with pytest.raises(ValueError, match="non-empty declared EOS set"):
         L.lifted_request(TINY, LP, CAP, (), lag=0)  # an empty declared EOS set is not a declaration
     with pytest.raises(ValueError, match="MAX_POS"):
@@ -114,7 +113,7 @@ def test_lifted_request_refusals_and_population_on_tiny():
         L.lifted_request(TINY, LP, CAP, (L.enc_bot(32),), lag=0)  # ⊥ as a declared EOS id is not an id
     prog = Program(sp)
     outs = prog.circuit.root_outputs()
-    assert len(outs) == CAP  # the event population IS the cap (SPEC R3), whatever any execution serves
+    assert len(outs) == CAP  # the event population IS the cap (the spec's R3), whatever any execution serves
     assert L.expected_bot_return_leaves(TINY, CAP, CAP, lag=0) == 0 and L.expected_bot_return_leaves(TINY, CAP, 1, lag=0) == (CAP - 1) * (1 + 2 * TINY["NL"] * TINY["KVH"] * TINY["D"])
 
 
@@ -132,7 +131,7 @@ def test_exact_count_arithmetic_equals_the_programs_step_arity_for_every_a_r():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# PAD-03 — the deletion rule as a FUNCTION of the lifted root body (what GP-01's comparison would apply)
+# the deletion rule as a FUNCTION of the lifted root body (what GP-01's comparison would apply)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -141,8 +140,8 @@ def _is_controller_row(nm: str) -> bool:
 
 
 def _delete_guard_rows(prog):
-    """PAD-03 option 1: drop the named guard rows (`eos[i]`, `bot32`, `s=<s>/live`, `s=<s>/tok_in`) and the Continuation_v1 controller rows
-    (R17-32: `slot=<t>/emit`, `slot=<t>/is_eos`, `slot=<t>/out`) and renumber the remaining root nodes; return [(name, gate_count)] of the
+    """The deletion rule: drop the named guard rows (`eos[i]`, `bot32`, `s=<s>/live`, `s=<s>/tok_in`) and the Continuation_v1 controller rows
+    (`slot=<t>/emit`, `slot=<t>/is_eos`, `slot=<t>/out`) and renumber the remaining root nodes; return [(name, gate_count)] of the
     body nodes under the survivors, in order."""
     out = []
     for c in prog.circuit.root_calls():
@@ -169,10 +168,10 @@ def test_deletion_rule_recovers_the_unlifted_body_and_nothing_else_is_deletable(
     guard = [c for c in p_l.circuit.root_calls() if (c.node.name or "").startswith("eos[") or c.node.name in ("bot32", "enable/one")
              or (c.node.name or "").endswith(("/live", "/tok_in"))]
     ctrl = [c for c in p_l.circuit.root_calls() if _is_controller_row(c.node.name or "")]
-    assert sum(c.hi - c.lo for c in guard) == 2 * D_MAX + 2 + 2 and sum(c.hi - c.lo for c in ctrl) == 3 * CAP  # R17-32: 3 controller gates per slot
+    assert sum(c.hi - c.lo for c in guard) == 2 * D_MAX + 2 + 2 and sum(c.hi - c.lo for c in ctrl) == 3 * CAP  # 3 controller gates per slot
     assert sum(c.hi - c.lo for c in guard + ctrl) == p_l.gates - p_u.gates == L.continuation_gate_count(CAP, 2, 0)
     ids = {c.id.split("{")[0] for c in guard}
-    assert ids == {"LStepLive2_v1", "LSelect32_v1", "LBot32_v1", "Const32[0x00000011]_v1", "Const32[0x00000017]_v1", "Const2[0x1]_v1"}  # + the root enable (v0.6 B7); the EOS set ordinary (v0.7 A11 / G1)
+    assert ids == {"LStepLive2_v1", "LSelect32_v1", "LBot32_v1", "Const32[0x00000011]_v1", "Const32[0x00000017]_v1", "Const2[0x1]_v1"}  # + the root enable; the EOS set ordinary (G1)
     assert {c.id.split("{")[0] for c in ctrl} == {"Const2[0x1]_v1", "LEmitNext[H=1]_v1", "LIsEOS2_v1", "LSelect32_v1"}
     # deleting a non-guard row (a step) does not recover the unlifted body: the rule is exact, not 'delete until equal'
     fewer = [x for x in _delete_guard_rows(p_l) if not x[0].startswith(f"t={LP + 2}/")]

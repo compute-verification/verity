@@ -1,6 +1,23 @@
-import Proofs.Flock.C3.Compose.HoloStageCoins
+module
+
+public import Proofs.Flock.Recursive.HPortTie
+public import Proofs.Flock.C3.RegLevels.SrcMaps
+public import Proofs.Flock.C3.Sparse.HeldStages
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.RegLevels.LgCoins
 import Proofs.Flock.C3.RegLevels.LgHeld
-import Proofs.Flock.Recursive.HPortTie
 
 /-!
 # `LaterCoins` at the verifier's map, from its hold of the inner session
@@ -11,11 +28,13 @@ import Proofs.Flock.Recursive.HPortTie
 `stagesHeld_of_run`'s, within the history's rounds where the stages take `holoCTs`' count (`coins_total_holo`).
 `stageCoins_holo_held`: `stageCoins_holo` at `holoMap` with `hlater` from `laterCoins_holo` at every accepted outer
 proof and `hlt` from `srcLevelTie_of_maps`, both at R's run in V*'s sessions (`MapsAt`) at the `C3` the verifier
-builds of its hold (`C3Held`), and the reps' `henc` at the map's one-round draws (`coinsEncoded_holoMap`). The
+builds of its hold (`C3Held`), and the reps' `henc` at the map's one-round samples (`coinsEncoded_holoMap`). The
 record facts the stages read are named below (`RecordPoints` … `RepStagesCounted`).
 `histPts`: a source with its link points set to the history's first coin under `holoMap`, where `hpts`
 (`PointsFromHistory`) is `pointsFromHistory_histPts`. At a free source it does not follow from the rest.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 
@@ -39,11 +58,11 @@ section held
 
 variable {Cm Coin : Type}
 
-/-- **Hypothesis: the link points are the session record's**: the coin server's record at the history decodes to a
+/-- **Hypothesis: the link points are the session record's**: the challenger's live-coin part's record at the history decodes to a
 session whose points read as the run's link points (`laterCoins_of_held`'s `hdec`, `hu`). -/
 def RecordPoints (wr : List (Cm × Coin) → Lean.Json × String) {e : ExecHolo} (t : List (Cm × Coin))
     (u : C3Run e) : Prop :=
-  ∃ (spec : Flock.SessionSpec) (sess : Flock.Session), Flock.Record.decode spec (wr t).2 = .ok sess ∧
+  ∃ (spec : Flock.SessionSpec) (sess : Flock.RunRecord), Flock.Record.decode spec (wr t).2 = .ok sess ∧
     holoPts e.cls.mPts sess.points = u.pts
 
 /-- **Hypothesis (`stageHeldW_sparse`'s `hh`): the verifier holds the inner transcript** at the history. -/
@@ -91,7 +110,7 @@ theorem laterCoins_holo {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
       Lean.Json × String}
     {held : Lean.Json × String → Except String RecVStar.InnerCommits} {sparse : Option RecSparse.Shape}
     {ish : RecVStar.Inner} {tbl : String} {bc : Cm → String → Nat → List UInt8} {spec : Flock.SessionSpec}
-    {sess : Flock.Session} {cs : RecVStar.InnerCommits} {c3 : RecCoins.C3} {unit : String}
+    {sess : Flock.RunRecord} {cs : RecVStar.InnerCommits} {c3 : RecCoins.C3} {unit : String}
     {rep rs : Array RecVStar.SchedRound} {sp : RecSparse.Shape} {sh : RecVStar.StackedShape}
     {x : RecVStar.InnerStream} {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt} {Reg' : Type}
     {M : FlockC3.Reps.StackedMaps stmt Vs} {zs : (s : Fin S) → (Vs s).Outer Reg'} {Lb : (s : Fin S) → (Vs s).Bits}
@@ -113,7 +132,7 @@ theorem laterCoins_holo {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
     (hx : cs.stream? "stacked/rep0" = some x) (hxs : x.coins.size = rs.size)
     (hrun : RecOpening.run osh (FlockC3.RegLevels.msgsO osh w (FlockC3.RegLevels.opsAt
         (FlockC3.RegLevels.readMaps M osh.sched) osh Lb kap c3 unit w)) (FlockC3.Opening.claimsO osh w c3 unit) 0
-      (RecAlgebra.Coins.ofRounds (FlockC3.Opening.rep0 c3 unit)) = .ok (res, k₁))
+      (RecAlgebra.CoinSource.ofRounds (FlockC3.Opening.rep0 c3 unit)) = .ok (res, k₁))
     (hz : ∀ y ∈ res, y = 0) (hleft : FlockC3.RegLevels.MapsLeft M zs Lb osh unit c3 w kap e0 sb e cap₀ u)
     (htot : 1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op + nCoins u.lg =
       1 + (Exec.kindCoinTys (holoKinds (holoAt st hp))).length) :
@@ -227,9 +246,9 @@ def MapsAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fi
 at R's run from `MapsAt`'s session (`run_of_sessionAt`) at the `C3` of the verifier's hold (`C3Held`), the stages'
 total from their ties (`coins_total_holo`), the history's length from `hleaf` (`(ℐ).r` is the table's coin kinds'
 `1 + length` and one more, by `schedInner`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). The reps' rounds are
-encoded and drawn at the map's one-round draws (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
-`repsDrawn_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, as
-`FlockC3.Sparse.record_decodes_of_accepted` gives it at a family) and the run's points are the history's first coin
+encoded and sampled at the map's one-round samples (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
+`repsDrawn_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, a
+hypothesis) and the run's points are the history's first coin
 (`hpts`, `PointsFromHistory`). -/
 theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}

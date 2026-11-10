@@ -48,9 +48,9 @@ def _sampler_argv(a: argparse.Namespace, d: Path, root_pid: int) -> list[str]:
 
 
 def _tele_env() -> dict[str, str]:
-    """[R18 infra, r18-int-2; F-r18-infra-1] the sidecar is `python -m research.telemetry` in a NEW process: launched through a script
-    that put its import root on sys.path in-process only, the child found no package -- the r18-int-1 canary's sampler.log reads
-    'No module named telemetry' and no resources.jsonl was written (the workload ran; Level 0 did not).  The package's IMPORT ROOT goes
+    """The sidecar is `python -m research.telemetry` in a NEW process: launched through a script that put its import root on
+    sys.path in-process only, the child would find no package -- its sampler.log reading 'No module named telemetry' and no
+    resources.jsonl written (the workload runs; Level 0 does not).  The package's IMPORT ROOT goes
     first on the child's PYTHONPATH, so the sidecar resolves the SAME package that runs it.  For research/telemetry/run.py that root is
     `src/` = parents[2] (research/telemetry/run.py -> telemetry -> research -> src); veritor's parents[1] would name `research/` and
     reproduce the bug silently (the regression test in tests/test_telemetry.py is the check)."""
@@ -215,8 +215,8 @@ def set_timeout_main(argv: list[str]) -> int:
 
 def _end_leftovers(em: Emitter, stage: str, pgid: int) -> None:
     """SIGKILL what is left of the workload's process group once its leader has exited, and mark it. A pool's workers whose parent
-    the OOM killer took live on otherwise, holding their memory after the run is recorded as ended (vy-nebius-cpu-1, 8 Oct 06:05Z:
-    two failed circuit-check runs' ~270 workers kept the user slice full for 40 minutes). A process that must outlive its run
+    the OOM killer took live on otherwise, holding their memory after the run is recorded as ended (a
+    failed circuit-check run's hundreds of workers can keep the user slice full for tens of minutes). A process that must outlive its run
     leaves the run's session (setsid), as tmux does."""
     if not (left := live_group(pgid)):
         return
@@ -288,7 +288,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
     sid = em.span_start(a.stage, pid=proc.pid, pgid=proc.pid, cmd0=Path(cmd[0]).name)
     timed_out = False
     rc: int | None = None
-    timeout = a.timeout
+    timeout, limit = a.timeout, "the run's --timeout"
     ctl = _TimeoutControl(d)
     sweep: Sweep | None = None          # set by a timeout or a cancel: the run's processes, ended once `deadline` has passed
     deadline, stop_actor, stop_grace = 0.0, "timeout", a.grace
@@ -303,11 +303,11 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                 pass
             new = ctl.poll()
             if new is not None and new["timeout_s"] != timeout:
-                # [r19-int-8, F-r19-int-8] the launch value is not the last word: an operator who sized --timeout on Build alone can raise
+                # the launch value is not the last word: an operator who sized --timeout on Build alone can raise
                 # (or lower) it while the row runs, and the change is a recorded mark beside the launch value -- not a paused watchdog.
                 em.mark(a.stage, "timeout_changed", old_timeout_s=timeout, new_timeout_s=new["timeout_s"], actor=new.get("actor"), reason=new.get("reason"),
                         elapsed_s=round(clock() - armed, 3), control=str(ctl.path))
-                timeout = new["timeout_s"]
+                timeout, limit = new["timeout_s"], new.get("reason") or f"{ctl.path}, set by {new.get('actor') or 'someone'}"
                 set_status(d, "running", timeout_s=timeout, timeout_changed_utc=utc_now_ms())
             if stall is not None:
                 try:
@@ -323,7 +323,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                 em.mark(a.stage, "cancel_seen", actor=stop_actor, grace_s=stop_grace, reason=req.get("reason"))
             if timeout and clock() - armed >= timeout and not timed_out:
                 timed_out = True
-                _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={timeout}", None, True, a.job)
+                _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={timeout} ({limit})", None, True, a.job)
                 if sweep is None:
                     sweep = Sweep(proc.pid, str(d.resolve()), leader_start=starttime)
                     stop_actor, stop_grace, deadline = "timeout", a.grace, clock() + a.grace

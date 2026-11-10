@@ -1,10 +1,10 @@
-"""A served audit window's commitment in the ZK statement's format, from a retained Pearl-C pass, registered, drawn and
-judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
-`outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
+"""A served audit execution phase's commitment in the ZK statement's format, from a retained Pearl-C pass, registered, sampled and
+judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
+`outcome`), and the check that a hidden tile proof's committed rows are the sampled tile's.
 
   python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P --max-tokens T --registration-deadline S]
-                                                                              the verifier's own parameters of the window
-  python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the window, salted and committed
+                                                                              the verifier's own parameters of the execution phase
+  python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the execution phase, salted and committed
   python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
   python served_commit.py edit REGISTRATION OUT KEY=JSON ...                  a control's registration, a field changed
   python served_commit.py challenger PARAMS LOG [--lean F --epoch E --state S] the challenger: one JSON request a line on stdin
@@ -15,90 +15,90 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
 
-- **The window** is SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), picked from ``os.urandom`` unless
+- **The execution phase** is SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), picked from ``os.urandom`` unless
   ``--call`` names them.  Each call's A rows (the pass's retained activations, BF16 widened to FP32) and its weight's B rows
-  are formed on the CPU as `pearl_c` forms them under the pass's epoch (`PearlC.noise`, forming v1, the peel factors), and
+  are formed on the CPU as `pearl_c` forms them under the pass's execution phase (`PearlC.noise`, forming v1, the peel factors), and
   become the statement's fp8-pi rows: fp8-p rows (A′_i ‖ P_A,i of role X, ``hm96-sha512/row-seg/v1``; B̃_j ‖ P_B,j of
   role W, ``hm96-sha512/row/v2``; `leaves.words_fp8_p`), each followed by its place in the call, I or J, as a u32 in one
   128-bit word (`pouw.window.side_row`, `leaves.words_fp8_pi`), which the tile unit reads.  A row whose forming the scheme refuses is no tile's.
-- **The tiles** are each call's kept rows' products, then filler tiles up to the padded count: the window's N_real real
+- **The tiles** are each call's kept rows' products, then filler tiles up to the padded count: the execution phase's N_real real
   tiles register the grid level of `pouw.window.bucket`, credited g_ℓ <= N_real tiles and padded to N = g_(ℓ+1).  A filler
   tile is a tile of the same template on zero rows (both sides), committed like any row, so its proof has the shape of
   every other tile's.  Unit t is `pouw.window.tile_at` of the advice: the population is
   `population_program(Pc8TileSide{K,1,1,sm120}, N)` under `Q_template_instance`.
-- **The commitment** is C-Flock's: each row's b ‖ c is hm96-sha512 over its row digest under a fresh 192-byte salt.  Each
+- **The commitment** is Flock's: each row's b ‖ c is hm96-sha512 over its row digest under a fresh 192-byte salt.  Each
   side of each entry (a call, or the filler) is one frame-v3-sha512 tree of its kept rows only, in order, padded to 2^D
-  leaves under the window's side domain (`pouw.window.side_domain` of the window root's domain, one-stage's served domain
-  of the window's program, partition and context: one per window and side).  Each entry is one fixed-width entry row
+  leaves under the execution phase's side domain (`pouw.window.side_domain` of the execution phase root's domain, one-stage's served domain
+  of the execution phase's program, partition and context: one per execution phase and side).  Each entry is one fixed-width entry row
   (`pouw.window.Entry`: kind, tile range, each side's row count and root, the root of the pass's -h3 tile commitment
   (`root_h3_of`), the call's first tile in the pass, ⌈n/64⌉ and m, and the SHA-512 of the call's record, which holds
   the kept rows' places in the call), an
-  ``hm96-sha512/row/v2`` row in the **window root** (port ``entries``), padded with
+  ``hm96-sha512/row/v2`` row in the **execution phase root** (port ``entries``), padded with
   empty entries to the public bound P (L2).  W, every weight the pass's k = n = K calls read, is
   committed by weight row (BF16, ``hm96-sha512/row/v2``) in **W's root**, beside it; the tiles read the formed B̃ rows of
   each call, not W's rows, until registered rows (P7) read B from W.  ``commitment.json`` is what the committer registers:
   the context, the level, the public items and the two roots.  ``advice.json`` (the entries and their salts) and
   ``prover.npz`` (rows, salts, b ‖ c) are the prover's.
-- **The fixed length** (Daniel, 19 Oct, ASK-39): the request is served at a public max_tokens under ignore_eos, so its
+- **The fixed length**: the request is served at a public max_tokens under ignore_eos, so its
   useful work is public.  The verifier's parameters hold its request's max_tokens (``length``), the committer registers
   the runner's record of how it served it (``served.json`` beside the pass, `served_length`), and PoUW's rule refuses an
   EOS-keyed row or a served length other than max_tokens (``window-form``).  A pass with no served record registers no
   length item, which the verifier refuses as registered before the rule.
-- **The service** (P1): the committer's `register` writes one-stage's v1 record, scheme `service.SCHEME`, whose window
+- **The service** (P1): the committer's `register` writes one-stage's v1 record, scheme `service.SCHEME`, whose execution phase
   holds exactly `pouw.window.REGISTERED`.  Two rules hold it: the service's (`service.check_public` over the `Spec`,
-  which declares what one-stage's record shows besides the two salted roots: N, the window item, each root's leaf count
-  and domain) and PoUW's inside the window item (`public_problem`: exactly those items, each the verifier's own
+  which declares what one-stage's record shows besides the two salted roots: N, the execution phase item, each root's leaf count
+  and domain) and PoUW's inside the execution phase item (`public_problem`: exactly those items, each the verifier's own
   recomputation at the registered level from its own context, ε, δ, the grid, P, |W| and max_tokens).  The `Challenger` holds both,
-  then `Stream.register` (R1-R7 and the receipt), `select`, `deliver` (the drawn units' session records' SHA-512, once)
-  and `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one law and K′ is a function of the
+  then `Stream.register` (R1-R7 and the receipt), `select`, `deliver` (the sampled proof blocks' session records' SHA-512, once)
+  and `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one sampling design and K′ is a function of the
   level, so the challenger holds one Stream per level.
 - **Of record** (`of_record`): the challenger's checks are Lean's.  PoUW's rule (`core_check.registered`, which
-  `public_problem` mirrors for the committer), R1-R6, the pass's epoch, the draw, PoUW's check over the stream's outcome
+  `public_problem` mirrors for the committer), R1-R6, the pass's execution phase, the sample, PoUW's check over the stream's outcome
   (`core_check.case`) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
-  decides and is the published items', both go in the window's witness (``outcome.json``'s ``of_record``, the opening
+  decides and is the published items', both go in the execution phase's witness (``outcome.json``'s ``of_record``, the opening
   verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  The service's public-items
   rule is Lean's too (``public``, `Service.checkPublic` beside `service.check_public`), and `check`'s reading of the
   registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own state stays
   Python's.
-- **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
-  challenger.  When the process starts, before it reads a request, that challenger draws the epoch's salt and draw coins
-  and their hm96 salts from the Lean verifier of record (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
+- **The coins** are the execution phase's (`pouw.coins`): the challenger process that holds the Streams holds the execution phase's coin
+  challenger.  When the process starts, before it reads a request, that challenger samples the execution phase's salt and sampling coins
+  and their hm96 salts from the Lean verifier (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
   `IO.getRandomBytes`, A3) and commits to them, and the process publishes the commitment (``LOG/coins.json``) before
   any request; with ``--state`` the entropy is instead the file the serving controller wrote from the same Lean coins
   before it served the pass (`e2e.state_entropy`), so the pass's salt coin is one it opens.  No coin is read from
-  Python's generator.  A window's registration names its
-  pass, and the challenger re-starts the pass's epoch from the pass's manifest under its own commitment
+  Python's generator.  An execution phase's registration names its
+  pass, and the challenger re-starts the pass's execution phase from the pass's manifest under its own commitment
   (`pouw_pearl_c_device.manifest_epoch`): the pass's salt coin must open against it, as the salt coin, after the
-  weights' root, and the pass's salt must be that coin's; a pass recorded before epoch coins (a beacon's salt) is read
-  only when the request says it is a recorded replay.  `select` opens the epoch's draw coin after the registration (its
-  digest), once, with no retry, and the draw's key is `draw_key` of that coin; Lean ``flock-verify draw --population N
-  --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  A window is received within
-  the registration deadline of the salt coin's release and before the epoch's draw coin is released, or it is refused
+  weights' root, and the pass's salt must be that coin's; a pass recorded before the execution phase's coins (a beacon's salt) is read
+  only when the request says it is a recorded replay.  `select` opens the execution phase's sampling coin after the registration (its
+  digest), once, with no retry, and the sample's key is `draw_key` of that coin; Lean ``flock-verify draw --population N
+  --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  An execution phase is received within
+  the registration deadline of the salt coin's release and before the execution phase's sampling coin is released, or it is refused
   (`late-registration`); parameters without the deadline are refused.  The challenger records each opening
   (``LOG/openings.jsonl``), and `replay` re-runs its requests from those records, byte for byte.
-- **A certified window** (`Challenger(certifier=…)`, the class only: the CLI doesn't run one yet) is salted by the network
-  certifier instead (`pouw.salt`): its context names its PoUW window p (`salt.context`), and its pass's salt is
-  `salt.pouw_salt` of p's certifier salt, the window's stream (`stream_id`, which names the certifier's run: its key id,
+- **A certified execution phase** (`Challenger(certifier=…)`, the class only: the CLI doesn't run one yet) is salted by the network
+  certifier instead (`pouw.salt`): its context names its PoUW execution phase p (`salt.context`), and its pass's salt is
+  `salt.pouw_salt` of p's certifier salt, the execution phase's stream (`stream_id`, which names the certifier's run: its key id,
   run id and ingress link, `certifier_run`) and its prover (`salt.prover_id`), which the prover recorded with the
-  certifier, signed, before p's salt was drawn
-  (`salt.pouw_record`).  **No certified window registers today**: a certified window credits only units that read its
-  salt (`salt.unit_reason`), and this window's unit, `Pc8TileSide`, reads two committed side rows and no salt, so
-  `register` refuses every certified window first (``unsalted``), before the stream receives it or the certifier is
-  asked anything.  Past that rule, `register` has the stream receive the window, reads the certifier's `committed` on
+  certifier, signed, before p's salt was sampled
+  (`salt.pouw_record`).  **No certified execution phase registers today**: a certified execution phase credits only units that read its
+  salt (`salt.unit_reason`), and this execution phase's unit, `Pc8TileSide`, reads two committed side rows and no salt, so
+  `register` refuses every certified execution phase first (``unsalted``), before the stream receives it or the certifier is
+  asked anything.  Past that rule, `register` has the stream receive the execution phase, reads the certifier's `committed` on
   that registration, refuses a pass whose weights, stream or prover it doesn't bind, and only then calls `reveal`,
-  failing closed (``certifier``), each through the certifier's client (`RemoteCertifier`: a signed request, a signed
+  failing closed (``certifier``), each through the certifier's client (`CertifierClient`: a signed request, a signed
   answer it verifies): the certifier gives p's salt once, within its reveal deadline on its own clock, so its
-  parameters carry no ``registration_deadline``.  The window registers once per PoUW window, stream and prover
-  (`salt.Registrations`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
+  parameters carry no ``registration_deadline``.  The execution phase registers once per PoUW execution phase, stream and prover
+  (`salt.WindowOpens`, ``reregistered``), and its sampling coin is its sample session's ``pouw/draw`` coin 0, checked against
   the commitment the challenger reads from its challenger's signed record (`challenger.trusted_commitment`), which the
-  draw's check of record verifies again, both under the challenger key the window's deployment pins (`Deployment`,
+  sample's check of record verifies again, both under the challenger key the execution phase's deployment pins (`Deployment`,
   beside the certifier's key and run id; `Deployment.pinned` reads it from infra's published pin, `CHALLENGER_KEY_PIN`,
   and refuses any key whose SHA-512 isn't `CHALLENGER_KEY_SHA512`), so a record the prover signs under its own key is
   refused (``coin-key``).
 - **The check** reads a proof's public file (``pub.bin``): instance 0's b ‖ c of its A row and B row must be the unit's rows,
-  each by its frame-v3 path to its entry's side root, and the entry by its path to the registered window root.  A
-  certified window's units are opened under the salt its pass was checked against (`Challenger.check`,
-  `core_check.certified_salt`).  The opening hands the verifier the drawn units' entries: a development shortcut, until
+  each by its frame-v3 path to its entry's side root, and the entry by its path to the registered execution phase root.  A
+  certified execution phase's units are opened under the salt its pass was checked against (`Challenger.check`,
+  `core_check.certified_salt`).  The opening hands the verifier the sampled proof blocks' entries: a development shortcut, until
   position reads in gates (the joint note's step 8) take it over.  Nothing it reads is in the outcome's public items.
 """
 from __future__ import annotations
@@ -131,36 +131,36 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import pc8
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import pc8
 from verity.core.protocols.pouw.coins import Challenger as Coins
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_reason
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as D
-from verity.core.protocols.sampled_proofs.one_stage import partition as PT
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict, _Collect
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import draw as D
+from verity.core.protocols.spot.one_stage import partition as PT
+from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.spot.one_stage.verdict import Verdict, _Collect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import of_record as OR  # noqa: E402
 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
-#: the window draw's key, from the epoch's draw coin (`draw_key`)
+#: the execution phase sample's key, from the execution phase's sampling coin (`draw_key`)
 DRAW_DOMAIN = CC.DRAW_DOMAIN
-#: the window root's port: the window's entries
+#: the execution phase root's port: the execution phase's entries
 PORT = "entries"
-#: a window stream's failure budget: its first failure stops it
+#: an execution phase stream's failure budget: its first failure stops it
 BUDGET = 1
-#: the window's proof deadline (`Check.proof_deadline`), seconds on the challenger's clock from the draw, unless the
+#: the execution phase's proof deadline (`Check.proof_deadline`), seconds on the challenger's clock from the sample, unless the
 #: parameters give ``proof_deadline``: a day
 PROOF_DEADLINE = 86400.0
-#: the window's registration deadline (`Check.registration_deadline`, `Pouw.AcceptsBy`'s td), seconds on the challenger's
-#: clock from the epoch's salt coin's release: the challenger's ``salt`` request, which opens that coin (drawn when the
+#: the execution phase's registration deadline (`Check.registration_deadline`, `Pouw.AcceptsBy`'s td), seconds on the challenger's
+#: clock from the execution phase's salt coin's release: the challenger's ``salt`` request, which opens that coin (sampled when the
 #: challenger process started, from the Lean verifier's coins or ``--state``) after the weights' root.  Unless
 #: ``params --registration-deadline`` gives another: an hour
 REGISTRATION_DEADLINE = 3600.0
@@ -168,9 +168,9 @@ NO_DEADLINE = ("the window's parameters name no registration_deadline, so the se
                "doesn't cover: write them with `served_commit.py params` (REGISTRATION_DEADLINE, or --registration-deadline)")
 CERTIFIED_DEADLINE = ("a certified window's time bound is the network certifier's reveal deadline on its own clock "
                       "(`Proxy(reveal_deadline=…)`), so its parameters carry no registration_deadline and it replays none")
-#: a certified window's stream as the PoUW salt binds it (`stream_id`)
+#: a certified execution phase's stream as the PoUW salt binds it (`stream_id`)
 STREAM_ID = "verity/pouw/served-zk/stream/v3"
-#: the frame's owner, as C-Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
+#: the frame's owner, as Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
 OWNER = -1
 SALT_BYTES = 192
 K = 4096
@@ -182,7 +182,7 @@ CHUNK = 256
 ENTRY_SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 W_SCHEMA = L.ROW_SCHEMA["bf16", ROLE_W]
 W_DOMAIN = "verity/pouw/served-zk/weights-domain/v0"
-#: the public bound on a window's entries (its calls and the filler), and the tile counts a window may register
+#: the public bound on an execution phase's entries (its calls and the filler), and the tile counts an execution phase may register
 ENTRIES = 16
 RANGE = (1, 1 << 40)
 EPS, DELTA = "1/2", "1/10"
@@ -192,7 +192,7 @@ MAX_TOKENS = 4
 SERVED_RECORD = "served.json"
 
 
-# ---- the window's parameters and its spec ---------------------------------------------------------------------------------
+# ---- the execution phase's parameters and its spec ---------------------------------------------------------------------------------
 
 def template(k: int):
     return pc8.side_tile(k, TILE, DEV)
@@ -204,7 +204,7 @@ def tile_work(params: dict) -> int:
 
 @lru_cache(maxsize=8)
 def population(k: int, n: int):
-    """The window's tiles as one-stage's population: (program, query, partition object)."""
+    """The execution phase's tiles as one-stage's population: (program, query, partition object)."""
     d = template(k)
     prog = PT.population_program(d, n)
     q = PT.template_instance_query(PT.template_id(d))
@@ -233,7 +233,7 @@ def served_length(served: Mapping[str, Any]) -> dict:
 
 def items_of(params: dict, ell: int, root_w: str | None, length: Mapping[str, Any] | None = None) -> dict:
     """The registered public items at level `ell` (`pouw.window.REGISTERED`), the rows' length item `length`; with none,
-    `pouw.window.LEGACY_REGISTERED`, a window the verifier refuses as registered before the fixed-length rule."""
+    `pouw.window.LEGACY_REGISTERED`, an execution phase the verifier refuses as registered before the fixed-length rule."""
     w = work_at(params, ell)
     return {"work": w.to_json(tile_work(params)), "check": check_item(params),
             "sampling": Wd.sampling(Fraction(params["eps"]), Fraction(params["delta"]), w, tile_work(params), params["grid_bits"]),
@@ -258,17 +258,18 @@ def law_of(params: dict, ell: int) -> dict:
 
 
 def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
-    """P1's Spec of a window at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
+    """P1's Spec of an execution phase at level `ell`: the entries and W committed, the rate K′/N of the level's N padded tiles
+    (`rate:K′/N`, subset:K′ at the level's N, scaled up with any N the prover registers past it), the tile template's
     Program and query as the check, and `LAYOUT` declared.  The check carries ``registration_deadline`` from `params`
-    (seconds on the challenger's clock from the epoch's salt coin's release, the ``salt`` request that opens it,
+    (seconds on the challenger's clock from the execution phase's salt coin's release, the ``salt`` request that opens it,
     `Pouw.AcceptsBy`'s td: `REGISTRATION_DEADLINE`), and parameters without one raise `ValueError` (`NO_DEADLINE`)
-    unless `predates_deadline`, a recorded window's replay, or they are a certified window's (`certified`), which the
+    unless `predates_deadline`, a recorded execution phase's replay, or they are a certified execution phase's (`certified`), which the
     certifier's reveal deadline bounds.  Its proof deadline is ``proof_deadline`` in `params`, else `PROOF_DEADLINE`."""
     if params.get("registration_deadline") is None and not (predates_deadline or certified(params)):
         raise ValueError(NO_DEADLINE)
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
-                  selection=S.Law(f"subset:{law_of(params, ell)['k']}"),
+                  selection=S.Law(f"rate:{law_of(params, ell)['k']}/{work_at(params, ell).n}"),
                   check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d),
                                 proof_deadline=params.get("proof_deadline", PROOF_DEADLINE),
                                 registration_deadline=params.get("registration_deadline")),
@@ -276,14 +277,14 @@ def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
 
 
 def certified(params: Mapping[str, Any]) -> bool:
-    """Whether `params` are a certified window's: their context names its PoUW window (`salt.context`)."""
+    """Whether `params` are a certified execution phase's: their context names its PoUW execution phase (`salt.context`)."""
     return PS.window_of(params.get("context")) is not None
 
 
 def certifier_run(certifier: Any) -> dict[str, str]:
-    """The network certifier's run as a certified window's stream names it: its `certifier_run`, (key id, run id, ingress
-    link), the identity every signed `Revealed` binds, which a `Proxy` and its `RemoteCertifier` give alike (key id and
-    run id as hex). A proxy started again draws another run id, and a second link has another name; a proxy without a
+    """The network certifier's run as a certified execution phase's stream names it: its `certifier_run`, (key id, run id, ingress
+    link), the identity every signed `Revealed` binds, which a `Proxy` and its `CertifierClient` give alike (key id and
+    run id as hex). A proxy started again samples another run id, and a second link has another name; a proxy without a
     signer has no key id, so no run."""
     try:
         key_id, run_id, link = certifier.certifier_run
@@ -298,7 +299,7 @@ def certifier_run(certifier: Any) -> dict[str, str]:
 
 DEPLOYMENT_FORM = ("a certified window's deployment is the network certifier's public key, its run's "
                    f"{RUN_ID_BYTES}-byte id and the verifier's challenger key (`challenger.ChallengerKey`)")
-#: infra's published challenger key, vy-challenger-1's from 2026-10-20T09:45:24Z: a challenger-key/v1 record
+#: the challenger's published key: a challenger-key/v1 record
 CHALLENGER_KEY_PIN = "art:d12f85becc22388f3e9834d3894cbb99eb655bc19484b0bc3abe9b080689a657"
 #: the SHA-512 of the public key `CHALLENGER_KEY_PIN` publishes; a record of any other key is refused, whatever it names
 CHALLENGER_KEY_SHA512 = "27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc"
@@ -335,13 +336,13 @@ def pinned_challenger_key(record: Path | None = None) -> Ch.ChallengerKey:
 
 @dataclass(frozen=True, slots=True)
 class Deployment:
-    """What a certified window's verifier pins of its deployment: the network certifier's public key and its run's id,
-    the only ones whose answers the challenger takes (its client, `certifier.active.RemoteCertifier`, must be for them,
-    and refuses any other), and the key of the verifier's own challenger, under which the challenger reads the window's
-    coin record and the draw's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
+    """What a certified execution phase's verifier pins of its deployment: the network certifier's public key and its run's id,
+    the only ones whose answers the challenger takes (its client, `certifier.active.CertifierClient`, must be for them,
+    and refuses any other), and the key of the verifier's own challenger, under which the challenger reads the execution phase's
+    coin record and the sample's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
-    # TODO(NET-50): the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
+    # TODO: the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
     # the caller does.
     certifier_key: Any
     run_id: bytes
@@ -361,10 +362,10 @@ class Deployment:
 
 
 def stream_id(params: dict, stream: str, certifier: Mapping[str, str]) -> bytes:
-    """A certified window's stream as the PoUW salt binds it (`salt.pouw_salt`), 64 bytes: the tagged SHA-512 of the
+    """A certified execution phase's stream as the PoUW salt binds it (`salt.pouw_salt`), 64 bytes: the tagged SHA-512 of the
     deployment, the stream's challenger name and the certifier's run (`certifier_run`), so one stream behind two
-    certifier links, or two runs of one, is two streams, and the once-only ledger (`salt.Registrations`), keyed on it,
-    is keyed on the certifier run. `Stream.digest` can't be the one bound: its Spec reads the window's context, which
+    certifier links, or two runs of one, is two streams, and the once-only ledger (`salt.WindowOpens`), keyed on it,
+    is keyed on the certifier run. `Stream.digest` can't be the one bound: its Spec reads the execution phase's context, which
     names the pass's manifest and so its salt, and the registered level, which the traffic fixes."""
     return tagged_sha512(STREAM_ID, canonical_json({"certifier": dict(certifier), "challenger": f"{CHALLENGER}/{stream}",
                                                     "deployment": params["deployment"]}))
@@ -375,7 +376,7 @@ def _frame(tag: str, fields: dict, count: int) -> CommitmentDomain:
 
 
 def _served(params: dict, ell: int, port: str, schema: str, count: int) -> CommitmentDomain:
-    """One-stage's window domain (`registration.window_domain`) of the window's program and partition at level `ell`."""
+    """One-stage's execution phase domain (`registration.window_domain`) of the execution phase's program and partition at level `ell`."""
     _, _, part = population(params["k"], work_at(params, ell).n)
     return _frame(R.WINDOW_DOMAIN, {"program": part["program"], "partition": PT.digest(part), "port": port, "schema": schema,
                                     "leaves": int(count), "run": params["context"]}, count)
@@ -386,7 +387,7 @@ def window_domain(params: dict, ell: int) -> CommitmentDomain:
 
 
 def side_domain(params: dict, ell: int, side: str) -> tuple[CommitmentDomain, str]:
-    """The domain of the window's side-`side` trees at level `ell` and their rows' schema."""
+    """The domain of the execution phase's side-`side` trees at level `ell` and their rows' schema."""
     return Wd.side_domain(window_domain(params, ell).domain_id, side), L.ROW_SCHEMA["fp8-pi", SIDES[side]]
 
 
@@ -396,7 +397,7 @@ def weights_domain(params: dict) -> CommitmentDomain:
 
 
 def ports(params: dict, ell: int) -> dict:
-    """The verifier's own ports: the window root over P entries, and W's root over |W| rows."""
+    """The verifier's own ports: the execution phase root over P entries, and W's root over |W| rows."""
     return {PORT: {"leaves": params["entries"], "domain": window_domain(params, ell).domain_id.hex()},
             "W": {"leaves": params["w_rows"], "domain": weights_domain(params).domain_id.hex()}}
 
@@ -412,10 +413,10 @@ def level_of(rec: Mapping[str, Any]) -> int:
 
 
 def public_problem(params: dict, rec: Any) -> Verdict:
-    """PoUW's rule inside the window item, which the service's rule declares as one item: the window is
+    """PoUW's rule inside the execution phase item, which the service's rule declares as one item: the execution phase is
     ``{"kind": "served", "context", "public"}`` under the verifier's own context, its public items are exactly
     `pouw.window.REGISTERED`, each the verifier's own at the registered level (root_W the registered W root; the length a
-    fixed-length window's at the verifier's max_tokens, `pouw.window.length_problem`, else ``window-form``), and N is the
+    fixed-length execution phase's at the verifier's max_tokens, `pouw.window.length_problem`, else ``window-form``), and N is the
     level's padded count."""
     c = _Collect()
     window = rec.get("window") if isinstance(rec, Mapping) else None
@@ -547,13 +548,13 @@ def filler_shape(fill: int) -> tuple[int, int]:
 
 def commit_window(params: dict, calls: list[dict], root_w: str, root_h3: bytes, salts: dict | None = None,
                   length: Mapping[str, Any] | None = None) -> tuple[dict, dict, dict]:
-    """The window's commitment from its calls (each `{"record", "words": {"a", "b"}}`, the record holding the call's
+    """The execution phase's commitment from its calls (each `{"record", "words": {"a", "b"}}`, the record holding the call's
     ``shape`` [m, k, n] and its first tile in the pass ``tile0``, a side's words None where the scheme refused the row) of
     the pass whose -h3 tile commitment's root is `root_h3`: (``commitment.json``, ``advice.json``, the prover's rows).  Each
     side tree holds the kept rows only, each with its place in the call (`Wd.side_row`); the call's record
     (`advice["records"]`, its SHA-512 in the entry) gains those places (``keep``), and the entry its tile0, cols and m.
     `salts` replays the salts of an earlier commit's prover file (`load`).  `length` is the registered length item
-    (`served_length` of the pass's served record; none, a window registered before the fixed-length rule)."""
+    (`served_length` of the pass's served record; none, an execution phase registered before the fixed-length rule)."""
     k = params["k"]
     zero = Wd.side_row([0] * L.ROW_WORDS["fp8-p"](k), 0)
     keeps = [{s: [i for i, w in enumerate(c["words"][s]) if w is not None] for s in SIDES} for c in calls]
@@ -631,7 +632,7 @@ def load(p: Path) -> dict:
 
 
 def opening(advice: dict, priv: dict, params: dict, unit: int) -> dict:
-    """The prover's opening of unit `unit`: its entry with its salt and path to the window root, and each side's row with
+    """The prover's opening of unit `unit`: its entry with its salt and path to the execution phase root, and each side's row with
     its path to the entry's side root."""
     e, i, j = Wd.tile_at(entries_of(advice), unit)
     out = {"unit": unit, "entry": e, "entry_value": advice["entries"][e], "entry_salt": advice["entry_salts"][e],
@@ -644,18 +645,18 @@ def opening(advice: dict, priv: dict, params: dict, unit: int) -> dict:
 
 
 def core_params(params: dict) -> dict:
-    """`core_check`'s parameters of the verifier's own window: its check item and its check's query."""
+    """`core_check`'s parameters of the verifier's own execution phase: its check item and its check's query."""
     return OR.core_params(params, check_item(params), R.query_digest(PT.template_instance_query(template(params["k"]))))
 
 
 def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True,
           record: OR.Record | None = None, salt: bytes | None = None) -> str | None:
-    """None if the proof's public file opens unit `unit`'s rows under the registered window root, else why not: PoUW's
-    rule on the opening (`core_check.opening`, the unit drawn unless not `drawn`), of record (`record`, Lean's by
-    default), beside this reading of the registration (its level the window's, its entries' domain the window's served
-    one), which may refuse only what the rule refuses (`Record.prelude`).  `salt` is a certified window's salt, the one
+    """None if the proof's public file opens unit `unit`'s rows under the registered execution phase root, else why not: PoUW's
+    rule on the opening (`core_check.opening`, the unit sampled unless not `drawn`), of record (`record`, Lean's by
+    default), beside this reading of the registration (its level the execution phase's, its entries' domain the execution phase's served
+    one), which may refuse only what the rule refuses (`Record.prelude`).  `salt` is a certified execution phase's salt, the one
     its pass was checked against (`core_check.certified_salt`, which `Challenger.check` passes); the opening refuses
-    every unit of a certified window without it."""
+    every unit of a certified execution phase without it."""
     try:
         ell = level_of(rec)
         work_at(params, ell)
@@ -702,7 +703,7 @@ def lean_verdict(path_: Path) -> dict:
 
 
 def rust_verdict(path_: Path | None) -> dict | None:
-    """The Rust prover-side verifier's verdict of the --zk session (`LIVE\\t{…}` lines), beside the verifier of record."""
+    """The Rust prover-side verifier's verdict of the --zk session (`LIVE\\t{…}` lines), beside the Lean verifier."""
     if path_ is None:
         return None
     try:
@@ -729,7 +730,7 @@ def _refused(code: str, detail: Any) -> S.Refused:
 
 def register(params: dict, commitment: dict, extra: Mapping[str, Any] = {}) -> dict:
     """The committer's registration of `commitment`: one-stage's v1 record of the level's population, the check's query,
-    subset:K′ and `service.SCHEME`, its window the public items (with `extra`, which both rules refuse).  Raises
+    subset:K′ and `service.SCHEME`, its execution phase the public items (with `extra`, which both rules refuse).  Raises
     `service.Refused` under the service's rule or PoUW's."""
     ell = commitment["level"]
     try:
@@ -745,7 +746,7 @@ def register(params: dict, commitment: dict, extra: Mapping[str, Any] = {}) -> d
 
 
 def _all(units: list[dict], name: str) -> dict[str, Any]:
-    """The drawn units' verdicts by one verifier as one verdict: accepted when every unit's is, null while one hasn't run;
+    """The sampled proof blocks' verdicts by one verifier as one verdict: accepted when every unit's is, null while one hasn't run;
     its sessions those each unit's verdict covers, in the units' order (a verdict of record must cover the delivered ones)."""
     vs = [u["verdicts"].get(name) for u in units]
     if all(v is None for v in vs):
@@ -759,17 +760,17 @@ def _all(units: list[dict], name: str) -> dict[str, Any]:
                    "sessions": [d for v in vs for d in (v or {}).get("sessions", ())]}}
 
 
-#: a draw over the key's stream: (law, N, the stream's bytes) to the units
+#: a sample over the key's stream: (law, N, the stream's bytes) to the units
 Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 
-def draw_key(coin: bytes, stream: S.Stream, reg: S.Registration) -> Key:
-    """The window draw's key: the epoch's draw coin, under the stream and the registration and receipt it was opened after."""
+def draw_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Key:
+    """The execution phase sample's key: the execution phase's sampling coin, under the stream and the registration and receipt it was opened after."""
     return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
 
 def draw_bytes(key: Key, law: Mapping[str, Any], n: int) -> bytes:
-    """The bytes a subset:k draw over N reads (Lean's ``2 k · width(N) + 64``)."""
+    """The bytes a subset:k sample over N reads (Lean's ``2 k · width(N) + 64``)."""
     if law.get("law") != "subset":
         raise _refused("law", f"the window's draw is a subset law's, not {dict(law)}")
     return key.stream("draw", 2 * law["k"] * CC.width(n) + 64)
@@ -783,7 +784,7 @@ def python_sampler(law: Mapping[str, Any], n: int, src: bytes) -> list[int]:
 
 
 class Recorded:
-    """The epoch's coins as a replay holds them: the published commitment and the openings the challenger recorded.
+    """The execution phase's coins as a replay holds them: the published commitment and the openings the challenger recorded.
     Each opens once, and only after what it was recorded opened after; `Challenger.open` checks it against the commitment."""
 
     def __init__(self, commitment: CoinCommitment, openings: list[CoinOpening]) -> None:
@@ -800,10 +801,10 @@ class Recorded:
 
 
 def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) -> tuple[Ch.LiveCommitment, dict]:
-    """A certified window's trusted coin commitment, which the challenger reads itself from the record its challenger
+    """A certified execution phase's trusted coin commitment, which the challenger reads itself from the record its challenger
     signed and wrote at `path` under the verifier's `key` (`challenger.trusted_commitment`), and the record with the key
-    as the draw's check of record reads them (`core_check.draw` verifies the record again).  Raises `ValueError` when
-    there is no such record, or it isn't a live epoch's."""
+    as the sample's check of record reads them (`core_check.draw` verifies the record again).  Raises `ValueError` when
+    there is no such record, or it isn't a live execution phase's sampling session's."""
     if path is None or not isinstance(key, Ch.ChallengerKey):
         raise ValueError("a certified window's challenger reads its coin commitment from its challenger's signed record "
                          "(`coin_record`, the path it was written to) under the challenger key its deployment pins "
@@ -816,56 +817,56 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
         raise ValueError(f"a certified window's draw coin opens against its challenger's signed record: {e}") from None
     if not same:
         raise ValueError(f"the challenger record at {path} changed while the challenger read it")
-    if (why := Wd.live_epoch_reason(trusted)) is not None:
-        raise ValueError(f"a certified window's draw coin is a live epoch's: {why}")
+    if (why := Wd.draw_epoch_reason(trusted)) is not None:
+        raise ValueError(f"a certified window's draw coin is a live window's draw session's: {why}")
     return trusted, {"key": key.to_json(), "record": doc}
 
 
 def _pd():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PD
+    from verity_vllm.protocols.pouw import pearl_c as PD
     return PD
 
 
 class Challenger:
-    """The challenger of one deployment's windows over P1's `Stream`: PoUW's rule (`core_check.registered`), the pass's
-    epoch under its own coins, then the stream's, each of PoUW's checks of record in `record` (Lean's, by default).  `coins` is the epoch's coin challenger (`pouw.coins.Challenger`, or
-    `Recorded` in a replay); the window's draw coin keys `sampler` (Lean's draw, or its twin `python_sampler`).  A Spec
-    fixes one law and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
-    registration it accepted is held by name.  A control stream `replay`s an earlier draw and opens no coin, so a
-    control's verdicts are judged on the honest draw's units.  The window's Check has a proof deadline (`spec_of`): a
-    drawn window whose proof isn't delivered by it is `late`.  It has a registration deadline too, and `params` without
+    """The challenger of one deployment's execution phases over P1's `Stream`: PoUW's rule (`core_check.registered`), the pass's
+    execution phase under its own coins, then the stream's, each of PoUW's checks of record in `record` (Lean's, by default).  `coins` is the execution phase's coin challenger (`pouw.coins.Challenger`, or
+    `Recorded` in a replay); the execution phase's sampling coin keys `sampler` (Lean's sample, or its twin `python_sampler`).  A Spec
+    fixes one sampling design and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
+    registration it accepted is held by name.  A control stream `replay`s an earlier sample and opens no coin, so a
+    control's verdicts are judged on the honest sample's units.  The execution phase's Check has a proof deadline (`spec_of`): a
+    sampled execution phase whose proof isn't delivered by it is `late`.  It has a registration deadline too, and `params` without
     ``registration_deadline`` are refused (`NO_DEADLINE`): the salt coin's opening reads the clock (its release), and
-    each stream records the epoch's salt at that release (`Stream.salt_released`) before its first registration, so a
-    window received later than the deadline, or before the salt is open, is refused (`late-registration`) and earns no
-    credit.  A window received after the epoch's draw coin was released is refused as `late-registration` too: the
+    each stream records the execution phase's salt at that release (`Stream.salt_released`) before its first registration, so an
+    execution phase received later than the deadline, or before the salt is open, is refused (`late-registration`) and earns no
+    credit.  An execution phase received after the execution phase's sampling coin was released is refused as `late-registration` too: the
     record's order is each root's receipt before the coin's release.  A control (`replay`) opens no coin and is exempt.
     `predates_deadline` replays a record whose parameters predate the deadline as it ran, untimed.  The clock counts the
     challenger's reads of it unless `clock` is given.
 
-    With `certifier` the window is certified (module docstring): `certifier` is the network certifier's client
-    (`certifier.active.RemoteCertifier`), whose `certifier_run` names the stream (`stream_id`) and whose `committed` and
+    With `certifier` the execution phase is certified (module docstring): `certifier` is the network certifier's client
+    (`certifier.active.CertifierClient`), whose `certifier_run` names the stream (`stream_id`) and whose `committed` and
     `reveal` are the certifier's signed answers to the challenger's signed requests, verified; `prover` is its 64-byte
-    id (`salt.prover_id`), `coins` the live epoch's challenger (`window.live_challenger`) whose ``pouw/draw`` coin 0 the
-    draw opens, `coin_record` the path of the record that challenger signed and wrote on its own host
+    id (`salt.prover_id`), `coins` the execution phase's sampling session's challenger (`window.draw_challenger`) whose ``pouw/draw``
+    coin 0 the sample opens, `coin_record` the path of the record that challenger signed and wrote on its own host
     (`challenger.write_record`), and `deployment` what the verifier pins of its deployment (`Deployment`): the network
     certifier's key and run id, which `certifier` must be the client for, and its challenger's key, under which the
     challenger reads its trusted commitment itself (`challenger.trusted_commitment`).  Every opening is checked against
-    it, and the draw's check of record verifies the record again under the key the deployment pins, not the one the
-    record's coins name (``coin-key``).  `registrations` is the deployment's `salt.Registrations`,
-    shared by its challengers.  Each registered window's salt, the one its pass was checked against, is held
-    (`salts`), and `check` opens its drawn units under it."""
+    it, and the sample's check of record verifies the record again under the key the deployment pins, not the one the
+    record's coins name (``coin-key``).  `opens` is the deployment's `salt.WindowOpens`,
+    shared by its challengers.  Each registered execution phase's salt, the one its pass was checked against, is held
+    (`salts`), and `check` opens its sampled proof blocks under it."""
 
     def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
                  clock: Callable[[], float] | None = None, record: OR.Record | None = None,
                  predates_deadline: bool = False, certifier: Any = None, prover: bytes | None = None,
                  coin_record: str | os.PathLike | None = None, deployment: Deployment | None = None,
-                 registrations: PS.Registrations | None = None) -> None:
+                 opens: PS.WindowOpens | None = None) -> None:
         self.trusted: Ch.LiveCommitment | None = None
         self.signed: dict | None = None
         self.deployment: Deployment | None = None
         if certifier is not None:
-            # TODO(RT4-INT-7): no Lean statement covers a certified window's timing, and no run measures the commit
+            # TODO: no Lean statement covers a certified execution phase's timing, and no run measures the commit
             # pipeline the certifier's reveal deadline must be sized against.
             if params.get("registration_deadline") is not None or predates_deadline:
                 raise ValueError(CERTIFIED_DEADLINE)
@@ -891,7 +892,7 @@ class Challenger:
                              "without one")
         self.predates_deadline = predates_deadline
         self.certifier, self.prover = certifier, prover
-        self.registrations = PS.Registrations() if registrations is None else registrations
+        self.opens = PS.WindowOpens() if opens is None else opens
         self.salts: dict[str, bytes] = {}
         self.params, self.coins, self.sampler, self.budget = params, coins, sampler, budget
         self.record = OR.Record() if record is None else record
@@ -901,10 +902,10 @@ class Challenger:
         ticks = itertools.count()
         self.clock = clock or (lambda: float(next(ticks)))
         self.streams: dict[tuple[str, int], S.Stream] = {}
-        self.regs: dict[str, tuple[S.Stream, S.Registration]] = {}
+        self.regs: dict[str, tuple[S.Stream, S.WindowCommitmentRecord]] = {}
         self.replays: dict[str, str] = {}
         self.passes: dict[str, str] = {}
-        self.manifests: dict[str, Any] = {}   # each registered window's pass manifest, read (`_distinct`)
+        self.manifests: dict[str, Any] = {}   # each registered execution phase's pass manifest, read (`_distinct`)
         self.draws: dict[str, S.Draw] = {}
         self.sessions: dict[str, list[str]] = {}
         self.openings: dict[str, CoinOpening] = {}
@@ -913,17 +914,18 @@ class Challenger:
         self._key: Key | None = None
 
     def _commitment(self) -> Any:
-        """The coin commitment the verifier checks openings against: the trusted live one, or the seeded epoch's."""
+        """The coin commitment the verifier checks openings against: the trusted live one, or the seeded execution phase's."""
         return self.coins.commitment if self.trusted is None else self.trusted
 
     def _coins_json(self) -> dict:
-        """The coins the checks of record read: a certified window's challenger record and the key it is signed under
-        (`core_check.draw` verifies it), or the seeded epoch's commitment."""
+        """The coins the checks of record read: a certified execution phase's challenger record and the key it is signed under
+        (`core_check.draw` verifies it), or the seeded execution phase's commitment."""
         return self.coins.commitment.to_json() if self.signed is None else self.signed
 
     def open(self, label: str, after: bytes) -> CoinOpening | Ch.LiveOpening:
-        """The epoch's `label` coin, opened once after `after` and checked against the published commitment.  A certified
-        window's one coin is its draw coin, ``pouw/draw`` 0 of its live epoch, checked against the trusted commitment."""
+        """The execution phase's `label` coin, opened once after `after` and checked against the published commitment.  A certified
+        execution phase's one coin is its sampling coin, ``pouw/draw`` 0 of its sampling session, checked against the trusted
+        commitment."""
         if self.trusted is not None:
             if label != "draw":
                 raise _refused("coin", f"a certified window's salt is the network certifier's: it opens no {label} coin")
@@ -946,7 +948,7 @@ class Challenger:
         return o
 
     def _of_record(self, name: str, check: Callable[..., Any], *args: Any) -> Any:
-        """`check`'s verdict of record (`of_record`), both verdicts kept in window `name`'s witness."""
+        """`check`'s verdict of record (`of_record`), both verdicts kept in execution phase `name`'s witness."""
         at = len(self.record.witness)
         try:
             return check(*args)
@@ -969,8 +971,8 @@ class Challenger:
 
     def pass_epoch(self, raw: bytes | None, recorded: bool = False, name: str = "", **bound: bytes) -> str:
         """How the pass's salt was had (``coin``, ``recorded beacon`` for a recorded replay's, or ``certifier``), its
-        manifest `raw` re-started under the challenger's own coin commitment, or a certified window's `bound`
-        (`core_check.pass_epoch`'s ``reveal``, ``committed``, ``stream`` and ``prover``), and named by the window's
+        manifest `raw` re-started under the challenger's own coin commitment, or a certified execution phase's `bound`
+        (`core_check.pass_epoch`'s ``reveal``, ``committed``, ``stream`` and ``prover``), and named by the execution phase's
         parameters, of record.  Raises `Refused`."""
         out = self._of_record(name, self.record.pass_epoch, {
             "coins": self._commitment().to_json(), "raw": None if raw is None else raw.hex(),
@@ -984,7 +986,7 @@ class Challenger:
         """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
         Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
-        law = D.parse_law(st.spec.selection.text)
+        law = S.selection_law(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
         codes = self._of_record(name, self.record.registration,
@@ -1010,7 +1012,7 @@ class Challenger:
                                                clock=self.clock, sampler=sampler)
         return self.streams[name, ell]
 
-    def _held(self, name: str) -> tuple[S.Stream, S.Registration]:
+    def _held(self, name: str) -> tuple[S.Stream, S.WindowCommitmentRecord]:
         if name not in self.regs:
             raise _refused("unknown", name)
         return self.regs[name]
@@ -1021,9 +1023,9 @@ class Challenger:
         return self.draws[name]
 
     def register(self, name: str, rec: Mapping[str, Any], stream: str = "window", replay: str | None = None,
-                 manifest: bytes | None = None, recorded: bool = False) -> S.Registration:
-        """Receive window `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`).  A
-        window received after the epoch's draw coin was released is refused (`late-registration`)."""
+                 manifest: bytes | None = None, recorded: bool = False) -> S.WindowCommitmentRecord:
+        """Receive execution phase `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`).  An
+        execution phase received after the execution phase's sampling coin was released is refused (`late-registration`)."""
         self.witness[name] = []
         if replay is None and not self.predates_deadline and "draw" in self.openings:
             raise _refused("late-registration", f"received after the epoch's draw coin was released (opened after "
@@ -1054,16 +1056,16 @@ class Challenger:
         return reg
 
     def _certified(self, name: str, rec: Mapping[str, Any], stream: str, replay: str | None, manifest: bytes | None,
-                   recorded: bool) -> S.Registration:
-        """A certified window's registration (`register`).  First the window's drawn unit must read its salt
-        (`salt.unit_reason`, ``unsalted``), which this window's `Pc8TileSide` doesn't, so today every certified window is
+                   recorded: bool) -> S.WindowCommitmentRecord:
+        """A certified execution phase's registration (`register`).  First the execution phase's sampled proof block must read its salt
+        (`salt.unit_reason`, ``unsalted``), which this execution phase's `Pc8TileSide` doesn't, so today every certified execution phase is
         refused here, before its stream receives it and before the certifier is asked for anything.  Past that, the
-        stream receives it (R1-R7 and the receipt), then the certifier gives what the prover recorded for PoUW window p
-        before it drew p's salt (`salt.committed`), which must bind the pass's weights, the window's stream (`stream_id`)
+        stream receives it (R1-R7 and the receipt), then the certifier gives what the prover recorded for PoUW execution phase p
+        before it sampled p's salt (`salt.committed`), which must bind the pass's weights, the execution phase's stream (`stream_id`)
         and its prover (`core_check.recorded_reason`, ``coin``) before the challenger asks for p's salt
         (`salt.revealed`), since the certifier reveals it once; either refused by the certifier is ``certifier``.  Then
-        the pass's epoch under them, of record, and p's entry in the registration ledger (``reregistered``: once per
-        stream and prover).  The certifier needs the receipt, so a window refused after it stays in its stream without an
+        the pass's execution phase under them, of record, and p's entry in the registration ledger (``reregistered``: once per
+        stream and prover).  The certifier needs the receipt, so an execution phase refused after it stays in its stream without an
         outcome: its failure is visible and has no retry."""
         if replay is not None or recorded:
             raise _refused("certifier", "a certified window is its own pass's: no control replays it and no recorded "
@@ -1092,8 +1094,8 @@ class Challenger:
         salt = CC.certified_salt(manifest, self.params["context"], reveal, committed, sid, self.prover)
         self._distinct(name, manifest)
         try:
-            self.registrations.admit(p, sid, self.prover, reg.digest)
-        except PS.Reregistered as e:
+            self.opens.admit(p, sid, self.prover, reg.digest)
+        except PS.Reopened as e:
             raise _refused("reregistered", str(e)) from None
         self.regs[name] = (st, reg)
         self.recorded[name] = False
@@ -1102,7 +1104,7 @@ class Challenger:
         return reg
 
     def _distinct(self, name: str, manifest: bytes | None) -> None:
-        """Window `name`'s pass, credited beside every pass a window registered before it (`manifests`): no call index
+        """Execution phase `name`'s pass, credited beside every pass an execution phase registered before it (`manifests`): no call index
         twice under one salt, each below 2^32 (`credit.passes_distinct`), so a pass registered again, on another stream,
         is refused (``repeated-call``).  Raises `Refused`; held once it passes."""
         if manifest is None:
@@ -1114,15 +1116,15 @@ class Challenger:
         self.manifests[name] = m
 
     def check(self, name: str, unit: int, pub: bytes, op: dict, drawn: bool = True) -> str | None:
-        """`check` of window `name`'s unit `unit` against its registration and draw, of record (`record`), under the salt
+        """`check` of execution phase `name`'s unit `unit` against its registration and sample, of record (`record`), under the salt
         its pass was checked against when it is certified (`salts`)."""
         _, reg = self._held(name)
         return check(self.params, dict(reg.record), self._drawn(name).draw, unit, pub, op, drawn, self.record,
                      self.salts.get(name))
 
     def select(self, name: str) -> S.Draw:
-        """The draw, once: a window's opens the epoch's draw coin after its registration and samples over `draw_key`;
-        nothing redraws, and a coin opened once is never opened again (a failed draw's retry is refused)."""
+        """The sample, once: an execution phase's opens the execution phase's sampling coin after its registration and samples over `draw_key`;
+        nothing resamples, and a coin opened once is never opened again (a failed sample's retry is refused)."""
         st, reg = self._held(name)
         if name in self.draws:
             raise _refused("drawn", name)
@@ -1146,7 +1148,7 @@ class Challenger:
         return d
 
     def coins_of(self, name: str) -> dict | None:
-        """A window's coins, for its outcome: the epoch's commitment, how its pass's salt was had and its draw coin."""
+        """An execution phase's coins, for its outcome: the execution phase's commitment, how its pass's salt was had and its sampling coin."""
         if name not in self.passes:
             return None
         draw = self.openings.get("draw")
@@ -1160,10 +1162,10 @@ class Challenger:
         return o
 
     def outcome(self, name: str, units: list[dict]) -> tuple[S.Outcome, dict, dict]:
-        """The final outcome from each drawn unit's ``{"unit", "statement", "verdicts"}``, ascending, and PoUW's public
+        """The final outcome from each sampled proof block's ``{"unit", "statement", "verdicts"}``, ascending, and PoUW's public
         items of it (exactly `pouw.window.PUBLIC`) and the stream's record of it.  PoUW's check over the stream's answer
         is of record: the stream's outcome is final once given, so a refusal here (``pouw-check``, or a disagreement)
-        leaves the window with no published outcome."""
+        leaves the execution phase with no published outcome."""
         st, reg = self._held(name)
         d = self._drawn(name)
         if [u["unit"] for u in units] != D.proved(d.draw):
@@ -1207,11 +1209,11 @@ def _put(p: str | None, obj: Any) -> None:
 
 
 def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
-    """One request to the challenger, as a reply word and its JSON.  Requests: ``coins`` (the epoch's coin commitment),
+    """One request to the challenger, as a reply word and its JSON.  Requests: ``coins`` (the execution phase's coin commitment),
     ``salt`` (``after`` hex, the weights' root; ``out`` the salt coin's opening), and with a registration's ``name``:
     ``register`` (``registration`` a record's file, ``manifest`` its pass's manifest and ``recorded`` true for a pass
-    recorded before epoch coins; ``stream`` and ``replay`` for a control; ``out`` the receipt), ``select`` (``out`` the
-    draw; the reply adds the stream's digest the draw read), ``deliver`` (``units``: the job's rows, each with its ``session`` record) and ``outcome`` (``units``; ``out`` a
+    recorded before the execution phase's coins; ``stream`` and ``replay`` for a control; ``out`` the receipt), ``select`` (``out`` the
+    sample; the reply adds the stream's digest the sample read), ``deliver`` (``units``: the job's rows, each with its ``session`` record) and ``outcome`` (``units``; ``out`` a
     directory: outcome.json, audit.json).  Replies: COINS, OPENED, REGISTERED, DRAWN, DELIVERED, ACCEPT, REJECT, LATE,
     PENDING, REFUSED, or ERROR for a request it couldn't read."""
     op, name = cmd.get("op"), cmd.get("name")
@@ -1267,7 +1269,7 @@ def _pass(pass_dir: Path):
     PD = _pd()
     raw = (pass_dir / "manifest.json").read_bytes()
     man = json.loads(raw)
-    if man.get("schema") not in PD.MANIFEST_SCHEMAS:
+    if man.get("schema") not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
         raise SystemExit(f"{pass_dir}: not a retained pass ({man.get('schema')!r})")
     calls = [u for u in man["matmuls"] if u["k"] == K and u["n"] == K]
     if not calls:
@@ -1288,9 +1290,9 @@ def _weights(man: dict, calls: list[dict]) -> list[int]:
 
 
 def cmd_params(a) -> int:
-    """The verifier's own parameters, from the served request it audits: its run and manifest name the window, the
+    """The verifier's own parameters, from the served request it audits: its run and manifest name the execution phase, the
     model's k = n = K weights give |W|, the request's one slot its fixed length (``--max-tokens``, ignore_eos), and the
-    registration deadline is the window's td."""
+    registration deadline is the execution phase's td."""
     _, man, sha, calls = _pass(Path(a.pass_dir))
     rows = sum(next(u["n"] for u in calls if int(u["weight"]) == w) for w in _weights(man, calls))
     deployment = f"served-zk/{man.get('run')}"
@@ -1403,7 +1405,7 @@ def cmd_edit(a) -> int:
 
 
 def lean_sampler(lean: str, log: Path | None = None) -> Sampler:
-    """The window's draw by Lean ``flock-verify draw --stream``: the units of a subset law over N, on the key's stream."""
+    """The execution phase's sample by Lean ``flock-verify draw --stream``: the units of a subset sampling design over N, on the key's stream."""
     def sample(law: Mapping[str, Any], n: int, src: bytes) -> list[int]:
         p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(law["k"]), "--stream", src.hex()],
                            capture_output=True, text=True)
@@ -1431,11 +1433,11 @@ def answer(ch: Challenger, line: str) -> str | None:
 
 
 def cmd_challenger(a) -> int:
-    """The challenger's process: the epoch's coins, drawn now from the Lean verifier of record (`pouw.verifier.coins`) or
+    """The challenger's process: the execution phase's coins, flipped now from the Lean verifier (`pouw.verifier.coins`) or
     read from ``--state``, their commitment published to LOG/coins.json before any request; then
     one JSON request a line on stdin (`handle`), one ``WORD {json}`` reply a line on stdout, each also appended to
     LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and
-    Python's, to LOG/witness.jsonl (a window that ends before its outcome keeps them there); it ends at end of input or
+    Python's, to LOG/witness.jsonl (an execution phase that ends before its outcome keeps them there); it ends at end of input or
     ``{"op": "quit"}``."""
     log = Path(a.log)
     log.mkdir(parents=True, exist_ok=True)
@@ -1486,7 +1488,7 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
     coins it opened (`Recorded`), each request's ``out`` under OUT.  Every difference from the record: a reply, or a file
     a request wrote; empty when the replay is byte-identical.  A record whose parameters predate the registration
     deadline replays as it ran (`Challenger`'s `predates_deadline`): the deadline is in the Spec's digest, which keys the
-    draw, so it can't be added to a recorded window."""
+    sample, so it can't be added to a recorded execution phase."""
     coins = Recorded(CoinCommitment.from_json(_json(log / "coins.json")),
                      [CoinOpening.from_json(json.loads(x)) for x in
                       ((log / "openings.jsonl").read_text().splitlines() if (log / "openings.jsonl").exists() else ()) if x])
@@ -1524,8 +1526,8 @@ CASES = ("foreign", "early", "mislabelled", "tampered", "resalted")
 
 
 def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: str) -> dict:
-    """`man` carrying the epoch's commitment and a salt coin `case` made of `opening`, the challenger's genuine salt coin:
-    another challenger's (``foreign``), opened after what the verifier had not recorded (``early``), the epoch's draw coin
+    """`man` carrying the execution phase's commitment and a salt coin `case` made of `opening`, the challenger's genuine salt coin:
+    another challenger's (``foreign``), opened after what the verifier had not recorded (``early``), the execution phase's sampling coin
     label (``mislabelled``), a byte of the coin flipped (``tampered``), or the genuine coin in a pass whose salt is not
     that coin's (``resalted``)."""
     o = opening
@@ -1540,7 +1542,7 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     elif case != "resalted":
         raise ValueError(f"a coin variant is one of {', '.join(CASES)}")
     out = {k: v for k, v in man.items() if k != "beacon"}
-    return {**out, "schema": _pd().MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
+    return {**out, "schema": CC.MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
 
 
 def cmd_coin_variant(a) -> int:
@@ -1632,7 +1634,7 @@ def main(argv=None) -> int:
                    help="the max_tokens the verifier's request set, each row served to it under ignore_eos")
     p.add_argument("--registration-deadline", type=float, default=REGISTRATION_DEADLINE,
                    help="td: seconds on the challenger's clock from the salt coin's release, when the challenger's `salt` "
-                        "request opens it after the weights' root; the coin itself was drawn when the challenger process "
+                        "request opens it after the weights' root; the coin itself was flipped when the challenger process "
                         "started, from the Lean verifier's coins (pouw.verifier.coins) or --state (default: "
                         "REGISTRATION_DEADLINE)")
     p = sub.add_parser("commit")
@@ -1652,10 +1654,10 @@ def main(argv=None) -> int:
     p = sub.add_parser("challenger")
     p.add_argument("params")
     p.add_argument("log")
-    p.add_argument("--lean", help="Lean flock-verify, whose draw over the draw coin's key is the challenger's "
+    p.add_argument("--lean", help="Lean flock-verify, whose draw over the sampling coin's key is the challenger's "
                                   "(default: its Python twin, stream_subset)")
     p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
-    p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's coins drew "
+    p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's coins flipped "
                                    "from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's coins "
                                    "before serving); default: fresh from the Lean verifier of record when this process "
                                    "starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes LOG/coins.json")
@@ -1663,7 +1665,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):
         p.add_argument(x)
-    p.add_argument("--lean", help="Lean flock-verify, the draw's sampler (default: its Python twin)")
+    p.add_argument("--lean", help="Lean flock-verify, the sample's sampler (default: its Python twin)")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("coin-variant")
     for x in ("manifest", "coins", "opening", "out"):
@@ -1676,7 +1678,7 @@ def main(argv=None) -> int:
     p.add_argument("pub")
     p.add_argument("opening")
     p.add_argument("--out", help="the opening check's verdict, for the outcome")
-    p.add_argument("--undrawn", action="store_true", help="a control: open a unit the draw did not draw")
+    p.add_argument("--undrawn", action="store_true", help="a control: open a unit the sample did not sample")
     p.add_argument("--expect-reject", action="store_true")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("shape")

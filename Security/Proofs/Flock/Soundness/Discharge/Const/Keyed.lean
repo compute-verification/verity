@@ -1,6 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+module
+
+public import Proofs.Flock.Soundness.Discharge.Const.ConstCols
+public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Zero.Uniform
-import Proofs.Flock.Soundness.Discharge.Const.ConstCols
 
 /-!
 # `hConst` at the production program's places
@@ -11,6 +14,8 @@ rows, each input on the gate of its Δ source key, each constant on the one gate
 program's own instance (`Placed.Sites.progPlaces_keyProg_inst`). So only a unit's constant column sits on the one gate:
 `constCols_keyProg`, the twin of `Zero.zeroCols_keyProg`, at the same places and from the same arguments.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Const
 

@@ -1,9 +1,11 @@
-"""IR-registered scalar primitives: the basic integer, bit, select and comparison operations, and the FP32 instructions
-whose semantics is a bit operation or an exact comparison on the encoding (`abs`, `neg`, `max`, `min`, `cvt.sat`).
+"""Registered scalar primitives: the basic integer, bit, select and comparison operations, the FP32 instructions
+whose semantics is a bit operation or an exact comparison on the encoding (`abs`, `neg`, `max`, `min`, `cvt.sat`), and the
+f32 -> s8 rounding cast (`cvt.rni.sat.s8.f32`).
 
-Encodings: f32 = `Value<32>`, bf16 = `Value<16>`, i32 = `Value<32>` (two's complement), bit = `Value<1>`.  Every evaluator
-is integer arithmetic on the encoding, so no host floating-point state (flush-to-zero, denormals-are-zero) reaches it.
-These ids appear in stored Programs registered by the vLLM integration; each denotes the function it denoted there.
+Encodings: f32 = `Value<32>`, bf16 = `Value<16>`, i32 = `Value<32>` (two's complement), s8 = `Value<8>` (two's complement),
+bit = `Value<1>`.  Every evaluator is integer arithmetic on the encoding, so no host floating-point state (flush-to-zero,
+denormals-are-zero) reaches it.  An id that appears in stored Programs registered by the vLLM integration denotes the
+function it denoted there.
 """
 from __future__ import annotations
 
@@ -12,15 +14,15 @@ from verity.ml.circuits.types import Value
 
 from verity.ml.circuits.silicon.cast import bf16_is_nan, f32_is_nan
 
-F32, BF16, I32, BIT = Value(32), Value(16), Value(32), Value(1)
+F32, BF16, I32, S8, U16, BIT = Value(32), Value(16), Value(32), Value(8), Value(16), Value(1)
 #: the GPU's canonical FP32 NaN: max.f32 / min.f32 of two NaNs, and every NaN result of add, sub, mul, div and fma (`fp32`'s `_v2`), an
-#: invalid operation and a NaN operand alike, no operand's payload, sign or signalling bit kept (the L40S / H100 probe
-#: art:e5dd6ce9fa74e7ca4538b848943d8bb555f2adac528277848395dbf4cdff66a5: every build, PTX and C++ operators, ftz on and off)
+#: invalid operation and a NaN operand alike, no operand's payload, sign or signalling bit kept (measured on the L40S and H100:
+#: every build, PTX and C++ operators, ftz on and off)
 F32_NAN_PTX = 0x7FFFFFFF
 
-__all__ = ["BIT", "BF16", "F32", "I32", "Bf16GtStrict", "BitAnd", "BitNot", "BitOr", "F32BitsShl23", "F32Eq", "F32Fabs",
-           "F32Fmaxf", "F32Fminf", "F32IsFinite", "F32Neg", "F32Sat", "I32Add", "I32Eq", "I32Le", "SelectBf16", "SelectF32",
-           "SelectI32"]
+__all__ = ["BIT", "BF16", "F32", "I32", "S8", "U16", "Bf16GtStrict", "BitAnd", "BitNot", "BitOr", "F32BitsShl23", "F32Eq",
+           "F32Fabs", "F32Fmaxf", "F32Fminf", "F32IsFinite", "F32Neg", "F32Sat", "F32ToS8RniSat", "I32Add", "I32Eq", "I32Le",
+           "SelectBf16", "SelectF32", "SelectI32", "U32Hi16"]
 
 
 def _order(u: int, width: int) -> int:
@@ -88,6 +90,31 @@ def F32Sat(a: int) -> int:
     if f32_is_nan(u) or u >> 31:
         return 0
     return 0x3F800000 if u >= 0x3F800000 else u
+
+
+@primitive("F32ToS8RniSat", 1, [("x", F32)], S8, conformance="exact-model-tested")
+def F32ToS8RniSat(x: int) -> int:
+    """`cvt.rni.sat.s8.f32`: x rounded to the nearest integer, ties to even, saturated to [-128, 127] (the infinities too),
+    NaN 0; the s8 code. The same as torch's ``round(x).clamp(-128, 127).to(torch.int8)`` on CPU, NaN included."""
+    u = x & 0xFFFFFFFF
+    if f32_is_nan(u):
+        return 0
+    e, neg = (u >> 23) & 0xFF, u >> 31
+    sig = (u & 0x7FFFFF) | (0x800000 if e else 0)
+    sh = 150 - max(e, 1)                 # |x| = sig 2^-sh
+    if sh <= 0:
+        v = sig << -sh
+    else:
+        q, r, half = sig >> sh, sig & ((1 << sh) - 1), 1 << (sh - 1)
+        v = q + (r > half or (r == half and q & 1))
+    v = min(v, 128 if neg else 127)
+    return (-v if neg else v) & 0xFF
+
+
+@primitive("U32Hi16", 1, [("a", I32)], U16, conformance="protocol-defined")
+def U32Hi16(a: int) -> int:
+    """A 32-bit word's high 16 bits."""
+    return (a >> 16) & 0xFFFF
 
 
 @primitive("F32BitsShl23", 1, [("a", F32)], F32, conformance="exact-model-tested")

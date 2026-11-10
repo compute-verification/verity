@@ -1,4 +1,7 @@
-import Models.Accounting.Guarantees.Compose
+module
+
+public import Definitions.Accounting.Guarantees.Compose
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The sharp rate: proof
@@ -15,6 +18,8 @@ the right side's affine interpolation of the vertex values:
 
 and the same for `y`, `L_0` with `b`, `p0`, `ν₀`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose.Rates
 

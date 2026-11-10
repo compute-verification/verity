@@ -1,5 +1,10 @@
-import Proofs.Flock.Soundness.Compose
-import Proofs.Flock.Soundness.Types.Dag
+module
+
+public import Proofs.Flock.Soundness.Compose
+public import Proofs.Flock.Soundness.Types.Dag
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # A unit's rows in logical order, over the type DAG (verified-lowering phase 1, 1d step 2)
@@ -15,6 +20,8 @@ For every statement `deriveChecked` accepts:
 - `Rows.compose_eval_unit`: satisfied composed rows, with `one` at 1, carry on each output's logical column the unit
   type's output (`evalT`) on the input columns' values. This is `Types.Dag.unit_sound` read through the order.
 -/
+
+@[expose] public section
 
 open Flock Flock.DeriveAll
 
@@ -65,7 +72,7 @@ theorem physical_of_mem (z : Fin (Rows.compose L h).w → Bool) {c : ℕ} (hc : 
 theorem comp_one {z : Fin (Rows.compose L h).w → Bool} (hz : (Rows.compose L h).Sat z)
     (h1 : z (Rows.compose L h).one = true) (k : Fin (Rows.compose L h).nComp)
     (hr : L.row (L.order.getD (L.nIn + k.val) 0) = none) : z ((Rows.compose L h).comp k) = true := by
-  have hone : ∀ M : List (Fin (Rows.compose L h).w), M.map Fin.val = [L.order.length] → xorSum M z = true := by
+  have hone : ∀ M : List (Fin (Rows.compose L h).w), M.map Fin.val = [L.order.length] → Verity.Boolean.xorSum M z = true := by
     intro M hM
     cases M with
     | nil => cases hM
@@ -74,7 +81,7 @@ theorem comp_one {z : Fin (Rows.compose L h).w → Bool} (hz : (Rows.compose L h
       | nil =>
         simp only [List.map_cons, List.map_nil, List.cons.injEq, and_true] at hM
         have : x = (Rows.compose L h).one := Fin.ext (by rw [Rows.compose_one]; exact hM)
-        simp [xorSum, this, h1]
+        simp [Verity.Boolean.xorSum, this, h1]
       | cons y M'' => simp at hM
   rw [hz k, hone _ (by rw [Rows.compose_a, lrow_none hr]), hone _ (by rw [Rows.compose_b, lrow_none hr])]
   rfl
@@ -180,7 +187,7 @@ theorem Rows.compose_eval_unit (hd : deriveChecked types ls info words unit = .o
         rw [hcol] at hr ⊢
         rw [hins ℓ hin', Option.some.injEq] at hr
         subst hr
-        simp [xorSum]
+        simp [Verity.Boolean.xorSum]
       · obtain ⟨k, rfl⟩ : ∃ k, ℓ = u.inCols.size + k := ⟨ℓ - u.inCols.size, by omega⟩
         have hk : k < (Rows.compose (ofBlock words done u) h).nComp := by
           show k < (order done u).length - u.inCols.size; omega
@@ -190,7 +197,7 @@ theorem Rows.compose_eval_unit (hd : deriveChecked types ls info words unit = .o
         · rw [hb, Option.some.injEq] at hr
           subst hr
           have := comp_one hz h1 ⟨k, hk⟩ hr'
-          simp only [xorSum, List.map_cons, List.map_nil, List.foldr_cons, List.foldr_nil, v, ite_true,
+          simp only [Verity.Boolean.xorSum, List.map_cons, List.map_nil, List.foldr_cons, List.foldr_nil, v, ite_true,
             Bool.xor_false, Bool.and_self]
           exact this
         · rw [hb, Option.some.injEq] at hr
@@ -201,8 +208,8 @@ theorem Rows.compose_eval_unit (hd : deriveChecked types ls info words unit = .o
               (fun c hc => hmem c (List.mem_append_left _ hc)),
             xorSum_physical z _ _ (by rw [Rows.compose_b, lrow_some hr'])
               (fun c hc => hmem c (List.mem_append_right _ hc))] at hzk
-          rw [xorSum_congr (fun c hc => hv c (hmem c (List.mem_append_left _ hc))),
-            xorSum_congr (fun c hc => hv c (hmem c (List.mem_append_right _ hc)))]
+          rw [Verity.Boolean.xorSum_congr (fun c hc => hv c (hmem c (List.mem_append_left _ hc))),
+            Verity.Boolean.xorSum_congr (fun c hc => hv c (hmem c (List.mem_append_right _ hc)))]
           exact hzk
         · rw [hb] at hr; cases hr
     · rw [hzero c r hm hr]

@@ -1,17 +1,20 @@
 """`_jit.build_dir`: the C++ twin libraries build in a per-user cache outside the checkout, keyed by the sources and the compiler
 flags; building them writes nothing under the repository; concurrent first users of one library resolve one path, compile it
-once and load the whole library."""
+once and load the whole library; each loads as a `_jit.Model` naming every file its build compiles."""
 from __future__ import annotations
 
 import ctypes
 import multiprocessing as mp
 import os
+import re
 import shutil
+import sys
+import types
 from pathlib import Path
 
 import pytest
 
-from verity_vllm.program.kernels import _jit
+from verity.ml.definitions.numerics import _jit
 
 REPO = Path(__file__).resolve().parents[4]
 TWINS = (("libtc_model.so", "tc_model.cpp"), ("librms_triton_model.so", "rms_triton_model.cpp"), ("libfa2_model.so", "fa2_model.cpp"))
@@ -49,8 +52,75 @@ def test_build_dir_is_a_user_cache_keyed_by_the_sources_and_the_compiler_flags(t
     assert _jit.build_dir() == (tmp_path / "override").resolve()
 
 
+def test_every_cpp_model_loads_as_a_model_naming_every_file_its_build_compiles(monkeypatch):
+    """circuit-check keys a check that called a C++ model on the files its `_jit.Model` names (`circuit_check.cache.MODEL`),
+    wherever the library was built.  So each model's library is a `Model` naming its build's sources, those hold every file a
+    source includes, every file of `cpp/` is some model's, and nothing here loads a library with ctypes but as a `_jit.Model`."""
+    from verity.ml.definitions.numerics import cpu_model, dense_rows, fa2_model, fa3_model, rms_triton_model
+
+    built: dict[str, tuple[Path, ...]] = {}
+
+    def atomic_build(lib, sources, compile_to, *, force=False):
+        built[Path(lib).name] = tuple(Path(s) for s in sources)
+        return Path(lib)
+
+    class Model(types.SimpleNamespace):
+        def __init__(self, path, sources):
+            super().__init__(path=Path(path), sources=tuple(Path(s) for s in sources))
+
+        def __getattr__(self, name):                   # a function, which the loaders give argtypes and a restype
+            setattr(self, name, fn := types.SimpleNamespace())
+            return fn
+
+    monkeypatch.setattr(_jit, "atomic_build", atomic_build)
+    monkeypatch.setattr(_jit, "Model", Model)
+    for m in (cpu_model, fa2_model, fa3_model, rms_triton_model):
+        monkeypatch.setattr(m, "_lib", None)
+    dense_rows.k16_lib.cache_clear()
+    try:
+        libs = [cpu_model.lib(), fa2_model.lib(), fa3_model.lib(), rms_triton_model.lib(), dense_rows.k16_lib()]
+    finally:
+        dense_rows.k16_lib.cache_clear()
+    assert all(isinstance(lib, Model) for lib in libs)
+    assert {lib.path.name: lib.sources for lib in libs} == built, "a model names the sources its build compiles"
+    for lib in libs:
+        for s in lib.sources:
+            for inc in re.findall(r'^\s*#\s*include\s+"([^"]+)"', s.read_text(), re.M):
+                assert (s.parent / inc).resolve() in {x.resolve() for x in lib.sources}, f"{s.name} includes {inc}: name it"
+    assert {s.name for lib in libs for s in lib.sources} == {p.name for p in _jit.CPP_DIR.glob("*.cpp")}
+    for f in sorted(_jit.CPP_DIR.parent.rglob("*.py")):
+        assert not re.search(r"\b(?:CDLL|PyDLL|LoadLibrary)\s*\(|\b(?:cdll|pydll)\.", f.read_text()), \
+            f"{f.name} loads a library with ctypes itself: load a model's as `_jit.Model(path, sources)`"
+
+
+@needs_cxx
+def test_a_models_every_call_raises_its_sources_whatever_its_build_directory(tmp_path, monkeypatch):
+    """`_jit.CALLED` with the model's sources, absolute, at each call of a function of its library, once it was loaded: a
+    library is loaded once a process, by whichever check first runs it, and its build directory need not be keyed on them."""
+    monkeypatch.setenv("VERITY_NUMERICS_BUILD_DIR", str(tmp_path / "libs"))
+    src = tmp_path / "m.cpp"
+    src.write_text('extern "C" int answer(int x) { return x + 41; }\n')
+    lib = _jit.atomic_build(_jit.lib_path("libanswer.so"), [src], lambda out: _jit.cxx_compile(out, src))
+    model = _jit.Model(lib, [src])
+    seen: list[tuple] = []
+    on = [True]
+
+    def hook(event, args):                             # an audit hook stays for the process: this one only while the test runs
+        if on and event == _jit.CALLED:
+            seen.append(args)
+
+    sys.addaudithook(hook)
+    try:
+        model.answer.restype = ctypes.c_int
+        assert seen == []
+        assert [model.answer(1), model.answer(2)] == [42, 43]
+    finally:
+        on.clear()
+    assert seen == [((str(src.resolve()),),)] * 2
+
+
 def test_no_twin_library_resolves_under_the_checkout():
-    from verity_vllm.program.kernels import cpu_model, fa2_model, rms_triton_model
+    from verity.ml.definitions.numerics import cpu_model, fa2_model, rms_triton_model
     for lib in (cpu_model.LIB, fa2_model.LIB, rms_triton_model.LIB):
         assert not Path(lib).resolve().is_relative_to(REPO.resolve()), f"{lib} is inside the checkout {REPO}"
 

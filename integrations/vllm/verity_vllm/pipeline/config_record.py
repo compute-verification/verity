@@ -36,7 +36,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import RECORDS, WORKLOADS, RowConfig, RowId, UsageError, done_source_refusal
+from verity_vllm.config import RECORDS, WORKLOADS, RowConfig, RowId, UsageError, done_source_refusal, workload_file
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline.research_outputs import verdicts
 
@@ -55,7 +55,7 @@ INDEX_ABOUT = ("Per row of record: `record`, its config record's art: id (`verit
                "of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose "
                "re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.  A switched row's `aot` names the "
                "comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and "
-               "that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.predict.aot`), its pins the "
+               "that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.program.predict.aot`), its pins the "
                "predicted Programs, and its rebuild the trace.")
 
 
@@ -107,13 +107,13 @@ def config_of(row: str) -> dict[str, Any]:
 
 def row_part(row: str, profile: str | None = None) -> dict[str, Any] | None:
     """The row's config (`config.RowConfig`, its file without the requests), the file's sha256 and the κ profile its Match folds with
-    (`profile`, else the role's: `engine.profiles.generic.module_name`).  None for a row without a file."""
-    p = WORKLOADS / f"{row}.json"
+    (`profile`, else the role's: `observe.fold.profiles.generic.module_name`).  None for a row without a file."""
+    p = workload_file(WORKLOADS / f"{row}.json")
     if not p.is_file():
         return None
     cfg = RowConfig.load(p)
     if profile is None and cfg.case:
-        from verity_vllm.engine.profiles.generic import module_name
+        from verity_vllm.observe.fold.profiles.generic import module_name
         profile = module_name(cfg.case, int(config_of(row).get("tp") or 1))
     return {"file": f"workloads/{row}.json", "sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "profile": profile,
             "config": {k: v for k, v in cfg.to_json().items() if k != "requests"}}
@@ -123,13 +123,13 @@ def index_refusal(row: str) -> str | None:
     """Why `INDEX` may not list `row`: a row it lists is a row of record, so its file must be done only at its public cap
     (`config.done_source_refusal`, with `of_record`); None when it is.  `records publish`, `pull` and `switch` refuse with it before
     they touch the index, and `row chain` before any stage when it would publish."""
-    p = WORKLOADS / f"{row}.json"
+    p = workload_file(WORKLOADS / f"{row}.json")
     return done_source_refusal(json.loads(p.read_text()) if p.is_file() else {"sweep": {"row_id": row}}, of_record=True)
 
 
 def match_part(d: Path, world: int) -> dict[str, Any] | None:
     """The Match's verdict: a TP row's fold Match (`match/fold_match/tp2_fold_match.json`: per-rank fold, compare and GM-01, the
-    cross-rank leg, the profile it folded with), a single-GPU row's global Match (`global_match.json`, GM-01's ``verdict``).  None when
+    cross-rank check, the profile it folded with), a single-GPU row's global Match (`global_match.json`, GM-01's ``verdict``).  None when
     no Match ran."""
     if world > 1:
         fm = _json(d / "match" / "fold_match" / "tp2_fold_match.json")

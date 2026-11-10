@@ -1,15 +1,19 @@
-import PouwCheck.Credit
+module
+
+public import PouwCheck.Credit
 
 /-!
 # A served window's work strata tile its units (`PouwCheck.Credit.strata`)
 
-The property of `strata` (`credit.strata`) that makes `established`'s two numbers the draw's: the strata it builds from a
+The property of `strata` (`credit.strata`) that makes `established`'s two numbers the sample's: the strata it builds from a
 window's layout hold the window's units call by call, in `h1window.program`'s order, each unit at its call's work, and no
 other unit. `callWork` (`credit.call_work`) lists each call's units and the work of each of them; call `i`'s units are
 `[callStart i, callStart (i + 1))`. So the credited calls' work `established` passes `epsAt` as `C` is the work of their
-units in the strata the draw runs over (`unitWork`), and the window's work it passes as `W` is the strata's
-(`Flock.Draw.totalWork`). Each is a `Prop`, and `Properties.Proofs.Pouw.Strata` proves every one, on Lean core.
+units in the strata the sample runs over (`unitWork`), and the window's work it passes as `W` is the strata's
+(`Flock.Draw.totalWork`). Each is a `Prop`, and `Proofs.Properties.Pouw.Strata` proves every one, on Lean core.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Strata
 
@@ -30,7 +34,7 @@ def callStart (layout : Json) (i : Nat) : Nat := (((callWork layout).take i).map
 `[callStart i, callStart (i + 1))`) is held by some stratum and does its call's work in every stratum that holds it; no
 unit from the window's end on is held; the strata's sizes add up to the window's units, so no unit is held twice; the
 strata's work (`Flock.Draw.totalWork`) is the calls' (`callWork`'s units times their work); and the strata's templates,
-which label their draw streams, are distinct. -/
+which label their sample streams, are distinct. -/
 def StrataTile : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum), PouwCheck.Credit.strata layout = .ok ss →
     (∀ i (hi : i < (callWork layout).length) u, callStart layout i ≤ u → u < callStart layout (i + 1) →

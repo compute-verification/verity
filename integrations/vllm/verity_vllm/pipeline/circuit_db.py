@@ -49,7 +49,7 @@ bundle=...)`), each digest checked against the record as from the store.
     verity-vllm records switch <row> --comparison comparison.json --run R --trace art:… [--tier T]   # the row's Build becomes AOT
 
 A switched row (`switch`: its `aot` in the index, `config_record.aot_of`) has the AOT Build on its record path
-(`verity_vllm.predict.aot`): its pins are the predicted Programs, equal on every rank to the traced Build its comparison checked.
+(`verity_vllm.program.predict.aot`): its pins are the predicted Programs, equal on every rank to the traced Build its comparison checked.
 """
 from __future__ import annotations
 
@@ -149,7 +149,7 @@ def programs(row: str, ranks: list[int] | None = None, *, part: list[str] | None
     """The row's Programs, {rank: {part: DecodedProgram}} (only `ranks` and the parts `part` names, when given), fetched from its Build
     (`evidence.build`, only the descriptors asked for) or read from a `bundle` (`records fetch`), and decoded through the registry
     (`program.boolean.load_program`).  A descriptor whose digest is not the record's is refused."""
-    from verity_vllm.program.boolean import load_program
+    from verity.ml.definitions.boolean import load_program
     rec = record(row, bundle)
     want = selected(rec, ranks, part)
     paths = [descriptor(rec, r, p) for r, ps in want.items() for p in ps]

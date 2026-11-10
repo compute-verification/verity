@@ -1,32 +1,42 @@
 #!/usr/bin/env python3
-"""Top's two loops on the control pod (INF-131; top's spec, #agent-coordination 1792433424.443299), which ran as Cursor timers on
+"""Top's two loops on the control pod (top's spec), which ran as Cursor timers on
 top's VM (asks-relay-v4, admin-hourly-v3) and stopped whenever it was suspended. Each detects and rings: it posts nothing but
-inbox doorbells, and whatever needs judgment rings @top instead of being decided.
+inbox doorbells, and whatever needs judgment rings top instead of being decided.
 
     top_watch.py asks  [--every 900]  [--state PATH] [--once] [--seed] [--dry-run]    $NOTION_API_KEY, $SLACK_BOT_TOKEN
-    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $GH_TOKEN, $CURSOR_API_KEY
+    top_watch.py sweep [--every 3600] [--state PATH] [--once] [--seed] [--dry-run]    $SLACK_BOT_TOKEN, $GH_TOKEN, $CURSOR_API_KEY,
+                                                                                      $LINEAR_CLIENT_ID, $LINEAR_CLIENT_SECRET
 
 **asks**, every 15 min: the Asks for Daniel pages (the registry's #ask-daniel `pages`) edited since the last pass, and every
 Default-kind page still Waiting on Daniel past its Deadline.
 - Approve ticked: Status Approved, Decision "Approved by Daniel (Approve ticked, <time PT>)".
-- Choose set: Status Decided otherwise, Decision "Daniel chose <letter>: <that option's heading on the page>".
+- Choose set to a letter the relay hasn't seen on the page: Status Decided otherwise, Decision "Daniel chose <letter>: <that
+  option's heading on the page>". A lane fills Choose on a page it decides itself, and that pick stays the lane's when the page
+  reopens.
 - Approve ticked on a Decided by lane page: Status Approved, and " Endorsed by Daniel." appended to its Decision.
 - A Default-kind page past its Deadline, still Waiting on Daniel: Status Default applied, Decision "Default applied <time PT>:
   <If no answer>".
 - New text under the bold first line of the yellow "Your reply" callout, or a new comment, not starting with an @handle or the
-  page's lane (or top) and a colon: quoted (QUOTE_MAX characters).
-Each rings the page's Lane, led by its name, with what to do (`resolve` on its card), and @top with one line, since top writes the
-decisions log. The state keeps `since`, the pages decided, the reply pieces seen per page (by block id) and the comment ids
-seen.
+  page's lane (or top) and a colon or a time (`proofs 03:20Z:`): quoted (QUOTE_MAX characters).
+Each rings the page's Lane, led by its name, with what to do (`resolve` on its card), and top with one line, since top writes the
+decisions log. The state keeps `since`, the pages decided, the reply pieces seen per page (by block id), the comment ids
+seen, and the Choose last seen per page (`chosen`; its first pass records every page not open that carries one).
 
 **sweep**, hourly; each finding rings its owner once (its id kept in `rung` for KEEP_S):
 1. `research msg traffic`: an ask unanswered for over an hour from a person or a handle (not a machine: `vy-*`): its addressees.
 2. An ACTIVE Verity cloud agent (`GET /v1/agents`) that holds no handle: no registry `holder` and no inbox in the routes names it.
-   @top.
-3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): @top.
-4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): @ci.
+   top.
+3. A new post in #agent-coordination thread RULES_THREAD (deadlocks and rule questions): top.
+4. main's head unchanged for STALL_S (since the sweep first saw it) while `next` is ahead of it (PRs queued): ci.
 5. Once a day after 15:00Z: each H200 under H200_BUSY_PCT mean GPU utilization over 24 h, from fleet.py's samples
-   ($FLEET_DIR): @top, with the numbers.
+   ($FLEET_DIR): top, with the numbers.
+6. The Linear audit (`research.linear`'s `audit`, $LINEAR_CLIENT_ID and $LINEAR_CLIENT_SECRET): one JSON line a pass in
+   <state dir>/linear-audit.jsonl, with the counts by lane and kind and #agent-coordination's last 24 h (`traffic --volume`:
+   posts, words, posts over 80 words). Each lane with findings, once per LANE_RING_S, with its counts and the command that
+   lists them (findings with no lane: top); a person's ask off track (`linear.ASK_KINDS`) rings its lane once per
+   LANE_RING_S, naming the issues, until it holds (a slipped ask holds once a `slip:` comment follows its last move); once
+   a day after 15:00Z, top with the totals and their change from the line 24 h earlier, and the registry's teams the app
+   can't read (`unread`), which the audit skips.
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for
@@ -50,7 +60,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from research import slack
+from research import linear, slack
 
 QUOTE_MAX = 600
 KEEP_S = 14 * 86400
@@ -60,6 +70,9 @@ RULES_THREAD = "1792037552.043289"
 STALL_S = 3600
 H200_BUSY_PCT = 10
 REPORT_HOUR_UTC = 15
+LANE_RING_S = 12 * 3600
+AUDIT_LOG = "linear-audit.jsonl"
+DAY_BEFORE_S = 86400 - 1800             # the line 24 h earlier: the newest one at least this old (passes drift within the hour)
 REPO = "compute-verification/verity"
 OPEN = ("Waiting on Daniel", "Revising")
 HANDLE_LEAD = re.compile(r"^\s*@[a-z0-9][a-z0-9._-]*")
@@ -148,8 +161,9 @@ def page_body(notion, pid: str) -> tuple[list[tuple[str, str]], dict[str, str]]:
 
 
 def lane_lead(lane: str) -> re.Pattern:
-    """How a lane's answer starts: an @handle, or the page's lane or top named with a colon (`proofs:`, as lanes sign)."""
-    return re.compile(rf"{HANDLE_LEAD.pattern}|^\s*(?:{re.escape(lane)}|top)\s*:")
+    """How a lane's answer starts: an @handle, or the page's lane or top named with a colon or a time, as lanes sign
+    (`proofs:`, `proofs 03:20Z:`, `proofs, <day> <month> 03:20Z:`). `proofs, please …` is still Daniel's."""
+    return re.compile(rf"{HANDLE_LEAD.pattern}|^\s*(?:{re.escape(lane)}|top)\s*(?::|,?\s+(?:\d{{1,2}}\s+[A-Z][a-z]{{2}}\s+)?\d{{1,2}}:\d{{2}})")
 
 
 def daniels(reply: list[tuple[str, str]], seen: set[str], lead: re.Pattern = HANDLE_LEAD) -> list[str]:
@@ -170,13 +184,14 @@ def comments(notion, pid: str) -> list[dict]:
     return notion.call("GET", f"/comments?block_id={urllib.parse.quote(pid)}&page_size=100").get("results") or []
 
 
-def decide(p: dict, headings: Callable[[], dict[str, str]], now: float) -> tuple[str, str, str] | None:
-    """(Status, Decision, the choice for `resolve`) the page's ticks call for, or None."""
+def decide(p: dict, headings: Callable[[], dict[str, str]], now: float, chose: str | None = None) -> tuple[str, str, str] | None:
+    """(Status, Decision, the choice for `resolve`) the page's ticks call for, or None. `chose` is the Choose the relay last saw
+    on the page: the same letter again is no new choice."""
     st, kind = p.get("Status"), p.get("Kind")
     rec = (m[1] if (m := OPTION_LETTER.match(p.get("Recommendation", ""))) else "<value>")
     if st in OPEN and p.get("Approve") == "yes":
         return "Approved", f"Approved by Daniel (Approve ticked, {pt(now)})", rec
-    if st in OPEN and p.get("Choose"):
+    if st in OPEN and p.get("Choose") and p["Choose"] != chose:
         c = p["Choose"]
         return "Decided otherwise", f"Daniel chose {c}: {headings().get(c, '(no such option on the page)')}", c
     if st == "Decided by lane" and p.get("Approve") == "yes":
@@ -197,6 +212,10 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
                        {"property": "Deadline", "date": {"before": iso(now)}}]}
     pages = {p["id"]: p for p in query_all(notion, ds, {"filter": edited}) + query_all(notion, ds, {"filter": overdue})}
     decided, replies, seen = set(state.get("decided", [])), state.setdefault("replies", {}), set(state.get("comments", []))
+    chosen = state.get("chosen")
+    if chosen is None:
+        chosen = {pg["id"]: c for pg in query_all(notion, ds, {"filter": {"or": [{"property": "Choose", "select": {"is_not_empty": True}}]}})
+                  if (q := props(pg)).get("Status") not in OPEN and (c := q.get("Choose"))}
     said: list = []
     for pid, page in pages.items():
         p, url = props(page), page.get("url", "")
@@ -218,7 +237,10 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
             if lane != "top":
                 ring("top", f"{lane}'s ask \u201c{ask[:120]}\u201d: {what[:300]} {url}", thread)
 
-        if ring is not None and pid not in decided and (d := decide(p, heads, now)):   # a seed leaves a pending tick to the next pass
+        before = chosen.get(pid)
+        if ring is not None or p.get("Status") not in OPEN:
+            chosen[pid] = p.get("Choose") or ""
+        if ring is not None and pid not in decided and (d := decide(p, heads, now, before)):   # a seed leaves a pending tick to the next pass
             status, decision, choice = d
             if dry:
                 log(f"would set {url}: Status {status}, Decision {decision}")
@@ -246,7 +268,7 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
             text = plain(c.get("rich_text")).strip()
             if text and not lead.match(text):
                 tell(f"Daniel commented: \u201c{text[:QUOTE_MAX]}\u201d", "<value>")
-    state.update(since=now, decided=sorted(decided), comments=sorted(seen))
+    state.update(since=now, decided=sorted(decided), comments=sorted(seen), chosen=chosen)
 
 
 # ---- sweep ----
@@ -352,6 +374,76 @@ def h200s(state, ring, now, samples: Callable[[float, float], list[dict]]) -> No
     state["h200_day"] = day
 
 
+def _change(n: int, then) -> str:
+    return f" ({n - then:+d})" if isinstance(then, int) else ""
+
+
+def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Callable[[], dict], log_path: Path | None,
+                 unread: Callable[[], list[str]] = list) -> None:
+    """The audit's line appended to `log_path` (None: a dry run, which appends nothing), each lane's ring and top's daily one.
+    A volume that can't be read leaves the line's `volume` null; `unread`, the teams the audit can't see, goes in both."""
+    found, blind = audit(), unread()
+    counts = linear.tally(found)
+    kinds = {k: sum(c.get(k, 0) for c in counts.values()) for k in linear.AUDIT_KINDS}
+    try:
+        totals = volume()["totals"]
+        vol = {k: totals[k] for k in ("posts", "words", "over")}
+    except (RuntimeError, ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as e:
+        log(f"linear: the volume not read: {type(e).__name__}: {e}")
+        vol = None
+    earlier = None
+    if log_path is not None:
+        for raw in log_path.read_text().splitlines() if log_path.is_file() else []:
+            try:
+                x = json.loads(raw)
+            except ValueError as e:
+                log(f"linear: skipped a log line that isn't JSON ({e}): {raw[:80]!r}")
+                continue
+            if str(x.get("t", "")) <= iso(now - DAY_BEFORE_S):
+                earlier = x
+        with log_path.open("a") as f:
+            f.write(json.dumps({"t": iso(now), "findings": len(found), "kinds": kinds, "lanes": counts, "volume": vol,
+                                "unread": blind}, sort_keys=True) + "\n")
+    bucket = int(now // LANE_RING_S)
+    for lane, c in counts.items():
+        name, whose = ("top", "issues with no lane") if lane == linear.NO_LANE else (lane, "your open issues")
+        once_each(state, f"linear:{lane}:{bucket}", ring, name,
+                  f"{name}: the Linear audit finds {sum(c.values())} on {whose} ({', '.join(f'{k} {n}' for k, n in c.items())}): "
+                  f"`research msg linear audit --lane {lane}` lists them, one line each with its fix.", None, now)
+    due: dict[str, list[dict]] = {}
+    for f in found:
+        if f["kind"] in linear.ASK_KINDS:
+            due.setdefault(f["lane"], []).append(f)
+    for lane, fs in due.items():
+        c = {k: n for k in linear.ASK_KINDS if (n := sum(f["kind"] == k for f in fs))}
+        once_each(state, f"linear-ask:{lane}:{bucket}", ring, "top" if lane == linear.NO_LANE else lane,
+                  f"{lane}: a person's ask is off track on {', '.join(dict.fromkeys(f['issue'] for f in fs))} "
+                  f"({', '.join(f'{k} {n}' for k, n in c.items())}): `research msg linear audit --lane {lane}` gives each fix; "
+                  "this rings every 12 hours until it holds (a slip, until a `slip:` comment follows its last move).", None, now)
+    if time.gmtime(now).tm_hour < REPORT_HOUR_UTC:
+        return
+
+    def then(*keys: str):
+        x = earlier
+        for k in keys:
+            x = x.get(k) if isinstance(x, dict) else None
+        return x
+    shown = [f"{k} {n}{_change(n, then('kinds', k))}" for k, n in kinds.items() if n or then("kinds", k)]
+    body = f"top: the Linear audit at {iso(now)}: {len(found)} findings{_change(len(found), then('findings'))}"
+    body += f" ({', '.join(shown)})" if shown else ""
+    if vol:
+        body += f"; #{slack.FRONT_DOOR}'s last 24 h: " + ", ".join(
+            f"{vol[k]} {what}{_change(vol[k], then('volume', k))}"
+            for k, what in (("posts", "posts"), ("words", "words"), ("over", f"over {slack.VOLUME_WORDS} words")))
+    body += f"; changes from {earlier['t']}" if earlier else "; no line 24 h earlier yet"
+    if blind:
+        body += f"; not audited, the app can't read team(s) {', '.join(blind)}"
+    if counts:
+        body += "; by lane: " + ", ".join(
+            f"{lane} {sum(c.values())}" for lane, c in sorted(counts.items(), key=lambda kv: -sum(kv[1].values())))
+    once_each(state, f"linear:day:{iso(now)[:10]}", ring, "top", body, None, now)
+
+
 def sweep_pass(state: dict, ring: Ringer | None, checks: dict[str, Callable[[], None]]) -> None:
     for name, check in checks.items():
         try:
@@ -373,6 +465,19 @@ def traffic_json() -> dict:
                         "--json"], capture_output=True, text=True, timeout=600)
     if r.returncode != 0:
         raise RuntimeError(f"research msg traffic exited {r.returncode}: {r.stderr.strip()[-300:]}")
+    return json.loads(r.stdout)
+
+
+def linear_check(state, ring, reg, now, log_path: Path | None) -> None:
+    lin, owners = linear.Linear(), linear.owners(reg)
+    linear_audit(state, ring, now, lambda: lin.audit(owners, now=now), volume_json, log_path, lambda: lin.unread(sorted(owners)))
+
+
+def volume_json() -> dict:
+    r = subprocess.run([sys.executable, "-m", "research", "msg", "traffic", "--volume", "--hours", "24", "--json"],
+                       capture_output=True, text=True, timeout=600)
+    if r.returncode != 0:
+        raise RuntimeError(f"research msg traffic --volume exited {r.returncode}: {r.stderr.strip()[-300:]}")
     return json.loads(r.stdout)
 
 
@@ -413,7 +518,8 @@ def main(argv: list[str] | None = None) -> int:
                     "agents": lambda: holderless(state, ring, now, cursor_agents, known_holders(reg, routes)),
                     "rules thread": lambda: rules_thread(state, ring, api, reg, now),
                     "main": lambda: main_stalled(state, ring, now),
-                    "h200": lambda: h200s(state, ring, now, fleet_samples)})
+                    "h200": lambda: h200s(state, ring, now, fleet_samples),
+                    "linear": lambda: linear_check(state, ring, reg, now, None if ns.dry_run else state_path.parent / AUDIT_LOG)})
                 prune(state, now)
             if not ns.dry_run:
                 tmp = state_path.with_suffix(".tmp")

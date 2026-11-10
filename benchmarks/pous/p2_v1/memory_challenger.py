@@ -4,19 +4,19 @@
         [--k 105] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
 
 `READY.json` names the responder's port, the setup salt, the commitment to `W` and the store's manifest. The verifier keeps
-every leaf (`LEAVES.bin`, 64 bytes per block in block order: `SHA512(0x00 ‖ salt ‖ u64be(s) ‖ u16be(v) ‖ R(block))`, `R` the
-block's `sha512/row/v2` digest), computes the RFC 6962 root and the epoch id from them, and draws each audit's indices from
+every leaf (`LEAVES.bin`, 64 bytes per label in label order: `SHA512(0x00 ‖ salt ‖ u64be(s) ‖ u16be(v) ‖ R(block))`, `R` the
+label's `sha512/row/v2` digest), computes the RFC 6962 root and the epoch id from them, and draws each audit's indices from
 its own secret: `audit_id` from `verity/pous/p2-audit-id/v4` at the audit's counter, round `j`'s index `uniform(B, j)` of
 `verity/pous/p2-audit-challenge/v4`. Rounds are revealed one at a time; each is timed from the challenge's send to its
-answer's last byte, correct when the block's leaf is the retained one, on time within the limit, and the audit stops at the
+answer's last byte, correct when the label's leaf is the retained one, on time within the limit, and the audit stops at the
 first failure. `k` is 105, the deployment's.
 
-The limit, the calibration, the clocks and the record are the band memory challenger's (`band_gpu/memory_challenger.py`): `--calibrate-only` fixes
+The limit, the calibration, the clocks and the record are the band memory challenger's (`verity/core/devices/memory_challenger/timed_audit.py`): `--calibrate-only` fixes
 `Δ + allowance` before any load, `--limit-ns` judges every audit against it, the allowance is a loopback one (spec v4 caps it
 at 354 µs), and every audit's secret source and every answer's time are kept.
 
 The transport is the harness's responder wire, not `p2-audit-wire/v4`'s frames (`wire.py`): a v4 RESPONSE also carries the
-block's authentication path (19 siblings of 64 bytes at B = 2^19, 1,216 bytes more), which a verifier that keeps every leaf
+label's authentication path (19 siblings of 64 bytes at B = 2^19, 1,216 bytes more), which a verifier that keeps every leaf
 does not need. Exit 0 when every audit accepted, 1
 otherwise.
 """
@@ -34,7 +34,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from band_gpu.memory_challenger import (  # noqa: E402
+from verity.core.devices.memory_challenger.timed_audit import (  # noqa: E402
     ALLOWANCE_KIND,
     OP_CHALLENGE,
     LiveResponder,
@@ -45,6 +45,7 @@ from band_gpu.memory_challenger import (  # noqa: E402
     quantiles,
 )
 from p2_v1 import reference  # noqa: E402
+from verity.core.protocols.pous.verifier import MerkleTree
 
 
 def params_of(manifest: dict[str, Any], payload_bytes: int) -> reference.Params:
@@ -59,7 +60,7 @@ def audit(host: str, port: int, params: reference.Params, salt: bytes, model: by
     blocks, bps = params.blocks, params.blocks_per_segment
     if len(leaves) != blocks:
         raise ValueError(f"{len(leaves)} leaves for a store of {blocks} blocks")
-    root = reference.root(leaves)
+    root = MerkleTree(leaves).root
     epoch = reference.epoch_id(params, model, salt, root)
     source = os.urandom(32)
     if cpu is not None:
@@ -97,7 +98,7 @@ def audit(host: str, port: int, params: reference.Params, salt: bytes, model: by
     return {"root": root.hex(), "epoch_id": epoch.hex(), "source": source.hex(), "limit_ns": limit, "limit_fixed_before_load": fixed,
             "deadline_ns": deadline_ns, "allowance": allowance, "allowance_kind": ALLOWANCE_KIND,
             "rtt_allowance_ns": limit - deadline_ns,
-            "rtt_allowance_within_spec": limit - deadline_ns <= reference.MAX_RTT_ALLOWANCE_NS, "calibration_here": cal,
+            "rtt_allowance_within_spec": limit - deadline_ns <= reference.RTT_ALLOWANCE_CAP_NS, "calibration_here": cal,
             "rtt_after_s": quantiles(after), "pings_raw_s": {"before": before, "after": after}, "k": k, "scheme": reference.PROTOCOL,
             "audit_of_record": {"accepted": accepted[0], "rounds": len(records[0]["answers"]),
                                 "elapsed_max_ns": max(x["elapsed_ns"] for x in records[0]["answers"])},

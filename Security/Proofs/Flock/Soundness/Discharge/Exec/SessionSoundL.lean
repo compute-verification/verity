@@ -1,6 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
-import Proofs.Flock.Soundness.Discharge.Exec.SessionL
-import Proofs.Flock.Soundness.Session
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.CompiledAlign
+import Proofs.Flock.Soundness.Extract
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Soundness
 
 /-!
 # A salted table inside a batched session
@@ -15,6 +21,8 @@ and the reps' locksteps are unchanged.
 * `session_knowledge_soundL`: the table accepts while the extraction from `K ≥ 1` reruns after `Commit`
   (`extractTableSL`) fails with probability at most `ε_c⁻ + K·adv₀ + N₀/(eK)` (`adv₀SL`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 
@@ -40,7 +48,7 @@ theorem tableOrcL_eq (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 �
         tableOrcAfterL (D := D) (Sl := Sl) A S sch hm ptLocal mPts C₀ pts :=
   rfl
 
-/-- **A batched session after `Commit`** (PROTOCOL.md §5): one link-point draw, then the games
+/-- **A batched session after `Commit`** (`Flock.Record`): one link-point sample, then the games
 `pre`, the table with level-0 cap `cap₀`, and the games `post`, concurrently. -/
 noncomputable def sessAfterL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)

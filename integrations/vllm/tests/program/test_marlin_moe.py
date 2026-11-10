@@ -23,11 +23,11 @@ from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.evaluation.reference import statics_of
 from verity.ml.circuits.ops.prims import F2fpBf16
 from verity_vllm.program.frontend.rules.vllm_marlin_moe import MARLIN_SERVED
-from verity_vllm.program.kernels import marlin_moe_rows as MR
-from verity_vllm.program.kernels import rows as RK
-from verity_vllm.program.registry import flashmla as F
-from verity_vllm.program.registry import marlin_moe as MM
-from verity_vllm.program.registry.prims import Bf16MulBf16, F32Add
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
+from verity.ml.definitions.numerics import rows as RK
+from verity.ml.definitions.registry import flashmla as F
+from verity.ml.definitions.registry import marlin_moe as MM
+from verity.ml.definitions.registry.prims import Bf16MulBf16, F32Add
 
 DOT = MM.DOT
 E2M1_VALUES = [v for v in MM.E2M1_VALUES] + [-v for v in MM.E2M1_VALUES]
@@ -149,12 +149,24 @@ def test_align_blocks_are_the_kernel_s_in_every_atomic_order(E: int, P: int, BM:
         assert [g for g, p in zip(got[:P], want) if p >= 0] == [p // BM for p in want if p >= 0] and got[P] == npp // BM, (ids, keys)
 
 
+@pytest.mark.parametrize("E,P,BM", [(4, 1, 8), (5, 12, 8), (6, 23, 48), (3, 30, 4)])
+def test_the_pair_index_key_gives_the_deterministic_aligns_blocks(E: int, P: int, BM: int) -> None:
+    """Keyed by the pair indices, as every Program keys it, the align is the deterministic `moe_align_block_size`'s: each expert's
+    pairs placed in pair-index order."""
+    rng = np.random.default_rng(100 + P)
+    for trial in range(6):
+        ids = rng.choice([0, 0, 0, E - 1, E - 1, 1, -1, E, 7 - 2**31], P).tolist() if trial % 3 == 2 else rng.integers(0, E, P).tolist()
+        want, npp = _vllm_align(ids, E, BM, range(P))
+        got = _align_words(E, P, BM, ids, list(range(P)))
+        assert [g for g, p in zip(got[:P], want) if p >= 0] == [p // BM for p in want if p >= 0] and got[P] == npp // BM, ids
+
+
 def test_align_bodies_are_cut_per_pair() -> None:
     """Both align Definitions are separable with no value two pair members compute, so the word check cuts one member however many
     pairs a batch routes (DeepSeek-V4-Pro's 256-token prefill: 1536 pairs, 42.5M gates in one body)."""
     from verity.ml.circuits.cut import separable
-    from verity_vllm.query import word as W
-    from verity_vllm.query.cross_call import members_check
+    from verity.ml.definitions import word as W
+    from verity.ml.definitions.cross_call import members_check
     for fn in (bind(MM.MoeAlignRanks, E=384, P=64, BM=8), bind(MM.MoeAlignBlocks, P=64, BM=8)):
         assert separable(fn) is not None, fn.id
         assert not members_check(fn, {})["recomputes"], fn.id

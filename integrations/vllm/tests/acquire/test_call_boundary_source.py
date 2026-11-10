@@ -1,6 +1,6 @@
 """The call-boundary source (`acquire.sources.call_boundary_source`) on CPU tensors with a recording committer, on request Programs written
 as Build dirs: a Gemma-2-style dense Program (the ATen norm chains, one input and x + residual, and the soft-capped logits) and the
-block-scaled FP8 linear (`Fp8GroupQuant_v1 -> ScaledMmFp8Block_v1`).  Every `call_boundaries` identity of the manifest is committed once
+block-scaled FP8 linear (`Fp8GroupQuant_v1 -> ScaledMmFp8BlockSharedScale_v1`).  Every `call_boundaries` identity of the manifest is committed once
 per step over its element range with the words a row-by-row `verity.ml.circuits.evaluation.evaluate` of the Program gives -- on edge words too (NaN
 payloads, +-inf, +-0, subnormals, the largest finite); a manifest naming none attaches nothing and a forced attach refuses; a body the
 rule cannot evaluate is refused by name; an argument of another shape is a collector error naming the site; and the consuming GEMM's
@@ -18,7 +18,7 @@ from tests.acquire.call_boundary_programs import DENSE, EMB, EPS, H, IL, LP, PF,
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch
 from verity_vllm.commit.binding import build_binding_map, logical_request
 from verity_vllm.query.compose import compose_global
-from verity_vllm.query.call_scope import specialization
+from verity.ml.definitions.call_scope import specialization
 from verity_vllm.query.manifest.format import spec_family
 from verity_vllm.query.program_view import definition_ports, spec_statics
 
@@ -77,7 +77,7 @@ def dense_fields():
 
 
 def reference(doc, prompt, fields, field_order):
-    """Every Call's output leaves, row by row through `verity.ml.circuits.evaluation.evaluate` (the IR's plain-integer reference)."""
+    """Every Call's output leaves, row by row through `verity.ml.circuits.evaluation.evaluate` (the circuit's plain-integer reference)."""
     weights = [int(w) for n in field_order for w in fields[n]]
     vals: dict[int, list[int]] = {}
     for r in doc["rows"]:
@@ -318,7 +318,7 @@ def test_fp8_group_quant_on_edge_words_is_the_ir_and_the_consuming_gemm_replays(
     op = "model.layers.0.mlp.gate_up_proj/per_token_group_fp8_quant_1"
     w_lo, w_hi = fp8.woff["model.model.layers.0.mlp.gate_up_proj.weight"]
     s_lo, s_hi = fp8.woff["model.model.layers.0.mlp.gate_up_proj.weight_scale_inv"]
-    mm = specialization("ScaledMmFp8Block_v1", {"K": fp8.H, "N": 2 * fp8.I, "G": fp8.G})
+    mm = specialization("ScaledMmFp8BlockSharedScale_v1", {"K": fp8.H, "N": 2 * fp8.I, "G": fp8.G})
     out = np.array(evaluate(mm, *[[int(v) for v in a] for a in (host[f"{op}/0"], host[f"{op}/1"], fp8.fields["model.model.layers.0.mlp.gate_up_proj.weight"],
                                                                  fp8.fields["model.model.layers.0.mlp.gate_up_proj.weight_scale_inv"])]), dtype=np.uint16)
     assert (w_hi - w_lo, s_hi - s_lo) == (fp8.fields["model.model.layers.0.mlp.gate_up_proj.weight"].size, 4)
@@ -379,7 +379,7 @@ def test_a_definition_past_the_reference_bound_is_its_row_kernels_alone(dense, m
     assert len(com.errors) == 1 + T and all(f"the row kernel of Gemm_v1{{K={H},N={V}}} declines an instance" in e for e in com.errors)
     assert com.acquired and not any(n.startswith("logits_processor") for _s, n, _t in com.acquired)
     monkeypatch.setattr(CP, "REFERENCE_LEAVES", 12)
-    from verity_vllm.program.kernels import kernel_registry
+    from verity.ml.definitions.numerics import kernel_registry
     monkeypatch.delitem(kernel_registry._REGISTERED, ("Bf16DivScalar_v1", "rows"))
     why = " ".join(CB.plan_of(dense.man, dense.pdir).uncovered)
     assert "Bf16DivScalar_v1" in why and "past the reference's bound, and no rows kernel registered" in why
@@ -439,7 +439,7 @@ def _drive_pair(pair, com, src, order, rows_of=lambda e, rows: rows):
 
 def test_a_global_manifest_commits_every_requests_rows_packed_as_the_binding_map_splits_them(pair):
     """The runtime runs r1's rows first: every target is one packed tensor per engine step, and the binding map over the committed
-    layouts and `step_rows` binds each request's identity to its own rows (a step-shared target's one row to each) -- the IR's words of
+    layouts and `step_rows` binds each request's identity to its own rows (a step-shared target's one row to each) -- the circuit's words of
     that request's Program."""
     ids = CB.manifest_sites(pair.man)
     com, src = _dense_source(pair, pair.man, pair.root)
@@ -498,7 +498,7 @@ def test_requests_at_other_local_steps_of_one_engine_step_are_refused_by_name(pa
 
 
 def test_a_warm_up_requests_rows_are_its_workload_requests_and_commit_the_same_layout(pair):
-    """Gemma-2-2B B8 (m006, r20260930-190524-cd72): the bounded warm-up runs `warmup-<i>` stand-ins, which no workload id resolves, so
+    """Gemma-2-2B B8: the bounded warm-up runs `warmup-<i>` stand-ins, which no workload id resolves, so
     every warm-up step refused ('engine step 0 ran (request, rows) [('warmup-0-aec3dda0', 11), ...]'), the learned plans held no
     call-boundary tensor, and record step 0 ran 7,392,522,240 bytes against a 4,134,862,080-byte plan.  Warm-up request i is workload
     request i's stand-in (same prompt length and schedule): it takes that request's rows and the step commits the same names and shapes."""
@@ -518,7 +518,7 @@ def test_a_warm_up_requests_rows_are_its_workload_requests_and_commit_the_same_l
 
 def test_the_warm_up_commits_zero_words_of_the_records_layout_and_evaluates_nothing(pair, monkeypatch):
     """The Commit's warm-up instrumented run is never a record (`taps.warmup`): every target, packed, per request or step-shared, is zero
-    words of the name, shape and dtype the record commits, and no template is evaluated.  Off again, the same source commits the IR's
+    words of the name, shape and dtype the record commits, and no template is evaluated.  Off again, the same source commits the circuit's
     words, and a bounded committer's `learn_only` follows the same switch."""
     com, src = _dense_source(pair, pair.man, pair.root)
     _drive_pair(pair, com, src, ["r1", "r0"])

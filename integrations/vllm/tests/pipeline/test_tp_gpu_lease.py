@@ -4,7 +4,7 @@ lock goes back at once, before the checks that follow.  A rank that still needs 
 to the Commit's exit (never part of it), and a Commit that ends before its release frees every lock at its exit.  A leased TP Match
 leases every GPU for its capture and its control only, each to its exit; its check, served-shape derives and fold Match run with no
 device and no lease, and its verdict is an unleased Match's.  CPU-only: the ranks are `TP2CaptureWorkerExtension`'s commit methods over
-a stand-in committer and model, the LLM dispatches `collective_rpc` to them, the Match's legs are stand-in processes, and the lease is
+a stand-in committer and model, the LLM dispatches `collective_rpc` to them, the Match's stages are stand-in processes, and the lease is
 `test_gpu_lease`'s stand-in tool."""
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from tests.pipeline.test_gpu_lease import fake_lease, released
 from tests.pipeline.test_row import TP_DENSE, _tp_row
 from verity_vllm.acquire.committer_api import StepCommitment
 from verity_vllm.engine import hooks
-from verity_vllm.engine.rank_worker import TP2CaptureWorkerExtension as _cls
+from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline.tp import lease as TPL
 
@@ -296,7 +296,7 @@ def test_what_a_ranks_weights_view_holds_on_the_host_is_emptied_not_moved(lease)
     """`acquire.as_loaded`: a TP rank's MXFP4 Marlin experts are on the host as loaded, and every reader after the release reads them
     through the rank's weights view, so the release empties their served copies instead of moving a second one to the host
     (DeepSeek-V4-Pro: 103 of a rank's 110 GB, eight ranks on one node's host memory)."""
-    from verity_vllm.protocol_options import WeightsView
+    from verity_vllm.protocols import WeightsView
 
     lease.cuda.looks = [[], [], [0]]
     for r in lease.ranks:
@@ -498,10 +498,10 @@ def test_a_tp_commit_hashes_its_weights_on_the_device_unless_the_item_says_other
     assert f"weights hash {mode}" in Path(f"{t.d}/row.log").read_text() and "commit PASS" in Path(f"{t.d}/stages.txt").read_text()
 
 
-#: Every Match leg's stand-in, run as ``leg.py <command> ARGS...`` from the dir of the lease tool's stand-in: it notes what it saw
+#: Every Match stage's stand-in, run as ``leg.py <command> ARGS...`` from the dir of the lease tool's stand-in: it notes what it saw
 #: (its devices, its lease, the lease locks it holds, whether each was free) in ``legs.jsonl`` and writes what the row reads after it.
 #: A capture or control ends as its exit would end its lease (every lock and the holder's stdin closed, the holder gone) before it
-#: returns, so the next leg sees the lease as the next process after it sees it.
+#: returns, so the next stage sees the lease as the next process after it sees it.
 LEG = '''\
 import fcntl, json, os, sys
 from verity_vllm.pipeline import cli, gpu_lease as GL
@@ -512,7 +512,7 @@ out = args[args.index("--out") + 1]
 
 
 def free(g):
-    # shared: the per-rank legs (build, global-program) run at once, and an exclusive probe would see the other leg's probe
+    # shared: the per-rank stages (build, global-program) run at once, and an exclusive probe would see the other stage's probe
     fd = os.open(os.path.join(TMP, g + ".lock"), os.O_CREAT | os.O_WRONLY | os.O_APPEND)
     try:
         fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
@@ -558,7 +558,7 @@ elif cmd == "tp-fold-match":
 
 
 def _match(tmp: Path, leased: bool) -> tuple[Any, list[dict]]:
-    """A TP Match of a built row (step and declared request Programs on disk), every leg `LEG`; leased: the item's lease tool is
+    """A TP Match of a built row (step and declared request Programs on disk), every stage `LEG`; leased: the item's lease tool is
     `test_gpu_lease`'s stand-in over GPUs 4 and 5 and its devices are hidden, as `Row.setup` leaves them; else they are visible."""
     tmp.mkdir()
     t = _tp_row(tmp, TP_DENSE)

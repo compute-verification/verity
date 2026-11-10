@@ -1,5 +1,42 @@
-import Proofs.Flock.Claims.KS.Mixture
-import Proofs.Flock.Claims.KS.SessionSC
+module
+
+public import Proofs.Flock.Claims.KS.Mixture
+public import Proofs.Flock.Claims.KS.Rounds
+public import Proofs.Flock.Claims.KS.SessionSC
+public import Proofs.Flock.Claims.KS.TableBound
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The plain table bound from salted sessions after `Commit`
@@ -25,6 +62,8 @@ With the mixture the simulated strategies after `Commit` of live strategies whos
 is the live verdict bounding the deployed runs that accept on `C`, and the decoder right for the verdict accepting
 with no opening off `C` unless it self-clashes (`plain_tableBoundθAt_of_live`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

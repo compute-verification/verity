@@ -1,5 +1,8 @@
-import Models.Nci.Guarantees.Activations
-import Proofs.Nci.Threads
+module
+
+public import Definitions.Nci.Guarantees.Activations
+public import Proofs.Nci.Threads
+public import Proofs.Nci.Lemmas.Activations
 
 /-!
 # Proofs of NCI's activations bound over all of training
@@ -19,13 +22,15 @@ Through a partial containment (`ActivationsBoundOn`), each IU of a compliant div
 of `S` that is small and reads no more than the IU (`piece`, `novelReads_piece`), and the pieces divide `S`.
 -/
 
+@[expose] public section
+
 namespace Nci.SecurityProofs
 
 open Verity Finset
 
 section Activations
 
-variable {c : Declaration} {T : Threading c} (L : T.Links)
+variable {c : RegisteredCircuit} {T : Threading c} (L : T.Links)
 
 theorem le_of_feeds {C : Circuit} {g t : Fin C.N} (hf : C.Feeds g t) : g ≤ t := by
   induction hf with
@@ -87,7 +92,7 @@ theorem sum_card_openActs_le (R : Finset (Fin c.D.N)) :
 end Activations
 
 /-- **The activations bound for one subcircuit.** -/
-theorem activations_reads (c : Declaration) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ) (dd e : ℕ)
+theorem activations_reads (c : RegisteredCircuit) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ) (dd e : ℕ)
     (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (he : ∀ a, (T.M.filter fun g => T.act g = a).card ≤ e)
     (hd : ∀ a, (L.src a).Nonempty →
       dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card)
@@ -112,7 +117,15 @@ theorem activations_reads (c : Declaration) (T : Threading c) (L : T.Links) (Γ 
 theorem ActivationsReads : Guarantees.ActivationsReads := activations_reads
 
 /-- **The activations bound over all of training, with dark gates** ([ACTIVATIONS-BOUND]). -/
-theorem ActivationsBoundOn : Guarantees.ActivationsBoundOn := by
+theorem ActivationsBoundOn_rate :
+    ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (c d : RegisteredCircuit) (T : Threading c) (L : T.Links) (dd e : ℕ)
+      (M : PartialContainment c d),
+      0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
+      (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
+      (∀ a, (L.src a).Nonempty →
+        dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
+      Assumptions.ActivationsIncompressibleAll c T L Γ K b_w b_a →
+        b_a * (T.M ∩ M.S).card ≤ α * T.bound K b_w dd e * d.D.size d.D.computed := by
   intro Γ α K b_w b_a c d T L dd e M hα hαK hbw hba hdd ⟨n, P, hP⟩ hB he hd hA
   set Λ := T.bound K b_w dd e
   have hΛ : 0 ≤ Λ := le_max_of_le_left (Nat.cast_nonneg _)
@@ -136,9 +149,19 @@ theorem ActivationsBoundOn : Guarantees.ActivationsBoundOn := by
         ring
 
 /-- **Training is slowed, by the activations bound, with dark gates.** -/
-theorem ActivationsTrainingOn : Guarantees.ActivationsTrainingOn := by
+theorem ActivationsTrainingOn_rate :
+    ∀ (Γ : ℕ) (α K b_w b_a κ : ℝ) (c d : RegisteredCircuit) (T : Threading c) (L : T.Links) (dd e : ℕ)
+      (M : PartialContainment c d),
+      0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
+      (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
+      (∀ a, (L.src a).Nonempty →
+        dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
+      Assumptions.ActivationsIncompressibleAll c T L Γ K b_w b_a →
+      κ * c.D.size c.D.computed ≤ 2 * T.M.card →
+        κ * b_a * c.D.size c.D.computed ≤
+          2 * b_a * M.dark.card + 2 * α * T.bound K b_w dd e * d.D.size d.D.computed := by
   intro Γ α K b_w b_a κ c d T L dd e M hα hαK hbw hba hdd hP hB he hd hA hκ
-  have h := ActivationsBoundOn Γ α K b_w b_a c d T L dd e M hα hαK hbw hba hdd hP hB he hd hA
+  have h := ActivationsBoundOn_rate Γ α K b_w b_a c d T L dd e M hα hαK hbw hba hdd hP hB he hd hA
   have hs : (T.M.card : ℝ) ≤ M.dark.card + (T.M ∩ M.S).card := by
     exact_mod_cast card_le_dark_add_inter M T.M_computed
   have h1 := mul_le_mul_of_nonneg_left hκ hba.le
@@ -147,7 +170,7 @@ theorem ActivationsTrainingOn : Guarantees.ActivationsTrainingOn := by
 
 open Classical in
 /-- **The premise over all counted multiplications gives the chain's**, where the chain is part of the threading. -/
-theorem activationsIncompressible_of_all {c : Declaration} {ch : Chain c.D} {T : Threading c} {L : T.Links}
+theorem activationsIncompressible_of_all {c : RegisteredCircuit} {ch : Chain c.D} {T : Threading c} {L : T.Links}
     (h : ChainIn ch T L) {Γ : ℕ} {K b_w b_a : ℝ} (hw : 0 ≤ b_w) (ha : 0 ≤ b_a)
     (hA : Assumptions.ActivationsIncompressibleAll c T L Γ K b_w b_a) :
     Assumptions.ActivationsIncompressible c ch Γ K b_w b_a := by
@@ -175,5 +198,9 @@ theorem activationsIncompressible_of_all {c : Declaration} {ch : Chain c.D} {T :
 /-- **The premise over all counted multiplications gives the chain's.** -/
 theorem ActivationsChain : Guarantees.ActivationsChain :=
   fun _ _ _ _ _ _ _ _ h hw ha hA => activationsIncompressible_of_all h hw ha hA
+
+theorem ActivationsBoundOn : Guarantees.ActivationsBoundOn := ActivationsBoundOn_rate
+
+theorem ActivationsTrainingOn : Guarantees.ActivationsTrainingOn := ActivationsTrainingOn_rate
 
 end Nci.SecurityProofs

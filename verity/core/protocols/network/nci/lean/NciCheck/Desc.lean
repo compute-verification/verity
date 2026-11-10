@@ -1,11 +1,13 @@
-import NciCheck.Check
+module
+
+public import NciCheck.Check
 
 /-!
 # The NCI check at the size of the description
 
 `NciCheck.Desc.evaluate` decides what `NciCheck.evaluate` decides, for a division whose IUs are unions of the root's
 nodes (IUs aligned to Calls), without laying out the circuit: its cost grows with the descriptor, not with the unrolled
-circuit (the rule of 18 Oct, AGENTS.md "Design rules"). `NciCheck.evaluate` stays the reference it is held to: the
+circuit (AGENTS.md "Design rules"). `NciCheck.evaluate` stays the reference it is held to: the
 difftest (`NciCheck.DescDifftest`) checks both on the same declarations, the old one on the division expanded gate by gate.
 
 ## The instance
@@ -31,7 +33,9 @@ computed in the decoder's order (callees first) and shared by every activation:
 * `ret`: its return leaves as segments (`Seg`) of pieces (`Piece`). A piece is `rows` runs `base + r * rowStride +
   t * stride` of the activation's own gates (of one width) or of one parameter's leaves (a pass-through); a strided part
   is one piece of rows. A segment is one piece, or `reps` copies of one batch member's return pieces, each `shift` gates
-  after the one before (a batch's whole members, read as a block);
+  after the one before (a batch's whole members, read as a block). Gate pieces that continue one progression, then runs
+  of one length at one step, are joined (`coalesce`): a body unrolled element by element returns one piece, not one per
+  node, and every read of it is one segment;
 * `used`: per parameter, the leaves some gate of it reads, as intervals (`ivsOf`: a piece of rows as periodic intervals,
   those of one period and count merged, so the rows of a transposed read become runs).
 
@@ -57,7 +61,8 @@ same IU (expanded copy by copy, `novelWidth`). Serve_v1 meets none of the walks,
 
 ## Refusals
 
-In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
+In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it, among them a
+reference that reads a leaf at another width than it was committed with, `E_REINTERPRET`: `NciCheck.decodeProgram`), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
 (a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; a scan of no
@@ -71,6 +76,8 @@ node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 an earlier member of itself, which this check refuses.
 -/
 
+@[expose] public section
+
 namespace NciCheck.Desc
 
 open Lean (Json toJson)
@@ -81,8 +88,10 @@ open Flock.Program
 /-- Half-open intervals `[lo, hi)`, sorted, disjoint and not adjacent. -/
 abbrev Ivs := Array (Nat × Nat)
 
+/-- The intervals of `xs` as `Ivs`, sorted by `List.mergeSort`: `Array.qsort` takes time quadratic in the elements of one
+key, and a body's nodes read the same leaves many times over. -/
 def Ivs.norm (xs : Array (Nat × Nat)) : Ivs :=
-  let ys := (xs.filter fun p => p.1 < p.2).qsort (fun x y => x.1 < y.1)
+  let ys := (xs.filter fun p => p.1 < p.2).toList.mergeSort fun x y => x.1 ≤ y.1
   ys.foldl (init := #[]) fun acc (a, b) =>
     match acc.back? with
     | some (c, e) => if a ≤ e then acc.pop.push (c, max b e) else acc.push (a, b)
@@ -214,7 +223,9 @@ def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 then { s with rep
 
 /-- `s` as reads, each of one node's gates: copies all alike as one (`alike`), and one copy piece by piece. A copy's
 pieces can name different nodes' outputs (a batch member returning leaves of several arguments its members share), and a
-read is kept, and its IU found, by its first piece. -/
+read is kept, and its IU found, by its first piece. Copies that shift stay one read, since they lie in one node: they
+name only gates of one batch's members (`down` makes them from whole members returning their own gates, and `fromCallee`
+offsets a callee's into one member), and copies naming leaves never shift. -/
 def Seg.split (s : Seg) : Array Seg :=
   let s := s.alike
   if s.reps == 1 then s.ps.map .one else #[s]
@@ -799,6 +810,48 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
       | _ => true
     | none => false
 
+/-- `p` then `q`, gates of one width in one row each, as one row: `q` the next elements of `p`'s progression. At most
+`WALK` elements, so that no run `carryRuns` takes from a joined piece is longer than one it took from the two. -/
+def Piece.join (p q : Piece) : Option Piece :=
+  match p.tgt with
+  | .ref _ _ => none
+  | .gate _ =>
+    let st := if p.len == 1 then q.base - p.base else p.stride
+    if p.tgt == q.tgt && p.rows == 1 && q.rows == 1 && 0 < p.len && 0 < q.len && p.len + q.len ≤ WALK &&
+        (q.len == 1 || q.stride == st) && q.base == p.base + p.len * st then
+      some { p with stride := st, len := p.len + q.len }
+    else none
+
+/-- `p` then `q`, gates of one width, as rows: `q` one row of `p`'s length and stride, one row step after `p`'s last
+row. At most `WALK` elements, as `Piece.join`. -/
+def Piece.stack (p q : Piece) : Option Piece :=
+  match p.tgt with
+  | .ref _ _ => none
+  | .gate _ =>
+    let rs := if p.rows == 1 then q.base - p.base else p.rowStride
+    if p.tgt == q.tgt && 0 < p.rows && q.rows == 1 && 0 < p.len && q.len == p.len &&
+        (p.len == 1 || q.stride == p.stride) && (p.rows + 1) * p.len ≤ WALK && q.base == p.base + p.rows * rs then
+      some { p with rows := p.rows + 1, rowStride := rs }
+    else none
+
+/-- The piece of a segment of one copy of one piece. -/
+def Seg.single (s : Seg) : Option Piece := if s.reps == 1 && s.ps.size == 1 then s.ps[0]? else none
+
+/-- `out` then `s`, `s` joined by `f` to `out`'s last segment where both are one copy of one piece and `f` joins them. -/
+def Seg.joinWith (f : Piece → Piece → Option Piece) (out : Array Seg) (s : Seg) : Array Seg :=
+  match out.back?.bind Seg.single, s.single with
+  | some p, some q => match f p q with
+    | some r => out.pop.push (.one r)
+    | none => out.push s
+  | _, _ => out.push s
+
+/-- A return's segments with its gates coalesced, the same positions in the same order: runs of a progression joined
+(`Piece.join`), then runs of one length and stride at one step stacked as rows (`Piece.stack`). A body unrolled element
+by element, one primitive node an element, returns its elements every few gates: one piece, where `down` gives one per
+node, and as many segments in every read of them. -/
+def coalesce (segs : Array Seg) : Array Seg :=
+  (segs.foldl (Seg.joinWith Piece.join) #[]).foldl (Seg.joinWith Piece.stack) #[]
+
 /-- Definition `d`'s summary, its callees' in `memo`. -/
 def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summary := do
   let defn := P.defs[d]!
@@ -815,7 +868,7 @@ def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summar
       for q in s.ps do
         if let .ref true i := q.tgt then
           acc := acc.modify i (·.push q)
-  return { ret := PS.of ret, used := acc.map fun qs => Ivs.norm (ivsOf qs) }
+  return { ret := PS.of (coalesce ret), used := acc.map fun qs => Ivs.norm (ivsOf qs) }
 
 /-- The Definitions the root reaches, each once. -/
 def reached (P : Prog) : Array Bool := Id.run do
@@ -866,7 +919,7 @@ def distinctWidth (ivs : Array (Nat × Nat × Nat)) : Nat :=
 
 /-- The gates of `qs` as intervals with their widths. -/
 def gateIvs (qs : Array Piece) : Array (Nat × Nat × Nat) :=
-  let ws := (qs.filterMap fun q => match q.tgt with | .gate w => some w | _ => none).qsort (· < ·) |>.toList.eraseDups
+  let ws := (qs.filterMap fun q => match q.tgt with | .gate w => some w | _ => none).toList.mergeSort (· ≤ ·) |>.eraseDups
   ws.toArray.flatMap fun w => (ivsOf (qs.filter (·.tgt == .gate w))).map fun iv => (iv.1, iv.2, w)
 
 /-- Gates `cnt` copies, `period` apart, of `res` (each `(lo, hi, w)` from `lo`, none past `span ≤ period`). -/
@@ -923,8 +976,8 @@ counted as copies times one copy's width, alone in their span, and with what els
 def novelWidth (segs : Array Seg) : Nat :=
   let acc := segs.foldl copiesStep (gateIvs (segs.filter (·.reps ≤ 1) |>.flatMap (·.ps)), #[])
   let ivs := acc.1
-  let frames := (acc.2.qsort fun x y =>
-    x.lo < y.lo || (x.lo == y.lo && (x.period < y.period || (x.period == y.period && x.cnt < y.cnt)))).foldl frameStep #[]
+  let frames := (acc.2.toList.mergeSort fun x y =>
+    x.lo < y.lo || (x.lo == y.lo && (x.period < y.period || (x.period == y.period && x.cnt ≤ y.cnt)))).foldl frameStep #[]
   let n := ivs.size
   let items := (ivs.mapIdx fun i x => (x.1, x.2.1, i)) ++
     (frames.mapIdx fun i x => (x.lo, x.lo + (x.cnt - 1) * x.period + x.span, n + i))
@@ -1049,9 +1102,7 @@ def analyzeCode (e : String) : String := if e.startsWith UNWALKED then e else "p
 
 def evaluate (j : Json) : Except String Json := do
   let i ← parse j
-  let P ← match decode i.program.toUTF8 with
-    | .ok P => pure P
-    | .error _ => throw "program"
+  let P ← decodeProgram i.program
   if P.orderViolation.isSome then throw "not-topological"
   if !(rootLaidOut P && inputsAtRoot P) then throw "program"
   if !walkable P then throw "program"
@@ -1076,16 +1127,16 @@ def evaluate (j : Json) : Except String Json := do
   let r := (Array.range n).map fun u => (size[u]!, novelWidth into[u]!)
   return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
 
-/-- A refusal as JSON: `unwalked` with its reason as the `message`, else as `NciCheck.refusal` writes it. -/
-def refusal (code : String) : Json :=
+/-- A refusal of `j` as JSON: `unwalked` with its reason as the `message`, else as `NciCheck.refusalOf` writes it. -/
+def refusal (j : Json) (code : String) : Json :=
   if code.startsWith UNWALKED then
     Json.mkObj [("error", Json.str "unwalked"), ("message", Json.str ((code.drop UNWALKED.length).toString))]
-  else NciCheck.refusal code
+  else NciCheck.refusalOf j code
 
 /-- `evaluate`, with a refusal as `refusal` writes it. -/
 def check (j : Json) : Json :=
   match evaluate j with
   | .ok r => r
-  | .error code => refusal code
+  | .error code => refusal j code
 
 end NciCheck.Desc

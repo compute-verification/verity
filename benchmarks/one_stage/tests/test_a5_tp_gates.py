@@ -21,8 +21,9 @@ import pytest
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.defs import bind
 from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier as V
-from verity_vllm.program.registry.b1_tp2 import AllReduce2
+from verity.core.protocols.spot.one_stage import draw as D, verifier as V
+from verity.ml.definitions.registry.b1_tp2 import AllReduce2
+from verity.ml.windows import rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -51,12 +52,12 @@ def table(c, m, port: str) -> list[bytes]:
 
 
 def header(win: dict, m) -> dict:
-    return next(e for e in win["members"] if e["name"] == m.key)["registered"]
+    return SR.registered_header(win, next(e["k"] for e in win["members"] if e["name"] == m.key))
 
 
 def test_the_unit_is_the_registered_allreduce2_with_a_port_a_rank() -> None:
     """The transfer-gate template is the registered `AllReduce2_v1{N}`, its ports ``part0`` and ``part1`` its input's rows
-    ``parts[0]`` and ``parts[1]``; it is `sums` of ``[part0, part1]`` on every word pair drawn, the special words among them
+    ``parts[0]`` and ``parts[1]``; it is `sums` of ``[part0, part1]`` on every word pair sampled, the special words among them
     (zeros of both signs, infinities, NaNs, subnormals, the largest finite), and on the activations' rows `sums` is
     ``bf16_rn(f32(a) + f32(b))``."""
     unit = AT.templates(H)[0]
@@ -187,21 +188,34 @@ def test_a_refused_runs_window_moves_the_bit_through_rank_1s_received_partial_on
 
 def test_a5s_registered_read_negatives_alter_one_of_a_chunks_two_ports_and_keep_the_other(tmp_path, monkeypatch) -> None:
     """A chunk reads both ranks' partials, so each of a5's registered-read negatives alters its first port's read and holds
-    the other port's as registered: Lean is to refuse the altered read by its reason, not a port the reads leave out."""
+    the other port's as registered: Lean is to refuse the altered read by its reason, not a port the reads leave out. The
+    last leaves its last port out of both the header's registered rows and the reads, a port committed afresh, which Lean
+    refuses at `Registered.checkComplete`; the honest member's own public file is left as it was."""
     import a5
 
     ports = {f"part{j}": {"value": AT.value_name(j, 0, 0), "root": f"{j}" * 128, "leaves": T, "reads": list(range(T))}
              for j in AT.RANKS}
     (tmp_path / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v1", "ports": ports}))
-    seen = {}
+    member = tmp_path / "m"
+    member.mkdir()
+    head = {"registered": {p: {"value": e["value"], "positions": e["reads"], "paths": [""] * T} for p, e in ports.items()}}
+    pub = json.dumps(head).encode() + b"\n" + bytes(range(8))
+    (member / f"pub-{T}.bin").write_bytes(pub)
+    seen, heads = {}, {}
 
     def lean_verify(lean, st, n, sdir, zk, log):
         seen[log] = json.loads(st["registered_file"].read_text())["ports"] if "registered_file" in st else None
+        h, body = (st["dir"] / f"pub-{n}.bin").read_bytes().split(b"\n", 1)
+        heads[log] = (tuple(sorted(json.loads(h)["registered"])), body)
         return {"accepted": False, "digest": "d", "why": "setup: registered reads: none"}
 
     monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
-    a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {"registered_file": tmp_path / "registered.json"},
+    a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {"registered_file": tmp_path / "registered.json", "dir": member},
                                                             "m": SimpleNamespace(n=T)}, tmp_path)
     assert seen == {"chunk-without-registered-reads": None,
                     "registered-read-against-another-root": {**ports, "part0": {**ports["part0"], "root": "00" * 64}},
-                    "registered-reads-another-row": {**ports, "part0": {**ports["part0"], "reads": [*range(1, T), 0]}}}
+                    "registered-reads-another-row": {**ports, "part0": {**ports["part0"], "reads": [*range(1, T), 0]}},
+                    "registered-reads-leaving-a-port-committed-afresh": {"part0": ports["part0"]}}
+    afresh = heads.pop("registered-reads-leaving-a-port-committed-afresh")
+    assert afresh == (("part0",), bytes(range(8))) and set(heads.values()) == {(tuple(sorted(ports)), bytes(range(8)))}
+    assert (member / f"pub-{T}.bin").read_bytes() == pub

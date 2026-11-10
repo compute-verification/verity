@@ -1,20 +1,63 @@
-import Definitions.Claims.Sampling
+module
+
+public import Definitions.Claims.Sampling
+public import Proofs.Flock.SamplingGeneric.Deployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The sampling scope: what it excludes, and that `KS` keeps content in it
 
-`KS`, `KSCount` and `Bits` hold on the statements in scope (`Claims.Sampling.Scope`), which excludes every design whose
-`P_a` is not its draw's miss probability. On a program of two input gates, partitioned into two units:
+The compiled sampled verifier's `KS`, `KSCount` and `Bits` at a deployment (`SamplingGeneric.ofDeploy`) hold on the
+statements in scope (`Claims.Sampling.Scope`), which excludes every design whose `P_a` is not its sample's miss
+probability. On a program of two input gates, partitioned into two units:
 
 * `subset 3` is the hole: `P_a = 0` at every set (`Pa_hole`), so at every `δ ≥ 0` no witness is in the relation
   (`not_relS_hole`), and `KS` there would be vacuous. It is out of scope (`not_inScope_hole`).
 * `subset 1` is in scope (`inScope_toy`). Its `P_a` is `1` at the empty set and `0` at both units (`Pa_toy`), so
   `M_{1/4}` holds `∅` and not `{0, 1}` (`M_toy`).
-* At every deployment that reads that statement with its numbers (`ToyNumbers`), `κ` at `δ = 1/4` is below `1`
-  (`κ_lt_one`). At the collision-free hash `id` neither finder finds a collision, so `KS` there bounds every prover's
-  `Pr[acc ∧ faulty ∉ M_{1/4}]` below `1` (`ks_lt_one`). `toyD` is such a deployment, with a decoder its Flock spec
-  admits (`listWithin_toyD`).
+* At every deployment that reads that statement with its numbers (`ToyNumbers`), the compiled verifier's `κ` at
+  `δ = 1/4` is below `1` (`κ_lt_one`). At the collision-free hash `id` neither finder finds a collision, so its `KS`
+  there bounds every prover's `Pr[acc ∧ faulty ∉ M_{1/4}]` below `1` (`ks_lt_one`). `toyD` is such a deployment.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.ScopeWitness
 
@@ -28,16 +71,14 @@ def toyProg : Prog := ⟨[.input, .input], [0, 1]⟩
 /-- A query; the deployments here evaluate it to `toyPart`. -/
 def toyQuery : Query := ⟨"", 0, []⟩
 
-/-- One class of one stratum of two replay units, the proof units `{0}` and `{1}`. -/
-def toyPart : Partition := ⟨[[[[[0]], [[1]]]]]⟩
+/-- One class of one stratum of two proof blocks, `{0}` and `{1}`. -/
+def toyPart : Partition := ⟨[[[[0], [1]]]]⟩
 
-/-- The program, drawn `subset 1`: in scope. -/
-def toyStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 1, none⟩]⟩, []⟩
+/-- The program, sampled `subset 1`: in scope. -/
+def toyStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[.subset 1]⟩, []⟩
 
-/-- The program, drawn `subset 3` from two units: out of scope. -/
-def holeStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 3, none⟩]⟩, []⟩
-
-theorem toyPart_rus : toyPart.rus = [[[0]], [[1]]] := rfl
+/-- The program, sampled `subset 3` from two units: out of scope. -/
+def holeStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[.subset 3]⟩, []⟩
 
 /-- A `K`-subset of fewer than `K` members misses every set with probability `0`. -/
 theorem Pa_subset_gt {ns : List ℕ} {K : ℕ} (h : ns.sum < K) (B : Finset ℕ) : OneStage.Pa ns (.subset K) B = 0 := by
@@ -47,22 +88,22 @@ theorem Pa_subset_gt {ns : List ℕ} {K : ℕ} (h : ns.sum < K) (B : Finset ℕ)
 
 /-- **`subset 3` of two units has `P_a = 0` at every set.** -/
 theorem Pa_hole (B : Finset ℕ) : holeStmt.design.Pa toyPart B = 0 := by
-  simp only [Design.Pa, holeStmt, toyPart, classesPa, Rule.Pa]
+  simp only [Design.Pa, holeStmt, toyPart, classesPa]
   rw [Pa_subset_gt (by decide), zero_mul]
 
 /-- **No witness is in the relation** at the hole, at any `δ ≥ 0`: `M_δ` is empty. -/
-theorem not_relS_hole (H : Msg → Msg) (Cm : Commitment Bool) {δ : ℝ} (hδ : 0 ≤ δ) (w : Wit) :
+theorem not_relS_hole (H : Msg → Msg) (Cm : CommitmentScheme Bool) {δ : ℝ} (hδ : 0 ≤ δ) (w : Wit) :
     ¬ RelS H Cm δ holeStmt toyPart w := by
   intro h
   have h' : δ < holeStmt.design.Pa toyPart (faulty H Cm holeStmt toyPart w) := h
   rw [Pa_hole] at h'
   linarith
 
-/-- **The hole is out of scope**: its rule draws more units than its class has. -/
+/-- **The hole is out of scope**: its rule samples more units than its class has. -/
 theorem not_inScope_hole : ¬ InScope toyPart holeStmt := by
   rintro ⟨_, _, _, hw⟩
-  have := hw (⟨.subset 3, none⟩, [[[[0]], [[1]]]]) (by simp [holeStmt, toyPart])
-  simp [Rule.WellFormed, OneStage.WellFormed, strataSizes] at this
+  have := hw (.subset 3, [[[0], [1]]]) (by simp [holeStmt, toyPart])
+  simp [OneStage.WellFormed, strataSizes] at this
 
 /-! ## The in-scope design: `subset 1` of two units -/
 
@@ -77,16 +118,16 @@ theorem inScope_toy : InScope toyPart toyStmt := by
       subst hx
       simp [BGate.reads] at hi
     · simp [toyStmt, toyProg] at hx
-  · refine ⟨by decide, by decide, fun g hg _ => ?_, by decide, by decide, by decide⟩
+  · refine ⟨by decide, by decide, fun g hg _ => ?_, by decide, by decide⟩
     have hg2 : g < 2 := hg
     interval_cases g <;> decide
   · refine ⟨rfl, ?_⟩
-    simp [toyStmt, toyPart, Rule.WellFormed, OneStage.WellFormed, strataSizes]
+    simp [toyStmt, toyPart, OneStage.WellFormed, strataSizes]
 
 /-- The toy design's `P_a`: a uniform unit of two misses the set's members among them. -/
 theorem Pa_toy (B : Finset ℕ) :
     toyStmt.design.Pa toyPart B = ((2 - (window 0 2 B).card).choose 1 : ℝ) / 2 := by
-  simp [Design.Pa, toyStmt, toyPart, classesPa, Rule.Pa, OneStage.Pa, strataSizes]
+  simp [Design.Pa, toyStmt, toyPart, classesPa, OneStage.Pa, strataSizes]
 
 /-- **`M_{1/4}` has content**: it holds the empty set, and not the set of both units. -/
 theorem M_toy : ∅ ∈ toyStmt.design.M toyPart (1 / 4) ∧ ({0, 1} : Finset ℕ) ∉ toyStmt.design.M toyPart (1 / 4) := by
@@ -119,12 +160,12 @@ structure ToyNumbers (D : Deploy Coin Col T) (x : Msg) : Prop where
 theorem scope_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : Scope D x :=
   ⟨toyStmt, toyPart, h.parse, h.partition, inScope_toy⟩
 
-theorem k_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : D.k x = 2 ^ 40 * 5 := by
+theorem k_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : D.k x = 2 ^ 10 * 5 := by
   have hp : D.part toyStmt = toyPart := by
     simp only [Deploy.part]
     rw [h.partition]
     rfl
-  simp only [Deploy.k, nRU, nPU, h.parse, hp]
+  simp only [Deploy.k, nPU, h.parse, hp]
   rfl
 
 /-- `e^{−a/8} ≤ 8/(a + 8)`, from `1 + y ≤ e^y`. -/
@@ -173,8 +214,9 @@ theorem κF_le {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : κF D x 
 
 /-- The waits' slack factor is at most `3/2`. -/
 theorem slack_le : slack ≤ 3 / 2 := by
-  have hp1 : (2 : ℝ) ^ (-40 : ℝ) ≤ 1 / 2 := by
-    calc (2 : ℝ) ^ (-40 : ℝ) ≤ (2 : ℝ) ^ (-1 : ℝ) := Real.rpow_le_rpow_of_exponent_le (by norm_num) (by norm_num)
+  have hp1 : (2 : ℝ) ^ (-(slackExp : ℝ)) ≤ 1 / 2 := by
+    calc (2 : ℝ) ^ (-(slackExp : ℝ)) ≤ (2 : ℝ) ^ (-1 : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le (by norm_num) (by norm_num [slackExp])
       _ = 1 / 2 := by rw [Real.rpow_neg_one]; norm_num
   have h : ∀ t : ℝ, 0 ≤ t → t ≤ 1 / 2 → (2 : ℝ) ^ t ≤ 3 / 2 := by
     intro t h0 h1
@@ -183,33 +225,38 @@ theorem slack_le : slack ≤ 3 / 2 := by
     linarith
   exact h _ (by positivity) hp1
 
-/-- **`κ` at `δ = 1/4` is below `1`** at every deployment with the toy's numbers, at every hash. -/
-theorem κ_lt_one {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : κ D (1 / 4) x < 1 := by
+/-- **`κ` at `δ = 1/4` is below `1`** for the compiled sampled verifier at every deployment with the toy's numbers
+(`SamplingGeneric.ofDeploy`), at every hash. -/
+theorem κ_lt_one [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x)
+    (iroots : Msg → Seen → ℕ → List Msg) : (SamplingGeneric.ofDeploy D iroots).κ (1 / 4) x < 1 := by
   have hs0 : 0 ≤ slack := Real.rpow_nonneg (by norm_num) _
   have hs := slack_le
-  have hF := κF_le h
+  have hF : (SamplingGeneric.ofDeploy D iroots).κs x ≤ 1 / 100 :=
+    SamplingGeneric.maxBelow_le (by norm_num) fun _ _ => (SamplingGeneric.κFAt_innerN₀ D x).trans_le (κF_le h)
   have hk := k_of_toyNumbers h
-  have hkr : (D.k x : ℝ) = 2 ^ 40 * 5 := by rw [hk]; push_cast; ring
-  have hcapr : (D.cap x : ℝ) = 2 ^ 128 * (2 ^ 40 * 5) := by rw [Deploy.cap, hk]; push_cast; ring
+  have hkr : (D.k x : ℝ) = 2 ^ 10 * 5 := by rw [hk]; push_cast; ring
+  have hcapr : (D.cap x : ℝ) = 2 ^ 128 * (2 ^ 10 * 5) := by rw [Deploy.cap, hk]; push_cast; ring
   have hout : 2 * (D.k x : ℝ) / D.cap x ≤ 1 / 1000 := by rw [hkr, hcapr]; norm_num
-  have hexp : Real.exp (-(D.k x : ℝ) / 8) ≤ 1 / 1000 := by
+  have hexp : Real.exp (-(D.k x : ℝ) / 8) ≤ 1 / 100 := by
     refine (exp_neg_div_eight_le (by positivity)).trans ?_
     rw [hkr]
     norm_num
-  have h1 : slack ^ 2 * (1 / 4 + κF D x) ≤ slack ^ 2 * (1 / 4 + 1 / 100) :=
+  have h1 : slack ^ 2 * (1 / 4 + (SamplingGeneric.ofDeploy D iroots).κs x) ≤ slack ^ 2 * (1 / 4 + 1 / 100) :=
     mul_le_mul_of_nonneg_left (by linarith) (by positivity)
   have h1' : slack ^ 2 * (1 / 4 + 1 / 100) ≤ (3 / 2) ^ 2 * (1 / 4 + 1 / 100) :=
     mul_le_mul_of_nonneg_right (pow_le_pow_left₀ hs0 hs 2) (by norm_num)
-  have h2 : (1 + slack) * (2 * D.k x / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) ≤ (1 + slack) * (1 / 1000 + 1 / 1000) :=
-    mul_le_mul_of_nonneg_left (by linarith) (by linarith)
-  have h2' : (1 + slack) * (1 / 1000 + 1 / 1000) ≤ (1 + 3 / 2) * (1 / 1000 + 1 / 1000) :=
-    mul_le_mul_of_nonneg_right (by linarith) (by norm_num)
-  unfold κ
+  have h2 : slack * (2 * D.k x / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) ≤ slack * (1 / 1000 + 1 / 100) :=
+    mul_le_mul_of_nonneg_left (by linarith) hs0
+  have h2' : slack * (1 / 1000 + 1 / 100) ≤ 3 / 2 * (1 / 1000 + 1 / 100) :=
+    mul_le_mul_of_nonneg_right hs (by norm_num)
+  unfold SamplingGeneric.Compiled.κ
+  rw [SamplingGeneric.ofDeploy_kOut, SamplingGeneric.ofDeploy_kIn, SamplingGeneric.ofDeploy_capOut,
+    SamplingGeneric.ofDeploy_capIn]
   linarith
 
 /-- No finder finds a collision of the injective hash `id`. -/
 theorem finder_pr_id (F : Finder) : F.Pr id = 0 := by
-  simp [Finder.Pr, Claims.Pr, Collision]
+  simp [Finder.Pr, Claims.Pr, Claims.prUniform, Collision, Hash.Collision]
 
 theorem prB_id [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Ω : Type} [Fintype Ω] [Nonempty Ω] (V : Verifier Coin)
     (P : Prover Ω) (x : Msg) : PrB id V P x = 0 := by
@@ -218,16 +265,17 @@ theorem prB_id [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Ω : Type} [Fint
   · exact finder_pr_id _
   · rfl
 
-/-- **`KS` has content in scope**: at the collision-free hash `id`, `KS` at a deployment with the toy's numbers bounds
-every prover's `Pr[acc ∧ faulty ∉ M_{1/4}]`, and so its chance of being accepted on a trace with both units faulty, below
-`1`, at every decoder Flock's spec admits. -/
-theorem ks_lt_one [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] {D : Deploy Coin Col T}
-    {x : Msg} (h : ToyNumbers D x) (hks : KS id D) (decode : List (ℕ × Col) → List T)
-    (hdec : Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (Ω : Type) [Fintype Ω] [Nonempty Ω]
-    (P : Prover Ω) : PrBad id D.V (R id D.commit D.parse D.partition (1 / 4)) (E D decode) x P < 1 := by
-  refine lt_of_le_of_lt (hks (1 / 4) decode (by norm_num) hdec x (scope_of_toyNumbers h) Ω P) ?_
+/-- **`KS` has content in scope**: at the collision-free hash `id`, the compiled sampled verifier's `KS` at a deployment
+with the toy's numbers (`SamplingGeneric.ofDeploy`) bounds every prover's `Pr[acc ∧ faulty ∉ M_{1/4}]`, and so its
+chance of being accepted on a trace with both units faulty, below `1`. -/
+theorem ks_lt_one [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {D : Deploy Coin Col T} {x : Msg}
+    (h : ToyNumbers D x) (iroots : Msg → Seen → ℕ → List Msg) (hks : (SamplingGeneric.ofDeploy D iroots).KS id)
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    PrBad id D.V (R id D.commit D.parse D.partition (1 / 4)) (SamplingGeneric.ofDeploy D iroots).E x P < 1 := by
+  refine lt_of_le_of_lt (hks (1 / 4) (by norm_num) x ((SamplingGeneric.ofDeploy_scope D iroots x).2
+    (scope_of_toyNumbers h)) Ω P) ?_
   rw [prB_id, finder_pr_id, mul_zero, Real.sqrt_zero, mul_zero, add_zero, add_zero]
-  exact κ_lt_one h
+  exact κ_lt_one h iroots
 
 end Bound
 
@@ -284,17 +332,17 @@ def toyD : Deploy Bool ℕ Unit where
 
 theorem toyNumbers_toyD (x : Msg) : ToyNumbers toyD x := ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-/-- The decoder that lists the one trace meets Flock's spec at `toyD`. -/
-theorem listWithin_toyD : Flock.ListWithin toyD.flock.len toyD.flock.enc toyD.flock.θ fun _ => [()] :=
-  fun _ _ _ => List.mem_singleton.2 rfl
+/-- **At `toyD`, every statement is in scope and the compiled verifier's `κ` at `δ = 1/4` is below `1`.** -/
+theorem toyD_scope_κ (iroots : Msg → Seen → ℕ → List Msg) (x : Msg) :
+    Scope toyD x ∧ (SamplingGeneric.ofDeploy toyD iroots).κ (1 / 4) x < 1 :=
+  ⟨scope_of_toyNumbers (toyNumbers_toyD x), κ_lt_one (toyNumbers_toyD x) iroots⟩
 
-/-- **At `toyD`, every statement is in scope and `κ` at `δ = 1/4` is below `1`.** -/
-theorem toyD_scope_κ (x : Msg) : Scope toyD x ∧ κ toyD (1 / 4) x < 1 :=
-  ⟨scope_of_toyNumbers (toyNumbers_toyD x), κ_lt_one (toyNumbers_toyD x)⟩
-
-/-- **`KS` at `toyD` and the hash `id`** bounds every prover's `Pr[acc ∧ faulty ∉ M_{1/4}]` below `1`. -/
-theorem toyD_ks_lt_one (hks : KS id toyD) (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
-    PrBad id toyD.V (R id toyD.commit toyD.parse toyD.partition (1 / 4)) (E toyD fun _ => [()]) x P < 1 :=
-  ks_lt_one (toyNumbers_toyD x) hks _ listWithin_toyD Ω P
+/-- **The compiled verifier's `KS` at `toyD` and the hash `id`** bounds every prover's `Pr[acc ∧ faulty ∉ M_{1/4}]`
+below `1`. -/
+theorem toyD_ks_lt_one (iroots : Msg → Seen → ℕ → List Msg) (hks : (SamplingGeneric.ofDeploy toyD iroots).KS id)
+    (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    PrBad id toyD.V (R id toyD.commit toyD.parse toyD.partition (1 / 4)) (SamplingGeneric.ofDeploy toyD iroots).E x P
+      < 1 :=
+  ks_lt_one (toyNumbers_toyD x) iroots hks Ω P
 
 end Claims.Sampling.ScopeWitness

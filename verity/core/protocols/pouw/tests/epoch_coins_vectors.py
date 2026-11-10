@@ -1,12 +1,12 @@
-"""Pinned vectors for PoUW's epoch coins (`verity.core.protocols.pouw.coins`) and the salt and draw keys derived
+"""Pinned vectors for PoUW's execution-phase coins (`verity.core.protocols.pouw.coins`) and the salt and sample keys derived
 from them: ``uv run python verity/core/protocols/pouw/tests/epoch_coins_vectors.py`` rewrites
 ``tests/vectors/epoch_coins_v1.json``.  A change to that file is a change to the coin commitment or a derivation, and needs a
 reason in the PR.
 
-A case's challenger draws from `epoch_coins.entropy(seed)`; the weights' root and the transcript's root are
+A case's challenger samples from `epoch_coins.entropy(seed)`; the weights' root and the transcript's root are
 SHA-256("verity/pouw/epoch-coins-vectors/v1", case, "weights" | "transcript").  A case pins every coin, hm96 salt,
-committed value and path, the root, the epoch's salt (`audit.salt_of`), and the clear audit's draw keys, the generic
-draw's (`clear_audit.AUDIT_DOMAIN`) and Pearl-C's (`clear_work.draw_key`) under a records root SHA-256(…, case, "records")."""
+committed value and path, the root, the execution phase's salt (`audit.salt_of`), and the clear audit's sample keys, the generic
+sample's (`clear_audit.AUDIT_DOMAIN`) and Pearl-C's (`clear_work.draw_key`) under a records root SHA-256(…, case, "records")."""
 
 from __future__ import annotations
 
@@ -20,13 +20,13 @@ from verity.ml.randomness import derive
 from verity.core.protocols.pouw import audit as au
 from verity.core.protocols.pouw import coins as EC
 
-# the draw keys are the clear audit's, a reference tool (benchmarks/pouw/clear) imported by name
+# the sample keys are the clear audit's, a reference tool (benchmarks/pouw/clear) imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
 import clear_audit as CA  # noqa: E402
 import clear_work as CW  # noqa: E402
 
 OUT = Path(__file__).with_name("vectors") / "epoch_coins_v1.json"
-#: (case, the challenger's seed, epoch)
+#: (case, the challenger's seed, execution phase)
 CASES = (("epoch-7", E.SEED, 7), ("epoch-0", b"another challenger", 0), ("epoch-2^40", E.SEED, 1 << 40))
 
 

@@ -1,11 +1,11 @@
 """J10-R's receipts-only units (h1u.cu's kh_seeds_j10r and kh_units_multi_j10r) on the host: the call's seed data and every
-unit's receipt, bit for bit the receipt of J10R's `h1tile.j10r_reference` (`PouwH1Tile_v5` / `_v6`, #3403 on
-cursor/h1-j10r-1de3 at 559bc0aa69), vectorized as served_h1/receipts.py's `tile_receipts` over each unit's J10-R noise.
+unit's receipt, bit for bit the receipt of J10R's `h1tile.j10r_reference` (`PouwH1Tile_v5` / `_v6`, at
+559bc0aa69), vectorized as `pouw_h1_receipts.tile_receipts` over each unit's J10-R noise.
 
 A call is A [T, K] (its slot: T rows, the rows past M zero) and B [N, K]; unit u = ri (N / 32) + cj is at position base + u,
 and `base`, the call's first unit position, is J10-R's ``call``. seed_c = seeds.call_seed(salt, base, roots); unit (ri, cj)'s
 noise is rows 32 ri .. and columns 32 cj .. of seed_c's stream at call scale (`h1tile.j10r_blocks(T, K, (32, 32), ri, cj)`:
-row i from the unit's first row block plus i RB, column j from its first column block plus j CB), its fold keys σ_R's at
+row i from the unit's first row tile plus i RB, column j from its first column tile plus j CB), its fold keys σ_R's at
 base + u. The call's stream is hashed once and each unit gathers its blocks from it.
 
 On a tree without J10R's Definition (main before it lands) `call_seed`, `blocks` and `counters` are restated from it
@@ -28,13 +28,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
-sys.path.insert(0, str(HERE.parents[2]))
-import receipts as RC
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from verity_vllm.protocols.pouw.h1 import receipts as RC
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 CALL_SEED_TAG = b"verity/pouw/call-seed/v1".ljust(24, b"\0")
 TILE = (RC.R, RC.C_)
@@ -63,7 +61,7 @@ def call_seed(salt: bytes, call: int, root_a: bytes, root_b: bytes) -> bytes:
 
 
 def blocks(t: int, k: int, ri: int, cj: int) -> tuple[int, int]:
-    """Unit (ri, cj)'s first row block and first column block in its call's stream, for a call of t rows."""
+    """Unit (ri, cj)'s first row tile and first column tile in its call's stream, for a call of t rows."""
     return HT.j10r_blocks(t, k, TILE, ri, cj) if DEFINITION else _blocks_local(t, k, ri, cj)
 
 
@@ -98,7 +96,7 @@ def lean_vectors() -> dict:
                             "h1_seeds_c": _kernel_seed(data, 0, 40)},
            "receiptSeed_vec": {"seeds.receipt_seed": SD.receipt_seed(salt, 46, ra, rb),
                                "h1_seeds_c": _kernel_seed(data, 1, 46)},
-           "noiseBlock_vec": {"_stream": _stream(sc, np.array([24]))[0].astype(">u4").tobytes()}}
+           "noiseChunk_vec": {"_stream": _stream(sc, np.array([24]))[0].astype(">u4").tobytes()}}
     doc: dict = {"file": str(path.relative_to(path.parents[4])), "bad": 0}
     for name, by in got.items():
         want = lean.get(name)
@@ -109,8 +107,7 @@ def lean_vectors() -> dict:
 
 
 def _stream(seed: bytes, ts: np.ndarray) -> np.ndarray:
-    head = SD.NOISE_TAG + bytes(seed)
-    out = b"".join(hashlib.sha512(head + int(t).to_bytes(8, "big")).digest() for t in ts)
+    out = b"".join(SD.noise_block(bytes(seed), int(t)) for t in ts)
     return np.frombuffer(out, dtype=">u4").astype(np.int64).reshape(len(ts), 16)
 
 
@@ -146,7 +143,7 @@ def call_receipts(a: torch.Tensor, b: torch.Tensor, salt: bytes, base: int, root
 
 def anchor(out: Path, seed: int = 0x10A) -> dict:
     """On J10R's tree: the restated seed and blocks against the Definition's, and `call_receipts` against
-    `h1tile.j10r_reference`'s receipt on every word, at small calls (both row blocks, several column blocks) and at K = 4096
+    `h1tile.j10r_reference`'s receipt on every word, at small calls (both row tiles, several column tiles) and at K = 4096
     and 14336 (m = 2 and 3) at the served slot T = 64; and the seeds against J10RChecks.lean's vectors (`lean_vectors`)."""
     if not DEFINITION:
         raise SystemExit("j10r_units anchor: this tree has no J10-R Definition (h1tile.j10r_reference); run it on J10R's")

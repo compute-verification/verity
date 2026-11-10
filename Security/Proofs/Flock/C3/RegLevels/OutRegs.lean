@@ -1,6 +1,25 @@
-import Proofs.Flock.C3.RegLevels.OpensRegs
+module
+
+public import Proofs.Flock.VBridge.Family.Openings
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.VBridge.Family.Openings
+import Proofs.Flock.C3.RegLevels.OpensRegs
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Proofs.Flock.Verifier.HmNets
 
 /-!
 # n11: `OpensTopAt`'s registered outputs, from the unit's output rows
@@ -22,8 +41,10 @@ output row (`HiddenExec.rowOfH`, `outRowOf`): copy `j`'s output `o`, bit `t`, is
   `checkAcc`, `own_of_checkAcc`) and the session registers each row of a port the reads file names (`hread`, as
   `regReads_of_check`'s);
 * `accOutRegs_of_check`: at the verifier's unit, the `acc_out` columns registered as the bits of the row the `acc_out`
-  read holds, as `accOut_of_regOut` takes them (`AccOut.lean`'s `accOutL_of_keysS`).
+  read holds, as `accOut_of_regOut` takes them.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

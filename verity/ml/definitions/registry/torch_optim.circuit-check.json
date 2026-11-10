@@ -1,0 +1,32 @@
+{
+ "definitions": {
+  "AdamWForeach_v1{N=1,LERP_FMA=0,BF16=1}": {
+   "and": 30344,
+   "type": "1565273f912cbd808906cdbf74b45d3827dfc1037f0988f3753c8dacfaa773db05823931db6ac9791aef9b0aedf6b0a1e1a0884110538047ed1016f3648132d9"
+  },
+  "AdamWForeach_v1{N=1,LERP_FMA=1,BF16=0}": {
+   "and": 28602,
+   "type": "aff8e0e89734b5296eba1f70c2dead0887f1381aa344f5012bbd434e6ddcd9f01f0b93dfe194d9b21b8a7acb258a1e8668fa5caa3fc3ebfca806899db46711db"
+  },
+  "AdamWForeach_v1{N=1,LERP_FMA=1,BF16=1}": {
+   "and": 28668,
+   "type": "3947b8c1fe99151c63b985765ef4caa585601981b30da83dd23087339aa514029d39e9ad7e513021738b7054f70f6f3af385234872c70b59f5d4d0b696f4e8a0"
+  },
+  "SgdForeach_v1{N=4,ALPHA_FMA=0}": {
+   "and": 12614,
+   "type": "5ca95d9d22e5e01217bf1ceaf9269fcee03243c9305269489531a6538959363295050ebe008aea32e6c78fbf29eb5f611ea9a247db0372c9e6627c271598cea5"
+  },
+  "SgdForeach_v1{N=4,ALPHA_FMA=1}": {
+   "and": 17346,
+   "type": "699ac5f694d778cc92538aaf38d1a25f25fb9393f6206d2cae03410ba5eb908d98f06c1503da26c5588b86529226fc0bee22a2303ffdf6877c2130bc3cf85bf4"
+  },
+  "TorchAdamScalarsOut_v1": {
+   "and": 31400,
+   "type": "de785407f0f366011061c6c1ed6c28dcb8468466b7689da616d091cf993093508bbbeb4f92bbd7511ee2861c508f89b4806498ccad7412a5c92a3bbad1ae9da2"
+  },
+  "TorchSgdScalar_v1": {
+   "and": 1403,
+   "type": "a7dccf274e705572be786664760433e2ff1ec4175fe76830782cd62b1198023535fe1c330621c64a8f80b1e344c9089c155eba13a69eaacdc3841f63d54463d1"
+  }
+ }
+}

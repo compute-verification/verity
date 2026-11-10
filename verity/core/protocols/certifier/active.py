@@ -12,8 +12,8 @@ releases it. Every frame on the link is B bytes: a header (kind u8, stream u32, 
 fill. Padding is B zero bytes (kind `PAD`); `DATA` is a payload.
 
 **The canonical framing** is every sender's, so that each direction's frames are one public template's: the same
-header on every frame, then the sender's bytes at a fixed place, then the same bytes after them (N3 checks a window's
-frames against that template, and nothing else of a frame is free). On egress a frame is one event (`event`): the
+header on every frame, then the sender's bytes at a fixed place, then the same bytes after them, so nothing else of a
+frame is free. On egress a frame is one event (`event`): the
 `DATA` header on stream `CANONICAL_STREAM` with length `EVENT_BYTES`, `EVENT_HEAD`, the base64 of at most
 `TOKEN_BYTES` bytes padded with NUL to `EVENT_TEXT` characters, and `EVENT_TAIL`, so a token is one frame, or one per
 `TOKEN_BYTES` of it (`events`). An id event (`id_event`, `ID_EVENT_BYTES`) is that object with no text: its request's
@@ -40,6 +40,17 @@ boundaries meet (both timers expire in one turn of the loop, or one `VirtualCloc
 difftest's harness wakes one ticker a tick event, so there each step runs that tick alone, as `CertifierDevice.step`
 takes one event, and the trace orders a shared boundary's two ticks either way.
 
+**The pacer** (`Proxy(paced=…)`, off by default): a bucket written on the loop leaves when its tick runs, so when the
+server writes within a bucket, which the prover chooses, moves when the bucket reaches the client. With `paced`, a
+number of seconds past `slack`, the egress tick hands its bucket to a process of its own (`pacer.Pacer`) instead, which
+writes it to the link at `origin` + t·τ + `paced` on the host's monotonic clock, a time fixed before the bucket is made,
+so the loop's lateness within the slack never moves it. A bucket that reached the pacer after its time, or whose release
+started more than `slack` after it, faults its window `monitor-unavailable`, as a late tick does, and one the link
+refused, `delivery-refused`. A client slow to read holds bytes in the pacer, never a later bucket's release: a tick
+that finds more than one bucket past its time and not yet written faults its window `delivery-refused`, as the loop's
+own backlog of more than a bucket does unpaced. A window's record is published once its last bucket's writes are
+reported, so a fault on that bucket is its window's.
+
 **Egress.** The server's bytes on a stream are cut after every `\\n\\n`, the end of a server-sent event, so a frame's
 content is fixed by the bytes and never by how they were read. The event's `id:` field is its position in the
 Program's canonical order on the link, and the frame is what follows that line (`event_body`): neither the position
@@ -60,7 +71,7 @@ its stream's server connection.
 
 **The salt** (`Proxy(salt=…)`, off by default) is `salt_bits` bits (512 by default) per PoUW window from the
 certifier's own randomness (`fresh_salt`), released into the block only. PoUW window p is the `pouw_window` = k
-certifier windows p·k … p·k + k − 1 (k = 1 by default). At p's first ingress tick, t_s, the certifier draws p's salt
+certifier windows p·k … p·k + k − 1 (k = 1 by default). At p's first ingress tick, t_s, the certifier samples p's salt
 and enqueues its own salt frame at the head of the queue, ahead of that bucket's arrivals and of any queue carried
 from the window before (`Bucketer(first=…)`), so it leaves in that bucket's slot 0: kind `SALT` on `SALT_STREAM`,
 its payload u64be p followed by `PLACEHOLDER`, 64 zero bytes. The frame and its slot are fixed by the window and the
@@ -73,35 +84,37 @@ side never sees the salt.
 The certifier's record cells are its grids and two sealed slots per PoUW window: `_salts[p]`, which holds the salt and
 is opened only by `reveal`, and `_weights[p]`, the 64-byte root of the weights PoUW's noise seed reads. The prover
 hands that root once (`commit_weights(p, root, signature)`), signed under the prover key registered with the
-certifier (`prover_key`, over `weights_message`), while p's first ingress tick, the salt's draw, is still ahead;
+certifier (`prover_key`, over `weights_message`), while p's first ingress tick, the salt's sample, is still ahead;
 `committed(p, registration)` opens it on `reveal`'s conditions. So the certifier's word orders the prover's weights
 before the salt, and no one else can fix them. The record's open cells (`Accounting.Attribution.openCells`) are the
 grids, a function of the traffic, and what the certifier sends into the block is a function of its record.
-`reveal(p, registration)` takes the PoUW window's registration as the proof service returned it
-(`sampled_proofs.service.Registration`) and fails closed without it: it refuses unless the receipt is that
+`reveal(p, registration)` takes the PoUW window's registration as the proof system returned it
+(`spot.service.WindowCommitmentRecord`) and fails closed without it: it refuses unless the receipt is that
 registration's (`one_stage.registration.receipt`) and `registered` reads p off the registration, while p's last
 ingress record is unpublished (t_d), once the certifier's clock is more than `reveal_deadline` past p's end (one PoUW
-window by default), for a window whose salt was never drawn, and for one it has revealed already. So the salt reaches
+window by default), for a window whose salt was never sampled, and for one it has revealed already. So the salt reaches
 one registration of p, made within the deadline after p's work. `check_salts` is the audit's read of it: p's first raw
 ingress record holds exactly one salt frame of p, the placeholder's, and the revealed salt has `salt_bits` bits.
 
 **The reveal over the network** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the certifier runs on
-the link, off the prover's node, and the auditor's challenger on an auditor host. With the keys, `reveal` and
+the link, off the developer's node, and the auditor's challenger on an auditor host. With the keys, `reveal` and
 `committed` take the challenger's `request`: its LMS signature under `challenger_key`, the key the auditor's
 deployment record (never the prover's configuration) registered for it, over `reveal_request_message(signer.key_id,
-run_id, ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`, where `run_id` is the 32 bytes the proxy drew
-at construction (`Proxy.run_id`). They refuse one that doesn't verify before reading anything else, so no one else
-spends p's one reveal, nor does a request for another certifier or another run, and a registration counts only if the
-challenger signed its digest, which binds its record. They answer a `Revealed`: the value, the certifier's key id and
-run id, and its own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the
+run_id, ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`, where `run_id` is the 32 bytes the proxy
+sampled at construction (`Proxy.run_id`). They refuse one that doesn't verify before reading anything else, so no one
+else spends p's one reveal, nor does a request for another certifier or another run, and a registration counts only if
+the challenger signed its digest, which binds its record. They answer a `Revealed`: the value, the certifier's key id
+and run id, and its own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the
 value too, so a consumer can key p on the certifier run, (key id, run id, link) (`Proxy.certifier_run`, the same on a
-`RemoteCertifier`), where two proxies on one link name don't collide. The
+`CertifierClient`), where two proxies on one link name don't collide. The
 salt needs authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
 `pouw.salt` as a public input, so nothing is encrypted. `serve_reveals(proxy, host, port)` serves both calls beside
-`run`, one JSON line per request and per answer, and `RemoteCertifier` is the challenger's client, which takes the
+`run`, one JSON line per request and per answer, and `CertifierClient` is the challenger's client, which takes the
 certifier's key and run id from the deployment record and returns the value it verified, as a keyless proxy does in
-process. A refusal is unsigned: forged on the path, it costs the window as dropping the answer would. What the keys
-leave on `trusted-nebius-host` is the certifier's own (its signing key and leaf state on its host, and its word on what
+process. A refusal is unsigned: forged on the path, it costs the window as dropping the answer would. Given
+`certificates`, the endpoint also serves each certifier window's certificates' public part to any caller, unsigned: each
+signs a salted digest of its record's head, a hiding commitment, and verifies on its own signature. What the keys
+leave on `trusted-host` is the certifier's own (its signing key and leaf state on its host, and its word on what
 it signs) and the deployment record's custody (the keys and the run id it gives each side). Without the keys,
 `reveal(p, registration)` and `committed(p, registration)` are the in-process calls the tests and replays make, and
 hold only on the auditor's side.
@@ -176,12 +189,13 @@ import socket
 import struct
 import threading
 import time
-from collections import defaultdict, deque
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections import Counter, defaultdict, deque
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from verity.ml.commitments.identity import tagged_sha512
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.crypto import aead
 from verity.core.protocols.certifier.audit import Audit, Verdict
 from verity.core.protocols.certifier.certificate import PublicKey, Signer, SignerRefused
@@ -191,13 +205,15 @@ from verity.core.protocols.certifier.grid import (
     Record,
     Row,
     Certifier,
+    Status,
     row_count,
 )
 from verity.core.protocols.certifier.online import Prover, Refused
+from verity.core.protocols.certifier.pacer import Pacer, Report
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.service import Registration
+from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.spot.service import WindowCommitmentRecord
 
 HEADER = struct.Struct(">BII")
 PAD, DATA, SALT = 0, 1, 3
@@ -217,7 +233,7 @@ SALT_BITS = 512
 SALT_BYTES = SALT_BITS // 8
 PLACEHOLDER = bytes(64)
 SALT_FRAME_BYTES = HEADER.size + 8 + len(PLACEHOLDER)
-WEIGHTS_ROOT_BYTES = 64  # a frame-v3-sha512 root
+WEIGHTS_ROOT_BYTES = DIGEST_BYTES["sha512"]  # a frame-v3-sha512 root
 WEIGHTS_TAG = "verity-network-certifier/weights/v1"
 
 
@@ -233,9 +249,9 @@ def weights_message(link: str, window: int, root: bytes, context: bytes = b"") -
 REVEAL_REQUEST_TAG = "verity-network-certifier/reveal-request/v1"
 REVEAL_RESPONSE_TAG = "verity-network-certifier/reveal-response/v1"
 SALT_KIND, WEIGHTS_KIND = b"salt", b"weights"
-#: a proxy's run id, drawn at its construction (`Proxy.run_id`)
+#: a proxy's run id, sampled at its construction (`Proxy.run_id`)
 RUN_ID_BYTES = 32
-#: the longest request or answer line `serve_reveals` and `RemoteCertifier` read: a deployed LMS signature is 34,756
+#: the longest request or answer line `serve_reveals` and `CertifierClient` read: a deployed LMS signature is 34,756
 #: bytes, twice that in hex, beside a registration
 REVEAL_LINE_BYTES = 1 << 20
 #: the longest a ticker waits at once. Linux lets an epoll wait end late by 0.1 % of its timeout, 0.5 % in a niced
@@ -288,7 +304,7 @@ def reveal_response_message(key_id: bytes, run_id: bytes, link: str, window: int
 class Revealed:
     """The certifier's signed answer to a reveal request: PoUW window `window`'s salt or weights' root, `value`, its
     `signature` over `reveal_response_message`, and the certifier's `key_id` and `run_id` that it binds. With the link
-    it verifies for, they are the certifier run (`Proxy.certifier_run`, `RemoteCertifier.certifier_run`). Keyed on the
+    it verifies for, they are the certifier run (`Proxy.certifier_run`, `CertifierClient.certifier_run`). Keyed on the
     certifier run and the window, two proxies on one link name, or two runs of one, don't collide."""
 
     window: int
@@ -433,22 +449,27 @@ def compact_record_data(cell: bytes) -> tuple[int, int, str | None] | None:
         return None
 
 
-def compact_records_of(request: int, sampled: Sequence[int], eos: Iterable[int]) -> list[bytes]:
+def compact_records_of(request: int, sampled: Sequence[int], eos: Iterable[int], aborted: bool = False) -> list[bytes]:
     """The compact records of a response whose sampled ids are `sampled`: each id unmarked but the last, a stop where
-    it is one of the model's EOS ids (`eos`) and the length's mark where it isn't."""
+    it is one of the model's EOS ids (`eos`) and the length's mark where it isn't; every one unmarked when its client
+    aborted it (`aborted`), since no record says an abort."""
     stops = frozenset(eos)
-    return [compact_record(request, t, None if k < len(sampled) - 1 else "stop" if t in stops else "length")
+    return [compact_record(request, t, None if aborted or k < len(sampled) - 1 else "stop" if t in stops else "length")
             for k, t in enumerate(sampled)]
 
 
-def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterable[int],
-                              cells: Iterable[bytes]) -> list[tuple[int, str]]:
+def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterable[int], cells: Iterable[bytes], *,
+                              max_tokens: Mapping[int, int], aborted: Collection[int] = ()) -> list[tuple[int, str]]:
     """A link's compact cells held to the Commit's sampled ids (`sampled`, each request's by its ingress ordinal):
-    ordinal o's cells, in canonical order, are `compact_records_of(o, sampled[o], eos)`, one for one, so each carries
-    the id the model sampled there, the response is as long as the Commit's, and its finish is the Commit's, a stop
-    only where the Commit sampled EOS. `cells` are the link's frames in canonical order, padding left out. A violation
-    is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits whatever ids and
-    finish the server writes; this is the rule the I/O tie holds each response's length and finish to."""
+    ordinal o's cells, in canonical order, are `compact_records_of(o, sampled[o], eos, o in aborted)`, one for one, so
+    each carries the id the model sampled there, the response is as long as the Commit's, and its finish is the
+    Commit's, a stop only where the Commit sampled EOS. `aborted` are the ordinals whose finish in the Commit is a
+    client's abort, each one's response held to 1 ≤ k < `max_tokens[o]` ids and none of them EOS; any other's length
+    finish is at `max_tokens[o]` exactly. `cells` are the link's frames in canonical order, padding left out. A
+    violation is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits
+    whatever ids and finish the server writes; this is the rule the I/O tie holds each response's length and finish
+    to. An abort is the Commit's word, not something on the link: the advice charges its `output_len` in full."""
+    stops = frozenset(eos)
     got: dict[int, list[tuple[int, str | None]]] = defaultdict(list)
     out: list[tuple[int, str]] = []
     for cell in cells:
@@ -460,7 +481,8 @@ def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterabl
         if o not in sampled:
             out.append((o, "no request of the Commit is this ordinal"))
             continue
-        want = [compact_record_data(r)[1:] for r in compact_records_of(o, sampled[o], eos)]
+        ids, m, gone = sampled[o], max_tokens[o], o in aborted
+        want = [compact_record_data(r)[1:] for r in compact_records_of(o, ids, stops, gone)]
         mine = got.get(o, [])
         k = next((k for k, (g, w) in enumerate(zip(mine, want)) if g != w), None)
         if k is not None and mine[k][0] != want[k][0]:
@@ -469,6 +491,14 @@ def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterabl
             out.append((o, f"finish {mine[k][1] or 'none'} on output {k} where the Commit's is {want[k][1] or 'none'}"))
         elif len(mine) != len(want):
             out.append((o, f"{len(mine)} records where the Commit sampled {len(want)} ids"))
+        elif gone and not ids:
+            out.append((o, "an abort before any output"))
+        elif gone and len(ids) >= m:
+            out.append((o, f"an abort at {len(ids)} outputs where max_tokens is {m}"))
+        elif gone and stops & set(ids):
+            out.append((o, "an abort on an EOS id"))
+        elif want and want[-1][1] == "length" and len(ids) != m:
+            out.append((o, f"a length finish at {len(ids)} outputs where max_tokens is {m}"))
     return out
 
 
@@ -519,8 +549,8 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
     eight (six decimals), `model` and `user` each in `ID_NAME_BYTES`, and each prompt id in its own `ID_FIELD_BYTES`.
     No field straddles a frame: spaces (JSON's whitespace) before one that would move it, with its key, to the next.
     At 4096-byte frames every field but the prompt's is in the first frame. `offset` is the request's first byte's
-    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the warden's cells
-    (`warden.cells`, which carry the bytes alone)."""
+    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the network certifier's
+    cells (`warden.cells`, which carry the bytes alone)."""
     if offset not in (0, LENGTH.size):
         raise ValueError(f"an id request starts its first frame's payload at 0 or {LENGTH.size}, not {offset!r}")
     if not prompt or isinstance(prompt, (str, bytes)):
@@ -708,7 +738,7 @@ class Pair:
                    Opener(aead.keys(secret, session, into), peer, peer_start))
 
 
-def served_window(registration: Registration) -> int | None:
+def served_window(registration: WindowCommitmentRecord) -> int | None:
     """The window a registration's provenance names when it is exactly `{"kind": "served", "window": w}` (the network
     certifier's own, `service.LinkWindows.provenance`), else None."""
     window = registration.record.get("window") if isinstance(registration.record, Mapping) else None
@@ -1069,6 +1099,11 @@ class _Stream:
     ended: int | None = None  # the ready bucket of its end upstream
 
 
+def _faulted(record: Record, reason: Reason) -> Record:
+    """`record` with `reason` as its status, unless it has one already: a window records its first fault."""
+    return record if not record.status.complete else replace(record, status=Status(reason))
+
+
 class Proxy:
     """The active certifier on one link: `run(reader, writer)` serves the link connection from `origin`, the clock's time
     of bucket 0, for the windows of `syncs`, or `windows` of them declared by an online `prover`, then closes it.
@@ -1090,14 +1125,14 @@ class Proxy:
       off a registration, by default `served_window`), its last ingress record is published, and the certifier's clock
       is no more than `reveal_deadline` past p's end (one PoUW window by default); with `prover_key`,
       `commit_weights(p, root, signature)` records the weights' root the prover signed (`weights_message`, under
-      `prover_context`) before p's salt is drawn, and `committed(p, registration)` gives it on `reveal`'s conditions;
+      `prover_context`) before p's salt is sampled, and `committed(p, registration)` gives it on `reveal`'s conditions;
     - with `challenger_key` and `signer`, both or neither, `reveal(p, registration, request)` and `committed(p,
       registration, request)` take only a request the auditor's challenger signed under `challenger_key`
       (`reveal_request_message`) and answer a `Revealed` that `signer`, the network certifier's own key, signed
-      (`reveal_response_message`), which `serve_reveals` serves to a `RemoteCertifier`; without them they are the
+      (`reveal_response_message`), which `serve_reveals` serves to a `CertifierClient`; without them they are the
       in-process calls, which take no request and return the value. `challenger_key` comes from the auditor's
-      deployment record, never from the prover's configuration, and `trusted-nebius-host` covers that record's custody.
-      Both messages bind the signer's `key_id` and `run_id`, 32 bytes (`RUN_ID_BYTES`) the proxy draws from
+      deployment record, never from the prover's configuration, and `trusted-host` covers that record's custody.
+      Both messages bind the signer's `key_id` and `run_id`, 32 bytes (`RUN_ID_BYTES`) the proxy samples from
       `run_nonce` at construction (the certifier's own randomness by default), so a request or an answer of one run,
       or of another proxy on the same link name, is never taken in another;
     - with `start` and `position`, it is back from maintenance: it serves windows `start` … `windows` − 1, its first
@@ -1119,6 +1154,10 @@ class Proxy:
       read is opened (`Pair.opener`) before the ingress certifier takes it, so every record is the unsealed run's. A
       unit that doesn't open faults its ingress window `malformed`, and every later one too (`link_frames_read` counts
       units then);
+    - with `paced`, seconds past `slack` (off by default), the egress tick hands each bucket to the pacer
+      (`pacer.Pacer`), which writes it to the link `paced` after its boundary on the host's monotonic clock, `origin`'s
+      clock then; `releases` holds each bucket's `pacer.Report`, and each egress record is published once its last
+      bucket's is in;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -1129,12 +1168,15 @@ class Proxy:
                  egress_link: str = "responses", ingress_link: str,
                  prover: Prover | None = None, windows: int | None = None, executor: Executor | None = None,
                  salt: Callable[[int, int], bytes] | None = None, salt_bits: int = SALT_BITS, pouw_window: int = 1,
-                 registered: Callable[[Registration], int | None] = served_window, start: int = 0,
+                 registered: Callable[[WindowCommitmentRecord], int | None] = served_window, start: int = 0,
                  position: int = 0, reveal_deadline: float | None = None, prover_key: PublicKey | None = None,
                  prover_context: bytes = b"", challenger_key: PublicKey | None = None,
                  signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes,
                  served: ServedProfile | None = None, ordinals: bool = False, compact: bool = False,
-                 pair: Pair | None = None) -> None:
+                 pair: Pair | None = None, paced: float | None = None) -> None:
+        if paced is not None and not (isinstance(paced, (int, float)) and paced > slack):
+            raise ValueError(f"a paced bucket leaves past the slack, so that a tick in time hands it before its time, "
+                             f"not {paced!r} s after its boundary")
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
         if compact and not (ordinals and egress.frame_bytes >= COMPACT_RECORD.size):
@@ -1186,7 +1228,7 @@ class Proxy:
         self._salts: dict[int, bytes] = {}
         self._revealed: set[int] = set()
         self._weights: dict[int, bytes] = {}
-        self._seal = threading.Lock()  # `commit_weights` may run off the loop: the draw and the commit never interleave
+        self._seal = threading.Lock()  # `commit_weights` may run off the loop: the sample and the commit never interleave
         self._salt_out: asyncio.Queue | None = None
         self._salt_task: asyncio.Task | None = None
         self.salts_released = self.salts_delivered = 0
@@ -1195,7 +1237,12 @@ class Proxy:
             served, egress.allocation, lambda w: syncs[w] if prover is None and w < len(syncs) else slowest)
         self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start,
                                  served=admission)
-        self.pair = pair
+        self.pair, self.paced = pair, paced
+        self.releases: list[Report] = []
+        self._pacer: Pacer | None = None
+        self._reports_task: asyncio.Task | None = None
+        self._unwritten: Counter[int] = Counter()
+        self._held: dict[int, Record] = {}
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
         self.streams: dict[int, _Stream] = {}
@@ -1219,10 +1266,13 @@ class Proxy:
             await asyncio.gather(self._egress(writer), self._ingress())
         finally:
             link.cancel()
-            tasks = [st.task for st in self.streams.values() if st.task] + [t for t in (self._salt_task,) if t]
+            tasks = [st.task for st in self.streams.values() if st.task] + \
+                [t for t in (self._salt_task, self._reports_task) if t]
             for task in tasks:
                 task.cancel()
             await asyncio.gather(link, *tasks, return_exceptions=True)
+            if self._pacer is not None:
+                await self._pacer.kill()
             writer.close()
             if self.choices is not None:
                 await asyncio.to_thread(self.choices.executor.shutdown, True, cancel_futures=True)
@@ -1259,31 +1309,82 @@ class Proxy:
         bucket_bytes = p.allocation * (p.frame_bytes if pair is None else p.frame_bytes + aead.TAG_BYTES)
         padding = memoryview(bytes(p.allocation * p.frame_bytes))
         pad = bytes(p.frame_bytes)
+        tau = p.bucket_ms / 1000
+        pacer = None
+        if self.paced is not None:
+            pacer = self._pacer = await Pacer.start({0: writer.get_extra_info("socket").fileno()})
+            self._reports_task = asyncio.create_task(self._reports(pacer))
         choices = self.choices
         if choices is not None and self.windows:
             choices.start()
 
         def tick(t: int) -> None:
-            backlog = writer.transport.get_write_buffer_size()
-            if backlog > bucket_bytes:
+            if pacer is None:
+                backlog = writer.transport.get_write_buffer_size()
+                refused, dropped = backlog > bucket_bytes, backlog > 4 * bucket_bytes
+            else:
+                behind = pacer.behind(self.clock())
+                refused, dropped = behind > 1, behind > 4
+            if refused:
                 self.shaper.certifier.fault(Reason.DELIVERY_REFUSED)
             self._check_forwarding()
             row, record = self.shaper.tick()
             n = row_count(row)
-            if backlog <= 4 * bucket_bytes:
+            if not dropped:
                 if pair is None:
-                    writer.writelines([*row[:n], padding[: (p.allocation - n) * p.frame_bytes]])
+                    cells = [*row[:n], padding[: (p.allocation - n) * p.frame_bytes]]
                 else:
-                    writer.writelines(pair.sealer.seal_bucket(t, [*row[:n], *[pad] * (p.allocation - n)]))
+                    cells = pair.sealer.seal_bucket(t, [*row[:n], *[pad] * (p.allocation - n)])
+                if pacer is None:
+                    writer.writelines(cells)
+                else:
+                    pacer.hand(t, self.origin + t * tau + self.paced, [(0, b"".join(cells), False)])
+                    self._unwritten[t // p.buckets] += 1
             if choices is not None and (t + choices.prover.lag) % p.buckets == 0 and \
                     (t + choices.prover.lag) // p.buckets < self.windows:
                 choices.start()
             if record is not None:
-                self.publish(record, p)
+                if self._unwritten[record.window]:
+                    self._held[record.window] = record
+                else:
+                    self.publish(record, p)
             self._changed.set()
 
         await self._ticks("egress", p, self.shaper.certifier, tick)
-        await writer.drain()
+        if pacer is None:
+            await writer.drain()
+            return
+        await pacer.close()
+        await self._reports_task
+        for w in sorted(self._held):
+            self.publish(_faulted(self._held.pop(w), Reason.MONITOR_UNAVAILABLE), p)
+        self._changed.set()
+
+    async def _reports(self, pacer: Pacer) -> None:
+        async for report in pacer.reports():
+            self._report(report)
+
+    def _report(self, report: Report) -> None:
+        """A bucket's release or its writes as the pacer reports them. A bucket that reached the pacer after its time,
+        or whose release started more than `slack` after it, faults its window `monitor-unavailable`, and one the link
+        refused, `delivery-refused`: the open window's certifier, or the record held for a closed one. A window's record
+        is published once the writes of every bucket of it that was handed are reported."""
+        w = report.t // self.egress.buckets
+        if report.end is None:
+            reason = Reason.MONITOR_UNAVAILABLE if report.arrived > 0 or report.start > self.slack else None
+        else:
+            self.releases.append(report)
+            reason = None if report.written else Reason.DELIVERY_REFUSED
+        if reason is not None:
+            if w in self._held:
+                self._held[w] = _faulted(self._held[w], reason)
+            elif w == self.shaper.certifier.window:
+                self.shaper.certifier.fault(reason)
+        if report.end is not None:
+            self._unwritten[w] -= 1
+            if not self._unwritten[w] and w in self._held:
+                self.publish(self._held.pop(w), self.egress)
+        self._changed.set()
 
     def _check_forwarding(self) -> None:
         """Fault every window a late forward can reach: a released request not written upstream by its deadline makes
@@ -1338,7 +1439,7 @@ class Proxy:
         await self._ticks("ingress", p, self.bucketer.certifier, tick)
 
     def _draw_salt(self, window: int) -> bytes | None:
-        """At a PoUW window's first certifier window, draw its salt and give the certifier's own frame, the
+        """At a PoUW window's first certifier window, sample its salt and give the certifier's own frame, the
         placeholder's."""
         if window % self.pouw_window:
             return None
@@ -1380,20 +1481,20 @@ class Proxy:
     def certifier_run(self) -> tuple[bytes, bytes, str]:
         """This certifier run's identity, (key id, run id, link): the signer's key id, `run_id` and the ingress link
         name, the one the reveal messages bind. Every signed answer binds it, and consumers key PoUW windows on it: a
-        `Revealed`'s `key_id` and `run_id`, with the link it verifies for, are it, and a `RemoteCertifier` of this proxy
+        `Revealed`'s `key_id` and `run_id`, with the link it verifies for, are it, and a `CertifierClient` of this proxy
         gives the same. A proxy without a signer has no key id, so it raises `ValueError`."""
         if self.signer is None:
             raise ValueError("a proxy without a signer has no key id, so no certifier run")
         return self.signer.key_id, self.run_id, self.bucketer.certifier.link
 
-    def reveal(self, window: int, registration: Registration | None,
+    def reveal(self, window: int, registration: WindowCommitmentRecord | None,
                request: bytes | None = None) -> bytes | Revealed:
-        """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof service returned
+        """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof system returned
         it, once. It fails closed (`RuntimeError`): without a registration whose receipt is its own and off which
         `registered` reads `window`, while the window's last ingress record is unpublished (t_d), once the certifier's
-        clock is more than `reveal_deadline` past the window's end, for a window whose salt wasn't drawn (one this proxy
-        was down for at its start), and for a window whose salt it has revealed already. So a registration made after
-        the window's work, or a second one naming the same window, gets no salt.
+        clock is more than `reveal_deadline` past the window's end, for a window whose salt wasn't sampled (one this
+        proxy was down for at its start), and for a window whose salt it has revealed already. So a registration made
+        after the window's work, or a second one naming the same window, gets no salt.
 
         With a challenger key it first refuses a `request` that isn't the registered challenger's signature over
         `reveal_request_message(signer.key_id, run_id, ingress link, window, registration.digest, SALT_KIND)`, so no
@@ -1411,7 +1512,7 @@ class Proxy:
             self._revealed.add(window)
         return self._respond(window, registration, SALT_KIND, self._salts[window])
 
-    def _authenticate(self, window: int, registration: Registration | None, request: bytes | None,
+    def _authenticate(self, window: int, registration: WindowCommitmentRecord | None, request: bytes | None,
                       what: bytes) -> None:
         """Refuse a request the registered challenger didn't sign for this certifier's key id and run, `window`,
         `registration` and `what`; in process (no challenger key), any request."""
@@ -1428,7 +1529,7 @@ class Proxy:
             raise RuntimeError(f"the request for window {window}'s {what.decode()} isn't signed by the registered "
                                "challenger for this certifier's run")
 
-    def _respond(self, window: int, registration: Registration, what: bytes, value: bytes) -> bytes | Revealed:
+    def _respond(self, window: int, registration: WindowCommitmentRecord, what: bytes, value: bytes) -> bytes | Revealed:
         if self.signer is None:
             return value
         key_id = self.signer.key_id
@@ -1439,7 +1540,7 @@ class Proxy:
         except SignerRefused as e:
             raise RuntimeError(f"the certifier's signer refused window {window}'s {what.decode()}: {e}") from None
 
-    def _opens(self, window: int, registration: Registration | None, what: str) -> None:
+    def _opens(self, window: int, registration: WindowCommitmentRecord | None, what: str) -> None:
         """Refuse unless PoUW window `window` may be opened now on `registration` (`reveal`'s conditions but the once)."""
         if self.salt is None:
             raise ValueError("the salt is off")
@@ -1457,7 +1558,7 @@ class Proxy:
         certifier's word orders it before the window's salt. Only the registered prover's root is taken: `signature`
         verifies under `prover_key` over `weights_message(ingress link, window, root, prover_context)`. It refuses
         (`RuntimeError`) without a prover key, on a signature that doesn't verify, once the window's first ingress tick,
-        the salt's draw, has run or was missed (a proxy back from maintenance after it), and a second root for the
+        the salt's sample, has run or was missed (a proxy back from maintenance after it), and a second root for the
         window."""
         if self.salt is None:
             raise ValueError("the salt is off")
@@ -1478,7 +1579,7 @@ class Proxy:
                 raise RuntimeError(f"PoUW window {window}'s weights are already recorded")
             self._weights[window] = root
 
-    def committed(self, window: int, registration: Registration | None,
+    def committed(self, window: int, registration: WindowCommitmentRecord | None,
                   request: bytes | None = None) -> bytes | Revealed:
         """PoUW window `window`'s weights' root, recorded before its salt, on `reveal`'s conditions but the once (it is a
         hiding commitment, and taking it doesn't reveal the salt), its request signed over `WEIGHTS_KIND` and its answer
@@ -1489,8 +1590,8 @@ class Proxy:
             raise RuntimeError(f"no weights were recorded before PoUW window {window}'s salt")
         return self._respond(window, registration, WEIGHTS_KIND, self._weights[window])
 
-    def _registers(self, window: int, registration: Registration | None) -> bool:
-        if not isinstance(registration, Registration) or not isinstance(registration.receipt, Mapping):
+    def _registers(self, window: int, registration: WindowCommitmentRecord | None) -> bool:
+        if not isinstance(registration, WindowCommitmentRecord) or not isinstance(registration.receipt, Mapping):
             return False
         try:
             digest = R.digest(registration.record)
@@ -1586,22 +1687,32 @@ class Proxy:
 
 _KINDS = {"salt": SALT_KIND, "weights": WEIGHTS_KIND}
 _MALFORMED = ("a request is a JSON object of window, kind (salt or weights), registration (record, receipt, digest) "
-              "and request (the challenger's signature, hex)")
+              "and request (the challenger's signature, hex), or of window and kind certificates")
 
 
 def _line(answer: Mapping) -> bytes:
     return json.dumps(answer).encode() + b"\n"
 
 
-def _reveal_answer(proxy: Proxy, line: bytes) -> dict:
+def _reveal_answer(proxy: Proxy, line: bytes, certificates: Callable[[int], Mapping | None] | None = None) -> dict:
     """`serve_reveals`' answer to one request line."""
     try:
         req = json.loads(line)
-        what, reg = _KINDS[req["kind"]], req["registration"]
-        registration = Registration(reg["record"], reg["receipt"], reg["digest"], 0)
-        window, request = req["window"], bytes.fromhex(req["request"])
+        window, what = req["window"], req["kind"]
+        if what != "certificates":
+            what, reg = _KINDS[what], req["registration"]
+            registration = WindowCommitmentRecord(reg["record"], reg["receipt"], reg["digest"], 0)
+            request = bytes.fromhex(req["request"])
     except (ValueError, KeyError, TypeError):
         return {"refused": _MALFORMED}
+    if what == "certificates":
+        if certificates is None:
+            return {"refused": "this certifier serves no certificates"}
+        if not (type(window) is int and window >= 0):
+            return {"refused": _MALFORMED}
+        if (public := certificates(window)) is None:
+            return {"refused": f"window {window}'s records aren't all certified, so its certificates aren't served"}
+        return dict(public) | {"window": window}
     try:
         out = (proxy.reveal if what == SALT_KIND else proxy.committed)(window, registration, request)
     except (RuntimeError, ValueError) as e:
@@ -1610,14 +1721,18 @@ def _reveal_answer(proxy: Proxy, line: bytes) -> dict:
             "key_id": out.key_id.hex(), "run_id": out.run_id.hex()}
 
 
-async def serve_reveals(proxy: Proxy, host: str, port: int) -> asyncio.Server:
+async def serve_reveals(proxy: Proxy, host: str, port: int, *,
+                        certificates: Callable[[int], Mapping | None] | None = None) -> asyncio.Server:
     """The certifier's reveal endpoint, on `run`'s loop: it answers each JSON line a connection sends, `{"window",
     "kind": "salt" | "weights", "registration": {"record", "receipt", "digest"}, "request"}` (the challenger's signature
     in hex), with one JSON line, `{"window", "value", "signature", "key_id", "run_id"}` (hex), the `Revealed` of
     `proxy.reveal` or `proxy.committed`, or `{"refused": reason}` for whatever they refuse and for a line that isn't a
     request. The registration's `order` isn't sent: the certifier reads its record, receipt and digest. It serves only
     a proxy with a challenger key and a signer, and each call runs off the loop, since verifying and signing hash for
-    milliseconds and the ticks have `slack`. Returns the listening server: `close()` stops it."""
+    milliseconds and the ticks have `slack`. With `certificates`, `{"window", "kind": "certificates"}`, which needs no
+    signature, is answered `certificates(window)` with its `window`: the public part of the window's certificates, the
+    caller's to keep (the module docstring's "The reveal over the network"), refused while it gives None, before every
+    record of the window is certified. Returns the listening server: `close()` stops it."""
     if proxy.challenger_key is None:
         raise ValueError("a proxy serves reveals only with a challenger key and a signer")
 
@@ -1633,7 +1748,7 @@ async def serve_reveals(proxy: Proxy, host: str, port: int) -> asyncio.Server:
                     break
                 if not line:
                     break
-                writer.write(_line(await asyncio.to_thread(_reveal_answer, proxy, line)))
+                writer.write(_line(await asyncio.to_thread(_reveal_answer, proxy, line, certificates)))
                 await writer.drain()
         except ConnectionError:
             pass
@@ -1643,7 +1758,7 @@ async def serve_reveals(proxy: Proxy, host: str, port: int) -> asyncio.Server:
     return await asyncio.start_server(handle, host, port, limit=REVEAL_LINE_BYTES)
 
 
-class RemoteCertifier:
+class CertifierClient:
     """The auditor challenger's handle on a network certifier's reveal endpoint (`serve_reveals`) at `host`:`port`, in
     place of the `Proxy` an in-process caller holds. `run_id` is that proxy's `Proxy.run_id`, which the auditor's
     deployment record gives beside `certifier_key`, as it gives the certifier `challenger_key` (not a signed hello,
@@ -1675,15 +1790,15 @@ class RemoteCertifier:
         every answer it takes binds and consumers key PoUW windows on."""
         return self.key_id, self.run_id, self.link
 
-    def reveal(self, window: int, registration: Registration | None) -> bytes:
+    def reveal(self, window: int, registration: WindowCommitmentRecord | None) -> bytes:
         return self._ask(window, registration, SALT_KIND)
 
-    def committed(self, window: int, registration: Registration | None) -> bytes:
+    def committed(self, window: int, registration: WindowCommitmentRecord | None) -> bytes:
         return self._ask(window, registration, WEIGHTS_KIND)
 
-    def _ask(self, window: int, registration: Registration | None, what: bytes) -> bytes:
+    def _ask(self, window: int, registration: WindowCommitmentRecord | None, what: bytes) -> bytes:
         kind = what.decode()
-        if not isinstance(registration, Registration):
+        if not isinstance(registration, WindowCommitmentRecord):
             raise RuntimeError(f"no registration of window {window}, so its {kind} isn't asked for")
         body = {"window": window, "kind": kind, "registration": {
             "record": registration.record, "receipt": registration.receipt, "digest": registration.digest}}

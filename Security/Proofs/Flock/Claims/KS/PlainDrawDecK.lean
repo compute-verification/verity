@@ -1,10 +1,61 @@
-import Proofs.Flock.Claims.KS.PlainDrawAccK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawAccK
+public import Proofs.Flock.Claims.Bridge.DecodePlain
+public import Proofs.Flock.Claims.KS.PlainBound
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.DecodeDeploy
+import Proofs.Flock.Claims.KS.DecodeHidden
+import Proofs.Flock.Claims.KS.Entries
+import Proofs.Flock.Claims.KS.PlainDrawK
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
-# The deployed plain decoders at the statement's draw, at `VK keep`
+# The deployed plain decoders at the statement's sample, at `VK keep`
 
-The deployed plain decoders for the verdict at the statement's draw read through `keep`, on `PlainDrawAccK`'s
-acceptance lemmas, at any record writer `wr` whose transcripts record their outcome at the setup at the draw
+The deployed plain decoders for the verdict at the statement's sample read through `keep`, on `PlainDrawAccK`'s
+acceptance lemmas, at any record writer `wr` whose transcripts record their outcome at the setup at the sample
 (`RecordsLiveAtDK`). The one place they meet the outcome's rounds is the rep's run (`PlaysCoin.RepRun`), which reads a
 round's coin count, coins and bytes and never its digest, so the decoded rounds carry it to the outcome's up to their
 digests (`PlaysCoin.repRun_of_erase`). At `wrPDK` they are the decoders for `plainVerdictAtK keep`, and at `keep := id`
@@ -13,11 +64,13 @@ and `wrPD` `PlainDrawDec`'s for `plainVerdictAt`:
 * `recordsLive_wrK1_of`, `recordsLive_wrPDK1`: a recording transcript, and `wrPDK`, at a one-table outcome record it as
   one table's, the rounds up to their digests.
 * `decodesTable_wrK_sc_of`, `decodesTable_wrK_scH_of`: the decoders right at public and at hidden outputs, on the
-  outcomes whose transcript `verifyWithMK keep` accepts at the draw `dj S` with no column off `C` (`AcceptsAtDK`,
+  outcomes whose transcript `verifyWithMK keep` accepts at the sample `dj S` with no column off `C` (`AcceptsAtDK`,
   `TxNoOffAtK`); `decodesTable_wrPDK_sc`, `decodesTable_wrPDK_scH` at `wrPDK`.
 * `plain_hdecAtK_of`, `plain_hdecHAtK_of`: at `plainTab`; `plain_hdecAtK`, `plain_hdecHAtK` at `wrPDK`, with
   `plainVerdictAtK keep`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlaysCoin
 
@@ -88,7 +141,7 @@ theorem recordsLive_wrPDK1 (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {
 open DecodeZL Integrate in
 /-- **The deployed plain decoders are right at a record writer for accepting with no opening off `C` without a
 self-clash**, at one table: `decodesTable_wrPD_sc` through `keep`, at any writer `wr` whose transcripts record their
-outcome at the setup at the draw `dj S` (`RecordsLiveAtDK`), on the outcomes whose transcript `verifyWithMK keep`
+outcome at the setup at the sample `dj S` (`RecordsLiveAtDK`), on the outcomes whose transcript `verifyWithMK keep`
 accepts there, whose root is `rootB₀`'s and on which the deployed plain reader looks up no column off `C` there
 (`TxNoOffAtK`). -/
 theorem decodesTable_wrK_sc_of (keep : Bool → Bool)
@@ -231,20 +284,20 @@ theorem decodesTable_wrPDK_sc (keep : Bool → Bool)
     (recordsLiveAtDK_wrPDK keep I (dj S)) j
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **The deployed plain decoders are right at a record writer at hidden outputs**: `decodesTable_wrK_sc_of` at the
-hidden tables and their openings `opnAtH` (`decodesTable_wrPD_scH` through `keep`). -/
-theorem decodesTable_wrK_scH_of (keep : Bool → Bool)
+/-- **The deployed plain decoders are right at a record writer at hidden outputs, at a leaf form `F`**:
+`decodesTable_wrK_sc_of` at the hidden tables and their openings `opnAtH` (`decodesTable_wrPD_scH` through `keep`). -/
+theorem decodesTable_wrK_scHLf_of (keep : Bool → Bool) (F : LeafForm)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkH I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg) {N : ℕ}
+    (hT : F.TagsOk I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg) {N : ℕ}
     (hN : N = 2 ^ (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0).logLen) (C : Fin N → List 𝔽)
     (rootB₀ : Array ByteArray) (wr : Tables.LiveOutJ 1 mPts → Exec.Transcript)
     (hwr : ∀ o, RecordsLiveAtDK keep I (dj S) o (wr o)) (j : Fin [tablesAtH (Reg := Reg) dj x₀ S R].length) :
-    Tables.DecodesTable (fun _ cap pend os => tableOutL H512 enc512 leaf512 cap pend os)
-      (fun _ o => o.accepted = true ∧ ¬ (Off₀L H512 enc512 leaf512 (tablesAtH (Reg := Reg) dj x₀ S R).sch
+    Tables.DecodesTable (fun _ cap pend os => tableOutL H512 enc512 F.lf cap pend os)
+      (fun _ o => o.accepted = true ∧ ¬ (Off₀L H512 enc512 F.lf (tablesAtH (Reg := Reg) dj x₀ S R).sch
         (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
-        ¬ SelfClashL H512 enc512 leaf512 (tablesAtH (Reg := Reg) dj x₀ S R).sch o))
+        ¬ SelfClashL H512 enc512 F.lf (tablesAtH (Reg := Reg) dj x₀ S R).sch o))
       (fun o => AcceptsAtDK keep I (some (dj S)) (wr o) ∧ o.rootB[0]! = rootB₀[0]! ∧
         TxNoOffAtK keep I (dj S) C (wr o))
       (fun ps _ => opnAtH (tablesAtH dj x₀) I dj S R ps)
@@ -258,11 +311,11 @@ theorem decodesTable_wrK_scH_of (keep : Bool → Bool)
   obtain rfl : j = ⟨0, Nat.one_pos⟩ := Fin.ext hj
   rintro o ⟨hacc, hr₀, hno⟩
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
-  have h := PlaysCoin.decodesOfRuns (fun cap pend os => tableOutL H512 enc512 leaf512 cap pend os)
+  have h := PlaysCoin.decodesOfRuns (fun cap pend os => tableOutL H512 enc512 F.lf cap pend os)
     (fun o' => o' = oneOf o)
-    (fun out => out.accepted = true ∧ ¬ (Off₀L H512 enc512 leaf512 (tablesAtH (Reg := Reg) dj x₀ S R).sch
+    (fun out => out.accepted = true ∧ ¬ (Off₀L H512 enc512 F.lf (tablesAtH (Reg := Reg) dj x₀ S R).sch
         (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) out ∧
-        ¬ SelfClashL H512 enc512 leaf512 (tablesAtH (Reg := Reg) dj x₀ S R).sch out))
+        ¬ SelfClashL H512 enc512 F.lf (tablesAtH (Reg := Reg) dj x₀ S R).sch out))
     (opnAtH (tablesAtH dj x₀) I dj S R) (decAt (tablesAtH dj x₀) wOP wLIG S R) (fun _ _ => []) capOfRoot
     (fun pts r => repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) pts r)
     (fun pts _ => PlaysCoin.repSpine Dig (tablesAtH (Reg := Reg) dj x₀ S R) pts)
@@ -273,14 +326,15 @@ theorem decodesTable_wrK_scH_of (keep : Bool → Bool)
   obtain ⟨hprf, hrec⟩ := recordsLive_wrK1_of keep I (dj S) o (hwr o) hacc
   obtain ⟨hSD, hmPts⟩ := hS
   obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsDK keep ht hc hh hc1 dj x₀ hacc hSD hmPts
-  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsOneDK keep hrr hl hc1 hacc
+  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ :=
+    accepts_repsOneDLfK keep F.lf hrr hc1 (F.verdicts keep hh hl hacc) hacc
   rw [setupOne_hidden hh] at hst
   obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
   obtain ⟨hroot, hpts, hstreams⟩ := hrec spec #[st] sess hsu hdec
   have hmP : st.mPts = mPts := hmPts st hst
   obtain ⟨-, hr⟩ := setupHidden_wf hst
   have hm : 13 ≤ st.m := by have := exec_fast100_ge hf; omega
-  have hms : st.merkle = MerkleScheme.hm96Sha512 := setupHidden_hm96 hl hst
+  have hms : st.merkle.digestLen = 64 := F.digestLen hst hl
   obtain ⟨pend, hreps, hv⟩ := hk hwf hr hm
   have hn : ∀ (q : ℕ) (pts : Fin 2 → Fin q → 𝔽),
       (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL q pts).length = 2 * st.regions.size := by
@@ -292,7 +346,7 @@ theorem decodesTable_wrK_scH_of (keep : Bool → Bool)
   have hcap : sess.rootB[0]! = rootB₀[0]! := hroot.trans hr₀
   have hv' := hv
   rw [hn, hcap] at hv'
-  obtain ⟨spec', sts', sess', hsu', hdec', hall⟩ := accepts_opens₀LDK keep hacc
+  obtain ⟨spec', sts', sess', hsu', hdec', hall⟩ := accepts_opens₀LDLfK keep F.lf hacc
   rw [hsu, Except.ok.injEq, Prod.mk.injEq] at hsu'
   obtain ⟨rfl, rfl⟩ := hsu'
   rw [hdec, Except.ok.injEq] at hdec'
@@ -303,7 +357,7 @@ theorem decodesTable_wrK_scH_of (keep : Bool → Bool)
       (Model.extraClaims (stmtOf #[st][0] hwf (regionsOf #[st][0])) PT_LOCAL q pts).length = 2 * st.regions.size :=
     hn
   obtain ⟨hver, hent⟩ := hk' hwf hr hm p₀ p₁ s₀ s₁ (pend 0) (pend 1) (capOfRoot rootB₀[0]!)
-    (tableOutL H512 enc512 leaf512 (capOfRoot rootB₀[0]!) (pend 0, pend 1)
+    (tableOutL H512 enc512 F.lf (capOfRoot rootB₀[0]!) (pend 0, pend 1)
       (opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
         #[(wr o).proofs[0]!, (wr o).proofs[1]!]))
     hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ (by rw [hn']; rfl) hv'
@@ -324,7 +378,7 @@ theorem decodesTable_wrK_scH_of (keep : Bool → Bool)
     obtain ⟨s', hs', hrs⟩ := hstreams r
     obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
     exact PlaysCoin.repRun_of_erase hrs <| repRun_at op_carries lig_carries decodeProof_sizes _ st hwf sch hf
-      (by rw [hms]; rfl) hS' hsch hpl
+      hms hS' hsch hpl
       (oneOf o).pts r hm rfl _ p hp s'.rounds (PlaysCoin.roundsWF_mem (decodeWithK_roundsWF keep With.std hdec s'
         (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs')))) _ hplay _ Tv hlen hret
   refine ⟨(pend 0, pend 1), hrep 0, hrep 1, ?_⟩
@@ -345,8 +399,32 @@ theorem decodesTable_wrK_scH_of (keep : Bool → Bool)
   rw [hopn, e₀, hsch]
   refine ⟨hv', fun ⟨hoff, hsc⟩ => hno spec st sess sch s₀ s₁ hsu hdec hf hs₀ hs₁ ?_⟩
   rw [hsch] at hN
-  exact Claims.Flock.exists_ne_of_entries H512 enc512 leaf512 (schedOf sch) (capOfRoot rootB₀[0]!) _ hN C _ _ rfl
+  exact Claims.Flock.exists_ne_of_entries H512 enc512 F.lf (schedOf sch) (capOfRoot rootB₀[0]!) _ hN C _ _ rfl
     hver hent hoff hsc
+
+open DecodeZL HiddenExec HiddenDec in
+/-- **The deployed plain decoders are right at a record writer at hidden outputs**: `decodesTable_wrK_sc_of` at the
+hidden tables and their openings `opnAtH` (`decodesTable_wrPD_scH` through `keep`):
+`decodesTable_wrK_scHLf_of` at `LeafForm.hm96`. -/
+theorem decodesTable_wrK_scH_of (keep : Bool → Bool)
+    {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkH I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg) {N : ℕ}
+    (hN : N = 2 ^ (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0).logLen) (C : Fin N → List 𝔽)
+    (rootB₀ : Array ByteArray) (wr : Tables.LiveOutJ 1 mPts → Exec.Transcript)
+    (hwr : ∀ o, RecordsLiveAtDK keep I (dj S) o (wr o)) (j : Fin [tablesAtH (Reg := Reg) dj x₀ S R].length) :
+    Tables.DecodesTable (fun _ cap pend os => tableOutL H512 enc512 leaf512 cap pend os)
+      (fun _ o => o.accepted = true ∧ ¬ (Off₀L H512 enc512 leaf512 (tablesAtH (Reg := Reg) dj x₀ S R).sch
+        (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
+        ¬ SelfClashL H512 enc512 leaf512 (tablesAtH (Reg := Reg) dj x₀ S R).sch o))
+      (fun o => AcceptsAtDK keep I (some (dj S)) (wr o) ∧ o.rootB[0]! = rootB₀[0]! ∧
+        TxNoOffAtK keep I (dj S) C (wr o))
+      (fun ps _ => opnAtH (tablesAtH dj x₀) I dj S R ps)
+      (fun _ => decAt (tablesAtH dj x₀) wOP wLIG S R) (fun _ _ => true)
+      (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+      (fun j => repsOf (D := Dig) execArith ([tablesAtH (Reg := Reg) dj x₀ S R].get j)) j :=
+  decodesTable_wrK_scHLf_of keep LeafForm.hm96 ht hc dj x₀ hT hS R hN C rootB₀ wr hwr j
 
 open DecodeZL HiddenExec HiddenDec in
 /-- **The deployed plain decoders are right at `wrPDK` at hidden outputs** (`decodesTable_wrK_scH_of` at `wrPDK`). -/
@@ -380,9 +458,9 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at a record writer**:
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at a record writer**:
 `plain_hdecAt` through `keep`, at any writer `wr` whose transcripts record their outcome at the setup at `d`, from
-`decodesTable_wrK_sc_of` at `d` and no drawn unit. -/
+`decodesTable_wrK_sc_of` at `d` and no sampled proof block. -/
 theorem plain_hdecAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -438,9 +516,69 @@ theorem plain_hdecAtK_of (keep : Bool → Bool)
   exact hdec
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and a leaf
+form `F`, at a record writer**: `plain_hdecHAt` through `keep`, at any writer `wr` whose transcripts record their
+outcome at the setup at `d`, from `decodesTable_wrK_scHLf_of`. -/
+theorem plain_hdecHLfAtK_of (keep : Bool → Bool) (F : AtDraw.LeafForm)
+    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
+    (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = F.tag) {d : Json}
+    (hd : ins.read.draw = some d) (L : Layout st)
+    (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
+    (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
+    (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts)
+    (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray)
+    (wr : Tables.LiveOutJ 1 spec.mPts → Exec.Transcript) (hwr : ∀ o, RecordsLiveAtDK keep ins.read.I d o (wr o)) :
+    ∀ j, DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 F.lf cap pend os)
+      (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 F.lf
+        ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
+        ¬ SelfClashL Refine.H512 Refine.enc512 F.lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+      (fun o => AcceptsAtDK keep ins.read.I (some d) (wr o) ∧ o.rootB[0]! = rootB₀[0]! ∧
+        TxNoOffAtK keep ins.read.I d C (wr o))
+      (fun ps _ => HiddenDec.opnAtH (fun (_ : Finset (Fin 0)) (_ : Unit) =>
+        plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I (fun _ => d) ∅ () ps)
+      (fun _ => DecodeZL.decAt (fun (_ : Finset (Fin 0)) (_ : Unit) =>
+        plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) DecodeZL.wOP DecodeZL.wLIG ∅ ())
+      (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+      (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
+      j := by
+  obtain ⟨ht, hc, hT, hst, rfl, h22, h35⟩ := plain_setupHiddenT hs hin hset h hh hl hd
+  obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
+    have e := Refine.fast100_schedOf st.m
+    rw [hsch] at e
+    cases hf : Flock.fast100 st.m with
+    | none => rw [hf] at e; cases e
+    | some sch => exact ⟨sch, rfl⟩
+  obtain ⟨pop, -, hdr⟩ := HiddenExec.setupHidden_drawn hst
+  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
+  obtain ⟨x₀, hx₀⟩ := HiddenExec.drawSetupH_of_setupHiddenI (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc
+    hst hf hD (fun u hu => absurd hu (Finset.notMem_empty u)) rfl
+  have e : HiddenExec.tablesAtH (Reg := Unit) (fun _ : Finset (Fin 0) => d) x₀ =
+      fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
+    funext S R
+    obtain rfl : S = ∅ := Finset.eq_empty_of_isEmpty S
+    exact tableAtH_plainTab ht (HmOut.parse_isTmpl hc) (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀
+      hx₀ L m k0 l₀ l₁
+      rest ext hsch hm hlay
+  have hS : HiddenDec.DrawOkH ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
+    ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
+      obtain rfl := Except.ok.inj (hst.symm.trans hst')
+      rfl⟩
+  have hN : wordLen false x =
+      2 ^ (lvOf (HiddenExec.tablesAtH (Reg := Unit) (fun _ : Finset (Fin 0) => d) x₀ ∅ ()).sch 0).logLen := by
+    rw [e]
+    exact plain_wordLen h h22 h35 hsch
+  have hdec := decodesTable_wrK_scHLf_of keep F ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () hN C
+    rootB₀ wr hwr
+  rw [e] at hdec
+  exact hdec
+
+open Classical Discharge.Tables Claims.Bridge.PlainDraw in
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and
 `hm96-sha512/v1` leaves, at a record writer**: `plain_hdecHAt` through `keep`, at any writer `wr` whose transcripts
-record their outcome at the setup at `d`, from `decodesTable_wrK_scH_of`. -/
+record their outcome at the setup at `d`: `plain_hdecHLfAtK_of` at `LeafForm.hm96`. -/
 theorem plain_hdecHAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -465,39 +603,12 @@ theorem plain_hdecHAtK_of (keep : Bool → Bool)
         plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) DecodeZL.wOP DecodeZL.wLIG ∅ ())
       (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
       (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
-      j := by
-  obtain ⟨ht, hc, hT, hst, rfl, h22, h35⟩ := plain_setupHidden hs hin hset h hh hl hd
-  obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
-    have e := Refine.fast100_schedOf st.m
-    rw [hsch] at e
-    cases hf : Flock.fast100 st.m with
-    | none => rw [hf] at e; cases e
-    | some sch => exact ⟨sch, rfl⟩
-  obtain ⟨pop, -, hdr⟩ := HiddenExec.setupHidden_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
-  obtain ⟨x₀, hx₀⟩ := HiddenExec.drawSetupH_of_setupHiddenI (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc
-    hst hf hD (fun u hu => absurd hu (Finset.notMem_empty u)) rfl
-  have e : HiddenExec.tablesAtH (Reg := Unit) (fun _ : Finset (Fin 0) => d) x₀ =
-      fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
-    funext S R
-    obtain rfl : S = ∅ := Finset.eq_empty_of_isEmpty S
-    exact tableAtH_plainTab ht (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀ hx₀ L m k0 l₀ l₁
-      rest ext hsch hm hlay
-  have hS : HiddenDec.DrawOkH ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
-    ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
-      obtain rfl := Except.ok.inj (hst.symm.trans hst')
-      rfl⟩
-  have hN : wordLen false x =
-      2 ^ (lvOf (HiddenExec.tablesAtH (Reg := Unit) (fun _ : Finset (Fin 0) => d) x₀ ∅ ()).sch 0).logLen := by
-    rw [e]
-    exact plain_wordLen h h22 h35 hsch
-  have hdec := decodesTable_wrK_scH_of keep ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () hN C rootB₀
-    wr hwr
-  rw [e] at hdec
-  exact hdec
+      j :=
+  plain_hdecHLfAtK_of keep AtDraw.LeafForm.hm96 hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay C rootB₀ wr
+    hwr
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw**: `plain_hdecAt` with
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample**: `plain_hdecAt` with
 `plainVerdictAtK keep` for `plainVerdictAt` (`plain_hdecAtK_of` at `wrPDK`). -/
 theorem plain_hdecAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
@@ -525,7 +636,7 @@ theorem plain_hdecAtK (keep : Bool → Bool)
     (recordsLiveAtDK_wrPDK keep ins.read.I d)
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and
 `hm96-sha512/v1` leaves**: `plain_hdecHAt` with `plainVerdictAtK keep` for `plainVerdictAt` (`plain_hdecHAtK_of` at
 `wrPDK`). -/
 theorem plain_hdecHAtK (keep : Bool → Bool)

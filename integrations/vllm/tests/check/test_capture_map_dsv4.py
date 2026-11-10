@@ -28,7 +28,7 @@ from verity_vllm.commit import identity as ID
 from verity_vllm.commit.committer.native_host import ACQUIRE_CLASSES
 from verity_vllm.engine import meta_inventory as MI
 from verity_vllm.pipeline import cli
-from verity_vllm.program.registry import catalog
+from verity.ml.definitions.registry import catalog
 
 HERE = Path(__file__).parent
 FIX = HERE / "fixtures" / "deepseek_v4"
@@ -42,7 +42,7 @@ DOC = json.loads((FIX / "inventory-tp8-rank0.json").read_text())
 RANK0 = DOC["ranks"]["0"]
 TP = CMAP["target"]["tensor_parallel_size"]
 ENV = CM.symbols(CMAP, CONFIG, TP)
-#: each `tonight` Program -> the branch of the row that writes its Definitions
+#: each `pending` Program -> the branch of the row that writes its Definitions
 OWNERS = {
     "cursor/glm53-committed-ops-8c79": {"cublas-f32-out", "router-gemm"},
     "cursor/deepgemm-sm90-8c79": {"fp8-block-linear-flashinfer", "fp8-block-linear-deepgemm", "fp8-einsum-deepgemm"},
@@ -334,7 +334,7 @@ def test_the_exists_programs_cite_what_the_build_binds():
 
 
 def test_the_program_statuses():
-    """What has no Definition on main is `tonight` on the branch of the row that writes it.  The Programs that went GO on the H200
+    """What has no Definition on main is `pending` on the branch of the row that writes it.  The Programs that went GO on the H200
     on other rows' branches (the TP8 all-reduce at H 7168, the query norm and cache insert, the indexer's query, the head-512
     compressor, mHC, hc_head, FlashMLA's decode and prefill, the indexer's compressor, logits, short-context fill and inverse
     RoPE, the two routers and the clamped SwiGLU, and the decode attention's window, ratio-4 and ratio-128 indices) are `port`:
@@ -342,18 +342,18 @@ def test_the_program_statuses():
     and its positions, are root inputs no kernel computes, held by word equality (`copy-equality`)."""
     statuses = {pid: p["status"] for pid, p in CMAP["programs"].items()}
     assert {statuses[t["program"]] for t in CMAP["taps"]} == set(CM.STATUSES) - {"committed-only"}
-    tonight: dict[str, set[str]] = {}
+    pending: dict[str, set[str]] = {}
     for pid, p in CMAP["programs"].items():
-        if p["status"] == "tonight":
-            tonight.setdefault(p["branch"], set()).add(pid)
-    assert tonight == OWNERS
+        if p["status"] == "pending":
+            pending.setdefault(p["branch"], set()).add(pid)
+    assert pending == OWNERS
     assert {pid for pid, s in statuses.items() if s == "committed-only"} == set()
     assert {t["id"] for t in CMAP["taps"] if t["program"] == "copy-equality"} == {"input_ids", "attn.positions"}
     assert {pid: (statuses[pid], CMAP["programs"][pid]["definitions"]) for pid in PORTED} == {
         pid: ("port", defs) for pid, defs in PORTED.items()}
     for p in CMAP["programs"].values():
         assert p["status"] != "exists" or p["definitions"]
-        assert p["status"] != "tonight" or not p["definitions"]
+        assert p["status"] != "pending" or not p["definitions"]
 
 
 def test_a_decode_step_s_one_tf32_mhc_pre_is_layer_0s_and_no_tap_is_committed_only():
@@ -428,15 +428,15 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        42, 28, {"exists": 5, "tonight": 11, "port": 69, "copy": 2, "committed-only": 0})
+        42, 28, {"exists": 5, "pending": 11, "port": 69, "copy": 2, "committed-only": 0})
     assert brief(CM.counts(CMAP, ENV, STEPS["decode"])) == (
-        72, 2786, {"exists": 125, "tonight": 518, "port": 2141, "copy": 2, "committed-only": 0}, 122)
+        72, 2786, {"exists": 125, "pending": 518, "port": 2141, "copy": 2, "committed-only": 0}, 122)
     assert brief(CM.counts(CMAP, ENV, STEPS["decode-scored"])) == (
-        76, 2906, {"exists": 125, "tonight": 548, "port": 2231, "copy": 2, "committed-only": 0}, 242)
+        76, 2906, {"exists": 125, "pending": 548, "port": 2231, "copy": 2, "committed-only": 0}, 242)
     assert brief(CM.counts(CMAP, ENV, STEPS["prefill"])) == (
-        71, 2723, {"exists": 125, "tonight": 548, "port": 2048, "copy": 2, "committed-only": 0}, 787)
+        71, 2723, {"exists": 125, "pending": 548, "port": 2048, "copy": 2, "committed-only": 0}, 787)
     assert brief(CM.counts(CMAP, ENV, STEPS["mixed"])) == (
-        78, 3028, {"exists": 125, "tonight": 548, "port": 2353, "copy": 2, "committed-only": 0}, 848)
+        78, 3028, {"exists": 125, "pending": 548, "port": 2353, "copy": 2, "committed-only": 0}, 848)
 
 
 def test_the_bound_tap_counts():

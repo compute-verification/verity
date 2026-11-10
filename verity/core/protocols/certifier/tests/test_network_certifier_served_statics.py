@@ -1,6 +1,6 @@
 """The served rows held to their steps' Programs (`served_statics.ServedStaticsTie_v1`) on the compile slice's
 corpus-smallkv window: the honest rows, registered a row a block, are accepted against the Programs the window ran, at
-one block a window and at one step a block; REDTEAM phase 10's six passes, which the slice accepts under their own
+one block a window and at one step a block; the six-pass run's rows, which the slice accepts under their own
 registered row, are refused; each field edit is refused by the flag that names it, and the ids and kinds are not the
 tie's; the circuit is `check` on any rows; and each block's row is its leaf of the registration, as the Lean verifier's
 registered reads open it."""
@@ -13,8 +13,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR, served_statics as SS, served_tie as ST
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG
+from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR
+from verity.ml.protocols.certifier import served_statics as SS, served_tie as ST
+from verity.core.protocols.spot.one_stage import registered as REG
 from verity.ml.commitments import advice as ADV
 
 FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
@@ -54,7 +55,7 @@ def test_the_honest_window_is_accepted_block_by_block(x, G):
 
 
 def test_six_passes_are_refused_against_the_programs_the_window_ran(x):
-    """REDTEAM phase 10 finding 2 through the tie. The prover registers the six-pass run's rows (user-1 never admitted),
+    """The six-pass run through the tie. The prover registers the six-pass run's rows (user-1 never admitted),
     consistently: their row is the registered one, so the slice accepts them, charged 17 bits under the registered
     book. Step 6's Program computed user-1's 29 prefill tokens in slot 1 beside user-0's decode; the cheap rows hold
     slot 1 empty, so the tie refuses at ``count``."""

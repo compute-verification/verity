@@ -15,7 +15,7 @@
 #      jobs run from there (SRC), not from an upload;
 #   3. runs `sky jobs launch` with the R2 credentials as secrets (from this environment) and prints the job's queue line.
 # config-run's two tasks: VY_ROW_CLASS=small|dense|long|moe|b64|tp2 (its header's table), or VY_BUILD_MEMORY / VY_GPU_MEMORY
-# in GB per cell (e.g. `verity-vllm sweep plan`'s ram_gb), which win over the class.
+# in GB per cell, which win over the class.
 # VY_LANE defaults to this checkout's branch name. KUBECONFIG is unset: the SkyPilot client forwards it to the server.
 # Another server's cluster (its own API server): VY_MACHINE=vy-nebius-2 VY_POOL=vy-nebius-2 VY_SKY_PORT=46581.
 set -euo pipefail
@@ -122,7 +122,7 @@ fi
 # At most VY_MAX_WAITING_CELLS vLLM deployments' tasks (default 4) and VY_MAX_WAITING jobs in all (default 6) wait in Kueue: a job waiting for
 # quota still holds one of the SkyPilot controller's 8 launch slots (provision_timeout: -1), and with every slot held no other job
 # reaches Kueue. Only SkyPilot's own pods count: the dispatcher's, the lease holders' and commit-pack's Kueue Jobs hold no launch
-# slot (they refused every Sky submission for 2 h, 4:10 PM PDT Sep 30). A queue it can't read doesn't block: this caps throughput
+# slot (counting them would refuse every Sky submission). A queue it can't read doesn't block: this caps throughput
 # loss, it guards no spend.
 wl=$(mktemp)
 research pods ssh "$machine" -- sudo k3s kubectl get workloads -A -o json > "$wl" 2> /dev/null || true

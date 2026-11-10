@@ -3,7 +3,7 @@
 
 A fill job is an executable script in FILL_DIR/queue/.  Its header says what it needs:
 
-    # fill: owner=bc-0de2d624 gpus=1 max_min=25 cpus=8 project=pous mem_gb=128
+    # fill: owner=bc-... gpus=1 max_min=25 cpus=8 project=pous mem_gb=128
     #   gpus 0 or 1 (default 1), or 2 for a Commit guest (a TP2 row: two idle GPUs on one NUMA node); max_min <= 30 (default
     #   25), a Commit guest's <= FILL_COMMIT_MAX_MIN (120), a job FILL_DIR/max-min names <= what it allows (infra's exceptions,
     #   each with an end: `pous-honest-soak-* 540 2026-10-02T14:45Z  # who, why`); cpus: threads it may use (OMP_NUM_THREADS; default 8); on: the GPU
@@ -102,11 +102,11 @@ RESERVE = int(os.environ.get("FILL_RESERVE", "0"))
 CPU_SLOTS = int(os.environ.get("FILL_CPU_SLOTS", "4"))
 CPU_SET = os.environ.get("FILL_CPU_SET", "96-127")
 CPU_MEM_GB = int(os.environ.get("FILL_CPU_MEM_GB", "128"))
-# PoUW's terms for CPU fill on NUMA 0 (bc-2aa33ad8, 30 Sep): CPU jobs freeze from the moment a window waits, not only once it is
+# PoUW's terms for CPU fill on NUMA 0: CPU jobs freeze from the moment a window waits, not only once it is
 # timed, and pous and lent CPU jobs keep their memory off NUMA 0 (numactl --membind=<node>).
 FREEZE_ON_WAIT = os.environ.get("FILL_FREEZE_ON_WAIT", "0") == "1"
 CPU_MEMBIND = os.environ.get("FILL_CPU_MEMBIND", "")
-# slot d's train checks on 0-47 (top-level, 1 Oct 1:52 AM PDT) run in a login session's cgroup, beside fill's user scopes, so
+# slot d's train checks on 0-47 run in a login session's cgroup, beside fill's user scopes, so
 # nice 19 can't make a CPU job yield to one: a cpu-sets job on those CPUs pauses while a check holds the slot's lock
 YIELD_LOCK = Path(os.environ.get("FILL_YIELD_LOCK", "/workspace/research/locks/check-d.lock"))
 YIELD_CPUS = os.environ.get("FILL_YIELD_CPUS", "0-47")
@@ -122,12 +122,12 @@ VERITY_DISK_PCT = float(os.environ.get("FILL_VERITY_DISK_PCT", "55"))
 VERITY_UNTIL = datetime.fromisoformat(os.environ.get("FILL_VERITY_UNTIL", "2026-10-07T12:00:00+00:00"))
 VERITY_STOP = datetime.fromisoformat(os.environ.get("FILL_VERITY_STOP", "2026-10-07T13:00:00+00:00"))
 VERITY_DISK_PATH = os.environ.get("FILL_VERITY_DISK_PATH", "/workspace")
-# the pool's jobs all ran at nice 19 on all of 48-95, where nice orders nothing between their scopes and node 2's queued runs'
-# (one suite got 0.9 cores, 19 Oct): each now claims whole cores in the registry the queued runs claim theirs in (research's
+# at nice 19 on all of 48-95, nice would order nothing between the pool's scopes and node 2's queued runs' (a suite could get
+# under one core): each job claims whole cores in the registry the queued runs claim theirs in (research's
 # cores.py): CLAIMS/<name>.cpus, live while its job holds it flock'ed, taken under CLAIMS/.lock; CLAIMS/wait.* are the runs
 # waiting for cores, which the pool lets go first
 CLAIMS = Path(os.environ.get("FILL_CPU_CLAIMS_DIR", "/workspace/research/locks/cpu-claims"))
-# the pool lends its idle slots to queued pous CPU jobs (Daniel 19:12Z: borrowing goes both ways); a Verity job that can't start
+# the pool lends its idle slots to queued pous CPU jobs (borrowing goes both ways); a Verity job that can't start
 # takes a slot back by requeueing the newest lent job (143, as a preempted job)
 VERITY_LEND = os.environ.get("FILL_VERITY_LEND", "1") == "1"
 COMMIT_PREFIX = "verity-commit-"
@@ -309,7 +309,7 @@ def header(p: Path, t: float | None = None) -> dict:
 
 
 def cpu_sets() -> dict[str, dict]:
-    """FILL_DIR/cpu-sets: owners whose CPU jobs get CPUs of their own (verity-top, 1 Oct: compute accounting's verifies on 0-47)."""
+    """FILL_DIR/cpu-sets: owners whose CPU jobs get CPUs of their own (such as verifies on 0-47)."""
     out = {}
     try:
         lines = (FILL / "cpu-sets").read_text().splitlines()
@@ -658,7 +658,7 @@ def repin(f: dict, fs: list[dict]) -> None:
 
 
 def rank(name: str, h: dict) -> int:
-    """Node 2's order (Daniel): circuits' Commit guests, then pous, then proofs and the rest of Verity's jobs."""
+    """Node 2's order: circuits' Commit guests, then pous, then proofs and the rest of Verity's jobs."""
     return 0 if name.startswith(COMMIT_PREFIX) else 1 if h["project"] != "verity" else 2
 
 

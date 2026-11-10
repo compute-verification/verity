@@ -6,7 +6,7 @@ coordinate n, then chunk c (`positions`).  Unit (row, n, c) reads ``xq[ck, (c+1)
 0, ``acc``: chunk c - 1's f32 accumulator, which serving never stores, so the reader computes the coordinate's chain with the
 twin (`fp8_moe_rows.moe_expert_fp8_block_accs`) and holds its last word to the row's served output word n; a chunk returns its
 accumulator, LAST the served word.  The window wires
-each ``acc`` row to the output row of the chunk before it (`wire`, `commit.wiring`), so a drawn chunk's input is the committed
+each ``acc`` row to the output row of the chunk before it (`wire`, `commit.wiring`), so a sampled chunk's input is the committed
 output of the chunk that wrote it."""
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import Template, template
 
@@ -60,8 +60,8 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
          slices: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
     """Member ``m``'s units (the module's order and ports), every port its elements' bytes in u16 words, the row's argument groups
     read by ``slices`` (`serving_rows._slices`); one index entry per row."""
-    from verity_vllm.program.kernels.derived_rows import f2fp_bf16
-    from verity_vllm.program.kernels.fp8_moe_rows import (
+    from verity.ml.definitions.numerics.derived_rows import f2fp_bf16
+    from verity.ml.definitions.numerics.fp8_moe_rows import (
         TWIN_DOT_OF,
         moe_expert_fp8_block_accs,
     )

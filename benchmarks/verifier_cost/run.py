@@ -1,13 +1,13 @@
-"""``verity bench verifier_cost COMMAND``: a verifier of record's time against the size of the description it reads and
+"""``verity bench verifier_cost COMMAND``: the verifier's time against the size of the description it reads and
 the size of the circuit that description unrolls to (README.md).
 
   measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
-      Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an NCI instance (θ its registered inputs, one
+      Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an inference-only check instance (θ its registered inputs, one
       IU per Call), checked by `nci-check --policy` (`NciCheck.Desc`) and, where the unrolled circuit has at most GATES
       gates, by `nci-check --policy --unrolled` (`NciCheck.check`) on the instance expanded gate by gate;
       DIR/results.json.
   partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
-      the one-stage verifier's partition (`sampled-proofs-difftest`'s `partition`: `Partition.units`, `strata`, the law
+      the one-stage verifier's partition (`sampled-proofs-difftest`'s `partition`: `Partition.units`, `strata`, the sampling design
       and the digest) on Serve_v1 under the template query of its Calls, and under `Q_word` v1 and `Q_call` v1 at X = 16
       where its Calls' distinct Definitions have at most GATES gates in all; and on the served shape, the population
       program of Serve_v1's largest Definition at N instances (`Q_template_instance`); DIR/partition.json.
@@ -192,7 +192,7 @@ def measure(args) -> int:
     return 0
 
 
-PIECES = ROOT / "verity/core/service/sampled_proofs/.lake/build/bin/sampled-proofs-difftest"
+PIECES = ROOT / "verity/core/service/spot/.lake/build/bin/sampled-proofs-difftest"
 PARTITION_SCHEMA = "verity/verifier-cost-partition/v1"
 POPULATION = (1, 30, 1000, 1_000_000)
 
@@ -224,7 +224,7 @@ def _partition_row(exe: Path, tmp: str, prog, query: dict, repeat: int) -> dict:
 
 
 def partition(args) -> int:
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity.ml.circuits import partition_object as PO
 
     out = Path(args.out)

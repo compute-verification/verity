@@ -1,13 +1,14 @@
+module
+
+public import Definitions.Accounting.Guarantees.Requirement
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Order.Interval.Finset.Nat
-import Models.Accounting.Guarantees.Requirement
 
 /-!
 # A declared circuit's requirement, from what the audit credits
 
-The values a layout packs in one block total at most the block's `b` bits (`bits_filter_block_le`): their bit ranges are
-disjoint intervals of `[0, b)`. So the values of a set `S`, each in a block of `R`, outside the blocks `H` total at most
-`|R \ H|·b` bits (`bits_le_bitsAt_add`), and those that lie in one block per group at most `b` per group
+The values a store placement packs in one block total at most the block's `b` bits (`bits_filter_block_le`): their bit
+ranges are disjoint intervals of `[0, b)`. So the values of a set `S`, each in a block of `R`, outside the blocks `H`
+total at most `|R \ H|·b` bits (`bits_le_bitsAt_add`), and those that lie in one block per group at most `b` per group
 (`bits_le_groups`). `Accounting.SecurityProofs.RequirementHeld` applies the first to the credited values and the
 resident blocks, `Accounting.SecurityProofs.RequirementMoved` to the credited reads and the plan, and
 `Accounting.SecurityProofs.RequirementUncredited` and `Accounting.SecurityProofs.RequirementUnplanned` the second to
@@ -16,6 +17,8 @@ planned blocks hold none of `W`'s credited values. `Accounting.SecurityProofs.Re
 `Accounting.SecurityProofs.RequirementDense` sum the credited bits block by block. An execution that follows its wiring
 reads only live values (`reads_subset_live`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Requirement
 
@@ -29,7 +32,7 @@ theorem reads_subset_live {W : Wiring G} {e : Execution G} (h : e.Follows W) (t 
   obtain ⟨hv, hb, g, hg, hgt, hu⟩ := hv
   exact ⟨hv, hb, g, hg, hgt.ge, (h.2 g hg).1 hu⟩
 
-variable (W : Wiring G) (ℓ : Layout G)
+variable (W : Wiring G) (ℓ : Store.Placement G)
 
 omit [DecidableEq G] in
 /-- A subset of a packed set is packed. -/

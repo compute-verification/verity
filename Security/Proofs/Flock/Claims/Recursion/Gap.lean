@@ -1,6 +1,48 @@
-import Proofs.Flock.Claims.Recursion.Inner
-import Proofs.Flock.Claims.Recursion.Abort
+module
+
+public import Proofs.Flock.Claims.Recursion.Inner
+public import Proofs.Flock.Claims.Recursion.OuterKS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ERep
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.Cost
 import Proofs.Flock.Claims.Recursion.Registered
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # `InnerKS` does not follow from `Inner.KS` and the code facts; `Inner.KSAbort` excludes the deployment
@@ -12,12 +54,14 @@ the errors its proof gives (`KSA`) and at the draft's (`KS`), so `InnerKS` fails
 The inner verifier accepts whatever it is sent, in one round; the inner `E^rep` makes one wait of one rerun and needs it
 accepted. The compiled verifier's one outer session is a round that rejects at its own coin half the time. `E*` reruns
 the inner stage at fresh outer coins, so its one inner rerun is seen rejected half the time, whatever the inner
-verifier decides, and `E*` fails on a quarter of the draws while `κ = 2·κ_O < 1/4` and `B`, `Be` find nothing. No
+verifier decides, and `E*` fails on a quarter of the samples while `κ = 2·κ_O < 1/4` and `B`, `Be` find nothing. No
 inner prover makes the inner verifier reject on a coin it never reads, so `Inner.KS` cannot bound that failure:
 `Inner.KS` bounds `E^rep` against runs whose acceptance is the inner verifier's alone. A prover that aborts at a
 fresh coin of its own does make `gI`'s one rerun rejected half the time, so `gI` fails `Inner.KSAbort`
 (`gI_not_KSAbort`), the one hypothesis of `KS_of_flockKS` the deployment lacks.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -43,8 +87,8 @@ def gI : Inner Bool Unit where
 
 /-- The outer statement: a circuit with no gates and no outputs, so every witness is in its relation. -/
 def gs₀ : Flock.Stmt :=
-  ⟨0, 0, ⟨0, [], []⟩, fun _ => [], fun _ => [], [],
-    ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false⟩⟩
+  ⟨0, 0, ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩, fun _ _ => .pub 0, fun _ _ => .pub 0, [],
+    ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false, false⟩⟩
 
 /-- The outer verifier: one round, accepting at its coin `false`. -/
 def gVO : Verifier Bool := ⟨fun _ => 1, fun _ _ cs => .ret (if cs.getD 0 true = false then .acc else .rej)⟩
@@ -84,7 +128,7 @@ def gVerdict (h : Msg) (as : List Msg) (cs : List Bool) : Out :=
 def gV : Verifier Bool := ⟨fun _ => 2, fun _ as cs => .query [] fun h => .ret (gVerdict h as cs)⟩
 
 /-- The recursion's statement: the empty inner statement, no circuit commitment. -/
-def gStmt : Stmt := ⟨[], none, none, ⟨0, 0, 0, 0, false, none, none, false⟩, []⟩
+def gStmt : CompiledStatement := ⟨[], none, none, ⟨0, 0, 0, 0, false, none, none, false⟩, [], none⟩
 
 /-- The compiled verifier's deployment: one outer session, its view the run's second round. -/
 noncomputable def gD (H : Msg → Msg) : Deploy Bool where
@@ -206,7 +250,7 @@ theorem gSessionRounds (H : Msg → Msg) : SessionRounds (gD H) gI gDO := by
 
 theorem gInnerViewRun (H : Msg → Msg) : InnerViewRun H (gD H) gI gDO := by
   intro decO x Ω P ω r c ws _
-  simp [innerRun, run, stepWith, replay, gI, gD, OC.eval, Trace.seen]
+  simp [innerRun, run, stepWith, replay, gI, gD, OC.eval, Transcript.seen]
 
 theorem gCallsRecord (H : Msg → Msg) : CallsRecord H (gD H) gI gDO := by
   intro decO x Ω P ω r c ws _
@@ -251,23 +295,23 @@ theorem gSessionRuns (H : Msg → Msg) : SessionRuns H (gD H) gI gDO := by
       simp [coinSeq, sessCoins, gDO, gVO]
     have hf : coinSeq (fork 1 r d) 1 = coinSeq d 1 := by rw [coinSeq_fork]; simp
     rw [hc, hf]
-    cases coinSeq d 1 <;> simp [outMsg, Trace.seen, gD]
+    cases coinSeq d 1 <;> simp [outMsg, Transcript.seen, gD]
   · rw [gDO_run] at he
     simp at he
 
 /-! ## The inner and outer KS hold -/
 
 /-- One wait of one rerun, accepted, assembles what its openings give. -/
-theorem firstWait_one_acc {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (opens : Seen → List Op)
+theorem firstWait_one_acc {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (ρ : Fin 1 → Fin 1 → R) (w : W) (h : (run (ρ 0 0)).out = .acc)
     (ha : ∀ v, assemble (opens v) = some w) (hc : check w = true) :
     ((firstWait 1 opens assemble check ((List.finRange 1).map fun i => (List.finRange 1).map (ρ i))).eval H run).1 =
       some w := by
-  simp [firstWait, waitAcc, RP.bind, RP.eval, Trace.seen, h, ha, hc, List.finRange_succ]
+  simp [firstWait, waitAcc, RP.bind, RP.eval, Transcript.seen, h, ha, hc, List.finRange_succ]
 
 theorem gI_E_some (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r₀ : Fin (gI.V.k x) → Bool)
     (ρ : gI.E.C x) : (gI.E.eval H P x ω r₀ ρ).1 = some () := by
-  simp only [Inner.E, ERep, Extractor.eval, RP.eval, Trace.seen, gI_run_out, ↓reduceIte]
+  simp only [Inner.E, ERep, Extractor.eval, RP.eval, Transcript.seen, gI_run_out, ↓reduceIte]
   exact firstWait_one_acc H _ gI.opens (gI.assemble x) (gI.check x) ρ () (gI_run_out H P x ω _) (fun _ => rfl) rfl
 
 theorem gInnerKS (H : Msg → Msg) : Inner.KS H gI := by
@@ -277,7 +321,7 @@ theorem gInnerKS (H : Msg → Msg) : Inner.KS H gI := by
     _ = 0 := Pr_false
     _ ≤ _ := by simp [gI]
 
-theorem firstWait_const_some {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+theorem firstWait_const_some {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (w : W)
     (ha : ∀ vs : List Seen, assemble (vs.flatMap opens) = some w) (hc : check w = true) (rs : List R)
     (rss : List (List R)) :
@@ -286,13 +330,13 @@ theorem firstWait_const_some {R W Op : Type} (H : Msg → Msg) (run : R → Trac
   rw [(RP.eval_bind H run _ _).1, ha]
   simp [hc, RP.eval]
 
-theorem gRelS (w : Flock.Wit) : Flock.RelS gs₀ w := fun _ _ => rfl
+theorem gRelS (w : Flock.Wit) : Flock.RelS gs₀ w := fun _ _ o => o.elim0
 
 theorem gDO_E_some (H : Msg → Msg) (decode : List (ℕ × ℕ) → List Unit)
     (hdec : Flock.ListWithin gDO.len gDO.enc gDO.θ decode) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (gDO.V.k x) → Bool) (ρ : (Flock.E gDO decode).C x) (hacc : (run H P gDO.V x ω r₀).out = .acc) :
     ((Flock.E gDO decode).eval H P x ω r₀ ρ).1 = some ⟨[]⟩ := by
-  simp only [Flock.E, ERep, Extractor.eval, RP.eval, Trace.seen, hacc, ↓reduceIte]
+  simp only [Flock.E, ERep, Extractor.eval, RP.eval, Transcript.seen, hacc, ↓reduceIte]
   obtain ⟨rs, rss, hl⟩ := List.exists_cons_of_ne_nil (l := (List.finRange (gDO.waits x)).map fun i =>
     (List.finRange (gDO.cap x)).map (ρ i)) (by simp [gDO])
   rw [hl]
@@ -325,12 +369,12 @@ theorem gFlockKS (H : Msg → Msg) : Flock.KS H gDO := by
 /-! ## The recursion's KS fails -/
 
 /-- `E^rep` at one wait of one rerun gives up when that rerun is rejected and nothing assembles from no openings. -/
-theorem erep_one_none {Dr W Op : Type} (H : Msg → Msg) (run : Dr → Trace) (opens : Seen → List Op)
+theorem erep_one_none {Dr W Op : Type} (H : Msg → Msg) (run : Dr → Transcript) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (ha : assemble [] = none) (d₀ : Dr) (ρ : Fin 1 → Fin 1 → Dr)
     (h : (run (ρ 0 0)).out ≠ .acc) : ((erep 1 1 1 opens assemble check d₀ ρ).eval H run).1 = none := by
   simp only [erep, RP.eval]
   split_ifs
-  · simp [firstWait, waitAcc, RP.bind, RP.eval, Trace.seen, h, ha, List.finRange_succ]
+  · simp [firstWait, waitAcc, RP.bind, RP.eval, Transcript.seen, h, ha, List.finRange_succ]
   · rfl
 
 /-- The prover: `H []`, every round. -/
@@ -347,20 +391,20 @@ theorem EO_ext_none {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) (h : (run H P D.V x ω d.1).out ≠ .acc) :
     (((EO D I DO decO).ext x d.1 d.2).eval H (run H P D.V x ω)).1 = none := by
-  simp [EO, RP.eval, Trace.seen, h]
+  simp [EO, RP.eval, Transcript.seen, h]
 
-/-- A draw where the outer stage gives up is served as a rejected run. -/
+/-- A sample where the outer stage gives up is served as a rejected run. -/
 theorem servedRun_out_none {Coin W₂ : Type} {V : Verifier Coin} (H : Msg → Msg) (E₂ : Extractor Coin W₂ V)
-    (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (x : Msg) (run : (Fin (V.k x) → Coin) → Trace)
+    (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (x : Msg) (run : (Fin (V.k x) → Coin) → Transcript)
     (d : (Fin (V.k x) → Coin) × E₂.C x) (h : ((E₂.ext x d.1 d.2).eval H run).1 = none) :
     (servedRun H (outerStage E₂ dec x) run d).out = (dec x d.1 none).out := by
   simp only [servedRun, outerStage]
   rw [RP.eval_bind_ret, h]
 
-/-- The one draw of one wait of one rerun. -/
+/-- The one sample of one wait of one rerun. -/
 def at00 {X : Type} (ρ : Fin 1 → Fin 1 → X) : X := ρ 0 0
 
-/-- `E*`'s one inner rerun's draw: the compiled verifier's coins and `E_O`'s. -/
+/-- `E*`'s one inner rerun's sample: the compiled verifier's coins and `E_O`'s. -/
 def gDraw (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) (x : Msg) (c : (E H (gD H) gI gDO decO).C x) :
     (Fin ((gD H).V.k x) → Bool) × (EO (gD H) gI gDO decO).C x :=
   at00 c.2
@@ -391,7 +435,7 @@ theorem gPr_quarter : Pr (fun b : Bool × Bool => b.1 = false ∧ b.2 = true) = 
   rw [this]
   norm_num
 
-/-- **`E*` fails on a quarter of the draws**: the judged run accepts at its coin `false`, and the inner rerun's outer
+/-- **`E*` fails on a quarter of the samples**: the judged run accepts at its coin `false`, and the inner rerun's outer
 coin `true` rejects it. -/
 theorem gPrBad_ge (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) :
     1 / 4 ≤ PrBad H (gD H).V (R (gD H) gI) (E H (gD H) gI gDO decO) [] (gP H) := by
@@ -496,7 +540,7 @@ theorem gNotKSA (H : Msg → Msg) : ¬ KSA H (gD H) gI gDO := by
 def gKeep : Unit → (Fin (gI.V.k []) → Bool) → Bool → Bool := fun _ _ a => !a
 
 /-- **`gI` fails `Inner.KSAbort`**: at the prover that keeps each run at its own fresh coin `false`, the judged run is
-kept and accepted, and `E^rep`'s one rerun aborted, on a quarter of the draws, while `κ_I = γ_I = 0`. -/
+kept and accepted, and `E^rep`'s one rerun aborted, on a quarter of the samples, while `κ_I = γ_I = 0`. -/
 theorem gI_not_KSAbort (H : Msg → Msg) : ¬ gI.KSAbort H := by
   intro h
   have hx := h [] Unit (gP H) Bool gKeep
@@ -518,7 +562,7 @@ theorem gI_not_KSAbort (H : Msg → Msg) : ¬ gI.KSAbort H := by
           · show (abortRun H (gP H) gI.V [] gKeep s.1 s.2.1).out = .acc
             simp [abortRun, gKeep, h1, gI_run_out]
           · have hrej : (abortRun H (gP H) gI.V [] gKeep s.1 (at00 s.2.2)).out ≠ .acc := by
-              simp [abortRun, gKeep, h2, abortTrace]
+              simp [abortRun, gKeep, h2, abortTranscript]
             have hnone : ((erep (gI.waits []) (gI.k []) (gI.cap []) gI.opens (gI.assemble []) (gI.check [])
                 s.2.1 s.2.2).eval H (abortRun H (gP H) gI.V [] gKeep s.1)).1 = none :=
               erep_one_none H _ gI.opens (gI.assemble []) (gI.check []) rfl s.2.1 s.2.2 hrej

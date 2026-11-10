@@ -1,30 +1,29 @@
 """Canary: the fixed small tile set that says a pinned instruction still computes its model's words.  Run it on the anchor after any
 driver / ptxas / toolkit change, on a second physical device of the SKU (TRUSTED_STABLE), or whenever anyone asks "did it break":
 
-    python benchmarks/tc_probe/tc_probe.py --instruction sm89.mma.m16n8k32.e4m3 --out $RESEARCH_RUN_DIR --canary [--sass-check]
+    python benchmarks/tc_probe/tc_probe.py --instruction sm89.mma.m16n8k32.e4m3 --out DIR --canary [--sass-check]
 
-A canary is < 1 minute on the device, exits non-zero on any mismatch against a declared model, and under ``research run`` writes a
-``tc-evidence/v1`` ``result.json`` whose ``tc_evidence.canary`` holds the counts and whose ``workload_fingerprint.family`` is
-``canary``; the lane then labels the artifact ``family=canary instruction=<id> hardware=<sku family> model=<name>
-model_agrees=<true|false>`` (the ``research data label`` lines are printed at the end; ``trust.py`` reads them).
+A canary is < 1 minute on the device, exits non-zero on any mismatch against a declared model, and in a recorded run
+(``RESEARCH_RUN_ID`` set) writes a ``tc-evidence/v1`` ``result.json`` whose ``tc_evidence.canary`` holds the counts and whose
+``workload_fingerprint.family`` is ``canary``; whoever ran it then labels the artifact ``family=canary instruction=<id>
+hardware=<sku family> model=<name> model_agrees=<true|false>`` (the label commands are printed at the end; ``trust.py`` reads
+the labels).
 
 The tile set is a pure function of the instruction id, the repository fixtures and :data:`CANARY_SEED` (:func:`canary_plan`,
 :func:`canary_tiles`, witnessed by :func:`canary_digest`):
 
-* the first :data:`CANARY_TILES` tiles of every finite-sweep family ``tc_probe.families`` defines for the format, drawn by the
+* the first :data:`CANARY_TILES` tiles of every finite-sweep family ``tc_probe.families`` defines for the format, sampled by the
   same generator as ``--sweep`` with ``n_random = CANARY_N_RANDOM`` (a small sweep, in the sweep's order, so a canary tile is a
   sweep tile of a known seed);
 * every regression tile of every *resolved* discrepancy-log entry naming the instruction or a Target over it
   (:data:`trust.REGRESSION_TILES`): ``family:<name>`` tiles join the family set, ``replay:<fragment>`` files
   are replayed in full (golden records; the tc-total special captures for BF16).
 
-TODO(pod): the device half (``run_canary``: ``Probe.tiles`` + ``model_eval`` + ``replay_golden``) has not been executed on
-silicon from this laptop.  First pod run per anchor: ``research run --tool tc_probe --project verity -- python
-benchmarks/tc_probe/tc_probe.py --instruction <id> --out $RESEARCH_RUN_DIR --canary --sass-check``, check the wall time (< 60 s) and
-that ``probe_results.json["canary"]["digest"]`` equals :func:`canary_digest` computed offline, then label the artifact.  BF16
-anchors have no ``adder_width_cancellation`` / ``acc_only_lsb_walk`` families yet (they are FP8-only in ``families()``): the
-trust framework's PINNED criterion P3 lists them as missing for every BF16 instruction until ``families()`` yields them for BF16
-and the anchors are re-swept.
+The device half is ``run_canary`` (``Probe.tiles`` + ``model_eval`` + ``replay_golden``).  On an anchor's first canary (the
+command above with ``--sass-check``), check the wall time (< 60 s) and that ``probe_results.json["canary"]["digest"]`` equals
+:func:`canary_digest` computed offline, then label the artifact.  BF16 anchors have no ``adder_width_cancellation`` /
+``acc_only_lsb_walk`` families (they are FP8-only in ``families()``), so the trust framework's PINNED criterion P3 lists them as
+missing for every BF16 instruction.
 """
 from __future__ import annotations
 
@@ -47,7 +46,7 @@ import tc_probe as P  # noqa: E402
 from trust import REGRESSION_TILES, _load_discrepancies, subjects  # noqa: E402
 
 CANARY_SEED = 20260922
-CANARY_N_RANDOM = 64      # families() n_random for the canary draws: every family then has >= CANARY_TILES tiles
+CANARY_N_RANDOM = 64      # families() n_random for the canary samples: every family then has >= CANARY_TILES tiles
 CANARY_TILES = 4          # tiles kept per family (M x 8 elements each: 512 for mma, 2048 for wgmma)
 REPLAY_ROOTS = ("verity/ml/circuits/ops/tests/fixtures/golden", "verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07", "verity/ml/circuits/silicon/captures")
 
@@ -178,8 +177,8 @@ def canary_plan(instruction_id: str, repo: Path | str | None = None) -> CanaryPl
 
 
 def canary_tiles(plan: CanaryPlan, fmt: P.Format, M: int, K: int) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray, dict | None]]:
-    """``(family, A, Bt, C, meta)`` for every family of the plan: the first ``tiles_per_family`` tiles of the family drawn by
-    ``tc_probe.families`` with the canary seed.  Slicing after the draw keeps every family's tiles independent of which families
+    """``(family, A, Bt, C, meta)`` for every family of the plan: the first ``tiles_per_family`` tiles of the family sampled by
+    ``tc_probe.families`` with the canary seed.  Slicing after the sample keeps every family's tiles independent of which families
     the plan keeps (the generator consumes the same random stream either way)."""
     rng = np.random.default_rng(plan.seed)
     keep = set(plan.families)

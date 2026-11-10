@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``gumbel-top-p-token-select`` (``GumbelTopPTokenSelect_v1{V}``, one vocabulary row) and its frame-v3
+"""Flock lowering of ``gumbel-top-p-token-select`` (``GumbelTopPTokenSelect_v1{V}``, one vocabulary row) and its frame-v3
 instance file for the statement ``verity/flock-ir-sampling/v1`` (``live/src/ir_sampling.rs``, binary ``flock-ir-sampling``,
 format ``flock-ir-sampling/v1``).
 
@@ -82,7 +82,7 @@ PIECES = IL.PIECES
 
 def _composites(V: int):
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import sampling as SM
+    from verity.ml.definitions.registry import sampling as SM
 
     return SM.TemperatureLane, bind(SM.TopPMaskStep, V=V), SM.GumbelSelectStep
 
@@ -131,7 +131,7 @@ class Lane:
 
     V: int
     circuit: Circuit
-    layout: IL.Layout
+    layout: IL.LoweredUnit
 
     @property
     def name(self) -> str:
@@ -187,7 +187,7 @@ def lane(V: int) -> Lane:
 # --- the words of one row, as the verifier computes them ------------------------------------------------------------------------
 
 def _prim(name: str):
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
     from verity.ml.circuits.ops import scalar as S
 
     return getattr(P, name, None) or getattr(S, name)
@@ -202,7 +202,7 @@ def row_scalars(temp: int) -> list[int]:
 
 def _add_ftz_rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """``F32AddFtz_v1`` lane for lane: the vectorised twin, and the primitive itself on every lane with a NaN operand."""
-    from verity_vllm.program.registry import sampling_rows as SR
+    from verity.ml.definitions.registry import sampling_rows as SR
 
     out = np.asarray(SR.add_ftz(a, b), dtype=np.uint32)
     nan = ((a & 0x7F800000) == 0x7F800000) & ((a & 0x7FFFFF) != 0) | ((b & 0x7F800000) == 0x7F800000) & ((b & 0x7FFFFF) != 0)
@@ -231,10 +231,10 @@ def _scan(y: np.ndarray):
 
 def row_words(logits: np.ndarray, top_p: int, seed: int, pos: int, temp: int, splits: int) -> tuple[np.ndarray, int]:
     """Every cut word of one instance (:func:`words` of them) and its token: the units' words by the vectorised twins of the
-    IR primitives (``verity_vllm.program.registry.sampling_rows``, held word-equal to them), the native ones by the primitives
+    IR primitives (``verity.ml.definitions.registry.sampling_rows``, held word-equal to them), the native ones by the primitives
     and the top-p split pipeline (``TopPMaskWordx{V}``'s own reference)."""
-    from verity_vllm.program.registry import sampling as SM
-    from verity_vllm.program.registry import sampling_rows as SR
+    from verity.ml.definitions.registry import sampling as SM
+    from verity.ml.definitions.registry import sampling_rows as SR
 
     logits = np.asarray(logits, dtype=np.uint16).reshape(-1)
     V = len(logits)
@@ -256,8 +256,8 @@ def row_words(logits: np.ndarray, top_p: int, seed: int, pos: int, temp: int, sp
 def native_words(cuts: np.ndarray, top_p: int, seed: int, pos: int, temp: int, splits: int) -> np.ndarray:
     """The native cut words of one instance recomputed from its public words (the scalar ports and the units' ``scaled``
     words): what :func:`check_native` holds a file's cut words to."""
-    from verity_vllm.program.registry import sampling as SM
-    from verity_vllm.program.registry import sampling_rows as SR
+    from verity.ml.definitions.registry import sampling as SM
+    from verity.ml.definitions.registry import sampling_rows as SR
 
     V = (len(cuts) - len(SCALARS) - len(INIT)) // len(LANE)
     lane = np.asarray(cuts[len(SCALARS) + len(INIT):], dtype=np.uint32).reshape(V, len(LANE))
@@ -351,7 +351,7 @@ def statement(input_set, lo: int, hi: int, logits: np.ndarray, scalars: dict, ou
     for name in leaves:
         bind[name] = bytes.fromhex(identity_digest(IF.BINDING_TAG, {"set": input_set.name, "content_digest": input_set.content_digest,
                                                                    "lo": int(lo), "hi": int(hi), "port": name, "schema": schemas[name]}))
-        doms[name] = CommitmentDomain(bind[name], IF.OWNER, RangeIndexedDomain(0, n))
+        doms[name] = CommitmentDomain(bind[name], IF.OWNER, RangeIndexedDomain(0, n), hash="sha256")
     fv = FrameV3({name: Port(doms[name], leaf) for name, leaf in leaves.items()})
     key = blake3_row_key(ROLE_X)
     digests = np.frombuffer(b"".join(blake3.blake3(np.ascontiguousarray(logits[i], dtype="<u2").tobytes(), key=key).digest()
@@ -425,7 +425,7 @@ def write(low: Lane, input_set, lo: int, hi: int, path, k_max: int = IF.K_MAX) -
 
 def stage(low: Lane, input_set, lo: int, hi: int, out_dir, k_max: int = IF.K_MAX) -> Path:
     """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/frame-<n>.bin`` and the lane netlist as ``<out_dir>/net.txt``: the
-    verifier's own staging (red-team-flock-2 IR2), every cut word the verifier's own computation."""
+    verifier's own staging, every cut word the verifier's own computation."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "net.txt").write_text(low.text)

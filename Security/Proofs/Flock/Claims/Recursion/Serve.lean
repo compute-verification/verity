@@ -1,4 +1,43 @@
-import Proofs.Flock.Claims.ERepCost
+module
+
+public import Definitions.Core.Interaction
+public import Proofs.Flock.Claims.ERepCost
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ERep
 
 /-!
 # Serving one rerun program's reruns by another's
@@ -17,6 +56,8 @@ So the worst cases multiply (`RP.serve_runs_le`, `RP.serve_hashes_le`), and the 
 reruns weighted by the outer stage's cost at each (`RP.serve_runs_cast`, which `Recursion/Wald.lean` averages).
 -/
 
+@[expose] public section
+
 namespace Claims
 
 /-- **Serve each rerun of `p` by the program `q r`**, which reruns at `R₂` and returns what `p` sees of its rerun at
@@ -26,19 +67,19 @@ def RP.serve {R₁ R₂ α : Type} (q : R₁ → RP R₂ Seen) : RP R₁ α → 
   | .hash m k => .hash m fun a => RP.serve q (k a)
   | .rerun r k => (q r).bind fun v => RP.serve q (k v)
 
-/-- The draws a program reruns at, in order, against `H` and the runs `run`. -/
-def RP.rerunsAt {R α : Type} (H : Msg → Msg) (run : R → Trace) : RP R α → List R
+/-- The samples a program reruns at, in order, against `H` and the runs `run`. -/
+def RP.rerunsAt {R α : Type} (H : Msg → Msg) (run : R → Transcript) : RP R α → List R
   | .ret _ => []
   | .hash q k => RP.rerunsAt H run (k (H q))
   | .rerun r k => r :: RP.rerunsAt H run (k (run r).seen)
 
 /-- **The served runs**: the rerun at `r` is seen as what `q r` returns against `run`, and logs no SHA-512 call of its
 own (the outer stage's are counted where it runs). -/
-def servedRun {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace) (r : R₁) : Trace :=
+def servedRun {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Transcript) (r : R₁) : Transcript :=
   ⟨((q r).eval H run).1.msgs, [], [], ((q r).eval H run).1.out⟩
 
-/-- A program reruns once per draw it reruns at. -/
-theorem RP.eval_runs_eq {R α : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) :
+/-- A program reruns once per sample it reruns at. -/
+theorem RP.eval_runs_eq {R α : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) :
     (p.eval H run).2.2 = (p.rerunsAt H run).length := by
   induction p with
   | ret a => rfl
@@ -46,15 +87,15 @@ theorem RP.eval_runs_eq {R α : Type} (H : Msg → Msg) (run : R → Trace) (p :
   | rerun r k ih => simp only [RP.eval, RP.rerunsAt, List.length_cons]; rw [ih]
 
 /-- A bound program's SHA-512 calls are the first part's and then the continuation's. -/
-theorem RP.eval_bind_hashes {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+theorem RP.eval_bind_hashes {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ((p.bind f).eval H run).2.1 = (p.eval H run).2.1 + ((f (p.eval H run).1).eval H run).2.1 := by
   induction p with
   | ret a => simp [RP.bind, RP.eval]
   | hash q k ih => simp only [RP.bind, RP.eval]; rw [ih]; ring
   | rerun r k ih => simp only [RP.bind, RP.eval]; rw [ih]; ring
 
-/-- A bound program reruns at the first part's draws and then the continuation's. -/
-theorem RP.rerunsAt_bind {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+/-- A bound program reruns at the first part's samples and then the continuation's. -/
+theorem RP.rerunsAt_bind {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     (p.bind f).rerunsAt H run = p.rerunsAt H run ++ (f (p.eval H run).1).rerunsAt H run := by
   induction p with
   | ret a => simp [RP.bind, RP.eval, RP.rerunsAt]
@@ -62,13 +103,13 @@ theorem RP.rerunsAt_bind {R α β : Type} (H : Msg → Msg) (run : R → Trace) 
   | rerun r k ih => simp only [RP.bind, RP.eval, RP.rerunsAt, List.cons_append]; rw [ih]
 
 /-- What the inner stage sees of a served rerun is what the outer stage returns. -/
-theorem servedRun_seen {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace) (r : R₁) :
+theorem servedRun_seen {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Transcript) (r : R₁) :
     (servedRun H q run r).seen = ((q r).eval H run).1 := rfl
 
 /-- **Serving, exactly**: against the prover's runs `run`, the served program returns the inner stage's result against
-the served runs; its SHA-512 calls are the inner stage's against them plus the outer stage's at each draw the inner
-stage reruns at; and its reruns are the outer stage's at each of those draws, summed. -/
-theorem RP.serve_eval {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace) (p : RP R₁ α) :
+the served runs; its SHA-512 calls are the inner stage's against them plus the outer stage's at each sample the inner
+stage reruns at; and its reruns are the outer stage's at each of those samples, summed. -/
+theorem RP.serve_eval {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Transcript) (p : RP R₁ α) :
     ((p.serve q).eval H run).1 = (p.eval H (servedRun H q run)).1 ∧
       ((p.serve q).eval H run).2.1 = (p.eval H (servedRun H q run)).2.1 +
         ((p.rerunsAt H (servedRun H q run)).map fun r => ((q r).eval H run).2.1).sum ∧
@@ -90,8 +131,8 @@ theorem RP.serve_eval {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R
       ring
     · rw [(RP.eval_bind H run _ _).2, h3]
 
-/-- **The served reruns, as reals**: the outer stage's reruns at each draw the inner stage reruns at, summed. -/
-theorem RP.serve_runs_cast {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace)
+/-- **The served reruns, as reals**: the outer stage's reruns at each sample the inner stage reruns at, summed. -/
+theorem RP.serve_runs_cast {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Transcript)
     (p : RP R₁ α) :
     (((p.serve q).eval H run).2.2 : ℝ) =
       ((p.rerunsAt H (servedRun H q run)).map fun r => (((q r).eval H run).2.2 : ℝ)).sum := by
@@ -99,7 +140,7 @@ theorem RP.serve_runs_cast {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ →
   rfl
 
 /-- **The served SHA-512 calls, as reals.** -/
-theorem RP.serve_hashes_cast {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace)
+theorem RP.serve_hashes_cast {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Transcript)
     (p : RP R₁ α) :
     (((p.serve q).eval H run).2.1 : ℝ) = ((p.eval H (servedRun H q run)).2.1 : ℝ) +
       ((p.rerunsAt H (servedRun H q run)).map fun r => (((q r).eval H run).2.1 : ℝ)).sum := by
@@ -119,7 +160,7 @@ theorem list_sum_le_mul {R : Type} (l : List R) (f : R → ℕ) (N : ℕ) (h : �
 
 /-- **The worst cases multiply**: an inner stage of at most `N₁` reruns against the served runs, each served by at most
 `N₂` reruns, makes at most `N₁ · N₂`. -/
-theorem RP.serve_runs_le {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace)
+theorem RP.serve_runs_le {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Transcript)
     (p : RP R₁ α) {N₁ N₂ : ℕ} (hp : (p.eval H (servedRun H q run)).2.2 ≤ N₁)
     (hq : ∀ r, ((q r).eval H run).2.2 ≤ N₂) : ((p.serve q).eval H run).2.2 ≤ N₁ * N₂ := by
   rw [(RP.serve_eval H q run p).2.2]
@@ -128,7 +169,7 @@ theorem RP.serve_runs_le {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → R
   exact Nat.mul_le_mul_right N₂ hp
 
 /-- **The SHA-512 calls' worst case**: the inner stage's own, and at most `N_h` for each of its at most `N₁` reruns. -/
-theorem RP.serve_hashes_le {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace)
+theorem RP.serve_hashes_le {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Transcript)
     (p : RP R₁ α) {N₁ Nh : ℕ} (hp : (p.eval H (servedRun H q run)).2.2 ≤ N₁)
     (hq : ∀ r, ((q r).eval H run).2.1 ≤ Nh) :
     ((p.serve q).eval H run).2.1 ≤ (p.eval H (servedRun H q run)).2.1 + N₁ * Nh := by
@@ -138,7 +179,7 @@ theorem RP.serve_hashes_le {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ →
   exact Nat.mul_le_mul_right Nh hp
 
 /-- Running a program followed by a return adds no rerun and no SHA-512 call. -/
-theorem RP.eval_bind_ret {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → β) :
+theorem RP.eval_bind_ret {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → β) :
     ((p.bind fun a => .ret (f a)).eval H run) = (f (p.eval H run).1, (p.eval H run).2.1, (p.eval H run).2.2) := by
   induction p with
   | ret a => rfl

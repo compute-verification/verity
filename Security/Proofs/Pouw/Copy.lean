@@ -1,9 +1,14 @@
-import Models.Pouw.Assumptions.Pinned
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Pouw.Assumptions.GameStatements
+public import Proofs.Pouw.Prob
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # R_copy (tt-attacks §6): the bound under Nz, and Nz for independent uniform bits
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 
@@ -17,21 +22,6 @@ theorem pr_or_disjoint (P P' : α → Prop) (h : ∀ x, ¬ (P x ∧ P' x)) :
   rw [pr_eq_card (fun x => P x ∨ P' x) (univ.filter P ∪ univ.filter P') (fun x => by simp),
     pr_eq_card P (univ.filter P) (fun x => by simp), pr_eq_card P' (univ.filter P') (fun x => by simp),
     Finset.card_union_of_disjoint (Finset.disjoint_filter.2 fun x _ hx hx' => h x ⟨hx, hx'⟩), Nat.cast_add, add_div]
-
-/-- The union bound over a finite index set. -/
-theorem pr_exists_le_sum {ι : Type} (s : Finset ι) (P : ι → α → Prop) :
-    pr (fun x => ∃ i ∈ s, P i x) ≤ ∑ i ∈ s, pr (P i) := by
-  classical
-  refine Finset.induction_on s ?_ ?_
-  · simp only [Finset.notMem_empty, false_and, exists_false, Finset.sum_empty]
-    exact le_of_eq (pr_eq_zero fun _ h => h)
-  · intro i s hi ih
-    rw [Finset.sum_insert hi]
-    calc pr (fun x => ∃ j ∈ insert i s, P j x) ≤ pr (fun x => P i x ∨ ∃ j ∈ s, P j x) := pr_mono fun x ⟨j, hj, h⟩ => by
-          rcases Finset.mem_insert.1 hj with rfl | hj
-          · exact Or.inl h
-          · exact Or.inr ⟨j, hj, h⟩
-      _ ≤ _ := (pr_or_le _ _).trans (add_le_add le_rfl ih)
 
 namespace RCopy
 
@@ -89,33 +79,33 @@ theorem half_pow_le_rpow (k : ℕ) (x : ℝ) (h : x ≤ k) : (1 / 2 : ℝ) ^ k �
 end RCopy
 
 /-- **R_copy's bound.** -/
-theorem copyBound : Pinned.CopyBound := by
-  intro Ω V _ n X N A γ₀ hγ0 hγ1 hNz
+theorem copyBound : GameStatements.CopyBound := by
+  intro Ω V _ n X N A g₀ hg0 hg1 hNz
   classical
-  have h1γ : 0 < 1 - γ₀ := by linarith
-  let few := (range N).filter (fun u => ((Copy.classes n A u).card : ℝ) < (1 - γ₀) * n u)
-  have hsub : ∀ ω, (Copy.cost n N A : ℝ) / (1 - γ₀) < 16 * ∑ u ∈ Copy.correctSet n X N A ω, (n u : ℝ) →
+  have h1g : 0 < 1 - g₀ := by linarith
+  let few := (range N).filter (fun u => ((Copy.classes n A u).card : ℝ) < (1 - g₀) * n u)
+  have hsub : ∀ ω, (Copy.cost n N A : ℝ) / (1 - g₀) < 16 * ∑ u ∈ Copy.correctSet n X N A ω, (n u : ℝ) →
       ∃ u ∈ few, Copy.Correct n X A ω u := by
     intro ω h
     by_contra hne
     push Not at hne
     refine absurd h (not_lt.2 ?_)
-    have hK : ∀ u ∈ Copy.correctSet n X N A ω, (n u : ℝ) ≤ (Copy.classes n A u).card / (1 - γ₀) := by
+    have hK : ∀ u ∈ Copy.correctSet n X N A ω, (n u : ℝ) ≤ (Copy.classes n A u).card / (1 - g₀) := by
       intro u hu
       have hu' := Finset.mem_filter.1 hu
       have : u ∉ few := fun hf => hne u hf hu'.2
-      have hle : (1 - γ₀) * n u ≤ (Copy.classes n A u).card := by
+      have hle : (1 - g₀) * n u ≤ (Copy.classes n A u).card := by
         by_contra hlt
         exact this (Finset.mem_filter.2 ⟨hu'.1, not_le.1 hlt⟩)
-      rw [le_div_iff₀ h1γ]
+      rw [le_div_iff₀ h1g]
       linarith
     calc 16 * ∑ u ∈ Copy.correctSet n X N A ω, (n u : ℝ)
-        ≤ 16 * ∑ u ∈ Copy.correctSet n X N A ω, ((Copy.classes n A u).card : ℝ) / (1 - γ₀) := by
+        ≤ 16 * ∑ u ∈ Copy.correctSet n X N A ω, ((Copy.classes n A u).card : ℝ) / (1 - g₀) := by
           gcongr with u hu; exact hK u hu
-      _ ≤ 16 * ∑ u ∈ range N, ((Copy.classes n A u).card : ℝ) / (1 - γ₀) := by
+      _ ≤ 16 * ∑ u ∈ range N, ((Copy.classes n A u).card : ℝ) / (1 - g₀) := by
           refine mul_le_mul_of_nonneg_left ?_ (by norm_num)
           exact Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) fun _ _ _ => by positivity
-      _ = (Copy.cost n N A : ℝ) / (1 - γ₀) := by
+      _ = (Copy.cost n N A : ℝ) / (1 - g₀) := by
           unfold Copy.cost
           push_cast
           simp only [div_eq_mul_inv]
@@ -123,12 +113,12 @@ theorem copyBound : Pinned.CopyBound := by
           ring
   calc _ ≤ pr (fun ω => ∃ u ∈ few, Copy.Correct n X A ω u) := pr_mono hsub
     _ ≤ ∑ u ∈ few, pr (fun ω => Copy.Correct n X A ω u) := pr_exists_le_sum _ _
-    _ ≤ ∑ u ∈ few, (2 : ℝ) ^ (-(γ₀ * n u)) := by
+    _ ≤ ∑ u ∈ few, (2 : ℝ) ^ (-(g₀ * n u)) := by
         refine Finset.sum_le_sum fun u hu => (RCopy.unit_le n X hNz A u).trans (RCopy.half_pow_le_rpow _ _ ?_)
         have hlt := (Finset.mem_filter.1 hu).2
         rw [Nat.cast_sub (RCopy.classes_card_le n A u)]
         linarith
-    _ ≤ ∑ u ∈ range N, (2 : ℝ) ^ (-(γ₀ * n u)) :=
+    _ ≤ ∑ u ∈ range N, (2 : ℝ) ^ (-(g₀ * n u)) :=
         Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) fun _ _ _ => by positivity
 
 namespace RCopy
@@ -197,6 +187,6 @@ theorem bits_nz (M : ℕ) (P : Finset ℕ) :
 end RCopy
 
 /-- **Nz is satisfiable.** -/
-theorem copyNzWitness : Pinned.CopyNzWitness := fun M _ P hP g hg => RCopy.bits_nz M P hP g hg
+theorem copyNzWitness : GameStatements.CopyNzWitness := fun M _ P hP g hg => RCopy.bits_nz M P hP g hg
 
 end Pouw.Proofs

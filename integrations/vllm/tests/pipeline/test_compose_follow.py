@@ -15,7 +15,8 @@ from verity_vllm.pipeline import components as C
 from verity_vllm.pipeline import global_program as G
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.registry import b1
+from verity_vllm.records import workload as WL
+from verity.ml.definitions.registry import b1
 
 SHAPES = ((3, 2), (5, 1))
 
@@ -47,7 +48,8 @@ def build_dirs(tmp_path_factory):
     for lp, t in SHAPES:
         _request_dir(root / f"build_request_LP{lp}_T{t}", lp, t)
         dirs.append(str(root / f"build_request_LP{lp}_T{t}"))
-    wl = {"requests": [{"request_id": f"q{i}", "prompt_len": lp, "max_tokens": t + 1, "arrive_step": 0} for i, (lp, t) in enumerate(SHAPES)],
+    wl = {"schema": WL.SCHEMA, "model": "stand-in", "engine": {}, "variants": {"greedy": {"temperature": 0.0}},
+          "requests": [{"request_id": f"q{i}", "prompt_len": lp, "max_tokens": t + 1, "arrive_step": 0} for i, (lp, t) in enumerate(SHAPES)],
           "sweep": {"row_id": "stand-in__b2__bi-eager"}}
     (root / "workload.json").write_text(json.dumps(wl))
     return root, dirs

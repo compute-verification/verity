@@ -1,9 +1,42 @@
-import Definitions.Accounting.TS.Receipt
+module
+
+public import Definitions.Accounting.TS.Receipt
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A round's unfolded share and the whole-unit luck (trusted)
 
-HMU's B′ at a whole unit (ASK-9 = A, `p₀ = ½`): a run that skips a unit's fold commits a value for the unit's receipt
+HMU's B′ at a whole unit (`p₀ = ½`): a run that skips a unit's fold commits a value for the unit's receipt
 that no word of the unit determines, so the round's check passes only if it guessed the unit's committed value.
 
 * `Unfolded`: per round, the share `e` of the run's words whose fold it skips, fixed before the round's coins, then the
@@ -13,6 +46,8 @@ that no word of the unit determines, so the round's check passes only if it gues
   round with a positive unfolded share keeps the honest committed value with probability at most `p₀`. This is HMU's
   B′ at a unit whose fold the run skips.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

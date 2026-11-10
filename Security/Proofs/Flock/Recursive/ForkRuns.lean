@@ -1,4 +1,8 @@
-import Proofs.Flock.Recursive.Schedule
+module
+
+public import Proofs.Flock.Recursive.Defs
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Recursion: a fork at round 0 is any two runs
@@ -14,6 +18,8 @@ the compile lemma turns a clash of two runs into a fork.
   rest of the run from the root.
 * `Inner.fork_of_outcomes`: two outcomes of `s` that `pick` reads as a collision are a fork of `s`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

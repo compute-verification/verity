@@ -1,6 +1,8 @@
-import Models.Nci.Guarantees.FitRate
-import Proofs.Accounting.Actual.Windows
-import Proofs.Nci.Fit
+module
+
+public import Definitions.Nci.Guarantees.FitRate
+public import Proofs.Accounting.Actual.Windows
+public import Proofs.Nci.Fit
 
 /-!
 # Proof of the fit bound on a run
@@ -13,13 +15,15 @@ most `R + r ω`, and `FitBound` gives the count over the `n J` windows. Its comp
 (`cuts_mul_le`), which gives the rate.
 -/
 
+@[expose] public section
+
 namespace Nci.SecurityProofs
 
 open Verity Accounting Finset
 
 /-- Through a containment `M : c ≼ d`, the piece of `c` that a unit of `d` induces reads at most what the unit reads in
 the image of `c`'s novel gates. -/
-theorem novelReads_pull_le_readsIn_compl {c d : Declaration} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
+theorem novelReads_pull_le_readsIn_compl {c d : RegisteredCircuit} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
     (u : Fin n) : novelReads c ((pull M P).gates u) ≤ readsIn d (P.gates u) ((c.θᶜ).map ⟨M.emb, M.emb_inj⟩) := by
   unfold novelReads readsIn
   rw [width_map (M := M)]

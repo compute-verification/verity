@@ -1,4 +1,43 @@
-import Proofs.Hash.TreeBinding
+module
+
+public import Definitions.Hash.Guarantees
+public import Proofs.Hash.TreeBinding
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Hash.Bytes
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # `Hash.SecurityProofs.RowBinding : Hash.Guarantees.RowBinding`
@@ -11,10 +50,14 @@ Down from the root, each step gives the next equality or a collision among what 
 3. **The hm96 leaf** (`hm96_bind`): one leaf message gives one commit string `b ‖ c`; one `c` gives one salt; and with
    one salt, one `b = x ⊕ M·y` gives one inner digest `x`.
 4. **The row digest** (`inner_bind`). Under `sha512/row/v2` (`rowV2_bind`), one message gives one bit length (`P(ℓ)`) and
-   one row's bytes, so one row. Under `sha512/row-seg/v1` (`rowSeg_bind`), one outer message gives one bit length
+   one row's bytes, so one row. Under `sha512/row/v1` (`rowV1_bind`), one message gives one row's bytes, whose
+   count gives the bit length of a row of whole 16-bit words, so one row. Under `sha512/row-seg/v1` (`rowSeg_bind`),
+   one outer message gives one bit length
    (`Q(ℓ)`) and one list of segment digests. Each segment digest comes from one segment message, so from one segment,
    and the segments cover the row.
 -/
+
+@[expose] public section
 
 namespace Hash.BindingProofs
 
@@ -36,6 +79,22 @@ theorem rowV2_bind (G : Msg → Digest) {r₁ r₂ : Row} (h₁ : r₁.length < 
     have hℓ : r₁.length = r₂.length :=
       be_inj_lt (lt_256_pow_8 h₁) (lt_256_pow_8 h₂) (List.append_cancel_left (padTo_inj (by simp) hp))
     exact Or.inl (packBits_inj hℓ hb)
+  · exact Or.inr hc
+
+theorem packBits_length (r : Row) : (RowSeg.packBits r).length = (r.length + 7) / 8 := by
+  simp [RowSeg.packBits]
+
+/-- **`sha512/row/v1` binds a row of whole words**: its bytes, two a word, give its length. -/
+theorem rowV1_bind (G : Msg → Digest) {r₁ r₂ : Row} (h₁ : r₁.length % RowV1.WORD_BITS = 0)
+    (h₂ : r₂.length % RowV1.WORD_BITS = 0) (h : RowV1.digest G r₁ = RowV1.digest G r₂) :
+    r₁ = r₂ ∨ CollisionIn G (RowV1.hashed r₁ ++ RowV1.hashed r₂) := by
+  rcases eq_or_collisionIn (xs := RowV1.hashed r₁ ++ RowV1.hashed r₂) (x := RowV1.msg r₁) (y := RowV1.msg r₂)
+    (by simp [RowV1.hashed]) (by simp [RowV1.hashed]) h with hm | hc
+  · obtain ⟨-, hb⟩ := List.append_inj hm (by simp [RowV1.rowPrefix, padTo_length])
+    have hl := congrArg List.length hb
+    rw [packBits_length, packBits_length] at hl
+    simp only [RowV1.WORD_BITS] at h₁ h₂
+    exact Or.inl (packBits_inj (by omega) hb)
   · exact Or.inr hc
 
 /-- **`sha512/row-seg/v1` binds the row.** -/
@@ -73,13 +132,14 @@ theorem rowSeg_bind (G : Msg → Digest) {r₁ r₂ : Row} (h₁ : r₁.length <
     · exact List.mem_append_left _ (List.mem_append_left _ (mem r₁ j hj))
     · exact List.mem_append_right _ (List.mem_append_left _ (mem r₂ j hj₂))
 
-/-- **A format's row digest binds the row.** -/
-theorem inner_bind (G : Msg → Digest) (f : Format) {r₁ r₂ : Row} (h₁ : r₁.length < 2 ^ 64)
-    (h₂ : r₂.length < 2 ^ 64) (h : f.digest G r₁ = f.digest G r₂) :
+/-- **A format's row digest binds the rows it fits.** -/
+theorem inner_bind (G : Msg → Digest) (f : Format) {r₁ r₂ : Row} (h₁ : f.Fits r₁.length)
+    (h₂ : f.Fits r₂.length) (h : f.digest G r₁ = f.digest G r₂) :
     r₁ = r₂ ∨ CollisionIn G (f.hashed G r₁ ++ f.hashed G r₂) := by
   cases f
   · exact rowSeg_bind G h₁ h₂ h
   · exact rowV2_bind G h₁ h₂ h
+  · exact rowV1_bind G h₁.2 h₂.2 h
 
 /-- **The hm96 leaf binds its inner digest.** -/
 theorem hm96_bind (H : Msg → Digest) (key : Msg) {x₁ x₂ : Digest} {y₁ y₂ : Msg}

@@ -1,5 +1,5 @@
 """`check.py --slots` and `--record --on auto`: each machine's check slots, windows and Lean audit slots, read over ssh by this
-tree's slot.py and lean_slot.py, and the machine a check is placed on from them (the lander placed checks by hand, 3 Oct)."""
+tree's slot.py and lean_slot.py, and the machine a check is placed on from them."""
 from __future__ import annotations
 
 import fcntl
@@ -8,7 +8,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("repo_check_placement", ROOT / "tools" / "verity" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
-NOW = datetime(2026, 10, 3, 17, 50, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 3, 17, 50, tzinfo=UTC)
 #: placement among two machines, whatever AUTO lists today (this module's own copy of check.py)
 N1, N2 = CHECK.AUTO = ("vy-nebius-1", "vy-nebius-2")
 HOLDER = {"pid": 11, "since": "2026-10-03T17:00Z", "minutes": 50, "cmd": "uv run python tools/verity/check/check.py", "run": "r-held",
@@ -27,6 +27,13 @@ HOLDER = {"pid": 11, "since": "2026-10-03T17:00Z", "minutes": 50, "cmd": "uv run
 @pytest.fixture(autouse=True)
 def _placed(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "PLACED", tmp_path / "placed.json")
+
+
+@pytest.fixture(autouse=True)
+def roomy_disk(monkeypatch, tmp_path):
+    """The machine's own /workspace and check cache never block a slot `status_doc` reads in these tests."""
+    monkeypatch.setattr(CHECK.SLOT, "DISK", tmp_path / "no-disk")
+    monkeypatch.setattr(CHECK.SLOT, "cache_disk", lambda: tmp_path / "no-disk")
 
 
 def slot(name: str, holder: dict | None = None, blocked: str | None = None, upcoming: list | None = None) -> dict:
@@ -97,18 +104,14 @@ def test_otherwise_the_fewest_waiters_ahead_and_with_priority_only_the_priority_
         CHECK.placement(machine([{**slot("d"), "trains": True}]))
 
 
-def test_spare_counts_the_checks_a_machine_could_start_now_which_drive_moves_waiting_trains_onto():
-    """24 Oct 05:28Z: two new empty nodes stood idle while trains waited 1-4 h in other machines' lines; drive reads how many
-    train checks each machine could start now and moves that many waiting trains there."""
-    two = machine([{**slot("a"), "trains": True}, {**slot("b"), "trains": True}, slot("c", HOLDER)])
-    assert CHECK.spare(two, priority=True) == 2 and CHECK.spare(two) == 0            # only=trains slots: a lane check gets none
-    assert CHECK.spare(machine([slot("a"), slot("b")], [waiter(priority=True)]), priority=True) == 1   # one is spoken for
-    assert CHECK.spare(machine([slot("a"), slot("b", blocked="12 GB of memory free, under the 560 GB")]), True) == 1
-    assert CHECK.spare(machine([slot("a"), slot("b")], pools=lean(free=1)), True) == 1                 # one Lean check slot free
-    assert CHECK.spare(machine([slot("a", HOLDER)]), True) == 0
-    assert CHECK.spare(machine(None), True) == 1                                     # no slots file: a check runs at once
-    assert CHECK.spare({**machine([slot("a")]), "deadline_in_s": 60}, True) == 0
-    assert CHECK.spare({"check": {"error": "x"}, "lean": {"pools": None}}, True) == 0
+def test_a_train_that_needs_a_train_slots_memory_skips_a_machine_of_smaller_slots_even_with_one_free():
+    small = machine([{**slot("c"), "mem": 64}, {**slot("d", HOLDER), "mem": 64}])     # cpu-3's lane slots
+    big = machine([{**slot("b", HOLDER), "mem": 300, "trains": True}])                 # a train slot, held
+    got, why, skipped = CHECK.choose([N1, N2], {N1: small, N2: big}, priority=True, min_mem=CHECK.TRAIN_GB)
+    assert got == N2 and "b held" in why and skipped == [f"{N1}: no slot in /workspace/research/locks/slots holds this check's "
+                                                         "300 GB (c 64 GB, d 64 GB): it takes a train slot"]
+    assert CHECK.choose([N1, N2], {N1: small, N2: big}, priority=True)[0] == N1         # a Lean check takes the free small one
+    assert CHECK.placement(machine([{**slot("a"), "mem": None}]), True, CHECK.TRAIN_GB)[0] is True   # no mem=: any size
 
 
 def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
@@ -127,7 +130,7 @@ def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
 
 
 def test_a_machine_whose_deadline_is_nearer_than_a_full_check_is_skipped_by_name():
-    """The lander's ask (9 Oct): node 2 stops at 05:30Z on 10 Oct, so from 03:00Z a full check placed there would be cut off."""
+    """A full check placed on a machine that stops before the check would end is cut off, so that machine is skipped."""
     n1 = machine([slot("c", HOLDER)], [waiter()], pools=lean())
     n2 = {**machine([slot("d")]), "deadline_in_s": CHECK.FULL_CHECK_S - 60}
     got, _, skipped = CHECK.choose([N1, N2], {N1: n1, N2: n2})
@@ -168,8 +171,8 @@ def test_record_on_auto_or_a_list_launches_on_the_machine_chosen(monkeypatch, ca
 
 
 def test_with_no_slot_free_anywhere_auto_launches_twins_on_every_machine_that_can_run_it(monkeypatch, capsys):
-    """9 Oct: four checks waited up to 54 min in node 1's line while a node 2 slot was free, each placed when no slot was free
-    and moved by hand. Now such a check waits in each line as twins (`slot.py --twin`) and runs in the first slot to free."""
+    """A check placed when no slot is free waits in each line as twins (`slot.py --twin`) and runs in the first slot to free,
+    rather than in one machine's line while another's slot frees."""
     docs = {N1: machine([slot("c", HOLDER)], [waiter()], pools=lean()), N2: machine([slot("d", HOLDER)])}
     monkeypatch.setattr(CHECK, "read_slots", lambda names: {n: docs[n] for n in names})
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
@@ -206,8 +209,8 @@ def test_with_no_slot_free_anywhere_auto_launches_twins_on_every_machine_that_ca
 
 
 def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_audit_slots():
-    """6 Oct: quick tiers waited past their timeout in node 1's line, 10 deep, while node 2 had free check slots (#1344). The quick
-    tier takes no Lean audit slot, so a machine whose Lean slots are all held, or can't be read, is no worse for it."""
+    """A quick tier must not wait past its timeout in one machine's line while another has free check slots. The quick tier
+    takes no Lean audit slot, so a machine whose Lean slots are all held, or can't be read, is no worse for it."""
     from research import queue as Q
 
     n1 = machine([slot("a", HOLDER), slot("c", HOLDER)], [waiter() for _ in range(10)], pools=lean())
@@ -288,15 +291,19 @@ def test_the_payload_reads_both_files_from_stdin_where_neither_script_is_on_disk
     (locks / "lean-slots").write_text("check 2\naudit 2\n")
     held = [_hold(locks / "check-c.lock"), _hold(locks / "lean-check-0.lock")]
     env = {"PATH": os.environ["PATH"], "CHECK_SLOTS": str(locks / "slots"), "LEAN_SLOTS": str(locks / "lean-slots")}
-    r = subprocess.run([sys.executable, "-"], input=CHECK.slots_payload(), cwd=tmp_path, env=env, capture_output=True, check=True)
+    floors = b"DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50"      # the payload reads the machine's own disks, which this test can't set
+    assert floors in (payload := CHECK.slots_payload())
+    payload = payload.replace(floors, b"DISK_MIN_INODES, DISK_MIN_GB = 0, 0")
+    r = subprocess.run([sys.executable, "-"], input=payload, cwd=tmp_path, env=env, capture_output=True, check=True)
     doc = json.loads(r.stdout)
+    doc["deadline_in_s"] = None             # the payload reads the machine's own /etc/research/deadline, which this test can't set
     assert [(s["name"], s["holder"]["pid"] if s["holder"] else None, s["blocked"]) for s in doc["check"]["slots"]] == [
         ("c", os.getpid(), None), ("a", None, None)]
     pools = doc["lean"]["pools"]
     assert [s["holder"]["pid"] if s["holder"] else None for s in pools["check"]["slots"]] == [os.getpid(), None]
     assert CHECK.placement(doc) == (True, 0, "check slots: c held, a free; 0 waiting ahead; Lean check: 1 of 2 free")
     (locks / "lean-slots").write_text("check two\n")
-    doc = json.loads(subprocess.run([sys.executable, "-"], input=CHECK.slots_payload(), cwd=tmp_path, env=env,
+    doc = json.loads(subprocess.run([sys.executable, "-"], input=payload, cwd=tmp_path, env=env,
                                     capture_output=True, check=True).stdout)
     assert doc["lean"]["error"].startswith("Refused: ") and doc["check"]["slots"][0]["name"] == "c"
     for fd in held:
@@ -331,10 +338,11 @@ def test_the_view_shows_each_machine_s_slots_windows_lean_slots_and_waiters_then
 
 
 def test_checks_placed_at_once_go_to_different_machines_until_each_shows_in_its_line(tmp_path):
-    """23 Oct 13:04Z: drive's four parallel launches all read cpu-1's one free slot as theirs, and three queued there for an hour
-    while cpu-4's stood free."""
+    """Parallel launches must not all read one machine's one free slot as theirs and queue there while another machine's
+    slot stands free."""
     docs = {N1: machine([slot("a")]), N2: machine([slot("b")])}
-    read = lambda names: json.loads(json.dumps({n: docs[n] for n in names}))
+    def read(names):
+        return json.loads(json.dumps({n: docs[n] for n in names}))
     path, t = tmp_path / "placed.json", [1000.0]
     first = CHECK.place([N1, N2], "a" * 40, True, read=read, path=path, now=lambda: t[0])[1]
     second = CHECK.place([N1, N2], "b" * 40, True, read=read, path=path, now=lambda: t[0])[1]

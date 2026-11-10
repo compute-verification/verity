@@ -1,6 +1,6 @@
 """The served rows (`served_rows`) on the compile slice's corpus-smallkv window: the server's rows as the model runner laid
 them out give the slice's ``srv`` row, and with the row the Commit side registers there, never the prover's own, the slice
-refuses REDTEAM's phase 10 finding 2 (six passes registered where user-1 was admitted at the sixth ask) at ``rows``; the
+refuses six passes registered where user-1 was admitted at the sixth ask at ``rows``; the
 honest run is accepted. The registration's row is bound by b‖c to its leaf, its run root and its index, so the six passes'
 own row isn't the leaf, and the public record holds no row or salt."""
 from __future__ import annotations
@@ -11,7 +11,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR, served_statics as SS
+from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR
+from verity.ml.protocols.certifier import served_statics as SS
 from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice import BOOK
 
 FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
@@ -48,7 +49,7 @@ def test_the_runner_rows_are_the_slices(x):
 
 
 def test_the_slice_refuses_six_passes_under_the_served_rows(x):
-    """The honest run with the registered row in ``srv`` is accepted under the verifier's own ``pub``; REDTEAM's cheap run,
+    """The honest run with the registered row in ``srv`` is accepted under the verifier's own ``pub``; the cheap run,
     six passes charged 17 bits against the honest 22, is accepted at 0x3F with its own rows in ``srv`` (a row that
     isn't the registered one, which the b‖c check refuses) and refused at ``rows`` with the registered row. These are
     the reference's verdicts: the corpus class is past what a test evaluates, and the circuit is its reference at the
@@ -89,9 +90,9 @@ def test_two_windows_and_an_idle_tail(x):
 
 
 def test_the_slices_block_rows_are_the_registered_leaves(x):
-    """At G < P (G = 1 on the corpus's P = 7) the slice's ``srv`` rows are the registration's rows of its blocks: unit w's
-    row ``srv{j}`` is leaf w·(P / G) + j, held there by its b‖c and at no other leaf; the six passes with the registered
-    rows in ``srv0`` … are refused at ``rows``, as at G = P."""
+    """At G < P (G = 1 on the corpus's P = 7) the slice's ``srv`` rows are the registration's rows of its blocks: proof
+    block w's row ``srv{j}`` is leaf w·(P / G) + j, held there by its b‖c and at no other leaf; the six passes with the
+    registered rows in ``srv0`` … are refused at ``rows``, as at G = P."""
     G = 1
     st = CS.with_block(x.st, G)
     S = SimpleNamespace(**st)
@@ -111,10 +112,10 @@ def test_the_slices_block_rows_are_the_registered_leaves(x):
 
 @pytest.mark.parametrize("G", [0, 2, 3, 8])
 def test_a_records_g_that_doesnt_divide_p_is_refused(x, G):
-    """REDTEAM phase 19 #3: the verifier indexes a unit's rows by the public record's G, which `register` holds to divide
+    """The verifier indexes a proof block's rows by the public record's G, which `register` holds to divide
     P; a record whose G doesn't (2 or 3 on P = 7 floors to 3 or 2 blocks a window, 8 to none, 0 divides by zero) is
     refused there too, rather than read as another G's leaves. The tie's statics, which don't hold P, refuse that G
-    too, so no unit is built for a block the registration never has."""
+    too, so no proof block is built for a block the registration never has."""
     with pytest.raises(ValueError, match="dividing P"):
         SR.leaf(x.S, {**x.record, "G": G}, 1, 0)
     with pytest.raises(ValueError, match="dividing P"):

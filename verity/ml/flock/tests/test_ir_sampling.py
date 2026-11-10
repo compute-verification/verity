@@ -1,4 +1,4 @@
-"""C-Flock's lowering of GumbelTopPTokenSelect_v1 (``verity_flock.ir_sampling``): the pieces against the IR primitives, the lane
+"""Flock's lowering of GumbelTopPTokenSelect_v1 (``verity_flock.ir_sampling``): the pieces against the IR primitives, the lane
 unit against the IR composites it is lowered from, a row's words against the IR evaluator on synthetic sets (a row whose last
 BLAKE3 chunk is short included), the staged file's units, the native words, the pin, and the negatives."""
 from __future__ import annotations
@@ -14,17 +14,17 @@ from verity_flock import gf2
 from verity_flock import ir_lower as IL
 from verity_flock import ir_sampling as S
 
-P = pytest.importorskip("verity_vllm.program.registry.prims")
+P = pytest.importorskip("verity.ml.definitions.registry.prims")
 from verity.ml.circuits.evaluation import evaluate  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F  # noqa: E402
 from verity.ml.circuits.ops.scalar import SelectF32  # noqa: E402
-from verity_numerical.bench import lowerings  # noqa: E402
-from verity_numerical.bench import templates as TM  # noqa: E402
-from verity_numerical.bench.generate import generate  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
-from verity_vllm.program.registry import ref_prims as RP  # noqa: E402
-from verity_vllm.program.registry import sampling as SM  # noqa: E402
+from verity_flock import lowerings  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
+from synthetic_sets import synthetic_set  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
+from verity.ml.definitions.registry import ref_prims as RP  # noqa: E402
+from verity.ml.definitions.registry import sampling as SM  # noqa: E402
 
 REG = lowerings.registry("C-Flock")
 SPECIAL = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7FC00123, 0x7F800001, 0xFFC00000, 0xFF800007, 1, 0x80000001,
@@ -134,7 +134,7 @@ def test_the_lane_is_the_pinned_one():
 
 def _set(tmp_path, V, n=3):
     sub = TM.subcircuit(S.TEMPLATE, V=V)
-    return InputSet.open(generate(sub, n, 20260926, tmp_path)["path"])
+    return InputSet.open(synthetic_set(sub, n, 20260926, tmp_path)["path"])
 
 
 def _replay_scan(masked, g, noisy, V):
@@ -260,7 +260,7 @@ def test_a_mutated_netlist_is_caught_by_the_ir_comparison():
     ands = list(range(first + 1, first + low.layout.counts["ands"]))
     caught = 0
     for k in ands[::len(ands) // 48][:48]:
-        lay = IL.Layout(list(low.layout.rows_a), list(low.layout.rows_b), low.layout.const, low.layout.in_groups, low.layout.out_groups,
+        lay = IL.LoweredUnit(list(low.layout.rows_a), list(low.layout.rows_b), low.layout.const, low.layout.in_groups, low.layout.out_groups,
                         low.layout.counts)
         lay.rows_b[k] = sorted(set(lay.rows_b[k]) ^ {k - 1})
         outs, _ = IL.evaluate_layout(lay, ports, len(vecs))
@@ -271,7 +271,7 @@ def test_a_mutated_netlist_is_caught_by_the_ir_comparison():
 CAPTURED = os.environ.get("VERITY_CAPTURED_101_GUMBEL")
 
 
-@pytest.mark.skipif(not CAPTURED, reason="set VERITY_CAPTURED_101_GUMBEL to the captured #101 sampling set's directory")
+@pytest.mark.skipif(not CAPTURED, reason="set VERITY_CAPTURED_101_GUMBEL to the captured Llama-3.2-1B sampling set's directory")
 def test_captured_rows_through_the_units(tmp_path):
     s = InputSet.open(Path(CAPTURED))
     low = S.lane(128256)

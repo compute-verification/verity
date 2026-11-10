@@ -3,11 +3,11 @@
 A workload is one VU family: the coordinate Definition a served GEMM's ``Q_word`` partition cuts it into, at that GEMM's K.
 Its population is ``n_max`` independent instances of that Definition (``population``: core's ``population_program``, each
 instance one unit of ``Q_template_instance`` v0, so the population is one stratum), staged once as one statement; each
-session proves the B units the verifier draws from it by the stratified law, the draw the Lean verifier's soundness covers
+session proves the B units the verifier samples from it by the stratified sampling design, the sample the Lean verifier's soundness covers
 (``instances``). Its unit is the coordinate class the ``Q_word`` partition of a ``Gemm_v2`` Call gives, gate for gate.
 
 ``bf16-k6144`` is the VU family behind GLM-5.3's bf16 GEMMs at hidden 6144 over ``HopperBF16WgmmaDot16_v1``
-(``integrations/vllm/verity_vllm/program/registry/bf16_gemm_check.py``): lm_head and the DSA indexer's ``wk_weights_proj``
+(``verity/ml/definitions/registry/bf16_gemm_check.py``): lm_head and the DSA indexer's ``wk_weights_proj``
 (N = 160) are ``Gemm_v2``, whose coordinate is the VU; the MoE router (N = 256) past 16 tokens is cuBLAS's ``GemmF32Out_v1``
 over the same dot chain, its output the f32 word rather than its bf16 rounding. The sites differ in N, the number of
 coordinates a token row makes, not in the coordinate, so one VU family stands for them. ``fp8-coord-k*`` are served_units' block-scaled FP8
@@ -36,7 +36,7 @@ class Workload:
     sites: dict[str, int | None]
     #: how the point job stages it: ``class-statement`` (verity_flock.class_statement --program-module) or ``served-unit``
     stager: str
-    #: the population's instance count: the units a session's draw is taken from, and the largest B
+    #: the population's instance count: the units a session's sample is taken from, and the largest B
     n_max: int
     #: block bits one coordinate takes in a statement (2^k_log), from staging; the cap is MAX_STATEMENT_BITS / 2^k_log
     k_log: int | None = None

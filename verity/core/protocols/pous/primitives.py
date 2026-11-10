@@ -22,7 +22,7 @@ parent, since walking back needs the dropped `r_j`; anything that reveals a pare
 call state of `2m + 512` bits, more than the two labels it yields.
 
 **Broken modes, kept to replay their attacks** (`tests/test_pous_two_for_one.py`): `XorSponge`, the sponge of the
-15:50Z instantiation (`s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))`, rate `m`, capacity 512, a header block first), from whose states
+first instantiation (`s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))`, rate `m`, capacity 512, a header block first), from whose states
 `Π⁻¹` recovers an absorbed parent (`lean/submissions/sponge-dense`, `dense_two_labels_from_one_state`); and
 `MiyaguchiPreneel` (`s_j = Π(x_j) ⊕ x_j`, `x_j = s_{j−1} ⊕ (B_j ‖ 0)`), whose pre-image `x_j` is a checkpoint that is
 also a masked parent.  Neither is a default anywhere.
@@ -81,7 +81,7 @@ def pi2_keccak_f(m: int) -> int:
     This counts a whole call, which is what the ideal-permutation model charges.  It does not bound an adversary at
     this `Π₂`: each round function is a long SHAKE256 squeeze from a 200-byte post-absorb state, so a prover that keeps
     the five odd rounds' states of a block's last call (1000 B, 1.53% of a 64 KiB label) rebuilds the whole label in
-    481 sequential Keccak-f, with no call and no chain walk (red team, 4 Oct 2026, art:7617c8017e80)."""
+    481 sequential Keccak-f, with no call and no chain walk (the red team's state attack)."""
     half = (2 * m + CAPACITY_BITS) // 16
     return FEISTEL_ROUNDS * ((ROUND_PREFIX_BYTES + half) // SHAKE256_RATE + 1)
 
@@ -274,9 +274,9 @@ class _RateStepper:
 
 @dataclass(frozen=True, slots=True)
 class XorSponge:
-    """**Broken.** The 15:50Z sponge: `s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))` over `pi` of `m + 512` bits, zero IV, blocks the
-    header (zero-filled to `m`), the parents newest first and the pad; the key is the rate.  One state regenerates two
-    labels through `Π⁻¹`."""
+    """**Broken.** The first instantiation's sponge: `s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))` over `pi` of `m + 512` bits, zero
+    IV, blocks the header (zero-filled to `m`), the parents newest first and the pad; the key is the rate.  One state
+    regenerates two labels through `Π⁻¹`."""
 
     params: Params
     pi: Permutation
@@ -656,7 +656,7 @@ IDEAL_DOMAIN = "verity/pous/ideal-model/v1"
 
 @dataclass(slots=True)
 class IdealPermutation:
-    """A lazily sampled uniform permutation of `width` bits, consistent in both directions, drawn from
+    """A lazily sampled uniform permutation of `width` bits, consistent in both directions, sampled from
     `verity.ml.randomness` under `seed`."""
 
     width: int

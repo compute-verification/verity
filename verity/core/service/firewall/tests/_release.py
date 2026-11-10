@@ -1,12 +1,13 @@
 """What this suite's tests share: the paths, the references the Lean is compared with (Python's `verity_flock.firewall`,
 the cases frozen from Rust's `flock_live::release` before the Lean replaced it, in `fixtures/`, and `flock-firewall
-contract` for the send check's verdict), and the strategies that draw records, ops and outer sessions.
+contract` for the send check's verdict), and the strategies that sample records, ops and outer sessions.
 
-Every record drawn is one the firewall wrote (Python's, from a drawn history of ops), or one torn by a crash (its last line
-cut short), with blank lines in it or without its final newline. Strings are any Unicode but lone surrogates, integers are
-below 2^40, and a schedule is any JSON but floats: outside that domain Python and Rust differed from each other (a budget
-that isn't an integer, statements that aren't strings, integers past u64, lines that are JSON but not the firewall's,
-`\\r\\n`), and the Lean reads only the firewall's own lines (`test_the_lean_reads_only_the_firewalls_lines`).
+Every record sampled is one the ZK server wrote (Python's, from a sampled history of ops, registrations among them), or one
+torn by a crash (its last line cut short), with blank lines in it or without its final newline. Strings are any Unicode but
+lone surrogates, integers are below 2^40, a registration's record is lowercase hex after its number, and a schedule is any
+JSON but floats: outside that domain Python and Rust differed from each other (a budget
+that isn't an integer, statements that aren't strings, integers past u64, lines that are JSON but not the ZK server's,
+`\\r\\n`), and the Lean reads only the ZK server's own lines (`test_the_lean_reads_only_the_firewalls_lines`).
 """
 
 from __future__ import annotations
@@ -41,6 +42,10 @@ def _op(fw: FW.Firewall, op: list):
         if name == "slot":
             with fw.slot(*args):
                 return None
+        if name == "register":
+            return fw.register(lambda n: n.to_bytes(8, "big") + bytes.fromhex(args[0]))[0]
+        if name == "registrations":
+            return fw.admit_reads(*args)
         return getattr(fw, name)(*args)
     except FW.Refused as e:
         return {"refused": str(e).removeprefix(REFUSED)}
@@ -66,7 +71,7 @@ def python_op(value: dict) -> dict:
 
 
 def record_of(ops: list[list]) -> str:
-    """The record Python's firewall writes running `ops` from an empty state."""
+    """The record Python's ZK server writes running `ops` from an empty state."""
     with tempfile.TemporaryDirectory() as d:
         fw = FW.Firewall(Path(d))
         for op in ops:
@@ -135,6 +140,15 @@ OP = st.one_of(
     st.builds(lambda s: ["failures", s], STREAM),
     st.builds(lambda s, p: ["slot", s, p], SESSION, PART),
 )
+HEX = st.binary(max_size=3).map(bytes.hex)
+#: the registrations a statement reads, by number, or why its value commitments are none of the server's
+READS = st.one_of(st.lists(st.integers(0, 4), max_size=3), st.lists(st.integers(0, 4), max_size=3),
+                  st.lists(NAT, max_size=2), TEXT)
+#: rule 5's ops, sampled only by `op_input`, so `outer_input`'s samples stay those `fixtures/release-outer.jsonl.gz` was frozen on
+REG_OP = st.one_of(
+    st.builds(lambda h: ["register", h], HEX),
+    st.builds(lambda s, p, r: ["registrations", s, p, r], SESSION, PART, READS),
+)
 
 
 @st.composite
@@ -154,15 +168,24 @@ def torn(draw, text: str) -> str:
 
 
 @st.composite
-def scene(draw, kinds=("served", "budget", "served", "budget", "none")) -> tuple[str, str, str, list[list]]:
+def scene(draw, kinds=("served", "budget", "served", "budget", "none", "registered")) -> tuple[str, str, str, list[list]]:
     """A record, an outer session to ask of it, and the ops aimed at the two, `(record, session, part, aimed)`. Most often
     a recursive session opened and finished, its first k statements released and the next one asked (sometimes after a
     slot of it whose holder died); or a stream's sessions stopped up to its budget, or one short of it, and the stream
-    opened again; or nothing; then a few ops of any kind."""
+    opened again; or registrations numbered and a recursive session's first k statements admitted, each admitting the
+    registrations it reads, and the next one admitted; or nothing; then a few ops of any kind."""
     ops, ask, again = [], None, None
     kind = draw(st.sampled_from(kinds))
     parts, stream = draw(VALID_PARTS), draw(STREAM)
-    if kind == "served":
+    if kind == "registered":
+        again = ["open", stream, parts, draw(st.one_of(st.none(), st.integers(1, 2))), None]
+        ops += [again, ["finish", "r0000"]] + [["register", draw(HEX)] for _ in range(draw(st.integers(0, 4)))]
+        k = draw(st.integers(0, len(parts) - 1))
+        for p in parts[:k]:
+            ops += [["admit", "r0000", p], ["registrations", "r0000", p, draw(READS)], ["release", "r0000", p]]
+        ask = ("r0000", parts[k])
+        ops.append(["admit", *ask])
+    elif kind == "served":
         again = ["open", stream, parts, draw(st.one_of(st.none(), st.integers(1, 3))),
                  draw(st.one_of(st.none(), valid_schedule(len(parts))))]
         k = draw(st.integers(0, len(parts)))
@@ -177,11 +200,15 @@ def scene(draw, kinds=("served", "budget", "served", "budget", "none")) -> tuple
         for i in range(n):
             ops += [again, ["finish", f"r{i:04d}"], ["stop", f"r{i:04d}", parts[0], "cut"]]
         ask = (f"r{max(n - 1, 0):04d}", parts[0])
-    ops += draw(st.lists(OP, max_size=draw(st.sampled_from([0, 0, 0, 2, 5]))))
+    ops += draw(st.lists(st.one_of(OP, REG_OP) if kind == "registered" else OP,
+                         max_size=draw(st.sampled_from([0, 0, 0, 2, 5]))))
     s, p = ask if ask is not None and draw(st.sampled_from([True, True, True, False])) else (draw(SESSION), draw(PART))
     aimed = [["admit", s, p], ["slot", s, p], ["release", s, p], ["finish", s], ["stop", s, p, "cut"]]
     if kind == "budget":
         aimed = [again, ["admit", s, p], ["failures", stream]]
+    elif kind == "registered":
+        aimed = [["registrations", s, p, draw(READS)], ["registrations", s, p, draw(READS)], ["register", draw(HEX)],
+                 ["release", s, p], ["failures", stream]]
     elif again is not None:
         aimed = [["admit", s, p], *aimed, again, ["failures", stream]]
     return draw(torn(record_of(ops))), s, p, aimed
@@ -191,7 +218,7 @@ def scene(draw, kinds=("served", "budget", "served", "budget", "none")) -> tuple
 def op_input(draw) -> dict:
     """`{"op", "record"}`: one of the ops aimed at the scene, or any op."""
     text, _, _, aimed = draw(scene())
-    return {"op": draw(st.one_of(st.sampled_from(aimed), OP)), "record": text}
+    return {"op": draw(st.one_of(st.sampled_from(aimed), OP, REG_OP)), "record": text}
 
 
 PANIC = st.one_of(TEXT, st.builds(lambda c, n: c * n, st.characters(exclude_categories=("Cs",)), st.integers(195, 205)))

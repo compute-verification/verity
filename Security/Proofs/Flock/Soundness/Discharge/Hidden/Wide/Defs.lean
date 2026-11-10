@@ -1,4 +1,19 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `OutputsCommitted` and `OutputsBinding`, widened: the frozen statements
@@ -16,6 +31,8 @@ unit, or a tail's last stage):
 * `…Wide`: a population file with shared rows too (header `shared_rows`, `pop.tables ≠ none`).
 -/
 
+@[expose] public section
+
 open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Hidden
@@ -23,17 +40,18 @@ namespace FlockSoundness.Discharge.Hidden
 /-! ## A tail that returns the outputs -/
 
 /-- **`OutputsCommittedTail`**: `OutputsCommitted` for a circuit whose unit or tail returns the outputs, with a unit per
-template instance at least (`0 < upv`). In a drawn statement `Stmt.setupHidden` accepts, in every satisfying witness of
+template instance at least (`0 < upv`). In a sampled statement `Stmt.setupHidden` accepts, in every satisfying witness of
 its block R1CS at regions containing the executable's, at block `o` and template instance `g` (below `2^⌊log₂ g⌋`),
 output row `j`'s `b ‖ c` in the registered population's public file, at the unit the template instance proves, is the
 commit string of the row prefix and the output words the template instance computes (`outBytes`), under the salt the
-witness holds at the row's `hm96` slot. For a population file without shared rows, a draw whose proved units are in the
+witness holds at the row's `hm96` slot. For a population file without shared rows, a sample whose proved units are in the
 population, and `sha512/row/v1` rows (`hv1`).
 -/
 def OutputsCommittedTail : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     0 < st.c.upv →
@@ -49,7 +67,7 @@ def OutputsCommittedTail : Prop :=
           outBytes (Hm.blockBit (L.model regs) z o) st.c g j)
         (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
 
-/-- **`OutputsBindingTail`** (under `cr/sha-512`): `OutputsBinding` under `OutputsCommittedTail`'s conditions. Two drawn
+/-- **`OutputsBindingTail`** (under `cr/sha-512`): `OutputsBinding` under `OutputsCommittedTail`'s conditions. Two sampled
 statements `Stmt.setupHidden` accepts on one circuit file, public file and tables, and satisfying witnesses of their
 block R1CS, that put one registered unit at block `o`, template instance `g` and at block `o'`, template instance `g'`:
 when the output words the two template instances compute for output row `j` differ, `commitPair` of their rows' bytes
@@ -57,7 +75,8 @@ and salts is a SHA-512 collision. -/
 def OutputsBindingTail : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
@@ -88,11 +107,12 @@ def OutputsBindingTail : Prop :=
 /-- **`OutputsCommittedV2`**: `OutputsCommittedTail` for `sha512/row/v1` or `sha512/row/v2` rows, the row prefix
 the row's own (`HmRow.prefixOf`: `sha512/row/v1`'s for its words, or a bit row's `P(bits)`). For unsegmented rows (no
 `segs`) whose output rows are one per output port, each of whole SHA-512 blocks (a multiple of 64 words), a population
-file without shared rows and a draw whose proved units are in the population. -/
+file without shared rows and a sample whose proved units are in the population. -/
 def OutputsCommittedV2 : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     0 < st.c.upv →
@@ -115,7 +135,8 @@ row's prefix its own (`HmRow.prefixOf`). -/
 def OutputsBindingV2 : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
@@ -146,12 +167,13 @@ def OutputsBindingV2 : Prop :=
 /-! ## Shared rows -/
 
 /-- **`OutputsCommittedWide`**: `OutputsCommittedV2` for a population file with or without shared rows (header
-`shared_rows`: an instance's input row a row of its port's table, `Public.digest`), for a draw whose proved units are in
+`shared_rows`: an instance's input row a row of its port's table, `Public.digest`), for a sample whose proved units are in
 the population. -/
 def OutputsCommittedWide : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop →
     ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     0 < st.c.upv →
@@ -173,7 +195,8 @@ def OutputsCommittedWide : Prop :=
 def OutputsBindingWide : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins coins' : Coins} {tables : List (String × ByteArray)} {d d' : Lean.Json}
     {partition partition' : Option Lean.Json} {program program' : Option ByteArray} {st st' : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
+    tags.typed = false → tags.isTmpl = false →
+    Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop →
     ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →

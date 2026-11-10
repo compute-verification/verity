@@ -1,4 +1,9 @@
-import Models.Nci.Assumptions.Cover
+module
+
+public import Definitions.Nci.Assumptions.Cover
+public import Definitions.Nci.Cover
+import Mathlib.Algebra.Order.AbsoluteValue.Basic
+import Mathlib.Algebra.Order.Field.Basic
 
 /-!
 # The cover theorem: paths into a block
@@ -9,6 +14,8 @@ until it meets an input of `I`, or reaches the path's first gate, which `I` hold
 follows readers forward from any gate of a set with one output gate: indices increase, so the walk ends, at a gate no
 gate of the set reads, the output.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

@@ -1,12 +1,46 @@
-import Proofs.Accounting.TS.Session.Checked.Layer
-import Proofs.Accounting.TS.Session.Held.Known
-import Definitions.Accounting.Served
+module
+
+public import Proofs.Accounting.TS.Session.Checked.Layer
+public import Proofs.Accounting.TS.Session.Held.Known
+public import Definitions.Accounting.Served
+public import Batteries.Data.ByteArray
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A checked unit's proof layer with its served checks, through its C-Flock sessions
+# A checked unit's proof layer with its served checks, through its Flock sessions
 
-`Accounting.TS.Checked.checkedLayer`'s relation asks only that a port named `ok` exist (RT4-LOGIC-29). This layer, at
-the same sessions, takes two steps further:
+`Accounting.TS.Checked.checkedLayer`'s relation asks only that a port named `ok` exist. This layer, at the same
+sessions, takes two steps further:
 
 * (a) **The `ok` rows are the verifier's.** flock-verify `--registered F` registers the `ok` port at known content
   (`Registered.KNOWN_KEY`: h1_prove's rows, each the one word `1` under the public `ok_salt`), and refuses a file whose
@@ -15,16 +49,18 @@ the same sessions, takes two steps further:
   `sha512/row/v2` bytes of the word `1` (`OkVal`), or the registrant's openings exhibit a SHA-512 collision
   (`OkColl`, a fact of the session's commit-time openings, with both preimages in hand: `FlockC3.RegLevels.knownColl`);
 * (b) **The served checks hold.** The relation (`HeldRel`) is `CheckedRel` and, unless `OkColl`, an assignment the
-  circuit's evaluation agrees with on every drawn unit's wires at which every drawn unit's checks hold in the declared
+  circuit's evaluation agrees with on every sampled proof block's wires at which every sampled proof block's checks hold in the declared
   circuit (`Accounting.Served.Held` of `Cd`, at the unit `unitOf u` and the values `dec vals`).
 
-What ties the C-Flock circuit to `Cd` is the premise `Accounting.Assumptions.TS.OkRealizes`: on an assignment the key
+What ties the Flock circuit to `Cd` is the premise `Accounting.Assumptions.TS.OkRealizes`: on an assignment the key
 program's evaluation agrees with at unit `u`, whose `ok` wires carry the `ok` row, `Cd`'s checks of `unitOf u` hold.
-Per RT4-LOGIC-30, unit `u` of the session is one unit of `Cd`, and its partials are proof-layer values.
+Unit `u` of the session is one unit of `Cd`, and its partials are proof-layer values.
 
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
 `Proofs.Accounting.TS.Session`, as `Accounting.TS.Checked`'s do.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Held
 
@@ -58,8 +94,8 @@ def OkColl (s : RowsSession) (ok : String) (ks : Array (Array ℕ × ByteArray))
       ((s.rdU u).ws p) ((s.rdU u).wpath p) = some (a, b) ∧ a ≠ b ∧ H512 a = H512 b
 
 /-- **The checked unit's relation with its served checks**: `CheckedRel`, and the layer value `v` is the registered
-reads of one assignment the circuit's evaluation agrees with on every wire of every drawn unit of `o`, at which every
-drawn unit `u`'s checks hold in the declared circuit `Cd` (`Accounting.Served.Held` at `unitOf u` and `dec vals`); or
+reads of one assignment the circuit's evaluation agrees with on every wire of every sampled proof block of `o`, at which every
+sampled proof block `u`'s checks hold in the declared circuit `Cd` (`Accounting.Served.Held` at `unitOf u` and `dec vals`); or
 the `ok` tie collides (`OkColl`) at the `ok` port's known rows in `known`. -/
 def HeldRel {ι : Type} (s : RowsSession) (o : s.Out) (ok : String) (Cd : Accounting.Compose.Declared ι)
     (cls : ℕ → Accounting.Served.Cls) (unitOf : Fin s.n → ℕ) (dec : (Fin s.Circ.N → Bool) → ι → ℤ)
@@ -70,7 +106,7 @@ def HeldRel {ι : Type} (s : RowsSession) (o : s.Out) (ok : String) (Cd : Accoun
         ∀ u ∈ o.2.1, Accounting.Served.Held Cd cls (unitOf u) (dec vals)) ∨
       ∃ ks, (ok, ks) ∈ known ∧ OkColl s ok ks)
 
-/-- **The held layer through its C-Flock sessions**: proof `i` of round `w` is accepted where flock-verify
+/-- **The held layer through its Flock sessions**: proof `i` of round `w` is accepted where flock-verify
 `--zk --registered` accepts its session at the registered file's known content `known x w i` (`LiveAcceptsZKR`, and
 `Registered.checkKnownAll`, which `flock-verify` runs on `--registered F`), opens the committed rows at the registered
 reads (`openedReg`), and its relation is `HeldRel` at round `w`'s declared circuit `Cd w`. -/

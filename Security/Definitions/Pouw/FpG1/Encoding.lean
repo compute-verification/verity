@@ -1,12 +1,47 @@
-import Mathlib
+module
+
+public import Mathlib.Algebra.Order.Ring.Unbundled.Rat
+public import Mathlib.Data.Finset.Max
+public import Mathlib.Data.Int.Interval
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # FP8-g1 and W4A8-g1: the operand encodings (trusted)
 
-FPX-DESIGN's g1 designs (note:20261019T0817Z-report-fpx-design; `benchmarks/ppl/steps.py`'s `native_linear` with `act`
-or `weight` = `g1`, PR #2710). Each GEMM operand is an integer level `R` that the honest prover picks on a format's
-integer grid, plus a live fair coin `b`, served centred as `R + b − ½`; the int8 MMA multiplies the integers `R + b`,
-and the epilogue takes the coin's two rank-one terms off (`Definitions.Pouw.FpG1.Gemm`).
+The g1 designs (`benchmarks/ppl/steps.py`'s `native_linear` with `act` or `weight` = `g1`). Each GEMM operand is an
+integer level `R` that the honest prover picks on a format's integer grid, plus a live fair coin `b`, served centred as
+`R + b − ½`; the int8 MMA multiplies the integers `R + b`, and the epilogue takes the coin's two rank-one terms off
+(`Definitions.Pouw.FpG1.Gemm`).
 
 * `E4M3Nat`, `E2M1x2Nat`: E4M3's non-negative integers (at most four significant bits, at most 448, its largest finite
   value) and twice E2M1's non-negative values (at most two significant bits, at most 12: `{0, 1, 2, 3, 4, 6, 8, 12}`).
@@ -16,16 +51,18 @@ and the epilogue takes the coin's two rank-one terms off (`Definitions.Pouw.FpG1
   below when `v − lo ≤ hi − v`). It is the honest encoder's choice only. No check reads it: GPTQ and a clip search
   pick other levels on the same grid, and the Program checks the level's grid, not how it was picked.
 * `Coin`: a live fair coin, `0` or `1`, the record's operand bit (co32c's).
-* `Entry`: an operand entry as a proof unit's values carry it: FP8-g1's E4M3 level and coin, W4A8-g1's weight (an
+* `Entry`: an operand entry as a proof block's values carry it: FP8-g1's E4M3 level and coin, W4A8-g1's weight (an
   integer UE4M3 block scale `m`, a doubled E2M1 level `q` and a coin), or the record's Dither int8 activation (`⌊v⌋`
   and its coin, served uncentred). `Entry.int` is what the int8 MMA reads, `Entry.offset` the centring (`½`, `½`,
   `0`) and `Entry.served = Entry.int − Entry.offset` the value the served model multiplies.
-* `Grids`, `Grids.On`: a device's g1 grids (sm_120: activations to 120, weights to 60, block scales to 5; B200 and
-  H200 on Dither-2S: 120, 120 and 10) and an entry on them at its side: a level of its format's grid plus a coin.
-  sm_120's 60 and 5 are FPX-DESIGN's, derived for Dither-C's co32c (7-bit weights), not for sm_120's record H1
-  (co32c-u16, weights to ±110), so on H1 they are conservative; g1's values fit both (RT2-FP-2,
-  note:20261019T1100Z-draft-rt2-fp). No Program checks `Grids.On`: it describes what an honest g1 prover commits.
+* `Grids`, `Grids.On`: a device's g1 grids (sm_120: activations to 120, weights to 60, block scales to 5; B200 and H200
+  on Dither-2S: 120, 120 and 10) and an entry on them at its side: a level of its format's grid plus a coin. sm_120's 60
+  and 5 were derived for Dither-C's co32c (7-bit weights), not for sm_120's record H1 (co32c-u16, weights to ±110), so
+  on H1 they are conservative; g1's values fit both. No Program checks `Grids.On`: it describes what an honest g1 prover
+  commits.
 -/
+
+@[expose] public section
 
 namespace Pouw.FpG1
 
@@ -68,7 +105,7 @@ abbrev Coin : Type := Fin 2
 plus the coin. -/
 def fp8 (B : ℕ) (s x : ℚ) (b : Coin) : ℤ := rn (e4m3Grid B) (x / s) + (b : ℕ)
 
-/-- **An operand entry** as a proof unit's values carry it:
+/-- **An operand entry** as a proof block's values carry it:
 * `fp8 R b`: FP8-g1, an E4M3 integer level `R` and its coin, served `R + b − ½`;
 * `fp4 m q b`: W4A8-g1's weight, an integer UE4M3 block scale `m`, a doubled E2M1 level `q` and its coin, served
   `m·q + b − ½`;
@@ -111,8 +148,8 @@ structure Grids where
 namespace Grids
 
 /-- **sm_120 (RTX PRO 6000)**: activations on E4M3's integers to 120, weights to 60 and W4A8-g1's block scales to 5
-(`steps.py`'s `e4m3i60` and `nvi5`), so that a weight moved by its coin stays in co32c's 7-bit weights. FPX-DESIGN
-derived these for Dither-C's co32c; on H1 (co32c-u16, weights to ±110) they are conservative (RT2-FP-2). -/
+(`steps.py`'s `e4m3i60` and `nvi5`), so that a weight moved by its coin stays in co32c's 7-bit weights. They were
+derived for Dither-C's co32c; on H1 (co32c-u16, weights to ±110) they are conservative. -/
 def sm120 : Grids := ⟨120, 60, 5⟩
 
 /-- **B200 and H200 on Dither-2S**: both sides on E4M3's integers to 120 and W4A8-g1's block scales to 10, so that an

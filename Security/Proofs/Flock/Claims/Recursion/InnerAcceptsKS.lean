@@ -1,5 +1,43 @@
-import Proofs.Flock.Claims.Recursion.InnerAccepts
-import Proofs.Flock.Claims.Recursion.FlockKSDeploy
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSAcc
+public import Proofs.Flock.Claims.Recursion.FlockKSDeploy
+public import Proofs.Flock.Claims.Recursion.InnerAbort
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.Abort
 
 /-!
 # The recursion's KS where the inner view may reject on a collision
@@ -10,17 +48,19 @@ recorded calls collide. This file proves `InnerKS` at the same bound, `γ_eA` un
 one more code fact, `RoundsMargin`: on an accepted run the inner protocol takes a round and the compiled verifier at
 least three rounds past the inner ones.
 
-* The inner stage fails where `E^rep` fails against `P_I`'s aborting runs, at a bad rerun, or where the judged draw's
+* The inner stage fails where `E^rep` fails against `P_I`'s aborting runs, at a bad rerun, or where the judged sample's
   inner view rejects (`PrBadGood_le_abort_rej`): `InnerAccepts` only closed the last case.
-* A bad draw costs at most `√(k_I·Σ_{j<k_I} Pr[forkColl j])` (`Pr_bad_le_fork`): the differing openings are collisions
+* A bad sample costs at most `√(k_I·Σ_{j<k_I} Pr[forkColl j])` (`Pr_bad_le_fork`): the differing openings are collisions
   at the inner rounds' forks only.
-* A rejecting judged draw is a collision at every fork (`Pr_innerRejects_le_fork`), so at the forks past the inner
+* A rejecting judged sample is a collision at every fork (`Pr_innerRejects_le_fork`), so at the forks past the inner
   rounds, which `Pr_bad_le_fork` leaves unused, it costs at most a third of their sum. Those forks' spare mass covers
   it (`sqrt_margin`), so `N_I·Pr[bad] + Pr[rejects] ≤ N_I·√(k_I·k(x)·Pr[Be])` (`bad_rej_le`), the term `InnerKS`
   holds for bad reruns alone.
 
 `KSFlock_of_flockKS_V_coll` is `KSFlock_of_flockKS_V` with `InnerAcceptsColl` and the margin for `InnerAccepts`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -36,7 +76,7 @@ def RoundsMargin (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) : Prop :
   ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
     0 < I.V.k (xI D x) ∧ I.V.k (xI D x) + 3 ≤ D.V.k x
 
-/-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le`'s argument, stopped before the inner
+/-- **A sample is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le`'s argument, stopped before the inner
 rounds' forks are bounded by all of `Be`'s. -/
 theorem Pr_bad_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
@@ -44,44 +84,8 @@ theorem Pr_bad_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {D
     (P : Prover Ω) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
       Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (forkColl H D I DO decO P x j)) := by
-  have h1 : Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
-      ∑ j : Fin (I.V.k (xI D x)), Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-        (eoOut H D I DO decO P x t.1 t.2).isSome = true ∧
-          eoMsg H D I DO decO P x t.1 t.2 j ≠ opAt H D I DO decO P x t.1 j ((List.range j).map (coinSeq t.2.1))) := by
-    refine (Pr_mono fun t ht => ?_).trans (Pr_exists_le _)
-    obtain ⟨hs, hna⟩ := ht
-    simp only [Agrees, not_forall] at hna
-    obtain ⟨j, hj, hne⟩ := hna
-    exact ⟨⟨j, hj⟩, hs, hne⟩
-  have h2 : ∀ j : Fin (I.V.k (xI D x)), Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-      (eoOut H D I DO decO P x t.1 t.2).isSome = true ∧
-        eoMsg H D I DO decO P x t.1 t.2 j ≠ opAt H D I DO decO P x t.1 j ((List.range j).map (coinSeq t.2.1))) ≤
-      Real.sqrt (Pr (OpensDiffer H D I DO decO P x j)) := fun j => by
-    have hp := Pr_plur_fork j (fun ω d => (eoOut H D I DO decO P x ω d).isSome = true)
-      (fun ω d => eoMsg H D I DO decO P x ω d j)
-    refine (le_of_eq (Pr_congr fun t => ?_)).trans (hp.trans (Real.sqrt_le_sqrt (Pr_mono fun t ht => ?_)))
-    · simp only [opAt, fork_preCoins]
-    · obtain ⟨hg₁, hg₂, hf⟩ := ht
-      obtain ⟨ws, hws⟩ := Option.isSome_iff_exists.1 hg₁
-      obtain ⟨ws', hws'⟩ := Option.isSome_iff_exists.1 hg₂
-      refine ⟨ws, ws', eoGives_of_some hws, eoGives_of_some hws', ?_⟩
-      simpa [eoMsg, hws, hws', dec] using hf
-  have hcs := Real.sum_sqrt_mul_sqrt_le (Finset.univ : Finset (Fin (I.V.k (xI D x))))
-    (f := fun _ : Fin (I.V.k (xI D x)) => (1 : ℝ)) (g := fun j => Pr (OpensDiffer H D I DO decO P x j))
-    (fun _ => zero_le_one) (fun j => Pr_nonneg _)
-  simp only [Real.sqrt_one, one_mul, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
-    mul_one] at hcs
-  calc Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2)
-      ≤ ∑ j : Fin (I.V.k (xI D x)), Real.sqrt (Pr (OpensDiffer H D I DO decO P x j)) :=
-        h1.trans (Finset.sum_le_sum fun j _ => h2 j)
-    _ ≤ Real.sqrt (I.V.k (xI D x)) * Real.sqrt (∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j)) :=
-        hcs
-    _ = Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j)) :=
-        (Real.sqrt_mul (Nat.cast_nonneg _) _).symm
-    _ ≤ Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (forkColl H D I DO decO P x j)) :=
-        Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
-          (Finset.sum_le_sum fun j _ => Pr_mono fun t => forkColl_of_opening hV hO hT decO x P t)
-          (Nat.cast_nonneg _))
+  exact (Pr_bad_le_opens H D I DO decO x P).trans (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
+    (Finset.sum_le_sum fun j _ => Pr_mono fun t => forkColl_of_opening hV hO hT decO x P t) (Nat.cast_nonneg _)))
 
 /-- **Spare mass under the root**: `n·√(a·A) + E ≤ n·√(a·(A+B))` when `B` holds three `E`s, `E ≤ 1`, `A ≤ a`,
 `a ≥ 1` and `n ≥ 1`, since `(√(a·A) + E)² ≤ a·A + 2a·E + a·E`. -/
@@ -114,7 +118,7 @@ theorem unifMap_drop {Ω R C Q : Type} [Fintype Ω] [Fintype R] [Fintype C] [Fin
   exact (UnifMap.equiv e).comp hfst
 
 /-- **The inner stage fails where `E^rep` fails against `P_I`'s aborting runs, at a bad rerun, or where the judged
-draw's inner view rejects**: `PrBadGood_le_abort`'s argument, where the judged draw's acceptance is read off the draw
+sample's inner view rejects**: `PrBadGood_le_abort`'s argument, where the judged sample's acceptance is read off the sample
 where its inner view doesn't reject, in place of `InnerAccepts`. -/
 theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decC : Msg → Msg → Coin} (hV : InnerViewRun H D I DO) (hpc : PublicCoin H I decC) (hR : InnerRounds D I)
@@ -219,11 +223,11 @@ theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
       (InnerRejects H D I DO decO P x)
   linarith
 
-/-- **Bad reruns and a rejecting judged draw together cost what `InnerKS` holds for bad reruns**:
-`N_I·Pr[bad] + Pr[rejects] ≤ N_I·√(k_I·k(x)·Pr[Be])`. A bad draw costs at most `√(k_I·A)`, `A` the inner rounds'
-forks' collisions (`Pr_bad_le_fork`); a rejecting draw at most each fork's, so a third of `B`, the forks' past the
+/-- **Bad reruns and a rejecting judged sample together cost what `InnerKS` holds for bad reruns**:
+`N_I·Pr[bad] + Pr[rejects] ≤ N_I·√(k_I·k(x)·Pr[Be])`. A bad sample costs at most `√(k_I·A)`, `A` the inner rounds'
+forks' collisions (`Pr_bad_le_fork`); a rejecting sample at most each fork's, so a third of `B`, the forks' past the
 inner rounds (`Pr_innerRejects_le_fork`, `RoundsMargin`), and `k(x)·Pr[Be] = A + B` (`sqrt_margin`). Where no run is
-accepted, no draw rejects, and `Pr_bad_le` alone gives it. -/
+accepted, no sample rejects, and `Pr_bad_le` alone gives it. -/
 theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
     (hT : CallsTrue H D I DO) (hR : InnerRounds D I) (hA : InnerAcceptsColl H D I DO) (hN0 : CallsNil H D)
@@ -282,7 +286,7 @@ theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : 
     _ = NI D I x * Real.sqrt (I.V.k (xI D x) * D.V.k x * PrBe H D I DO decO P x) := by
         rw [mul_assoc, htot, hsplit]
 
-/-- **`InnerKS` from `Inner.KSAbort` where V* meets `InnerAcceptsColl`**: `innerKS_of_KSAbort`, with the judged draw's
+/-- **`InnerKS` from `Inner.KSAbort` where V* meets `InnerAcceptsColl`**: `innerKS_of_KSAbort`, with the judged sample's
 rejection paid from the spare forks (`PrBadGood_le_abort_rej`, `bad_rej_le`), at the same bound. -/
 theorem innerKS_of_KSAbort_coll [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {opening : Opening} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)

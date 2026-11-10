@@ -22,7 +22,9 @@ For `suites.py`'s per-test verdicts it also records each test that passed (every
 seconds, each test that failed, and which of the suite's `test_*.py` files were opened while a test module was collected or
 its tests ran (under `"*"` when neither: a session fixture, a conftest). It deselects the tests `VERITY_SUITE_REUSE` names,
 whose passes `suites.py` reuses, and in an xdist worker it moves the longest tests (`VERITY_SUITE_HEAVY`) to the heads of the
-workers' shares: an order only, which parallel suites declare their outcomes don't depend on. It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
+workers' shares: an order only, which parallel suites declare their outcomes don't depend on. Under `suites.py --files` it
+collects only the test files of the run's part (`VERITY_SUITE_PART`, `in_part`), or of a part by test id deselects the tests
+whose node id hashes to another part (`id_part`), and reports how many it left out (`part_out`). It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
 trace their own reads (`child/`), and in a child this process forks it writes each such read at once to `VERITY_SUITE_READS`
 (`child/verity_suite_reads.py`): a fork's memory never comes back, and one that ends through `os._exit` flushes nothing.
 
@@ -36,6 +38,7 @@ Two kinds of skip fail instead: one for an unreachable evidence store under a re
 from __future__ import annotations
 
 import atexit
+import hashlib
 import importlib.metadata
 import importlib.util
 import json
@@ -54,7 +57,8 @@ SLOW_S = 5.0
 STORE_UNREACHABLE = "the evidence store is not reachable"
 _STORE_REQUIRED = os.environ.get("VERITY_STORE_REQUIRED") == "1"
 _KEY = "verity_suite_guard"
-_ACTIVE = bool(os.environ.get("VERITY_SUITE_ROOT") and os.environ.get("VERITY_SUITE_REPORT"))
+_REPORT = os.environ.get("VERITY_SUITE_REPORT")
+_ACTIVE = bool(os.environ.get("VERITY_SUITE_ROOT") and _REPORT)
 
 _root = os.path.realpath(os.environ.get("VERITY_SUITE_ROOT", ""))
 _watch = frozenset(os.path.normpath(os.path.join(_root, p)) for p in json.loads(os.environ.get("VERITY_SUITE_WATCH", "[]")))
@@ -72,8 +76,8 @@ _current = "*"                                                   # the test modu
 _test = ""                                                       # the node id of the test running, if one is
 _reads: dict[str, set[str]] = {}                                 # test module (or "*") -> other test modules it opened
 #: node id -> seconds of its setup and call, None once a phase did not pass. Setup counts: a module-scoped fixture's setup goes
-#: to the first test that needs it, and ordering by call alone started those late (test_lean_witness, 12 Oct: 138 s of calls
-#: behind 1,270-1,475 s of `f1` setup per worker). A test enters only once its call passed: one stopped mid-call never counts
+#: to the first test that needs it, and ordering by call alone started those late (a module with 138 s of calls behind
+#: 1,270-1,475 s of fixture setup per worker). A test enters only once its call passed: one stopped mid-call never counts
 _outcomes: dict[str, float | None] = {}
 _setup_s: dict[str, float] = {}                                  # node id -> seconds of its passed setup, until its call reports
 _failed: set[str] = set()
@@ -250,8 +254,8 @@ def pytest_runtest_protocol(item, nextitem):
 
 
 def heavy_first(nodeids: list[str], heavy: list[str], workers: int) -> list[int]:
-    """The order (indices into ``nodeids``) that starts each of the ``heavy`` tests (longest first) at the head of its own
-    worker's first share under xdist's `worksteal` with ``workers`` workers, the other tests in collection order. `worksteal`
+    """The order (indices into ``nodeids``) that starts the first ``workers`` of the ``heavy`` tests (longest first) found in
+    ``nodeids`` each at the head of its own worker's first share under xdist's `worksteal`, the other tests in collection order. `worksteal`
     splits the collection into contiguous shares, one per worker, and steals from a share's tail, so a long test deep in a share
     starts late and ends the run late."""
     starts, at = [], 0
@@ -270,8 +274,14 @@ def heavy_first(nodeids: list[str], heavy: list[str], workers: int) -> list[int]
 
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session, config, items) -> None:
-    """Deselect the tests `VERITY_SUITE_REUSE` names; in an xdist worker, start the longest of those left at the heads of the
-    workers' shares (`VERITY_SUITE_HEAVY`, longest first; every worker orders its collection alike, as xdist requires)."""
+    """Deselect the tests of the other parts of a part by test id (`id_part`), then those `VERITY_SUITE_REUSE` names; in an xdist
+    worker, start the longest of those left at the heads of the workers' shares (`VERITY_SUITE_HEAVY`, longest first; every
+    worker orders its collection alike, as xdist requires)."""
+    global _part_out
+    if _id_part is not None and (out := [i for i in items if id_part(i.nodeid, _id_part[1]) not in _id_part[0]]):
+        _part_out = len(out)
+        config.hook.pytest_deselected(items=out)
+        items[:] = [i for i in items if id_part(i.nodeid, _id_part[1]) in _id_part[0]]
     if reuse := os.environ.get("VERITY_SUITE_REUSE"):
         with open(reuse) as f:
             ids = set(json.load(f))
@@ -284,6 +294,48 @@ def pytest_collection_modifyitems(session, config, items) -> None:
         with open(heavy) as f:
             order = heavy_first([i.nodeid for i in items], json.load(f), workers)
         items[:] = [items[i] for i in order]
+
+
+def _load_part() -> dict | None:
+    if not (_ACTIVE and (f := os.environ.get("VERITY_SUITE_PART"))):
+        return None
+    with open(f) as fh:
+        return json.load(fh)
+
+
+_part_doc = _load_part()
+#: a part by test file: (the suite's directory, `in_part`'s arguments)
+_part = ((_part_doc["dir"], (set(_part_doc["ks"]), _part_doc["m"], frozenset(_part_doc["mine"]), frozenset(_part_doc["every"])))
+         if _part_doc is not None and _part_doc.get("by") != "id" else None)
+#: a part by test id: (its ks, m)
+_id_part = (set(_part_doc["ks"]), _part_doc["m"]) if _part_doc is not None and _part_doc.get("by") == "id" else None
+_part_out = 0                                                    # the collected tests of the other parts by id, deselected
+
+
+def id_part(nodeid: str, m: int) -> int:
+    """The part, 1..``m``, of a suite in parts by test id (`suites.id_part_of`) that runs test ``nodeid`` (from the suite's
+    directory): by its sha256, as circuit-check shards its targets, so every test the suite's collection finds runs in exactly
+    one part on any machine."""
+    return 1 + int.from_bytes(hashlib.sha256(nodeid.encode()).digest()[:8], "big") % m
+
+
+def in_part(rel: str, ks: set[int], m: int, mine: frozenset, every: frozenset) -> bool:
+    """Whether test file ``rel`` (from the suite's directory) is in parts ``ks`` of ``m``: by `suites.partition`'s assignment
+    (``mine`` of ``every``), and a file pytest collects that it doesn't list by its path's hash, so every file the suite's own
+    collection finds runs in exactly one part."""
+    if rel in every:
+        return rel in mine
+    return int(hashlib.sha256(rel.encode()).hexdigest()[:8], 16) % m + 1 in ks
+
+
+def pytest_ignore_collect(collection_path, config):
+    """Under `suites.py --files` (`VERITY_SUITE_PART`): a test file outside the run's part by file isn't collected, nor imported
+    (a part by test id collects every file)."""
+    name = collection_path.name
+    if _part is None or not name.endswith(".py") or not (name.startswith("test_") or name.endswith("_test.py")):
+        return None
+    rel = os.path.relpath(collection_path, _part[0]).replace(os.sep, "/")
+    return None if in_part(rel, *_part[1]) else True
 
 
 def _ours(name: str) -> bool:
@@ -315,7 +367,7 @@ def importorskip(modname: str, minversion: str | None = None, reason: str | None
             pytest.fail(f"pytest.importorskip({modname!r}): {e.name} is not importable, and {e.name.partition('.')[0]} is this "
                         "checkout's, so it moved or is gone. Import it from where it is now, plainly: importorskip is for a "
                         "third-party package an install may lack", pytrace=False)
-    except Exception:
+    except Exception:  # noqa: BLE001  (any other failure is pytest's importorskip's to report, below)
         pass
     return _pytest_importorskip(modname, minversion, reason, exc_type=exc_type)
 
@@ -359,11 +411,12 @@ def pytest_runtest_logreport(report) -> None:
 @pytest.hookimpl(optionalhook=True)
 def pytest_testnodedown(node, error) -> None:
     """In the controller, for each xdist worker as it finishes: take the files it read outside the inputs."""
-    global _workers_untraced
+    global _workers_untraced, _part_out
     record = (getattr(node, "workeroutput", None) or {}).get(_KEY)
     if record is None:
         _unguarded.append(node.gateway.id)
     else:
+        _part_out = max(_part_out, record.get("part_out", 0))
         for p, m in record["outside"].items():
             _outside.setdefault(p, m)
         _watched.update(record["watched"])
@@ -385,14 +438,16 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     reads = {m: sorted(files) for m, files in sorted(_reads.items())}
     if hasattr(config, "workerinput"):
         config.workeroutput[_KEY] = {"outside": dict(sorted(_outside.items())), "watched": sorted(_watched), "reads": reads, **used,
-                                     "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(_untraced.items())}}
+                                     "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(_untraced.items())},
+                                     "part_out": _part_out}
         return
     used = {k: sorted(set(v) | _record[k]) for k, v in used.items()}
     passed = {n: round(s, 3) for n, s in sorted(_outcomes.items()) if s is not None}
     untraced = _untraced if _workers_untraced is None else _workers_untraced     # a controller's own programs are its workers
     payload = json.dumps({"counts": _counts, "outside": dict(sorted(_outside.items())), "unguarded": _unguarded, "unmarked_slow": _slow,
                           "watched": sorted(_watched), "passed": passed, "failed": sorted(_failed), "reads": reads, **used,
-                          "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(untraced.items())}},
+                          "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(untraced.items())},
+                          "part_out": _part_out},
                          indent=1)
-    with open(os.environ["VERITY_SUITE_REPORT"], "w") as f:
+    with open(_REPORT, "w") as f:
         f.write(payload)

@@ -1,7 +1,7 @@
 #!/bin/bash
 # First boot of the Nebius server, as root, from cloud-init's runcmd (launch.sh embeds it); safe to run again.
 #
-#   - sshd: keys only, no root, only $VY_USER;
+#   - sshd: keys only, no root, only $VY_USER, and room for many concurrent connections (MaxStartups, MaxSessions);
 #   - the data disk (/dev/disk/by-id/virtio-data) is formatted ONLY when it holds no filesystem, and mounted at /workspace, where
 #     the tooling already looks: /workspace/hf (HF_HOME, the weight cache), /workspace/research (the research root),
 #     /workspace/ramlock (--mem-gb reservations), /workspace/cp (the vLLM integration's build root, as on a RunPod pod: its
@@ -24,13 +24,52 @@ PermitRootLogin no
 AllowUsers $U
 X11Forwarding no
 EOF
-systemctl reload ssh || systemctl reload sshd || true
+# sshd keeps the first value it reads; on the nodes a MaxStartups in a drop-in didn't take effect (the main file's own line won),
+# and at the default 10:30:100 ssh from runs and agents was refused at random. So both go first in the main file.
+sed -i -E '/^[[:space:]]*#?[[:space:]]*(MaxStartups|MaxSessions)[[:space:]]/d' /etc/ssh/sshd_config
+sed -i '1i MaxStartups 200:30:400\nMaxSessions 64' /etc/ssh/sshd_config
+# Inbound IPv4 TCP packets that carry IP options are dropped before anything sees them (normal traffic never carries them),
+# and MPTCP stays off; deploy.toml installs the same three files on running nodes.
+mkdir -p /etc/vy
+cat > /etc/vy/drop-ipv4-options.nft <<'EOF'
+add table ip vy_drop_ipv4_options
+delete table ip vy_drop_ipv4_options
+table ip vy_drop_ipv4_options {
+  chain prerouting {
+    type filter hook prerouting priority -300; policy accept;
+    meta l4proto tcp ip hdrlength > 5 counter drop
+  }
+}
+EOF
+cat > /etc/systemd/system/vy-drop-ipv4-options.service <<'EOF'
+[Unit]
+Description=Drop inbound IPv4 TCP packets that carry IP options
+DefaultDependencies=no
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/vy/drop-ipv4-options.nft
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo 'net.mptcp.enabled = 0' > /etc/sysctl.d/90-vy-mptcp-off.conf
+command -v nft > /dev/null || { apt-get update -q && apt-get install -y -q nftables; }
+systemctl daemon-reload
+systemctl enable vy-drop-ipv4-options.service
+systemctl restart vy-drop-ipv4-options.service
+sysctl -q -p /etc/sysctl.d/90-vy-mptcp-off.conf
+sshd -t && { systemctl reload ssh || systemctl reload sshd || true; }
 
 for _ in $(seq 60); do [ -e "$DEV" ] && break; sleep 2; done
 [ -e "$DEV" ] || { log "no data disk at $DEV"; exit 1; }
 if [ -z "$(blkid -o value -s TYPE "$DEV" || true)" ]; then
   log "formatting $DEV (it holds no filesystem)"
-  mkfs.ext4 -q -L vy-data -m 0 -i 262144 -E lazy_itable_init=1,lazy_journal_init=1 "$DEV"
+  # one inode per 64 KiB: at 256 KiB a 2 TB disk ran out of inodes with 46% of its bytes used, a Lean build tree being 0.5-1M inodes
+  mkfs.ext4 -q -L vy-data -m 0 -i 65536 -E lazy_itable_init=1,lazy_journal_init=1 "$DEV"
 fi
 mkdir -p /workspace
 grep -q ' /workspace ' /etc/fstab || echo "LABEL=vy-data /workspace ext4 defaults,noatime,nofail,x-systemd.device-timeout=120 0 2" >> /etc/fstab
@@ -38,23 +77,36 @@ mountpoint -q /workspace || mount /workspace
 install -d -o "$U" -g "$U" /workspace/hf /workspace/hf/hub /workspace/hf/prefetch /workspace/research /workspace/ramlock \
   /workspace/cache /workspace/cache/uv /workspace/cp
 
-# TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB; four at once filled it on vy-nebius-1 (6 Oct)
+# TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB, so a few at once would fill it
 install -d -m 1777 -o root -g root /workspace/tmp
+# the check cache (~/.cache/verity-check, a busy node's Lean build trees: 150 GB and more) lives on /workspace as well; on the
+# root disk a Security build filled it mid-run. A real directory there is the node's live cache: it is moved with its slots
+# drained, never here.
+CC=$(getent passwd "$U" | cut -d: -f6)/.cache/verity-check
+install -d -o "$U" -g "$U" /workspace/research/cache /workspace/research/cache/verity-check "$(dirname "$CC")"
+if [ ! -e "$CC" ] && [ ! -L "$CC" ]; then
+  ln -sT /workspace/research/cache/verity-check "$CC" && chown -h "$U:$U" "$CC"
+elif [ ! -L "$CC" ]; then
+  log "$CC is a directory on the root disk: move it onto /workspace/research/cache with the node's check slots drained"
+fi
 if [ -n "${VY_FS_TAG:-}" ]; then   # a shared filesystem launch.sh attached (NEBIUS_FILESYSTEM_ID), shared by every VM it is attached to
   mkdir -p /workspace/fs
   grep -q ' /workspace/fs ' /etc/fstab || echo "$VY_FS_TAG /workspace/fs virtiofs defaults,nofail 0 0" >> /etc/fstab
   mountpoint -q /workspace/fs || mount /workspace/fs
   chown "$U:$U" /workspace/fs
 fi
-echo 'd /workspace/tmp 1777 root root 10d' > /etc/tmpfiles.d/workspace-tmp.conf
+# 12 h, not 10 d: every job's TMPDIR, so a suite's dead pytest temp trees cost inodes until they age out
+echo 'd /workspace/tmp 1777 root root 12h' > /etc/tmpfiles.d/workspace-tmp.conf
 touch /etc/environment
-for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID TMPDIR=/workspace/tmp; do
+# UV_SYSTEM_CERTS (the pinned uv's name for what was --native-tls): uv reads the system trust store, not the roots it ships
+for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID TMPDIR=/workspace/tmp \
+    UV_SYSTEM_CERTS=1; do
   grep -q "^${kv%%=*}=" /etc/environment || echo "$kv" >> /etc/environment
 done
 
 echo 'd /run/gpu-lease 1777 root root -' > /etc/tmpfiles.d/gpu-lease.conf
 systemd-tmpfiles --create /etc/tmpfiles.d/gpu-lease.conf
-# gpu-lease hands out this VM's GPUs: a `research run --on` here sees none unless it asks with --gpus N (research.remote, INF-55).
+# gpu-lease hands out this VM's GPUs: a `research run --on` here sees none unless it asks with --gpus N (research.remote).
 # The cluster's nodes say otherwise in /etc/vy/direct-gpus (cluster_up.sh), which the runner reads first.
 # vy-gpu-adopt holds the lease of a GPU some process uses without one, until it exits, and logs it (gpu_adopt.py).
 install -d -m 755 /etc/vy
@@ -80,9 +132,18 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 # python3-numpy: `python3 tools/verity/lean/check.py --update` runs PoUW's vector generators, which import numpy, under that
-# python3 (node 2 and cpu-1 lacked it, 11 Oct). python3.12-dev and build-essential: Triton compiles cuda_utils.c against
-# Python.h at a vLLM engine's first start (vy-glm53-eu 16 Oct and vy-glm53-eu2 17 Oct lacked it; circuits)
+# python3. python3.12-dev and build-essential: Triton compiles cuda_utils.c against Python.h at a vLLM engine's first start
 apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev build-essential util-linux ripgrep
+# The trust store: the Nebius images ship with apt's daily timers off, so ca-certificates stayed at the image's and
+# kept roots Ubuntu had removed. Upgrade it now, and let unattended-upgrades keep it, and only it, current: no driver or kernel
+# package moves under a run. Strict: a whitelist that isn't only raises its packages' priority and upgrades everything else
+# too. `research deploy drift` lists a node that still trusts a distrusted root.
+apt-get install -y -q --only-upgrade ca-certificates 'libnss3*'
+cat > /etc/apt/apt.conf.d/52vy-trust <<'EOF'
+Unattended-Upgrade::Package-Whitelist { "ca-certificates"; "libnss3"; };
+Unattended-Upgrade::Package-Whitelist-Strict "true";
+EOF
+systemctl enable --now apt-daily.timer apt-daily-upgrade.timer
 UV_VERSION=0.12.20        # tools/verity/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
 [ "$(uv --version 2> /dev/null | cut -d' ' -f2)" = "$UV_VERSION" ] \
   || curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh

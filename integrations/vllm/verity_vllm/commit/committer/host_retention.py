@@ -67,10 +67,10 @@ class _HostWindows:
 
 
 class _HostRanges:
-    """[R17 fp8, R17-5] The raw bytes of one step retained on host as pinned BYTE RANGES of the step stream (retain=host with
+    """The raw bytes of one step retained on host as pinned BYTE RANGES of the step stream (retain=host with
     `VERITY_RETAIN_EXCLUDE`): the chunk-aligned interior of every tensor whose value family is excluded (the FA3 hidden M1 plane at
     3,545 tokens: 93 % of the prefill step) is NOT copied off the staging window -- those leaves open by REPLAY against the original
-    root (R17-5); every other chunk (module outputs, the boundary chunks an excluded tensor shares with its neighbours) is kept and
+    root; every other chunk (module outputs, the boundary chunks an excluded tensor shares with its neighbours) is kept and
     opens from host as before.  `ranges` = [(lo, hi, hv)] disjoint, sorted, hv a pinned uint8 view of exactly hi - lo bytes; a slice
     may span consecutive ranges (a window boundary splits one retained region in two) but never a gap: a gap is a KeyError, never
     zeros.  Same duck type as `_HostWindows` / the contiguous `keep` tensor."""
@@ -127,12 +127,12 @@ class _HostRanges:
         return self
 
 
-#: [R19 admit, F-r18-admit-1 fix (a): the RETAIN-windowed pool] the value families NO C2 consumer reads back from host: the attention
+#: The RETAIN-windowed pool: the value families NO C2 consumer reads back from host: the attention
 #: launch's M1 export stream (FA2 on Ada/Ampere, FA3 on Hopper).  oracle_compare classifies `hidden_stream` out before any read
 #: (`no oracle family`), sampled_replay has no VU row for it (`fa2_hidden_m1_stream: attention interior, no VU row of its own`), the
 #: boundary linkage reads ids only; its leaves are COMMITTED (coverage + openings) and open by REPLAY against the original root
-#: (openings_after_release, R17-5).  It is 84 % of the raw stream at 1024/128 (planner: #60 hidden 100,126 of 119,879 MiB; #23 122,740
-#: of 146,955), so `--retain-exclude hidden_m1` (= both families, whichever tap the pod has) keeps the C2 byte source whole and the
+#: (openings_after_release).  It is 84 % of the raw stream at 1024/128 (planner, two workloads: hidden 100,126 of 119,879 MiB and 122,740
+#: of 146,955 MiB), so `--retain-exclude hidden_m1` (= both families, whichever tap the pod has) keeps the C2 byte source whole and the
 #: pinned pool at the 16 % the C2 forms read -- byte-identical oracle / sampled-replay / linkage forms by construction.
 HIDDEN_M1_FAMILIES = frozenset({"fa2_hidden_m1", "fa3_hidden_m1"})
 RETAIN_EXCLUDE_ALIASES = {"hidden_m1": HIDDEN_M1_FAMILIES, "hidden": HIDDEN_M1_FAMILIES}

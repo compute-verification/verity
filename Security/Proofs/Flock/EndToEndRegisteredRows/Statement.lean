@@ -1,26 +1,49 @@
-import Flock.Desc
-import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
-import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
+module
+
+public import Flock.Desc
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+public import Proofs.Flock.Soundness.Registered.ReadsX
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# C-Flock's one-stage audit, end to end, with the rows link (trusted)
+# Flock's one-stage audit, end to end, with the rows link (trusted)
 
-`EndToEndRegisteredRows` is `EndToEndRegisteredDrawn`'s statement with the rows link added to its event: at the drawn
-units, an accepted session's committed input rows are the rows the registered roots open to, and its committed output
+`EndToEndRegisteredRows` is `EndToEndRegisteredDrawn`'s statement with the rows link added to its event: at the sampled
+proof blocks, an accepted session's committed input rows are the rows the registered roots open to, and its committed output
 rows are the program's outputs on them, which `EndToEndHiddenDrawn` and `EndToEndRegisteredDrawn` leave unstated. Its
-proof is `Flock.SecurityProofs.EndToEndRegisteredRows`. It is stated over the circuit's descriptor `D` (`Flock.Desc`),
-as `EndToEndRegisteredDrawn` is, and `EndToEndRegisteredRowsFlat` is the same statement at a flat circuit file,
-`D = Desc.single c`.
+proof is `Flock.SecurityProofs.EndToEndRegisteredRows`. It is stated over the circuit's descriptor `D` (`Flock.Desc`)
+that `Desc.parse` reads, a flat file, at `EndToEndRegisteredDrawnFlat`'s rows; `EndToEndRegisteredRowsFlat` is the same
+statement at `D = Desc.single c`.
 
-It is the C-Flock side of PoUW's proof premise (`Accounting.TS.ProofLayer.SoundAt`), and does not discharge it: the
-bridge is open (PRF-107). That needs a probability bridge from a window's round and proof `(w, i)` to a C-Flock session,
+It is the Flock side of PoUW's proof premise (`Accounting.TS.ProofLayer.SoundAt`), and does not discharge it: the
+bridge is open. That needs a probability bridge from a window's round and proof `(w, i)` to a Flock session,
 the link from `ProofLayer`'s opening to the extracted plurality `XplurZC`, and a union bound over the `n` units, since
 `OwnReadsHJ` here is over all of a session's registered reads, not per unit.
 
-C-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Models.lean`, which the `security` package builds without
+Flock's definitions are still in its proofs package, so this module imports
+`Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Definitions.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEndRegisteredRows` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -31,7 +54,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **C-Flock's one-stage audit, end to end, with the rows link, at the drawn units.** `EndToEndRegisteredDrawn`'s
+/-- **Flock's one-stage audit, end to end, with the rows link, at the sampled proof blocks.** `EndToEndRegisteredDrawn`'s
 setting, for `flock-verify verify --zk --registered F --session-tables J` over hidden outputs and any public file the
 verifier loads (`pub`, whatever its header carries, a salt among it), in this order:
 1. **the operands' roots are registered**: `own` holds F's registered roots, and `rd`
@@ -40,24 +63,24 @@ verifier loads (`pub`, whatever its header carries, a salt among it), in this or
    of one root at one position give an explicit SHA-512 collision (`Registered.TwoOpenings.collides`), so the roots fix
    these rows;
 2. **then the coin**: the statement `I` (its circuit and public file) is any value, so the bound holds for a live coin
-   drawn after step 1 and carried by `I`, read by the program as a registered read of the root it is registered under
+   flipped after step 1 and carried by `I`, read by the program as a registered read of the root it is registered under
    or as a constant of the circuit;
 3. **then the sinks**: the live prover `τ` registers the session's rows (`reg σ`), its output rows among them, after
-   `I` is fixed, and the verifier draws the units it audits.
+   `I` is fixed, and the verifier samples the units it audits.
 
 Then for every live prover `τ`,
-$$\Pr[\text{flock-verify accepts} \wedge \text{some drawn unit is wrong or its rows are off}] \le
+$$\Pr[\text{flock-verify accepts} \wedge \text{some sampled proof block is wrong or its rows are off}] \le
   \varepsilon_{ks} + \delta_{link} + \delta_{rows} + \delta_{reg},$$
-a drawn unit `u` wrong as in `EndToEndRegisteredDrawn` (`wrongRegZ`), and its rows off unless, at the committed
+a sampled proof block `u` wrong as in `EndToEndRegisteredDrawn` (`wrongRegZ`), and its rows off unless, at the committed
 transcript fixed at registration (`XplurZC`, the plurality of the rows extraction finds), on each of `u`'s committed
 wires `g` (`RowsRightZC`):
-* **input rows**: where `g`'s commit string is a registered read of `rd` that the verifier owns at the outcome's draw
+* **input rows**: where `g`'s commit string is a registered read of `rd` that the verifier owns at the outcome's sample
   (`OwnReadsHJ`, as in `EndToEndRegistered`), `g`'s committed bit is the bit of the row the registered root opens to,
   `rd.wv`;
 * **output rows**: `g`'s committed bit is the circuit's evaluation on the committed inputs (`Circuit.eval`), the key
   program's output at `g` on those rows and the coin.
-So when `rd` reads every input row a drawn unit's outputs depend on, its output rows are the program's outputs on the
-registered rows and the coin. `ε_ks`, `δ_link` are `EndToEnd`'s terms, averaged over the verifier's draw; `δ_rows` is
+So when `rd` reads every input row a sampled proof block's outputs depend on, its output rows are the program's outputs on the
+registered rows and the coin. `ε_ks`, `δ_link` are `EndToEnd`'s terms, averaged over the verifier's sample; `δ_rows` is
 `δ_link`'s closed form, for the rows finders (`rowsOutZC`: one trial at a registered read, which outputs the binding's
 extractor on a row it reads there other than `rd`'s, and `rd`'s opening); and `δ_reg = q_R²/2^513` is the registered
 reads' term (`Registered.ReadsX.prob_off_le`): the probability that the session's leaf at an owned registered read is
@@ -71,7 +94,7 @@ Its named assumptions, each a hypothesis, are `EndToEndRegisteredDrawn`'s and tw
 registered reads' finder, which plays the audit once and outputs the session's opening at an off read and `rd`'s
 (`Registered.ReadsX.pick`). The rest are `EndToEndRegisteredDrawn`'s: the verify command's tags under hidden outputs
 (`TagsOkZHJ`), an untyped statement, the bound's numeric conditions, and `EndToEndHidden`'s reference setup `y₀`, which
-every draw flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`). -/
+every sample flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`). -/
 def EndToEndRegisteredRows : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- F's registered roots: registered before the statement and its coin
@@ -82,9 +105,9 @@ def EndToEndRegisteredRows : Prop :=
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    -- the law: a `kd`-subset of the `n` units, split evenly over the session's tables
+    -- the sampling design: a `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (hdiv : kd % nTab I = 0)
-    -- the record: the draw file at each draw, and the session at each draw and registration
+    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     -- the registrant's opening of `own`'s roots at the session's registered reads
@@ -153,9 +176,9 @@ def EndToEndRegisteredRowsFlat : Prop :=
     (c : Flock.Circuit) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH c = true)
-    -- the law: a `kd`-subset of the `n` units, split evenly over the session's tables
+    -- the sampling design: a `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (hdiv : kd % nTab I = 0)
-    -- the record: the draw file at each draw, and the session at each draw and registration
+    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     -- the registrant's opening of `own`'s roots at the session's registered reads

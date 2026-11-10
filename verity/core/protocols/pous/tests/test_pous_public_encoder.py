@@ -97,7 +97,7 @@ def test_2_one_flipped_byte_anywhere(scheme):
 
 
 def _corrupt_and_continue(x: World, s: int, j: int) -> list[bytes]:
-    """Segment `s` with block `j` set to zeros and every later block encoded honestly on top of it."""
+    """Segment `s` with label `j` set to zeros and every later label encoded honestly on top of it."""
     p = x.params
     mb, t = p.block_bytes, tag(salt_value(x.salt), s)
     seg = list(split(p, x.w))[s]
@@ -173,7 +173,7 @@ def test_4_wrong_sizes():
 
 
 def test_5_server_data_unused():
-    """No parameter takes a root, a leaf list or a manifest from the server; the root is the decoded blocks'."""
+    """No parameter takes a root, a leaf list or a manifest from the server; the root is the decoded labels'."""
     assert set(inspect.signature(setup.verifier_key_from_encoding).parameters) == {
         "params", "prims", "commitment", "salt", "encoded", "codec"}
 
@@ -248,7 +248,7 @@ def test_7_known_answer_vectors(group, chain):
 
 @pytest.mark.parametrize("scheme", SCHEMES)
 def test_negative_control_any_wrong_codeword(scheme):
-    """A server submitting any C* with Dec(C*) ≠ W is rejected: random blocks, the honest encoding of another W, or
+    """A server submitting any C* with Dec(C*) ≠ W is rejected: random labels, the honest encoding of another W, or
     of W under another salt."""
     x = WORLDS[scheme]
     p = x.params

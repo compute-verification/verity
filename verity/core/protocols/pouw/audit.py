@@ -1,21 +1,21 @@
-"""The protocol's commitments and epoch, the same for every `PoUWScheme` (``PROTOCOL.md``, "Lifecycle"): what the served
+"""The protocol's commitments and execution phase, the same for every `PoUWScheme` (Lean `PouwCommit.Bindings`, `PouwCommit.Rows`, `PouwCommit.Draws`): what the served
 path's prover commits and its verifier reads.
 
-0. **Coins.**  Before the epoch the challenger publishes its coin commitment over the epoch's coins (`coins`).
+0. **Coins.**  Before the execution phase the challenger publishes its coin commitment over the execution phase's coins (`coins`).
 1. **Weights.**  Each weight is committed as its rows along k; `weights_root` binds every weight root.
-2. **Salt.**  The challenger opens the epoch's salt coin after it recorded the weights' root, and the salt is
+2. **Salt.**  The challenger opens the execution phase's salt coin after it recorded the weights' root, and the salt is
    ``derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": root, "weights": weights_root})`` (`Epoch.start`).
 3. **Units.**  For each matmul the prover commits the activation rows, bound to the salt and the index
    (`activation_binding`, `commit_rows`).
 4. **Transcript.**  A Merkle root over every tile's digest (`transcript_domain`), in matmul order and then tile order
    (`tile_refs`).
 
-The clear audit that drew, opened and recomputed tiles in the clear (`Prover`, `Verifier`, `Sampled`, `WorkProfile`) is a
-reference tool, not a verifier: ``benchmarks/pouw/clear/clear_audit.py``.  Served windows are checked by PoUW's verifier of
-record, the Lean (`lean/check`, `core_check`).
+The clear audit that sampled, opened and recomputed tiles in the clear (`Prover`, `Verifier`, `Sampled`, `WorkProfile`) is a
+reference tool, not a verifier: ``benchmarks/pouw/clear/clear_audit.py``.  Served execution phases are checked by PoUW's verifier, the Lean (`lean/check`, `core_check`).
 
-Commitments are `verity.ml.commitments.merkle` trees, framed SHA-256 unless a scheme names another frame hash:
-``"hm96-sha512"`` (`HM96`) is ``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
+Commitments are `verity.ml.commitments.merkle` trees under the scheme's frame hash, by default ``"hm96-sha512"`` (`HM96`,
+hashing format h3's; a scheme on SHA-256 trees, Pearl-C's h0 or NCP, names ``"sha256"``).  `HM96` is
+``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
 followed by a 192-byte salt, a row's leaf ``hm96-sha512/row-seg/v1`` over the row's ``sha512/row-seg/v1`` digest and a tile's
 over its 64-byte digest itself; the prover's salts are a ChaCha20 stream under its own key (`hm96_salt`), and an opening's
 value carries its salt, so `opened_value` strips it before a scheme reads the value.
@@ -31,18 +31,19 @@ from dataclasses import dataclass
 from verity.core.protocols.pouw.salt import pouw_salt, pouw_window
 from verity.errors import ProtocolError
 from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.gates import sha512 as sha512_gates
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.randomness import derive
 
 from .coins import CoinCommitment, CoinOpening, coin_reason
 from .protocol import DomainError, Matmul, PoUWScheme, Tile, tagged
 
-SALT_DOMAIN = "verity/pouw/salt/v1"
-EPOCH_SALT_DOMAIN = "verity/pouw/epoch-salt/v1"
-ROW_SCHEMA = "verity/pouw/row/v1"
-TILE_SCHEMA = "verity/pouw/tile/v1"
+SALT_DOMAIN = domains.POUW_UNVERIFIED_SALT
+EPOCH_SALT_DOMAIN = domains.POUW_EPOCH_SALT
+ROW_SCHEMA = domains.POUW_AUDIT_ROW
+TILE_SCHEMA = domains.POUW_AUDIT_TILE
 #: ``frame-v3-sha512`` with hm96-sha512 leaves (module docstring)
 HM96 = "hm96-sha512"
 HM96_KEY = hm96.SHA512.default_key
@@ -53,8 +54,8 @@ _M32 = 0xFFFFFFFF
 
 
 def chacha20_block(key: bytes, counter: int, nonce: int) -> bytes:
-    """ChaCha20's block function, 20 rounds, with a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14, 15): C-Flock's
-    ``chacha20_block`` (``verity/ml/flock/cuda/sha512.cuh``), the stream its hm96 leaf salts are drawn from."""
+    """ChaCha20's block function, 20 rounds, with a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14, 15): Flock's
+    ``chacha20_block`` (``verity/ml/flock/cuda/sha512.cuh``), the stream its hm96 leaf salts are sampled from."""
     s = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574, *struct.unpack("<8I", key),
          counter & _M32, counter >> 32, nonce & _M32, nonce >> 32]
     x = list(s)
@@ -73,17 +74,18 @@ def chacha20_block(key: bytes, counter: int, nonce: int) -> bytes:
 
 def hm96_salt(key: bytes, nonce: int, i: int) -> bytes:
     """Leaf i's 192-byte salt in the tree with salt nonce `nonce`: ChaCha20 blocks 3i, 3i + 1 and 3i + 2 under the prover's
-    32-byte `key` (C-Flock's ``hm96_salt``)."""
+    32-byte `key` (Flock's ``hm96_salt``)."""
     return b"".join(chacha20_block(key, 3 * i + j, nonce) for j in range(3))
 
 
 @functools.lru_cache(maxsize=1)
 def hm96_kernel_constants() -> bytes:
-    """`HM96`'s constants as a kernel reads them (C-Flock's ``hm96_finish_leaves``, pearl_c's ``hm_leaves``): the midstates
+    """`HM96`'s constants as pearl_c's ``hm_leaves`` reads them and Flock's ``Hm96Guard`` takes them: the midstates
     after the salt prefix and after the leaf prefix (eight u64 little-endian each), then the byte tables, per salt byte position
     and byte value the 64-byte column XOR little-endian (3 MiB)."""
     mids = [sha512_gates.midstate(p) for p in (hm96.SHA512.salt_prefix, hm96.SHA512.leaf_prefix(HM96_KEY))]
-    tables = b"".join(v.to_bytes(64, "little") for table in hm96.SHA512.byte_tables(HM96_KEY) for v in table)
+    tables = b"".join(v.to_bytes(DIGEST_BYTES["sha512"], "little")
+                      for table in hm96.SHA512.byte_tables(HM96_KEY) for v in table)
     return b"".join(struct.pack("<8Q", *m) for m in mids) + tables
 
 
@@ -97,7 +99,7 @@ class Hm96Domain(CommitmentDomain):
     digests: bool = False
 
     def leaf(self, rank: int, position: int, schema: str, value: bytes) -> bytes:
-        if len(value) < HM96_SALT or self.digests and len(value) != 64 + HM96_SALT:
+        if len(value) < HM96_SALT or self.digests and len(value) != DIGEST_BYTES["sha512"] + HM96_SALT:
             raise ProtocolError(f"an {HM96} value is its preimage and a {HM96_SALT}-byte salt")
         pre, y = value[:-HM96_SALT], value[-HM96_SALT:]
         x = pre if self.digests else sha512_row_seg_digest(pre, 8 * len(pre))
@@ -110,32 +112,39 @@ def opened_value(hash: str, value: bytes) -> bytes:
     return value[:-HM96_SALT] if hash == HM96 else value
 
 
-def rows_domain(binding: bytes, owner: int, count: int, hash: str = "sha256", digests: bool = False) -> CommitmentDomain:
+def rows_domain(binding: bytes, owner: int, count: int, hash: str = HM96, digests: bool = False) -> CommitmentDomain:
     if hash == HM96:
         return Hm96Domain(binding, owner, RangeIndexedDomain(count), hash="sha512", digests=digests)
     return CommitmentDomain(binding, owner, RangeIndexedDomain(count), hash=hash)
 
 
 def weight_binding(weight: int) -> bytes:
-    return tagged("verity/pouw/weight-rows/v1", weight)
+    return tagged(domains.POUW_WEIGHT_ROWS, weight)
 
 
 def activation_binding(salt: bytes, index: int) -> bytes:
-    return tagged("verity/pouw/activation-rows/v1", salt, index)
+    return tagged(domains.POUW_ACTIVATION_ROWS, salt, index)
 
 
-def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "sha256", salt_key: bytes | None = None,
-                nonce: int = 0, digests: bool = False) -> MerkleTree:
-    """`rows` in one tree; under `HM96` each value is followed by its salt, `hm96_salt(salt_key, nonce, i)`."""
+def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = HM96, salt_key: bytes | None = None,
+                nonce: int = 0, digests: bool = False, public: bool = False) -> MerkleTree:
+    """`rows` in one tree.  Values are committed hiding, under `HM96` with the committer's 32-byte run key `salt_key`: each
+    value is followed by its salt, `hm96_salt(salt_key, nonce, i)`, so no one without the key recomputes the root from
+    candidate values.  A plain ``sha256`` or ``sha512`` tree is not hiding, and is refused unless ``public``, the caller's
+    statement that its rows need no hiding: rows the protocol makes public, or a plain format's tree (h0's) that a reference
+    tool or a recorded run replays, which no served commitment is."""
     if hash == HM96:
         if salt_key is None:
             raise ProtocolError(f"an {HM96} tree takes the prover's salt key")
         rows = [r + hm96_salt(salt_key, nonce, i) for i, r in enumerate(rows)]
+    elif not public:
+        raise ProtocolError(f"a plain {hash} tree is not hiding: values are committed under {HM96} with the committer's "
+                            "salt key, and public=True is for rows the protocol makes public")
     return MerkleTree(rows_domain(binding, owner, len(rows), hash, digests), dict(enumerate(rows)), lambda _: ROW_SCHEMA)
 
 
 def weights_root(weight_roots: Mapping[int, bytes]) -> bytes:
-    return tagged("verity/pouw/weights/v1", *(p for w in sorted(weight_roots) for p in (w, weight_roots[w])))
+    return tagged(domains.POUW_WEIGHTS_ROOT, *(p for w in sorted(weight_roots) for p in (w, weight_roots[w])))
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,8 +167,8 @@ class Workload:
 
 @dataclass(frozen=True, slots=True)
 class Epoch:
-    """The committed weights, the salt drawn after them, and the challenger's coin commitment the epoch's coins open
-    against (None for an `unverified` epoch's salt with no draw coin)."""
+    """The committed weights, the salt sampled after them, and the challenger's coin commitment the execution phase's coins open
+    against (None for an `unverified` execution phase's salt with no sampling coin)."""
 
     workload: Workload
     weight_roots: Mapping[int, bytes]
@@ -173,8 +182,8 @@ class Epoch:
     @classmethod
     def start(cls, workload: Workload, weight_roots: Mapping[int, bytes], coins: CoinCommitment, opening: CoinOpening
               ) -> Epoch:
-        """The epoch whose salt is the challenger's salt coin: `opening` must be epoch `coins.epoch`'s salt coin, opened
-        against `coins` (the commitment the challenger published before the epoch) after it recorded the weights' root."""
+        """The execution phase whose salt is the challenger's salt coin: `opening` must be execution phase `coins.epoch`'s salt coin, opened
+        against `coins` (the commitment the challenger published before the execution phase) after it recorded the weights' root."""
         _check_weights(workload, weight_roots)
         root = weights_root(weight_roots)
         reason = coin_reason(coins, opening, "salt", root)
@@ -185,9 +194,9 @@ class Epoch:
     @classmethod
     def unverified(cls, workload: Workload, weight_roots: Mapping[int, bytes], seed: bytes,
                    coins: CoinCommitment | None = None) -> Epoch:
-        """The epoch whose salt is keyed by bare bytes under ``verity/pouw/salt/v1``, with no coin behind it: test
+        """The execution phase whose salt is keyed by bare bytes under ``verity/pouw/salt/v1``, with no coin behind it: test
         instances, replays of recorded runs, and integrations whose salt claims nothing.  `coins`, when given, is the
-        commitment the epoch's draw coin opens against."""
+        commitment the execution phase's sampling coin opens against."""
         _check_weights(workload, weight_roots)
         salt = derive(seed, SALT_DOMAIN, {"weights": weights_root(weight_roots)}).stream("salt", 32)
         return cls(workload, dict(weight_roots), salt, coins)
@@ -195,10 +204,10 @@ class Epoch:
     @classmethod
     def certified(cls, workload: Workload, weight_roots: Mapping[int, bytes], windows: Sequence[int], k: int,
                   reveal: bytes, stream: bytes, prover: bytes, coins: CoinCommitment | None = None) -> Epoch:
-        """The epoch of PoUW window p, the network certifier's windows `windows` with k per PoUW window (p·k … p·k + k − 1,
+        """The execution phase of PoUW execution phase p, the network certifier's execution phases `windows` with k per PoUW execution phase (p·k … p·k + k − 1,
         refused unless whole and aligned at 0: `salt.pouw_window`), registered under `stream` and `prover`, whose salt is
         `salt.pouw_salt(reveal, p, stream, prover)`, 64 bytes: `reveal` is p's certifier salt as `salt.revealed` read it.
-        `coins`, when given, is the commitment the epoch's draw coin opens against."""
+        `coins`, when given, is the commitment the execution phase's sampling coin opens against."""
         _check_weights(workload, weight_roots)
         return cls(workload, dict(weight_roots), pouw_salt(reveal, pouw_window(windows, k), stream, prover), coins)
 
@@ -209,7 +218,7 @@ def _check_weights(workload: Workload, weight_roots: Mapping[int, bytes]) -> Non
 
 
 def salt_of(coins: CoinCommitment, coin: bytes, weights_root: bytes) -> bytes:
-    """The epoch's 32-byte salt from its opened salt coin.  A live window's salt coin opens after the window's open root
+    """The execution phase's 32-byte salt from its opened salt coin.  A live execution phase's salt coin opens after the execution phase's open root
     (`salt.window_open_root`), and its salt is still keyed by `weights_root`, the weights' root: the coin and `coins` are
     its own session's."""
     return derive(coin, EPOCH_SALT_DOMAIN, {"epoch": coins.epoch, "coins": coins.root, "weights": weights_root}
@@ -234,10 +243,10 @@ def tile_refs(scheme: PoUWScheme, workload: Workload) -> list[TileRef]:
 
 
 def transcript_binding(epoch: Epoch) -> bytes:
-    return tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root)
+    return tagged(domains.POUW_TRANSCRIPT, epoch.salt, epoch.weights_root)
 
 
-def transcript_domain(epoch: Epoch, count: int, hash: str = "sha256") -> CommitmentDomain:
+def transcript_domain(epoch: Epoch, count: int, hash: str = HM96) -> CommitmentDomain:
     return rows_domain(transcript_binding(epoch), -1, count, hash, digests=True)
 
 

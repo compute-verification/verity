@@ -1,11 +1,21 @@
-import Proofs.Flock.C3.PubRows.Prefix
-import Proofs.Flock.C3.HoloValues.Reps
-import Proofs.Flock.C3.Sparse.Session
-import Proofs.Flock.C3.Opening.Algebra
-import Proofs.Flock.C3.RegLevels.Chain
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.C3.PubRows.Frame
-import Proofs.Flock.C3.PubRows.Check
+module
+
+public import Proofs.Flock.C3.PubRows.Prefix
+public import Proofs.Flock.C3.PubRows.Frame
+public import Proofs.Flock.C3.PubRows.Check
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # n1: the public rows, the tape and the commitments at the honest family
@@ -13,7 +23,7 @@ import Proofs.Flock.C3.PubRows.Check
 * `hPubRows_of_check'`: `HPubRows` at `C3Family.honest`, from the verifier's check of each accepted session's public
   file (`ChecksPubRows`: `RecVStar.checkPubRows` on each statement the session's record sets up, as `FlockVerify`'s
   `--rec-inner` path runs it after setup; `AcceptsZKR` does not make it, gap n1b) where the check reads every row
-  `HPubRows` does: every unit, which a transcript the session writes draws (`rowsHeld`, at the labels `checkLabels`
+  `HPubRows` does: every unit, which a transcript the session writes samples (`rowsHeld`, at the labels `checkLabels`
   makes the units), the first port of a name (`PortsNamed`) and a rec-sparse unit's rows at its own shape
   (`SparseAtShape`, `PubRows/Check.lean`).
 * `hTape_of_frame`: `HTape` at the honest family from `HFrame`. The stages' obligations read only the decode, and no
@@ -25,6 +35,8 @@ import Proofs.Flock.C3.PubRows.Check
   the rows the verifier holds being the history's commitments (`HeldIs`, the record–history link, gap n1c): G's
   `hCommits_of` after `pubCommits_of_pubRows`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.PubRows
 
@@ -102,7 +114,7 @@ theorem hTape_of_frame {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hfr : HFra
   hTape_iff_frame.2 hfr
 
 /-- **(n1) The public rows at the honest family, from the verifier's check**, where it reads every row `HPubRows`
-does: a transcript a session writes and accepts draws every unit (`rowsHeld`), labelled as the units by the check's
+does: a transcript a session writes and accepts samples every unit (`rowsHeld`), labelled as the units by the check's
 `checkLabels` (`label_of_checked`), each circuit names each port once (`PortsNamed`) and V*'s rec-sparse units are at
 the verifier's shape (`SparseAtShape`). -/
 theorem hPubRows_of_check' (hchk : ChecksPubRows 𝓗 wr reg) (hnames : PortsNamed 𝓗) (hsp : SparseAtShape 𝓗) :

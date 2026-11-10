@@ -1,31 +1,80 @@
-import Proofs.Flock.Claims.KS.ZkPlanHJ
-import Proofs.Flock.Claims.KS.ZkEntries
+module
+
+public import Proofs.Flock.Claims.KS.ZkEntries
+public import Proofs.Flock.Claims.KS.ZkPlanHJ
+public import Proofs.Flock.Claims.KS.ZkPlanJ
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
+import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
 /-!
-# The deployed `--zk` decoders at the statement's draw
+# The deployed `--zk` decoders at the statement's sample
 
-`Deploy.V` sets a masked session up at the statement's draw and runs `verify --zk` on the record against that setup;
-its checks give the record's own draw only up to key order (`checks_draw`). `verify --zk` itself sets the session up at
-the record's draw (`AcceptsZK`), which keeps the draw: it is the session's `unitDraw` and is written into the public
-header, so the two setups agree only where the draws are equal as values. Here the old discharge reads the setup at the
-statement's draw instead, so no draw in the record is read:
+`Deploy.V` sets a masked session up at the statement's sample and runs `verify --zk` on the record against that setup;
+its checks give the record's own sample only up to key order (`checks_draw`). `verify --zk` itself sets the session up at
+the record's sample (`AcceptsZK`), which keeps the sample: it is the session's `unitDraw` and is written into the public
+header, so the two setups agree only where the samples are equal as values. Here the old discharge reads the setup at the
+statement's sample instead, so no sample in the record is read:
 
-* `AcceptsAt`, `RecordsLiveAtS`: `AcceptsZK` and `RecordsLiveAt` at the setup at a given draw (`setupAt`).
+* `AcceptsAt`, `RecordsLiveAtS`: `AcceptsZK` and `RecordsLiveAt` at the setup at a given sample (`setupAt`).
 * `RunsOnZCJV`, `decodes_of_runsOnZCJV`: `RunsOnZCJ` and `decodesOnZKJ_of_runsOnZCJ` at any verdict on the live
   outcomes; `RunsOnZCJW` is `RunsOnZCJV` at any verdict on the outputs.
 * `runsAtZCJ_live`, `runsAtZCJH_live`: `runsZCJ_live` and `runsZCJH_liveI` at `AcceptsAt`, public and hidden outputs.
 * `OpensEntries`, `runsAtZCJ_live_entries`, `runsAtZCJH_live_entries`: at public and hidden outputs, each accepted
   output's level-0 openings verify at its cap and are, on the witness lanes, the masked reader's entries
   (`zk_table_opens₀Z`).
-* `setupAt_of_setup`, `recordsLiveAtS_of_checks`: `Deploy.V`'s setup is the setup at the statement's draw, and where
+* `setupAt_of_setup`, `recordsLiveAtS_of_checks`: `Deploy.V`'s setup is the setup at the statement's sample, and where
   its checks pass the last message records the run's live outcome there (`recordsLiveAt_of_checks` without `hdraw`).
-* `wrS`, `not_acceptsAt_nil`, `recordsLiveAtS_wrS`: the record writer at a draw, which records the live session.
+* `wrS`, `not_acceptsAt_nil`, `recordsLiveAtS_wrS`: the record writer at a sample, which records the live session.
 * `acceptsAt_of_decide`, `acceptsAt_wrS`: an accepting decision of `Deploy.V --zk` is accepted at the setup at its
-  statement's draw, at its last message and at `wrS` (`accepts_of_decide`, `acceptsZK_wrD` without `hdraw`).
+  statement's sample, at its last message and at `wrS` (`accepts_of_decide`, `acceptsZK_wrD` without `hdraw`).
 * `decodesTable_zkTabs`, `decodesTableH_zkTabs`: the deployed `--zk` decoders `opnD` and `decD` are right at
-  `zkTabs` on the outcomes `verify --zk` accepts at the setup at the empty draw at `wrS`, at public and hidden
-  outputs (`ZkPlanJ`'s and `ZkPlanHJ`'s plans at the law of that one draw).
+  `zkTabs` on the outcomes `verify --zk` accepts at the setup at the empty sample at `wrS`, at public and hidden
+  outputs (`ZkPlanJ`'s and `ZkPlanHJ`'s plans at the sampling design of that one sample).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -38,13 +87,13 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`verify --zk` accepts at the session it sets up at the draw `d`**: `AcceptsZK` with the setup at `d`
-(`FlockDeploy.KS.setupAt`) for the setup at the record's draw. -/
+/-- **`verify --zk` accepts at the session it sets up at the sample `d`**: `AcceptsZK` with the setup at `d`
+(`FlockDeploy.KS.setupAt`) for the setup at the record's sample. -/
 def AcceptsAt (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, FlockDeploy.KS.setupAt (zkInputs I) (some d) = .ok (spec, sts) ∧ sts.forM Zk.shapeOk = .ok () ∧
     Zk.verify spec (sts.map Setup.ofCircuit) t.record t.proofs = .ok ()
 
-/-- **`RecordsLiveAt` at the setup at the draw `d`**: where `verify --zk` accepts the transcript `t` at the session it
+/-- **`RecordsLiveAt` at the setup at the sample `d`**: where `verify --zk` accepts the transcript `t` at the session it
 sets up at `d`, its proof files are the outcome `o`'s, and the session its record decodes to there has `o`'s link points
 and, at each of `o`'s tables, `o`'s `root_B` and rep streams' rounds. -/
 def RecordsLiveAtS (I : Inputs) (d : Lean.Json) {J : ℕ} (o : LiveOutJ J mPts) (t : Exec.Transcript) : Prop :=
@@ -84,7 +133,7 @@ def RunsOnZCJV : Prop :=
         (opn (L.draw ω) R o.proofs j)).accepted = true
 
 omit [Fintype K] [Inhabited D] [Inhabited Sl] in
-/-- **The decoder at the law's draws, table by table, from `RunsOnZCJV`** (`decodesOnZKJ_of_runsOnZCJ` at `acc`). -/
+/-- **The decoder at the sampling design's samples, table by table, from `RunsOnZCJV`** (`decodesOnZKJ_of_runsOnZCJ` at `acc`). -/
 theorem decodes_of_runsOnZCJV (h : RunsOnZCJV A Hs planZ opn dec fin capOf L acc) (ω : L.Ω) (R : Reg)
     (j : Fin (planZ (L.draw ω) R).length) :
     DecodesTable (outJ Hs (planZ (L.draw ω) R)) (fun _ o => o.accepted = true) (acc (L.draw ω) R)
@@ -123,13 +172,13 @@ theorem RunsOnZCJW.runsOnZCJV {ok : (S : Finset (Fin n)) → (R : Reg) → LiveO
 
 end Runs
 
-/-- **An output's level-0 openings are the masked reader's entries at table `j`**: the setup at the draw `d` has a
+/-- **An output's level-0 openings are the masked reader's entries at table `j`**: the setup at the sample `d` has a
 table `j`, whose schedule is `Zk.schedule`'s, the record decodes to a session with table `j`'s two rep streams, and the
 output's level-0 openings verify against `cap` at `width₀` below level 0's `2^d` and are, on the witness lanes, the
 reps' `zkRepColsOf` entries at `2·|regions|` extra claims on the streams' rounds and table `j`'s proof files. -/
 def OpensEntries (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : TabZK 𝔽 mPts) (cap : Cap Dig)
     (out : OutZC 𝔽 Dig (List UInt8)) : Prop :=
-  ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session) (sch : Flock.Schedule) (tPad : ℕ)
+  ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord) (sch : Flock.Schedule) (tPad : ℕ)
     (s₀ s₁ : StreamRec) (h : j < sts.size),
     FlockDeploy.KS.setupAt (zkInputs I) (some d) = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
     Zk.schedule sts[j].m = .ok (sch, tPad) ∧
@@ -143,8 +192,8 @@ def OpensEntries (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T
         Claims.Flock.zkRepColsOf (shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size)) s₁.rounds
           t.proofs[2 * j + 1]!
 
-/-- **`runsZCJ_live` at the setup at each draw, with the entries**: `RunsOnZCJV` at `AcceptsAt` of the law's draw,
-where `wr` records the live session at the setup at that draw (`RecordsLiveAtS`), so the record's own draw is never
+/-- **`runsZCJ_live` at the setup at each sample, with the entries**: `RunsOnZCJV` at `AcceptsAt` of the sampling design's sample,
+where `wr` records the live session at the setup at that sample (`RecordsLiveAtS`), so the record's own sample is never
 read, with each accepted output's level-0 openings the masked reader's entries (`OpensEntries`, `zk_table_opens₀Z`). -/
 theorem runsAtZCJ_live_entries (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
@@ -284,8 +333,8 @@ theorem runsAtZCJ_live_entries (I : Inputs) (_ht : I.tags.typed = false) (dj : F
       hent.trans ?_⟩
     rw [hN, hyst]
 
-/-- **`runsZCJ_live` at the setup at each draw**: `RunsOnZCJV` at `AcceptsAt` of the law's draw, where `wr` records the
-live session at the setup at that draw (`RecordsLiveAtS`), so the record's own draw is never read
+/-- **`runsZCJ_live` at the setup at each sample**: `RunsOnZCJV` at `AcceptsAt` of the sampling design's sample, where `wr` records the
+live session at the setup at that sample (`RecordsLiveAtS`), so the record's own sample is never read
 (`runsAtZCJ_live_entries`). -/
 theorem runsAtZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
@@ -313,11 +362,10 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`runsZCJH_liveI` at the setup at each draw, with the entries**: `RunsOnZCJV` at `AcceptsAt` of the law's draw
-under hidden outputs, where `wr` records the live session at the setup at that draw (`RecordsLiveAtS`), with each
+/-- **`runsZCJH_liveI` at the setup at each sample, with the entries**: `RunsOnZCJV` at `AcceptsAt` of the sampling design's sample
+under hidden outputs, where `wr` records the live session at the setup at that sample (`RecordsLiveAtS`), with each
 accepted output's level-0 openings the masked reader's entries (`OpensEntries`, `zk_table_opens₀Z`). -/
-theorem runsAtZCJH_live_entries (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+theorem runsAtZCJH_live_entries (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
@@ -344,12 +392,10 @@ theorem runsAtZCJH_live_entries (I : Inputs) (ht : I.tags.typed = false) {c : Fl
   have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ ht j.val
-  have hcJ : HmOut.parse (inputsJ I j.val).tags (inputsJ I j.val).circuitFile (inputsJ I j.val).tables = .ok c :=
-    (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
   obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[j.val].c with outPorts := #[] }) hdr
-  obtain ⟨x, hx⟩ := drawSetupH_of_setupHiddenI (I := inputsJ I j.val)
-    (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hcJ hst hf hD
+  obtain ⟨x, hx⟩ := HiddenExec.drawSetupH_of_setupHiddenU (I := inputsJ I j.val)
+    (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hst hf hD
     ((hDraw ω ⟨j.val, hjn⟩).1 D hD) ((hDraw ω ⟨j.val, hjn⟩).2 _ hst)
   obtain ⟨y, hyx, hysch, hytp⟩ := drawSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape j.val hj)
     (sch := schs[j.val].1) (tPad := schs[j.val].2) (by rw [hx]; exact hz')
@@ -456,10 +502,9 @@ theorem runsAtZCJH_live_entries (I : Inputs) (ht : I.tags.typed = false) {c : Fl
       hent.trans ?_⟩
     rw [hN, hyst]
 
-/-- **`runsZCJH_liveI` at the setup at each draw**: `RunsOnZCJV` at `AcceptsAt` of the law's draw under hidden
-outputs, where `wr` records the live session at the setup at that draw (`RecordsLiveAtS`; `runsAtZCJH_live_entries`). -/
-theorem runsAtZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+/-- **`runsZCJH_liveI` at the setup at each sample**: `RunsOnZCJV` at `AcceptsAt` of the sampling design's sample under hidden
+outputs, where `wr` records the live session at the setup at that sample (`RecordsLiveAtS`; `runsAtZCJH_live_entries`). -/
+theorem runsAtZCJH_live (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
@@ -468,7 +513,7 @@ theorem runsAtZCJH_live (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circ
     RunsOnZCJV (K := 𝕂) execArith hs512 (planZHJ dj y₀) (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
       (fun S R o => AcceptsAt I (dj S) (wr S R o)) :=
-  RunsOnZCJW.runsOnZCJV execArith hs512 _ _ _ _ _ _ _ (runsAtZCJH_live_entries I ht hc dj y₀ wr L hT hRec hDraw)
+  RunsOnZCJW.runsOnZCJV execArith hs512 _ _ _ _ _ _ _ (runsAtZCJH_live_entries I ht dj y₀ wr L hT hRec hDraw)
     fun _ _ _ _ _ h => h.1
 
 end FlockSoundness.Discharge.ZkHidden
@@ -482,7 +527,7 @@ local instance lawfulBEqByteArrayDraw : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-/-- **`Deploy.V`'s setup is `verify --zk`'s at the statement's draw** (`setupOf_zkInputs` with no record), where the
+/-- **`Deploy.V`'s setup is `verify --zk`'s at the statement's sample** (`setupOf_zkInputs` with no record), where the
 statement carries no `--public-inputs`. -/
 theorem setupAt_of_setup {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hs : s.setup = .ok (spec, sts))
     (hzk : s.read.zk = true) (hpi : s.read.publicInputs = none) :
@@ -491,8 +536,8 @@ theorem setupAt_of_setup {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hs :
   simp only [KS.setupAt, Readable.Read.setup, Readable.Read.tags, Readable.Read.coins, ZkExec.zkInputs, hzk, hpi,
     ite_true]
 
-/-- **Custody gives `RecordsLiveAtS`** (`recordsLiveAt_of_checks` at the statement's draw `d`, so with no premise on
-the record's draw): where `Deploy.V --zk`'s checks pass, the last message's record and proof files are a record of the
+/-- **Custody gives `RecordsLiveAtS`** (`recordsLiveAt_of_checks` at the statement's sample `d`, so with no premise on
+the record's sample): where `Deploy.V --zk`'s checks pass, the last message's record and proof files are a record of the
 run's live outcome (`viewOf`) at the setup at `d`, at any `J` of the session's tables. -/
 theorem recordsLiveAtS_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
@@ -528,8 +573,8 @@ theorem recordsLiveAtS_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts
     simp [withSha, hsha _ rfl]
 
 open Classical in
-/-- **The record writer at the statement's draw**: at the live outcome `o`, a transcript `verify --zk` accepts at the
-setup at the draw `d` that records `o` there (`RecordsLiveAtS`), where one exists, else a session without proof files,
+/-- **The record writer at the statement's sample**: at the live outcome `o`, a transcript `verify --zk` accepts at the
+setup at the sample `d` that records `o` there (`RecordsLiveAtS`), where one exists, else a session without proof files,
 which `verify --zk` refuses (`not_acceptsAt_nil`). A decided run's last message is such a transcript for its outcome
 (`acceptsAt_wrS`). -/
 noncomputable def wrS {J mPts : ℕ} (I : Exec.Inputs) (d : Json) (o : Tables.LiveOutJ J mPts) : Exec.Transcript :=
@@ -549,8 +594,8 @@ theorem recordsLiveAtS_wrS {J mPts : ℕ} (I : Exec.Inputs) (d : Json) (o : Tabl
     exact (Classical.choose_spec h).2
   · exact fun h => absurd h (not_acceptsAt_nil _ _ _)
 
-/-- **An accepting decision of `Deploy.V --zk` at SHA-512 is an accepting `verify --zk` at the statement's draw**
-(`accepts_of_decide` with no premise on the record's draw): on a statement of draw `d`, the last message's record and
+/-- **An accepting decision of `Deploy.V --zk` at SHA-512 is an accepting `verify --zk` at the statement's sample**
+(`accepts_of_decide` with no premise on the record's sample): on a statement of sample `d`, the last message's record and
 proof files are accepted at the setup at `d` (`AcceptsAt`), and record the run's live outcome `viewOf` there. -/
 theorem acceptsAt_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
@@ -567,7 +612,7 @@ theorem acceptsAt_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List C
   exact ⟨⟨spec, sts, hsA, setup_shapeOk hs hzk, hv⟩, recordsLiveAtS_of_checks hs hzk hd hJ hc⟩
 
 /-- **`Deploy.V --zk`'s accepting runs are accepted at `wrS`**: where its decision accepts at SHA-512 on a statement of
-draw `d`, `verify --zk` accepts at the setup at `d` what `wrS` writes for the run's live outcome at `J ≤` the session's
+sample `d`, `verify --zk` accepts at the setup at `d` what `wrS` writes for the run's live outcome at `J ≤` the session's
 tables. -/
 theorem acceptsAt_wrS {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
@@ -592,7 +637,7 @@ attribute [local instance] _root_.Claims.Bridge.Custody.lawfulBEqByteArrayDraw
 
 variable [S : ZkSetup]
 
-/-- **`Deploy.V`'s setup is `verify --zk`'s at the statement's draw** (`setupOf_zkInputs` with no record), where the
+/-- **`Deploy.V`'s setup is `verify --zk`'s at the statement's sample** (`setupOf_zkInputs` with no record), where the
 statement carries no `--public-inputs`. -/
 theorem Claims.Bridge.Custody.setupAt_of_setup {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hs : S.Ok zk s spec sts)
     (hzk : s.read.zk = true) (hpi : s.read.publicInputs = none) :
@@ -601,8 +646,8 @@ theorem Claims.Bridge.Custody.setupAt_of_setup {zk : Bool} {s : Ins} {spec : Ses
   simp only [KS.setupAt, Readable.Read.setup, Readable.Read.tags, Readable.Read.coins, ZkExec.zkInputs, hzk, hpi,
     ite_true]
 
-/-- **Custody gives `RecordsLiveAtS`** (`recordsLiveAt_of_checks` at the statement's draw `d`, so with no premise on
-the record's draw): where `Deploy.V --zk`'s checks pass, the last message's record and proof files are a record of the
+/-- **Custody gives `RecordsLiveAtS`** (`recordsLiveAt_of_checks` at the statement's sample `d`, so with no premise on
+the record's sample): where `Deploy.V --zk`'s checks pass, the last message's record and proof files are a record of the
 run's live outcome (`viewOf`) at the setup at `d`, at any `J` of the session's tables. -/
 theorem Claims.Bridge.Custody.recordsLiveAtS_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
@@ -637,8 +682,8 @@ theorem Claims.Bridge.Custody.recordsLiveAtS_of_checks {zk : Bool} {s : Ins} {sp
     subst hn hcn hb hbytes
     simp [withSha, hsha _ rfl]
 
-/-- **An accepting decision of `Deploy.V --zk` at SHA-512 is an accepting `verify --zk` at the statement's draw**
-(`accepts_of_decide` with no premise on the record's draw): on a statement of draw `d`, the last message's record and
+/-- **An accepting decision of `Deploy.V --zk` at SHA-512 is an accepting `verify --zk` at the statement's sample**
+(`accepts_of_decide` with no premise on the record's sample): on a statement of sample `d`, the last message's record and
 proof files are accepted at the setup at `d` (`AcceptsAt`), and record the run's live outcome `viewOf` there. -/
 theorem Claims.Bridge.Custody.acceptsAt_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
@@ -655,7 +700,7 @@ theorem Claims.Bridge.Custody.acceptsAt_of_decide {x : Claims.Msg} {as : List Cl
   exact ⟨⟨spec, sts, hsA, setup_shapeOk hs hzk, hv⟩, recordsLiveAtS_of_checks hs hzk hd hJ hc⟩
 
 /-- **`Deploy.V --zk`'s accepting runs are accepted at `wrS`**: where its decision accepts at SHA-512 on a statement of
-draw `d`, `verify --zk` accepts at the setup at `d` what `wrS` writes for the run's live outcome at `J ≤` the session's
+sample `d`, `verify --zk` accepts at the setup at `d` what `wrS` writes for the run's live outcome at `J ≤` the session's
 tables. -/
 theorem Claims.Bridge.Custody.acceptsAt_wrS {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
@@ -682,11 +727,11 @@ open FlockSoundness.Discharge.Composed (planZJ outJ repJ)
 open FlockSoundness.Discharge.ZkHidden (TagsOkZHJ planZHJ)
 open FlockSoundness.Discharge.Tables (DecodesTable)
 
-/-- **The deployed `--zk` decoders are right at `zkTabs`**: where `verify --zk` sets its session up at the empty draw
+/-- **The deployed `--zk` decoders are right at `zkTabs`**: where `verify --zk` sets its session up at the empty sample
 `dj ∅`, on untyped inputs under `TagsOkZJ`, at every layout and link layout at the session's link points, the
 openings `opnD` and decoder `decD` at `tabsJ` of `zkTabs` are right on the outcomes `verify --zk` accepts at the setup
 at `dj ∅` at `wrS`: they are the old ones at the plan (`opnAtZJ_eq_opnD`), which is `tabsJ` of `zkTabs`
-(`planZJ_eq_tabsJ`), and those are right there (`runsAtZCJ_live` at the law of that one draw, `recordsLiveAtS_wrS`,
+(`planZJ_eq_tabsJ`), and those are right there (`runsAtZCJ_live` at the sampling design of that one sample, `recordsLiveAtS_wrS`,
 `drawOkZKJ_empty`, table 0's setup as the reference). -/
 theorem decodesTable_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : Composed.TagsOkZJ I) {n : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
@@ -713,14 +758,13 @@ theorem decodesTable_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : 
   exact h
 
 /-- **The deployed hidden-output `--zk` decoders are right at `zkTabs`**: where `verify --zk` sets its session up at
-the empty draw `dj ∅` and its tables pass the shape check, on untyped inputs under `TagsOkZHJ` whose circuit file
+the empty sample `dj ∅` and its tables pass the shape check, on untyped inputs under `TagsOkZHJ` whose circuit file
 `HmOut.parse` accepts, at every layout and link layout at the session's link points, the openings `opnD` and decoder
 `decD` at `tabsJ` of `zkTabs` are right on the outcomes `verify --zk` accepts at the setup at `dj ∅` at `wrS`: they are
 the old hidden-output ones at the plan (`opnAtZHJ_eq_opnD`), which is `tabsJ` of `zkTabs` (`planZHJ_eq_tabsJ`), and
-those are right there (`runsAtZCJH_live` at the law of that one draw, `recordsLiveAtS_wrS`, `drawOkZKHJ_empty`,
+those are right there (`runsAtZCJH_live` at the sampling design of that one sample, `recordsLiveAtS_wrS`, `drawOkZKHJ_empty`,
 table 0's setup as the reference). -/
-theorem decodesTableH_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : TagsOkZHJ I)
-    {c : Flock.Circuit} (hc : HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) {n : ℕ}
+theorem decodesTableH_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : TagsOkZHJ I) {n : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts)) (hshape : sts.forM Flock.Zk.shapeOk = .ok ())
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -735,12 +779,12 @@ theorem decodesTableH_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT :
       (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
   have hok := drawOkZKHJ_empty hT.1 dj hs
   obtain ⟨y₀, -, -, -⟩ :=
-    setupZHJ_of_setupAt hT.1 ht hc dj hs hshape hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
+    setupZHJ_of_setupAt hT.1 ht dj hs hshape hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
   have h := Composed.decodes_of_runsOnZCJV execArith ZkExec.hs512 _ _ _ _ _ _ _
-    (ZkHidden.runsAtZCJH_live (Reg := Unit) I ht hc dj y₀ (fun S _ o => Claims.Bridge.Custody.wrS I (dj S) o)
+    (ZkHidden.runsAtZCJH_live (Reg := Unit) I ht dj y₀ (fun S _ o => Claims.Bridge.Custody.wrS I (dj S) o)
       { Ω := Unit, draw := fun _ => ∅ } hT (fun S _ o => Claims.Bridge.Custody.recordsLiveAtS_wrS I (dj S) o)
       (fun _ => hok)) () ()
-  have hp := planZHJ_eq_tabsJ hT.1 ht hc dj y₀ hs hshape hok h0 L hz hk hlay ()
+  have hp := planZHJ_eq_tabsJ hT.1 ht dj y₀ hs hshape hok h0 L hz hk hlay ()
   revert i
   rw [← hp, ← opnAtZHJ_eq_opnD (planZHJ dj y₀) dj hT.1 hs (by rw [hp, tabsJ_length])]
   exact h

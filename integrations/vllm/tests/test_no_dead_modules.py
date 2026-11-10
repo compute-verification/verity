@@ -1,6 +1,6 @@
 """Dead-code lint: no new dead modules in `integrations/vllm` (shrink-only keep-list).
 
-`tests/dead_code_census.py` builds the static import graph of `verity_vllm` / `verity_vllm` / `verity_vllm.program.kernels` /
+`tests/dead_code_census.py` builds the static import graph of `verity_vllm` / `verity_vllm` / `verity.ml.definitions.numerics` /
 `verity_vllm` from the declared entry points in `census_roots.txt` (shell runners -- every `verity_vllm/ops/*.sh` and
 every `*_negatives.sh` / `*_negative_*.sh` by rule --, Python entry points, the regression harness).  A production module no root
 reaches is dead unless `dead_code_keep.json` names it, with the reason it stays.  The test fails on
@@ -13,7 +13,7 @@ reaches is dead unless `dead_code_keep.json` names it, with the reason it stays.
 Shell scripts are entry points: a runner is live because `census_roots.txt` declares it, not because something imports it.
 
 Dynamic evidence: the modules seen imported (`sys.modules` at exit of every process) by the ENGINE=v2 regression harness over the 13
-fixture rows, the offline suites and `python -m <entry point> --help` of every root module on the tree of the deletions is the R2
+fixture workloads, the offline suites and `python -m <entry point> --help` of every root module on the tree of the deletions is the
 artifact named by `dynamic_record` in `dead_code_keep.json`; `python tests/dead_code_census.py --imported <its imported.json>` merges it.
 """
 from __future__ import annotations

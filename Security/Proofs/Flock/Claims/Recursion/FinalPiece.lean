@@ -1,5 +1,40 @@
-import Proofs.Flock.Claims.Recursion.ResAccepts
-import Proofs.Flock.Claims.Recursion.RowSlots
+module
+
+public import Proofs.Flock.Claims.Recursion.PartAccepts
+public import Proofs.Flock.Claims.Recursion.ResAccepts
+public import Proofs.Flock.Claims.Recursion.RowSlots
+public import Proofs.Flock.Claims.Recursion.VStarPartsB
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A `rec-residuals` piece of the final check, from `PartAccepts`
@@ -8,7 +43,7 @@ The final check's residuals pieces are `GfResiduals`' groups: a `rec-residuals` 
 residuals at the elements their input columns read (`partAccepts_inner`), and check 5 asks them to be zero at the held
 messages' rows and the coins' coefficients. This file states that piece's lowering fact (`partAccepts_resZero`) with
 one hypothesis, check 5's tie at the `m<r>` rows (`ResTie`: a copy's output columns are zero and its `v` port reads the
-verifier's `v`), which waits on the vcalls ask (`note:20261024T2340Z-draft-vcalls-ask`): the tie goes from "same
+verifier's `v`), which is open: the tie goes from "same
 digest" to "same row" through a collision with the verifier's own evaluations, which only option A's escape charges.
 
 * **The residuals vanish where the tie holds** (`resVal_zero_of_tie`): a copy's output columns hold its residuals
@@ -18,6 +53,8 @@ digest" to "same row" through a collision with the verifier's own evaluations, w
   port's elements as the message bytes there (`elemsOf`), with no hypothesis: `rowsRead_port` finds the port's
   elements among the copy's columns, `readElems_of_colsHold` reads them as bytes.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -187,7 +224,7 @@ theorem partAccepts_resZero {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     (vv : ℕ → ℕ → ℕ → ℕ → ℕ → _root_.Flock.F128)
     (htie : ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
       _root_.Flock.Readable.parseBytes readOfO xO = some p → L.Agrees cmt x s w xO ms →
-      (∀ e ∈ L.calls x s w, H e.1 = e.2) → (Claims.findColl (L.calls x s w)).isSome = false →
+      (∀ e ∈ L.calls x s w, H e.1 = e.2) → (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false →
       showsTr untr s x xO c →
       ∀ t (ht : t < p.sts.size) (o g u : ℕ), o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) → g < p.sts[t].c.g →
         u < p.sts[t].c.upv →

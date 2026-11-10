@@ -11,19 +11,23 @@ which pins their SHA-256), and `verity/core/protocols/network/tests/test_nci_lea
 still writes them.
 
 A declaration is a descriptor v1 Program built with `verity.ml.circuits` in one of five shapes: a random DAG, a chain, a
-reduction tree, a chain of matrix-vector products (the NCI draft's updated multiplications: products and their sums),
+reduction tree, a chain of matrix-vector products (the inference-only policy draft's updated multiplications: products and their sums),
 and a nested one whose gates sit in calls, batches (of a primitive and of a composite) and a scan. Its parameters are
 values and arrays of widths from 1 to 32 bits, some bound at registration, and its primitives take one to four values
 or an array. θ is empty, every input (refused, `theta-not-registered`, where one is bound per run), the registered
 inputs, or a random set of them. A division is one IU, one IU per gate, runs of consecutive gates or a random
 assignment, numbered in a random order; `Γ` is at, below or above the division's largest IU, and `α` at, just below or
-just above its largest NCI, written reduced or not. About a third of the instances are malformed, each in one way the
-check refuses (every code of `NciCheck.Check`). The data ends with `pinned()`'s two instances on the declaration worked
-by hand (`hand()`): θ every input, which the check must refuse, and θ the registered input, which it must accept.
+just above its largest fresh input per gate, written reduced or not. About a third of the instances are malformed, each in one way the
+check refuses (every code of `NciCheck.Check`). Then come `mistyped_vectors.cases()`'s (`mistyped()`): references
+that name leaves of other widths than their types give them, which the codec and the check refuse as `program`, and
+their well-typed neighbours. The data ends with `pinned()`'s three instances: two on the declaration worked by hand
+(`hand()`), θ every input, which the check must refuse, and θ the registered input, which it must accept, and one on a
+declaration with a constant gate (`hand_const()`), which it must accept.
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib.util
 import json
 import random
@@ -37,9 +41,14 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 
-_spec = importlib.util.spec_from_file_location("nci_reference", Path(__file__).resolve().parent / "nci_reference.py")
-reference = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(reference)
+def _load(name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+reference = _load("nci_reference")
 
 COUNT = 4000
 WIDTHS = [1, 2, 3, 8, 16, 32]
@@ -118,7 +127,7 @@ def composite(name: str, body: Body, ret: list[int]):
 
 
 def _op(rng, body: Body, srcs: list[int], k: int | None = None, exact: list[int] | None = None) -> list[int]:
-    """One primitive over the handles `exact`, or over `k` (else one to four) drawn from `srcs`, or now and then a
+    """One primitive over the handles `exact`, or over `k` (else one to four) sampled from `srcs`, or now and then a
     constant."""
     if exact is None and (not srcs or rng.random() < 0.04):
         return body.add(("call", prim((), r := rng.choice(WIDTHS)), []), [r])
@@ -393,22 +402,56 @@ def hand() -> str:
     return codec.canonical_json(codec.encode_program(Program(fn, registered=("a",)))).decode()
 
 
+def hand_const() -> str:
+    """A declaration with a constant: a: Value<8> (registered), b: Value<8> (bound per run); k = `Const8[0x2a]`, which
+    reads nothing; c = f(a, k): Value<8>; d = g(c, b): Value<4>. Gates, and root nodes, 0 a, 1 b, 2 k, 3 c, 4 d."""
+    from verity.ml.circuits.ops.prims import const
+
+    k, f, g = const(8, 0x2A), prim((8, 8), 8), prim((8, 8), 4)
+
+    def body(B, S, a, b):
+        return B.call(g, B.call(f, a, B.call(k)), b)
+    fn = bind(CompositeDefinition("HandConstDecl", 1, (), lambda S: ((("a", Value(8)), ("b", Value(8))), Value(4)), body,
+                                  register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=("a",)))).decode()
+
+
 def pinned() -> list[dict]:
-    """The two instances the data ends with, on `hand()` divided as {c}, {d, e}, with the result each must get (`expect`):
-    θ every input (`theta_kind` "all"), which holds b, bound per run, so it is refused; and θ the registered input
-    alone, which saves IU 1 a's 8 bits and gets a verdict. Gate ids are root node ids here, so each is an instance of
-    `NciCheck.Desc` too."""
+    """The three instances the data ends with, with the result each must get (`expect`). Two on `hand()` divided as
+    {c}, {d, e}: θ every input (`theta_kind` "all"), which holds b, bound per run, so it is refused; and θ the
+    registered input alone, which saves IU 1 a's 8 bits and gets a verdict. Then `hand_const()` divided as {k, c}, {d}
+    with θ its registered input: the constant is a gate of IU 0 that reads nothing, so IU 0 reads no fresh bit, and
+    IU 1 reads c's 8 and b's 8. Gate ids are root node ids here, so each is an instance of `NciCheck.Desc` too."""
     base = {"program": hand(), "owner": ["input", "input", 0, 1, 1], "gamma": 2, "alpha": [16, 1]}
     return [
         {"instance": base | {"theta": [0, 1]}, "theta_kind": "all", "expect": {"error": "theta-not-registered"}},
         {"instance": base | {"theta": [0]}, "theta_kind": "registered",
          "expect": {"gates": 5, "ius": [[1, 16], [2, 20]], "complies": True, "failure": None}},
+        {"instance": {"program": hand_const(), "theta": [0], "owner": ["input", "input", 0, 0, 1], "gamma": 2,
+                      "alpha": [16, 1]}, "theta_kind": "registered",
+         "expect": {"gates": 5, "ius": [[2, 0], [1, 16]], "complies": True, "failure": None}},
     ]
 
 
+@functools.cache
+def mistyped() -> list[dict]:
+    """`mistyped_vectors.cases()` as `check` reads them: gate by gate (`nci_reference.expand`) where the Program decodes,
+    else as they are, since a Program the decoder refuses is refused before θ and the owners are read."""
+    desc = _load("desc_difftest_vectors")
+    out = []
+    for inst in _load("mistyped_vectors").cases(desc.instance):
+        try:
+            reference.root_nodes(inst["program"])
+        except (ValueError, KeyError, TypeError, AttributeError):
+            out.append(inst)
+            continue
+        out.append(reference.expand(inst))
+    return out
+
+
 def total(count: int = COUNT) -> int:
-    """How many instances the data has: `count` random ones, then `pinned()`'s."""
-    return count + len(pinned())
+    """How many instances the data has: `count` random ones, then `mistyped()`'s, then `pinned()`'s."""
+    return count + len(mistyped()) + len(pinned())
 
 
 def python_results(inst: dict) -> dict:
@@ -420,11 +463,11 @@ def line(obj) -> str:
 
 
 def write(out: Path, count: int = COUNT) -> dict[str, Path]:
-    """Both files for instances 0 … count − 1, then `pinned()`'s, under ``out/difftest``."""
+    """Both files for instances 0 … count − 1, then `mistyped()`'s and `pinned()`'s, under ``out/difftest``."""
     d = out / "difftest"
     d.mkdir(parents=True, exist_ok=True)
     paths = {"difftest/instances.jsonl": d / "instances.jsonl", "difftest/python.jsonl": d / "python.jsonl"}
-    insts = [*(instance(seed)["instance"] for seed in range(count)), *(p["instance"] for p in pinned())]
+    insts = [*(instance(seed)["instance"] for seed in range(count)), *mistyped(), *(p["instance"] for p in pinned())]
     with open(paths["difftest/instances.jsonl"], "w") as fi, open(paths["difftest/python.jsonl"], "w") as fp:
         for inst in insts:
             fi.write(line(inst))

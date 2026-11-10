@@ -1,4 +1,4 @@
-// The served window's tables on the device, bit for bit `served_h1/commit.py`'s: hm96-sha512 hiding leaves
+// The served execution phase's tables on the device, bit for bit `served_h1/commit.py`'s: hm96-sha512 hiding leaves
 // (hm96-sha512/row-seg/v1) in one frame-v3-sha512 tree a table, every table a served step commits (each call's A table, its
 // admit words and its receipts; the a-step, admit-step and round trees over their roots) and the install's B tables.  Plain
 // launches on the caller's stream into caller-owned buffers, the step read from device memory, so a step's sequence is the
@@ -31,7 +31,7 @@
 // the levels from 7 up are launches of their own.  H1C_LMINB = B (H1C_HB) asks the leaves kernel's registers to leave
 // room for B blocks an SM (with H1C_MK and H1C_MID the leaves hold 200 registers on sm_120a, 160 on sm_90a and 192 on
 // sm_100a; B = 4 caps them at 128 on all three, with 64 to 96 bytes more stack).  H1C_LT = N (H1C_LVF) gives h1c_levels'
-// block N threads, 256 by default: at 128 registers a 256-thread block fits 2 an SM, so a build of more tables than
+// block N threads, 256 by default: at 128 registers a 256-CTA fits 2 an SM, so a build of more tables than
 // twice the SMs runs its levels' serial chain in two waves.  H1C_APW = 1: h1c_a_pre_k reads a row's M_key byte-table
 // rows a y word at a time, the word's 8 rows' loads issued before any is folded and y rotated in registers (as hb_mk),
 // rather than one row after another with y indexed at run time.  H1C_SEGMID = 1 (H1C_HB): a segment's first block
@@ -105,24 +105,28 @@ static_assert(H1C_MK || !H1C_MKN, "H1C_MKN is H1C_MK's M_key a nibble at a time"
 static_assert(H1C_MK || !H1C_LVB, "H1C_LVB's subtrees are H1C_MK's leaves kernel's");
 static_assert(H1C_HB || !H1C_SEGJ, "H1C_SEGJ is H1C_HB's segments kernel's");
 
-namespace sh {
-typedef unsigned long long u64;
-#include "../../codec_tensor/sha512.cuh"
-}  // namespace sh
-typedef unsigned long long u64;
-typedef unsigned int u32;
+#include "../../../verity/ml/kernels/sha512.cuh"
+#include "../../../verity/ml/kernels/row_commit.cuh"
+using u64 = rc::u64;
+using u32 = rc::u32;
 
 struct H1Const {
   u64 salt_prefix[16];  // hm96's salt_prefix block, big-endian words
   u64 leaf_prefix[16];  // leaf_prefix(KEY)
-  uint8_t head[128];    // SALT_TAG || the window's key
-  uint8_t frame[64];    // merkle._FRAME
+  uint8_t head[128];    // SALT_TAG || the execution phase's key
   uint8_t schema[32];   // "hm96-sha512/row-seg/v1"
   uint8_t qtag[48];     // rowleaf.SHA512_ROW_SEG_TAG
   uint8_t stag[48];     // rowleaf.SHA512_ROW_SEG_SEGMENT_TAG
-  int head_len, frame_len, schema_len, qtag_len, stag_len;
+  int head_len, schema_len, qtag_len, stag_len;
 };
 __constant__ H1Const HC;
+// HC's prefixes as the row commitment's hm96 constants (their chaining values), h1c_const's
+__constant__ rc::Hm96K HK;
+// sx::compress<0, 2> as the row commitment's compression
+struct H1Sha {
+  static RC_HD void compress(u64* st, u64* w) { sx::compress<0, 2>(st, w); }
+  static RC_HD void compress_kw(u64* st, const u64* kw) { sx::compress_kw<0, 2>(st, kw); }
+};
 
 struct H1Dom {
   const uint8_t* bind;    // _TAGGED_SHA512_PREFIX || u32be len(tag) || tag
@@ -155,21 +159,23 @@ struct H1Tab {
 __device__ __forceinline__ bool row_dead(const H1Tab& T, long long i) { return T.xd && !T.rlive[i / T.rbw]; }
 
 // -- SHA-512 over a byte stream ----------------------------------------------------------------------------------------
+// Hs and Hb (below) are the row commitment's sinks: rc's message forms put into them, and they hash as they fill
 struct Hs {
   u64 h[8], w[16];
   int n;
   u64 tot;
+  __device__ void put(u32 b);
+  __device__ void put8(u64 v);
 };
 __device__ __forceinline__ void hs_init(Hs& s) {
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s.h[j] = sh::kSha512Iv[j];
+  sx::iv(s.h);
 #pragma unroll
   for (int j = 0; j < 16; ++j) s.w[j] = 0;
   s.n = 0;
   s.tot = 0;
 }
 __device__ __forceinline__ void hs_flush(Hs& s) {
-  sh::sha512_compress(s.h, s.w);
+  sx::compress<0, 2>(s.h, s.w);
 #pragma unroll
   for (int j = 0; j < 16; ++j) s.w[j] = 0;
   s.n = 0;
@@ -182,17 +188,19 @@ __device__ void hs_u8(Hs& s, u32 b) {
 __device__ void hs_be(Hs& s, u64 x, int nbytes) {
   for (int i = nbytes - 1; i >= 0; --i) hs_u8(s, (u32)(x >> (8 * i)));
 }
-__device__ void hs_words(Hs& s, const u64* x, int nw) {
-  for (int k = 0; k < nw; ++k) {
-    if ((s.n & 7) == 0) {
-      s.w[s.n >> 3] = x[k];
-      s.n += 8;
-      s.tot += 8;
-      if (s.n == 128) hs_flush(s);
-    } else {
-      hs_be(s, x[k], 8);
-    }
+__device__ void Hs::put(u32 b) { hs_u8(*this, b); }
+__device__ void Hs::put8(u64 v) {
+  if ((n & 7) == 0) {
+    w[n >> 3] = v;
+    n += 8;
+    tot += 8;
+    if (n == 128) hs_flush(*this);
+  } else {
+    hs_be(*this, v, 8);
   }
+}
+__device__ void hs_words(Hs& s, const u64* x, int nw) {
+  for (int k = 0; k < nw; ++k) s.put8(x[k]);
 }
 __device__ void hs_bytes(Hs& s, const uint8_t* p, int n) {
   for (int i = 0; i < n; ++i) hs_u8(s, p[i]);
@@ -200,28 +208,15 @@ __device__ void hs_bytes(Hs& s, const uint8_t* p, int n) {
 __device__ void hs_zeros(Hs& s, int n) {
   for (int i = 0; i < n; ++i) hs_u8(s, 0);
 }
-// merkle._uint: u64be len || the value's minimal big-endian bytes (one byte for 0)
-__device__ void hs_uint(Hs& s, u64 v) {
-  int l = 1;
-  while (l < 8 && (v >> (8 * l))) ++l;
-  hs_be(s, (u64)l, 8);
-  hs_be(s, v, l);
-}
 __device__ void hs_final(Hs& s, u64 out[8]) {
   const u64 bits = 8 * s.tot;
   s.w[s.n >> 3] |= 0x80ull << (56 - 8 * (s.n & 7));
   ++s.n;
   if (s.n > 112) hs_flush(s);
   s.w[15] = bits;
-  sh::sha512_compress(s.h, s.w);
+  sx::compress<0, 2>(s.h, s.w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) out[j] = s.h[j];
-}
-// merkle._message's head: _FRAME || u32be len(tag) || tag
-__device__ void hs_frame(Hs& s, const char* tag, int tl) {
-  hs_bytes(s, HC.frame, HC.frame_len);
-  hs_be(s, (u64)tl, 4);
-  for (int i = 0; i < tl; ++i) hs_u8(s, (u32)(uint8_t)tag[i]);
 }
 __device__ int dec(u64 v, uint8_t d[20]) {
   int n = 0;
@@ -292,13 +287,11 @@ extern "C" __global__ void h1c_domains(H1Tab* __restrict__ tabs, int ntab, const
   u64 binding[8];
   hs_final(s, binding);
   hs_init(s);
-  hs_frame(s, "domain", 6);
-  hs_be(s, 64, 8);
-  hs_words(s, binding, 8);
-  hs_uint(s, 1);  // owner -1, as _uint(owner + 2)
-  hs_be(s, 64, 8);
-  hs_words(s, D.pos, 8);
-  hs_uint(s, (u64)T.count);
+  rc::put_tag(s, "domain");
+  rc::put_part64(s, binding);
+  rc::put_uint(s, 1);  // owner -1, as _uint(owner + 2)
+  rc::put_part64(s, D.pos);
+  rc::put_uint(s, (u64)T.count);
   hs_final(s, T.dom);
 }
 
@@ -332,15 +325,12 @@ extern "C" __global__ void h1c_leaves(const H1Tab* __restrict__ tabs, int ntab, 
   u64 out[8];
   if (i >= T.count) {
     hs_init(s);
-    hs_frame(s, "pad", 3);
-    hs_be(s, 64, 8);
-    hs_words(s, T.dom, 8);
-    hs_uint(s, (u64)i);
+    rc::put_pad(s, T.dom, (u64)i);
     hs_final(s, out);
   } else {
     if (!T.data) return;
     const int ns = nseg_of(T.len);
-    u64 x[8], y[24], mk[8], c[8], h[8];
+    u64 x[8], y[24], B[16], h[8];
     if (row_dead(T, i)) {
 #pragma unroll
       for (int k = 0; k < 8; ++k) x[k] = T.xd[8 * (i % T.rbw) + k];
@@ -371,39 +361,18 @@ extern "C" __global__ void h1c_leaves(const H1Tab* __restrict__ tabs, int ntab, 
       hs_u8(s, (u32)cc);
       hs_final(s, y + 8 * cc);
     }
+    const rc::PosTab<true, true> tab{reinterpret_cast<const uint8_t*>(btab)};
+    u32 m[16];
 #pragma unroll
-    for (int k = 0; k < 8; ++k) mk[k] = 0;
-    for (int p = 0; p < 192; ++p) {
-      const u32 v = (u32)(y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
-      const uint4* e = reinterpret_cast<const uint4*>(btab + ((size_t)p * 256 + v) * 8);
+    for (int k = 0; k < 16; ++k) m[k] = 0;
+    for (int p = 0; p < 192; ++p) tab.xor64(m, p, (u32)(y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu);
+    tab.words(m, B);
 #pragma unroll
-      for (int k = 0; k < 4; ++k) {
-        const uint4 q = __ldg(e + k);
-        mk[2 * k] ^= (u64)q.y << 32 | q.x;
-        mk[2 * k + 1] ^= (u64)q.w << 32 | q.z;
-      }
-    }
+    for (int k = 0; k < 8; ++k) B[k] ^= x[k];
+    rc::salt_digest<H1Sha>(HK.mid_salt, rc::SaltWords{y}, B + 8);
+    rc::hm96_value<H1Sha>(HK.mid_leaf, HK.kw_leafpad, B, h);
     hs_init(s);
-    hs_words(s, HC.salt_prefix, 16);
-    hs_words(s, y, 24);
-    hs_final(s, c);
-#pragma unroll
-    for (int k = 0; k < 8; ++k) mk[k] ^= x[k];
-    hs_init(s);
-    hs_words(s, HC.leaf_prefix, 16);
-    hs_words(s, mk, 8);
-    hs_words(s, c, 8);
-    hs_final(s, h);
-    hs_init(s);
-    hs_frame(s, "leaf", 4);
-    hs_be(s, 64, 8);
-    hs_words(s, T.dom, 8);
-    hs_uint(s, (u64)i);
-    hs_uint(s, (u64)i);
-    hs_be(s, (u64)HC.schema_len, 8);
-    hs_bytes(s, HC.schema, HC.schema_len);
-    hs_be(s, 64, 8);
-    hs_words(s, h, 8);
+    rc::put_leaf(s, T.dom, (u64)i, (u64)i, HC.schema, HC.schema_len, h);
     hs_final(s, out);
   }
 #pragma unroll
@@ -425,15 +394,7 @@ extern "C" __global__ void h1c_level(const H1Tab* __restrict__ tabs, int ntab, i
   u64* o = T.level + 8 * (off + (width >> lv) + idx);
   Hs s;
   hs_init(s);
-  hs_frame(s, "node", 4);
-  hs_be(s, 64, 8);
-  hs_words(s, T.dom, 8);
-  hs_uint(s, (u64)lv);
-  hs_uint(s, (u64)idx);
-  hs_be(s, 64, 8);
-  hs_words(s, in, 8);
-  hs_be(s, 64, 8);
-  hs_words(s, in + 8, 8);
+  rc::put_node(s, T.dom, (u64)lv, (u64)idx, in, in + 8);
   u64 out[8];
   hs_final(s, out);
 #pragma unroll
@@ -445,7 +406,7 @@ extern "C" __global__ void h1c_level(const H1Tab* __restrict__ tabs, int ntab, i
 #endif
 
 // -- a served call's A table in one launch -------------------------------------------------------------------------------
-// The same table as h1c_build's, split by what it reads.  Once a window (h1c_a_init): each segment's first block and x's
+// The same table as h1c_build's, split by what it reads.  Once an execution phase (h1c_a_init): each segment's first block and x's
 // (they read only the row length), and x of the canonical empty row.  Once a step, before its forward (h1c_a_step: the
 // domains, then h1c_a_pre): what reads the step but no row (each row's salts y, M_key y and c, its leaf frame up to h, each
 // level's node prefix) and every leaf and node over rows >= m alone (the canonical empty row's).  Per call (h1c_a_call): the
@@ -477,10 +438,11 @@ struct Hb {
   uint8_t* b;
   int n;
   u64 tot;
+  __device__ void put(u32 v);
+  __device__ void put8(u64 v);
 };
 __device__ __forceinline__ void hb_init(Hb& s, uint8_t* b) {
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s.h[j] = sh::kSha512Iv[j];
+  sx::iv(s.h);
   s.b = b;
   s.n = 0;
   s.tot = 0;
@@ -504,8 +466,8 @@ __device__ __forceinline__ u64* ap_base(int p) {
   return ap_smem + AP_WORDS * p;
 }
 __device__ __forceinline__ void ap_round(u64& a, u64& b, u64& c, u64& d, u64& e, u64& f, u64& g, u64& h, u64 kw) {
-  const u64 t1 = h + (sh::rotr64(e, 14) ^ sh::rotr64(e, 18) ^ sh::rotr64(e, 41)) + ((e & f) ^ (~e & g)) + kw;
-  const u64 t2 = (sh::rotr64(a, 28) ^ sh::rotr64(a, 34) ^ sh::rotr64(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+  const u64 t1 = h + (sx::rotr<0, 14>(e) ^ sx::rotr<0, 18>(e) ^ sx::rotr<0, 41>(e)) + ((e & f) ^ (~e & g)) + kw;
+  const u64 t2 = (sx::rotr<0, 28>(a) ^ sx::rotr<0, 34>(a) ^ sx::rotr<0, 39>(a)) + ((a & b) ^ (a & c) ^ (b & c));
   h = g;
   g = f;
   f = e;
@@ -523,7 +485,7 @@ __device__ __noinline__ void ap_cmp(u64* h, const u64* w) {
 #pragma unroll
   for (int t = 0; t < 16; ++t) {
     x[32 * (80 + t)] = w[t];
-    x[32 * t] = sh::kSha512K[t] + w[t];
+    x[32 * t] = sx::K_DEV[t] + w[t];
   }
   if (lane == 0) base[96 * 32] = 0;
   ap_arrive(bar, 64);
@@ -554,7 +516,7 @@ __device__ __forceinline__ void ap_cmp_in(u64 h[8], const u64 w[16]) {
 #pragma unroll
   for (int t = 0; t < 16; ++t) {
     x[32 * (80 + t)] = w[t];
-    x[32 * t] = sh::kSha512K[t] + w[t];
+    x[32 * t] = sx::K_DEV[t] + w[t];
   }
   if (lane == 0) base[96 * 32] = 0;
   ap_arrive(bar, 64);
@@ -593,11 +555,11 @@ __device__ void ap_serve(int p) {
 #pragma unroll
       for (int t = 0; t < 16; ++t) {
         const u64 w15 = w[(t + 1) & 15], w2 = w[(t + 14) & 15];
-        w[t] += (sh::rotr64(w15, 1) ^ sh::rotr64(w15, 8) ^ (w15 >> 7)) + w[(t + 9) & 15] +
-                (sh::rotr64(w2, 19) ^ sh::rotr64(w2, 61) ^ (w2 >> 6));
+        w[t] += (sx::rotr<0, 1>(w15) ^ sx::rotr<0, 8>(w15) ^ (w15 >> 7)) + w[(t + 9) & 15] +
+                (sx::rotr<0, 19>(w2) ^ sx::rotr<0, 61>(w2) ^ (w2 >> 6));
       }
 #pragma unroll
-      for (int i = 0; i < 16; ++i) x[32 * (16 * q + i)] = sh::kSha512K[16 * q + i] + w[i];
+      for (int i = 0; i < 16; ++i) x[32 * (16 * q + i)] = sx::K_DEV[16 * q + i] + w[i];
       ap_arrive(bar + q, 64);
     }
   }
@@ -616,7 +578,7 @@ __device__ __noinline__ void hb_block(u64* h, const uint8_t* b) {
   for (int k = 0; k < 16; ++k) w[k] = (u64)bswap32(q[2 * k]) << 32 | bswap32(q[2 * k + 1]);
 #pragma unroll
   for (int j = 0; j < 8; ++j) v[j] = h[j];
-  sh::sha512_compress(v, w);
+  sx::compress<0, 2>(v, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) h[j] = v[j];
 }
@@ -663,6 +625,8 @@ __device__ __forceinline__ void hb_put8(Hb& s, u64 v) {
   s.tot += 8;
   if (s.n == 128) hb_flush<PR>(s);
 }
+__device__ __forceinline__ void Hb::put(u32 v) { hb_u8(*this, v); }
+__device__ __forceinline__ void Hb::put8(u64 v) { hb_put8(*this, v); }
 template <int PR = 0>
 __device__ __forceinline__ void hb_words(Hb& s, const u64* x, int nw) {
   for (int k = 0; k < nw; ++k) hb_put8<PR>(s, x[k]);
@@ -672,17 +636,6 @@ __device__ __forceinline__ void hb_bytes(Hb& s, const uint8_t* p, int n) {
 }
 __device__ __forceinline__ void hb_zeros(Hb& s, int n) {
   for (int i = 0; i < n; ++i) hb_u8(s, 0);
-}
-__device__ __forceinline__ void hb_uint(Hb& s, u64 v) {
-  int l = 1;
-  while (l < 8 && (v >> (8 * l))) ++l;
-  hb_be(s, (u64)l, 8);
-  hb_be(s, v, l);
-}
-__device__ __forceinline__ void hb_frame(Hb& s, const char* tag, int tl) {
-  hb_bytes(s, HC.frame, HC.frame_len);
-  hb_be(s, (u64)tl, 4);
-  for (int i = 0; i < tl; ++i) hb_u8(s, (u32)(uint8_t)tag[i]);
 }
 template <int PR = 0>
 __device__ __forceinline__ void hb_final(Hb& s, u64* out) {
@@ -783,7 +736,7 @@ __device__ __forceinline__ void hb_row(Hb& s, const H1Tab& T, long long i, int o
         w[2 * k] = (u64)bswap32(v.x) << 32 | bswap32(v.y);
         w[2 * k + 1] = (u64)bswap32(v.z) << 32 | bswap32(v.w);
       }
-      sh::sha512_compress(s.h, w);
+      sx::compress<0, 2>(s.h, w);
       s.tot += 128;
       p += 128;
     } else {
@@ -814,13 +767,11 @@ __device__ __forceinline__ void hb_domain(H1Tab& T, u64 st, uint8_t* b) {
   u64 binding[8];
   hb_final(s, binding);
   hb_init(s, b);
-  hb_frame(s, "domain", 6);
-  hb_be(s, 64, 8);
-  hb_words(s, binding, 8);
-  hb_uint(s, 1);  // owner -1, as _uint(owner + 2)
-  hb_be(s, 64, 8);
-  hb_words(s, D.pos, 8);
-  hb_uint(s, (u64)T.count);
+  rc::put_tag(s, "domain");
+  rc::put_part64(s, binding);
+  rc::put_uint(s, 1);  // owner -1, as _uint(owner + 2)
+  rc::put_part64(s, D.pos);
+  rc::put_uint(s, (u64)T.count);
   hb_final(s, T.dom);
 }
 
@@ -910,6 +861,10 @@ extern "C" __global__ void H1C_SEGS_BOUNDS h1c_segs(H1Tab* __restrict__ tabs, in
   hb_final(s, T.segs + (i * ns + j) * 8);
 }
 
+// row v of byte table p (rc::PosTab's entry, as words) as 4 uint4
+__device__ __forceinline__ const uint4* btab_at(const u64* btab, int p, u32 v) {
+  return reinterpret_cast<const uint4*>(rc::PosTab<true, true>{reinterpret_cast<const uint8_t*>(btab)}.at(p, v));
+}
 // H1C_MK: byte table p's row v is the XOR of M_key's columns 8p + s over v's set bits s, column 8p + s its row 1 << s,
 // so M_key y is the XOR of the columns of y's set bits.  The block stages MKW words' columns at a time in bf (every
 // thread of the block, at its barriers), and its threads read each column at one address: a broadcast, 1536 columns
@@ -930,8 +885,7 @@ __device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restric
     for (int q = threadIdx.x; q < 16 * 16 * 4; q += HT) {
       const int t = q >> 6, r = (q >> 2) & 15, k = q & 3;  // table t = 2e + h (byte e from the top, h 1 its low nibble)
       const u32 v = (t & 1) ? (u32)r : (u32)r << 4;
-      cs[(q & ~3) | (k ^ ((r >> 1) & 3))] =
-          __ldg(reinterpret_cast<const uint4*>(btab + ((size_t)(8 * wd + (t >> 1)) * 256 + v) * 8) + k);
+      cs[(q & ~3) | (k ^ ((r >> 1) & 3))] = __ldg(btab_at(btab, 8 * wd + (t >> 1), v) + k);
     }
     __syncthreads();
     const u64 w = y[0];
@@ -968,7 +922,7 @@ __device__ __forceinline__ void hb_mk(u64 y[24], u64 mk[8], const u64* __restric
       __syncthreads();
       for (int q = threadIdx.x; q < MKW * 8 * 8 * 4; q += HT) {
         const int c = q >> 2, p = 8 * wd + (c >> 3);
-        cs[q] = __ldg(reinterpret_cast<const uint4*>(btab + ((size_t)p * 256 + (1u << (c & 7))) * 8) + (q & 3));
+        cs[q] = __ldg(btab_at(btab, p, 1u << (c & 7)) + (q & 3));
       }
       __syncthreads();
     }
@@ -1009,11 +963,7 @@ __device__ __forceinline__ void x_head(Hb& s, const H1Tab& T) {
   hb_be(s, 1024, 4);
   hb_zeros(s, 128 - HC.qtag_len - 20);
 }
-__device__ __forceinline__ void frame_head(Hb& s, const H1Tab& T) {
-  hb_frame(s, "leaf", 4);
-  hb_be(s, 64, 8);
-  hb_words(s, T.dom, 8);
-}
+__device__ __forceinline__ void frame_head(Hb& s, const H1Tab& T) { rc::put_head(s, "leaf", T.dom); }
 // snapshot k of table T's constant heads: 0 x's header, 1 salt_prefix, 2 leaf_prefix, 3 the frame leaf's prefix
 __device__ __forceinline__ void leaf_head(const H1Tab& T, int k, uint8_t* b, u64* o) {
   Hb s;
@@ -1091,12 +1041,10 @@ __device__ __forceinline__ void leaf_out(const H1Tab& T, long long i, uint8_t* b
     hb_init(s, b);
     frame_head(s, T);
   }
-  hb_uint(s, (u64)i);
-  hb_uint(s, (u64)i);
-  hb_be(s, (u64)HC.schema_len, 8);
-  hb_bytes(s, HC.schema, HC.schema_len);
-  hb_be(s, 64, 8);
-  hb_words(s, h, 8);
+  rc::put_uint(s, (u64)i);
+  rc::put_uint(s, (u64)i);
+  rc::put_part(s, HC.schema, HC.schema_len);
+  rc::put_part64(s, h);
   hb_final(s, out);
 }
 
@@ -1148,10 +1096,7 @@ extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_leaves(const H1T
 #endif
     Hb s;
     hb_init(s, b);
-    hb_frame(s, "pad", 3);
-    hb_be(s, 64, 8);
-    hb_words(s, T.dom, 8);
-    hb_uint(s, (u64)i);
+    rc::put_pad(s, T.dom, (u64)i);
     hb_final(s, out);
   } else {
 #if !H1C_MK
@@ -1159,23 +1104,13 @@ extern "C" __global__ void __launch_bounds__(HT, H1C_LMINB) h1c_leaves(const H1T
     u64 x[8], y[24], mk[8];
     leaf_x(T, i, b, x);
     leaf_salt(T, i, step, b, y);
+    const rc::PosTab<true, true> tab{reinterpret_cast<const uint8_t*>(btab)};
+    u32 m[16];
 #pragma unroll
-    for (int k = 0; k < 8; ++k) mk[k] = 0;
+    for (int k = 0; k < 16; ++k) m[k] = 0;
 #pragma unroll
-    for (int wd = 0; wd < 24; ++wd) {
-      const u64 yw = y[wd];
-#pragma unroll
-      for (int e = 0; e < 8; ++e) {
-        const u32 v = (u32)(yw >> (56 - 8 * e)) & 0xFFu;
-        const uint4* q4 = reinterpret_cast<const uint4*>(btab + ((size_t)(8 * wd + e) * 256 + v) * 8);
-#pragma unroll
-        for (int k = 0; k < 4; ++k) {
-          const uint4 q = __ldg(q4 + k);
-          mk[2 * k] ^= (u64)q.y << 32 | q.x;
-          mk[2 * k + 1] ^= (u64)q.w << 32 | q.z;
-        }
-      }
-    }
+    for (int p = 0; p < 192; ++p) tab.xor64(m, p, (u32)(y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu);
+    tab.words(m, mk);
     leaf_out(T, i, b, x, y, mk, out);
 #endif
   }
@@ -1206,15 +1141,7 @@ __device__ __forceinline__ void hb_node(const H1Tab& T, uint8_t* b, int lv, long
   u64* o = T.level + 8 * (off + (width >> lv) + idx);
   Hb s;
   hb_init(s, b);
-  hb_frame(s, "node", 4);
-  hb_be(s, 64, 8);
-  hb_words(s, T.dom, 8);
-  hb_uint(s, (u64)lv);
-  hb_uint(s, (u64)idx);
-  hb_be(s, 64, 8);
-  hb_words(s, in, 8);
-  hb_be(s, 64, 8);
-  hb_words(s, in + 8, 8);
+  rc::put_node(s, T.dom, (u64)lv, (u64)idx, in, in + 8);
   u64 out[8];
   hb_final(s, out);
 #pragma unroll
@@ -1231,10 +1158,8 @@ constexpr int NSNAP = 10, NMAXD = 32;
 __device__ __forceinline__ void node_snap(const H1Tab& T, int lv, uint8_t* b, u64* o) {
   Hb s;
   hb_init(s, b);
-  hb_frame(s, "node", 4);
-  hb_be(s, 64, 8);
-  hb_words(s, T.dom, 8);
-  hb_uint(s, (u64)lv);
+  rc::put_head(s, "node", T.dom);
+  rc::put_uint(s, (u64)lv);
   hb_zeros(s, 7);
   hb_save(s, o);
 }
@@ -1327,10 +1252,7 @@ extern "C" __global__ void __launch_bounds__(LT) h1c_tail_pre_k(H1Tab* __restric
   for (long long i = T.count + threadIdx.x; i < width; i += LT) {
     Hb s;
     hb_init(s, b);
-    hb_frame(s, "pad", 3);
-    hb_be(s, 64, 8);
-    hb_words(s, T.dom, 8);
-    hb_uint(s, (u64)i);
+    rc::put_pad(s, T.dom, (u64)i);
     u64 out[8];
     hb_final(s, out);
 #pragma unroll
@@ -1374,7 +1296,7 @@ __device__ __forceinline__ void tail_node(const H1Tab& T, uint8_t* b, int lv, lo
         for (int i = 3; i < 15; ++i) w[i] = 0;
         w[15] = bits;
       }
-      sh::sha512_compress(h, w);
+      sx::compress<0, 2>(h, w);
     }
     u64* o = T.level + 8 * (off + (width >> lv) + idx);
 #pragma unroll
@@ -1478,10 +1400,8 @@ extern "C" __global__ void __launch_bounds__(64) h1c_a_pre_k(const H1Tab* __rest
   for (int k = 0; k < 8; ++k) dom[k] = T.dom[k];
   for (int lv = tid; lv < T.depth; lv += nt) {
     hb_init(s, b);
-    hb_frame(s, "node", 4);
-    hb_be(s, 64, 8);
-    hb_words(s, dom, 8);
-    hb_uint(s, (u64)lv);
+    rc::put_head(s, "node", dom);
+    rc::put_uint(s, (u64)lv);
     hb_zeros(s, 7);
     hb_save(s, P + A_NS + SNAP * lv);
   }
@@ -1506,6 +1426,7 @@ extern "C" __global__ void __launch_bounds__(64) h1c_a_pre_k(const H1Tab* __rest
     }
 #pragma unroll
     for (int k = 0; k < 8; ++k) mk[k] = 0;
+    const rc::PosTab<true, true> tab{reinterpret_cast<const uint8_t*>(btab)};
 #if H1C_APW
     // 24 rotations bring y back in order for the salt hash below.
 #pragma unroll 1
@@ -1517,8 +1438,7 @@ extern "C" __global__ void __launch_bounds__(64) h1c_a_pre_k(const H1Tab* __rest
       uint4 q[8][4];
 #pragma unroll
       for (int e = 0; e < 8; ++e) {
-        const uint4* r =
-            reinterpret_cast<const uint4*>(btab + ((size_t)(8 * wd + e) * 256 + ((w >> (56 - 8 * e)) & 0xFFu)) * 8);
+        const uint4* r = reinterpret_cast<const uint4*>(tab.at(8 * wd + e, (u32)(w >> (56 - 8 * e)) & 0xFFu));
 #pragma unroll
         for (int k = 0; k < 4; ++k) q[e][k] = __ldg(r + k);
       }
@@ -1531,16 +1451,11 @@ extern "C" __global__ void __launch_bounds__(64) h1c_a_pre_k(const H1Tab* __rest
         }
     }
 #else
-    for (int p = 0; p < 192; ++p) {
-      const u32 v = (u32)(y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
-      const uint4* e = reinterpret_cast<const uint4*>(btab + ((size_t)p * 256 + v) * 8);
+    u32 mw[16];
 #pragma unroll
-      for (int k = 0; k < 4; ++k) {
-        const uint4 q = __ldg(e + k);
-        mk[2 * k] ^= (u64)q.y << 32 | q.x;
-        mk[2 * k + 1] ^= (u64)q.w << 32 | q.z;
-      }
-    }
+    for (int k = 0; k < 16; ++k) mw[k] = 0;
+    for (int p = 0; p < 192; ++p) tab.xor64(mw, p, (u32)(y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu);
+    tab.words(mw, mk);
 #endif
 #pragma unroll
     for (int k = 0; k < 8; ++k) R[SNAP + k] = mk[k];
@@ -1548,14 +1463,11 @@ extern "C" __global__ void __launch_bounds__(64) h1c_a_pre_k(const H1Tab* __rest
     hb_words(s, y, 24);
     hb_final(s, R + SNAP + 8);
     hb_init(s, b);
-    hb_frame(s, "leaf", 4);
-    hb_be(s, 64, 8);
-    hb_words(s, dom, 8);
-    hb_uint(s, (u64)i);
-    hb_uint(s, (u64)i);
-    hb_be(s, (u64)HC.schema_len, 8);
-    hb_bytes(s, HC.schema, HC.schema_len);
-    hb_be(s, 64, 8);
+    rc::put_head(s, "leaf", dom);
+    rc::put_uint(s, (u64)i);
+    rc::put_uint(s, (u64)i);
+    rc::put_part(s, HC.schema, HC.schema_len);
+    rc::put_be(s, 64, 8);  // the value's part length: a_leaf puts its words
     hb_save(s, R);
   }
   __syncthreads();
@@ -1563,10 +1475,7 @@ extern "C" __global__ void __launch_bounds__(64) h1c_a_pre_k(const H1Tab* __rest
     u64 out[8];
     if (i >= T.count) {
       hb_init(s, b);
-      hb_frame(s, "pad", 3);
-      hb_be(s, 64, 8);
-      hb_words(s, dom, 8);
-      hb_uint(s, (u64)i);
+      rc::put_pad(s, dom, (u64)i);
       hb_final(s, out);
     } else {
       a_leaf(s, b, P, i, P + A_XE, out);
@@ -1637,7 +1546,7 @@ extern "C" __global__ void __launch_bounds__(32 * AW) h1c_a_call_k(const H1Tab* 
 #pragma unroll
               for (int j = 0; j < 8; ++j) nx[j] = __ldg(q + j);
             }
-            sh::sha512_compress(s.h, w);
+            sx::compress<0, 2>(s.h, w);
             s.tot += 128;
             if (!more) break;
           }
@@ -1675,7 +1584,7 @@ extern "C" __global__ void __launch_bounds__(32 * AW) h1c_a_call_k(const H1Tab* 
   if (threadIdx.x == 0) *reinterpret_cast<unsigned*>(P + A_CNT) = 0;
 }
 
-// segment block q of a row (the bytes after the segment's prefix block: L of them, then SHA-512's padding) as message words;
+// segment block q of a row (the bytes after the segment's prefix chunk: L of them, then SHA-512's padding) as message words;
 // row's bytes below k, the tail's (sa's) at k and above
 __device__ __forceinline__ void a_seg_words(u64 w[16], const uint8_t* row, const uint8_t* tl, int k, int p0, int L, int nb,
                                             int q) {
@@ -1839,7 +1748,7 @@ extern "C" __global__ void __launch_bounds__(128) h1c_a_call2_k(const H1Tab* __r
 
 // h1c_a_form(3): h1c_a_call2_k's table, every message built as words in registers and every compression the one inlined
 // ap_cmp_in site of a loop over the lane's blocks (segments, x, h, the frame leaf, then the last block's nodes).  It reads
-// the layout the window's constants give (h1c_a_call refuses form 3 otherwise, a3_layout): the segment, x and h prefixes
+// the layout the execution phase's constants give (h1c_a_call refuses form 3 otherwise, a3_layout): the segment, x and h prefixes
 // end on a block, a node prefix leaves one byte pending (an idx below 256 then puts its children at byte 3), a row's leaf
 // frame prefix 41 to 47 (its children at word 5, byte 1 to 7).  Each consumer warp stages its rows' and the levels'
 // prefixes into shared memory first (cs: x's and h's first-block states, its two rows' frame prefixes, M_key y and c,
@@ -2122,15 +2031,27 @@ static bool hc_set = false;
 extern "C" int h1c_const(const H1Const* c) {
   hc_host = *c;
   hc_set = true;
-  return (int)cudaMemcpyToSymbol(HC, c, sizeof(H1Const));
+  rc::Hm96K hk;
+  const u64* pre[2] = {c->salt_prefix, c->leaf_prefix};
+  u64* mid[2] = {hk.mid_salt, hk.mid_leaf};
+  for (int j = 0; j < 2; ++j) {
+    u64 w[16];
+    for (int k = 0; k < 16; ++k) w[k] = pre[j][k];
+    sha::iv(mid[j]);
+    sha::compress(mid[j], w);
+  }
+  rc::pad_schedule(256, hk.kw_leafpad);
+  const cudaError_t e = cudaMemcpyToSymbol(HC, c, sizeof(H1Const));
+  return (int)(e != cudaSuccess ? e : cudaMemcpyToSymbol(HK, &hk, sizeof hk));
 }
 // h1c_a_call3_k's layout: a node prefix (frame, "node", 64, the domain, uint(lv), seven zeros) one byte past a block, a
 // row's leaf frame prefix (frame, "leaf", 64, the domain, uint(i) twice, the schema, 64) 41 to 47 bytes past one for every
 // row below AP_MAXCOUNT (uint(i) one or two bytes)
+static_assert((rc::FRAME_LEN + 96) % 128 == 1, "a node prefix ends one byte past a block");
 static bool a3_layout() {
-  if (!hc_set || (hc_host.frame_len + 96) % 128 != 1) return false;
+  if (!hc_set) return false;
   for (int l = 1; l <= 2; ++l) {
-    const int n = (hc_host.frame_len + hc_host.schema_len + 112 + 2 * l) % 128;
+    const int n = (rc::FRAME_LEN + hc_host.schema_len + 112 + 2 * l) % 128;
     if (n >> 3 != 5 || !(n & 7)) return false;
   }
   return true;
@@ -2138,7 +2059,7 @@ static bool a3_layout() {
 
 extern "C" int h1c_a_words(int t) { return A_ROW + A_RW * t; }
 
-// the window's part, once, on `stream`: ntab A tables (tabs_dev) into pre (wpt = h1c_a_words(T) words a table)
+// the execution phase's part, once, on `stream`: ntab A tables (tabs_dev) into pre (wpt = h1c_a_words(T) words a table)
 extern "C" int h1c_a_init(const H1Tab* tabs, const H1Tab* tabs_dev, int ntab, u64* pre, int wpt, cudaStream_t stream) {
   for (int t = 0; t < ntab; ++t) {
     if (!tabs[t].data || nseg_of(tabs[t].len) > A_NSEG || tabs[t].depth > A_DEPTH || tabs[t].depth < 1) return 100 + t;

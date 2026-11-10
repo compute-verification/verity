@@ -1,7 +1,14 @@
-import Proofs.Flock.Soundness.TmplSplitTab
+module
+
+public import Proofs.Flock.Soundness.TmplSplitTab
+public import Proofs.Flock.Soundness.TmplFoldClass
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.TmplFoldClassOk
 
 /-!
-# A class's table, valued at a chunk origin (PRF-133, part 3, stage 3)
+# A class's table, valued at a chunk origin
 
 `walk` folds a class at local offset `off` in chunks of `2^al`; placed at chunk origin `H` (so at `h = H · 2^al + off`
 in `foldDef`'s terms), an entry at row chunk `cx` and column chunk `cy` has high factors `eq(ρ[L ..], H + cx)` and
@@ -12,6 +19,8 @@ value an `Out`.
   low factors `walk` reads from its `eq` halves times the high factors.
 - `ref_tabExp`, `ref_tabSum`: `Tab.ref` adds its reference's term.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

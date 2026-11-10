@@ -16,7 +16,7 @@ import bisect
 from itertools import chain, islice
 from typing import Iterator
 
-from .types import Array, Record, Tuple, Type, Value, remove_axis
+from .types import Array, RecordType, Tuple, Type, Value, remove_axis
 
 Ref = tuple[str, int, int]
 
@@ -96,7 +96,7 @@ class Strided(Refs):
     (e.g. one KV head's rows out of a `[T][KVH][D]` cache, or a `[D][16]` column block of V).
 
     Zero strides denote repetition of the *same* reference: `Strided(s, i, b, 1, 0, 0, n)` is the leaf `b`
-    of `(s, i)` referenced `n` times — one produced value, broadcast (frontend rulings §8.5). It is what
+    of `(s, i)` referenced `n` times — one produced value, broadcast. It is what
     `concat` normalises `[z.refs] * n` to; it never merges distinct produced values."""
 
     __slots__ = ("space", "idx", "base", "inner", "outer_stride", "inner_stride", "count")
@@ -479,7 +479,7 @@ class Coll:
         t = self.type
         if isinstance(t, Array):
             return t.n
-        if isinstance(t, (Tuple, Record)):
+        if isinstance(t, (Tuple, RecordType)):
             return len(t.fields)
         raise TypeError("a scalar has no length")
 
@@ -502,7 +502,7 @@ class Coll:
             ft = t.fields[i]
             off = t.field_offset(i)
             return Coll(ft, self.refs.slice(off, off + ft.leaves))
-        if isinstance(t, Record):
+        if isinstance(t, RecordType):
             if isinstance(i, str):
                 return self.field(i)
             _, ft = t.fields[i]
@@ -512,7 +512,7 @@ class Coll:
 
     def field(self, name: str) -> "Coll":
         t = self.type
-        if not isinstance(t, Record):
+        if not isinstance(t, RecordType):
             raise TypeError(f"{t!r} has no fields")
         i = t.index(name)
         return self[i]
@@ -587,4 +587,4 @@ def tuple_of(*parts: Coll) -> Coll:
 
 
 def record_of(**parts: Coll) -> Coll:
-    return coll_concat(Record(**{k: v.type for k, v in parts.items()}), list(parts.values()))
+    return coll_concat(RecordType(**{k: v.type for k, v in parts.items()}), list(parts.values()))

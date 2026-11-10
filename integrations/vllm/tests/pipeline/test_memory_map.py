@@ -1,7 +1,7 @@
 """The Commit's memory map (`verity_vllm.pipeline.memory_map`) on CPU: a small Llama's request Program of record in a Build dir
 (its ``descriptor.json.gz`` and instance rows), a committed store that serves each identity's words as a function of it and the
 request's slots at pages out of first-need order, and the engine's caches in vLLM 0.28's packed page layout.  The map written is
-`commit.memory_map.record`'s over the rows' committed words at those pages, the engine holds its blocks, the Program's census and
+`commit_map.record`'s over the rows' committed words at those pages, the engine holds its blocks, the Program's census and
 KV rows are cached beside its descriptor and read back without it, and a run without committed slots, without the engine's caches
 or with a descriptor of another Program is refused beside the map, never raised.  A warm request's rows are cut by its Build's
 ``prefix_cache.json``, and its cached page is its producer's, written once.  GLM-5.3 at TP2 in small: each rank's replay
@@ -20,7 +20,7 @@ import pytest
 import torch
 
 from tests.commit.test_memory_map import PREFIX, PRODUCERS, WARM_ARRIVE, WARM_TABLES, _slots, dsa_request, warm_program
-from tests.predict.test_predict import TINY, _phi
+from tests.program.predict.test_predict import TINY, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
@@ -30,7 +30,8 @@ from verity_vllm.commit import memory_map as MM
 from verity_vllm.pipeline import memory_map as PMM
 from verity_vllm.pipeline.build import _instance_rows
 from verity_vllm.pipeline.tp import rank_replay as RR
-from verity_vllm.predict.build import build_program
+from verity_vllm.program.predict.build import build_program
+from verity_vllm.protocols.remote_bandwidth import commit_map as CM
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
 LAYERS = [f"model.layers.{i}.self_attn.attn" for i in range(2)]
@@ -110,10 +111,10 @@ def test_the_commits_map_is_the_records_at_the_engines_pages(tmp_path):
     pi, rows = ProgramIndex(lp["instances"]), MM.rows(program)
     kv, payload = MM.packed(rows), _payload(ProgramIndex(lp["instances"]), rows)
     out = tmp_path / "memory_map.jsonl"
-    doc = PMM.write(out, {"path": str(out), "registration": "ab" * 64}, loaded={"r0": lp}, store=_store(rows), arrivals={"r0": ARRIVE},
+    doc = CM.write(out, {"path": str(out), "registration": "ab" * 64}, loaded={"r0": lp}, store=_store(rows), arrivals={"r0": ARRIVE},
                     caches=_caches(kv, payload))
-    layout = MM.Layout(block_size=4, pages=8)
-    head, steps = MM.record({"r0": kv}, {"r0": ARRIVE}, payload, bytes.fromhex("ab" * 64), layout, {"r0": PAGES})
+    layout = CM.KvPool(block_size=4, pages=8)
+    head, steps = CM.record({"r0": kv}, {"r0": ARRIVE}, payload, bytes.fromhex("ab" * 64), layout, {"r0": PAGES})
     assert out.read_text() == dumps(head, steps)
     got_head, got = parse(out.read_text().splitlines())
     rp = Replay(got_head)
@@ -135,10 +136,10 @@ def test_a_remote_sessions_map_is_written_where_its_encodes_land(tmp_path):
     rows, out = MM.rows(program), tmp_path / "memory_map.jsonl"
     rec = {"prover": {"kv": {"lifetime": 60}},
            "memory_map": {"first_step": 100, "deferral": {"encodes": [[102, 103, 32, 4], [104, 105, 36, 2], [106, 107, 38, 2]]}}}
-    (tmp_path / PMM.SESSION).write_text(json.dumps(rec))
-    d = PMM.deferral(tmp_path / PMM.SESSION)
-    assert d == MM.Deferral(((102, 103, 32, 4), (104, 105, 36, 2), (106, 107, 38, 2)), 100, 60)
-    doc = PMM.write(out, {"path": str(out), "registration": "ab" * 64}, loaded={"r0": lp}, store=_store(rows), arrivals={"r0": ARRIVE},
+    (tmp_path / CM.SESSION).write_text(json.dumps(rec))
+    d = CM.deferral(tmp_path / CM.SESSION)
+    assert d == CM.Deferral(((102, 103, 32, 4), (104, 105, 36, 2), (106, 107, 38, 2)), 100, 60)
+    doc = CM.write(out, {"path": str(out), "registration": "ab" * 64}, loaded={"r0": lp}, store=_store(rows), arrivals={"r0": ARRIVE},
                     caches=_caches(MM.packed(rows), _payload(ProgramIndex(lp["instances"]), rows)), deferral=d)
     # each append lands a step after it is made: the filler freed where a write first reaches it, page 2's second half, read
     # last at step 7 where its encode lands, written there and freed a line later
@@ -147,8 +148,8 @@ def test_a_remote_sessions_map_is_written_where_its_encodes_land(tmp_path):
         (2, [12, 13, 28, 29], []), (3, [4, 20], [12, 13, 28, 29]), (5, [5, 21], [4, 20]),
         (7, [4, 8, 12, 13, 20, 24, 28, 29], [5, 21]), (8, [5, 21], [])]
     assert doc["deferral"] == {"first_step": 100, "appends": 3, "lifetime": 60}
-    (tmp_path / PMM.SESSION).write_text(json.dumps({"prover": {"kv": {"lifetime": 60}}, "memory_map": None}))
-    assert PMM.deferral(tmp_path / PMM.SESSION) is None and PMM.deferral(tmp_path / "none.json") is None
+    (tmp_path / CM.SESSION).write_text(json.dumps({"prover": {"kv": {"lifetime": 60}}, "memory_map": None}))
+    assert CM.deferral(tmp_path / CM.SESSION) is None and CM.deferral(tmp_path / "none.json") is None
 
 
 def test_no_page_is_assumed(tmp_path):
@@ -156,9 +157,9 @@ def test_no_page_is_assumed(tmp_path):
     rows, out = MM.rows(program), tmp_path / "memory_map.jsonl"
     req, kw = {"path": str(out), "registration": "00" * 64}, {"loaded": {"r0": lp}, "arrivals": {"r0": ARRIVE}}
     with pytest.raises(ValueError, match=re.escape("no committed `model.layers.0.self_attn.attn/slot_mapping` of request r0 at step 2")):
-        PMM.write(out, req, store=Committed({}), caches=_caches(MM.packed(rows), lambda r, x: bytes(2048)), **kw)
+        CM.write(out, req, store=Committed({}), caches=_caches(MM.packed(rows), lambda r, x: bytes(2048)), **kw)
     with pytest.raises(ValueError, match="the Commit attached no KV-slots source"):
-        PMM.write(out, req, store=_store(rows), caches=None, **kw)
+        CM.write(out, req, store=_store(rows), caches=None, **kw)
     assert not out.exists()
 
 
@@ -167,7 +168,7 @@ def test_the_census_and_kv_rows_are_computed_once_per_program(tmp_path):
     d, digest = tmp_path / "build_request_LP4_T5", lp["instances"]["digest"]
     out = tmp_path / "memory_map.jsonl"
     rows = MM.rows(program)
-    PMM.write(out, {"path": str(out), "registration": "ab" * 64}, loaded={"r0": lp}, store=_store(rows), arrivals={"r0": ARRIVE},
+    CM.write(out, {"path": str(out), "registration": "ab" * 64}, loaded={"r0": lp}, store=_store(rows), arrivals={"r0": ARRIVE},
               caches=_caches(MM.packed(rows), _payload(ProgramIndex(lp["instances"]), rows)))
     census = json.loads(gzip.decompress((d / PMM.CENSUS).read_bytes()))
     kv = json.loads(gzip.decompress((d / PMM.KV_ROWS).read_bytes()))
@@ -185,7 +186,7 @@ def test_a_requests_cache_dir_leaves_the_build_dir_untouched(tmp_path):
     program, lp = _build_dir(tmp_path, 4, 5)
     d, digest, side = tmp_path / "build_request_LP4_T5", lp["instances"]["digest"], tmp_path / "side"
     rows, out, before = MM.rows(program), tmp_path / "memory_map.jsonl", sorted(p.name for p in d.iterdir())
-    PMM.write(out, {"path": str(out), "registration": "ab" * 64, "cache_dir": str(side)}, loaded={"r0": lp}, store=_store(rows),
+    CM.write(out, {"path": str(out), "registration": "ab" * 64, "cache_dir": str(side)}, loaded={"r0": lp}, store=_store(rows),
               arrivals={"r0": ARRIVE}, caches=_caches(MM.packed(rows), _payload(ProgramIndex(lp["instances"]), rows)))
     assert sorted(p.name for p in d.iterdir()) == before and {p.name for p in (side / digest).iterdir()} == {PMM.CENSUS, PMM.KV_ROWS}
     (d / "descriptor.json.gz").unlink()
@@ -205,8 +206,8 @@ def test_the_map_reads_and_fills_the_replays_index_memo(tmp_path, monkeypatch):
         built_as.append(k)
         return ProgramIndex(*a, **k)
 
-    monkeypatch.setattr(PMM, "ProgramIndex", recording)
-    first = PMM.write(out, req, indices=memo, index_kw={"query": None, "norm_scales": False}, **kw)
+    monkeypatch.setattr(CM, "ProgramIndex", recording)
+    first = CM.write(out, req, indices=memo, index_kw={"query": None, "norm_scales": False}, **kw)
     written = out.read_text()
     ((key, pi),) = memo.items()
     assert key == ("index", id(lp["instances"])) and isinstance(pi, ProgramIndex)
@@ -215,8 +216,8 @@ def test_the_map_reads_and_fills_the_replays_index_memo(tmp_path, monkeypatch):
     def built(*a, **k):
         raise AssertionError("an index the memo holds is built again")
 
-    monkeypatch.setattr(PMM, "ProgramIndex", built)
-    again = PMM.write(out, req, indices=memo, **kw)
+    monkeypatch.setattr(CM, "ProgramIndex", built)
+    again = CM.write(out, req, indices=memo, **kw)
     assert out.read_text() == written and memo == {key: pi}
     assert [again[k] for k in ("page", "blocks", "written", "freed", "engine")] == [first[k] for k in ("page", "blocks", "written", "freed", "engine")]
 
@@ -226,7 +227,7 @@ def test_a_descriptor_of_another_program_is_refused_beside_the_map(tmp_path):
     _, other = _build_dir(tmp_path, 4, 1)
     req = {"path": str(tmp_path / "memory_map.jsonl"), "registration": "00" * 64}
     (tmp_path / "req.json").write_text(json.dumps(req))
-    got = PMM.after_commit(str(tmp_path / "req.json"), loaded={"r0": {**lp, "instances": other["instances"]}}, bmap={},
+    got = CM.after_commit(str(tmp_path / "req.json"), loaded={"r0": {**lp, "instances": other["instances"]}}, bmap={},
                            committed=None, manifest=None, arrivals={"r0": 0}, caches={LAYERS[0]: torch.zeros(1)})
     assert "error" in got and "descriptor.json.gz is Program" in (tmp_path / "memory_map.jsonl.error.txt").read_text()
     assert not (tmp_path / "memory_map.jsonl").exists()
@@ -256,7 +257,7 @@ def test_a_warm_requests_map_takes_its_cached_page_from_its_producer(tmp_path, m
     """A cold request and a warm one whose first page is the cold one's (`tests.commit.test_memory_map`'s session): the warm
     Build's KV rows are cut by its ``prefix_cache.json`` and refused without it, and the Commit's map takes the warm request's
     cached page from its producer as the replay names it (`c2_replay.cached_prefixes`), writing that page once, as
-    `commit.memory_map.record` does, with the engine holding every block it wrote."""
+    `commit_map.record` does, with the engine holding every block it wrote."""
     progs = {"r0": build_program(_phi(WIDE), "request", LP=8, T=1).program, "r1": warm_program(8, 4, 4)}
     loaded = {r: {"dir": str(tmp_path / r), "instances": {"digest": r[1] * 128}} for r in progs}
     for lp in loaded.values():
@@ -273,7 +274,7 @@ def test_a_warm_requests_map_takes_its_cached_page_from_its_producer(tmp_path, m
     def payload(rid, row):
         return _operand(None, None, None, rid, 0, row.group).reshape(2, 4, 128).transpose(1, 0, 2).tobytes()
 
-    monkeypatch.setattr(PMM, "_operand", _operand)
+    monkeypatch.setattr(CM, "_operand", _operand)
     kv, slot = {r: MM.packed(rs) for r, rs in session.items()}, _slots(session, WARM_TABLES, WARM_ARRIVE)
     store = _Slots({r: {s: slot(r, s) for s in range(WARM_ARRIVE[r], WARM_ARRIVE[r] + rs.steps)} for r, rs in session.items()})
     phys = [torch.zeros((6, 4, 4, 256), dtype=torch.bfloat16) for _ in LAYERS]
@@ -287,9 +288,9 @@ def test_a_warm_requests_map_takes_its_cached_page_from_its_producer(tmp_path, m
     kw = {"loaded": loaded, "store": store, "arrivals": WARM_ARRIVE, "caches": {n: p.permute(0, 2, 1, 3) for n, p in zip(LAYERS, phys)},
           "indices": {("index", id(lp["instances"])): r for r, lp in loaded.items()}}
     with pytest.raises(ValueError, match="request r1's Program reads 4 cached rows, and 0 producing requests are named"):
-        PMM.write(out, req, **kw)
-    doc = PMM.write(out, req, cached_prefixes={"r1": {"cached": 4, "producers": ["r0"]}}, **kw)
-    assert out.read_text() == dumps(*MM.record(kv, WARM_ARRIVE, payload, bytes.fromhex("ab" * 64), MM.Layout(block_size=4, pages=6),
+        CM.write(out, req, **kw)
+    doc = CM.write(out, req, cached_prefixes={"r1": {"cached": 4, "producers": ["r0"]}}, **kw)
+    assert out.read_text() == dumps(*CM.record(kv, WARM_ARRIVE, payload, bytes.fromhex("ab" * 64), CM.KvPool(block_size=4, pages=6),
                                                WARM_TABLES, None, PRODUCERS))
     assert doc["requests"]["r1"] == {"arrive": 1, "steps": 5, "positions": 12, "layers": 2, "row_bytes": 1024, "pages": [1, 4, 5],
                                      "program_digest": dig1, "cached": 4, "producers": ["r0"]}
@@ -316,7 +317,7 @@ def _latent_caches(rows: MM.Rows, words) -> dict[str, torch.Tensor]:
 
 
 @pytest.mark.slow
-def test_each_tp_rank_writes_the_map_of_its_mla_latent_rows(tmp_path, served, monkeypatch):  # noqa: F811
+def test_each_tp_rank_writes_the_map_of_its_mla_latent_rows(tmp_path, served, monkeypatch):
     # GLM-5.3 at TP2 in small: each rank's Build dir holds its request Program (the DSA stand-in: an indexer layer and an IndexShare
     # layer, a prefill of 64 rows, then two decode steps); MLA's latent cache is whole on each rank, the scheduler's pages the same
     # on both, and each rank's committed words its own.  Rank 0's Build has KV rows cached under kv-rows/v1, which refused them
@@ -333,15 +334,15 @@ def test_each_tp_rank_writes_the_map_of_its_mla_latent_rows(tmp_path, served, mo
                 json.dump({"schema": "verity-vllm/kv-rows/v1", "program": lp["instances"]["digest"], "refused": "no attention Call"}, f)
         store = _store(rows, DSA_PAGES, 64, salt=rank)
         words = _words(ProgramIndex(lp["instances"], tp={"rank": rank, "world": 2}, program_dir=lp["dir"]), store)
-        monkeypatch.setattr(PMM.CommittedStore, "of_record", lambda *a, store=store: store)
+        monkeypatch.setattr(CM.CommittedStore, "of_record", lambda *a, store=store: store)
         st = {"replay": {"memory_map": str(req)}, "bmap": {}, "manifest_doc": None,
               "com": types.SimpleNamespace(sources=[types.SimpleNamespace(short_name="kv_slots", caches=_latent_caches(rows, words))])}
         p = RR.Loaded(rank, 2, [], {"r0": lp}, {"r0": lp["instances"]}, {"r0": lp["instances"]["digest"]}, {"r0": lp["dir"]},
                       {"r0": ARRIVE}, [], None)
         got = RR.memory_map(st, p, committed=None)
         out = tmp_path / "maps" / f"memory_map.rank{rank}.jsonl"
-        head, steps = MM.record({"r0": rows}, {"r0": ARRIVE}, lambda r, x, words=words: words(r, x).tobytes(), bytes.fromhex(("ab", "cd")[rank] * 64),
-                                MM.Layout(block_size=64, pages=8), {"r0": DSA_PAGES})
+        head, steps = CM.record({"r0": rows}, {"r0": ARRIVE}, lambda r, x, words=words: words(r, x).tobytes(), bytes.fromhex(("ab", "cd")[rank] * 64),
+                                CM.KvPool(block_size=64, pages=8), {"r0": DSA_PAGES})
         assert out.read_text() == dumps(head, steps)
         # the prefill fills page 3 (a block a layer), read to the last step; the decode rows reach page 5's filler and leave it dirty
         assert [(s.step, list(s.freed), [w.slot for w in s.written]) for s in steps] == [

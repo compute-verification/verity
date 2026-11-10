@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# R13 lane hopper: build the FA3 M1 hidden-value tap `verity_fa3_matReq.so` (export-and-commit tap of the sm90 FlashAttention-3
+# Build the FA3 M1 hidden-value tap `verity_fa3_matReq.so` (export-and-commit tap of the sm90 FlashAttention-3
 # forward, VERITY_TAP=3 / VERITY_MAT_SRC=59, layout v9 = the FA2 v8 word layout over PackGQA-packed rows) for THIS pod's H100 with
 # the bf16 paged PackGQA forward kernels of head dims 64 and 128 in one .so.
 #
@@ -15,7 +15,7 @@
 # ROW word 3 = GuardNegInfZero(row_max) after a row's first key block, and VERITY_MAT_SRC=123, the MS class = each block's max * scale; neither in the default build).
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
-VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # [R19] the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
+VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
 if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export MAX_JOBS=${MAX_JOBS:-32}
@@ -46,7 +46,7 @@ HAVE=0
 if [ -f "$OUT/$NAME.so" ]; then
   HAVE=$($PY -c "import torch; torch.ops.load_library('$OUT/$NAME.so'); print(int(torch.ops.$NAME.verity_tap_hdims()))" 2>/dev/null || echo 0)
 fi
-# [R16 sys] source-set gate (same rule as pod_fa2_tap.sh): rebuild iff the fa3_tap_src files / pin / hdims / defines / nvcc changed, the .so is
+# Source-set gate (same rule as pod_fa2_tap.sh): rebuild iff the fa3_tap_src files / pin / hdims / defines / nvcc changed, the .so is
 # missing or lacks hdims, or FA3_TAP_FORCE=1; an existing hdims-complete build without a recorded hash is ADOPTED as the baseline (no rebuild).
 NVCC_VER=$(nvcc --version 2>/dev/null | sed -n "s/.*release \([0-9.]*\), \(V[0-9.]*\).*/\1-\2/p" | head -1)   # e.g. 12.4-V12.4.131
 SRC_SHA=$( (cd "$SRC" && find . -type f ! -name '*.pyc' ! -path '*/__pycache__/*' | LC_ALL=C sort | while read -r f; do printf '%s ' "$f"; sha256sum "$f" | cut -c1-64; done; echo "pin=$PIN hdims=$HDIMS defines=$DEFS nvcc=$NVCC_VER") | sha256sum | cut -c1-64)

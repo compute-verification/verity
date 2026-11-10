@@ -1,4 +1,39 @@
-import Proofs.Flock.SessionLoop.FinRep
+module
+
+public import Proofs.Flock.SessionLoop.FinRep
+public import Proofs.Flock.Claims.ZK.FinExe
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
 /-!
 # (c.3) `FinRepFwView`, in parts
@@ -10,7 +45,7 @@ rows and salts, `τ` and its salt, the pads' opened columns and salts) included,
 each named here, none a premise of a guarantee:
 
 * **`Loop.FinRepErased`**: the run from the views returns, with the same transcript, a proof equal to `p` up to
-  `eraseZ`: `Masked.swSrcE_repCut` at the views' source, the views' values tied to the history's by `LiveRoundEq`.
+  `eraseZ`: `Masked.swSrcE_repCut` at the views' source, the views' values tied to the history's by `LiveRoundEqOwn`.
 * **`Loop.FinRepFinal`**: where it returns so, the final-only data agree (`Masked.FinalEq`).
 * **`Loop.FinRepXs`**: the extra claims from the views have the request's coordinates (`Drive.extras`), so as many
   claims as `claimsOf`.
@@ -20,14 +55,16 @@ each named here, none a premise of a guarantee:
 (`Finish.encZk_view`, `Finish.shapeZk_view`). **`Loop.finRepProofs_of_view`** then gives (c) with `Loop.finRepCut`.
 -/
 
+@[expose] public section
+
 namespace Flock.Firewall.Finish
 
 open Flock
 
-/-- The firewall's proof file is the session's encoder's. -/
+/-- The ZK server's proof file is the session's encoder's. -/
 theorem encZk_view (sh : Shape) (p : Zk.ZkProof) : encZk sh p = FlockSoundness.Discharge.ZkView.encZk sh p := rfl
 
-/-- The firewall's file shape is the session's. -/
+/-- The ZK server's file shape is the session's. -/
 theorem shapeZk_view (st : Setup) (sch : Flock.Schedule) (n : ℕ) : shapeZk st sch n = FlockComplete.shapeZk st sch n := rfl
 
 end Flock.Firewall.Finish

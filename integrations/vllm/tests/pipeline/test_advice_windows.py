@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.certifier import advice as A
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity_vllm.commit import serving_rows as CS
+from verity.core.protocols.spot.one_stage import registration as R
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
 
@@ -339,7 +339,7 @@ def _gated_mine(c, name: str = "gated"):
 
 
 class _Coins:
-    """Deterministic coin bytes for a test's draw: SHA-512 in counter mode."""
+    """Deterministic coin bytes for a test's sample: SHA-512 in counter mode."""
 
     def __init__(self) -> None:
         self.at = 0
@@ -353,15 +353,17 @@ class _Coins:
 
 
 def _draw(rec: dict, law: dict) -> dict:
-    from verity.core.protocols.sampled_proofs import service as S
+    """A challenger's sample under the registration's expanded `law` (`service.select_draw` past its rule)."""
+    from verity.core.protocols.spot import coins as T
 
-    return S.select_draw(S.Law(f"work:{law['k']}"), law, rec["population"], _Coins())
+    n = rec["population"]
+    return {**law, "population": n, "units": sorted(T.draw_first(T.OwnRandomness(_Coins()), law, n)["units"])}
 
 
 def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):
-    """The window's work law proves every RoPE head (work 0, its floor all 32: an All stratum) and draws 2 of the 8 SiluMul rows, as
-    the registration's law states and the verifier's own window derives; a draw by it holds every transfer-gate unit."""
-    from verity.core.protocols.sampled_proofs.one_stage import draw as D
+    """The window's work sampling design proves every RoPE head (work 0, its floor all 32: an All stratum) and samples 2 of the 8 SiluMul rows, as
+    the registration's law states and the verifier's own window derives; a sample by it holds every transfer-gate unit."""
+    from verity.core.protocols.spot.one_stage import draw as D
 
     c = gated_tp
     mine, held = _gated_mine(c)
@@ -380,9 +382,9 @@ def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest
 
 
 def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
-    """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a draw trading one for an undrawn SiluMul
-    row (`check_draw`, the stratum's count), and a registration whose law draws the RoPE heads as the rest is (R1)."""
-    from verity.core.protocols.sampled_proofs.one_stage import draw as D
+    """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a sample trading one for an unsampled SiluMul
+    row (`check_draw`, the stratum's count), and a registration whose sampling design samples the RoPE heads as the rest is (R1)."""
+    from verity.core.protocols.spot.one_stage import draw as D
 
     c = gated_tp
     mine, _held = _gated_mine(c)
@@ -400,7 +402,7 @@ def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
 
 
 def test_a_window_under_the_compiler_listing_no_transfer_gates_is_refused(gated_tp):
-    """The prover's window committed under the same Programs by a compiler that lists no transfer gates draws 2 of the RoPE heads and
+    """The prover's window committed under the same Programs by a compiler that lists no transfer gates samples 2 of the RoPE heads and
     1 SiluMul row: the verifier, holding the registered compiler that lists them, refuses it on the compiler's digest, on the advice's
     root (its tree's domain binds the compiler, `commitment_binding`) and on R1."""
     c = gated_tp
@@ -421,10 +423,14 @@ def test_a_partition_that_leaves_out_or_samples_a_transfer_gate_template_is_refu
     comp, opening = c["gated"]["compiler"], c["gated"]["opening"]
     for doc, why in (({"templates": [SILU], "law": "work:2"}, "would be left out of the proved set"),
                      ({"templates": [ROPE, SILU], "law": "stratified:2"}, r"work law's draw \(law work:K\)"),
+                     ({"templates": [ROPE, SILU], "law": "stratified-rate:1/4"}, r"work law's draw \(law work:K\)"),
                      ({"templates": [ROPE], "law": "work:2"}, "its selection is all")):
         (pf := tmp_path / "partition.json").write_text(json.dumps(doc))
         with pytest.raises(ValueError, match=why):
             AW.window_of_advice(c["commit"], 0, pf, comp, *AW.of_opening(comp, opening))
+    (pf := tmp_path / "partition.json").write_text(json.dumps({**json.loads(Path(c["partition"]).read_text()), "law": "work-rate:1/4"}))
+    mine, _held = AW.window_of_advice(c["commit"], 0, pf, comp, *AW.of_opening(comp, opening))
+    assert mine.law == {"law": "work", "k": 10} and mine.work_table == {ROPE: {"work": 0, "floor": 32}, SILU: {"work": 1, "floor": 2}}
     assert SRW.work_table_of({"law": "work", "k": 2}, {ROPE: 32, SILU: 8}) == {ROPE: {"work": 1, "floor": 1}, SILU: {"work": 1, "floor": 1}}
     assert SRW.work_table_of({"law": "subset", "k": 2}, {ROPE: 32, SILU: 8}) is None
 

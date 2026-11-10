@@ -1,10 +1,14 @@
 """Each Definition module's circuit-check bindings and pins, in sidecar files beside it.
 
-    fp8.py                    a Definition module (`verity_vllm.program.registry.fp8`)
+    fp8.py                    a Definition module (`verity.ml.definitions.registry.fp8`)
     fp8.circuit-check.py      its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
-                              `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries
+                              `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries; a Program
+                              root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`);
+                              a family registered over a range of statics, ``RANGES``: each rule and its spots (`ranges`)
     fp8.circuit-check.json    its pins (`checks`' lowering counts and circuit digest, ``type``, by kind: ``definitions``,
-                              ``pieces``, ``units``; and a gated Definition's circuit digest, ``digests``)
+                              ``pieces``, ``units``; and the circuit digest of a gated Definition or of one bound at
+                              served statics over `targets.MAX_GATES`, ``digests``, which keeps it in ``--all``; and a
+                              family's struct budget, ``struct_max_gates``: {family: gates}, `checks.struct_budget`)
 
 A module's bindings bind the Definitions it defines (a template module's, its templates), and its pins are the lowerings of its
 Definitions (`owner`; a template's subcircuits for the template module), each the one its pin's key names alone (`pin_owner`),
@@ -20,6 +24,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import re
 import sys
 from functools import cache
 from pathlib import Path
@@ -203,21 +208,40 @@ def pin_owner(kind: str, key: str) -> str | None:
     or a piece's, the module that defines the Definition its key names (`named`, `owner`).  None when the key alone names none,
     whatever this process has built: then the pin is in ``pins/`` (`shared_pin`)."""
     if kind == "units":
-        from verity_numerical.bench import templates as TM
+        from verity_flock import subcircuit_templates as TM
 
         return TM.__name__ if key.partition("/")[0] in TM.TEMPLATES else None
-    d = named(key.partition("{")[0])
+    fid = key.partition("{")[0]
+    if (have := HANDED.get(fid)) is not None:
+        return have
+    d = named(fid)
     return owner(d) if d is not None else None
 
 
 _NAMED: dict[str, Any] = {}
 
 
+def composite_lift(fid: str) -> Any | None:
+    """`lifted.lift_composite` of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the lift a body calling it
+    makes, or its hand lift), whatever version the id writes; None when the id wraps no registered composite.  The on-demand
+    ``Lifted[...]`` families lift primitives only."""
+    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition
+
+    m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fid)
+    inner = REGISTRY.defs.get(m[1]) if m else None
+    if not isinstance(inner, CompositeDefinition):
+        return None
+    from verity.ml.definitions.registry import lifted as L
+
+    return L.lift_composite(inner)
+
+
 def named(fid: str) -> Any | None:
-    """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else one an
-    on-demand family makes from it (`verity.ml.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory
-    whoever asked for it first).  None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by
-    nothing, built in this process or not."""
+    """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else a
+    registered composite's lift (`composite_lift`, when its id is ``fid``), else one an on-demand family makes from it
+    (`verity.ml.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory whoever asked for it first).
+    None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by nothing, built in this process
+    or not."""
     from verity.ml.circuits.codec import lookup_primitive
     from verity.ml.circuits.defs import Registry
 
@@ -226,18 +250,12 @@ def named(fid: str) -> Any | None:
     if (d := _NAMED.get(fid)) is not None:
         return d
     with CC.internal():
+        if (d := composite_lift(fid)) is not None:
+            return d if d.id == fid else None
         try:
             return lookup_primitive(Registry(), fid)
         except (KeyError, ValueError):
             return None
-
-
-def _function_module(d: Any) -> str | None:
-    fields = getattr(d, "__dict__", {})
-    for a in ("build", "body", "evaluate", "fn"):
-        if callable(f := fields.get(a)) and getattr(f, "__module__", None):
-            return f.__module__
-    return None
 
 
 def _top_level_names(path: str) -> set[str]:
@@ -269,6 +287,10 @@ def _top_level_names(path: str) -> set[str]:
 
 
 _INDEX: dict[int, tuple[Any, str]] = {}
+#: each Definition's owner by id as a process that has imported every module a full build imports before its checks has it
+#: (`units.owners`), taken before this process's own (`owner`, `pin_owner`): set where the catalog comes from the bindings'
+#: records, whose bodies no one process builds
+HANDED: dict[str, str] = {}
 
 
 def _index() -> dict[int, tuple[Any, str]]:
@@ -292,19 +314,21 @@ def _index() -> dict[int, tuple[Any, str]]:
                 if isinstance(v, (CompositeDefinition, PrimitiveDefinition)):
                     found.setdefault(id(v), (v, []))[1].append(name)
     for k, (v, mods) in found.items():
-        fm = _function_module(v)
+        fm = CC._function_module(v)
         _INDEX[k] = (v, fm if fm in mods else mods[0])
     return _INDEX
 
 
 def owner(d: Any) -> str | None:
     """The module that defines Definition ``d`` (a specialization's, its Definition's): the module whose top level binds it
-    other than by import (`_index`), else, for one made on demand, the module of the function that builds or evaluates it.
-    Read once the registries are loaded."""
+    other than by import (`_index`; `HANDED`, where set, by its id), else, for one made on demand, the module of the function
+    that builds or evaluates it.  Read once the registries are loaded."""
     d = getattr(d, "defn", d)
+    if (have := HANDED.get(getattr(d, "id", None))) is not None:
+        return have
     e = _index().get(id(d))
-    return e[1] if e is not None and e[0] is d else _function_module(d)
+    return e[1] if e is not None and e[0] is d else CC._function_module(d)
 
 
-__all__ = ["PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "binding_modules", "discover", "load_pins", "named", "owner",
+__all__ = ["HANDED", "PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "binding_modules", "discover", "load_pins", "named", "owner",
            "path_of", "pin_file", "pin_files", "pin_owner", "pin_reads", "rel", "shared_pin", "write_pins"]

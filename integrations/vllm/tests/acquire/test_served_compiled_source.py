@@ -323,8 +323,8 @@ def test_launch_configs_are_the_configs_steps_and_captures_launched(tmp_path, mo
     """A live autotuner's state is no record of a launch (Qwen3-8B's combo kernels each had one live autotuner, never run): `executed`
     is what served steps and captures launched, once per autotuner; a compile-time run launches outside both and does not count; two
     autotuners of one kernel text launched with two configs are both recorded (the Build refuses the kernel).  A launch through
-    `run`'s fast path runs the launcher it cached, though the autotuner holds two since (Qwen3-8B's reductions after an rblock rescale:
-    r20261018-045838-4e9c).  Every live autotuner gives its candidates, the heap frozen or not, and it is frozen again afterwards."""
+    `run`'s fast path runs the launcher it cached, though the autotuner holds two since (Qwen3-8B's reductions after an rblock
+    rescale).  Every live autotuner gives its candidates, the heap frozen or not, and it is frozen again afterwards."""
     import gc
     import hashlib
 

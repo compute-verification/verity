@@ -1,32 +1,63 @@
-import Proofs.Accounting.TS.Session.Lanes.Assumptions
-import Proofs.Accounting.TS.Session.Lanes.Lane
-import Definitions.Pouw.H1Zy.Dequant
-import Proofs.Accounting.TS.Session.Lanes.KnownOf
-import Proofs.Accounting.TS.Session.Lanes.Committed
-import Proofs.Accounting.TS.Session.Lanes.Canon
-import PouwWindow.OwnPorts
-import PouwWindow.FullDraw
+module
+
+public import Proofs.Accounting.TS.Session.Group.Premises
+public import Proofs.Accounting.TS.Session.Lanes.Lane
+public import Definitions.Pouw.H1Zy.Dequant
+public import Proofs.Accounting.TS.Session.Lanes.Committed
+public import Proofs.Accounting.TS.Session.Lanes.Canon
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A leaf's 33 linked sessions realize one unit (the statement)
 
-`Accounting.Guarantees.TS.LeafLanesSound`: under option A a drawn 32 × 32 H1 leaf is proved as its 32 lanes
-(`h1zy.PouwH1LaneZy_v1{TILE}`) and their combine (`PouwH1Combine_v1{TILE}`), 33 C-Flock sessions over the leaf's
+`Accounting.Guarantees.TS.LeafLanesSound`: under option A a sampled 32 × 32 H1 leaf is proved as its 32 lanes
+(`h1zy.PouwH1LaneZy_v1{TILE}`) and their combine (`PouwH1Combine_v1{TILE}`), 33 Flock sessions over the leaf's
 committed rows and one post-draw partials record. Accepted together, they realize the one-unit proof layer
 `Accounting.TS.Lanes.leafLayer`, whose relation is the unit's served checks on the leaf's 32 × 32 cells (`UnitServed`:
 `z = A·Bᵀ` and `y = dq(z)` at every cell, the receipt the XOR of its lanes' honest partials) unless two of the
 sessions' registrants' records exhibit a SHA-512 collision (`LeafColl`) or a session's known-content tie does
 (`LeafKnownColl`). Its acceptance includes flock-verify's known-content, complete and known-read checks at each of
 the 33 sessions, and the leaf verifier's checks of each session's registered file (`PouwWindow.Lanes.checkOwn`) and
-of its draw (`PouwWindow.Lanes.checkFull`: every unit of a non-empty population) and of the file's reads
+of its sample (`PouwWindow.Lanes.checkFull`: every unit of a non-empty population) and of the file's reads
 (`PouwWindow.Lanes.checkOneRead`: one read at each port), all run by `pouw-leaf-own`. Each session is
 `RowsSession.canon` of a session and its registrants' openings (`RowsSession.Openings`): its registered reads are built
 from the verifier's own `own`, every circuit port's row that `own` names read through `own`'s port at its one position,
 and only the rows, salts and paths the registrants committed come from them. It takes `CheckedSessionSound`'s
-hypotheses at each session, but port uniqueness and the `ok` port, which that acceptance gives (the known-read check's
-names, at known content naming `o0`), full checking (`kd = n`) and a unit (`0 < n`), which the draw check gives, and
-registered served roots (`RowsSession.ServedRegistered`), which the reads built from `own` and the one-read check
-give, and two named premises: the
+hypotheses at each session as named premises, Flock's collision bounds and the window's sampling design
+(`Accounting.Premises.TS.SessionsCR`, `WindowDesigns`), but port uniqueness and the `ok` port, which that acceptance gives
+(the known-read check's names, at known content naming `o0`), full checking (`kd = n`) and a unit (`0 < n`), which the
+sample check gives, and registered served roots (`RowsSession.ServedRegistered`), which the reads built from `own` and the
+one-read check give, and two named premises: the
 lanes' and the combine's circuits compute their pieces' compositions on bits, at their port rows, read through the
 layout's decodes (`Accounting.TS.Lanes.LaneLowers` and `CombineLowers` at `Lanes.decL`, `Lanes.decC`; the lane's dequant
 is its Definition's word view, `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`), and its chain words are `h1tile._chain`'s,
@@ -53,11 +84,16 @@ placement from the window's committed descriptor and round log (`PouwCheck.LeafO
 on how the file was built. Each file marks its reads of the A, B and partials rows `read_in_full`
 (`PouwWindow.Lanes.readFull`), which the known-read check holds to one row of the registered words: so lane `l`'s
 partials row and the combine's `p<l>` are one row, the partials record is the rows the 33 statements read, and nothing
-of it is asked. The leaf is one unit of the declared circuit, and the partials are proof-layer values (RT4-LOGIC-30's
-ruling). Each proof is then accepted with a leaf that fails the unit's checks, and no collision in hand, with
-probability at most `33 δ`: `δ` a session from `CheckedSessionSound`, joined by a union bound.
+of it is asked. The leaf is one unit of the declared circuit, and the partials are proof-layer values.
+Each proof is then accepted with a leaf that fails the unit's checks, and no collision in hand, with
+probability at most `33 δ`: `δ` a session from `CheckedSessionSound`, joined by a union bound. It is
+`Accounting.Guarantees.TS.LeafGroupSound`'s argument (`Accounting.TS.Group.group_soundAt`) at the 32 × 32 leaf, one
+chunk a lane, where the group's premise `GroupRealizes` is proved from the two above
+(`Accounting.TS.Lanes.groupRealizes_lanes32`).
 It sits in the proofs package because the sessions do (`reads_exempt`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 
@@ -65,24 +101,24 @@ open Accounting.TS Accounting.TS.Lanes Flock.SoundAtBridge
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
-/-- **A leaf's 33 linked C-Flock sessions realize one unit, fully checked.** For any window whose proof `i` of round
+/-- **A leaf's 33 linked Flock sessions realize one unit, fully checked.** For any window whose proof `i` of round
 `w` on the path `x` is a leaf proved as its lanes' sessions `sess x w i (some l)` and its combine's `sess x w i none`,
-each a session `sess₀ x w i k` (#2909's `RowsSession`) at its registrants' openings `op x w i k`, its registered reads
+each a session `sess₀ x w i k` (a `RowsSession`) at its registrants' openings `op x w i k`, its registered reads
 built from `own` (`RowsSession.canon`: each unit reads its row of every circuit port `own` names, through `own`'s first
 port of that name at that port's one position, the registrants committing only the rows, salts and paths, each opening
 `own`'s root there), with outcomes `out x w i k`, and the leaf layer
 `leafLayer sess out known full want (dqOf Pouw.H1Zy.zyDequant) (partOf (laneChain K nw)) pub receiptOf leafOf right` (accepted where flock-verify `--zk --registered` accepts all
 33 sessions, its known-content check at `known x w i k = knownOf (pub x w i) (salts x w i k) k`, the rows of the path's
 public inputs `pub x w i` (`PouwWindow.Lanes.knownRows`) under any salts, and its complete check
-(`Flock.Registered.checkComplete`, run when the `--registered` file sets `complete`: every port of the circuit is a port
-of `own`) and its known-read check (`Flock.KnownRead.check`: each known port, and each port the file marks
+(`Flock.Registered.checkComplete`, run on every statement whenever `--registered` is given: every port of the circuit is
+a port of `own`) and its known-read check (`Flock.KnownRead.check`: each known port, and each port the file marks
 `read_in_full`, `full x w i k = PouwWindow.Lanes.readFull (servedTile K) k`, the statement's reads of the partials, is
 a `sha512/row/v2` row of its known rows' or registered row's words, a computed row of the unit reads each bit of such
 an input row and a copy returns each bit of such an output row) included, and the leaf verifier's check of the file
 (`PouwWindow.Lanes.checkOwn`: the file's first port of each name of `want x w i k = PouwWindow.Lanes.ownOf (roots x w i)
 (place x w i) (servedTile K) k`, the statement's data ports at the layout's rows of one table per value, each value `v`
 placed in the table `(place x w i v).1` from the base row `(place x w i v).2` and the layout's row read from that base,
-any roots `roots` and any placement `place`, is that port), and the leaf verifier's check of the session's draw (`PouwWindow.Lanes.checkFull`, which `pouw-leaf-own` runs
+any roots `roots` and any placement `place`, is that port), and the leaf verifier's check of the session's sample (`PouwWindow.Lanes.checkFull`, which `pouw-leaf-own` runs
 on the session's record: `subset` of every unit of a non-empty population), and of the file's reads
 (`PouwWindow.Lanes.checkOneRead`, which `pouw-leaf-own` runs too: every port of the file has one read), and of the
 tile (`PouwWindow.Lanes.Tile.check` at 32 × 32 and `K`, which `pouw-leaf-own` runs in `lane?` and `combine?`: `32 ∣ K`
@@ -92,8 +128,9 @@ row as lane `4 (r mod 8)` decodes it, each B row as lane `⌊(j mod 8)/2⌋` doe
 cell it is, at the registrants' commit-time openings), its relation the unit's served checks at the path's public
 inputs `pub` and the receipt the combine's committed row decodes to (`Accounting.TS.Lanes.receiptOf`), or a clash of two
 of the sessions' registrants' records, `LeafColl`, or a collision of a session's known-content tie, `LeafKnownColl`):
-given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses (`RowsSession.CR`, the
-window's law `Accounting.Assumptions.TS.WindowLaw`, and
+given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses as the named premises
+`Accounting.Premises.TS.SessionsCR` (`RowsSession.CR`) and `Accounting.Premises.TS.WindowDesigns` (the window's sampling design
+`Accounting.Assumptions.TS.WindowDesign` at each statement), and
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta,$$
 `δ ≥ 0`), the 33 circuits computing
 their pieces' compositions on bits, at their port rows through the layout's decodes at
@@ -109,11 +146,11 @@ fails the unit's served checks on the path, and no clash of its sessions' regist
 known-content ties, with probability at most `33 δ`. That each circuit names each port once and has a port `o0` that
 `own` registers is not asked: an accepted proof's known-read check names every port of its known content, `o0`
 among them, and its known-content check registers it (`Flock.KnownRead.namesOk`, `Flock.Registered.checkKnownAll`).
-Nor are full checking (`kd = n`) and a unit (`0 < n`): the draw check accepts only a record whose draw is `subset` of
-its whole non-empty population, which the session's custody (`RecordCustodyZKJ`) makes the verifier's draw
+Nor are full checking (`kd = n`) and a unit (`0 < n`): the sample check accepts only a record whose sample is `subset` of
+its whole non-empty population, which the session's custody (`RecordCustodyZKJ`) makes the verifier's sample
 `subset kd` over `n` units. Nor is every unit's served roots registered (`RowsSession.ServedRegistered`): the reads
 built from `own` are its rows of the ports `own` names, through `own`'s ports, and with one read at each port
-(`checkOneRead`) the position a port gives a unit at any draw is its one position
+(`checkOneRead`) the position a port gives a unit at any sample is its one position
 (`RowsSession.servedRegistered_canon`). -/
 def LeafLanesSound : Prop :=
   ∀ {Ω : Type} [Fintype Ω] {S nπ K nw : ℕ}
@@ -126,8 +163,8 @@ def LeafLanesSound : Prop :=
     (roots : Paths Ω S → Fin S → Fin nπ → String → _root_.Flock.Registered.Port)
     (place : Paths Ω S → Fin S → Fin nπ → String → String × ℕ)
     (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) (δ : ℝ),
-    (∀ x w i k, (sess x w i k).CR) →
-    (∀ k, Accounting.Assumptions.TS.WindowLaw (fun x w i => sess x w i k) (fun x w i => out x w i k)) →
+    Accounting.Premises.TS.SessionsCR sess →
+    Accounting.Premises.TS.WindowDesigns sess out →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     (∀ x w i, LaneLowers (servedTile K) (laneChain K nw) Pouw.H1Zy.zyDequant (sess x w i)) →
     (∀ x w i, CombineLowers (sess x w i) (decC nw (servedTile K))) →

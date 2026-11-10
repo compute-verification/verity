@@ -1,4 +1,4 @@
-"""`challengers.Gate` against the auditor host's own gate (`benchmarks/live_challenger/auditor.py`), in this process: its
+"""`challengers.ChallengerGate` against the auditor host's own gate (`benchmarks/live_challenger/auditor.py`), in this process: its
 requests go to `auditor.gate` as the lane key's forced command would pass them, and each opened session is served by
 `auditor.run` through `serve.py` (the Lean's coins stubbed, `stub_serve.py`) on a thread, with the gate's root steps
 (chown, systemctl) and the clock injected. An honest session whose coins the gate's session released is accepted and
@@ -7,8 +7,8 @@ for the same window and a challenger whose commitment isn't the open's are each 
 verifier's own paced sessions, through the gate or serve.py, reserve only the coins they use, so an honest one ends
 complete and a dropper doesn't; and `auditor_line` credits a gate session to the line only when its period committed
 its verifier, at the commit its host run recorded, on the auditor's first-parent list of main, it and its period closed
-complete, the Lean accepted it, the host's pins log its open sealed records its pin, a commit on that list too
-(RT4-INT-40, CMP-74), and the verifier bound the store to the model, reporting filler held beside weights held. The
+complete, the Lean accepted it, the host's pins log its open sealed records its pin, a commit on that list too, and
+the verifier bound the store to the model, reporting filler held beside weights held. The
 peer a gate session's ledger entries must carry is the one the run's record names."""
 from __future__ import annotations
 
@@ -29,20 +29,22 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 LIVE = ROOT / "benchmarks" / "live_challenger"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(LIVE))
 sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests"))
 
 import auditor as A  # noqa: E402
 import auditor_line as al  # noqa: E402
-import challengers  # noqa: E402
-import verifier  # noqa: E402
-import wire  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import challengers  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import verifier  # noqa: E402
+from benchmarks.remote_session import verifier_process as VP  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
+from verity.core.protocols.spot.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 P = lms.Params(64, 4, 4)
@@ -67,8 +69,9 @@ class Host:
 
     def __init__(self, root: Path) -> None:
         (root / "var" / "sessions").mkdir(parents=True)
-        (root / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n"
-                                    "vy-auditor-1 challenger@10.0.0.3\n")
+        (root / "peers").write_text("challenger-host research@192.0.2.11\ncpu-node research@192.0.2.12\n"
+                                    "auditor-host challenger@192.0.2.13\n")
+        (root / "coin-ports").write_text("cpu-node 7811-7854\nauditor-host 7855-7899\n")
         (root / "pins.jsonl").write_text("".join(line + "\n" for line in PINS))
         self.host = A.Host(root=root / "var", peers=root / "peers", pins=root / "pins.jsonl")
         self.signer = A.key_signer(self.host, P, workers=1)
@@ -89,11 +92,9 @@ class Host:
                                                    active=lambda s: False))
 
     def start(self, session: str) -> None:
-        """The session's unit: serve.py on a port of its own (no tunnel), returning once it listens."""
+        """The session's unit: serve.py on a port of its own, returning once it listens."""
         body = A.sessions_of(A.read_ledger(self.host.ledger))[session]["open"]["body"]
         argv = A.serve_argv(self.host, session, body)
-        i = argv.index("--peer")
-        del argv[i:i + 2]
         argv[argv.index("--port") + 1] = "0"
         argv = [sys.executable, str(LIVE / "tests" / "stub_serve.py"), *argv[2:], "--params", "4,4",
                 "--keygen-workers", "1"]
@@ -116,9 +117,9 @@ class Host:
             t.join()
 
     def gate(self, out: Path, *, pin: str | None = None, period: str = "p-1", main: list[str] | None = MAIN,
-             call=None, peer: str = "vy-nebius-1") -> challengers.Gate:
-        return challengers.Gate(out, call or self.call, peer, pin or self.pin, period, main, address=self.address,
-                                pause=self.pause, polls=3)
+             call=None, peer: str = "cpu-node") -> challengers.ChallengerGate:
+        return challengers.ChallengerGate(out, call or self.call, peer, pin or self.pin, period, main, VP.lms_verify,
+                                          address=self.address, pause=self.pause, polls=3)
 
     def period(self, name: str = "p-1", circuit: str = CIRCUIT) -> None:
         rc, out = self.call(["period-open", "--name", name, "--cap", "4", "--circuit", circuit])
@@ -130,7 +131,7 @@ class Host:
     @staticmethod
     def seal(monkeypatch, pins: list[str] | None) -> None:
         """Each open from here on seals the pins log `pins` (`challenger.pins_seal`) in place of the host's own log,
-        which `auditor.admit` seals; `pins` None: the open seals no log, as on every gate before RT4-INT-40's."""
+        which `auditor.admit` seals; `pins` None: the open seals no log, as on the earlier gates."""
         append = A.append
 
         def resealed(body: dict) -> dict:
@@ -151,11 +152,11 @@ def host(tmp_path, monkeypatch) -> Host:
     return Host(tmp_path / "host")
 
 
-def session(store, gate: challengers.Gate):
+def session(store, gate: challengers.ChallengerGate):
     """An honest session over `store` whose coins come from `gate`'s session for window 0: the session and verdicts."""
     p = params()
     client = gate.open(store.registration.digest, 0, p.windows, 8)
-    c = coins.Coins(client, store.registration.digest, 0, p.windows, clock=itertools.count().__next__)
+    c = coins.SessionCoins(client, store.registration.digest, 0, p.windows, clock=itertools.count().__next__)
     s, prover, passes, clock = drive(store, p, SCHEDULE, coins_=c)
     return s, finish(s, prover, passes, clock)
 
@@ -173,14 +174,14 @@ def test_a_session_whose_coins_the_gates_session_released_is_held_to_the_ledger_
     kinds = [(e["kind"], e["session"]) for e in host.ledger()]
     assert kinds == [("period-open", None), ("reserve", sid), ("open", sid), ("end", sid)]
     reserve = host.ledger()[1]["body"]
-    assert (reserve["by"], reserve["peer"], reserve["scheme"], reserve["epoch"]) == (LANE, "vy-nebius-1", coins.SCHEME, 0)
+    assert (reserve["by"], reserve["peer"], reserve["scheme"], reserve["epoch"]) == (LANE, "cpu-node", coins.SCHEME, 0)
     assert reserve["families"] == [list(f) for f in coins.families(params().windows, 8)]
     assert (tmp_path / "out" / f"{sid}.ledger.jsonl").read_bytes() == host.host.ledger.read_bytes()
     assert (tmp_path / "out" / f"{sid}.pins.jsonl").read_bytes() == host.host.pins.read_bytes()
     assert not (tmp_path / "out" / sid / "secret").exists()
     key = gate.key()
     heads = [tmp_path / "out" / f"{sid}.ledger.jsonl"]
-    assert s.trusted_reason(tmp_path / "out" / sid / "out", heads, key, PINS, MAIN, challengers.lms_verify, "p-2") == (
+    assert s.trusted_reason(tmp_path / "out" / sid / "out", heads, key, PINS, MAIN, VP.lms_verify, "p-2") == (
         "the challenger's session for this session's window is not trusted: the auditor's ledger holds the session's "
         "window in period p-1, not the audit's period p-2")
 
@@ -188,8 +189,8 @@ def test_a_session_whose_coins_the_gates_session_released_is_held_to_the_ledger_
 @pytest.mark.parametrize("case", ["no-main", "stale-main", "no-pins"])
 def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_verifiers_main_hold_its_pin(
         store, host, tmp_path, case):
-    """`Gate.finish` reads the window's session through `coins.trusted`, so through `challenger.pinned_session`, with
-    the host's pins log as the gate serves it (`pins`, fetched beside the ledger) and the verifier's own first-parent
+    """`ChallengerGate.finish` reads the window's session through `coins.trusted`, so through
+    `challenger.pinned_session`, with the host's pins log as the gate serves it (`pins`, fetched beside the ledger) and the verifier's own first-parent
     list of main. An honest session, its coins the gate's session's and its open sealing the host's log, is refused when the
     verifier holds no copy of main, when its copy predates the host's pin, and when the gate serves no pins log."""
     host.period()
@@ -210,7 +211,7 @@ def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_ve
                        f"{PIN}, which the host's pins log records but which is not on main's first-parent line in the "
                        "verifier's copy (`git rev-list --first-parent origin/main`): a branch commit merged into main "
                        "is in main's history but no tree main's check ran on; repin the challenger host to a commit "
-                       "on main's first-parent line (vy-challenger-pin) and rerun the window there"),
+                       "on main's first-parent line (with its pin command) and rerun the window there"),
         "no-pins": ("the auditor's session is not readable: the challenger gate answered pins with exit 3: "
                     '{"refused": "usage"}')}[case]
 
@@ -218,7 +219,8 @@ def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_ve
 def test_a_gate_verifier_needs_the_auditors_first_parent_list_of_main(tmp_path):
     """`--challenger gate` without `--challenger-main FILE`, or with a FILE it can't read, is refused before the run
     starts, so no gate run takes coins it would refuse at every session's end."""
-    flags = dict(ssh="-i /nonexistent/key research@192.0.2.1", peer="vy-nebius-1", pin="ab" * 64, period="p-1")
+    flags = dict(verify=VP.lms_verify, ssh="-i /nonexistent/key research@192.0.2.1", peer="cpu-node", pin="ab" * 64,
+                 period="p-1")
     with pytest.raises(ValueError, match=re.escape("--challenger-main FILE (the auditor's own `git rev-list "
                                                    "--first-parent origin/main`)")):
         challengers.of("gate", tmp_path / "out", None, None, **flags)
@@ -226,6 +228,35 @@ def test_a_gate_verifier_needs_the_auditors_first_parent_list_of_main(tmp_path):
         challengers.of("gate", tmp_path / "out", None, None, **flags, main=tmp_path / "absent")
     (tmp_path / "main.txt").write_text("".join(c + "\n" for c in MAIN))
     assert challengers.of("gate", tmp_path / "out", None, None, **flags, main=tmp_path / "main.txt").main == MAIN
+
+
+@pytest.mark.parametrize("kind", ["serve", "gate"])
+def test_a_served_or_gate_verifier_needs_the_verify_and_the_challengers_process_its_entry_hands_in(tmp_path, kind):
+    """The verifier reads no `verity.ml` code, so the LMS verify a served or gate session's signatures are checked with,
+    and the challenger's process `--challenger serve` starts, come from its process's entry (`verifier_process.py`): a
+    run handed neither is refused before its first session."""
+    (tmp_path / "main.txt").write_text("".join(c + "\n" for c in MAIN))
+    flags = dict(serve=("python", "serve.py")) if kind == "serve" else dict(
+        ssh="-i /nonexistent/key research@192.0.2.1", peer="cpu-node", pin="ab" * 64, period="p-1",
+        main=tmp_path / "main.txt")
+    key = tmp_path / "key" if kind == "serve" else None
+    with pytest.raises(ValueError, match=re.escape(f"--challenger {kind} checks the challenger's signatures with the "
+                                                   "LMS verify its process's entry hands in")):
+        challengers.of(kind, tmp_path / "out", key, None, **flags)
+    source = challengers.of(kind, tmp_path / "out", key, None, **flags, verify=VP.lms_verify)
+    assert source.verify is VP.lms_verify
+    if kind == "serve":
+        assert source.command == ("python", "serve.py")
+        with pytest.raises(ValueError, match="starts the challenger's process its entry hands in"):
+            challengers.of(kind, tmp_path / "out", key, None, verify=VP.lms_verify)
+
+
+def test_the_verifiers_entry_hands_its_main_the_lms_verify_and_the_live_challengers_serve(monkeypatch):
+    got = {}
+    monkeypatch.setattr(VP.verifier, "main", lambda argv, **kw: got.update(argv=argv, **kw) or 0)
+    assert VP.main(["--port", "7781"]) == 0
+    assert got == {"argv": ["--port", "7781"], "verify": VP.lms_verify,
+                   "serve": (sys.executable, str(LIVE / "serve.py"))}
 
 
 def test_a_challenger_key_other_than_the_pinned_one_is_refused_before_a_reserve(store, host, tmp_path):
@@ -274,24 +305,21 @@ def test_the_gates_ports_are_the_hosts():
 @pytest.mark.parametrize("kind", ["gate", "serve"])
 def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tmp_path, kind):
     """The verifier's paced sessions over one registration, an honest one and a 1/16 dropper, their coins from the
-    gate's sessions (`challengers.Gate`) or from serve.py on this machine (`challengers.Serve`), its Lean coins stubbed.
+    gate's sessions (`challengers.ChallengerGate`) or from serve.py on this machine (`challengers.Serve`), its Lean coins stubbed.
     The plan appends nothing (its hello says so), so each reserves W challenges and W openings coins and no append
     family. The honest session's
     challenger released every coin it reserved: its end on the served log is complete. The prover sends each window's
-    openings as its draws arrive (`defer_openings=False`), so the dropper, refused at its first window, left openings
+    openings as its samples arrive (`defer_openings=False`), so the dropper, refused at its first window, left openings
     coins unreleased and is not, and the period's close lists the two so."""
     if kind == "gate":
         host.period()
         source = host.gate(tmp_path / "out")
     else:
-        python = tmp_path / "python"
-        python.write_text(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} "
-                          f"{shlex.quote(str(LIVE / 'tests' / 'stub_serve.py'))} \"$@\" --keygen-workers 1\n")
-        python.chmod(0o755)
         (tmp_path / "served").mkdir()
-        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", python=str(python))
+        serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), str(LIVE / "serve.py"), "--keygen-workers", "1")
+        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.lms_verify)
     pace = verifier.pace_of("1:4:160:2", 1.0)
-    (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source, verdict="python",
+    (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source,
                                         defer_openings=False)
     w = honest["windows"]
     end, dropped = ((r["challenger"]["end"] if kind == "gate" else r["challenger"]) for r in (honest, dropper))
@@ -310,16 +338,17 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
 
 
 def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
-             peer: str = "vy-nebius-1") -> tuple[list[dict], dict, bytes]:
+             peer: str = "cpu-node", groups_per_coin: int = 1) -> tuple[list[dict], dict, bytes]:
     """A gate run of `plan`'s sessions in period p-1, which committed the descriptor of the verifier that ran them, its
-    verifier at the challenger host as `peer`: the sessions, their registration and that descriptor."""
+    verifier at the challenger host as `peer`, each session's windows sampled `groups_per_coin` a coin: the sessions,
+    their registration and that descriptor."""
     desc = al.descriptor("ab" * 20)
     host.period(circuit=hashlib.sha512(desc).hexdigest())
     got = {}
     pace = verifier.pace_of("1:4:160:2", 1.0)
     sessions, _ = run_sessions(plan, paces=[pace] * len(plan.split(",")),
-                               challenger=host.gate(out / "challenger", peer=peer), verdict="python",
-                               defer_openings=defer_openings,
+                               challenger=host.gate(out / "challenger", peer=peer), defer_openings=defer_openings,
+                               groups_per_coin=groups_per_coin,
                                then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     return sessions, got["reg"], desc
 
@@ -346,7 +375,7 @@ def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes
 
 
 def test_the_line_reads_the_sketch_at_its_outside_factor() -> None:
-    """RD-5: `sketch_at` reads a session's SketchBound δ at F times the compressions its verifier charged the node
+    """`sketch_at` reads a session's SketchBound δ at F times the compressions its verifier charged the node
     (gate run 8's session 0: 2^-51.59 at F = 1, the red team's 2^-41.59 at 2^10), at the record's F unless asked
     another (1 for a record written before F), and the line's error there is the horizon's plus it; a session with no
     sketch term has none."""
@@ -423,12 +452,15 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert honest["error"]["delta_rejection"] > 0 and honest["error"]["named_terms"] == al.NAMED_TERMS
         assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
         assert next(x for x in al.table(doc).splitlines() if x.startswith(f"line {t}:")).endswith(
-            "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + δs + Σ_t k_t/2^64) summed over the credited "
+            "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the "
+            "credited "
             "sessions, "
             "beside Σ_t Adv(prf t) (claim prf/sha-512), named and in no total")
-        assert doc["conditional_on"] == al.CONDITIONAL_ON and list(doc["conditional_on"]) == ["NoOutsideCompute"]
+        assert doc["conditional_on"] == al.CONDITIONAL_ON
+        assert list(doc["conditional_on"]) == ["NoOutsideCompute", "binding-split"]
         assert doc["boundary"] == {"checked": False, "reason": "off by default (--boundary)"}
-        assert f"conditional on NoOutsideCompute: {al.CONDITIONAL_ON['NoOutsideCompute']}" in al.table(doc).splitlines()
+        lines = set(al.table(doc).splitlines())
+        assert {f"conditional on {n}: {what}" for n, what in al.CONDITIONAL_ON.items()} <= lines
         by = al.lv.Lean(al.lv.build(), lambda _: None)
         try:
             assert doc["line_by"] == "python" and analysed(out, host, sessions, reg, desc, line_by=by) == {
@@ -474,6 +506,41 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
 
 
+def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
+        host, tmp_path, monkeypatch):
+    """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest
+    session and a prover that skips half its reads, each paced in twelve windows sampled on three openings coins, which
+    the gate reserves and releases (⌈12/4⌉). The period closes complete; the honest session, which the Lean accepts
+    and whose record names g, is credited, its twelve windows' last roots read on the challenger's clock off its
+    three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three draws
+    (`line.draws_of`), and the Lean verifier's line is line.py's; the skipper, rejected at a receipt, earns none."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest,skip:0.5", True, groups_per_coin=4)
+    honest, skipper = sessions
+    assert honest["accepted"] and honest["windows"] == 12 and honest["record"]["public"]["groups_per_coin"] == 4
+    assert not skipper["accepted"] and skipper["failure"]["failure"] == "receipt"
+    reserves = [e["body"]["families"] for e in host.ledger() if e["kind"] == "reserve"]
+    assert reserves == [[[coins.CHALLENGE, 12], [coins.OPENINGS, 3]]] * 2
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
+    doc = analysed(out, host, sessions, reg, desc)
+    h, s = doc["sessions"]
+    assert h["credit"]["ok"] and h["of_record"] and s["credit"]["accepted"]["reason"] == "the Lean refused it (receipt)"
+    assert {k: [why.split(":")[0] for why in v] for k, v in doc["credit"]["zero"].items()} == {1: ["not accepted"]}
+    t, mine = h["T"], h["shares_auditor_clock"][al.line.TIME_HELD]
+    assert doc["line"][t]["credited_sessions"] == [0] and doc["line"][t][al.line.TIME_HELD] == {
+        "k": 0, **{x: mine[x] for x in (*al.SHARES, "exact")}}
+    assert h["groups"] == 12 and sum(h["named"]["last_root_first_named_by"].values()) == 12
+    assert len(verifier.recorded_windows(honest)[0]) == 3
+    by = al.lv.Lean(al.lv.build(), lambda _: None)
+    try:
+        assert doc["line_by"] == "python" and analysed(out, host, sessions, reg, desc, line_by=by) == {
+            **doc, "line_by": "lean"}
+    finally:
+        by.close()
+
+
 @pytest.mark.parametrize("sealed, main", [(PINS[:1], MAIN), (None, MAIN), (PINS, MAIN[2:]), (PINS, None)],
                          ids=["unpinned", "unsealed", "branch", "no-main"])
 def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_earns_no_credit(host, tmp_path,
@@ -481,7 +548,7 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
                                                                                               main):
     """An honest session, complete in a period that committed its verifier, on a host whose tree (`PIN`) isn't a
     logged commit on main's first-parent line when the session opens: the log the open sealed holds only an earlier
-    pin, and the pin appended after the open doesn't count; or, as on every gate before RT4-INT-40, the open seals no
+    pin, and the pin appended after the open doesn't count; or, as on the earlier gates, the open seals no
     log at all; or the log records the pin but the auditor's first-parent list of main doesn't hold it, as it doesn't a
     branch commit merged into main; or the auditor gives no copy of main. The line credits zero, and the session's
     `credited` check (`credited_session` reads the pin first) and its `pinned` check each name the fix. When the open
@@ -502,15 +569,15 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
                "window on a host whose gate seals its pins log in each open")
     elif sealed != PINS:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log doesn't record as a commit of main's "
-               "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
-               "window there")
+               "history: repin the challenger host to a commit origin/main contains (with its pin command) and "
+               "rerun the window there")
     elif main is None:
         why = NO_MAIN
     else:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log records but which is not on main's "
                "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
-               "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+               "commit on main's first-parent line (with its pin command) and rerun the window there")
     assert s["credit"]["complete"]["ok"]
     assert s["credit"]["credited"]["ok"] is False and s["credit"]["credited"]["reason"] == why
     assert s["credit"]["pinned"] == {"commit": PIN, "seal": None if sealed is None else pins_seal(sealed), "ok": False,
@@ -536,29 +603,29 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
     assert f"| 0 | {t} | {cells} | yes | zero |" in al.table(doc).splitlines()
 
 
-@pytest.mark.parametrize("peer", ["vy-nebius-1", "vy-auditor-1"], ids=["n1", "host-run"])
+@pytest.mark.parametrize("peer", ["cpu-node", "auditor-host"], ids=["n1", "host-run"])
 def test_the_gate_sessions_peer_is_the_one_the_runs_record_names_and_a_record_naming_none_is_refused(host, tmp_path,
                                                                                                     peer):
     """The peer each gate session's reserve and open must carry on the ledger is the one the run's record names, with
-    no --peer: verifier.json's gate sessions (`challengers.Gate.finish`) for a verifier on vy-nebius-1, or a host
-    run's request.json beside out/ for one on vy-auditor-1 whose verifier.json predates that field (gate run 7's),
+    no --peer: verifier.json's gate sessions (`challengers.ChallengerGate.finish`) for a verifier on a CPU node, or a
+    host run's request.json beside out/ for one on the verifier host whose verifier.json predates that field (gate run 7's),
     the request's own `peer` being the audited node. Either way its session is of record. --peer overrides the record,
     and a session reserved for another peer is then not of record; a record naming two peers, or none, is refused with
     the flag."""
-    out, other = tmp_path / "run", {"vy-nebius-1": "vy-auditor-1", "vy-auditor-1": "vy-nebius-1"}[peer]
+    out, other = tmp_path / "run", {"cpu-node": "auditor-host", "auditor-host": "cpu-node"}[peer]
     sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True, peer=peer)
     assert [s["challenger"]["peer"] for s in sessions] == [peer]
     bare = [{**s, "challenger": {k: x for k, x in s["challenger"].items() if k != "peer"}} for s in sessions]
     request = tmp_path / "request.json"
 
     def requested(name: str) -> None:
-        request.write_text(json.dumps({"peer": "vy-nebius-2", "argv": [
+        request.write_text(json.dumps({"peer": "gpu-node", "argv": [
             "/usr/bin/python3", "-I", "verifier.py", "--challenger", "gate", "--challenger-peer", name,
             "--challenger-pin", host.pin]}))
 
-    if peer == "vy-auditor-1":
+    if peer == "auditor-host":
         requested(peer)
-    doc = analysed(out, host, sessions if peer == "vy-nebius-1" else bare, reg, desc)
+    doc = analysed(out, host, sessions if peer == "cpu-node" else bare, reg, desc)
     (s,) = doc["sessions"]
     assert doc["peer"] == {"name": peer, "from": "record"}
     assert s["ledger"]["ok"] and s["ledger"]["peer"] == s["ledger"]["open_peer"] == peer and s["of_record"]
@@ -572,7 +639,7 @@ def test_the_gate_sessions_peer_is_the_one_the_runs_record_names_and_a_record_na
     request.unlink()
     with pytest.raises(SystemExit) as none:
         analysed(out, host, bare, reg, desc)
-    for e, named in ((two, "challenger peers vy-auditor-1, vy-nebius-1"), (none, "no challenger peer")):
+    for e, named in ((two, "challenger peers auditor-host, cpu-node"), (none, "no challenger peer")):
         assert str(e.value) == (f"auditor_line: the run's record names {named} (verifier.json's gate sessions, "
                                 f"{request}'s --challenger-peer): pass --peer NAME, the verifier machine's name in the "
                                 "challenger host's /etc/vy/peers")
@@ -592,7 +659,7 @@ def test_a_session_earns_credit_only_under_the_commit_its_verifier_ran_at_on_mai
     assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
     request, branch = tmp_path / "request.json", "9" * 40
     for ran in (VERIFIER, branch):
-        request.write_text(json.dumps({"peer": "vy-nebius-2", "pinned": ran}))
+        request.write_text(json.dumps({"peer": "gpu-node", "pinned": ran}))
         doc = analysed(out, host, sessions, reg, desc, commit=ran)
         (s,) = doc["sessions"]
         assert all(s["credit"][c]["ok"] for c in ("complete", "accepted", "pinned", "bound"))
@@ -695,12 +762,13 @@ def test_a_session_earns_no_credit_when_its_boundarys_certifiers_show_ingress_be
 
 def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no_outside_compute(tmp_path, host,
                                                                                                 monkeypatch):
-    """RD-20: with infra's lockdown record (`--lockdown`), a gate session whose span as the challenger signed it (its
+    """With infra's lockdown record (`--lockdown`), a gate session whose span as the challenger signed it (its
     open's started_utc to its end's ended_utc) lies strictly inside an applied interval has its NoOutsideCompute
     grounded by `ProviderLockdown`, and the line is conditional on that in its place. A span that starts or ends on
     an interval's edge at whole seconds, a node that mounts a shared filesystem, or no record leaves it conditional
-    on NoOutsideCompute. It changes no credit, and the line's label names what the file names (`line_label`). A
-    record not of `read_lockdown`'s form is refused."""
+    on NoOutsideCompute. Either way the line stays conditional on the gaps in its charge (`binding-split`). It
+    changes no credit, and the line's label names what the file names (`line_label`). A record not of
+    `read_lockdown`'s form is refused."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run"
     sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True)
@@ -709,7 +777,7 @@ def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no
 
     def record(name: str, intervals: list[tuple[str, str]], shared: bool | None = None) -> Path:
         p = tmp_path / f"{name}.json"
-        p.write_text(json.dumps({"node": "vy-nebius-2", "allow": [{"host": "vy-auditor-1", "ip": "81.85.1.145"}],
+        p.write_text(json.dumps({"node": "gpu-node", "allow": [{"host": "auditor-host", "ip": "192.0.2.7"}],
                                  "intervals": [{"applied_utc": a, "lifted_utc": b, "records": ["art:" + "0" * 64]}
                                                for a, b in intervals], "shared_filesystem": shared}))
         return p
@@ -723,13 +791,14 @@ def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no
     start, end = s["no_relay"]["span_utc"]
     assert s["credit"]["ok"] and s["no_relay"]["grounded_by"] is None and doc["conditional_on"] == al.CONDITIONAL_ON
     assert doc["lockdown"] == {"read": False, "reason": "no lockdown record (--lockdown)"}
-    assert al.line_label(doc) == "python conditional on NoOutsideCompute"
+    assert al.line_label(doc) == "python conditional on NoOutsideCompute, binding-split"
     before, after = A.later(start, -1), A.later(end, 1)
     doc = locked("inside", [(A.later(start, -30), A.later(start, -20)), (before, after)])
     (s,) = doc["sessions"]
     assert s["credit"]["ok"] and s["no_relay"]["grounded_by"] == "ProviderLockdown"
     assert s["no_relay"]["interval"] == [before, after] and s["no_relay"]["shared_filesystem"] == "pending (infra)"
-    assert doc["conditional_on"] == al.GROUNDED and al.line_label(doc) == "python conditional on ProviderLockdown"
+    assert doc["conditional_on"] == {**al.GROUNDED, "binding-split": al.CONDITIONAL_ON["binding-split"]}
+    assert al.line_label(doc) == "python conditional on ProviderLockdown, binding-split"
     assert doc["lockdown"]["read"] and doc["lockdown"]["sha512"] == hashlib.sha512(
         (tmp_path / "inside.json").read_bytes()).hexdigest()
     assert f"no relay, session 0: ProviderLockdown, its span inside the lockdown applied {before} to {after}" in \
@@ -737,7 +806,7 @@ def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no
     for name, intervals, shared, why in (
             ("at-start", [(start, after)], None, "lies inside no interval"),
             ("at-end", [(before, end)], None, "lies inside no interval"),
-            ("shared", [(before, after)], True, "vy-nebius-2 mounts a shared filesystem")):
+            ("shared", [(before, after)], True, "gpu-node mounts a shared filesystem")):
         doc = locked(name, intervals, shared)
         (s,) = doc["sessions"]
         assert s["credit"]["ok"] and s["no_relay"]["grounded_by"] is None and why in s["no_relay"]["reason"]
@@ -754,7 +823,7 @@ def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no
 
 
 def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_cover_it():
-    """A credited span from σ_0's release at 100 ns to the last root's arrival at 250 ns is covered by windows
+    """A credited span from chal_0's release at 100 ns to the last root's arrival at 250 ns is covered by windows
     [0, 120) and [120, 251), whatever lies beyond it, and not with a gap at 120 or a last window ending at 250."""
     seen = [{"released_ns": 100, "arrivals_ns": [150]}, {"released_ns": 160, "arrivals_ns": [250]}]
 
@@ -768,7 +837,7 @@ def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_c
 
 
 def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip():
-    """Coins 110 ms apart on a challenger clock 30 ppm fast, σ_0 and σ_1 stamped a 100 ms round trip before the
+    """Coins 110 ms apart on a challenger clock 30 ppm fast, chal_0 and chal_1 stamped a 100 ms round trip before the
     challenger released them and every later coin 50 ms after: the cross-check's rate reads 30 ppm, where the ratio end
     to end reads the round trip over the session's span."""
     ms = 1_000_000
@@ -784,7 +853,7 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     forms', exactly; a refused form records none), beside its five parts (verifier.json's `delta`,
     `ledger.delta_parts`), which must sum to it as the ledger adds them: forms that record two δ, or parts that don't
     sum to it, give no line. The hiding part, n·2^-191, is below the float δ's precision, so the exact parts exceed
-    the recorded total by it. A ledger that didn't charge the draw's rejection has Σ_t k_t/2^64 added at the session's
+    the recorded total by it. A ledger that didn't charge the sample's rejection has Σ_t k_t/2^64 added at the session's
     `samples`, so it reads as one that did, a window that opened all its receipts included. Every error names the
     windows' PRF advantages (claim prf/sha-512) with no value, in no total. The line at each T, and over every T,
     fails with at most the sum over its credited sessions, and a T that credits none has error 0."""
@@ -805,8 +874,8 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     e = al.session_error(a)
     total = Fraction(a["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"])
     parts = {"delta_profile": Fraction(1, 2 ** 40), "delta_slack": Fraction(700, 2 ** 41),
-             "delta_hiding": Fraction(al.ledger.hiding_over(700)), "delta_sketch": Fraction(1, 2 ** 60),
-             "delta_rejection": Fraction(48 * 700, 2 ** 64)}
+             "delta_hiding": Fraction(al.ledger.hiding_over(700)), "delta_binding": Fraction(0),
+             "delta_sketch": Fraction(1, 2 ** 60), "delta_rejection": Fraction(48 * 700, 2 ** 64)}
     assert e["exact"] == {**{k: str(x) for k, x in parts.items()}, "total": str(total)}
     assert e["total"] == float(total) and e["log2_total"] == al.timing.log2(total)
     assert sum(parts.values()) - total == parts["delta_hiding"] and e["delta_slack"] > 300 * e["delta_profile"]
@@ -841,10 +910,9 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     assert out["T=60s"]["error"] == {"sessions": [], "total": 0.0, "exact": "0", "log2": None, "named_terms": {}}
 
 
-# Gate runs 8 and 9's accepted sessions (fire runs r20261024-090758-3b8a and r20261024-112611-902d, their
-# verifier.json): (passes, the memory line's δ every form records, the sketch's log2 its `sketch_failure` records,
-# the session's samples, which each window drew, one window a pass, every one of 9.75·10^7 receipts or more:
-# r20261024-210802-42c2).
+# Gate runs 8 and 9's accepted sessions (their verifier.json): (passes, the memory line's δ every form records, the
+# sketch's log2 its `sketch_failure` records, the session's samples, which each window drew, one window a pass, every
+# one of 9.75·10^7 receipts or more).
 GATE_RUNS = {(8, 0): (2118, 9.640646787142758e-10, -51.59094185809943, 48),
              (8, 2): (96, 4.4565254207300316e-11, -56.00597544028051, 232),
              (9, 0): (2118, 9.6406468008027e-10, -51.58427317163358, 48),
@@ -855,7 +923,7 @@ GATE_RUNS = {(8, 0): (2118, 9.640646787142758e-10, -51.59094185809943, 48),
 def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     """On gate runs 8 and 9's records, written before verifier.json carried δ's parts or the slack (`slack_log2`), a
     session's error is the memory line's δ its ledger recorded, bit for bit, plus the coin commitment's hiding and the
-    draw's rejection it didn't charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
+    sample's rejection it didn't charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
     which dominates (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), δs, the rest,
     which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 at the session's samples,
     which every window drew (2118·48 = 101,664 draws, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its

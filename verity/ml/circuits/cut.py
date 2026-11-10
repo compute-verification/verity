@@ -58,11 +58,12 @@ specified in `verity/ml/circuits/PROTOCOL.md` (pinned by `verity/ml/circuits/tes
 (on one v1 refuses only for `gate-recomputed`, the cut v1 computed before refusing).  `check_cut` still computes the pairs: under v2
 (`RECOMPUTE[2]`, "report") the pairs across units are `detail["recomputed_across"]` (count and first pairs) instead of the code
 `gate-recomputed`; `redundant_gates` counts the pairs within one unit, as in v1; every other code is unchanged.  Each copy is its own
-gate, certified by one unit from that unit's gates and committed values, so v2's units may compute a common value: a count of them
-bounds wrong work but is not distinct work.  `check_cut`'s default, and so `validate_unit_cut`'s, stays v1's refusal.
+gate, certified by one unit from that unit's gates and committed values, so v2's proof blocks may compute a common value: a count of
+them bounds the incorrect ones' size but counts a shared value more than once.  `check_cut`'s default, and so `validate_unit_cut`'s, stays v1's refusal.
 
-**Cost.**  `owners` runs one backward pass per round of promotions, so O(n · (n + E)) for n computing gates and E edges in the worst
-case.  `evaluate` shortcuts separable bodies, but `verify` builds the flat `CallGraph` of every distinct Definition, separable ones
+**Cost.**  `owners` runs one backward pass, then per round of promotions only the gates upstream of the promoted ones whose unit
+changes (`_repass`), and the dead-unit pass in a round that promotes nothing: O(n · (n + E)) for n computing gates and E edges in
+the worst case, but a round costs what it changes.  `evaluate` shortcuts separable bodies, but `verify` builds the flat `CallGraph` of every distinct Definition, separable ones
 included, to check the cut on it.
 
 **Q_call v1** (`evaluate_call`, `PROTOCOL.md` §11), a query of its own, with one parameter X (bits; 32 is the agreed value):
@@ -82,7 +83,8 @@ included, to check the cut on it.
    its activation), or a member or iteration of a batch or scan node.  Its outputs are its computing gates `g` with
    `last[g] >= hi` (read after the piece, or returned): the layout is topological, so nothing before `lo` reads inside it, and
    this is `parts.out(S)` for S the piece's computing gates.  w_out is their summed declared widths.
-4. **Cut** (`call_units`), from the Call down, depth first in layout order: a piece without computing gates is no unit; one
+4. **Cut**, the term `each(instances("@*"), frontier(X))` (`query_ast`'s `Frontier`; one Call's sets `frontier_pieces`), from
+   the Call down, depth first in layout order: a piece without computing gates is no unit; one
    with w_out <= X is one unit; otherwise its children are the pieces, in order -- a composite activation's (the Call's, a call
    node's callee, a composite member's) body nodes; a batch or scan node's members or iterations.  A primitive piece is one
    gate of at most X bits, so it always fits, and the cut ends.  A unit is (`lo`, `hi`, path): the path is its steps from the
@@ -99,17 +101,20 @@ included, to check the cut on it.
    else its own, `("g", j)`.  A program's data reaches the Call through its parameters, from registered or run input gates, so it
    is compared by leaf, never by value.
 
-**Cost.**  O(n) to build `CallGates` (one pass over the gates and their operands), O(n · depth) for the cut, each piece's w_out
-one scan of its interval.
+**Cost.**  O(n) to build `CallGates` (one pass over the gates and their operands); the cut is structural, each Definition with a
+given set of returns read resolved once, its pieces' w_out from the description, never gate by gate.
 """
 from __future__ import annotations
 
+import heapq
+import operator
 from array import array
 from collections import Counter
 from typing import Any, Iterable, Iterator, Sequence
 
 from .layout import resolve
 from .partition import INPUT_UNIT, CutVerdict, validate_unit_cut
+from .query_ast import frontier_pieces
 from .refs import Affine, Strided
 
 #: primitives that only rearrange bits (each output bit a constant or a copy of one input bit): wiring, like constants, is
@@ -215,8 +220,7 @@ class CallGraph:
         ops: list[list[int]] = []
         inputs: dict[int, int] = {}                                  # the Call's parameter gates it reads (root id -> index)
         wide: set[int] = set()
-        for j in range(n):
-            g = c.gate(lo + j)
+        for j, g in enumerate(c.gates(lo, lo + n)):
             width[j] = g.prim.ret.w
             prim[j] = self.prims.setdefault(g.prim.id, len(self.prims))
             scope[j] = self.scopes.setdefault(g.scope.spec.id, len(self.scopes))
@@ -420,51 +424,113 @@ def targets(graph: CallGraph, X: int) -> list[list[int]]:
     return out
 
 
+def _agreed(own: list[int], consumers: list[int]) -> int:
+    """A headless gate's unit in the backward pass (step 4 (ii)): its consumers' one unit, -1 when none has one, -2 when two
+    differ."""
+    o = -1
+    for c in consumers:
+        oc = own[c]
+        if oc == -1 or oc == o:
+            continue
+        if o == -1 and oc >= 0:
+            o = oc
+        else:
+            return -2
+    return o
+
+
+def _repass(own: list[int], head: list[int], consumers: list[list[int]], producers: list[list[int]],
+            moved: list[int]) -> list[int]:
+    """The backward pass after the gates ``moved`` became heads, from ``own``, the pass before they did, in place: only what
+    lies upstream of them, highest gate first, and only while a gate's unit changes; the gates whose unit changed.  The pass's
+    own answer when every edge reads an earlier gate: each gate is recomputed after every consumer that changed."""
+    heap: list[int] = []
+    queued: set[int] = set()
+    changed = []
+    for g in moved:
+        own[g] = head[g]
+        changed.append(g)
+        for p in producers[g]:
+            if head[p] < 0 and p not in queued:
+                queued.add(p)
+                heapq.heappush(heap, -p)
+    while heap:
+        g = -heapq.heappop(heap)
+        o = _agreed(own, consumers[g])
+        if o == own[g]:
+            continue
+        own[g] = o
+        changed.append(g)
+        for p in producers[g]:
+            if head[p] < 0 and p not in queued:
+                queued.add(p)
+                heapq.heappush(heap, -p)
+    return changed
+
+
 def owners(graph: CallGraph, head: list[int], kinds: list[str]) -> tuple[list[int], list[int]]:
-    """Steps 2-3 (see the module docstring): owner per computing gate, and the heads, extended by the committed values."""
+    """Steps 2-3 (see the module docstring): owner per computing gate, and the heads, extended by the committed values.  Each
+    round's backward pass is the last round's redone upstream of the gates it promoted (`_repass`), and its promotions those of
+    the gates whose unit or whose consumers' changed: the whole pass's answers, since a Call's every edge reads an earlier gate
+    (`CallGraph`; a graph with one that doesn't is passed whole each round)."""
     n = graph.n
     consumers: list[list[int]] = [[] for _ in range(n)]
     producers: list[list[int]] = [[] for _ in range(n)]
-    edges = list(zip(graph.src.tolist(), graph.dst.tolist()))
+    src, dst = graph.src.tolist(), graph.dst.tolist()
+    edges = list(zip(src, dst))
     for p, q in edges:
         consumers[p].append(q)
         producers[q].append(p)
+    forward = all(map(operator.lt, src, dst))
+    own: list[int] = []
+    moved: list[int] = []
     while True:
-        own = list(head)
-        for g in range(n - 1, -1, -1):
-            if own[g] >= 0:
-                continue
-            o = -1
-            for c in consumers[g]:
-                oc = own[c]
-                if oc == -1 or oc == o:
+        if not own or not forward:
+            own = list(head)
+            for g in range(n - 1, -1, -1):                        # `_agreed` inlined: a call per gate costs a tenth of the pass
+                if own[g] >= 0:
                     continue
-                if o == -1 and oc >= 0:
-                    o = oc
-                else:
-                    o = -2
-                    break
-            own[g] = o
-        promote = sorted({p for p, q in edges if own[p] == -2 and own[q] >= 0})
+                o = -1
+                for c in consumers[g]:
+                    oc = own[c]
+                    if oc == -1 or oc == o:
+                        continue
+                    if o == -1 and oc >= 0:
+                        o = oc
+                    else:
+                        o = -2
+                        break
+                own[g] = o
+            ready = {p for p, q in edges if own[p] == -2 and own[q] >= 0}
+        else:
+            for g in _repass(own, head, consumers, producers, moved):
+                for p in (g, *producers[g]):
+                    if own[p] == -2 and any(own[q] >= 0 for q in consumers[p]):
+                        ready.add(p)
+                    else:
+                        ready.discard(p)
+        promote = sorted(ready)
         if not promote:
             live = len(kinds)
+            final = list(own)
             for g in range(n):
-                if own[g] != -1:
+                if final[g] != -1:
                     continue
-                us = {own[p] for p in producers[g] if head[p] < 0}
+                us = {final[p] for p in producers[g] if head[p] < 0}
                 alive = {u for u in us if 0 <= u < live}
-                own[g] = alive.pop() if len(alive) == 1 and len(us) == 1 else -1
+                final[g] = alive.pop() if len(alive) == 1 and len(us) == 1 else -1
             for g in range(n):
-                if own[g] == -1:
-                    own[g] = len(kinds)
+                if final[g] == -1:
+                    final[g] = len(kinds)
                     kinds.append("dead")
-            promote = sorted({p for p, q in edges if own[p] != own[q] and head[p] < 0})
+            promote = sorted({p for p, q in edges if final[p] != final[q] and head[p] < 0})
             if not promote:
-                return own, head
+                return final, head
             del kinds[live:]
         for i, g in enumerate(promote):
             head[g] = len(kinds) + i
         kinds += ["committed"] * len(promote)
+        moved = promote
 
 
 def cut_word(graph: CallGraph, X: int) -> tuple[list[int], list[str], list[int]]:
@@ -570,8 +636,7 @@ class CallGates:
         prim: list[str] = [""] * n
         last = [-1] * n
         ops: list[tuple[int, ...]] = [()] * n
-        for j in range(n):
-            g = c.gate(lo + j)
+        for j, g in enumerate(c.gates(lo, lo + n)):
             p = g.prim
             width[j], prim[j] = p.ret.w, p.id
             if not p.params:
@@ -645,48 +710,6 @@ class CallGates:
         return any(self.computing[lo:hi])
 
 
-def call_units(G: CallGates, X: int) -> list[tuple[int, int, tuple[tuple[int, ...], ...]]]:
-    """Step 4: the Call's units, (lo, hi, path) in layout order (see the module docstring)."""
-    units: list[tuple[int, int, tuple[tuple[int, ...], ...]]] = []
-    # a pending piece: (lo, hi, path, children) where children() lists the pieces it splits into
-    stack: list[tuple[int, int, tuple, Any]] = [(0, G.n, (), ("activation", G.fn, 0))]
-    while stack:
-        lo, hi, path, how = stack.pop()
-        if not G.any_computing(lo, hi):
-            continue
-        if G.w_out(lo, hi, X) <= X:
-            units.append((lo, hi, path))
-            continue
-        kids = list(_children(how, path))
-        stack.extend(reversed(kids))
-    return units
-
-
-def _children(how: tuple, path: tuple) -> Iterator[tuple[int, int, tuple, Any]]:
-    """A piece's children (step 4): an activation's body nodes; a call node's callee's body nodes; a batch or scan's members."""
-    kind, fn, off = how
-    if kind == "activation":
-        body = fn.body
-        for k, node in enumerate(body.nodes):
-            lo = off + body.offsets[k]
-            hi = off + body.offsets[k + 1]
-            if node.form == "primitive":
-                yield lo, hi, path + ((k,),), ("gate", node.fn, lo)
-            elif node.form == "call":
-                yield lo, hi, path + ((k,),), ("activation", node.fn, lo)
-            else:
-                yield lo, hi, path + ((k,),), ("members", node, lo)
-        return
-    if kind == "members":
-        node, g = fn, fn.fn.gates
-        step = path[-1][0]
-        for m in range(node.n):
-            lo = off + m * g
-            yield lo, lo + g, path[:-1] + ((step, m),), (("gate", node.fn, lo) if not hasattr(node.fn, "body") else ("activation", node.fn, lo))
-        return
-    raise AssertionError(f"a {kind} piece always fits")
-
-
 class CallCut:
     """`Q_call{X}`'s cut of one Definition: `units` [(lo, hi, path)] over its local gates (`CallGates`), and `owner()`, the unit of
     each computing gate in compact order."""
@@ -712,7 +735,8 @@ def call_gates(fn: Any, memo: dict | None = None) -> CallGates:
 
 def evaluate_call(fn: Any, X: int = CALL_X, memo: dict | None = None) -> CallCut:
     """`Q_call{X}` on one activation of `fn` (steps 0, 2-4): `QueryInapplicable` (`gate-too-wide`) when a computing gate is wider than
-    X bits.  Memoised by Definition id."""
+    X bits; the proof blocks are the term's sets (`query_ast.frontier_pieces`), each computing gate in exactly one.  Memoised by
+    Definition id."""
     memo = {} if memo is None else memo
     key = ("Q_call", fn.id, X)
     got = memo.get(key)
@@ -723,7 +747,7 @@ def evaluate_call(fn: Any, X: int = CALL_X, memo: dict | None = None) -> CallCut
     if j is not None:
         raise QueryInapplicable(f"{fn.id}: gate {j} ({G.prim[j]}) is {G.width[j]} bits, wider than Q_call's X = {X}",
                                 {"definition": fn.id, "gate": j, "primitive": G.prim[j], "width": G.width[j], "X": X, "why": "gate-too-wide"})
-    units = call_units(G, X)
+    units = frontier_pieces(fn, X, memo)
     owner = [-1] * G.nc
     for u, (lo, hi, _path) in enumerate(units):
         for g in range(lo, hi):
@@ -777,4 +801,4 @@ def check_call_cut(G: CallGates, owner: Sequence[int], X: int, committed: Iterab
 
 __all__ = ["WIRING", "WIDE_FAN_IN", "WIDTH_RULE", "RECOMPUTE", "QueryInapplicable", "call_scope", "member_refs", "wide_operands", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut",
            "separable", "targets", "owners", "cut_word", "DefinitionCut", "evaluate_definition",
-           "CALL_X", "CallGates", "call_gates", "call_units", "CallCut", "evaluate_call", "call_committed", "check_call_cut"]
+           "CALL_X", "CallGates", "call_gates", "CallCut", "evaluate_call", "call_committed", "check_call_cut"]

@@ -1,19 +1,22 @@
-import Definitions.Pous.Model.Audit
+module
+
+public import Definitions.Pous.Model.Audit
 
 /-!
-# The public-encoder setup check and audit game (staged: enters only with the public-encoder band pins)
+# The public-encoder setup check and audit game
 
-Verbatim copies of the definitions the proposed public-encoder pins (`BandPubMeets64`, `BandPubMeets14`,
-`BandPubMeets14Global`) read, from `lean/submissions/public-encoder/PubEncoderModel.lean`. That file already uses the
-trusted layer's names (namespace `Pous`) and plans this move: everything but `PubMeets` into this file, and `PubMeets`
-into `Security/Definitions/Pous/Accounting/PubMeets.lean`. So there is no renaming, and the lane's
-`PubEncoderModel.lean` must stop declaring these names (import this file instead) when it enters, or the two clash.
-`Scheme.EncDec`, which no pinned statement reads, stays in the lane.
+Verbatim copies of the definitions the public-encoder pins (`BandPubMeets64`, `BandPubMeets14`,
+`BandPubMeets14Global`) read, from the module `PubEncoderModel`. That module already uses the trusted layer's names
+(namespace `Pous`): everything but `PubMeets` is in this file, and `PubMeets` in
+`Security/Definitions/Pous/Accounting/PubMeets.lean`. So there is no renaming. `Scheme.EncDec`, which no pinned
+statement reads, is in the module's section of `Security/Proofs/Pous/Chain/Flat.lean`.
 
 An untrusted server encodes: its encoder `E` outputs `(pp*, C*)` from `(W, ω, r)`, a setup check `V` with its own coins
 `ξ` accepts or rejects it as the encoding of the committed `W`, and preprocessing and the audit run on `(pp*, C*)`.
 The commitment to `W` and the binding of `C*` are idealized, and the check's cost is not in any statement.
 -/
+
+@[expose] public section
 
 namespace Pous
 
@@ -21,7 +24,7 @@ open scoped ENNReal
 
 variable {M : IdealModel}
 
-/-- **A setup check** for a scheme: its coins `Ξ`, drawn uniformly after the server's output, and the predicate
+/-- **A setup check** for a scheme: its coins `Ξ`, sampled uniformly after the server's output, and the predicate
 `accepts W pp C ξ f`: accept `(pp, C)` as the encoding of the committed `W` under coins `ξ`, reaching the primitive
 through `f`. -/
 structure SetupCheck (sch : Scheme M) : Type 1 where

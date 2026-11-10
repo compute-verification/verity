@@ -29,7 +29,7 @@ proxy saw, that its hand times are the rule's, and that the peer's digest of eac
 ingress record holds the salt frame, which carries the placeholder and never the salt, and the server receives the salt
 on a connection of its own, logging each window's SHA-512 of it (`fingerprint`), never the salt. Once the run's
 records are published the proxy answers the verifier's "reveal" call with every window's salt (`salts.json`), each
-revealed on a stand-in for the window's registration (`stand_in`: the replay registers nothing with a proof service),
+revealed on a stand-in for the window's registration (`stand_in`: the replay registers nothing with a proof system),
 and the audit's `salt` section reads the salt frames against them (`active.check_salts`, on the raw ingress records),
 counts the salt frames in each ingress record and in the egress records, and checks that no egress frame holds a salt
 and that the server received each salt.
@@ -162,8 +162,8 @@ from verity.core.protocols.certifier.schedule import (
     run_shaper,
 )
 from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.service import Registration
+from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.spot.service import WindowCommitmentRecord
 
 MODEL = "llama-3.1-8b-instruct"
 HTTP_HEAD = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncache-control: no-cache\r\n\r\n"
@@ -216,7 +216,7 @@ _WORKLOADS: dict[str, dict[int, dict]] = {}
 
 
 def live_body(session: str | None, model: str) -> dict:
-    """The request `record.py` sent for a session named `workload.instance.index`, its first prompt token drawn from the
+    """The request `record.py` sent for a session named `workload.instance.index`, its first prompt token sampled from the
     session's name; one token of a one-token prompt for a request no session names. Without `return_token_ids`, with
     which vLLM puts the prompt's token ids in the first event, past a frame."""
     import record
@@ -502,12 +502,21 @@ def program_streams(plan: dict, release: dict[int, int], params: GridParams) -> 
 
 
 STRATEGIES = ("honest", "burst", "spread", "bits", "late", "covert")
-LIVE_TAMPERS = ("extra", "drop", "token")
+LIVE_TAMPERS = ("extra", "drop", "token", "byte")
 
 
 def other_token(data: bytes) -> bytes:
     """Bytes of a canonical event's length other than `data`, which isn't empty: its first byte's low bit flipped."""
     return bytes([data[0] ^ 1]) + data[1:]
+
+
+def other_hex(data: bytes) -> bytes:
+    """`data` with its first hex digit's low bit flipped (``0``-``1``, ``a``-``b``, ``e``-``f``), so a response whose text
+    is the hex of its outputs carries one output byte changed and stays hex; `data` without a hex digit is refused."""
+    for i, c in enumerate(data):
+        if chr(c) in "0123456789abcdef":
+            return data[:i] + b"%x" % (int(chr(c), 16) ^ 1) + data[i + 1:]
+    raise ValueError("an event without a hex digit has no output byte to change")
 
 
 def other_id(token_id: int, eos: frozenset) -> int:
@@ -566,14 +575,16 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     sender that steers the online prover's declared sync with a random message), with the symbols it sent kept for
     the audit's `covert` measurement. Under syncs fixed before the run (`envelope`, `model`) the covert sender steers
     nothing: the control. On a live server the plan carries the sender's parameters, and the shim's
-    `covert.LiveSender` draws the symbols as it serves. On a live shim only, on time and logged: `extra` writes one
+    `covert.LiveSender` samples the symbols as it serves. On a live shim only, on time and logged: `extra` writes one
     event more at the end of the first session's response, after what the endpoint sent and the shim's padding
     (`pad_to`); `drop` writes that response's first event not at all, counted as written so the padding doesn't make
-    it up; and `token` writes every event that carries bytes, of every response to a request enqueued in window 0,
+    it up; `byte` writes that response's first event that carries bytes with one hex digit changed (`other_hex`: one
+    output byte, when the text is the outputs' hex), so only the output tie refuses it; and `token` writes every event
+    that carries bytes, of every response to a request enqueued in window 0,
     with other bytes (`other_token`), so the frame counts are honest's and only a check of the frames' tokens against
-    the committed sampled ids (the I/O tie) refuses it. The tie draws positions in each window, so a window whose every
-    token is wrong is refused at any number of draws, where one wrong frame among N would be refused only at the share
-    1/N a draw."""
+    the committed sampled ids (the I/O tie) refuses it. The tie samples positions in each window, so a window whose
+    every token is wrong is refused at any number of samples, where one wrong frame among N would be refused only at the
+    share 1/N a sample."""
     if strategy == "token":
         T = setup.egress_params.buckets
         window0 = [q["session"] for q in plan.get("requests", ()) if "enqueue" in q and q["enqueue"] // T == 0]
@@ -905,7 +916,7 @@ class LiveServer:
         self.compact = bool(plan.get("compact"))
         if self.compact and not self.token_ids:
             raise ValueError("compact records are a varied plan's, of token ids")
-        self.drop, self.token = plan.get("drop"), frozenset(plan.get("token") or ())
+        self.drop, self.token, self.byte = plan.get("drop"), frozenset(plan.get("token") or ()), plan.get("byte")
         self.eos = frozenset((plan.get("varied") or {}).get("eos_token_ids") or ())
         self.forward_user = bool(plan.get("varied"))
         self.held: Counter = Counter()
@@ -974,11 +985,12 @@ class LiveServer:
         """A response's canonical events, one list per chunk of its body as it arrives; under `pad_to`, empty events
         (`active.event(b"")`, what a chunk of no text gives) after its last, up to `pad_to`, counted in `padded`; for
         the `extra` session, one event more after those; for the `drop` session, its first left out; for a `token`
-        session, each that carries bytes carrying `other_token` of them. `tampered` logs each event changed or left
+        session, each that carries bytes carrying `other_token` of them; for the `byte` session, its first that carries
+        bytes carrying `other_hex` of them (one output byte of a hex response). `tampered` logs each event changed or left
         out, as (session, its index in the response). Under `token_ids`, id events of request `ordinal` (`id_events`);
         a `token` session's carry other ids (`other_id`), its EOS ids left as they are, so each response keeps its
         length and finish."""
-        cutter, n, made = Events(), 0, [0]
+        cutter, n, made, byte = Events(), 0, [0], name == self.byte
 
         def framed(e: bytes) -> list[bytes]:
             if self.compact:
@@ -994,6 +1006,12 @@ class LiveServer:
                 n, bodies = len(bodies), bodies[1:]
                 yield bodies
                 continue
+            if byte:
+                for k, b in enumerate(bodies):
+                    if text := event_data(b):
+                        self.log.setdefault("tampered", []).append([name, n + k])
+                        bodies[k], byte = event(other_hex(text)), False
+                        break
             if name in self.token:
                 for k, b in enumerate(bodies):
                     if self.compact and (d := compact_record_data(b)) is not None:
@@ -1017,7 +1035,7 @@ class LiveServer:
                    else canonical_events(b'data: {"choices":[{"text":" extra"}]}\n\n'))
 
     async def _serve(self, body: dict, writer: asyncio.StreamWriter, ticket: int = 0,
-                     ordinal: int | None = None, release: tuple[int, bytes | None] | None = None) -> None:
+                     ordinal: int | None = None, release: tuple[int, bytes | None, int | None] | None = None) -> None:
         received = self.clock() - self.origin
         self.log["requests"] += 1
         self.log["receipt_late_ms"].append(round((received % self.tau) * 1000, 3))
@@ -1159,7 +1177,7 @@ class Peer:
             return id_request(**fields, user=name, frame_bytes=self.B_in)
         if self.live_model is None:
             return request_bytes(name, q["frames"], self.B_in)
-        body = self.body if self.body is not None else live_body(q["session"], self.live_model)
+        body = q.get("body") or (self.body if self.body is not None else live_body(q["session"], self.live_model))
         return live_request_bytes(name, body, q["frames"], self.B_in)
 
     async def read(self, reader: asyncio.StreamReader, origin: float) -> None:
@@ -1212,13 +1230,18 @@ class Publisher:
 def proxy_log(proxies: Sequence[Proxy]) -> dict:
     """The run's proxy log: one proxy's, or, for an outage plan, the proxies before and after the outage joined, each
     list in order and each count summed, with the windows each served (`served`). A proxy numbers the requests it cut
-    from 1 (`active.Requests`), so a later proxy's streams are shifted by the requests the ones before cut."""
+    from 1 (`active.Requests`), so a later proxy's streams are shifted by the requests the ones before cut. A paced
+    proxy's log has its offset and each bucket's pacer report (`paced`, in ms after the bucket's time)."""
     last = proxies[-1]
     shift = list(itertools.accumulate((p.requests.stream for p in proxies), initial=0))
     frames = [[pos, s + shift[j], *rest] for j, p in enumerate(proxies) for pos, s, *rest in p.frames]
     salts = {} if last.salt is None else {"salts": {"released": sum(p.salts_released for p in proxies),
                                                     "delivered": sum(p.salts_delivered for p in proxies)}}
     served_by = {} if len(proxies) == 1 else {"served": [[p.start, p.windows] for p in proxies]}
+    paced = {} if last.paced is None else {"paced": {
+        "ms": last.paced * 1000, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
+        "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3), round(r.end * 1000, 3), r.written]
+                     for p in proxies for r in p.releases]}}
     return {"lateness_ms": {k: [round(x * 1000, 3) for p in proxies for x in p.lateness[k]] for k in last.lateness},
             "syncs": [[s.delta, str(s.rho)] for s in last.shaper.syncs],
             "frames": frames, "hands": [h for p in proxies for h in p.shaper.hands],
@@ -1226,14 +1249,15 @@ def proxy_log(proxies: Sequence[Proxy]) -> dict:
             "streams": sum(len(p.streams) for p in proxies), "slack_ms": last.slack * 1000,
             "forwards": [[st.window, None if st.delivered is None else round((st.delivered - st.deadline) * 1000, 3)]
                          for p in proxies for st in p.streams.values() if st.deadline is not None],
-            "prover": None if last.choices is None else last.choices.log} | salts | served_by | _usage()
+            "prover": None if last.choices is None else last.choices.log} | salts | served_by | paced | _usage()
 
 
-def stand_in(window: int) -> Registration:
-    """A stand-in for the proof service's registration of `window`, which the replay has none of: a record whose
+def stand_in(window: int) -> WindowCommitmentRecord:
+    """A stand-in for the proof system's registration of `window`, which the replay has none of: a record whose
     provenance names the window (`active.served_window`), with its receipt."""
     record = {"window": {"kind": "served", "window": window}}
-    return Registration(record, R.receipt(record, "active-replay", received=str(window)), R.digest(record), window)
+    return WindowCommitmentRecord(record, R.receipt(record, "active-replay", received=str(window)), R.digest(record),
+                                  window)
 
 
 def reveal_deadline(plan: dict, window_s: float) -> float:
@@ -1771,9 +1795,9 @@ def live_comparisons(plan: dict, setup: Setup, frames: Sequence[LogicalFrame], r
     return {"model_syncs_met_windows": sum(w not in late for w in range(windows)), "hindsight": hindsight}
 
 
-def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dict:
+def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit, client: Path | None = None) -> dict:
     """The audit of one run's published records, and the comparisons with the reference and the model. The verifier
-    is `audit`, a class with `audit.Audit`'s interface."""
+    is `audit`, a class with `audit.Audit`'s interface; the peer's `peer.json` is in `client`, by default `run`."""
     setup = Setup(report)
     e, i = setup.egress_params, setup.ingress_params
     T, windows = e.buckets, plan["windows"]
@@ -1878,7 +1902,7 @@ def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dic
         for b in in_frames.get(q["stream"], []):
             delivery[round(b * i.bucket_ms - q["trace_ms"], 3)] += 1
 
-    peer = json.loads((run / "peer.json").read_text())
+    peer = json.loads(((client or run) / "peer.json").read_text())
     zero = bytes(e.allocation * e.frame_bytes)
     wire = []
     for rec in sorted(out_records, key=lambda r: r.window):

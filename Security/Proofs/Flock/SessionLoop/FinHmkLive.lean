@@ -1,6 +1,41 @@
-import Proofs.Flock.SessionLoop.FinRep
+module
+
+public import Proofs.Flock.Claims.ZK.FinHmkLive
+public import Proofs.Flock.Claims.ZK.FinishSwSrc
+public import Proofs.Flock.SessionLoop.FinRep
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.SessionLoop.FinRounds
-import Proofs.Flock.Claims.ZK.FinHmkLive
 
 /-!
 # `hmk` at the loop's `Finish`: the views' masked values below `zp 64`
@@ -16,6 +51,8 @@ proofs: they are the request's values plus its pads, `tauFw_at`'s `hmk`, with no
 * **`Loop.swSrcE_hmk_live`**: so does the switched cut's (`Masked.swSrcE` at the opened coins and the workers' values
   `vs`), where every table admits the opened coins (`Loop.admits_of_finCtx`, from `Serves`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -122,7 +159,7 @@ theorem swSrcE_hmk_live (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
     (hv : (viewRep vs x w ν t m₀ ρ₀ ops spec schs cms k extras ic).go l₀ = (.ok (p', tr), l'))
     (he : FlockComplete.eraseZ p' = FlockComplete.eraseZ p) :
     ∀ i < (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).zp 64,
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2)).masked i =
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2)).masked i =
         q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := by
   intro i hi
   have hx : Masked.Live x := Masked.live_of hsc hRel
@@ -133,7 +170,7 @@ theorem swSrcE_hmk_live (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
   have hA := admits_of_finCtx L₀ src real wk hServe hF
   have e := congrArg FlockComplete.RepSrc.masked
     (eraseS_finSrc vs w ν t hA (i := k / 2) (r := k % 2) (by omega) (Nat.mod_lt _ (by omega)))
-  have e' : ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2)).masked =
+  have e' : ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2)).masked =
       ((finSrc vs x w ν t ops (k / 2)).rep (k % 2)).masked := e.symm
   rw [congrFun e' i]
   exact finSrc_hmk_live vs hsc hsx hk hR hrun hv he i hi

@@ -1,6 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
-import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
-import Proofs.Flock.Soundness.Binding.RowsX
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
+public import Proofs.Flock.Soundness.Binding.RowsX
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Place
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `--zk` rows each under its own encoding
@@ -15,6 +31,8 @@ import Proofs.Flock.Soundness.Binding.RowsX
 * `zk_flock_countC_execOS_keyProgX`: the compiled `--zk` count curve at such rows' binding.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.ZkBind
 
 open Game Model Accounting Refine Audit ZkSession ZkLink Binding
@@ -22,7 +40,7 @@ open Game Model Accounting Refine Audit ZkSession ZkLink Binding
 section Rows
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
-  {A : Arith F K} {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type}
+  {A : Arith F K} {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type}
   {planZ : Finset (Fin n) → Reg → List (TabZK F mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length}
   {decode : DecoderZK (C := C) planZ tab}
@@ -52,7 +70,7 @@ variable {lay : LayoutZ A P planZ tab decode} (rs : HmRowsZX lay)
 def scheme (p : lay.Pos) : ExplicitLeaf lay.Val :=
   if rs.isRow p then ExplicitLeaf.hm96X (rs.enc p) (rs.ext p) (rs.ext_spec p) else rs.other p
 
-/-- **`HmRowComputes` at the drawn units' rows of `--zk` tables**, each row under its own encoding. -/
+/-- **`HmRowComputes` at the sampled proof blocks' rows of `--zk` tables**, each row under its own encoding. -/
 def Computes : Prop :=
   Assumptions.HmRowComputes (fun l => digBytes (H512 l)) K512.saltPrefix K512.mask
     (fun w : RowSiteZ planZ tab C.N =>
@@ -89,7 +107,7 @@ section Shadow
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length}
   {planS : Finset (Fin n) → Reg → List (TabSpec mPts)}

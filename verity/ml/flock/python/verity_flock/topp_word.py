@@ -47,9 +47,9 @@ from .gf2 import (
 
 # the pipeline, its word gates and their constants are written once, in the registry (`topp_keep_builder`, `topp_word_gates`);
 # F, R, CW, WIDTH and SPLIT_COUNTS are re-exported
-from verity_vllm.program.registry.topp_keep_builder import F, R, SPLIT_COUNTS, keep_word  # noqa: E402, F401
-from verity_vllm.program.registry.topp_keep_builder import Engine as _Engine  # noqa: E402
-from verity_vllm.program.registry.topp_word_gates import CW, EPS9, HALF, LOG2E, M126, QNAN, WIDTH  # noqa: E402, F401
+from verity.ml.definitions.registry.topp_keep_builder import F, R, SPLIT_COUNTS, keep_word  # noqa: E402, F401
+from verity.ml.definitions.registry.topp_keep_builder import Engine as _Engine  # noqa: E402
+from verity.ml.definitions.registry.topp_word_gates import CW, EPS9, HALF, LOG2E, M126, QNAN, WIDTH  # noqa: E402, F401
 
 
 def _c(v: int):
@@ -243,3 +243,18 @@ def count(V: int, p: int | None = None, splits: int | None = None) -> Counter:
     sv = E.free(1) if splits is None else E.const([splits])
     keep_word(E, E.free(V), pv, sv)
     return E.counts
+
+
+_ANDS: dict[int, int] = {}
+
+
+def ands(V: int) -> int:
+    """The circuit's ANDs at ``V`` lanes, p and splits free: every piece instance :func:`count` counts times its variant's ANDs.
+    Seconds at V = 16, about a minute at a served vocabulary."""
+    if V not in _ANDS:
+        built: dict = {}
+        for (_path, name, key) in (c := count(V)):
+            if (name, key) not in built:
+                built[(name, key)] = build(name, key).counts()["ands"]
+        _ANDS[V] = sum(n * built[(name, key)] for (_path, name, key), n in c.items())
+    return _ANDS[V]

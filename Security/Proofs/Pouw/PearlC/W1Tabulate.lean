@@ -1,13 +1,16 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Definitions.Pouw.PearlC.W1Stop
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Definitions.Pouw.PearlC.W1Stop
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 
 /-!
 # A cheap winning W1 program refutes TT_OUT at W1, and W1 charges only the branch a run takes
 
-`TTOutW1` (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`), `Gγ` and `GγPerCoin` bound every adversary by its cost and
+`TTOutW1` (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`), `GGap` and `GGapPerCoin` bound every adversary by its cost and
 its oracle calls. W1 itself bounds a program's text (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64`
-constants, W1RT-1's fix F2), and nothing else bounds an adversary. These lemmas make that exact, as red-team tools for
+constants), and nothing else bounds an adversary. These lemmas make that exact, as attack tools for
 the TT family restated at `W1.w1Priced`.
 
 - `exec_ite_untaken`: an `ite` runs one branch, so a run is the same whatever its untaken branch is. That branch may be
@@ -16,10 +19,10 @@ the TT family restated at `W1.w1Priced`.
   leaf the memory reaches (`pathOf`), whatever the other leaves are. At `n = 256` on the salt's bits, that would be a
   table of one leaf per salt, selected for 256 INT32.
 - `size_tree`, `tree_not_code`: a tree of depth `n` has at least `2^n` nodes, so no program's code is a tree of depth
-  above 64. W1RT-1's table (`tree leaf 256 []`) is not a W1 program.
-- `not_ttOutW1_of_win`, `not_gγ_of_win`, `not_gγPerCoin_of_win`: one adversary within `T` and `q ≤ 2^64` calls that
+  above 64. The table `tree leaf 256 []` is not a W1 program.
+- `not_ttOutW1_of_win`, `not_gGap_of_win`, `not_gGapPerCoin_of_win`: one adversary within `T` and `q ≤ 2^64` calls that
   wins with probability above the error refutes each form. They are the forms read at that adversary.
-- `schema_not_ttOutW1` (and `schema_not_gγ`, `schema_not_gγPerCoin`): the forms as schemas carry no guard of their own.
+- `schema_not_ttOutW1` (and `schema_not_gGap`, `schema_not_gGapPerCoin`): the forms as schemas carry no guard of their own.
   For a protocol whose reference a program reproduces at no cost (`tabP`, whose words are the zeros a fresh memory
   holds), the empty program wins on every coin, so the schema fails at it. What makes a named form true is its
   protocol's reference being expensive to produce, which the form does not state.
@@ -27,7 +30,7 @@ the TT family restated at `W1.w1Priced`.
 What these do not do: refute a named form at the deployed protocol. At `NoiseSha512.sha512Sem` with the game's salt the
 reference reads no oracle. Without the text bound a program could tabulate it per salt in `tree` at depth 256 and pay
 for one path (`exec_tree`). The rest of that program (the salt's bits, the word tables, the leaf's writes) and its
-transcript are the red team's arithmetic (`note:compute-accounting/20261024T1730Z-report-w1-redteam`, W1RT-1). Under
+transcript are arithmetic. Under
 the bound it is not a program (`tree_not_code`).
 
 **What the bound leaves, an argument and not a theorem here.**
@@ -40,11 +43,13 @@ the bound it is not a program (`tree_not_code`).
   no data of its own beyond those words and its instructions' few immediates, so the count is of words, not paths.
 - A table that answers a salt holds that salt's reference words, which differ from salt to salt as SHA-512's outputs
   do. So a program that reads its answers from a table has them for at most about `2^97` of the `2^256` salts. Its
-  success is then at most about `2^-159`, below `εPearlC`'s `2^-128` per unit (W1-RT estimates about `2^-150`).
+  success is then at most about `2^-159`, below `δPearlC`'s `2^-128` per unit (W1-RT estimates about `2^-150`).
 
 "Tabulates" isn't defined in Lean, and this counting bound isn't proved. Whatever else a bounded program can do, such
 as compute the reference more cheaply than the honest program, is TT_OUT's own conjecture.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1Tabulate
 
@@ -126,7 +131,7 @@ theorem size_tree (leaf : List Bool → W1.Code) : ∀ (n : ℕ) (path : List Bo
       omega
 
 /-- **No W1 program's code is a tree of `ite`s of depth above 64**, at any layout and whatever the tree's leaves: the
-tree has at least `2^n` nodes (`size_tree`), and W1's text bound (`Prog.bounded`) allows `2^64`. W1RT-1's table of one
+tree has at least `2^n` nodes (`size_tree`), and W1's text bound (`Prog.bounded`) allows `2^64`. The table of one
 leaf per salt, `tree leaf 256 []` on the salt's 256 bits, is one of them. -/
 theorem tree_not_code (leaf : List Bool → W1.Code) {n : ℕ} (hn : 64 < n) (path : List Bool) (pr : Prog)
     (L : Layout) : pr.code L ≠ tree leaf n path := by
@@ -139,36 +144,36 @@ theorem tree_not_code (leaf : List Bool → W1.Code) {n : ℕ} (hn : 64 < n) (pa
 /-! ## A cheap winning program refutes each form -/
 
 /-- **TT_OUT at W1 fails at a winning adversary.** One adversary within `T` and `q ≤ 2^64` calls whose correct units'
-credit exceeds `T / (1 − γ₀)` with probability above `ε q N` refutes `TTOutW1`. -/
+credit exceeds `T / (1 − g₀)` with probability above `δ q N` refutes `TTOutW1`. -/
 theorem not_ttOutW1_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {dv : W1Device}
-    {salt : S → List ℕ} {P : Protocol Q R S} {D : Layout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ}
+    {salt : S → List ℕ} {P : Protocol Q R S} {D : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ}
     (U : Workload) (hU : U.InDomain P D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64)
     (A : Adversary (W1.w1Priced dv salt : CostModel Q R S)) (hA : A.Bounded U T q)
-    (hwin : ε q U.layout.N < pr (fun x : (Q → R) × S =>
-      T / (1 - γ₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
+    (hwin : δ q U.layout.N < pr (fun x : (Q → R) × S =>
+      T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
         P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))) :
-    ¬ TTOutW1 dv salt P D γ₀ ε := fun h =>
+    ¬ TTOutW1 dv salt P D g₀ δ := fun h =>
   absurd (h U hU T hT q hq A hA) (not_le.mpr hwin)
 
-/-- **The γ-gap property fails at a winning adversary**, over any cost model (`W1.w1Priced` among them). -/
-theorem not_gγ_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
-    {P : Protocol Q R S} {D : Layout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ}
+/-- **The gap property fails at a winning adversary**, over any cost model (`W1.w1Priced` among them). -/
+theorem not_gGap_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
+    {P : Protocol Q R S} {D : Layout → Prop} {g : ℝ} {δ : ℕ → ℕ → ℝ}
     (U : Workload) (hU : U.InDomain P D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64)
     (A : Adversary CM) (hA : A.Bounded U T q)
-    (hwin : η q U.layout.N < pr (fun x : (Q → R) × S => Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2)) :
-    ¬ Gγ CM P D γ η := fun h =>
+    (hwin : δ q U.layout.N < pr (fun x : (Q → R) × S => Wins P U g T (A.transcript U x.1 x.2) x.1 x.2)) :
+    ¬ GGap CM P D g δ := fun h =>
   absurd (h U hU T hT q hq A hA) (not_le.mpr hwin)
 
-/-- **The γ-gap property per coin fails at a winning adversary**, over any cost model (the compute audit's
+/-- **The gap property per coin fails at a winning adversary**, over any cost model (the compute audit's
 `W1.w1Priced` among them). -/
-theorem not_gγPerCoin_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
-    {P : Protocol Q R S} {D : Layout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ}
+theorem not_gGapPerCoin_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
+    {P : Protocol Q R S} {D : Layout → Prop} {g : ℝ} {δ : ℕ → ℕ → ℝ}
     (U : Workload) (hU : U.InDomain P D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64)
     (A : Adversary CM)
     (hcalls : ∀ (H : Q → R) (s : S), A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q)
-    (hwin : η q U.layout.N < pr (fun x : (Q → R) × S =>
-      CM.cost A.online x.1 U A.act (A.pre.eval x.1) x.2 ≤ T ∧ Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2)) :
-    ¬ GγPerCoin CM P D γ η := fun h =>
+    (hwin : δ q U.layout.N < pr (fun x : (Q → R) × S =>
+      CM.cost A.online x.1 U A.act (A.pre.eval x.1) x.2 ≤ T ∧ Wins P U g T (A.transcript U x.1 x.2) x.1 x.2)) :
+    ¬ GGapPerCoin CM P D g δ := fun h =>
   absurd (h U hU T hT q hq A hcalls) (not_le.mpr hwin)
 
 /-! ## The forms as schemas carry no guard -/
@@ -182,7 +187,7 @@ def tabP : Protocol Unit Unit Unit where
   ticket := fun _ _ _ _ _ _ _ => Fp8Atom.wordQ 0
   useful := fun _ _ _ _ _ _ _ => Fp8Atom.wordQ 0
   actOK := fun _ _ => True
-  weightOK := fun _ _ _ => True
+  fixedOK := fun _ _ _ => True
   credit := fun _ _ _ _ _ => 1
   capOK := fun _ _ _ _ _ => True
   Wref := fun _ _ => 1
@@ -226,35 +231,35 @@ theorem emptyAdv_correctSet (dv : W1Device) (H : Unit → Unit) (s : Unit) :
 theorem tabU_inDomain : tabU.InDomain tabP (fun _ => True) := by
   simp [Workload.InDomain, tabU]
 
-/-- **TT_OUT at W1, as a schema, fails**: at `tabP` the empty program wins on every coin at cost `0`, so at every `γ₀`
-no error with `ε 0 1 < 1` (`εPearlC 0 1 = 2^-128` among them) makes `TTOutW1` hold. -/
-theorem schema_not_ttOutW1 (dv : W1Device) (γ₀ : ℝ) {ε : ℕ → ℕ → ℝ} (hε : ε 0 1 < 1) :
-    ¬ TTOutW1 dv (fun _ : Unit => []) tabP (fun _ => True) γ₀ ε := by
+/-- **TT_OUT at W1, as a schema, fails**: at `tabP` the empty program wins on every coin at cost `0`, so at every `g₀`
+no error with `δ 0 1 < 1` (`δPearlC 0 1 = 2^-128` among them) makes `TTOutW1` hold. -/
+theorem schema_not_ttOutW1 (dv : W1Device) (g₀ : ℝ) {δ : ℕ → ℕ → ℝ} (hδ : δ 0 1 < 1) :
+    ¬ TTOutW1 dv (fun _ : Unit => []) tabP (fun _ => True) g₀ δ := by
   refine not_ttOutW1_of_win tabU tabU_inDomain 0 le_rfl 0 (by norm_num) (emptyAdv dv) (emptyAdv_bounded dv) ?_
   rw [pr_eq_one]
-  · exact hε
+  · exact hδ
   · intro x
     simp only [emptyAdv_correctSet]
     simp [tabP]
 
-/-- **The γ-gap property at W1, as a schema, fails** at `tabP`, at every `γ` and error with `η 0 1 < 1`. -/
-theorem schema_not_gγ (dv : W1Device) (γ : ℝ) {η : ℕ → ℕ → ℝ} (hη : η 0 1 < 1) :
-    ¬ Gγ (W1.w1Priced dv (fun _ : Unit => []) : CostModel Unit Unit Unit) tabP (fun _ => True) γ η := by
-  refine not_gγ_of_win tabU tabU_inDomain 0 le_rfl 0 (by norm_num) (emptyAdv dv) (emptyAdv_bounded dv) ?_
+/-- **The gap property at W1, as a schema, fails** at `tabP`, at every `g` and error with `δ 0 1 < 1`. -/
+theorem schema_not_gGap (dv : W1Device) (g : ℝ) {δ : ℕ → ℕ → ℝ} (hδ : δ 0 1 < 1) :
+    ¬ GGap (W1.w1Priced dv (fun _ : Unit => []) : CostModel Unit Unit Unit) tabP (fun _ => True) g δ := by
+  refine not_gGap_of_win tabU tabU_inDomain 0 le_rfl 0 (by norm_num) (emptyAdv dv) (emptyAdv_bounded dv) ?_
   rw [pr_eq_one]
-  · exact hη
+  · exact hδ
   · intro x
     simp only [Wins, emptyAdv_correctSet]
     simp [tabP]
 
-/-- **The γ-gap property per coin at W1, as a schema, fails** at `tabP`, at every `γ` and error with `η 0 1 < 1`. -/
-theorem schema_not_gγPerCoin (dv : W1Device) (γ : ℝ) {η : ℕ → ℕ → ℝ} (hη : η 0 1 < 1) :
-    ¬ GγPerCoin (W1.w1Priced dv (fun _ : Unit => []) : CostModel Unit Unit Unit) tabP (fun _ => True) γ η := by
-  refine not_gγPerCoin_of_win tabU tabU_inDomain 0 le_rfl 0 (by norm_num) (emptyAdv dv) ?_ ?_
+/-- **The gap property per coin at W1, as a schema, fails** at `tabP`, at every `g` and error with `δ 0 1 < 1`. -/
+theorem schema_not_gGapPerCoin (dv : W1Device) (g : ℝ) {δ : ℕ → ℕ → ℝ} (hδ : δ 0 1 < 1) :
+    ¬ GGapPerCoin (W1.w1Priced dv (fun _ : Unit => []) : CostModel Unit Unit Unit) tabP (fun _ => True) g δ := by
+  refine not_gGapPerCoin_of_win tabU tabU_inDomain 0 le_rfl 0 (by norm_num) (emptyAdv dv) ?_ ?_
   · intro H s
     simp [emptyAdv, W1.w1Priced, QTree.calls]
   · rw [pr_eq_one]
-    · exact hη
+    · exact hδ
     · intro x
       refine ⟨(emptyAdv_cost dv x.1 x.2).le, ?_⟩
       simp only [Wins, emptyAdv_correctSet]

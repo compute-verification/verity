@@ -1,4 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Final
 
 /-!
 # Ligerito under `--zk`, as frames
@@ -9,6 +26,8 @@ followed by level 0's hiding frames (`l0Fr`, through `laneFr`); and level 0's qu
 (`queryLevel0_emit`), followed by a pure loop over the extra lanes that emits nothing. The final check is
 `Refine.finalProg`'s text returning the lane phase's record (`finalProgZ`), and it emits nothing (`finalProgZ_ok`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -182,6 +201,8 @@ theorem finalProgZ_ok {p : LigeritoProof} {basisAt : Array F256 → ℕ → Arra
 
 /-! ## Ligerito under `--zk` -/
 
+-- one proof of a few hundred lines down `Zk.ligerito`'s unfolded run, a `*_bind` step per bind and `rw` and `omega` on
+-- the frames' indices
 set_option maxHeartbeats 4000000 in
 theorem zkLigerito_frames (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0) (hdim : DimSeam sch)

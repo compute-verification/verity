@@ -1,7 +1,7 @@
-"""Blackwell FP4 tensor-core probe (lanes fp4-5090, fp4-re): one ``mma.sync`` per tile on an RTX 5090, raw bits captured and
+"""Blackwell FP4 tensor-core probe: one ``mma.sync`` per tile on sm_120 (RTX 5090, RTX PRO 6000), raw bits captured and
 compared bit for bit against ``verity.ml.circuits.silicon.models`` (``BLACKWELL_SM120_NVF4`` / ``BLACKWELL_SM120_MXF4``, the primary model and
 the validation gate) and against ``model5.py`` (autoproof's five-way align-add, kept as the control whose D16/D17/D18 mismatches
-the verity rule must remove).  Families under ``families_fp4_re`` are lane fp4-re's accumulator families; ``specials`` is
+the verity rule must remove).  Families under ``families_fp4_re`` are the accumulator families of discrepancy-log entries D16-D18; ``specials`` is
 record-only (NaN / inf accumulators, sums leaving binary32: the hardware words are summarised, no model is asserted), and so
 are mxf4's ``families_mxf4_edges`` (the UE8M0 NaN scale, overflowing blocks that cancel, the RZ edge at 2^128, infinite
 accumulators against overflows): what a total mxf4 step must decide.
@@ -14,7 +14,7 @@ Instructions (``--instruction``): ``nvf4`` = ``mma.sync.aligned.kind::mxf4nvf4.b
 (``sm120.mma.m16n8k64.e2m1.mxf4``, capture + model5-with-ue8m0-shift as a hypothesis, no hot clip); ``f8f6f4`` = the unscaled
 ``mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32`` (``sm120.mma.m16n8k32.e2m1.f8f6f4``, autoproof probe2
 replay only); ``bf16`` = ``mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`` (``sm120.mma.m16n8k16.bf16``), compared with
-``verity.ml.circuits.silicon.silicon.tc_dot`` under BOTH ``AMPERE_BF16_M16N8K16`` and ``HOPPER_BF16_M16N8K16`` -- which agrees is the finding.
+``verity.ml.circuits.silicon.models.tc_dot`` under BOTH ``AMPERE_BF16_M16N8K16`` and ``HOPPER_BF16_M16N8K16`` -- which agrees is the finding.
 
 The kernel (``mma_fp4.cu``) is built with ``-arch=sm_120a``: ptxas refuses ``.block_scale`` / ``.kind::f8f6f4`` on plain
 ``sm_120`` ("not supported on .target sm_120"), the arch-specific target is required.  ``--sass-check`` runs ``cuobjdump -sass``
@@ -30,36 +30,18 @@ recorded, nothing is tuned.
 random accumulators; random with zero accumulators; uniform encodings (codes, scales and accumulator bits all uniform); the full
 UE4M3 scale-code sweep (every valid code 0x00..0x7E, one and both operands); the hot-group-clip regime (one live group with both
 scale codes in 0x78..0x7E, the other groups on subnormal scales with bits at 2^-20, tiny or zero accumulators); all-hot and
-one-operand-hot controls; large cancellation (two groups cancel exactly at the top of the window while small terms sit below
-E1-41: the window-width probe); accumulator-window probe (large accumulators over tiny terms: W2); tiny accumulators; signed zero.
-
-MEASURED 2026-09-22 on vy-5090 (RTX 5090, driver 570.153.02, nvcc 12.8.93; runs r20260922-182011-88f8 nvf4,
-r20260922-182132-d6db f8f6f4, r20260922-182548-e654 mxf4, r20260922-182911-1f10 bf16):
-  * autoproof replay: probe3 1601/1601 (K=64/128/256) and probe2 1400/1400 dots reproduced bit for bit -- model5 IS the silicon
-    for zero-initialised ascending-K chains, on a different RTX 5090 and a different kernel.
-  * nvf4 sweep, 1,736,704 elements, 263,781 hot firings: every family with a +0 accumulator agrees with model5 (0 mismatches over
-    hot_clip_regime 131,072 / random_zero_acc 262,144 / scale sweeps / acc_window / tiny_acc).  Two regimes autoproof never probed
-    (its accumulators were always +0 or the running sum, i.e. the largest addend) disagree: (1) a -0 accumulator with all-zero
-    products returns +0 on silicon, model5 keeps -0 (16,328/16,328 such elements); (2) an incoming accumulator of the OPPOSITE
-    sign to the result whose msb lies 37..42 binades below E1 -- at the alignment window's edge -- comes out 1 ulp (up to 8 in the
-    cancellation family) larger in magnitude than model5's truncated-toward-zero sum (12,790 of 1,507,328 nonzero-acc elements,
-    100% opposite-sign).  Neither a narrower accumulator window nor an anchor computed from scale exponents explains all of them;
-    the accumulator's alignment path is the open question, not the 42/36-bit windows, the RZ normalisation or the hot clip.
-  * mxf4 (ue8m0, .2X): accepted by ptxas on sm_120a (SASS OMMA.SF...E8); model5 with 4 groups of 16 under a per-32 shift is the
-    better structure (2 groups of 32: 32,691/32,768 wrong in large_cancellation vs 126) but not exact: 798/131,072 zero-acc
-    mismatches.  Capture only; hypothesis open.
-  * bf16 m16n8k16 on the RTX 5090: HOPPER_BF16_M16N8K16 reproduces 204,800/204,800 words; AMPERE_BF16_M16N8K16 fails 48,569.
-    The consumer Blackwell part keeps the Hopper BF16 pipeline (one 16-wide group, 26-bit alignment).
+one-operand-hot controls; large cancellation (two groups cancel exactly at the top of the window while small terms sit below:
+the window-width probe); accumulator-window probe (large accumulators over tiny terms: W2); tiny accumulators; signed zero.
 
 Outputs under ``--out``: ``probe_results.json`` (identity, sass counts, replay and per-family counts, first mismatches),
 ``capture_sample.json`` (records sampled per family: acc, a/b codes, scales, d as hex), ``tiles_<family>.npz`` (the full capture),
 ``result.json`` (``kind: tc-evidence/v1``; meta per store README §11: instruction, arch, sku, driver, nvcc, families, counts,
 model, model_agrees, first_mismatches (<= 20), seed, n; validation passes iff every replay and model mismatch count is zero).
 
-PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
+The K=32 E2M1 rows, the gates, and the other instructions and modes:
   * ``f8f6f4_e2m1_e4m3`` / ``f8f6f4_e4m3_e2m1`` (unscaled mixed), ``mxf8f6f4_e2m1`` / ``_e2m1_e4m3`` / ``_e4m3_e2m1`` (UE8M0
-    ``.scale_vec::1X``) run through ``mma_fp4.cu``'s ``row_tiles_kernel<kind>``; they and ``f8f6f4`` (now swept with the K=32
-    families of ``k32.py``, which also fixes ``--sweep`` for it: it used to generate K=64 operands) are captures whose finding is
+    ``.scale_vec::1X``) run through ``mma_fp4.cu``'s ``row_tiles_kernel<kind>``; they and ``f8f6f4`` (swept with the K=32
+    families of ``k32.py``) are captures whose finding is
     which of ``k32.candidates`` reproduce every word (``candidate_finding``); ``--expect-model NAME`` makes one the gate (a
     fresh-seed confirmation).  All of them lower to QMMA (SASS), where E4M3 x E4M3 is ``GroupSum`` (32,)/26/-133.
   * ``--chain L``: every family's tiles regrouped into chains of L dependent MMAs kept in registers (the generic kernel), against
@@ -67,12 +49,10 @@ PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
   * ``--expect-uuid``: stops before any measurement unless the device CUDA opened has that UUID (identity is read from CUDA, and
     nvidia-smi is queried for that GPU only: on a multi-GPU host its first line is some other GPU).
   * ``--sass-only`` (the offline SASS gate: exactly one MMA per kernel, the row's kernel present), ``--fake-silicon MODEL`` (a CPU
-    dry run where MODEL's words stand in for the device; refused under a research run), ``--corrupt-word`` (one flipped bit in the
-    first gated family: the run must fail).
+    dry run where MODEL's words stand in for the device; refused with ``RESEARCH_RUN_ID`` set), ``--corrupt-word`` (one flipped
+    bit in the first gated family: the run must fail).
   * casts (``--instruction cvt_*``, ``cast.py``); the 2:4 sparse ``mma.sp`` m16n8k128 rows (``--instruction sp_nvf4 | sp_mxf4``,
     ``sparse.py``: a capture over named candidates, the first of which is the dense pinned model on the compressed operands);
-    T1's merged k128 route (``--instruction sp_nvf4_t1``, ``t1_merged.py``: the sparse k128 from C = H against two chained dense
-    atoms from C = H, on the operands of ``fp4_emulation.py routes`` at 1ad1aaa2, for each ``--hot-bits`` h and C = +0);
     the sparse rows' metadata rule (``--instruction sp_nvf4_meta | sp_mxf4_meta``, ``meta_rule.py``: where each of the 16
     nibbles puts a chunk's stored codes, the pinned step on that gather, and the zero patterns the hardware can write);
     named vectors of a generated Lean vector file (``--instruction nvf4_lean_vectors --vectors F``, ``lean_vectors.py``: each
@@ -84,7 +64,7 @@ PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
     nibbles; ``twins`` counts the words the pair's members differ in, and any difference on the device means no model that
     reads only the exact products and the accumulator (no ``GroupSum``) computes the instruction.
 
-Lane tcgen05 -- the datacenter Blackwell backend (``tcgen05_fp4.cu``, ``-arch=sm_100a`` on a B200 / ``sm_103a`` on a B300):
+The datacenter Blackwell backend (``tcgen05_fp4.cu``, ``-arch=sm_100a`` on a B200 / ``sm_103a`` on a B300):
 ``--instruction tcgen05_nvf4`` = ``tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X`` (UE4M3, registry id
 ``sm100.tcgen05.mma.e2m1.nvf4``), ``tcgen05_mxf4`` = the same mnemonic with ``.scale_vec::2X`` and the UE8M0 instruction
 descriptor (``sm100.tcgen05.mma.e2m1.mxf4``), ``tcgen05_mxf4kind`` = ``kind::mxf4.block_scale.scale_vec::2X`` (CUTLASS's mnemonic
@@ -118,12 +98,13 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-_VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.ml.circuits.silicon.silicon (and verity) from the shipped tree
-for _src in (_VERITY_SRC, _VERITY_SRC / "catalog"):
+_VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.ml.circuits.silicon.models (and verity) from the shipped tree
+for _src in (_VERITY_SRC, _VERITY_SRC / "catalog", _VERITY_SRC / "tools" / "config"):
     if _src.is_dir() and str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
 import k32  # noqa: E402
 import model5  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 MAX_TILES_PER_CALL = 1 << 14
 
@@ -137,7 +118,7 @@ PTX = {
     "mxf4": "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0",
     "f8f6f4": "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32",
     "bf16": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
-    # sm_100 (lane tcgen05): the mnemonic plus the instruction descriptor it is issued with (types, scale format, M, N, K-major)
+    # sm_100: the mnemonic plus the instruction descriptor it is issued with (types, scale format, M, N, K-major)
     "tcgen05_nvf4": "tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X [idesc: e2m1 x e2m1 -> f32, scale ue4m3, M128 N8 K64, K-major]",
     "tcgen05_mxf4": "tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::2X [idesc: e2m1 x e2m1 -> f32, scale ue8m0, M128 N8 K64, K-major]",
     "tcgen05_mxf4kind": "tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X [idesc: e2m1 x e2m1 -> f32, scale ue8m0, M128 N8 K64, K-major]",
@@ -153,8 +134,6 @@ CAST_INSTRUCTIONS = ("cvt_e2m1x2_f32", "cvt_f16x2_e2m1x2", "cvt_ue8m0x2_f32_rz",
                      "cvt_e4m3x2_f32_ue4m3")
 #: the 2:4 sparse mma.sp rows (sparse.py; mma_fp4.cu's sparse_tiles_kernel), dispatched like the casts
 SPARSE_INSTRUCTIONS = ("sp_nvf4", "sp_mxf4")
-#: T1's merged k128 route (t1_merged.py): the sparse NVF4 row against the dense one's two-atom chain, from the hot accumulator
-T1_INSTRUCTIONS = ("sp_nvf4_t1",)
 #: the sparse rows' metadata rule (meta_rule.py): what each of the 16 nibbles gathers, and the pinned step on that gather
 META_RULE_INSTRUCTIONS = ("sp_nvf4_meta", "sp_mxf4_meta")
 #: named vectors of a generated Lean vector file (lean_vectors.py), captured on the NVF4 row against the file's predicted words
@@ -366,7 +345,7 @@ class Probe:
         return {"device": name.value.decode(), "compute_capability": f"{major.value}.{minor.value}",
                 "nvidia_smi": smi.stdout.strip() if smi.returncode == 0 else None,
                 "driver": fields[1] if len(fields) > 1 else None, "gpu_uuid": cuda_uuid or (fields[3] if len(fields) > 3 else None),
-                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+                "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES,
                 "hostname": platform.node(), "has_mxf4": bool(self.lib.has_mxf4()), "backend": "tcgen05" if self.tcgen05 else "mma.sync"}
 
     def clocks(self, uuid: str | None) -> dict | None:
@@ -615,7 +594,8 @@ def families_nvf4(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     def acc_random(n, lo=-30, hi=40):
         return f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
-    zeros = lambda n: np.zeros((n, 16, 8), np.uint32)
+    def zeros(n):
+        return np.zeros((n, 16, 8), np.uint32)
 
     n = n_random
     yield "random_random_scales", codes((n, 16, k)), codes((n, 8, k)), scales((n, 16, nblk)), scales((n, 8, nblk)), acc_random(n)
@@ -717,7 +697,7 @@ def families_nvf4(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     yield from families_fp4_re(rng, n_random, scale_kind, fixed_mult)
 
 
-# --- lane fp4-re: the accumulator families (D16 sign of zero, D17 alignment anchor, D18 ue8m0 scales, domain edges) ---------------
+# --- the accumulator families (D16 sign of zero, D17 alignment anchor, D18 ue8m0 scales, domain edges) ---------------
 
 
 def _scale_value(codes: np.ndarray, scale_kind: str) -> np.ndarray:
@@ -763,7 +743,8 @@ def families_fp4_re(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     def pm_zero(shape):
         return np.where(rng.random(shape) < 0.5, np.uint32(0x80000000), np.uint32(0)).astype(np.uint32)
 
-    zeros = lambda n: np.zeros((n, 16, 8), np.uint32)
+    def zeros(n):
+        return np.zeros((n, 16, 8), np.uint32)
 
     # --- D16: the sign-of-zero matrix.  Accumulator +-0 x (a) all-zero A against random B, (b) random A against all-zero B,
     # (c) +-0 against +-0 operands, (d) every product -0 x -0, (e) pairs cancelling exactly inside every group, (f) group 0
@@ -1163,7 +1144,8 @@ def twin_summary(D, models: dict) -> dict:
 
 def families_bf16(rng, n_random: int):
     k = 16
-    cast = lambda x: to_bf16_bits(x.astype(np.float32))
+    def cast(x):
+        return to_bf16_bits(x.astype(np.float32))
     n = n_random
     yield "randn_random_acc", cast(rng.standard_normal((n, 16, k))), cast(rng.standard_normal((n, 8, k))), None, None, \
         f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(-20, 21, (n, 16, 8)))).astype(np.float32))
@@ -1235,7 +1217,8 @@ def model_words(model, A, Bt, SFA, SFB, C, k_mma: int, nblk: int) -> tuple[np.nd
 
 class FakeProbe:
     """A CPU stand-in for the device (``--fake-silicon MODEL``): every word is MODEL's, so a dry run exercises the build, the gates,
-    the families, the comparison and the verdict without a GPU.  ``main`` refuses it under a research run: it never publishes."""
+    the families, the comparison and the verdict without a GPU.  ``main`` refuses it with ``RESEARCH_RUN_ID`` set: it never
+    publishes."""
 
     tcgen05 = False
 
@@ -1248,7 +1231,7 @@ class FakeProbe:
 
     def identity(self) -> dict:
         return {"device": f"FAKE SILICON ({self.model_name})", "compute_capability": "fake", "nvidia_smi": None, "driver": None,
-                "gpu_uuid": "GPU-fake", "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"), "hostname": platform.node(),
+                "gpu_uuid": "GPU-fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES, "hostname": platform.node(),
                 "has_mxf4": True, "backend": "fake"}
 
     def clocks(self, uuid):
@@ -1265,7 +1248,7 @@ def _init(instr: str, group: int):
     _CTX["group"] = group
     try:
         if instr == "bf16":
-            from verity.ml.circuits.silicon import silicon as S
+            from verity.ml.circuits.silicon import models as S
             _CTX["pipes"] = {"ampere_bf16_m16n8k16": S.AMPERE_BF16_M16N8K16, "hopper_bf16_m16n8k16": S.HOPPER_BF16_M16N8K16}
             _CTX["tc_dot"] = S.tc_dot
         else:
@@ -1454,7 +1437,7 @@ def replay_autoproof(probe: Probe, path: Path) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="nvf4",
-                    choices=sorted(PTX) + list(CAST_INSTRUCTIONS) + list(SPARSE_INSTRUCTIONS) + list(T1_INSTRUCTIONS)
+                    choices=sorted(PTX) + list(CAST_INSTRUCTIONS) + list(SPARSE_INSTRUCTIONS)
                     + list(META_RULE_INSTRUCTIONS) + list(LEAN_VECTOR_INSTRUCTIONS))
     ap.add_argument("--arch", default=None, help="nvcc -arch (default sm_120a; sm_100a for the tcgen05 instructions, sm_103a on a B300)")
     ap.add_argument("--out", required=True)
@@ -1481,9 +1464,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--prebuilt", default=None, metavar="SO",
                     help="load this library (an earlier --sass-only run's build of the same source; its sha256 is recorded) instead of "
                          "running nvcc, so a fill job holds no GPU while compiling")
-    ap.add_argument("--hot-bits", default="14,15,16", help="sp_nvf4_t1: the h of each hot accumulator H (C = +0 always runs)")
-    ap.add_argument("--model-sample", type=int, default=4096,
-                    help="sp_nvf4_t1: span words per accumulator checked against the pinned models (and 1/64 as many whole chains)")
     ap.add_argument("--vectors", default=None, help="nvf4_lean_vectors: a generated Fp4Vectors.lean")
     ap.add_argument("--vector-list", default="nvf4P7", help="nvf4_lean_vectors: the Vec list --vector-ids index")
     ap.add_argument("--vector-ids", default=None, help="nvf4_lean_vectors: comma list of 0-based entries of --vector-list")
@@ -1502,9 +1482,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.instruction in CAST_INSTRUCTIONS:
         import cast
         return cast.main(args)
-    if args.instruction in T1_INSTRUCTIONS:
-        import t1_merged
-        return t1_merged.main(args)
     if args.instruction in META_RULE_INSTRUCTIONS:
         import meta_rule
         return meta_rule.main(args)
@@ -1524,8 +1501,8 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--chain2 is a tcgen05 option")
     if args.chain < 1 or (args.chain > 1 and instr not in ROW_KIND):
         ap.error("--chain L (L >= 2) is for the mma.sync rows " + ", ".join(sorted(ROW_KIND)))
-    if args.fake_silicon and os.environ.get("RESEARCH_RUN_ID"):
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+    if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if args.sass_only:
         args.sass_check = True
 
@@ -1552,7 +1529,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     primary = args.expect_model or PRIMARY_MODEL[instr]
     if instr == "bf16":
-        model_desc, model_src = "verity.ml.circuits.silicon.silicon.tc_dot", "verity.ml.circuits.silicon.silicon"
+        model_desc, model_src = "verity.ml.circuits.silicon.models.tc_dot", "verity.ml.circuits.silicon.models"
     elif instr in k32.ROWS:
         model_desc = "k32.candidates: " + ", ".join(sorted(verity_models(instr))) + (" (control: autoproof model5)" if instr in MODEL5_ROWS else "")
         model_src = str(HERE / "k32.py") + " + verity.ml.circuits.silicon.models"
@@ -1781,7 +1758,7 @@ def main(argv: list[str] | None = None) -> int:
     results["failures"] = failures
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
 
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         agree = {}
         first_mism: list = []

@@ -15,9 +15,9 @@ from verity.ml.kernels.tc import f2fp_bf16_batch, group_sum_total_batch
 from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.ml.circuits.silicon.models import HOPPER_BF16_M16N8K16
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import moe as M
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import moe as M
+from verity.ml.definitions.registry import prims as P
 from verity_vllm.program.frontend import targets as T
 
 E, K, N = 3, 64, 5
@@ -97,7 +97,7 @@ def test_the_dot_forms_with_the_sm120_step_are_its_ascending_chain():
 def test_vocabulary_replay_rows_and_vu_export_read_the_dot_static():
     from verity_vllm.pipeline import vu_export as VX
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
-    from verity_vllm.program.kernels import rows
+    from verity.ml.definitions.numerics import rows
 
     assert V.kind("moe_expert_gemm_dot", E=E, K=K, N=N, DOT=HopperBF16WgmmaDot16).id == f"MoeExpertGemm_v2{{E={E},K={K},N={N},DOT=HopperBF16WgmmaDot16_v1}}"
     assert V.kind("moe_expert_gemm_w_dot", E=E, K=K, N=N, DOT=HopperBF16WgmmaDot16).id.startswith("MoeExpertGemmW_v2{")

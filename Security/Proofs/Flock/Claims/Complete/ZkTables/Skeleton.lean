@@ -1,7 +1,43 @@
-import Proofs.Flock.Claims.Complete.Skeleton
-import Proofs.Flock.Claims.Complete.ZkTables.Ready
-import Proofs.Flock.Claims.Complete.ZkTables.Run
-import Proofs.Flock.Claims.Complete.Zk.Verdict
+module
+
+public import Proofs.Flock.Claims.Complete.Skeleton
+public import Proofs.Flock.Claims.Complete.ZkTables.Ready
+public import Proofs.Flock.Claims.Complete.ZkTables.Run
+public import Proofs.Flock.Claims.Complete.Zk.Verdict
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Encode
+import Proofs.Flock.Claims.Complete.Zk.Sim
+import Proofs.Flock.Claims.Scope.Sizes
 
 /-!
 # The masked completeness proof's skeleton, at any number of tables
@@ -12,11 +48,13 @@ This is `Zk/Skeleton.lean`'s at a good case whose readiness is `ready` (any numb
 and whose run is the masked session on each table's share of the witness (`sessionS`): each goal is `GoalsZk`'s of the
 same name, at `Run`, and already stated per table (`∀ i < |tables|, ∀ r < 2`).
 
-* **Proved here**: the last message's statement, the scope check (`Case.scope_ok`), a drawn session, the link and last
+* **Proved here**: the last message's statement, the scope check (`Case.scope_ok`), a sampled session, the link and last
   messages read back given their lengths, S18 from S16, and the keyed coin tree (`coinTree_goal`, from `ready`).
 * **The composition**: `Run.rep_ok` (`zk_verifyRepWith_ok`), `Run.verdict_ok` (`zk_verifyWith_ok`), `Run.checks_ok'`
   (`checks_ok`), `Run.acc` (`run_acc_of`), and `complete_of_goals` (`complete_of`).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy Transcript
 
@@ -86,7 +124,7 @@ def live (o : Run H rel) : Live :=
   | .error _ => ⟨#[], #[], #[], #[]⟩
 
 /-- The record, decoded. -/
-def sess (o : Run H rel) : Session := val (Record.decodeWith o.hs o.spec o.record)
+def sess (o : Run H rel) : RunRecord := val (Record.decodeWith o.hs o.spec o.record)
 
 /-- Table `i`'s `--zk` schedule. -/
 def sch (o : Run H rel) (i : ℕ) : Schedule := (zkSchedsOf o.tabs)[i]!.1
@@ -164,7 +202,7 @@ def LinkFirstZk : Prop :=
 def FinalFitsZk : Prop :=
   ∀ o : Run H rel, o.record.toUTF8.size < 2 ^ 64 ∧ o.proofs.size < 2 ^ 64 ∧ ∀ b ∈ o.proofs, b.size < 2 ^ 64
 
-/-- **The record's draw is the statement's**, whatever its key order (`drawEq`). -/
+/-- **The record's sample is the statement's**, whatever its key order (`drawEq`). -/
 def DrawMatchesZk : Prop :=
   ∀ o : Run H rel, drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
 
@@ -320,7 +358,7 @@ section Proved
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- `ready` at the case's setup: the session draws a unit, the statement is under `2^64` bytes, every table's regions
+/-- `ready` at the case's setup: the session samples a unit, the statement is under `2^64` bytes, every table's regions
 fit, the setup against `H` is the case's, the session's coins are the keyed coin tree, and the honest record fits. -/
 theorem Case.ready_all (c : Case H rel) :
     c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, RegionsFit st) ∧
@@ -354,7 +392,7 @@ theorem coinTree_goal : CoinTree H rel := fun o => by
   · rw [h] at this; cases this
   · rfl
 
-/-- **A drawn session**: `checks` never reaches `drawLaw zk tags none`. -/
+/-- **A sampled session**: `checks` never reaches `drawLaw zk tags false none`. -/
 theorem Case.drawn (c : Case H rel) : c.s.read.draw.isNone = false := by
   have := c.ready_parts.1
   cases h : c.s.read.draw

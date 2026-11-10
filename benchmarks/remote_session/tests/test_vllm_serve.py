@@ -1,5 +1,5 @@
-"""vLLM serving under the remote audit (`serve.py --local`): the vLLM tests' tiny Llama on a GPU, `Binder` on its engine
-and `verity_vllm.store.remote.StoreBackend` proving its store to an in-process verifier while it serves a trace of
+"""vLLM serving under PoUB (`serve.py --local`): the vLLM tests' tiny Llama on a GPU, `Binder` on its engine
+and `verity_vllm.protocols.remote_bandwidth.remote.StoreBackend` proving its store to an in-process verifier while it serves a trace of
 requests, one session a process.  Skipped without vLLM, a GPU, or a `StoreBackend` to import (the vLLM integration's
 remote session)."""
 from __future__ import annotations
@@ -23,9 +23,9 @@ def remote_or_skip():
     torch = pytest.importorskip("torch")
     if not torch.cuda.is_available():
         pytest.skip("no GPU")
-    remote = pytest.importorskip("verity_vllm.store.remote")
+    remote = pytest.importorskip("verity_vllm.protocols.remote_bandwidth.remote")
     if not hasattr(remote, "StoreBackend"):
-        pytest.skip("no StoreBackend in verity_vllm.store.remote")
+        pytest.skip("no StoreBackend in verity_vllm.protocols.remote_bandwidth.remote")
 
 
 def serve(out: Path, plan: str) -> dict:
@@ -40,7 +40,7 @@ def test_a_real_engines_serving_is_accepted_and_a_prover_that_drops_a_kv_block_i
     """The one test that runs a real engine's steps under the audit (every other session test scripts its serving):
     the engine's allocs, KV writes and frees reach the verifier as appends, releases and plans, a pass a step.  Honest
     serving is accepted, with the memory line's weights the layout's and its KV read the record's post-seed reads; a
-    prover that withholds the first block appended is rejected at a receipt on it (every receipt is drawn)."""
+    prover that withholds the first block appended is rejected at a receipt on it (every receipt is sampled)."""
     remote_or_skip()
     d = serve(tmp_path / "serve", "serve")
     v, p = d["verifier"], d["prover"]

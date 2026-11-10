@@ -1,14 +1,12 @@
-"""REDTEAM phase 12, target 3 (REDTEAM-ADVICE, note:network-accounting/20261024T0558Z-finding-redteam-v3) against #3728,
-CERT-VARLEN's compact EOS fix (`cursor/redteam-phase12-eos-061a` @d301378f8f), kept as regressions of its fix:
+"""Adversarial cases against the compact framing's EOS rule, kept as regressions of its fix:
 
-- **The fix holds.** The phase-10 cases (`test_compact_phase10`) pass: an EOS id in a compact record that isn't its
+- **The fix holds.** `test_compact_phase10`'s cases pass: an EOS id in a compact record that isn't its
   response's stop is refused, so the server can't extend a response past a sampled EOS by sending the id as an
   ordinary token.
 - **A second way a server decided where a compact response stops.** A compact stop record was `COMPACT_EOS` (all ones)
   and carried no token id, so `certified_io` accepted it as finish `eos` at any length up to `max_tokens`, with nothing
   to check: a response that honestly ran to `max_tokens` (finish `length`, no EOS sampled) could be cut at any earlier
-  position and charged fewer tokens for a stop it never sampled. REDTEAM's cases accepted the forged stop at every
-  position. Now a stop record carries the EOS id the model sampled (`COMPACT_LAST | COMPACT_STOP | id`), so:
+  position and charged fewer tokens for a stop it never sampled. The forged stop was accepted at every position. Now a stop record carries the EOS id the model sampled (`COMPACT_LAST | COMPACT_STOP | id`), so:
   - the old cell is a stop on id 2^30 − 1, and `certified_io` refuses a stop on an id that isn't EOS at every position;
   - a stop on an EOS id the model never sampled there is `certified_io`'s to accept, as it accepts the same id events
     (the server writes what it likes): the ids of record are the Commit's, and `active.compact_finish_violations`,
@@ -56,6 +54,11 @@ def _sampled(io: dict) -> dict[int, list[int]]:
     return {r["stream"]: _answer(r["prompt"], r["max_tokens"])[0] for r in io["records"]}
 
 
+def _caps(io: dict) -> dict[int, int]:
+    """Each request's `max_tokens` by its ingress ordinal."""
+    return {r["stream"]: r["max_tokens"] for r in io["records"]}
+
+
 def _cells(outs) -> list[bytes]:
     """The link's frames in canonical order, padding left out."""
     return [s for rec in sorted(outs, key=lambda r: r.window) for row in rec.grid for s in row[:row_count(row)]]
@@ -91,11 +94,11 @@ def test_the_honest_compact_run_is_accepted_and_its_cells_are_the_commits_sample
     sampled = _sampled(run.honest)
     assert {r["stream"]: r["output"] for r in run.honest["records"]} == sampled
     assert any(r["finish"] == "eos" for r in run.honest["records"]) and not run.eos & set(run.target["output"])
-    assert active.compact_finish_violations(sampled, run.eos, _cells(run.outs)) == []
+    assert active.compact_finish_violations(sampled, run.eos, _cells(run.outs), max_tokens=_caps(run.honest)) == []
 
 
 def test_the_hidden_stop_is_refused_at_every_length(run):
-    """REDTEAM's case: the response that ran to `max_tokens` (finish `length`, no EOS among its ids) cut at output k by
+    """The response that ran to `max_tokens` (finish `length`, no EOS among its ids) cut at output k by
     the old `COMPACT_EOS` cell, which was accepted as `eos` at every k. That cell is a stop on id 2^30 − 1, and so is
     refused at every k, as is a stop on the id the model did sample there: a stop is only on an EOS id."""
     stream, full = run.target["stream"], len(run.target["output"])
@@ -123,5 +126,5 @@ def test_a_stop_the_model_never_sampled_is_refused_by_the_tie_at_every_length(ru
         assert got["accepted"] and mine["finish"] == "eos" and len(mine["output"]) == k + 1, k
         assert got["tokens"] == run.honest["tokens"] - (full - 1 - k)
         assert cs.certified_io(ids, run.setup, run.ins, _as_id_events(forged))["accepted"], k
-        assert active.compact_finish_violations(sampled, run.eos, _cells(forged)) == \
+        assert active.compact_finish_violations(sampled, run.eos, _cells(forged), max_tokens=_caps(run.honest)) == \
             [(stream, f"output {k} is id {eos_id} where the Commit sampled {run.target['output'][k]}")], k

@@ -1,6 +1,47 @@
-import Proofs.Flock.SessionLoop.FinRepFinal
-import Proofs.Flock.Claims.ZK.FinPads
-import Proofs.Flock.Claims.ZK.FinishInner
+module
+
+public import Proofs.Flock.SessionLoop.FinRepFinal
+public import Proofs.Flock.Claims.ZK.FinPads
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Shaped.Commit
+import Proofs.Flock.Claims.Complete.Zk.RepRounds
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.ZK.FinishSwInner
+import Proofs.Flock.Claims.ZK.FinishTrunc
+import Proofs.Flock.Claims.ZK.Round1Root
+import Proofs.Flock.SessionLoop.RepSrc
 
 /-!
 # (c.3)'s `FinRepOpen`: the pads' opened columns and salts
@@ -8,7 +49,7 @@ import Proofs.Flock.Claims.ZK.FinishInner
 `Loop.FinRepOpen` asks that the run from the views and the session's rep open the pads at the same columns and salts.
 Both are answered by the opened coins (`asksCut`), so each opens its pads commitment at `padQs`, its last round's `Q`
 coins mod the commitment's size (`FlockComplete.repCut_padsAt`, `Finish.repFwC_padsAt`). Both end at rep `k + 1`'s
-first round (the views' by `Loop.FinRepRounds`, the session's as the firewall's run does, `Loop.finRepCut_size`), so the
+first round (the views' by `Loop.FinRepRounds`, the session's as the ZK server's run does, `Loop.finRepCut_size`), so the
 queried positions are one, and at each the two commitments agree:
 
 * the views' commitment holds the views' pads columns and salts (`FlockComplete.padsTreeCut_cols`). Where table `k / 2`'s
@@ -19,10 +60,12 @@ queried positions are one, and at each the two commitments agree:
   (`Masked.pads_frame_eq`), under the request's leaf salts, which are the tape's (`Loop.RepSrc.innerSalt`,
   `innerSalt_fit`).
 
-**`Loop.finRepOpen`**: at a live statement where the frame draws the tape's pads (`Loop.RepSrc`), `FinRepOpen` holds
+**`Loop.finRepOpen`**: at a live statement where the frame samples the tape's pads (`Loop.RepSrc`), `FinRepOpen` holds
 wherever every table's rows hold at its base (`Loop.FinRepRows`) and each rep stream's run from the views ends at the next
 one's first round (`Loop.FinRepRounds`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -54,7 +97,7 @@ end FlockComplete
 
 namespace Flock.Firewall.Finish
 
-/-- **The firewall's rep answered by `asksCut` opens its pads commitment at the queried positions**, as the session's
+/-- **The ZK server's rep answered by `asksCut` opens its pads commitment at the queried positions**, as the session's
 does (`FlockComplete.repPZk_padsAt`). -/
 theorem repFwC_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes FlockComplete.PS) (st : Setup)
     (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit)
@@ -79,7 +122,7 @@ at the workers' values (`Hm96.swViewR_eq`), and the pads columns and salts read 
 theorem FlockSoundness.Discharge.ZkView.Coined.swExe_padCols {K W Hi VL : Type} [Field K]
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (ω : T.tab.Rand) (ys : T.tab.Hid → FlockSoundness.Discharge.ZkView.Salt)
-    (hr : T.tab.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1) :
+    (hr : T.tab.onVals.RowsAt (w, v) ω.1 ω.2.1) :
     (T.swExe w v ω ys).ch = (T.viewExe w ω ys).ch ∧ (T.swExe w v ω ys).cm = (T.viewExe w ω ys).cm ∧
       (T.swExe w v ω ys).saltsP = (T.viewExe w ω ys).saltsP := by
   have e1 : T.swExe w v ω ys = T.tab.toBase (T.hm96.onVals.viewR (w, v) ω ys) :=
@@ -194,8 +237,8 @@ namespace Loop
 base the tape gives it, so its switched view is the view at those values (`Hm96.swViewR_eq`). -/
 def FinRows (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape) (ops : List (Msg × Msg))
     (j : Fin (Masked.jOf x)) : Prop :=
-  ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt (finS.wt x w j, vs x w ν (finCoins x ops) j)
-    (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1.2.1
+  ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt (finS.wt x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)
+    (finS.randAt x (finCoins x ops) t j).1.1 (finS.randAt x (finCoins x ops) t j).1.2.1
 
 open FlockSoundness.Discharge in
 /-- **Where its rows hold, the views' pads columns and salts are the honest views'**: table `i`'s rep `r` source from
@@ -207,7 +250,7 @@ theorem finSrc_padCols (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.N
       ((finSrc vs x w ν t ops i).rep r).cm = ((Masked.srcV x (finCoins x ops) w t i).rep r).cm ∧
       ((finSrc vs x w ν t ops i).rep r).padSalt = ((Masked.srcV x (finCoins x ops) w t i).rep r).padSalt := by
   obtain ⟨h1, h2, h3⟩ := ZkView.Coined.swExe_padCols ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩))
-    (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
+    (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) (finS.seenOf x t) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
     (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).2 hrows
   exact Masked.tabSrcView_padCols Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
     (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t)
@@ -223,7 +266,7 @@ def FinRepRows : Prop :=
   ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops →
     ∀ j, FinRows vs x w ν t ops j
 
-/-- **The session's rep ends at the next rep's first round**: in the masked scope, where the firewall's rep on rep
+/-- **The session's rep ends at the next rep's first round**: in the masked scope, where the ZK server's rep on rep
 stream `k`'s table and request returns at its last coin, `repFwC` on the same inputs answered by the opened coins, from
 a history at the rep's first round, ends at rep `k + 1`'s (`repFwC_br`, at the rep's `repRounds` coins). -/
 theorem finRepCut_size (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) :
@@ -284,7 +327,7 @@ theorem finRepCut_size (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Fl
   rw [Masked.repBase_eq hsx (k + 1), FlockComplete.ZkTables.repStart_succ, ← Masked.repBase_eq hsx k]
   exact hb
 
-/-- **`FinRepOpen` holds where the rows hold**: at a live statement where the frame draws the tape's pads
+/-- **`FinRepOpen` holds where the rows hold**: at a live statement where the frame samples the tape's pads
 (`Loop.RepSrc`), wherever every table's rows hold at its base (`FinRepRows`) and each rep stream's run from the views
 ends at the next one's first round (`FinRepRounds`), the views and the session's rep open the pads at the queried
 positions (`repCut_padsAt`, `Finish.repFwC_padsAt`), one set since both runs end at rep `k + 1`'s first round

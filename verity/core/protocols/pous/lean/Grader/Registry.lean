@@ -1,4 +1,6 @@
-import Lean
+module
+
+public import Lean
 
 /-!
 # The grader's registry, compiled into the grader
@@ -7,14 +9,16 @@ A submission cannot change these at grading time: they are part of the grader bi
 before and after the submission builds.
 -/
 
+@[expose] public section
+
 open Lean
 
 /-- The axioms a graded proof may depend on: Lean's three. Named assumptions are hypotheses of a pinned statement,
 never axioms (Verity's policy), so this list does not grow. -/
 def allowedAxioms : List Name := [``propext, ``Classical.choice, ``Quot.sound]
 
-/-- The statements a submission may prove: the frozen statements of `Security/Models/Pous/Guarantees.lean` and the files
-under `Security/Models/Pous/Guarantees/`, and six of the lemmas of `Security/Proofs/Pous/Statements.lean`, `KFloor` and
+/-- The statements a submission may prove: the frozen statements of `Security/Definitions/Pous/Guarantees.lean` and the files
+under `Security/Definitions/Pous/Guarantees/`, and six of the lemmas of `Security/Proofs/Pous/Statements.lean`, `KFloor` and
 `Theorem1ii` (`check.sh`'s controls) and the open `A2LemmaAM1`, `A5RabinGcd`, `A7Params` and `M1Meets`. Each must also be
 a `Prop`-valued definition in `Pous.Guarantees` of the trusted environment. -/
 def pinnedTargets : List Name := [
@@ -50,8 +54,6 @@ def pinnedTargets : List Name := [
   `Pous.Guarantees.ContinuousAudit,
   `Pous.Guarantees.BackgroundRebuildExcluded,
   `Pous.Guarantees.BandFamilyContinuousTimeAverage,
-  `Pous.Guarantees.SecureErasureMeetsFamily,
-  `Pous.Guarantees.SecureErasureMeets96GiB,
   `Pous.Guarantees.P2MeetsM1pB19Uncond,
   `Pous.Guarantees.P2MeetsM1pFamilyUncond,
   `Pous.Guarantees.P2MeetsM1pW8192Uncond,

@@ -1,0 +1,25 @@
+# Scenarios: one choice from every layer (rho/scenario.py). bounds/attacks default to all of them.
+
+[scenario.onsite-h200-kimi]
+fleet = "reference-h200"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.remote-h200-kimi]
+fleet = "reference-h200"
+regime = "remote"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]
+
+[scenario.unmonitored-h200-kimi]
+fleet = "reference-h200"
+regime = "unmonitored"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-pretrain"
+families = ["full"]

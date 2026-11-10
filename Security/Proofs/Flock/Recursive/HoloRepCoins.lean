@@ -1,17 +1,22 @@
-import Proofs.Flock.Recursive.HoloSched
+module
+
+public import Proofs.Flock.Recursive.HoloSched
+import all Init.Data.Range.Basic
 
 /-!
 # The reps' coin rounds at the hidden-unit schedule
 
-`coinRounds_holo`: at a claim, the rounds of `holoRounds` that draw coins are all of its rounds but z_partial's
+`coinRounds_holo`: at a claim, the rounds of `holoRounds` that flip coins are all of its rounds but z_partial's
 (`zpRound`); `coinRounds_holoRep` states it at the verifier's `RecVStar.holoRepRounds`, which is `holoRounds`, and
 `coinRounds_holoRep_split` as the two ranges either side of `zpRound` (`range'_split_filter`).
-`repRounds` draws in every round (`repRounds_coins`): `fast100` (`Schedule.lean:47`) puts `m` in `[22, 35]`, the
+`repRounds` samples in every round (`repRounds_coins`): `fast100` (`Schedule.lean:47`) puts `m` in `[22, 35]`, the
 table's variables above 0 and every level's queries at 2 or more (`fast100_facts`, by evaluating it at each `m`), and
-each of `repRounds`' rounds draws a positive constant, `m - 13`, the claims, the table's variables, a split
-(`n - k0 + 1`, `ext + 1`), a level's queries or `bitLength (q - 1)`. `holoRounds` puts a round drawing nothing at
+each of `repRounds`' rounds samples a positive constant, `m - 13`, the claims, the table's variables, a split
+(`n - k0 + 1`, `ext + 1`), a level's queries or `bitLength (q - 1)`. `holoRounds` puts a round sampling nothing at
 `zpRound` and moves the rest one round on.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees.HoloRepCoins
 
@@ -43,7 +48,7 @@ theorem oforIn_inv {α σ : Type} {f : α → σ → Option (ForInStep σ)} {L :
   oforIn_inv' P Q f hf L hL init v hq h
 
 /-- **`fast100`'s schedules** (`Schedule.lean:47-61`), by evaluating it at each `m`: `m ≥ 22`, the table has variables,
-and every level draws at least two queries. -/
+and every level samples at least two queries. -/
 theorem fast100_facts {m : Nat} {s : Schedule} (h : fast100 m = some s) :
     22 ≤ m ∧ 0 < s.n ∧ 0 < s.levels.size ∧ ∀ l < s.levels.size, 2 ≤ (s.levels.getD l default).q := by
   have hm : m < 40 := by
@@ -72,7 +77,7 @@ theorem bitLength_pos {q : Nat} (h : 2 ≤ q) : 0 < bitLength (q - 1) := by
     | (simp at he; omega)
   · omega
 
-/-- **Every round of `repRounds` draws coins** at a claim. -/
+/-- **Every round of `repRounds` flips coins** at a claim. -/
 theorem repRounds_coins {m kLog claims : Nat} {out : Array SchedRound} (hc : 0 < claims)
     (h : repRounds m kLog claims = some out) : ∀ x ∈ out, 0 < x.1 := by
   unfold repRounds at h
@@ -169,7 +174,7 @@ theorem getElem?_insert {xs : Array SchedRound} {K : Nat} {z o : SchedRound} (hK
         · rw [if_neg h4, Array.getElem?_eq_none (by omega)]
 
 /-- **The hidden-unit schedule's coin rounds** (`holoRounds`), at a claim: z_partial's round (`zpRound`) is a round of
-it and draws nothing, and every other round draws coins. -/
+it and samples nothing, and every other round flips coins. -/
 theorem holoRounds_coins {m kLog claims : Nat} {rs : Array SchedRound} (hc : 0 < claims)
     (h : holoRounds m kLog claims = some rs) :
     zpRound m kLog < rs.size ∧ ∀ q < rs.size, (0 < (rs.getD q default).1 ↔ q ≠ zpRound m kLog) := by

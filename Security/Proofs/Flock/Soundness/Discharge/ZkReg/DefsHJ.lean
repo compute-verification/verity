@@ -1,17 +1,34 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The registered reads of a hidden-output `verify --zk --registered F` session of `J` tables
 
 `AcceptsZKR` reads every statement `Stmt.setupTables` sets up, so it is the event at `J` tables too: `checkRegistered`
-runs on each table's statement. At `count > 1` table `j`'s statement is setupHidden's at its part of the record's draw,
-`drawJ I d j` (`ZkHidden.setupOf_tableJH`), over the drawn statement `HmOut.drawn c pub (drawJ I d j)`, and a unit `u`
-is drawn into table `partOf I d u` (`ZkHidden.tabZHJ`). `OwnReadsHJ` and `regPathsHJ` are `OwnReadsH` and `regPathsH`
-with each read `(u, q)` at the table `u` is drawn into: the draw is that table's, `drawJ I d (partOf I d u)`, and `u`'s
-rank is its rank in that table's draw. At one table they are `OwnReadsH` and `regPathsH` (`ownReadsHJ_one`,
+runs on each table's statement. At `count > 1` table `j`'s statement is setupHidden's at its part of the record's sample,
+`drawJ I d j` (`ZkHidden.setupOf_tableJH`), over the sampled statement `HmOut.drawn c pub (drawJ I d j)`, and a unit `u`
+is sampled into table `partOf I d u` (`ZkHidden.tabZHJ`). `OwnReadsHJ` and `regPathsHJ` are `OwnReadsH` and `regPathsH`
+with each read `(u, q)` at the table `u` is sampled into: the sample is that table's, `drawJ I d (partOf I d u)`, and `u`'s
+rank is its rank in that table's sample. At one table they are `OwnReadsH` and `regPathsH` (`ownReadsHJ_one`,
 `regPathsHJ_one`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 
@@ -21,9 +38,9 @@ open FlockSoundness.Discharge.Composed (nTab drawJ partOf)
 
 variable {n : ℕ} {Gate : Type}
 
-/-- **The registered reads are the verifier's own at their tables' draws, under hidden outputs, at `J` tables**:
-`OwnReadsH` with each read `(u, q)` at the table `u` is drawn into (`partOf I d u`), whose draw is
-`drawJ I d (partOf I d u)` and whose drawn statement is `HmOut.drawn c pub` at it. -/
+/-- **The registered reads are the verifier's own at their tables' samples, under hidden outputs, at `J` tables**:
+`OwnReadsH` with each read `(u, q)` at the table `u` is sampled into (`partOf I d u`), whose sample is
+`drawJ I d (partOf I d u)` and whose sampled statement is `HmOut.drawn c pub` at it. -/
 def OwnReadsHJ (I : Inputs) (own : Array Registered.Port) (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (isRead : (Fin n × Fin c.ports.size) ⊕ Gate → Prop) (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port)
     (readAt : (Fin n × Fin c.ports.size) ⊕ Gate → ℕ) : Prop :=
@@ -35,7 +52,7 @@ def OwnReadsHJ (I : Inputs) (own : Array Registered.Port) (c : Circuit) (pub : P
     (port p).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some (readAt p))
 
 /-- **The paths of the registered reads, under hidden outputs, at `J` tables**: `regPathsH` with each row `(u, q)` at the
-table `u` is drawn into, through the path that table's drawn statement gives. -/
+table `u` is sampled into, through the path that table's sampled statement gives. -/
 def regPathsHJ (I : Inputs) (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port) : (Fin n × Fin c.ports.size) ⊕ Gate → ByteArray
   | .inl (u, q) => Option.getD (do

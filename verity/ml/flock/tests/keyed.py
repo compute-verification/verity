@@ -4,7 +4,7 @@
 A key is a sha256 over `FORMAT` and its parts: an absolute path by its content (a directory's: each file's relative path and
 content), any other string as itself, and with `code`, the static import closure of those modules (a repository module by its
 content and the environment variables it names, the rest by `uv.lock` and the interpreter). `run` keys an executable that
-reads only its argv's paths and what is under them (`flock-verify`, `flock-witness`). A directory's build draws its OS bytes
+reads only its argv's paths and what is under them (`flock-verify`, `flock-witness`). A directory's build samples its OS bytes
 from a stream of its name, so two builds under one key are the same bytes, and is kept with the repository files it opened,
 which a hit must find unchanged. What can't be keyed (a relative or absent path, a read outside the repository, a process or
 thread started, a function run from a repository file outside the closure, a key that changed as it ran) is built and not
@@ -72,10 +72,15 @@ def _raise(e: OSError):
     raise e
 
 
+#: below this size a file is hashed at every read: rewritten in place to the same length within one timestamp tick, it keeps
+#: its stat, so a digest remembered by stat would key a run on bytes it no longer has
+SMALL = 1 << 20
+
+
 def _file(p) -> str:
     st = os.stat(p)
     k = (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
-    if k not in _digests:
+    if st.st_size < SMALL or k not in _digests:
         with open(p, "rb") as f:
             _digests[k] = hashlib.file_digest(f, "sha256").hexdigest()
     return _digests[k]

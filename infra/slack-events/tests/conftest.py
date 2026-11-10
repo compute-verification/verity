@@ -23,7 +23,7 @@ SIGNING = "dummy-signing-secret"
 BOT, BOT_USER, COORD, TEAM, ACCT = "B0VERITY", "U0AGENTS", "CCOORD", "C0CA1JZSYNR", "C0CABUKBT2S"
 LUKE, DANIEL = "U0LUKE", "UDANIEL"
 CHAT = "CCHATLUKE"
-T0 = 1_800_000_000.0                                           # 2027-01-15 08:00 UTC
+T0 = 1_800_000_000.0                                           # a fixed instant, 08:00 UTC
 
 
 class Clock:
@@ -183,8 +183,8 @@ def registry() -> dict:
 
 @pytest.fixture
 def world(tmp_path, monkeypatch, registry):
-    """The deps the service runs on, with Luke's chat (people.d published beside routes.d) and inboxes for @top and
-    @circuits."""
+    """The deps the service runs on, with Luke's chat (people.d published beside routes.d) and inboxes for the admin
+    (`top`) and `circuits`."""
     notes, published = tmp_path / "notes", tmp_path / "published"
     (notes / rs.ROUTES_DIR).mkdir(parents=True)
     published.mkdir()
@@ -192,12 +192,10 @@ def world(tmp_path, monkeypatch, registry):
     (tmp_path / rs.PEOPLE_DIR / "luke.json").write_text(json.dumps({
         "schema": rs.PERSON_SCHEMA, "name": "Luke Example", "slack_user": LUKE, "email": None, "note": "x",
         "channel": {"key": "chat-luke", "id": CHAT}, "opened": "2026-10-19T17:30Z", "closed": None}))
-    for k in ("RESEARCH_SLACK_REGISTRY", "RESEARCH_AGENT_URL", "ROUTER_MODEL_ENABLED"):
+    for k in ("RESEARCH_SLACK_REGISTRY", "RESEARCH_AGENT_URL", "ROUTER_MODEL_ENABLED", "VERCEL_OIDC_TOKEN"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("RESEARCH_NOTES", str(notes))
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{published}")
-    monkeypatch.setenv("RESEARCH_PR_BRANCHES", str(tmp_path / "pr-branches.json"))
-    monkeypatch.setattr(rs, "GH", str(tmp_path / "no-gh"))
     monkeypatch.setattr(rs, "_now", lambda: datetime.fromtimestamp(T0, timezone.utc))
     monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "dummy-notes-token")
     pushed: list[str] = []

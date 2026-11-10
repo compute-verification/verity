@@ -1,8 +1,10 @@
-import Proofs.Accounting.TS.Drawn
-import Models.Accounting.Guarantees.TS.Fixed
+module
+
+public import Proofs.Accounting.TS.Drawn
+public import Proofs.Accounting.Lemmas.TS.Fixed
 
 /-!
-# `UnitFixed` from a fixed word, and the additive lemma (ASK-40's option A)
+# `UnitFixed` from a fixed word, and the additive lemma
 
 `Accounting.SecurityProofs.TS.UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords` and
 `Accounting.SecurityProofs.TS.AdditiveFixed : Accounting.Guarantees.TS.AdditiveFixed`.
@@ -17,6 +19,8 @@ position committed no later than the unit's coin keeps its committed value on ev
 (`committed_spliceAt`): such a continuation is one from the position's own cut too (`spliceAt_mono`), and every
 continuation from the cut has the path's plurality (`Plurality.plural_sp`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 
@@ -54,7 +58,7 @@ theorem spliceAt_mono {C B : Type} {m : ℕ} : ∀ {n : ℕ} (a b w c : ℕ) (x 
 /-- **A position committed no later than round `w`'s coin `c` keeps its committed value on every continuation from that
 coin.** -/
 theorem committed_spliceAt {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V : Type} [Nonempty V]
-    (pf : DrawnLayer C B S m s J Q Pos V) (x z : Paths (Paths C m × B) S) (ℓ : Pos) (w : Fin S) (c : Fin m)
+    (pf : SampledLayer C B S m s J Q Pos V) (x z : Paths (Paths C m × B) S) (ℓ : Pos) (w : Fin S) (c : Fin m)
     (h : (pf.cut ℓ).1 < w ∨ (pf.cut ℓ).1 = w ∧ (pf.cut ℓ).2 ≤ c.castSucc) :
     pf.committed (spliceAt w c x z) ℓ = pf.committed x ℓ := by
   have hm : spliceAt (pf.cut ℓ).1 (pf.cut ℓ).2 x (spliceAt w c x z) = spliceAt w c x z := by
@@ -63,7 +67,7 @@ theorem committed_spliceAt {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J
     · exact Or.inl h
     · refine Or.inr ⟨congrArg Fin.val h1, ?_⟩
       exact h2
-  unfold DrawnLayer.committed
+  unfold SampledLayer.committed
   rw [← hm]
   exact Plurality.plural_sp (sp := pf.cont ℓ) (opens := fun y v => pf.Opens y ℓ v)
     (spliceAt_left (pf.cut ℓ).1 (pf.cut ℓ).2) x _
@@ -119,6 +123,6 @@ theorem AdditiveFixed : Accounting.Guarantees.TS.AdditiveFixed := by
     rw [hC.1]
     exact add_sub_cancel_right _ _
   · funext k
-    exact committed_spliceAt pf.toDrawnLayer x z (pf.pos u.1 u.2 k.1) u.1 (pf.coin u.1 u.2) (hb k.1 k.2)
+    exact committed_spliceAt pf.toSampledLayer x z (pf.pos u.1 u.2 k.1) u.1 (pf.coin u.1 u.2) (hb k.1 k.2)
 
 end Accounting.SecurityProofs.TS

@@ -1,5 +1,5 @@
 """The Python side of the streamed wipe's difftests: `streamed_wipe.py` (the reference, unchanged) behind the Lean port's
-JSON formats (`MemoryChallenger.WipeJudge`), and the sessions the tests draw.
+JSON formats (`MemoryChallenger.WipeJudge`), and the sessions the tests sample.
 
 The decoders mirror the Lean's: byte strings lowercase hex, the parameters naturals that `WipeParams` accepts, a batch
 record's fields, the fill's times and the egress integers of either sign, and the record exactly the canonical JSON of
@@ -89,10 +89,13 @@ class Session:
         return dataclasses.replace(self, signed=dataclasses.replace(s, signature=sig))
 
 
-def tiers_of(labels: int, cuts: list[int], names: list[str]) -> tuple[tuple[str, int], ...]:
-    """The fill's `labels · 64` bytes cut at `cuts` (labels) into tiers named `names`, each at least one label."""
+def tiers_of(labels: int, cuts: list[int], names: list[str], outside: int = 0) -> tuple[tuple[str, int], ...]:
+    """The fill's `labels · 64` bytes cut at `cuts` (labels) into tiers named `names`, each at least one label, and
+    `outside` bytes the fill doesn't reach (`R`) in the last."""
     edges = [0, *sorted({c for c in cuts if 0 < c < labels}), labels]
-    return tuple((names[i], sw.LABEL_BYTES * (b - a)) for i, (a, b) in enumerate(zip(edges, edges[1:])))
+    tiers = [(names[i], sw.LABEL_BYTES * (b - a)) for i, (a, b) in enumerate(zip(edges, edges[1:]))]
+    tiers[-1] = (tiers[-1][0], tiers[-1][1] + outside)
+    return tuple(tiers)
 
 
 def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], session_id: bytes = bytes(32),
@@ -128,8 +131,8 @@ EGRESS = st.one_of(st.integers(0, 4 * U), st.sampled_from([0, 1, U, U + 1, sw.EG
 
 @st.composite
 def sessions(draw, signer: M.AtLeaf | None = None) -> Session:
-    """An honest run of `Challenger` at a drawn batch size, every answer on time and right (some at the deadline itself),
-    or one batch late or one answer wrong; signed by `signer` or a drawn test signer at a drawn leaf."""
+    """An honest run of `Challenger` at a sampled batch size, every answer on time and right (some at the deadline itself),
+    or one batch late or one answer wrong; signed by `signer` or a sampled test signer at a sampled leaf."""
     if signer is None:
         height = draw(st.integers(1, 2))
         signer = M.test_signer(draw(st.sampled_from(M.SECRETS)), height, draw(st.integers(0, 2 ** height - 1)))
@@ -138,7 +141,8 @@ def sessions(draw, signer: M.AtLeaf | None = None) -> Session:
     limit = draw(st.integers(1, 10 ** 6))
     names = draw(st.permutations(TIER_NAMES))
     cuts = draw(st.lists(st.integers(1, max(1, labels - 1)), max_size=2))
-    params = sw.WipeParams(labels, k, batch, limit, tiers_of(labels, cuts, names))
+    outside = draw(st.sampled_from([0, 0, 1, sw.LABEL_BYTES, 4096]))
+    params = sw.WipeParams(labels, k, batch, limit, tiers_of(labels, cuts, names, outside))
     batches = params.batches
     spend = draw(st.lists(st.one_of(st.integers(0, limit), st.just(limit)), min_size=batches, max_size=batches))
     fault, at = draw(st.sampled_from(["none", "none", "late", "wrong"])), draw(st.integers(0, batches - 1))
@@ -198,7 +202,7 @@ def _scheme(s: Session, x: int) -> Session:
     return _unsigned(s, scheme=M.PRINTABLE_SCHEMES[x % len(M.PRINTABLE_SCHEMES)])
 
 
-#: One adversarial edit of a session, `(session, x) -> session`, `x` a drawn natural: a signature or key that isn't the
+#: One adversarial edit of a session, `(session, x) -> session`, `x` a sampled natural: a signature or key that isn't the
 #: session's, a commitment that isn't the published one, a wrong label, a late or early answer, a wrong batch number,
 #: first index or count, a batch dropped or added, a session that didn't complete, the fill not before the first batch,
 #: a field past its width, and the egress edited.
@@ -280,6 +284,7 @@ JSON_MUTATIONS = [
     _tiers(lambda t, x: t + [t[0]]),
     _tiers(lambda t, x: [[t[0][0], 0]] + t),
     _tiers(lambda t, x: [[t[0][0], t[0][1] + 64]] + t[1:]),
+    _tiers(lambda t, x: [[t[0][0], t[0][1] - 64]] + t[1:]),
     _tiers(lambda t, x: [t[0][:1]] + t[1:]),
     _tiers(lambda t, x: [t[0] + [1]] + t[1:]),
     _tiers(lambda t, x: [[1, t[0][1]]] + t[1:]),

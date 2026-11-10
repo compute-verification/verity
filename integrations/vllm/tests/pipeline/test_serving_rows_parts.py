@@ -1,10 +1,10 @@
 """The fused all-reduce + residual add + RMSNorm rows split into their parts (`pipeline.serving_rows`' parts, ``PARTS``): an
 ``AllReduceRmsNormMnnvl_v1`` row holds one ``AllReduceResidualMnnvl_v1`` at its width and W / w of it at each halving w (as
 ``COLS``), and one ``RmsNormMnnvl_v1``, each at the row's statics it has.  Each part reads the row's operands and committed outputs
-its entry names, with the types the row gives them; together the parts cover the row's two outputs once each (the residual
-part's blocks its r in order, the norm part its normed row, each under one index entry naming that output) and compute them: each
-part's Definition on its units' committed rows is their outputs.  A row is read by one member per part, never by two members of
-one part, nor by the row and a part."""
+its entry names (or an intermediate an earlier part returns), with the types the row gives them; together the parts cover the
+row's two outputs once each (the residual part's blocks its r in order, the norm part its normed row, each under one index entry
+naming that output) and compute them: each part's Definition on its units' committed rows is their outputs.  A row is read by
+one member per part, never by two members of one part, nor by the row and a part."""
 from __future__ import annotations
 
 import numpy as np
@@ -14,11 +14,12 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 
+from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
-from verity_vllm.program.registry import boolean_sigma as SG
-from verity_vllm.program.registry import deepgemm as DG
-from verity_vllm.program.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import boolean_sigma as SG
+from verity.ml.definitions.registry import deepgemm as DG
+from verity.ml.definitions.registry import tp_allreduce as TA
 
 WORLD, N = 4, 256
 STATICS = {"WORLD": WORLD, "N": N, "SHOT": 1, "CLUSTER": 1, "EPS": 1e-5, "FMA": False}
@@ -106,14 +107,24 @@ def test_a_row_holds_each_part_at_its_statics_and_the_residual_at_every_halving(
 
 @pytest.mark.parametrize("family", list(SRW.PARTS))
 def test_each_part_reads_what_the_row_gives_it_and_the_parts_return_every_output_once(family):
-    whole = {"AllReduceRmsNormMnnvl_v1": fused, "DeepGemmFp8Linear_v1": lambda: bind(DG.DeepGemmFp8Linear, K=256, N=200)}[family]()
+    """An intermediate (a named return) is read only by a later part, with the type the part returning it gives it, and has a
+    twin (`part_rows.MIDS`); the row's committed outputs are returned once each."""
+    whole = {"AllReduceRmsNormMnnvl_v1": fused, "DeepGemmFp8Linear_v1": lambda: bind(DG.DeepGemmFp8Linear, K=256, N=200),
+             "FlashInferFp8Linear_v1": lambda: bind(DG.FlashInferFp8Linear, K=256, N=200)}[family]()
     params, ret = whole.signature()
-    outs = ret.fields
-    assert sorted(j for p in SRW.PARTS[family] for j in p[2]) == list(range(len(outs)))
+    outs = getattr(ret, "fields", None) or (ret,)
+    assert sorted(j for p in SRW.PARTS[family] for j in p[2] if isinstance(j, int)) == list(range(len(outs)))
+    mids: dict[str, object] = {}
     for fam, reads, returns in SRW.PARTS[family]:
         pp, pr = SRW._bind(descriptor_id(whole), fam, **ST.PART_STATICS.get(family, {})).signature()
-        assert [ty for _n, ty in pp] == [(params[g][1] if src == "arg" else outs[g]) for src, g in reads], fam
-        assert list(getattr(pr, "fields", None) or (pr,)) == [outs[j] for j in returns], fam
+        given = {"arg": lambda g: params[g][1], "out": outs.__getitem__, "mid": mids.__getitem__}
+        assert [ty for _n, ty in pp] == [given[src](g) for src, g in reads], fam
+        got = list(getattr(pr, "fields", None) or (pr,))
+        assert len(got) == len(returns) and [ty for j, ty in zip(returns, got) if isinstance(j, int)] == [
+            outs[j] for j in returns if isinstance(j, int)], fam
+        mids.update((j, ty) for j, ty in zip(returns, got) if isinstance(j, str))
+    assert set(mids) == {g for p in SRW.PARTS[family] for src, g in p[1] if src == "mid"}
+    assert (family in PR.MIDS) == bool(mids)
 
 
 @pytest.mark.parametrize("w", [N, N // 2, N // 8])

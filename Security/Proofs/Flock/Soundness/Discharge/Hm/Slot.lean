@@ -4,8 +4,12 @@ of a message before its last block, its `pad` inputs the last block and its salt
 outputs are the bits of `SHA-512(m) ⊕ M·y` and of `SHA-512(salt_prefix ‖ y)`. The chaining value before each block is
 `chainV` (`chainV_succ`: one compression per block, the form the sha512x3 slots compute).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Salt
-import Proofs.Flock.Soundness.Discharge.Hm.Top
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Salt
+public import Proofs.Flock.Soundness.Discharge.Hm.Top
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 
@@ -87,8 +91,6 @@ def chainV (d : ByteArray) (k : ℕ) : List (BitVec 64) := (List.range 8).map fu
 
 /-- The `k`-th block of `d`, as its sixteen big-endian words. -/
 def blockV (d : ByteArray) (k : ℕ) : List (BitVec 64) := (List.range 16).map fun i => (wordBE d (128 * k) i).toBitVec
-
-theorem chainV_zero (d : ByteArray) : chainV d 0 = (List.range 8).map fun i => Sha512.iv[i]!.toBitVec := rfl
 
 /-- **One compression per block**: the chaining value after `k + 1` blocks is `compressV` of the one after `k` and
 block `k`. -/

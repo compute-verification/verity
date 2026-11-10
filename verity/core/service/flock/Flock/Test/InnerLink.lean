@@ -1,13 +1,19 @@
 /-
-The circuit table's tops and the link points as the coin server recorded them, at every shape: `RecVStar.innerLink`,
+The circuit table's tops and the link points as the challenger's live-coin part recorded them, at every shape: `RecVStar.innerLink`,
 `topRow`, `checkTopRowsAt` and `checkLinkRounds`, `RecCoins.checkLevelTopReads`, and the record on the verifier's
 schedule (`checkSchedule`). A transcript of two reps whose
 `root_B` has two nodes and whose reps commit one later top each, at round 1 (rep 0's of two nodes, rep 1's of one), and
 two link points of two coins: `rec-top-L0`'s row `x` is node `x` of `root_B`, `rec-top-L1`'s rep 0's nodes then rep 1's.
-A row other than the coin server's `b ‖ c` at `root_B` or at a later top is refused, and so is an inner session record
-whose link points are not the coin server's.
+A row other than the challenger's live-coin part's `b ‖ c` at `root_B` or at a later top is refused, and so is an inner session record
+whose link points are not the challenger's live-coin part's.
 -/
-import Flock.RecSetup
+module
+
+public import Flock.RecCoins
+public import Flock.RecSetup
+meta import Flock.RecSetup
+
+@[expose] public section
 
 namespace Flock.Test.InnerLink
 
@@ -47,7 +53,7 @@ def link : InnerLink := linkOf (transcript)
 #guard link.tops.map (·.map fun (k, t) => (k, t.size)) == #[#[(1, 2)], #[(1, 1)]]
 #guard link.points.map (·.size) == #[2, 2] && link.points[1]![0]! == ((f128OfHex (hexOf (ByteArray.mk (Array.replicate 16 12)))).toOption.getD default)
 
--- only a finished session's record is read (`checkFinished`): one the coin server marked stopped, or naming no end, is not
+-- only a finished session's record is read (`checkFinished`): one the challenger's live-coin part marked stopped, or naming no end, is not
 def stopWhy : String :=
   "rec inner transcript: the inner session ended stop, not finish: a stopped session is no inner proof"
 #guard why (innerLink ((transcript).setObjVal! "end" (Json.str "stop")) (record)) == some stopWhy
@@ -57,7 +63,7 @@ def stopWhy : String :=
   some "rec inner transcript: the coin server's record names no end; only a finished session is read"
 #guard why (innerCommits ((transcript).setObjVal! "end" (Json.str "stop")) (record)) == some stopWhy
 
--- the link points: the inner session's record (the prover's, which check 5 reads) holds the coin server's
+-- the link points: the inner session's record (the prover's, which check 5 reads) holds the challenger's live-coin part's
 def pointsWhy : String :=
   "rec inner transcript: the inner session's record's link points are not the ones the coin server drew (link.points): " ++
     "check 5 would take the extra claims at points the prover chose"
@@ -94,7 +100,7 @@ def is (n : Nat) : Option (List UInt8) := some (b n).data.toList
 #guard row link 2 0 == none
 #guard (topRow link 1 2).toOption.map (·.1) == some "node 0 of rep 1's level 1 top"
 
--- the statement's rows at its reads of rec-top-L<l> are the coin server's: honest rows pass, and the prover's rows against a
+-- the statement's rows at its reads of rec-top-L<l> are the challenger's live-coin part's: honest rows pass, and the prover's rows against a
 -- transcript whose root_B or later top differs are refused, with the row and the node it is not
 def rows (xs : List Nat) (r : Nat) : ByteArray := b (xs.getD r 0)
 #guard why (checkTopRowsAt "u" "out" "rec-top-L0" link 0 #[1, 0, 1] (rows [2, 1, 2])) == none
@@ -167,7 +173,7 @@ def readsWhy : String :=
 #guard reads #[port "acc" "rec-acc" [0, 1]] 1 ==
   some "rec-coins: rec-open/l8-h2: the verifier's registered reads hold no port out: level 1's tops would be the prover's"
 
-/-! The coin server's record on the verifier's schedule (`checkSchedule`): a record of `scheduleOf`'s streams and rounds
+/-! The challenger's live-coin part's record on the verifier's schedule (`checkSchedule`): a record of `scheduleOf`'s streams and rounds
 passes at its inner shape, plain and candidate 3's. A record that ends `finish` and is off it is refused: an extra
 round, a missing round, a round of another coin count, `n` or `level0`, rounds out of order, a stream declared with
 another round count (a holo record under a public shape), streams beside the schedule's, Hello of two tables, and a
@@ -220,5 +226,16 @@ def c3i : Inner :=
 #guard why (checkSchedule i25 ((onSched i25).setObjVal! "hello" (Json.mkObj [("tables", toJson ["circuit", "x"])]))) ==
   offWhy i25 "Hello names no one table"
 #guard why (checkSchedule { i25 with m := 6 } (onSched i25)) == offWhy { i25 with m := 6 } "the shape has no schedule"
+
+/-! Below k_log 6 `SchedRound`'s absorb flag reads a 2-element round as z_partial's 64-element one, so `checkSchedule`
+alone passes a record on that misread schedule; `statements`, which every V* session's setup runs (`RecSetup.checks`,
+`checkStmt`, `check`), refuses the shape first. -/
+
+def i5 : Inner := { i25 with kLog := 5 }
+#guard why (checkSchedule i5 (onSched i5)) == none
+#guard why (statements i5) == some ("the inner session's shape (m 25, k_log 5, claims 8) is not V*'s: a fast100 " ++
+  "schedule, k_log at least 6, claims at least 2")
+#guard why (statements { c3i with kLog := 5 }) == some ("the inner session's shape (m 25, k_log 5, claims 8) is not " ++
+  "V*'s: a fast100 schedule, k_log at least 6, claims at least 2")
 
 end Flock.Test.InnerLink

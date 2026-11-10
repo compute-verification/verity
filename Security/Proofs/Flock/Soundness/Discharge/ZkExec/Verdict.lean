@@ -1,11 +1,26 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLig
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
 # `RunsZC`'s verdict half: the compiled `--zk` table accepts at the two reps' results
@@ -18,6 +33,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
   `VerdictLig.lean`), the inner check (`zk_inner_of_rep`, `VerdictRows.lean`, through `zk_inner_accepts`) and the
   requested rows (`zk_opens_ok`, `VerdictOpens.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

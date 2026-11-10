@@ -10,7 +10,7 @@
 
 ``--statement`` is ``<subcircuit id>+<scheme id>`` (the render's statement ids); ``--input-set`` a census input set id (a
 backend's frozen set), an input-set directory, or an ``art:`` id of one (``input_sets``).  ``plan`` resolves the cell: the
-backend's driver (``bench.drivers``, one module per backend), the family's lowering of the statement (``bench.lowerings``: why
+backend's driver (``bench.drivers``, one module per backend), the family's lowering of the statement (``verity_flock.lowerings``: why
 not, or the relation name its scripts take), and whether the backend can run on the input set; it writes the cell and the
 ``research run`` of every job, which ``run`` launches in order.  The protocol is the backend's own scripts', wrapped, never
 rewritten: the plateau sweep (doubling from 1,024 until two doublings add < 2 %), warm + >= 5 timed runs + the timing guard, the
@@ -22,7 +22,7 @@ records its container's identity (DMI product uuid, kernel boot id, CPU model, p
 ``placement.json``, and ``check`` compares both runs' identities, never their hostnames.
 
 ``check`` reads the prover run's result and says what keeps it from counting: the result contract (``contract.validate``), the
-protocol (``views._protocol``), the interaction record (``views.interaction_problem``), a live verifier on another machine for an
+protocol (``interaction.protocol_problem``), the interaction record (``interaction.interaction_problem``), a live verifier on another machine for an
 interactive backend, the loopback probe, and that its statement and instance set are the cell's.  ``register`` runs the backend's
 registration script, stamps the cell (backend, family, statement, subcircuit, scheme, input set, both machines) into the document, checks it,
 and puts it in the evidence store (``research data put --kind bench-result/v1 --ref run_files=... --preserve``).
@@ -42,7 +42,10 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from . import census as CN
-from . import contract, drivers, input_sets as IS, lowerings as LW, placement as PL, templates as TM, views
+from . import contract, drivers, interaction, placement as PL
+from verity_flock import input_sets as IS
+from verity_flock import lowerings as LW
+from verity_flock import subcircuit_templates as TM
 
 FAMILIES = {"A": "A-GKR", "B": "B-Ligero", "C": "C-Flock", "D": "D-SP1"}
 BACKENDS = ("A-interactive", "A-fs", "A-route-a", "B-interactive", "B-fs", "C-interactive", "D-fs")
@@ -293,11 +296,11 @@ def check(cell: Cell, doc: Mapping[str, Any], prover_run: Path | None = None, ve
     drv = drivers.driver(cell.backend)
     fp = doc.get("workload_fingerprint") if isinstance(doc.get("workload_fingerprint"), Mapping) else {}
     out = [f"contract: {p}" for p in contract.validate(doc)]
-    why = views._protocol(doc, None)
+    why = interaction.protocol_problem(doc)
     if why:
         out.append(why)
-    ix = views.interaction(doc)
-    why = views.interaction_problem(ix)
+    ix = interaction.interaction(doc)
+    why = interaction.interaction_problem(ix)
     if why:
         out.append(why)
     m = _meas(doc)
@@ -392,7 +395,7 @@ def register(cell: Cell, prover_ref: str, verifier_ref: str | None, work: Path, 
     files = run_files(pd.name, RUN_FILES_WAIT_S) if not dry_run else f"<run_files of {pd.name}>"
     if not files:
         problems.append(f"no run files: the prover run {pd.name}'s attempt names none after {RUN_FILES_WAIT_S:.0f} s (its proofs are "
-                        f"what the views count; `research data show {pd.name}` once its custody lands, then register again)")
+                        f"what the cell counts; `research data show {pd.name}` once its custody lands, then register again)")
     doc.setdefault("validation", {})["cell_problems"] = problems
     meta.write_text(json.dumps(doc, indent=1, default=str) + "\n")
     put = ["research", "data", "put", "--kind", "bench-result/v1", "--meta", f"@{meta}"]

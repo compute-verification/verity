@@ -1,4 +1,14 @@
-import Definitions.Pouw.H1Zy.LaneChunk
+module
+
+public import Definitions.Pouw.H1Zy.LaneChunk
+public import Mathlib.Algebra.GroupWithZero.Defs
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Ring.RingNF
+import Proofs.Pouw.H1Zy.Combine
 import Proofs.Pouw.H1Zy.Lane
 
 /-!
@@ -12,8 +22,10 @@ are the chunks' in sequence, so the chain's state and each cell's z after chunk 
 `(c + 1) K_c / 32` segments. An induction over `c` (`chunkCarry_eq`) pins each carry in, through the chunk before's
 carry-out check, to that state, and each chunk's scales, through its scale check, to chunk 0's. So the last chunk's
 checks are the lane's on the joined rows, at `z = gemmAccS8` over the whole `K` (`zRun_zero`), which `laneOk_spec`
-(with #3392's `gemmAccS8_eq`, at `32 ∣ K` and `K < 2^17`) makes the exact dot.
+(with `gemmAccS8_eq`, at `32 ∣ K` and `K < 2^17`) makes the exact dot.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

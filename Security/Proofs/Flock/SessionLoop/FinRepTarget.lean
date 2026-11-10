@@ -1,18 +1,57 @@
-import Proofs.Flock.SessionLoop.FinRepRows
+module
+
+public import Proofs.Flock.SessionLoop.FinRepRows
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.ZK.FinishFwTarget
+import Proofs.Flock.Claims.ZK.FrameUnrefused
+import Proofs.Flock.SessionLoop.FinRepXs
+import Proofs.Flock.SessionLoop.Tables
 
 /-!
 # `FinRepTarget`: the ring switch's `T` is the opening's
 
-At a `Finish` `FinishIs` reads, the firewall's rep stream `2j + r` (`Loop.RepRun`) runs its ring switch on the session's
+At a `Finish` `FinishIs` reads, the ZK server's rep stream `2j + r` (`Loop.RepRun`) runs its ring switch on the session's
 table and packed table (`Loop.finRepTab`, `Loop.Level0Src.realOf`), with the request's extra claims at the region points
 of the view's link points (`Loop.linkPoints_wordsAt`). There `Masked.fwTarget_at` reads `T` as `Composed.openT` at the
 view's `ν + maskHom`.
 
 **`Loop.finRepTarget`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 the source
-draws from the tape, `FinRepTarget` holds. It reads the firewall's run, its coins and the witness, never the workers'
+samples from the tape, `FinRepTarget` holds. It reads the ZK server's run, its coins and the witness, never the workers'
 clear values or the rows: `openT`'s `ν` reads the witness alone.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -94,8 +133,8 @@ theorem finRepTarget (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
     simp only [viewPoints, Array.size_map, Array.size_range]
     exact Nat.mul_comm _ _
   rw [hsch] at h₁ h₂
-  exact Masked.fwTarget_at x hx w hR t (finCoins x ops) (refK x) hnr s0 spec hsx j r (vs x w ν (finCoins x ops))
-    (_root_.Flock.Firewall.Finish.claimsOf q.xs) hxsz hxs tb.st hst tb.g hg tb.cm0.toC
+  exact Masked.fwTarget_at x hx w hR t (finCoins x ops) (refK x) hnr s0 spec hsx j r
+    (vs x w ν (finCoins x ops) (finS.seenOf x t)) (_root_.Flock.Firewall.Finish.claimsOf q.xs) hxsz hxs tb.st hst tb.g hg tb.cm0.toC
     (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic'.toC q.vals hl _ _ _ _ _ _ _ _ _ _ _ _ _ h₁ h₂ h₃
 
 end Loop

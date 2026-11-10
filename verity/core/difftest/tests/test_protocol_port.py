@@ -1,5 +1,5 @@
 """The harness in protocol mode, against the core protocol interface's toy protocol (`CoreProtocol.Example`, its
-`core-protocol-example serve`): its Python reference agrees on every drawn case, valid and malformed, and a reference wrong
+`core-protocol-example serve`): its Python reference agrees on every sampled case, valid and malformed, and a reference wrong
 in the verdict, the commitment or the profile is caught and shrunk, while one wrong only in the reason passes."""
 
 from __future__ import annotations
@@ -117,13 +117,10 @@ def test_the_reason_is_not_compared(server):
 
 
 def test_a_lenient_hex_decoder_is_caught(server):
-    """`bytes.fromhex` takes uppercase hex, which `Flock.unhex` refuses."""
+    """A decoder that takes uppercase hex, as `bytes.fromhex` does, where `Flock.unhex` refuses it."""
     def lenient(case):
         if isinstance(case, dict) and isinstance(case.get("commitment"), str) and isinstance(case.get("evidence"), str):
-            try:
-                case = case | {"commitment": bytes.fromhex(case["commitment"]).hex(), "evidence": bytes.fromhex(case["evidence"]).hex()}
-            except ValueError:
-                pass
+            case = case | {"commitment": case["commitment"].lower(), "evidence": case["evidence"].lower()}
         return example(case)
 
     with pytest.raises(D.Mismatch) as e:

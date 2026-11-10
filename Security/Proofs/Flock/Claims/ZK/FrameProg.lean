@@ -1,19 +1,56 @@
-import Proofs.Flock.Claims.ZK.FrameReal
-import Proofs.Flock.Claims.ZK.FrameSched
-import Proofs.Flock.Claims.ZK.FrameState
+module
+
+public import Proofs.Flock.Claims.ZK.FrameReal
+public import Proofs.Flock.Claims.ZK.FrameState
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FramePass
+import Proofs.Flock.Claims.ZK.FramePlan
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The loop's frame state is the deployed frame's check's (Stage B, `ProgChecks`)
+# The loop's frame state is the deployed frame's check's (`ProgChecks`)
 
-Toward `ofLoop_progChecks` (`note:20261022T0001Z-report-zkfin-stageb`): at a scheduled round the loop's frame state after
+Toward `ofLoop_progChecks`: at a scheduled round the loop's frame state after
 it is the placeholder frame's check of the placeholder's scheduled round against itself, and the deployed frame's check
-of any device round, at the tape's draws and its scheduled round, leaves the same state but for `stopped`:
+of any device round, at the tape's samples and its scheduled round, leaves the same state but for `stopped`:
 
 * `Frame.run` over appended requests (`run_append`).
 * `check_alike_self`: where the frame's check at `c` of a device round against the scheduled round of frames `fs`
   releases a round, the check at an alike configuration `c'` of a scheduled round of alike frames `fs'` against itself
   releases one too, from the same state, its state the same but for `stopped`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -543,7 +580,7 @@ theorem ofDraws_mask : (Cfg.ofDraws l d m).mask = m := rfl
 theorem ofDraws_h : (Cfg.ofDraws l d m).h = d.h := rfl
 end OfDraws
 
-/-- **A rep's configurations at two draws** of one layout and mask slot are alike. -/
+/-- **A rep's configurations at two samples** of one layout and mask slot are alike. -/
 theorem cfgAlike_ofBytes (l : _root_.Flock.Zk.PadLayout) (b b' : ByteArray)
     (m : Option _root_.Flock.Firewall.Frame.MaskSlot) :
     CfgAlike (Cfg.ofDraws l (Draws.ofBytes l b) m) (Cfg.ofDraws l (Draws.ofBytes l b') m) where
@@ -873,7 +910,7 @@ theorem schedOf_sched_error (real : ℕ → V (_root_.Flock.Firewall.Finish.Tab 
   rw [hx, hq]
   simp only [hreal, hs]
 
-/-- **Rep stream `k`'s placeholder**, where it is one: the frame's configuration at zero draws at `Drive.start`'s layout
+/-- **Rep stream `k`'s placeholder**, where it is one: the frame's configuration at zero samples at `Drive.start`'s layout
 and mask slot, the stream's domain and the extra claims at the link points. -/
 theorem placeholder_ok {spec : SessionSpec} {sts : Array Stmt} {k : ℕ} {link : Array F128} {c' : Cfg}
     {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
@@ -1233,9 +1270,9 @@ theorem locate_ge : ∀ (rs : List ℕ) (k i : ℕ), rs.sum ≤ i →
     simp only [List.length_cons, List.sum_cons, Prod.mk.injEq]
     exact ⟨by omega, by omega⟩
 
-theorem open_ok {S S' : _root_.Flock.Firewall.Coins.Session} {st : String} {n : ℕ} {m c : List UInt8}
+theorem open_ok {S S' : _root_.Flock.Firewall.Coins.Release} {st : String} {n : ℕ} {m c : List UInt8}
     (h : S.open st n m = .ok (S', c)) : st ∈ S.hello.spec.streams.toList ∧ S'.hello = S.hello := by
-  unfold _root_.Flock.Firewall.Coins.Session.open at h
+  unfold _root_.Flock.Firewall.Coins.Release.open at h
   dsimp only at h
   refine ⟨?_, ?_⟩
   · by_contra hn
@@ -1246,11 +1283,11 @@ theorem open_ok {S S' : _root_.Flock.Firewall.Coins.Session} {st : String} {n : 
   · repeat' split at h
     all_goals (cases h <;> rfl)
 
-theorem openAll_mem : ∀ (S S' : _root_.Flock.Firewall.Coins.Session) (os : List (String × ℕ × List UInt8)),
+theorem openAll_mem : ∀ (S S' : _root_.Flock.Firewall.Coins.Release) (os : List (String × ℕ × List UInt8)),
     S.openAll os = .ok S' → ∀ o ∈ os, o.1 ∈ S.hello.spec.streams.toList
   | _, _, [], _, _, ho => by cases ho
   | S, S', (st, n, m) :: os, h, o, ho => by
-    unfold _root_.Flock.Firewall.Coins.Session.openAll at h
+    unfold _root_.Flock.Firewall.Coins.Release.openAll at h
     cases hop : S.open st n m with
     | error e => simp [hop] at h
     | ok p =>
@@ -1261,18 +1298,18 @@ theorem openAll_mem : ∀ (S S' : _root_.Flock.Firewall.Coins.Session) (os : Lis
       · exact hmem
       · rw [← hhe]; exact openAll_mem S'' S' os h o ho
 
-theorem start_hello {hl : _root_.Flock.Firewall.Coins.Hello} {a : List UInt8} {S : _root_.Flock.Firewall.Coins.Session}
-    (h : _root_.Flock.Firewall.Coins.Session.start hl a = .ok S) : S.hello = hl := by
-  unfold _root_.Flock.Firewall.Coins.Session.start at h
+theorem start_hello {hl : _root_.Flock.Firewall.Coins.Hello} {a : List UInt8} {S : _root_.Flock.Firewall.Coins.Release}
+    (h : _root_.Flock.Firewall.Coins.Release.start hl a = .ok S) : S.hello = hl := by
+  unfold _root_.Flock.Firewall.Coins.Release.start at h
   split at h
   · cases h; rfl
   · cases h
 
 theorem coinVerdict_ok {hl : _root_.Flock.Firewall.Coins.Hello} {a : List UInt8} {os : List (String × ℕ × List UInt8)}
     (h : (coinVerdict (.ok hl) a os).isOk = true) :
-    ∃ S S', _root_.Flock.Firewall.Coins.Session.start hl a = .ok S ∧ S.openAll os = .ok S' ∧ S.hello = hl := by
+    ∃ S S', _root_.Flock.Firewall.Coins.Release.start hl a = .ok S ∧ S.openAll os = .ok S' ∧ S.hello = hl := by
   unfold coinVerdict at h
-  cases hS : _root_.Flock.Firewall.Coins.Session.start hl a with
+  cases hS : _root_.Flock.Firewall.Coins.Release.start hl a with
   | error e => simp [Except.bind, hS, Except.isOk, Except.toBool] at h
   | ok S =>
     cases hO : S.openAll os with
@@ -1335,7 +1372,7 @@ theorem takeAt_ok {n : ℕ} {b : Bool} {cN cP : Cfg} {p : Masker} {f : Except St
     cases b with
     | true =>
       simp only [↓reduceIte] at h
-      exact Or.inr (Or.inl ⟨hn, rfl, h⟩)
+      exact Or.inr (Or.inl ⟨hn, rfl, (bind_rankStop_ok h).1⟩)
     | false =>
       simp only [Bool.false_eq_true, ↓reduceIte] at h
       cases ha : p.answer cP cs with
@@ -1376,7 +1413,7 @@ theorem repOf_add_two {x : Msg} {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
 
 open Loop in
 /-- **At a rep's round past its first the loop's frame checks it at the state the last coins leave**: the state of
-the same rep, which released the last round. -/
+the same rep, which released the last round, past the rank stop. -/
 theorem ofLoop_frameAnswer_same (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -1388,8 +1425,8 @@ theorem ofLoop_frameAnswer_same (T : ZKMal.CoinLayer.TableData)
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q + 1)
     (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 = j + 1) :
     (ofLoop T L₀ real).frameAnswer x ρ (e0 :: h1) =
-      (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))
-        (coinsAt x (e0 :: h1)) := by
+      ((progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))
+        (coinsAt x (e0 :: h1)) >>= rankStop ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))) := by
   obtain ⟨q', rfl⟩ : ∃ q', q = q' + 1 := by
     rcases q with _ | q'
     · rw [locate_zero] at hj
@@ -1467,6 +1504,7 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
     · cases hA
   rw [ofLoop_frameAnswer_same T L₀ real x ρ (m0, r0) h1 hx (by rw [← hcs1, List.length_map] at hq1; exact hq1) hj,
     hcs1] at hF
+  replace hF := (bind_rankStop_ok hF).1
   have hsch : schedOf (real x w ρ) x cs = some (rsched.getD (j + 1) (.empty, 0)).1 := by
     have := schedOf_eq (real x w ρ) x cs hx hq1 (by rw [hk1]; exact hreal) (by rw [hk1, hj]; exact hrs0)
       (by rw [hj]; exact hlt)
@@ -1498,7 +1536,7 @@ open Loop in
 /-- **`ProgChecks` at a scheduled round, from the rep's own table**: as `ofLoop_progChecks_step`, where the rep's own
 table (`real`) is of the placeholder's shape (`TabAlike`, at the bounds `schedSoFar_alike` reads) and its schedule so
 far holds round `j + 1`. The placeholder's schedule is then of the real one's shape (`schedSoFar_alike`), so of its
-coin counts, and the configuration at the tape's draws alike the placeholder's (`cfgAlike_ofBytes`). -/
+coin counts, and the configuration at the tape's samples alike the placeholder's (`cfgAlike_ofBytes`). -/
 theorem ofLoop_progChecks_sched (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -1823,11 +1861,7 @@ theorem loop_round_in_plan (T : CoinLayer.TableData)
     {s0 : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt} {q : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h.length = q + 2) : q < (roundsOf spec sts).sum := by
   by_contra hlt
-  have ho : (loop loopNr T L).opens x ρ h = true := by
-    unfold answered at hA
-    split at hA
-    · assumption
-    · cases hA
+  have ho : (loop loopNr T L).opens x ρ h = true := (answered_ok hA).1
   match h, hq, ho, hne with
   | [], hq, _, _ => simp at hq
   | [_], hq, _, _ => simp only [List.length_cons, List.length_nil] at hq; omega
@@ -1837,10 +1871,10 @@ theorem loop_round_in_plan (T : CoinLayer.TableData)
     | error e => rw [hh] at hv; cases hv
     | ok hl' =>
       rw [hh] at hv
-      obtain ⟨s', spec', sts', ct, hs', hc, hok, hle⟩ := helloChkAt_ok hh
-      rw [hx] at hs'
+      obtain ⟨spec', sts', ct, hs', hc, hok, hle⟩ := helloChkAt_ok hh
+      rw [sessOf_flock hx] at hs'
       simp only [Option.some.injEq, Prod.mk.injEq] at hs'
-      obtain ⟨rfl, rfl, rfl⟩ := hs'
+      obtain ⟨rfl, rfl⟩ := hs'
       rcases Nat.lt_or_ge (roundsOf spec sts).sum q with hlt' | hge
       · obtain ⟨S, S', _, hO, hhe⟩ := coinVerdict_ok hv
         simp only [List.length_cons] at hq
@@ -1851,7 +1885,7 @@ theorem loop_round_in_plan (T : CoinLayer.TableData)
         exact empty_not_stream hok hst
       · apply hne
         unfold lastOf
-        rw [hx]
+        rw [sessOf_flock hx]
         simp only [hc, hok, ↓reduceIte]
         rw [plan_size, hq]
         omega

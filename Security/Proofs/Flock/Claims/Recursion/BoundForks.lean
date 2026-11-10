@@ -1,4 +1,38 @@
-import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
 # The recursion's KS where the inner rounds' forks bind
@@ -7,12 +41,14 @@ import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
 `sum_opensDiffer_le`, and there only through `forkColl_of_opening`: two extractions at a fork at round `j` whose inner
 views differ at message `j` show a collision `Be` finds at that fork. `ForksBind` is that conclusion, stated as the
 premise. At option (d) the inner views' rounds before the last are the run's (`RecDeploy.ReadersRunPlayed`) and the
-last is bound by `IVStar`'s decision (`Bound.LastBinds`), with no `Opening` of a commit string to read, so
+last is bound by `IVStar`'s decision (`Bound.LastBindsEC`), with no `Opening` of a commit string to read, so
 `CallsOpenPlayed` has nothing to say there and `ForksBind` is proved directly.
 
 This file is the chain with `ForksBind` in place of `CallsOpenPlayed` (`Pr_bad_le_fork_binds`, `Pr_bad_le_binds`,
 `bad_rej_le_binds`, `innerKS_of_KSAbort_binds`, `KS_of_flockKS_binds`), at the same bound.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -22,7 +58,7 @@ section Coupling
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The inner rounds' forks bind**: at every draw of `Be`'s fork at round `j` where `E_O` gives witnesses on both
+/-- **The inner rounds' forks bind**: at every sample of `Be`'s fork at round `j` where `E_O` gives witnesses on both
 runs and the inner views read off them differ at message `j`, `Be` finds a collision there. -/
 def ForksBind (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (j : ℕ)
@@ -40,50 +76,14 @@ theorem ForksBind.toAt {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {D
     (h : ForksBind H D I DO) (x : Msg) : ForksBindAt H D I DO x :=
   fun decO => h decO x
 
-/-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le_fork`, from `ForksBind`. -/
+/-- **A sample is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le_fork`, from `ForksBind`. -/
 theorem Pr_bad_le_fork_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
       Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (forkColl H D I DO decO P x j)) := by
-  have h1 : Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
-      ∑ j : Fin (I.V.k (xI D x)), Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-        (eoOut H D I DO decO P x t.1 t.2).isSome = true ∧
-          eoMsg H D I DO decO P x t.1 t.2 j ≠ opAt H D I DO decO P x t.1 j ((List.range j).map (coinSeq t.2.1))) := by
-    refine (Pr_mono fun t ht => ?_).trans (Pr_exists_le _)
-    obtain ⟨hs, hna⟩ := ht
-    simp only [Agrees, not_forall] at hna
-    obtain ⟨j, hj, hne⟩ := hna
-    exact ⟨⟨j, hj⟩, hs, hne⟩
-  have h2 : ∀ j : Fin (I.V.k (xI D x)), Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
-      (eoOut H D I DO decO P x t.1 t.2).isSome = true ∧
-        eoMsg H D I DO decO P x t.1 t.2 j ≠ opAt H D I DO decO P x t.1 j ((List.range j).map (coinSeq t.2.1))) ≤
-      Real.sqrt (Pr (OpensDiffer H D I DO decO P x j)) := fun j => by
-    have hp := Pr_plur_fork j (fun ω d => (eoOut H D I DO decO P x ω d).isSome = true)
-      (fun ω d => eoMsg H D I DO decO P x ω d j)
-    refine (le_of_eq (Pr_congr fun t => ?_)).trans (hp.trans (Real.sqrt_le_sqrt (Pr_mono fun t ht => ?_)))
-    · simp only [opAt, fork_preCoins]
-    · obtain ⟨hg₁, hg₂, hf⟩ := ht
-      obtain ⟨ws, hws⟩ := Option.isSome_iff_exists.1 hg₁
-      obtain ⟨ws', hws'⟩ := Option.isSome_iff_exists.1 hg₂
-      refine ⟨ws, ws', eoGives_of_some hws, eoGives_of_some hws', ?_⟩
-      simpa [eoMsg, hws, hws', dec] using hf
-  have hcs := Real.sum_sqrt_mul_sqrt_le (Finset.univ : Finset (Fin (I.V.k (xI D x))))
-    (f := fun _ : Fin (I.V.k (xI D x)) => (1 : ℝ)) (g := fun j => Pr (OpensDiffer H D I DO decO P x j))
-    (fun _ => zero_le_one) (fun j => Pr_nonneg _)
-  simp only [Real.sqrt_one, one_mul, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
-    mul_one] at hcs
-  calc Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2)
-      ≤ ∑ j : Fin (I.V.k (xI D x)), Real.sqrt (Pr (OpensDiffer H D I DO decO P x j)) :=
-        h1.trans (Finset.sum_le_sum fun j _ => h2 j)
-    _ ≤ Real.sqrt (I.V.k (xI D x)) * Real.sqrt (∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j)) :=
-        hcs
-    _ = Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j)) :=
-        (Real.sqrt_mul (Nat.cast_nonneg _) _).symm
-    _ ≤ Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (forkColl H D I DO decO P x j)) :=
-        Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
-          (Finset.sum_le_sum fun j _ => Pr_mono fun t => hFk decO x Ω P j t)
-          (Nat.cast_nonneg _))
+  exact (Pr_bad_le_opens H D I DO decO x P).trans (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
+    (Finset.sum_le_sum fun j _ => Pr_mono fun t => hFk decO x Ω P j t) (Nat.cast_nonneg _)))
 
 /-- **The inner rounds' forks cost at most `k(x)·Pr[Be]`**: they are among the compiled verifier's (`InnerRounds`),
 whose forks' collisions average to `Pr[Be]`. -/
@@ -107,7 +107,7 @@ theorem sum_forkColl_inner_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     rw [hS]
     exact mul_nonneg (Nat.cast_nonneg _) (PrBe_nonneg H D I DO decO P x)
 
-/-- **A draw is bad at most as `√(k_I·k(x)·Pr[Be])`**: `Pr_bad_le`, from `ForksBind`. -/
+/-- **A sample is bad at most as `√(k_I·k(x)·Pr[Be])`**: `Pr_bad_le`, from `ForksBind`. -/
 theorem Pr_bad_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (hR : InnerRounds D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
@@ -117,7 +117,7 @@ theorem Pr_bad_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {
   exact (Pr_bad_le_fork_binds hFk decO x P).trans
     (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (sum_forkColl_inner_le hR decO x P) (Nat.cast_nonneg _)))
 
-/-- **Bad reruns and a rejecting judged draw together cost what `InnerKS` holds for bad reruns**: `bad_rej_le`, from
+/-- **Bad reruns and a rejecting judged sample together cost what `InnerKS` holds for bad reruns**: `bad_rej_le`, from
 `ForksBind`. -/
 theorem bad_rej_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (hT : CallsTrue H D I DO) (hR : InnerRounds D I) (hA : InnerAcceptsColl H D I DO)

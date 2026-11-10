@@ -15,9 +15,9 @@ from verity.ml.circuits.defs import Builder, bind, composite
 from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.pipeline import boolean_replay as BR
-from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import boolean_silu as BSL
+from verity.ml.definitions.numerics.kernel_registry import Declined
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import boolean_silu as BSL
 
 W16 = Value(16)
 SPECIAL = [0x0000, 0x8000, 0x3F80, 0xBF80, 0x7F80, 0xFF80, 0x7FC0, 0x0001, 0x8001, 0x7F7F, 0x4120, 0xC2C8]
@@ -75,6 +75,23 @@ def test_a_call_is_evaluated_on_bits_by_its_boolean_version_and_equals_its_word_
     assert ev(_Index({}), r, {}, [gu]).keys() == {"out"}                     # an interior row: keyed by its port
 
 
+def test_a_batch_row_is_its_members_each_on_its_slice_of_a_mapped_operand(tmp_path) -> None:
+    """A batch over three rows of `silu_and_mul` (class G's batched form, `prune.batched_form`): each member is evaluated on its
+    row by the Boolean version of the member's Definition, the outputs in member order, and its peak counts the members' outputs."""
+    rng = np.random.default_rng(7)
+    word = bind(b1.SiluMul, I=8)
+    B = Builder((("gu", Array(48, W16)),), Value(1))
+    B.batch(word, Coll(Array(3, Array(16, W16)), Affine("p", 0, 0, 48)), axes=(0,))
+    r = {"i": 0, "spec": f"batch:{descriptor_id(B.nodes[0].fn)}"}
+    ev = BR.BooleanRows(B.nodes, 0, tmp_path / "rows.jsonl")
+    gu = rng.integers(0, 1 << 16, 48).astype(np.uint16)
+    got = ev(_Index({}), r, {}, [gu])["out"]
+    want = np.concatenate([np.asarray(evaluate_batch(word, gu[16 * m:16 * m + 16][None].astype(np.uint64))).reshape(-1) for m in range(3)])
+    assert got.tolist() == want.tolist() and ev.sigma == {r["spec"]: bind(BSL.SiluMul, I=8).id}
+    nodes, one = _row(word, Array(16, W16))
+    assert ev.peak_bytes(r) > BR.BooleanRows(nodes, 0).peak_bytes(one)
+
+
 @composite("WordOnlyFixture", 1, ["K"], lambda S: ((("x", Array(S.K, W16)),), W16), conformance="protocol-defined")
 def WordOnlyFixture(B, S, x):
     """A word Definition no registered Boolean Definition names as its word."""
@@ -121,7 +138,7 @@ def test_a_picks_stated_peak_bounds_what_its_evaluation_allocates(tmp_path) -> N
 
 
 def test_a_boolean_version_that_changes_the_calls_boundary_is_refused(monkeypatch) -> None:
-    import verity_vllm.program.boolean as BB
+    import verity.ml.definitions.boolean as BB
 
     monkeypatch.setattr(BB, "boolean_version", lambda fn: bind(BSL.SiluMul, I=4))
     nodes, r = _row(bind(b1.SiluMul, I=8), Array(16, W16))

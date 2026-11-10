@@ -131,7 +131,7 @@ def build_bound(arm: Arm, world: int = 1) -> tuple[str, ...]:
 
     if not arm.protocols:
         return ()
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
 
     ctx = PO.Context(stage="serve", enabled=arm.protocols, world=world)
     bound = []
@@ -174,8 +174,8 @@ def served_variant(name: str, settings: ArmSettings | None = None) -> Arm:
 def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str, Any]]:
     """The arm's protocols config as `verity_vllm.LLM` takes it: each ``"$NAME"`` value read from `environ` (a missing
     one raises, naming it), and PoUW's ``coins`` an in-process challenger of epoch 0 (`pouw.challenged`) when PoUW is
-    enabled, since its install draws the epoch's salt from a live coin and a config can't carry one; H1 takes its coins from
-    `verity_vllm.LLM` instead, one window each (`h1_config`)."""
+    enabled, since its install takes the epoch's salt from a live coin and a config can't carry one; H1 takes its coins
+    from `verity_vllm.LLM` instead, one window each (`h1_config`)."""
 
     def expand(value: Any, where: str) -> Any:
         if isinstance(value, str) and value.startswith("$"):
@@ -188,7 +188,7 @@ def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str
     config = {p: {k: expand(v, f"{p}.{k}") for k, v in s.items()} for p, s in (arm.protocols_config or {}).items()}
     if is_h1(arm) or not any(e.partition(":")[0] == "pouw" for e in arm.protocols):
         return config
-    from verity_vllm.protocol_options import pouw
+    from verity_vllm.protocols import pouw
 
     return pouw.challenged(config, arm.protocols)
 

@@ -1,4 +1,4 @@
-"""F6's unit-cost inventory: pinned Boolean counts of small subcircuits, the exact affine check, the draw and the work model."""
+"""F6's unit-cost inventory: pinned Boolean counts of small subcircuits, the exact affine check, the sample and the work model."""
 from __future__ import annotations
 
 from fractions import Fraction
@@ -109,7 +109,7 @@ def test_attention_t_of_a_stratum():
     assert U._t_stats(two, 128)["ceil16_mean"] == (1 + 1 + 2 + 3 * 3) / 6
 
 
-#: circuits' F3 units (art:b56410ca…): nnz_a + nnz_b of one registered unit
+#: circuits' F3 units: nnz_a + nnz_b of one registered unit
 @pytest.mark.parametrize("template, params, units, nnz_ab", [
     ("rope-head", {"D": 64}, 32, 156_755),
     ("gemm-coordinate", {"K": 32, **AMPERE}, 2, 254_460),

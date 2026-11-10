@@ -1,10 +1,10 @@
 """(e') [T1] The sampled-replay PARTITION reproduces: `commit/sampled_replay_p<k>.json`'s population (every Program row classified: the VUs
-by family, the not-evaluable rows by name, the strata and their sizes, the window-lifetime split), its R17-1 `not_executed_by_rule` split,
-the seeded stratified draw (the per-stratum sample counts, the round-robin cap, the picks per (request, request-relative step)) and the
+by family, the not-evaluable rows by name, the strata and their sizes, the window-lifetime split), its `not_executed_by_rule` split,
+the seeded stratified sample (the per-stratum sample counts, the round-robin cap, the picks per (request, request-relative step)) and the
 per-request phase anchors -- recomputed with `verity_vllm.check.replay`'s own pure functions (`ProgramIndex`, `population`,
 `executed_prefix_of_record`, `phase_anchor`, `split_not_executed`, `sample`) over the row's request Programs under the v2 query's address
 rule + the facts the record states (seed, per-stratum count, cap, targets, ring depth, arrivals, the executed-prefix facts of record).
-STRONG: a row classified into another family / stratum, a moved phase boundary, a different draw -- each moves a count.
+STRONG: a row classified into another family / stratum, a moved phase boundary, a different sample -- each moves a count.
 
 What this does NOT recompute: the VU evaluations themselves (the `evaluated` / `equal` / `mismatch` counts and the Q(P) reconciliation
 `query_total` / `sampled_strata` / `uncovered_by_name` need the binding map, `commit/binding_map_p*.json`, 0.5-1.5 GB, vault core tars only).
@@ -81,7 +81,7 @@ def _load_program(p: str) -> dict:
 
 def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] | None = None) -> dict:
     """The partition over `programs` (request label -> Program instances doc) with the record's stated parameters -- `sampled_replay`'s
-    population / split / draw, without the evaluations, under the v2 query's address rule (`program_dirs` = the Build dirs whose
+    population / split / sample, without the evaluations, under the v2 query's address rule (`program_dirs` = the Build dirs whose
     correspondence the manifest is built with).  A record that predates the v2 rule (no `addresses.rule`: every reference record) was
     addressed by the retired v1 rule; its partition is recomputed under v2 here (decision `retire-v1` where that moves a count).  Returns a
     `sampled_replay`-shaped document (`lift` reads it)."""

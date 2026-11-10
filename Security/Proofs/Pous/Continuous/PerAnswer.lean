@@ -1,10 +1,12 @@
-import Proofs.Pous.Statements
-import Proofs.Pous.Thm1.Theorem1iTimed
-import Proofs.Pous.Thm1.Theorem1iiSeq
-import Proofs.Pous.Thm1.Theorem1iiiTimed
-import Proofs.Pous.Graded.Theorem
-import Proofs.Pous.Continuous.MissCount
-import Proofs.Pous.Continuous.Verifier
+module
+
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Thm1.Theorem1iTimed
+public import Proofs.Pous.Thm1.Theorem1iiSeq
+public import Proofs.Pous.Thm1.Theorem1iiiTimed
+public import Proofs.Pous.Graded.Theorem
+public import Proofs.Pous.Continuous.MissCount
+public import Proofs.Pous.Continuous.Verifier
 
 /-!
 # The continuous audit from `TimedINC`: `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`
@@ -29,6 +31,8 @@ depends only on the indices up to its own (`contRecords_ofFn`), and a hit return
    because the indices are independent of the setup and so each round's history is bad with probability at most
    `(β + 1)·π`.
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 
@@ -74,7 +78,7 @@ def hitAt (a : M.Ω × sch.Coins) (h : List (Fin sch.B)) (i : Fin sch.B) : Prop 
 
 /-- The round's program, stopped at `(D, Q)`, from a memory given as `τ`. -/
 def stopped (W : Bits sch.n) (pp : Bits sch.t) (h : List (Fin sch.B)) {s : ℕ} (τ : Bits s) (i : Fin sch.B) :
-    Prog M (Bits sch.ℓ) :=
+    OracleAlgorithm M (Bits sch.ℓ) :=
   progMap (fun r : Option (Bits sch.ℓ) × List Bool => r.1.getD fun _ => false)
     (PousGraded.cut ((none, []) : Option (Bits sch.ℓ) × List Bool) D Q
       (mach.round W pp h D_late (List.ofFn τ) (some i)))

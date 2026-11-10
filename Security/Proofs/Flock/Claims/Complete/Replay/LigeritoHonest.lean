@@ -1,6 +1,10 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoTrack
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
-import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoTrack
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The honest Ligerito against the model's steps
@@ -14,6 +18,8 @@ model's steps (`Lg.sync_chal`, `Lg.sync_chalSplit`, `Lg.sync_ood`, `Lg.sync_clos
 `Lg.Mid`, reached after level 0 (`Lg.mid_lv0`) and kept by an inner level's step (`Lg.mid_stepN`, folding the weight by
 `Lg.wok_fold`), from which the last level meets the final identity (`Lg.goal_last`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
@@ -59,8 +65,6 @@ theorem fast100_k0 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) : 1 ≤
 theorem foldKs_push (a : Array F256) (r : F256) (x : Array F256) :
     foldKs (a.push r).toList x = foldK r (foldKs a.toList x) := by
   simp [foldKs, Array.toList_push, List.foldl_append]
-
-theorem foldKs_nil (x : Array F256) : foldKs (#[] : Array F256).toList x = x := rfl
 
 theorem embedF_c0 (g : Array F128) : (embedF g).map F256.c0 = g := by
   apply Array.ext (by simp [embedF])

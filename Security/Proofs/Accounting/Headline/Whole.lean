@@ -1,10 +1,13 @@
-import Proofs.Accounting.TS
+module
+
+public import Proofs.Accounting.TS
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # Theorem D-ideal with fold skippers charged
 
-`DIdealFloor` with FOLD-OPT per word folded at the certificate it prices (`FoldOptFoldedAt`, ASK-6 = A, RT2-LOGIC-1)
-and the whole-unit luck (`WholeLuckAt`, ASK-9 = A), the form the headlines take. A round's saving is
+`DIdealFloor` with FOLD-OPT per word folded at the certificate it prices (`FoldOptFoldedAt`)
+and the whole-unit luck (`WholeLuckAt`), the form the headlines take. A round's saving is
 `κ·d_w + f·e_w`, `d_w` its deficient share and `e_w` the share of its words whose fold the run skips, with
 `κ = N_w w*/B_♭` and `f = (1 − μ_f)N_w φ*/B_♭`. The tail bound is
 PoUW's exponential round bound (`prob_accepts_le`, `c = 1`) on the log-luck game `wgame`, whose round weighs
@@ -19,6 +22,8 @@ PoUW's exponential round bound (`prob_accepts_le`, `c = 1`) on the log-luck game
   the unfolded branch's floor `(N_w w* + (1 − μ_f)N_w φ*)/B_♭ · (1 − 41/48000)` at `p₀ = ½`, `S = 48,000` and
   `δ′ ≥ 2^-41`, and the headline's last step, a bound below both branches' floors.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.Whole
 

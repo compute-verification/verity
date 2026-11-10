@@ -1,5 +1,7 @@
-import Mathlib.Data.Nat.Bitwise
-import Proofs.Flock.Soundness.Audit.Circuit
+module
+
+public import Definitions.Core.Boolean
+import Mathlib.Data.List.GetD
 
 /-!
 # Rows from a gate circuit (`flock-ir-unit/v2`)
@@ -15,9 +17,9 @@ evaluates natively. `psum z m n` is the parity of `z` over the bits of `m` below
 `xorSum_eq_psum` relates it to the audit's `xorSum` over a list of columns.
 -/
 
-namespace FlockSoundness.GateRows
+@[expose] public section
 
-open Audit
+namespace FlockSoundness.GateRows
 
 /-! ## Parity over the bits of a mask -/
 
@@ -56,13 +58,13 @@ def listMask : List ℕ → ℕ
   | c :: l => 2 ^ c ^^^ listMask l
 
 theorem xorSum_eq_psum (z : ℕ → Bool) (n : ℕ) (l : List ℕ) (hl : ∀ c ∈ l, c < n) :
-    xorSum l z = psum z (listMask l) n := by
+    Verity.Boolean.xorSum l z = psum z (listMask l) n := by
   induction l with
-  | nil => simp [xorSum, listMask, psum_zero]
+  | nil => simp [Verity.Boolean.xorSum, listMask, psum_zero]
   | cons c l ih =>
     have hc : c < n := hl c (by simp)
     have ih' := ih (fun d hd => hl d (by simp [hd]))
-    simp only [xorSum, List.map_cons, List.foldr_cons] at ih' ⊢
+    simp only [Verity.Boolean.xorSum, List.map_cons, List.foldr_cons] at ih' ⊢
     rw [ih', listMask, psum_xor, psum_two_pow]
     simp [hc]
 

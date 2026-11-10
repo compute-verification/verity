@@ -7,15 +7,15 @@ import torch
 from verity.ml.circuits.refs import Coll, array_of
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, ViewRule
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, row_value, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, _untransposed, aten
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _untransposed, aten
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
-from verity_vllm.program.registry.fp8 import QUANT_GROUPS, weight_blocks
+from verity.ml.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
 
 
-# -- [R15 fp8] block-scaled FP8 linears: vLLM's sm_90 default dynamic route, and the explicit CUTLASS route ------------------------------
+# -- block-scaled FP8 linears: vLLM's sm_90 default dynamic route, and the explicit CUTLASS route ------------------------------
 
 FP8_E4M3 = torch.float8_e4m3fn
 #: the quant op's pinned scalars (`per_token_group_quant_fp8(..., group_size=128, eps=1e-10, dtype=e4m3)` as vLLM calls it for
@@ -205,7 +205,7 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
         a = self._scalars(node)
         if not all(k in a for k in ("x", "x_q", "x_s", "group_size", "eps", "fp8_min", "fp8_max")):
             return "unexpected operator arity"
-        r = _row_value(ctx, a["x"], "x")
+        r = row_value(ctx, a["x"], "x")
         if r:
             return r
         xs_shape = shape(ctx, a["x"])
@@ -246,11 +246,11 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
 class CutlassScaledMmFp8BlockRule(InPlaceRule):
     """`_C.cutlass_scaled_mm(out! bf16 [.., N], a e4m3 [.., K], b = W.T ([K, N] view of e4m3 W [N, K]), a_scales f32 [.., K/G],
     b_scales = Ws.T ([K/G, cdiv(N, G)] view of f32 Ws [cdiv(N, G), K/G]: N may end mid-block, `fp8.weight_blocks`), bias None)` ->
-    `scaled_mm_fp8_block{K,N,G}` per token row (the active target's `fp8_scale_construction`: ScaledMmFp8BlockSharedScale_v1 by
-    default, ScaledMmFp8Block_v1 per-coordinate; the version 3 forms over the target's step where it is not Hopper's,
+    `scaled_mm_fp8_block{K,N,G}` per token row (the active target's `fp8_scale_construction`: ScaledMmFp8BlockSharedScale_v1, and
+    its version 3 form over the target's step where it is not Hopper's,
     `frontend.targets.fp8_block_dot`); `out` is rebound.  W and Ws are prescribed weight Inputs (the checkpoint's e4m3 words and f32 block scales); `a` / `a_scales` are the
     values `PerTokenGroupFp8Quant[vllm]` computed.  Binds the BLOCK-scaled shapes only: a per-tensor / per-token scaled_mm (scales [M,1] /
-    [1,N] / 0-d) is another kernel (`ScaledMmFp8_v1` of registry.fp8, R14 QZ) and is refused here, named.  A target whose GEMM record
+    [1,N] / 0-d) is another kernel (`ScaledMmFp8_v1` of registry.fp8) and is refused here, named.  A target whose GEMM record
     has no blockwise step is refused: `_C.cutlass_scaled_mm` runs that target's own blockwise kernel under the same op and kernel class."""
     modes = frozenset({"profile"})
     info = RuleInfo("CutlassScaledMmFp8Block[vllm]", 1, "in-place-binding",
@@ -279,7 +279,7 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
         bias = node.args[5] if len(node.args) > 5 else node.kwargs.get("bias")
         if bias is not None:
             return "numerics_unregistered: a fused bias in the blockwise FP8 epilogue has no registered Definition (vLLM adds the bias outside the kernel)"
-        r = _row_value(ctx, a, "a", dtype=FP8_E4M3)
+        r = row_value(ctx, a, "a", dtype=FP8_E4M3)
         if r:
             return r
         if not isinstance(ctx.val(out), Alloc):

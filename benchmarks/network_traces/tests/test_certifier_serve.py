@@ -1,11 +1,11 @@
 """certifier-serve on an injected clock, end to end: the served plan probed from a stub OpenAI streaming endpoint, the
 certifier (`active.Proxy` with its salt on, its records certified and its reveals signed) in front of it behind the
-shim, and the offline check of what it published, which asks each window's salt through a `RemoteCertifier` signed
+shim, and the offline check of what it published, which asks each window's salt through a `CertifierClient` signed
 with the challenger's key. Honest traffic is accepted on every link-window (N2 on the planned profile, the audit and
 the salt), a shim that holds one session past every sync or writes one event more than the endpoint sent is refused,
 and each window's salt is revealed once. The same holds four in flight against an endpoint that sends some responses'
 last two tokens in one event, as vLLM does: the plan's F is the body's tokens, and the shim pads a short response. On
-N2's served profile (`--profile served`) the plan fixes no egress counts: the proxy admits requests by NET-54's rule,
+N2's served profile (`--profile served`) the plan fixes no egress counts: the proxy admits requests by the served profile's rule,
 a group sent in a window's first bucket goes behind the salt frame, and N2's served counts accept honest traffic on
 every window and refuse the extra event. Against an endpoint that streams GLM-5.3's tokens (multi-byte, and tokens
 that split a character's UTF-8, which vLLM sends as chunks of no text) both profiles accept honest traffic with F the
@@ -32,6 +32,7 @@ import sys
 import tarfile
 from collections import defaultdict
 from dataclasses import replace
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -170,10 +171,24 @@ def _released_as_signed(out: dict) -> list[int]:
     signed = {name: stream - 1 for name, stream in ar.released_sessions(records).items()}
     run_id = bytes.fromhex(json.loads((run / "deployment.json").read_text())["run_id"])
     assert out["released"] == signed and sorted(signed.values()) == list(range(len(signed)))
-    assert sorted(out["releases"]) == [(n, run_id) for n in range(len(signed))]
+    assert sorted(out["releases"]) == [(n, run_id, None) for n in range(len(signed))]
     frames = b"".join(f for r in records for row in r.grid for f in row[:active.row_count(row)])
     assert b"x-verity-release" not in frames.lower()
-    return [n for n, _ in out["releases"]]
+    return [n for n, _, _ in out["releases"]]
+
+
+def _late_is_uncertified(run: dict) -> None:
+    """The late shim's window-0 egress record is not established (`coverage-never-established`), so the certifier
+    certifies none of it (`certificate.Issuer` lists it in `issuer_refused`): the check stops at window 0 with no
+    certified record, nothing is registered and no salt is revealed, and the audit of the run's raw and committed
+    records refuses that record too."""
+    check = run["check"]
+    assert check["verdict"] == "refused" and not check["audit_accepted"] and not check["salt_accepted"]
+    assert [[d, w] for _, d, w in check["issuer_refused"]] == [["egress", 0]] and run["revealed"] == []
+    assert check["rows"] == [{"window": 0, "n2": "no certified record", "salt": "no certified record",
+                              "audit": {"egress": {"raw": "status:coverage-never-established",
+                                                   "committed": "status:coverage-never-established"},
+                                        "ingress": {"raw": None, "committed": None}}}]
 
 
 @pytest.fixture(scope="module")
@@ -255,7 +270,7 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
     assert ar.released_sessions(records) == {"served.0": 1, "served.2": 2, "served.3": 3}
     released = dict(json.loads((tmp_path / "server.json").read_text())["released"])
     assert released == {"served.0": 0, "served.2": 1, "served.3": 2}
-    assert [n for n, _ in releases] == [0, 1, 2] and len({run for _, run in releases}) == 1
+    assert [n for n, _, _ in releases] == [0, 1, 2] and len({run for _, run, _ in releases}) == 1
     audit = ar.audit_configuration(plan, report, tmp_path)
     faulted = [r for r in audit["rows"] if r["raw"]]
     assert {(r["direction"], r["window"]) for r in faulted} == {("egress", 0), ("ingress", 0)}
@@ -280,12 +295,33 @@ def test_the_gates_certifier_rehearsal_parses_here_with_its_sampling(tmp_path):
     assert {k: cs.request_body("m", 16)[k] for k in ("temperature", "top_p")} == {"temperature": 0.0, "top_p": 1.0}
 
 
+def test_the_gates_keys_height_reaches_rehearse_and_a_key_above_this_files_is_made_in_its_workers(tmp_path,
+                                                                                                    monkeypatch):
+    """`certifier-rehearse`'s command passes its keys' height, the deployed key's (20) unless the request gives one,
+    as `rehearse`'s `--height`, which makes both keys at it; `load_key` makes a key above `HEIGHT` in
+    `KEYGEN_WORKERS` processes (at 20, minutes, not the quarter hour one process takes) and one at or below it in one,
+    and either loads back from its files."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    plain = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None}, tmp_path, "u")[2:])
+    given = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None, "height": 10}, tmp_path,
+                                                       "u")[2:])
+    assert (plain.height, given.height) == (cs.lms.DEPLOYED.H, 10) and cs.KEYGEN_WORKERS == 8
+    keygen, workers = cs.lms.keygen, []
+    monkeypatch.setattr(cs.lms, "keygen", lambda params, seed, workers=1, seen=workers: (
+        seen.append((params.H, workers)), keygen(params, seed, workers))[1])
+    for h in (cs.HEIGHT, cs.HEIGHT + 1):
+        made = cs.load_key(tmp_path / f"h{h}", h)
+        assert cs.load_key(tmp_path / f"h{h}").tree == made.tree and len(made.tree) == 2 ** (h + 1)
+    assert workers == [(cs.HEIGHT, 1), (cs.HEIGHT + 1, cs.KEYGEN_WORKERS)]
+
+
 def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_parser_takes(tmp_path):
     """The gate's tampers are `serve`'s `--tamper` choices, so the auditor host runs every shim this file has, and
     each reaches `serve` (which alone checks it, after the tunnel is up) as one strategy of `rehearse`."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
-    assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token")
+    assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token", "byte")
     for t in A.TAMPERS:
         args = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": t}, tmp_path, "u")[2:])
         assert args.strategies.split(",") == [t]
@@ -293,6 +329,17 @@ def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_
                                          "--link", "127.0.0.1:1", "--reveal", "127.0.0.1:2", "--key", "k",
                                          "--challenger-key", "k.json", "--session", "00", "--tamper", t])
         assert served.tamper == t
+
+
+def test_the_byte_shim_changes_one_output_byte_of_a_hex_response_and_keeps_it_hex():
+    data = bytes([0xa5, 0x00, 0xff]) * 8
+    got = cs.ar.other_hex(data.hex().encode())
+    changed = bytes.fromhex(got.decode())
+    assert changed[0] == 0xb5 and changed[1:] == data[1:]
+    assert cs.ar.other_hex(b"\0\0f0") == b"\0\0e0"
+    with pytest.raises(ValueError, match="no output byte"):
+        cs.ar.other_hex(b"\0\0")
+    assert cs.ar.adversary_plan({"sessions": [["s.0", "s.1"]]}, None, "byte")["byte"] == "s.0"
 
 
 def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_every_flag_it_was_given(tmp_path):
@@ -314,16 +361,21 @@ def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_
         "u")[2:])
     assert (plain.tokens, plain.rate, plain.prompt_range, plain.seed, plain.eos_ids, plain.in_flight, plain.profile,
             plain.strategies) == (64, A.CERTIFIER_VARIED_RATE, "16:1024", 0, None, 4, cs.PROFILES[0], "honest")
+    assert (plain.margin, plain.prompts_file) == (2.0, None)
+    given = cs.parser().parse_args(A.certifier_command(
+        {k: req[k] for k in ("run", "requests", "traffic", "temperature", "top_p", "tamper")}
+        | {"margin": 4.0, "prompts": {"count": 3, "ids": 4}}, tmp_path / "out", "u")[2:])
+    assert (given.margin, given.prompts_file, given.out) == (4.0, tmp_path / A.WITNESS / A.PROMPTS, tmp_path / "out")
 
 
 def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_major(tmp_path):
-    """The plan sends the endpoint's shape (its one model, a prompt of exactly 128 of its tokens, `min_tokens` =
-    `max_tokens`, `ignore_eos`, streamed, the given temperature and top_p on every request, the probes' and the run's
-    alike, so that an endpoint's own generation config never applies) four at a time, the ingress releasing them two a
-    bucket, and the
+    """The plan sends the endpoint's shape (its one model, a prompt of exactly 128 of its tokens, `max_tokens` and
+    `ignore_eos` with no `min_tokens`, streamed, the given temperature and top_p on every request, the probes' and the
+    run's alike, so that an endpoint's own generation config never applies) four at a time, the ingress releasing them
+    two a bucket, and the
     endpoint interleaves the responses of each two released together chunk by chunk; the shim still writes each
     response whole, in the order their requests reached it, so the egress counts are the planned profile's and honest
-    traffic is accepted on every link-window."""
+    traffic is accepted on every execution phase."""
     endpoint = _SideBySide(2)
     args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=TOKENS, response_frames=None,
                               probes=4, in_flight=4, requests=REQUESTS, delta_buckets=None, profile="planned",
@@ -349,8 +401,7 @@ def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_
 
     probed, plan, out = asyncio.run(go())
     assert probed["body"] == {"model": "stub-model", "prompt": list(range(128)), "max_tokens": TOKENS,
-                              "min_tokens": TOKENS, "stream": True, "ignore_eos": True, "temperature": 0.6,
-                              "top_p": 0.9}
+                              "stream": True, "ignore_eos": True, "temperature": 0.6, "top_p": 0.9}
     assert all(b == probed["body"] for b in endpoint.bodies) and len(endpoint.bodies) == 4 + 4 + REQUESTS
     assert plan["served"]["in_flight"] == 4 and plan["request_major"]
     sends = [q["send_ms"] for q in plan["requests"]]
@@ -367,7 +418,7 @@ def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_
 
 
 def test_honest_served_traffic_is_accepted_on_every_link_window(served):
-    """N2's verdict of record accepts every link-window on the planned profile, `network_verdict` accepts the link,
+    """N2's verdict of record accepts every execution phase on the planned profile, `network_verdict` accepts the link,
     the certifier's audit accepts every record raw and committed, and the shim received every salt the certifier
     revealed to the challenger, which no egress frame holds."""
     *_, runs = served
@@ -382,7 +433,7 @@ def test_honest_served_traffic_is_accepted_on_every_link_window(served):
 
 
 def test_the_endpoint_gets_each_request_with_the_release_order_the_certifier_signed(served):
-    """Every request reaches the endpoint with `x-verity-release: N` and the proxy's run id (VLLM-89), N its place in
+    """Every request reaches the endpoint with `x-verity-release: N` and the proxy's run id, N its place in
     the release order the signed ingress records hold, while the records hold the client's request without them, and
     honest traffic is accepted with them present (`test_honest_served_traffic_is_accepted_on_every_link_window`). One
     request in flight, the endpoint gets them in that order."""
@@ -394,8 +445,9 @@ def test_the_endpoint_gets_each_request_with_the_release_order_the_certifier_sig
 def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(served, tmp_path):
     """`serve`'s `CertifierProcess`, on a copy of one key, writes the honest run's records and commitments byte for
     byte as `CertifyingPublisher` inline does, and the same heads, each certificate at the same leaf and valid under its
-    own fresh salt, and the same clock certificates of the syncs handed with the egress records; a reveal signed between
-    two records takes the same leaf: its calls run in the order they are made."""
+    own fresh salt, and salted clock certificates of the syncs handed with the egress records, the same leaves too,
+    each opening under its own fresh salt; a reveal signed between two records takes the same leaf: its calls run in
+    the order they are made."""
     import certifier_serve  # by name, so that the spawned process finds its functions
 
     _, report, _, runs = served
@@ -440,16 +492,18 @@ def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(serv
     assert all(cs.certified_from_json(d).verify(process.public_key(), SESSION) for d in process_docs)
     clocks = [cs.read_clocks(tmp_path / run / "clocks.jsonl") for run in ("inline-run", "process-run")]
     egress = [r for r, _ in published if r.link == setup.egress_link]
-    assert clocks[0] == clocks[1] and [(c.window, c.sync) for c in clocks[1]] == [(r.window, sync(r)) for r in egress]
+    assert [[(c.window, c.sync) for c in k] for k in clocks] == [[(r.window, sync(r)) for r in egress]] * 2
+    assert [c.certificate.signature[:4] for c in clocks[0]] == [c.certificate.signature[:4] for c in clocks[1]]
     assert all(c.verify(process.public_key(), SESSION) for c in clocks[1])
+    assert len({c.salt for k in clocks for c in k}) == 2 * len(egress)
 
 
 def test_the_served_proxy_hands_its_certifier_each_egress_windows_sync_which_it_signs(tmp_path):
     """`ServedProxy` hands its `publish` the sync its own shaper ran each egress window under, and none with an ingress
-    record or past the shaper's syncs; `CertifyingPublisher` signs it beside the window's record (`clocks.jsonl`), and
-    an advised link's clock source of record reads exactly those syncs back (`LinkWindows(clock_certificates=…)`)."""
+    record or past the shaper's syncs; `CertifyingPublisher` signs it salted beside the window's record (`clocks.jsonl`,
+    with its opening), and the certifier's key opens exactly those syncs back (`certificate.SignedClocks`)."""
+    from verity.core.protocols.certifier.certificate import SignedClocks
     from verity.core.protocols.certifier.grid import Certifier
-    from verity.core.protocols.certifier.service import LinkWindows
 
     probed = {"url": "stub", "body": cs.request_body("stub", TOKENS),
               "responses": [{"events": TOKENS, "first_s": 0.0, "last_s": 0.0}]}
@@ -488,14 +542,122 @@ def test_the_served_proxy_hands_its_certifier_each_egress_windows_sync_which_it_
         signer.close()
     clocks = cs.read_clocks(tmp_path / "clocks.jsonl")
     assert [(c.link, c.window, c.sync) for c in clocks] == [(cs.N2_LINK, w, syncs[w]) for w in (0, 1)]
-    lw = LinkWindows(cs.N2_LINK, e, setup.sync_set, key, "r-clocks", SESSION, ingress=i, clock_certificates=clocks)
-    assert lw.clock_source.syncs(cs.N2_LINK) == tuple(syncs)
+    signed = SignedClocks(key, SESSION, tuple(clocks))
+    assert signed.syncs(cs.N2_LINK) == tuple(syncs) and signed.refused == ()
     assert cs.read_clocks(tmp_path / "absent.jsonl") == []
 
 
+def _egress_record(window: int, text: bytes, frame_bytes: int = 4096):
+    """An egress record whose canonical events carry `text`, 64 bytes an event, then a padding slot and an id event."""
+    def frame(kind, body):
+        return (active.HEADER.pack(kind, active.CANONICAL_STREAM, len(body)) + body).ljust(frame_bytes, b"\0")
+
+    slots = [frame(active.DATA, active.event(text[i:i + active.TOKEN_BYTES]))
+             for i in range(0, len(text), active.TOKEN_BYTES)]
+    return SimpleNamespace(window=window, grid=[slots, [None, frame(active.PAD, b""),
+                                                        frame(active.DATA, active.id_event(0, 7))]])
+
+
+def _out_shape(words: int, rows: int, program: str = "cd" * 64):
+    from verity.core.protocols.certifier import out_commit as OC
+
+    return OC.OutShape(program, "out", words, rows)
+
+
+def test_the_network_certifier_commits_and_signs_each_egress_windows_output_in_its_own_session(tmp_path):
+    """`--out-shape`'s commitment (`certify_out`): the output an egress record's canonical events carry, as the hex
+    of u16 little-endian words, cut into the shape's rows and committed under the running issuer, which signs its head
+    in the certifier's session for the execution phase: the public record `check_out` pins under the certifier's key,
+    and the witness (each row and its salt) apart, for the prover. A record whose text isn't that commits nothing, one
+    that isn't the shape's rows is an ``out-shape`` line, and a refused signature is the execution phase under
+    ``refused``, with no witness."""
+    from verity.core.protocols.certifier import out_commit as OC
+
+    words = [0x0102, 0xfffe, 7, 0]
+    text = b"".join(w.to_bytes(2, "little") for w in words).hex().encode() * 40
+    shape = _out_shape(1, 160)
+    signer = cs.signer(tmp_path / "key", 4)
+    try:
+        issuer, key = Issuer(signer, SESSION), signer.public_key()
+        assert cs.out_words(_egress_record(2, text)) == words * 40
+        assert cs.out_rows(words * 40, shape) == [[w] for w in words] * 40
+        got = cs.certify_out(tmp_path, _egress_record(2, text), issuer, shape)
+        assert cs.certify_out(tmp_path, _egress_record(3, b"not hex " * 8), issuer, shape) is None
+        assert cs.certify_out(tmp_path, _egress_record(3, b"abc"), issuer, shape) is None
+        assert cs.certify_out(tmp_path, _egress_record(4, text), Issuer(signer, bytes(32)), shape) is None
+        assert cs.certify_out(tmp_path, _egress_record(5, text[:-4]), issuer, shape) is None
+    finally:
+        signer.close()
+    records = [json.loads(x) for x in (tmp_path / cs.OUT_RECORDS).read_text().splitlines()]
+    assert records[0] == got.public and records[1] == {"refused": [OC.LINK, "egress", 4]}
+    assert records[2:] == [{"out-shape": [OC.LINK, "egress", 5], "detail": "159 words, not 160 rows of 1"}]
+    assert OC.check_out(records[0], key, SESSION, shape, window=2) == got.root
+    witness = [json.loads(x) for x in (tmp_path / cs.OUT_WITNESS).read_text().splitlines()]
+    assert witness == [{"window": 2, "program": shape.program, "rows": [[w] for w in words] * 40,
+                        "salts": [s.hex() for s in got.salts]}]
+    assert not any(s.hex() in json.dumps(records) for s in got.salts)
+
+
+def test_the_out_value_is_committed_at_the_registered_width_in_the_records_order(tmp_path):
+    """At a wide shape (the wired toy's: one row of h words a response step) the words go into rows in the record's
+    order, ``shape.words`` a row, so response j's step s is row ``j·S + s`` (`out_rows`); the record pins at that
+    shape and is ``out-width`` at the per-coordinate one, and words that aren't whole rows of it, or more rows than
+    it holds, are ``out-shape``, never padded."""
+    from verity.core.protocols.certifier import out_commit as OC
+
+    words = list(range(1, 4 * 8 + 1))
+    text = b"".join(w.to_bytes(2, "little") for w in words).hex().encode()
+    wide, narrow = _out_shape(8, 4), _out_shape(1, 32)
+    assert cs.out_rows(words, wide) == [words[i:i + 8] for i in range(0, 32, 8)]
+    assert cs.out_rows(words[:-1], wide) is None and cs.out_rows(words + words[:8], wide) is None
+    signer = cs.signer(tmp_path / "key", 4)
+    try:
+        issuer, key = Issuer(signer, SESSION), signer.public_key()
+        got = cs.certify_out(tmp_path, _egress_record(0, text), issuer, wide)
+        assert cs.certify_out(tmp_path, _egress_record(1, text + text[:32]), issuer, wide) is None
+    finally:
+        signer.close()
+    records = [json.loads(x) for x in (tmp_path / cs.OUT_RECORDS).read_text().splitlines()]
+    assert (got.head.words, got.head.rows) == (8, 4) and OC.check_out(records[0], key, SESSION, wide, window=0) == got.root
+    with pytest.raises(OC.OutRefused, match="out-width"):
+        OC.check_out(records[0], key, SESSION, narrow, window=0)
+    assert records[1] == {"out-shape": [OC.LINK, "egress", 1], "detail": "40 words, not 4 rows of 8"}
+    witness = [json.loads(x) for x in (tmp_path / cs.OUT_WITNESS).read_text().splitlines()]
+    assert [w["rows"] for w in witness] == [cs.out_rows(words, wide)]
+
+
+def test_the_out_shape_reaches_each_rehearsed_serve_and_is_an_out_shape(tmp_path, monkeypatch):
+    shape = _out_shape(128, 4).doc()
+    path = tmp_path / "shape.json"
+    path.write_text(json.dumps(shape))
+    serve = ["serve", "--plan", "p", "--calibration", "c", "--upstream", "u", "--out", "o", "--link", "h:1",
+             "--reveal", "h:2", "--key", "k", "--challenger-key", "c", "--session", "00"]
+    assert cs.parser().parse_args(serve).out_shape is None
+    assert cs.parser().parse_args(["rehearse", "--out", "o", "--out-shape", str(path)]).out_shape == shape
+    for bad in ({**shape, "program": shape["program"].upper()}, {**shape, "words": 0}, {"program": shape["program"]}):
+        path.write_text(json.dumps(bad))
+        with pytest.raises(SystemExit):
+            cs.parser().parse_args([*serve, "--out-shape", str(path)])
+    with pytest.raises(SystemExit):
+        cs.parser().parse_args([*serve, "--out-shape", str(tmp_path / "absent.json")])
+    seen = []
+
+    def popen(argv, **_):
+        seen.append(argv)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cs.subprocess, "Popen", popen)
+    with pytest.raises(KeyboardInterrupt):
+        cs.rehearse_one(tmp_path, "honest", url="u", certifier_dir=tmp_path / "k", challenger_dir=tmp_path / "c",
+                        api_key_env=None, start_in=1.0, out_shape=shape)
+    assert cs.parser().parse_args(seen[0][2:]).out_shape == shape
+
+
 def test_each_salt_is_revealed_once_to_the_challengers_signed_request(served):
+    """Each certified window's salt, once; the late run has none certified, so it reveals none."""
     *_, runs = served
-    for strategy in cs.STRATEGIES:
+    _late_is_uncertified(runs["late"])
+    for strategy in ("honest", "extra"):
         check = runs[strategy]["check"]
         assert [r["salt"] for r in check["rows"]] == ["revealed", "revealed"]
         assert re.fullmatch(r"refused: the certifier refused window 0's salt: window 0's salt is revealed already",
@@ -505,17 +667,12 @@ def test_each_salt_is_revealed_once_to_the_challengers_signed_request(served):
 
 
 def test_a_shim_that_holds_a_session_past_every_sync_is_refused(served):
-    """The late shim's window-0 egress record is not established (`coverage-never-established`): the certifier's
-    audit refuses it, N2's head check rejects the link-window, and `network_verdict` refuses the link."""
+    """The late shim's window-0 egress record is not established (`coverage-never-established`): the certifier
+    certifies none of it, so N2 has no window to register and `network_verdict` refuses the link from window 0."""
     *_, runs = served
+    _late_is_uncertified(runs["late"])
     check = runs["late"]["check"]
-    assert check["verdict"] == "refused" and not check["network_verdict"]["accepted"]
-    assert 0 in check["network_verdict"]["refused"]
-    first = check["rows"][0]
-    assert first["n2"] == {"accepted": False, "codes": ["reject"], "public": {}}
-    assert first["audit"]["egress"] == {"raw": "status:coverage-never-established",
-                                        "committed": "status:coverage-never-established"}
-    assert check["salt_accepted"]
+    assert not check["network_verdict"]["accepted"] and check["network_verdict"]["refused"] == [0, 1]
 
 
 def test_a_shim_that_writes_one_event_more_is_refused_on_n2s_counts_alone(served):
@@ -534,7 +691,8 @@ def test_a_shim_that_writes_one_event_more_is_refused_on_n2s_counts_alone(served
 
 def test_the_served_plan_takes_f_from_the_bodys_tokens_and_refuses_a_response_longer():
     """F is the body's token count, so probed responses of F − 1 and F events plan F frames each; a response of more
-    than F events, or of none, or a body that doesn't ask for exactly its tokens, has no plan."""
+    than F events, or of none, or a body that doesn't ask for exactly its tokens (`ignore_eos`, a `max_tokens` of at
+    least 1) or asks for `min_tokens`, which the vLLM integration's advice refuses, has no plan."""
     body = cs.request_body("stub", TOKENS)
 
     def probed(*lengths):
@@ -548,8 +706,13 @@ def test_the_served_plan_takes_f_from_the_bodys_tokens_and_refuses_a_response_lo
     for lengths in ((TOKENS + 1,), (0, TOKENS)):
         with pytest.raises(ValueError, match="events long"):
             cs.served_plan(probed(*lengths), 4, delta_buckets=20)
+    assert "min_tokens" not in body and body["ignore_eos"] is True
+    for bad in ({"min_tokens": TOKENS}, {"min_tokens": 1}, {"ignore_eos": False}, {"max_tokens": 0}):
+        with pytest.raises(ValueError, match="exactly its tokens"):
+            cs.served_plan(probed(TOKENS) | {"body": body | bad}, 4, delta_buckets=20)
+    no_eos = {k: v for k, v in body.items() if k != "ignore_eos"}
     with pytest.raises(ValueError, match="exactly its tokens"):
-        cs.served_plan(probed(TOKENS) | {"body": body | {"min_tokens": 1}}, 4, delta_buckets=20)
+        cs.served_plan(probed(TOKENS) | {"body": no_eos}, 4, delta_buckets=20)
     _, plan = cs.served_plan(probed(TOKENS, TOKENS + 1), 4, delta_buckets=20, frames=TOKENS + 1)
     assert plan["pad_to"] == plan["served"]["response_frames"] == TOKENS + 1 and plan["served"]["tokens"] == TOKENS
     assert sum(map(sum, plan["occupancy"]["egress"])) == 4 * (TOKENS + 1)
@@ -639,20 +802,19 @@ def test_a_response_whose_last_two_tokens_share_an_event_is_padded_to_the_bodys_
 
 def test_honest_traffic_with_merged_events_is_accepted_on_every_window_and_late_and_extra_are_refused(merged):
     """Padded to F, honest traffic is accepted on every link-window, N2 on the planned profile among it; the late shim
-    is refused on its window-0 egress record, the extra one (F + 1 events in its first response) on N2's counts alone,
-    and each window's salt is revealed once in every run."""
+    is refused on its window-0 egress record, which the certifier doesn't certify, the extra one (F + 1 events in its
+    first response) on N2's counts alone, and each window's salt is revealed once in every run but late's."""
     *_, runs = merged
     honest = runs["honest"]["check"]
     assert honest["verdict"] == "accepted", cs.table(honest)
     assert all(r["n2"]["accepted"] for r in honest["rows"]) and honest["network_verdict"]["refused"] == []
     assert honest["timing"]["server_padded"] == {"responses": REQUESTS // 2, "events": REQUESTS // 2}
-    late = runs["late"]["check"]
-    assert late["verdict"] == "refused" and 0 in late["network_verdict"]["refused"]
-    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    _late_is_uncertified(runs["late"])
+    assert 0 in runs["late"]["check"]["network_verdict"]["refused"]
     extra = runs["extra"]["check"]
     assert runs["extra"]["events"] == REQUESTS * MERGED_TOKENS + 1
     assert extra["verdict"] == "refused" and extra["network_verdict"]["refused"] == [0] and extra["audit_accepted"]
-    for strategy in cs.STRATEGIES:
+    for strategy in ("honest", "extra"):
         check = runs[strategy]["check"]
         assert all(r["salt"] == "revealed" for r in check["rows"]) and check["salt_again"].startswith("refused")
         assert check["salt_accepted"]
@@ -720,8 +882,9 @@ def test_the_served_profile_plans_no_egress_occupancy_and_the_proxy_admits_by_th
 
 
 def test_honest_is_accepted_on_every_link_window_under_the_served_profile(served_profile):
-    """N2's verdict of record accepts every link-window on the served profile, each window's egress counts the ones its
-    ingress counts derive (`served_counts`), and `network_verdict` accepts the link; the audit and the salt accept."""
+    """N2's verdict of record accepts every execution phase on the served profile, each window's egress counts the ones
+    its ingress counts derive (`served_counts`), and `network_verdict` accepts the link; the audit and the salt
+    accept."""
     *_, runs = served_profile
     check = runs["honest"]["check"]
     assert check["verdict"] == "accepted", cs.table(check)
@@ -757,14 +920,13 @@ def test_a_request_in_a_windows_first_bucket_is_released_behind_the_salt_frame_a
 
 
 def test_late_is_refused_and_extra_is_refused_by_the_served_counts(served_profile):
-    """The late shim's window-0 egress record is not established: the audit refuses it and N2 rejects the window. The
-    extra shim's first response is F + 1 events, on time and logged, so every record is complete and the audit accepts
-    it: only the served counts refuse window 0, whose egress counts are one more than its ingress counts derive."""
+    """The late shim's window-0 egress record is not established: the certifier certifies none of it, so N2 has no
+    window to register and refuses the link from window 0. The extra shim's first response is F + 1 events, on time and
+    logged, so every record is complete and the audit accepts it: only the served counts refuse window 0, whose egress
+    counts are one more than its ingress counts derive."""
     *_, runs = served_profile
-    late = runs["late"]["check"]
-    assert late["verdict"] == "refused" and 0 in late["network_verdict"]["refused"]
-    assert late["rows"][0]["n2"] == {"accepted": False, "codes": ["reject"], "public": {}}
-    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    _late_is_uncertified(runs["late"])
+    assert 0 in runs["late"]["check"]["network_verdict"]["refused"]
     assert runs["extra"]["events"] == REQUESTS * MERGED_TOKENS + 1
     extra = runs["extra"]["check"]
     assert extra["verdict"] == "refused" and extra["network_verdict"]["refused"] == [0]
@@ -775,8 +937,10 @@ def test_late_is_refused_and_extra_is_refused_by_the_served_counts(served_profil
 
 
 def test_each_salt_is_revealed_once_under_the_served_profile(served_profile):
+    """As on the planned profile: each certified window's salt once, and none of the late run's."""
     *_, runs = served_profile
-    for strategy in cs.STRATEGIES:
+    _late_is_uncertified(runs["late"])
+    for strategy in ("honest", "extra"):
         check = runs[strategy]["check"]
         assert [r["salt"] for r in check["rows"]] == ["revealed"] * 3
         assert check["salt_again"].startswith("refused: the certifier refused window 0's salt")
@@ -867,18 +1031,18 @@ def test_a_glm_token_is_one_event_and_the_shim_carries_the_text_byte_for_byte(gl
 
 def test_honest_glm_traffic_is_accepted_and_late_and_extra_are_refused(glm):
     """On each of N2's profiles, honest GLM traffic is accepted on every link-window, the late shim is refused on its
-    window-0 egress record, the extra one on N2's counts alone, and each window's salt is revealed once."""
+    window-0 egress record, which the certifier doesn't certify, the extra one on N2's counts alone, and each window's
+    salt is revealed once in every run but late's."""
     *_, plan, runs = glm
     honest = runs["honest"]["check"]
     assert honest["verdict"] == "accepted", cs.table(honest)
     assert honest["profile"] == plan["occupancy"]["kind"] and honest["network_verdict"]["refused"] == []
     assert all(r["n2"]["accepted"] for r in honest["rows"])
-    late = runs["late"]["check"]
-    assert late["verdict"] == "refused" and 0 in late["network_verdict"]["refused"]
-    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    _late_is_uncertified(runs["late"])
+    assert 0 in runs["late"]["check"]["network_verdict"]["refused"]
     extra = runs["extra"]["check"]
     assert extra["verdict"] == "refused" and extra["network_verdict"]["refused"] == [0] and extra["audit_accepted"]
-    for strategy in cs.STRATEGIES:
+    for strategy in ("honest", "extra"):
         check = runs[strategy]["check"]
         assert all(r["salt"] == "revealed" for r in check["rows"]) and check["salt_again"].startswith("refused")
         assert runs[strategy]["revealed"] == list(range(plan["windows"]))
@@ -1021,6 +1185,53 @@ def test_a_varied_request_is_an_id_request_in_frames_its_prompts_length_fixes(le
     assert json.loads(raw.partition(b"\r\n\r\n")[2]) == cs.varied_body(fields["model"], q) | {"user": "varied.99999"}
 
 
+def test_given_prompts_are_sent_in_turn_at_the_same_seeds_arrivals_max_tokens_and_seeds(monkeypatch):
+    """With `prompts` (`--prompts-file`, the gate's `--prompts`) request j's prompt is the (j mod n)-th of the n and
+    nothing is tokenized; its arrival, `max_tokens`, seed and session are what the same seed gives the chat turns."""
+    monkeypatch.setattr(cs, "tokenize", lambda url, model, text, key=None: list(text.encode()))
+    prompts = [[70001, 3], [5], [7]]
+    turns = cs.varied_requests("u", "m", 7, rate=0.2, prompt_tokens=(8, 8), max_tokens=24, seed=5, name="r")
+    monkeypatch.setattr(cs, "tokenize", lambda *a, **k: pytest.fail("tokenized given prompts"))
+    given = cs.varied_requests("u", "m", 7, rate=0.2, prompt_tokens=(8, 8), max_tokens=24, seed=5, name="r",
+                               prompts=prompts)
+    assert [q["prompt"] for q in given] == [prompts[j % 3] for j in range(7)]
+    assert [{k: v for k, v in q.items() if k != "prompt"} for q in given] == \
+        [{k: v for k, v in q.items() if k != "prompt"} for q in turns]
+    assert len({tuple(q["prompt"]) for q in turns}) == 1
+    for bad in ([], [[1], []]):
+        with pytest.raises(ValueError, match="prompts: at least one"):
+            cs.varied_requests("u", "m", 7, prompts=bad)
+
+
+def test_the_varied_plan_takes_the_prompts_file_and_its_timing_widens_with_the_margin(tmp_path, monkeypatch):
+    """`plan_of` on varied traffic reads `--prompts-file` for the requests' prompts and plans at `--margin`: a larger
+    margin waits longer for each request's first frame (Δ0) and plans a slower rate (ρ0), the plan recording both;
+    fixed traffic refuses the file. The probes are the toy engine's: a token every 0.33 s after 0.4 s."""
+    (tmp_path / "prompts.json").write_text(json.dumps([[1, 2, 3, 4, 5, 6, 7, 8], [9, 10, 11, 12, 13, 14, 15, 16]]))
+
+    def probe(url, model, requests, key, clock, sleep):
+        return {"url": url, "model": model, "upstream_fields": cs.UPSTREAM_FIELDS, "responses": [
+            {"session": q["session"], "max_tokens": q["max_tokens"], "prompt_tokens": len(q["prompt"]),
+             "tokens": q["max_tokens"], "token_s": [0.4 + 0.33 * k for k in range(q["max_tokens"])],
+             "finish": "length", "last": 1} for q in requests]}
+    monkeypatch.setattr(cs, "probe_varied", probe)
+    monkeypatch.setattr(cs, "tokenize", lambda *a, **k: pytest.fail("tokenized given prompts"))
+    plans = {}
+    for margin in (2.0, 4.0):
+        args = argparse.Namespace(model="toy", api_key_env=None, traffic="varied", requests=6, rate=0.2,
+                                  prompt_range="16:1024", tokens=24, seed=0, probes=4, eos_ids="0", margin=margin,
+                                  prompts_file=tmp_path / "prompts.json")
+        _, _, plans[margin] = cs.plan_of(args, "u")
+    for margin, plan in plans.items():
+        assert [q["id_request"]["prompt"][0] for q in plan["requests"]] == [1, 9, 1, 9, 1, 9]
+        assert plan["varied"]["margin"] == margin and plan["varied"]["prompt_tokens"] == [8, 8]
+    two, four = plans[2.0]["varied"], plans[4.0]["varied"]
+    assert four["delta0_buckets"] > two["delta0_buckets"] and Fraction(four["rho0"]) < Fraction(two["rho0"])
+    fixed = argparse.Namespace(model="toy", api_key_env=None, traffic="fixed", prompts_file=tmp_path / "prompts.json")
+    with pytest.raises(SystemExit, match="--prompts-file: varied traffic's"):
+        cs.plan_of(fixed, "u")
+
+
 def _no_sleep(seconds: float) -> None:
     pass
 
@@ -1096,9 +1307,9 @@ def compact(request, tmp_path_factory):
 
 
 def test_compact_varied_traffic_is_certified_its_io_the_endpoints_and_its_egress_b_bytes_a_frame(compact, varied):
-    """On compact records in B-byte cells the honest run is accepted as on id events: every link-window certified, its
-    salt revealed, the audit accepting raw and committed. The certified I/O read from the cells is the id-event run's,
-    request for request (the same fields, ordinals, releases and token ids, each stop's EOS id too, and the same
+    """On compact records in B-byte cells the honest run is accepted as on id events: every execution phase certified,
+    its salt revealed, the audit accepting raw and committed. The certified I/O read from the cells is the id-event
+    run's, request for request (the same fields, ordinals, releases and token ids, each stop's EOS id too, and the same
     finishes, the merged responses' `length` by their count), and its ingress records are the id-event run's. Its
     egress carries the same frames a window, each B bytes: the link's bytes a window are B/4096 of the id-event
     run's."""
@@ -1180,10 +1391,10 @@ def test_the_varied_plan_sends_poisson_arrivals_of_varied_prompts_and_plans_no_e
 
 
 def test_honest_varied_traffic_is_certified_on_every_window_and_its_io_read_from_the_frames(varied):
-    """Every link-window's records are certified under the certifier's key and session and its salt revealed; N2 gives
-    no verdict on the advice profile. The certified I/O, read from the records' frames alone, is each request's fields
-    as the plan sent them, under its ingress ordinal, and each response's token ids as the endpoint streamed them, EOS
-    included, one id event a token and no other egress frame."""
+    """Every execution phase's records are certified under the certifier's key and session and its salt revealed; N2
+    gives no verdict on the advice profile. The certified I/O, read from the records' frames alone, is each request's
+    fields as the plan sent them, under its ingress ordinal, and each response's token ids as the endpoint streamed
+    them, EOS included, one id event a token and no other egress frame."""
     tmp, _, _, plan, runs, _ = varied
     check = runs["honest"]["check"]
     assert check["verdict"] == "accepted", cs.table(check)
@@ -1206,14 +1417,12 @@ def test_honest_varied_traffic_is_certified_on_every_window_and_its_io_read_from
 
 
 def test_a_late_shim_is_refused_by_the_audit_and_an_extra_token_by_the_finish_rule(varied):
-    """The late shim's window-0 egress record is not established, which the certifier's audit refuses. The extra
-    shim's token after its first response's last is on time and logged, so the records are complete, certified, and
-    the audit accepts them: only the certified I/O's finish rule refuses it, the response going past its EOS or its
-    `max_tokens`."""
+    """The late shim's window-0 egress record is not established, which the certifier doesn't certify and its audit
+    refuses. The extra shim's token after its first response's last is on time and logged, so the records are
+    complete, certified, and the audit accepts them: only the certified I/O's finish rule refuses it, the response
+    going past its EOS or its `max_tokens`."""
     tmp, _, _, plan, runs, _ = varied
-    late = runs["late"]["check"]
-    assert late["verdict"] == "refused" and not late["audit_accepted"]
-    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    _late_is_uncertified(runs["late"])
     extra = runs["extra"]["check"]
     assert runs["extra"]["events"] == runs["honest"]["events"] + 1
     assert extra["verdict"] == "refused" and extra["certified_accepted"] and extra["audit_accepted"]
@@ -1222,7 +1431,7 @@ def test_a_late_shim_is_refused_by_the_audit_and_an_extra_token_by_the_finish_ru
     r = _io(tmp / "extra")[first]
     assert r["output"][-1] == 0 and r["finish"] in ("a token after EOS", "longer than max_tokens")
     assert extra["io"]["violations"] == [[r["stream"], r["finish"]]]
-    for strategy in cs.STRATEGIES:
+    for strategy in ("honest", "extra"):
         check = runs[strategy]["check"]
         assert all(row["salt"] == "revealed" for row in check["rows"]) and check["salt_again"].startswith("refused")
 
@@ -1267,15 +1476,18 @@ def test_the_io_tie_accepts_honest_varied_traffic_and_refuses_the_token_shims_id
     port entries' (accepted); the token shim's are not in exactly the windows its changed ids fall in, each refused by
     IoTieWindow.content alone; so is the extra shim's token past a response's end, which no committed output is, and
     the drop shim's response without its first token, whose later ids each sit one output early and whose last
-    committed output no cell carries. The late shim's held frames never reach a certified record. A committed output no
-    cell carries is refused by content at window -1, since no advice places it in a window."""
+    committed output no cell carries. The late shim's held frames never reach a certified record, and its window-0
+    egress record, whose coverage was never established, has no certified head for its frames to hold to (refused by
+    cells_root). A committed output no cell carries is refused by content at window -1, since no advice places it in a
+    window."""
     pytest.importorskip(negatives.IO_TIE_MODULE)
     tmp, _, _, plan, runs, _ = varied
     ids = negatives.read_ids(_ids(tmp, plan))
     got = {s: negatives.tie_run(tmp / s, ids) for s in runs}
     tokens, W = sum(map(len, ids.values())), plan["windows"]
-    for row in got.values():
-        assert row["held"] == {"egress": W, "ingress": W} and row["missing"] == {} and row["outputs"] == tokens
+    for s, row in got.items():
+        assert row["held"] == {"egress": W - (s == "late"), "ingress": W} and row["missing"] == {}
+        assert row["outputs"] == tokens
     honest, token, extra = got["honest"], got["token"], got["extra"]
     assert honest["verdict"] == "accepted" and honest["failing"] == {} and honest["codes"] == []
     assert honest["id_events"] == honest["placed"] == tokens and honest["unplaced"] == 0
@@ -1290,7 +1502,7 @@ def test_the_io_tie_accepts_honest_varied_traffic_and_refuses_the_token_shims_id
     assert drop["verdict"] == "refused" and drop["codes"] == ["IoTieWindow.content"] and -1 in drop["failing"]
     assert drop["id_events"] == drop["placed"] == tokens - 1 and drop["unplaced"] == 1
     late = got["late"]
-    assert late["verdict"] == "refused" and late["failing"] == {-1: ["content"]}
+    assert late["verdict"] == "refused" and late["failing"] == {0: ["cells_root"], -1: ["content"]}
     assert 0 < late["unplaced"] == tokens - late["id_events"] and runs["late"]["events"] == tokens
     assert all(negatives.tie_ok(s, got[s]) for s in ("honest", "token", "extra", "drop"))
 
@@ -1509,7 +1721,8 @@ def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them
                       key=lambda r: r.window)
         cells = [s for r in outs for row in r.grid for s in row[:active.row_count(row)]]
         sampled = {r["stream"]: recorded[u] for u, r in g["io"].items()}
-        bad = active.compact_finish_violations(sampled, g["plan"]["varied"]["eos_token_ids"], cells)
+        bad = active.compact_finish_violations(sampled, g["plan"]["varied"]["eos_token_ids"], cells,
+                                               max_tokens={r["stream"]: r["max_tokens"] for r in g["io"].values()})
         assert {o for o, _ in bad} == {g["io"][u]["stream"] for u in differs}, bad
     plain = cs.parser().parse_args(A.certifier_command(
         {"run": "c20261024T120000Z-ab12", "requests": 16, "tamper": None, "traffic": "varied"}, Path("o"), "u")[2:])
@@ -1521,8 +1734,9 @@ def test_tie_run_on_the_gates_compact_runs_reads_their_records_as_data_cells_and
     """`negatives.tie_run` on the gate's compact runs, the endpoint's `requests.jsonl` the Commit's ids: each compact
     record is the data cell of its id, so neither run lacks id events, and the tie holds the link's records to the
     ids (`finish`, `active.compact_finish_violations`). Honest's finish holds; token's fails on exactly window 0's
-    responses, which refuses it. With IO-TIE in the tree honest is accepted and token refused by content too, at
-    window 0; without it neither has a verdict, only IO-TIE missing."""
+    responses, which refuses it. Honest's fails too, at that request's ordinal alone, where the Commit says a user's
+    client aborted it (`aborted`) and its records end on `COMPACT_LAST`. With `io_tie` in the tree honest is accepted
+    and token refused by content too, at window 0; without it neither has a verdict, only `io_tie` missing."""
     got, endpoint = gate_compact
     path = tmp_path / "requests.jsonl"
     path.write_text("".join(json.dumps(r) + "\n" for r in endpoint.served))
@@ -1536,6 +1750,12 @@ def test_tie_run_on_the_gates_compact_runs_reads_their_records_as_data_cells_and
         assert list(row["missing"]) == ([] if IT else ["io-tie"])
         assert {o for o, _ in row["finish_violations"]} == (window0 if strategy == "token" else set()) and window0
         assert row["finish"] is (strategy != "token")
+    gone = {u: r for u, r in got["honest"]["io"].items() if r["finish"] == "length"}
+    u = min(gone)
+    marked = negatives.tie_run(got["honest"]["dir"], ids, aborted={u})
+    assert marked["finish"] is False and marked["verdict"] == ("refused" if IT else negatives.NOT_APPLICABLE)
+    assert marked["finish_violations"] == [
+        [gone[u]["stream"], f"finish length on output {len(gone[u]['output']) - 1} where the Commit's is none"]]
     if IT is None:
         assert {s: r["verdict"] for s, r in rows.items()} == {s: negatives.NOT_APPLICABLE for s in got}
         return

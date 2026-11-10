@@ -1,8 +1,42 @@
-import Proofs.Accounting.TS.Session.Tile.Computes
-import Proofs.Accounting.TS.Session.Checked.Guarantees
+module
+
+public import Proofs.Accounting.TS.Session.Tile.Computes
+public import Proofs.Accounting.TS.Session.Assumptions
+public import Proofs.Flock.SoundAtBridge.Served
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A tile unit's proof layer with its Definition's checks is sound through its C-Flock sessions (the statement)
+# A tile unit's proof layer with its Definition's checks is sound through its Flock sessions (the statement)
 
 `Accounting.Guarantees.TS.TileSessionSound`: `Accounting.Guarantees.TS.CheckedSessionSound`'s window, with the layer
 `Accounting.TS.Tile.tileLayer` in place of `checkedLayer`. Its relation is the unit's Definition with its check words
@@ -12,11 +46,12 @@ statement names what the Definition reading takes:
 
 * (a) the `ok` rows are the verifier's, proved from flock-verify's known-content refusal (`Registered.checkKnownAll`)
   as in `Accounting.Guarantees.TS.HeldSessionSound`, not a premise;
-* (b) every drawn unit's view of the words its registered reads carry (`Accounting.TS.Tile.tileView` of `rd`) meets
+* (b) every sampled proof block's view of the words its registered reads carry (`Accounting.TS.Tile.tileView` of `rd`) meets
   the Definition's checks (`TileOk`) at the Definition's own dequant (`Accounting.TS.Lanes.dqOf dqW`), under the named
   premise `Accounting.TS.Tile.TileComputes` (the circuit computes `PouwH1TileZy_v1{TILE}` there, TILE `PouwH1Tile_v1`
-  or `PouwH1Tile_v3`), at sessions whose every circuit port is a port of `own`, what flock-verify's complete check
-  establishes (`Flock.Registered.checkComplete_ok`). That the Definition's `ok = 1` means `TileOk` is proved
+  or `PouwH1Tile_v3`). That every circuit port is a port of `own` is not a hypothesis: `tileLayer`'s acceptance
+  includes flock-verify's complete check (`Flock.Registered.checkComplete`), from which `checkComplete_ok` reads it.
+  That the Definition's `ok = 1` means `TileOk` is proved
   (`Accounting.TS.Tile.tileChecks_of_computes`, which gives `Accounting.Assumptions.TS.TileChecks`), at a `K` the
   tile's EXACT binds at (`32 ∣ K`, `K < 2^17`), which the statement takes of its `K`: the tile verifier pins each
   template's circuit by digest (`PouwCheck.tiles`) and reads no `K` it could refuse, and the served tiles' `K`s are
@@ -27,24 +62,26 @@ so the tile layer's unsound event is inside the checked layer's. It sits in the 
 (`reads_exempt`).
 -/
 
+@[expose] public section
+
 namespace Accounting.Guarantees.TS
 
 open Accounting.TS Accounting.TS.Checked Accounting.TS.Held Accounting.TS.Tile Flock.SoundAtBridge
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
-/-- **A tile unit's proof layer, with its Definition's checks, is sound at `δ` through its C-Flock sessions, fully
+/-- **A tile unit's proof layer, with its Definition's checks, is sound at `δ` through its Flock sessions, fully
 checked.** `CheckedSessionSound`'s window and premises, at the tile layer `tileLayer sess out ok known dq dec right`
-(accepted where flock-verify `--zk --registered` accepts, at the registered file's known content `known x w i`;
-opening the committed rows at the registered reads; its relation `TileRel`), and in addition at every session: every
-port of its circuit is a port of `own` (what `Flock.Registered.checkComplete` establishes, `checkComplete_ok`), the
-known content names the port `ok` with rows each the word `1` (`okRow`), and, at a `K` the tile's EXACT binds at
+(accepted where flock-verify `--zk --registered` accepts, at the registered file's known content `known x w i` and
+under its complete check, `Flock.Registered.checkComplete`: every port of the circuit is a port of `own`; opening the
+committed rows at the registered reads; its relation `TileRel`), and in addition at every session: the known content
+names the port `ok` with rows each the word `1` (`okRow`), and, at a `K` the tile's EXACT binds at
 (`32 ∣ K`, `K < 2^17`), its circuit computes `PouwH1TileZy_v1{TILE}`'s Definition (`Pouw.H1Zy.tileOk` at TILE's form
 `form` and the dequant's word view `dqW`) on the words `rd x w i` reads from the registered reads
 (`Accounting.TS.Tile.TileComputes`). Then the layer, at the Definition's dequant `dqOf dqW` and the view of those words
 (`tileView`), accepts only where flock-verify accepts (`AcceptedLive`), and each proof is accepted with committed rows
 that fail `TileRel` on the path with probability at most `δ`: outside `δ` the rows are one assignment the circuit's
-evaluation agrees with on every drawn unit, at which every drawn unit's cells have `z = Σ_k a_k b_k` and
+evaluation agrees with on every sampled proof block, at which every sampled proof block's cells have `z = Σ_k a_k b_k` and
 `y = dq [z, s_a, s_b]`, or the registrant's `ok` openings exhibit an explicit SHA-512 collision (`OkColl`). -/
 def TileSessionSound : Prop :=
   ∀ {Ω : Type} [Fintype Ω] {S nπ R C K : ℕ} {P : Type} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
@@ -54,14 +91,11 @@ def TileSessionSound : Prop :=
     (rd : Paths Ω S → Fin S → Fin nπ → (ℕ → ℕ → Option Bool) → ℕ → Pouw.H1Zy.TileIn R C K P)
     (right : Paths Ω S → (Fin S → Fin nπ → ℕ → ℕ → Option Bool) → Prop) (δ : ℝ),
     (∀ x w i, (sess x w i).CR) →
-    Accounting.Assumptions.TS.WindowLaw sess out →
+    Accounting.Assumptions.TS.WindowDesign sess out →
     (∀ x w i, (sess x w i).kd = (sess x w i).n) →
-    (∀ x w i (q q' : Fin (sess x w i).c.ports.size),
-      (sess x w i).c.ports[q].name = (sess x w i).c.ports[q'].name → q = q') →
     (∀ x w i u, (sess x w i).ServedRegistered u) →
     (∀ x w i, (∃ q : Fin (sess x w i).c.ports.size, (sess x w i).c.ports[q].name = ok) ∧
       ∃ pt ∈ (sess x w i).own, pt.name = ok) →
-    (∀ x w i, ∀ p ∈ (sess x w i).c.ports, ∃ r ∈ (sess x w i).own, r.name = p.name) →
     (∀ x w i, ∃ ks, (ok, ks) ∈ known x w i ∧ ∀ r ∈ ks, r.1 = okRow) →
     32 ∣ K → K < 2 ^ 17 →
     (∀ x w i, Accounting.TS.Tile.TileComputes form dqW (sess x w i) ok (rd x w i)) →

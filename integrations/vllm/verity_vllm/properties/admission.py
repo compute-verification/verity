@@ -2,20 +2,20 @@
 body against the pinned production operation, bit-exact, in two halves so the torch venv and the 3.12 verity venv never meet:
 
     # on the pod, in the vLLM venv (torch + the production kernel):
-    verity-vllm properties-admission produce --adapter verity_vllm.program.registry.quarantine.<lane>.<def>_difftest --n 32 --seed 7 --out DIR
+    verity-vllm properties-admission produce --adapter verity_vllm.program.quarantine.<area>.<def>_difftest --n 32 --seed 7 --out DIR
     # on the pod in /workspace/venv-py312 (or on the laptop after copying DIR):
     verity-vllm properties-admission check --adapter <same> --dir DIR --out quarantine.json [--append]
 
-The ADAPTER (lane-written, next to the quarantined definition) is a plain module with three functions and no import of
+The ADAPTER (written next to the quarantined definition) is a plain module with three functions and no import of
 torch at module level:
 
-    SEMANTIC_ID = "<lane>/<Definition>@v1"                        # the versioned identity being admitted
+    SEMANTIC_ID = "<area>/<Definition>@v1"                        # the versioned identity being admitted
     def cases(rng: random.Random, i: int) -> dict:                 # statics + input specs for case i; MUST include the
         return {"statics": {...}, "inputs": [{"shape": [...], "dtype": "bfloat16", "kind": "random|zeros|max|subnormal|alternating"}], "edge": bool}
     def production(statics: dict, inputs: list["torch.Tensor"]) -> list["torch.Tensor"]:   # runs the pinned production op (imports torch inside)
     def spec(statics: dict) -> "SpecializedDefinition":            # the Verity specialization under test (torch-free)
 
-`produce` draws the inputs (uint16/uint32 words -> device tensors), runs `production`, and stores every case's input and
+`produce` samples the inputs (uint16/uint32 words -> device tensors), runs `production`, and stores every case's input and
 output words (`case_<i>/in_<j>.npy`, `out_<k>.npy`, `case.json`).  `check` rebuilds `spec(statics)`, evaluates its body on
 the SAME input words through the Verity evaluator (core `verity.ml.circuits.evaluation.evaluate`) and compares the output encodings
 word for word.  Gate G4 reads the resulting `quarantine.json`: `differential.passed == differential.total > 0` for every

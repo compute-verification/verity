@@ -22,10 +22,10 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_tp_allreduce as BA
-from verity_vllm.program.registry import tp_allreduce as TA
-from verity_vllm.program.registry import tp_allreduce_check as K
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_tp_allreduce as BA
+from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce_check as K
 
 H = 6144
 #: signed zeros, the smallest and largest subnormals, the smallest normals, +-1, the finite maxima, infinities, NaNs
@@ -195,12 +195,26 @@ def test_batch_invariance_routes_every_call_to_pynccl_and_the_tp4_entry_is_keyed
         TA.covered("bi", 8192, "pynccl_comm", 1, **on)
 
 
-def test_the_h200_routes_are_not_keyed_on_a_device_or_transport() -> None:
-    """Every H200 entry covers its calls whatever the caller's GPU and transport, and only at world 8."""
+def test_an_h200_route_is_keyed_on_a_device_only_by_its_node_record() -> None:
+    """Every H200 entry covers its calls whatever the caller's transport, and only at world 8; one no node record keys, whatever
+    the caller's GPU; a node record's, only at its device and its stated tree, and stated none only `UNSTATED_NODE`'s, at its
+    device or one the caller does not name."""
     for c in (c for c in TA.CAPTURED if c.setting in TA.SETTINGS):
-        assert (c.world, c.device, c.transport) == (8, None, None)
-        for device, transport in ((None, None), (("9.0", 132), None), (TA.RTX_PRO_6000, "shm")):
-            assert TA.covered(c.setting, c.N, c.route, c.lo, device=device, transport=transport) is c
+        assert (c.world, c.transport) == (8, None)
+        if c.node is None:
+            assert c.device is None
+            for device, transport in ((None, None), (("9.0", 132), None), (TA.RTX_PRO_6000, "shm")):
+                assert TA.covered(c.setting, c.N, c.route, c.lo, device=device, transport=transport) is c
+        else:
+            trees, ftz = c.node
+            for transport in (None, "shm"):
+                assert TA.covered(c.setting, c.N, c.route, c.lo, device=c.device, transport=transport, trees=trees, ftz=ftz) is c
+            for device in (None, TA.RTX_PRO_6000):
+                assert TA.covered(c.setting, c.N, c.route, c.lo, device=device, trees=trees, ftz=ftz) is None
+            assert TA.covered(c.setting, c.N, c.route, c.lo, device=c.device, trees=trees, ftz=not ftz) is None
+            for device in (None, c.device):
+                assert (TA.covered(c.setting, c.N, c.route, c.lo, device=device) is c) == (c.node == TA.UNSTATED_NODE[1:])
+            assert TA.covered(c.setting, c.N, c.route, c.lo, device=TA.RTX_PRO_6000) is None
         assert TA.covered(c.setting, c.N, c.route, c.lo, world=4) is None
 
 

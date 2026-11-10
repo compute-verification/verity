@@ -175,50 +175,74 @@ def push_targets(store: LocalStore, targets: list[str], *, jobs: int = SYNC_JOBS
 
 
 def pull_targets(store: LocalStore, targets: list[str], *, jobs: int = 1) -> dict:
-    """Fetch the assertions about `targets` that the remote has and this store lacks (one listing per target, `jobs` at once), the
-    reverse of `push_targets`.  A remote file whose content doesn't hash to its name or doesn't validate is left alone and
-    reported in `bad`.
+    """Fetch the assertions about `targets` that the remote has and this store lacks (one listing per target, and the GETs, `jobs`
+    at once), the reverse of `push_targets`.  A remote file whose content doesn't hash to its name or doesn't validate is left
+    alone and reported in `bad`.
         {"pulled": [content hash, ...], "bad": ["<key>: <why>", ...]}"""
     r = store._require_remote()  # noqa: SLF001
     todo = list(dict.fromkeys(targets))
     if jobs > 1 and len(todo) > 1:
         with ThreadPoolExecutor(max_workers=min(jobs, len(todo))) as ex:
-            return _pull(store, r, list(zip(todo, ex.map(lambda t: remote_labels_for(r, t), todo))))
-    return _pull(store, r, ((t, remote_labels_for(r, t)) for t in todo))
+            return _pull(store, r, list(zip(todo, ex.map(lambda t: remote_labels_for(r, t), todo))), jobs=jobs)
+    return _pull(store, r, ((t, remote_labels_for(r, t)) for t in todo), jobs=jobs)
 
 
 def pull_prefix(store: LocalStore, prefix: str) -> dict:
-    """`pull_targets` for every target whose id starts with `prefix` and has assertions on the remote, from one listing of their
-    common key prefix (`pr:12@`: each head of pull request 12).
+    """`pull_prefixes` of one prefix."""
+    return pull_prefixes(store, [prefix])
+
+
+def pull_prefixes(store: LocalStore, prefixes: list[str], *, jobs: int = 1) -> dict:
+    """`pull_targets` for every target whose id starts with one of `prefixes` and has assertions on the remote, from one listing of
+    each prefix's common key prefix (`pr:12@`: each head of pull request 12), and the GETs, `jobs` at once.
         {"pulled": [content hash, ...], "bad": ["<key>: <why>", ...], "targets": [target, ...]}"""
     r = store._require_remote()  # noqa: SLF001
-    d = ids.target_dirname(prefix)
+
+    def listed(prefix: str) -> dict[str, dict[str, str]]:
+        d, out = ids.target_dirname(prefix), {}
+        for k in r.list(f"{PREFIX}{d}"):
+            if m := KEY_RE.match(k):
+                out.setdefault(prefix + m.group(1)[len(d):], {})[m.group(2)] = k
+        return out
+
+    todo = list(dict.fromkeys(prefixes))
     listing: dict[str, dict[str, str]] = {}
-    for k in r.list(f"{PREFIX}{d}"):
-        if m := KEY_RE.match(k):
-            listing.setdefault(prefix + m.group(1)[len(d):], {})[m.group(2)] = k
-    return _pull(store, r, sorted(listing.items())) | {"targets": sorted(listing)}
+    with ThreadPoolExecutor(max_workers=max(1, min(jobs, len(todo)))) as ex:
+        for got in ex.map(listed, todo):
+            listing.update(got)
+    return _pull(store, r, sorted(listing.items()), jobs=jobs) | {"targets": sorted(listing)}
 
 
-def _pull(store: LocalStore, r: Remote, listings: Iterable[tuple[str, dict[str, str]]]) -> dict:
-    """Fetch each assertion of `listings` ((target, {content hash: key}) pairs from the remote) that this store lacks."""
+def _pull(store: LocalStore, r: Remote, listings: Iterable[tuple[str, dict[str, str]]], jobs: int = 1) -> dict:
+    """Fetch each assertion of `listings` ((target, {content hash: key}) pairs from the remote) that this store lacks, `jobs`
+    GETs at once; the calling thread checks and writes each."""
     rep: dict = {"pulled": [], "bad": []}
     scratch = store.root / "scratch"
     scratch.mkdir(parents=True, exist_ok=True)
+    todo: list[tuple[str, str, str]] = []
     for t, theirs in listings:
         mine = local_labels_for(store, t)
-        for h, key in sorted(theirs.items()):
-            if h in mine:
-                continue
-            tmp = scratch / f".label-pull-{h}-{os.getpid()}"
+        todo += [(t, h, key) for h, key in sorted(theirs.items()) if h not in mine]
+
+    def get(item: tuple[str, str, str]) -> bytes | Exception:
+        tmp = scratch / f".label-pull-{item[1]}-{os.getpid()}-{threading.get_ident()}"
+        try:
+            r.get(item[2], tmp)
+            return tmp.read_bytes()
+        except (KeyError, ValueError) as e:                  # reported as bad, as a bad file is; anything else raises
+            return e
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    with ThreadPoolExecutor(max_workers=max(1, min(jobs, len(todo)))) as ex:
+        for (t, h, key), data in zip(todo, ex.map(get, todo)):
             try:
-                r.get(key, tmp)
-                lab = parse_label_bytes(tmp.read_bytes())
+                if isinstance(data, Exception):
+                    raise data
+                lab = parse_label_bytes(data)
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 rep["bad"].append(f"{key}: {type(e).__name__}: {e}")
                 continue
-            finally:
-                tmp.unlink(missing_ok=True)
             if label_hash(lab) != h or lab.target != t:
                 rep["bad"].append(f"{key}: content hashes to {label_hash(lab)} for {lab.target}, not its name")
                 continue

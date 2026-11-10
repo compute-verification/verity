@@ -1,27 +1,56 @@
+module
+
+public import Properties.Nci.Desc.Verdict
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Nci.Verdict
-import Properties.Proofs.Nci.DescVerdict
+import Proofs.Properties.Nci.Agrees
+import Proofs.Properties.Nci.DescVerdict
 
 /-!
-# A verdict of compliance of the description-sized check carries the thread bound, from `DescAgrees`
+# A verdict of compliance of the description-sized check carries the thread bound
 
-Each thread bound of `Properties.NciDesc.Verdict`, from `DescAgrees` and the bound of a verdict of `NciCheck.evaluate`
-(`Throttles` and its forms, `Proofs.Nci.Verdict`), through `Properties.Proofs.Nci.DescVerdict`. They take `DescAgrees` as
-a hypothesis while its proof rests on one open statement, `Novel.ReadsExact` (`descAgrees_of_readsExact`,
-`Properties.Proofs.Nci.Agrees`).
+Each thread bound of `Properties.Nci.Desc.Verdict`, from `DescAgrees` (`SecurityProofs.DescAgrees`,
+`Proofs.Properties.Nci.Agrees`) and the bound of a verdict of `NciCheck.evaluate` (`Throttles` and its forms,
+`Proofs.Nci.Verdict`), through `Proofs.Properties.Nci.DescVerdict`.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs
 
-theorem descThrottles_of_descAgrees (h : Properties.DescAgrees) : Properties.DescThrottles :=
-  descThrottles_of h Throttles
+/-- **A verdict of compliance of the description-sized check throttles every threaded reference circuit the declaration
+contains, if its weights are incompressible and its θ registered** (`WeightsIncompressible`,
+`ThetaRegistered`). -/
+theorem DescThrottles : Properties.DescThrottles :=
+  descThrottles_of DescAgrees Throttles
 
-theorem descThrottlesDark_of_descAgrees (h : Properties.DescAgrees) : Properties.DescThrottlesDark :=
-  descThrottlesDark_of h ThrottlesDark
+/-- **A verdict of compliance of the description-sized check puts counted multiplications off the books in dark
+gates**, for every threaded reference circuit the declaration contains partly, if its weights are incompressible and its
+θ registered (`WeightsIncompressible`, `ThetaRegistered`). -/
+theorem DescThrottlesDark : Properties.DescThrottlesDark :=
+  descThrottlesDark_of DescAgrees ThrottlesDark
 
-theorem descThrottlesSlots_of_descAgrees (h : Properties.DescAgrees) : Properties.DescThrottlesSlots :=
-  descThrottlesSlots_of h ThrottlesSlots
+/-- **`DescThrottles` per parameter slot** (`WeightsIncompressibleSlots`, `ThetaRegistered`). -/
+theorem DescThrottlesSlots : Properties.DescThrottlesSlots :=
+  descThrottlesSlots_of DescAgrees ThrottlesSlots
 
-theorem descThrottlesDarkSlots_of_descAgrees (h : Properties.DescAgrees) : Properties.DescThrottlesDarkSlots :=
-  descThrottlesDarkSlots_of h ThrottlesDarkSlots
+/-- **`DescThrottlesDark` per parameter slot** (`WeightsIncompressibleSlots`, `ThetaRegistered`). -/
+theorem DescThrottlesDarkSlots : Properties.DescThrottlesDarkSlots :=
+  descThrottlesDarkSlots_of DescAgrees ThrottlesDarkSlots
 
 end NciCheck.Properties.SecurityProofs

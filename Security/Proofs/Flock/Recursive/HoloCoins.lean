@@ -1,6 +1,21 @@
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.C3.HoloValues.Shape
-import Proofs.Flock.Recursive.StageKinds
+module
+
+public import Proofs.Flock.C3.HoloValues.Shape
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.Recursive.StageKinds
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # Candidate 3's coin types
@@ -10,6 +25,8 @@ link points, then the coins of the stages' shapes in the run's order (both reps,
 Ligerito on R: `holoKinds`), as `StageCoins` lays the history's coins out. Every coin of those shapes is finite and has
 an element (`coinsFin_holoKinds`), so each coin type is a `Fintype` with an element.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

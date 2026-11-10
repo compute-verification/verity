@@ -1,6 +1,45 @@
-import Proofs.Flock.Claims.KS.ZkLock
+module
+
+public import Proofs.Flock.Claims.KS.ZkLock
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # The masked simulator's rounds are the record's
@@ -21,6 +60,8 @@ With the abort (`zkSimAbortAt`), masked KS and the recursion's `zk_KSFlockJR` ch
 view's clash alone (`zk_KS_of_fork`, `zk_tableBoundJOnAccR_of_fork`, `zk_KSFlock_of_fork`).
 -/
 
+@[expose] public section
+
 namespace FlockDeploy.KS
 
 open Flock Transcript FlockSoundness FlockSoundness.Discharge.Tables Claims.Bridge.Live
@@ -34,7 +75,7 @@ local notation "𝔽" => FlockLevel3.GF128
 coin's bytes. -/
 theorem zk_stepWith_dep {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (V' : Claims.Verifier Coin)
     (x : Claims.Msg) (ω : Ω) (c : ℕ → Coin) (hV : Claims.Bridge.AnswersCoin H V' x Coin.bytes) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       hist = zkDepHist H P x ω c as.length → as = (List.range as.length).map (zkDepMsg H P x ω c) →
       t.msgs.map Prod.fst = as →
       (Claims.stepWith H P x ω (fun as => V'.next x as ((List.range as.length).map c)) n hist as t).msgs.map
@@ -204,7 +245,7 @@ theorem zk_check_true {b : Bool} {why : String} {u : Unit} (h : Record.check b w
   · cases h
 
 /-- **The verifier's decoder reads only rounds of `1` to `65536` coins** (S12). -/
-theorem zk_decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
+theorem zk_decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 := by
   unfold Record.decodeWith Record.decodeJWith at h

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.BoundRun
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRun
 
 /-!
 # The inner view accepts, at V*'s bound layout (option (d))
@@ -18,13 +20,12 @@ So `VStarB.PartChecksB` gives each part's check on the readers' messages, and `V
 acceptance. With `Refuses` and `ReadersTrue`, the three shapes give `InnerAcceptsColl` (`RecDeploy.innerAcceptsColl_bound`).
 -/
 
+@[expose] public section
+
 namespace Claims.Recursion.VStarB
 
 open Claims
 open Claims.Recursion.VStar (readAt)
-
-theorem readAt_length (w : Flock.Wit) (ps : List ℕ) : (readAt w ps).length = (ps.length + 7) / 8 := by
-  simp [readAt, VStar.bytesOf]
 
 theorem readForms_length (w : Flock.Wit) (fs : List _root_.Flock.HmNets.Lin) :
     (readForms w fs).length = (fs.length + 7) / 8 := by
@@ -212,8 +213,8 @@ theorem vstarAccepts_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recurs
       rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
         Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
       exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
-    · intro i hi1 _ _
-      exact (hrd i (by omega)).trans (hshs.2 i hi1).symm
+    · exact Claims.Recursion.VStarB.LayoutB.cmtAgrees_of_eq fun i hi1 _ =>
+        (hrd i (by omega)).trans (hshs.2 i hi1).symm
     · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
   rcases hDec x st hst hf (Claims.coinSeq r) ws ho.1 htrue hchk with hd | hd
   · exact Or.inl hd

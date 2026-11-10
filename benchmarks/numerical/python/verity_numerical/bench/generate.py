@@ -1,131 +1,47 @@
-"""Synthetic input sets from the IR: seeded draws of a subcircuit's inputs, each with the output the IR evaluator computes.
+"""The bench's synthetic input sets (`verity_flock.synthetic`): named suites of them, and registering one in the evidence store.
 
     python -m verity_numerical.bench.generate --list
     python -m verity_numerical.bench.generate --template gemm-coordinate --param K=2048 --param semantics=sm80.mma.m16n8k16.bf16 \\
         --n 4096 --seed 20260926 --out DIR [--procs P] [--register]
     python -m verity_numerical.bench.generate --subcircuit rope-head/d64/neox-bf16 --n 1024 --seed 1 --out DIR
 
-The key is ``verity.ml.randomness.derive(SOURCE, DOMAIN, {"subcircuit": id, "seed": seed})``; draw ``j`` is
-``Subcircuit.draw(key, j)`` (``templates``: every port's words from the counter stream at ``(port, j)``), evaluated by
-``verity.ml.circuits.evaluation.evaluate_batch`` on the subcircuit's IR target.  A draw is admitted when its outputs are inside the
-subcircuit's domain (``Subcircuit.admitted``: every BF16 output word finite), and instance ``i`` is the ``i``-th admitted draw
-(``index.json`` ``sub.draw``), so a larger set extends a smaller one of the same key: the first ``n`` instances are the same.
-The set is written in the captured sets' layout (``input_sets``, schema ``input-set/v1``) under ``<out>/sets/<name>/``, its
-provenance holding the recipe, the Definition's Program digests and the software versions.  ``--register`` puts it in the
+The sets are `verity_flock.synthetic`'s, each with its provenance naming the run that wrote it.  ``--register`` puts it in the
 evidence store as an ``input-set/v1`` artifact (``research data put --tree ... --preserve``) and prints its id.
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
-import platform
 import subprocess
 import sys
-import time
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-import numpy as np
-
-from verity.ml.randomness import Key, derive
-
-from . import input_sets as IS
-from . import templates as TM
-
-SOURCE = b"verity input-set synthetic"
-DOMAIN = "verity/input-sets/synthetic/v1"
-MAX_DRAW_FACTOR = 4
-_SOURCES = ("templates.py", "generate.py", "input_sets.py")
-
-
-def key_for(sub: TM.Subcircuit, seed: int) -> Key:
-    return derive(SOURCE, DOMAIN, {"subcircuit": sub.id, "seed": int(seed)})
-
-
-_CTX: dict[str, Any] = {}
-
-
-def _chunk(lo_hi: tuple[int, int]) -> tuple[list[TM.Draw], dict[str, list[np.ndarray]]]:
-    sub, key = _CTX["sub"], _CTX["key"]
-    draws = [sub.draw(key, j) for j in range(*lo_hi)]
-    outs = sub.evaluate({p.name: [d.inputs[p.name] for d in draws] for p in sub.inputs}, [d.instance_statics for d in draws])
-    return draws, outs
+from verity_flock import input_sets as IS
+from verity_flock import subcircuit_templates as TM
+from verity_flock import synthetic as SY
 
 
 def _versions() -> dict[str, Any]:
-    here = Path(__file__).resolve().parent
     head = os.environ.get("RESEARCH_SOURCE_COMMIT")
     if not head:
         try:
-            head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=here, capture_output=True, text=True, timeout=10).stdout.strip() or None
+            head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent, capture_output=True, text=True,
+                                  timeout=10).stdout.strip() or None
         except (OSError, subprocess.SubprocessError):
             head = None
-    return {"git_head": head, "python": platform.python_version(), "numpy": np.__version__,
-            "source_sha256": {f"verity_numerical/bench/{f}": hashlib.sha256((here / f).read_bytes()).hexdigest() for f in _SOURCES}}
+    return SY.versions(head)
 
 
 def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: int = 1, chunk: int = 64,
              provenance: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """Write the first ``n`` admitted draws of ``sub`` under key (``sub``, ``seed``) as set ``<out>/sets/<sub.set_name>``; returns the
-    summary (``input_sets.write``'s, plus the path, draws and rejected draws)."""
-    if n <= 0:
-        raise ValueError("n must be positive")
-    key = key_for(sub, seed)
-    t0 = time.time()
-    kept: list[tuple[int, TM.Draw, dict[str, np.ndarray]]] = []
-    rejected: list[int] = []
-    limit = MAX_DRAW_FACTOR * n + 64
-    _CTX.update(sub=sub, key=key)
-    pool = ProcessPoolExecutor(max_workers=procs, mp_context=__import__("multiprocessing").get_context("fork")) if procs > 1 else None
-    try:
-        j = 0
-        while len(kept) < n:
-            if j >= limit:
-                raise RuntimeError(f"{sub.id}: {len(kept)} of {n} draws admitted after {j} (the sampler leaves the domain too often)")
-            need = (n - len(kept)) + (n - len(kept)) // 8 + 1
-            per = chunk if pool is None else max(1, min(chunk, -(-need // procs)))
-            span = max(per, need) if pool is None else per * procs
-            ranges = [(a, min(j + span, a + per)) for a in range(j, j + span, per)]
-            results = list(pool.map(_chunk, ranges)) if pool is not None else [_chunk(r) for r in ranges]
-            for (a, _b), (draws, outs) in zip(ranges, results):
-                ok = sub.admitted(outs)
-                for r, d in enumerate(draws):
-                    if len(kept) >= n:
-                        break
-                    if ok[r]:
-                        kept.append((a + r, d, {p.name: outs[p.name][r] for p in sub.outputs}))
-                    else:
-                        rejected.append(a + r)
-            j += span
-    finally:
-        _CTX.clear()
-        if pool is not None:
-            pool.shutdown()
-    draws_used = kept[-1][0] + 1
-    rejected = [r for r in rejected if r < draws_used]
-    ports: dict[str, list[np.ndarray]] = {p.name: [d.inputs[p.name] for _j, d, _o in kept] for p in sub.inputs}
-    ports.update({p.name: [o[p.name] for _j, _d, o in kept] for p in sub.outputs})
-    rows = [[i, None, None, None, None, None, None, "synthetic", {"draw": jj, **d.sub}] for i, (jj, d, _o) in enumerate(kept)]
-    recipe = {"generator": "verity_numerical.bench.generate", "template": sub.template.id, "subcircuit": sub.id, "parameters": sub.params,
-              "seed": int(seed), "n": n, "key": f"verity.ml.randomness.derive({SOURCE!r}, {DOMAIN!r}, {{'subcircuit': {sub.id!r}, 'seed': {int(seed)}}})",
-              "draw": "templates.Subcircuit.draw(key, j): each port's words from key.stream((port, j), 4 bytes per word)",
-              "samplers": sub.recipe, "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",
-              "draws": draws_used, "rejected": len(rejected), "rejected_draws": rejected[:64]}
-    prov = {k: None for k in IS.PROVENANCE_FIELDS}
-    prov.update({"source": "synthetic", "recipe": recipe, "research_run": os.environ.get("RESEARCH_RUN_ID"),
-                 "program_digests": sub.program_digests([d.instance_statics for _j, d, _o in kept]),
-                 "selection": "the first n admitted draws, in draw order", "versions": _versions()})
-    prov.update(provenance or {})
-    summary = IS.write(Path(out) / "sets", sub.set_name, sub.relation, ports, rows, prov, schema=IS.SCHEMA)
-    summary.update(path=str(Path(out) / "sets" / sub.set_name), subcircuit=sub.id, draws=draws_used, rejected=len(rejected),
-                   seconds=round(time.time() - t0, 3))
-    return summary
+    """`verity_flock.synthetic.generate`, its provenance naming the run this runs under and its source commit."""
+    run = {"research_run": os.environ.get("RESEARCH_RUN_ID"), "versions": _versions()}
+    return SY.generate(sub, n, seed, out, procs=procs, chunk=chunk, provenance={**run, **(provenance or {})})
 
 
-#: Named suites: (template, parameters, n).  ``101``: row #101's captured subcircuits (Llama-3.2-1B), plus its GEMMs on Hopper wgmma.
+#: Named suites: (template, parameters, n).  ``101``: row 101's captured subcircuits (Llama-3.2-1B), plus its GEMMs on Hopper wgmma.
 SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
     "101": [("gemm-coordinate", {"K": 2048, "semantics": "sm80.mma.m16n8k16.bf16"}, 4096),
             ("gemm-coordinate", {"K": 8192, "semantics": "sm80.mma.m16n8k16.bf16"}, 4096),
@@ -137,13 +53,21 @@ SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
             ("rmsnorm-triton", {"N": 2048, "EPS": 1e-5}, 256),
             ("silu-mul", {"I": 8192}, 256),
             ("gumbel-top-p-token-select", {"V": 128256}, 32)],
-    #: The FP8 GEMM lines at vLLM's reduction lengths: the captured #101 sizes (6,272 at K = 2048, 1,920 at K = 8192) and the
+    #: The FP8 GEMM lines at vLLM's reduction lengths: the captured row 101 sizes (6,272 at K = 2048, 1,920 at K = 8192) and the
     #: largest batches the RTX 4090's 24 GB carried (16,384 and 8,192); each smaller set is the larger one's prefix.
     "fp8": [("gemm-coordinate", {"K": K, "semantics": sem}, n)
             for sem in ("sm89.mma.m16n8k32.e4m3", "sm90.wgmma.m64n8k32.e4m3")
             for K, sizes in ((2048, (6272, 16384)), (8192, (1920, 8192))) for n in sizes],
     #: NVFP4 on the RTX 5090 at K = 1536 for the two Flock cells (Fp4 <= 32,768 and ShaFp4 <= 16,384 VUs per proof); 8,192 is the prefix.
     "nvfp4": [("gemm-coordinate", {"K": 1536, "semantics": "sm120.mma.m16n8k64.e2m1.nvf4"}, n) for n in (8192, 16384)],
+    #: The registered compiler's dead-free Definitions a served window samples, at Llama-3.2-1B's shapes (N 2048, D 64) and
+    #: Llama-3.1-8B's (N 4096, D 128): RMSNormTriton_v5, AttentionHead_v18, and TokenSelect_v4's two calls at Llama 3's vocabulary.
+    "dead-free": [("rmsnorm-triton-v5", {"N": 2048, "EPS": 1e-5}, 256),
+                  ("rmsnorm-triton-v5", {"N": 4096, "EPS": 1e-5}, 256),
+                  ("attention-head-v18", {"D": 64, "BN": 128, "T": "1:512"}, 1024),
+                  ("attention-head-v18", {"D": 128, "BN": 64, "T": "1:512"}, 128),
+                  ("token-select-chunk", {"C": 64}, 1024),
+                  ("token-select-combine", {"V": 128256, "C": 64}, 64)],
 }
 
 
@@ -157,13 +81,13 @@ WORKLOAD_ROWS = (39, 57, 60, 67, 73, 74)
 
 
 def workload_suite(rows: tuple[int, ...] = WORKLOAD_ROWS) -> list[tuple[str, dict[str, Any], int]]:
-    """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``benchmarks/census/workloads.json``, ``headline.groups``), in
-    id order; an attention head's T range is its census ``variable_ranges.T``."""
+    """One set per census-bound subcircuit of the workloads of vLLM ``rows`` (``benchmarks/census/workloads.json``: a mix entry's
+    template bound to exactly its parameters), in id order; an attention head's T range is its census ``variable_ranges.T``."""
     from . import census
-    from . import headline as H
 
-    sids = sorted({g["subcircuit"] for w in census.raw("workloads") if (w.get("source") or {}).get("row") in rows
-                   for g in H.groups(w) if g["subcircuit"]})
+    bound = {(s.template, json.dumps(vars(s.parameters), sort_keys=True)): s.id for s in census.SUBCIRCUITS.values()}
+    sids = sorted({sid for w in census.raw("workloads") if (w.get("source") or {}).get("row") in rows for m in w["template_mix"]
+                   if (sid := bound.get((m["subcircuit_template"], json.dumps(m["subcircuit_parameters"] or {}, sort_keys=True))))})
     out = []
     for sid in sids:
         sub = TM.parse_subcircuit_id(sid)

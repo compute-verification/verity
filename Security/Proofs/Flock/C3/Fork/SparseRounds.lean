@@ -1,7 +1,18 @@
-import Proofs.Flock.Soundness.RepSound
-import Proofs.Flock.Soundness.Model.Holo
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.Push
+module
+
+public import Definitions.Flock.Holo
+public import Definitions.Core.Game
+public import Mathlib.Algebra.Polynomial.Degree.Defs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.Rounds
+import Proofs.Flock.Soundness.ZerocheckPhase
+import VCVio.Prelude.Core
 
 /-!
 # The sparse phase's rounds, one coin at a time
@@ -9,7 +20,7 @@ import Mathlib.Tactic.Push
 The two coin bounds `sparse_sound` (`C3/Fork/Sparse.lean`) chains, and the algebra they rest on:
 
 * `value_drawFin_le`: Schwartz–Zippel per `drawFin` coin. A nonzero vector's multilinear extension at `n` fresh coins,
-  drawn one at a time, is zero with probability at most `n/|F|`: each coin folds the lowest bit, and a nonzero pair
+  flipped one at a time, is zero with probability at most `n/|F|`: each coin folds the lowest bit, and a nonzero pair
   `(u(2b), u(2b+1))` folds to zero at one coin at most.
 * `value_degRounds_le`: `degRounds`' round step. A round's polynomial sums to the claim by construction
   (`g(0) + g(1) = claim` in characteristic 2), so on a false claim it differs from the true one, of degree `k + 1` in the
@@ -18,6 +29,8 @@ The two coin bounds `sparse_sound` (`C3/Fork/Sparse.lean`) chains, and the algeb
 `cube G` is `G`'s sum over `{0,1}^n` (bit `j` of `b` is coordinate `j`, as in `eqAt`), and a function of degree one in
 each variable is its multilinear extension (`sum_eqAt_mul`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork.SparseCount
 
@@ -518,7 +531,7 @@ theorem value_degRounds_le [CharP F 2] (k : ℕ) : ∀ (n : ℕ) (G : (Fin n →
       refine value_bind_le_of_forall _ _ _ _ fun c => ?_
       refine value_draw_bind_le _ F _ (fun r => (degPoly claim c).eval r = (∑ b ∈ Finset.range (2 ^ n), P b).eval r)
         _ _ ?_ fun r hr => ?_
-      · refine Game.prCoin_eval_eq_eval_le _ _ (fun hPT => hc ?_) (k + 1) (degPoly_natDegree_le _ _) hTd
+      · refine Verity.Game.prCoin_eval_eq_eval_le _ _ (fun hPT => hc ?_) (k + 1) (degPoly_natDegree_le _ _) hTd
         rw [cube_succ, ← degPoly_sum claim c, hPT, hTe, hTe, Finset.sum_add_distrib]
       · refine (value_bind_le' _ _ _ (fun x => x.2 ≠ G (Fin.cons r x.1)) 0 ?_).trans ?_
         · rintro ⟨rs, out⟩ hx

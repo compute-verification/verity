@@ -1,12 +1,29 @@
-import Proofs.Flock.Recursive.CompileRuns
-import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Recursive.ForkInner
-import Proofs.Flock.Soundness.Assumptions.Recursive
+module
+
+public import Proofs.Flock.Recursive.CompileRuns
+public import Proofs.Flock.Recursive.ForkInner
+public import Proofs.Flock.Recursive.Target
+public import Proofs.Flock.Soundness.Assumptions.Recursive
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.ForkRuns
+import Proofs.Flock.Soundness.Accounting.Numbers
 
 /-!
 # Recursion: the compile gap
 
-`RecursiveSound` at C-Flock's compiled inner protocol (`flockInnerCL`), with the inner protocol's soundness in fork form
+`RecursiveSound` at Flock's compiled inner protocol (`flockInnerCL`), with the inner protocol's soundness in fork form
 and the interactive table's error as its inner term. Every declaration is proved.
 
 * `ClashCL`, `clashPickCL`: two runs of the compiled table that clash (either run self-clashes, `SelfClashL`, or the two
@@ -25,6 +42,8 @@ and the interactive table's error as its inner term. Every declaration is proved
   V*'s bridge as VBridge G (`vbridge_compiled`) concludes it, the inner fork, and the inner term the table's error;
   `recursive_sound_compiled_fast100` at `2^-205`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -74,7 +93,7 @@ noncomputable def clashPickCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle
       ClashCL H E Lf sch o o')
     fun ⟨_, _, _, _, hc⟩ => hc.collision
 
-/-- **Gap 1, the compile lemma: C-Flock's compiled inner protocol is sound in fork form, at the interactive table's
+/-- **Gap 1, the compile lemma: Flock's compiled inner protocol is sound in fork form, at the interactive table's
 error.** On every hidden template of the class whose statement no witness satisfies, for every `G` and every prover of
 `flockInnerCL`: two continuations of the prover's own strategy after some round's message, both of whose transcripts
 satisfy `G`, play the compiled table to outcomes that clash (a collision of `H`), or the compiled table accepts a
@@ -152,7 +171,7 @@ noncomputable def decodedV (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂
     (t : List (Cm × I.Coin)) (o : Reg₂ × VRec Vs Reg' dg N) : List (I.Msg × I.Coin) :=
   (wmsg (layers (zs R ω t o.1) dg N k Rw o.2)).zip (t.map Prod.snd)
 
-/-- **An inner fork of the recursive prover's own runs**: at some draw `ω` and round `i < r`, two continuations of `σ`
+/-- **An inner fork of the recursive prover's own runs**: at some sample `ω` and round `i < r`, two continuations of `σ`
 after its round-`i` commitment, each run through V*'s outer proof at the leaf it reaches, whose decoded inner transcripts
 (`decodedV`) `pick` reads, on the hidden statement at `ω`, as a collision of `H` at an outcome the fork reaches. -/
 def InnerForkRec (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
@@ -221,7 +240,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : Law n} {Reg : Type} {Cm : Type}
 
-/-- **The recursive audit is sound at C-Flock's compiled inner protocol.** `RecursiveSound` at `I := flockInnerCL`
+/-- **The recursive audit is sound at Flock's compiled inner protocol.** `RecursiveSound` at `I := flockInnerCL`
 (the compiled table on the class's hidden statements, the schedule `(T, CT)` with live coins), V*'s bridge as VBridge G
 (`vbridge_compiled`) concludes it: a registrant fork, a round fork, a session fork, an inner fork of `σ`'s own runs whose decoded
 transcripts play the compiled table to outcomes that clash (`InnerForkRec` at `clashPickCL`), or the audit accepts a

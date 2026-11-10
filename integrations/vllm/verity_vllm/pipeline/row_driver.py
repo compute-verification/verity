@@ -27,12 +27,14 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_target
+from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_path, row_target
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program import prefix_plan as PP
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
+#: A row's stages as research Attempts (`row stage|chain|shed`), loaded by name (`config.run_store`): it runs the run store.
+RESEARCH = "verity_vllm.pipeline.research"
 SIGNUM = {"TERM": 15, "INT": 2, "HUP": 1}
 SHARED_JIT = ("TRITON_CACHE_DIR", "VLLM_CACHE_ROOT")
 _NUM = re.compile(r"^-?[0-9]+(\.[0-9]+)?$")
@@ -166,7 +168,7 @@ class Row:
         self.py = env.py
         self.py312 = env.py312 or env.py
         self.d = f"{env.sweep_dir}/{row}"
-        self.wl = f"workloads/{row}.json"
+        self.wl = row_path(row)
         self.timeline = env.timeline or f"{self.d}/timeline.jsonl"
         self.child_env: dict[str, str] = {}
         self._running: set[int] = set()

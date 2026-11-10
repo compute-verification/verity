@@ -1,8 +1,8 @@
-"""Red-team phase 12's target 3 on the end-to-end report: on a compact run the I/O tie holds each response's records to
+"""The compact finish on the end-to-end report: on a compact run the I/O tie holds each response's records to
 its sampled ids (`negatives.tie_run`'s ``finish``, `active.compact_finish_violations`), and the report requires it of
 the honest run (`chain.TIE_REQUIRED`). The runs are the gate's own compact rehearsal (network_traces' `gate_compact`:
 `certifier-rehearse --traffic varied --compact 8`, honest and token, against one endpoint), tied to the endpoint's
-`requests.jsonl` with IO-TIE's parts all holding (`HOLDS`, a stand-in), so the finish alone decides.
+`requests.jsonl` with `io_tie`'s parts all holding (`HOLDS`, a stand-in), so the finish alone decides.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def _parse(cell: bytes):
     return SimpleNamespace(data=kind == 1, stream=q, id=x) if kind in (0, 1) else None
 
 
-#: what `negatives.tie_run` calls of IO-TIE (`io_tie`), every part of its `reference_parts` holding: a data cell its
+#: what `negatives.tie_run` calls of `io_tie`, every part of its `reference_parts` holding: a data cell its
 #: kind, stream and id, a pad all zero
 HOLDS = SimpleNamespace(
     pad_cell=bytes, data_cell=lambda x, q, B: struct.pack(">BII", 1, q, x).ljust(B, b"\0"), parse_cell=_parse,
@@ -67,5 +67,6 @@ def test_the_gates_compact_token_run_fails_the_reports_tie_by_its_finish_and_its
     assert verdicts == {"honest": ("accepted", [], True, []),
                         "token": ("refused", [], False, ["the I/O tie didn't accept the honest run"])}
     tie_run = NG.tie_run
-    monkeypatch.setattr(NG, "tie_run", lambda run, ids: {k: v for k, v in tie_run(run, ids).items() if k != "finish"})
+    monkeypatch.setattr(NG, "tie_run", lambda run, ids, aborted=(): {
+        k: v for k, v in tie_run(run, ids, aborted=aborted).items() if k != "finish"})
     assert chain.tie_gate(chain.tie({"honest": got["honest"]["dir"]}, None, ids)) == [chain.TIE_REQUIRED["finish"]]

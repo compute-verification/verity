@@ -1,5 +1,11 @@
-import Models.Pouw.Assumptions.Dimension.H100Frag
-import Proofs.Pouw.Dimension.H100DenseProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Frag
+public import Proofs.Pouw.Dimension.H100DenseProofs
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.H100Proofs
 
 /-!
 # Computed fragments in the k8 lemma: proofs
@@ -10,6 +16,8 @@ import Proofs.Pouw.Dimension.H100DenseProofs
 * **The counterexample** (`fragShareGain`): `fragProg m n` writes the sum of the coordinates once, as an `other`
   register, and then `(i + 1)` times it with one cheap instruction each.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

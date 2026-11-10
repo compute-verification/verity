@@ -1,5 +1,5 @@
-"""Chunked-prefill column (window 2026-09-17): the `--variant chunked=<N>` workload variant, its V1 schedule simulation, and the
-prefill-chunk / token-step attribution of `verity_vllm.observe.chunks` on stub engines with vLLM V1's shape (one-iteration
+"""Chunked-prefill column: the `--variant chunked=<N>` workload variant, its V1 schedule simulation, and the
+prefill-chunk / token-step attribution of `verity_vllm.engine.chunks` on stub engines with vLLM V1's shape (one-iteration
 output lag, no output at a partial-prefill step, token budget shared running-first).  Torch-free."""
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.engine import arrivals
-from verity_vllm.observe import chunks as CA
+from verity_vllm.engine import chunks as CA
 from verity_vllm.pipeline import coverage_workloads as gw
 from tests.pipeline.test_coverage_workloads import _LaggedStubEngine, _Out
 
 REPO = Path(__file__).resolve().parents[2]
 PROF = REPO / "workloads"
 # which `run_requests_arrivals` is present: the original loop measures the output lag from the first returned output (wrong under
-# chunked prefill; `attribute()` corrects it), `lane/coverage`'s (integ, 22:12Z) derives the forwards from the scheduler / clamps
+# chunked prefill; `attribute()` corrects it), the current one derives the forwards from the scheduler / clamps
 # the lag and exposes `scheduler_of`; the attribution's RESULT is the same on both, only the `corrections` record differs
 _OLD_LOOP = not hasattr(arrivals, "scheduler_of")
 
@@ -53,7 +53,7 @@ def test_chunked_schedule_of_the_b1_c256_draw():
 
 
 def test_chunked_schedule_reproduces_the_ov_batch_chunked_200p_shape():
-    """b0_chunked_200p (ov-batch lane, real run): request 0 (7 tokens, 8 out) decodes while request 1's 200-token prompt is prefilled
+    """b0_chunked_200p (a real run): request 0 (7 tokens, 8 out) decodes while request 1's 200-token prompt is prefilled
     in chunks 57 + 63 + 63 + 17; request 1's first token at step 3; 15 engine steps."""
     reqs = [{"prompt_len": 7, "max_tokens": 8, "arrive_step": 0}, {"prompt_len": 200, "max_tokens": 12, "arrive_step": 0}]
     sim = gw.simulate_schedule_chunked(reqs, 64)
@@ -224,7 +224,7 @@ def test_b1_chunked_prefill_three_chunks_and_the_lag_correction():
         assert c["loop"] == {"engine_steps": 15, "output_lag_steps": 3, "requests": {"x": {"arrive_step_realized": 0, "first_step": 0, "finish_step": 14}}}
         assert c["corrected"] == {"engine_steps": 17, "output_lag_steps": 1}
     else:
-        assert c is None, c                    # lane/coverage's loop derives the forwards itself and agrees: nothing to correct
+        assert c is None, c                    # the current loop derives the forwards itself and agrees: nothing to correct
     # every existing key is still there
     for k in ("arrive_step", "arrive_step_realized", "first_step", "finish_step", "finish_reason", "n_generated", "admit_iter", "finish_iter"):
         assert k in rec
@@ -299,7 +299,7 @@ def test_unchunked_lagged_engine_records_one_chunk_per_request_and_consecutive_t
 
 
 def test_an_idle_gap_between_arrivals_does_not_inflate_the_corrected_lag():
-    """integ's note (22:12Z): with staggered arrivals the loop drains the finished batch (a no-forward iteration), then admits the
+    """With staggered arrivals the loop drains the finished batch (a no-forward iteration), then admits the
     next arrival at once; `iterations - forwards` counts every drain and would say lag 2 here.  The lag is per request
     finish iteration - last advancing iteration (1), and first/finish steps come from the advancing forwards themselves."""
     eng = _ChunkedLaggedStubEngine(64)
@@ -367,7 +367,7 @@ def test_vllm_adapter_run_requests_carries_the_chunk_record():
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------
-# [rev F-r17-16 / R17-1] async_scheduling=False (LAG 0): step() returns THIS forward's outputs and frees the finishing request inside
+# async_scheduling=False (LAG 0): step() returns THIS forward's outputs and frees the finishing request inside
 # step(), BEFORE the collector's post-step scheduler snapshot -- its last forward is invisible to the schedule deltas, last_adv one early,
 # the derived lag 1 for a true 0.  exec r17_2216 (the first sync record): attribute() rewrote engine_steps 11 -> 10, output_lag_steps
 # 0 -> 1, finish_step 10 -> 9 and GM-01 G6 failed the record against its own tokens.  The loop's values must stand.
@@ -434,7 +434,7 @@ def test_f_r17_16_a_sync_record_keeps_the_loops_finish_step_when_the_derived_lag
     assert c is not None and c["applied"] is False and c["corrected"]["output_lag_steps"] == 1 and c["corrected"]["engine_steps"] == 10
     assert c["corrected"]["requests"]["r0"]["finish_step"] == 9 and "NOT APPLIED" in c["reason"]
     assert timing["engine_steps"] == 11 and timing["output_lag_steps"] == 0 and timing["requests"]["r0"]["finish_step"] == 10
-    assert not rep["consistent"] and any("contradicts the resolved async_scheduling LAG 0" in p and "F-r17-16" in p for p in rep["problems"])
+    assert not rep["consistent"] and any("contradicts the resolved async_scheduling LAG 0" in p and p.endswith("finish_step values stand") for p in rep["problems"])
     # the served tokens are attributed with the loop's forward map: 11 token-producing forwards 0..10, the last = finish_step
     assert timing["requests"]["r0"]["token_steps"] == list(range(11)) and timing["requests"]["r0"]["first_token_step"] == 0
 
@@ -444,7 +444,7 @@ def test_f_r17_16_without_a_resolved_lag_the_same_record_reverts_the_correction_
     c = rep["corrections"]
     assert c is not None and c["applied"] is False and "REVERTED" in c["reason"]
     assert timing["engine_steps"] == 11 and timing["output_lag_steps"] == 0 and timing["requests"]["r0"]["finish_step"] == 10
-    assert not rep["consistent"] and rep["problems"][0].startswith("scheduler-state correction reverted") and "F-r17-16" in rep["problems"][0]
+    assert not rep["consistent"] and rep["problems"][0].startswith("scheduler-state correction reverted") and rep["problems"][0].endswith("step fields stand")
 
 
 def test_f_r17_16_an_async_record_with_the_matching_resolved_lag_is_unchanged():

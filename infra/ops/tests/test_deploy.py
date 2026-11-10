@@ -41,8 +41,10 @@ def local(node: str, argv: list[str], stdin: bytes | None) -> subprocess.Complet
 
 
 @pytest.fixture
-def world(tmp_path):
+def world(tmp_path, monkeypatch):
     origin, repo, node = tmp_path / "origin.git", tmp_path / "repo", tmp_path / "node"
+    (tmp_path / "certs").mkdir()
+    monkeypatch.setattr(deploy, "CERTS", str(tmp_path / "certs"))       # this machine's own trust store is no fixture
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
     subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
     _git(repo, "remote", "add", "origin", str(origin))
@@ -142,8 +144,8 @@ def test_a_process_that_started_before_its_file_was_installed_needs_a_restart(wo
 
 
 def test_a_file_installed_from_a_commit_main_has_since_merged_and_changed_is_stale_not_ahead(world, monkeypatch):
-    """Node 1's custody tree ran a store/local.py from 6 Oct that drift called `ahead` (its record named the commit) for two days
-    after main had merged that commit and changed the file (#1402), because the stale search reads only main's last HISTORY
+    """Node 1's custody tree ran an old store/local.py that drift called `ahead` (its record named the commit) for two days
+    after main had merged that commit and changed the file, because the stale search reads only main's last HISTORY
     commits and the record was taken at its word."""
     node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
     deploy.install(n, "origin/fix", "lane-x", [str(node / "bin" / "c.py")], local, apply=True, repo=repo)
@@ -358,6 +360,19 @@ def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsy
     assert "no node 'zz'" in err and err.count("research deploy: --node is now --on") == 1
 
 
+def test_a_trust_store_that_holds_a_distrusted_root_is_drift_until_the_upgrade_removes_it(world, capsys):
+    n, certs = world["nodes"]["n"], Path(deploy.CERTS)
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
+    (world["node"] / "bin" / "unit.service").write_text("[Unit]\n")
+    (certs / "ISRG_Root_X1.pem").write_text("kept\n")
+    (certs / "emSign_ECC_Root_CA_-_G3.pem").write_text("distrusted\n")
+    rep = deploy.drift(n, "origin/main", local, world["repo"])
+    assert rep["distrusted"] == ["emSign_ECC_Root_CA_-_G3.pem"] and not deploy.clean(rep)
+    assert "root     " in deploy.render("n", "origin/main", rep) and "--only-upgrade ca-certificates" in deploy.render("n", "origin/main", rep)
+    (certs / "emSign_ECC_Root_CA_-_G3.pem").unlink()
+    assert deploy.clean(deploy.drift(n, "origin/main", local, world["repo"]))
+
+
 def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_is_an_error(world, capsys):
     def down(stderr: bytes):
         return lambda node, argv, stdin: subprocess.CompletedProcess(argv, 255, b"", stderr)
@@ -383,7 +398,7 @@ def test_an_admin_only_node_is_read_only_when_named(world, capsys):
 
 
 def test_a_node_no_machine_entry_names_is_that_nodes_error_not_the_whole_drift(world, monkeypatch, capsys):
-    """A node added to deploy.toml before its VM is registered (vy-auditor-1, 21 Oct) failed every relay drift with Refused."""
+    """A node added to deploy.toml before its VM is registered failed every relay drift with Refused."""
     from research import remote
 
     def unknown(name, project):
@@ -392,6 +407,20 @@ def test_a_node_no_machine_entry_names_is_that_nodes_error_not_the_whole_drift(w
     assert deploy.main(["drift", "--json", "--no-fetch"], run=deploy.ssh_runner(), manifest=world["manifest"],
                        repo=world["repo"]) == 1
     assert "is not in machines.toml" in json.loads(capsys.readouterr().out)["n"]["error"]
+
+
+def test_a_released_machine_is_unreachable_not_the_drift_monitors_error(world, monkeypatch, tmp_path, capsys):
+    """Released machines (no host) failed every relay drift for hours, though a stopped VM's are skipped."""
+    from research import remote
+    from research.pods import registry
+
+    def refused(name, project):
+        raise remote.Refused(f"machine {name!r} refused: {name}.toml: host None is not a host name or address")
+    (tmp_path / "n.toml").write_text('provider = "ssh"\nreleased_host = "10.0.0.1"\n')
+    monkeypatch.setattr(remote, "resolve_machine", refused)
+    monkeypatch.setattr(registry, "registry_dir", lambda *_a, **_k: tmp_path)
+    deploy.main(["drift", "--json", "--no-fetch"], run=deploy.ssh_runner(), manifest=world["manifest"], repo=world["repo"])
+    assert json.loads(capsys.readouterr().out)["n"]["unreachable"] is True
 
 
 def test_code_running_from_a_tree_without_history_reads_and_fetches_every_branch_of_the_clone_it_is_given(world, tmp_path, capsys):

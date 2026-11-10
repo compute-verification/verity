@@ -1,13 +1,14 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Definitions.Pouw.PearlC.DeviceFp4
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 
 /-!
 # TT_OUT-FP4 at W1 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)
 
-`TTOutFp4` and `TTOutTileFp4` (`Models.Pouw.Assumptions.PearlC.TTOutFp4`) are stated over any `CostModel`, and which one
+`TTOutFp4` and `TTOutTileFp4` (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4`) are stated over any `CostModel`, and which one
 they are believed at (W1 at sm_120's prices, in FP4 units) is prose in `TTOutFp4Sm120`'s docstring. Here that cost model
 is a term, as `TTOutW1` makes it for the FP8 records: TT_OUT's game at `CM := W1.w1Priced dv salt`. Each form is the old
-one's body at that cost model (same protocol, domain, `γ₀ = 1/400` and `εPearlC`); `TTOutFp4W1 … ↔ TTOutFp4
+one's body at that cost model (same protocol, domain, `g₀ = 1/400` and `δPearlC`); `TTOutFp4W1 … ↔ TTOutFp4
 (W1.w1Priced dv salt) …` (`Proofs.Pouw.PearlC.TTOutFp4W1`). What W1 charges, why `w1Priced`, and the honest program's
 `AdmitsRef` are `TTOutW1`'s.
 
@@ -30,6 +31,8 @@ until D-SK and the lines are stated over SHA-512 (an `Fp4Sem` whose lines a W1 p
 instructions, `pearl_c4.line`).
 -/
 
+@[expose] public section
+
 namespace Pouw.PearlC.Assumptions
 
 variable {Q R S : Type}
@@ -38,12 +41,12 @@ variable {Q R S : Type}
 `W1.w1Priced dv salt`. -/
 def TTOutFp4W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOutW1 dv salt (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) εPearlC
+  TTOutW1 dv salt (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) per audit tile at an FP4 record `d`, at W1 on `dv`**: `TTOutTileFp4` at `W1.w1Priced dv salt`. -/
 def TTOutTileFp4W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTileW1 dv salt (pearlCProtocolFp4 d sem ρ) (pearlCTilesFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) εPearlC
+  TTOutTileW1 dv salt (pearlCProtocolFp4 d sem ρ) (pearlCTilesFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
 
 /-- **`tt-out/fp4-sm120` at W1**: TT_OUT(1/400) for Pearl-C4 at `devFp4Sm120` on `W1Device.fp4Sm120 sha fetch`. -/
 def TTOutFp4Sm120W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)

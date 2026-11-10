@@ -1,4 +1,4 @@
-"""served_h1's credit by the padded-window rule (PADCREDIT round 2 with RT10's fixes, coordinator 22:35Z and 22:39Z): credit
+"""served_h1's credit by the padded-window rule: credit
 only the admitted slots, from admissions that always-proved units compute from the committed request queue and the rows'
 scales.
 
@@ -9,14 +9,14 @@ scales.
               a function of the slot's row, and admitted iff it is selected and its row's scale is nonzero (`queue_admit`,
               the word of `PouwQueueAdmit`): a row can withhold its slot's admission, never grant it; the admit unit
               refuses a slot that is not admitted unless its row is the canonical empty row (K zero bytes, scale 0:
-              `junk`) and a slot that is selected whose row is the canonical empty row (`hollow`, RT-ALGO-4); it reads no
+              `junk`) and a slot that is selected whose row is the canonical empty row (`hollow`); it reads no
               row byte, so a selected row of zero bytes under a nonzero scale (`scale_only`) is admitted
     words     a call's T admit bits as T / 16 words of 16 bits (bit b of word q is slot 16 q + b), one admit unit each: a
-              proof unit's outputs are at most 16 bits; each word is its own hiding leaf, in the call's admit tree
+              proof block's outputs are at most 16 bits; each word is its own hiding leaf, in the call's admit tree
     tile      a unit (32 slot rows by 32 weight rows) is `PouwH1Tile_v4`, whose `admit` input is its 32 rows' admit bits,
               bound by commitment equality to the two admit-tree leaves the tally reads: its live bit is their OR, so
               the tiles the circuit treats as live are exactly the tiles the tally credits, and an admitted tile of
-              zero-byte rows is live, noised, receipted and credited (RT4-LOGIC-4, RT4-LOGIC-20)
+              zero-byte rows is live, noised, receipted and credited
     dead      a unit is dead iff its 32 slots' admit bits are all 0: its rows are the canonical empty row (the admit unit
               refuses any other), it skips the H1 noise and receipt, and its receipt leaf is the canonical empty receipt
               (2 (KS + m) zero words), so the receipt trees keep their shape
@@ -25,8 +25,8 @@ scales.
               sum_site count_site N_site K_site, a public weighting of four 16-bit limbs; the level is
               window.level(window.floor_point(Cr)) and the published credit Pub = window.point(level) <= Cr
 
-Every admit unit is proved in every window (`proof_plan`); the tally is no proof unit until a tally Definition exists.  The
-draw is uniform over every unit position of the window, dead ones included, never weighted by an annotation.  Numpy and
+Every admit unit is proved in every window (`proof_plan`); the tally is no proof block until a tally Definition exists.  The
+sample is uniform over every unit position of the window, dead ones included, never weighted by an annotation.  Numpy and
 `pouw.circuit.admit`'s word.
 """
 from __future__ import annotations
@@ -49,7 +49,7 @@ def queue_of(spans: Sequence[Sequence[tuple[str, int]]], steps: int, t: int) -> 
     """The request queue from the scheduler's record: ``spans[s]``, step s's (request id, rows) in batch order, its rows the
     step's slots in that order.  Requests take indices 1, 2, .. by first appearance; each is live from its first step to
     one past its last.  Steps past the record are empty."""
-    from verity.core.protocols.pouw.circuit import admit as A
+    from verity.ml.protocols.pouw.circuit import admit as A
     if len(spans) > steps:
         raise ValueError(f"the record has {len(spans)} steps, past the window's {steps}")
     index: dict[str, int] = {}
@@ -72,7 +72,7 @@ def queue_of(spans: Sequence[Sequence[tuple[str, int]]], steps: int, t: int) -> 
 
 def queue_select(queue: dict, s: int) -> np.ndarray:
     """(T,) bool: step s's selection, the slots the queue assigns a request live at s (`admit.select_bit`)."""
-    from verity.core.protocols.pouw.circuit import admit as A
+    from verity.ml.protocols.pouw.circuit import admit as A
     req = queue["requests"]
     return np.array([bool(A.select_bit(s, int(x), *req[int(x)])) for x in queue["slot_map"][s]], dtype=bool)
 
@@ -85,7 +85,7 @@ def scales(rows: np.ndarray) -> list[int]:
 
 def queue_admit(queue: dict, s: int, rows: np.ndarray) -> np.ndarray:
     """(T,) bool: step s's admit bits, `PouwQueueAdmit`'s word on each 16 slots' queue entries and committed rows' scales."""
-    from verity.core.protocols.pouw.circuit import admit as A
+    from verity.ml.protocols.pouw.circuit import admit as A
     q = [int(x) for x in queue["slot_map"][s]]
     req, sc = queue["requests"], scales(rows)
     if len(sc) != len(q):
@@ -112,7 +112,7 @@ def junk(rows: np.ndarray, bits: np.ndarray) -> list[int]:
 
 
 def hollow(rows: np.ndarray, selected: np.ndarray) -> list[int]:
-    """The slots the admit unit refuses: selected by the queue, yet holding the canonical empty row (RT-ALGO-4).  The unit
+    """The slots the admit unit refuses: selected by the queue, yet holding the canonical empty row.  The unit
     admits none of them, so they credit nothing even unrefused."""
     return [int(i) for i in np.flatnonzero(~nonempty(rows) & np.asarray(selected, dtype=bool))]
 
@@ -187,7 +187,7 @@ def published(macs: int) -> dict:
 
 
 def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], population: int) -> dict:
-    """What every window proves, beside the uniform draw over its units."""
+    """What every window proves, beside the uniform sample over its units."""
     admit_units = n_calls * (t // WORD)
     return {"population": population,
             "draw": "uniform over every unit position of the window, live or dead, by the window's draw coin: public "
@@ -203,7 +203,7 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
                          "by commitment equality to the two leaves of the call's admit tree that the tally reads, so its "
                          "live bit (their OR) is the tally's liveness: credit counts exactly the tiles live in-circuit, "
                          "an admitted tile of zero-byte rows included (RT4-LOGIC-4, RT4-LOGIC-20)",
-            "tally": f"no proof unit until a tally Definition exists; the harness computes and commits {steps * len(sites)} "
+            "tally": f"no proof block until a tally Definition exists; the harness computes and commits {steps * len(sites)} "
                      f"per (step, site) popcount sums (<= 2^11), {len(sites)} per-site sums over the steps (< 2^16), and "
                      "the level (window.level(floor_point(sum_site count N K)), <= 9 bits)",
             "dead_unit": "a drawn dead unit proves, with the live tile's template (PouwH1Tile_v4), that its 32 bound "

@@ -1,6 +1,6 @@
 """`requirement`: a toy decoder's live and read bits per step, held to `boundary.py`'s exact in(S) and out(S), and the link
 to the audit's store and plans (`StoreMatches`, `PlanMatches`) with the transfer bounds of
-`Security/Models/Accounting/Guarantees/Requirement.lean` checked on every held set."""
+`Security/Definitions/Accounting/Guarantees/Requirement.lean` checked on every held set."""
 
 from __future__ import annotations
 
@@ -57,14 +57,18 @@ def decoder() -> tuple[Program, list[int]]:
             outs.append(tok)
         return array_of(outs)
 
-    sig = lambda _S: ((("tok0", I32), ("emb", Array(D, Array(V, F32))), ("wk", Array(D, F32))), Array(S, I32))
+    def sig(_S):
+        return ((("tok0", I32), ("emb", Array(D, Array(V, F32))), ("wk", Array(D, F32))), Array(S, I32))
+
     fn = CompositeDefinition("TestDecoder", 1, (), sig, body, register=False)
     return Program(fn, registered=("emb", "wk")), starts
 
 
 def _inputs() -> dict[int, int]:
     """tok0 = 1 (gate 0), the embedding's D·V words (gates 1-8) and the key projection's D weights (gates 9-10)."""
-    f = lambda x: fp32.bits_of(np.float32(x))
+    def f(x):
+        return fp32.bits_of(np.float32(x))
+
     return {0: 1, **{1 + i: f(0.5 + i) for i in range(D * V)}, 9: f(1.5), 10: f(-0.25)}
 
 
@@ -171,7 +175,7 @@ def test_a_block_a_later_step_fills_is_credited_once_complete(run):
     _, _, _, req = run
     layout, store = R.pack(req, 128)
     assert (store.registered, layout.block[14], layout.block[15], layout.block[19], layout.offset[15]) == (3, 3, 3, 4, 32)
-    paged = R.Layout({**layout.block, 19: 3}, {**layout.offset, 19: 64})
+    paged = R.Store.Packing({**layout.block, 19: 3}, {**layout.offset, 19: 64})
     filled = R.Store(3, {0: frozenset(), 1: frozenset({3, 4})}, store.freed,
                      {**store.payload, 3: store.payload[3] | req.values[19] << 64})
     assert R.incomplete(req, paged, 1) == {3, 4} and not R.incomplete(req, paged, 2)

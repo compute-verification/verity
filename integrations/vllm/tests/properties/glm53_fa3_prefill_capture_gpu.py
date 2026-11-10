@@ -95,7 +95,7 @@ def case_list(quick: bool = False) -> list[dict[str, Any]]:
 
 def plan(seqlens: list[int], num_splits: int) -> dict[str, Any]:
     """The launch's split count and each sequence's (`fa3_model.split_plan` for the served `num_splits = 0`; 1 for a pinned launch)."""
-    from verity_vllm.program.kernels import fa3_model as FM
+    from verity.ml.definitions.numerics import fa3_model as FM
 
     if num_splits == 1:
         return {"static": 1, "dynamic": [1] * len(seqlens)}
@@ -264,10 +264,10 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
     """``rows`` of a sequence of L rows the plan runs as ``ns`` splits through `fa3_split_twins.head_split_rows`, the 8 heads of a
     row at once: (out [rows, NH, DV], nonfinite [rows, NH])."""
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.kernels import fa3_split_twins as TW
-    from verity_vllm.program.registry import attention_vocab
-    from verity_vllm.program.registry import fa3_split as FS
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.numerics import fa3_split_twins as TW
+    from verity.ml.definitions.registry import attention_vocab
+    from verity.ml.definitions.registry import fa3_split as FS
 
     twin = {"dot16": DR.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"], "inv": DR.INV_SUM_BY_PRIM["Fa3InvSum_v1"]}
     out, nf = np.empty((len(rows), NH, DV), dtype=np.uint16), np.zeros((len(rows), NH), dtype=bool)
@@ -286,11 +286,11 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity_vllm.program.frontend.rules import vllm_dsa_dense
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.kernels import fa2_relation, fa3_model as FM
-    from verity_vllm.program.registry import attention_vocab, hopper
-    from verity_vllm.program.registry import fa3_check_inf as F3
-    from verity_vllm.program.registry import fa3_split as FS
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.numerics import fa2_relation, fa3_model as FM
+    from verity.ml.definitions.registry import attention_vocab, hopper
+    from verity.ml.definitions.registry import fa3_check_inf as F3
+    from verity.ml.definitions.registry import fa3_split as FS
 
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
     twin = {"dot_prim": "HopperBF16WgmmaDot16_v1", "inv_prim": "Fa3InvSum_v1"}

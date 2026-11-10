@@ -1,10 +1,46 @@
-import Definitions.Accounting.TS.Machine
+module
+
+public import Definitions.Accounting.TS.Machine
+public import Mathlib.Algebra.Group.End
+public import Mathlib.Data.Fintype.Sum
+public import Mathlib.Tactic.DeriveFintype
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The data-sheet machine (trusted)
 
-The TS machine a device's vendor documents give on their own (note:20261017T1818Z-draft-axioms §2; decision 96:
-data-sheet constants, no GPU self-attestation), over instruction classes `K` and Nsight Compute pipes `P`. Every facet
+The TS machine a device's vendor documents give on their own (data-sheet
+constants, no GPU self-attestation), over instruction classes `K` and Nsight Compute pipes `P`. Every facet
 is SM-clocked, and each row is in SMSP-cycles a warp instruction (four SMSPs an SM):
 
 * issue: `1` for every class, uniform-datapath classes included (A2, A2u);
@@ -19,6 +55,8 @@ is SM-clocked, and each row is in SMSP-cycles a warp instruction (four SMSPs an 
 The machine model's `DS-NN` vectors are these rows at each device's vendor values (status `datasheet`).
 -/
 
+@[expose] public section
+
 namespace Accounting.TS
 
 /-- **A device's data sheet** over classes `K` and pipes `P`: its maximum boost clock `fmax`; per class, the dense
@@ -30,7 +68,7 @@ an SM clock `width p`. -/
 structure Sheet (K P : Type) where
   /-- The top of the declared vBIOS's clock table, which no SM clock on the node exceeds (`accounting-declared-device`):
   the data sheet's maximum boost clock (the H200's 1,980 MHz), or the driver's reported maximum where the sheet gives
-  none for the board (sm_120's Server card, 2,430 MHz, where RT-CLOCK measured the table's top; the B200's 1,965 MHz).
+  none for the board (sm_120's Server card, 2,430 MHz, measured as the table's top; the B200's 1,965 MHz).
   The H200's and B200's tables are unmeasured. -/
   fmax : ℝ
   macs : K → ℝ

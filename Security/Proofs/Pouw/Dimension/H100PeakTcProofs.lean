@@ -1,4 +1,9 @@
-import Models.Pouw.Assumptions.Dimension.H100PeakTc
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100PeakTc
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.H100WProofs
 
 /-!
@@ -6,6 +11,8 @@ import Proofs.Pouw.Dimension.H100WProofs
 
 `floorTcPeakTc` is by `decide`, and `distinctWritesPeakTc` instantiates `distinctWritesLegacy` at `a = 32`, `c = 8`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verity's vLLM CPU Builds on vy-nebius-2's idle CPUs (Daniel 19:12Z: the two nodes are one pool), as `project=verity` fill guests
+# Verity's vLLM CPU Builds on vy-nebius-2's idle CPUs (the two nodes are one pool), as `project=verity` fill guests
 # that node 2's fill runner pins to its Verity CPUs and freezes (SIGSTOP) through PoUW's timed windows. The Commit stays on node 1.
 #
 #   on node 1:  n2_build.sh submit KEY ITEM.json|-   (ITEM: the config-run item a lane gives dispatch.py, as in its ready files;
@@ -27,7 +27,7 @@ set -euo pipefail
 N1=${VY_N1:-vy-n1} N2=${VY_N2:-vy-n2}
 GUEST=/workspace/verity-guest
 # the fill prio of node 2's vLLM guests: above every other guest's (proofs' are 5 and 10), since circuits' vLLM work goes first
-# on both nodes (Daniel 1 Oct 01:35Z)
+# on both nodes
 PRIO=${VY_N2_PRIO:-20}
 DISPATCH=${VY_DISPATCH:-/workspace/jobs/dispatch/infra/nebius/dispatch.py}
 
@@ -81,10 +81,10 @@ submit() {
   { read -r tree; read -r row; read -r repo; read -r rev; read -r mem; read -r max_min; } < <(item_get "$item" tree ROW REPO REVISION mem max_min)
   [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("template"))' "$item")" = config-run ] \
     || { echo "ITEM: a config-run item" >&2; exit 2; }
-  # node 2 caps a guest with MemoryMax at the item's request, in 64-256: node 1's Builds peaked at 4-29 GB against 47-108 GB requests
-  # (container_memory_working_set_bytes over 6 h, 2026-09-30 21:15Z)
-  # A node-1 request is no limit there, so an MoE item's 66 GB request OOM-killed Qwen3-30B-A3B's Build on node 2 eight times
-  # (node2-ops 1 Oct 03:40Z): MoE checkpoints take the cap, the class table's moe row
+  # node 2 caps a guest with MemoryMax at the item's request, in 64-256: node 1's Builds peak far under their requests
+  # (container_memory_working_set_bytes)
+  # A node-1 request is no limit there, so an MoE item's request is too small on node 2 (Qwen3-30B-A3B's Build at 66 GB is
+  # OOM-killed): MoE checkpoints take the cap, the class table's moe row
   [[ $repo =~ -A[0-9]+B|OLMoE|[Mm]o[Ee] ]] && mem=256
   mem=${VY_N2_MEM_GB:-$(( ${mem:-96} < 64 ? 64 : ${mem:-96} > 256 ? 256 : ${mem:-96} ))} max_min=${VY_MAX_MIN:-${max_min:-130}}
   # the queue's placement on node 2, with the item's research question (n2_commit.sh's `place`): a refusal keeps the Build on

@@ -1,32 +1,39 @@
-import Flock.Draw
+module
+
+public import Flock.Draw
+public import Flock.Norm
+public import Flock.JsonParse
 
 /-!
-# A drawn H1 leaf's sessions draw every unit
+# A sampled H1 leaf's sessions sample every unit
 
-A drawn leaf's 33 statements are each proved and checked in full: the verifier's draw policy for a leaf statement's
-session is `subset` of every unit of its partition, a non-empty population. flock-verify takes the record's draw as
-it is (any law it decodes, `Flock.Draw.UnitDraw.ofJson`), so the leaf verifier holds each session record to the
+A sampled leaf's 33 statements are each proved and checked in full: the verifier's sample policy for a leaf statement's
+session is `subset` of every unit of its partition, a non-empty population. flock-verify takes the record's sample as
+it is (any sampling design it decodes, `Flock.Draw.UnitDraw.ofJson`), so the leaf verifier holds each session record to the
 policy itself (`checkFull`, which `pouw-leaf-own` runs on every session of a statement):
 
-* `recordDraw`: the record's `unit_draw`, as flock-verify reads it (`Main.recordDraw`);
-* `checkFull`: that draw decodes, its law is `subset k` with `k` its population, `0 < k`, and its units are every unit
+* `recordDraw`: the record's `unit_draw`, rebuilt (`Flock.norm`), as flock-verify reads it (`Main.recordDraw`, through
+  Flock's total parser `Flock.JsonParse.parse`);
+* `checkFull`: that sample decodes, its sampling design is `subset k` with `k` its population, `0 < k`, and its units are every unit
   `[0, k)`; `checkFull_ok` states what its `.ok` gives.
 -/
+
+@[expose] public section
 
 namespace PouwWindow.Lanes
 
 open Lean (Json)
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null): `Main.recordDraw`. -/
+/-- A record's `unit_draw`, when it is a sample (not absent, not null), rebuilt (`Flock.norm`): `Main.recordDraw`. -/
 def recordDraw (record : String) : Option Json :=
-  match Json.parse record with
+  match Flock.JsonParse.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
-    | .ok d => some d
+    | .ok d => some (Flock.norm d)
     | .error _ => none
   | .error _ => none
 
-/-- **The session's record draws every unit**: its draw decodes (`UnitDraw.ofJson`), is `subset k` of a population of
+/-- **The session's record samples every unit**: its sample decodes (`UnitDraw.ofJson`), is `subset k` of a population of
 `k` units, `0 < k`, and its units are `[0, k)`; else the reason, named. -/
 def checkFull (record : String) : Except String Unit :=
   match recordDraw record with

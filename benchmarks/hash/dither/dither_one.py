@@ -1,7 +1,7 @@
-"""Dither's served linear in one stream in compiled vLLM (`h1o.cu`, CA's H1V3): every int8-exact linear's y = dequant(z),
+"""Dither's served linear in one stream in compiled vLLM (`h1o.cu`, H1V3): every int8-exact linear's y = dequant(z),
 z = O' - sum_d 128^d D_d + 256 X (wb⁺ - wb⁻)^T from the noised mainloop whose words the call's H1 + fx1 receipts fold and
 the wrap bits of W' = B + c + U, computed in the unit from B and the noise (H1V3's exact wrap correction).  The seeds are
-the call's own, from the window's salt and root(A_j), root(B_j) (the 17 Oct seeded regime: epsilon is 'seeded'), so each
+the call's own, from the execution phase's salt and root(A_j), root(B_j) (the seeded regime: epsilon is 'seeded'), so each
 call commits its A table on the device before its units and nothing waits on a later round.
 
     import dither_one as DO
@@ -9,17 +9,17 @@ call commits its A table on the device before its units and nothing waits on a l
     llm = LLM(model=int8_exact_checkpoint, ...)       # compiled, CUDA graphs: the op is opaque to Inductor, its launches captured
     DO.hook(llm)
 
-The window: its B tables at install, then one live round whose coin gives the epoch salt (`h1tile.live_salt` of the
+The execution phase: its B tables at install, then one live round whose coin gives the execution phase's salt (`h1tile.live_salt` of the
 round over the B roots).  Before step s's forward, the A tables' parts that read the step but no row (`h1c_a_step`:
 domains, salts, prefixes, and the leaves and nodes over rows >= m alone).  A linear call (`dither1::one_mm`), on the
 forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root where its seeds read it), then its units
 (each unit's seeds, receipt, z and y; DITHER_UNITS picks the form, `block` (`h1o_unitsb`, a unit a block, the default),
 `split` (`h1o_unitss`, a unit a block of six warps) or `warp` (`h1o_units`, a unit a warp)).  After step s's forward: its
 admit and z tables, the a-step,
-admit-step and z-step trees, the round over them, and the receipt trees (with `Window.tree_streams` set, the receipt
+admit-step and z-step trees, the round over them, and the receipt trees (with `DitherState.tree_streams` set, the receipt
 trees and the admit tables on streams of their own beside the rest), then the round root recorded
-(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `Window.step_salt` set (CA's
-PERIOD-PATH ask 11) the salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
+(`spot.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `DitherState.step_salt` set the
+salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
 `h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
 each step's noise comes from the round before it.  The rounds' coins are `dither_fused`'s switch (`coins.open_coins`):
 the challenger off the node with ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``, so the auditor host's round
@@ -29,49 +29,59 @@ this process, labelled ``in-process (not certified)`` in `stats`.
 The served value is the dithered product z = X (B + c)^T, exact for every int8 B, with X the int8 A + b the MMA reads (it
 wraps where A = 127 and b = 1), so y is not today's served y (`gate` measures how far) and the tokens are not the exact
 arm's.  The gate records wb's density on the run's weights, and how many cells differ from (A + b)(B + c)^T and A B^T.
-Peeled (DITHER_PEEL=1, CA's 11:02Z and 12:16Z decisions, H1V3's PouwPeelSeg; the block and split forms) z is A B^T, today's
+Peeled (DITHER_PEEL=1, H1V3's PouwPeelSeg; the block and split forms) z is A B^T, today's
 product, taken from the same O: z = O + 256 X (wb⁺ - wb⁻)^T - X c^T - (b - 256 xa) B^T with xa = [A = 127 and b = 1],
 the binary-by-int8 MMAs beside the wrap MMA, never a product of A itself: y is today's served y and the tokens are exact's
 (both gated); the receipts are the same words, and a perturbed noised word moves z.
 
-Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows; the window is the
-engine's life; the epoch round's root (a b-step tree over the B roots) and the z table (AROW's row-table format) are this
-lane's rendering of CA's forms.  Its stats, checks and verdict say form=beside (`forms.form_of`): not ASK-71 A's form.
+Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows; the execution phase is the
+engine's life; the execution-phase round's root (a b-step tree over the B roots) and the z table (AROW's row-table format) are this
+harness's rendering of the credit's forms.  Its stats, checks and verdict say form=beside (`forms.form_of`): not
+`forms.FORM_A`.
 """
 from __future__ import annotations
 
 import ctypes as C
 import os
 import time
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
+from verity_config.settings import of
 
 import dither_fused as DF
 import forms as F
-from dither_fused import CM, CO, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
 import h1c as H1CM
+from dither_fused import CM, CO, CR, H1C, H1R, SV, Call, Dom, Tab, unwords, words
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+
+    from vllm import LLM
+    from vllm.v1.core.sched.output import SchedulerOutput
+
+settings = of(__file__)
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
 F_FAULT_Y = 64      # dither_a's ycommit only: bit 0 of the served y[0, 0] flipped, in place, every call
-# the round's leaves past a-step, admit-step and z-step (set before the window is built): "y-step" the calls' served-y
-# roots (an arm's Side fills them in `before_mid`), "receipt-step" the calls' receipt-table roots (RT4-INT-13), both
+# the round's leaves past a-step, admit-step and z-step (set before the execution phase is built): "y-step" the calls' served-y
+# roots (an arm's Side fills them in `before_mid`), "receipt-step" the calls' receipt-table roots, both
 # under the round recorded before the next coin
 ROUND_EXTRA: tuple = ()
-CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`Window.captures`)
+CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled execution phase's add "fault_xa" (`DitherState.captures`)
 LIB_ENV = "DITHER_H1O"
-PHASE_RANGE = "verity/dither/phase/"    # `Window.phase`'s NVTX ranges, under DITHER_NSYS=prof only
+PHASE_RANGE = "verity/dither/phase/"    # `DitherState.phase`'s NVTX ranges, under DITHER_NSYS=prof only
 UNITS_ENV = "DITHER_UNITS"
 UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch",   # h1o.cu's forms of the same units
                "split2": "h1o_unitss2_launch", "block2": "h1o_unitsb2_launch"}   # those two at the maximum carveout (`h1o_init`)
-# a form per call: (wide, narrow), wide where the call's column blocks outnumber the SMs (a second block an SM pays only
+# a form per call: (wide, narrow), wide where the call's column tiles outnumber the SMs (a second block an SM pays only
 # past one wave: qkv and gate_up at decode), narrow elsewhere
 MIX_FORMS = {"mix": ("block2", "split")}
-# "1": z = A B^T from O (CA's peel of b and c: `h1o_unitsbp` / `h1o_unitssp`), so y is today's served y; the warp form has none
+# "1": z = A B^T from O (the peel of b and c: `h1o_unitsbp` / `h1o_unitssp`), so y is today's served y; the warp form has none
 PEEL_ENV = "DITHER_PEEL"
-# ASK-64's perCall, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
+# the per-call challenger round, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
 PERCALL_ENV = "DITHER_PERCALL"
-# "1" (dither_so's -aom/-aomn without -ov; CA's ruling of 23 Oct, core's form not yet landed): one A table a K a step,
+# "1" (dither_so's -aom/-aomn without -ov; the credit's form, not yet in core): one A table a K a step,
 # a/<K>@<s> (`a_step_fields`), its rows every call of that K's slots in call order (call c's slot r at row c T + r: the K
 # slots' buffer and their scales' rows of `scale_all`), built once after the forward; the a-step leaf of call w is the
 # root of its K's table.  Past K = 4096 a row is n = `weights.chunks` (K) leaves (SPLITK): leaf n i + c its codes
@@ -82,7 +92,7 @@ A_CHUNKS_ENV = "DITHER_A_CHUNKS"
 LIB = "dither1"
 REG = DF.REG
 CFG: dict = {}
-WIN: "Window | None" = None
+WIN: "DitherState | None" = None
 M32 = (1 << 32) - 1
 
 
@@ -92,15 +102,15 @@ class _O(C.Structure):
                 ("k", C.c_int), ("units", C.c_int)]
 
 
-class Window:
-    """A window's device state: per linear one A, scale and z slot (a step's tables are built before the next step's
+class DitherState:
+    """An execution phase's device state: per linear one A, scale and z slot (a step's tables are built before the next step's
     forward reads its slots); the h1c sets (B tables once; the A, admit and z tables, the step trees and the round); one
-    call table for the seeds and receipts; the `h1o` table and step struct; the epoch salt."""
+    call table for the seeds and receipts; the `h1o` table and step struct; the execution phase's salt."""
     group_slots = False     # `slot_groups` and `scale_all` (dither_so's ring copies a step's slots from them)
     a_step = False          # A_STEP_ENV's tables (dither_so sets it, with group_slots)
     h2d_pinned = False      # `before`'s inputs through pinned buffers, without a host wait (`_h2d`)
 
-    def __init__(self, t: int, key: bytes, h1c_path: str, h1o_path: str, gate: bool, dev):
+    def __init__(self, t: int, key: bytes, h1c_path: str, h1o_path: str, gate: bool, dev: torch.device) -> None:
         self.t, self.key, self.dev = t, key, dev
         self.pins: dict[int, torch.Tensor] = {}
         self.L = L = len(REG)
@@ -165,10 +175,10 @@ class Window:
                           lab=("r/", f"/{w}")))
         self.rset = self.c.set(rt)
         self.o = C.CDLL(h1o_path)
-        self.units_form = os.environ.get(UNITS_ENV, "block")
+        self.units_form = settings.get(UNITS_ENV)
         if self.units_form not in UNITS_FORMS and self.units_form not in MIX_FORMS:
             raise RuntimeError(f"{UNITS_ENV}={self.units_form}: one of {sorted(UNITS_FORMS) + sorted(MIX_FORMS)}")
-        self.peel = os.environ.get(PEEL_ENV) == "1"
+        self.peel = settings.get(PEEL_ENV)
         if self.peel and self.units_form == "warp":
             raise RuntimeError(f"{PEEL_ENV}=1: the warp form serves the dithered product only")
         self.captures = CAPTURES + (("fault_xa",) if self.peel else ())
@@ -179,7 +189,7 @@ class Window:
         else:
             self.call_forms = [self.units_form] * L
 
-        def units_fn(form: str):
+        def units_fn(form: str) -> Callable[..., int]:
             fn = UNITS_FORMS[form]
             f = getattr(self.o, fn.replace("_launch", "p_launch") if self.peel else fn)
             f.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_int, C.c_void_p, C.c_void_p, C.c_int,
@@ -191,7 +201,7 @@ class Window:
         if self.o.h1o_init():
             raise RuntimeError("h1o_init refused")
         self.percall = None
-        pc = os.environ.get(PERCALL_ENV)
+        pc = settings.get(PERCALL_ENV)
         if pc:
             ns = [0] if pc == "0" else [int(x) for x in open(pc).read().split()]
             if self.o.h1o_percall_init(L, (C.c_longlong * len(ns))(*ns), len(ns)):
@@ -240,12 +250,12 @@ class Window:
         self.tree_streams: tuple | None = None
         # called on the serving stream after the z tables and before the step trees (an arm's leaves of its own)
         self.before_mid: list = []
-        self.nvtx = os.environ.get("DITHER_NSYS") == "prof"
+        self.nvtx = settings.DITHER_NSYS == "prof"
         self.phase_open = False
         self._epoch()
 
     def _epoch(self) -> None:
-        from verity.core.protocols.pouw.circuit import h1tile as HT
+        from verity.ml.protocols.pouw.circuit import h1tile as HT
         self.HT = HT
         self.coins = CO.open_coins(CO.session(), 1, DF.ROUNDS)
         self.rounds = self.coins.rounds
@@ -317,7 +327,7 @@ class Window:
 
     # -- the step hook ---------------------------------------------------------------------------------------------------
 
-    def _poison(self, ts) -> None:
+    def _poison(self, ts: Iterable[torch.Tensor]) -> None:
         for x in ts:
             x.view(torch.uint8).fill_(DF.POISON)
 
@@ -363,7 +373,7 @@ class Window:
 
     def before(self, m: int) -> None:
         if m > self.t:
-            raise RuntimeError(f"a step of {m} tokens in a window of T = {self.t} slots")
+            raise RuntimeError(f"a step of {m} tokens in an execution phase of T = {self.t} slots")
         self.phase("before")
         self.m, self.flags, self.cap = m, 0, None
         if self.arms and m == self.arm_m:
@@ -477,7 +487,7 @@ class Window:
         self.s += 1
         self.steps += 1
         if self.s + 1 >= DF.ROUNDS:
-            raise RuntimeError(f"the window's {DF.ROUNDS} rounds are spent")
+            raise RuntimeError(f"the execution phase's {DF.ROUNDS} rounds are spent")
 
     def stats(self) -> dict:
         ph, self.phases = self.phases, []
@@ -486,7 +496,7 @@ class Window:
             by.setdefault(x["m"], []).append(x)
         top = sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]
 
-        def per(f):
+        def per(f: Callable[[list], float]) -> dict:
             return {str(m): {"steps": len(xs), **{k: round(float(f([x[k] for x in xs if k in x])), 4)
                                                   for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
                     for m, xs in top}
@@ -499,27 +509,28 @@ class Window:
                 "phases_p90_by_m": per(lambda v: np.percentile(v, 90)), "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
 
 
-def round_leaves(kinds) -> str:
+def round_leaves(kinds: Iterable[str]) -> str:
     """The round domain's "leaves" field: "a-step root, admit-step root, z-step root" and ROUND_EXTRA's."""
     return ", ".join(f"{k} root" for k in kinds)
 
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
 
-def _window(dev) -> Window:
+def _window(dev: torch.device) -> DitherState:
     global WIN
     if WIN is None:
-        WIN = Window(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1o"], CFG["gate"], dev)
+        WIN = DitherState(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1o"], CFG["gate"], dev)
     return WIN
 
 
-# A kernel op (`torch.library.Library`, a CUDA implementation), not a `custom_op`: #2684's trace counts an op without a
+# A kernel op (`torch.library.Library`, a CUDA implementation), not a `custom_op`: the credit gate's trace counts an op without a
 # Python definition as one GEMM, and its two fresh results, z and y, as written by it.
 _LIB = torch.library.Library(LIB, "DEF")
 _LIB.define("one_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w, int idx) -> (Tensor, Tensor)")
 
 
-def _one_mm_cuda(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, idx: int):
+def _one_mm_cuda(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
+                 idx: int) -> tuple[torch.Tensor, torch.Tensor]:
     z = torch.empty((xq.shape[0], w.shape[0]), dtype=torch.int32, device=xq.device)
     y = torch.empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16, device=xq.device)
     if xq.shape[0]:
@@ -531,7 +542,8 @@ _LIB.impl("one_mm", _one_mm_cuda, "CUDA")
 
 
 @torch.library.register_fake(f"{LIB}::one_mm")
-def _one_mm_fake(xq, s_a, w, s_w, idx):
+def _one_mm_fake(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
+                 idx: int) -> tuple[torch.Tensor, torch.Tensor]:
     return (xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.int32),
             xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16))
 
@@ -541,7 +553,7 @@ CG = None
 
 
 def credit_doc() -> dict:
-    """#2684's verdicts over the traced calls: how many, how many credited, each refusal's reason and the kernels."""
+    """The credit gate's verdicts over the traced calls: how many, how many credited, each refusal's reason and the kernels."""
     return {"calls": CREDIT.get("calls", 0), "credited": CREDIT.get("credited", 0),
             "reasons": dict(CREDIT.get("reasons", {})), "kernels": dict(CREDIT.get("kernels", {})),
             "sample": CREDIT.get("sample", [])}
@@ -549,7 +561,7 @@ def credit_doc() -> dict:
 
 def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = False, credit: str | None = None) -> None:
     """Every int8-exact linear through ``dither1::one_mm`` (call before the engine is built, in its process).  ``credit``,
-    the path of #2684's `credit_gate.py`: each `apply` runs inside its `Trace` and its verdict on (the y handed back, the
+    the path of `credit_gate.py`: each `apply` runs inside its `Trace` and its verdict on (the y handed back, the
     op's z) is tallied in `CREDIT` (an eager engine: a compiled one never runs `apply` per call)."""
     from collections import Counter
 
@@ -560,12 +572,13 @@ def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = Fal
     IV.register()
     orig_pw = IV.Int8PlainLinearMethod.process_weights_after_loading
 
-    def process_weights_after_loading(self, layer):
+    def process_weights_after_loading(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module) -> None:
         orig_pw(self, layer)
         self.dither_idx = DF.index_of(self.prefix)
         REG[self.dither_idx] = (self.prefix, layer)
 
-    def apply(self, layer, x, bias=None):
+    def apply(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module, x: torch.Tensor,
+              bias: torch.Tensor | None = None) -> torch.Tensor:
         if bias is not None or x.dtype != torch.bfloat16:
             raise ValueError(f"{self.prefix}: the one-stream arm takes bf16 activations and no bias")
         lead, k = x.shape[:-1], x.shape[-1]
@@ -589,7 +602,8 @@ def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = Fal
         CREDIT.update(calls=0, credited=0, reasons=Counter(), kernels=Counter(), sample=[])
         served = apply
 
-        def apply(self, layer, x, bias=None):
+        def apply(self: IV.Int8PlainLinearMethod, layer: torch.nn.Module, x: torch.Tensor,
+                  bias: torch.Tensor | None = None) -> torch.Tensor:
             self.dither_z = None
             with CG.Trace(self.prefix) as tr:
                 y = served(self, layer, x, bias)
@@ -608,13 +622,13 @@ def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = Fal
     IV.Int8PlainLinearMethod.apply = apply
 
 
-def hook(llm) -> Window:
-    from verity_vllm.engine import engine_profile as prof
-    runner = prof.get_model_runner(llm)
+def hook(llm: LLM) -> DitherState:
+    from verity_vllm.engine import handle
+    runner = handle.model_runner(llm)
     win = WIN if WIN is not None else _window(torch.device("cuda"))
     orig = runner.execute_model
 
-    def execute_model(so, *args, **kw):
+    def execute_model(so: SchedulerOutput, *args, **kw) -> Any:
         m = int(getattr(so, "total_num_scheduled_tokens", 0) or 0)
         if m:
             with torch.inference_mode():
@@ -640,23 +654,23 @@ def _s32(v: np.ndarray) -> np.ndarray:
     return np.where(v >> 31, v - (1 << 32), v)
 
 
-def cap_salt(win, g: dict) -> tuple[bytes, torch.Tensor]:
-    """The salt capture g's step ran under (the epoch's, or with step_salt its round's) and its words on the device."""
+def cap_salt(win: DitherState, g: dict) -> tuple[bytes, torch.Tensor]:
+    """The salt capture g's step ran under (the execution phase's, or with step_salt its round's) and its words on the device."""
     b = g.get("salt", win.salt_bytes)
     return b, torch.from_numpy(words(b)).to(win.dev)
 
 
 def h1v3_unit(a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> dict:
-    """CA's definition on the CPU for one 32 x 32 unit (`h1tile.noise`, `segment.call_words` and the CP-W fold, as
+    """H1V3's Definition on the CPU for one 32 x 32 unit (`h1tile.noise`, `segment.call_words` and the CP-W fold, as
     `h1tile.reference`): z = O' - sum_d 128^d D_d + 256 X (wb⁺ - wb⁻)^T per cell (s32), wb⁺ = [B + c + U > 127] and
     wb⁻ = [B + c + U < -128] on the integers, the receipt, and the products to hold z to: X (B + c)^T with X the int8
-    A + b (z must equal it), (A + b)(B + c)^T and today's A B^T.  And CA's peel of b and c (11:02Z), as written,
+    A + b (z must equal it), (A + b)(B + c)^T and today's A B^T.  And the peel of b and c, as written,
     z - b B^T - A c^T - b c^T, and with the term the s8 X's wrap needs, + 256 xw (B + c)^T, xw = [A = 127 and b = 1]
     (X = -128 there): A B^T, as a peeled kernel's z must be; and the peeled kernel's own form of it (H1V3's PouwPeelSeg),
     z + 256 xw B^T - X c^T - b B^T."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
-    from verity.core.protocols.pouw.circuit import seeds as SD
-    from verity.core.protocols.pouw.circuit import segment as SG
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import segment as SG
     a = [[int(v) & 0xFF for v in row] for row in a32]
     b = [[int(v) & 0xFF for v in row] for row in b32]
     lay = HT.Layout(32, 32, len(a[0]))
@@ -706,8 +720,8 @@ def h1v3_unit(a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int, root
 def wb_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
     """F_FAULT_WB's move of unit 0's z column 0 (rows of `a`, 32 x K; `b` the unit's 32 B rows), mod 2^32: its wb⁺ bit at
     entry 0 flipped changes wb⁺ - wb⁻ there by 1 - 2 wb⁺, so z[i, 0] moves by 256 (1 - 2 wb⁺) X[i, 0]."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import seeds as SD
     rows, cols = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
     s = int(b[0, 0]) + int(cols[0][0][0]) + int(_sx(np.array(cols[0][1][0])))
     d = 1 - 2 * int(s > 127)
@@ -717,8 +731,8 @@ def wb_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
 def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
     """F_FAULT_XA's move of unit 0's z row 0 (as `wb_fault_expected`), mod 2^32: its xa bit at entry 0 flipped changes
     xa there by 1 - 2 xa, so z[0, j] moves by 256 (1 - 2 xa) B[j, 0]."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import seeds as SD
     rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
     d = 1 - 2 * int(int(a[0, 0]) == 127 and int(rows[0][0][0]) == 1)
     return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
@@ -727,10 +741,10 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
 def a_chunks(k: int) -> int:
     """A_STEP_ENV's leaves a row of K = k: `weights.chunks` (k), or 1 under A_CHUNKS_ENV=0."""
     from verity.core.protocols.pouw import weights as WT
-    return 1 if os.environ.get(A_CHUNKS_ENV) == "0" else WT.chunks(k)
+    return 1 if settings.get(A_CHUNKS_ENV) == "0" else WT.chunks(k)
 
 
-def a_step_fields(win: Window, k: int, s: int) -> dict:
+def a_step_fields(win: DitherState, k: int, s: int) -> dict:
     """A_STEP_ENV's table a/<k>@<s>: its domain's fields (kind "a-table", count n len(linears) T at n = `a_chunks` (k),
     which the fields name past 1)."""
     n = a_chunks(k)
@@ -745,7 +759,8 @@ def a_step_rows(q: np.ndarray, sc: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return q.reshape(-1, q.shape[1] // n), np.repeat(np.asarray(sc).reshape(-1), n)
 
 
-def a_roots_cpu(win: Window, s: int, calls, q_of, sc_of) -> dict[int, bytes]:
+def a_roots_cpu(win: DitherState, s: int, calls: Iterable[int], q_of: Callable[[int], np.ndarray],
+                sc_of: Callable[[int], np.ndarray]) -> dict[int, bytes]:
     """commit.py's A root of each call in `calls` at step s from its slot rows q_of(w) ([T, k] int8) and scales sc_of(w)
     ([T] float32): its own table a/<s>/<w>, or under a_step its K's a/<K>@<s> (the K's calls' rows in call order, as
     `a_step_rows` leaves)."""
@@ -783,16 +798,16 @@ def a_bad_diag(g: dict, bad: list[int]) -> list[dict]:
 
 
 def h1v3_itself(units: list[dict]) -> dict:
-    """`h1v3_ref.py` under CA's tree: z and receipt of each unit by CA's own `h1tile.reference(stream=True)`. The tree is
+    """`h1v3_ref.py` under H1V3's tree: z and receipt of each unit by its own `h1tile.reference(stream=True)`. The tree is
     this source's own (PouwH1Tile_v4, ungated: v3's z, receipts and wrap bits with the peel) unless DITHER_H1V3_TREE
     names another (a launcher's H1V3_SHA)."""
     import json
     import subprocess
     import sys
     import tempfile
-    tree = os.environ.get("DITHER_H1V3_TREE") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    tree = settings.DITHER_H1V3_TREE or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)))))
-    sha = os.environ.get("DITHER_H1V3_SHA") or os.environ.get("RESEARCH_SOURCE_SHA") or "source"
+    sha = settings.DITHER_H1V3_SHA or settings.RESEARCH_SOURCE_SHA or "source"
     with tempfile.TemporaryDirectory() as td:
         src, dst = os.path.join(td, "in.json"), os.path.join(td, "out.json")
         with open(src, "w") as f:
@@ -807,19 +822,19 @@ def h1v3_itself(units: list[dict]) -> dict:
     return {"tree": tree, "sha": sha, **doc}
 
 
-def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
+def check(win: DitherState, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
           cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
     """`which`'s capture against references other than the served kernel: every call's A, admit and z roots, the receipt
     roots of CPU_CALLS and the step's round = commit.py's; every receipt = h1r v1's (another unit implementation, gated
-    against receipts.py) on the saved slots under the window's salt and the CPU's roots; every z = h1o_ref's (noise from
+    against receipts.py) on the saved slots under the execution phase's salt and the CPU's roots; every z = h1o_ref's (noise from
     full compressions, T_last and Y by scalar dp4a, z = T_last - U Y + 256 X wbᵀ by a scalar scatter over the integer
     B + c + U, which also counts wb: its density); y (dumped) = dequant of the kernel's own z on the rows < m; a few units =
-    CA's definition on the CPU (`h1v3_unit`: z, receipt, z = X (B + c)^T) and by H1V3's own code (`h1v3_itself`).  Every
+    H1V3's Definition on the CPU (`h1v3_unit`: z, receipt, z = X (B + c)^T) and by H1V3's own code (`h1v3_itself`).  Every
     buffer read was 0xA5 before the kernels wrote it.  "fault" wants z off h1o_ref's by 2^FAULT_SHIFT at unit 0's cell
     (0, 0) of every call and nowhere else, that unit's receipt off h1r's and no other, and y = dequant of that z (the
     perturbed MMA word reached what serves).  "fault_wb" wants every receipt unmoved (wb is not receipted), z moved only in
     column 0 of unit 0, by `wb_fault_expected` on CPU_CALLS and by multiples of 256 elsewhere, and y = dequant of that z.
-    Peeled (`Window.peel`), z's reference is A B^T itself (a float64 product on the device, exact: every partial sum is
+    Peeled (`DitherState.peel`), z's reference is A B^T itself (a float64 product on the device, exact: every partial sum is
     an integer below 2^53), y must be today's served y (`int8_ops.scaled_mm`'s body) on every call, the CPU units' z the kernel's
     peel of their z, and each fault wants what it wants unpeeled against A B^T: so a z that reads no noised word (one
     computed beside the receipted MMAs) is refused at "fault".  "fault_xa" (peeled) wants every receipt unmoved, z moved
@@ -835,7 +850,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     # commitments against commit.py
     bits = np.arange(t) < m
     wrows = CR.word_rows(CR.words(bits))
-    a_cpu, s_cpu, z_cpu, cm = {}, {}, {}, []
+    a_cpu, s_cpu, z_cpu = {}, {}, {}
     for w in range(L):
         n, k = win.nk[w]
         q, sc = g["a"][w].cpu().numpy(), g["sa"][w].cpu().numpy()
@@ -860,7 +875,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
                        [a_step, admit_step, z_step])
     doc["round"] = {"a_step": a_step == g["leaves"][0], "admit_step": admit_step == g["leaves"][1],
                     "z_step": z_step == g["leaves"][2], "root": rnd == g["root"]}
-    # receipts (h1r v1) and z (h1o_ref) on the saved slots, the window's salt and the CPU's roots
+    # receipts (h1r v1) and z (h1o_ref) on the saved slots, the execution phase's salt and the CPU's roots
     r = H1R(lib_h1o)
     o = C.CDLL(lib_h1o)
     o.h1o_ref_launch.argtypes = [C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p]
@@ -952,7 +967,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
                  "density": float(cnt.sum() / ent.sum()),
                  "by_site": {site: float(cnt[i::4].sum() / ent[i::4].sum()) for i, site in enumerate(DF.SITES)}}
     # the activation wrap's entries (A = 127 and b = 1) each call's live units hold, by h1o_ref's own noise, and the
-    # A = 127 entries of the call's live rows (each such entry meets every unit of its row block)
+    # A = 127 entries of the call's live rows (each such entry meets every unit of its row tile)
     a127 = [int((g["a"][w][:m] == 127).sum()) for w in range(L)]
     doc["xa"] = {"entries": int(cnt[:, 2].sum()), "by_call": cnt[:, 2].tolist(), "calls_without": int((cnt[:, 2] == 0).sum()),
                  "min": int(cnt[:, 2].min()), "max": int(cnt[:, 2].max()),
@@ -977,7 +992,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
             eq += int(torch.equal(yt, yk))
             rel.append(float((yk - yt).norm() / yt.norm().clamp_min(1e-30)))
         doc["y_vs_today"] = {"calls_equal": eq, "rel_l2_median": float(np.median(rel)), "rel_l2_max": float(np.max(rel))}
-    # CA's definition on the CPU, a few units of row block 0
+    # H1V3's Definition on the CPU, a few units of row tile 0
     units_doc, h1v3_in, kernel_out = [], [], []
     if which == "gate":
         rng = np.random.default_rng(s)

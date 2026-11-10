@@ -1,4 +1,4 @@
-// Pearl-C on the RTX PRO 6000 Blackwell (sm_120a): the kernels of `pearl-c-sm120-v1` (verity/core/protocols/pouw/schemes/
+// Pearl-C on the RTX PRO 6000 Blackwell (sm_120a): the kernels of `pearl-c-sm120-v1` (verity/ml/protocols/pouw/schemes/
 // pearl_c.py on pearl_c_device.SM120, hashing -h3) and the plain FP8 GEMMs, for run.py.  Every kernel takes one Args by value:
 // 16 pointers p[] and 16 ints i[].  sm_120 has no wgmma, TMA multicast or tcgen05: the products are warp-level mma.sync
 // (kind::f8f6f4 m16n8k32 E4M3 for every FP8 atom, m16n8k16 BF16 for the peel) fed by ldmatrix from shared memory that
@@ -306,7 +306,7 @@ template <int MODE, int TM, int BN, int G, int RB = BK, int PF = 0> DEV void gem
   }
 }
 
-// The 128 x 128 GEMMs on bc-fb55a759's mainloop (mainloop_sm120.cuh: TMA into 3 stages of 128 bytes of depth, a producer
+// The 128 x 128 GEMMs on the TMA mainloop (mainloop_sm120.cuh: TMA into 3 stages of 128 bytes of depth, a producer
 // warpgroup, 8 consumer warps of 64 x 32, the chain word for word gemm_body's), with gemm_body's epilogues.  p10 the four
 // tensor maps (ml::Maps; P_A, P_B the peel's, else A, B again).
 constexpr int ML_NT = 384;
@@ -892,6 +892,26 @@ extern "C" __global__ void pa(const Args a) {
   const uint16_t v = e < 32 ? e4m3bf(reinterpret_cast<const uint8_t*>(a.p[0])[row * 32 + e])
                             : f2bf(reinterpret_cast<const float*>(a.p[2])[row * 32 + e - 32]);
   reinterpret_cast<uint16_t*>(a.p[3])[(size_t)row * 64 + e] = v;
+}
+
+// B~'s bytes into L2 ahead of its call's GEMM, beside the call's per-row keying, which leaves DRAM idle.  Writes nothing.
+// p0 the bytes; i0 their count (a multiple of 128), i1 the form: 0 prefetch.global.L2 a 128-byte line a thread, 1 the same
+// with ::evict_last, 2 cp.async.bulk.prefetch.L2 a PF_CHUNK chunk a thread
+#define PF_CHUNK 16384
+extern "C" __global__ void __launch_bounds__(256) prefetch_l2(const Args a) {
+  const char* p = reinterpret_cast<const char*>(a.p[0]);
+  const size_t n = (size_t)(uint32_t)a.i[0], t = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const size_t stride = (size_t)gridDim.x * blockDim.x;
+  if (a.i[1] == 2) {
+    for (size_t o = t * PF_CHUNK; o < n; o += stride * PF_CHUNK) {
+      const uint32_t len = (uint32_t)(n - o < PF_CHUNK ? n - o : PF_CHUNK);
+      asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;" ::"l"(p + o), "r"(len) : "memory");
+    }
+  } else if (a.i[1] == 1) {
+    for (size_t o = t * 128; o < n; o += stride * 128) asm volatile("prefetch.global.L2::evict_last [%0];" ::"l"(p + o));
+  } else {
+    for (size_t o = t * 128; o < n; o += stride * 128) asm volatile("prefetch.global.L2 [%0];" ::"l"(p + o));
+  }
 }
 
 // P_B rows: [RNE_bf16(FP32 add(fma chain from +0 over p of be_p G_pq, -BF_jq)) || -be], be = bf16(E'_B).

@@ -1,27 +1,27 @@
 """The received-pieces leak scan every zero-knowledge driver runs: which witness pieces found in what the verifier received
-(`a8.received`'s ``verifier_found``, each piece raw or as hex) leak, read against C-Flock's proof format.
+(`a8.received`'s ``verifier_found``, each piece raw or as hex) leak, read against Flock's proof format.
 
     sys.path.insert(0, "benchmarks/network_traces"); import leak_scan as LS
     pieces, held, public = LS.public_pieces(a8, blobs, held, circuit)  # each witness row cut whole, less the public
     LS.scan(received, pieces, vdir)    # {"leaked": [k], "structured": {k: "across" | "public"}, "placed": {k: [...]}}
     LS.find_whole(received, short, vdir, control)  # each row shorter than a piece found whole, then `scan`'s rule
 
-It reads the format with C-Flock's own reader (``verity/ml/flock/verifier``: `redigest.layout`, `transcript_check`).
+It reads the format with Flock's own reader (``verity/ml/flock/verifier``: `redigest.layout`, `transcript_check`).
 
 The pieces (`cut`, the one cutter every driver's `public_pieces` runs): each witness row cut into 16-byte pieces that
 cover it whole, its aligned ones and, past its last 16-byte boundary, its last 16 bytes and its last aligned chunk
-zero-padded (the row's last element, packed from an element boundary). The residual (REDTEAM phase 19): a row packed
+zero-padded (the row's last element, packed from an element boundary). The residual: a row packed
 from an element boundary whose last element pads its tail with anything but zeros matches neither, its last 16 bytes
-straddling two elements, so a leak in that tail is missed. A row shorter than a piece (a unit's carry rows, the served
-rows of a block of a few steps) is found whole (`find_whole`), raw or as the hex of whole bytes, and its finds are
-judged by the same rule. It is at least 6 bytes (`WHOLE`): a uniform L-byte row matches a given offset raw, or an even
-offset of hex text, with chance 2^-8L, so R rows over N received bytes expect about 2·N·R·2^-8L chance finds, 2^-7 at 6
-bytes for a GiB and 1024 rows but 2 at 5. A low-entropy row matches the format's structure more often: in a field the
-reader fixes it reads public, which also excuses a real find of it, and anywhere else leaked.
+straddling two elements, so a leak in that tail is missed. A row shorter than a piece (a proof block's carry rows, the
+served rows of a block of a few steps) is found whole (`find_whole`), raw or as the hex of whole bytes, and its finds
+are judged by the same rule. It is at least 6 bytes (`WHOLE`): a uniform L-byte row matches a given offset raw, or an
+even offset of hex text, with chance 2^-8L, so R rows over N received bytes expect about 2·N·R·2^-8L chance finds, 2^-7
+at 6 bytes for a GiB and 1024 rows but 2 at 5. A low-entropy row matches the format's structure more often: in a field
+the reader fixes it reads public, which also excuses a real find of it, and anywhere else leaked.
 
 The rule:
 * A find counts only where it is one field's bytes: inside one field of a repetition's proof stream (``S.repK.bin``,
-  every read C-Flock's proof format makes of it, `redigest.layout`), inside one 16-byte record of a round message of
+  every read Flock's proof format makes of it, `redigest.layout`), inside one 16-byte record of a round message of
   the session transcript (``streams[K].rounds[r].msg``, as `transcript_check.T` frames it), or anywhere in a file whose
   format isn't read (the rest of a transcript, a stream the format doesn't read whole, any other file). A find that
   straddles two fields, or a hex match a nibble off a message's bytes, doesn't count.
@@ -30,15 +30,14 @@ The rule:
   and parameters, reads of at most 8 bytes, not its nonces, Ligerito's grinding nonces ``GRIND`` among them, but a ring
   switch's nonce that is 0, as the verifier requires) and a round message's headers, domain and labels. Otherwise the
   piece is ``leaked`` and fails its statement, whatever its row, its bytes or how few values they take: there is no
-  byte-count or witness-class exemption, so a switch row found in one field of one repetition fails (REDTEAM phase 16,
-  finding 1).
+  byte-count or witness-class exemption, so a switch row found in one field of one repetition fails.
 * The excuse is by value, so a low-entropy row equal to some reader-fixed field's bytes is excused wherever it lies. The
-  rule that excuses a find only inside a field the reader fixes (the lead's ruling on #4020) waits for a class of fields
+  rule that excuses a find only inside a field the reader fixes waits for a class of fields
   whose value is the same for every witness, decided by a differential proof with a different witness: without it an
   honest all-zero private row fails wherever an honest prover writes a zero element (861e's carry row ``cin 6``, inside
   the zero high limbs of Ligerito's intro messages, ``lig.msg``, which the reader doesn't check).
 
-A find across fields isn't a missed leak (REDTEAM phase 18): the reads tile a stream with no gaps and C-Flock's writer
+A find across fields isn't a missed leak: the reads tile a stream with no gaps and Flock's writer
 writes each field whole, so an honest writer's leak lands inside one field. A match across two fields is a coincidental
 alignment of their bytes, and a secret split across adjacent fields the prover picks freely (its salts) needs a modified
 prover, outside this scan's model. A differential against a proof of a different witness is evidence for a manual
@@ -68,7 +67,7 @@ _SWAP = threading.Lock()
 #: ``lig.fold`` (``fold_grinding_nonces``) is one too: the verifier requires it empty, but the scan reads what it got.
 GRIND = ("lig.qn", "lig.fold", "lig.cbn", "lig.consn")
 
-#: A ring switch's grinding nonce, which the verifier requires to be 0 (C-Flock's PROTOCOL.md §8.3): a zero one is a
+#: A ring switch's grinding nonce, which the verifier requires to be 0 (the Lean verifier's `Flock.Proof`): a zero one is a
 #: field the reader fixes, and a nonzero one, which the verifier refuses, stays the prover's.
 RS_NONCE = re.compile(r"rs\.\d+\.nonce")
 
@@ -97,15 +96,20 @@ def cut(blobs: dict[str, bytes], size: int) -> dict[str, bytes]:
     return pieces
 
 
-def public_pieces(a8, blobs: dict[str, bytes], held: set[str], public: bytes) -> tuple[dict[str, bytes], set[str], list[str]]:
+def public_pieces(a8, blobs: dict[str, bytes], held: set[str], public: bytes,
+                  fields: bool = False) -> tuple[dict[str, bytes], set[str], list[str]]:
     """`blobs` cut into the scan's pieces (`cut`, at `a8.needles`' size), less the pieces `public` holds raw or as hex:
     what the statement fixes before any witness (the staged circuit, which the stager writes from the Definition before
     any instance), which the verifier has whatever the witness. Returns the pieces to scan for, the held ones (pieces of
-    a blob in `held`) and the excluded pieces' hex."""
+    a blob in `held`, which the prover's instance holds as it is) and the excluded pieces' hex. A held blob is a whole
+    row, which the instance packs into 16-byte elements, its last one zero-padded; with `fields` it is a field inside a
+    row (a head in N2's ``wit`` row), followed there by the next field's bytes (the head's salt), so its zero-padded
+    last chunk isn't held, while its last 16 bytes, which cover the same tail, are."""
     pieces = cut(blobs, a8.PIECE)
     out = {pieces[k] for k in a8.find(public, a8.needles(pieces))}
     kept = {k: x for k, x in pieces.items() if x not in out}
-    return kept, {k for k in kept if k.rsplit(" @", 1)[0] in held}, sorted(x.hex() for x in out)
+    padded = {f"{k} @{len(b) - len(b) % a8.PIECE}" for k, b in blobs.items() if fields and len(b) % a8.PIECE}
+    return kept, {k for k in kept if k.rsplit(" @", 1)[0] in held and k not in padded}, sorted(x.hex() for x in out)
 
 
 def is_stream(name: str) -> bool:
@@ -115,7 +119,7 @@ def is_stream(name: str) -> bool:
 
 @functools.lru_cache(maxsize=8)
 def reads(stream: bytes) -> tuple[tuple[tuple[int, int], ...], frozenset[int]] | None:
-    """A ``--zk`` proof stream's fields, (offset, bytes) in order: every read C-Flock's proof format makes of it
+    """A ``--zk`` proof stream's fields, (offset, bytes) in order: every read Flock's proof format makes of it
     (`redigest.layout`: its elements, hashes, salts and paths and the integers between them), and its nonces' offsets
     (the ``*nonce`` fields and the Ligerito grinding nonces `GRIND`, but a ring switch's that is 0, `RS_NONCE`); None
     when the format doesn't read the whole stream."""
@@ -305,9 +309,9 @@ def scan(received: dict, pieces: dict[str, bytes], vdir: Path | None, reads=read
 def rescan(received: dict, pieces: dict[str, bytes], vdir: Path | None, reads=reads, a8=None, rows=()) -> dict:
     """A finished run's scan (its summary's ``received``) taken again under this rule from the verifier's files it kept,
     with the pieces the driver recomputes: `scan`'s result, and the run's own ``leaked`` as ``was``. A found piece the
-    driver can't recompute (a salt the run drew) reads leaked. With `a8`, each kept file is searched afresh for `pieces`
-    (`a8.find`), so a piece the run's cutter didn't cut is searched too, and of the run's own finds only those of a blob
-    the driver didn't recompute (not in `rows`) stay."""
+    driver can't recompute (a salt the run sampled) reads leaked. With `a8`, each kept file is searched afresh for
+    `pieces` (`a8.find`), so a piece the run's cutter didn't cut is searched too, and of the run's own finds only those
+    of a blob the driver didn't recompute (not in `rows`) stay."""
     if a8 is not None and vdir is not None:
         table, files = a8.needles(pieces), {}
         for f, rec in received["files"].items():

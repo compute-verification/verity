@@ -1,21 +1,62 @@
-import Proofs.Flock.Claims.KS.PlainCapPrefix
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainCapPrefix
+public import Proofs.Flock.Claims.KS.PlainLevels
+public import Proofs.Flock.Claims.KS.RoundsN
+import Flock.With.SimVerify
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.Recursion.CallsBridgeE
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # Which positions an accepted plain rep opens at a later level
 
-An accepted plain run opens, at table 0's rep `r` and level `ℓ ≥ 1`, exactly the positions drawn from that level's
+An accepted plain run opens, at table 0's rep `r` and level `ℓ ≥ 1`, exactly the positions sampled from that level's
 query coins, and those coins are a deployed coin with a count the statement fixes. So "the run opens `q` there" is a
 function of the run's coins alone, which is what a cap position's `opens` reads (`Claims.Recursion.Caps`).
 
 * `plainQRound`, `plainQN`: the deployed coin of rep `r`'s level-`ℓ` query round, `r · R + J + 1` for `R` the table's
   `repRounds` and `J` the stream round `plainLevelRound`, and its count, `plainRepNs`' entry `J`.
 * `plain_levelCols_queried`: at an accepted plain run, a level-`ℓ` column at `q` exists iff `q` is among the positions
-  that coin draws. The columns are those positions zipped with the proof's rows (`plainLevels_verifyWithM`), the rows
+  that coin samples. The columns are those positions zipped with the proof's rows (`plainLevels_verifyWithM`), the rows
   as many as the positions (`merkleCheck_rows`), the positions `q` of the level (`positions_size`), and the stream
   round's coins the deployed coin's first `n` (`custody_ok`, `streams_ns_plain`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -42,7 +83,7 @@ theorem plainLevelRound_lt {spec : SessionSpec} {st : Stmt} {sch : Flock.Schedul
   dsimp only
   split <;> omega
 
-/-- **Every drawn position within the level's queries has its row among the columns**: the converse of
+/-- **Every sampled position within the level's queries has its row among the columns**: the converse of
 `mem_zkRepCols`. -/
 theorem mem_zkRepCols_of {lv : Flock.Level} {coins : Array F128} {rows : Array (Array F128)} {j : ℕ}
     (hj : j < (positions lv coins).size) (hr : j < rows.size) (hq : j < lv.q) :
@@ -54,7 +95,7 @@ theorem mem_zkRepCols_of {lv : Flock.Level} {coins : Array F128} {rows : Array (
   refine List.mem_map.2 ⟨_, List.getElem_mem hlen, ?_⟩
   simp [List.getElem_zip]
 
-/-- **An accepted plain rep opens a later-level position iff its query coin draws it.** At an accepted plain run, at
+/-- **An accepted plain rep opens a later-level position iff its query coin samples it.** At an accepted plain run, at
 table 0's rep `r < 2` and level `1 ≤ ℓ` of the table's `fast100` schedule, some level-`ℓ` column is at `q` iff `q` is
 among the level's positions at the first `plainQN` elements of the run's coin `plainQRound`. -/
 theorem plain_levelCols_queriedK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}

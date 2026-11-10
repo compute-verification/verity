@@ -1,11 +1,11 @@
-"""C-Flock over an arbitrary partition (`verity_flock.partition_units`): every lowered unit class agrees with the reference
+"""Flock over an arbitrary partition (`verity_flock.partition_units`): every lowered size class agrees with the reference
 evaluator on synthetic inputs lifted through its flat Definition, under `Q_word` on circuit-check's tiny Serve_v1 and under two
 deliberately odd owner functions on a RoPE Call; a class circuit run on another class's lanes disagrees."""
 from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("verity_vllm.program.registry")
+pytest.importorskip("verity.ml.definitions.registry")
 from circuit_check import targets as TG  # noqa: E402
 from verity.ml.circuits import partition_object as PO  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
@@ -17,7 +17,7 @@ from verity_flock import partition_units as PU  # noqa: E402
 @pytest.fixture(scope="module")
 def tiny():
     TG.load_registries()
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
 
     return Program(bind(b1.Serve, C=TG.TINY, LP=3, STEPS=2))
 

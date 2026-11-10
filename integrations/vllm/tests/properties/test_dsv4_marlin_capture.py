@@ -17,7 +17,7 @@ import pytest
 import torch
 
 from tests.properties import dsv4_marlin_capture_gpu as X
-from verity_vllm.program.kernels import marlin_moe_rows as MR
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 E, K, N, SMS = 8, 256, 128, 3
@@ -310,7 +310,7 @@ LARGE = {(64, 256): 2, (64, 128): 2, (128, 64): 2}
 
 def _served(allow: dict, sms: int = 132, large: dict = LARGE) -> dict:
     """The config at each swept M under ``allow`` at the blocks of 8 and 16 and ``large`` at 32."""
-    return {kind: {str(M): list(X._auto(M, kind, sms, large if X.block_of(M) == 32 else allow)) for M in X.SERVED_M}
+    return {kind: {str(M): list(X._auto(M, kind, sms, large if X.moe_block_size_of(M) == 32 else allow)) for M in X.SERVED_M}
             for kind in ("w13", "w2")}
 
 
@@ -337,7 +337,7 @@ def test_the_model_finds_the_limits_behind_the_sweep(allow: dict, large: dict) -
 
 def _served_launch(kind: str, M: int) -> dict:
     K_, N_ = X.shape(kind)
-    return {"args": {"moe_block_size": X.block_of(M), "top_k": X.launch_top_k(kind), "mul_topk_weights": kind == "w2",
+    return {"args": {"moe_block_size": X.moe_block_size_of(M), "top_k": X.launch_top_k(kind), "mul_topk_weights": kind == "w2",
                      "size_m": X.prob_m(kind, M), "size_n": N_, "size_k": K_, "is_k_full": True, "use_atomic_add": False, "use_fp32_reduce": True, "is_zp_float": False,
                      "b_q_type": "float4_e2m1f", "thread_k": -1, "thread_n": -1, "blocks_per_sm": -1},
             "absent": sorted(X.ABSENT), "dtypes": {"input": "torch.bfloat16", "b_scales": "torch.float8_e8m0fnu",
@@ -355,7 +355,7 @@ def _kernel(config, sms: int = 132, block: int = 8) -> dict:
 def test_the_sweep_names_a_served_config_at_every_batch() -> None:
     allow = {(128, 128): 2, (64, 128): 4, (128, 64): 4}
     served = _served(allow)
-    launches = [{**_served_launch(kind, M), "label": f"sweep/{M}", "kernel": _kernel(served[kind][str(M)], block=X.block_of(M))}
+    launches = [{**_served_launch(kind, M), "label": f"sweep/{M}", "kernel": _kernel(served[kind][str(M)], block=X.moe_block_size_of(M))}
                 for M in X.SERVED_M for kind in ("w13", "w2")]
     got = X.sweep_record(launches, 132, TYPES)
     assert got["ok"] and got["statics_ok"] and got["served"] == served and got["model"]["w2/8"]["consistent"] >= 1
@@ -385,7 +385,7 @@ def _tensor(a, dtype=torch.int32) -> torch.Tensor:
 def test_a_case_s_records_read_its_two_runs(tmp_path, M: int) -> None:
     """`case_launches` over intercepted launches as the Interceptor leaves them (CPU tensors here), at a moe block of 8, 16 and 32:
     the assignment, the statics, the kernel's config in both runs, determinism, and the arrays the jobs read."""
-    block = X.block_of(M)
+    block = X.moe_block_size_of(M)
     rng = np.random.default_rng(5)
     ids = np.stack([rng.permutation(np.arange(8, 40))[:X.TOP_K] for _ in range(M)]).reshape(-1)
     st, ex, ntpp = _align(ids, block, experts=40)
@@ -421,7 +421,7 @@ def test_a_case_s_records_read_its_two_runs(tmp_path, M: int) -> None:
 
 
 def test_two_align_draws_split_a_case_into_unmoved_and_moved_pairs(tmp_path) -> None:
-    """Run r20261014-065141-a1ec: decode460 and hot1024 were NO-GO on the v2 whole-output comparison at zero word mismatches
+    """decode460 and hot1024 were NO-GO on the v2 whole-output comparison at zero word mismatches
     against the twin, because `moe_align_block_size` places a multi-block expert's pairs across its blocks in atomic arrival order
     and a pair's words read its block's k-slice schedule (the capture's module docstring, Replay determinism).  Two runs whose
     aligns placed one expert's pairs differently must still check out: the pairs both placed alike are held to each other
@@ -527,7 +527,7 @@ def test_the_replay_relaunches_the_recorded_call(monkeypatch) -> None:
 
 
 def test_a_case_over_the_edge_experts_is_deterministic_by_its_words(tmp_path) -> None:
-    """Run r20261013-205619-ce5e's edge8 (8 tokens routed over the edge experts 0..7 only, both launches at 64/128/4 on 132 SMs) was
+    """A run's edge8 (8 tokens routed over the edge experts 0..7 only, both launches at 64/128/4 on 132 SMs) was
     NO-GO on determinism alone, every word equal to the twin's: an edge expert's +inf scale byte on a +-0 code writes NaN words, and
     `torch.equal` on the bf16 outputs is false wherever one stands, so it called the two runs different whatever they wrote.
     `case_launches` compares the runs' words as bits (`same_words`): equal words are deterministic, and a word one bit off, a NaN's
@@ -775,8 +775,8 @@ def test_the_cases_cover_the_decode_batches_and_the_edge_experts() -> None:
     assert [c for c in X.CASES if c[2] == "edge"] and 0 in X.EDGE_BYTES and 255 in X.EDGE_BYTES
     assert len(X.candidates(8)) == len(X.candidates(16)) == 12 and len(X.candidates(32)) == 6 and X.SENTINEL != 0x7FFF
     assert all(c[2] != "edge" for c in X.CASES if c[0] in X.FORCED + X.QUICK_FORCED), "the probe's scale reads finite weights"
-    assert {X.block_of(M) for M in range(1, X.ENVELOPE + 1)} == {X.block_of(M) for M in Ms} == {8, 16, 32}
-    assert {X.block_of(M) for M, pool in ((c[1], c[2]) for c in X.CASES) if pool == "edge"} == {8, 32}
-    assert all(X.block_of(c[1]) == 8 for c in X.CASES if c[0] in X.FORCED + X.QUICK_FORCED)
-    edges = {m for M in range(2, X.ENVELOPE + 1) if X.block_of(M) != X.block_of(M - 1) for m in (M - 1, M)}
+    assert {X.moe_block_size_of(M) for M in range(1, X.ENVELOPE + 1)} == {X.moe_block_size_of(M) for M in Ms} == {8, 16, 32}
+    assert {X.moe_block_size_of(M) for M, pool in ((c[1], c[2]) for c in X.CASES) if pool == "edge"} == {8, 32}
+    assert all(X.moe_block_size_of(c[1]) == 8 for c in X.CASES if c[0] in X.FORCED + X.QUICK_FORCED)
+    edges = {m for M in range(2, X.ENVELOPE + 1) if X.moe_block_size_of(M) != X.moe_block_size_of(M - 1) for m in (M - 1, M)}
     assert edges == {460, 461, 921, 922} and set(X.SERVED_M) == set(range(1, 18)) | edges | {X.ENVELOPE}

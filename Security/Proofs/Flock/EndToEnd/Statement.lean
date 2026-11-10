@@ -1,15 +1,19 @@
-import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 
 /-!
-# C-Flock's one-stage audit, end to end (trusted)
+# Flock's one-stage audit, end to end (trusted)
 
-`EndToEnd` is a `def G : Prop` in the form of `Pouw.Guarantees.EndToEnd`: stated over C-Flock's definitions, with the
+`EndToEnd` is a `def G : Prop` in the form of `Pouw.Guarantees.EndToEnd`: stated over Flock's definitions, with the
 named assumptions it rests on as hypotheses. Its proof is `Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd`.
 
-C-Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.Composed.PublicJ`, and `Models.lean`, which the `security` package builds without
+Flock's definitions are still in its proofs package, so this module imports
+`Proofs.Flock.Soundness.Discharge.Composed.PublicJ`, and `Definitions.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEnd` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -20,10 +24,10 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **C-Flock's one-stage audit, end to end.** The prover registers `R` (its roots); the verifier draws a uniform
-`kd`-subset of the `n` proof units from its operating system's bytes (`Flock.Draw.drawOS`, `Law.execOS` on the byte
-source `src`); one `--zk` session of `J = nTab I` tables proves the drawn units, `kd / J` in each; and the verifier of
-record, `flock-verify verify --zk --session-tables J`, reads the session's record. Then for every live prover `τ`,
+/-- **Flock's one-stage audit, end to end.** The prover registers `R` (its roots); the challenger's coins sample a
+uniform `kd`-subset of the `n` proof blocks (`Flock.Draw.drawWith`, `Law.execOS` on the byte source `src`); one `--zk`
+session of `J = nTab I` tables proves the sampled proof blocks, `kd / J` in each; and the verifier,
+`flock-verify verify --zk --session-tables J`, reads the session's record. Then for every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
 * a unit wrong (`wrongRegZ`) unless it is right against the public file: in the committed transcript fixed at
@@ -39,23 +43,23 @@ $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong
   salt), so at the input rows the opening conjunct adds essentially nothing to correctness in `XplurZC`. That the
   committed inputs are the data owner's bytes is not stated here. The units are those of the key program of the circuit
   the verifier parses (`keyProg c hU n`, partitioned at `Layout.outsOf`), each read at its `--zk` site in the table it
-  is drawn into and bound to the rows it commits;
-* `ε_ks = ksAvgStrictZ`: the worst table's knowledge error, `ksStrictZ / (1 − N₀/(ek))`, averaged over the draw;
-* `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, `Q_s` the expected number of commit strings the drawn
-  units read.
+  is sampled into and bound to the rows it commits;
+* `ε_ks = ksAvgStrictZ`: the worst table's knowledge error, `ksStrictZ / (1 − N₀/(ek))`, averaged over the sample;
+* `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, `Q_s` the expected number of commit strings the sampled
+  proof blocks read.
 
 Its named assumptions, each a hypothesis:
 * A3 (`uniform/io-getrandombytes`, `Assumptions.UniformRandomBytes`): the verifier's bytes are uniform;
 * `live-verifier` (`Assumptions.Zk.RecordCustodyZKJ`, with A6 `uniform/flock-coin-server` for its coins): the record
-  `flock-verify` reads is the one the coin server wrote for the live session, and its draw file the one
-  `flock-verify draw` printed for the verifier's own draw;
+  `flock-verify` reads is the one the challenger's live-coin part wrote for the live session, and its sample file the one
+  `flock-verify draw` printed for the verifier's own sample;
 * `cr/sha-512` (`Assumptions.SHA512CRStrict`, through `TableCRZ`) for the knowledge finders of each table of the
   prover's session, at budgets `qF` (rewinding) and `qS` (self-clash);
 * `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through `LinkCRZC`) for the prover's link finders.
 
 The rest are the verify command's tags (`TagsOkZJ`), an untyped statement whose outputs are public, the count curve's
-numeric conditions, and a reference setup `y₀`: table 0's, at the session's link points, at some draw `d₀`, which the
-session's plan puts in place of a table that a draw doesn't set up. Every draw flock-verify accepts gives one
+numeric conditions, and a reference setup `y₀`: table 0's, at the session's link points, at some sample `d₀`, which the
+session's plan puts in place of a table that a sample doesn't set up. Every sample flock-verify accepts gives one
 (`Flock.SecurityProofs.EndToEnd_refSetup`), at any number of tables. -/
 def EndToEnd : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -64,9 +68,9 @@ def EndToEnd : Prop :=
     (c : Flock.Circuit) (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOk c = true)
-    -- the law: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
+    -- the sampling design: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    -- the record: the draw file at each draw, and the session at each draw and registration
+    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -107,8 +111,8 @@ def EndToEnd : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **`EndToEnd` at A3 per test**: `EndToEnd` with the verifier's bytes passing the draw's escape test
-(`Law.escapeTest`: the live draw runs and misses every unit of `B`) at every `B` up to `η`
+/-- **`EndToEnd` at A3 per test**: `EndToEnd` with the verifier's bytes passing the sample's escape test
+(`Law.escapeTest`: the live sample runs and misses every unit of `B`) at every `B` up to `η`
 (`Assumptions.UniformRandomBytesTest`), in place of every event exactly, and `η` added to the miss term. -/
 def EndToEndPerTest : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -117,9 +121,9 @@ def EndToEndPerTest : Prop :=
     (c : Flock.Circuit) (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOk c = true)
-    -- the law: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
+    -- the sampling design: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
-    -- the record: the draw file at each draw, and the session at each draw and registration
+    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →

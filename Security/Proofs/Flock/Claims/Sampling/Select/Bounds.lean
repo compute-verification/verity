@@ -1,24 +1,69 @@
-import Proofs.Flock.Claims.Sampling.Select.Steps
-import Proofs.Flock.Claims.Sampling.Escape
-import Proofs.Flock.Claims.Sampling.ExecBernoulli
+module
+
+public import Proofs.Flock.Claims.Sampling.Escape
+public import Proofs.Flock.Claims.Sampling.ExecBernoulli
+public import Proofs.Flock.Claims.Sampling.Select.Layout
+public import Proofs.Flock.Claims.Sampling.Select.Steps
+public import Proofs.Flock.Claims.Sampling.Select.Take
+public import Properties.Spot.Draw
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The draw `drawUnits` makes misses a set of units no more often than its law's `P_a`
+# The sample `drawUnits` makes misses a set of units no more often than its sampling design's `P_a`
 
-`drawUnits` runs its law's stages on the coins in order (`drawUnits_seq`), and each stage is bounded by its sampler's
+`drawUnits` runs its sampling design's stages on the coins in order (`drawUnits_seq`), and each stage is bounded by its sampler's
 escape on a stream of any length (`Law.subset_exec_escape_le`, `Law.bernoulli_exec_escape_le`), so the stopping-time
 bound (`seqMiss_le`) multiplies them.
 
-* `subset_none_of_lt`: `subset k n` draws nothing when `k > n`, so such a stratum's stage misses with probability `0`.
-* `one_bound`: a subset or Bernoulli draw misses a set `U` of units with probability at most
+* `subset_none_of_lt`: `subset k n` samples nothing when `k > n`, so such a stratum's stage misses with probability `0`.
+* `one_bound`: a subset or Bernoulli sample misses a set `U` of units with probability at most
   `C(n − |U|, k)/C(n, k)` or `((den − num)/den)^|U|`.
-* `strata_bound`: a stratified or work draw misses the units of its strata at the slots of `W` with probability at most
-  `strataPa` of its strata's sizes and draws.
+* `strata_bound`: a stratified or work sample misses the units of its strata at the slots of `W` with probability at most
+  `strataPa` of its strata's sizes and samples.
 -/
 
-open SampledProofs
+@[expose] public section
 
-namespace Properties.SampledProofs.SecurityProofs
+open Spot
+
+namespace Properties.Spot.SecurityProofs
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset Claims.Sampling
 open scoped ENNReal
@@ -47,7 +92,7 @@ theorem loopSw_none (n : ℕ) (src : ByteArray) :
         exact absurd hu (by simp)
       · exact loopSw_none n src is _ p ((List.mem_cons.1 h).resolve_left fun e => hi e.symm)
 
-/-- **`subset k n` draws nothing when `k > n`**: its `n`-th step draws from `[0, 0)`. -/
+/-- **`subset k n` samples nothing when `k > n`**: its `n`-th step samples from `[0, 0)`. -/
 theorem subset_none_of_lt (k n : ℕ) (hk : n < k) (src : ByteArray) : Flock.Draw.subset k n src = none := by
   rw [DrawExec.subset_eq, loopSw_none n src _ _ _ (List.mem_range'.2 ⟨n, hk, by omega⟩), Option.map_none]
 
@@ -85,7 +130,7 @@ theorem Pr_le_of_prCoin {L : ℕ} (E : (Fin L → Fin 256) → Prop) (q : ℝ≥
   rw [Pr_eq_toReal_prCoin]
   exact ENNReal.toReal_mono hq h
 
-/-- **A subset or Bernoulli draw misses `U`** with probability at most `C(n − |U|, k)/C(n, k)`, or
+/-- **A subset or Bernoulli sample misses `U`** with probability at most `C(n − |U|, k)/C(n, k)`, or
 `((den − num)/den)^|U|`. -/
 theorem one_bound (n : ℕ) (U : Finset ℕ) (hU : U ⊆ range n) (L : ℕ) :
     (∀ k, k ≤ n → Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
@@ -141,7 +186,7 @@ theorem stratum_unit (s : Flock.Draw.Stratum) (j : ℕ) : s.unit j = (expand s.u
 theorem stratum_size' (s : Flock.Draw.Stratum) : s.size = (expand s.units.toList).length := stratum_size s
 
 /-- The stage of stratum `s` at slot `o`, missing the slots of `W`, and its bound: `subset`'s escape, `0` when the stratum
-draws more units than it has. -/
+samples more units than it has. -/
 noncomputable def stratumQ (W : Finset ℕ) (s : Flock.Draw.Stratum) (o : ℕ) : ℝ≥0∞ :=
   if h : s.k ≤ s.size then (Law.subset s.size s.k h).escape (finOf s.size (window o s.size W)) else 0
 
@@ -196,7 +241,7 @@ theorem strataStages_prod (W : Finset ℕ) : ∀ (l : List Flock.Draw.Stratum) (
     simp only [strataStages, List.map_cons, List.prod_cons, strataPa]
     exact ⟨mul_le_one' (stratumQ_le_one W s o) h1, by rw [ENNReal.toReal_mul, h2, stratumQ_toReal]⟩
 
-/-- **The strata's stages as `drawUnits` runs them miss their windows**: stage `i` of the strata `St` draws its
+/-- **The strata's stages as `drawUnits` runs them miss their windows**: stage `i` of the strata `St` samples its
 `i`-th stratum's units among `units`, and no unit at a slot of `W` is among them. -/
 theorem strataStages_of (St : Array Flock.Draw.Stratum) (units : Array ℕ) (W : Finset ℕ)
     (hW : ∀ v ∈ W, (St.toList.flatMap fun s => expand s.units.toList).getD v 0 ∉ units) :
@@ -223,8 +268,8 @@ theorem strataStages_of (St : Array Flock.Draw.Stratum) (units : Array ℕ) (W :
         List.length_append, ← stratum_size'] at this
       exact this
 
-/-- **A stratified or work draw misses the units at the slots of `W`** with probability at most `strataPa` of its strata's
-sizes and draws, its strata's units in order as slots. -/
+/-- **A stratified or work sample misses the units at the slots of `W`** with probability at most `strataPa` of its strata's
+sizes and samples, its strata's units in order as slots. -/
 theorem strata_bound (law : Flock.Draw.Law) (St : Array Flock.Draw.Stratum)
     (hSt : (∃ k, law = .stratified k St) ∨ ∃ k ws, law = .work k ws ∧ St = ws.map (·.toStratum)) (n : ℕ)
     (W : Finset ℕ) (L : ℕ) :
@@ -246,4 +291,4 @@ theorem strata_bound (law : Flock.Draw.Law) (St : Array Flock.Draw.Stratum)
   simp only [List.length_nil, List.flatMap_nil, Array.length_toList] at this
   exact seqMiss_imp _ _ this _ _ hs
 
-end Properties.SampledProofs.SecurityProofs
+end Properties.Spot.SecurityProofs

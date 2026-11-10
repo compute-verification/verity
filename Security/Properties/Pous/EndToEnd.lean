@@ -1,10 +1,12 @@
-import PousCheck.Run
-import Properties.Pous
-import Properties.Pous.TimedAudit
-import Properties.Pous.MemoryChallenger
-import Properties.Identity
-import Models.Pous.Assumptions.P2
-import Definitions.Pous.P2.Cost
+module
+
+public import PousCheck.Run
+public import Properties.Pous
+public import Properties.Pous.TimedAudit
+public import Properties.Pous.MemoryChallenger
+public import Properties.Hash.Identity
+public import Definitions.Pous.Assumptions.P2
+public import Definitions.Pous.P2.Cost
 
 /-!
 # PoUS end to end: what an accepted run certifies, and P2's audit in the ring model
@@ -23,21 +25,21 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
   the challenged block of that `C*`, within `Δ + RTT` on its own clock; or the run's own data holds a SHA-512
   collision (`RunBreak`, `TableBreak`) or an LMS forgery (`RunBreak`). `RunCertifies` adds the
   setup check's acceptance of `C*` (`Accepted`): `C*` decodes to the committed `W` and setup published its root, so
-  every `C*` setup accepts is one `RunCheckAccepts` speaks of. `RunCheckAccepts` is proved; `RunCertifies` follows from
-  it and the setup check's `AcceptsDecodes` and `PublishesRoot`, which are open.
-* `EndToEndRing`, `EndToEndRingDeployed`, `DrawExact`, `HonestPassesRing` and `HonestPassesAccepts`, **in the ring
-  model, with `ω` uniform**: P2's square–mask–square over `Z/p` with a uniformly random odd labeling and uniformly random
-  per-block keys (`p2ring`), against a server that is a `Server S D Q L` of this module, with the memory challenger's
-  coins drawn as the code draws them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from
-  uniform bytes.
+  every `C*` setup accepts is one `RunCheckAccepts` speaks of. Both are proved: `RunCertifies` from `RunCheckAccepts`
+  and the setup check's `AcceptsDecodes` and `PublishesRoot` (`Properties.Pous`).
+* `EndToEndRing`, `EndToEndRingDeployed` and `DrawExact`, **in the ring model, with `ω` uniform**: P2's
+  square–mask–square over `Z/p` with a uniformly random odd labeling and uniformly random per-block keys (`p2ring`),
+  against a server that is a `Server S D Q L` of this module, with the memory challenger's coins flipped as the code
+  samples them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from uniform bytes. The honest
+  full-state server's lemmas, `HonestPassesRing` and `HonestPassesAccepts`, are in
+  `Security/Proofs/Pous/Lemmas/EndToEnd.lean`.
 
 The step from the ring game to the deployed system is four claims, each its own id in `verity.core.claims`, cited
 separately so that each can be rejected alone:
 
 1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded between
    setup, the session and its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its
-   host never restores an earlier copy: `trusted-nebius-host`
-   (pending network-accounting's widening, Daniel decision 2)) and the coins drawn online, after its state is fixed. It
+   host never restores an earlier copy: `trusted-host`) and the coins flipped online, after its state is fixed. It
    names no number.
 2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
    multiplication round, `Q + 1` key queries or `L + 1` ring operations within `Δ + RTT`, at the corollary's
@@ -56,9 +58,9 @@ it hands the server the session commitment, and `P2RingAuditSecure`, the conject
 Two gaps stood between these statements and the deployed verifier:
 
 * **G-1**: the check's half is fixed in code; one session per id is the memory challenger's `SessionLog` under its host
-  presumption, which `trusted-nebius-host` covers as network-accounting widens it
-  (pending network-accounting's widening, Daniel decision 2). The check's half: a session's `binding` is required and is
-  the setup's root (`Run.check` refuses any other), so a session names the setup it audits, and its id is the one the
+  presumption, which `trusted-host` covers once it is widened to the challenger's host. The check's half: a session's
+  `binding` is required and is the setup's root (`Run.check` refuses any other), so a session names the setup it audits,
+  and its id is the one the
   auditor designated for the audit (`Run.check` refuses any other); `RunCheckAccepts` states it. The memory challenger
   runs at most one session under an id (`memory_challenger.SessionLog`, a file of its own, recorded before the session's
   first challenge), so an audit has at most one session the check accepts; that refusal is the device's code and log,
@@ -66,6 +68,8 @@ Two gaps stood between these statements and the deployed verifier:
 * **G-2**, fixed: the composed setup-to-challenger check is `PousCheck.Run.check`, and `RunCheckAccepts` is what its
   acceptance gives.
 -/
+
+@[expose] public section
 
 open MemoryChallenger MemoryChallenger.Properties
 open PousCheck PousCheck.Properties
@@ -113,13 +117,13 @@ def AnsweredOnTime (r : Run) (C : Array (Array ByteArray)) : Prop :=
 
 /-- The strings the run hashes, beyond `runStrings`: each answer the device received under the key, and each block of
 `C*`, as `blockDigest` hashes them. -/
-def blockStrings (pk : ByteArray) (dev : Device) (C : Array (Array ByteArray)) : List ByteArray :=
+def blockStrings (pk : ByteArray) (dev : Challengers) (C : Array (Array ByteArray)) : List ByteArray :=
   (dev.sessions pk).flatMap (fun r => r.observed.map fun o => blockInput o.block) ++ (flat C).toList.map blockInput
 
 /-- The run's own data holds a break: two distinct strings it hashes with one SHA-512 digest (`cr/sha-512`), or a
 signature verifying under a trusted key over a session message the device never signed (`euf-cma/lms-sha512-n64`,
 under the one-role reading of `MemoryChallenger.Properties`). Every witness is bounded by the run. -/
-def RunBreak (trusted : List ByteArray) (s : SignedSession) (dev : Device) (C : Array (Array ByteArray)) : Prop :=
+def RunBreak (trusted : List ByteArray) (s : SignedSession) (dev : Challengers) (C : Array (Array ByteArray)) : Prop :=
   (let xs := runStrings s dev ++ blockStrings s.publicKey dev C
    ∃ x ∈ xs, ∃ y ∈ xs, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) ∨
     ∃ p m, SCHEMES.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧ sessionMessage s = some m ∧
@@ -181,9 +185,10 @@ the device's own readings: what the server reports about its latency enters nowh
 challenger's own: whichever table it held, an accepted one has the published root, so it is `C*`'s or there is a
 collision. -/
 def RunCheckAccepts : Prop :=
-  ∀ (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray),
+  ∀ (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord)
+    (sid : ByteArray),
     Run.check trusted pub digests r sid = .ok () →
-    ∀ (dev : Device) (C : Array (Array ByteArray)),
+    ∀ (dev : Challengers) (C : Array (Array ByteArray)),
       AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧ r.signed.publicKey ∈ trusted ∧
         (Shaped C → Merkle.root (leaves pub.salt C) = some pub.root →
           (∃ run ∈ dev.sessions r.signed.publicKey, run.commitment = r.commitment ∧ AnsweredOnTime run C) ∨
@@ -194,7 +199,7 @@ salt and publishes `pub`, and the composed check accepts, against the verifier's
 keys (never the run's record), `pub`, the memory challenger's table and its session under the id `sid` the auditor
 designated. -/
 def Accepted (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) : Prop :=
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray) : Prop :=
   SetupProtocol.protocol.check q c C = .accept pub () ∧ Run.check trusted pub digests r sid = .ok ()
 
 /-- **An accepted run certifies `C*`.** For every verifier's list `trusted` of memory-challenger keys (never the run's
@@ -204,11 +209,12 @@ so the session's `binding` is the root of the `C*` setup checked), the session a
 under the designated id and is signed under a key in `trusted`, and that key's holder ran a session with the accepted
 commitment in which every recorded answer is the challenged block of `C*`, on time on its own clock; or the run's own
 data holds a SHA-512 collision or an LMS forgery under a key in `trusted`. A dishonest commitment (`C*` decoding to a
-`W'` other than the `W` the server was handed) is `CommitBreak`'s. It rests on the setup check's `AcceptsDecodes` and
-`PublishesRoot`, which are open. -/
+`W'` other than the `W` the server was handed) is `CommitBreak`'s. It follows from `RunCheckAccepts` and the setup
+check's `AcceptsDecodes` and `PublishesRoot`, all proved. -/
 def RunCertifies : Prop :=
   ∀ (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Device),
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray)
+    (dev : Challengers),
     Accepted trusted c C pub digests r sid →
       DecodesToCommitment q c C ∧ Published q c C pub ∧ AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧
         r.signed.publicKey ∈ trusted ∧
@@ -228,7 +234,7 @@ noncomputable def S : ℕ := sch.stateBound Params.ρ
 /-- The full state: all of `C`, `2^19 · 16,448` bits, more than `S`. -/
 def FULL : ℕ := 2 ^ 19 * 16448
 
-/-- `n` bytes, each uniform when drawn. -/
+/-- `n` bytes, each uniform when sampled. -/
 abbrev Bytes (n : ℕ) : Type := Fin n → Fin 256
 
 /-- The bytes, as the code holds them. -/
@@ -264,7 +270,7 @@ answer within `(D, Q, L)` (`RingBounded`: at most `D` rounds with a multiplicati
 operations, for every `ω`):
 
 * `pre W pp C ω` is all that survives setup, `S` bits, a function of `W`, `C` and the whole primitive (perfect
-  isolation); it is fixed before the memory challenger's coins are drawn (online coins);
+  isolation); it is fixed before the memory challenger's coins are flipped (online coins);
 * `step sc W pp j σ i` answers round `j`'s index `i` from the state `σ`, what is public (`W`, `pp`) and the one session
   commitment `sc` of the audit, returning the block and the next `S`-bit state.
 
@@ -274,7 +280,7 @@ server learns from indices seen after one only helps a server the game counts as
 structure Server (S D Q L : ℕ) : Type where
   pre : Preprocessor sch S
   step : SessionCommitment → Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B →
-    Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
+    OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
   bounded : ∀ sc W pp j σ i, (step sc W pp j σ i).RingBounded D Q L
 
 /-- **The server passes the session**: `ω`, the coins and the streams `x`; the code's sampler reads index `I j` from
@@ -294,7 +300,7 @@ def Passes {S D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n) (A : S
           (A.pre W (sch.enc W x.1 ()).1 (sch.enc W x.1 ()).2 x.1) =
         List.ofFn fun j => (sch.enc W x.1 ()).2 (I j)
 
-/-- **The draw's rejection sampling never rejects at `2^19` blocks (`ε_rs = 0`)**: `uniformOn (2^19)` on `DRAW_BYTES`
+/-- **The sample's rejection sampling never rejects at `2^19` blocks (`ε_rs = 0`)**: `uniformOn (2^19)` on `DRAW_BYTES`
 uniform bytes returns an index, and it is exactly uniform. Its word is `width (2^19) = 11` bytes, and `2^19` divides
 `2^88`, so no word is rejected. -/
 def DrawExact : Prop :=
@@ -314,8 +320,8 @@ It speaks of the deployed system only through the four claims of this module's h
 `pous-ring-speed` (the hardware's `D`, `Q` and `L` within `Δ + RTT`, by measurement), `pous-ring-instantiation` (P2 with
 `φ = id`, SHA-512-CTR keys and its public root is no easier than `p2ring` with uniform `ω`) and `prf/sha-512` (the
 derived streams are as good as uniform bytes). G-1: the check's half is fixed in code; one session per id is the memory
-challenger's `SessionLog` under its host presumption, which `trusted-nebius-host` covers as network-accounting widens it
-(pending network-accounting's widening, Daniel decision 2). G-2 (the composed check) is fixed in code. What the deployed
+challenger's `SessionLog` under its host presumption, which `trusted-host` covers once it is widened to the challenger's
+host. G-2 (the composed check) is fixed in code. What the deployed
 verifier's acceptance gives is `RunCheckAccepts` (this module's header). -/
 def EndToEndRing : Prop :=
   Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
@@ -338,8 +344,8 @@ first), so even a root in fewer rounds leaves the attack about twice as far as `
 
 The timing. `pous-ring-speed` at this `D` says no allowed hardware finishes 16,447 sequential multiplication rounds
 within `Δ + RTT ≤ 854 µs`. `ROOT_CALL_NS` (PROTOCOL.md, P2's SeqRoot) is half the fastest modelled root, the timing red
-team's 361.55 ns per 16,448-bit squaring on one Zen 5 core cut by the measured 8-core cooperation speedup of 3.490×
-(run `r20260929-060834-0ec4`): about 103.6 ns per round, so 16,447 rounds take at least 1,704 µs, 1.995 × 854 µs. The
+team's 361.55 ns per 16,448-bit squaring on one Zen 5 core cut by the measured 8-core cooperation speedup of 3.490×:
+about 103.6 ns per round, so 16,447 rounds take at least 1,704 µs, 1.995 × 854 µs. The
 PROTOCOL's 2.0001× counts the root's 20 extra multiplications, which a round of the ring model performs beside its
 squaring. Under the red team's sync model (4.24× and 5.55× at 8 cores) the margin is 1.64× and 1.25×.
 
@@ -351,19 +357,5 @@ def EndToEndRingDeployed : Prop :=
     Pous.P2.Assumptions.P2RingAuditSecure 16446 (2 ^ 20) (2 ^ 64) →
       ∀ (session binding : ByteArray) (W : Bits sch.n) (A : Server S 16446 (2 ^ 20) (2 ^ 64)),
         pr (Passes session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
-
-/-- **Non-vacuity in the ring model, with `ω` uniform: the honest full-state server passes P2's audit.** At the full
-state (`FULL = 2^19 · 16,448` bits, more than `S`), a responder that keeps all of `C` and answers each index from it
-with no query at all (`RingBounded 0 0 0`) is accepted by `seqAcceptsOn` with probability 1, for every `W`. -/
-def HonestPassesRing : Prop :=
-  S < FULL ∧ ∃ (A₁ : Preprocessor sch FULL) (A₂ : SeqResponderOn sch FULL 0 0 0),
-    ∀ W, pr (seqAcceptsOn sch 105 W A₁ A₂) = 1
-
-/-- **Non-vacuity of `EndToEndRing`'s event, in the ring model, with `ω` uniform**: the honest full-state server, a
-`Server FULL 0 0 0`, passes the session with probability 1 for every 32-byte session id, binding and `W`: the code
-always builds the coin tree, and the draw never fails (`ε_rs = 0`, `DrawExact`). -/
-def HonestPassesAccepts : Prop :=
-  ∃ A : Server FULL 0 0 0, ∀ session : ByteArray, session.size = 32 → ∀ (binding : ByteArray) (W : Bits sch.n),
-    pr (Passes session binding W A) = 1
 
 end Pous.EndToEnd
