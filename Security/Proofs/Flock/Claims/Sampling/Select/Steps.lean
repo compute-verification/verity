@@ -2,6 +2,41 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Select.Layout
 public import Properties.Spot.Draw
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Sampling.Select.Take
 
 @[expose] public section
 
@@ -81,10 +116,10 @@ theorem throw_bind_ne {ε α β : Type} (e : ε) (f : α → Except ε β) (b : 
 theorem throw_ne {ε α : Type} (e : ε) (b : α) : (throw e : Except ε α) ≠ .ok b := by
   simp [throw, throwThe, MonadExceptOf.throw]
 
-/-- **The sampling design `flockLaw` accepts**: a subset of the sampling design object's `k` units, no more than the population, a Bernoulli law
-at a probability, or a sampling design of kind `stratified` or `work`. -/
+/-- **The sampling design `flockLaw` accepts**: a subset of the sampling design object's `k` units, at least one and no
+more than the population, a Bernoulli law at a probability, or a sampling design of kind `stratified` or `work`. -/
 theorem flockLaw_cases (law : Json) (n : ℕ) (parsed : Flock.Draw.Law) (h : Draw.flockLaw law n = .ok parsed) :
-    (∃ k, parsed = .subset k ∧ k ≤ n ∧ nat? (getD law "k") = some k) ∨
+    (∃ k, parsed = .subset k ∧ k ≤ n ∧ nat? (getD law "k") = some k ∧ 1 ≤ k) ∨
       (∃ a b, parsed = .bernoulli a b ∧ 0 < b ∧ a ≤ b) ∨ kindOf law = "stratified" ∨ kindOf law = "work" := by
   unfold Draw.flockLaw at h
   split at h
@@ -98,8 +133,10 @@ theorem flockLaw_cases (law : Json) (n : ℕ) (parsed : Flock.Draw.Law) (h : Dra
       · rename_i k hnat
         split at h
         · exact absurd h (throw_bind_ne _ _ _)
+        split at h
+        · exact absurd h (throw_bind_ne _ _ _)
         · obtain rfl := (Except.ok.inj h).symm
-          exact Or.inl ⟨_, rfl, by omega, hnat⟩
+          exact Or.inl ⟨_, rfl, by omega, hnat, by omega⟩
       · exact absurd h (throw_ne _ _)
     · split at h
       · exact absurd h (throw_bind_ne _ _ _)

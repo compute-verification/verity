@@ -193,10 +193,22 @@ unopened coins rest on the tree's hm96 hiding.
 =======
 ``coin_tree`` a tree the log shows sampled, its link's ``root_b`` keys exactly its session's tables (`LINK_TABLES`), each
 entry the length its table's statement fixes (`LINK_ROOT_LEN`, refused before the hash so the hashed message parses one
+<<<<<<< 94ca7fd0d18
 way), its link points and every round's coins that tree's logged openings.  `sessions_tree_reason` holds an audit's sessions to
 them, one tree a session and every tree a session's, so no statement's coins are flipped twice.  The tree's root and key
 leave at ``Hello``, as C-Flock's coin server releases them, so its unopened coins rest on the tree's hm96 hiding.
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+way), its link points and every round's coins that tree's logged openings.  `sessions_tree_reason` holds an audit's sessions to
+them, one tree a session and every tree a session's, so no statement's coins are flipped twice.  The tree's root and key
+leave at ``Hello``, as Flock's live-coin part releases them, so its unopened coins rest on the tree's hm96 hiding.
+=======
+way), its link points and every round's coins that tree's logged openings, and every logged opening of that tree a round
+the record gives its stream (`record_rounds`).  `sessions_tree_reason` holds an audit's sessions to them, one tree a
+session and every tree a session's, so no statement's coins are flipped twice.  `sample_link_first` holds the log's
+order: the sample, then the link, then the other rounds.  The tree's root and key leave at ``Hello``, as
+Flock's live-coin part releases them, so its unopened coins rest on the tree's hm96 hiding.
+>>>>>>> 7af4d24fca3e
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
@@ -943,6 +955,24 @@ def _record_coins(cs: Any) -> bytes | None:
     return b"".join(bytes.fromhex(c) for c in cs)
 
 
+def record_rounds(record: Any, stream: str) -> int:
+    """The rounds a ``--zk`` session's record gives stream `stream` of its coin tree: one of ``session`` (`CT.SESSION`),
+    its round 0 the link points; of another stream, the size of ``rounds`` of the record's first stream so named; none
+    of a stream the record doesn't name."""
+    if stream == CT.SESSION:
+        return 1
+    streams = record.get("streams") if isinstance(record, dict) else None
+    named = (x for x in streams if isinstance(x, dict) and x.get("stream") == stream) if type(streams) is list else ()
+    s = next(named, None)
+    rounds = s.get("rounds") if s is not None else None
+    return len(rounds) if type(rounds) is list else 0
+
+
+EXTRA_OPENING = ("its coin tree opens a round its record doesn't record: the challenger opens a tree's "
+                 f"{CT.SESSION} round 0 and each round of each stream the record names, as the session records it, and "
+                 "no other")
+
+
 def session_tree_reason(trees: dict[str, LoggedTree], tables: Mapping[str, int | None], record: Any) -> str | None:
     """Why `record`, a ``--zk`` session's record (its ``session.json``) on the tables `tables`, each with the byte
     length its statement fixes for its ``root_B`` (None where the caller set up no statement), doesn't show its coins
@@ -952,7 +982,9 @@ def session_tree_reason(trees: dict[str, LoggedTree], tables: Mapping[str, int |
     message it hashes parses one way; its link points (``link.points``, in order) that tree's ``session`` round 0,
     opened after the roots its link commits (`link_after` of ``link.root_f`` and ``link.root_b``); and each round ``k``
     of each of its ``streams`` that tree's round ``k`` of the stream, its ``n`` coins opened after its message
-    (``msg_sha512``) and whose SHA-512 is its ``coins``' (`coins_digest`)."""
+    (``msg_sha512``) and whose SHA-512 is its ``coins``' (`coins_digest`); and each round the tree shows opened one the
+    record gives its stream (`record_rounds`, `EXTRA_OPENING`), so the tree opens its ``session`` stream once, each
+    stream the record names exactly its ``rounds``, and no other stream."""
     ct = record.get("coin_tree") if isinstance(record, dict) else None
     t = trees.get(ct["root"]) if isinstance(ct, dict) and type(ct.get("root")) is str else None
     if t is None:
@@ -985,6 +1017,8 @@ def session_tree_reason(trees: dict[str, LoggedTree], tables: Mapping[str, int |
             o = t.opening(name, k)
             if o is None or (o.n, o.after, o.coins) != (r["n"], r["msg_sha512"], hashlib.sha512(coins).hexdigest()):
                 return f"its {name} round {k} is not coins the challenger opened under its tree after that round's message"
+    if not all(o.round < record_rounds(record, o.stream) for o in t.opened):
+        return EXTRA_OPENING
     return None
 
 
@@ -2044,6 +2078,7 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
            "verify_periods", "withheld_on", "write_record",
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
            "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS", "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT",
            "SAMPLE_LINK_FIRST", "SHARED_TREE", "TREE_EVENT", "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE",
@@ -2060,3 +2095,15 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "coin_trees_of", "coins_digest", "link_after", "session_tree_reason", "sessions_tree_reason", "tree_line",
            "tree_spec_reason"]
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+           "LINK_ROOT_LEN", "LINK_TABLES", "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS", "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT",
+           "SHARED_TREE", "TREE_EVENT", "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening",
+           "coin_trees_of", "coins_digest", "link_after", "session_tree_reason", "sessions_tree_reason", "tree_line",
+           "tree_spec_reason"]
+=======
+           "EXTRA_OPENING", "LINK_ROOT_LEN", "LINK_TABLES", "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS",
+           "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT", "SAMPLE_LINK_FIRST", "SHARED_TREE", "TREE_EVENT",
+           "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening", "coin_trees_of",
+           "coins_digest", "link_after", "link_line", "open_line", "record_rounds", "sample_link_first",
+           "session_tree_reason", "sessions_tree_reason", "tree_line", "tree_spec_reason"]
+>>>>>>> 7af4d24fca3e

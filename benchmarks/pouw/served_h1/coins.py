@@ -30,7 +30,7 @@
   commitment; a sample session the gate opens plain is refused before any coin. The prover's record says only
   ``coins=off-node session ID at HOST:PORT (unchecked)``: what it writes about its coins is the prover's.
 * **In-process** (no address): `window.live_challenger` and `window.draw_challenger` in the serving process, on the
-  prover's node. It stays for CPU tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not
+  developer's node. It stays for CPU tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not
   certified)``.
 
 `check` is the verifier's side. It reads the session as infra's gate publishes it (``fetch SESSION``: the challenger's
@@ -605,7 +605,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     it: the session the ledger opens on `draw_after` (`audited_window`), opened withheld (`challenger.withheld_on`), a
     sample session's layout (`window.draw_epoch_reason`), and its sampling coin opened once after `draw_after`.  ``ok`` only
     when all hold."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
     d = published(directory)
     sid, window = coins.get("session"), coins.get("window") or {}
     out: dict[str, Any] = {"ok": False, "coins": "refused", "challenger_out": str(d), "session": sid}

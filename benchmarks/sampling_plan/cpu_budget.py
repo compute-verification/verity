@@ -28,12 +28,20 @@ from collections.abc import Sequence
 from math import ceil, log
 from pathlib import Path
 
+<<<<<<< 94ca7fd0d18
 from verity.core.protocols.pous import wipe_monitoring
 from verity.ml.windows.interface import K_MAX, MAX_ROWS, proof_block_k_log
+||||||| e10cf2c8559
+from verity.core.protocols.pous import wipe_monitoring
+from verity.ml.windows.interface import K_MAX
+=======
+from verity.core.protocols import reporting
+from verity.ml.windows.interface import K_MAX
+>>>>>>> 7af4d24fca3e
 
-#: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`wipe_monitoring`)
-DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
-PERIODS = dict(wipe_monitoring.PERIODS)
+#: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`reporting`)
+DELTAS = tuple(map(float, reporting.DELTAS))
+PERIODS = dict(reporting.PERIODS)
 SERVERS = 10_000
 UNITS = 8
 SLOT_CORES, SLOT_GB = 42, 120

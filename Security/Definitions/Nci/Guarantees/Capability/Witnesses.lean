@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Guarantees.Capability.Budgets
-public import Definitions.Nci.Guarantees.Capability.Incidence
 public import Definitions.Nci.Guarantees.Capability.Dependency
 public import Definitions.Nci.Capability.Toy
 
@@ -13,17 +12,17 @@ Each local bound has two witnesses at the toy instance (`Nci.Capability.Toy`), l
 * `XHonest`: the bound's premises, every one, hold together at the toy, at the parameters its conclusion is read at;
 * `XNontrivial`: its conclusion fails at the toy where a premise is dropped, so the conclusion is not a tautology.
 
-Each bound over a covering or a partition (the incidence and operand caps, the caps from dependency, and the three
-budgets) is of the lock's `exclusion` kind: its `XNontrivial` states, at the toy, each of the bound's other premises,
-the dropped premise's failure and the bound's. `HeldBudget` drops description hardness and `StatHeldBudget` min-entropy
-hardness, at items priced above what the toy's values carry.
+Each bound over a covering or a partition (the caps from dependency and the three budgets) is of the lock's `exclusion`
+kind: its `XNontrivial` states, at the toy, each of the bound's other premises, the dropped premise's failure and the
+bound's. `HeldBudget` drops description hardness and `StatHeldBudget` min-entropy hardness, at items priced above what
+the toy's values carry.
 
-The structural premises (`HeldPriceAtMost`, `SlotsRead`, the incidence, `Consumers.Upstream`, `OverlapWeights`,
-`RequiresState`) are proved at the toy. So are the information premises. Description and source hardness hold at
-deficit `1` for the two-bit value `bb` of gates `2` and `3`, the token `b` twice, and the recovery at ambiguity `1`.
-Each honest witness also proves its parameter spent: at deficit or ambiguity `0` the premise fails, because the toy's
-decoder `M` describes `11`, an honest run's value, in one bit, and its recovery program spends one bit picking the
-source. Min-entropy hardness holds at deficit `0` for the product's value, a uniform bit.
+The structural premises (`HeldPriceAtMost`, `Consumers.Upstream`, `OverlapWeights`, `RequiresState`) are proved at the
+toy. So are the information premises. Description and source hardness hold at deficit `1` for the two-bit value `bb` of
+gates `2` and `3`, the token `b` twice, and the recovery at ambiguity `1`. Each honest witness also proves its parameter
+spent: at deficit or ambiguity `0` the premise fails, because the toy's decoder `M` describes `11`, an honest run's
+value, in one bit, and its recovery program spends one bit picking the source. Min-entropy hardness holds at deficit `0`
+for the product's value, a uniform bit.
 -/
 
 @[expose] public section
@@ -86,64 +85,6 @@ def RecoveredBudgetNontrivial : Prop :=
     ¬ Assumptions.Recovers R1 M () 0 [true, true, true] z 2 7 1 (fun _ => 1) ∧
     ¬ ((7 : ℝ) * ((1 : ℕ) : ℝ) ≤ ((1 + Nat.clog 2 R1.d.n + 3 : ℕ) : ℝ) + 1 + 1)
 
-/-- **`IncidenceCap`'s premises hold together** at the toy's product: it reads its slot and its operand, with at most
-one product per slot-operand pair (`r = 1`) and per operand (`aout = 1`). -/
-def IncidenceCapHonest : Prop :=
-  SlotsRead B W ∧ (∀ q ∈ B.P, ∃ c ∈ O.cells (I.occ q), c ⊆ holds D.D (B.m q)) ∧
-    (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ 1) ∧
-    ∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1
-
-/-- **`IncidenceCap`'s conclusion fails without its pair premise**: at most one product uses the operand (`aout = 1`);
-`r = 0` is below the one product of its slot-operand pair; and the gate computing the product completes more than
-`min(r |U| |V|, aout |V|) = 0` products. -/
-def IncidenceCapNontrivial : Prop :=
-  (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1) ∧
-    ¬ (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ 0) ∧
-    ¬ (((completedIn B ({2} : Finset (Fin 4))).card : ℝ) ≤
-        min (0 * ((completedIn B ({2} : Finset (Fin 4))).image Prod.fst).card *
-            ((completedIn B ({2} : Finset (Fin 4))).image I.occ).card)
-          (1 * ((completedIn B ({2} : Finset (Fin 4))).image I.occ).card))
-
-/-- **`OperandCapSeparate`'s premises hold together** at the toy: one bit per slot and per operand, the block holding
-slots and operands priced at most one bit each, and `Q = 1`. -/
-def OperandCapSeparateHonest : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (∀ i, W.price i = 1) ∧ (∀ o, O.price o = 1) ∧
-    (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ 1) ∧
-    (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1) ∧
-    HeldPriceAtMost R1 W 1 ∧ HeldPriceAtMost R1 O 1 ∧
-    ∀ x y : ℝ, 0 ≤ x → 0 ≤ y → 1 * x ≤ 1 → 1 * y ≤ 1 → min (1 * x * y) (1 * y) ≤ 1
-
-/-- **`OperandCapSeparate`'s conclusion fails without its premise on `Q`**: its other premises hold as in its honest
-witness; `Q = 0` does not bound `min(r x y, aout y)` on the region, where it is `1` at `x = y = 1`; and the proof block
-completes more than `Q` products. -/
-def OperandCapSeparateNontrivial : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (∀ i, W.price i = 1) ∧ (∀ o, O.price o = 1) ∧
-    (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ 1) ∧
-    (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1) ∧
-    HeldPriceAtMost R1 W 1 ∧ HeldPriceAtMost R1 O 1 ∧
-    ¬ (∀ x y : ℝ, 0 ≤ x → 0 ≤ y → 1 * x ≤ 1 → 1 * y ≤ 1 → min (1 * x * y) (1 * y) ≤ 0) ∧
-    ¬ (((completedIn B (R1.d.𝓘.gates 0)).card : ℝ) ≤ 0)
-
-/-- **`OperandCapJoint`'s premises hold together** at the toy: one bit per slot and per operand, the block holding
-slots and operands priced at most two bits together, and `Q = 2`. -/
-def OperandCapJointHonest : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (∀ i, W.price i = 1) ∧ (∀ o, O.price o = 1) ∧
-    (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ 1) ∧
-    (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1) ∧
-    HeldPriceAtMost R1 (W.sum O) 2 ∧
-    ∀ x y : ℝ, 0 ≤ x → 0 ≤ y → 1 * x + 1 * y ≤ 2 → min (1 * x * y) (1 * y) ≤ 2
-
-/-- **`OperandCapJoint`'s conclusion fails without its premise on `Q`**: its other premises hold as in its honest
-witness; `Q = 0` does not bound `min(r x y, aout y)` on the region, where it is `1` at `x = y = 1`; and the proof block
-completes more than `Q` products. -/
-def OperandCapJointNontrivial : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (∀ i, W.price i = 1) ∧ (∀ o, O.price o = 1) ∧
-    (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ 1) ∧
-    (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1) ∧
-    HeldPriceAtMost R1 (W.sum O) 2 ∧
-    ¬ (∀ x y : ℝ, 0 ≤ x → 0 ≤ y → 1 * x + 1 * y ≤ 2 → min (1 * x * y) (1 * y) ≤ 0) ∧
-    ¬ (((completedIn B (R1.d.𝓘.gates 0)).card : ℝ) ≤ 0)
-
 /-- **`ImportOrRecompute`'s premises hold together** at the toy: the token reaches the gate the product reads, and the
 one consumer has weight `1`. -/
 def ImportOrRecomputeHonest : Prop :=
@@ -180,16 +121,5 @@ their values priced at most `h = 2`; recomputing the consumer needs no state abo
 consumer's required gates. -/
 def RecomputeByStateNontrivial : Prop :=
   HeldPriceAtMost R1 W2 2 ∧ ¬ K2.RequiresState W2 2 ∧ ¬ ∀ (u : Fin R1.d.n) (c : Fin 1), ¬ K2.G c ⊆ R1.d.𝓘.gates u
-
-/-- **`WeightedProductCap`'s premises hold together** at the toy: the product reads its slot, the use has weight `1`,
-and the block holds slots priced at most one bit. -/
-def WeightedProductCapHonest : Prop :=
-  SlotsRead B W ∧ (∀ _j : Fin B.nt, (0 : ℝ) ≤ 1) ∧ HeldPriceAtMost R1 W 1
-
-/-- **`WeightedProductCap`'s conclusion fails without its budget**: the product reads its slot and the use has weight
-`1`; the block holds the slot, priced above `h = 0`; and its weighted products exceed `h` times the weight it serves. -/
-def WeightedProductCapNontrivial : Prop :=
-  SlotsRead B W ∧ (∀ _j : Fin B.nt, (0 : ℝ) ≤ 1) ∧ ¬ HeldPriceAtMost R1 W 0 ∧
-    ¬ (∑ q ∈ completedIn B (R1.d.𝓘.gates 0), W.price q.1 * 1 ≤ 0 * ∑ _j ∈ served B (R1.d.𝓘.gates 0), (1 : ℝ))
 
 end Nci.Guarantees

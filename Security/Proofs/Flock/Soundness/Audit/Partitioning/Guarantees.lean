@@ -177,9 +177,11 @@ def Concentration : Prop :=
 replay unit escapes its two stages independently of the others. For `p < 1` that is `exp(−∑_i ψ(m_i))`, with
 `ψ = detectionRisk N k p`.
 
-This is variant (a) of `Audit.TwoStage`: every commitment, the replay units' roots and every proof block's, comes before
-the one nested sample, so `nested` is a one-stage law over the proof blocks. Under variant (b), where the prover commits a
-sampled replay unit's interior after the first stage, the escape is `effAcceptProb` over the replay units, not `ψ`. -/
+Under `nested` every commitment comes before the one nested sample, so `nested` is a one-stage law over the proof blocks.
+The two-stage design commits a sampled replay unit's interior after the first stage, and its acceptance probability at
+the footprint (`Claims.Sampling.Design.Two.Pa`) is `E_S ∏_{i ∈ S} C(N − m_i, k)/C(N, k)` over the first stage's sample
+`S`, with `m_i` replay unit `i`'s footprint. A Bernoulli(`p`) first stage samples the replay units independently, so that
+is this product at the footprints. -/
 def NestedEscape : Prop :=
   ∀ (R N k a b : ℕ) [NeZero b] (hk : k ≤ N), a ≤ b → ∀ B : Finset (Fin (R * N)),
     ((nested R N k a b hk).escape B).toReal =

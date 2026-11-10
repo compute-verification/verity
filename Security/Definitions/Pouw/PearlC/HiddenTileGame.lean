@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Pouw.PearlC.Hidden
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # What a proof system gives per tile, toward the hidden audit's open obligation (trusted)
@@ -13,7 +15,7 @@ stated here for any hidden audit:
   single-game class `Cls`, on the transcript and opening it proves against. For Flock, `Cls` is the hypotheses of
   `flock_e2e_drawn_hm96_reads` at `q`.
 * **Its bound, per tile** (`TileGame`): one tile's proof game is a game of the proof system's, relabelled to its
-  verdict, with an event whose probability is at most `ηzk(q)` for every strategy in `Cls`, outside which an accepted
+  verdict, with an event whose probability is at most `δzk(q)` for every strategy in `Cls`, outside which an accepted
   run happens only on a good or blank tile. For Flock that bound is `flock_e2e_drawn_hm96_reads` and the last
   part is the hm96-binding step.
 
@@ -43,7 +45,7 @@ def BoundedByInduced {O : Type} (Cls : Transcript → O → (g : Verity.Game Boo
 
 * `game_eq`: the hidden audit's proof game is the proof system's game `G` with its output relabelled to the verdict;
 * `bad_le`: for every strategy of `G` whose relabelling is in `Cls τ o` at `q`, the verdict is accept on a run in the
-  event `Bad` with probability at most `ηzk q` (for Flock, `flock_e2e_drawn_hm96_reads`: `Bad` is a sampled proof block wrong
+  event `Bad` with probability at most `δzk q` (for Flock, `flock_e2e_drawn_hm96_reads`: `Bad` is a sampled proof block wrong
   under the extracted witness, or a finder's success);
 * `good_of_accept`: a run that ends in accept outside `Bad` happens only when tile `g` is good or blank in `τ` (for
   Flock, the hm96-binding step: the rows the proof speaks of are `τ`'s under `o`, with L3 and L8).
@@ -53,11 +55,11 @@ vacuous (`HiddenAudit`'s docstring). So a `TileGame` says something about a proo
 system's own class of single-game strategies, stated without reading which of `τ`'s tiles are good (Flock's: every
 collision finder built from the strategy meets `cr/sha-512` or `ecr/sha-512` at `q`), and only beside the theorem that
 the honest prover's induced strategies are in it. Holding the honest prover is not enough: the strategies of games that
-are no bad tile's proof game hold it, and give a `TileGame` for every tile at `ηzk = 0` with `Bad` the tile being bad,
-and so `GγHidden` from `GγSampled` with no proof system. -/
+are no bad tile's proof game hold it, and give a `TileGame` for every tile at `δzk = 0` with `Bad` the tile being bad,
+and so `GGapHidden` from `GGapSampled` with no proof system. -/
 structure TileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (TR : TileRules Q R S)
     (HA : HiddenAudit Q R S)
-    (Cls : Transcript → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (ηzk : ℕ → ℝ)
+    (Cls : Transcript → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (δzk : ℕ → ℝ)
     (U : Workload) (τ : Transcript) (o : HA.Opening) (H : Q → R) (s : S) (g : ℕ) where
   Out : Type
   G : Verity.Game Out
@@ -66,7 +68,7 @@ structure TileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Prot
   Bad : Verity.Game.Strategy G → Out → Prop
   bad_le : ∀ (q : ℕ) (σ : Verity.Game.Strategy G),
     Cls τ o _ (cast (congrArg Verity.Game.Strategy game_eq.symm) (Verity.Game.Strategy.toMap verdict G σ)) q →
-    (Verity.Game.prob (fun x => verdict x = true ∧ Bad σ x) G σ).toReal ≤ ηzk q
+    (Verity.Game.prob (fun x => verdict x = true ∧ Bad σ x) G σ).toReal ≤ δzk q
   good_of_accept : ∀ (σ : Verity.Game.Strategy G) (x : Out), verdict x = true → ¬ Bad σ x →
     g ∈ goodTiles P TR U H s τ ∪ blankTiles TR U τ
 

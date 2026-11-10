@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.Dither
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Pouw.ShaRealize
+public import Proofs.Pouw.Lemmas.Dither
 
 /-!
 # The no-fold Dither protocol's work-soundness: the headline's proof
@@ -164,7 +165,7 @@ theorem prob_fst_le {α β : Type} [Fintype α] [Fintype β] (D : α → Prop) :
   prob_le_of_slices (fun ω : α × β => D ω.1) (prob_nonneg D) fun _ => le_rfl
 
 theorem prob_false {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
-  unfold prob
+  unfold prob Claims.prUniform
   simp
 
 /-- **Rounds on adapted advice**: if round `w`'s factor is a nonnegative function of advice `adv x w` that reads only

@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["PouwCheck", "PouwCheck.DifftestMain"],
  "exempt": {
   "PouwCheck.Main": "the pouw-check executable's entry point, one line; its command is Core.Protocol.main over PouwCheck.protocol, audited under PouwCheck",
@@ -29,8 +30,8 @@
     "PouwCheck.Json",
     "PouwCheck.Tile",
     "PouwWindow.Length",
-    "Flock.Draw",
-    "Identity.Domains"
+    "Identity.Domains.Pouw",
+    "Flock.Draw"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
@@ -44,7 +45,7 @@
     "PouwWindow.Length",
     "PouwCheck.Inputs",
     "PouwCheck.WindowSalt",
-    "Identity.Domains"
+    "Identity.Domains.Pouw"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
@@ -55,14 +56,14 @@
     "PouwCheck.Pass",
     "PouwWindow.Record",
     "PouwWindow.Side",
-    "Identity.Domains",
+    "Identity.Domains.Pouw",
     "Flock.FV3"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Protocol": {
-   "imports": ["CoreProtocol.Cli", "PouwCheck.Check", "Identity.Domains"],
+   "imports": ["CoreProtocol.Cli", "PouwCheck.Check", "Identity.Domains.Pouw"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
@@ -75,13 +76,13 @@
     "PouwCheck.Inputs",
     "Spot.ChallengerRecord",
     "Spot.ChallengerSession",
-    "Identity.Domains"
+    "Identity.Domains.Pouw"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.WindowSalt": {
-   "imports": ["PouwCheck.Pass", "Identity.Domains"],
+   "imports": ["PouwCheck.Pass", "Identity.Domains.Pouw"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
@@ -104,8 +105,8 @@
     "Spot.ChallengerSession",
     "Spot.PyJson",
     "Spot.Registered",
-    "Flock.FV3",
-    "Identity.Domains"
+    "Identity.Domains.Pouw",
+    "Flock.FV3"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"

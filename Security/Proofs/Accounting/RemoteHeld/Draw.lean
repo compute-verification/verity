@@ -1,11 +1,53 @@
 module
 
 public import Definitions.Accounting.Guarantees.RemoteDraw
-public import Proofs.Accounting.RemoteHeld.OverTime
 public import Proofs.Accounting.RateAudit.Pooled
-public import Proofs.Accounting.Prob
 public import Proofs.Accounting.Actual.Sampler
+public import Proofs.Accounting.Prob
 public import Proofs.Hash.RowBinding
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.Nat.Size
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.Bandwidth.AuditRO
+import Proofs.Accounting.RateAudit.Windows
+import Proofs.Accounting.RemoteHeld
+import Proofs.Accounting.RemoteHeld.OverTime
+import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The openings' pooled bound: the proof
@@ -689,7 +731,7 @@ theorem prod_le_of_pooled_lt {n : ℕ} (U g d : Fin n → ℕ) {δ : ℝ} (hδ :
 theorem pr_eq_sum_div₁ {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → Prop) :
     pr Q = (∑ x, pr fun y => Q (x, y)) / Fintype.card X := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have e : (univ.filter Q).card = ∑ x, (univ.filter fun y => Q (x, y)).card := by
     rw [card_filter, Fintype.sum_prod_type]
     simp only [card_filter]
@@ -713,7 +755,7 @@ theorem pr_le_add_of_fiber {X Y Z : Type} [Fintype X] [Fintype Y] [Fintype Z] (P
 theorem pr_fst_eq {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (P : α → Prop) :
     pr (fun z : α × β => P z.1) = pr P := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have e : (univ.filter fun z : α × β => P z.1) = (univ.filter P) ×ˢ (univ : Finset β) := by
     ext z
     simp
@@ -729,7 +771,7 @@ theorem pr_snd_le {α β : Type} [Fintype α] [Fintype β] (P : β → Prop) : p
 
 theorem pr_true {α : Type} [Fintype α] [Nonempty α] : pr (fun _ : α => True) = 1 := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [filter_true, card_univ]
   exact ENNReal.div_self (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
 
@@ -781,7 +823,7 @@ theorem pr_below {δ : ℝ} (hδ : 0 ≤ δ) (P : ℝ) : pr (below δ P) = ENNRe
       exact propext (by simp [below, hP, Pous.bitsVal])
     rw [e, coinWeight, ite_eq_right hP]
     classical
-    unfold pr
+    simp only [Pous.pr_eq_card]
     rw [filter_congr_decidable, Fin.card_filter_val_lt, min_eq_right hF, Fintype.card_fin,
       ENNReal.ofReal_div_of_pos (by positivity), ENNReal.ofReal_natCast, ENNReal.ofReal_pow (by norm_num),
       ENNReal.ofReal_ofNat, Nat.cast_pow, Nat.cast_ofNat]

@@ -28,17 +28,6 @@ structure Items (C : Circuit) (ι : Type) where
   price : ι → ℝ
   price_nonneg : ∀ i, 0 ≤ price i
 
-/-- **The joint family** of `X` and `Y`: their items side by side, each with its own cells and price. Pricing a selection
-from both in one budget is what a joint premise asserts; it is not implied by two separate ones. -/
-def Items.sum {C : Circuit} {ι κ : Type} (X : Items C ι) (Y : Items C κ) : Items C (ι ⊕ κ) where
-  cells := Sum.elim X.cells Y.cells
-  price := Sum.elim X.price Y.price
-  price_nonneg := by
-    intro i
-    cases i with
-    | inl i => exact X.price_nonneg i
-    | inr i => exact Y.price_nonneg i
-
 /-- **What the gates `S` hold**: their own gates and the gates they read, `S ∪ in(S)`. -/
 def holds (C : Circuit) (S : Finset (Fin C.N)) : Finset (Fin C.N) := S ∪ C.into S
 

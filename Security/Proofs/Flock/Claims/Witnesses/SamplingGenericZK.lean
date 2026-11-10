@@ -1,11 +1,43 @@
 module
 
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
-public import Proofs.Flock.Claims.Witnesses.BindingMeets
 public import Proofs.Flock.Claims.ZK.Compose
+public import Proofs.Flock.Claims.ZK.Split
 public import Proofs.Flock.Claims.ZKOut
-public import Proofs.Flock.Claims.Sampling.Assembled
 public import Proofs.Flock.Masked
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
 # Refutation witnesses: the generic sampled compiler's zero knowledge
@@ -119,6 +151,8 @@ def talkL (Coin : Type) : ZkCompiled Coin (talkArg Coin) where
   iroots _ _ _ := []
   reveal _ _ _ _ := []
   openCalls _ := 0
+  nOut _ := 1
+  nIn _ := 1
   Tape := (Fin 1 → Unit) × (Fin 1 → Unit)
   P _ := ⟨fun _ _ _ => .ret [0]⟩
   δc _ _ := 1
@@ -338,6 +372,8 @@ noncomputable def zkL : ZkCompiled FlockDeploy.Coin zkA where
   iroots _ _ _ := []
   reveal _ _ _ _ := []
   openCalls _ := 0
+  nOut _ := 1
+  nIn _ := 1
   Tape := (Fin 1 → zkFlock.Nonce) × (Fin 1 → zkFlock.Rest)
   P _ := ⟨fun x hist t => (zkFlock.prover ⟨[]⟩).next x hist (t.1 ⟨0, Nat.one_pos⟩, t.2 ⟨0, Nat.one_pos⟩)⟩
   δc _ _ := 1

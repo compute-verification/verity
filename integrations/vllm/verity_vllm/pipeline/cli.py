@@ -62,7 +62,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
     "glue": ("verity_vllm.glue", "per model, the code its `__models__` markers tie to it and the hours from staged checkpoint to record"),
     "golden": ("verity_vllm.properties.golden", "golden corpus check"),
-    "hidden-gpu": ("verity_vllm.commit.committer.hidden_gpu_src.hidden_gpu", "GPU commitment tree: check, bench, commit"),
     "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
     "hot": ("verity_vllm.pipeline.hot", "hot Commit worker"),
     "instances-form": ("verity_vllm.program.instances_form", "stored form of instances.jsonl operand references"),
@@ -117,6 +116,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "tp-commit-replay": ("verity_vllm.pipeline.tp.commit_replay", "a deferred tensor-parallel Commit's C2 replay on CPU, from its ranks' sealed bundles"),
     "tp-fold-match": ("verity_vllm.pipeline.tp.fold_match", "per-rank fold Match of a tensor-parallel row"),
     "tp-match": ("verity_vllm.pipeline.tp.match", "tensor-parallel Match at the collective level"),
+    "tp-register-tables": ("verity_vllm.pipeline.expert_tables", "a TP rank's registration of the per-expert cut's tables, from the checkpoint"),
     "tp-serving-rows": ("verity_vllm.pipeline.tp.serving_rows", "a deferred tensor-parallel Commit's stand-in windows, from its ranks' sealed bundles"),
     "advice-windows": ("verity_vllm.pipeline.advice_windows", "a deferred tensor-parallel Commit's stand-in windows over a compiler's Programs for the advice"),
     "twins": ("verity_vllm.program.twins_check", "vectorized twins of the registered bodies"),
@@ -125,6 +125,13 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "weights-tie": ("verity_vllm.program.predict.weights_tie", "the weights registration's checkpoint tie: its window (commit), the verifier's (verify), the pins (pins)"),
     "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
     "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
+}
+
+#: Why a command's module can be absent from a tree, for the refusal that names it: the public release leaves out what
+#: reads a private protocol.
+ABSENT: dict[str, str] = {
+    "serve-openai": "the served window (this endpoint and the window circuit) reads the network certifier's encoding, which the "
+                    "public release leaves out, so it ships without a runnable served window",
 }
 
 
@@ -278,7 +285,14 @@ def main(argv: list[str] | None = None) -> Any:
         except settings.UnknownSetting as e:
             print(f"{PROG}: {e}", file=sys.stderr)
             return 2
-    parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
+    try:
+        parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
+    except ModuleNotFoundError as e:
+        if e.name != COMMANDS[argv[0]][0]:
+            raise
+        why = ABSENT.get(argv[0])
+        print(f"{PROG}: {argv[0]}: its module {e.name} is not on this tree" + (f": {why}" if why else ""), file=sys.stderr)
+        return 2
     process_settings(os.environ)
     if process:
         # run records store sys.argv as the command's own command line, the one `python -m <module>` gave it

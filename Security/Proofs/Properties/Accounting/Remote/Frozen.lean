@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Accounting.Remote.Coins
+public import Proofs.Properties.Accounting.Remote.Bisect
 
 /-!
 # A sampled window's record is kept (`RecordKeptAfterSample`)

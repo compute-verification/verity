@@ -119,7 +119,16 @@ class Options:
 def committer_opts(opts: Options) -> SimpleNamespace:
     """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row."""
     return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, commit=True, seal=False,
+<<<<<<< 94ca7fd0d18
                            retention=SL.RetentionOptions())
+||||||| e10cf2c8559
+    """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row: the
+    vllm-v1 committer's own knobs are unset, since commit-arb serves no recorded vllm-v1 run again."""
+    return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, of_record=None, commit=True,
+                           seal=False, gpu_tree=True, chunk=None, hash_threads=None, cudart_copy=False, retention=SS.RetentionOptions())
+=======
+                           retention=SS.RetentionOptions())
+>>>>>>> 7af4d24fca3e
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:

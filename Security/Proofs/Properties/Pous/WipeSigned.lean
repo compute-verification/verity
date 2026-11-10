@@ -5,10 +5,51 @@ public import Properties.Pous.Component
 public import Proofs.Properties.Pous.WipeSigned.Header
 public import Proofs.Properties.Pous.WipeSigned.Inputs
 public import Proofs.Properties.Pous.WipeSigned.Run
-public import Proofs.Properties.Pous.MemoryChallenger
-public import Proofs.Properties.NetworkCertifier.Device.Lms
-public import Mathlib.Tactic.SplitIfs
 import all Init.Data.String.Defs
+public import Batteries.Data.ByteArray
+public import Lms.Sign
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.Order.Interval.Finset.Box
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Properties.NetworkCertifier.Device.Lms
+import Proofs.Properties.Pous.MemoryChallenger
+import Proofs.Properties.Pous.MemoryChallenger.Inputs
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Proof of `WipeSigned` (`Properties.Pous.WipeSigned`)
@@ -29,7 +70,7 @@ verdict accepted make it the streamed wipe's accepted session (`accepted_run`). 
 one the collision finder outputs (`collisionIn_finds`); a forgery is the forger's output.
 
 `wipeSigned_honest` is its honest lemma: at the deployed LMS parameters a key `Lms.keygen` derives signs the honest
-session at r20261026-094403-bb5f's parameters and clock readings, and the compiled check accepts it
+session at the wipe of record's parameters and clock readings, and the compiled check accepts it
 (`measured_accepts`, by LMS's correctness). `wipeSigned_nontrivial` is its nontrivial lemma: a session with a batch no
 record encodes, signed under the empty key, is no run of the idle challengers, and both adversaries output nothing
 there, since the run hashes nothing and the signature signs nothing; so a check that accepts it, as a verifier that
@@ -529,7 +570,7 @@ private theorem measured_batch (digest : Nat → ByteArray) (pk sig : ByteArray)
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> first | trivial | omega | simp | (intro h; subst h; omega)
 
 /-- **The compiled check accepts the measured honest wipe**: for every key `Lms.key` derives at S1's deployed LMS
-parameters and every digest of the batches' answers, the session at r20261026-094403-bb5f's parameters and clock
+parameters and every digest of the batches' answers, the session at the wipe of record's parameters and clock
 readings, each read taking the slowest round trip measured, signed at leaf 0 with `Lms.signAt` on its message, is
 accepted by the wipe's compiled check of a period that trusts that key. The signature verifies by LMS's correctness
 (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). -/
@@ -645,7 +686,7 @@ theorem wipeSigned : WipeSigned := by
 
 /-- **`WipeSigned`'s honest lemma**: its hypothesis holds at the honest deployed instance. A key `Lms.keygen` derives at
 S1's deployed LMS parameters (`Lms.deployed`, the one scheme `SCHEMES` accepts) signs the honest session at
-r20261026-094403-bb5f's parameters (`2^24` labels, `k = 2152` reads one at a time, 20 ms each) and clock readings (the
+the wipe of record's parameters (`2^24` labels, `k = 2152` reads one at a time, 20 ms each) and clock readings (the
 fill's 2.95 s, the first read revealed 7.6 ms after it, each read taking the slowest round trip measured, 1.40 ms),
 each read answered with its label, and the wipe's compiled check of the period that trusts that key accepts it. -/
 theorem wipeSigned_honest :

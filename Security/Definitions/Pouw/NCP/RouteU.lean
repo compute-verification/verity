@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.NCP.Protocol
-public import Mathlib.Algebra.BigOperators.Intervals
 
 /-!
 # NCP's checked values on route U (trusted)
@@ -78,12 +77,12 @@ variable {Q R S : Type} (P : Params Q R S)
 
 /-- Route U's checked values: block `t` is route U's int32 accumulator at `blockEnd d (3k) t`. -/
 def YU (β : ℤ) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Checked :=
-  fun t => mmWU β (U.layout.shape u).k A (U.weight (U.layout.wid u)) (P.e1 H s U u A) (P.wtNoise H s U u).1
+  fun t => mmWU β (U.layout.shape u).k A (U.fixed (U.layout.fixedId u)) (P.e1 H s U u A) (P.wtNoise H s U u).1
     (P.wtNoise H s U u).2 (D1.blockEnd P.d (3 * (U.layout.shape u).k) t)
 
 /-- Route U's useful output: its int32 accumulator at `3k`. -/
 def refOutU (β : ℤ) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Mat :=
-  mmWU β (U.layout.shape u).k A (U.weight (U.layout.wid u)) (P.e1 H s U u A) (P.wtNoise H s U u).1
+  mmWU β (U.layout.shape u).k A (U.fixed (U.layout.fixedId u)) (P.e1 H s U u A) (P.wtNoise H s U u).1
     (P.wtNoise H s U u).2 (3 * (U.layout.shape u).k)
 
 /-- NCP on route U at bias `β` as a protocol: `toProtocol` with route U's checked values and useful output. -/

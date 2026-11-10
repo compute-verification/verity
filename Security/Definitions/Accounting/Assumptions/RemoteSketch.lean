@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Remote.Held
 public import Definitions.Accounting.Remote.Sketch
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # What deriving the receipts' sketch bound assumes (trusted)

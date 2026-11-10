@@ -1,16 +1,48 @@
 module
 
+public import Proofs.Flock.Soundness.Assumptions.Custody
+public import Proofs.Flock.Soundness.Assumptions.CustodyZk
+public import Proofs.Flock.Soundness.Finders
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Composed
-public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
-public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Design
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
 public import Proofs.Flock.Soundness.Discharge.FailClosed.General
-public import Proofs.Flock.Soundness.ExecStrataOf
 public import Proofs.Flock.Soundness.Discharge.FailClosed.PlainRegistered
-public import Proofs.Flock.Soundness.Assumptions.Custody
-public import Proofs.Flock.Soundness.Discharge.FailClosed.Design
-public import Proofs.Flock.Soundness.Assumptions.CustodyZk
-public import Proofs.Flock.Soundness.Assumptions.Finders
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Bind
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Decode
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Decode
+public import Proofs.Flock.Soundness.ExecStrataOf
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.Discharge.Composed.Headline
+import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Reps
+import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
+import Proofs.Flock.Soundness.Discharge.PlainJ.Sound
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
+import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 public import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
 public import Proofs.Flock.Soundness.Discharge.PlainJ.Sound
 

@@ -6,10 +6,11 @@ public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 /-!
 # The inference-only policy over threads, each value charged once over its copies: the named assumption
 
-`WeightsSupportFmt` is false at the deployed point: on weights a few
-AdamW steps past the checkpoint, on a weight's fprop and dgrad copies, and at llama-3-405b's fan-out.
-`WeightsSupportFmt2` restates it with weights charged per source, a fan-out bound in place of the margin, `e` per model,
-and the counted multiplications off weights fewer than `k₀` steps from the registered information. It is not signed off.
+Weights' incompressibility in support form with each thread charged by its work, at `b_w` per weight gate and a margin
+on each value's charge per thread, is false at the deployed point: on weights a few AdamW steps past the checkpoint, on
+a weight's fprop and dgrad copies, and at llama-3-405b's fan-out. `WeightsSupportFmt2` restates it with weights charged
+per source, a fan-out bound in place of the margin, `e` per model, and the counted multiplications off weights fewer
+than `k₀` steps from the registered information. It is not signed off.
 -/
 
 @[expose] public section
@@ -26,7 +27,7 @@ has fresh input reads that take at least `2^(b_w · #(sources of the weights R u
 distinct values over the runs with the registered information at `θv`, where `m_t` is the number of thread `t`'s counted
 multiplications in `R`.
 
-It is `WeightsSupportFmt` with four changes, at the deployed point (`d = 2048`, E4M3 at `b_a = 4`, `S = 2·10⁷`,
+It is that form with four changes, at the deployed point (`d = 2048`, E4M3 at `b_a = 4`, `S = 2·10⁷`,
 `b_w = 2.5`) and under `benchmarks/nci/kappa.py`'s minimal reference circuits:
 
 * Weights are charged per source, so a weight's fprop and dgrad copies are charged once. An NVFP4 16 × 16 2D-block

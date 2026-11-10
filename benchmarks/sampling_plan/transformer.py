@@ -57,7 +57,7 @@ from inputs import I, KEY, observations  # noqa: E402
 from inputs import CARDS, I, observations  # noqa: E402
 >>>>>>> 705be2b532
 
-from verity.core.protocols.pous import wipe_monitoring
+from verity.core.protocols import reporting
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.spot.candidates import Shape, cuts, shape_of  # noqa: E402
 from verity.core.protocols.spot.costfit import Fitted, fit  # noqa: E402
@@ -77,15 +77,15 @@ from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
 
-#: core's reporting deltas (`wipe_monitoring`), as floats
-DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
+#: core's reporting deltas (`reporting`), as floats
+DELTAS = tuple(map(float, reporting.DELTAS))
 #: the server-time block, assumed: the Phase 2 default, 20 minutes, which a `gpu-lease`'s 30-minute ceiling sets; no
 #: wipe has been timed, and the census has no block length
 BLOCK_S = 1200
 #: the datacenter, assumed: the census has no datacenter size
 SERVERS = 10_000
-#: core's monitoring periods (`wipe_monitoring`), seconds by name
-PERIODS = dict(wipe_monitoring.PERIODS)
+#: core's monitoring periods (`reporting`), seconds by name
+PERIODS = dict(reporting.PERIODS)
 #: the target, a share of the block's ANDs certified at most incorrect: a share of the work scales with the model where a
 #: count of units does not (a coarser cut has fewer units); 1e-3 is the small model's knee (halving it costs about 8%
 #: more, each halving past it over 10%), held fixed for every size
@@ -390,6 +390,7 @@ def costs(m: Model, s: Serving, card: str = "rtx-pro-6000") -> CostModel:
                    replay={"request": ReplayGrain(m.requests, s.replay)})
 
 
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
 def candidates(dag: DefinitionGraph, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
     """`candidates.cuts` on each op, every subcircuit in the `request` replay domain: its alternatives, each its units
@@ -398,6 +399,11 @@ def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) ->
     """`candidates.cuts` on each op, every subcircuit in the `request` replay domain: its alternatives, each its units
 =======
 def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
+||||||| e10cf2c8559
+def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
+=======
+def candidates(dag: DefinitionGraph, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
+>>>>>>> 7af4d24fca3e
     """`candidates.cuts` on each op, every subcircuit in the `request` replay grain: its alternatives, each its units
 >>>>>>> 705be2b532
     by Definition."""
@@ -411,7 +417,14 @@ def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) ->
 
 def plans(m: Model, s: Serving, delta: float = DELTAS[0], *, grid: int = 61, cut_grid: int = 21):
     """The block's DAG, its cost model, objective and candidates, and the frontier of expected cost against certified
+<<<<<<< 94ca7fd0d18
     faulty proof blocks (screened by `density_bound`)."""
+||||||| e10cf2c8559
+    incorrect proof blocks (screened by `density_bound`)."""
+    dag = Dag(m)
+=======
+    incorrect proof blocks (screened by `density_bound`)."""
+>>>>>>> 7af4d24fca3e
     dag = DefinitionGraph(m)
     objective = Objective(delta)
     cm = costs(m, s)

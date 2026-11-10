@@ -1,8 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Harm
-public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Mathlib.Analysis.SpecialFunctions.Log.Base
+public import Definitions.Flock.Audit.Partitioning
 
 /-!
 # Optimal partitioning: the model
@@ -15,6 +14,7 @@ the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
   number of units it samples;
 * `unitCost f o s = f + o · s`, the simple cost model: a fixed cost `f` per sampled proof block plus an overhead `o` per unit of
   work;
+<<<<<<< ours
 * `servedCost F C f o δ w β h s`, the leading cost of cutting work `F` into units of work `s` when serving commits every
   unit: proving's `c(s) · (F/C) · Λ` plus the commitment's `w · (F/s) · β · h`;
 * `MeetsTarget L w C δ`, the free-compute target: every set of incorrect proof blocks whose work is at least `C` escapes with
@@ -22,6 +22,16 @@ the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
 * `locBits n K = log₂ ∑_{j ≤ K} C(n, j)`, the location term of `audit_exfiltration`, and `CertifiesLeak L b δ ℓ`, the
   exfiltration target: with unit `u` exporting `b u` bits, `audit_exfiltration`'s bound certifies at most `ℓ` bits at
   `δ`;
+||||||| base
+* `MeetsTarget L w C δ`, the free-compute target: every set of incorrect proof blocks whose work is at least `C` escapes with
+  probability at most `δ`;
+* `locBits n K = log₂ ∑_{j ≤ K} C(n, j)`, the location term of `audit_exfiltration`, and `CertifiesLeak L b δ ℓ`, the
+  exfiltration target: with unit `u` exporting `b u` bits, `audit_exfiltration`'s bound certifies at most `ℓ` bits at
+  `δ`;
+=======
+* the targets, `MeetsTarget` (free compute) and `CertifiesLeak` (exfiltration) with its location term `locBits`, in
+  `Definitions.Flock.Audit.Partitioning`;
+>>>>>>> theirs
 * `detectionRisk N k p m = −ln(1 − p + p · C(N − m, k) / C(N, k))`, the detection risk of a replay unit holding `m` wrong
   proof blocks out of `N`, when the verifier samples the replay unit with probability `p` and then `k` of its proof blocks
   uniformly;
@@ -48,6 +58,7 @@ noncomputable def meanDraws (L : Law n) : ℝ := ∑ u, (L.incl u).toReal
 /-- The simple cost model: a fixed cost `f` per sampled proof block plus an overhead `o` per unit of work `s`. -/
 def unitCost (f o s : ℝ) : ℝ := f + o * s
 
+<<<<<<< ours
 /-- The leading served cost of cutting work `F` into units of work `s`: proving, `c(s) · (F/C) · Λ` with `Λ = ln(1/δ)`,
 plus serving's commitment of every one of the `F/s` units, sampled or not, `β` bytes each at `h` a byte, weighted `w`
 against proving. -/
@@ -71,6 +82,26 @@ def CertifiesLeak (L : Law n) (b : Fin n → ℕ) (δ ℓ : ℝ) : Prop :=
   ∃ H K : ℕ, IsHarmBound L (fun u => (b u : ℝ)) (ENNReal.ofReal δ) H ∧ L.miss (K + 1) < ENNReal.ofReal δ ∧
     (H : ℝ) + locBits n K ≤ ℓ
 
+||||||| base
+/-- **The free-compute target**: every set of incorrect proof blocks whose work is at least `C` escapes with probability at most
+`δ`. -/
+def MeetsTarget (L : Law n) (w : Fin n → ℝ) (C δ : ℝ) : Prop :=
+  ∀ B : Finset (Fin n), C ≤ ∑ u ∈ B, w u → (L.escape B).toReal ≤ δ
+
+/-- The location term of `audit_exfiltration`: `log₂ ∑_{j ≤ K} C(n, j)`, the bits that say which units are wrong when at
+most `K` of `n` are. -/
+noncomputable def locBits (n K : ℕ) : ℝ := Real.logb 2 (∑ j ∈ range (K + 1), n.choose j : ℕ)
+
+/-- **The exfiltration target**: with unit `u` exporting `b u` bits, `audit_exfiltration`'s bound certifies at most `ℓ`
+bits at `δ`. That is, a harm bound `H` of the widths at `δ` and a count `K` with `miss (K + 1) < δ`, with
+`H + locBits n K ≤ ℓ`, so that a uniform message of `m` bits is recovered from an accepted audit with probability at
+most `2^(ℓ − m)` plus `δ` and the audit's error. -/
+def CertifiesLeak (L : Law n) (b : Fin n → ℕ) (δ ℓ : ℝ) : Prop :=
+  ∃ H K : ℕ, IsHarmBound L (fun u => (b u : ℝ)) (ENNReal.ofReal δ) H ∧ L.miss (K + 1) < ENNReal.ofReal δ ∧
+    (H : ℝ) + locBits n K ≤ ℓ
+
+=======
+>>>>>>> theirs
 /-- **The detection risk** of a replay unit holding `m` wrong proof blocks out of `N`: the verifier samples the replay unit
 with probability `p`, then `k` of its proof blocks uniformly, and the replay unit escapes with probability
 `1 − p + p · C(N − m, k) / C(N, k)`. This is its negative logarithm. -/

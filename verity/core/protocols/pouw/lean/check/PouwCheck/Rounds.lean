@@ -1,9 +1,6 @@
 module
 
-public import PouwWindow.Rounds
-public import PouwCheck.Inputs
 public import PouwCheck.Pass
-public import Spot.ChallengerSession
 
 /-!
 # A live execution phase's salt and round coins (`core_check.py`, "a live execution phase's salt and round coins")

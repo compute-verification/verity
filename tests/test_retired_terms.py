@@ -3,18 +3,26 @@ A semantically meaningful part of the registered or actual circuit is a block, a
 (`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty or wrong unit an incorrect
 proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
-Scanned: every tracked text file but the Lean (`.lean` files, their packages' `lakefile.toml` and their locks' reasons, `lean-audit.json`)
-and the lints that name the terms (``LINTS``: `tests/lint/test_repo_retired_terms.py` holds every term the table retires,
-in the whole text of each file, to the file's count, while this one holds its terms at zero in prose), and the word maps
-of `tools/move/`, which name the words they retire. A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
-line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
+Scanned: every tracked text file but the Lean packages' `lakefile.toml` and their locks' reasons (`lean-audit.json`), the
+lints that name the terms (``LINTS``: `tests/lint/test_repo_retired_terms.py` holds every term the table retires, in the
+whole text of each file, to the file's count, while this one holds its terms at zero in prose outside the Lean) and the
+word maps of `tools/move/`, which name the words they retire; and of a `.lean` file only its comments and docstrings
+(``lean_prose``, the lane-text lint's reader), where every site is held to its file's count in ``LEAN_LIST``: a file past
+its count, or with a site and no entry, fails, and the ratchet gate holds the list's total from rising, so it only shrinks
+(``--prune`` lowers it to what the tree holds). A term matches case-insensitively as two words, hyphenated, or wrapped onto
+the next line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
 (`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
-already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it, or that moves to another
-repository.
+queued on `next` rewrites, or whose messages mirror the Lean's (``PENDING``), until that PR lands or the Lean is renamed,
+and the rename follows it.
+
+The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name that carries one of the Glossary's older
+names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
+sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
+(`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
@@ -25,9 +33,14 @@ record key stays, and a term written as a quoted mention ("leg"); the table's ro
 """
 from __future__ import annotations
 
+import json
 import re
+import sys
+from collections import Counter
 
+from lint.test_repo_lane_text import lean_prose
 from test_repository import ROOT, _tracked
+from test_lean_packages import RETIRED_NAMES, _held, declarations
 
 #: Each retired term and what to write instead.
 TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system",
@@ -48,6 +61,8 @@ _INCORRECT_TERM = re.compile(rf"\b(?:faulty{_SEP}(?:outputs?|steps?|ingress{_SEP
 GLOSSARY = "GLOSSARY.md"
 #: The table's rows that name the terms, in GLOSSARY.
 RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "declared advice"', '| "audit coin"')
+#: The Lean's sites, a count per file, which only shrinks.
+LEAN_LIST = ROOT / "tests/lint/allowlists/lean_retired_terms.json"
 
 #: Retired in the maintained docs' prose, and what to write instead.
 DOC_TERMS = {
@@ -63,11 +78,29 @@ DOC_TERMS = {
                               "until renamed)",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
+    "coin server, coin source, coin device, randomness source": "the challenger",
+    "salted leaf, salted commitment": "hiding leaf, hiding commitment",
+    "acceptance probability P_a, a sampling design's acceptance probability": "miss probability (detection is its "
+                                                                              "complement; a prover's acceptance probability "
+                                                                              "keeps the word)",
+    "egress cone": "reach (E)",
+    "link window": "an execution phase's transfer blocks (`link-window` stays in backticks until a format version)",
+    "block-scaled, blockwise, scale block": "scale group",
+    "production": "serving, or proving",
     "builder, advice compiler, circuit builder": "registered compiler",
     "declared advice": "advice",
     "declared circuit": "registered circuit",
-    "declared work, declared workload, declares its advice": "registered work; the developer reports its advice, which the "
-                                                             "registered compiler turns into the execution block",
+    "declared work, declared workload, declares its advice": "registered circuit; the developer reports its advice, which "
+                                                             "the registered compiler turns into the execution block",
+    "registered work": "registered circuit (D)",
+    "the prover's node, machine, host or site, a machine the prover doesn't control, nothing the prover runs or hosts, "
+    "prover-controlled, the prover system":
+        "the developer's node, machine, host or site, a machine the developer doesn't control, nothing the developer runs "
+        "or hosts, developer-controlled, the developer's hardware (\"prover\" stays for the proving side of a proof: "
+        "Flock's prover, a proof's messages, a cheating prover)",
+    "onsite deployment, remote deployment": "composite protocol (onsite or remote, the Lean's `Composite`)",
+    "named premise, the card premise": "assumption, or a proposed assumption until a lock lists it; the card assumption (a "
+                                       "theorem's hypothesis stays a premise)",
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
     "C-Flock": "Flock (Succinct's is upstream Flock)",
     "netlist": "a private circuit, or the circuit's description",
@@ -82,7 +115,7 @@ DOC_TERMS = {
     "prover gateway, verifier gateway": "the ZK server; the challenger",
     "batch verifier": "the verifier",
     "GPU workers": "workers",
-    "escape probability": "acceptance probability",
+    "escape probability": "miss probability",
     "post-landing run, postland": "after-landing run",
     "Commit window": "Commit period",
     "accounting period": "the monitoring period",
@@ -105,7 +138,7 @@ DOC_TERMS = {
     "KV block": "KV page",
     "the accelerator model, the machine model": "the ACCEL model (`benchmarks/pouw/machine_model/` and its `machine-model` "
                                                 "command keep the name)",
-    "coverage premise, coverage table": "the card premise, the opcode table",
+    "coverage premise, coverage table": "the card assumption, the opcode table",
     "envelope ISA, envelope op": "the ACCEL ops",
     "server-time block, serving block, server-window": "server block",
     "overhead lower bound, exclusion bound": "the slowdown lower bound",
@@ -124,17 +157,26 @@ DOC_TERMS = {
     "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
+    "leg": "the subprotocol's name (SPOT, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
            "memory wipe's, or run",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
                        rf"|wardens?"
                        rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
+                       rf"|coin{_SPACE}(?:servers?|sources?|devices?)|randomness{_SPACE}sources?"
+                       rf"|salted{_SPACE}(?:leaf|leaves|commitments?)|egress{_SPACE}cones?"
+                       rf"|acceptance{_SPACE}probabilit(?:y|ies){_SPACE}\$?(?:\\bar\{{?\s?)?P\u0304?\}}?_\{{?a\b"
+                       rf"|(?:sampling{_SPACE})?design's{_SPACE}acceptance{_SPACE}probabilit(?:y|ies)"
+                       rf"|link{_SPACE}windows?|block{_SPACE}scaled|blockwise|scale{_SPACE}blocks?|productions?"
                        rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
                        rf"|integrity{_SPACE}periods?|execution{_SPACE}transcripts?"
                        rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
+                       rf"|registered{_SPACE}work|(?:named|card){_SPACE}premises?|(?:onsite|remote){_SPACE}deployments?"
+                       rf"|prover{_SPACE}systems?|prover-controlled|prover{_SPACE}runs{_SPACE}or{_SPACE}hosts"
+                       rf"|prover's{_SPACE}(?:own{_SPACE})?(?:nodes?|machines?|hosts?|sites?|datacenters?|servers?|GPUs?|hardware)"
+                       rf"|prover{_SPACE}(?:doesn't|does{_SPACE}not){_SPACE}control|(?:hosts?|machines?){_SPACE}the{_SPACE}prover{_SPACE}controls"
                        rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|(?:accelerator|machine){_SPACE}models?|coverage{_SPACE}(?:premises?|tables?)|envelope{_SPACE}(?:ISA|ops?)"
@@ -168,10 +210,12 @@ ALLOWED: dict[str, str] = {
                                   "`Spec.digest` hashes it",
     "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
                                                         "(`certifier.service`): `Spec.digest` hashes it",
+    "the client's request commitment, the randomness source": "a line of GLOSSARY.md that a queued PR rewrites; renamed "
+                                                              "after it lands",
+    "production would publish every event": "infra's Vercel deployment, another sense",
+    "Production is `verity-slack-events`": "infra's Vercel deployment, another sense",
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
                                                                              "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
-    "the verifier of record runs it": "Flock's Soundness README: a queued PR on next rewrites the line beside it; renamed after "
-                                      "it lands",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
     "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
                              "which their digests hash",
@@ -182,80 +226,23 @@ ALLOWED: dict[str, str] = {
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
+    "a tied audit no faulty term (its wrong units' outputs are the egress's)": "the network period check's refusal in "
+        "`period_case.py`, which mirrors `NetworkCheck.Period`'s Lean message word for word; renamed with the Lean",
+    "K charges a tied audit no faulty term": "the refusal `test_network_period_protocol.py` expects from Lean "
+                                             "(`NetworkCheck.Period`); renamed with the Lean",
+    "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
+                                                           "names to say it is not the network certifier's name",
+    "where a passive warden only watches": "network steganography's own term, beside the one above",
 }
 
 PENDING: dict[str, str] = {
-    "verity/core/protocols/pouw/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
-    "verity/core/protocols/pouw/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
-    "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
-    "integrations/vllm/verity_vllm/pipeline/serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
-    "integrations/vllm/tests/pipeline/test_serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
-    "verity/ml/commitments/domains.py": "queued PRs add the term here; the proof-service rename follows them",
-    "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "Security/Definitions/Nci/Capability/README.md": "its per-block cap q was pending when the accounting vocabulary's rename "
-                                                     "ran; that rename follows",
-    "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
-    "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
-    "examples/h200/README.md": "#4680 rewrites its lines",
-    "benchmarks/stacked_share/README.md": "#4514 rewrites its lines",
-    "integrations/vllm/README.md": "#4773 adds lines",
-    "README.md": "main rewrote its demos' rows, naming verity example, after the demos' words were generated; they follow",
-    "tools/verity/cli/README.md": "main added it, naming verity example, after the demos' words were generated; they follow",
-    "benchmarks/remote_session/README.md": "main rewrote its opening, naming verity example, after the demos' words were "
-                                           "generated; they follow",
-    "verity/README.md": "#4502 rewrites its lines",
-    "verity/core/protocols/network/tests/period_case.py": "#6383 rewrites its docstrings and the rows form's refusals",
-    "verity/core/protocols/network/tests/test_network_period_protocol.py": "#6383 rewrites its docstrings and the rows "
-                                                                           "form's refusals",
-    "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
-    "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
-    "verity/ml/windows/interface.py": "#4502 adds lines",
-    "examples/onsite_served/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "Security/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "benchmarks/multi_unit/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "benchmarks/sampling_plan/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/core/protocols/interface/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/core/protocols/pouw/lean/check/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/ml/definitions/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    ".agents/skills/friction/SKILL.md": "queued PRs on next add the warden here; the network certifier's rename follows them",
-    "AGENTS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "ARCHITECTURE.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/rho/README.md": "queued PRs on next rewrite it",
-    "benchmarks/prove_path/e2e_chains/README.md": "queued PRs on next rewrite lines the training vocabulary's rename touches; it follows them",
-    "benchmarks/network_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/network_sim/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/network_traces/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/one_stage/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/pouw/opcode_probe/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "verity/core/protocols/pouw/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean",
+    "verity/core/protocols/pouw/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; "
+                                                            "renamed with the Lean",
+    "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; "
+                                                             "renamed with the Lean",
     "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/torch_gpu/sha512_rows/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "examples/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "examples/lifecycle/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "examples/vllm/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/difftest/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/primitives/requirement/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/bandwidth/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/certifier/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/certifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/composition/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/pous/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/remote/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/pouw/README.md": "main and queued PRs on next rewrite its lines naming verity example, the honest "
-                                            "prover's GPU effort and block-scaled FP4, or lines beside them; the renames follow",
-    "verity/core/protocols/sampled_proofs/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/ml/flock/live/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/ml/flock/verifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/ml/flock/README.md": "a PR on next rewrites the lines beside its unit classes; the rename follows it",
-    "tools/verity/check/README.md": "moves to the infra repository with the check's tooling; renamed there",
-    "benchmarks/README.md": "queued PRs on next add rows that name C-Flock, beside lines the rename touches; it follows them",
-    "benchmarks/unit_block/README.md": "a queued PR on next adds it, naming C-Flock; the rename follows it",
-    "benchmarks/flock_s8_block/README.md": "a queued PR on next adds lines naming C-Flock and the verifier of record; the rename follows it",
-    "verity/core/devices/memory_challenger/lean/README.md": "a queued PR on next adds it, naming C-Flock; the rename follows it",
-    "verity/ml/private_circuits/README.md": "a queued PR on next adds it, naming the netlist; the rename follows it",
 }
 
 
@@ -266,9 +253,24 @@ MAPS = "tools/move/"
 
 
 def scanned(files: list[str]) -> list[str]:
-    """Every file but the Lean, PENDING, the LINTS and the word maps."""
-    return sorted(f for f in files if not f.endswith((".lean", "lean-audit.json", "lakefile.toml"))
+    """Every file but the Lean packages' configs and locks, PENDING, the LINTS and the word maps."""
+    return sorted(f for f in files if not f.endswith(("lean-audit.json", "lakefile.toml"))
                   and f not in PENDING and f not in LINTS and not f.startswith(MAPS))
+
+
+_CODE_CHAR = re.compile(r"\S")
+
+
+def _lean_prose(text: str) -> str:
+    """A Lean file's comments and docstrings where they stand, and its code's non-blank characters NUL, so that a term
+    wraps from one comment line onto the next but never through code."""
+    starts = [0] + [m.end() for m in re.finditer("\n", text)]
+    out, at = [], 0
+    for line, chunk in lean_prose(text):
+        start = text.index(chunk, max(at, starts[line - 1]))
+        out += [_CODE_CHAR.sub("\0", text[at:start]), chunk]
+        at = start + len(chunk)
+    return "".join(out) + _CODE_CHAR.sub("\0", text[at:])
 
 
 def _read(f: str) -> str | None:
@@ -286,6 +288,8 @@ def offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]],
         incorrect = f.startswith(INCORRECT)
         if text is None or not ("unit" in text.lower() or "service" in text.lower() or "faulty" in text.lower()):
             continue
+        if f.endswith(".lean"):
+            text = _lean_prose(text)
         allowed = [(m.start(), m.end(), s) for s in ALLOWED for m in re.finditer(re.escape(s), text)]
         lines = text.splitlines()
         terms = (_TERM, _INCORRECT_TERM) if incorrect else (_TERM,)
@@ -323,14 +327,35 @@ def doc_offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, st
     return out, used
 
 
+def lean_allowed() -> Counter:
+    """Each Lean file's allowed sites, from LEAN_LIST."""
+    doc = json.loads(LEAN_LIST.read_text(encoding="utf-8"))
+    counts = Counter({e["file"]: e["count"] for e in doc["entries"]})
+    assert len(counts) == len(doc["entries"]) and all(type(n) is int and n >= 1 for n in counts.values()), (
+        f"{LEAN_LIST.name}: each entry is one file's {{file, count}}, its count a positive int")
+    return counts
+
+
+def over_lean_list(found: list[tuple[str, int, str]], have: Counter) -> list[str]:
+    """Each Lean file holding more sites than ``have`` allows, with its sites."""
+    lean = Counter(f for f, *_ in found if f.endswith(".lean"))
+    return [f"  {f}: {n} found, {have[f]} allowed\n" + "\n".join(f"    {f}:{line}: {term}" for g, line, term in found if g == f)
+            for f, n in sorted(lean.items()) if n > have[f]]
+
+
 def test_no_retired_term_in_prose():
-    bad, used = offenders(_tracked())
+    found, used = offenders(_tracked())
+    bad = [o for o in found if not o[0].endswith(".lean")]
+    say = ("say " + " and ".join(f'"{new}" for "{old}"' for old, new in TERMS.items())
+           + f" (in {', '.join(INCORRECT)}, also " + " and ".join(f'"{new}" for "{old}"' for old, new in INCORRECT_TERMS.items())
+           + ")" + f' (ARCHITECTURE.md, Glossary, "Block"; {GLOSSARY})')
     assert not bad, (
-        "a retired term: say " + " and ".join(f'"{new}" for "{old}"' for old, new in TERMS.items())
-        + f" (in {', '.join(INCORRECT)}, also " + " and ".join(f'"{new}" for "{old}"' for old, new in INCORRECT_TERMS.items())
-        + ")"
-        + f' (ARCHITECTURE.md, Glossary, "Block"; {GLOSSARY}); a spelling baked into a record or a digest goes in ALLOWED'
-        + " with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
+        f"a retired term: {say}; a spelling baked into a record or a digest goes in ALLOWED with its reason:\n"
+        + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
+    over = over_lean_list(found, lean_allowed())
+    assert not over, (
+        f"a retired term in a Lean comment or docstring, past {LEAN_LIST.relative_to(ROOT)}, which only shrinks: {say}, "
+        f"and once a file holds fewer, `python3 tests/test_retired_terms.py --prune` lowers its count:\n" + "\n".join(over))
     unused = set(ALLOWED) - used - doc_offenders(_tracked())[1]
     assert not unused, f"ALLOWED entries that match nothing any more: {sorted(unused)}"
 
@@ -343,6 +368,47 @@ def test_no_retired_term_in_the_maintained_docs():
         + " in another sense goes in ALLOWED with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
 
 
+def _normal(name: str) -> str:
+    return re.sub(r"^(?:(?:the|a|an|or|and)\s+)+", "", " ".join(name.lower().split()))
+
+
+def older_names(glossary: str) -> set[str]:
+    """Each name GLOSSARY's Older names table quotes in its first column: not one qualified by its sense (`"block" for a
+    tile`, `"unit" alone meaning one`), nor one it keeps (`"stage", outside "one-stage"`)."""
+    table = re.search(r"^## Older names\n(.*?)(?=^## |\Z)", glossary, re.M | re.S)[1]
+    names = set()
+    for cell in (re.split(r"(?<!\\)\|", line)[1] for line in table.splitlines() if line.startswith("| ")):
+        for m in re.finditer(r'"([^"]*)"', cell):
+            if not (cell[m.end():].startswith((" for ", " meaning ", " alone ")) or cell[:m.start()].endswith("outside ")):
+                names.add(_normal(m[1]))
+    return names
+
+
+def stale_replacements(tables: dict[str, str], old: set[str]) -> list[tuple[str, str]]:
+    """(row, the name it prescribes) for each replacement in ``tables`` that is one of ``old``."""
+    return [(row, piece) for row, new in tables.items() for piece in map(_normal, re.split(r"[,;:()]", new)) if piece in old]
+
+
+def test_no_replacement_is_an_older_name():
+    old = older_names((ROOT / GLOSSARY).read_text(encoding="utf-8"))
+    stale = stale_replacements({**TERMS, **INCORRECT_TERMS, **DOC_TERMS}, old)
+    assert not stale, (f"a row prescribes a name {GLOSSARY}'s Older names table retires: write that table's Term instead:\n"
+                       + "\n".join(f'  "{row}": "{name}"' for row, name in stale))
+
+
+def test_the_older_names_are_read_from_the_table():
+    """On a toy Glossary: a row that prescribes an older name (`"isolation block"`, `"server-time block"`, one piece of a
+    longer replacement) is found, and a sense-qualified or kept name isn't an older name."""
+    toy = ('## Older names\n\n| Old name | Term |\n|---|---|\n| "isolation unit" (IU), "isolation block" | inference block |\n'
+           '| "server-time block", "window" for a server\'s gates, \\|C\\| | server block |\n'
+           '| "stage", outside "one-stage" | phase |\n| "unit" alone meaning one | proof block |\n\n## Next\n\n| "leg" | x |\n')
+    assert older_names(toy) == {"isolation unit", "isolation block", "server-time block", "stage"}
+    assert stale_replacements({"isolation unit, IU": "isolation block", "physical block": "the server-time block",
+                               "replay unit": "replay block", "unit": "a phase, or the stage (a one-stage run)"},
+                              older_names(toy)) == [("isolation unit, IU", "isolation block"),
+                                                    ("physical block", "server-time block"), ("unit", "stage")]
+
+
 def test_the_glossary_records_the_retired_terms():
     rows = [line for line in (ROOT / GLOSSARY).read_text(encoding="utf-8").splitlines() if line.startswith(RETIRED_ROWS)]
     assert len(rows) == len(RETIRED_ROWS), f"{GLOSSARY}'s retired-terms table has no row starting {RETIRED_ROWS}"
@@ -350,11 +416,98 @@ def test_the_glossary_records_the_retired_terms():
         f"{GLOSSARY}'s rows {RETIRED_ROWS} no longer name the terms")
 
 
+#: the Glossary's older names (GLOSSARY.md) a Lean declaration's own name may carry, each word's forms and its term;
+#: `session`, `window` and `block` are left out, as each has a sense the Glossary keeps
+LEAN_WORDS = {"draw": (("draw", "draws", "drawn"), "sample"), "law": (("law", "laws"), "sampling design"),
+              "escape": (("escape",), "miss probability"), "wrong": (("wrong",), "incorrect"),
+              "dampener": (("dampener",), "slowdown"), "firewall": (("firewall",), "ZK server"),
+              "horizon": (("horizon",), "monitoring period"), "warden": (("warden",), "network certifier"),
+              "tap": (("tap", "taps"), "network certifier"), "leg": (("leg", "legs"), "subprotocol")}
+
+
+def words(name: str) -> list[str]:
+    """``name``'s words, lowercased: split at dots, underscores and primes, then at case (`drawCoins_ok` is draw, coins
+    and ok; `HTTPLaw` is http and law)."""
+    return [w.lower() for part in re.split(r"[._']", name) for w in re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+", part)]
+
+
+def retired_names(files: dict[str, str]) -> dict[str, list[str]]:
+    """{word of LEAN_WORDS: `FILE:LINE NAME` for each declaration of ``files`` ({file: its source}) whose name, as the
+    declaration writes it, carries the word}."""
+    forms = {f: w for w, (fs, _) in LEAN_WORDS.items() for f in fs}
+    out: dict[str, list[str]] = {w: [] for w in LEAN_WORDS}
+    for f, src in sorted(files.items()):
+        for d in declarations(src):
+            for w in sorted({forms[x] for x in words(d.written) if x in forms}):
+                out[w].append(f"{f}:{d.line} {d.written}")
+    return out
+
+
+def test_no_retired_word_in_a_new_lean_name():
+    """A Lean name says the Glossary's term, not an older name: an existing name keeps its word until it is renamed (with
+    `--moved` where a lock lists it), and each word's count only falls (`RETIRED_NAMES`, `test_lean_packages.py`)."""
+    files = {f: text for f in _tracked() if f.endswith(".lean") and (text := _read(f)) is not None}
+    found = retired_names(files)
+    _held("RETIRED_NAMES", RETIRED_NAMES, {w: len(v) for w, v in found.items()}, "the Lean names with a retired word",
+          "name the new one with the Glossary's term instead (" + "; ".join(f"{t} for {w}" for w, (_, t) in LEAN_WORDS.items())
+          + "; GLOSSARY.md, Older names): `git diff -U0 origin/main -- '*.lean'` shows it")
+
+
+#: SPOT's older name (GLOSSARY.md, Older names): each spelling's count in the scanned files' whole text, which only falls
+#: (`_held`). A sampled proof block, and its proof, keep their words and aren't counted where "block" follows.
+SPOT_NAMES = {"sampled proof(s)": 435, "sampled_proofs": 62, "SampledProofs": 15, "sampled-proofs": 507}
+_GAP = r"(?:[ \t]+|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
+SPOT_SPELLINGS = {"sampled proof(s)": re.compile(rf"\bsampled{_GAP}proofs?\b(?!{_GAP}blocks?\b)", re.I),
+                  "sampled_proofs": re.compile("sampled_proofs", re.I), "SampledProofs": re.compile("[Ss]ampledProofs"),
+                  "sampled-proofs": re.compile("sampled-proofs", re.I)}
+
+
+def spot_names(files: list[str], read=_read) -> dict[str, int]:
+    """Each of SPOT_SPELLINGS' count in the scanned ``files``."""
+    out = dict.fromkeys(SPOT_SPELLINGS, 0)
+    for f in scanned(files):
+        if (text := read(f)) is not None and "sampled" in text.lower():
+            for k, spelling in SPOT_SPELLINGS.items():
+                out[k] += len(spelling.findall(text))
+    return out
+
+
+def test_spot_s_older_name_only_falls():
+    """The sampled proof system is SPOT: its older name's count in every spelling only falls."""
+    _held("SPOT_NAMES", SPOT_NAMES, spot_names(_tracked()), "SPOT's older name, sampled proofs,",
+          "write SPOT in prose and strings, `spot` in a new path or Python name and `Spot` in a new Lean name (GLOSSARY.md, "
+          "Older names): `git diff -U0 origin/main | grep -i -E 'sampled.?proofs'` shows it")
+
+
+def test_the_spot_scan_reads_each_form():
+    """On toy files: the words count in either case and wrapped behind a comment marker, a sampled proof block doesn't,
+    and each code spelling counts under its own key, never under the words."""
+    toy = {"a.py": "# Sampled proofs' verifier, a sampled proof, the sampled\n# proofs; sampled proof blocks, a sampled proof block\n",
+           "b.lean": "import SampledProofs\n/-- `sampledProofsSound_of`, `core_sampled_proofs`, `SAMPLED_PROOFS` -/\n",
+           "c.toml": 'id = "verity/sampled-proofs/v1"\n'}
+    assert spot_names(list(toy), read=toy.get) == {"sampled proof(s)": 3, "sampled_proofs": 2, "SampledProofs": 2,
+                                                   "sampled-proofs": 1}
+
+
+def test_the_lean_name_scan_reads_each_form():
+    """The words of a name, on toy files: a form at a case or underscore boundary counts, inside a word it doesn't
+    (`drawer`, `lawful`, `tapir`, `legal`), a comment's name doesn't, and a private name does."""
+    assert words("drawCoins_ok") == ["draw", "coins", "ok"] and words("HTTPLaw.mk'") == ["http", "law", "mk"]
+    src = ("namespace Pouw.Draw\n/-- A drawn sample. -/\ndef drawnUnits : Nat := 1\nprivate theorem wrong_set : True := trivial\n"
+           "-- def lawOf : Nat := 0\ndef drawer : Nat := 0\nstructure Lawful where\ndef tapir : Nat := 0\n"
+           "def legal : Nat := 0\nabbrev TapLegs : Nat := 0\nend Pouw.Draw\n")
+    got = {w: v for w, v in retired_names({"a.lean": src}).items() if v}
+    assert got == {"draw": ["a.lean:3 drawnUnits"], "wrong": ["a.lean:4 wrong_set"], "tap": ["a.lean:10 TapLegs"],
+                   "leg": ["a.lean:10 TapLegs"]}
+
+
 def test_the_scan_reads_each_form():
     """The rules above, on toy files."""
     docs = {
         "a.py": '"""A proof unit, two Proof-Units and a proof\n    units wrap."""\nx.proof_unit  # a faulty unit; unit tests\n',
         "b.rs": "/// the proof\n/// unit of it; a bulletproof unit\nlet reason = \"N, the round's proof units\";\n",
+        "e.lean": ('def s := "a proof unit"  -- the proof\n  -- unit, wrapped\n/-- a faulty\n  unit -/ def proof_unit := 1\n'
+                   "-- a proof\ndef unit := 2\n"),
         "d.py": '# the Proof-Service and a proof\n# services; proof_service, verity/proof-service/stream/v0; a faulty service\n',
         "c.lean": "-- a proof unit",
         next(iter(PENDING)): "a proof unit",
@@ -363,7 +516,11 @@ def test_the_scan_reads_each_form():
     found, used = offenders(list(docs), read=docs.__getitem__)
     assert found == [(GLOSSARY, 2, "proof unit"), ("a.py", 1, "proof unit"), ("a.py", 1, "Proof-Units"),
                      ("a.py", 1, "proof units"), ("a.py", 3, "faulty unit"), ("b.rs", 1, "proof /// unit"),
-                     ("d.py", 1, "Proof-Service"), ("d.py", 1, "proof # services")]
+                     ("c.lean", 1, "proof unit"), ("d.py", 1, "Proof-Service"), ("d.py", 1, "proof # services"),
+                     ("e.lean", 1, "proof -- unit"), ("e.lean", 3, "faulty unit")]
+    assert over_lean_list(found, Counter({"c.lean": 1, "e.lean": 2})) == []
+    assert over_lean_list(found, Counter({"c.lean": 1, "e.lean": 1})) == [
+        "  e.lean: 2 found, 1 allowed\n    e.lean:1: proof -- unit\n    e.lean:3: faulty unit"]
     assert used == {"N, the round's proof units", "verity/proof-service/"}
 
 
@@ -426,7 +583,7 @@ def test_the_doc_scan_reads_each_form():
                 "```sh\nverity example vllm\n```\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
         "benchmarks/pouw/CHANGELOG.md": "a leg",
-        next(f for f in PENDING if f.endswith(".md")): "a leg",
+        **{f: "a leg" for f in PENDING if f.endswith(".md")},
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [(GLOSSARY, 2, "leg"),
@@ -434,6 +591,21 @@ def test_the_doc_scan_reads_each_form():
         ("a.md", 2, "IUs"), ("a.md", 2, "KV block"), ("a.md", 3, "legs"), ("a.md", 3, "leg"), ("a.md", 3, "leg"),
         ("b.md", 8, "thread block"), ("b.md", 9, "verity example"), ("b.md", 9, "verity bench|example"),
         ("b.md", 11, "verity example")]
+
+
+def test_the_doc_scan_reads_the_party_terms():
+    """The developer, the composite protocols, the registered circuit and assumptions, on toy files: the proving side's
+    prover, a theorem's premise, a deployment record, `verity.core.deploy` and a registered workload stay."""
+    docs = {
+        "a.md": "Nothing the prover runs or hosts; a machine the prover doesn't\ncontrol, the prover's node, a "
+                "prover-controlled host and the prover system. The remote deployment's registered work, under a named\n"
+                "premise and the card premise. Flock's prover, a cheating prover, a theorem's premise, a deployment record,"
+                " `verity.core.deploy` and a registered workload stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "prover runs or hosts"), ("a.md", 1, "prover doesn't control"), ("a.md", 2, "prover's node"),
+        ("a.md", 2, "prover-controlled"), ("a.md", 2, "prover system"), ("a.md", 2, "remote deployment"),
+        ("a.md", 2, "registered work"), ("a.md", 2, "named premise"), ("a.md", 3, "card premise")]
 
 
 def test_the_doc_scan_reads_the_protocol_terms():
@@ -501,6 +673,26 @@ def test_the_doc_scan_reads_the_training_terms():
         ("a.md", 6, "dark compute"), ("a.md", 6, "certified work")]
 
 
+def test_the_doc_scan_reads_the_owners_terms():
+    """The owners' renames (`GLOSSARY.md`), on toy files: the challenger, hiding leaves, the miss probability, the reach,
+    transfer blocks, scale groups and serving; `link-window` in backticks, a quoted "production", a reproduction, a
+    scale group and a prover's acceptance probability stay."""
+    docs = {
+        "a.md": "The coin server, a coin\nsource, the coin devices and a randomness source; salted leaves and a salted commitment.\n"
+                "Acceptance probability $\\bar P_a$, a design's acceptance probabilities, egress cones and a prover's "
+                "acceptance probability; the link window and a link-window.\n"
+                "Block-scaled FP8, blockwise scales, a scale block; in production, two productions.\n"
+                'The `link-window` key, a quoted "production", a reproduction and a scale group stay.\n',
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "coin server"), ("a.md", 1, "coin source"), ("a.md", 2, "coin devices"),
+        ("a.md", 2, "randomness source"), ("a.md", 2, "salted leaves"), ("a.md", 2, "salted commitment"),
+        ("a.md", 3, "Acceptance probability $\\bar P_a"), ("a.md", 3, "design's acceptance probabilities"),
+        ("a.md", 3, "egress cones"), ("a.md", 3, "link window"),
+        ("a.md", 3, "link-window"), ("a.md", 4, "Block-scaled"), ("a.md", 4, "blockwise"), ("a.md", 4, "scale block"),
+        ("a.md", 4, "production"), ("a.md", 4, "productions")]
+
+
 def test_the_doc_scan_reads_the_incorrect_terms():
     """Incorrect proof blocks and the incorrect set, on toy files: a faulty node, link, device or hardware stays."""
     docs = {
@@ -525,3 +717,17 @@ def test_the_doc_scan_reads_the_flock_terms():
         ("a.md", 1, "C-Flock"), ("a.md", 1, "netlist"), ("a.md", 2, "Netlists"), ("a.md", 2, "C-FLOCK"),
         ("a.md", 3, "M0"), ("a.md", 3, "IR"), ("a.md", 3, "IRs"), ("a.md", 3, "verifier of record"),
         ("a.md", 4, "verifiers-of-record")]
+
+
+def dump_lean_list(counts: Counter) -> None:
+    lines = [f"    {json.dumps({'file': f, 'count': n}, ensure_ascii=False)}" for f, n in sorted(counts.items()) if n > 0]
+    LEAN_LIST.write_text('{\n  "rule": "retired terms in Lean comments and docstrings (tests/test_retired_terms.py)",\n'
+                         '  "entries": [\n' + ",\n".join(lines) + "\n  ]\n}\n", encoding="utf-8")
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] not in (["--prune"], ["--record"]):
+        sys.exit("python3 tests/test_retired_terms.py --prune    # lower LEAN_LIST to what this tree holds\n"
+                 "python3 tests/test_retired_terms.py --record   # LEAN_LIST is what this tree holds (the gate holds a rise)")
+    lean = Counter(f for f, *_ in offenders(_tracked())[0] if f.endswith(".lean"))
+    dump_lean_list(lean_allowed() & lean if sys.argv[1] == "--prune" else lean)

@@ -18,17 +18,17 @@ namespace Nci.Assumptions
 
 open Verity
 
-/-- **A window is `L` ticks at the rate**: at `(k / c) F` bits a tick, a window of `L` ticks takes in `R` bits, as much as
-the state a wipe leaves. -/
-def WindowLength (c k : ℕ) (F L R : ℝ) : Prop :=
-  (k / c : ℝ) * F * L = R
+/-- **A window is `L` ticks at the rate**: at `α F` bits a tick, a window of `L` ticks takes in `R` bits, as much as the
+state a wipe leaves. -/
+def WindowLength (α F L R : ℝ) : Prop :=
+  α * F * L = R
 
 /-- **The servers' windows hold the residual and the declared computation**: summed over `n` servers' `⌈H / L⌉` windows,
-each reading at most `K = R + (k / c) F L` bits and holding at most `K Λ(K) / b_a` counted multiplications of `T`'s
-bound, `b_a (M_r + |M|) ≤ n ⌈H / L⌉ K Λ(K)`. -/
-def WindowsHold {r : RegisteredCircuit} (T : Threading r) (c k Mr n : ℕ) (F H L R b_w b_a : ℝ) (dd e : ℕ) : Prop :=
+each reading at most `K = R + α F L` bits and holding at most `K Λ(K) / b_a` counted multiplications of `T`'s bound,
+`b_a (M_r + |M|) ≤ n ⌈H / L⌉ K Λ(K)`. -/
+def WindowsHold {r : RegisteredCircuit} (T : Threading r) (Mr n : ℕ) (α F H L R b_w b_a : ℝ) (dd e : ℕ) : Prop :=
   b_a * ((Mr : ℝ) + T.M.card) ≤
-    n * ⌈H / L⌉₊ * ((R + (k / c : ℝ) * F * L) * T.bound (R + (k / c : ℝ) * F * L) b_w dd e)
+    n * ⌈H / L⌉₊ * ((R + α * F * L) * T.bound (R + α * F * L) b_w dd e)
 
 /-- **The parts fit in the monitored compute**: `∑ x_i ≤ C`, for PoUW's windows' capacities or the declared runs'
 sizes. -/

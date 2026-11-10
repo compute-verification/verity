@@ -2,6 +2,20 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `RunsZC` at the live `--zk` tables, from `TablesAtZKLive` (statement)
@@ -49,7 +63,7 @@ noncomputable def opnAtZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : I
     | .error _ => default
   | .error _ => default
 
-/-- **`RunsZC` at the live `--zk` tables, at the sampling design's samples** (R11b's message half at `--zk`). Given that wherever
+/-- **`RunsZC` at the live `--zk` tables, at the sampling design's samples** (the decoder premise's message half at `--zk`). Given that wherever
 flock-verify accepts the `--zk` table is the executable's (`TablesAtZKLive`), on untyped one-table inputs under the tags
 `TagsOk` fixes, with `wr` the challenger's record of the live `--zk` session and each of the sampling design's samples proving its
 units at `mPts` link points (`DrawOkZK` at `L.draw ω`: the link points depend on `|S|`, so no `mPts` holds at every

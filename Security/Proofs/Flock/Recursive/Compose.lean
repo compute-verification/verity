@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Recursive.Defs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: commit-and-prove composition

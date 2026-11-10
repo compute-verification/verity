@@ -1,19 +1,44 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
-public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
+public import Proofs.Flock.Soundness.Registered.ReadsX
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 import all Init.Data.Array.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The registered check at an accepted hidden-output `--zk --registered` outcome of `J` tables
 
-`checked_of_acceptsHJ`: `checked_of_acceptsH` at `J` tables. `AcceptsZKR` runs `checkRegistered` on every table's
-statement, and table `j`'s is setupHidden's under its tags at its part of the record's sample, `drawJ I d j`
-(`ZkHidden.setupOf_tableJH`, from `setupTables_partsH`), over `HmOut.drawn c pub (drawJ I d j)`. A read `(u, q)` is at
-the table `u` is sampled into (`OwnReadsHJ`), so that table's check is `checked_of_acceptsH`'s at its sample: the sampled
-instance at `u`'s rank in the table's sample holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the
-hidden layout's registered leaf at `(u, q)`, which reads the population alone, whatever the table.
+`checked_of_acceptsHJ`. `AcceptsZKR` runs `checkRegistered` on every table's statement, and table `j`'s is setupHidden's
+under its tags at its part of the record's sample, `drawJ I d j` (`ZkHidden.setupOf_tableJH`, from `setupTables_partsH`),
+over `HmOut.drawn c pub (drawJ I d j)`. A read `(u, q)` is at the table `u` is sampled into (`OwnReadsHJ`), so it is that
+table's registered check at its sample (`checkRegistered_ok`, `checkPort_at`): the sampled instance at `u`'s rank in the
+table's sample holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the hidden layout's registered
+leaf at `(u, q)`, which reads the population alone, whatever the table.
 -/
 
 @[expose] public section

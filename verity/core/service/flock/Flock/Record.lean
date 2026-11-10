@@ -3,11 +3,9 @@ The session record (`flock-live-session/v1`) and the session checks S1–S14, S1
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Transcript
 public import Flock.Draw
 public import Flock.CoinTree
-public import Flock.JsonParse
 
 @[expose] public section
 

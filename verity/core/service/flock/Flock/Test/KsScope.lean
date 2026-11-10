@@ -1,5 +1,6 @@
 /-
-`KsScope`: the `--zk` statement passes `tagsWhy`, and a typed statement or one of public outputs is refused. A unit of
+`KsScope`: the `--zk` statement passes `tagsWhy`, and a typed statement or one of public outputs is refused; every named
+statement that passes it reads its record's sample (`hm96Rows`), the draw `verify --zk` hands `checkOf`. A unit of
 one input group that returns the outputs passes `filesWhy`, and with a `sha512/row-seg/v1` output row too; with that row
 one compression short, or an output row of two ports, it is refused, and so are a unit reading two input groups and a
 tail stage returning the outputs (both in `scopeOkI`, which `ProvedScope.check` admits under hidden outputs). A
@@ -7,13 +8,17 @@ shared-row public file in the form `SampledKSLiveV5` covers (two input ports' ta
 parsing, the file loading over them, no two roots one) passes `sharedWhy` and the whole check; one whose circuit's
 public input ports do not parse, one that does not load and a per-instance file are refused. At one table any sample
 passes `drawWhy`; at more, a subset sample whose `k` the tables divide passes, and a sample of `k` they don't divide, a sample
-that does not parse and no sample are refused.
+that does not parse and no sample are refused. A templated statement's circuit, `Flock.Test.Tmpl`'s unit as
+`Flock.Test.TmplScope` builds it, is held to `scopeOkT` on its template: it passes at one table and is refused at two,
+with outputs a tail stage computes, and without a template.
 -/
 module
 
 public import Flock.KsScope
+public import Flock.Test.TmplScope
 public import Flock.Test.Wires
 meta import Flock.KsScope
+meta import Flock.Test.TmplScope
 meta import Flock.Test.Wires
 
 @[expose] public section
@@ -28,14 +33,29 @@ open Flock Flock.KsScope
 #guard (tagsWhy Tags.circuitEb90718f).isSome
 #guard (tagsWhy { Tags.circuit with retainRounds := false }).isSome
 #guard (tagsWhy { Tags.circuit with merkleLeaf := "flock-leaf/sha512-unsalted" }).isSome
+#guard Tags.all.all fun t => (tagsWhy t).isSome || t.hm96Rows
 
 /-- A unit of one input group, returning the outputs. -/
 def one : Circuit := Wires.circ #[Wires.net #[⟨0, 1, #[1]⟩] 1 #[1] #[(#[0], #[0])]] #[1] #[]
 
 #guard ProvedScope.scopeOkH one
-#guard filesWhy Tags.circuit one default ByteArray.empty == none
-#guard ProvedScope.scopeOkI (Wires.rms 0) && filesWhy Tags.circuit (Wires.rms 0) default ByteArray.empty == some SCOPE_WHY
-#guard ProvedScope.scopeOkI Wires.tail && filesWhy Tags.circuit Wires.tail default ByteArray.empty == some SCOPE_WHY
+#guard filesWhy Tags.circuit 1 one default ByteArray.empty == none
+#guard ProvedScope.scopeOkI (Wires.rms 0) && filesWhy Tags.circuit 1 (Wires.rms 0) default ByteArray.empty == some SCOPE_WHY
+#guard ProvedScope.scopeOkI Wires.tail && filesWhy Tags.circuit 1 Wires.tail default ByteArray.empty == some SCOPE_WHY
+
+/-- `one` with a `sha512/row/v2` input row `x` and a `sha512/row-seg/v1` output row `y` of 1,024 bits in `chunks`
+compressions, its one segment's two and none past them when well formed. -/
+def segOut (chunks : Nat) : Circuit :=
+  { one with
+    ports := #[{ name := "x", words := 64, chunks := 1, nb := 0, bits := 1024, v2 := true },
+      { name := "y", words := 64, chunks, nb := 0, bits := 1024, v2 := true, segs := some (HmRow.segShape 1024).1 }],
+    outRowPorts := #[1] }
+
+#guard ProvedScope.scopeOkH (segOut 2) && filesWhy Tags.circuit 1 (segOut 2) default ByteArray.empty == none
+#guard !ProvedScope.scopeOkH (segOut 1) && filesWhy Tags.circuit 1 (segOut 1) default ByteArray.empty == some SCOPE_WHY
+#guard (ProvedScope.scopeWhy true (segOut 1)).startsWith "rows that are neither" &&
+  (ProvedScope.scopeWhy true (segOut 1)).endsWith "one output port per output row"
+#guard !ProvedScope.scopeOkH { segOut 2 with outRowPorts := #[2] }
 
 /-- `one` with a `sha512/row/v2` input row `x` and a `sha512/row-seg/v1` output row `y` of 1,024 bits in `chunks`
 compressions, its one segment's two and none past them when well formed. -/
@@ -100,5 +120,21 @@ def why (tags : Tags) (c : Circuit) (count : Nat) (draw : Option Json) : Option 
 
 #guard why Tags.circuitTypes one 1 none == some (ProvedScope.refusal (tagsWhy Tags.circuitTypes).get!)
 #guard (why Tags.circuit one 1 none).isSome
+
+/-- `Flock.Test.Tmpl`'s unit as a templated circuit (`Circuit.tmpl`), as `TmplScope` builds it. -/
+def tmpl : Option Circuit := TmplScope.unit.toOption.map fun tu => { (default : Circuit) with tmpl := some tu }
+
+/-- `unitWhy` and `filesWhy` on `tmpl` (changed by `f`) at the templated statement's tags and `count` tables. -/
+def tmplWhy (count : Nat) (f : Circuit → Circuit := id) : Option (Option String × Option String) :=
+  tmpl.map fun c =>
+    (unitWhy (TmplScope.tags true) count (f c), filesWhy (TmplScope.tags true) count (f c) default ByteArray.empty)
+
+#guard tmpl.isSome
+#guard tmplWhy 1 == some (none, none)
+#guard tmplWhy 2 == some (some TMPL_WHY, some TMPL_WHY)
+#guard tmplWhy 1 (fun c => { c with outNet := 1 }) == some (some TMPL_WHY, some TMPL_WHY)
+#guard tmplWhy 1 (fun c => { c with tmpl := none }) == some (some TMPL_WHY, some TMPL_WHY)
+#guard tmpl.map (unitWhy (TmplScope.tags false) 1) == some (some TMPL_WHY)
+#guard unitWhy Tags.circuit 2 one == none
 
 end Flock.Test.KsScope

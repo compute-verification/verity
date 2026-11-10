@@ -109,7 +109,7 @@ def test_timeline_of_fill_once_under_ltw(tmp_path, capsys):
 
 
 # ------------------------------------------------------------------------------------------------------------ known answers
-# Known answers of verity/core/protocols/pouw/circuit/dither.py (`values_buffer`, `commit` under salts(Ks, 3 leaves),
+# Known answers of verity/ml/protocols/pouw/circuit/dither.py (`values_buffer`, `commit` under salts(Ks, 3 leaves),
 # `pad_rows`, `Shape.domain`) on salt bytes 0..63, coin 64..127, operand-root receipt 128..191, Ks 192..255, call 3, and B
 # (and the served A) from default_rng(11)
 DITHER = {

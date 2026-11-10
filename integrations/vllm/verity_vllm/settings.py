@@ -139,6 +139,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_COLLECT_WATCHDOG_MARKER", str, "", WHERE, "the file the collector's watchdog writes when it exits (the Commit sets it)"),
     S("VERITY_CONSUMER_DELAY_MS", float, 0.0, DEBUG, "milliseconds the collector's consumer sleeps per step (a stall injected for tests)"),
     S("VERITY_DRAIN_SIDE", flag, True, VALUE, "the collector drains a gather replay on its side stream (native_collect.cpp)"),
+    S("VERITY_DSA_TOPK", str, None, VALUE, "the DSA top-k plugin's row past INDEX_TOPK keys: canonical rewrites it to the top set in "
+      "ascending index order, the order DsaButterflyRows reads (`engine_classes.DSA_TOPK_ENV`); unset, the kernels' own order"),
     S("VERITY_FA2_COMPACT", not_off, True, VALUE, "the attention tap writes its classes compacted"),
     S("VERITY_FA2_TAP_CAP_MB", int_or_zero, None, VALUE, "the attention tap's residency cap in MiB, 0 (or empty) unbounded; unset, the "
       "source's own", empty=True),
@@ -236,7 +238,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("HOT_RELEASE_JSON", str, "/workspace/cp/RELEASE.json", WHERE, "the release (tag, commit) of the tree on the pod"),
     S("RELEASING_STALE_S", float, 900.0, WHERE, "seconds after which a release marker nobody refreshed is stale"),
     S("NATIVE_COLLECT_BUILD", str, None, WHERE, "the parent directory of the native collector's builds"),
-    S("HIDDEN_GPU_BUILD", str, None, WHERE, "the directory of the hidden-GPU committer's builds"),
     # ---- the program (program/)
     S("VERITY_DENSE_THREADS", str, None, VALUE, "the dense chain's thread cap, read at import; not a positive integer, no cap"),
     S("VERITY_NUMERICS_BUILD_DIR", str, None, WHERE, "where the numerics' JIT-built libraries live"),
@@ -257,6 +258,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("TOKENIZERS_PARALLELISM", str, None, WHERE, "the tokenizers library's threads, true or false (`engine.env.EXPORT` sets false); "
       "a Build records it"),
     S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's output-code cache; unset, torch's default"),
+    S("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", str, None, VALUE, "1, torch's default: Inductor picks a reduction kernel's tiling per "
+      "process at its first launch; an engine pins 0 (`engine.env.ENGINE`) and refuses another"),
     S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it)"),
     S("TRITON_CACHE_DIR", str, None, WHERE, "Triton's compiled-kernel cache; unset, ~/.triton/cache"),
     S("VLLM_API_KEY", str, None, VALUE, "the key vLLM's OpenAI-compatible server asks of its clients (its family's role): a "
@@ -282,7 +285,7 @@ FAMILIES: dict[str, str] = {"VLLM_": VALUE, "NCCL_": VALUE, "CUBLAS": VALUE}
 #: The ``VERITY_*`` variables the rest of the tree reads (``verity/``, ``benchmarks/``, ``tools/``, the integration's tests and
 #: tools), which a verity-vllm process may inherit.  A name ending ``_`` names a family.
 ELSEWHERE = frozenset("""
-VERITY_BENCH_ VERITY_SUITE_ VERITY_VLLM_BENCH_
+VERITY_BENCH_ VERITY_GRADER_ VERITY_SUITE_ VERITY_VLLM_BENCH_
 VERITY_ADV_CACHE VERITY_ADV_SEED VERITY_AMBIENT VERITY_AMBIENT_TEST VERITY_CAPTURED_101_GUMBEL VERITY_CENSUS
 VERITY_CHECKER_VARIANT VERITY_CIRCUIT_CHECK_SLOW VERITY_COMMIT VERITY_DENSE_PROGRAM_DIRS VERITY_E2E_B VERITY_E2E_BOUNDED
 VERITY_E2E_CASE VERITY_E2E_EXCLUDE VERITY_E2E_GPU_UTIL VERITY_E2E_HIDDEN_SO VERITY_E2E_LEARN_MB VERITY_E2E_UTIL

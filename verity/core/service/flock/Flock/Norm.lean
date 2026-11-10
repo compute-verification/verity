@@ -4,8 +4,7 @@ keeps a parsed value (a sample) it keeps `norm` of it, whose trees depend only o
 -/
 module
 
-public import Lean.Data.Json
-public import Flock.JsonParse
+public import Lean.Data.Json.Basic
 
 @[expose] public section
 

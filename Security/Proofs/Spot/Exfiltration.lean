@@ -1,6 +1,13 @@
 module
 
 public import Definitions.Spot.Exfiltration
+public import Proofs.Core.Coins
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
 
 /-!
 # Exfiltration before detection: the stopping-time bounds
@@ -25,76 +32,72 @@ leaking what its incorrect proof blocks' cones carry, and the deployment halting
 namespace Population.Exfil
 
 open Finset
+open Verity.Game (iid_toReal iid_cons_toReal)
 
-variable {Ω : Type} [Fintype Ω] {μ : Ω → ℝ}
+variable {Ω : Type} [Fintype Ω] {μ : PMF Ω}
 
 /-! ## Expectations over coin paths -/
 
-omit [Fintype Ω] in
-theorem pathWeight_cons (μ : Ω → ℝ) {n : ℕ} (c : Ω) (cs : Fin n → Ω) :
-    pathWeight μ (Fin.cons c cs : Fin (n + 1) → Ω) = μ c * pathWeight μ cs := by
-  simp [pathWeight, Fin.prod_univ_succ]
-
-omit [Fintype Ω] in
-theorem pathWeight_nonneg (hμ : ∀ c, 0 ≤ μ c) {n : ℕ} (cs : Fin n → Ω) : 0 ≤ pathWeight μ cs :=
-  prod_nonneg fun i _ => hμ (cs i)
-
-theorem ex_zero (μ : Ω → ℝ) (F : (Fin 0 → Ω) → ℝ) (cs₀ : Fin 0 → Ω) : ex μ 0 F = F cs₀ := by
-  rw [ex, Fintype.sum_unique, Subsingleton.elim default cs₀]
-  simp [pathWeight]
+theorem ex_zero (μ : PMF Ω) (F : (Fin 0 → Ω) → ℝ) (cs₀ : Fin 0 → Ω) : ex μ 0 F = F cs₀ := by
+  rw [ex, Fintype.sum_unique, Subsingleton.elim default cs₀, iid_toReal]
+  simp
 
 /-- The first window's coin splits off: an expectation over `n + 1` windows is the first coin's average of the
 expectation over the remaining `n`. -/
-theorem ex_succ (μ : Ω → ℝ) {n : ℕ} (F : (Fin (n + 1) → Ω) → ℝ) :
-    ex μ (n + 1) F = ∑ c, μ c * ex μ n fun cs => F (Fin.cons c cs) := by
+theorem ex_succ (μ : PMF Ω) {n : ℕ} (F : (Fin (n + 1) → Ω) → ℝ) :
+    ex μ (n + 1) F = ∑ c, (μ c).toReal * ex μ n fun cs => F (Fin.cons c cs) := by
   have e : ∀ p : Ω × (Fin n → Ω), (Fin.consEquiv fun _ : Fin (n + 1) => Ω) p = Fin.cons p.1 p.2 :=
     fun _ => rfl
   simp only [ex]
   rw [← (Fin.consEquiv fun _ : Fin (n + 1) => Ω).sum_comp, Fintype.sum_prod_type]
-  simp only [e, pathWeight_cons, mul_sum, mul_assoc]
+  simp only [e, iid_cons_toReal, mul_sum, mul_assoc]
 
-theorem ex_mono (hμ : ∀ c, 0 ≤ μ c) {n : ℕ} {F G : (Fin n → Ω) → ℝ} (h : ∀ cs, F cs ≤ G cs) :
-    ex μ n F ≤ ex μ n G :=
-  sum_le_sum fun cs _ => mul_le_mul_of_nonneg_left (h cs) (pathWeight_nonneg hμ cs)
+theorem ex_mono {n : ℕ} {F G : (Fin n → Ω) → ℝ} (h : ∀ cs, F cs ≤ G cs) : ex μ n F ≤ ex μ n G :=
+  sum_le_sum fun cs _ => mul_le_mul_of_nonneg_left (h cs) ENNReal.toReal_nonneg
 
-theorem ex_const (hμ : IsDist μ) (n : ℕ) (a : ℝ) : ex μ n (fun _ => a) = a := by
+theorem ex_const (μ : PMF Ω) (n : ℕ) (a : ℝ) : ex μ n (fun _ => a) = a := by
   induction n with
   | zero => exact ex_zero μ _ Fin.elim0
-  | succ n ih => rw [ex_succ]; simp [ih, ← sum_mul, hμ.2]
+  | succ n ih => rw [ex_succ]; simp [ih, ← sum_mul, Verity.Game.sum_toReal_pmf]
 
-theorem ex_add_const (hμ : IsDist μ) {n : ℕ} (a : ℝ) (F : (Fin n → Ω) → ℝ) :
+theorem ex_add_const (μ : PMF Ω) {n : ℕ} (a : ℝ) (F : (Fin n → Ω) → ℝ) :
     ex μ n (fun cs => a + F cs) = a + ex μ n F := by
-  have h := ex_const hμ n a
+  have h := ex_const μ n a
   simp only [ex, mul_add, sum_add_distrib] at h ⊢
   rw [h]
 
-theorem prob_congr {n : ℕ} {E E' : (Fin n → Ω) → Prop} (h : ∀ cs, E cs ↔ E' cs) : prob μ n E = prob μ n E' := by
-  rw [show E = E' from funext fun cs => propext (h cs)]
+open Classical in
+/-- `prob` is the expectation of the event's indicator. -/
+theorem prob_eq_ex (μ : PMF Ω) (n : ℕ) (E : (Fin n → Ω) → Prop) :
+    prob μ n E = ex μ n fun cs => if E cs then 1 else 0 :=
+  Verity.Game.prPMFReal_eq_sum_mul _ E
 
-theorem prob_nonneg (hμ : ∀ c, 0 ≤ μ c) (n : ℕ) (E : (Fin n → Ω) → Prop) : 0 ≤ prob μ n E :=
-  sum_nonneg fun cs _ => mul_nonneg (pathWeight_nonneg hμ cs) (by dsimp only; split_ifs <;> norm_num)
+theorem prob_congr {n : ℕ} {E E' : (Fin n → Ω) → Prop} (h : ∀ cs, E cs ↔ E' cs) : prob μ n E = prob μ n E' :=
+  Verity.Game.prPMFReal_congr _ h
 
-theorem prob_le_one (hμ : IsDist μ) (n : ℕ) (E : (Fin n → Ω) → Prop) : prob μ n E ≤ 1 := by
-  unfold prob
-  refine (ex_mono hμ.1 (G := fun _ => 1) fun cs => ?_).trans (ex_const hμ n 1).le
-  split_ifs <;> norm_num
+theorem prob_nonneg (n : ℕ) (E : (Fin n → Ω) → Prop) : 0 ≤ prob μ n E :=
+  Verity.Game.prPMFReal_nonneg _ _
 
-theorem prob_false (μ : Ω → ℝ) (n : ℕ) : prob μ n (fun _ => False) = 0 := by
-  simp [prob, ex]
+theorem prob_le_one (n : ℕ) (E : (Fin n → Ω) → Prop) : prob μ n E ≤ 1 :=
+  Verity.Game.prPMFReal_le_one _ _
+
+theorem prob_false (μ : PMF Ω) (n : ℕ) : prob μ n (fun _ => False) = 0 :=
+  Verity.Game.prPMFReal_false _
 
 open Classical in
-theorem prob_zero (μ : Ω → ℝ) (E : (Fin 0 → Ω) → Prop) (cs₀ : Fin 0 → Ω) :
+theorem prob_zero (μ : PMF Ω) (E : (Fin 0 → Ω) → Prop) (cs₀ : Fin 0 → Ω) :
     prob μ 0 E = if E cs₀ then 1 else 0 := by
-  rw [prob, ex_zero μ _ cs₀]
+  rw [prob_eq_ex, ex_zero μ _ cs₀]
 
-theorem prob_succ (μ : Ω → ℝ) {n : ℕ} (E : (Fin (n + 1) → Ω) → Prop) :
-    prob μ (n + 1) E = ∑ c, μ c * prob μ n fun cs => E (Fin.cons c cs) := by
-  rw [prob, ex_succ]
-  rfl
+theorem prob_succ (μ : PMF Ω) {n : ℕ} (E : (Fin (n + 1) → Ω) → Prop) :
+    prob μ (n + 1) E = ∑ c, (μ c).toReal * prob μ n fun cs => E (Fin.cons c cs) := by
+  rw [prob_eq_ex, ex_succ]
+  simp only [prob_eq_ex]
 
-/-- The coins of a window that escape, by weight: the sum over the escaping coins. -/
+/-- The coins of a window that escape, by weight: the probability of escaping. -/
 theorem sum_ite_esc (s : Finset Ω) [DecidablePred (· ∈ s)] (a : ℝ) :
-    ∑ c, μ c * (if c ∈ s then a else 0) = (∑ c ∈ s, μ c) * a := by
+    ∑ c, (μ c).toReal * (if c ∈ s then a else 0) = Verity.Game.prPMFReal μ (· ∈ s) * a := by
+  rw [Verity.Game.prPMFReal_mem]
   simp [mul_ite, sum_mul]
 
 /-! ## The stopping-time bounds -/
@@ -134,7 +137,7 @@ theorem cum_nonneg {A : Strategy Ω} {ℓ : ℝ} (hL : LeakBounded ℓ A) :
 /-- **Leakage through the first detection is geometric**: under detection pressure `κ`, with every window leaking at
 most `ℓ`, what leaves up to and including the first detection reaches `x` with probability at most
 `exp (-κ (x - ℓ))`, whatever the prover does adaptively and however long the deployment runs. -/
-theorem tail_cum (hμ : IsDist μ) {κ ℓ : ℝ} (hκ : 0 ≤ κ) {A : Strategy Ω} (hP : DetectionPressure μ κ A)
+theorem tail_cum {κ ℓ : ℝ} (hκ : 0 ≤ κ) {A : Strategy Ω} (hP : DetectionPressure μ κ A)
     (hL : LeakBounded ℓ A) (n : ℕ) (h : List Ω) (x : ℝ) :
     prob μ n (fun cs => x ≤ A.cum n h cs) ≤ Real.exp (-(κ * (x - ℓ))) := by
   have hℓ : 0 ≤ ℓ := (hL []).1.trans (hL []).2
@@ -148,26 +151,26 @@ theorem tail_cum (hμ : IsDist μ) {κ ℓ : ℝ} (hκ : 0 ≤ κ) {A : Strategy
     · rw [ite_eq_right hx]; exact (Real.exp_pos _).le
   | succ n ih =>
     by_cases hx : x ≤ A.leak h
-    · exact (prob_le_one hμ _ _).trans (one_le x (hx.trans (hL h).2))
+    · exact (prob_le_one _ _).trans (one_le x (hx.trans (hL h).2))
     · replace hx := not_le.1 hx
       rw [prob_succ]
       simp only [cum_cons]
-      calc ∑ c, μ c * prob μ n (fun cs => x ≤ A.leak h + if c ∈ A.esc h then A.cum n (c :: h) cs else 0)
-          ≤ ∑ c, μ c * (if c ∈ A.esc h then Real.exp (-(κ * (x - A.leak h - ℓ))) else 0) := by
-            refine sum_le_sum fun c _ => mul_le_mul_of_nonneg_left ?_ (hμ.1 c)
+      calc ∑ c, (μ c).toReal * prob μ n (fun cs => x ≤ A.leak h + if c ∈ A.esc h then A.cum n (c :: h) cs else 0)
+          ≤ ∑ c, (μ c).toReal * (if c ∈ A.esc h then Real.exp (-(κ * (x - A.leak h - ℓ))) else 0) := by
+            refine sum_le_sum fun c _ => mul_le_mul_of_nonneg_left ?_ ENNReal.toReal_nonneg
             split_ifs with hc
             · refine le_of_eq_of_le (prob_congr fun cs => ?_) (ih (c :: h) (x - A.leak h))
               constructor <;> intro <;> linarith
             · rw [prob_congr (E' := fun _ => False) fun cs => by simp only [add_zero, iff_false, not_le]; exact hx,
                 prob_false]
-        _ = (∑ c ∈ A.esc h, μ c) * Real.exp (-(κ * (x - A.leak h - ℓ))) := sum_ite_esc _ _
+        _ = Verity.Game.prPMFReal μ (· ∈ A.esc h) * Real.exp (-(κ * (x - A.leak h - ℓ))) := sum_ite_esc _ _
         _ ≤ Real.exp (-(κ * A.leak h)) * Real.exp (-(κ * (x - A.leak h - ℓ))) :=
             mul_le_mul_of_nonneg_right (hP h) (Real.exp_pos _).le
         _ = Real.exp (-(κ * (x - ℓ))) := by rw [← Real.exp_add]; ring_nf
 
 /-- **When a caught window's egress is withheld**, what leaves before the first detection reaches `x` with probability
 at most `exp (-κ x)`: the per-window term goes. -/
-theorem tail_cumPrev (hμ : IsDist μ) {κ : ℝ} (hκ : 0 ≤ κ) {A : Strategy Ω} (hP : DetectionPressure μ κ A)
+theorem tail_cumPrev {κ : ℝ} (hκ : 0 ≤ κ) {A : Strategy Ω} (hP : DetectionPressure μ κ A)
     (n : ℕ) (h : List Ω) (x : ℝ) :
     prob μ n (fun cs => x ≤ A.cumPrev n h cs) ≤ Real.exp (-(κ * x)) := by
   have one_le : ∀ y : ℝ, y ≤ 0 → 1 ≤ Real.exp (-(κ * y)) := fun y hy => Real.one_le_exp (by nlinarith)
@@ -179,19 +182,19 @@ theorem tail_cumPrev (hμ : IsDist μ) {κ : ℝ} (hκ : 0 ≤ κ) {A : Strategy
     · rw [ite_eq_right hx]; exact (Real.exp_pos _).le
   | succ n ih =>
     by_cases hx : x ≤ 0
-    · exact (prob_le_one hμ _ _).trans (one_le x hx)
+    · exact (prob_le_one _ _).trans (one_le x hx)
     · replace hx := not_le.1 hx
       rw [prob_succ]
       simp only [cumPrev_cons]
-      calc ∑ c, μ c * prob μ n (fun cs => x ≤ if c ∈ A.esc h then A.leak h + A.cumPrev n (c :: h) cs else 0)
-          ≤ ∑ c, μ c * (if c ∈ A.esc h then Real.exp (-(κ * (x - A.leak h))) else 0) := by
-            refine sum_le_sum fun c _ => mul_le_mul_of_nonneg_left ?_ (hμ.1 c)
+      calc ∑ c, (μ c).toReal * prob μ n (fun cs => x ≤ if c ∈ A.esc h then A.leak h + A.cumPrev n (c :: h) cs else 0)
+          ≤ ∑ c, (μ c).toReal * (if c ∈ A.esc h then Real.exp (-(κ * (x - A.leak h))) else 0) := by
+            refine sum_le_sum fun c _ => mul_le_mul_of_nonneg_left ?_ ENNReal.toReal_nonneg
             split_ifs with hc
             · refine le_of_eq_of_le (prob_congr fun cs => ?_) (ih (c :: h) (x - A.leak h))
               constructor <;> intro <;> linarith
             · rw [prob_congr (E' := fun _ => False) fun cs => by simp only [iff_false, not_le]; exact hx,
                 prob_false]
-        _ = (∑ c ∈ A.esc h, μ c) * Real.exp (-(κ * (x - A.leak h))) := sum_ite_esc _ _
+        _ = Verity.Game.prPMFReal μ (· ∈ A.esc h) * Real.exp (-(κ * (x - A.leak h))) := sum_ite_esc _ _
         _ ≤ Real.exp (-(κ * A.leak h)) * Real.exp (-(κ * (x - A.leak h))) :=
             mul_le_mul_of_nonneg_right (hP h) (Real.exp_pos _).le
         _ = Real.exp (-(κ * x)) := by rw [← Real.exp_add]; ring_nf
@@ -221,7 +224,7 @@ theorem leak_add_esc_le {κ ℓ a e : ℝ} (hκ : 0 < κ) (ha : 0 ≤ a) (haℓ 
 /-- **The rate form**: under detection pressure `κ > 0`, with every window leaking at most `ℓ`, what leaves before the
 `j`-th detection is at most `j (ℓ + 1/κ)` on average, for every adaptive strategy and horizon. A deployment that
 halts at the first failure (`j = 1`) gives up at most `ℓ + 1/κ`; one that tolerates failures pays that much for each. -/
-theorem ex_cumUpTo (hμ : IsDist μ) {κ ℓ : ℝ} (hκ : 0 < κ) {A : Strategy Ω} (hP : DetectionPressure μ κ A)
+theorem ex_cumUpTo {κ ℓ : ℝ} (hκ : 0 < κ) {A : Strategy Ω} (hP : DetectionPressure μ κ A)
     (hL : LeakBounded ℓ A) (n j : ℕ) (h : List Ω) :
     ex μ n (A.cumUpTo n j h) ≤ j * (ℓ + 1 / κ) := by
   have hℓ : 0 ≤ ℓ := (hL []).1.trans (hL []).2
@@ -234,7 +237,7 @@ theorem ex_cumUpTo (hμ : IsDist μ) {κ ℓ : ℝ} (hκ : 0 < κ) {A : Strategy
     cases j with
     | zero =>
       simp only [Strategy.cumUpTo, Nat.cast_zero, zero_mul]
-      rw [ex_const hμ]
+      rw [ex_const μ]
     | succ j =>
       rw [ex_succ]
       simp only [cumUpTo_cons]
@@ -242,17 +245,17 @@ theorem ex_cumUpTo (hμ : IsDist μ) {κ ℓ : ℝ} (hκ : 0 < κ) {A : Strategy
           else A.cumUpTo n j (c :: h) cs) ≤ A.leak h + j * (ℓ + 1 / κ) +
             (if c ∈ A.esc h then ℓ + 1 / κ else 0) := by
         intro c
-        rw [ex_add_const hμ]
+        rw [ex_add_const μ]
         split_ifs with hc
         · have := ih (j + 1) (c :: h); push_cast at this; linarith
         · have := ih j (c :: h); linarith
-      calc ∑ c, μ c * ex μ n (fun cs => A.leak h + if c ∈ A.esc h then A.cumUpTo n (j + 1) (c :: h) cs
+      calc ∑ c, (μ c).toReal * ex μ n (fun cs => A.leak h + if c ∈ A.esc h then A.cumUpTo n (j + 1) (c :: h) cs
             else A.cumUpTo n j (c :: h) cs)
-          ≤ ∑ c, μ c * (A.leak h + j * (ℓ + 1 / κ) + (if c ∈ A.esc h then ℓ + 1 / κ else 0)) :=
-            sum_le_sum fun c _ => mul_le_mul_of_nonneg_left (hstep c) (hμ.1 c)
-        _ = A.leak h + j * (ℓ + 1 / κ) + (∑ c ∈ A.esc h, μ c) * (ℓ + 1 / κ) := by
+          ≤ ∑ c, (μ c).toReal * (A.leak h + j * (ℓ + 1 / κ) + (if c ∈ A.esc h then ℓ + 1 / κ else 0)) :=
+            sum_le_sum fun c _ => mul_le_mul_of_nonneg_left (hstep c) ENNReal.toReal_nonneg
+        _ = A.leak h + j * (ℓ + 1 / κ) + Verity.Game.prPMFReal μ (· ∈ A.esc h) * (ℓ + 1 / κ) := by
             rw [← sum_ite_esc]
-            simp only [mul_add, sum_add_distrib, ← sum_mul, hμ.2, one_mul]
+            simp only [mul_add, sum_add_distrib, ← sum_mul, Verity.Game.sum_toReal_pmf, one_mul]
         _ ≤ ((j + 1 : ℕ) : ℝ) * (ℓ + 1 / κ) := by
             have := leak_add_esc_le hκ (hL h).1 (hL h).2 (hP h)
             push_cast

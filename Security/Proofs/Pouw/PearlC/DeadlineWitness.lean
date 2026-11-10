@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pouw.Assumptions.Deadline
 public import Definitions.Pouw.PearlC.Deadline
-public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!

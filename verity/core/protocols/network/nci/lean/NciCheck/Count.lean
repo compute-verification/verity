@@ -45,6 +45,11 @@ its order, `total` the sum of the counts, `complies` when every block Definition
 at most `k` fresh bits and `total ≤ n`, and `failure` the first that doesn't: `[b, "gates"]` or `[b, "fresh"]` for row
 `b`, else `[null, "count"]`.
 
+## What is published
+
+Only the judgment against `n`: `check` gives `{complies}`, or the refusal. The rows, the total and the failure count the
+declaration's blocks and name the one that failed, and stay in the private record (`checkDetail`, the whole verdict).
+
 ## Refusals
 
 In the order checked: `instance` (a field missing or of the wrong JSON kind), `params` (`c`, `k` or `n` not a natural, an
@@ -291,10 +296,18 @@ def refusal (j : Json) (code : String) : Json :=
     | some m => refusalWith code (some m)
     | none => NciCheck.refusal code
 
-/-- `evaluate`, with a refusal as `refusal` writes it. -/
-def check (j : Json) : Json :=
+/-- `evaluate`, with a refusal as `refusal` writes it: the whole verdict, for the private record only. It is never
+published: its rows and total count the declaration's blocks, and its failure names the block that failed. -/
+def checkDetail (j : Json) : Json :=
   match evaluate j with
   | .ok r => r
+  | .error code => refusal j code
+
+/-- What the count publishes: the judgment against `n`, `{complies}` from `evaluate`'s verdict, or the refusal as
+`refusal` writes it. -/
+def check (j : Json) : Json :=
+  match evaluate j with
+  | .ok r => Json.mkObj [("complies", r.getObjValD "complies")]
   | .error code => refusal j code
 
 end NciCheck.Count

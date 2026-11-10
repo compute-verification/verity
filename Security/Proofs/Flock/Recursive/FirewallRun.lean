@@ -1,7 +1,7 @@
 module
 
 public import Flock.Firewall
-public import Flock.Firewall.Contract
+import Flock.Firewall.Contract
 
 /-!
 # The ZK server's salts reach what it sends only as commit strings

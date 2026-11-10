@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Accounting.TS.Drawn
-public import Definitions.Accounting.Guarantees.TS.Fixed
+public import Proofs.Accounting.Lemmas.TS.Fixed
 
 /-!
 # An honest run meets option A's hypotheses (non-vacuity)
@@ -323,7 +323,7 @@ theorem prob_glue : prob (fun b : Bool => sampleF b 2 = 2) = 1 / 2 := by
     simp only [Finset.mem_univ, true_and]
     clear inst
     cases b <;> decide
-  unfold prob
+  unfold prob Claims.prUniform
   rw [h, Fintype.card_bool]
   norm_num
 

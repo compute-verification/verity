@@ -531,6 +531,16 @@ def _cover(t: Type, lo: int, hi: int) -> tuple[Type, int]:
             return t, off
 
 
+def _cyclic_widths(E: Type, r: int, n: int) -> frozenset:
+    """The widths of `n` consecutive leaves of an array of `E`s, from leaf `r` of an element on."""
+    L = E.leaves
+    if n >= L:
+        return E.width_set()
+    if r + n <= L:
+        return range_widths(E, r, r + n)
+    return range_widths(E, r, L) | range_widths(E, 0, r + n - L)
+
+
 def _residues(stride: int, count: int, L: int, cap: int = 4096) -> set[int] | None:
     """{k * stride mod L : k < count}, or None when it has more than `cap` members."""
     g = math.gcd(stride, L)
@@ -603,10 +613,14 @@ class _Widths:
             return False
         L = node.elem.leaves
         A = _residues(p.outer_stride, -(-p.count // p.inner), L)
+        r0 = (p.base - off) % L
+        if A is not None and p.inner_stride == 1 and len(A) <= 4096:
+            # each outer step reads `inner` consecutive leaves (fewer at a short last step), so a superset of the leaves `p`
+            # names is the window of `inner` leaves from each step's first, cyclically within an element
+            return all(_cyclic_widths(node.elem, (r0 + a) % L, min(p.inner, p.count)) == {w} for a in A)
         B = _residues(p.inner_stride, p.inner, L)
         if A is None or B is None or len(A) * len(B) > 4096:
             return False
-        r0 = (p.base - off) % L
         return all(range_widths(node.elem, r, r + 1) == {w} for r in {(r0 + a + b) % L for a in A for b in B})
 
     def misread(self, t: Type, pos: int, p: Refs) -> int | None:
@@ -663,36 +677,36 @@ class _Widths:
     def first(self, c: Coll) -> tuple[int, tuple[str, int, int]] | None:
         """(position, reference) of the first leaf of `c` that names a leaf of another width than `c.type` gives it, None when
         there is none. A `Concat` cut from a `PartLog` costs only its parts past the longest cut checked at that width."""
-        t = c.type
+        return self._first(c.type, c.refs, 0) if c.refs.count else None
 
-        def walk(r: Refs, pos: int) -> tuple[int, tuple[str, int, int]] | None:
-            if not isinstance(r, Concat):
-                k = self.misread(t, pos, r)
-                return None if k is None else (pos + k, r[k])
-            first = 0
-            if r.prefix is not None and not self.forward:
-                log, j = r.prefix
-                ws = range_widths(t, pos, pos + log.starts[j])
-                if len(ws) == 1:
-                    (w,) = ws
-                    owner, done = log.memo.get("defs.widths", (None, None))
-                    if owner is not self.token:
-                        done = {}
-                        log.memo["defs.widths"] = (self.token, done)
-                    for k in range(done.get(w, 0), j):
-                        hit = walk(log.parts[k], pos + log.starts[k])
-                        if hit is not None:
-                            return hit
-                    if not self.forward:
-                        done[w] = max(done.get(w, 0), j)
-                    first = j
-            for k in range(first, len(r.parts)):
-                hit = walk(r.parts[k], pos + r.starts[k])
-                if hit is not None:
-                    return hit
-            return None
-
-        return walk(c.refs, 0) if c.refs.count else None
+    def _first(self, t: Type, r: Refs, pos: int) -> tuple[int, tuple[str, int, int]] | None:
+        # A method, not a closure: a recursive closure is a reference cycle, which only the cyclic collector frees, and this
+        # runs for every argument of every node.
+        if not isinstance(r, Concat):
+            k = self.misread(t, pos, r)
+            return None if k is None else (pos + k, r[k])
+        first = 0
+        if r.prefix is not None and not self.forward:
+            log, j = r.prefix
+            ws = range_widths(t, pos, pos + log.starts[j])
+            if len(ws) == 1:
+                (w,) = ws
+                owner, done = log.memo.get("defs.widths", (None, None))
+                if owner is not self.token:
+                    done = {}
+                    log.memo["defs.widths"] = (self.token, done)
+                for k in range(done.get(w, 0), j):
+                    hit = self._first(t, log.parts[k], pos + log.starts[k])
+                    if hit is not None:
+                        return hit
+                if not self.forward:
+                    done[w] = max(done.get(w, 0), j)
+                first = j
+        for k in range(first, len(r.parts)):
+            hit = self._first(t, r.parts[k], pos + r.starts[k])
+            if hit is not None:
+                return hit
+        return None
 
     def refuse(self, what: str, t: Type, hit: tuple[int, tuple[str, int, int]]) -> TypeError:
         pos, (s, i, j) = hit

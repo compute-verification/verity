@@ -52,7 +52,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.certifier import ingress_scan as IS
+from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -525,6 +525,7 @@ class Rows:
             for lo, hi, r in [*pieces, *((lo, lo + r.words, r) for lo, r in sums)]:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
                 self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
+<<<<<<< 94ca7fd0d18
             if (r := P.ys.get(j)) is not None:
                 if 2 * len(w) != r.words:
                     raise ValueError(f"{P.name}: node {j}'s {len(w)} words are not the {r.words // 2} bf16 its y row widens")
@@ -540,6 +541,13 @@ class Rows:
                 raise ValueError(f"{P.name}: node {j}'s x is {len(x)} {x.dtype} elements, not the {r.words // 2} bf16 its A row "
                                  "widens")
             self._put(r.tid, r.unit, r.out, np.stack([np.zeros_like(x), x], axis=1).reshape(1, r.words), EVALUATED)
+||||||| e10cf2c8559
+=======
+            if (r := P.packed.get(j)) is not None:
+                if len(w) != r.words:
+                    raise ValueError(f"{P.name}: node {j}'s {len(w)} words are not its leaf row {r}'s {r.words}")
+                self._put(r.tid, r.unit, r.out, w.reshape(1, r.words), S.source[j])
+>>>>>>> 7af4d24fca3e
         emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
         for p, (j, feed) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]

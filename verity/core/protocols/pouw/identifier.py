@@ -22,7 +22,10 @@ from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from .audit import Epoch
 from .protocol import DomainError, PoUWScheme
-from .schemes import SCHEMES
+
+#: the names `schemes.SCHEMES` registers, in its order (`test_pouw_identifier` holds them equal); core imports no builder
+SCHEMES = ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4", "pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-h100-v1-h3",
+           "pearl-c-sm120-v1", "pearl-c-sm120-v1-h3", "pearl-c-nvfp4-v0")
 
 FORMAT = domains.POUW_IDENTIFIER
 SALT_BYTES = 32

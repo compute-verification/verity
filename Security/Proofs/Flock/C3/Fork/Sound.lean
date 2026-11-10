@@ -1,7 +1,24 @@
 module
 
 public import Proofs.Flock.C3.Fork.Runs
-public import Proofs.Flock.Recursive.Universal
+public import Proofs.Flock.Recursive.HoloExec
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.ForkRuns
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # Piece (a): candidate 3's table is sound, in fork form
@@ -122,7 +139,7 @@ is `fast100`'s where it covers `mReg` and the default (empty levels) elsewhere, 
 theorem holoAt_rsch (st : Flock.Stmt) (hp : HoloParams) :
     (holoAt st hp).rsch.sch.levels = [] ∨
       Accounting.fast100 (holoAt st hp).cls.shape.mReg = some (holoAt st hp).rsch.sch := by
-  have key : ∀ (M : ℕ) (s : Accounting.Schedule), (s = default ∨ s = schedAt M) →
+  have key : ∀ (M : ℕ) (s : FlockSoundness.Accounting.Schedule), (s = default ∨ s = schedAt M) →
       s.levels = [] ∨ Accounting.fast100 M = some s := by
     rintro M s (rfl | rfl)
     · exact Or.inl rfl

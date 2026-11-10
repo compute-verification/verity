@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Analysis
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
 public import Proofs.Flock.Soundness.LinkCarry
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
 
 /-!
 # `δ_link` for the compiled `--zk` session, under expected-time collision resistance
@@ -44,7 +46,7 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
-variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
@@ -203,7 +205,7 @@ theorem expect_trialZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw
           (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2) /
         Fintype.card (ΩcZ A P planZ tab vb L c) := by
   unfold trialGZC trialStratZC
-  rw [expect_bind, expect_draw]
+  rw [expect_bind, Verity.Game.expect_draw]
   congr 1
   refine Finset.sum_congr rfl fun w _ => ?_
   rw [expect_bind]

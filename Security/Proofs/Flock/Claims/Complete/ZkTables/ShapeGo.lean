@@ -1,12 +1,50 @@
 module
 
-public import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
 public import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
-public import Proofs.Flock.Claims.Complete.Zk.ProverOk
-public import Proofs.Flock.Claims.Complete.Zk.Json.Files
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import all Init.Data.Nat.Power2.Basic
+public import Proofs.Flock.Claims.Complete.Zk.InnerGo
+public import Proofs.Flock.Claims.Complete.ZkTables.Parts
+public import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Goals
+import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+import Proofs.Flock.Claims.Complete.Zk.Count
+import Proofs.Flock.Claims.Complete.Zk.ProverOk
+import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+import Proofs.Flock.Claims.Complete.ZkTables.View
 
 /-!
 # The honest masked rep proof fits its shape
@@ -26,9 +64,8 @@ shape the masked verifier decodes it at.
   proof at most `424 + 16·|y| + 168·(232 + 64·depth)` (`wInner_size_le`); every `--zk` schedule's part is under
   `2^32` (`zkSchedule_file`), and a good case's table has at most 2,050 claims (`Case.extras_le`).
 
-`complete_jsonT_of_level0`: so `complete_jsonT` follows from level 0's four premises (proved in `Zk.Level0Premises`
-and `Zk.Level0Verifier`) and the mask-rank bound (`L0.complete_jsonT_closed`; with the bound proved,
-`L0.complete_jsonT_of_spec`).
+`complete_jsonT_of_level0`: so `complete_jsonT` follows from level 0's four premises (three proved in
+`Zk.Level0Premises`; `Level0.Verifier` is not) and the mask-rank bound (proved, `MaskRank.maskRankBound`).
 -/
 
 @[expose] public section

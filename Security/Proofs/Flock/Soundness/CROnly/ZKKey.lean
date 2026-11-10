@@ -1,6 +1,16 @@
 module
 
-public import Proofs.Flock.Soundness.CROnly.ZK
+public import Definitions.Core.Game
+public import Definitions.Flock.ZK.Cut
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.CROnly.Hm96Sha512
+import Proofs.Flock.Soundness.CROnly.ZK
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Lemma C at a uniform hm96 key

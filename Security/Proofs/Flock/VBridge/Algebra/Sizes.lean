@@ -1,6 +1,14 @@
 module
 
+public import Flock.RecAlgebra
+public import Proofs.Flock.Soundness.Refine.Final
 public import Proofs.Flock.VBridge.Algebra.RunSkel
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.VBridge.Algebra.Ligerito
+import Proofs.Flock.VBridge.Algebra.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # `verifierRows` reads a record's rounds only through their sizes

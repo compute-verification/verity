@@ -4,7 +4,7 @@ public import Definitions.Accounting.RateAuditSketchDeployed
 public import Definitions.Accounting.RateAuditDeployed
 public import Definitions.Accounting.Gates.Codec
 public import Definitions.Accounting.Requirement
-public import Mathlib.Data.ENat.Lattice
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Carriers: device memory whose post-seed contents are a circuit's values (trusted)

@@ -3,7 +3,7 @@ module
 public import Flock.Hm96
 public import PouwCommit.Frame
 public import PouwCommit.Py
-public import Identity.Domains
+public import PouwCommit.Tagged
 
 /-!
 # The execution phase's coins' check (`verity.core.protocols.pouw.coins`)

@@ -18,8 +18,10 @@ verity bench recursion_e2e run   [POINT] [--e2e] [--release] [--dry-run] [--here
                                                                    plain run on a CPU node; a GPU run: a GPU node's queue)
 verity bench recursion_e2e result --dir OUT [--out F] [--md F]    the result from a job's out/ (the job runs it last)
 verity bench recursion_e2e table RESULT... [--merge] [--json]     the table from results (a file, or a run id whose
-                                                                   records are fetched and read with this reader)
-verity bench recursion_e2e store RESULT... [--merge]              the results and their table as one art: id
+                                                                   records `research fetch --all RUN` fetched, read with
+                                                                   this reader)
+verity bench recursion_e2e store RESULT... [--merge] --dir DIR    the results and their table as one art's tree in DIR,
+                                                                   and the `research data put` command that stores it
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 --lease-min M --neg challenge,query
        --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
@@ -69,13 +71,11 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   `Spot.Challenger.innerTreesReason`). The result's `release` and the table's release-side section give each
   part's window, release time, decision time, slack and prove wall; the headline's `released` is its verdict, and `ok`
   needs it. `--max-min` gives oprove twice its proving model (a window is about twice its part's prove) and the lead.
-- **The figures** (`figures.py`, the result's `figures` and the table's last section): the session's cost, its
-  knowledge-soundness error and its stop-leak bound, for one window and pooled over a week, a month and a year, over the
-  reference datacenter and the world's compute (`benchmarks/census`), each with its basis: measured (the run), proved (the
-  Lean theorem it reads and what that assumes) or scaled (a session a machine a window, each as this one). The
-  knowledge-soundness error is κ + t·ε a session (κ and ε proved), pooled by the union bound as sessions·κ + T·ε against
-  the SHA-512 calls of the world's GPUs and of the datacenter's, and as a share of the sessions and of the ANDs they cover.
-  The module's docstring states every figure.
+- **The session's times** (the result's `session_times`): each step of one recursive session after its build (inner,
+  vstage, vcap, oprove, lean), its first invocation's wall and CPU seconds and peak RSS, what the session's figures (its
+  cost, knowledge-soundness error and stop-leak bound per window and pooled over the monitoring periods) scale from. The
+  figures read the census and the periods, which stay off this public bench: `benchmarks/recursion_figures/figures.py
+  RESULT.json` gives them.
 - **The negative** (`negative`, on by default): the lean step again over a copy of the inner run with one coin of
   rep 0 flipped (the pod script's `NEG_INNER`, `rec_inner.py forge`), once per `--neg` coin. A flipped coin moves only the V*
   statements that read it, so a coin counts as refused when Lean refuses it under at least one statement (exit 1, no
@@ -157,8 +157,8 @@ Each GPU step runs once, with its runs inside it: the inner's `WARM=1 RUNS=3`, e
 `--oprove-warm 0 --oprove-runs 1`. Each invocation of the pod script runs under its own `RESEARCH_RUN_DIR`
 (`out/steps/<step>/r<i>/`), so every record it writes is kept. `result` reads them into `out/recursion_e2e.json` and
 `out/table.md`. `job.sh` tries to write them on SIGTERM too, but cancelling the run ends its scope within a second,
-which leaves only the records. `table RUN` rebuilds the result from a fresh fetch of them, so a cancelled run's rows
-are still read.
+which leaves only the records. `table RUN` rebuilds the result from them once `research fetch --all RUN` has fetched
+them, so a cancelled run's rows are still read.
 
 - **Prover time** (`inner`, `oprove`; the table's "time s"): each timed run's `prove_total_s` from the prover's `LIVE`
   line (both reps' `prove_s` summed). This covers the device's phases, not the host witness.

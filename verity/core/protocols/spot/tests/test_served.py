@@ -80,7 +80,7 @@ def test_the_registration_it_builds_passes_r7_and_the_file_is_the_verifiers():
 
 
 def test_each_registered_read_opens_the_served_root(tmp_path):
-    """The file's port is what flock-verify opens a statement's rows against: every row the program reads opens the served
+    """The file's port is what `flock-verify` opens a statement's rows against: every row the program reads opens the served
     root under the file's domain, and `write` writes the bytes `flock-verify --registered` reads."""
     prog = _program()
     reg, tree = _tree(prog)

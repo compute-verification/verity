@@ -1,13 +1,27 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Compiled
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
-public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The coin half of `DecodesZK` at the compiled `--zk` table
 
-`DecodesZK` (R11b at `--zk`) at `Discharge/ZkLink`'s compiled table, with each round's coin step `coinMsg true`
+`DecodesZK` (the decoder premise at `--zk`) at `Discharge/ZkLink`'s compiled table, with each round's coin step `coinMsg true`
 (`one := fun _ _ _ => true`), from its message half alone. `Discharge/PlaysCoin`'s `decodesOfRunsAt` turns each rep's
 `RepRun` along a spine that holds where the run ends (`SpineAt`) into `Decodes`. At the compiled rep that spine is
 `repShapeZ` at every result whose Ligerito part is not a reject (`repZCAt_spineAt`), and a table that accepts has no
@@ -104,7 +118,7 @@ theorem decodes_of_runsOnZC {L : Law n} (h : RunsOnZC A Hs T I wr opn dec fin ca
   exact ⟨pend, _, _, repZCAt_spineAt A Hs (T (L.draw ω) R) o.pts 0 hl₀, h₀,
     repZCAt_spineAt A Hs (T (L.draw ω) R) o.pts 1 hl₁, h₁, hacc⟩
 
-variable {C : Circuit} (P : Partition C n) (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planOne T S R).length)
+variable {C : Verity.Boolean.Circuit} (P : Partition C n) (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planOne T S R).length)
   {decode : DecoderZK (C := C) (planOne T) tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ZkLink.ValueBindingZ A P (planOne T) tab decode Hc)
 

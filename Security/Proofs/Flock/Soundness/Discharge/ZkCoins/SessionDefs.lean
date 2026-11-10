@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The batched `--zk` session on committed coins (live/PROTOCOL.md §9, Flock ZK)

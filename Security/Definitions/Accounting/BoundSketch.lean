@@ -1,7 +1,8 @@
 module
 
-public import Mathlib.Data.ZMod.Basic
-public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Data.ZMod.Defs
+import Mathlib.Tactic.Bound.Init
 
 /-!
 # The deployed bound receipt's sketch: a relay as a two-party protocol (trusted)

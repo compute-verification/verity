@@ -32,11 +32,12 @@ whole in a single step gate unless the step completes an entry of the multiplica
 `ActivationsIncompressible`, the rationale is that `R` must read each input entry it uses, its linked output entry or a
 partial sum of it, and each weight entry it uses, whichever of its gates hold them.
 
-It is adopted, with `PackedTrainingIncompressible`, as the `k`-generalization of the per-product premises
-`ActivationsIncompressible` and `TrainingIncompressible`. It
-covers a reference training circuit with at most `k` of the chain's products to a gate, such as one in `Dot16` steps,
-whose weights and first inputs depend on more than `c` work of training since the commitment, as
-`ActivationsIncompressible` does, and is false on a declared circuit, whose wiring the prover controls. -/
+It is the `k`-generalization of `ActivationsIncompressible` and, as that is of `TrainingIncompressible`, the
+activations' half of `PackedTrainingIncompressible`, which implies it
+(`Nci.SecurityProofs.activationsIncompressible_of_training_packed`). It covers a reference training circuit with at most
+`k` of the chain's products to a gate, such as one in `Dot16` steps, whose weights and first inputs depend on more than
+`c` work of training since the commitment, as `ActivationsIncompressible` does, and is false on a declared circuit,
+whose wiring the prover controls. -/
 def PackedActivationsIncompressible {p : ℕ} (D : RegisteredCircuit) (ch : PackedChain D.D p) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ R ⊆ D.D.computed, D.D.size R ≤ c → (novelReads D R : ℝ) ≤ k →
     b_w * (ch.weightsUsed R).card +

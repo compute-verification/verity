@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.Pins
 public import Proofs.Flock.Soundness.Audit.FlockPublic
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # Readers of rows and single gates
@@ -24,7 +26,7 @@ namespace FlockSoundness.Discharge.Layout
 
 open Game Model Audit Binding
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   (place : ∀ S R u, u ∈ S → UnitPlace P (Partition.tabOf plan tab S R u).S u)

@@ -32,12 +32,12 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
-from verity.core.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import leaves as L
 from verity.core.protocols.pouw.coins import Challenger as Coins
 from verity.core.protocols.pouw.coins import CoinOpening, coin_reason
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 from verity.core.protocols.spot import challenger as Ch
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import registration as R
@@ -78,10 +78,10 @@ def _manifest(run: str, coins: Coins | None) -> dict:
     man, roots, work = _pass(run)
     if coins is None:
         beacon = bytes(32)
-        return {**man, "schema": PD.MANIFEST_SCHEMA_RECORDED, "beacon": beacon.hex(),
+        return {**man, "schema": CC.MANIFEST_RECORDED, "beacon": beacon.hex(),
                 "salt": Epoch.unverified(work, roots, beacon).salt.hex()}
     opening = coins.open("salt", weights_root(roots))
-    return {**man, "schema": PD.MANIFEST_SCHEMA, "coins": coins.commitment.to_json(), "salt_opening": opening.to_json(),
+    return {**man, "schema": CC.MANIFEST_SCHEMA, "coins": coins.commitment.to_json(), "salt_opening": opening.to_json(),
             "salt": Epoch.start(work, roots, coins.commitment, opening).salt.hex()}
 
 
@@ -488,7 +488,7 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
     assert SC.spec_of(bare, public["level"], predates_deadline=True).check.registration_deadline is None
     assert SC.spec_of(params, public["level"]).check.registration_deadline == SC.REGISTRATION_DEADLINE
 
-    man = {"schema": PD.MANIFEST_SCHEMA, "run": "r", "matmuls": [{"index": 0, "m": 1, "k": SC.K, "n": SC.K, "weight": 2}]}
+    man = {"schema": CC.MANIFEST_SCHEMA, "run": "r", "matmuls": [{"index": 0, "m": 1, "k": SC.K, "n": SC.K, "weight": 2}]}
     (tmp_path / "pass").mkdir()
     (tmp_path / "pass" / "manifest.json").write_text(json.dumps(man))
     assert SC.main(["params", str(tmp_path / "pass"), str(tmp_path / "p.json")]) == 0
@@ -580,7 +580,7 @@ def _certifier(sid: bytes, key, sign, record: bytes, keys, seed: bytes = b"", cl
     """The certifier's run `run` on ingress link `link`, answering under `keys`' certifier signer the requests its
     challenger signs, PoUW's reader and the prover's `key` registered, the stream `sid` its context, on `clock`: the
     prover records `record` for PoUW execution phases 0 … `windows` − 1 before the first tick, signed, then they are published.
-    With the salt it sampled for each, which the prover's server receives in-band."""
+    With the salt it sampled for each, which the developer's server receives in-band."""
     drawn: dict[int, bytes] = {}
 
     def source(p: int, n: int) -> bytes:
@@ -936,9 +936,9 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
     brec, braw = _register(bparams, bpublic), PASSES[bparams["context"]][1]
     with pytest.raises(S.Refused) as e:
         _challenger(bparams, coins=_coins()).register("x", brec, manifest=braw)
-    assert _codes(e) == {"coin"} and f"is {PD.MANIFEST_SCHEMA_RECORDED}, recorded before epoch coins" in e.value.verdict.detail["coin"]
+    assert _codes(e) == {"coin"} and f"is {CC.MANIFEST_RECORDED}, recorded before epoch coins" in e.value.verdict.detail["coin"]
     _, _, bman = PASSES[bparams["context"]]
-    for schema, code, why in (("verity-vllm/pouw-pearl-c-run/v0", "coin", f"schema 'verity-vllm/pouw-pearl-c-run/v0', not {PD.MANIFEST_SCHEMA}"),
+    for schema, code, why in (("verity-vllm/pouw-pearl-c-run/v0", "coin", f"schema 'verity-vllm/pouw-pearl-c-run/v0', not {CC.MANIFEST_SCHEMA}"),
                               (None, "manifest", "the pass's manifest names no schema")):
         ch = _challenger(bparams, coins=_coins())
         with pytest.raises(S.Refused) as e:

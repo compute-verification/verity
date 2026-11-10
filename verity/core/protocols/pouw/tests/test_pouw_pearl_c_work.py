@@ -19,11 +19,11 @@ import pearl_c_vectors as CV
 from test_pouw_pearl_c_debit import spiked_rows
 from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
@@ -262,12 +262,26 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
 
 
 def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
+<<<<<<< 94ca7fd0d18
     """A weight row that fails the per-row rules is excluded, and by the band rule it takes the credit of its whole block
     of 64 columns, so no tile holding its column has a credited cell.  L3's `TileCheck.Accepts` asks `weightOK` of each
     of a tile's columns and refuses such a tile, and the game counts every column of a credited tile (`cols g`); the band
     rule leaves such a tile neither a ticket nor credit, so the work law no longer credits a tile the game refuses.  Here
     the block holds all 16 columns: W and the credit are 0, the one exclusion tile (A row 3's and B row 5's) is opened and
     accepted, and declaring the row credited fails its tile."""
+||||||| e10cf2c8559
+    """Where the work sampling design and L3's tile check differ: a weight row that fails the per-row rules is excluded, and every
+    tile holding its column is accepted with none of that column's cells credited, while L3's `TileCheck.Accepts` asks
+    `weightOK` of each of a tile's columns and refuses the tile.  The work sampling design is credit-sound there only while the
+    excluded column's chain words (its C̃ and U words, computed and bound as any other's) earn nothing: W and the credit
+    count 19 · 15 cells, not 19 · 16, and declaring the row credited fails its tile."""
+=======
+    """Where the work sampling design and L3's tile check differ: a weight row that fails the per-row rules is excluded, and every
+    tile holding its column is accepted with none of that column's cells credited, while L3's `TileCheck.Accepts` asks
+    `fixedOK` of each of a tile's columns and refuses the tile.  The work sampling design is credit-sound there only while the
+    excluded column's chain words (its C̃ and U words, computed and bound as any other's) earn nothing: W and the credit
+    count 19 · 15 cells, not 19 · 16, and declaring the row credited fails its tile."""
+>>>>>>> 7af4d24fca3e
     rows_a = CV.rows_f32("work-life", "A", 20, K) + [C.f32_row([0] * K)] * 12
     rows_a[3] = spiked(rows_a[3])
     rows_b = CV.rows_f32("work-life", "B", 16, K)
@@ -293,7 +307,7 @@ def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
 def test_a_padded_weights_last_tile_is_neither_drawn_nor_credited():
     """GLM-5.3's lm_head is 19360 rows a TP8 rank, not whole 64-column tiles; padded with zero rows to 19392 it is in
     Pearl-C's domain.  Its last tile holds real columns and zero rows, and a zero row fails the noise floor, so no tile
-    check may see it (L3's `TileCheck.Accepts` asks `weightOK` of every column): the padded tile's rows are voluntary,
+    check may see it (L3's `TileCheck.Accepts` asks `fixedOK` of every column): the padded tile's rows are voluntary,
     which leaves it no credited cell, so no sample lands on it and it opens no exclusion tile.  Here 500 rows padded to
 <<<<<<< HEAD
     504 on 8-column tiles (V-EX's ⌈n/64⌉ cap holds the tile's 8 rows): by the band rule the padded rows take their block
@@ -357,7 +371,7 @@ def test_r1_is_a_no_op_on_pearl_c():
 def test_pearl_c4s_per_element_term_3_is_a_no_op_on_pearl_c(monkeypatch):
     """Pearl-C4's debit (item 3 per element on the witness, `pearl_c4.tile_debit`) is its own: Pearl-C (FP8) brings no
     `tile_cap`, so its audit never reaches Pearl-C4's witness or debit and accepts as before."""
-    from verity.core.protocols.pouw.schemes import pearl_c4
+    from verity.ml.protocols.pouw.schemes import pearl_c4
 
     def unreachable(*args, **kwargs):
         raise AssertionError("Pearl-C reached Pearl-C4's debit")

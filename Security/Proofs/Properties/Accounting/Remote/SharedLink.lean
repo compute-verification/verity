@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Properties.Accounting.Remote.Shared
+import Proofs.Properties.Accounting.Remote.Draw
+import Proofs.Properties.Accounting.Remote.Window
 
 /-!
 # The session link windows a draw (`SessionSamplesRecords`, `AcceptedSamplesOpenable`)

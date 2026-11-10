@@ -1,7 +1,13 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
 public import Proofs.Flock.Soundness.Discharge.Layout
+public import Proofs.Flock.Soundness.Discharge.Layout.Site
 public import Proofs.Flock.Soundness.Discharge.Placed
+public import Proofs.Flock.Soundness.Refine.Setup
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
 public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
@@ -28,7 +34,7 @@ file, one table), at the sample the challenger writes for `S` (`dj S`, the sampl
   is setupH's statement wherever setupH accepts.
 * `sitesAt`, `sitesAt_parse`: the `Sites` of the plan `fun S R => [tableAt … S]`, and `hparse` from the session's one
   circuit file.
-* `sitesAt_bcSite`: e2e-layout's site fact `BcSite` at every satisfiable site: at a `DrawSetup` table by the rank, and at
+* `sitesAt_bcSite`: `Discharge/Layout`'s site fact `BcSite` at every satisfiable site: at a `DrawSetup` table by the rank, and at
   a refused table vacuously.
 -/
 

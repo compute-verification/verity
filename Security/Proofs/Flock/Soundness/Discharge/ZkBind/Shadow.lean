@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Bind
-public import Proofs.Flock.Soundness.Discharge.Layout.Keyed
+public import Proofs.Flock.Soundness.Binding.Rows
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # A `--zk` layout from a public one at the same statements
@@ -82,7 +83,7 @@ theorem wit_surj {mPts : ℕ} (T : TabSpec mPts) (z : Witness T.S.m) :
 
 section Shadow
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length}
   {planS : Finset (Fin n) → Reg → List (TabSpec mPts)}

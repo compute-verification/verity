@@ -33,7 +33,14 @@ from pathlib import Path
 from typing import Any
 
 # The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
+<<<<<<< 94ca7fd0d18
 from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, block_count, short_sessions
+||||||| e10cf2c8559
+from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, short_sessions
+=======
+from verity.core.protocols.pous.wipe_monitoring import short_sessions
+from verity.core.protocols.reporting import DELTAS, PERIODS
+>>>>>>> 7af4d24fca3e
 
 from . import codec, pooled
 
@@ -123,7 +130,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["DELTAS", "FORMAT", "PERIODS", "STATEMENT", "main", "per_window", "pooled_step", "short_sessions", "table"]
+__all__ = ["FORMAT", "STATEMENT", "main", "per_window", "pooled_step", "short_sessions", "table"]
 
 if __name__ == "__main__":
     sys.exit(main())

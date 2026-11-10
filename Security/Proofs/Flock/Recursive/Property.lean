@@ -1,14 +1,22 @@
 module
 
-public import Proofs.Flock.Recursive.Compile
-public import Proofs.Flock.Recursive.Statements
-public import Proofs.Flock.Recursive.Premises
 public import Proofs.Flock.Recursive.ExecClass
 public import Proofs.Flock.Recursive.Firewall
 public import Proofs.Flock.Recursive.Description
 public import Proofs.Flock.Recursive.VStarCheck
-public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-public import Flock.RecResiduals
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The recursive audit's property (trusted)
@@ -91,7 +99,7 @@ under `Refine.H512`: `flock-leaf/sha512-unsalted`, which `RecVStar.innerTags` na
 and the schedule `sch`. -/
 noncomputable abbrev innerExec {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
-    (sch : Accounting.Schedule) : Inner :=
+    (sch : FlockSoundness.Accounting.Schedule) : Inner :=
   flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain cls regs sch
 
 /-- **The number of V*'s outer statements** over an inner session of a table of `m` variables, `k_log` and `claims`

@@ -1,6 +1,12 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Tables.Session
+public import Proofs.Flock.Soundness.Binding.RowsX
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
+import Proofs.Flock.Soundness.Discharge.Exec.Headline
+import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
 
 /-!
 # The headline at the executable, for sessions of `J` tables
@@ -41,8 +47,7 @@ session directory by `wr`. Against any live prover `τ`, flock-verify accepts wi
 committed values of the simulated prover (`simAuditJ … τ`) with probability at most `miss(K) + ε_ks + δ_link`:
 `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_tables`, so `Pr[bad] = 0`. Beyond
 `Prog.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`, `hCR`),
-it takes `hdec`: the decoder is right on the sessions flock-verify accepts, at the samples the sampling design makes, table by table
-(R11b). -/
+it takes `hdec`: the decoder is right on the sessions flock-verify accepts, at the samples the sampling design makes, table by table. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_tables
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)

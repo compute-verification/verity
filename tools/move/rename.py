@@ -13,7 +13,9 @@ branch across it):
 1. renames each [words] entry in every tracked text file the map doesn't exclude, except inside what [keep] keeps (a domain
    tag, a format id, an id; a name in a Python module's `__all__` only as it keeps the name, never as a quoted string,
    since `__all__` names what the module exports; the name of a file the second step leaves in place, `Words.hold`) and,
-   in the files a [keep_in] glob matches, the words it lists;
+   in the files a [keep_in] glob matches, the words it lists; in a JSON file other than a lock, a Lake manifest or
+   `moves.json`, it sorts again each object whose keys were sorted and that renamed keys leave out of order, keeping the
+   file's lines but for their order and trailing commas, or else leaves the renamed text as it is (`resorted`);
 2. moves each tracked file whose path the same words rename, with `layout.py`'s machinery (`layout.Run.move`), but for the
    words a [keep_in] or [keep_paths] glob lists for it ([keep_paths] holds a path and not the file's text); a module's
    name is its path's, so the first step has already renamed every import of it;
@@ -26,22 +28,29 @@ branch across it):
    run of renamed parts (`.../warden/`, not each file under it, and `.../warden/tests/test_warden.py` besides; a directory
    only when it moves whole, else the file), so that a branch carried across the move appends the same entry unless it
    adds a path that renames a part below a renamed one.
-It refuses a dirty worktree, and a second run changes nothing.
+It refuses a dirty worktree, and a second run changes nothing. The first step runs in `--jobs` forked processes (by
+default the cores it may use, at most 32), since `restack.py` runs it once for each branch it carries; a file's new text
+reads only that file and the map, so the result is one process's.
 
 A map with `scope = "prose"` renames only prose, the part of a move `tools/verity/check/move_check.py` certifies without a
 build: a word that stands as a word in a comment, a docstring or Markdown's text (`regions`, `prose_word`), never one in
 code, a string literal, a data file, backticks, a name, a path or a constant's name, nor in a file a JSON pin records (its
 command regenerates the pin). Such a move moves no path, renames no declaration (`--moves` prints `{}`) and leaves every
 lock and pin as it was.
+
+Every mode refuses a map whose [[words_in]] files, [keep_in] or [keep_paths] name a path or glob that no tracked file
+matches (`Words.unmatched`), naming each, rather than skip the renames or keeps it holds for a file since moved or deleted.
 """
 from __future__ import annotations
 
 import argparse
 import bisect
+import concurrent.futures
 import fnmatch
 import hashlib
 import importlib.util
 import json
+import multiprocessing
 import os
 import posixpath
 import re
@@ -62,6 +71,7 @@ PIN = re.compile(r"^([0-9a-f]{64})  (.+)$", re.M)
 PINS_PY = "tools/verity/check/pins.py"              # the pins of Lean sources, some of them JSON (`json_pins`)
 MANIFEST = "lake-manifest.json"
 MOVES = L.MOVES                                     # research's record of each move's renamed paths
+JOBS, CHUNK = 32, 8                                 # at most this many processes rewrite files, this many files a task
 EXPORTS = re.compile(r"^__all__\s*\+?=\s*[\[(][^\])]*[\])]", re.M)   # a Python module's `__all__`: names, never data
 # a space of a phrase: one, a line break and what starts the next line, or a break between two string literals Python joins
 GAP = r"""(?: ["']\n[ \t]*[rbfRBF]{0,2}["']|["']\n[ \t]*[rbfRBF]{0,2}["'] | |\n[ \t]*(?:(?:///?|--|#|\*) )?)"""
@@ -446,9 +456,14 @@ class Words:
             kept: Counter | None = None, protect: bool = True) -> str:
         """`text` (of file `path`) with every word renamed, except inside the spans [keep] (and `keep`) cover and the words
         [keep_in] lists for `path`. ``counts`` and ``kept`` count the words renamed (by old and new) and the words left
-        standing; without ``protect`` (a path), [keep] keeps nothing and [keep_paths] holds its words as [keep_in] does."""
+        standing; without ``protect`` (a path), [keep] keeps nothing and [keep_paths] holds its words as [keep_in] does.
+        Under `scope = "prose"` a file with no prose (a data file, a lock) is returned as it is, its words not counted:
+        finding each one in Security's lock takes most of a 32-process move."""
         pattern, new = self.rules(path, text)
         if pattern.search(text) is None:
+            return text
+        parts = regions(path, text) if self.scope and protect else None
+        if parts is not None and all(k != PROSE for _, _, k in parts):
             return text
         held = [(m.start(), m.end()) for k in self.keep if protect for m in k.finditer(text)]
         if held and path.endswith(".py") and (names := [(m.start(), m.end()) for m in EXPORTS.finditer(text)]):
@@ -469,7 +484,6 @@ class Words:
             reach.append(far)
         held_in = [*self.keep_in.items(), *(() if protect else self.keep_paths.items())]
         skip = {w for g, ws in held_in if path and _match(path, g) for w in ws}
-        parts = regions(path, text) if self.scope and protect else None
 
         def one(m: re.Match) -> str:
             w = m.group(0)
@@ -500,6 +514,16 @@ class Words:
                                         + r")(?![\w/-])"))
         return held
 
+    def unmatched(self, files: list[str]) -> list[str]:
+        """The paths and globs of [[words_in]]'s files, [keep_in] and [keep_paths] that match none of `files`, each after its
+        table. Each names files the map renames or keeps apart, so one that matches none (a file since moved or deleted) is
+        a rename or a keep the move would skip; [rewrite] exclude may name what a tree lacks (`archive/**`, a file that
+        lands later), since it only leaves files as they are."""
+        named = [("[[words_in]] files", g) for globs, _ in self.scoped for g in globs]
+        named += [(t, g) for t, held in (("[keep_in]", self.keep_in), ("[keep_paths]", self.keep_paths)) for g in held]
+        tracked = set(files)
+        return [f"{t}: {g}" for t, g in dict.fromkeys(named) if g not in tracked and not any(_match(p, g) for p in files)]
+
     def name(self, n: str, path: str = "") -> str:
         """A Lean or Python dotted name, as it is renamed where it stands in file `path`: not where [keep] keeps it (a
         namespace that shares a module's name)."""
@@ -520,6 +544,83 @@ def record_spans(text: str) -> list[tuple[int, int]]:
     return spans
 
 
+JSON_GAP = re.compile(r"[ \t\n\r]*")
+
+
+def resorted(old: str, new: str, path: str) -> str:
+    """``new``, the text ``old`` becomes under the words, with each JSON object whose keys were sorted in ``old`` and that
+    renamed keys leave out of order sorted again, as a writer that keeps its keys sorted (`unread.py`'s caps) writes it:
+    in a `*.json` file other than a lock, a Lake manifest or `moves.json`, when its lines stay ``new``'s but for their
+    order and trailing commas. Otherwise (a JSON text on one line, a duplicate key, text that isn't JSON) ``new`` as it
+    is."""
+    if (old == new or not path.endswith(".json") or posixpath.basename(path) in (POLICY, MANIFEST) or path == MOVES
+            or not (_is_json(old) and _is_json(new))):
+        return new
+
+    def again(value: tuple, was: tuple) -> str | None:
+        """``new``'s span of ``value`` with each object sorted again that was sorted in ``was`` (``old``'s) and isn't now:
+        its members change places and the text between them stays. None when the two differ in shape."""
+        kind, start, end, parts = value
+        if (kind, len(parts)) != (was[0], len(was[3])):
+            return None
+        if not kind:
+            return new[start:end]
+        inner = [again(v, w) for (_, _, v), (_, _, w) in zip(parts, was[3])]
+        if None in inner:
+            return None
+        members = [new[at:v[1]] + s for (_, at, v), s in zip(parts, inner)]
+        keys, before = [k for k, _, _ in parts], [k for k, _, _ in was[3]]
+        if kind == "{" and before == sorted(before) and keys != sorted(keys):
+            members = [m for _, m in sorted(zip(keys, members))]
+        out, at = [], start
+        for (_, a, v), m in zip(parts, members):
+            out += [new[at:a], m]
+            at = v[2]
+        return "".join(out) + new[at:end]
+
+    o, n = (_value(t, JSON_GAP.match(t).end()) for t in (old, new))
+    body = again(n, o)
+    out = new if body is None else new[:n[1]] + body + new[n[2]:]
+    lines = [sorted(x.removesuffix(",") for x in t.splitlines()) for t in (out, new)]
+    return out if lines[0] == lines[1] else new
+
+
+def _unique(pairs: list) -> list:
+    if len({k for k, _ in pairs}) < len(pairs):
+        raise ValueError("a key twice in one object")
+    return pairs
+
+
+def _is_json(text: str) -> bool:
+    """Whether ``text`` is JSON with no key twice in an object."""
+    try:
+        json.loads(text, object_pairs_hook=_unique)
+    except ValueError:
+        return False
+    return True
+
+
+def _value(text: str, i: int) -> tuple:
+    """The value at ``text[i]`` of a JSON text with no key twice in an object, as (kind, start, end, parts): an object's
+    (`{`) parts its members (key, the key's start, value), a list's (`[`) its values (None, start, value), a scalar's
+    none."""
+    if text[i] not in "{[":
+        return "", i, json.JSONDecoder().raw_decode(text, i)[1], []
+    kind, start, parts = text[i], i, []
+    i = JSON_GAP.match(text, i + 1).end()
+    while text[i] not in "}]":
+        key, at = None, i
+        if kind == "{":
+            key, i = json.decoder.scanstring(text, i + 1)
+            i = JSON_GAP.match(text, JSON_GAP.match(text, i).end() + 1).end()
+        value = _value(text, i)
+        parts.append((key, at, value))
+        i = JSON_GAP.match(text, value[2]).end()
+        if text[i] == ",":
+            i = JSON_GAP.match(text, i + 1).end()
+    return kind, start, i + 1, parts
+
+
 def renamed(name: str, moved: dict[str, str]) -> str:
     """`tools/verity/lean/check.py`'s `renamed`: `name` with its longest moved prefix replaced."""
     parts = name.split(".")
@@ -529,16 +630,34 @@ def renamed(name: str, moved: dict[str, str]) -> str:
     return name
 
 
-def module_files(files: list[str]) -> dict[str, str]:
-    """Each Lean module's file ({module: path}): a module is its file's path below its package's source directory, so it is
-    each dotted tail of a `.lean` path that no other file's path ends in."""
+def module_files(root: Path, files: list[str]) -> dict[str, list[tuple[str, str | None]]]:
+    """Each Lean module's files with their packages ({module: [(path, package directory)]}, one entry unless two packages
+    define the module). A module is its file's path below its package's source directory: the nearest `lakefile.toml` at or
+    above the file is its package, whose `srcDir` (its own directory by default) is that directory, so `Security/Proofs`'s
+    `Properties/X.lean` is `Proofs.Properties.X` beside `Security/Properties`'s `Properties.X`. A file under no
+    `lakefile.toml` is each dotted tail of its path that no other such file's path ends in, with no package. A test's
+    fixture is no package's module."""
+    lakes = {posixpath.dirname(p): posixpath.normpath(posixpath.join(posixpath.dirname(p),
+                                                                      tomllib.loads((root / p).read_text()).get("srcDir", ".")))
+             for p in files if posixpath.basename(p) == "lakefile.toml" and "/tests/fixtures/" not in f"/{p}"}
+    out: dict[str, list[tuple[str, str | None]]] = {}
     tails: dict[str, list[str]] = {}
     for p in files:
-        if p.endswith(".lean"):
+        if not p.endswith(".lean") or "/tests/fixtures/" in f"/{p}":
+            continue
+        pkg = posixpath.dirname(p)
+        while pkg not in lakes and pkg:
+            pkg = posixpath.dirname(pkg)
+        if pkg not in lakes:
             parts = p[:-len(".lean")].split("/")
             for i in range(len(parts)):
                 tails.setdefault(".".join(parts[i:]), []).append(p)
-    return {m: ps[0] for m, ps in tails.items() if len(ps) == 1}
+        elif not (rel := posixpath.relpath(p, lakes[pkg])).startswith("../"):
+            out.setdefault(rel[:-len(".lean")].replace("/", "."), []).append((p, pkg))
+    for m, ps in tails.items():
+        if len(ps) == 1:
+            out.setdefault(m, []).append((ps[0], None))
+    return out
 
 
 def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
@@ -546,19 +665,32 @@ def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
     where it is declared (a read definition in its module's file, a guarantee in its lock), its first renamed prefix, and
     the full name too when that prefix alone would rename it otherwise; none implied by another. A prefix with such a name
     under it is listed as its names in full instead, since `check.py --moved` reads no move under another move's new name
-    that maps back elsewhere (its `move_errors`)."""
+    that maps back elsewhere (its `move_errors`). A lock under a `tests/fixtures/` directory is a test's data, in whatever
+    form its test needs, and no package's record, so it is not read: `check.py --update --moved` re-records packages.
+
+    A module two packages define (`module_files`) is read from the lock's own package when that package is one of them;
+    otherwise every file defining it must rename the definition alike, and a map that renames it apart in them is refused
+    before any records run, naming the lock, the definition and each file's rename."""
     want: dict[str, str] = {}
-    where = module_files(files)
+    where = module_files(root, files)
     for p in files:
-        if posixpath.basename(p) != POLICY or words.excluded(p):
+        if posixpath.basename(p) != POLICY or words.excluded(p) or "/tests/fixtures/" in f"/{p}":
             continue
         d = json.loads((root / p).read_text())
-        names = dict.fromkeys(d.get("guarantees", {}), p)
-        names |= {n: where.get(m, p) for m, g in d.get("reads", {}).items() for n in g.get("definitions", {})}
-        for n, f in sorted(names.items()):
-            if words.excluded(f):
-                continue
-            if (new := words.name(n, f)) != n and want.setdefault(n, new) != new:
+        own = posixpath.dirname(p)
+        names = {n: [p] for n in d.get("guarantees", {})}
+        for m, g in d.get("reads", {}).items():
+            fs = where.get(m, [])
+            fs = [f for f, pkg in fs if pkg == own] or [f for f, _ in fs] or [p]
+            names |= {n: fs for n in g.get("definitions", {})}
+        for n, fs in sorted(names.items()):
+            got = {f: n if words.excluded(f) else words.name(n, f) for f in fs}
+            if len(set(got.values())) > 1:
+                raise SystemExit(f"{p}: {n} is read from a module that {len(fs)} packages define, none of them this lock's, "
+                                 "and the map renames it apart in their files: "
+                                 + "; ".join(f"{f}: {new}" for f, new in sorted(got.items()))
+                                 + ". Rename it alike in each, or keep it in each")
+            if (new := got[fs[0]]) != n and want.setdefault(n, new) != new:
                 raise SystemExit(f"{n} is renamed {want[n]} in one lock and {new} in {p}")
     want = dict(sorted(want.items()))
     moves: dict[str, str] = {}
@@ -692,6 +824,47 @@ def record(root: Path, moves: list[tuple[str, str]], present: list[str] = ()) ->
     return json.dumps(doc, indent=2) + "\n"
 
 
+#: what the workers `rewrite` forks read: (root, words, run)
+_FORKED: tuple = ()
+
+
+def _rewrite(files: list[str]) -> tuple[dict[str, str], Counter, Counter]:
+    """The new text of each of `files` that the words change, the words renamed (by old and new) and the words left standing
+    (by file and word)."""
+    root, words, run = _FORKED
+    texts, counts, kept = {}, Counter(), Counter()
+    for p in files:
+        lock = posixpath.basename(p) == POLICY
+        text = (root / p).read_text() if lock else run._read(p)      # a lock is larger than `layout`'s text limit
+        if text is None:
+            continue
+        here = Counter()
+        new = resorted(text, words.sub(text, p, record_spans(text) if lock else [], counts, here), p)
+        kept.update({(p, w): n for w, n in here.items()})
+        if new != text:
+            texts[p] = new
+    return texts, counts, kept
+
+
+def rewrite(root: Path, words: Words, run: L.Run, files: list[str], jobs: int) -> tuple[dict[str, str], Counter, Counter]:
+    """`_rewrite` of `files`, in `jobs` forked processes when that is more than one, largest files first: a file's new text
+    reads that file and the map alone, so it is what one process writes, in the files' order."""
+    global _FORKED
+    _FORKED = (root, words, run)
+    if jobs > 1 and len(files) > CHUNK:
+        big = sorted(files, key=lambda p: -os.path.getsize(root / p))
+        with concurrent.futures.ProcessPoolExecutor(jobs, mp_context=multiprocessing.get_context("fork")) as ex:
+            parts = list(ex.map(_rewrite, [big[i:i + CHUNK] for i in range(0, len(big), CHUNK)]))
+    else:
+        parts = [_rewrite(files)]
+    got, counts, kept = {}, Counter(), Counter()
+    for t, c, k in parts:
+        got.update(t)
+        counts.update(c)
+        kept.update(k)
+    return {p: got[p] for p in files if p in got}, counts, kept
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--map", type=Path, required=True, help="the word map (`tests/fixtures/rename_map.toml` is an example)")
@@ -699,10 +872,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--moves", action="store_true", help="print the declaration renames this tree's locks need, for the Lean check's `--update --moved`")
     ap.add_argument("--allow-dirty", action="store_true")
+    ap.add_argument("--jobs", type=int, default=min(JOBS, len(os.sched_getaffinity(0))),
+                    help=f"the processes that rewrite files (default: the cores this process may use, at most {JOBS})")
     a = ap.parse_args(argv)
     root = (a.root or Path(L.git(HERE, "rev-parse", "--show-toplevel").strip())).resolve()
     words = Words(tomllib.loads(a.map.read_text()))
     files = [p for p in L.git(root, "ls-files", "-z").split("\0") if p]
+    if missing := words.unmatched(files):
+        raise SystemExit(f"{a.map}: it names paths no tracked file matches, whose renames or keeps the move would skip; point "
+                         "each at its file's path on this tree, or drop it:\n  " + "\n  ".join(missing))
     words.hold(files)
     if a.moves:
         print(json.dumps({} if words.scope else lock_moves(root, words, files), indent=1))
@@ -722,20 +900,8 @@ def main(argv: list[str] | None = None) -> int:
     if fold := sorted(n for n in dest.values() if folded[n.lower()] > 1):
         raise SystemExit("paths that would differ only in case:\n  " + "\n  ".join(fold[:50]))
 
-    counts, kept, texts = Counter(), Counter(), {}
-    for p in present:
-        if words.excluded(p) or os.path.islink(root / p) or p in fixed:
-            continue
-        lock = posixpath.basename(p) == POLICY
-        text = (root / p).read_text() if lock else run._read(p)      # a lock is larger than `layout`'s text limit
-        if text is None:
-            continue
-        keep = record_spans(text) if lock else []
-        here = Counter()
-        new = words.sub(text, p, keep, counts, here)
-        kept.update({(p, w): n for w, n in here.items()})
-        if new != text:
-            texts[p] = new
+    todo = [p for p in present if not (words.excluded(p) or os.path.islink(root / p) or p in fixed)]
+    texts, counts, kept = rewrite(root, words, run, todo, a.jobs)
     pins = {p: t for p in present if posixpath.basename(p) == PINS and (t := repin(root, words, p, texts, dest)) is not None}
     tracked = set(present)
     pins |= {p: t for p, key, under in json_pins(root)

@@ -33,8 +33,8 @@ commitment  a pass's root, the PoUB driver's: frame-v3-sha512 over leaves of 16 
             hidden as an hm96-sha512/row/v2 leaf under a salt, bound to the pass's seed and the plan's digest (over
             the plan's runs of store indices)
 opening     for a sampled (pass, position): the block's bytes as read, its receipt, its leaf's receipts and salt, the
-            leaf's path to the pass's root and its registration record, from which the verifier recomputes the
-            receipt and checks the decoding
+            leaf's `merkle.Opening` in the pass's tree and its registration record, from which the verifier recomputes
+            the receipt and checks the decoding
 ~~~
 """
 from __future__ import annotations
@@ -214,8 +214,17 @@ class BlockOpening:
     """Block ``block`` (region ``region``, tier and kind as read) at position ``position`` of pass ``pass_index``: the
     bytes read, the receipt, the leaf's receipts (up to 16, in plan order) and ``salt``, the registration ``source`` the
     decoding is checked against, and ``leaf``, the leaf's opening in the pass's tree (`merkle.Opening`: the leaf's
+<<<<<<< 94ca7fd0d18
     index, its hidden value `receipts.hidden` of its receipts under its salt, and the driver's path, the leaf's path to
     its segment's node and then the node's to the pass's root)."""
+||||||| e10cf2c8559
+    bytes read, the receipt, the leaf's receipts (up to 16, in plan order), the leaf's path to its segment's node and
+    the node's path to the pass's root (together the driver's path), the registration ``source`` the decoding is
+    checked against, and the leaf's ``salt``."""
+=======
+    index, its receipts hidden under its salt, `receipts.hidden`, and the driver's path, the leaf's path to its
+    segment's node and then the node's to the pass's root)."""
+>>>>>>> 7af4d24fca3e
 
     pass_index: int
     position: int

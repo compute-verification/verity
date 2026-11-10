@@ -77,7 +77,6 @@ import hashlib
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.weights import chunks
 from verity.core.protocols.spot.one_stage import produced as PR
 from verity.core.protocols.spot.one_stage import registered as G
@@ -105,6 +104,9 @@ OKS, CARRY = "oks", "carry"
 FULL = (A, B, PARTIALS, OKS)
 LANE_ROWS, LANE_COLS = 4, 8
 LANE, CHUNK, COMBINE = "lane", "chunk", "combine"
+#: the least K at which a leaf's combine is proved (`h1zy.combine`); a lane is proved at any K the Definitions bind
+#: (64 <= K)
+LEAST_K = 384
 #: the tag of a served leaf's known rows' salts (`known_salt`)
 KNOWN_SALT_TAG = b"verity/pouw/h1/leaf-known/v1\0"
 
@@ -268,6 +270,19 @@ def bits_words(bits: Sequence[int]) -> list[int]:
     return [sum(x << t for t, x in enumerate(b[i:i + 16])) for i in range(0, len(b), 16)]
 
 
+def _leaf_bits(data: bytes) -> list[int]:
+    """`data`'s bits as the unit's seed reads them (`seeds.leaves`): its big-endian 32-bit halves, each least significant
+    bit first."""
+    return [(h >> j) & 1 for i in range(0, len(data), 4) for h in [int.from_bytes(data[i:i + 4], "big")] for j in range(32)]
+
+
+def _u64_bits(x: int) -> list[int]:
+    """A u64's bits as `_leaf_bits` reads its 8 big-endian bytes (`seeds.position_leaves`)."""
+    if not 0 <= x < 1 << 64:
+        raise ValueError(f"a position or a counter is a u64, not {x!r}")
+    return _leaf_bits(x.to_bytes(8, "big"))
+
+
 def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int, *, call: int | None = None,
               blocks: Sequence[int] | None = None) -> list[int]:
     """Lane ln's ``pub`` row: the salt's, the position's and the two roots' leaves as the unit's seed reads them
@@ -281,9 +296,9 @@ def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int, *, ca
         raise ValueError(f"the lane index is a u16 word, not {ln!r}")
     if (call is None) != (blocks is None) or (blocks is not None and len(blocks) != 2):
         raise ValueError("a J10-R lane's row has the unit's call and its two blocks, a v1 lane's neither")
-    bits = SD.leaves(salt, True) + SD.position_leaves(position, True) + SD.leaves(roots[0], True) + SD.leaves(roots[1], True)
+    bits = _leaf_bits(salt) + _u64_bits(position) + _leaf_bits(roots[0]) + _leaf_bits(roots[1])
     if call is not None:
-        bits += SD.position_leaves(call, True) + SD.position_leaves(blocks[0], True) + SD.position_leaves(blocks[1], True)
+        bits += _u64_bits(call) + _u64_bits(blocks[0]) + _u64_bits(blocks[1])
     assert len(bits) == sum((PUBLIC_BITS if call is None else PUBLIC_J10R_BITS)[:-1])
     return bits_words(bits) + [int(ln)]
 

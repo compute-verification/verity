@@ -34,9 +34,9 @@ from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw.audit import HM96_WEIGHTS, Epoch, Workload, commit_rows, weight_binding, weights_root
 from verity.core.protocols.pouw.coins import coin_reason
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import ncp
+from verity.ml.protocols.pouw.schemes import ncp
 from verity.core.protocols.spot.one_stage import registration as R
 from verity.core.protocols.spot.service import WindowCommitmentRecord
 
@@ -366,6 +366,7 @@ def setup():
     rng = random.Random(3)
     work = Workload((Matmul(0, Shape(32, 64, 64), 7),))
     rows = [ncp.int7_bytes([rng.randint(-64, 63) for _ in range(64)]) for _ in range(64)]
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
     return work, {7: commit_rows(weight_binding(7), -2, rows, salt_key=bytes(32), nonce=HM96_WEIGHTS + 7).commitment.root}
 ||||||| merged common ancestors
@@ -373,6 +374,11 @@ def setup():
 =======
     return work, {7: commit_rows(weight_binding(7), -2, rows, "sha256").commitment.root}
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+    return work, {7: commit_rows(weight_binding(7), -2, rows, "sha256").commitment.root}
+=======
+    return work, {7: commit_rows(weight_binding(7), -2, rows, salt_key=bytes(32), nonce=HM96_WEIGHTS + 7).commitment.root}
+>>>>>>> 7af4d24fca3e
 
 
 def test_a_certified_epoch_applies_its_pouw_windows_salt():
@@ -589,9 +595,9 @@ def test_a_certified_window_credits_only_units_that_read_its_salt():
     """`unit_reason` refuses the served-zk window's sampled proof block, `Pc8TileSide`, which reads two committed side rows and
     no salt (it declares no port), and passes the compiled Program's H1 tile (`PouwH1Tile`), whose ``salt`` is a coin
     port over the 64-byte salt; anything without a signature is refused."""
-    from verity.core.protocols.pouw.circuit import compile as C
-    from verity.core.protocols.pouw.circuit import h1tile as H
-    from verity.core.protocols.pouw.circuit import pc8
+    from verity.ml.protocols.pouw.circuit import compile as C
+    from verity.ml.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import pc8
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
 

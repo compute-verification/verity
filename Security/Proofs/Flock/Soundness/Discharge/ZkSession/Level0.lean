@@ -1,7 +1,14 @@
 module
 
+public import Definitions.Flock.Defs
+public import Definitions.Flock.LigeritoPad
+public import Mathlib.CategoryTheory.Category.Basic
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
 public import Proofs.Flock.Soundness.SoundnessPad
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.LigeritoDecode
 
 /-!
 # Flock ZK's masked Ligerito level 0 (live/PROTOCOL.md §1, §4, §7)

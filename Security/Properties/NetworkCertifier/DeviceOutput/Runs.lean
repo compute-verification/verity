@@ -1,8 +1,10 @@
 module
 
 public import Properties.NetworkCertifier.DeviceOutput
-public import Definitions.NetworkCertifier
 public import Mathlib.Data.Set.Card
+public import Definitions.NetworkCertifier.Premises
+public import Definitions.NetworkCertifier.Schedule
+public import Properties.NetworkCertifier.Check
 
 /-!
 # What an accepted run of the certifier device is

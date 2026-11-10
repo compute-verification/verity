@@ -1,8 +1,22 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
 public import Proofs.Flock.Soundness.Binding.RowsX
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Place
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `--zk` rows each under its own encoding
@@ -26,7 +40,7 @@ open Game Model Accounting Refine Audit ZkSession ZkLink Binding
 section Rows
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
-  {A : Arith F K} {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type}
+  {A : Arith F K} {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type}
   {planZ : Finset (Fin n) → Reg → List (TabZK F mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length}
   {decode : DecoderZK (C := C) planZ tab}
@@ -93,7 +107,7 @@ section Shadow
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length}
   {planS : Finset (Fin n) → Reg → List (TabSpec mPts)}

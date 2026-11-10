@@ -9,6 +9,7 @@ whose link points are not the challenger's live-coin part's.
 -/
 module
 
+public import Flock.RecCoins
 public import Flock.RecSetup
 meta import Flock.RecSetup
 

@@ -36,7 +36,7 @@ of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its o
 parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
 node.
 `trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
-when the challenger host isn't the node, and the leg says which (`challenger_party.placement`). The setup's salt is
+when the challenger host isn't the node, and the leg says which (`challenger_session.placement`). The setup's salt is
 still sampled on the node.
 """
 
@@ -60,9 +60,8 @@ from verity.core.deploy.stream import Side
 from verity.ml.circuits import requirement
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
-from verity.ml.randomness import derive
 
-from verity.core.devices.memory_challenger import challenger_party
+from . import challenger_session
 from . import memory_challenger as mc
 from . import protocol as pous_protocol
 from . import run as R
@@ -344,15 +343,15 @@ def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | No
     point, published = held.point, held.published
     q = point.params
     if party is None:
-        session_id = derive(coins, SESSION_DOMAIN, {"node": node, "setup": published.root}).stream("session", 32)
+        session_id = challenger_session.coin_session_id(coins, SESSION_DOMAIN, node, published.root)
         tree = mc.CoinTree.draw(coins, session_id, q.blocks, point.k)
         challenger = mc.MemoryChallenger(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
                                          binding=published.root, clock=clock)
         signed = challenger.run(prover(held.blocks))
         session, key = R.ChallengePhaseRecord(signed, challenger.commitment, challenger.openings()), signer.public_key
     else:
-        got = challenger_party.session(party, challenger_party.request_of(node, point, published.root),
-                                       prover(held.blocks))
+        got = challenger_session.session(party, challenger_session.request_of(node, point, published.root),
+                                         prover(held.blocks))
         session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
         session = R.ChallengePhaseRecord.from_json(got["session"])
     trusted = (key,) if trusted is None else tuple(trusted)
@@ -555,17 +554,17 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     audits it with fresh coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With
     `{"pous": {"point": "small"}}` in `period.json`, each period sets the period's own records up at the small point
     instead, certifying nothing. The memory challenger is a party of its own on `period.json`'s `challenger_host`
-    (`challenger_party.side_of`; on this node by default, a process whose key and session log are beside the periods)
+    (`challenger_session.side_of`; on this node by default, a process whose key and session log are beside the periods)
     and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean verifier
     answers and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
     `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
-    whether `trusted-host`'s premise holds (`challenger_party.placement`), go in `pous.json` and in an accepted
+    whether `trusted-host`'s premise holds (`challenger_session.placement`), go in `pous.json` and in an accepted
     answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
     workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))
-    party = challenger_party.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
-    where = challenger_party.placement(node, party.host)
+    party = challenger_session.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
+    where = challenger_session.placement(node, party.host)
     kept = Path(period_dir).parent / "pous-store"
     t = time.monotonic()
     if small or not (kept / "store.json").exists():

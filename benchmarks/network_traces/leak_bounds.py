@@ -41,12 +41,13 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.core.protocols.certifier import ingress_scan as IS, warden as W
-from verity.core.protocols.pous import wipe_monitoring as WM
+from verity.ml.protocols.certifier import ingress_scan as IS
+from verity.core.protocols.certifier import warden as W
+from verity.core.protocols import reporting
 
 #: the monitoring periods' seconds, by name
-PERIODS: dict[str, int] = dict(WM.PERIODS)
-DELTAS: tuple[Fraction, ...] = WM.DELTAS
+PERIODS: dict[str, int] = dict(reporting.PERIODS)
+DELTAS: tuple[Fraction, ...] = reporting.DELTAS
 #: a bucket's seconds when a link names none: the warden's default τ
 TAU = Fraction(W.WardenParams().bucket_ms, 1000)
 #: a sampling block's scan's δ when a link names none: `scan_zk --delta`'s default

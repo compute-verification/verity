@@ -4,6 +4,20 @@ public import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
 public import Proofs.Flock.Soundness.Discharge.Tables.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The decoder at `J` tables: statements
@@ -153,7 +167,7 @@ def DrawOkJ (dj : Finset (Fin n) → Json) (S : Finset (Fin n)) : Prop :=
   ∀ j < I.count, ∀ st, Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables
     (some (partJson (dj S) I.count j)) I.partition I.program = .ok st → st.mPts = mPts
 
-/-- **The decoder is right at `J` tables** (R11b at `--session-tables J`): given the tags, `wr` the challenger's record
+/-- **The decoder is right at `J` tables** (the decoder premise at `--session-tables J`): given the tags, `wr` the challenger's record
 and the challenger's samples setting each table up at `mPts` link points, `DecodesOnJ` holds at the tables flock-verify
 sets up (`planJ`, at any fallback `T₀`) with the decoder `decJ` on each table's two streams, single coins as field
 elements, no final messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and its openings `opnJ`. -/

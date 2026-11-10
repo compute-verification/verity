@@ -9,15 +9,9 @@ bound on wrong receipts computed in the workers side by side, and a window's set
 from __future__ import annotations
 
 import multiprocessing
-import sys
 from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "remote_session")
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1]))
-
-from verity.core.protocols.remote_bandwidth import audit  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit
 
 
 class Checks:

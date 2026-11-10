@@ -1,6 +1,21 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkBind.At
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hm.Site
+import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
 
 /-!
 # The rows at the `--zk` tables, with or without shared rows
@@ -48,12 +63,12 @@ theorem sitesSh_bcSiteS :
       rw [e]; exact y₀.x.refusedC_unsat (zkTyped ht) S
     exact absurd hM (hns _)
 
-/-- The public plan's layout at the `--zk` tables' samples: e2e-layout's `keyedLayout` at `tableSh`'s sites, whose
+/-- The public plan's layout at the `--zk` tables' samples: `Layout.keyedLayout` at `tableSh`'s sites, whose
 registered leaf at row `(u, q)` is `SHA-512(leaf_prefix ‖ b ‖ c)` of the population's row (`pub.digest u q`). -/
 noncomputable abbrev laySh :=
   Layout.keyedLayout (Reg := Reg) (sitesSh_parse ht dj y₀ hc) (Layout.outsOf c hU n) Hm.saltCol fun _ => pub
 
-/-- The public plan's rows: e2e-layout's `keyedRowsOuts` at `tableSh`'s sites, with or without shared rows. -/
+/-- The public plan's rows: `Layout.keyedRowsOuts` at `tableSh`'s sites, with or without shared rows. -/
 noncomputable abbrev rowsSh : Binding.HmRows (laySh (Reg := Reg) ht dj y₀ hc hU (pub := pub)) :=
   Layout.keyedRowsOuts (sitesSh_parse ht dj y₀ hc) Hm.saltCol hc (Layout.scopeOk_spec hU hscope).1
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1

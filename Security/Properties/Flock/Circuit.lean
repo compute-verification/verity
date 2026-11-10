@@ -2,6 +2,8 @@ module
 
 public import Properties.Flock.Circuit.Outs
 public import Properties.Flock.Circuit.CircuitOf
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The circuit a registered Flock circuit file describes

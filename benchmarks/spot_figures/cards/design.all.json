@@ -4,13 +4,21 @@
  "model": null,
  "status": "modeled",
  "provisional": false,
- "source": "the figures' parameters: δ is the evasion threshold (a bound holds unless the adversary evades detection with probability above δ), the budgets are the curves' shares of the scope's GPU-seconds spent on replays, interior commitments and proofs, the overheads span the x-axis, and serving commits a token id as a u32",
+ "source": "the figures' parameters: δ is the evasion threshold (a bound holds unless the adversary evades detection with probability above δ), the budgets are the curves' shares of the scope's GPU-seconds spent on replays, interior commitments and proofs, the overheads span the x-axis, and serving commits a token id as a u32; main_lines names, by label prefix and per panel, the reference lines the main figure plots and their line style (the appendix plots the rest), and notes the sentences each caption ends with",
  "runs": [],
  "owner": "@proofs",
  "value": {
   "delta": 0.01,
   "budgets": [0.001, 0.01, 0.1],
   "overheads": [1.0, 1e14],
-  "token_bytes": 4
+  "token_bytes": 4,
+  "main_lines": {
+   "exfiltration": {"{model}'s weights": "solid", "Advice today": "solid", "Advice once the length rule": "dashed"}
+  },
+  "notes": {
+   "exfiltration_appendix": [
+    "The advice cap here is a registered cap a 600 s machine window on the scheduler's advice without the certified tick, measured with prefix caching on and so pending, times the scope's machine windows, the most any accepted advice is charged. With the tick, certified arrivals (the run with the real network certifier is pending) and prefix caching off, today's advice is the response length, charged until a circuit checks the stop rule; once one does, and with batch-invariant Definitions, it is 0 bits."
+   ]
+  }
  }
 }

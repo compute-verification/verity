@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Recursion.HonestHalfFixture
 import all Init.Control.State
+import Proofs.Flock.Claims.Recursion.NumsFixedR
+import Proofs.Flock.Claims.Recursion.VPiecesDeployed
 
 /-!
 # A recursive statement's base parses at the masked deployment's parser

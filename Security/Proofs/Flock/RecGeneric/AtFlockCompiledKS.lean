@@ -9,7 +9,8 @@ public import Proofs.Flock.RecGeneric.OuterProof
 /-!
 # L2 at Flock: the compiled recursive verifier's knowledge soundness at every statement
 
-L2 (`Flock.SecurityProofs.GenericRecursiveKSCompiled`) at `Proto.ofFlock`, `Server.ofBound`, `Arg.ofFlock DO` and
+L2 (`compilerKS`, `Definitions.Claims.RecursionGeneric`'s `CompilerKS`) at `Proto.ofFlock`, `Server.ofBound`,
+`Arg.ofFlock DO` and
 `recCompiler` gives `KSCompiledOn` at the statements where the compiler's contract holds (`ksCompiledOn_of`), from F4
 (`protoWFOfFlock`, `kSAbortLinOfFlockLin`), F8, F2 (`bindsOfBound`), Flock's KS as the outer argument's and the
 compiler's contract for `E_O` (`SessionsOfRec`). `Comp.err` is nonnegative where the inner protocol is well formed and
@@ -50,12 +51,13 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
   {Col' T' : Type} [DecidableEq Col']
 
 omit [DecidableEq Col'] in
-/-- **L2 at Flock gives `KSCompiledOn` at the statements `G` admits**: L2 at the deployed inner decoder, from the
-element-level Flock's KS with no root (`KSFlockLin` at `DE`), Flock's KS as the outer argument's, the compiler's
-contract for `E_O`, answers that decode to their coins, `DE`'s nonnegative table errors, F8, `rowIn` injective
-(`Bound.Binds`), the inner decoder meeting the list-decoding spec and the compiler's contract at each statement `G`
-admits. -/
-theorem ksCompiledOn_of [Zero Col] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
+/-- **L2 at Flock gives `KSCompiledOn` at the statements `G` admits**, the instance of `CompilerKS` at Π_in the
+element-level Flock (`Proto.ofFlock` at the deployed decoder), the hm96 server (`Server.ofBound`), Π_out Flock
+(`Arg.ofFlock DO`) and today's compiler (`recCompiler`): from L2 (`hL2`), the element-level Flock's KS with no root
+(`KSFlockLin` at `DE`), Flock's KS as Π_out's, the compiler's contract for `E_O`, answers that decode to their coins,
+`DE`'s nonnegative table errors, F8, `rowIn` injective (`Bound.Binds`), the decoder meeting the list-decoding spec and
+the compiler's contract at each statement `G` admits. -/
+theorem ksCompiledOn_of [Zero Col] (hL2 : CompilerKS) (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) (hKS : KSFlockLin H Bd.DE Cp)
     (hA : (Arg.ofFlock DO).KS H) (hS : SessionsOfRec H D DO ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans))
     (hdec : ∃ dec : Msg → Coin, ∀ c, dec (Bd.ans c) = c) (hε : ∀ x, 0 ≤ Bd.DE.εtable x)
@@ -63,7 +65,7 @@ theorem ksCompiledOn_of [Zero Col] (H : Msg → Msg) (D : RecAt Coin) (Bd : Boun
     (hdI : decOK Bd.DE Bd.deploy.decode) (hC : ContractCompiledOn H D Bd DO Cp G) :
     KSCompiledOn H D Bd DO Cp G := by
   intro x hx Ω _ _ P m M
-  exact _root_.Flock.SecurityProofs.GenericRecursiveKSCompiled Coin _ H (Proto.ofFlock Bd Bd.deploy.decode Cp)
+  exact hL2 Coin _ H (Proto.ofFlock Bd Bd.deploy.decode Cp)
     (Server.ofBound Bd) (Arg.ofFlock DO) (recCompiler D DO) (protoWFOfFlock Bd Bd.deploy.decode Cp hdec hε)
     (kSAbortLinOfFlockLin H Bd Cp hKS Bd.deploy.decode hdI) hLC (bindsOfBound Bd hB) hA hS x (hC x hx) Ω P m M
 
@@ -122,7 +124,7 @@ theorem recursiveKSCompiledAtRec_of_contract (b : RecDeploy.Brings) (L : Claims.
       (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
       RecDeploy.rowInDeployed final w).DE.εtable x :=
     fun x => FlockDeploy.Assembled.εtable_nonneg false x
-  have hK := ksCompiledOn_of FlockDeploy.sha512 _ _ _ FlockDeploy.KS.CpDep RecDeploy.DenseAt
+  have hK := ksCompiledOn_of compilerKS FlockDeploy.sha512 _ _ _ FlockDeploy.KS.CpDep RecDeploy.DenseAt
     (RecDeploy.ksFlockLin_R rd wE FlockDeploy.joinR final w hIn) flockArgKS_deployed
     (sessionsOfRec_deployed _root_.Flock.Readable.relation b L _) (ans_dec_deployed rd final wE w) hε
     (RecDeploy.lastCoinFree_ofFlock_R _ rd _ (by rfl) _ _)
@@ -148,7 +150,8 @@ namespace Flock.SecurityProofs
 open Claims.RecGeneric
 
 /-- **Knowledge soundness of the recursive verifier compiled over Flock `--zk`, at every statement, at the deployed
-reader.** -/
+reader**: `CompilerKS`'s Flock instance (`ksCompiledOn_of compilerKS`) at the dense statements, lifted to every
+statement. -/
 theorem RecursiveKSCompiledEvery : Flock.Guarantees.RecursiveKSCompiledEvery :=
   recursiveKSCompiledEvery_of_contract (contractCompiledDense (ivStarOfBound _) (openViewOfBound _))
 

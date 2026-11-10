@@ -21,15 +21,26 @@ public import Lms.Verify
 
 The verifier is one compiled Lean function per composite (`Verity.Registration.Composite`), the `answer` of
 the composite `Core.Composites.composites` lists for it (`verifier`): onsite's `Core.Onsite.protocol`
+<<<<<<< ours
 (`verity/onsite/v0`, `Core.Composition.tiedSameB`) and remote's composite of record `Core.Remote.V1.protocol`
 (`verity/remote/v1`, `Core.Composition.tiedSameB`), each composing its subprotocols over the blobs the prover sent.
 Remote's development composite, `Core.Remote.protocol` (`verity/remote/v0`, H1's period as its work), is no
 composite's verifier, and `Core.Composites.ofIds` refuses its subprotocols. Onsite has seven
 subprotocols and remote three of them, each subprotocol at the component its composite names for it (`component`);
+||||||| base
+(`verity/onsite/v0`, `Core.Composition.tiedSameB`) and remote's `Core.Remote.protocol` (`verity/remote/v0`,
+`Core.Composition.tiedSameB`), each composing its subprotocols over the blobs the prover sent. Onsite has seven
+subprotocols and remote three of them, each subprotocol at the component its composite names for it (`component`);
+=======
+(`verity/onsite/v0`, `Core.Composition.tiedSameB`) and remote's `Core.Remote.protocol` (`verity/remote/v0`,
+`Core.Composition.tiedSameB`), each composing its subprotocols over the blobs the prover sent. Onsite has seven
+subprotocols and remote three of them, each subprotocol at the compiled check its composite names for it (`component`);
+>>>>>>> theirs
 the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 
-| subprotocol | `Audit` | onsite's component | remote's component |
+| subprotocol | `Audit` | onsite's compiled check | remote's compiled check |
 | --- | --- | --- | --- |
+<<<<<<< ours
 <<<<<<< ours
 | sampled proofs | `.sampled` | `Spot.OneStage.protocol` (v1) | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) |
@@ -38,6 +49,11 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same |
 =======
 | sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | the same |
+||||||| base
+| sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | the same |
+=======
+| SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | the same |
+>>>>>>> theirs
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same |
 >>>>>>> theirs
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
@@ -79,10 +95,10 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **One adversary form: every prover, and collisions a fixed finder outputs.** There is no strategy class and no break
   in the event. The finder `B` (`finder a`, a `Claims.Finder`) is a fixed construction applied to the strategy whose
   SHA-512 calls are at most `c · calls(τ) + d` (`finder_calls`). Subprotocol `a`'s error at a strategy (`error`) is,
-  where `B^τ` outputs a SHA-512 collision with probability at most the published `ε_cr` at the strategy's calls
-  (`FinderCR`, quantitative), its published `δ` at those calls plus its loss at `Pr[B^τ]`, the form of
-  `Accounting.PeriodLive.error`; elsewhere `⊤`. That admits Flock's conditional bound (`loss = 0`) and the additive
-  one (`crBound = 1`). A bound that reads further finders built from the strategy lists them (`finders`, each a
+  where `B^τ` meets `ecr/sha-512` (`FinderCR`, `Claims.ExpectedCR` at the finder), its published `δ` at the strategy's
+  calls plus its loss at `Pr[B^τ]`, the form of `Accounting.PeriodLive.error`; elsewhere `⊤`. There `B^τ` outputs a
+  SHA-512 collision with probability at most its budget over `2^256` (`crBound`), which a bound reads as `ε_cr`. That
+  admits Flock's conditional bound (`loss = 0`). A bound that reads further finders built from the strategy lists them (`finders`, each a
   `FinderSpec`: the finder, and its budget as a function of the strategy's calls that bounds its calls), and the error
   is `⊤` where one of them outputs a collision with probability above its budget over `2^256` (`finderCR`, built by
   `finderCROf`), the bound `ecr/sha-512` gives it. Two openings of one position
@@ -98,8 +114,9 @@ The statement's form is the causal game, the committed files, one fixed extracto
   circuit (`declaration`: its registered inputs `θ`, `theta`). The wipe's claim is that the run, read at the wipe's
   boundary as the wipe's game (`Verity.Wipe.OfRun`, `wipeRun`), doesn't keep foreign content past the survivor threshold
   the wipe publishes (`Verity.Wipe.OfRun.Kept` at `foreignBits`).
-* **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
+* **Each compiled check's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
+<<<<<<< ours
   components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
 <<<<<<< ours
   at onsite PoUS and PoUB-P2 on one store and at remote Pearl+'s run on the policy's record, `AcceptTied`'s),
@@ -120,6 +137,15 @@ The statement's form is the causal game, the committed files, one fixed extracto
 =======
   at onsite PoUS and PoUB-P2 on one store and at remote every window of PoUW's period on the record, `AcceptTied`'s),
   and `a`'s compiled component's acceptance of its own case. The device's log as each component's check read it
+||||||| base
+  components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
+  at onsite PoUS and PoUB-P2 on one store and at remote every window of PoUW's period on the record, `AcceptTied`'s),
+  and `a`'s compiled component's acceptance of its own case. The device's log as each component's check read it
+=======
+  subprotocols whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
+  every window of PoUW's period on the record and at onsite PoUS and PoUB-P2 on one store, `AcceptTied`'s),
+  and `a`'s compiled check's acceptance of its own case. The device's log as each compiled check read it
+>>>>>>> theirs
   (`coinsRead`) is the targets' to bind to the device's whole log (`Logged`).
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
   (`computed`), with no pricing.
@@ -165,7 +191,7 @@ inductive Subprotocol
   | sampled
   /-- PoUW: work -/
   | pouw
-  /-- the inference-only policy: the declared circuit divides into inference blocks within their budgets -/
+  /-- the inference-only policy: the registered circuit divides into inference blocks within their budgets -/
   | inferenceOnly
   /-- PoUS: space -/
   | pous
@@ -204,13 +230,29 @@ def tied : Verity.Registration.Composite → List String
   | .onsite => Onsite.tied
   | .remote => Remote.V1.tied
 
+<<<<<<< ours
 /-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store; at remote, Pearl+'s run on the policy's
 record. -/
+||||||| base
+/-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store; at remote, every window of PoUW's period on
+the policy's record. -/
+=======
+/-- The ties of composite `k`: at both, every window of PoUW's period on the policy's record; at onsite, also PoUS and
+PoUB-P2 on one store. -/
+>>>>>>> theirs
 def ties : Verity.Registration.Composite → List Composition.Tie
+<<<<<<< ours
   | .onsite => [Onsite.store]
   | .remote => Remote.V1.ties
+||||||| base
+  | .onsite => [Onsite.store]
+  | .remote => [Remote.windows]
+=======
+  | .onsite => Onsite.ties
+  | .remote => [Remote.windows]
+>>>>>>> theirs
 
-/-- **The compiled component of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
+/-- **The compiled check of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
 subprotocol. -/
 def component : Verity.Registration.Composite → Subprotocol → Option BlobProtocol
   | .onsite, .sampled => some VStar.Recursive.Sampled.protocol
@@ -233,19 +275,19 @@ def component : Verity.Registration.Composite → Subprotocol → Option BlobPro
   | .remote, .inferenceOnly => some NciCheck.Protocol.protocol
   | .remote, _ => none
 
-/-- Composite `k`'s subprotocols: those it has a component for. Remote's are a subset of onsite's. -/
+/-- Composite `k`'s subprotocols: those it has a compiled check for. Remote's are a subset of onsite's. -/
 def subprotocols (k : Verity.Registration.Composite) : Finset Subprotocol :=
   Finset.univ.filter fun a => (component k a).isSome
 
 /-- What the prover sends a composite's verifier: the parameters, the commitment and the evidence, as bytes,
-and the blobs its components read. -/
+and the blobs its subprotocols read. -/
 structure Sent where
   params : ByteArray
   commitment : ByteArray
   evidence : ByteArray
   blobs : Array ByteArray
 
-/-- Composite `k`'s components on the blobs the prover sent. -/
+/-- Composite `k`'s subprotocols on the blobs the prover sent. -/
 def Sent.components (k : Verity.Registration.Composite) (s : Sent) : List Protocol :=
   (componentsOf k).map (·.onBlobs (Blobs.ofArray s.blobs))
 
@@ -254,20 +296,20 @@ def Accepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ((verifier k).answer s.params s.commitment s.evidence s.blobs).verdict = .accept
 
 /-- The three byte strings decode under the composition's formats (`Core.Composition.product`'s, which both composites
-read): the components' parameters `ps`, the binding `c` of their digests, and their cases `ev`. -/
+read): the subprotocols' parameters `ps`, the binding `c` of their digests, and their cases `ev`. -/
 def Decoded (s : Sent) (ps : List Composition.Named) (c : ByteArray) (ev : List Composition.Case) : Prop :=
   (canonicalJson s.params >>= Composition.decodeParams) = .ok ps ∧ Composition.decodeCommitment s.commitment = .ok c ∧
     Composition.decodeEvidence s.evidence = .ok ev
 
 /-- The protocol `P` accepts its own case in what the prover sent composite `k`: the three byte strings decode, and
-one of the components' cases is `P`'s, as one of `k`'s components, which decodes under the parameters `k` names for
+one of the subprotocols' cases is `P`'s, as one of `k`'s subprotocols, which decodes under the parameters `k` names for
 it, and `P`'s check accepts it. -/
 def CaseAccepts (k : Verity.Registration.Composite) (P : BlobProtocol) (s : Sent) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧
     ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = P.onBlobs (Blobs.ofArray s.blobs) ∧
       Properties.Composition.DecodedAccepted x.1 x.2.1.params.toUTF8 x.2.2.commitment x.2.2.evidence
 
-/-- Subprotocol `a`'s component at composite `k` accepts its own case in what the prover sent. -/
+/-- Subprotocol `a`'s compiled check at composite `k` accepts its own case in what the prover sent. -/
 def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : Sent) : Prop :=
   ∃ P, component k a = some P ∧ CaseAccepts k P s
 
@@ -283,9 +325,19 @@ def PearlPlusCredits (s : Sent) (w : PouwCheck.PearlPlus.Credit) : Prop :=
       PouwCheck.PearlPlus.Protocol.checkBlobs p cm e (Blobs.ofArray s.blobs) = .accept w prof
 
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
+<<<<<<< ours
 accepted composition of `k`'s components on the blobs sent, whose record subprotocols (`tied k`) committed to one
 record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, PoUS and PoUB-P2 on one store; at
 remote, Pearl+'s run on the policy's record) each named one value (`Properties.Composition.Tied`). -/
+||||||| base
+accepted composition of `k`'s components on the blobs sent, whose record subprotocols (`tied k`) committed to one
+record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, PoUS and PoUB-P2 on one store; at
+remote, every window of PoUW's period on the policy's record) each named one value (`Properties.Composition.Tied`). -/
+=======
+accepted composition of `k`'s subprotocols on the blobs sent, whose record subprotocols (`tied k`) committed to one
+record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at both, every window of PoUW's period on the
+policy's record; at onsite, also PoUS and PoUB-P2 on one store) each named one value (`Properties.Composition.Tied`). -/
+>>>>>>> theirs
 def SameAccepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ pub prof,
     Properties.Composition.SameAccepted (verifier k).id (tied k) (s.components k) ps c ev pub prof ∧
@@ -539,7 +591,7 @@ structure Exchange where
   evidence : ByteArray
   blobs : Array ByteArray
 
-/-- What the prover sent the composite in the play that ended with `o`: the blobs its components read are the committed
+/-- What the prover sent the composite in the play that ended with `o`: the blobs its subprotocols read are the committed
 files, then the evidence's blobs. -/
 def Exchange.sent (o : Exchange) : Sent := ⟨o.params, o.commitment, o.evidence, o.files ++ o.blobs⟩
 
@@ -686,7 +738,7 @@ abbrev World {ι : Type} (d : Device ι) (α : Type) [Fintype α] := Accounting.
 /-- **The names the subprotocols define.** v2's reading of the committed files at the parameters; the positions from
 the files and the commitment, the circuit file's and the public file's digests in the parameters and the registered
 files; the coin commitment's families and the device's signer, the device's only parts the parameters fix (its frames
-are the prover's: `Frame`), and the device's log as each component's check read it, decoded from the device's signed
+are the prover's: `Frame`), and the device's log as each compiled check read it, decoded from the device's signed
 log in what the prover sent; the extractor applied to a strategy, and each subprotocol's collision finder and forger of
 the device's signature, with their SHA-512 calls bounded by the strategy's (`finder_calls`, `forger_calls`), and the
 device's messages in a play and the forger's on each of its coins bounded by the published `Q` (`signs_le`,
@@ -695,8 +747,8 @@ each with its budget in the strategy's calls (`finders`); the committed circuit'
 their window's coin; the world each play realizes; the declaration's registered inputs and the inference-only policy's
 budgets; the wipe that opens the period, at a boundary of a schedule of the committed circuit's blocks, and each play
 read at that boundary as the wipe's game;
-the deployment's honest prover; and the certificates, survivor threshold, errors, collision and forgery bounds and
-losses the composite publishes, from the parameters and the strategy's SHA-512 calls alone.
+the deployment's honest prover; and the certificates, survivor threshold, errors, forgery bounds and losses the
+composite publishes, from the parameters and the strategy's SHA-512 calls alone.
 
 `cost θ F c σ` is the strategy's SHA-512 calls in one run (`t' τ`): `Verity.Game` has no call model of
 strategies, so it is declared, as `Claims.Finder.cost` is. -/
@@ -805,7 +857,6 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   honest : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) (signer θ) θ F c)
   certOf : ByteArray → Certificates
-  crBound : ByteArray → Subprotocol → ℕ → ℝ
   delta : ByteArray → Subprotocol → ℕ → ℝ≥0∞
   /-- **The published `ε_forge(t, Q)`**: the bound `Hash.Assumptions.LmsUnforgeable` gives a forger of at most `t`
   SHA-512 calls that has at most `Q` of the device's messages signed on each of its coins -/
@@ -857,7 +908,7 @@ def Opens (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (g : Fin (V.cir
         ∀ i : Fin ((V.circuitOf θ F).w g), o.row[p.offset + i.val]? = some (v.getLsbD i.val)
 
 /-- **Subprotocol `a`'s verdict at composite `k`**: the committed files passed the commit phase's check, `k` accepted
-what the prover sent as a `same` composition, and `a`'s compiled component accepts its own case in it. -/
+what the prover sent as a `same` composition, and `a`'s compiled check accepts its own case in it. -/
 def Verdict (k : Verity.Registration.Composite) (a : Subprotocol) (o : Exchange) : Prop :=
   V.Registered o.params o.files ∧ SameAccepts k o.sent ∧ ComponentAccepts k a o.sent
 
@@ -956,12 +1007,24 @@ def finderCR (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteA
   finderCROf (V.finders a θ F c) σ
 >>>>>>> theirs
 
-/-- **`B^τ`'s collision premise, quantitative**: subprotocol `a`'s finder applied to the strategy outputs a SHA-512
-collision with probability at most the published bound at the strategy's SHA-512 calls (`ε_cr`). `ecr/sha-512` is asked
-at the finder's budget, `callsMul θ a * cost θ F c σ + callsAdd θ a` calls (`finder_calls`), a defined function of the
-strategy's `cost` as `qF`/`qS` are of `t'`. -/
+/-- **Subprotocol `a`'s finder with its budget** (`finder_calls`): `callsMul θ a * t + callsAdd θ a` SHA-512 calls at
+the strategy's `t`, a defined function of the strategy's `cost` as `qF`/`qS` are of `t'`. -/
+def finderSpec (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+    FinderSpec (V.game θ F c) (V.cost θ F c) where
+  finder := V.finder a θ F c
+  budget t := V.callsMul θ a * t + V.callsAdd θ a
+  calls σ x := V.finder_calls a θ F c σ x
+
+/-- **`ε_cr`, subprotocol `a`'s finder's collision bound at `t` calls**: its budget over `2^256`, what `ecr/sha-512`
+gives a finder of that many calls. -/
+noncomputable def crBound (θ : ByteArray) (a : Subprotocol) (t : ℕ) : ℝ :=
+  ((V.callsMul θ a * t + V.callsAdd θ a : ℕ) : ℝ) / 2 ^ (256 : ℝ)
+
+/-- **`B^τ`'s collision premise**: `ecr/sha-512` (`Claims.ExpectedCR`) at subprotocol `a`'s finder applied to the
+strategy. Its calls are within its budget on every coin (`finderSpec`), so it outputs a SHA-512 collision with
+probability at most `crBound` at the strategy's calls. -/
 def FinderCR (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
-  (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ)
+  Claims.ExpectedCR sha512Msg (V.finder a θ F c σ)
 
 /-- **`B^τ`'s forgery premise**: subprotocol `a`'s forger applied to the strategy meets
 `Hash.Assumptions.LmsUnforgeable` at the compiled LMS verifier, at the finder's budget of SHA-512 calls
@@ -975,8 +1038,7 @@ def Unforgeable (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : By
 and its forger its forgery premise (`Unforgeable`), its published `δ` at the strategy's SHA-512 calls, plus the published
 `ε_forge(t, Q)` at the forger's budget and the device's signatures (`epsForge`), plus its loss at the probability that
 the finder outputs a collision, the form of `Accounting.PeriodLive.error` with the forgery term beside `δ`; elsewhere no
-bound (`⊤`), as `Accounting.condError` reads it. Flock's conditional bound is the case `loss = 0`, the additive one
-the case `crBound = 1`. -/
+bound (`⊤`), as `Accounting.condError` reads it. Flock's conditional bound is the case `loss = 0`. -/
 noncomputable def error (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
   condError (fun σ => V.finderCR a θ F c σ ∧ V.FinderCR a θ F c σ ∧ V.Unforgeable a θ F c σ)
     (fun σ => V.delta θ a (V.cost θ F c σ) +
@@ -1029,8 +1091,8 @@ def NetworkCertifierSound (k : Verity.Registration.Composite) : Prop := V.Target
 def WipeSound (k : Verity.Registration.Composite) : Prop := V.Target k .wipe
 
 /-- **Subprotocol `a`'s honest lemma at the deployment**: at registered files, the deployment's honest prover meets
-`a`'s claim at composite `k` on almost every play. Each subprotocol's piece proves its own (sampled proofs from
-`Flock.Bridge.card_wrong_lt_of_relS_honest`; the others from their owners' `_honest` lemmas). -/
+`a`'s claim at composite `k` on almost every play. No theorem proves it for any subprotocol: the soundness theorem
+takes it as a hypothesis, one per subprotocol (`Proofs.Properties.Verity.Soundness`). -/
 def HonestHolds (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray), V.Registered θ F →
     Game.prob (fun o => ¬ V.Holds k θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0

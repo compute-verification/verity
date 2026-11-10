@@ -1,7 +1,28 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Placed
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+public import Proofs.Flock.Soundness.Discharge.Const.Inst
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Placed.Setup
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Lowering
 public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 
 /-!
@@ -9,7 +30,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 
 The compiled `--zk` count curve (`ZkLink.zk_flock_countC_execOS_cr`) takes each sampled proof block's place in its `--zk`
 table's statement (`place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u`). This is the `--zk` form of
-e2e-placed's `Placed.Sites.progPlaces_keyProg`, for plans of `TabZK` tables:
+`Placed.Sites.progPlaces_keyProg`, for plans of `TabZK` tables:
 
 * `acceptsZK_accepted`: flock-verify `--zk`'s acceptance (`ZkExec.AcceptsZK`), on the untyped path without hidden
   outputs, gives for every table of the session an `Placed.Accepted` statement: `Stmt.setupH`'s run under the table's

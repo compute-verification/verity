@@ -16,6 +16,7 @@ the step recorded, so the bytes, layout and digests are those of a committer wit
 """
 from __future__ import annotations
 
+import functools
 import gc
 import hashlib
 import pickle

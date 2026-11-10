@@ -100,8 +100,14 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Gate": (),
 =======
     "Game": (f"{CORE}Game.lean::Verity.Game",),
+<<<<<<< 94ca7fd0d18
     "Gate": (),
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+    "Gate": (),
+=======
+    "Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate",),
+>>>>>>> 7af4d24fca3e
     "Hardware": (),
     "Hash": (),
     "InteractiveDevice": (),
@@ -114,7 +120,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Merkle": (),  # nothing in scope declares it
     "Netlist": ("verity/ml/private_circuits/universal.py::Netlist",),
     "Node": (),
-    "Op": (f"{CORE}Boolean.lean::FlockSoundness.Audit.Op",),
+    "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
     "Opening": ("Security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/ml/commitments/merkle.py::Opening"),
     "Outcome": (f"{PROTOCOL}::Core.Outcome",),
     "Partition": (f"{CORE}Partition.lean::Verity.Partition", f"{FLOCK}Evaluated.lean::Flock.Extract.Partition"),
@@ -151,6 +157,14 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
 }
 CANONICAL["Record"] = ("verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record",)
+#: The slots a knowledge-soundness or zero-knowledge statement quantifies over: the claims core's counted programs.
+CONCEPTS += ("Extractor", "Simulator")
+CANONICAL["Extractor"] = (f"{CORE}Interaction.lean::Claims.Extractor",)
+CANONICAL["Simulator"] = (f"{CORE}Interaction.lean::Claims.Simulator",)
+#: What a second declaration of a concept loses, said in its failure.
+WHY = {"Extractor": "an extractor is a rerun program whose work `RP.eval` counts; a function or a structure of free fields "
+                    "can open a hiding commitment to any trace, so it meets any contract",
+       "Simulator": "a simulator is a program whose calls `SP.eval` counts, fixed before the witness"}
 
 RA, RA_PY = "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/", "verity/core/protocols/remote_bandwidth/audit.py"
 MC, MC_PY = "verity/core/devices/memory_challenger/lean/MemoryChallenger/", "verity/core/protocols/pous/"
@@ -180,6 +194,7 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                               "the memory challenger's port"),
     f"{MC_PY}streamed_wipe.py::Verdict": (f"{MC}StreamedWipe.lean::MemoryChallenger.StreamedWipe.Verdict",
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
     f"{MC_PY}run.py::Session": ("verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session", "pous-run",
                                 "the PoUS run's protocol port reads the sessions the Python records"),
@@ -192,6 +207,13 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                 "the PoUS run's protocol port reads the sessions the Python records"),
 =======
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+=======
+    "verity/ml/circuits/layout.py::Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate", "verity-evaluate",
+                                           "the evaluator's `gate` answers each gate of the Python's layout"),
+    "verity/ml/circuits/partition_object.py::Partition": (f"{FLOCK}Evaluated.lean::Flock.Extract.Partition", "verity-evaluate",
+                                                          "the evaluator's `partition` answers the Python's Q_word evaluation"),
+>>>>>>> 7af4d24fca3e
 }
 
 
@@ -519,7 +541,7 @@ KNOWN: dict[str, str] = {
     "Security/Definitions/Core/Accel/Isa.lean::Verity.Accel.Store": "homonym, a GPU's memory kinds: rename (proofs)",
     "Security/Definitions/Core/Advice.lean::Verity.Advice.Registration":
         "homonym, a hiding commitment to a partition's rows: rename (proofs)",
-    "Security/Definitions/Core/Boolean.lean::FlockSoundness.Audit.Circuit":
+    "Security/Definitions/Core/Boolean.lean::Verity.Boolean.Circuit":
         "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
     "Security/Definitions/Core/Circuit.lean::Verity.Circuit.Trace":
         "homonym, one run's gate values, which the Glossary calls a trace: rename, then the canonical trace (proofs)",
@@ -620,13 +642,15 @@ KNOWN: dict[str, str] = {
     "Security/Proofs/Flock/Claims/Recursion/VStar.lean::Claims.Recursion.VStar.Layout":
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Sampled/Defs.lean::FlockSampled.Trace":
-        "homonym, the sampled proofs' committed units, each one's type and values: rename (proofs)",
+        "homonym, SPOT's committed units, each one's type and values: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout":
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",
     "Security/Proofs/Flock/SampledGeneric/Defs.lean::FlockSoundness.SampledGeneric.Binding.Trace":
         "homonym, the value a binding commits at each of its positions (`Pos → Val`): rename (proofs)",
+    "Security/Proofs/Flock/SampledGeneric/Defs.lean::FlockSoundness.SampledGeneric.Extractor":
+        "duplicate of `Claims.Extractor` as free bound fields (`ks`, `link`), read by no listed guarantee: becomes a reading of it or goes (proofs)",
     "Security/Proofs/Flock/Soundness/Discharge/Exec/Event.lean::FlockSoundness.Discharge.Exec.Transcript":
         "homonym, a session directory's files: rename (proofs)",
     "Security/Proofs/Flock/Soundness/ExecPlacement.lean::FlockSoundness.Layout":
@@ -683,7 +707,7 @@ KNOWN: dict[str, str] = {
         "homonym, the simulator's model of one served block: rename (network-accounting)",
     "benchmarks/network_sim/workload/lab.py::Session":
         "homonym, the old word for a run, here a simulated read: rename (network-accounting)",
-    "benchmarks/numerical/python/verity_numerical/bench/lowerings.py::Registry":
+    "verity/ml/flock/python/verity_flock/lowerings.py::Registry":
         "homonym, a table of benchmark lowerings: rename (compute-accounting)",
     "verity/ml/flock/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
@@ -734,8 +758,6 @@ KNOWN: dict[str, str] = {
         "homonym, a block of rows and columns of one design: rename (compute-accounting)",
     "benchmarks/pouw/theory/checked_strip.py::Ledger":
         "homonym, a strategy's priced products: rename (compute-accounting)",
-    "benchmarks/pouw/theory/ksw_k.py::Layout":
-        "homonym, the bits of a theory model's coin groups: rename (compute-accounting)",
     "benchmarks/property_redteam/demo.py::Circuit":
         "homonym, a red-team demo's multi-precision arithmetic builder: rename (memory-accounting)",
     "benchmarks/property_redteam/renorm.py::Gate":
@@ -756,9 +778,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
-    "benchmarks/torch_gpu/p2_stage/stage.py::Store":
-        "duplicate of `CircuitRequirement.Store`: becomes a client of it (kernels)",
-    "benchmarks/torch_gpu/s8_dec_linear/run.py::Device": "homonym, slices of a device byte buffer: rename (kernels)",
     # demos/
     "demos/h200/e2e_h200/store.py::Store": "homonym, where a demo's weights live: rename (compute-accounting)",
     "demos/h200/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
@@ -854,13 +873,13 @@ KNOWN: dict[str, str] = {
         "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
     "verity/core/protocols/certifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
-    "verity/core/protocols/certifier/cache_step_v2.py::Op":
+    "verity/ml/protocols/certifier/cache_step_v2.py::Op":
         "homonym, a cache call's inputs: rename (network-accounting)",
     "verity/core/protocols/certifier/lean/NetworkCertifier/Run.lean::NetworkCertifier.Program":
         "homonym, a Program's egress prediction: rename (network-accounting)",
     "verity/core/protocols/certifier/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "verity/core/protocols/certifier/window_charge.py::Window":
+    "verity/ml/protocols/certifier/window_charge.py::Window":
         "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
@@ -907,14 +926,14 @@ KNOWN: dict[str, str] = {
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
     "verity/core/protocols/pous/wipe_parties.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/pouw/circuit/anchors.py::Ledger":
+    "verity/ml/protocols/pouw/circuit/anchors.py::Ledger":
         "homonym, a window's admitted calls: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/compile.py::Site":
+    "verity/ml/protocols/pouw/circuit/compile.py::Site":
         "homonym, a node of the served function and a kind of dot: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/h1device.py::Device":
+    "verity/ml/protocols/pouw/circuit/h1device.py::Device":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the card by digest (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/h1tile.py::Layout": "homonym, a tile shape: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
+    "verity/ml/protocols/pouw/circuit/h1tile.py::Layout": "homonym, a tile shape: rename (compute-accounting)",
+    "verity/ml/protocols/pouw/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
     "verity/core/protocols/pouw/coins.py::Challenger":
         "duplicate of `parties.Challenger`: becomes it (deleted) (compute-accounting)",
     "verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean::PouwCheck.Law":
@@ -927,9 +946,9 @@ KNOWN: dict[str, str] = {
         "homonym, a frame's hash kind: rename (compute-accounting)",
     "verity/core/protocols/pouw/protocol.py::Certificate":
         "homonym, what a scheme's guarantee rests on: rename (compute-accounting)",
-    "verity/core/protocols/pouw/schemes/pearl_c_device.py::Device":
+    "verity/ml/protocols/pouw/schemes/pearl_c_device.py::Device":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the card by digest; prices stay the scheme's (compute-accounting)",
-    "verity/core/protocols/pouw/schemes/pearl_kw.py::Device":
+    "verity/ml/protocols/pouw/schemes/pearl_kw.py::Device":
         "homonym, a code's parameters: rename (compute-accounting)",
     "verity/core/protocols/remote_bandwidth/audit.py::Ledger": "homonym, the γ cost terms: rename (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/audit.py::Record":
@@ -1017,10 +1036,6 @@ KNOWN: dict[str, str] = {
     "verity/ml/circuits/defs.py::Registry": "homonym, the registered Definitions by id: rename (proofs)",
     "verity/ml/circuits/layout.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/ml/circuits/layout.py::Gate":
-        "duplicate of `Flock.Program`'s gate: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/ml/circuits/partition_object.py::Partition":
-        "duplicate of `Verity.Partition`: becomes its Python mirror, held by a difftest (proofs)",
     "verity/ml/circuits/requirement.py::Layout":
         "homonym, each value's place in the store: rename (`Accounting.Requirement.Layout`'s mirror) (proofs)",
     "verity/ml/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
@@ -1098,6 +1113,7 @@ def test_every_hit_is_canonical_or_listed():
     found = classify(_scanned())
     assert len(found) >= 200, f"the scan found only {len(found)} declarations of the concepts: has the tree moved?"
     unlisted = [f"{k} (line {h.line}) declares {concept} again: read {_read(concept)}, or rename it if it is another thing"
+                + (f" ({WHY[concept]})" if concept in WHY else "")
                 for k, (concept, h, status) in sorted(found.items()) if status == "unlisted"]
     assert not unlisted, (f"declarations of a concept that are not its canonical object ({FIX}):\n  "
                           + "\n  ".join(unlisted))
@@ -1317,6 +1333,18 @@ def test_a_canonical_under_another_name():
     assert [h.key for h in s.hits["Session"]] == [f"{core}::Verity.Play", f"{rate}::Accounting.Rate.Session"]
     assert "Play" not in s.hits
     assert reads_canonical(s.hits["Session"][1], set(CANONICAL["Session"]), s)
+
+
+def test_a_second_extractor_is_refused():
+    """An extractor of free fields beside the counted one (a statement over it is met by an extractor that opens a hiding
+    commitment to any trace) is a second declaration of the concept; the claims core's is canonical."""
+    core, sampled = f"{CORE}Interaction.lean", "Security/Proofs/Flock/Sampled/Defs.lean"
+    found = classify(scan({core: "namespace Claims\nstructure Extractor (W : Type) where\n  ext : Nat → RP Nat W\n"
+                                 "structure Simulator where\n  prog : Nat → SP Nat\nend Claims\n",
+                           sampled: "namespace Sampled\nstructure Extractor where\n  ks : Nat → Nat\nend Sampled\n"}))
+    assert {k: (c, status) for k, (c, _, status) in found.items()} == {
+        f"{core}::Claims.Extractor": ("Extractor", "canonical"), f"{core}::Claims.Simulator": ("Simulator", "canonical"),
+        f"{sampled}::Sampled.Extractor": ("Extractor", "unlisted")}
 
 
 def test_prune_deletes_stale_lines():

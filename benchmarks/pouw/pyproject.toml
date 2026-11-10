@@ -20,7 +20,6 @@ verity-exact-kit = { workspace = true }
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_ffill.py",
-    "tests/test_lowbit_dc.py",
     "tests/test_pearl_c_hash_decode.py",
     "tests/test_pearl_c_hash_host.py",
     "tests/test_pearl_c_sm120.py",
@@ -59,12 +58,21 @@ untraced = [
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
+<<<<<<< ours
 # before and after vllm's layout move. bench_arm's live coins open their session through verity_vllm.pipeline.commit_coins.
+||||||| base
+# before and after vllm's layout move.
+=======
+# before and after vllm's layout move.
+# test_pearl_c_sm90_overhead_arm reads the overhead door's schemes and linears (verity_bench's overhead.py), which name
+# pearl_c_sm90's arm.
+>>>>>>> theirs
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/record.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/spot",
+          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw", "verity/ml/protocols/certifier",
           "verity/core/protocols/certifier",
           "verity/core/difftest", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/kernels", "verity/ml/randomness", "verity/ml/flock/python", "verity/ml/windows",
@@ -99,6 +107,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "integrations/vllm/verity_vllm/protocols/pouw/h1/registered_device.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/requests.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/served.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/h1/served_program.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/h1/public_rows.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/settings.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/static.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
@@ -157,8 +167,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "benchmarks/torch_gpu/s8_linear/sass_gate.py", "benchmarks/torch_gpu/attn_bf16/sass_gate.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
-          "benchmarks/hash/dither/hb_side.py", "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
-          "benchmarks/served_units/summarize.py",
+          "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
+          "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py"]
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
@@ -188,10 +198,6 @@ tests = [
     "tests/test_served_h1_producer.py",
 ]
 paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
-
-[[tool.verity.tests.reads]]
-tests = ["tests/test_emu8.py"]
-paths = ["verity/ml/circuits/silicon"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_facet_break.py"]

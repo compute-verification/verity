@@ -1,8 +1,8 @@
 module
 
 public import CoreProtocol.Protocol
-public import MemoryChallenger.Records
 public import MemoryChallenger.SignedMessage
+public import Lms.Verify
 
 /-!
 # The verdict on a signed session

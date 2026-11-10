@@ -4,7 +4,6 @@ integer tests. The one difference is deliberate: `jeq` tells `true` from `1`, wh
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Hash
 meta import Lean.Data.Json
@@ -12,6 +11,7 @@ meta import Flock.Canon
 meta import Flock.Hash
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 set_option backward.privateInPublic true

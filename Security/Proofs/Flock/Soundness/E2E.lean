@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.FlockPublic
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The end-to-end theorem: a skeleton, every gap a named hypothesis
@@ -13,9 +15,9 @@ circuit and values, 1 on the constants and 0 on the zero, which are public:
 "Wrong" is measured on the audit's circuit `C`, at the committed values: the circuit the statement's rows make, each unit
 its template's rows (`Prog.circuit`: the circuit is chosen on the untrusted side, and the lowering does
 no optimizing). `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` state it there, with each sampled proof block's place from its
-table's statement (`ProgPlaces`). What a correct unit computes is the certificate's: rows that are `GateRows.rows` of a
-gate circuit `G` compute `G`, so a correct unit's committed values compute `G` (`IsRowsUnit.computes_of_cert`,
-`Certificate.lean`). The only cryptographic assumption is `SHA512CRExpected`, for the link finders built from the prover
+table's statement (`ProgPlaces`). Rows that are `GateRows.rows` of a gate circuit `G`, satisfied with the constant 1,
+carry `G`'s outputs (`GateRows.rows_sound`); no theorem carries that to a correct unit's committed values
+(`ASSUMPTIONS.md`). The only cryptographic assumption is `SHA512CRExpected`, for the link finders built from the prover
 the theorem bounds (`hCR : LinkCR … (reg σ) (cont σ) …`), not from every prover at once. `ε_ks(σ)` is the prover's
 collision advantages; under `SHA512CRStrict` it is at most `StrictCR.ksAvgStrict` (`StrictCR.ksAvgBE_le_strict`), which
 the `_hm96` forms state (`Binding/E2E.lean`).
@@ -56,7 +58,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
@@ -73,7 +75,7 @@ constants read, every unit wrong on the program's Boolean circuit `CB` (partitio
 rows, the audit's circuit. `proj` reads the Boolean circuit's wires off the rows' columns. The end-to-end theorems don't
 take it: they are about the rows' circuit. `UProg.rowsL1` proves it for every program of units over circuit types, which
 carries `UProg.flock_e2e_count` and `UProg.flock_e2e_drawn` to the Boolean circuit. -/
-def RowsL1 {CB : Circuit} (PB : Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (ones : Finset (Fin C.N)) :
+def RowsL1 {CB : Verity.Boolean.Circuit} (PB : Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (ones : Finset (Fin C.N)) :
     Prop :=
   ∀ vals, (∀ g ∈ ones, vals g = true) → PB.wrong (proj vals) ⊆ P.wrong vals
 

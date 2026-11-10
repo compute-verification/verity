@@ -16,8 +16,8 @@ public import NciCheck.Protocol
 # The NCI policy's check
 
 `NciCheck.Baseline.check` (the `nci-check` exe) is the verifier's check that a declared division of a declaration into
-isolation units meets `Nci.Complies Γ α` (`Security/Definitions/Nci.lean`), for IUs aligned to the root's Calls, at the
-cost of the descriptor: `NciCheck.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
+isolation units meets `Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`), for IUs aligned to the root's Calls, at
+the cost of the descriptor: `NciCheck.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
 (AGENTS.md "Design rules"), then each θ entry's provenance, registered public data that the first record of the
 deployment's registration log registers and never an earlier run's output, against the service's log
 (`NciCheck.Baseline`; `NciCheck.BaselineDifftest` holds it to the Python reference).
@@ -39,7 +39,9 @@ Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check
 `NciCheck.Count.check` (`nci-check --count`) is the count of `(c, k)`-inference blocks: that a Boolean declaration's
 computed gates divide into at most `n` proof blocks of a `(c, k)`-partition (`Nci.CompliesAtMost`), the blocks the
 activations of the block Definitions the declaration names, with each block Definition's Boolean gates from the gate
-table and its fresh bits from `NciCheck.Desc`'s summaries; `NciCheck.CountDifftest` holds it to the Python reference.
+table and its fresh bits from `NciCheck.Desc`'s summaries. It publishes only the judgment against `n`, `{complies}`;
+the whole verdict, with the counts, is `NciCheck.Count.checkDetail`, for the private record. `NciCheck.CountDifftest`
+holds both to the Python reference.
 -/
 
 @[expose] public section

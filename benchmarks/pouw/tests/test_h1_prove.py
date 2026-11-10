@@ -31,8 +31,8 @@ import h1unit as U  # noqa: E402
 
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
+from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
 
 
 def _module(name: str, file: str):
@@ -434,9 +434,9 @@ def test_each_in_proof_negatives_window_changes_its_value_and_ok_drops_where_its
 
 
 def test_the_h1_statement_is_flat_unless_h1_tmpl_says_structural(monkeypatch):
-    """`h1unit.layout`, the form every H1 stager takes (`h1unit.stager`): unset, empty or ``flat`` the flat statement, the
-    one the Lean verifier accepts; ``structural`` the templated statement at `h1unit.LAYOUT`, another mode the templated
-    one at it, and anything else refused by name."""
+    """`h1unit.layout`, the form every H1 stager takes (`h1unit.stager`): unset, empty or ``flat`` the flat statement,
+    ``structural`` the templated statement at `h1unit.LAYOUT`, another mode the templated one at it, and anything else
+    refused by name."""
     monkeypatch.delenv("H1_TMPL", raising=False)
     assert U.layout() is None
     for value, want in (("", None), ("flat", None), ("structural", U.LAYOUT), ("iv/hybrid/4", "iv/hybrid/4"), ("iv", "iv")):
@@ -450,7 +450,7 @@ def test_the_h1_statement_is_flat_unless_h1_tmpl_says_structural(monkeypatch):
 def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
     """`h1unit.stager`: with a layout, the templated statement of the unit's own structural template; with none, the flat
     statement, which evaluates the unit alike; and where struct_lower refuses the Definition (its NotImplementedError, as
-    for assertions or table reads), the flat statement, said on stderr."""
+    for an assertion), the flat statement, said on stderr."""
     from verity.ml.circuits.boolean import BIT
     from verity.ml.circuits.boolean.forms import add
     from verity.ml.circuits.boolean.trace import definition
@@ -469,7 +469,7 @@ def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
     assert np.array_equal(tmpl.low.evaluate(x)[0], flat.low.evaluate(x)[0])
 
     def refuse(definition, **_):
-        raise NotImplementedError(f"{definition.id}: assertions and table reads are not laid out by the structural lowering yet")
+        raise NotImplementedError(f"{definition.id}: an assertion is not laid out: its row reads its own column")
 
     monkeypatch.setattr(SL, "lower", refuse)
     capsys.readouterr()
@@ -482,7 +482,7 @@ def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
     """`h1window.statement_rows`, the rows the auditor's lowering writes K's circuit file on: under h1_prove's ports
     (`h1unit.ports`) the stager's rows as `Shape` sizes them (an A or B row K / 2 + 2 words, the record 3 R C, the public
     row 100), and by default `window_ports`' A and B ports, which credit's registered file reads, with the rest unchanged."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     for shape in (U.Shape(64), U.Shape(128)):
         t = shape.definition()
         bits = {p.name: p.bits for p in shape.ports()}

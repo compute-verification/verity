@@ -29,6 +29,8 @@ from verity_vllm.protocols.pouw.pearl_c import host as PH
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
 
+from verity.core.protocols.pouw import core_check as CC
+
 torch = pytest.importorskip("torch")
 
 from verity.ml.commitments import MerkleTree
@@ -57,9 +59,9 @@ from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
 from verity.core.protocols.spot import challenger as Ch
 from verity_vllm.protocols.pouw import pearl_c as PPD
@@ -355,7 +357,7 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
     run.gemm(1, torch.randn(32, 1024).to(torch.bfloat16), weights[1], None)
     out = run.end()
     man = json.loads(Path(out["manifest"]).read_text())
-    assert man["schema"] == PPD.MANIFEST_SCHEMA and man["scheme"] == SCHEME and man["salt"] == salt.hex()
+    assert man["schema"] == CC.MANIFEST_SCHEMA and man["scheme"] == SCHEME and man["salt"] == salt.hex()
     assert "session" not in man, "in-process coins: no live session to name"
     assert [(u["m"], u["real_rows"], u["weight"]) for u in man["matmuls"]] == [(32, 20, 0), (32, 32, 1)]
     assert man["commitment"] == {"root": out["transcript_root"], "count": 6}
@@ -1114,8 +1116,16 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
     dt = transcript_domain(epoch, count, s.commitment_hash)
+<<<<<<< 94ca7fd0d18
     head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
             "instance": {"k_min": 32, "tile": list(tile)},
+||||||| e10cf2c8559
+    head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
+            "instance": {"k_min": 32, "tile": [16, 16]},
+=======
+    head = {"schema": CC.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
+            "instance": {"k_min": 32, "tile": [16, 16]},
+>>>>>>> 7af4d24fca3e
             "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
             **({} if live is None else {"pass_index": live}),
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
@@ -2230,9 +2240,9 @@ def test_verify_run_reads_a_v1_manifest_only_as_a_recorded_replay(honest_pass):
     path, *_ = honest_pass
     man = json.loads(path.read_text())
     v1 = path.parent / "manifest-v1.json"
-    for schema, recorded, why in ((PPD.MANIFEST_SCHEMA_RECORDED, False, "recorded before epoch coins"),
-                                  (PPD.MANIFEST_SCHEMA_RECORDED, True, "recorded pass has no beacon"),
-                                  ("verity-vllm/pouw-pearl-c-run/v0", True, f"not {PPD.MANIFEST_SCHEMA}")):
+    for schema, recorded, why in ((CC.MANIFEST_RECORDED, False, "recorded before epoch coins"),
+                                  (CC.MANIFEST_RECORDED, True, "recorded pass has no beacon"),
+                                  ("verity-vllm/pouw-pearl-c-run/v0", True, f"not {CC.MANIFEST_SCHEMA}")):
         v1.write_text(json.dumps({**man, "schema": schema}))
         r = VR.verify(v1, 3, 1, "test", b"verifier" * 4, coins=published(path), recorded=recorded)
         assert not r["accepted"] and r["line"].startswith("REJECT") and why in r["line"], (schema, recorded, r["line"])
@@ -2249,7 +2259,7 @@ def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refu
     commitment, opening = salt_coin(roots)
     epoch = Epoch.start(Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1))), roots, commitment,
                         opening)
-    man = {"schema": PPD.MANIFEST_SCHEMA, "matmuls": [{"index": 0, "m": 16, "k": 1024, "n": 256, "weight": 0}, {"index": 1, "m": 16, "k": 1024, "n": 128, "weight": 1}],
+    man = {"schema": CC.MANIFEST_SCHEMA, "matmuls": [{"index": 0, "m": 16, "k": 1024, "n": 256, "weight": 0}, {"index": 1, "m": 16, "k": 1024, "n": 128, "weight": 1}],
            "weights": {str(w): {"root": r.hex()} for w, r in roots.items()},
            "coins": commitment.to_json(), "salt_opening": opening.to_json(), "salt": epoch.salt.hex()}
     got, how = PPD.manifest_epoch(man, commitment)
@@ -2273,22 +2283,22 @@ def test_a_pass_whose_salt_coin_is_foreign_early_mislabelled_or_tampered_is_refu
     with pytest.raises(DomainError, match="no salt coin"):
         PPD.manifest_epoch({k: v for k, v in man.items() if k not in ("coins", "salt_opening")}, commitment)
     recorded = {k: v for k, v in man.items() if k not in ("coins", "salt_opening")}
-    recorded |= {"schema": PPD.MANIFEST_SCHEMA_RECORDED, "beacon": SEED.hex(),
+    recorded |= {"schema": CC.MANIFEST_RECORDED, "beacon": SEED.hex(),
                  "salt": Epoch.unverified(epoch.workload, roots, SEED).salt.hex()}
     with pytest.raises(DomainError, match="recorded before epoch coins: only a replay of a recorded pass reads it"):
         PPD.manifest_epoch(recorded, commitment)
     assert PPD.manifest_epoch(recorded, None, recorded=True)[1] == "recorded beacon"
     with pytest.raises(DomainError, match="recorded pass has no beacon"):
-        PPD.manifest_epoch({**man, "schema": PPD.MANIFEST_SCHEMA_RECORDED}, commitment, recorded=True)
+        PPD.manifest_epoch({**man, "schema": CC.MANIFEST_RECORDED}, commitment, recorded=True)
     with pytest.raises(DomainError, match="not its recorded beacon's"):
         PPD.manifest_epoch({**recorded, "salt": "00" * 32}, None, recorded=True)
     assert PPD.manifest_epoch(man, commitment, recorded=True) == (epoch, "coin")
     for schema in ("verity-vllm/pouw-pearl-c-run/v0", None):
         for flag in (False, True):
-            with pytest.raises(DomainError, match=f"schema {schema!r}, not {PPD.MANIFEST_SCHEMA}"):
+            with pytest.raises(DomainError, match=f"schema {schema!r}, not {CC.MANIFEST_SCHEMA}"):
                 PPD.manifest_epoch({**man, "schema": schema}, commitment, recorded=flag)
     with pytest.raises(DomainError, match="recorded before epoch coins"):
-        PPD.manifest_epoch({**recorded, "schema": PPD.MANIFEST_SCHEMA_RECORDED, **{k: man[k] for k in ("coins", "salt_opening")}},
+        PPD.manifest_epoch({**recorded, "schema": CC.MANIFEST_RECORDED, **{k: man[k] for k in ("coins", "salt_opening")}},
                            commitment)
 
 
@@ -2358,7 +2368,7 @@ def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessi
     work = Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1)))
     c, o = live_coin(PS.epoch_open_root(weights_root(roots), 0))
     epoch = PPD.epoch_of(work, roots, c, o, 0)
-    man = {"schema": PPD.MANIFEST_SCHEMA, "matmuls": [{"index": 0, "m": 16, "k": 1024, "n": 256, "weight": 0},
+    man = {"schema": CC.MANIFEST_SCHEMA, "matmuls": [{"index": 0, "m": 16, "k": 1024, "n": 256, "weight": 0},
                                                       {"index": 1, "m": 16, "k": 1024, "n": 128, "weight": 1}],
            "weights": {str(w): {"root": r.hex()} for w, r in roots.items()},
            "coins": c.to_json(), "salt_opening": o.to_json(), "salt": epoch.salt.hex(), "pass_index": 0}

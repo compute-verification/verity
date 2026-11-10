@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Binding.Layout
 public import Proofs.Flock.Level3.RowV2
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # `hm96-sha512/row/v1` and `/row/v2` rows: the registration fact from `HmRowComputes`
@@ -28,7 +29,7 @@ namespace FlockSoundness.Binding
 
 open Game Model Accounting Refine Audit
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}

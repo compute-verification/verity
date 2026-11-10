@@ -507,9 +507,15 @@ def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None,
            registered: dict | None = None, scheme: str = SCHEME, outputs: dict | None = None,
            schemas: dict | None = None) -> dict:
     """``outputs`` and ``schemas`` (a registration reusing an earlier record's values, `registration.check`'s) appear only
+<<<<<<< 94ca7fd0d18
     when given, ``schemas`` under the Lean's name ``row_schemas``; with ``registered``, ``parameters`` (the program
     function's, which the descriptor doesn't carry), which `OneStage.paramsOfJson` requires of a verifier expecting values
     registered."""
+||||||| e10cf2c8559
+           registered: dict | None = None, scheme: str = SCHEME) -> dict:
+=======
+    when given."""
+>>>>>>> 7af4d24fca3e
     return {"anchors": list(anchors or []), "delta": delta, "law": law, "leaf_layer": leaf_layer, "log": list(log or []),
             "partition": partition, "ports": ports, "program": descriptor(program), "query": query,
             "registered": registered, "scheme": scheme, "work_table": work_table,
@@ -582,7 +588,13 @@ def python(c: Case) -> dict:
         R.PROTOCOL, verdict, reason, digest, public, profile)
     codes = R.check(rec, program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                     p["partition"], p["work_table"], p["registered"], outputs=p.get("outputs"),
+<<<<<<< 94ca7fd0d18
                     schemas=p.get("row_schemas")).codes
+||||||| e10cf2c8559
+                    p["partition"], p["work_table"], p["registered"]).codes
+=======
+                    schemas=p.get("schemas")).codes
+>>>>>>> 7af4d24fca3e
     if codes:
         return out("reject", f"registration: {', '.join(codes)}")
     try:
@@ -1628,7 +1640,7 @@ def served_window(run: Run) -> Iterator[Case]:
     is the service's and the audit took the delivered sessions. Neither took the served sample or the sessions' roots, and
     no verdict of record reports registered reads."""
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.pouw.circuit import leaves as L, pc8
+    from verity.ml.protocols.pouw.circuit import leaves as L, pc8
     from verity.ml.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
     pv = run.json("out/request/params.json")
     rec = run.json("out/request/registration.json")
@@ -1775,7 +1787,7 @@ def served_audit(run: Run) -> Iterator[Case]:
     no sessions and none of the later checks' inputs. Before `served_commit.run_of` the verifier took the run its served
     domains bind from the record's own window, not the request's binding, so the other request's registration passed R3
     (`receive-foreign` RECEIVED, the run's failed check)."""
-    from verity.core.protocols.pouw.circuit import leaves as L, pc8
+    from verity.ml.protocols.pouw.circuit import leaves as L, pc8
     from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
     src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/pouw/served_zk/served_commit.py"],

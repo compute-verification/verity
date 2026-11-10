@@ -1,8 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
-public import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
 public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The salted compiled and knowledge terms under strict-time collision resistance
@@ -168,16 +169,17 @@ noncomputable def selfSFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkl
       fun _ h => h.collision)
 
 /-- **`SHA512CRStrict` for a table's finders in a session**: the rewinding finders at budget `qF`, the self-clash finder
-at budget `qS`. -/
-structure SessCRL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ)
+at budget `qS`. It is a conjunction of `StrictCR.Finder.CR`s, each `Assumptions.SHA512CRStrict` (`cr/sha-512`) at one
+finder: the rewinding finders at each level, level 0's, then the self-clash finder. -/
+def SessCRL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ)
     (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D)
     (σ : Strategy (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀))
-    (qF qS : ℝ) : Prop where
-  fork : ∀ r ∈ Finset.range 2, ∀ ℓ ∈ Finset.Icc 1 (l₀ :: l₁ :: rest).length,
-    (advRSFinderL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post cap₀ r ℓ σ).CR H qF
-  level0 : (adv₀SFinderL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀ σ).CR H qF
-  self : (selfSFinderL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀ σ).CR H qS
+    (qF qS : ℝ) : Prop :=
+  (∀ r ∈ Finset.range 2, ∀ ℓ ∈ Finset.Icc 1 (l₀ :: l₁ :: rest).length,
+      (advRSFinderL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post cap₀ r ℓ σ).CR H qF) ∧
+    (adv₀SFinderL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀ σ).CR H qF ∧
+    (selfSFinderL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀ σ).CR H qS
 
 theorem advRS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m)
@@ -225,8 +227,8 @@ theorem epsS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (
         qS ^ 2 / 2 ^ (513 : ℝ) :=
   add_le_add (add_le_add le_rfl (Finset.sum_le_sum fun r hr => Finset.sum_le_sum fun ℓ hℓ =>
       Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (advRS_le_strictL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal
-        mPts pre post cap₀ r ℓ σ (h.fork r hr ℓ hℓ)) (by positivity))))
-    (selfS_le_strictL A H E Lf S _ hm ptLocal mPts pre post cap₀ σ h.self)
+        mPts pre post cap₀ r ℓ σ (h.1 r hr ℓ hℓ)) (by positivity))))
+    (selfS_le_strictL A H E Lf S _ hm ptLocal mPts pre post cap₀ σ h.2.2)
 
 /-- **`SHA512CRStrict` for table `j`'s finders in a batched session**, with the prover's session strategy `τ`. -/
 abbrev TableCRL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts))
@@ -244,7 +246,7 @@ theorem ksBoundAccB_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkl
       ((gamesBL A H E Lf ts τ.1).take j) ((gamesBL A H E Lf ts τ.1).drop (j + 1)) (τ.1 j) (stratBL A H E Lf ts j τ) h)
     (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left
       (adv₀S_le_strictL A H E Lf (ts.get j).S (ts.get j).sch (ts.get j).hm (ts.get j).ptLocal mPts
-        ((gamesBL A H E Lf ts τ.1).take j) ((gamesBL A H E Lf ts τ.1).drop (j + 1)) (τ.1 j) (stratBL A H E Lf ts j τ) h.level0)
+        ((gamesBL A H E Lf ts τ.1).take j) ((gamesBL A H E Lf ts τ.1).drop (j + 1)) (τ.1 j) (stratBL A H E Lf ts j τ) h.2.1)
       (Nat.cast_nonneg k)))
 
 end Session

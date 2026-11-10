@@ -35,7 +35,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays on the node);
   OUT gets ``session.json`` and ``bundle.tgz``, the public outcome, and the run's kept directory a copy of
   ``session.json`` (`SESSION`), whose gate the piece's placement names. ``--gate local`` is the dry run's (this
-  tree's gate in this process, a `relay` to PORT its tunnel): a warden on the prover's node is no auditor's device,
+  tree's gate in this process, a `relay` to PORT its tunnel): a warden on the developer's node is no auditor's device,
   so it never stands for the gate.
   Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
@@ -57,7 +57,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
-     their proofs' coins in this piece on the prover's node, so `trusted-host` is assumed with the auditor's devices
+     their proofs' coins in this piece on the developer's node, so `trusted-host` is assumed with the auditor's devices
      not placed.
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ, and the scan's answers; never the
   endpoint's report, the report's counts or a step's summary, which are private) and the check's three input files in
@@ -292,8 +292,8 @@ def kept_run(serve_dir: Path) -> str:
 
 def placement(serve_dir: Path, run: str) -> dict:
     """Which host ran each party, and what `trusted-host`'s premise rests on: the network certifier ran on the gate's
-    host (the kept `SESSION`'s ``gate``; ``local`` is the prover's node), and the chain's checks and samples, the period
-    check and their proofs' coins ran in this piece on the prover's node, the kept run's peer. No device of the
+    host (the kept `SESSION`'s ``gate``; ``local`` is the developer's node), and the chain's checks and samples, the period
+    check and their proofs' coins ran in this piece on the developer's node, the kept run's peer. No device of the
     auditor's is on the node's links, so the premise is assumed of both hosts; ``links`` are the node's to the gate,
     and K counts the certified one alone."""
     kept = serve_dir / PRIVATE / run
@@ -304,7 +304,7 @@ def placement(serve_dir: Path, run: str) -> dict:
     node = SS.served_peer(kept / "fetch.tar.gz") or socket.gethostname()
     if gate == "local":
         return {"kind": "prover-node", "parties": {"network_certifier": node, "prover": node, "verifier": node},
-                PREMISE: f"unmet: the network certifier ran on the prover's node {node} (the front's --gate local)",
+                PREMISE: f"unmet: the network certifier ran on the developer's node {node} (the front's --gate local)",
                 "links": [], "uncounted": f"every link of {node}'s"}
     host = gate.rpartition("@")[2]
     return {"kind": "not-placed", "parties": {"network_certifier": host, "prover": node, "verifier": node},

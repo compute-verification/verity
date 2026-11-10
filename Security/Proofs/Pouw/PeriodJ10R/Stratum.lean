@@ -2,7 +2,7 @@ module
 
 public import Properties.Pouw.PeriodJ10R
 public import Proofs.Accounting.Served
-public import Proofs.Accounting.ComposePeriod.Honest
+public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
 public import Proofs.Flock.Soundness.Audit.StratifiedProj
 
 /-!
@@ -30,7 +30,7 @@ open Claims renaming Ex → expect
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs
 
 open Properties.Pouw.PeriodJ10R Pouw.RelativeSecurity
-open Accounting.SecurityProofs.Compose.Budget (forall_mem_subsetSample rest card_le_rest prob_mem)
+open Accounting.SecurityProofs.Compose.Budget (forall_mem_subsetDraw rest card_le_rest prob_mem)
 open Accounting.SecurityProofs.TS.Stages (prob_prod)
 open Properties.Served.SecurityProofs (card_rest_le)
 
@@ -42,7 +42,7 @@ theorem miss_eq : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
   | 0, N, B, _ => by
     classical
     rw [prob_eq_card, Finset.filter_true_of_mem fun π _ =>
-      (forall_mem_subsetSample (K := 0) π fun v => v ∉ B).mpr fun i hi => absurd hi (Nat.not_lt_zero _),
+      (forall_mem_subsetDraw (K := 0) π fun v => v ∉ B).mpr fun i hi => absurd hi (Nat.not_lt_zero _),
       Finset.card_univ, Nat.choose_zero_right, Nat.choose_zero_right, div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)]
     norm_num
   | K + 1, 0, _, h => absurd h (by omega)
@@ -57,8 +57,8 @@ theorem miss_eq : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
       intro p
       by_cases hp : p ∈ B
       · rw [if_pos hp, mul_zero]
-        refine Accounting.SecurityProofs.ComposePeriod.Honest.prob_none fun e he => ?_
-        have h0 := (forall_mem_subsetSample _ _).mp he 0 (Nat.succ_pos K)
+        refine Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.prob_none fun e he => ?_
+        have h0 := (forall_mem_subsetDraw _ _).mp he 0 (Nat.succ_pos K)
         rw [Equiv.Perm.decomposeFin_symm_apply_zero] at h0
         exact h0 hp
       rw [if_neg hp, mul_one]
@@ -66,16 +66,16 @@ theorem miss_eq : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
       rw [← hc, ← miss_eq K n (rest B p) hK]
       congr 1
       funext e
-      refine propext ⟨fun he => (forall_mem_subsetSample _ _).mpr fun j hj => ?_, fun he =>
-        (forall_mem_subsetSample _ _).mpr fun i hi => ?_⟩
-      · have hmiss := (forall_mem_subsetSample _ _).mp he j.succ (by rw [Fin.val_succ]; omega)
+      refine propext ⟨fun he => (forall_mem_subsetDraw _ _).mpr fun j hj => ?_, fun he =>
+        (forall_mem_subsetDraw _ _).mpr fun i hi => ?_⟩
+      · have hmiss := (forall_mem_subsetDraw _ _).mp he j.succ (by rw [Fin.val_succ]; omega)
         rw [Equiv.Perm.decomposeFin_symm_apply_succ] at hmiss
         simpa [rest] using hmiss
       · rcases Fin.eq_zero_or_eq_succ i with rfl | ⟨j, rfl⟩
         · rw [Equiv.Perm.decomposeFin_symm_apply_zero]
           exact hp
         · have hj : j.val < K := by simpa using hi
-          have hmiss := (forall_mem_subsetSample _ _).mp he j hj
+          have hmiss := (forall_mem_subsetDraw _ _).mp he j hj
           rw [Equiv.Perm.decomposeFin_symm_apply_succ]
           simpa [rest] using hmiss
     refine (congrArg expect (funext hstep)).trans ?_
@@ -131,7 +131,7 @@ theorem disjoint_tileDraw_iff {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (π : Equiv.Perm (Fin (tileCount σ sT)))
     (B : Finset (Fin nB)) :
     Disjoint (tileDraw σ k hk sT π) B ↔ ∀ v ∈ Pouw.Window.subsetDraw (k sT) π, v ∉ tilesIn σ sT B := by
-  rw [Finset.disjoint_left, forall_mem_subsetSample]
+  rw [Finset.disjoint_left, forall_mem_subsetDraw]
   constructor
   · intro h i hi hT
     exact h (Finset.mem_image.2 ⟨⟨i.val, hi⟩, Finset.mem_univ _, rfl⟩) (Finset.mem_filter.1 hT).2

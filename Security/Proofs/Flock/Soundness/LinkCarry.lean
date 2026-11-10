@@ -2,6 +2,8 @@ module
 
 public import Mathlib.Algebra.BigOperators.Field
 public import Proofs.Flock.Soundness.LinkFinder
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Carried state: one hiding leaf read in several sampling blocks

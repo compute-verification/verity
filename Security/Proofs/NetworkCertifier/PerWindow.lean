@@ -1,7 +1,12 @@
 module
 
-public import Proofs.NetworkCertifier.Schedule
-public import Proofs.NetworkCertifier.Ingress
+public import Definitions.NetworkCertifier.Assumptions
+public import Definitions.NetworkCertifier.Ingress
+public import Definitions.NetworkCertifier.Schedule
+public import Mathlib.Data.Set.Card
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.NetworkCertifier.Ingress
+import Proofs.NetworkCertifier.Schedule
 
 /-!
 # Per window: the blocks the accounting charges

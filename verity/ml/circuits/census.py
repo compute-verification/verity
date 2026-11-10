@@ -184,8 +184,8 @@ RULED: dict[str, str] = {"S8Dot_v1": "verity.ml.circuits.ops.s8", "S8Matmul_v1":
                          "S8Dot_v2": "verity.ml.circuits.ops.boolean.s8", "S8Matmul_v2": "verity.ml.circuits.ops.boolean.s8",
                          "GemmAccumulatorS8_v1": "verity.ml.circuits.ops.gemm",
                          "GemmAccumulatorS8_v2": "verity.ml.circuits.ops.boolean.gemm",
-                         "PouwSegDot_v2": "verity.core.protocols.pouw.circuit.segment",
-                         "PouwSegDot0_v2": "verity.core.protocols.pouw.circuit.segment"}
+                         "PouwSegDot_v2": "verity.ml.protocols.pouw.circuit.segment",
+                         "PouwSegDot0_v2": "verity.ml.protocols.pouw.circuit.segment"}
 
 
 def serves_none(bindings: dict) -> dict[str, int]:
@@ -775,7 +775,12 @@ def boolean_gates(fns: Iterable[Any]) -> list[int | str]:
     """Each of ``fns``' two-input Boolean gates per instance, over every facet, as `census` with ``boolean`` counts a class's
     work, in order; for one that isn't counted, the id of the first primitive it reaches that is no Boolean gate, constant
     bit or input. A Definition shared by several is counted once."""
+<<<<<<< 94ca7fd0d18
     w = BooleanWork()
+||||||| e10cf2c8559
+=======
+    w = _Work()
+>>>>>>> 7af4d24fca3e
     out: list[int | str] = []
     for fn in fns:
         got = w.of(fn)
@@ -1192,5 +1197,13 @@ def step_of(doc: dict) -> Callable[[int], int]:
     return lambda k: -1 if k < I else bisect.bisect_right(ends, k)
 
 
+<<<<<<< 94ca7fd0d18
 __all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "BooleanWork",
            "NoBooleanWork", "boolean_gates", "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
+||||||| e10cf2c8559
+__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
+           "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
+=======
+__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
+           "boolean_gates", "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
+>>>>>>> 7af4d24fca3e

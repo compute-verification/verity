@@ -15,12 +15,11 @@ each bound's premises holding together, and its conclusion failing where a premi
 * `2` and `3`, each `0 ∧ 1`: the product, and a second gate computing it again.
 
 The committed declaration `R1` puts the computed gates in one proof block, a `(2, 1)`-partition (two gates, the token
-its one unregistered input bit); `R2` puts each in its own. One counted product (`B`) multiplies the weight (`W`, its
-slot) by the token (`O`, its operand) at gate `2`; its use is the one consumer of `K`, whose region and required gate
-are the token. The item `Y p` is the product's value at gate `2` priced `p`, and `Y2 p` its value at both gates `2`
-and `3`. The decoder `M` has programs of four lengths, and compresses: it describes `11`, the value of gates `2` and `3`
-when the token is set, in one bit, and every other two-bit string in three. The run distribution `μ` samples the token
-uniformly.
+its one unregistered input bit); `R2` puts each in its own. One counted product (`B`) multiplies the weight by the token
+at gate `2`; its use is the one consumer of `K`, whose region and required gate are the token. The item `Y p` is the
+product's value at gate `2` priced `p`, and `Y2 p` its value at both gates `2` and `3`. The decoder `M` has programs of
+four lengths, and compresses: it describes `11`, the value of gates `2` and `3` when the token is set, in one bit, and
+every other two-bit string in three. The run distribution `μ` samples the token uniformly.
 -/
 
 @[expose] public section
@@ -91,18 +90,6 @@ def P2 : Partition C 2 where
   T_disjoint := fun j j' h => absurd (Subsingleton.elim j j') h
   T_θ := by decide
 
-/-- The slot items: the weight, priced one bit. -/
-def W : Items C (Fin 1) where
-  cells := fun _ => {{0}}
-  price := fun _ => 1
-  price_nonneg := fun _ => zero_le_one
-
-/-- The operand items: the token, priced one bit. -/
-def O : Items C (Fin 1) where
-  cells := fun _ => {{1}}
-  price := fun _ => 1
-  price_nonneg := fun _ => zero_le_one
-
 /-- The product's value, priced `p` bits. -/
 def Y (p : ℕ) : Items C (Fin 1) where
   cells := fun _ => {{2}}
@@ -114,12 +101,6 @@ def W2 : Items C (Fin 2) where
   cells := fun i => if i = 0 then {{2}} else {{3}}
   price := fun _ => 1
   price_nonneg := fun _ => zero_le_one
-
-/-- The product reads the weight and the token. -/
-def I : Incidence B W O where
-  occ := fun _ => 0
-  slots := fun _ _ => ⟨{0}, mem_singleton_self _, show ({0} : Finset (Fin 4)) ⊆ holds C {2} by decide⟩
-  operands := fun _ _ => ⟨{1}, mem_singleton_self _, show ({1} : Finset (Fin 4)) ⊆ holds C {2} by decide⟩
 
 /-- The product's use as a consumer: its region and required gate are the token. -/
 def K : Consumers D (Fin 1) :=

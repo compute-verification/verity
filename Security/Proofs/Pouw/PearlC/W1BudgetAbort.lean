@@ -5,7 +5,7 @@ public import Definitions.Pouw.PearlC.W1
 /-!
 # W1 doesn't truncate
 
-`BudgetAbortPearlC` is `Accounting.BudgetAbort`'s statement over Pearl-C's `CostModel` (ra-per-run's hypothesis for the
+`BudgetAbortPearlC` is `Accounting.BudgetAbort`'s statement over Pearl-C's `CostModel` (the hypothesis of the
 per-run bound). W1 (`Pouw.PearlC.W1.w1`) fails it whenever its prices are positive (`Positive`), because a correct
 unit's operand fetches are free and whether a unit is correct is decided on the final transcript under the oracle,
 which no W1 program reads.
@@ -300,7 +300,7 @@ def toyP : Protocol Unit Bool Unit where
   ticket := fun _ _ _ _ a i j => wordQ (if i = 0 ∧ j = 0 then a 0 0 else 0)
   useful := fun _ _ _ _ _ _ _ => wordQ 0
   actOK := fun _ _ => True
-  weightOK := fun _ _ _ => True
+  fixedOK := fun _ _ _ => True
   credit := fun _ _ _ _ _ => 0
   capOK := fun H _ _ _ _ => H () = true
   Wref := fun _ _ => 0

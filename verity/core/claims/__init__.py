@@ -168,11 +168,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "whose ops are charged to accounts other than the compute account", "Rate device"),
     # falsified by a partial completion cheaper than x * c_enc / b: x bits of a word of E, rebuilt from setup, the weights
     # they encode and the rest of the word, in less than that of the compute account's units, by any schedule. At k = 2
-    # the red team's 4-dimensional lattice completes a tail of up to b/10 bits (r20261012-163319-2804), and fplll, the
-    # best of five reducers, costs 12.3x the claim at 512 bits (r20261012-164518-ccba); the 1.2x at the reduction's
-    # operation-count floor is an estimate from operation counts, unmeasured (r20261012-170958-f49a). At k = 1 with the
-    # payload known, F27 (r20261012-132841-565e) is such a completion, at a floor of half a GMP extended GCD
-    # (r20261012-164518-ccba). In partial-completion form it is `Accounting.Assumptions.WorkHardness`
+    # the red team's 4-dimensional lattice completes a tail of up to b/10 bits, and fplll, the best of five reducers,
+    # costs more than the claim at 512 bits, as does the reduction's operation-count floor, an estimate from operation
+    # counts, unmeasured. At k = 1 with the payload known, F27 is such a completion, at a floor of half a GMP extended
+    # GCD. In partial-completion form it is `Accounting.Assumptions.WorkHardness`
     # (Security/Definitions/Accounting/Assumptions/RateAudit.lean)
     Entry("rate-codec-work", "assumption",
           "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
@@ -291,10 +290,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
-    # the timing red team's modelled floor
-    # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
-    # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
-    # stated device falsifies it
+    # the timing red team's modelled floor and the 8-core cooperation run; a faster squaring on the stated device
+    # falsifies it
     Entry("pous-ring-speed", "assumption",
           "PoUS ring speed: on the stated device (up to 8 cores of one chiplet cooperating, each at least as slow as a "
           "Zen 5 core at 5.7 GHz with full-rate IFMA), within Δ + RTT (at most 854 µs) no server finishes a 16,447th "
@@ -308,17 +305,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "
           "than p2ring with a uniformly random odd labeling and uniformly random keys", "PoUS ring instantiation",
           "conjectured"),
-    # `Pouw.PearlC.GγPerCoin (W1.w1Priced dv salt)` (Security/Definitions/Pouw/PearlC/W1Stop.lean): the one open hypothesis
-    # of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced); it implies
-    # the γ-gap property Gγ itself (Pouw.PearlC.W1Stop.gγ_of_withStop)
+    # `Pouw.PearlC.GGapPerCoin (W1.w1Priced dv salt)` (Security/Definitions/Pouw/PearlC/W1Stop.lean): the one open
+    # hypothesis of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced);
+    # it implies the gap property GGap itself (Pouw.PearlC.W1Stop.gGap_of_withStop)
     Entry("pouw-gamma-per-coin", "assumption",
-          "Pearl-C's γ-gap property with the budget per coin, at W1 priced (its arithmetic at W1's instruction prices and "
+          "Pearl-C's gap property with the budget per coin, at W1 priced (its arithmetic at W1's instruction prices and "
           "each word it first fetches at the fetch price): for every adversary within q oracle calls, the probability "
-          "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
-          "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
-    # `Pouw.Assumptions.HonestClock`, stated once for both PoUW games: the premise by which the deadline guarantees
-    # (Pouw.Guarantees.WorkBetweenSaltAndDeadline, SpareCapacityAtDeadline, PearlCSampledByDeadline and its sm_120
-    # instances) read the verifier's clock in the cost model
+          "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − g) at the gap g "
+          "is at most δ(q, N)", "PoUW gap per coin", "conjectured"),
+    # `Pouw.Assumptions.HonestClock` and its Pearl-C form `Pouw.PearlC.Assumptions.HonestClock`: the premise by which the
+    # deadline guarantees (Pouw.Guarantees.WorkBetweenSaltAndDeadline, SpareCapacityAtDeadline, PearlCSampledByDeadline
+    # and its sm_120 instances) read the verifier's clock in the cost model
     Entry("honest-clock", "assumption",
           "Honest clock: the cost behind a transcript the verifier receives by the deadline is spent after the salt's "
           "release and by the deadline, so the prover's computation stopped at the deadline outputs every transcript "
@@ -327,7 +324,18 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
-    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
+    # the min-cut bound's cut conjectures (Security/Definitions/Assumptions.lean): (H) is
+    # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
+    Entry("training-cut-hardness", "assumption",
+          "(H), cut hardness: every set S of words of the registered circuit with κ(S) ≤ k has "
+          "Σ_r β_r |val(S ∩ A_r)| ≤ κ(S), κ(S) the least number of gates meeting every path from the unregistered "
+          "inputs to the gates of S's words: each value of array A_r that S's words carry costs β_r of those gates; "
+          "refuted by exhibiting a set of words whose values cost more than κ(S)", "(H) cut hardness", "conjectured"),
+    Entry("training-cut-exports", "assumption",
+          "(E), cut exports: every set B of computed gates has κ(B → E(B)) ≥ b |E(B)|, E(B) the outputs fed by a MAC "
+          "inside B with no wire in B: each output B finishes costs b of the gates separating B from it; refuted by "
+          "exhibiting a set of computed gates with κ(B → E(B)) < b |E(B)|", "(E) cut exports", "conjectured"),
+    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean):
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
     # (Security/Definitions/Accounting/Assumptions/Stages.lean)
     Entry("accounting-ts-facet-ceilings", "assumption",
@@ -538,7 +546,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
-    # the two premises UnitFixed rests on under ASK-40's option A (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
+    # the two premises UnitFixed rests on under option A (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
     Entry("accounting-ts-modes-run", "assumption",
           "The modes are the run's: a unit the run paid for has its words and the values it writes honest, from the "
           "values the layer committed, under its noise, and a unit not skipped whole has its receipt commit the fold of "
@@ -571,6 +579,31 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
           "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
           "since zero knowledge protects the developer", "Firewall OS source", "standard"),
+    # the training formalism v2's assumptions (Security/Definitions/Assumptions.lean): A1 is
+    # `Nci.Formalism.Assumptions.CutCost`, the token-work bound `Nci.Formalism.Assumptions.TokenWork`, A2
+    # `Nci.Formalism.Assumptions.EfficiencyFloor`
+    Entry("training-cut-cost", "assumption",
+          "A1, cut cost: no inference block I of the trained circuit (at most c gates, at most k bits beyond θ) reads "
+          "fewer bits |in(I) \\ θ| than u_I + Σ_T a_T(e_T(I)), over the tokens T it works on, at the values a finite "
+          "family of witness blocks of the circuit gives: e_T(I) where I's work on token T begins, a_T(x) the least "
+          "state bits of T (the gates of T's own block that the work reads and doesn't compute) that any witness "
+          "block working on T alone and entering it at x reads, and u_I the shared bits, what the witness blocks "
+          "entering I's tokens where I's work on them begins all read beyond the tokens' own state, counted once and "
+          "net of what I computes (θ' or the encoding it is decoded from, the shared context and the earlier tokens' "
+          "keys and values); a witness's reads are in(W) \\ θ, counted as the policy counts a block's; refuted by "
+          "exhibiting an inference block that violates it", "A1 cut cost", "conjectured"),
+    Entry("training-token-work", "assumption",
+          "The token-work bound: for a set X of token gates of the trained circuit and a cap, at every set S of "
+          "tokens, entry profile f and shared bits ν within A1's budget (ν + Σ_{T ∈ S} a_T(f_T) ≤ k, at the values "
+          "A1's witness blocks give), Σ_{T ∈ S} W_T(f_T, ν) ≤ cap, W_T(x, ν) the most gates of X in T that an "
+          "inference block holds whose work on T begins at x and whose shared bits are at most ν; A1 prices a "
+          "block's reads and says nothing of how much token work they reach; refuted by exhibiting inference blocks "
+          "with shared bits at most ν that, entering their tokens at those entries, hold more than the cap of X",
+          "token-work bound", "conjectured"),
+    Entry("training-efficiency-floor", "assumption",
+          "A2, efficiency floor: no run of the methods considered whose total update stays within a given bin of Δ "
+          "reaches the target loss ℓ* for less than p·H(ℓ*), H(ℓ*) the least compute of any of them to reach it; "
+          "empirical, falsified by a measured run", "A2 efficiency floor", "measured"),
 )}
 
 

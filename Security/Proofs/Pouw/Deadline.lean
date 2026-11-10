@@ -2,24 +2,24 @@ module
 
 public import Definitions.Pouw.Guarantees.Deadline
 public import Proofs.Pouw.Game
-public import Proofs.Pouw.Prob
-public import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
-public import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
+public import Proofs.Pouw.Break
+public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
+public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 public import Proofs.Pouw.PearlC.TTOutW1
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceCapRev1Gap
+import Proofs.Pouw.Prob
 
 /-!
 # Proofs of the deadline's guarantees
 
 The honest clock names a program that outputs the adversary's transcript wherever it is received by the deadline, after
 the same preprocessing, at a cost within the run's spending between the salt and the deadline. That program is within
-the budget `EndToEnd` (or `GγSampled`) reads, and its accepted transcripts include every one the verifier accepts by the
+the budget `EndToEnd` (or `GGapSampled`) reads, and its accepted transcripts include every one the verifier accepts by the
 deadline.
 
 The sm_120 instances are stated at W1: each is `PearlCSampledByDeadline` at `CM := W1.w1Priced dv salt`, with its
-sampled γ from the old reduction at that cost model (`Proofs.Pouw.PearlC.TTOutW1`).
-
-The honest clock is stated once over `Adversaries`; at each game's `CostModel.adversaries` it unfolds, by `Iff.rfl`, to
-that game's own reading (`CostModel.honestClock_iff`, `PearlC.CostModel.honestClock_iff`).
+sampled g from the old reduction at that cost model (`Proofs.Pouw.PearlC.TTOutW1`).
 -/
 
 @[expose] public section
@@ -53,8 +53,8 @@ end Pouw
 namespace Pouw.SecurityProofs
 
 theorem WorkBetweenSaltAndDeadline : Pouw.Guarantees.WorkBetweenSaltAndDeadline := by
-  intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU A run td hclock T hT q hq hB t εs hεs
-  obtain ⟨A', hpre, hA'⟩ := CostModel.honestClock_iff.1 hclock
+  intro Q R S _ _ _ _ CM P D g₀ Ωmax ε hg₀ hΩ hW hTT U hU A run td hclock T hT q hq hB t εs hεs
+  obtain ⟨A', hpre, hA'⟩ := hclock
   have hb : A'.Bounded U T q := by
     intro H s
     refine ⟨(hA' H s).2.1.trans (hB H s).1, ?_⟩
@@ -62,23 +62,24 @@ theorem WorkBetweenSaltAndDeadline : Pouw.Guarantees.WorkBetweenSaltAndDeadline 
     have h2 := (hB H s).2
     rw [hpre] at h1 ⊢
     omega
-  refine le_trans (pr_mono fun x hx => ?_) (EndToEnd Q R S CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU T hT q hq A' hb t εs hεs)
-  obtain ⟨⟨htr, hacc⟩, hlt⟩ := hx
-  rw [(hA' x.1 x.2.1).1 htr]
-  exact ⟨hacc, hlt⟩
+  refine le_trans (pr_mono fun x hx => ?_) (EndToEnd Q R S CM P D g₀ Ωmax ε hg₀ hΩ hW hTT U hU T hT q hq A' hb t εs hεs)
+  obtain ⟨⟨htr, hacc⟩, hlt, hbr⟩ := hx
+  obtain ⟨heq, hsub⟩ := (hA' x.1 x.2.1).1 htr
+  rw [heq]
+  exact ⟨hacc, hlt, fun h => hbr (Pouw.Proofs.collisionIn_mono hsub h)⟩
 
 theorem SpareCapacityAtDeadline : Pouw.Guarantees.SpareCapacityAtDeadline := by
-  intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU A run td hclock C Y hY q hq hB t εs hεs
+  intro Q R S _ _ _ _ CM P D g₀ Ωmax ε hg₀ hΩ hW hTT U hU A run td hclock C Y hY q hq hB t εs hεs
   have hb : A.BoundedBy U run td (C * (td - run.ts) - Y) q := by
     intro H s
     exact ⟨by linarith [(hB H s).1], (hB H s).2⟩
-  refine le_trans (pr_mono fun x hx => ⟨hx.1, by linarith [hx.2]⟩)
-    (WorkBetweenSaltAndDeadline Q R S CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU A run td hclock (C * (td - run.ts) - Y)
+  refine le_trans (pr_mono fun x hx => ⟨hx.1, by linarith [hx.2.1], hx.2.2⟩)
+    (WorkBetweenSaltAndDeadline Q R S CM P D g₀ Ωmax ε hg₀ hΩ hW hTT U hU A run td hclock (C * (td - run.ts) - Y)
       (by linarith) q hq hb t εs hεs)
 
 theorem PearlCSampledByDeadline : Pouw.Guarantees.PearlCSampledByDeadline := by
-  intro Q R S _ _ _ _ CM P TR D γ η hG U hU A run td hclock T hT q hq hB w κ hκ hw t εs hεs
-  obtain ⟨A', hpre, hA'⟩ := PearlC.CostModel.honestClock_iff.1 hclock
+  intro Q R S _ _ _ _ CM P TR D g δ hG U hU A run td hclock T hT q hq hB w κ hκ hw t εs hεs
+  obtain ⟨A', hpre, hA'⟩ := hclock
   have hb : A'.Bounded U T q := by
     intro H s
     refine ⟨(hA' H s).2.1.trans (hB H s).1, ?_⟩

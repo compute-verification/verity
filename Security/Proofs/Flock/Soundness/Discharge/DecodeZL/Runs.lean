@@ -1,15 +1,32 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Tape
 public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 
 /-!
-# A rep's run, from its rounds' frames (R11b)
+# A rep's run, from its rounds' frames (`DecodesOn`'s message half)
 
-plays-coin's `DecodesOnOfRuns` asks each rep for a `RepRun`: a run on its rounds' coins whose messages, cut at the spine's
+`Discharge/PlaysCoin`'s `DecodesOnOfRuns` asks each rep for a `RepRun`: a run on its rounds' coins whose messages, cut at the spine's
 coins, are the decoder's groups of the rounds. This file gives it from the executable's side:
 
-* `coinPat_eq`: `Carries`' coin pattern is plays-coin's, so `cutOfPat` cuts a `Carries` back into its rounds.
+* `coinPat_eq`: `Carries`' coin pattern is `Discharge/PlaysCoin`'s, so `cutOfPat` cuts a `Carries` back into its rounds.
 * `roundGroups_eq`: on rounds that retained the encodings of `F`'s chunks, the decoder `decOf W`'s groups are
   `rdChunks W F`.
 * `repRun_at`: at a table whose statement, schedule and link layout are `stmtOf`'s, `fast100`'s and `PT_LOCAL`, the rep

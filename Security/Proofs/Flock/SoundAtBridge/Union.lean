@@ -1,7 +1,40 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Prob
 public import Definitions.Accounting.TS.ProofLayer
+public import Definitions.Flock.Game
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Game
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The bridge's probability steps, over any family of sessions
@@ -49,7 +82,7 @@ theorem game_prob_exists_le {α : Type} {ι : Type*} (s : Finset ι) (E : ι →
 theorem wprob_mono {β : Type*} [Fintype β] {p q : β → Prop} (h : ∀ b, p b → q b) :
     Pouw.RelativeSecurity.prob p ≤ Pouw.RelativeSecurity.prob q := by
   classical
-  unfold Pouw.RelativeSecurity.prob
+  unfold Pouw.RelativeSecurity.prob Claims.prUniform
   apply div_le_div_of_nonneg_right _ (by positivity)
   exact_mod_cast Finset.card_le_card fun b hb => by
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb ⊢
@@ -59,7 +92,7 @@ theorem wprob_or_le {β : Type*} [Fintype β] (p q : β → Prop) :
     Pouw.RelativeSecurity.prob (fun b => p b ∨ q b) ≤
       Pouw.RelativeSecurity.prob p + Pouw.RelativeSecurity.prob q := by
   classical
-  unfold Pouw.RelativeSecurity.prob
+  unfold Pouw.RelativeSecurity.prob Claims.prUniform
   rw [← add_div]
   apply div_le_div_of_nonneg_right _ (by positivity)
   have key : ∀ s t u : Finset β, (∀ b ∈ s, b ∈ t ∨ b ∈ u) → (s.card : ℝ) ≤ t.card + u.card := fun s t u h => by

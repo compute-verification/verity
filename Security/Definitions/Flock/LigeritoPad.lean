@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Flock.Session
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Ligerito with Flock ZK's padded level 0, in the clear

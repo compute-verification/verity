@@ -1,12 +1,12 @@
-"""serve-openai's PoUW H1 arm (``--protocols pouw:eps1-sm120-h1fx1``): one H1 window a Commit window, tied to the server's
+"""serve-openai's PoUW H1 arm (``--protocols pouw:eps1-sm120-h1fx1``): one H1 window a Commit period, tied to the server's
 own Commit.
 
 * **One Commit.** H1 builds no committer: its tap goes on the server's rows-sha512 collector (`acquire.h1_commit.tap`),
   which already acquires each linear's x_q and s_a (the bench row's int8 source) and each step's input ids (its step-input
   port), so ROOTS1 holds H1's A tables and input ids to the values the served window commits.
-* **One window a Commit window.** `serve_commit.CommitWindows` opens the arm once the committer is installed, so H1's
+* **One window a Commit period.** `serve_commit.CommitWindows` opens the arm once the committer is installed, so H1's
   hooks sit on top of the committer's, and closes it first thing at the window's close, before the committer comes off.
-  The H1 window's T is the engine's token budget (``--max-num-batched-tokens``) and its S the Commit window's steps
+  The H1 window's T is the engine's token budget (``--max-num-batched-tokens``) and its S the Commit period's steps
   (``--window-steps``); a window that closes early (idle, ``--window-gb``, ``--window-requests``) closes H1's with its
   remaining steps empty (`pouw_h1.H1Run.close`), unless it served none on in-process coins (`UNSERVED`).
 * **Once a server.** The period's declared Program over the served linears at (T, S) and its digest
@@ -279,8 +279,20 @@ class H1Windows:
     release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
     ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
     sample under `DRAWER` (`drawn`) when it waits for one. ``tie`` (`serve_tie.WindowTie`, ``--h1-window-commit``) names
+<<<<<<< 94ca7fd0d18
     each window's Commit record at its close, once the window is sealed (`sealed`), so its release runs on ``closer``.
     ``clock`` times each part."""
+||||||| e10cf2c8559
+    coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`; None:
+    kept nowhere, so no sampled proof block or round of it can be proved); ``receipts`` each window's `Served` registers each
+    call's ``receipt@<c>`` (``--h1-receipts``, `pouw_h1_receipts.Receipts.serving`). ``closer`` (a `worker`) runs each
+    window's release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome
+    itself. ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release
+    puts its sample under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
+=======
+    each window's Commit record at its close, once the window is sealed (`sealed`) and its prover state written (`kept`),
+    so its release runs on ``closer``. ``clock`` times each part."""
+>>>>>>> 7af4d24fca3e
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
@@ -396,7 +408,7 @@ class H1Windows:
                 "commit_record": "the tap's" if self.tie is None else {"named": "at the close", **self.tie.describe()}}
 
     def open(self, window: int) -> None:
-        """Window ``window``'s H1, on the open Commit window: its session (with ``sessions``, `GateSessions.take`), the
+        """Window ``window``'s H1, on the open Commit period: its session (with ``sessions``, `GateSessions.take`), the
         tap on the committer, a fresh `Served`, and the option installed with the session's coins, else the epoch
         ``window``'s."""
         from verity_vllm import protocols as PO

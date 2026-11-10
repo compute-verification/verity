@@ -1,7 +1,12 @@
 module
 
 public import Definitions.Spot.LongValue
-public import Proofs.Spot.Leakage
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Proofs.Spot.Determinacy
+import Proofs.Spot.Egress
+import Proofs.Spot.Leakage
+import Proofs.Spot.Work
 
 /-!
 # Long values buy nothing

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Accounting.TS.Fork
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # (I8) for a sampled window
@@ -196,7 +197,7 @@ theorem moved_le_forked [Nonempty V] (hl : ∀ x z z', sp (sp x z) z' = sp x z')
   have hcM : (Finset.univ.filter fun x => Mov sp opens x).card = M := by rw [Finset.card_filter]
   have hcF : (Finset.univ.filter fun p : X × X => Frk sp opens p.1 p.2).card = Fk := by
     rw [Finset.card_filter, Fintype.sum_prod_type]
-  unfold prob
+  unfold prob Claims.prUniform
   rw [hcM, hcF, Fintype.card_prod, ← hC]
   rcases Nat.eq_zero_or_pos C with h0 | hpos
   · simp [h0]

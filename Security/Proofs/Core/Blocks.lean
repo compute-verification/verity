@@ -1,7 +1,11 @@
 module
 
 public import Definitions.Core.Blocks
-public import Proofs.Core.Game.Prob
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Data.Fintype.BigOperators
+import Proofs.Core.Game.Basic
+import Proofs.Core.Game.Interleave
 
 /-!
 # A wipe that meets the boundary's definitions, and its survivor bound on a run

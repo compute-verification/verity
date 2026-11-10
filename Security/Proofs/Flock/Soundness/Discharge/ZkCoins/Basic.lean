@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Basic
-public import Proofs.Flock.Soundness.Assumptions
+public import Definitions.Core.Game
+public import Definitions.Flock.Game
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Interactions with committed coins (live/PROTOCOL.md §9, Flock ZK)

@@ -17,7 +17,7 @@ Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated ove
 * **a round** of a commit-then-check protocol (`RoundProto`): the words the prover computes after the first coin, their
   commitment (the SHA-512 Merkle root over the words' leaves), and the check, parametric in the protocol,
   with the no-fold protocol as one instance (`NoFold`, `noFoldRound`) whose knobs are parameters, so protocol v1 and
-  v2 are instances, and the served sampling block, checked where its selection coin picks it (`ditherSelected`);
+  v2 are instances, and its selected form, checked where its selection coin picks it (`ditherSelected`);
 * **a round program's moments** (`wordsMoment`, `commitMoment`): the moment bounds of the two "public best" premises,
   SAK(matmul) on the words and SHA-512's speed on their commitment (`Definitions.Pouw.Assumptions.Dither`'s
   `SAKMatmul`, `SAKSha`), in units of priced cost, outside a degenerate set of dithers;
@@ -33,6 +33,9 @@ Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated ove
 * **a replica's moment** (`MomentSound`): the probability form before its Markov step, which a fleet pools at its
   luck (`fleetLuck`);
 * the error (`epsWorkSound`, `ε_skip`).
+
+`noFoldRound` and `ditherSelected` are the only round protocols the Lean defines, so the headline's only instances are
+the no-fold round's, and it doesn't cover Dither v3.2's proof block, which no guarantee states yet.
 -/
 
 @[expose] public section
@@ -227,7 +230,7 @@ def noFoldRound (k : NoFold) : RoundProto where
 def noFoldHonest (k : NoFold) (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) : (noFoldRound k).Tr :=
   fun i j b => noFoldWord k (k.noise a d) i j b
 
-/-- **The served Dither sampling block: selected or not**. The no-fold round at its knobs `k`, its check coin
+/-- **The no-fold round, selected or not**. The no-fold round at its knobs `k`, its check coin
 carrying a selection coin `Sel` beside the cells' coin: the block is checked where its
 selection coin is `picked`, with probability `π = Pr[picked]`, and then on the `s` cells its cells' coin selects, as
 in `noFoldRound`; where it isn't picked, `ok`, `opens` and `accept` hold with no cell checked. The selection is decided
@@ -433,6 +436,15 @@ abbrev Readings (G : Accel) (P : RoundProto) (k : ℕ) (Obs : Type) : Type 1 :=
 def Prover.Passes {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} (A : Prover G P k) (verdict : Verdict P k Obs)
     (dev : Readings G P k Obs) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Prop :=
   verdict o x (A.transcript o x) (dev A o x)
+
+/-- **The verdict with the network certifier's count**: the service's verdict, and the certifier's signed counts of the
+bits into (`cin`) and out of (`cout`) the period's devices, as the verdict reads them from the devices' readings,
+within `K` together; a period past it is refused. With the certifier counting every exchanged bit
+(`Assumptions.CertifierSeesImports`), a period it accepts exchanged at most `K` bits. The card instance caps each
+direction (`Counted`). -/
+def CountedWithin {P : RoundProto} {k : ℕ} {Obs : Type} (verdict : Verdict P k Obs) (cin cout : Obs → ℝ) (K : ℝ) :
+    Verdict P k Obs :=
+  fun o x tr ob => verdict o x tr ob ∧ cin ob + cout ob ≤ K
 
 /-- **The headline's error over a monitoring period of `k` rounds**, round `w` at its registered instance's honest
 cost `H w` (its matmul, hashing and other parts at the dual prices) and public bests `pubmm w` and

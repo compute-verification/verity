@@ -1,6 +1,5 @@
 module
 
-public import Flock.HmRow
 public import VStar.In
 
 /-!

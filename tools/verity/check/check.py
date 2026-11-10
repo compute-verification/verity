@@ -17,6 +17,9 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             records step passed: `--cc-records`)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
                                                             a regenerated record (drive's after-landing run)
+    ... --bookkeeping-warn                                  with --deferred and without --no-regenerate (drive's lock run):
+                                                            lean-audit repairs a lock's bookkeeping and the caps it breaks and
+                                                            warns rather than failing (`lean_audit.py --bookkeeping warn`)
     ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
                                                             nightly `audit-main`, which gates nothing); with --circuit-cache,
                                                             circuit-check alone still reuses and stores its per-target passes,
@@ -422,7 +425,7 @@ SLOTS_TIMEOUT_S = 60
 FULL_CHECK_S = 9000
 #: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
-            'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
+            'uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
 #: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
 SLOTS_PROGRAM = '''
@@ -725,13 +728,13 @@ def lean_regenerates() -> bool:
 
 def lean_audit_misses(cache: bool = True, only: list[str] | None = None) -> bool:
     """Whether the lean-audit step will audit a package (of ``only``, its `--package`s, when given): one whose pass isn't kept
-    here under its key (`lean_audit.run`'s test)."""
+    here under its key with what its reuse needs (`lean_audit.reusable`, `lean_audit.run`'s test)."""
     la = _lean_audit()
     files = tracked_files(ROOT)
     if not cache or files is None:
         return True
     pkgs = [p for p in la.packages(files) if not only or p in only]
-    return any(not (cache_dir() / "lean-audit" / f"{la.key(p, files, la.FLAGS)}.json").is_file() for p in pkgs)
+    return any(not la.reusable(cache_dir() / "lean-audit", p, la.key(p, files, la.FLAGS)) for p in pkgs)
 
 
 def lean_fast(out: Path) -> str | None:
@@ -752,6 +755,32 @@ def lean_fast(out: Path) -> str | None:
         return (f"refused: {', '.join(fast) or p}: a {kind} result (the fast path: no kernel replay, no tests), which no merge "
                 "check accepts")
     return None
+
+
+def lean_passes(out: Path, done: list[dict], lc=None) -> dict[str, str]:
+    """{inputs key: package} for each package the lean-audit step audited and passed on this tree's own lock (no failure, the
+    kernel replay, not passed on a record it regenerated), each key `lean_changed.inputs_key` (``lc``, the module) of this tree:
+    the key a records run of the commit keeps and `lean_changed.py --inputs-key` prints, so `research queue`'s records gate
+    finds a check's passes as it finds a records run's.  None from a step that didn't end with the audit's verdict
+    (refused, hung, stopped) or from an audit that failed without reporting a package (check.py crashed)."""
+    step = next((s for s in done if s.get("step") == "lean-audit"), None)
+    if step is None or step.get("status") not in ("passed", "failed") or step.get("rc") not in (0, 1) or step.get("detail"):
+        return {}
+    try:
+        doc = json.loads((out / "lean-audit" / "audit.json").read_text())
+        reports = {r["package"]: r for r in doc["packages"] if isinstance(r.get("package"), str)}
+        if any(f not in reports for f in doc.get("failed") or []):
+            return {}
+        regenerated = doc.get("regenerated") or {}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        print(f"check: lean-audit's report can't be read ({type(e).__name__}: {e}), so the result lists no Lean passes",
+              file=sys.stderr)
+        return {}
+    lc = lc or _load("lean_changed", LEAN_JOBS)
+    ok = [p for p, r in sorted(reports.items()) if r.get("failures") == [] and not r.get("settled") and p not in regenerated
+          and r.get("kind") != lc.FAST_KIND and isinstance(r.get("seconds"), dict) and "replay" in r["seconds"]]
+    files = tracked_files(ROOT) if ok else None
+    return {lc.inputs_key(p, files): p for p in ok} if files is not None else {}
 
 
 def lean_slot(cmd: list[str]) -> list[str]:
@@ -776,12 +805,13 @@ def requires_outside(lean: Path) -> list[str]:
 
 
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
-               regenerate: bool = True) -> list[tuple[str, list[str] | str, Path]]:
+               regenerate: bool = True, bookkeeping: bool = False) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
     is skipped by name.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
-    drive's after-landing run, where a record difference fails), and inside a recorded run it bundles the module versions it
+    drive's after-landing run, where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, drive's lock run)
+    repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
     built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
     `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
     directory (`requires_outside`)."""
@@ -810,7 +840,8 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
                             "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
                             *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else []),
                             *(["--bundle"] if SETTINGS.RESEARCH_RUN_ID else []),
-                            *(["--regenerate"] if regenerate and lean_regenerates() else [])], ROOT),
+                            *(["--regenerate"] if regenerate and lean_regenerates() else []),
+                            *(["--bookkeeping", "warn"] if bookkeeping and regenerate and lean_regenerates() else [])], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 
@@ -1499,7 +1530,8 @@ def suite_args(held: list[str], splits: dict[str, dict] | None, out: Path) -> li
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
            only: list[str] | None = None, regenerate: bool = True,
-           circuit_cache: bool | None = None, splits: dict[str, dict] | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
+           circuit_cache: bool | None = None, splits: dict[str, dict] | None = None,
+           bookkeeping: bool = False) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
     shard's parts (`shard`), just the jobs those name, lean-audit on its packages there, and all the cores to pytest or to
     circuit-check when the other isn't among them.  ``circuit_cache`` (default ``cache``) is whether circuit-check reuses its
@@ -1523,7 +1555,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
     tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else [])]
-    lean = lean_steps(out, cache, urls, regenerate)
+    lean = lean_steps(out, cache, urls, regenerate, bookkeeping)
     # an auto shard's suites (`pytest:SUITE`, `lean-suites:SUITE`): only those
     held = {job: [p.partition(":")[2] for p in only or () if p.partition(":")[0] == job and p.partition(":")[2]]
             for job in SHARDS.SUITE_JOBS}
@@ -1579,7 +1611,7 @@ def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
 
 #: a shard's result kind, which the tool doesn't produce: no gate takes a shard alone, only a `--combine` check of its set
 SHARD_KIND = "check-shard/v1"
-#: an after-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to revert a landing
+#: an after-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to name a red's culprit
 DEFERRED_KIND = "check-deferred/v1"
 
 
@@ -2652,7 +2684,7 @@ def prebuild(out: Path, steps: Steps) -> dict | None:
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
         only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None,
         regenerate: bool = True, circuit_cache: bool | None = None, live=None,
-        splits: dict[str, dict] | None = None) -> tuple[bool, list[dict]]:
+        splits: dict[str, dict] | None = None, bookkeeping: bool = False) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
     steps = Steps(out, keep_going, packs, reused, live)
@@ -2689,7 +2721,8 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         if not steps.stopping and all(r["status"] == "passed" for r in results):
             if reused is not None:
                 reused.start()
-            gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache, splits=splits)
+            gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache, splits=splits,
+                        bookkeeping=bookkeeping)
             steps.live.plan([name for g in gs for name, _, _ in g])
             steps.live.request()
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
@@ -2783,8 +2816,9 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                  nondeterministic: list[dict] = (), shard: dict | None = None, stopped_by: str | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
     config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran); for an
-    after-landing run (`--deferred`), `DEFERRED_KIND`, the same under `deferred`.  A run
-    ``stopped_by`` a signal is `not_run`: no verdict, so a job queue runs it again."""
+    after-landing run (`--deferred`), `DEFERRED_KIND`, the same under `deferred`.  Its `passes` are the lean-audit step's
+    (`lean_passes`), which the store indexes as `passes.<key>`.  A run ``stopped_by`` a signal is `not_run`: no verdict and
+    no passes, so a job queue runs it again."""
     if shard is not None:
         done = [{**s, "parts": got} if (got := [p for p in shard["parts"] if p.partition(":")[0] == s["step"]]) else s
                 for s in done]
@@ -2797,6 +2831,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                           "detail": (f"stopped by {stopped_by}: " if stopped_by else "")
                                     + "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
+           "passes": {} if stopped_by else lean_passes(run_dir, done),
            "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", f"{CC_SHARDS}/", "lean-audit/",
                                                     *PACK_FILES, STEPS_LOG, SPANS.SPANS_LOG, LIVE.LIVE_FILE,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
@@ -2830,7 +2865,15 @@ def live_record(out: Path, run_dir: Path | None, sharded: dict | None, picked: l
     return LIVE.Live(out, run_id=run_id, put=put, commit=_rev("HEAD"), what=what)
 
 
-def main(argv: list[str]) -> int:
+def resync(argv: list[str]) -> None:
+    """Install the workspace into this fresh environment (`SUITES.SYNC`) and run check again with ``argv``, unless the sync left it
+    fresh (`SUITES.fresh`), which would sync again."""
+    print(f"check: {sys.prefix} holds none of the workspace yet: `{' '.join(SUITES.SYNC)}`", file=sys.stderr)
+    if subprocess.run(SUITES.SYNC, cwd=ROOT).returncode == 0 and not SUITES.fresh(env()):
+        os.execv(sys.executable, [sys.executable, sys.argv[0], *argv])
+
+
+def main(argv: list[str], script: bool = False) -> int:
     if argv == ["--agreement-files"]:
         from research.store.local import LocalStore
 
@@ -2879,7 +2922,8 @@ def main(argv: list[str]) -> int:
     circuit_cache = cache or "--circuit-cache" in argv
     keep_going = "--keep-going" in argv
     regenerate = "--no-regenerate" not in argv
-    rest = [a for a in argv if a not in ("--no-cache", "--circuit-cache", "--keep-going", "--no-regenerate")]
+    bookkeeping = "--bookkeeping-warn" in argv
+    rest = [a for a in argv if a not in ("--no-cache", "--circuit-cache", "--keep-going", "--no-regenerate", "--bookkeeping-warn")]
     pack = None
     if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
         i = rest.index("--verdicts-in")
@@ -2932,6 +2976,10 @@ def main(argv: list[str]) -> int:
             sharded = {**sharded, "parts": mine}
         sharded = {**(sharded or {}), "parts": mine, "deferred": deferred.split(",")}
         print(f"check: deferred {deferred}: {', '.join(sorted({p.partition(':')[0] for p in sharded['parts']}))}", flush=True)
+    if bookkeeping and (deferred is None or not regenerate or "--shard" in argv):
+        print("check: --bookkeeping-warn is drive's lock run: with --deferred, unsharded and without --no-regenerate",
+              file=sys.stderr)
+        return 2
     if picked:
         if sharded or SETTINGS.RESEARCH_RUN_ID:
             print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
@@ -2951,8 +2999,11 @@ def main(argv: list[str]) -> int:
         print(__doc__.strip(), file=sys.stderr)
         return 2
     if away := SUITES.foreign(SUITES.members(), env()):
+        if script and SUITES.fresh(env()):
+            resync(argv)
         print(f"check: {sys.executable} would run this tree's steps against another checkout's code ({away}); run check with "
-              f"{ROOT}'s own environment: `uv run --extra torch-cpu python tools/verity/check/check.py` there", file=sys.stderr)
+              f"{ROOT}'s own environment: `{' '.join(SUITES.SYNC)} && uv run --extra torch-cpu python tools/verity/check/check.py` "
+              f"there", file=sys.stderr)
         return 2
     only = sharded["parts"] if sharded else None
     if only is None and OFF_GATE and cache and run_dir is not None:
@@ -2980,7 +3031,8 @@ def main(argv: list[str]) -> int:
     live = live_record(out, run_dir, sharded, picked)
     live.start()
     try:
-        ok, done = run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache, live, splits)
+        ok, done = run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache, live, splits,
+                       **({"bookkeeping": True} if bookkeeping else {}))
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)
@@ -3013,4 +3065,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:], script=True))

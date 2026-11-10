@@ -674,10 +674,6 @@ def Blind {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) 
   ∀ x w (ρ ρ' : R) (h h' : List (Msg × Msg)) s, π ρ = π ρ' → h.map (fun m => rd m.2) = h'.map (fun m => rd m.2) →
     wk x w ρ h s = wk x w ρ' h' s
 
-theorem lift_blind {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (bw : S.BWorker Rw C) :
-    S.Blind π rd (S.lift π rd bw) :=
-  fun _ _ _ _ _ _ _ hρ hh => by simp only [lift, hρ, hh]
-
 /-- **Every pad-blind worker is one the server runs**, at any tapes `σ r` with part `r` and answers `ε a` read as `a`. -/
 theorem Blind.eq_lift {W R Rw C : Type} {S : ZkServer W R} {π : R → Rw} {rd : Msg → C} {wk : S.Worker}
     (hb : S.Blind π rd wk) (σ : Rw → R) (hσ : ∀ r, π (σ r) = r) (ε : C → Msg) (hε : ∀ a, rd (ε a) = a) :

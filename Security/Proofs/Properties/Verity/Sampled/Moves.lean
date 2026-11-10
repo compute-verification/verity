@@ -309,22 +309,29 @@ theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Re
   dsimp only at h
   split at h
   · rename_i record hrec
+    obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨proofs, spec, tabs, rest, hf, hst, hv⟩ := verdictOf_ok (push_ok h hall)
     rw [hst] at hf
     exact ⟨recB, record, spec, tabs, rest, proofs, hb, hrec, hst, hf, hv⟩
   · cases h
 
 /-- **v2's run on one session, where it accepted**: the statement's tags, the circuit and public files and the
-registered reads, and the session's `step` from the empty run, which ends with the run. -/
+registered reads, the session's `step` from the empty run at the population check of the public file
+(`FilePart.check`), which ends with the run, and, at the units `want` v1 proved where the run accepted every session,
+the run's proved units held to them (`provedHeld`). -/
 theorem run_verified {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.RunFiles}
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p #[s] pu bs = .ok r) :
     ∃ tags0 circuitB pubB rd, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.readsOf p.registered = .ok rd ∧
-      ∃ scope ksFiles population programSha want,
+      ∃ scope ksFiles programSha want,
         _root_.Spot.OneStageZk.step (_root_.Spot.OneStageZk.inputsOf tags0 p circuitB pubB bs) rd bs
-          scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s = .ok r := by
+          scope ksFiles
+          (_root_.Spot.FilePart.check p.program (_root_.Spot.getD p.partition "query") pubB)
+          programSha want ⟨#[], #[], #[], true⟩ s = .ok r ∧
+        ∀ want', pu = some want' → r.all = true →
+          _root_.Spot.OneStageZk.provedHeld r.proved want' = .ok () := by
   unfold _root_.Spot.OneStageZk.run at h
   dsimp only at h
   split at h
@@ -333,21 +340,35 @@ theorem run_verified {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZ
     obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨circuitB, hc, h⟩ := ebind_ok h
     obtain ⟨pubB, hp, h⟩ := ebind_ok h
+    obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨rd, hrd, h⟩ := ebind_ok h
     obtain ⟨r', hr', h⟩ := ebind_ok h
-    have e : r' = r := by
-      repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
-      all_goals simpa only [pure, Except.pure, Except.ok.injEq] using h
-    subst e
-    exact ⟨tags0, circuitB, pubB, rd, htags, hc, hp, hrd, _, _, _, _, _, foldlM_single hr'⟩
+    have e : r' = r ∧ ∀ want', pu = some want' → r'.all = true →
+        _root_.Spot.OneStageZk.provedHeld r'.proved want' = .ok () := by
+      cases pu with
+      | none =>
+        refine ⟨?_, fun _ hw => by cases hw⟩
+        simpa only [pure, Except.pure, Except.ok.injEq] using h
+      | some want =>
+        refine ⟨?_, fun want' hw hall => ?_⟩
+        · repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
+          all_goals simpa only [pure, Except.pure, Except.ok.injEq] using h
+        · cases hw
+          simp only [hall, ↓reduceIte] at h
+          obtain ⟨⟨⟩, hu, -⟩ := ebind_ok h
+          exact hu
+    obtain ⟨rfl, hw⟩ := e
+    exact ⟨tags0, circuitB, pubB, rd, htags, hc, hp, hrd, _, _, _, _, foldlM_single hr', hw⟩
   · cases h
 
-/-- **v2's check at the coins `ξ` accepts only where its run on the evidence's one session accepted it**. -/
+/-- **v2's check at the coins `ξ` accepts only where its run on the evidence's one session accepted it**, on the public
+file v2 held to the registration (`publicHeld`). -/
 theorem checkBlobsAt_run {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    ∃ r, e.sessions.size = 1 ∧
+    ∃ r pubB, e.sessions.size = 1 ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+      _root_.Spot.OneStageZk.publicHeld c.record pubB = .ok () ∧
       _root_.Spot.OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs = .ok r ∧ r.all = true := by
   unfold _root_.Spot.OneStageZk.checkBlobsAt at h
   dsimp only at h
@@ -356,11 +377,12 @@ theorem checkBlobsAt_run {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.On
   · rename_i r hr
     obtain ⟨_, h1, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
+    obtain ⟨⟨⟩, -, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
-    obtain ⟨_, -, hr⟩ := ebind_ok hr
-    obtain ⟨_, -, hr⟩ := ebind_ok hr
-    refine ⟨r, ?_, hr, ?_⟩
+    obtain ⟨pubB, hpub, hr⟩ := ebind_ok hr
+    obtain ⟨⟨⟩, hph, hr⟩ := ebind_ok hr
+    refine ⟨r, pubB, ?_, hpub, hph, hr, ?_⟩
     · unfold _root_.Spot.OneStageZk.oneSession at h1
       split at h1
       · rename_i hs
@@ -419,10 +441,10 @@ theorem checkBlobsAt_verified {p : _root_.Spot.OneStageZk.Params}
     {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ record spec tabs rest proofs, V2Verified p e bs record spec tabs rest proofs := by
-  obtain ⟨r, hsz, hrun, hall⟩ := checkBlobsAt_run h
+  obtain ⟨r, _, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run h
   have hs := eq_single hsz
   rw [hs] at hrun
-  obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, hrd, _, _, _, _, _, hstep⟩ := run_verified hrun
+  obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, hrd, _, _, _, _, hstep, -⟩ := run_verified hrun
   obtain ⟨recB, record, spec, tabs, rest, proofs, hb, hrec, hst, hf, hv⟩ := step_verified hstep hall
   exact ⟨record, spec, tabs, rest, proofs, e.sessions[0], tags0, circuitB, pubB, rd, hs, ht, hc, hp, hrd,
     sessionRecord_eq hs hb hrec, hst, hf, hv⟩

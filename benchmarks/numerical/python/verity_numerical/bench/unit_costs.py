@@ -4,7 +4,7 @@ work weight.
 
     python -m verity_numerical.bench.unit_costs --out DIR [--exact-nnz 4e8] [--jobs 8] [--workload SUBSTRING] [--reuse JSON]
 
-**Registered lowerings (the primary count).** Where the template has a registered Flock lowering (``bench.lowerings``,
+**Registered lowerings (the primary count).** Where the template has a registered Flock lowering (``verity_flock.lowerings``,
 :func:`registered`), a subcircuit is that lowering's ``units.n`` identical units, each one ``flock-ir-unit/v2`` layout: the
 matrix a session evaluates, with the intermediates the lowering commits as rows and the native tail outside it. A unit's
 committed rows are ``units x rows`` and its nonzeros ``units x (nnz_a + nnz_b + rows)`` (C = I over rows). Attention's
@@ -50,7 +50,7 @@ sharing a VU-level circuit could make between its subcircuits (an operand they s
 ANDs and nonzeros.
 
 **Sampled instances.** The sample is uniform over all units, because a hidden partition cannot be stratified by type: K =
-``record_k(ε, δ)`` units (``verity.core.protocols.pouw.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
+``record_k(ε, δ)`` units (``verity.ml.protocols.pouw.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
 replacement from the workload's N evaluable units, at each granularity. A type with n of the N units gets a hypergeometric
 count: its mean ``K n / N`` and its upper ``1 − δ`` quantile, the least k with P(X > k) ≤ δ, summed exactly over the tail
 in log space.
@@ -167,10 +167,10 @@ ATTENTION_REG_T = (1, 15, 16, 17, 100, 128, 129, 1000)
 
 
 def registered(template: str, params: Mapping[str, Any], T: int | None = None) -> dict[str, Any]:
-    """The template's registered Flock lowering (``bench.lowerings``): its units per subcircuit and the unit's
+    """The template's registered Flock lowering (``verity_flock.lowerings``): its units per subcircuit and the unit's
     ``flock-ir-unit/v2`` layout counts, the matrix a session evaluates per unit with the intermediates the lowering commits.
     The native tail (``tail_gates``) is evaluated by the verifier and has no rows. ``{"none": why}`` without one."""
-    from . import lowerings
+    from verity_flock import lowerings
     from verity_flock import subcircuit_templates as TM
 
     mod = lowerings.registry("C-Flock").module(template)
@@ -338,9 +338,8 @@ def retree(inv: dict[str, Any], trees: Mapping[tuple[str, int], Mapping[str, Any
     return inv
 
 
-#: circuits' F3 unit nonzeros (``benchmarks/private_circuit/nonzero_cost.py`` on cursor/f3-nonzero-cost-f253 @76e405893,
-#: art:b56410cabae792600c86d960160b0c8da7a3ca408b867357103ce4719e07dd47): nnz_a + nnz_b of one registered unit (the RMSNorm
-#: figure is the fused lowering's unit, one warp)
+#: circuits' F3 unit nonzeros (``benchmarks/private_circuit/nonzero_cost.py`` on cursor/f3-nonzero-cost-f253 @76e405893):
+#: nnz_a + nnz_b of one registered unit (the RMSNorm figure is the fused lowering's unit, one warp)
 CIRCUITS_F3 = {"rope-pair": 156_755, "tc-step-k2048": 254_460, "silu-element": 378_759, "f32mul-ftz": 94_333,
                "rmsnorm-fused-warp-n2048": 8_045_790}
 
@@ -464,7 +463,7 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
 # --- the sample --------------------------------------------------------------------------------------------------------------
 
 def sample_size(epsilon: Fraction = EPSILON, delta: Fraction = DELTA) -> int:
-    from verity.core.protocols.pouw.circuit.plan import record_k
+    from verity.ml.protocols.pouw.circuit.plan import record_k
 
     return record_k(epsilon, delta)
 

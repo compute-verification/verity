@@ -118,7 +118,7 @@ def test_a_merge_check_runs_on_a_free_pod_and_completes_with_its_run_id():
     "research: run r20260929-000001-abcd refused on t1 (PreflightFailed): cpu: no avx512f  (recorded in /x)",
 ])
 def test_a_pod_that_fails_checks_preflight_is_benched_and_another_pod_takes_the_job(tail):
-    """Only preflight.py (#440) says whether a pod is prepared; the dispatcher's probe measures, and it believes the preflight."""
+    """Only preflight.py says whether a pod is prepared; the dispatcher's probe measures, and it believes the preflight."""
     w = World(pods=("t1", "t2"))
     w.runner.caps["t1"] = {**GOOD, "tools": [], "disk_gb": 3}           # measured, never judged
     j = w.add()
@@ -641,7 +641,7 @@ def _change(repo: Path, path: str) -> tuple[str, str]:
     ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "docs.md", False),                # no agreement runs
     ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/ml/flock/README.md", False),
     ("-C target-cpu=x86-64-v4", r"never", "verity/ml/flock/src.rs", False),                                     # the tree's own rule
-    ("-C target-cpu=native", None, "verity/ml/flock/src.rs", True),                                            # a tree before #440
+    ("-C target-cpu=native", None, "verity/ml/flock/src.rs", True),                                            # a tree before preflight.py's AVX512
 ])
 def test_a_check_asks_for_avx512_only_when_its_tree_says_so(tmp_path, rustflags, pattern, path, want):
     from research.jobs.cli import needs_avx512
@@ -698,7 +698,7 @@ def test_audit_main_is_a_cold_check_of_mains_tip_with_every_path_changed(tmp_pat
 
 
 def test_the_worker_claims_with_its_own_token_even_beside_the_coordinators(tmp_path, monkeypatch):
-    """Daniel's layout on the RC's VM: ~/.research/jobs/token is the coordinator's, ~/.research/jobs/dispatch-rc.token the
+    """The layout on the RC's VM: ~/.research/jobs/token is the coordinator's, ~/.research/jobs/dispatch-rc.token the
     dispatcher's. Each command takes its own, whatever else is set."""
     from research import remote
     from research.jobs import cli as J

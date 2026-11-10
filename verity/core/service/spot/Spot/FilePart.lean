@@ -14,7 +14,8 @@ order (`Flock.Bridge.partOf` at the file's key program, `Placed.keyProg`):
   each stacked input's key once, O(the unit), never a unit per slot; `block u` is unit `u`'s proof block.
 * **The population check** (`why`): the registration's strata over its program and query (`Partition.strata`), read
   stratum by stratum, are its units `0, 1, …, N − 1` in order, and the public file holds exactly those units in that
-  order (`units.indices` is `0, …, N − 1`), so slot `u` is the registration's unit `u` and the file's unit `u`, in strata
+  order (`units.indices` is `0, …, N − 1`, read off the header v2 reads the file's other fields from, `header`), so slot
+  `u` is the registration's unit `u` and the file's unit `u`, in strata
   of the sizes `sizes` gives, the `ns` of `partOf`. O(the strata's ranges + the public file's units), which the setup
   reads already.
 -/
@@ -23,10 +24,14 @@ module
 public import Flock.Circuit
 public import Flock.RecResiduals
 public import Flock.KnownRead
+public import Flock.JsonParse
+public import Flock.Norm
 public import Spot.Partition
 meta import Flock.Circuit
 meta import Flock.RecResiduals
 meta import Flock.KnownRead
+meta import Flock.JsonParse
+meta import Flock.Norm
 meta import Spot.Partition
 
 @[expose] public section
@@ -158,18 +163,29 @@ def why (strata : Array (String × Array (Nat × Nat))) (indices : Array Nat) : 
       some s!"partition: the public file's {indices.size} units are not the registration's {n}, in order"
     else none
 
-/-- The public file's `units.indices`, from its header line. -/
-def unitIndices (pubB : ByteArray) : V (Array Nat) := do
-  let nl := Id.run do
-    for i in [0:pubB.size] do
-      if pubB.get! i == 10 then return i
-    return pubB.size
-  let some text := String.fromUTF8? (pubB.extract 0 nl) | throw "the public file's header is not UTF-8"
-  let .arr is := getD (getD (← Json.parse text) "units") "indices"
-    | throw "the public file's header names no units.indices"
+/-- The public file's header line: its bytes before the first newline, all of them when it has none. -/
+def headerLine (b : ByteArray) : ByteArray := Id.run do
+  for i in [0:b.size] do
+    if b[i]! == 10 then return b.extract 0 i
+  return b
+
+/-- **The public file's header**, as `HmRow.loadPublic` reads it: its header line parsed by the verifier's total parser
+(`Flock.JsonParse.parse`), then `Flock.norm`. The population check (`unitIndices`) and v2's other reads of the file
+(`OneStageZk.publicHeld`, `OneStageZk.provedUnits`) read this one value. -/
+def header (pubB : ByteArray) : V Json := do
+  let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
+  Flock.norm <$> (Flock.JsonParse.parse line).mapError (s!"the public file's header is not JSON: {·}")
+
+/-- A header's `units.indices`, a list of natural numbers. -/
+def indicesOf (h : Json) : V (Array Nat) := do
+  let .arr is := getD (getD h "units") "indices" | throw "the public file's header names no units.indices"
   is.mapM fun i => match nat? i with
     | some u => pure u
     | none => throw "the public file's units.indices is not a list of natural numbers"
+
+/-- The public file's `units.indices`, off its header (`header`). -/
+def unitIndices (pubB : ByteArray) : V (Array Nat) := do
+  indicesOf (← header pubB)
 
 /-- **The population check on the files** (`why`): the registration's strata over the verifier's program (its
 descriptor's bytes) and query, against the public file's units. -/
@@ -177,14 +193,19 @@ def check (program : ByteArray) (query : Json) (pubB : ByteArray) : V Unit := do
   let strata ← Partition.strata (← Program.parse program) query
   if let some w := why strata (← unitIndices pubB) then throw w
 
-/-- `{"program", "query", "indices"}` to `{"why"}`: `why` on the strata of the query over the program, null when the
-population is the units in order; refused where the strata are. -/
+/-- `{"program", "query", "indices"}` or `{"program", "query", "public"}` to `{"why"}`: `why` on the strata of the query
+over the program, against the given `indices` or the units the public file (`public`, its bytes in hex) names
+(`unitIndices`), null when the population is the units in order; refused where the strata or the file's units are. -/
 def piece (j : Json) : V Json := do
   let .obj _ := getD j "program" | throw "program is not an object"
-  let .arr is := getD j "indices" | throw "indices is not a list"
-  let indices ← is.mapM fun i => match nat? i with
-    | some u => pure u
-    | none => throw "indices is not a list of natural numbers"
+  let indices ← match getD j "public" with
+    | .null => do
+      let .arr is := getD j "indices" | throw "indices is not a list"
+      is.mapM fun i => match nat? i with
+        | some u => pure u
+        | none => throw "indices is not a list of natural numbers"
+    | .str s => unitIndices (← Flock.unhex s)
+    | _ => throw "public is not a string"
   let strata ← Partition.strata (← Program.parse (← Flock.canon (getD j "program")).toUTF8) (getD j "query")
   return Json.mkObj [("why", match why strata indices with | some w => Json.str w | none => Json.null)]
 
@@ -195,6 +216,14 @@ def piece (j : Json) : V Json := do
 #guard (why #[("a", #[(0, 2)])] #[0]).isSome
 #guard (why #[("a", #[(0, 2)])] #[1, 0]).isSome
 #guard (why #[("a", #[(0, 2)])] #[0, 1, 2]).isSome
+#guard (unitIndices ("{\"circuit_sha512\": \"ab\", \"frame_v3\": {\"roots\": {\"x\": \"cd\"}}, \"instances\": 2, " ++
+  "\"units\": {\"blocks\": [[0, 1]], \"classes\": [\"c\", \"c\"], \"indices\": [0, 1], \"units_per_vu\": 1, " ++
+  "\"vus_per_block\": 2}}\n\n{").toUTF8).toOption == some #[0, 1]
+#guard (unitIndices "{\"units\":{\"indices\":[0,1]}}".toUTF8).toOption == some #[0, 1]
+#guard (unitIndices "{\"units\":{\"indices\":[0,-1]}}".toUTF8).toOption.isNone
+#guard (unitIndices "{\"units\":{}}\n".toUTF8).toOption.isNone
+#guard (unitIndices "{\"units\":".toUTF8).toOption.isNone
+#guard (unitIndices (ByteArray.mk #[255, 10])).toOption.isNone
 #guard lastLe #[0, 2, 2, 5] 2 == 2
 #guard lastLe #[0, 2, 5] 7 == 2
 #guard lastLe #[0, 2, 5] 0 == 0

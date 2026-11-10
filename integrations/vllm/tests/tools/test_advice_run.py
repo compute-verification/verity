@@ -33,8 +33,8 @@ def test_the_engine_class_sets_what_the_arguments_leave_unset():
 
 
 def test_a_max_prompt_over_the_class_limit_is_refused_before_any_engine(tmp_path):
-    with pytest.raises(SystemExit, match="--max-prompt 300 is over engine class G's prompt limit 256"):
-        AR.main(["--out", str(tmp_path / "run"), "--engine-class", "G", "--max-prompt", "300"])
+    with pytest.raises(SystemExit, match="--max-prompt 131073 is over engine class G's prompt limit 131072"):
+        AR.main(["--out", str(tmp_path / "run"), "--engine-class", "G", "--max-prompt", "131073"])
     assert not (tmp_path / "run").exists()
 
 
@@ -68,28 +68,54 @@ def test_the_runs_target_states_what_the_engine_ran():
     assert AR.target_of(device, record, "NVIDIA H200") == {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False,
                                                            "moe_backend": "triton", "device_name": "NVIDIA H200"}
     assert AR.target_of(device, {}, "NVIDIA H200") == {**device, "device_name": "NVIDIA H200"}
+    compiled = {"effective": {"batch_invariant": False, "enforce_eager": False, "breakable_cudagraph": True}}
+    assert AR.target_of(device, compiled, "NVIDIA H200")["compilation"] == "breakable"
+    eager = {"effective": {"batch_invariant": False, "enforce_eager": True, "breakable_cudagraph": True}}
+    assert "compilation" not in AR.target_of(device, eager, "NVIDIA H200")
 
 
-def test_a_class_g_runs_registration_is_in_class_g():
-    """What a class-G run records (its engine's keyword arguments, its target, its execution) registers, as
-    `tools/advice_compile.py` reads it, a φ without batch invariance that class G admits."""
+def _class_g_phi(execution: str | None = None, effective: dict | None = None):
+    """The φ a class-G run at ``execution`` registers, as `tools/advice_compile.py` reads what it records (its engine's keyword
+    arguments, its target, its execution), the built engine reading back ``effective``."""
     import json
 
     from verity_vllm import llm as L
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.program.predict.phi import Phi
-    from verity_vllm.program.predict.steps import launch_class
 
     spec = importlib.util.spec_from_file_location("advice_compile", SCRIPT.parent / "advice_compile.py")
     AC = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(AC)
     model, revision = "zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42"
-    opts = L.class_options({"engine_class": "G"})
+    opts = L.class_options({"engine_class": "G", **({"execution": execution} if execution else {})})
     kw = {k: v for k, v in opts.items() if k in (*L.ENGINE_ARGS, "tensor_parallel_size", "max_num_seqs")}
-    record = {"engine_kwargs": {**kw, "enforce_eager": True}, "effective": {"batch_invariant": False}, "execution": opts["execution"]}
+    eager = opts["execution"] == "eager"
+    record = {"engine_kwargs": {**kw, "enforce_eager": eager}, "execution": opts["execution"],
+              "effective": {"batch_invariant": False, "enforce_eager": eager, "breakable_cudagraph": True, **(effective or {})}}
     target = AR.target_of({"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": True}, record, "NVIDIA H200")
     tp, engine = AC.engine_of({"engine_record": record}, 7)
     phi = Phi(model={"repo": model, "revision": revision, "hf_config": json.loads(pinned_hf_config(model, revision).read_text())},
               target=target, execution=record["execution"], tp=tp, engine=engine)
     assert tp == {"world": 8, "rank": 7} and phi.target_profile().batch_invariant is False
+    return phi
+
+
+def test_a_class_g_runs_registration_is_in_class_g():
+    """A class-G run's registration is a φ without batch invariance that class G admits, eager or compiled (at its breakable
+    graphs, whose capture sizes its Build pads to); a compiled run without them is refused."""
+    import dataclasses
+
+    from verity_vllm.program.predict.common import Unexpressible, graph_capture_sizes
+    from verity_vllm.program.predict.domain import check_phi
+    from verity_vllm.program.predict.dsa import Net
+    from verity_vllm.program.predict.steps import launch_class
+
+    launch_class(_class_g_phi())
+    assert graph_capture_sizes(_class_g_phi()) == ()
+    phi = _class_g_phi("compiled")
+    assert phi.target_profile().compilation == "breakable" and phi.target_profile().execution_label == "compiled"
     launch_class(phi)
+    check_phi(dataclasses.replace(phi, model={**phi.model, "dtype": "float8_e4m3fn"}), Net.DOMAIN)
+    assert graph_capture_sizes(phi) == phi.target_profile().graph_capture_sizes() and graph_capture_sizes(phi)[-1] == 512
+    with pytest.raises(Unexpressible, match="target compilation None at execution 'compiled', not 'breakable'"):
+        launch_class(_class_g_phi("compiled", {"breakable_cudagraph": False}))

@@ -1,8 +1,10 @@
 """The sampling planner (`optimize`): its statement count, replay count and closed-form bound against brute force and core's
 bound, `Achievability`'s rates at zero statement cost, the frontier under Flock's statement-batched cost, the choice
 between a partition and a covering, serving's commitment (per proof block, and the fixed serve-time total with its overlaps), the
-weight classes' weights, the sensitivity queries, and the two-stage design on a uniform grain: its second stage's
-detection, its rate against the exact escape at every footprint, one-stage as its case, and its choice of k."""
+weight classes' weights, the sensitivity queries, and the two-stage design: its exfiltration bound against the
+admissible sets' count enumerated and the adversary's best attack at scale, uncapped and capped at the bits a replay
+block serves, its proving price with its statements a replay block's or a registration's padded to its public cap, and the
+width-stratified design against the uniform one."""
 
 from __future__ import annotations
 
@@ -11,7 +13,7 @@ import random
 from dataclasses import replace
 from fractions import Fraction
 from itertools import combinations, product
-from math import ceil, comb, exp, fsum, log, log1p, log2, ulp
+from math import ceil, comb, exp, fsum, lgamma, log, log1p, log2, ulp
 from pathlib import Path
 
 import pytest
@@ -27,15 +29,23 @@ from verity.core.protocols.spot.optimize import (Candidate, TensorCommit, CostMo
 from verity.core.protocols.spot.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
 =======
 from verity.core.protocols.spot.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS, SHA512_ROWS, Candidate,
+<<<<<<< 94ca7fd0d18
                                                            Commitment, CostModel, Grain, Objective, ReplayGrain,
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+                                                           Commitment, CostModel, Grain, Objective, ReplayGrain,
+=======
+                                                           Cell, Commitment, CostModel, Grain, Objective, ReplayGrain,
+>>>>>>> 7af4d24fca3e
                                                            TemplateCost, _hit, _miss, certify, density_bound, density_exact,
-                                                           detection, footprint_cap, for_budget, for_target, frontier,
+                                                           for_budget, for_target, frontier,
                                                            grain_costs, grain_optimum, leak_count, leak_draws, ln_bound,
                                                            ln_upper, loc_bits, max_harm, max_harm_check, met_replay,
-                                                           needs_benchmark, overlaps, perturb, pinned_ands, replay_cost,
-                                                           row_ands, sensitivity, sqrt_grain, template_cost, touched,
-                                                           two_stage, two_stage_rate, weigh, work_draws, work_law)
+                                                           needs_benchmark, overlaps, perturb, pinned_ands,
+                                                           OVERFLOW, registration_cap, replay_cost, row_ands,
+                                                           sensitivity, sqrt_grain, template_cost, touched,
+                                                           two_stage_design, two_stage_exfil, two_stage_price,
+                                                           two_stage_statements, weigh, work_law)
 from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
@@ -620,127 +630,286 @@ def test_leak_costs_keep_the_refinement_rule():
     assert grain_costs([split], delta, h=0.0, leak=ell)[0]["total"] < grain_costs([whole], delta, h=0.0, leak=ell)[0]["total"]
 
 
-def _miss_exact(n: int, w: int, k: int) -> float:
-    return comb(n - w, k) / comb(n, k)
+def _esc(n: int, k: int, m: int) -> float:
+    k = min(k, n)
+    return comb(n - m, k) / comb(n, k)
 
 
-def test_detection_is_at_most_the_second_stages_exact_chance():
-    """k of n sampled without replacement meet one of w incorrect proof blocks with probability 1 - C(n-w, k)/C(n, k):
-    `detection` is at most it, k/n exactly at w = 1, and 1 once k > n - w; a mean n of replay blocks of unequal sizes
-    reaches 1 only once k covers it."""
-    for n in (1, 2, 7, 30, 64):
-        for w in range(n + 1):
-            for k in range(n + 1):
-                exact = 1 - _miss_exact(n, w, k)
-                assert detection(n, w, k) <= exact + 1e-12, (n, w, k)
-                if w == 1 or k > n - w or not (w and k):
-                    assert detection(n, w, k) == pytest.approx(exact, abs=1e-12), (n, w, k)
-    assert detection(7.5, 1, 7) == 7 / 7.5 and detection(7.5, 3, 7) < 1 == detection(7.5, 1, 8)
+def _admissible_sum(cells: list[Cell], k: dict[int, int], replay_blocks: int, q: float, delta: float,
+                    served: float | None = None, union: bool = False) -> float:
+    """`CompiledTwo.Exfil`'s count, Σ_{T ∈ admissibleTwo} 2^{b(T)}, enumerating every set T of incorrect proof blocks:
+    T is admissible when P̄_a = ∏_ρ (1 − q(1 − ∏_t escCell(n_t, k_t, T's in (ρ, t)))) > δ.  Under `served` a replay
+    block's charge is min(b(T_ρ), S); under `union` its choices are each T_ρ of at most S bits, charged 2^{b(T_ρ)}, and
+    one for all the others together, charged 2^S at the best escape among them."""
+    blocks = [(c.bits, c.stratum) for c in cells for _ in range(int(c.n))]
+    sizes: dict[int, int] = {}
+    for _, t in blocks:
+        sizes[t] = sizes.get(t, 0) + 1
+    choices = []
+    for mask in range(1 << len(blocks)):
+        counts: dict[int, int] = {}
+        bits = 0.0
+        for i, (b, t) in enumerate(blocks):
+            if mask >> i & 1:
+                counts[t] = counts.get(t, 0) + 1
+                bits += b
+        e = 1.0
+        for t, n in sizes.items():
+            e *= _esc(n, k[t], counts.get(t, 0))
+        choices.append((e, bits))
+    if union:
+        heavy = [e for e, b in choices if b > served]
+        choices = [(e, b) for e, b in choices if b <= served] + ([(max(heavy), served)] if heavy else [])
+    elif served is not None:
+        choices = [(e, min(b, served)) for e, b in choices]
+    total = 0.0
+    for picks in product(choices, repeat=replay_blocks):
+        pa = 1.0
+        for e, _ in picks:
+            pa *= 1 - q * (1 - e)
+        if pa > delta:
+            total += 2.0 ** fsum(b for _, b in picks)
+    return total
 
 
-@pytest.mark.parametrize("n,s,b,target,ell", [(10 ** 6, 1.0, 16, 1e4, 2 ** 20), (10 ** 9, 4096.0, 16, 1e10, 2 ** 30),
-                                              (5000, 2.0, 64, 1e9, 1e4), (300, 1.0, 8, 30.0, 10 ** 6)])
-def test_one_stage_is_the_two_stage_case_of_one_proof_block_a_replay_block(n, s, b, target, ell):
-    """At n_ρ = 1 the only k is 1 and the two-stage rate is `Achievability`'s and `ExfiltrationOptimum`'s: the same
-    proof blocks proved, every one past a rate of 1, none once every proof block may be incorrect."""
-    delta = 2.0 ** -40
-    g = Grain("g", n, s, b, 4.0, 1.0)
-    rg = ReplayGrain(n, 0.0)
-    for kw, draws in (({"work": target}, work_draws(g, target, delta)), ({"leak": ell}, leak_draws(g, ell, delta))):
-        (row,) = grain_costs([g], delta, h=1e-3, replay=rg, design="two-stage", **kw)
-        assert row["draws"] == pytest.approx(draws, rel=1e-12) and row["n_rho"] == 1
-        assert row["replay_sample"] == pytest.approx(draws, rel=1e-12)
+def _every(cells: list[Cell], replay_blocks: int) -> float:
+    return replay_blocks * fsum(c.n * log2(1 + 2.0 ** c.bits) for c in cells)
 
 
-def _escape(q: float, n: int, k: int, footprints: list[int]) -> float:
-    out = 1.0
-    for w in footprints:
-        out *= 1 - q + q * _miss_exact(n, min(w, n), k)
-    return out
-
-
-def test_the_two_stage_rate_certifies_the_target_at_every_footprint():
-    """At `two_stage_rate`'s q, any incorrect replay blocks escape with probability at most δ once their harm passes the
-    target: compute credit's whole work at any footprint, and a leak's footprints counted to the cap once they
-    pass K (exactly, by C(n_ρ - w, k)/C(n_ρ, k)), the packed and the spread ones alike."""
-    rng = random.Random(7)
-    delta = 2.0 ** -12
+def test_the_two_stage_bound_is_at_least_the_admissible_sets_count():
+    """On small designs, every set of incorrect proof blocks enumerated: `two_stage_exfil` is at least log2 of
+    `CompiledTwo.Exfil`'s Σ_{T admissible} 2^{b(T)}, at most every T's, and every T's when nothing is sampled."""
+    rng = random.Random(11)
     checked = 0
-    for _ in range(300):
-        blocks, n, b = rng.randint(50, 400), rng.randint(2, 40), rng.choice([1, 4, 16])
-        g = Grain("g", blocks * n, rng.uniform(1, 10), b, 1.0, 1.0)
-        rg = ReplayGrain(blocks, 1.0, out_bits=rng.choice([b, 3 * b, 8 * b, 10 ** 6]))
-        k = rng.randint(1, n)
-        target = rng.uniform(0.1, 0.9) * g.units * g.work
-        q = two_stage_rate(g, rg, k, delta, work=target)
-        if q <= 1:
-            for incorrect in range(1, blocks + 1):
-                if incorrect * n * g.work >= target:
-                    assert _escape(q, n, k, [rng.randint(1, n) for _ in range(incorrect)]) <= delta * (1 + 1e-9)
-                    assert _escape(q, n, k, [1] * incorrect) <= delta * (1 + 1e-9)
-                    checked += 1
-                    break
-        ell = rng.uniform(1, 20) * b * blocks
-        q, count, cap = two_stage_rate(g, rg, k, delta, leak=ell), leak_count(g, ell), int(footprint_cap(g, rg))
-        if 0 < q <= 1:
-            packed, spread = [], []
-            while sum(min(w, cap) for w in packed) <= count:
-                packed.append(cap)
-            while sum(spread) <= count:
-                spread.append(rng.randint(1, cap))
-            for footprints in (packed, spread):
-                if len(footprints) <= blocks:
-                    assert _escape(q, n, k, footprints) <= delta * (1 + 1e-9), (blocks, n, b, k, footprints)
-                    checked += 1
-        elif q == 0:
-            assert blocks * cap <= count
-    assert checked > 400
+    while checked < 300:
+        replay_blocks = rng.choice([1, 2, 3])
+        cells = [Cell(rng.choice([1, 2, 3]), rng.choice([0.5, 1.0, 3.0, 8.0, 20.0]), rng.choice([0, 1]))
+                 for _ in range(rng.choice([1, 2]))]
+        if sum(c.n for c in cells) * replay_blocks > 12:
+            continue
+        k = {c.stratum: rng.choice([1, 2, 3, 4]) for c in cells}
+        q, delta = rng.choice([0.1, 0.5, 0.9, 1.0]), rng.choice([0.5, 0.1, 0.01, 1e-4])
+        bound = two_stage_exfil(cells, k, replay_blocks, q, delta)
+        assert log2(_admissible_sum(cells, k, replay_blocks, q, delta)) <= bound + 1e-9, (cells, k, q, delta)
+        assert bound <= _every(cells, replay_blocks) * (1 + 1e-12)
+        checked += 1
+    cells = [Cell(2, 3.0), Cell(1, 8.0, 1)]
+    assert two_stage_exfil(cells, {0: 1, 1: 1}, 3, 0.0, 0.01) == pytest.approx(_every(cells, 3))
+    assert two_stage_exfil(cells, {0: 2, 1: 1}, 1000, 1.0, 0.01) < 0.01
 
 
-def test_the_output_cap_can_meet_a_leak_target_with_nothing_sampled():
-    """When every replay block at its footprint cap counts at most K incorrect proof blocks, the boundaries alone meet
-    the leak target: q = 0, nothing proved, replayed or committed after the first stage."""
-    g = Grain("g", 8 * 10 ** 6, 1.0, 16, 2.0, 1.0)
-    rg = ReplayGrain(8, 5.0, boundary_bytes=4096, out_bits=2e5)
-    (row,) = grain_costs([g], 2.0 ** -40, h=1e-3, leak=2.0 ** 22, replay=rg, design="two-stage")
-    assert footprint_cap(g, rg) == 12_500 and 8 * 12_500 <= leak_count(g, 2.0 ** 22)
-    assert row["q"] == row["k"] == row["draws"] == row["prove"] == row["replay"] == row["interior"] == 0
-    assert row["total"] == row["boundary"] == pytest.approx(8 * 4096 * 1e-3)
+def test_the_capped_bound_is_at_least_the_capped_count():
+    """On small designs, every set of incorrect proof blocks enumerated: capped at S served bits a replay block, the
+    bound is at least log2 of the sets' count Σ_{T adm} 2^{Σ_ρ min(b(T_ρ), S)} and of the patterns' count, and the sets'
+    form is at most the uncapped bound."""
+    rng = random.Random(12)
+    checked = 0
+    while checked < 300:
+        replay_blocks = rng.choice([1, 2, 3])
+        cells = [Cell(rng.choice([1, 2, 3]), rng.choice([0.0, 0.5, 1.0, 3.0, 8.0, 20.0]), rng.choice([0, 1]))
+                 for _ in range(rng.choice([1, 2, 3]))]
+        if sum(c.n for c in cells) * replay_blocks > 12:
+            continue
+        k = {c.stratum: rng.choice([1, 2, 3, 4]) for c in cells}
+        q, delta = rng.choice([0.0, 0.1, 0.5, 0.9, 1.0]), rng.choice([0.5, 0.1, 0.01, 1e-4])
+        served = rng.choice([0.0, 1.0, 4.0, 10.0, 30.0])
+        for union in (False, True):
+            bound = two_stage_exfil(cells, k, replay_blocks, q, delta, served, union)
+            count = _admissible_sum(cells, k, replay_blocks, q, delta, served, union)
+            assert log2(count) <= bound + 1e-9, (cells, k, q, delta, served, union)
+        plain = two_stage_exfil(cells, k, replay_blocks, q, delta)
+        assert two_stage_exfil(cells, k, replay_blocks, q, delta, served) <= plain * (1 + 1e-6) + 1e-9
+        checked += 1
+    with pytest.raises(ValueError, match="patterns' form needs one"):
+        two_stage_exfil([Cell(2, 3.0)], {0: 1}, 1, 0.5, 0.01, union=True)
 
 
-def test_two_stage_prices_its_parts_and_picks_the_cheapest_k():
-    """The design's parts at its k: q R k proofs, q R replays, R boundaries and q R interiors of n_ρ b(s) bytes; and its k
-    the cheapest of every k from 1 to n_ρ, proving and replay traded through the footprint: k = 1 for a leak target
-    when only proving costs and k = 1 certifies, k past n_ρ / W when replay dominates and the cap is small, and every
-    proof block proved when no k certifies."""
-    delta, h = 2.0 ** -40, 1e-4
-    for prove, replay, out_bits in ((1.0, 0.0, 64.0), (1e-3, 50.0, 64.0), (0.1, 1.0, 1e9), (0.01, 10.0, 640.0)):
-        g = Grain("g", 1000 * 240, 1.0, 16, 2.0, prove)
-        rg = ReplayGrain(1000, replay, boundary_bytes=64, out_bits=out_bits)
-        for kw in ({"work": 0.2 * g.units}, {"leak": 2e4}):
-            row = two_stage(g, rg, delta, h=h, **kw)
-            sampled = row["q"] * 1000
-            assert row["replay_sample"] == pytest.approx(sampled)
-            assert row["prove"] == pytest.approx(sampled * row["k"] * prove)
-            assert row["replay"] == pytest.approx(sampled * replay)
-            assert row["boundary"] == pytest.approx(1000 * 64 * h)
-            assert row["interior"] == pytest.approx(sampled * 240 * 2 * h)
-            assert row["total"] == pytest.approx(row["prove"] + row["replay"] + row["boundary"] + row["interior"])
-            scan = [two_stage_rate(g, rg, k, delta, **kw) for k in range(1, 241)]
-            best = min((q * 1000 * (k * prove + replay + 240 * 2 * h) for k, q in enumerate(scan, 1) if q <= 1),
-                       default=None)
-            if best is not None:
-                assert row["total"] - row["boundary"] == pytest.approx(best, rel=1e-9), (prove, replay, out_bits, kw)
-    for out_bits in (640.0, 1e9):
-        g, rg = Grain("g", 1000 * 240, 1.0, 16, 2.0, 1.0), ReplayGrain(1000, 0.0, out_bits=out_bits)
-        assert two_stage_rate(g, rg, 1, delta, leak=2e5) <= 1
-        assert two_stage(g, rg, delta, h=0.0, leak=2e5)["k"] == 1
-    row = two_stage(Grain("g", 1000 * 240, 1.0, 16, 2.0, 1.0), ReplayGrain(1000, 0.0, out_bits=1e9), delta, h=0.0,
-                    leak=2e4)
-    assert (row["q"], row["k"], row["prove"]) == (1.0, 240.0, 240000.0)
-    g = Grain("g", 1000 * 240, 1.0, 16, 2.0, 1e-6)
-    row = two_stage(g, ReplayGrain(1000, 100.0, out_bits=160.0), delta, h=0.0, leak=2e4)
-    assert row["k"] >= 240 / footprint_cap(g, ReplayGrain(1000, 100.0, out_bits=160.0))
+def _log2_comb(n: float, m: float) -> float:
+    return (lgamma(n + 1) - lgamma(m + 1) - lgamma(n - m + 1)) / log(2)
+
+
+def test_the_capped_bound_meets_the_adversarys_best_attack_at_scale():
+    """Capped at S = 10^5 served bits a replay block, the best attack is many partly incorrect replay blocks: in each of
+    m, just over S bits in the stratum whose incorrect blocks escape most cheaply a bit, 25 of stratum 1's 4,096-bit
+    blocks.  Each such replay block is caught with probability q (1 − escCell(n_1, k_1, 25)); the sets' form counts
+    C(R, m) (C(n_1, 25) 2^S)^m and the patterns' C(R, m) 2^{m S}, and the bound is within 5% of each.  Proved whole,
+    every incorrect replay block is caught with probability q: the sets' form counts at least C(R, m) 2^{m(N − 1 + S)}
+    (half a replay block's sets hold at least S bits) and the patterns' C(R, m) (C(1000, 625) 2^S)^m, 625 of the
+    16-bit blocks at S bits, and the bound is within 1% of each.  One wide block over S alone, its escape weight far
+    below a float's least, still counts 2^S in each of the m replay blocks it is in."""
+    delta, lam, served = 2.0 ** -20, 20 * log(2), 1e5
+    cells = [Cell(10 ** 6, 16.0, 0), Cell(10 ** 4, 4096.0, 1), Cell(100, 65536.0, 2)]
+    caught = 1 - _esc(10 ** 4, 2, 25)
+    for replay_blocks, q in ((10 ** 9, 1e-4), (10 ** 12, 1e-2), (10 ** 13, 1e-3)):
+        m = ceil(lam / -log1p(-q * caught)) - 1
+        for union, each in ((False, served + _log2_comb(10 ** 4, 25)), (True, served)):
+            attack = _log2_comb(replay_blocks, m) + m * each
+            bound = two_stage_exfil(cells, {0: 4, 1: 2, 2: 1}, replay_blocks, q, delta, served, union)
+            assert attack <= bound <= 1.05 * attack, (replay_blocks, q, union)
+    cells, served = [Cell(1000, 16.0, 0), Cell(10, 4096.0, 1)], 1e4
+    for replay_blocks, q in ((10 ** 6, 1e-3), (10 ** 9, 1e-4), (10 ** 12, 1e-2)):
+        m = ceil(lam / -log1p(-q)) - 1
+        for union, each in ((False, 1010 - 1 + served), (True, served + _log2_comb(1000, 625))):
+            attack = _log2_comb(replay_blocks, m) + m * each
+            bound = two_stage_exfil(cells, {0: 1000, 1: 10}, replay_blocks, q, delta, served, union)
+            assert attack <= bound <= 1.01 * attack, (replay_blocks, q, union)
+    cells, served, replay_blocks, q = [Cell(10 ** 5, 16.0), Cell(4, 131072.0)], 4096.0, 10 ** 8, 0.0438
+    m = ceil(lam / -log1p(-q * 995 / (10 ** 5 + 4))) - 1
+    for union, each in ((False, served + 2), (True, served)):
+        attack = _log2_comb(replay_blocks, m) + m * each
+        assert attack <= two_stage_exfil(cells, {0: 995}, replay_blocks, q, delta, served, union) <= 1.05 * attack
+
+
+def test_the_two_stage_bound_meets_the_adversarys_best_attack_at_scale():
+    """At scale the bound is within 1% of an attack's count.  Width-stratified with each stratum sampled: m wholly
+    incorrect replay blocks, each caught with probability q, so admissible while m < Λ / −ln(1 − q), count
+    C(R, m) 2^{m B} at B a replay block's bits, whatever widths the strata hold.  Uniform with k = 1: m incorrect
+    blocks of the widest, in distinct replay blocks, each caught with probability q/n_ρ, count C(R, m) n_w^m 2^{m b}."""
+    delta, lam = 2.0 ** -20, 20 * log(2)
+    cells = [Cell(10 ** 6, 16.0, 0), Cell(10 ** 4, 4096.0, 1), Cell(100, 65536.0, 2)]
+    for replay_blocks, q in ((10 ** 6, 1e-3), (10 ** 9, 1e-4), (10 ** 12, 1e-2)):
+        m = ceil(lam / -log1p(-q)) - 1
+        attack = _log2_comb(replay_blocks, m) + m * fsum(c.n * c.bits for c in cells)
+        bound = two_stage_exfil(cells, {0: 4, 1: 2, 2: 1}, replay_blocks, q, delta)
+        assert attack <= bound <= 1.01 * attack, (replay_blocks, q)
+    n = sum(c.n for c in cells)
+    for replay_blocks, q in ((10 ** 12, 1e-2), (10 ** 13, 1e-3)):
+        m = ceil(lam / -log1p(-q / n)) - 1
+        attack = _log2_comb(replay_blocks, m) + m * (65536 + log2(100))
+        bound = two_stage_exfil([replace(c, stratum=0) for c in cells], {0: 1}, replay_blocks, q, delta)
+        assert m < replay_blocks / 100 and attack <= bound <= 1.01 * attack, (replay_blocks, q)
+
+
+def test_a_two_stage_design_samples_every_stratum():
+    cells = [Cell(4, 16.0, 0), Cell(4, 32.0, 1)]
+    for k in ({0: 1}, {0: 1, 1: 0}):
+        with pytest.raises(ValueError, match="k >= 1 in each stratum"):
+            two_stage_exfil(cells, k, 10, 0.5, 0.01)
+    with pytest.raises(ValueError, match="0 <= q <= 1"):
+        two_stage_exfil(cells, {0: 1, 1: 1}, 10, 1.5, 0.01)
+    with pytest.raises(ValueError, match="n > 0"):
+        Cell(0, 16.0)
+
+
+def test_a_sampled_replay_block_proves_each_stratums_k_in_its_types_statements():
+    """Stratum t's min(k_t, n_t) proof blocks, each type's share of them, a statement's fixed cost once per `cap`, and
+    at the chance the type is sampled below one block."""
+    cells = [Cell(8, 16.0, prove=1.0, fixed=10.0, cap=4), Cell(2, 16.0, prove=3.0, fixed=6.0, cap=4)]
+    assert two_stage_price(cells, {0: 5}) == (5.0, 4.0 + 3.0, 7.0 + 10.0 + 6.0)
+    assert two_stage_price(cells, {0: 20}) == (10.0, 8.0 + 6.0, 14.0 + 20.0 + 6.0)
+    assert two_stage_price(cells, {0: 1}) == pytest.approx((1.0, 0.8 + 0.6, 1.4 + 8.0 + 1.2))
+
+
+def test_a_registrations_cap_is_past_its_sample_but_for_the_overflow():
+    """The registration's public cap K0: the binomial count it samples is past it with probability at most `OVERFLOW`
+    (summed exactly), at least one, at most the registration, and within a few of the least such cap."""
+    def tail(n: int, q: float, j: int) -> float:
+        return fsum(exp(lgamma(n + 1) - lgamma(i + 1) - lgamma(n - i + 1) + i * log(q) + (n - i) * log1p(-q))
+                    for i in range(j, n + 1))
+
+    n = 4000
+    for sampled in (1e-6, 0.02, 1.0, 33.0, 600.0):
+        top = registration_cap(sampled, n)
+        assert 1 <= top <= n and tail(n, sampled / n, top + 1) <= OVERFLOW
+        least = next(j for j in range(n) if tail(n, sampled / n, j + 1) <= OVERFLOW)
+        assert top - max(1, least) <= max(3, 0.15 * least), (sampled, top, least)
+    assert registration_cap(0.0, n) == 0 and registration_cap(5.0, 3) == 3
+
+
+def test_a_registrations_statements_are_padded_to_its_cap_and_paid_whatever_it_samples():
+    """A type's registration statements hold K0 sampled replay blocks' blocks, split into sessions of at most its cap
+    padded to one size, their fixed costs and padded blocks paid by each registration and so over its Q sampled replay
+    blocks; a type takes them only where they cost less than its own, and without a registration it never does."""
+    cells = [Cell(8, 16.0, prove=1.0, fixed=10.0, cap=4), Cell(2, 16.0, prove=3.0, fixed=6.0, cap=4)]
+    for k in ({0: 1}, {0: 5}, {0: 20}):
+        assert two_stage_price(cells, k, 0.5, 0.0) == two_stage_price(cells, k)
+    own = [r["prove"] for r in two_stage_statements(cells, {0: 1})]
+    assert own == pytest.approx([0.8 + 8.0, 0.6 + 1.2])
+    for sampled in (0.02, 1.0, 100.0, 1e4):
+        top = registration_cap(sampled, 1e6)
+        for c, taken, mine, r in zip(cells, (0.8, 0.2), own, two_stage_statements(cells, {0: 1}, sampled / 1e6, 1e6)):
+            blocks = ceil(top * taken - 1e-9)
+            sessions = ceil(blocks / c.cap)
+            shared = (sessions * c.fixed + sessions * ceil(blocks / sessions) * c.prove) / sampled
+            assert r["shared"] == (shared < mine) and r["prove"] == pytest.approx(min(shared, mine))
+            assert r["padding"] == (pytest.approx(shared - sessions * c.fixed / sampled - taken * c.prove)
+                                    if r["shared"] else 0.0)
+    assert not any(r["shared"] for r in two_stage_statements(cells, {0: 1}, 0.02 / 1e6, 1e6))
+    assert all(r["shared"] for r in two_stage_statements(cells, {0: 1}, 1e4 / 1e6, 1e6))
+
+
+def test_a_registration_shares_statements_at_its_own_q():
+    """With a registration of many replay blocks, the design spends at most the budget at the most q it pays for, its
+    proving `two_stage_price`'s at that q and its cap the registration's; its types' statements shared, it samples
+    more replay blocks and bounds less than a statement per sampled replay block.  A registration of none, or too few
+    to pay for its padding, is that design."""
+    delta, replay_blocks, budget = 2.0 ** -20, 10 ** 8, 1e7
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0),
+             Cell(4, 131072.0, prove=1e-3, fixed=5.0, cap=4, commit_bytes=2.0 ** 14)]
+    kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6}
+    alone = two_stage_design(cells, replay_blocks, delta, **kw)
+    assert alone["shared"] == alone["padding"] == 0.0 and alone["registration_cap"] == 0
+    assert two_stage_design(cells, replay_blocks, delta, registration=0.0, **kw) == alone
+    few = two_stage_design(cells, replay_blocks, delta, registration=10.0, **kw)
+    assert few["shared"] == 0.0 and (few["q"], few["bound"]) == (alone["q"], alone["bound"])
+    shared = two_stage_design(cells, replay_blocks, delta, registration=10 ** 4, **kw)
+    q, sampled = shared["q"], shared["registration_sample"]
+    assert sampled == pytest.approx(q * 10 ** 4) and shared["registration_cap"] == registration_cap(sampled, 10 ** 4)
+    strata = [replace(c, stratum=0 if c.bits <= shared["merged"] else 131072) for c in cells]
+    assert shared["prove"] == pytest.approx(shared["replay_sample"] * two_stage_price(strata, shared["k"], q,
+                                                                                      10 ** 4)[2])
+    assert shared["total"] <= budget * (1 + 1e-12) and shared["shared"] == 1.0 and 0 < shared["padding"] < 0.01
+    over = q * (1 + 1e-6)
+    assert over * (1.0 + 1e-6 * sum(c.n * c.commit_bytes for c in cells)
+                   + two_stage_price(strata, shared["k"], over, 10 ** 4)[2]) > (budget - 1e5) / replay_blocks
+    assert q > alone["q"] and shared["bound"] < alone["bound"]
+
+
+def test_the_width_stratified_design_beats_the_uniform_one_when_proving_costs():
+    """Many narrow proof blocks and a few wide ones: sampled uniformly, a wide incorrect block is met as rarely as a
+    narrow one, so the uniform design proves thousands of blocks a request to price it as a wholly incorrect request,
+    and the width-stratified one samples the wide size class apart.  Free proving, the two meet.  The width-stratified
+    family merges the classes up to a threshold, the widest one's being the uniform design, so it is never worse; either
+    spends at most the budget, and none fits when the boundaries alone are over it."""
+    delta, replay_blocks, budget = 2.0 ** -20, 10 ** 8, 1e7
+    for prove, apart in ((1e-3, True), (0.0, False)):
+        cells = [Cell(10 ** 5, 16.0, prove=prove, commit_bytes=2.0), Cell(4, 131072.0, prove=prove, commit_bytes=2.0 ** 14)]
+        rows = {s: two_stage_design(cells, replay_blocks, delta, budget=budget, replay=1.0, boundary=1e5, h=1e-6,
+                                    stratify=s) for s in (True, False)}
+        for s, row in rows.items():
+            assert row["design"] == ("stratified" if s else "uniform") and 0 < row["q"] <= 1
+            assert row["merged"] in ({16, 131072} if s else {131072})
+            assert set(row["k"]) == ({0} if row["merged"] == 131072 else {0, 131072})
+            assert row["total"] == pytest.approx(row["boundary"] + row["replay"] + row["interior"] + row["prove"])
+            assert row["total"] <= budget * (1 + 1e-12) and row["commit"] == row["boundary"] + row["interior"]
+            assert row["replay_sample"] == pytest.approx(row["q"] * replay_blocks)
+            strata = [replace(c, stratum=0 if c.bits <= row["merged"] else 131072) for c in cells]
+            assert row["bound"] == two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta)
+        assert rows[True]["bound"] <= rows[False]["bound"]
+        if apart:
+            assert rows[True]["merged"] == 16 and rows[True]["bound"] < 0.5 * rows[False]["bound"]
+        else:
+            assert rows[True]["bound"] == pytest.approx(rows[False]["bound"], rel=1e-2)
+    assert two_stage_design(cells, replay_blocks, delta, budget=1.0, replay=1.0, boundary=2.0) is None
+
+
+def test_a_capped_design_charges_what_a_request_serves():
+    """Capped at S served bits a request, a design charges a stratum's width at most S and a request its capped count,
+    every T counted (at most N + S bits in the sets' form): its bound is the capped `two_stage_exfil` at its rates, at
+    most the uncapped design's, and the patterns' form's at most the sets'."""
+    delta, replay_blocks, budget, served = 2.0 ** -20, 10 ** 8, 1e7, 4096.0
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, commit_bytes=2.0), Cell(4, 131072.0, prove=1e-3, commit_bytes=2.0 ** 14)]
+    assert two_stage_exfil(cells, {0: 1}, 1, 0.0, 0.5, served) <= 10 ** 5 + 4 + served
+    for s in (True, False):
+        kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "stratify": s}
+        plain = two_stage_design(cells, replay_blocks, delta, **kw)
+        sets = two_stage_design(cells, replay_blocks, delta, served=served, **kw)
+        patterns = two_stage_design(cells, replay_blocks, delta, served=served, union=True, **kw)
+        assert patterns["bound"] <= sets["bound"] < plain["bound"]
+        for row, union in ((sets, False), (patterns, True)):
+            strata = [replace(c, stratum=0 if c.bits <= row["merged"] else 131072) for c in cells]
+            assert row["bound"] == two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta, served, union)
+            assert row["total"] <= budget * (1 + 1e-12)
 
 
 def test_a_one_stage_sample_replays_the_replay_blocks_it_meets():
@@ -755,11 +924,19 @@ def test_a_one_stage_sample_replays_the_replay_blocks_it_meets():
     assert row["replay"] == pytest.approx(met_replay(ReplayGrain(100, 3.0), bare["draws"]))
     assert row["total"] == bare["total"] + row["replay"] and row["design"] == "one-stage"
     assert {k: row[k] for k in bare} | {"total": bare["total"]} == bare
+<<<<<<< 94ca7fd0d18
     with pytest.raises(ValueError, match="two-stage one needs a replay grain"):
         grain_costs([g], 2.0 ** -40, h=1e-3, work=1e4, design="two-stage")
     with pytest.raises(ValueError, match="can't refine"):
         two_stage_rate(g, ReplayGrain(10 ** 6, 1.0), 1, 2.0 ** -40, work=1e4)
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+    with pytest.raises(ValueError, match="two-stage one needs a replay grain"):
+        grain_costs([g], 2.0 ** -40, h=1e-3, work=1e4, design="two-stage")
+    with pytest.raises(ValueError, match="can't refine"):
+        two_stage_rate(g, ReplayGrain(10 ** 6, 1.0), 1, 2.0 ** -40, work=1e4)
+=======
+>>>>>>> 7af4d24fca3e
 
 
 def test_overlaps_count_each_scale_and_price_committing_once():

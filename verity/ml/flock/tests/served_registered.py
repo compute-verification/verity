@@ -74,13 +74,13 @@ def program() -> tuple[Program, dict]:
 def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
     out.mkdir(parents=True, exist_ok=True)
     prog, query = program()
     part = P.partition(prog, query)
-    s = InputSet.open(generate(TM.rope_head(64), N, seed, out / "set")["path"])
+    s = InputSet.open(synthetic_set(TM.rope_head(64), N, seed, out / "set")["path"])
     low = FC.lowering_for_set(s)
     x = np.asarray(s.port("x", 0, N), np.uint16).reshape(N, -1)
     bits = {} if schema == G.SCHEMA else {"port_bits": [16 * x.shape[1], 16 * WORDS],

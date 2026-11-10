@@ -2,9 +2,10 @@
 
 A *twin* re-implements one registered composite (`verity/ml/definitions/registry/b1.py`) for speed — numpy over whole operands,
 or the C++ models of `cpp/` through ctypes — and is admissible only where its output words are IDENTICAL to
-`verity.ml.circuits.evaluate.evaluate_call` on the registered body.  A twin never redefines a body: where it cannot be exact it
-declines the input (`Declined`, the gate path is the fallback) or does not claim the specialisation (`covers`).  Twins
-are core `verity.ml.circuits.evaluation` kernels (`KERNEL`) of their Definitions, checked against the reference by core `self_check`:
+`verity.ml.circuits.evaluation.reference.evaluate_call` on the registered body.  A twin never redefines a body: where it
+cannot be exact it declines the input (`Declined`, the gate path is the fallback) or does not claim the specialisation
+(`covers`).  Twins are core `verity.ml.circuits.evaluation` kernels (`KERNEL`) of their Definitions, checked against the
+reference by core `self_check`:
 
     covers(spec, KERNEL)                   # None when a twin claims spec (e.g. `Gemm_v1{K=576,N=960}`), else why not
     words = instance(spec, KERNEL)(*args, **spec.statics)
@@ -698,7 +699,7 @@ class AttentionTwin(Twin):
 FAMILIES: dict[str, type[Twin]] = {cls.base_id: cls for cls in (GemmTwin, BiasAddTwin, EmbeddingTwin, TokenSelectTwin, SiluMulTwin,
                                                                 RoPETwin, RMSNormTritonTwin, RMSNormFusedTwin, AttentionTwin)}
 FAMILIES.update(CNR.twin_families(Twin, rand_bf16, RANDOM_KINDS))
-RMSNormCudaVector8Twin, RMSNormFusedCudaVector8Twin = (
+RMSNormCudaVector8Twin, RMSNormFusedCudaVector8Twin, RMSNormFusedCudaVector8BatchedTwin = (
     FAMILIES[k] for k in CNR.TWIN_DEFINITIONS)
 DEFINITIONS = {"Gemm_v1": b1.Gemm, "BiasAdd_v1": b1.BiasAdd, "Embedding_v1": b1.Embedding, "TokenSelect_v1": b1.TokenSelect,
                "SiluMul_v1": b1.SiluMul, "RoPE_v1": b1.RoPE, "RMSNormTriton_v1": b1.RMSNormTriton,

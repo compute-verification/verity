@@ -123,6 +123,7 @@ from verity.core.protocols.pouw.audit import (
 from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw.coins import CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
+<<<<<<< 94ca7fd0d18
 from verity.core.protocols.pouw.protocol import Matmul, Shape, Tile, tagged
 from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
@@ -132,6 +133,13 @@ from verity.core.protocols.spot.challenger import LiveCommitment
 from verity.core.protocols.spot.one_stage import registered as G, registration as REG
 from verity.errors import ProtocolError
 from verity.ml.randomness import derive
+||||||| e10cf2c8559
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
+from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+=======
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
+>>>>>>> 7af4d24fca3e
 from verity_vllm.protocols.pouw import pearl_c as PD
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR

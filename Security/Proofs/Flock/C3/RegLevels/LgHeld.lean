@@ -1,7 +1,26 @@
 module
 
-public import Proofs.Flock.C3.Sparse.HeldStages
-public import Proofs.Flock.C3.RegLevels.RRounds
+public import Proofs.Flock.C3.Compose.HoloEncoded
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.C3.RegLevels.SrcMaps
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.C3.RegLevels.LgCoins
+import Proofs.Flock.C3.RegLevels.RRounds
+import Proofs.Flock.C3.RegLevels.SrcRun
+import Proofs.Flock.C3.Sparse.HeldStages
 
 /-!
 # `StageHeld` part 3 at R's stages: `laterCoins_of_held`'s `h4` and `h5`
@@ -103,12 +122,12 @@ theorem eq_range'_of_prefix {α : Type _} {f : ℕ → α} {l : List α} {k N : 
 from `k₂` as their coins, as many as they take, at most as many as there are. -/
 theorem lgCoins_of_weave {ts : List FlockSoundness.Game.Step} {σ ms} {c : Array (Array Flock.F128)} {k₂ : ℕ}
     (h : ts = FlockSoundness.Discharge.Exec.weave σ ms
-      (((List.range' k₂ (c.size - k₂)).map fun i => c[i]!).map (coinArr FlockSoundness.Refine.fOf))) :
+      (((List.range' k₂ (c.size - k₂)).map fun i => (c)[i]!).map (coinArr FlockSoundness.Refine.fOf))) :
     ts.filterMap Sum.getRight? =
-        ((List.range' k₂ (nCoins ts)).map fun i => c[i]!).map (coinArr FlockSoundness.Refine.fOf) ∧
+        ((List.range' k₂ (nCoins ts)).map fun i => (c)[i]!).map (coinArr FlockSoundness.Refine.fOf) ∧
       nCoins ts ≤ c.size - k₂ := by
   have hp := weave_coins_prefix σ ms
-    (((List.range' k₂ (c.size - k₂)).map fun i => c[i]!).map (coinArr FlockSoundness.Refine.fOf))
+    (((List.range' k₂ (c.size - k₂)).map fun i => (c)[i]!).map (coinArr FlockSoundness.Refine.fOf))
   rw [← h, List.map_map] at hp
   rw [List.map_map]
   exact eq_range'_of_prefix hp

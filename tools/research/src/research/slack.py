@@ -10,7 +10,8 @@ Notes are records, never messages.
 
   research msg send --as NAME [--to @A @B ...] [--thread TS] [--kind WORD] [--quiet] [--urgent] (--text T | --file PATH)
                     [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...     # prints `<ts> <permalink>`; --kind announce: an announcement
-  research msg ask --as NAME --to @OWNER (--text T | --file PATH) [--urgent]   # an issue in OWNER's Linear team, its tag and doorbell
+  research msg ask --as NAME --to @OWNER (--text T | --file PATH) [--urgent]   # an issue in OWNER's Linear team on its current
+                                                                   # milestone, its tag and doorbell (`send` files nothing)
   research msg ask --as NAME --to @daniel --kind K --question Q --why W --option V=L... --recommend V --default V --deadline D
                    --page FILE.md --area AREA                      # to @daniel: the ask's page and card, as `ask-daniel --page`
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
@@ -36,10 +37,11 @@ Notes are records, never messages.
   research msg deliver --ts TS [--thread T]                         # ring the doorbells for a post no client delivered
   research msg deliver --channel ask-the-team|chat-NAME --event JSON|@PATH|-  # a person's post there: its doorbells name the
                                                                    # channel; a chat's doorbells carry no text (`chat_targets`)
-  research msg chat open NAME (--user U... | --email E) [--start-here URL] [--note T] [--cursor-bot U...]
-                                                                   # a person's private #chat-NAME; the person goes to people.d
+  research msg chat open NAME (--user U... | --email E) [--start-here URL] [--note T] [--lane HANDLE] [--cursor-bot U...]
+                                                                   # a person's private #chat-NAME; the person goes to people.d;
+                                                                   # --lane: the lane their unaddressed posts go to ('' clears it)
   research msg chat close NAME | chat list                         # archive it and mark it closed; each chat in people.d
-  research msg chat expect NAME --email E [--note T]               # someone invited to the workspace: people.d, no channel
+  research msg chat expect NAME --email E [--note T] [--lane HANDLE]  # someone invited to the workspace: people.d, no channel
                                                                    # yet; the Slack events service opens it at their team_join
   research msg groups sync [--apply]                               # one user group per handle; a plan unless --apply
   research msg slack-app export|diff|apply [--app-id ID] [--manifest PATH]   # the app's manifest: live, against the repo's, update
@@ -327,6 +329,9 @@ def load_registry(path: Path, people: bool = True) -> dict:
 
 
 EXAMPLES_MAX, EXAMPLE_CHARS = 5, 160                   # a handle's `examples`: the questions a collaborator might ask it
+HOLDER_RE = re.compile(r"(?:bc-)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")   # one agent's full id (a desktop agent's: no bc-)
+STORE_PATH = "/cursor/stores/"                         # an agent's scratch store, which nothing cites
+LINEAR_LANE = "lane:"                                  # linear.LANE_LABEL: a lane filing in another handle's team labels its issues so
 
 
 def check_registry(reg: dict, path: str) -> dict:
@@ -341,14 +346,28 @@ def check_registry(reg: dict, path: str) -> dict:
         for k in ("remit", "charter"):
             if not isinstance(h.get(k), str) or not h[k]:
                 raise SlackError(f"registry {path}: @{name} has no {k}")
+            if STORE_PATH in h[k]:
+                raise SlackError(f"registry {path}: @{name}'s {k} cites an agent store ({STORE_PATH}...), which is its agent's "
+                                 "scratch: cite a note (note:<id>), a ruling or a PR instead, or say it in plain words")
+        if "holder" in h and not (isinstance(h["holder"], str) and HOLDER_RE.fullmatch(h["holder"])):
+            raise SlackError(f"registry {path}: @{name}'s holder {h['holder']!r}: its coordinator's agent id alone (bc-<8 hex>-"
+                             "<4>-<4>-<4>-<12>, or a desktop agent's bare UUID), with no prose; the agents that post as it are "
+                             "its route's `posters` (`research msg names open --as HANDLE --poster BC_ID`), and what it does "
+                             "goes in its remit")
         if len(h["remit"]) > DESCRIPTION_MAX:
             raise SlackError(f"registry {path}: @{name}'s remit is {len(h['remit'])} characters; its user group's description takes {DESCRIPTION_MAX}")
         for p in h.get("owns", []):
             if not isinstance(p, str) or not p or p.startswith("/") or ".." in p.split("/") or p in owned:
                 raise SlackError(f"registry {path}: @{name} owns {p!r}: a path relative to the checkout that no other handle owns")
             owned[p] = name
-        if "linear" in h and (not LINEAR_KEY_RE.match(str(h["linear"])) or any(o.get("linear") == h["linear"] for o in reg["handles"] if o is not h)):
+        if "linear" in h and (not LINEAR_KEY_RE.match(str(h["linear"])) or "linear_label" not in h and any(
+                o.get("linear") == h["linear"] and "linear_label" not in o for o in reg["handles"] if o is not h)):
             raise SlackError(f"registry {path}: @{name}'s linear {h['linear']!r}: a Linear team key no other handle has")
+        if "linear_label" in h and (h["linear_label"] != LINEAR_LANE + name or not any(
+                o.get("linear") == h.get("linear") and "linear_label" not in o for o in reg["handles"] if o is not h)):
+            raise SlackError(f"registry {path}: @{name}'s linear_label {h['linear_label']!r}: a lane with no Linear team of its "
+                             f"own files in its parent's, so `linear` is that handle's team key and `linear_label` is "
+                             f"{LINEAR_LANE + name!r}")
         ex = h.get("examples", [])
         if not isinstance(ex, list) or len(ex) > EXAMPLES_MAX or not all(isinstance(q, str) and 0 < len(q) <= EXAMPLE_CHARS for q in ex):
             raise SlackError(f"registry {path}: @{name}'s examples: at most {EXAMPLES_MAX} questions, each one line of at most "
@@ -1268,15 +1287,18 @@ def vercel_oidc_token() -> str | None:
         return OIDC_TOKEN() or None
     except Exception as e:  # noqa: BLE001 - the host's lookup has no identity for this call: the notes token falls back
         _notes_token["why"] = f"no OIDC identity ({type(e).__name__})"
-        print(f"research msg: no Vercel OIDC identity ({type(e).__name__}): using RESEARCH_NOTES_TOKEN if set", file=sys.stderr)
+        print(f"research msg: no Vercel OIDC identity ({type(e).__name__}): "
+              "using RESEARCH_NOTES_TOKEN or an agent's notes token", file=sys.stderr)
         return None
 
 
 def notes_token(now: float | None = None) -> str | None:
     """A token for the private notes repository.  Where there is a Vercel OIDC identity (`vercel_oidc_token`, as the Slack events
     service has it), the one the broker mints for it (`NOTES_TOKEN_URL`, scope `notes`), kept until shortly before it
-    expires; else, or when the broker refuses (said on stderr), $RESEARCH_NOTES_TOKEN.  None when there is neither, so a
-    read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was, and why."""
+    expires; else, or when the broker refuses (said on stderr), `notes_sync.notes_token`'s: $RESEARCH_NOTES_TOKEN when set by
+    hand, else on a Cursor agent the one the agents' GitHub broker mints for its Cursor identity.  None when there is none of
+    them, so a read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was, and
+    why."""
     _notes_token.pop("why", None)
     oidc = vercel_oidc_token()
     if oidc and (token := _broker_notes_token(oidc, time.time() if now is None else now)):
@@ -1284,13 +1306,21 @@ def notes_token(now: float | None = None) -> str | None:
         return token
     if not oidc:
         _notes_token.setdefault("why", "no OIDC identity")
-    token = os.environ.get("RESEARCH_NOTES_TOKEN") or None
-    _notes_token["source"] = "env" if token else None
+    try:
+        from . import notes_sync
+    except ImportError:   # the Slack events service deploys this file alone: it has only $RESEARCH_NOTES_TOKEN
+        token = os.environ.get("RESEARCH_NOTES_TOKEN") or None
+        _notes_token["source"] = "env" if token else None
+        return token
+    token = notes_sync.notes_token()
+    _notes_token["source"] = None if not token else \
+        "agent-broker" if os.environ.get(notes_sync.SOURCE_ENV) == "broker" else "env"
     return token
 
 
 def notes_token_source() -> str | None:
-    """Where `notes_token` got the token it gives now: "broker", "env" (RESEARCH_NOTES_TOKEN), or None."""
+    """Where `notes_token` got the token it gives now: "broker" (the Slack broker's, by Vercel identity), "agent-broker" (the
+    agents' GitHub broker's, by Cursor identity), "env" (RESEARCH_NOTES_TOKEN), or None."""
     notes_token()
     return _notes_token.get("source")
 
@@ -1403,14 +1433,19 @@ class Routes:
             if _route_ok(r, p.stem):
                 self.local[p.stem] = r
         self._fetched: dict[str, dict | None] = {}
-        self._unread: set[str] = set()                           # names whose published copy couldn't be read
+        self._unread: dict[str, str] = {}                        # name -> why its published copy couldn't be read
 
     def _fetch(self, name: str) -> dict | None:
-        raw = self.get(f"{self.base}{name}.json")
+        try:
+            raw = self.get(f"{self.base}{name}.json")
+        except SlackError as e:
+            self._unread[name] = str(e)
+            raise
         try:
             r = json.loads(raw) if raw else None
+            self._unread.pop(name, None)
         except ValueError:
-            r = None
+            r, self._unread[name] = None, "its published copy is not JSON"
         self._fetched[name] = r if _route_ok(r, name) else None
         return self._fetched[name]
 
@@ -1429,7 +1464,7 @@ class Routes:
             try:
                 self._fetch(name)
             except SlackError:
-                self._unread.add(name)
+                pass                                             # `_fetch` recorded it in `_unread`
         if len(names) == 1:
             one(names[0])
         elif names:
@@ -1439,7 +1474,7 @@ class Routes:
 
     def current(self, name: str) -> dict | None:
         """`name`'s route as the published table has it, read once per table (`deliver` reads every name it starts from so):
-        a copy that can't be read leaves the clone's, so a name the clone lacks then has none."""
+        a copy that can't be read leaves the clone's, so a name the clone lacks then has none (`unread` tells it apart)."""
         if not NAME_RE.match(name):
             return None
         if name not in self._fetched and name not in self._unread:
@@ -1456,12 +1491,21 @@ class Routes:
         """Follow a closed route's `forward_to` (at most FORWARD_HOPS hops), each name as published (`current`): the name that
         gets the doorbell, and its route.  No route at the end, or one still closed (`unreachable`), is a dead end, a loop or
         a chain too long: nobody reads its inbox."""
-        r = self.current(name)
+        return self._resolve(name)[:2]
+
+    def unread(self, name: str) -> str | None:
+        """Why `resolve(name)` may not be what the published table says: the error reading the published copy of a name on
+        its way, or None.  A name that has no published copy (a 404) was read: it has no route."""
+        return self._resolve(name)[2]
+
+    def _resolve(self, name: str) -> tuple[str, dict | None, str | None]:
+        r, why = self.current(name), self._unread.get(name)
         for _ in range(FORWARD_HOPS):
             if not r or not r.get("closed") or not r.get("forward_to"):
                 break
             name, r = r["forward_to"], self.current(r["forward_to"])
-        return name, r
+            why = why or self._unread.get(name)
+        return name, r, why
 
 
 FORWARD_HOPS = 3
@@ -1506,9 +1550,11 @@ def rings_own_inbox(routes: Routes | None, handle: str, sender: str | None) -> b
 
 
 _CHANNEL = r"#[A-Za-z0-9][A-Za-z0-9._-]*"
+_PERSON = r"(?: \(a person, waiting [^()]*\))?"                 # a person's post: who is waiting, and how long
 #: groups: author, urgent, thread, reply; a post outside the front door names its channel before `thread` (`doorbell_channel`)
-DOORBELL_RE = re.compile(rf"^from ([a-z0-9][a-z0-9._-]*)( \(URGENT\))?, (?:{_CHANNEL} )?thread (\d+\.\d+)(?:, reply (\d+\.\d+))?: ")
-DOORBELL_CHANNEL_RE = re.compile(rf"^from [a-z0-9][a-z0-9._-]*(?: \(URGENT\))?, ({_CHANNEL}) thread \d")
+DOORBELL_RE = re.compile(rf"^from ([a-z0-9][a-z0-9._-]*){_PERSON}( \(URGENT\))?, (?:{_CHANNEL} )?thread (\d+\.\d+)"
+                         r"(?:, reply (\d+\.\d+))?: ")
+DOORBELL_CHANNEL_RE = re.compile(rf"^from [a-z0-9][a-z0-9._-]*{_PERSON}(?: \(URGENT\))?, ({_CHANNEL}) thread \d")
 CHANNEL_ID_RE = re.compile(r"^[CDG][A-Z0-9]{2,}$")
 
 
@@ -1516,13 +1562,21 @@ def _channel_flag(channel: str) -> str:
     return f"--channel-id {channel}" if CHANNEL_ID_RE.match(channel) else f"--channel {channel}"
 
 
+def waiting(s: float) -> str:
+    """How long a person has waited, as a doorbell says it."""
+    m = int(max(0.0, s) // 60)
+    return "under a minute" if m < 1 else f"{m} min" if m < 120 else f"{s / 3600:.1f} h"
+
+
 def doorbell(author: str, thread: str, ts: str, text: str, urgent: bool = False, channel: str | None = None,
-             private: bool = False, reminder: str | None = None) -> str:
+             private: bool = False, reminder: str | None = None, waited: float | None = None) -> str:
     """The post itself, so its reader can act without another read: `from infra, thread T[, reply R]: <text>`.  A post in a
     channel other than the front door names it (its registry key, else its id), so its reader answers there: `from daniel,
-    #ask-the-team thread T: <text>`.  A `private` post's (a chat's) carries no text, since anyone in the front door reads
-    the inboxes, only where to read it.  A `reminder` (the Slack events service's watchdog) leads the body with
-    `reminder (WHY): `.  Never starts with `@`, so it can't route itself."""
+    #ask-the-team thread T: <text>`.  A person's post (`waited`, the seconds since they posted) leads with them and how
+    long they have waited: `from douglas (a person, waiting 18 min), #chat-douglas thread T: ...`.  A `private` post's (a
+    chat's) carries no text, since anyone in the front door reads the inboxes, only where to read it.  A `reminder` (the
+    Slack events service's watchdog) leads the body with `reminder (WHY): `.  Never starts with `@`, so it can't route
+    itself."""
     body = plain(text)
     if private:
         body = f"(a post in a private channel: research msg read {_channel_flag(channel or '?')} --thread {thread})"
@@ -1530,7 +1584,8 @@ def doorbell(author: str, thread: str, ts: str, text: str, urgent: bool = False,
         read = f"research msg read {_channel_flag(channel)} --thread {thread}" if channel else f"research msg read --thread {thread}"
         body = body[:DOORBELL_MAX].rstrip() + f"\u2026 (the rest: `{read}`)"
     where = (f"#{channel} " if channel else "") + f"thread {thread}" + (f", reply {ts}" if ts and ts != thread else "")
-    return f"from {author}{' (URGENT)' if urgent else ''}, {where}: " + (f"reminder ({reminder}): " if reminder else "") + body
+    who = author + (f" (a person, waiting {waiting(waited)})" if waited is not None else "")
+    return f"from {who}{' (URGENT)' if urgent else ''}, {where}: " + (f"reminder ({reminder}): " if reminder else "") + body
 
 
 def doorbell_channel(text: str) -> str | None:
@@ -1578,7 +1633,8 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
     A `reminder` (its watchdog's) rings again a name this post already rang, once per reason: only a doorbell for this post
     carrying the same reminder keeps it from ringing.  `sender` tells the agent that posted `msg` (`_post` passes
     `self_agent_id`), asked only for a post that would ring its author's own inbox, which it does when another agent
-    holds it (`rings_own_inbox`)."""
+    holds it (`rings_own_inbox`).  A name whose route couldn't be read (`Routes.unread`) is NOT RUNG, as when its doorbell's
+    post fails, so the caller tries again; only a name read as having no open route is reported as having no inbox."""
     log = log or sys.stderr
     front = channel_id_for(reg, FRONT_DOOR) or ch
     where = None if ch == front else (key_of(reg, ch) or ch)
@@ -1610,6 +1666,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
         lines.append("no doorbells: " + ("another app's bot posted it, not Verity's" if reg.get("bot_id") else
                                          "the registry records no bot_id (`research msg groups sync --apply` writes it)"))
     humans = people_names(reg)
+    waited = now - float(msg["ts"]) if person(msg, reg) and re.fullmatch(r"\d+\.\d+", str(msg.get("ts") or "")) else None
     own = False
     if names is not None:
         targets = names
@@ -1624,6 +1681,10 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
             continue                                                 # people read Slack itself
         to, r = routes.resolve(name)
         if why := unreachable(name, to, r):
+            if failed := routes.unread(name):                        # not known to have no inbox: a later try may ring it
+                lines.append(f"@{name}: NOT RUNG (its route couldn't be read: {failed})")
+                missed.append(name)
+                continue
             h = next((h for h in reg["handles"] if h["handle"] == name), None)
             if h and h.get("linear"):
                 lines.append(f"@{name}: no Slack inbox; reach it through its Linear team {h['linear']} (an ask to it files there)")
@@ -1659,7 +1720,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                 continue
             api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                      unfurl_media="false", text=doorbell(author, src, msg.get("ts") or src, msg.get("text", ""), urgent, where,
-                                                         private, reminder))
+                                                         private, reminder, waited))
             lines.append(f"@{to}: rang" + (f" (for @{name}, finished)" if to != name else ""))
         except SlackError as e:                                      # the others still ring; `deliver` rings this one later
             lines.append(f"@{to}: NOT RUNG ({e})")
@@ -1873,12 +1934,14 @@ def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> s
         if asker:
             raise SlackError(f"--asker: @{owner['handle']} has no Linear team to file the ask in, so nothing would track it")
         return body
+    lane = owner.get("linear_label")
     if ns.dry_run:
-        print(f"dry-run: would file the ask in Linear team {owner['linear']}" + (f" as asked by {asker}" if asker else ""),
-              file=sys.stderr)
+        print(f"dry-run: would file the ask in Linear team {owner['linear']}" + (f" with {lane}" if lane else "")
+              + (f" as asked by {asker}" if asker else ""), file=sys.stderr)
         return f"{linear.first_line(body)}\nLinear: <https://linear.app|{owner['linear']}-?>"
     parent = getattr(ns, "parent", None)
-    issue, why = linear.ask_issue(owner["linear"], sender, body, parent=parent, title=getattr(ns, "title", None), asker=asker)
+    issue, why = linear.ask_issue(owner["linear"], sender, body, parent=parent, title=getattr(ns, "title", None), asker=asker,
+                                  label=lane)
     if not issue and asker:
         raise SlackError(f"not filed on Linear ({why}), and {asker}'s ask must be tracked: nothing was posted; run it again")
     if not issue:
@@ -2045,7 +2108,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 print(f"dry-run: would file {title!r} in {team} as {h['handle']}" + (f" under {ns.parent}" if ns.parent else "")
                       + (f", due {ns.due}" if ns.due else ""))
                 return 0
-            made = lin.file(team, h["handle"], body, parent=ns.parent, title=title)
+            made = lin.file(team, h["handle"], body, parent=ns.parent, title=title, label=None if ns.team else h.get("linear_label"))
             if ns.due:
                 lin.edit(made["identifier"], due=ns.due)
             board = " / ".join(x["name"] for x in (made.get("project"), made.get("projectMilestone")) if x)
@@ -2114,7 +2177,9 @@ def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, te
     """Ring the inbox of the issue's team's handle and of each name the comment starts with, as `send` would, so nobody
     polls Linear for comments (no one subscribes to them: every handle writes as one app).  The author is never
     rung.  One line per name."""
-    owner = next((h["handle"] for h in reg["handles"] if h.get("linear") == issue["team"]["key"]), None)
+    from . import linear
+
+    owner = linear.owners(reg).get(issue["team"]["key"])
     names = list(dict.fromkeys(([owner] if owner else []) + lead_names(text, reg)))
     routes, api, lines = routes_of(ns), client(ns), []
     ch = channel_id(ns, reg, FRONT_DOOR)
@@ -2163,15 +2228,15 @@ def _check_audience(to: list[dict], body: str, reg: dict) -> None:
 def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     """The one way to post: top-level (a new thread) or into `--thread`.  The `--to` names lead it, which is what routes it;
     `--kind` rides in the footer.  An announcement (`--kind announce`) gets its header,
-    and with no `--to` it is for every handle."""
+    and with no `--to` it is for every handle.  It files no Linear issue, whatever its kind: `ask` does."""
     h = acting_as(ns, reg, ns.handle)
     to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     kind = (ns.kind or ("ask" if to and not ns.thread else "")).strip().lower()
     if kind and not NAME_RE.match(kind) or kind in FLAGS:
         raise SlackError(f"--kind {ns.kind!r}: one lower-case word")
-    if (getattr(ns, "parent", None) or getattr(ns, "title", None) or getattr(ns, "asker", None)) and not (
-            kind == "ask" and not ns.thread and len(to) == 1):
-        raise SlackError("--parent, --title and --asker go with an ask, which files an issue: a top-level send --to one handle")
+    if getattr(ns, "parent", None) or getattr(ns, "title", None) or getattr(ns, "asker", None):
+        raise SlackError("--parent, --title and --asker go with an ask, and only `research msg ask --as ME --to @OWNER` files "
+                         "one as an issue; `send` posts without filing anything")
     def own() -> bool:
         return rings_own_inbox(routes_of(ns), h["handle"], self_agent_id())
     if any(t["handle"] == h["handle"] for t in to) and not own():
@@ -2195,8 +2260,6 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
             raise SlackError("--verify and --ships go with --kind announce")
         if to and (m := LEAD_RE.match(body)) and set(lead_names(body, reg)) <= {t["handle"] for t in to}:
             body = body[m.end():]                                    # `--to @NAME` with a body that starts `@NAME` names it once
-        if kind == "ask" and not ns.thread and len(to) == 1:
-            body = linear_ask(ns, to[0], h["handle"], body)
         text = " ".join([*(tag(t) for t in to), body])
     ch = channel_id(ns, reg, FRONT_DOOR) if not (ns.thread or ns.channel) else channel_id(ns, reg)   # --channel: a machine's alert
     quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
@@ -3282,6 +3345,26 @@ def publish_person(api: Slack, r: dict, message: str) -> None:
         print(publish_route(notes_root(), r, message, PEOPLE_DIR, name))
 
 
+def person_lane(ns: argparse.Namespace, reg: dict, prev: dict | None) -> dict:
+    """A person record's `lane`, the handle they usually work with: `--lane`'s, which must be a registry handle (`''` clears
+    it), else `prev`'s.  Empty when there is none, so a record without one keeps its shape."""
+    lane = getattr(ns, "lane", None)
+    if lane is None:
+        lane = (prev or {}).get("lane")
+    elif lane:
+        lane = entry(reg, lane)["handle"]
+    return {"lane": lane} if lane else {}
+
+
+def usual_lane(msg: dict, reg: dict, key: str | None) -> str | None:
+    """The lane the person of the chat `key` usually works with (their people.d record's `lane`), when `msg` is that
+    person's own post and the lane is a registry handle; else None."""
+    r = (chat_channels(reg).get(key or "") or {}).get("person") or {}
+    lane, handles = r.get("lane"), {h["handle"] for h in reg["handles"]}
+    mine = bool(person(msg, reg)) and bool(r.get("slack_user")) and msg.get("user") == r["slack_user"]
+    return lane if mine and isinstance(lane, str) and lane in handles else None
+
+
 def chat_expect(ns: argparse.Namespace, reg: dict, book: ChatPeople) -> int:
     """`chat expect NAME --email E`: people.d/NAME.json with status `expected`, their email and no channel, which no command
     routes by.  A rerun updates the email or the note; a chat already open refuses."""
@@ -3297,9 +3380,9 @@ def chat_expect(ns: argparse.Namespace, reg: dict, book: ChatPeople) -> int:
         raise SlackError(f"{email} is #{clash['channel']['key']}'s already (`research msg chat list`)")
     live = prev if is_expected(prev) else None
     rec = {"schema": PERSON_SCHEMA, "name": (live or {}).get("name") or ns.name.capitalize(), "slack_user": None,
-           "email": email, "note": ns.note or (live or {}).get("note") or f"asks the lanes in #{key}", "status": EXPECTED,
-           "channel": {"key": key, "id": None}, "expected": (live or {}).get("expected") or _now_stamp(), "opened": None,
-           "closed": None}
+           "email": email, "note": ns.note or (live or {}).get("note") or f"asks the lanes in #{key}",
+           **person_lane(ns, reg, live), "status": EXPECTED, "channel": {"key": key, "id": None},
+           "expected": (live or {}).get("expected") or _now_stamp(), "opened": None, "closed": None}
     check_collaborators({**reg, "collaborators": [*reg.get("collaborators", []),
                                                   {k: rec[k] for k in ("name", "slack_user", "note", "email")}]},
                         PEOPLE_DIR, {h["handle"] for h in reg["handles"]})
@@ -3320,8 +3403,9 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
     every command takes them into `collaborators` (`with_people`): no registry change.  A rerun reuses the channel and the
     record (after a Slack Connect invite is accepted, it records their Slack id).  `close NAME` archives the channel and
     marks the record closed; `list` reads people.d.  `expect NAME --email E` publishes someone invited to the
-    workspace, with no channel yet: the Slack events service runs `chat open` for them when they join (`team_join`).  `reg`
-    is the registry without people.d."""
+    workspace, with no channel yet: the Slack events service runs `chat open` for them when they join (`team_join`).
+    `--lane HANDLE` (open, expect) records the lane the person usually works with, which the Slack events service rings in
+    place of CHAT_WATCHER for their posts that name no lane (`usual_lane`).  `reg` is the registry without people.d."""
     book = ChatPeople()
     if ns.verb == "list":
         for n in list(book.local):
@@ -3331,7 +3415,8 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
             state = f"closed {r['closed']}" if r.get("closed") else f"expected since {r['expected']}, no channel yet" \
                 if is_expected(r) else f"open since {r['opened']}"
             print(f"#{r['channel']['key']} ({r['channel']['id'] or 'no channel'}): {r['name']} "
-                  f"({r.get('slack_user') or 'no Slack id yet'}, {r.get('email') or 'no email'}), {state}")
+                  f"({r.get('slack_user') or 'no Slack id yet'}, {r.get('email') or 'no email'}), {state}"
+                  + (f", usual lane @{r['lane']}" if r.get("lane") else ""))
         if not rows:
             print(f"no chat channels in {book.root / PEOPLE_DIR}")
         return 0
@@ -3394,7 +3479,7 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
     name = (user or {}).get("real_name") or ((user or {}).get("profile") or {}).get("real_name") or (live or {}).get("name") \
         or ns.name.capitalize()
     rec = {"schema": PERSON_SCHEMA, "name": name, "slack_user": uid or (live or {}).get("slack_user"), "email": email,
-           "note": ns.note or (prev or {}).get("note") or f"asks the lanes in #{key}",
+           "note": ns.note or (prev or {}).get("note") or f"asks the lanes in #{key}", **person_lane(ns, reg, prev),
            "channel": {"key": key, "id": None}, "opened": (live or {}).get("opened") or _now_stamp(), "closed": None}
     human = any(p.get("slack_user") == rec["slack_user"] for p in reg.get("humans", []) if rec["slack_user"])
     if not human:
@@ -4184,7 +4269,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
                    help="a word the footer carries (ask, the default top-level with --to; announce; "
-                        "fyi, which implies --quiet; ...)")
+                        "fyi, which implies --quiet; ...); none files a Linear issue: `research msg ask` does")
     p.add_argument("--verify", default=None, metavar="CMD", help="announce: a required action, and the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="announce: code it runs, pinned")
     p.add_argument("--quiet", action="store_true", help="wake only the names it starts with: no reply needed")
@@ -4387,6 +4472,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    "Connect); expect: the address Daniel invited")
     p.add_argument("--start-here", default=None, metavar="URL", help="open: a link to bookmark in the channel as Start here")
     p.add_argument("--note", default=None, metavar="TEXT", help="open, expect: who they are (default: kept, or a stub)")
+    p.add_argument("--lane", default=None, metavar="HANDLE",
+                   help="open, expect: the lane they usually work with, which their posts that name no lane ring in place of "
+                        f"@{CHAT_WATCHER} (default: kept; '' clears it)")
     p.add_argument("--cursor-bot", default=None, metavar="U...", help="open: Cursor's bot user (default: users.list's bot named cursor)")
     p = sub.add_parser("groups", help="the handles' Slack user groups")
     gsub = p.add_subparsers(dest="gcmd", required=True)

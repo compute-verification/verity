@@ -2,8 +2,9 @@ module
 
 public import Definitions.Pouw.Assumptions.PearlC.RowSeedAssumptions
 public import Proofs.Pouw.PearlC.RowSeedFragment
-public import Proofs.Pouw.Prob
 public import Proofs.Pouw.QTree
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # The fragment corollary: the union bound and `ttOutRowSeed_skipClass` (staging, nothing pinned)

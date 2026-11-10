@@ -114,15 +114,6 @@ theorem sum_price_le {ι : Type} [Fintype ι] (X : Items C ι) (hp : ∀ i, X.pr
   simp only [hp, sum_const, nsmul_eq_mul, mul_one]
   exact_mod_cast card_le_univ U
 
-theorem held_W : HeldPriceAtMost R1 W 1 := fun _ U _ _ _ =>
-  (sum_price_le W (fun _ => rfl) U).trans (by simp)
-
-theorem held_O : HeldPriceAtMost R1 O 1 := fun _ U _ _ _ =>
-  (sum_price_le O (fun _ => rfl) U).trans (by simp)
-
-theorem held_WO : HeldPriceAtMost R1 (W.sum O) 2 := fun _ U _ _ _ =>
-  (sum_price_le (W.sum O) (fun i => by cases i <;> rfl) U).trans (by norm_num)
-
 theorem held_W2_R1 : HeldPriceAtMost R1 W2 2 := fun _ U _ _ _ =>
   (sum_price_le W2 (fun _ => rfl) U).trans (by norm_num)
 
@@ -132,22 +123,6 @@ theorem not_requires_K2 : ¬ K2.RequiresState W2 2 := by
   obtain ⟨U, σ, -, -, hlt⟩ := h 0
   have hle : ∑ i ∈ U, W2.price i ≤ 2 := (sum_price_le W2 (fun _ => rfl) U).trans (by norm_num)
   linarith
-
-theorem slotsRead : SlotsRead B W := fun _ _ =>
-  ⟨{0}, mem_singleton_self _, show ({0} : Finset (Fin 4)) ⊆ holds C {2} by decide⟩
-
-theorem operandsRead : ∀ q ∈ B.P, ∃ c ∈ O.cells (I.occ q), c ⊆ holds D.D (B.m q) := fun _ _ =>
-  ⟨{1}, mem_singleton_self _, show ({1} : Finset (Fin 4)) ⊆ holds C {2} by decide⟩
-
-theorem pairs_le : ∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ 1 := by
-  have : ∀ i o : Fin 1, (B.P.filter fun q => q.1 = i ∧ I.occ q = o).card ≤ 1 := by decide
-  exact fun i o => by exact_mod_cast this i o
-
-theorem operand_le : ∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1 := by
-  have : ∀ o : Fin 1, (B.P.filter fun q => I.occ q = o).card ≤ 1 := by decide
-  exact fun o => by exact_mod_cast this o
-
-theorem completed_R1 : completedIn B (R1.d.𝓘.gates 0) = {(0, 0)} := by decide
 
 theorem upstream : K.Upstream := by
   intro c F hF g hg
@@ -327,38 +302,6 @@ theorem RecoveredBudgetNontrivial : Guarantees.RecoveredBudgetNontrivial := by
     rw [Nat.clog_one_right]
     norm_num
 
-theorem IncidenceCapHonest : Guarantees.IncidenceCapHonest :=
-  ⟨slotsRead, operandsRead, pairs_le, operand_le⟩
-
-theorem IncidenceCapNontrivial : Guarantees.IncidenceCapNontrivial := by
-  refine ⟨operand_le, fun h => ?_, ?_⟩
-  · have key : ¬ ∀ i o : Fin 1, (B.P.filter fun q => q.1 = i ∧ I.occ q = o).card ≤ 0 := by decide
-    exact key fun i o => by exact_mod_cast h i o
-  · rw [show completedIn B ({2} : Finset (Fin 4)) = {(0, 0)} by decide]
-    norm_num [le_min_iff]
-
-theorem OperandCapSeparateHonest : Guarantees.OperandCapSeparateHonest :=
-  ⟨one_pos, one_pos, fun _ => rfl, fun _ => rfl, pairs_le, operand_le, held_W, held_O,
-    fun x y _ _ _ hy => (min_le_right _ _).trans (by linarith)⟩
-
-theorem OperandCapSeparateNontrivial : Guarantees.OperandCapSeparateNontrivial := by
-  refine ⟨one_pos, one_pos, fun _ => rfl, fun _ => rfl, pairs_le, operand_le, held_W, held_O, fun h => ?_, ?_⟩
-  · have := h 1 1 zero_le_one zero_le_one (by norm_num) (by norm_num)
-    norm_num at this
-  · rw [completed_R1]
-    simp
-
-theorem OperandCapJointHonest : Guarantees.OperandCapJointHonest :=
-  ⟨one_pos, one_pos, fun _ => rfl, fun _ => rfl, pairs_le, operand_le, held_WO,
-    fun x y hx _ hxy => (min_le_right _ _).trans (by linarith)⟩
-
-theorem OperandCapJointNontrivial : Guarantees.OperandCapJointNontrivial := by
-  refine ⟨one_pos, one_pos, fun _ => rfl, fun _ => rfl, pairs_le, operand_le, held_WO, fun h => ?_, ?_⟩
-  · have := h 1 1 zero_le_one zero_le_one (by norm_num)
-    norm_num at this
-  · rw [completed_R1]
-    simp
-
 theorem ImportOrRecomputeHonest : Guarantees.ImportOrRecomputeHonest :=
   ⟨upstream, overlapWeights⟩
 
@@ -383,16 +326,5 @@ theorem RecomputeByStateHonest : Guarantees.RecomputeByStateHonest :=
 
 theorem RecomputeByStateNontrivial : Guarantees.RecomputeByStateNontrivial :=
   ⟨held_W2_R1, not_requires_K2, fun h => h 0 0 (by decide)⟩
-
-theorem WeightedProductCapHonest : Guarantees.WeightedProductCapHonest :=
-  ⟨slotsRead, fun _ => zero_le_one, held_W⟩
-
-theorem WeightedProductCapNontrivial : Guarantees.WeightedProductCapNontrivial := by
-  refine ⟨slotsRead, fun _ => zero_le_one, fun h => ?_, ?_⟩
-  · have := h 0 {0} (fun _ => {0}) (fun _ _ => mem_singleton_self _)
-      (fun _ _ => show ({0} : Finset (Fin 4)) ⊆ holds C (P1.gates 0) by decide)
-    norm_num [W] at this
-  · rw [completed_R1]
-    simp [W]
 
 end Nci.SecurityProofs

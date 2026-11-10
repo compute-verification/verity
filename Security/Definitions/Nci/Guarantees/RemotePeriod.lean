@@ -6,7 +6,7 @@ public import Definitions.Nci.Guarantees.Remote
 # The compute dampener, remote protocol, over a monitoring period: the statement
 
 `DampenerRemote` over a monitoring period of `T` windows (results are per monitoring period), with its
-three premises on the protocols, `PouwSound`, `SampledDetection` and the thread bound's `Complies`, replaced by what
+three premises on the protocols, `PouwSound`, `SampledDetection` and the thread bound's `CompliesRate`, replaced by what
 each protocol's own guarantee gives on live coins. A window is one round of the verifier's live coins: window `t`'s
 coins `Ω t` are uniform and independent of the other windows', and a run of the period is `ξ : (t : Fin T) → Ω t`. Each
 leg is stated as `Proofs.Flock.Soundness.Audit.Periods` states a period's bound: at any value of the other windows'
@@ -16,7 +16,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   below `(1 − ε)·T_cred`) with probability at most `p` over its coins. That is
   `Accounting.SecurityProofs.Compose.CircuitCredit`'s conclusion, `p = δ_s + δ_bind + δ_ks = 3 · 2⁻⁴⁰`, at window `t`'s
   play, for a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s
-  premises; that bridge is not stated. `ComposePeriod.CircuitCreditPeriod` credits live words over a period's
+  premises; that bridge is not stated. `ComposeMonitoringPeriod.CircuitCreditPeriod` credits live words over a period's
   accepted prefix, not time, so it does not give `wrong`'s form.
 * **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
   proof blocks at registration, `wrongRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,
@@ -39,17 +39,17 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `Properties.Spot` proves what it does (`FleetHaltIsFinal`, `NoAcceptAfterHalt`), but not this form: it halts
   an operator at its `budget`-th failure, not its first (`budget ≥ 1`); it ends the operator's registrations, not its
   hardware's use; and nothing states the verdict's time `Δ` after the detected block.
-* **The inference-only policy** (in place of `Complies` and `ThreadedThrottled`'s premises): each declared run `i` meets
-  `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)`, which
+* **The inference-only policy** (in place of `CompliesRate` and `ThreadedThrottled`'s premises): each declared run `i`
+  meets `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)`, which
   `NciCheck.Properties.DescThrottles` gives for every declaration a verdict of compliance of the check of record lays
   out (`NciCheck.Baseline.evaluate`, whose verdict is `Desc.evaluate`'s), at `c = gamma` and the rate `k / c = num/den`,
-  under `ThetaRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs
-  the code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
+  under `ThetaRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs the
+  code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
   premise here: it is a guarantee, proved (`NciCheck.Properties.SecurityProofs.DescThrottles` in `Security/Properties`'
   lock) from `DescAgrees` (`SecurityProofs.DescAgrees`, itself proved from `Novel.readsExact`) and the gate-by-gate
   check's `Throttles`, and the check of record's verdict is `Desc.evaluate`'s (`SecurityProofs.baseline_desc`). What is
-  open on this leg is the bridge from those verdicts to this premise, that each declared run `i` is a declaration such
-  a verdict lays out, with the threading `Th_i` the premise reads: it is not stated. The cover theorem's factor on the
+  open on this leg is the bridge from those verdicts to this premise, that each declared run `i` is a declaration such a
+  verdict lays out, with the threading `Th_i` the premise reads: it is not stated. The cover theorem's factor on the
   same verdicts, `NciCheck.Properties.CheckedCoverTraining` (proved), would replace `ρ_T = b_a/((k / c) Λ)` by its own.
 
 Every other premise is `DampenerRemote`'s: the model's accounting of the four sources of counted multiplications, the
@@ -130,12 +130,12 @@ def DampenerRemotePeriod : Prop :=
       1 - (p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t) ≤
         prob (PMF.uniformOfFintype ((t : Fin T) → Ω t)) (fun ξ =>
           efficiency κ (M ξ) C U ≤
-              unmonitoredShare C U +
-                  (1 - unmonitoredShare C U) *
+              unregisteredShare C U +
+                  (1 - unregisteredShare C U) *
                     (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
                 declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ ∧
-            remoteDampener mfu (unmonitoredShare C U)
-                ((1 - unmonitoredShare C U) *
+            remoteDampener mfu (unregisteredShare C U)
+                ((1 - unregisteredShare C U) *
                     (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
                   declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ) ≤
               hardwareMultiple mfu κ (M ξ) C U)
@@ -186,12 +186,12 @@ def DampenerRemotePeriod_honest : Prop :=
     (∀ ξ, (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity cap (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2) ∧
     (∀ ξ, (Mx ξ : ℝ) ≤ κ * χ * (C + U) / 2) ∧
     p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t ≤ 1 / 10 ^ 6 ∧
-    ∀ ξ, 1 < remoteDampener mfu (unmonitoredShare C U)
-        ((1 - unmonitoredShare C U) *
+    ∀ ξ, 1 < remoteDampener mfu (unregisteredShare C U)
+        ((1 - unregisteredShare C U) *
             (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
           declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ) ∧
-      remoteDampener mfu (unmonitoredShare C U)
-          ((1 - unmonitoredShare C U) *
+      remoteDampener mfu (unregisteredShare C U)
+          ((1 - unregisteredShare C U) *
               (residualShare (W ξ) C + εW * W ξ / C + ε + lagShare I.card Δ H + I.card * K * B / C) +
             declaredShare κ (rhoT (k / c : ℝ) b_a Λ) C U + χ) ≤
         hardwareMultiple mfu κ (M ξ) C U
@@ -276,13 +276,13 @@ def DampenerRemotePeriod_nontrivial : Prop :=
   ¬ (1 - (0 / (1 / 2) + (∅ : Finset Unit).card * (1 - 1) ^ ((0 : ℕ) + 1) + ∑ t, AcceptAll.ks t) ≤
       prob (PMF.uniformOfFintype (Fin 1 → Bool)) (fun ξ =>
         efficiency 2 (AcceptAll.M ξ) 1 0 ≤
-            unmonitoredShare 1 0 +
-                (1 - unmonitoredShare 1 0) *
+            unregisteredShare 1 0 +
+                (1 - unregisteredShare 1 0) *
                   (residualShare (AcceptAll.W ξ) 1 + 0 * AcceptAll.W ξ / 1 + 1 / 2 +
                     lagShare (∅ : Finset Unit).card 0 1 + (∅ : Finset Unit).card * (0 : ℕ) * 0 / 1) +
               declaredShare 2 (rhoT ((1 : ℝ) / ((1 : ℕ) : ℝ)) 100 1) 1 0 + 0 ∧
-          remoteDampener 1 (unmonitoredShare 1 0)
-              ((1 - unmonitoredShare 1 0) *
+          remoteDampener 1 (unregisteredShare 1 0)
+              ((1 - unregisteredShare 1 0) *
                   (residualShare (AcceptAll.W ξ) 1 + 0 * AcceptAll.W ξ / 1 + 1 / 2 +
                     lagShare (∅ : Finset Unit).card 0 1 + (∅ : Finset Unit).card * (0 : ℕ) * 0 / 1) +
                 declaredShare 2 (rhoT ((1 : ℝ) / ((1 : ℕ) : ℝ)) 100 1) 1 0 + 0) ≤

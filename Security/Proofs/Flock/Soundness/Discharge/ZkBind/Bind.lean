@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
-public import Proofs.Flock.Soundness.Binding.Rows
+public import Proofs.Flock.Soundness.Binding.Layout
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # `--zk` value binding: the committed values are the sampled proof blocks' own
@@ -30,7 +32,7 @@ namespace FlockSoundness.Discharge.ZkBind
 open Game Model Accounting Refine Audit ZkSession ZkLink Binding
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
-  (A : Arith F K) {C : Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type}
+  (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 

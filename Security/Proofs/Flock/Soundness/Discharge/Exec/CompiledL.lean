@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.CompiledSound
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Merkle
+import Proofs.Flock.Soundness.Soundness
 
 /-!
 # Compiled soundness of one table under a leaf scheme (README.md §1.2, `Flock.Merkle`)

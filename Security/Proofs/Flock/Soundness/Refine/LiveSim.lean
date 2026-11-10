@@ -1,8 +1,13 @@
 module
 
+public import Definitions.Flock.Compiled
+public import Proofs.Flock.Soundness.Model.Compiled
 public import Proofs.Flock.Soundness.Refine.Live
 public import Proofs.Flock.Soundness.Refine.Plays
-public import Proofs.Flock.Soundness.Model.Compiled
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The table's simulation (the transfer, R11c)
@@ -16,7 +21,7 @@ any strategy.
 
 * `PlaysT g ts a`: `g`, played with the typed steps `ts` (messages and coins, in order), ends with `a`.
 * `Decodes`: on every accepted live outcome, each rep's model game runs on the tape decoded from its stream and its
-  proof file (`repTape`), and the model accepts those runs. This is what the refinement and framing (R11b) provide.
+  proof file (`repTape`), and the model accepts those runs. This is what the refinement and framing (the decoder premise) provide.
 * `live_le`: against any live prover, the live verdict's probability is at most the model's against the simulated
   prover.
 -/

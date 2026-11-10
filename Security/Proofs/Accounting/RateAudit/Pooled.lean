@@ -1,8 +1,46 @@
 module
 
-public import Mathlib
 public import Definitions.Accounting.Guarantees.RateAuditPooled
 public import Proofs.Accounting.RateAudit.Chain
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.Bandwidth.AuditRO
+import Proofs.Accounting.RateAudit.Windows
+import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The causal bound over the monitoring period: the proof
@@ -104,18 +142,18 @@ theorem step_le (M g K' a c : ℕ) (hM : 0 < M) :
 
 theorem pr_le_one {Ω : Type} [Fintype Ω] (P : Ω → Prop) : pr P ≤ 1 := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   exact ENNReal.div_le_of_le_mul (by rw [one_mul]; exact_mod_cast Finset.card_le_univ _)
 
 theorem pr_false {Ω : Type} [Fintype Ω] : pr (fun _ : Ω => False) = 0 := by
   classical
-  simp [pr]
+  simp [Pous.pr_eq_card]
 
 /-- `s` uniform items all land in a set of `g` of the `M`: `(g/M)^s`. -/
 theorem pr_sample {M : ℕ} (G : Finset (Fin M)) (s : ℕ) :
     pr (fun I : Fin s → Fin M => ∀ t, I t ∈ G) = ((G.card : ℝ≥0∞) / M) ^ s := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [Finset.filter_congr_decidable, Bandwidth.AuditRO.card_sample G s]
   simp [div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
 
@@ -124,7 +162,7 @@ holds: at most the first's probability times `ε`. -/
 theorem pr_and_le_mul {X Y : Type} [Fintype X] [Fintype Y] (A : X → Prop) (B : X × Y → Prop) (ε : ℝ≥0∞)
     (h : ∀ x, A x → pr (fun y => B (x, y)) ≤ ε) : pr (fun p : X × Y => A p.1 ∧ B p) ≤ pr A * ε := by
   classical
-  unfold pr at h ⊢
+  simp only [Pous.pr_eq_card] at h ⊢
   rw [Finset.filter_congr_decidable, Finset.filter_congr_decidable]
   rcases Nat.eq_zero_or_pos (Fintype.card Y) with hY | hY
   · have h0 : (Finset.univ.filter (fun p : X × Y => A p.1 ∧ B p)).card = 0 :=

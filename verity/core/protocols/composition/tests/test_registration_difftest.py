@@ -60,6 +60,7 @@ ITEMS = (WEIGHTS, {"domain": "e" * 128, "kind": "theta", "leaves": 1, "root": "d
                    "word_bits": 32, "words": 8},
          {"advice": "verity/advice/v1", "cap": 32, "digest": "f" * 128, "kind": "builder"})
 DAY0 = G.Declaration(0, "1" * 128, ("block0",))
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
 EXAMPLE = (G.site((SHEET,), LOCS, LINKS), G.Information(ITEMS), DAY0)
 ||||||| merged common ancestors
@@ -67,6 +68,11 @@ EXAMPLE = (G.Hardware((CARD,), LOCS, LINKS), G.Information(ITEMS))
 =======
 EXAMPLE = (G.Hardware((CARD,), LOCS, LINKS), G.Information(ITEMS), DAY0)
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+EXAMPLE = (G.Hardware((CARD,), LOCS, LINKS), G.Information(ITEMS), DAY0)
+=======
+EXAMPLE = (G.site((SHEET,), LOCS, LINKS), G.Information(ITEMS), DAY0)
+>>>>>>> 7af4d24fca3e
 
 
 def _wrap(f):
@@ -180,6 +186,7 @@ TWISTS = (G.site(links=(S.Link("l3", ("node0", S.OUTSIDE), 1, 0),)),
 
 @st.composite
 def changed(draw) -> list:
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
     """The example, sometimes with a twist after it, and with up to three changes: a location, a link, a sheet or an item
     dropped, replaced, added or with one field set, a site entry split in two, entries swapped, a declaration added, or
@@ -192,6 +199,15 @@ def changed(draw) -> list:
     one field set, a hardware entry split in two, entries swapped, a declaration added, or the example's declaration's
     day, program or blocks set."""
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+    """The example, sometimes with a twist after it, and with up to three changes: a location, a link, a card or an item dropped, replaced, added or with
+    one field set, a hardware entry split in two, entries swapped, a declaration added, or the example's declaration's
+    day, program or blocks set."""
+=======
+    """The example, sometimes with a twist after it, and with up to three changes: a location, a link, a sheet or an item
+    dropped, replaced, added or with one field set, a site entry split in two, entries swapped, a declaration added, or
+    the example's declaration's day, program or blocks set."""
+>>>>>>> 7af4d24fca3e
     bodies = list(EXAMPLE) + ([pick(draw, TWISTS)] if pick(draw, [True, False]) else [])
     for _ in range(pick(draw, [0, 0, 0, 1, 1, 2, 3])):
         i = pick(draw, range(len(bodies)))
@@ -259,6 +275,7 @@ def cases(draw) -> dict:
     if source == "twist":
         return case(composite, chain(composite, [*EXAMPLE, pick(draw, TWISTS)]))
     bodies = (draw(changed()) if source == "changed"
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
               else draw(st.lists(st.one_of(site, information, declarations), max_size=3)))
 ||||||| merged common ancestors
@@ -266,6 +283,11 @@ def cases(draw) -> dict:
 =======
               else draw(st.lists(st.one_of(hardware, information, declarations), max_size=3)))
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+              else draw(st.lists(st.one_of(hardware, information, declarations), max_size=3)))
+=======
+              else draw(st.lists(st.one_of(site, information, declarations), max_size=3)))
+>>>>>>> 7af4d24fca3e
     log = chain(composite, bodies)
     if log and not pick(draw, range(8)):
         k = pick(draw, range(len(log)))
@@ -348,7 +370,14 @@ def test_registration_difftest() -> None:
 
 
 def test_a_reference_without_the_challengers_reach_is_caught() -> None:
+<<<<<<< 94ca7fd0d18
     """A Python that skips onsite's `challenger-reach` disagrees with the Lean on some drawn log."""
+||||||| e10cf2c8559
+    """A Python that skips onsite's `challenger-reach` disagrees with the Lean on some sampled log."""
+    real = G.hardware_refusal
+=======
+    """A Python that skips onsite's `challenger-reach` disagrees with the Lean on some sampled log."""
+>>>>>>> 7af4d24fca3e
     real = G.site_refusal
 
     def lax(auditor, composite, s, head, e):

@@ -6,31 +6,39 @@ The certifier publishes instead one digest and the untimed status per execution 
 **Padding is elided.** The certifier is left-packed (W4), so a row is fixed by its count n and its n real frames: slots
 n … r − 1 are padding. A row's digest covers only those:
 
-    row(n, f_0 … f_{n−1}) = tagged_sha256("verity-network-warden/row/v1", u32be(n) ‖ f_0 ‖ … ‖ f_{n−1})
+    row(n, f_0 … f_{n−1}) = tagged_sha512("verity-network-certifier/row-sha512/v1", u32be(n) ‖ f_0 ‖ … ‖ f_{n−1})
 
 The frames all have the fixed size B, so the encoding is unambiguous. A row that isn't left-packed has no encoding.
 
-**The record digest** binds the grid parameters, the link, the window and the status, then the T row digests:
+**The record digest** binds the grid parameters, the link, the window and the status, then the T 64-byte row digests:
 
-    record = tagged_sha256("verity-network-warden/record/v1", u32be(len(h)) ‖ h ‖ row_0 ‖ … ‖ row_{T−1})
+    record = tagged_sha512("verity-network-certifier/record-sha512/v1", u32be(len(h)) ‖ h ‖ row_0 ‖ … ‖ row_{T−1})
 
 Here `h` is the canonical JSON of {link, window, buckets, allocation, frame_bytes, bucket_ms, status}.
 
 **The check.** The verifier recomputes the digest from the Program's grid, with a complete status. It accepts the
-execution phase only if the digests are equal. Under the collision resistance of SHA-256 (`cr/sha-256`), equal digests
+execution phase only if the digests are equal. Under the collision resistance of SHA-512 (`cr/sha-512`), equal digests
 mean equal records, so the audit stays exact. It never needs the certifier's raw grid, since the Program fixes every
-egress frame's content. The capacity bounds on accepted runs then hold up to a SHA-256 collision.
+egress frame's content. The capacity bounds on accepted runs then hold up to a SHA-512 collision.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+<<<<<<< 94ca7fd0d18
 from verity.ml.commitments.identity import Digest, canonical_json_bytes, tagged_sha256
 from verity.core.protocols.certifier.grid import Grid, GridParams, BlockGrid, Row, Status, row_count, row_left_packed
+||||||| e10cf2c8559
+from verity.ml.commitments.identity import Digest, canonical_json_bytes, tagged_sha256
+from verity.core.protocols.certifier.grid import Grid, GridParams, Record, Row, Status, row_count, row_left_packed
+=======
+from verity.ml.commitments.identity import Digest, canonical_json_bytes, tagged_sha512
+from verity.core.protocols.certifier.grid import Grid, GridParams, Record, Row, Status, row_count, row_left_packed
+>>>>>>> 7af4d24fca3e
 
-ROW_TAG = "verity-network-warden/row/v1"
-RECORD_TAG = "verity-network-warden/record/v1"
+ROW_TAG = "verity-network-certifier/row-sha512/v1"
+RECORD_TAG = "verity-network-certifier/record-sha512/v1"
 
 
 def row_digest(row: Row, params: GridParams) -> bytes:
@@ -43,7 +51,7 @@ def row_digest(row: Row, params: GridParams) -> bytes:
     frames = row[:n]
     if any(len(f) != params.frame_bytes for f in frames):
         raise ValueError(f"frames are {params.frame_bytes} bytes")
-    return bytes.fromhex(tagged_sha256(ROW_TAG, n.to_bytes(4, "big") + b"".join(frames)))
+    return tagged_sha512(ROW_TAG, n.to_bytes(4, "big") + b"".join(frames))
 
 
 def record_digest(link: str, window: int, grid: Grid, status: Status, params: GridParams) -> Digest:
@@ -55,7 +63,7 @@ def record_digest(link: str, window: int, grid: Grid, status: Status, params: Gr
         "status": "complete" if status.complete else status.reason.value,
     })
     rows = b"".join(row_digest(row, params) for row in grid)
-    return tagged_sha256(RECORD_TAG, len(header).to_bytes(4, "big") + header + rows)
+    return Digest(tagged_sha512(RECORD_TAG, len(header).to_bytes(4, "big") + header + rows).hex())
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,6 +1,6 @@
 # Prove path
 
-Network accounting under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
+Network certification under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system samples
 units on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
@@ -63,8 +63,8 @@ commitments and never published.
    - The advice can only choose among Programs the compiler emits. Every unit's values are still committed under hiding leaves
      and opened only inside the proof.
 7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose units hold
-   transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` sampling design samples every unit of theirs beside
-   K of the rest, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
+   transfer gates (the I/O shell's), and its digest covers the list. The window's work sampling design (`work-rate:NUM/DEN`, the
+   stream's rule) samples every unit of theirs beside the rest's share, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
    of them, a sample trading one away, and a registration sampling them as the rest. Until the compiler lists the I/O shell's
    units, a stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
 
@@ -88,10 +88,10 @@ It follows from `SampledKSLiveV2`, the same bound at the circuit files the verif
 are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, and SHA-512's collision resistance.
 
 **The property.** `NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`, at any
-sampling deployment `D`: `∀ H D L K S lay k, Claims.Sampling.KS H D → KSAccepted H D L K S lay k`. The sampled step units
-are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 0, every decoder within Flock's radius and
-every prover, Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and
-Pr[B_ext] are the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
+compiled sampled verifier `D`: `∀ H D L K S lay k, D.KS H → KSAccepted H D L K S lay k` (`Compiled.KS`). The sampled
+step units are its sampled class. On the statements in scope (`ScopeAcc`), at every δ ≥ 0 and every prover,
+Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and Pr[B_ext] are
+the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
 - the incorrect set is in M_δ = {B : P_a(B) > δ} (`RelS`);
 - no incorrect proof block is in a class sampled `all`: the transfer-gate units and the network certifier's head checks
   (`allSlots`);
@@ -101,8 +101,8 @@ Pr[B_ext] are the chances of finding a SHA-512 collision in the run, not an assu
   `free` is empty and `Accepted` is exact.
 
 **The leak bound.** `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted`
-(`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any deployment. Given
-`SampledAuditAccepted` and `Claims.Sampling.KS` at the deployment, except with probability δ + ε_ks + ε_bind, an accepted
+(`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any compiled
+verifier. Given `SampledAuditAccepted` and `Compiled.KS` there, except with probability δ + ε_ks + ε_bind, an accepted
 audit's carried sequences, cut at the horizon, number at most 2^c · #faultySets(δ) · 2^β · D^n, at whatever values the
 statement's registered inputs `reg` hold (`AsReg`). So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
 - c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the horizon lists as
@@ -122,10 +122,14 @@ conditional escape and its leak relation as hypotheses, which `SampledKSLive` an
 history would discharge, and doesn't discharge them yet.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; each rank's `ranks.<r>.charge` holds
-`advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
-- c, which the run doesn't print. Once the advice is the only free input outside the registration, c is `advice.bits`,
-  the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as `bits`. Over
-  several windows, c is their sum.
+`advice_bits`, `c`, `other_inputs`, `bound`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and
+`exfiltration_bound`):
+- c is `c`. It is `advice.bits` (the registration's `window.advice.bits`: the I1 advice's length, which
+  `prove_path.py advice` prints as `bits`) only while the window's leak count (`records_audit.leak_count`) is within the
+  charge, so the advice is the only free input outside the registration. Otherwise `c` is null and `bound` is `vacuous`,
+  with the count's `other_inputs` beside it. That covers a stand-in partition, whose free inputs are its units' inputs,
+  and a partial window, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
+  states the leak bound there. Over several windows, c is their sum, and null if any one's is.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/spot/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
@@ -144,11 +148,12 @@ guarantee above.
 
 **The named assumptions.**
 - SHA-512 collision resistance: `FlockSoundness.Assumptions.SHA512CRStrict` and `SHA512CRExpected`
-  (`Security/Proofs/Flock/Soundness/Assumptions.lean`), and `Claims.StrictBirthday` and `Claims.ExpectedCR`
-  (`Security/Definitions/Core/Interaction.lean`).
-- A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file).
-- Record custody: under `--zk`, `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ`
-  (`Security/Proofs/Flock/Soundness/Assumptions/Zk.lean`) and `Zk.RecordCustodyZKLaw` and its forms
+  (`Security/Definitions/Assumptions/Flock.lean`, the lock's named assumptions), and `Claims.StrictBirthday` and
+  `Claims.ExpectedCR` (`Security/Definitions/Core/Interaction.lean`).
+- A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file as the first two).
+- Record custody: under `--zk`, `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw`
+  (`Security/Proofs/Flock/Soundness/Assumptions/ZkP.lean`; `RecordCustodyZKJ`, its instance at no public inputs, is in
+  `Security/Proofs/Flock/Soundness/Premises.lean`) and `Zk.RecordCustodyZKLaw` and its forms
   (`Security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean`); in plain, `FlockSoundness.Assumptions.RecordCustodyExec`
   and `RecordCustodyExecH` (`Security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
 - `Verity.Assumptions.TrustedHost` (`Security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
@@ -235,7 +240,10 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   gates the sample on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
   (`window`), a compiler whose digest carries no cap (`cap`) or isn't the verifier's (`compiler`), another advice root
   (`advice`), a published root that isn't 64 bytes of a `rows-sha512` store (`sha512`) or isn't the row dir's run root
-  (`run_root`), and a registration naming another Commit (`commit`). Its negatives run beside the audit's. `serve-standin`
+  (`run_root`), a registration naming another Commit (`commit`), and a carried request that doesn't follow from the close of
+  the window before (`follows`: the advice is read as `window_advice`'s, and its carried requests are held to that window's
+  close, opened under its registration, naming the request and what doesn't follow: its order, a request dropped with outputs
+  still to keep, its record, or a counter of its state). Its negatives run beside the audit's. `serve-standin`
   lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its windows.
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
   what an integration hands Verity (`verity.ml.windows.interface`): the window's `circuit.json`, which its registration binds

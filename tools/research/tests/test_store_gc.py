@@ -80,7 +80,7 @@ def test_an_uncited_old_record_goes_after_a_grace_and_a_young_one_stays(env):
 
 
 def test_a_multipart_sidecar_beside_a_record_is_no_record(env):
-    """`manifests/<hex>.json.parts.json` (a large manifest's multipart sidecar, 26 Oct on the bucket) stopped the first pass."""
+    """`manifests/<hex>.json.parts.json` (a large manifest's multipart sidecar) must not stop a pass."""
     b, notes, cache, _ = env
     a = artifact(b, "run-record/v1", blob(b, b"x"), age_days=40)
     _put(b, f"manifests/{ids.hex_of(a)}.json.parts.json", b'{"parts": []}')
@@ -179,7 +179,7 @@ def _due(b, cache, marks, notes, *datas: bytes):
 
 
 def test_each_batch_of_deletes_follows_a_fresh_listing(env):
-    """ci, 26 Oct: one listing before 395,277 deletes left hours in which a put reusing a candidate blob went unseen."""
+    """One listing before hundreds of thousands of deletes would leave hours in which a put reusing a candidate blob goes unseen."""
     b, notes, cache, marks = env
     blobs = sorted(_due(b, cache, marks, notes, b"first", b"second"))
     later = NOW + gc.GRACE_S
@@ -243,7 +243,7 @@ def conn(nodes, after=None):
 
 
 def test_linear_cites_issues_their_comments_projects_updates_and_documents(env):
-    """top, 26 Oct: lanes cite run ids and art ids mostly in Linear (r20261026-171233-4e86 on INF-263 and VLLM-33)."""
+    """Lanes cite run ids and art ids mostly in Linear: in issues, their comments, projects, updates and documents."""
     b, notes, cache, _ = env
     by_issue = artifact(b, "run-record/v1", blob(b, b"1"), age_days=40)
     by_comment = artifact(b, "run-record/v1", blob(b, b"2"), age_days=40)

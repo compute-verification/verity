@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Accounting.Guarantees.TS.Grind
 public import Proofs.Accounting.TS.Steer
 public import Mathlib.Analysis.MeanInequalitiesPow
+public import Proofs.Accounting.Lemmas.TS.Grind
 
 /-!
 # The grinding premium under hashed seeds: proofs
@@ -34,7 +34,7 @@ namespace Grind
 
 theorem card_filter_le {Ω : Type} [Fintype Ω] (P : Ω → Prop) [DecidablePred P] {p : ℝ} (h : prob P ≤ p) :
     ((Finset.univ.filter P).card : ℝ) ≤ p * Fintype.card Ω := by
-  unfold prob at h
+  unfold prob Claims.prUniform at h
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | h0
   · have : IsEmpty Ω := Fintype.card_eq_zero_iff.mp h0
     simp
@@ -159,7 +159,7 @@ theorem GrindTail : Accounting.Guarantees.TS.GrindTail := by
     intro q
     rcases isEmpty_or_nonempty B with hB | hne
     · have : IsEmpty (Ω₀ × (Fin T → B)) := ⟨fun ω => hB.false (ω.2 q)⟩
-      have h0 : prob (fun ω : Ω₀ × (Fin T → B) => Bad q ω.1 ω.2) = 0 := by unfold prob; simp
+      have h0 : prob (fun ω : Ω₀ × (Fin T → B) => Bad q ω.1 ω.2) = 0 := by unfold prob Claims.prUniform; simp
       rw [h0]; exact hτ
     obtain ⟨b₀⟩ := hne
     set Φ := Steer.splitAt (Ω₀ := Ω₀) (X := B) q
@@ -363,7 +363,7 @@ theorem GrindPremiumAt : Accounting.Guarantees.TS.GrindPremiumAt := by
   rcases Nat.eq_zero_or_pos T with hT | hT
   · subst hT
     have h0 : prob (fun ω : Ω₀ × (Fin 0 → B) => ∃ q, Real.log ((0 : ℕ) * M / δ) / θ ≤ R q ω.1 ω.2) = 0 := by
-      unfold prob; simp
+      unfold prob Claims.prUniform; simp
     rw [h0]; exact add_nonneg hδ.le ((prob_nonneg _).trans hB)
   have hTM : 0 < (T : ℝ) * M / δ := div_pos (mul_pos (by exact_mod_cast hT) hM) hδ
   have := GrindPremium g R Break θ M (Real.log (T * M / δ) / θ) δb hθ.le hM.le hg hB hR

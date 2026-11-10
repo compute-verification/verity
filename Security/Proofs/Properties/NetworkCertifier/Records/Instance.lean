@@ -1,9 +1,58 @@
 module
 
+public import Batteries.Data.ByteArray
+public import Mathlib.Algebra.Ring.Subsemiring.Defs
+public import Mathlib.Tactic.ENatToNat
 public import Proofs.Properties.NetworkCertifier.Records.Accept
+public import Properties.NetworkCertifier.Records
+import Difftest
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
 import all Init.Data.Repr
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import NetworkCheck.RecordsBytes
+import Proofs.Properties.NetworkCertifier.Device.Basic
+import Proofs.Properties.NetworkCertifier.Device.Lms
+import Proofs.Properties.NetworkCertifier.DeviceOutput.Encode
+import Proofs.Properties.Hash.Identity
+import Proofs.Properties.NetworkCertifier.Check
+import Proofs.Properties.NetworkCertifier.Check.Check
+import Proofs.Properties.NetworkCertifier.Check.Grid
+import Proofs.Properties.NetworkCertifier.Records.Bytes
+import Proofs.Properties.NetworkCertifier.Records.Check
+import Proofs.Properties.NetworkCertifier.Records.Commit
+import Proofs.Properties.NetworkCertifier.Records.Program
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # An instance: a unit whose records are the Program's, which the check accepts

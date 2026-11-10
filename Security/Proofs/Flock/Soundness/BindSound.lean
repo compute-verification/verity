@@ -1,9 +1,21 @@
 module
 
-public import Proofs.Flock.Soundness.LincheckPhase
-public import Proofs.Flock.Soundness.OpeningPhase
-public import Proofs.Flock.Soundness.ListSize
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
+public import Definitions.Flock.Session
+public import Mathlib.Algebra.MvPolynomial.Degrees
 public import Mathlib.Data.Nat.BitIndices
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.RingTheory.Henselian
+import Mathlib.RingTheory.RegularLocalRing.Defs
+import Mathlib.RingTheory.SimpleRing.Principal
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
 
 /-!
 # The link points (`Flock.Statement`)
@@ -453,7 +465,7 @@ theorem prCoin_regionClaim_le (A : Arith F K) (hA : A.Correct) (S : Statement)
         rw [eval_regionPoly, sub_eq_zero]
         rfl
     _ ≤ ((regionPoly (F := F) S R ptLocal mPts z).totalDegree : ℝ≥0∞) / Fintype.card F :=
-        prCoin_mvEval_eq_zero_le _ hQ
+        Verity.Game.prCoin_mvEval_eq_zero_le _ hQ
     _ ≤ (mPts : ℝ≥0∞) / Fintype.card F := by
         have := totalDegree_regionPoly_le (F := F) S R ptLocal mPts z
         gcongr

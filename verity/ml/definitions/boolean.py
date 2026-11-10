@@ -10,8 +10,8 @@ looked up among every module of `verity.ml.circuits.ops.boolean` and of `verity.
 it serves only the callers that bind it (`HopperBF16WgmmaDot16_v3`, the training routes' k16 step), never `boolean_version`,
 so adding it moves no served Program.  A function-valued static is bound to its own Boolean version; a
 static the word has no counterpart for, to the Boolean version of the word Definition the Boolean Definition's ``word_statics``
-names for it.  A word primitive made on demand (`prims.const`'s `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`) has its
-Boolean version made on demand too (`_families`, by id: `made_on_demand`), since no module can register one per constant or
+names for it.  A word primitive made on demand (`prims.const`'s `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`,
+`BitAtx{W}`) has its Boolean version made on demand too (`_families`, by id: `made_on_demand`), since no module can register one per constant or
 vocabulary size ahead.
 
 `sigma_lift(word, version)` is a word composite as a registered Boolean Definition: at each binding, its word body with each Call
@@ -178,6 +178,7 @@ def _families() -> tuple:
             (re.compile(r"^GatherBf16x(\d+)_v1$"), lambda m: BGA.gather_bf16(int(m[1]))),
             (re.compile(r"^GatherI32x(\d+)_v1$"), lambda m: BGA.gather_i32(int(m[1]))),
             (re.compile(r"^GatherF32x(\d+)_v1$"), lambda m: BGA.gather_f32(int(m[1]))),
+            (re.compile(r"^BitAtx(\d+)_v1$"), lambda m: BGA.bit_at(int(m[1]))),
         ])
     return tuple(_FAMILIES)
 
@@ -571,6 +572,44 @@ def dry_run(program) -> dict:
                             "list": nb["list"] + [{"id": w, "kind": "wrapper"} for w in wrappers]}}
 
 
+def gate_table(fns) -> tuple[dict[str, int], list[str]]:
+    """The gate table of the primitives ``fns`` reach (each Definition visited once; no input): each by its descriptor key, its
+    two-input Boolean gates as `census` counts a Definition's Boolean work (an n-input And or Xor n - 1, a Not 1, a constant bit
+    or an input 0) through its Boolean version (`boolean_version`, the primitive itself where it is Boolean); and, sorted, the
+    keys of those it can't price: no Boolean version, or one that reaches a primitive that is no gate. The one table a count
+    of (c, k)-inference blocks reads (`NciCheck.Count`'s ``table``)."""
+    from verity.ml.circuits import census as CE
+    from verity.ml.circuits.program import is_input
+
+    prims: dict[str, Any] = {}
+    seen: set[int] = set()
+    todo = list(fns)
+    while todo:
+        fn = todo.pop()
+        if id(fn) in seen:
+            continue
+        seen.add(id(fn))
+        if isinstance(fn, PrimitiveDefinition):
+            if not is_input(fn):
+                prims[descriptor_id(fn)] = fn
+        else:
+            todo += [nd.fn for nd in fn.body.nodes]
+    table: dict[str, int] = {}
+    unpriced, keys, versions = [], [], []
+    for key, p in sorted(prims.items()):
+        try:
+            versions.append(p if BL.is_boolean(p) else boolean_version(p))
+            keys.append(key)
+        except LookupError:
+            unpriced.append(key)
+    for key, got in zip(keys, CE.boolean_gates(versions)):
+        if isinstance(got, str):
+            unpriced.append(key)
+        else:
+            table[key] = got
+    return table, sorted(unpriced)
+
+
 def load_program(path: Path):
     from verity.ml.circuits.codec import decode_program, program_digest
     from verity.ml.definitions.registry.catalog import load as load_registry
@@ -582,4 +621,5 @@ def load_program(path: Path):
 
 
 __all__ = ["NoBooleanVersion", "boolean_version", "made_on_demand", "bit_offsets", "lift", "lift_body", "sigma_lift", "sigma_check",
-           "boolean_function", "purity", "dry_run", "derived_calls", "load_program", "word_descriptor", "write_word"]
+           "boolean_function", "purity", "dry_run", "derived_calls", "gate_table", "load_program", "word_descriptor",
+           "write_word"]

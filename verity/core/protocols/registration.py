@@ -4,6 +4,7 @@ this module to the Lean (`composition/tests/test_registration_difftest.py`).
 
 A deployment's registration is one append-only log of entries, each naming the head of the log before it (`previous`):
 the digest of the log's last entry, or its composite's genesis when the log is empty, so the head names the whole log.
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
 An entry is one of three kinds:
 ||||||| merged common ancestors
@@ -11,7 +12,13 @@ An entry is one of two formats:
 =======
 An entry is one of three formats:
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+An entry is one of three formats:
+=======
+An entry is one of three kinds:
+>>>>>>> 7af4d24fca3e
 
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
 * a site entry, the Site's own (`verity.core.site.Entry`, `verity/registration/site/v1`): the sheets, locations and
   links it adds to the Site, its JSON, digest and check the Site's;
@@ -41,6 +48,29 @@ An entry is one of three formats:
   day, before the day's first coin, so a second declaration of a day is refused (`duplicate-declaration`), and each
   window's program is its day's (`View.declared`; the sampled-proofs registration record's R2).
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+* `verity/registration/hardware/v1`: the cards, locations and links it adds to the site (`Site`);
+* `verity/registration/information/v1`: its items, each registered once in the log (`item_key`): θ, each registered
+  value by its committed root, and the builder B (its digest, its advice's format and its public cap ℓ on one
+  declaration's advice, in bits). Registration registers the site, θ and B, not the circuit B builds; a subprotocol's
+  Program and parameters, and the proof system, are that protocol's public verifier parameters.
+* `verity/registration/declaration/v1`: a day's circuit (`Declaration`): the day, by its index among the monitoring
+  period's days, its program's digest and its block Definitions by descriptor key. The prover declares one circuit a
+  day, before the day's first coin, so a second declaration of a day is refused (`duplicate-declaration`), and each
+  window's program is its day's (`View.declared`; the sampled-proofs registration record's R2).
+=======
+* a site entry, the Site's own (`verity.core.site.Entry`, `verity/registration/site/v1`): the sheets, locations and
+  links it adds to the Site, its JSON, digest and check the Site's;
+* an information entry (`Information`, `verity/registration/information/v1`): its items, each registered once in the
+  log (`item_key`): θ, each registered value by its committed root, and the builder B (its digest, its advice's format
+  and its public cap ℓ on one declaration's advice, in bits). Registration registers the site, θ and B, not the circuit
+  B builds; a subprotocol's Program and parameters, and the proof system, are that protocol's public verifier
+  parameters;
+* a declaration (`Declaration`, `verity/registration/declaration/v1`): a day's circuit: the day, by its index among
+  the monitoring period's days, its program's digest and its block Definitions by descriptor key. The prover declares
+  one circuit a day, before the day's first coin, so a second declaration of a day is refused (`duplicate-declaration`),
+  and each window's program is its day's (`View.declared`; the sampled-proofs registration record's R2).
+>>>>>>> 7af4d24fca3e
 
 ~~~text
 entry digest   SHA-512(format ‖ 0 ‖ canon(entry))                          the entry's format and previous among its keys
@@ -49,6 +79,7 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 ~~~
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
 fails (`REFUSALS`): a site entry by the Site's (`verity.core.site.entry_refusal`), an information entry by `previous`
 and then `duplicate-information`, a declaration by `previous` and then `duplicate-declaration`. A component reads its
@@ -67,6 +98,19 @@ fails (`REFUSALS`, in order). A component reads its view of an accepted log (`Vi
 otherwise; registration is ASCII-only without DEL, and a log or parameters holding any other character is `Malformed` as
 `ascii` before any digest is taken.
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+fails (`REFUSALS`, in order). A component reads its view of an accepted log (`View`): the site, θ's values
+(`View.value`), the builder and the days' declared circuits (`View.declared`), at the head. Decoding takes exactly what the encoders write and raises `Malformed`
+otherwise; registration is ASCII-only without DEL, and a log or parameters holding any other character is `Malformed` as
+`ascii` before any digest is taken.
+=======
+fails (`REFUSALS`): a site entry by the Site's (`verity.core.site.entry_refusal`), an information entry by `previous`
+and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`. A component reads
+its view of an accepted log (`View`): the Site, θ's values (`View.value`), the builder and the days' declared circuits
+(`View.declared`), at the head. Decoding takes exactly what the encoders write and raises `Malformed`
+otherwise; a log or parameters holding a character outside ASCII without DEL are `Malformed` (`ascii`), in
+`Core.canonicalJson`'s words.
+>>>>>>> 7af4d24fca3e
 """
 
 from __future__ import annotations
@@ -83,6 +127,7 @@ from verity.core.wire import canonical
 INFORMATION = "verity/registration/information/v1"
 DECLARATION = "verity/registration/declaration/v1"
 PROTOCOL = "verity/registration/log/v1"
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
 REFUSALS = (*S.REFUSALS, "duplicate-information", "duplicate-declaration")
 ||||||| merged common ancestors
@@ -132,6 +177,32 @@ over `[-128, 127]`, `[-2, 1]`, `[0, 3]` or `[0, 15]`, or the one value 0."""
 class Malformed(ValueError):
     """Bytes or JSON that aren't what the encoders write."""
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+OUTSIDE = "outside"
+"""The rest of the world: an end every site has, whose id no location may take."""
+COMPOSITES = ("onsite", "remote")
+KINDS = ("site", "host", "device", "memory", "certifier", "challenger", "outside")
+TIERS = ("hbm", "dram", "disk")
+OWNERS = ("prover", "auditor")
+PARENTS: dict[str, tuple[str | None, ...]] = {
+    "site": (None,), "host": ("site",), "device": ("host",), "memory": ("device", "host"), "certifier": ("site",),
+    "challenger": ("site",), "outside": ()}
+"""The kinds of parent a location of each kind may have, None being the root."""
+LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
+"""The pairs of kinds a link may join, in either order."""
+AUDITOR_KINDS = ("certifier", "challenger")
+REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "card-digest", "figures", "capacity", "owner",
+            "uncertified", "challenger-reach", "duplicate-information", "duplicate-declaration")
+OPERAND_CLASSES = ("uniform-s8", "uniform-s2", "uniform-u2", "uniform-u4", "zero")
+"""The operand classes of a tensor-core multiply-add, `DeviceFigures`' `OperandClass`: int8 operands drawn uniformly
+over `[-128, 127]`, `[-2, 1]`, `[0, 3]` or `[0, 15]`, or the one value 0."""
+
+
+class Malformed(ValueError):
+    """Bytes or JSON that aren't what the encoders write."""
+=======
+REFUSALS = (*S.REFUSALS, "duplicate-information", "duplicate-declaration")
+>>>>>>> 7af4d24fca3e
 
 
 class Refused(Exception):
@@ -160,6 +231,7 @@ class Information:
 
 @dataclass(frozen=True)
 class Declaration:
+<<<<<<< 94ca7fd0d18
     """A day's declared circuit (`Core.Registration.Declared`): the day, by its index among the monitoring period's days,
     its program's SHA-512 as hex, its block Definitions by descriptor key, and the head of the log it follows
     (`previous`, set by `chain`)."""
@@ -183,6 +255,30 @@ class Declaration:
 
 Entry = S.Entry | Information | Declaration
 """An entry of the registration log: the Site's site entry, an information entry or a declaration."""
+||||||| e10cf2c8559
+=======
+    """A day's declared circuit (`Core.Registration.Declared`): the day, by its index among the monitoring period's
+    days, its program's SHA-512 as hex, and its block Definitions by descriptor key; and the head of the log it follows
+    (`previous`, set by `chain`)."""
+
+    day: int
+    program: str
+    blocks: tuple[str, ...] = ()
+    previous: str = ""
+
+    def body(self) -> dict[str, Any]:
+        return {"blocks": list(self.blocks), "day": self.day, "program": self.program}
+
+    def to_json(self) -> dict[str, Any]:
+        return {**self.body(), "format": DECLARATION, "previous": self.previous}
+
+    def digest(self) -> str:
+        return S.tagged(DECLARATION, self.to_json())
+
+
+Entry = S.Entry | Information | Declaration
+"""An entry of the registration log: the Site's site entry, an information entry, or a declaration."""
+>>>>>>> 7af4d24fca3e
 
 
 def item_key(item: Mapping[str, Any]) -> str:
@@ -190,6 +286,7 @@ def item_key(item: Mapping[str, Any]) -> str:
     return "theta " + item["value"] if item["kind"] == "theta" else item["kind"]
 
 
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
 def site(sheets: Sequence[S.Sheet] = (), locs: Sequence[S.Loc] = (), links: Sequence[S.Link] = ()) -> S.Entry:
     """A site entry adding `sheets`, `locs` and `links`, its `previous` for `chain` to set."""
@@ -261,6 +358,52 @@ def genesis(composite: str) -> str:
     """The head of a composite's empty log."""
     return tagged(GENESIS, {"composite": composite})
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+@dataclass(frozen=True)
+class Declaration:
+    """A day's declared circuit (`Core.Registration.Declared`): the day, by its index among the monitoring period's days,
+    its program's SHA-512 as hex, and its block Definitions by descriptor key."""
+
+    day: int
+    program: str
+    blocks: tuple[str, ...] = ()
+
+    def to_json(self) -> dict[str, Any]:
+        return {"blocks": list(self.blocks), "day": self.day, "program": self.program}
+
+
+@dataclass(frozen=True)
+class Entry:
+    previous: str
+    body: Hardware | Information | Declaration
+
+    @property
+    def format(self) -> str:
+        return (HARDWARE if isinstance(self.body, Hardware) else DECLARATION if isinstance(self.body, Declaration)
+                else INFORMATION)
+
+    def to_json(self) -> dict[str, Any]:
+        b = self.body
+        if isinstance(b, Hardware):
+            return {"cards": [k.to_json() for k in b.cards], "format": HARDWARE,
+                    "links": [k.to_json() for k in b.links], "locs": [x.to_json() for x in b.locs],
+                    "previous": self.previous}
+        if isinstance(b, Declaration):
+            return {**b.to_json(), "format": DECLARATION, "previous": self.previous}
+        return {"format": INFORMATION, "items": [dict(i) for i in b.items], "previous": self.previous}
+
+    def digest(self) -> str:
+        return tagged(self.format, self.to_json())
+
+
+def genesis(composite: str) -> str:
+    """The head of a composite's empty log."""
+    return tagged(GENESIS, {"composite": composite})
+=======
+def site(sheets: Sequence[S.Sheet] = (), locs: Sequence[S.Loc] = (), links: Sequence[S.Link] = ()) -> S.Entry:
+    """A site entry adding `sheets`, `locs` and `links`, its `previous` for `chain` to set."""
+    return S.Entry("", tuple(sheets), tuple(locs), tuple(links))
+>>>>>>> 7af4d24fca3e
 
 
 def head(composite: str, log: Sequence[Entry]) -> str:
@@ -268,6 +411,7 @@ def head(composite: str, log: Sequence[Entry]) -> str:
     return log[-1].digest() if log else S.genesis(composite)
 
 
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
 def chain(composite: str, entries: Sequence[Entry]) -> list[Entry]:
     """The log of `entries` in order, each following the head of the log before it."""
@@ -278,6 +422,13 @@ def chain(composite: str, bodies: Sequence[Hardware | Information]) -> list[Entr
 def chain(composite: str, bodies: Sequence[Hardware | Information | Declaration]) -> list[Entry]:
     """The log of `bodies` in order, each entry following the head of the log before it."""
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+def chain(composite: str, bodies: Sequence[Hardware | Information | Declaration]) -> list[Entry]:
+    """The log of `bodies` in order, each entry following the head of the log before it."""
+=======
+def chain(composite: str, entries: Sequence[Entry]) -> list[Entry]:
+    """The log of `entries` in order, each following the head of the log before it."""
+>>>>>>> 7af4d24fca3e
     log: list[Entry] = []
     for e in entries:
         log.append(replace(e, previous=head(composite, log)))
@@ -372,6 +523,7 @@ def entry_of(j: Any) -> Entry:
         return S.Entry.of_json(j)
     if fmt == INFORMATION:
         _exactly(j, ["format", "items", "previous"], "an information entry")
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
         return Information(tuple(item_of(i) for i in _list(j["items"], "items")), _str(j["previous"], "previous"))
     if fmt == DECLARATION:
@@ -387,13 +539,27 @@ def entry_of(j: Any) -> Entry:
 =======
         previous = _hex64(j["previous"], "previous")
         return Entry(previous, Information(tuple(item_of(i) for i in _list(j["items"], "items"))))
+||||||| e10cf2c8559
+        previous = _hex64(j["previous"], "previous")
+        return Entry(previous, Information(tuple(item_of(i) for i in _list(j["items"], "items"))))
+=======
+        return Information(tuple(item_of(i) for i in _list(j["items"], "items")), _str(j["previous"], "previous"))
+>>>>>>> 7af4d24fca3e
     if fmt == DECLARATION:
         _exactly(j, ["blocks", "day", "format", "previous", "program"], "a declaration")
         previous = _hex64(j["previous"], "previous")
         blocks = tuple(_str(b, "a declaration's block") for b in _list(j["blocks"], "blocks"))
+<<<<<<< 94ca7fd0d18
         return Entry(previous, Declaration(_nat(j["day"], "day"), _hex64(j["program"], "program"), blocks))
     raise Malformed(f"an entry: format {fmt} is not one of [{HARDWARE}, {INFORMATION}, {DECLARATION}]")
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+        return Entry(previous, Declaration(_nat(j["day"], "day"), _hex64(j["program"], "program"), blocks))
+    raise Malformed(f"an entry: format {fmt} is not one of [{HARDWARE}, {INFORMATION}, {DECLARATION}]")
+=======
+        return Declaration(_nat(j["day"], "day"), _hex64(j["program"], "program"), blocks, previous)
+    raise Malformed(f"an entry: format {fmt} is not one of [{S.SITE}, {INFORMATION}, {DECLARATION}]")
+>>>>>>> 7af4d24fca3e
 
 
 def log_of(j: Any) -> tuple[str, list[Entry]]:
@@ -417,6 +583,7 @@ def site_refusal(auditor: Auditor, composite: str, s: S.Site, head: str, e: S.En
 
 @dataclass(frozen=True)
 class State:
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
     """The log so far, folded: its Site, its information items in order, its head, its length and its declarations in
 ||||||| merged common ancestors
@@ -424,6 +591,11 @@ class State:
 =======
     """The log so far, folded: its site, its information items in order, its head, its length and its declarations in
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+    """The log so far, folded: its site, its information items in order, its head, its length and its declarations in
+=======
+    """The log so far, folded: its Site, its information items in order, its head, its length and its declarations in
+>>>>>>> 7af4d24fca3e
     order."""
 
     site: S.Site
@@ -437,6 +609,7 @@ class State:
             return site_refusal(auditor, composite, self.site, self.head, e)
         if e.previous != self.head:
             return "previous"
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
         if isinstance(e, Declaration):
             return "duplicate-declaration" if any(d.day == e.day for d in self.declared) else None
@@ -452,8 +625,20 @@ class State:
             return "duplicate-declaration" if any(d.day == e.body.day for d in self.declared) else None
         return None if _nodup([item_key(i) for i in self.items + e.body.items]) else "duplicate-information"
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+        if isinstance(e.body, Hardware):
+            return hardware_refusal(auditor, composite, self.site, e.body)
+        if isinstance(e.body, Declaration):
+            return "duplicate-declaration" if any(d.day == e.body.day for d in self.declared) else None
+        return None if _nodup([item_key(i) for i in self.items + e.body.items]) else "duplicate-information"
+=======
+        if isinstance(e, Declaration):
+            return "duplicate-declaration" if any(d.day == e.day for d in self.declared) else None
+        return None if _nodup([item_key(i) for i in self.items + e.items]) else "duplicate-information"
+>>>>>>> 7af4d24fca3e
 
     def add(self, e: Entry) -> State:
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
         if isinstance(e, S.Entry):
             return replace(self, site=self.site.add(e), head=e.digest(), entries=self.entries + 1)
@@ -471,6 +656,20 @@ class State:
             return replace(self, declared=self.declared + (e.body,), head=e.digest(), entries=self.entries + 1)
         return replace(self, items=self.items + e.body.items, head=e.digest(), entries=self.entries + 1)
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+        if isinstance(e.body, Hardware):
+            return replace(self, site=self.site.add(e.body), head=e.digest(), entries=self.entries + 1)
+        if isinstance(e.body, Declaration):
+            return replace(self, declared=self.declared + (e.body,), head=e.digest(), entries=self.entries + 1)
+        return replace(self, items=self.items + e.body.items, head=e.digest(), entries=self.entries + 1)
+=======
+        if isinstance(e, S.Entry):
+            return replace(self, site=self.site.add(e), head=e.digest(), entries=self.entries + 1)
+        if isinstance(e, Declaration):
+            return replace(self, declared=self.declared + (replace(e, previous=""),), head=e.digest(),
+                           entries=self.entries + 1)
+        return replace(self, items=self.items + e.items, head=e.digest(), entries=self.entries + 1)
+>>>>>>> 7af4d24fca3e
 
     def view(self) -> View:
         return View(self.site, tuple(dict(i) for i in self.items if i["kind"] == "theta"),
@@ -496,6 +695,7 @@ def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
 
 @dataclass(frozen=True)
 class View:
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
     """What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder,
     and the days' declared circuits in order (`{"blocks", "day", "program"}` each)."""
@@ -503,6 +703,11 @@ class View:
     """What a component reads of an accepted log, at its head: the site, θ's registered values in order, the builder."""
 =======
     """What a component reads of an accepted log, at its head: the site, θ's registered values in order, the builder,
+||||||| e10cf2c8559
+    """What a component reads of an accepted log, at its head: the site, θ's registered values in order, the builder,
+=======
+    """What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder,
+>>>>>>> 7af4d24fca3e
     and the days' declared circuits in order."""
 >>>>>>> 705be2b532
 
@@ -535,6 +740,7 @@ class View:
 >>>>>>> 705be2b532
 
     def to_json(self) -> dict[str, Any]:
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
         return {"builder": self.builder, "declarations": list(self.declarations), "head": self.head,
 ||||||| merged common ancestors
@@ -542,6 +748,11 @@ class View:
 =======
         return {"builder": self.builder, "declarations": [d.to_json() for d in self.declarations], "head": self.head,
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+        return {"builder": self.builder, "declarations": [d.to_json() for d in self.declarations], "head": self.head,
+=======
+        return {"builder": self.builder, "declarations": [d.body() for d in self.declarations], "head": self.head,
+>>>>>>> 7af4d24fca3e
                 "site": self.site.to_json(), "theta": list(self.theta)}
 
 

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Prover.Piop
-public import Proofs.Flock.Claims.Complete.Zk.Tape
+public import Flock.Zk
 
 /-!
 # The masked prover's zerocheck and lincheck

@@ -1,8 +1,15 @@
 module
 
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Algebra.CharZero.Defs
+public import Mathlib.Data.Fintype.Powerset
 public import Proofs.Spot.Egress
 public import Proofs.Spot.Pointer
 public import Proofs.Spot.Work
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Fintype.BigOperators
+import Proofs.Spot.Determinacy
 
 /-!
 # Leakage is the incorrect proof blocks' cone egress

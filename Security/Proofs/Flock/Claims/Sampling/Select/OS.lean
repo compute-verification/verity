@@ -167,9 +167,10 @@ theorem drawUnits_subset_runOS (k n : ℕ) {L : Fin 1 → ℕ} (f : (i : Fin 1) 
     obtain ⟨r, read⟩ := x
     cases r <;> rfl
 
-/-- A sampling design object `flockLaw` reads as a subset sampling design is of kind `subset`, sampling no more than the population. -/
+/-- A sampling design object `flockLaw` reads as a subset sampling design is of kind `subset`, sampling at least one
+unit and no more than the population. -/
 theorem flockLaw_subset (law : Json) (n k : ℕ) (h : Draw.flockLaw law n = .ok (.subset k)) :
-    kindOf law = "subset" ∧ k ≤ n := by
+    kindOf law = "subset" ∧ 1 ≤ k ∧ k ≤ n := by
   unfold Draw.flockLaw at h
   split at h
   next s hs =>
@@ -181,8 +182,10 @@ theorem flockLaw_subset (law : Json) (n k : ℕ) (h : Draw.flockLaw law n = .ok 
       split at h
       · split at h
         · exact absurd h (throw_bind_ne _ _ _)
+        split at h
+        · exact absurd h (throw_bind_ne _ _ _)
         · obtain rfl := Flock.Draw.Law.subset.inj (Except.ok.inj h)
-          exact ⟨by rwa [hk], by omega⟩
+          exact ⟨by rwa [hk], by omega, by omega⟩
       · exact absurd h (throw_ne _ _)
     all_goals exfalso
     all_goals repeat' (first

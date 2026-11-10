@@ -1,20 +1,17 @@
 module
 
-public import Flock.Canon
-public import PousCheck.Merkle
-public import PousCheck.Challenge
 public import PousCheck.Certificate
-public import PousCheck.Prim.PyJson
 
 /-!
 # The timed audit's verdict on its record
 
 `protocol.TimedAudit` with `audit.UnsignedRounds` (`verity/core/protocols/pous/protocol.py`, `audit.py`), as the GPU
-harness's memory challenger runs it strict (`verity/core/devices/memory_challenger/timed_audit.py --strict`, P2 v3's arm) on the
-registered scheme's framing (`schemes/p2.py`, `p2-<w>/v4`), judged from what that process records: `READY.json` (the salt,
-the scheme and its manifest), `LEAVES.bin` (one 64-byte leaf digest a block, `verifier.leaf_hash`) and its audit document
-(the root, `Δ`, the RTT allowance, the limit, `strict`, `k`, and each audit's challenge `source` with each answer's index,
-elapsed time and block). `verdict` is `memory_challenger.verdict`, which drives `TimedAudit` on the same record:
+harness's memory challenger runs it strict (`verity/core/devices/memory_challenger/timed_audit.py --strict`, P2 v3's
+arm) on the registered scheme's framing (`schemes/p2.py`, `p2-<w>/v4`), judged from what that process records:
+`READY.json` (the salt, the scheme and its manifest), `LEAVES.bin` (one 64-byte leaf digest a block,
+`verifier.leaf_hash`) and its audit document (the root, `Δ`, the RTT allowance, the limit, `strict`, `k`, and each
+audit's challenge `source` with each answer's index, elapsed time and block). `verdict` is the memory challenger's
+`timed_audit.verdict`, which drives `TimedAudit` on the same record:
 
 * `fault "ready"`: not P2 v4 (`p2-<w>/v4` at a manifest `P2Params` gives back, keys sorted or not, with a 24-byte salt);
 * `fault "leaves"`: not one digest a block;

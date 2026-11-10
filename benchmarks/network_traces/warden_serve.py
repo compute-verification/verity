@@ -1,5 +1,5 @@
-"""warden-serve: the active warden (`verity.core.protocols.certifier.warden`) on one host, a relay that knows bytes
-only, in front of any TCP server, and the offline check of what it published.
+"""warden-serve: the active warden (`verity.core.protocols.certifier.warden`) on one host, a relay in front of any TCP
+server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
 connection to the server (`--upstream HOST:PORT`) for it and forwards each direction's bytes unchanged in content, on
@@ -8,7 +8,11 @@ its schedule, in B-byte cells; the client speaks cells through the thin, workloa
 
     client ──cells──▶ network certifier ──bytes──▶ server ──bytes──▶ network certifier ──cells──▶ client
 
-Nothing here is the network certifier's but bytes. Tonight's clients send HTTP/1.1 requests for vLLM's streamed
+**The egress form** (`--egress`, `warden`'s "The egress form"). `serve` releases the id form, the egress record's, by
+default: only `io_tie`'s id-form cells leave, and a server's other bytes fail their connection (format). `rehearse`
+names its traffic's: `id` with `--ids`, whose answers are id-form responses, else `bytes`, a relay of vLLM's stock
+framing and the fake's text whose parameters no period check takes. Beside that gate nothing here is the network
+certifier's but bytes. Tonight's clients send HTTP/1.1 requests for vLLM's streamed
 `/v1/completions` with `Connection: close`, so the server's end of stream ends egress (the network certifier never
 half-closes toward a server). The server gets each request whole at its release, with its place in the network
 certifier's release order, its release bucket and the network certifier's run id (`release`), which `deployment.json`
@@ -49,12 +53,13 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         [--temperature T] [--top-p P]
     python warden_serve.py fake --listen HOST:PORT [--token-ms 20] [--id-payload P]
     python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
-        --windows N [--start-in 5] [--load-heads FILE] [--paced-ms 50] [--watermark] [schedule]
+        --windows N [--start-in 5] [--load-heads FILE] [--paced-ms 50] [--watermark] [schedule] [--egress id|bytes]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
     python warden_serve.py check --run DIR
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
         [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--watermark] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
+        [--egress id|bytes]
 
 - `serve` writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters and their
   digest, the origin, the listener), runs the network certifier for `--windows` windows, each bucket released by its
@@ -106,7 +111,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import ctypes
-import dataclasses
 import fcntl
 import hashlib
 import http.client
@@ -143,8 +147,15 @@ from verity.core.protocols.certifier.grid import GridParams, Record, Status, row
 =======
 from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count
 from verity.core.protocols.certifier.release import WATERMARK_PATH
+<<<<<<< 94ca7fd0d18
 >>>>>>> 705be2b532
 from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
+||||||| e10cf2c8559
+from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
+=======
+from verity.core.protocols.certifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
+                                                    WardenParams, audit, cells)
+>>>>>>> 7af4d24fca3e
 
 HERE = Path(__file__).resolve().parent
 INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
@@ -1104,8 +1115,20 @@ def traffic_of(args, model: str) -> list[dict]:
                           temperature=args.temperature, top_p=args.top_p)
 
 
+def schedule_flags(q: argparse.ArgumentParser, egress: str | None) -> None:
+    """`WardenParams` as `q`'s flags: each integer field at `SCHEDULE`'s, and `--egress` at `egress` (None: the
+    traffic's, id with `--ids` and else bytes)."""
+    for name in INTEGER_FIELDS:
+        q.add_argument(f"--{name.replace('_', '-')}", type=int, default=SCHEDULE[name])
+    q.add_argument("--egress", choices=EGRESS_FORMS, default=egress,
+                   help="the egress form (warden's \"The egress form\"): id, the egress record's, which the period "
+                        "check takes, or bytes, any server's bytes, a rehearsal's relay of another form (default: "
+                        + (egress or "id with --ids, else bytes") + ")")
+
+
 def _params(args) -> WardenParams:
-    return WardenParams(**{f.name: getattr(args, f.name) for f in dataclasses.fields(WardenParams)})
+    egress = args.egress or ("id" if getattr(args, "ids", False) else "bytes")
+    return WardenParams(**{name: getattr(args, name) for name in INTEGER_FIELDS}, egress=egress)
 
 
 def _check_paced(args) -> None:
@@ -1115,8 +1138,7 @@ def _check_paced(args) -> None:
 
 
 def _flags(args) -> list[str]:
-    return [x for f in dataclasses.fields(WardenParams) for x in (f"--{f.name.replace('_', '-')}",
-                                                                 str(getattr(args, f.name)))]
+    return [x for k, v in asdict(_params(args)).items() for x in (f"--{k.replace('_', '-')}", str(v))]
 
 
 def await_model(url: str, seconds: float, poll: float = 5.0) -> str:
@@ -1259,9 +1281,17 @@ def parser() -> argparse.ArgumentParser:
                        help="also send the server the watermark stream, a chunked POST /verity/watermark on its own "
                             "connection, one line 't n l...' a tick: bucket t has closed, its releases are N < n, and "
                             "each l is one of its releases that the release's server connection lost")
+<<<<<<< 94ca7fd0d18
 >>>>>>> 705be2b532
         for field in dataclasses.fields(WardenParams):
             q.add_argument(f"--{field.name.replace('_', '-')}", type=int, default=SCHEDULE[field.name])
+||||||| e10cf2c8559
+        for field in dataclasses.fields(WardenParams):
+            q.add_argument(f"--{field.name.replace('_', '-')}", type=int, default=SCHEDULE[field.name])
+=======
+    schedule_flags(s, "id")
+    schedule_flags(r, None)
+>>>>>>> 7af4d24fca3e
     s.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT")
     s.add_argument("--key", required=True, type=Path, help="the network certifier's key directory (keys)")
     s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex")

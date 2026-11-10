@@ -10,11 +10,11 @@ import all Init.Data.Nat.Power2.Basic
 At a rep's start the Lean frame commits the pads it drew (`Flock.Firewall.Frame.padsRoot`): `treeRoot` of the leaves
 `H(H(c_h(j) ‖ c_μ(j)), salt j)`, a level at a time. The masked prover commits its tape's pads with `innerCommitP`, whose
 root is `layerOf`'s of the same leaves at its own salts (`FlockComplete.innerCommitP_root_layerOf`). On the tape of the
-frames' samples they are one root:
+frames' draws they are one root:
 
 * `treeRoot_layerOf`: `treeRoot` of `2^d` leaves is `layerOf`'s root, so `padsRoot` is `layerOf`'s root of the frame's
   leaves (`padsRoot_layerOf`), over `codeLen` columns (`ofBytes_cols`).
-* `padsRoot_tapeOfDraws`: at frame rep `rep i r`'s samples of `drawBytes` bytes, the frame's `padsRoot` is the root
+* `padsRoot_tapeOfDraws`: at frame rep `rep i r`'s draws of `drawBytes` bytes, the frame's `padsRoot` is the root
   `innerCommitP` commits table `i`'s rep `r`'s pads under on `tapeOfDraws`: the pads are the frame's
   (`padsOf_tapeOfDraws`) and so are the leaf salts (`innerSalt_fit`).
 -/
@@ -70,7 +70,7 @@ theorem ofBytes_cols (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
       codeLen l := by
   simp [Draws.ofBytes, _root_.Flock.Firewall.Frame.words, codeLen]
 
-/-- **The frame's pads root is `layerOf`'s root** of its leaves: column `j`'s leaf under the samples' `j`-th salt. -/
+/-- **The frame's pads root is `layerOf`'s root** of its leaves: column `j`'s leaf under the draws' `j`-th salt. -/
 theorem padsRoot_layerOf (l : _root_.Flock.Zk.PadLayout) (d : Draws) :
     padsRoot l d = (FlockComplete.layerOf (fun l r => _root_.Flock.Sha512.hash (l ++ r)) (Nat.log2 (codeLen l))
       (fun j => _root_.Flock.Hm96.Default512.leaf (_root_.Flock.Sha512.hash
@@ -83,8 +83,8 @@ theorem padsRoot_layerOf (l : _root_.Flock.Zk.PadLayout) (d : Draws) :
   unfold padsRoot
   rw [hD, Nat.log2_two_pow, treeRoot_layerOf]
 
-/-- **The frame's pads root is the masked prover's**: at frame rep `rep i r`'s samples of `drawBytes` bytes, the frame's
-`padsRoot` is the root `innerCommitP` commits table `i`'s rep `r`'s pads under, on the tape of the frames' samples. -/
+/-- **The frame's pads root is the masked prover's**: at frame rep `rep i r`'s draws of `drawBytes` bytes, the frame's
+`padsRoot` is the root `innerCommitP` commits table `i`'s rep `r`'s pads under, on the tape of the frames' draws. -/
 theorem padsRoot_tapeOfDraws (t : FlockComplete.TapeZk) (lay : ℕ → _root_.Flock.Zk.PadLayout) (B : ℕ → ByteArray)
     (rep : ℕ → ℕ → ℕ) (i r : ℕ) (hs : (B (rep i r)).size = drawBytes (lay (rep i r)))
     {ic : FlockComplete.InnerCommit}

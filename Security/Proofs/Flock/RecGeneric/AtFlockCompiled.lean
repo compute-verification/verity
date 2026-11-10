@@ -5,7 +5,7 @@ public import Proofs.Flock.RecGeneric.AtFlock
 /-!
 # L2 at Flock: the compiler at today's compiled record, over Flock `--zk`
 
-The compiler statement (`Flock.Guarantees.GenericRecursiveKSCompiled`) at today's recursion: the outer argument is
+The compiler statement (`Claims.RecGeneric.CompilerKS`) at today's recursion: Π_out is
 Flock `--zk` at the outer record's deployed decoder (`Claims.SamplingGeneric.Arg.ofFlock DO`, its assemble step
 counted), and the compiler is today's compiled record read session by session (`Compiled.ofRec`, `recCompiler`):
 

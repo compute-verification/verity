@@ -14,9 +14,8 @@ The proof system's own checks (`service.py`), each with Python's codes, order an
 -/
 module
 
-public import Spot.Registration
 public import Spot.PyJson
-public import Std.Data.HashMap
+public import Spot.Json
 
 @[expose] public section
 
@@ -74,6 +73,7 @@ def checkPublic (record scheme : Json) (query : String) (values : Array Value) (
     for s in strata do
       need := need.push ("population:" ++ (← pyStr (if s matches .obj _ then getD s "template" else s)))
   if present "window" then need := need.push "window"
+  if (field? (getD record "window") "seed_salt").isSome then need := need.push "seed_salt"
   if !(getD record "leaf_layer" matches .null) then need := need.push "leaf_layer"
   if truthy (getD record "anchors") then need := need.push "anchors"
   let mut wrong : Array Json := #[]

@@ -1,7 +1,7 @@
 module
 
-public import Properties.Accounting.Remote
 public import Proofs.Properties.Accounting.Remote.Plan
+public import Properties.Accounting.Remote
 
 /-!
 # The session's bookkeeping (`AcceptedMinPasses`, `PassesStepped`, `PassesReadDistinct`, `ReceiptsBelowLimit`,

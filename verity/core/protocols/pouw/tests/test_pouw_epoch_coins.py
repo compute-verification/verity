@@ -22,7 +22,7 @@ from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.spot import challenger as Ch
 from verity.core.protocols.pouw.audit import Epoch, Workload, salt_of, weights_root
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import ncp
+from verity.ml.protocols.pouw.schemes import ncp
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
@@ -171,9 +171,10 @@ def test_a_served_window_draws_every_coin_from_its_entropy_and_none_from_the_os(
 #: The PoUW and proof-system modules that read the operating system's randomness, each with why it isn't a coin, or
 #: the claim instance that names it
 OS_RANDOMNESS = {
-    "pouw/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named by A5's "
-                               "uniform/python-secrets",
-    "spot/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean (`_dumps`), no coin",
+    "ml/protocols/pouw/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named "
+                                            "by A5's uniform/python-secrets",
+    "core/protocols/spot/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean "
+                                                           "(`_dumps`), no coin",
 }
 
 
@@ -182,16 +183,17 @@ def test_the_served_path_takes_no_os_randomness_for_its_coins():
     `OS_RANDOMNESS` names: every coin comes from a challenger's named entropy, the Lean verifier's `coins` on
     the served path."""
     import ast
-    root = Path(EC.__file__).resolve().parents[1]
+    verity = Path(EC.__file__).resolve().parents[3]
     found = set()
-    for path in [*(root / "pouw").rglob("*.py"), *(root / "spot").rglob("*.py")]:
-        rel = path.relative_to(root).as_posix()
-        if "/tests/" in f"/{rel}" or "/.lake/" in f"/{rel}":
-            continue
-        for node in ast.walk(ast.parse(path.read_text(), rel)):
-            if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
-                    and (node.value.id, node.attr) in {("os", "urandom"), ("os", "getrandom"), ("random", "SystemRandom")}
-                    or isinstance(node, ast.alias) and node.name.split(".")[0] == "secrets"
-                    or isinstance(node, ast.ImportFrom) and node.module == "secrets"):
-                found.add(rel)
+    for d in ("core/protocols/pouw", "core/protocols/spot", "ml/protocols/pouw"):
+        for path in (verity / d).rglob("*.py"):
+            rel = path.relative_to(verity).as_posix()
+            if "/tests/" in f"/{rel}" or "/.lake/" in f"/{rel}":
+                continue
+            for node in ast.walk(ast.parse(path.read_text(), rel)):
+                if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                        and (node.value.id, node.attr) in {("os", "urandom"), ("os", "getrandom"), ("random", "SystemRandom")}
+                        or isinstance(node, ast.alias) and node.name.split(".")[0] == "secrets"
+                        or isinstance(node, ast.ImportFrom) and node.module == "secrets"):
+                    found.add(rel)
     assert found == set(OS_RANDOMNESS), sorted(found ^ set(OS_RANDOMNESS))

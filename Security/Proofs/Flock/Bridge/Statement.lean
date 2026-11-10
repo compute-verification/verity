@@ -43,11 +43,21 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **The circuit's constants**: `keyProg`'s constant wire `oneG` is `1` and its zero `zeroG` is `0`, public circuit
-structure, so `progOf` lowers them to constants (`.const`), which a proof block reads with no opening. -/
-noncomputable def _root_.Flock.Bridge.constsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
+/-- **The circuit's constant wires**: `keyProg`'s constant wire `oneG` is `1` and its zero `zeroG` is `0`. -/
+noncomputable def _root_.Flock.Bridge.constWiresOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
     (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
   if g = Discharge.Layout.oneG then some true else if g = Discharge.Layout.zeroG then some false else none
+
+open Classical in
+/-- **The circuit's constants**: `keyProg`'s constant wire `oneG` is `1`, and its zero `zeroG` and every program input
+no unit reads (`Bridge.owner`) are `0`, public circuit structure, so `progOf` lowers them to constants (`.const`), which
+a proof block reads with no opening. They are Bits' (`Spot.Bits.consts`). -/
+noncomputable def _root_.Flock.Bridge.constsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
+    (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
+  if g = Discharge.Layout.oneG then some true
+  else if g = Discharge.Layout.zeroG ∨ (g.val < 2 + n * Discharge.Layout.keyB c hU ∧
+      Bridge.owner ((keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)) g = none) then some false
+  else none
 
 open Classical in
 /-- **The sampled audit's knowledge soundness, live.** `EndToEndHidden`'s setting: for every live prover `τ`, strata
@@ -120,13 +130,10 @@ def SampledKSLive : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **The registered openings open the deployed commitment** (the bridge's `Transports`, at `SampledKSLive`'s
-commitment, roots, hash and registration): in `EndToEndHidden`'s setting, at every unit `u`, every committed wire `g` of
-`u` and every opening `o` of `g`'s registered commit string at the prover's registration, some data opens `g`'s claims
-position to `o`'s bit there, under the registration's roots at SHA-512. With `tr i o := ⟨i, vb.bit (vb.val o) (φ i), d⟩`,
-`d` chosen by it, it is `WrongSet.Transports execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb sha512Msg Cd
-(stmtOf P κ r desc q roots) (reg σ) u φ tr` at every `u`, `r`, `desc`, `q` and every `φ` that maps into `P.io u` only
-committed positions, its wire's (`φ i ∈ P.io u → posOf Cc (φ i) = i`). -/
+/-- **The registered openings open the deployed commitment** (at `SampledKSLive`'s commitment, roots, hash and
+registration): in `EndToEndHidden`'s setting, at every unit `u`, every committed wire `g` of `u` and every opening `o`
+of `g`'s registered commit string at the prover's registration, some data `d` opens `g`'s claims position
+(`posOf Cc g`) to `o`'s bit there, `vb.bit (vb.val o) g`, under the registration's roots at SHA-512 (`Cd.Opens`). -/
 def _root_.Flock.Bridge.TransportsLive : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)

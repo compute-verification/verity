@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 _spec = importlib.util.spec_from_file_location("h1_lanes_run", Path(__file__).resolve().parents[1] / "h1_lanes" / "run.py")
 RN = sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)

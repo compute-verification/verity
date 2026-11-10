@@ -10,6 +10,7 @@ public import Proofs.Accounting.Compose.CircuitWork
 public import Proofs.Accounting.Compose.WholeLuckOfEntropy
 public import Proofs.Accounting.Compose.CircuitWorkSeeded
 public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # PoUW's credit on an arbitrary declared circuit: proofs
@@ -59,7 +60,7 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    protocol fact under which those are the service's coins, as `SeedNamed` is in step 9. Under `LayerCommitted` an
    input's layer cut is its IR cut (`layer_stageCuts`: an input has no second case), so a run input is bound before its
    first reader's coin. Then
-   `Accounting.SecurityProofs.TS.SampledRightOff` at `S = 1` (its sample the layer's, `sampleOf`) gives one event of
+   `Accounting.SecurityProofs.TS.SampledRightOff` at `S = 1` (its sample the layer's, `drawOf`) gives one event of
    probability at most `δ_bind + δ_ks` off which every accepted sampled tile is right at its committed slots, so `Of`
    gives the share game's pass; `ServiceBudget` on `serviceGame` at `a`, `b` and `shareCone` (the same coins and pass)
    and `budget_tail` at `t = ln(1/δ_s)` bound `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s`, `S_F`, `S_0` the folded and whole
@@ -148,7 +149,7 @@ section Layer
 variable {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
   (pr : ProofRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
 
-theorem layer_sample : (Cd.layer hr hK pr).draw = sampleOf hK := rfl
+theorem layer_sample : (Cd.layer hr hK pr).draw = drawOf hK := rfl
 
 theorem layer_src (ℓ : ℕ) : (Cd.layer hr hK pr).src ℓ =
     if h : ℓ < Cd.dag.length ∧ Cd.binding ℓ ≠ some .coin ∧ Cd.unit ℓ < Np then some (0, ⟨Cd.unit ℓ, h.2.2⟩)

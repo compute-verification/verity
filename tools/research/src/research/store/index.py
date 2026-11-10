@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS replica_checks(id TEXT, location TEXT, verified TEXT,
 """
 # Schema rule: the catalog is shared by every worktree on this machine, including ones running older `research` code, and older
 # code inserts into the original tables positionally (`INSERT ... VALUES (?,?,?,?)`).  Never add a column to a shipped table --
-# it breaks every older writer at once (2026-09-22: `replicas.verified` did exactly that to six running lanes).  Add a side
+# it breaks every older writer at once, every running lane's included.  Add a side
 # table keyed like the original instead; `replica_checks` is the first.
 #
 # Every row a write reads, replaces or deletes is found through an index.  A write holds the catalog's lock until it commits,
@@ -153,6 +153,11 @@ def _g(d: Any, *keys: str) -> Any:
     return d
 
 
+#: how long a connection waits on another process's lock before "database is locked": a refresh's write transaction can hold
+#: the catalog for minutes while every check shard on the same node reads it
+BUSY_TIMEOUT_S = 300
+
+
 class Index:
     """Usable from several threads: `db` is the calling thread's own connection (a sqlite3 connection must not be shared, and one
     thread's BEGIN would take in another's writes), opened on first use and closed by `close()` with the rest."""
@@ -173,7 +178,7 @@ class Index:
         db = getattr(self._local, "db", None)
         if db is None:
             # autocommit; explicit BEGIN where several writes must land together.  check_same_thread off only so `close()` may close it.
-            db = self._local.db = sqlite3.connect(self.path, timeout=30, isolation_level=None, check_same_thread=False)
+            db = self._local.db = sqlite3.connect(self.path, timeout=BUSY_TIMEOUT_S, isolation_level=None, check_same_thread=False)
             with self._dbs_lock:
                 self._dbs.append(db)
         return db
@@ -348,14 +353,14 @@ class Index:
 
     def sql(self, query: str, params: tuple = ()) -> list[tuple]:
         """Power-user escape hatch on a read-only connection."""
-        ro = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=30)
+        ro = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=BUSY_TIMEOUT_S)
         try:
             return ro.execute(query, params).fetchall()
         finally:
             ro.close()
 
     def sql_with_columns(self, query: str, params: tuple = ()) -> tuple[list[str], list[tuple]]:
-        ro = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=30)
+        ro = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=BUSY_TIMEOUT_S)
         try:
             cur = ro.execute(query, params)
             return [d[0] for d in cur.description or []], cur.fetchall()

@@ -1,9 +1,13 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Extraction
-public import Proofs.Flock.Soundness.Audit.Flock
 public import Proofs.Flock.Soundness.Knowledge
-public import Proofs.Flock.Soundness.Lowering
+public import Definitions.Flock.Lowering
+public import Proofs.Flock.Soundness.Game
+public import Proofs.Flock.Soundness.Instance
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # The Flock audit at the compiled layer, one table: `ε_ks` from `table_knowledge_sound_joint_tight`
@@ -31,7 +35,8 @@ wrong sampled proof block, pointwise in the reruns) follows from **the lowering*
 a message packing a witness that satisfies the table's statement decodes, for each sampled proof block, to
 values on which that unit is correct. `loweringSoundC_of_place` discharges it from each sampled
 proof block's place in the table (`UnitPlace`, `Lowering.lean`), where the audit's circuit `C` is the rows
-the verifier parses; what a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`).
+the verifier parses; what a correct unit computes beyond its rows is outside it (rows derived from a gate circuit
+carry its outputs, `GateRows.rows_sound`; `ASSUMPTIONS.md`, The circuit and the certificate).
 
 **The discharge** (`flock_compiled_knowledgeSound`): the audit's knowledge term is the table
 theorem's bound for the prover's strategy after each sample, averaged over the sample,
@@ -109,7 +114,7 @@ end FlockTableC
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (plan : Finset (Fin n) → Reg → FlockTableC)
 
 /-- **The compiled session on a sample**: one compiled table, planned by the verifier from the sample

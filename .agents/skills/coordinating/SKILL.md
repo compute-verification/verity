@@ -113,6 +113,8 @@ using-slack skill).
 - **Its brief starts with the issue's URL and done-condition.** It tells the worker to comment each run id, verdict line
   and PR on the issue with `research msg linear comment ISSUE 'TEXT' --worker NAME`.
 - **No issue, no worker.** A worker running for no issue is stopped, or gets an issue.
+- **It ends its turn done or blocked, never on a plan.** The brief says so. A worker whose last words are "I'll do X"
+  has stopped, so resume it with X. An idle worker reads no inbox message: resume it with the message instead.
 - **Map the premises before staffing proofs.** Before staffing proof workers for a guarantee or bound, write one premise
   map: a row per premise, with the code check that discharges it, its Lean Property and its owner. Check each row against
   AGENTS.md's design rules (zero knowledge, no Python premise, one vocabulary, O(descriptor)), take the map to @soundness
@@ -140,13 +142,13 @@ using-slack skill).
 - **Every few hours, and before ending a long turn:** run `research msg linear audit --lane ME` and fix what it finds.
   Each line gives the fix: place an orphan, date it, retitle it, close a landed issue, attach an unlinked one's PR,
   re-date a lapsed milestone, comment on a quiet one, or cancel a stale one.
-- **When a goal you own changes, and at least every 12 hours:** update it on the Goals page (the writing-goals skill).
+- **When a goal you own changes:** update it on the Goals page (the writing-goals skill).
 - **On a launch:** file the sub-issue first, then launch the worker named after it.
 - **At each checkpoint:** list your workers by state (`batch-fetch-details`) and resume each idle one whose runs have
   ended or that has inbox messages queued. Completion notices can lapse, and the inbox reaches only running agents.
   Judge a running worker by its commits, PRs, runs and notes: a fetched transcript lacks a resumed turn.
 
-top's hourly sweep (`infra/control/top_watch.py`) runs the same audit and only reports. It rings a lane with findings
-once every 12 hours, a person's ask off track every hour (and @top) until it holds (a slip once per new date), and records the counts in `linear-audit.jsonl`.
-top's hourly audit of the Goals page rings the owner of a goal past its due, unchanged for 12 hours, or past a step's
-day. top reads the campaign's state from the Goals page and Linear, not from Slack.
+top's hourly sweep (`infra/control/top_watch.py`) runs the same audit and only reports. Once every 12 hours it rings a
+lane with findings, and a lane with a person's ask off track until it holds (a slip, until its `slip:` comment), and it
+records the counts in `linear-audit.jsonl`. Once a day top rings the owner of a goal past its due, for a new date or its
+evidence. top reads the campaign's state from the Goals page and Linear, not from Slack.

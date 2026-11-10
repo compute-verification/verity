@@ -25,9 +25,25 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+<<<<<<< 94ca7fd0d18
 from verity_vllm.protocols.pouw.pearl_c.host import _event, _Lane, _zeros, torch_uint8
 from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into
 from verity_vllm.protocols.pouw.pearl_c.whole_calls import WholeCall, WholeCalls
+||||||| e10cf2c8559
+from verity.core.protocols.pouw.protocol import Matmul, Shape
+from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+
+from verity_vllm.protocols.pouw.pearl_c.passes import call_index
+from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _event, _Lane, _write, _zeros, torch_uint8
+from verity_vllm.protocols.pouw.pearl_c.screen import excluded, scatter_into
+=======
+from verity.core.protocols.pouw.protocol import Matmul, Shape
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
+
+from verity_vllm.protocols.pouw.pearl_c.passes import call_index
+from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _event, _Lane, _write, _zeros, torch_uint8
+from verity_vllm.protocols.pouw.pearl_c.screen import excluded, scatter_into
+>>>>>>> 7af4d24fca3e
 
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight

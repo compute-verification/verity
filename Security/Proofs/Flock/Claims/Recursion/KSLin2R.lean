@@ -8,9 +8,8 @@ public import Proofs.Flock.Claims.Recursion.LastCallsR
 
 `StepsBase` fixes the bound record's columns at the deployed plain verifier's (`deployPlainTrim`). The deployed reader
 opens its own (`colsRV rd`, trimmed: `deployPlainTrimR`), so `StepsBaseC` is `StepsBase` at any columns `colsE`, and
-`ksLin2_stepsC_partAccepts` and `bitsLin2_stepsC_partAccepts` are `ksLin2_deployedE_partAccepts` and
-`bitsLin2_deployedE_partAccepts` at any steps and columns meeting it: `ksLin2_route_staged` at `layoutBTops (finOpen
-rest)` and the challenger's live-coin part's record (`recTr`), which reads nothing of the columns beyond `StepsBaseC`.
+`ksLin2_stepsC_partAccepts` and `bitsLin2_stepsC_partAccepts` give `KSLin2` and `BitsLin2` at any steps and columns
+meeting it: `ksLin2_route_staged` at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record (`recTr`), which reads nothing of the columns beyond `StepsBaseC`.
 
 At the deployed reader's steps and trimmed columns (`stepsBase_R`):
 

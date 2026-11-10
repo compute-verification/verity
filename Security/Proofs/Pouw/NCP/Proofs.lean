@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.NCP.Pinned
 public import Proofs.Pouw.Exact
 public import Definitions.Pouw.Guarantees.NCP
+public import Proofs.Pouw.Lemmas.NCP
 
 /-!
 # Noise that cancels inside one checked product: proofs

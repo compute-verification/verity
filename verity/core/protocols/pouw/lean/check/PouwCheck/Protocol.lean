@@ -1,8 +1,6 @@
 module
 
-public import CoreProtocol.Cli
 public import PouwCheck.Check
-public import Identity.Domains
 
 /-!
 # PoUW's execution phase check as a `Core.Protocol`

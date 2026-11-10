@@ -54,7 +54,7 @@
 #   --dram-reserve-gib G DRAM left out of the fill (default 16)
 #   --lease-min M        gpu-lease's --max-min (default 60; a fill of the disks too takes longer)
 #   --gpu NAME           refuse a GPU whose name lacks NAME (default H200; any: take any)
-#   --node NAME          the prover's node, the wiped server's id (default: hostname)
+#   --node NAME          the developer's node, the wiped server's id (default: hostname)
 #   --limit-ns N         the deadline a read (default 20 ms)
 #   --no-lean            judge in Python alone; judge out/wipe.case.json with wipe-protocol later on a CPU node
 #   --wipe-protocol EXE  the Lean judge built elsewhere (served_wipe.sh builds it outside this tree's .lake, which

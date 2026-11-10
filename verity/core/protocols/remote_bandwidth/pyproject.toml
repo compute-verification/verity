@@ -9,7 +9,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/core/protocols/spot/coins.py", "verity/core/protocols/spot/one_stage/link_points.py",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/record.py",
-          "verity/core/protocols/profile.py", "verity/core/protocols/spot/__init__.py",
+          "verity/core/protocols/profile.py", "verity/core/protocols/reporting.py",
+          "verity/core/protocols/spot/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/spot/challenger.py", "verity/core/protocols/spot/remote.py",
           # one_stage's registration, which core_check imports, and its draw and verdict
@@ -23,6 +24,7 @@ inputs = ["verity/core/protocols/spot/coins.py", "verity/core/protocols/spot/one
           "verity/core/periods",
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/core/protocols/pous",
+          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
           # the deployment layer and its wire, which the session's parties run on (`session_parties.py`)
           "verity/core/wire", "verity/core/deploy",
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and

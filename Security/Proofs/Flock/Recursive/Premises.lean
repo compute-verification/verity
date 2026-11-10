@@ -1,11 +1,22 @@
 module
 
 public import Proofs.Flock.Recursive.Compile
-public import Proofs.Flock.Recursive.Raw
-public import Proofs.Flock.Soundness.Assumptions.Recursive
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Assumptions.Inner
 public import Proofs.Flock.Soundness.Assumptions.Registrant
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The premises the recursive audit's property takes
@@ -88,7 +99,7 @@ arithmetic (`execArith`) and the inner statement's Merkle scheme, SHA-512 with p
 `Refine.leafPlain` under `Refine.H512`), on the class `cls`, its regions and the schedule `sch`. -/
 def CompiledForkSound {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
     (cls : HClass) (regs : List (FlockSoundness.Model.Region cls.kLog (cls.m - cls.kLog)))
-    (sch : Accounting.Schedule) : Prop :=
+    (sch : FlockSoundness.Accounting.Schedule) : Prop :=
   InnerSoundForkOn Refine.H512 (flockInnerCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain cls regs sch)
     (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain cls regs sch)
     (ENNReal.ofReal (Accounting.tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩))

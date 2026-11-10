@@ -1,7 +1,8 @@
 module
 
 public import Lean.Data.Json.Basic
-public import Std.Data.TreeMap.Raw.Lemmas
+public import Std.Data.TreeMap.Raw.AdditionalOperations
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # `Json` equivalence Lean can reason through

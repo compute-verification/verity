@@ -1,9 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.ZK.SHVZK
-public import Proofs.Flock.Soundness.ZK.Masking
-public import Proofs.Flock.Soundness.Assumptions
+public import Definitions.Flock.Defs
 public import Definitions.Flock.LigeritoPad
+public import Definitions.Flock.ZK.Table
+public import Proofs.Flock.Soundness.Assumptions
+public import Proofs.Flock.Soundness.ZK.Masking
+import Proofs.Flock.Soundness.NovelBasis
+import VCVio.Prelude.Core
 
 /-!
 # Zero knowledge: the reference prover is complete, and Flock ZK's level-0 padding is onto

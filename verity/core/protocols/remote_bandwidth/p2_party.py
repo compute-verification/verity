@@ -187,11 +187,11 @@ def registration_of(doc: Mapping[str, Any]) -> p2.Registration:
 def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
     """The registration of the PoUS setup the memory challenger kept for one session (`challenger_party.keep`): the
     request's node, the setup's P2 parameters, commitment and salt, and the session's binding as the vk root, at
-    sketch-sha512's rows; ValueError for a record without a setup, or one `challenger_party.setup_of` refuses."""
-    from verity.core.devices.memory_challenger import challenger_party as CP
+    sketch-sha512's rows; ValueError for a record without a setup, or one `challenger_session.setup_of` refuses."""
+    from verity.core.protocols.pous import challenger_session as CS
 
     request = record["request"]
-    s = CP.setup_of(request)
+    s = CS.setup_of(request)
     if s is None:
         raise ValueError("the challenger's record of the session has no setup")
     q = s["params"]
@@ -203,11 +203,11 @@ def registration_of_setup(record: Mapping[str, Any]) -> p2.Registration:
 def pous_record(directory: Path, session_id: str) -> bytes:
     """The registration file's bytes (`registration_json`, every unit its plan) of the setup the memory challenger whose
     device is `directory` kept for the session `session_id` (64 lowercase hex), on this host (`registration_of_setup`)."""
-    from verity.core.devices.memory_challenger import challenger_party as CP
+    from verity.core.protocols.pous import challenger_session as CS
 
     if not re.fullmatch(r"[0-9a-f]{64}", session_id):
         raise ValueError("a session id is 64 lowercase hex digits")
-    doc = json.loads((directory / CP.SETUPS / f"{session_id}.json").read_text())
+    doc = json.loads((directory / CS.SETUPS / f"{session_id}.json").read_text())
     if doc.get("session_id") != session_id:
         raise ValueError(f"the record names the session {doc.get('session_id')}, not {session_id}")
     return json.dumps(registration_json(registration_of_setup(doc)), sort_keys=True).encode()

@@ -47,6 +47,7 @@ from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -57,6 +58,9 @@ sys.path.insert(0, str(HERE.parent / "s8_linear"))
 import gemm as G  # noqa: E402
 import layout as L  # noqa: E402
 import stage as S  # noqa: E402
+
+if TYPE_CHECKING:
+    import sketch as K
 
 DEVICE = torch.device("cuda")
 
@@ -141,9 +145,8 @@ FULL_PREVIOUS = hashlib.sha512(b"verity/p2-stage/bw-full/previous/v0").hexdigest
 class Audit:
     """The bandwidth audit's pass over the whole store (`--receipts`): its seed, tree, salts and `sketch.Pass`."""
 
-    def __init__(self, args, lay: L.StoreLayout) -> None:
+    def __init__(self, args: argparse.Namespace, lay: L.StoreLayout) -> None:
         import sketch as K
-
         from verity.core.protocols.remote_bandwidth import receipts as R
 
         self.K, self.R = K, R
@@ -229,7 +232,7 @@ def digests(src: L.Weights, t: L.Tensor, host: np.ndarray) -> dict[str, bool]:
     return out
 
 
-def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit | None = None
+def decode(args: argparse.Namespace, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit | None = None
            ) -> tuple[torch.Tensor | None, S.EncodedRows, dict]:
     """`t`'s rows onto the device and decoded into a fresh buffer: the buffer (None if refused), the store and timings.
     With `audit`, the rows are of whole units and the decode sketches them."""
@@ -252,12 +255,13 @@ def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit |
     return w, store, rec
 
 
-def sketched(store: S.EncodedRows, sk, layer: int, name: str, w: torch.Tensor) -> None:
+def sketched(store: S.EncodedRows, sk: K.Pass | None, layer: int, name: str, w: torch.Tensor) -> None:
     store.sketch = sk
     S.decode_matrix(store, layer, name, w)
 
 
-def stage_pass(args, lay: L.StoreLayout, src: L.Weights, tensors: list[L.Tensor], out: Out) -> tuple[dict, bool]:
+def stage_pass(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights, tensors: list[L.Tensor],
+               out: Out) -> tuple[dict, bool]:
     bps = lay.params.blocks_per_segment
     ok, done, total_s, layers = True, deque(), 0.0, {}
     audit = Audit(args, lay) if args.receipts else None
@@ -352,7 +356,7 @@ def activations(M: int, K: int, gen: torch.Generator) -> tuple[torch.Tensor, tor
     return x, sx
 
 
-def gemm_pass(args, lay: L.StoreLayout, src: L.Weights, read: L.Read, out: Out) -> bool:
+def gemm_pass(args: argparse.Namespace, lay: L.StoreLayout, src: L.Weights, read: L.Read, out: Out) -> bool:
     import int_mm
 
     epilogue = "fused" if DEVICE.type == "cuda" else "eager"
@@ -418,7 +422,7 @@ def layer_set(spec: str, last: int) -> set[int]:
     return out
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     global DEVICE
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_v1/store.py layout)")
@@ -481,7 +485,7 @@ def main(argv=None) -> int:
         read = L.reader(args.w) if args.w else L.generator_reader(args.generator, args.shape, args.weights_seed)
         ok &= gemm_pass(args, lay, src, read, out)
     rc = summary.get("receipts")
-    print(f"full {'PASS' if ok else 'FAIL'}: {summary['tensors']} tensors staged and held to the manifest's SHA-256, "
+    print(f"full {'PASS' if ok else 'FAIL'}: {summary['tensors']} tensors loaded and held to the manifest's SHA-256, "
           f"decode step {summary['decode_step_s']} s"
           + (f"; receipts pass {rc['pass']} over the tensors' {rc['units']} units of the store's {rc['store_units']} "
              f"({rc['padding_units_left_out']} padding units left out), root {rc['root'][:16]}..., step with receipts "

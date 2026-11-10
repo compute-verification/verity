@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 public import Proofs.Flock.Soundness.Discharge.Const.Inst
-public import Properties.Flock.Circuit.Keyed
+public import Proofs.Flock.Soundness.Discharge.Placed.Setup
+public import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # `ProgPlaces` for the circuit's program on Δ's source keys
@@ -28,7 +29,7 @@ namespace FlockSoundness.Discharge.Placed
 open Model Audit
 
 /-- An instance carried along equal rows wires each column where the original wires it. -/
-theorem wire_cast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R R' : Rows} (e : R = R')
+theorem wire_cast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R R' : Rows} (e : R = R')
     (inst : P.IsRowsUnit u R) (x : Fin R'.w) :
     (e ▸ inst).wire x = inst.wire (Fin.cast (congrArg Rows.w e).symm x) := by
   subst e; rfl

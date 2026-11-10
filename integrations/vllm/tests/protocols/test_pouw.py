@@ -19,7 +19,7 @@ from verity.core.protocols.pouw.audit import (HM96, HM96_WEIGHTS, Epoch, Workloa
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment, CoinOpening, coin_reason
 from verity.core.protocols.pouw.protocol import Context as UnitContext
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import SCHEMES, get
+from verity.ml.protocols.pouw.schemes import SCHEMES, get
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
@@ -78,7 +78,7 @@ def _int7_linear(x, w, bias=None):
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
 def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the_lead_are_executed():
-    from verity.core.protocols.pouw import circuit
+    from verity.ml.protocols.pouw import circuit
     from verity_vllm.protocols.pouw import h1 as pouw_h1
     from verity_vllm.protocols.pouw import lead as pouw_lead
     assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
@@ -198,6 +198,7 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     settings = {"pouw": {"coins": coins, "transcript_dir": str(tmp_path)}}
     comp = PO.install(model, _serve("pouw:ncp-v1", settings=settings))
     opt = comp.get("pouw")
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
     key = pouw._SALT_KEYS["pouw:ncp-v1"]
     rows = {w: [r.tobytes() for r in pouw.quantize(m)[0]] for w, m in enumerate((w0, w1))}
@@ -211,6 +212,16 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     roots = {w: commit_rows(weight_binding(w), -2, [r.tobytes() for r in pouw.quantize(m)[0]], "sha256").commitment.root
              for w, m in enumerate((w0, w1))}
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+    roots = {w: commit_rows(weight_binding(w), -2, [r.tobytes() for r in pouw.quantize(m)[0]], "sha256").commitment.root
+             for w, m in enumerate((w0, w1))}
+=======
+    key = pouw._SALT_KEYS["pouw:ncp-v1"]
+    rows = {w: [r.tobytes() for r in pouw.quantize(m)[0]] for w, m in enumerate((w0, w1))}
+    roots = {w: commit_rows(weight_binding(w), -2, r, HM96, key, HM96_WEIGHTS + w).commitment.root for w, r in rows.items()}
+    plain = {commit_rows(weight_binding(w), -2, r, h, public=True).commitment.root for w, r in rows.items() for h in ("sha256", "sha512")}
+    assert not plain & set(roots.values())                   # hiding: the weights' candidates alone don't give the roots
+>>>>>>> 7af4d24fca3e
     declared = Workload((Matmul(0, Shape(16, K, N), 0), Matmul(1, Shape(16, N, N + 64), 1)))
     c = opt.commitment()
     assert comp.weight_commitments["pouw:ncp-v1"]["weight_roots"] == {str(w): r.hex() for w, r in roots.items()}
@@ -245,6 +256,7 @@ def test_the_executor_is_the_schemes_reference_bit_for_bit():
     b = rng.integers(-63, 64, (N, K)).astype(np.int8)
     u = Matmul(7, Shape(16, K, N), 3)
     rows = [r.tobytes() for r in a]
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
     ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, HM96, bytes(32), 7).commitment.root, b"\x22" * 32)
 ||||||| merged common ancestors
@@ -252,6 +264,11 @@ def test_the_executor_is_the_schemes_reference_bit_for_bit():
 =======
     ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, s.commitment_hash).commitment.root, b"\x22" * 32)
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+    ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, s.commitment_hash).commitment.root, b"\x22" * 32)
+=======
+    ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows, HM96, bytes(32), 7).commitment.root, b"\x22" * 32)
+>>>>>>> 7af4d24fca3e
     noise = s.noise(ctx)
     got = pouw.ncp_tiles(s, ctx, noise, a, pouw.Operands(np.ones(N, np.float32), *pouw.stack_y(s, ctx.salt, u.weight, b, noise)))
     tile = Tile(tuple(range(16)), tuple(range(48, 64)))
@@ -366,7 +383,7 @@ def test_served_fp8_claims_registered_weights_only_under_the_shared_rule(monkeyp
     """Served FP8 applies no keyed rotation, so its weights register only from the curated list, through the one
     registered-weights rule Pearl-C4 reads too; refused, the claim says it is about nothing and names why."""
     from verity.core.protocols.pouw import registration
-    from verity.core.protocols.pouw.schemes import pearl_c
+    from verity.ml.protocols.pouw.schemes import pearl_c
     s, seen = PPD.scheme_of("pearl-c-sm120-v1-h3"), []
     assert pouw.SERVED_TRANSFORMS == () and pearl_c.check_registration is registration.check_registration
     monkeypatch.setattr(pearl_c, "check_registration", lambda *a: seen.append(a) or registration.check_registration(*a))

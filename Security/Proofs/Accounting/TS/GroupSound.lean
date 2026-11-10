@@ -1,16 +1,48 @@
 module
 
 public import Proofs.Accounting.TS.Session.Group.Guarantees
-public import Proofs.Accounting.TS.Session.Lanes.KnownRead
-public import Proofs.Accounting.TS.Session.Lanes.Partials
-public import Proofs.Accounting.TS.Session.Lanes.Committed
 public import Proofs.Flock.C3.RegLevels.TopLeaf
-public import Proofs.Accounting.TS.CheckedSound
-public import Proofs.Accounting.TS.HeldSound
-public import Proofs.Pouw.RelativeSecurity
-public import Proofs.Flock.VBridge.Family.Registrants
-public import PouwWindow.OwnPorts
-public import PouwWindow.FullDraw
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.TS.CheckedSound
+import Proofs.Accounting.TS.HeldSound
+import Proofs.Accounting.TS.Session.Lanes.KnownRead
+import Proofs.Flock.C3.Compose.RowsReg
+import Proofs.Flock.SoundAtBridge.ServedProof
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+import Proofs.Flock.Soundness.Game
+import Proofs.Pouw.RelativeSecurity
 
 /-!
 # A leaf's group of linked sessions realizes one unit, any shape (the proof)
@@ -339,7 +371,7 @@ theorem not_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} [Nonempty 
     (w : Fin S) (i : Fin nπ) (h : ∀ x, pf.Unsound x w i) {ε : ℝ} (hε : ε < 1) : ¬ pf.SoundAt ε := by
   intro hs
   have z : Pouw.RelativeSecurity.prob (fun x => ¬ pf.Unsound x w i) = 0 := by
-    unfold Pouw.RelativeSecurity.prob
+    unfold Pouw.RelativeSecurity.prob Claims.prUniform
     simp [h]
   have e := Pouw.RelativeSecurity.prob_add_not (fun x => pf.Unsound x w i)
   linarith [hs w i]

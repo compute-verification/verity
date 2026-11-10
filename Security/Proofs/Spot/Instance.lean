@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Spot.Determinacy
-public import Proofs.Core.Circuit
 public import Definitions.Spot.Partition
+public import Mathlib.Algebra.CharZero.Defs
+public import Mathlib.Algebra.Order.Sub.Basic
+public import Proofs.Core.Circuit
 
 /-!
 # Sampled proofs' partitions as populations

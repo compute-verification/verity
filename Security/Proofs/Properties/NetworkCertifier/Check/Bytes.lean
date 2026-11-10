@@ -1,6 +1,7 @@
 module
 
 public import Properties.NetworkCertifier.Check
+public import Proofs.Flock.Bytes
 public import Proofs.Properties.Hash.Identity
 public import Mathlib.Data.Set.Card
 import all Init.Data.String.Defs
@@ -14,7 +15,8 @@ Each string the check hashes determines what it encodes: a record head's encodin
 input its payload (`taggedInput_inj`), a certificate message's input its key identifier, session, link-window and
 digest (`messageInput_inj`), a leaf's input its frame (`leafInput_inj`), a node's input its two children
 (`nodeInput_inj`); and a payload's bytes its bits, for whole bytes of bits (`bitsOfBytes_bytesOfBits`). Byte strings are read as their
-lists of bytes (`bs`), and an encoding is parsed field by field, each of a width it fixes.
+lists of bytes (`bs`, with the generic byte lemmas, in `Proofs.Flock.Bytes`), and an encoding is parsed field by field,
+each of a width it fixes.
 -/
 
 @[expose] public section
@@ -26,28 +28,6 @@ open Flock
 set_option maxRecDepth 20000
 
 namespace Properties.NetworkCertifier.Bytes
-
-/-- A byte string's bytes. -/
-def bs (b : ByteArray) : List UInt8 := b.data.toList
-
-theorem bs_append (a b : ByteArray) : bs (a ++ b) = bs a ++ bs b := by
-  simp [bs, ByteArray.data_append]
-
-theorem bs_length (b : ByteArray) : (bs b).length = b.size := by
-  simp [bs]
-
-theorem bs_inj {a b : ByteArray} (h : bs a = bs b) : a = b := by
-  apply ByteArray.ext
-  simpa [bs] using h
-
-/-- Two lists that agree after a prefix of one length agree on the prefix and on the rest. -/
-theorem split {a a' r r' : List UInt8} (h : a ++ r = a' ++ r') (hl : a.length = a'.length) : a = a' ∧ r = r' :=
-  List.append_inj h hl
-
-theorem split_bytes {a a' : ByteArray} {r r' : List UInt8} (h : bs a ++ r = bs a' ++ r') (hl : a.size = a'.size) :
-    a = a' ∧ r = r' := by
-  obtain ⟨h1, h2⟩ := split h (by rw [bs_length, bs_length, hl])
-  exact ⟨bs_inj h1, h2⟩
 
 theorem error_ne_ok {ε α : Type} {s : ε} {x : α} (h : (Except.error s : Except ε α) = .ok x) : False := by
   cases h
@@ -109,20 +89,6 @@ theorem uBE_split {w : Nat} {x y : Int} {n n' : String} {b b' : ByteArray} {r r'
   obtain ⟨hb, hr⟩ := split_bytes e (by rw [uBE_size h, uBE_size h'])
   subst hb
   exact ⟨by rw [← uBE_value h, ← uBE_value h'], hr⟩
-
-theorem be64_bs (x : UInt64) : bs (be64 x) =
-    [(x >>> 56).toUInt8, (x >>> 48).toUInt8, (x >>> 40).toUInt8, (x >>> 32).toUInt8,
-     (x >>> 24).toUInt8, (x >>> 16).toUInt8, (x >>> 8).toUInt8, (x >>> 0).toUInt8] := by
-  simp [be64, bs, List.range', ByteArray.push, ByteArray.emptyWithCapacity]
-  rfl
-
-theorem be64_size (x : UInt64) : (be64 x).size = 8 := by
-  rw [← bs_length, be64_bs]
-  rfl
-
-theorem be32_size (x : UInt32) : (be32 x).size = 4 := by
-  simp [be32]
-  rfl
 
 theorem byte_toNat (x : UInt64) (k : Nat) (hk : k < 64) :
     ((x >>> (UInt64.ofNat k)).toUInt8).toNat = x.toNat / 2 ^ k % 256 := by
@@ -451,10 +417,6 @@ theorem nodeInput_inj {a b a' b' : ByteArray} (ha : a.size = 64) (ha' : a'.size 
   simp only [nodeInput, bs_append, List.append_assoc] at e
   obtain ⟨e1, e2⟩ := split_bytes (List.append_cancel_left e) (by rw [ha, ha'])
   exact ⟨e1, bs_inj e2⟩
-
-theorem hash_size (m : ByteArray) : (Sha512.hash m).size = 64 := by
-  unfold Sha512.hash
-  exact Array.size_ofFn
 
 theorem empty_size (l : Nat) : (empty l).size = 64 := by
   cases l <;> simp only [empty, node] <;> exact hash_size _

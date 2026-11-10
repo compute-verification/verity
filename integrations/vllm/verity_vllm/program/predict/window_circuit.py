@@ -98,7 +98,9 @@ it a writer row, so no unit copies rows together: a template's port is read at o
 cut that many ways. Every wire and read is stated per node as a pattern (a node's heads, KV groups and slices as digits of
 one) and `interface.coalesce`d, and each allocation's slots sit side by side in its template, so the slots' copies of a
 pattern are one and the circuit's description grows with the class Program's nodes, not its slots or units; so does the
-lowering's own state (a node's output rows are runs).
+lowering's own state (a node's output rows are runs). A template's units are read at every step, so its wires have cycles
+between templates: the circuit states an order of its allocations, the allocations each wire reads in an allocation before
+it (`interface.ordered`, the circuit's ``order``).
 
 The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the blocks'
 slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the stack, LM head
@@ -145,6 +147,7 @@ from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
 from verity.ml.definitions.registry.fa3_check_inf import AttentionV20
 from verity.ml.windows import interface as IF
+from verity_vllm.pipeline.tp.grain import GROUP
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -158,8 +161,6 @@ PROMPT = "prompt"
 #: the `Attention` versions cut by key block, each by the version of its function whose heads' steps are Calls: FA2's v18
 #: by v19, FA3's v4 by v20
 CUTS = {18: AttentionV19, 19: AttentionV19, 4: AttentionV20, 20: AttentionV20}
-#: a token select's group of logits: a word of each `TokenSelectGroups_v1` unit's row of bests
-GROUP = 16
 
 
 _GRAIN = Grain()
@@ -190,15 +191,32 @@ class _Program:
     ``entry`` (`io_shell.SlotEntry_v1`, its last position's `SelectEntry_v1`'s): each node's output as the rows that hold it,
     ``(lo, hi, row)`` its words [lo, hi) as ``row`` and the units after it, (hi - lo) / ``row.words`` rows of one output at
     consecutive units (none for the last position's select, which nothing reads). With ``tables`` it reads H1's tables
+<<<<<<< 94ca7fd0d18
     (`Tables`), or Pearl+'s (`PearlTables`) cut at its linears, ``cut`` their layout (`window_cut.linears`)."""
+||||||| e10cf2c8559
+    consecutive units (none for the last position's select, which nothing reads)."""
+=======
+    (`Tables`)."""
+>>>>>>> 7af4d24fca3e
 
     def __init__(self, b: _Builder, fn: Any, cls: WindowClass, name: str, slot: int, scan: Any, entry: Any,
+<<<<<<< 94ca7fd0d18
                  tables: FixedLoad | None = None, cut: Linears | None = None) -> None:
+||||||| e10cf2c8559
+    def __init__(self, b: _Builder, fn: Any, cls: WindowClass, name: str, slot: int, scan: Any, entry: Any) -> None:
+=======
+                 tables: Tables | None = None) -> None:
+>>>>>>> 7af4d24fca3e
         self.b, self.fn, self.cls, self.name, self.slot_index = b, fn, cls, name, slot
         self.anchor, self.lane, self.scan, self.entry = cls.anchor(slot), cls.lane(slot), scan, entry
+<<<<<<< 94ca7fd0d18
         self.tables, self.cut = tables, cut
         if isinstance(tables, PearlTables) != (cut is not None):
             raise ValueError(f"{name}: a cut's layout goes with Pearl+'s tables, and only with them")
+||||||| e10cf2c8559
+=======
+        self.tables = tables
+>>>>>>> 7af4d24fca3e
         params = [name for name, _ in self.fn.signature()[0]]
         if set(params) != {PROMPT, WEIGHTS}:
             raise Unexpressible(f"{name}: its inputs are {params}; the window's lowering takes a prompt and the weights record "
@@ -419,7 +437,13 @@ class _Program:
         if K % R:
             raise Unexpressible(f"{node.fn.id}: its x is {R} writer rows, which don't divide its {K} values")
         t = self.tables
+<<<<<<< 94ca7fd0d18
         if not isinstance(t, Tables) or K != t.k:
+||||||| e10cf2c8559
+        self._one(j, node, bind(IX.Int8RowQuantV3, K=K, R=R))
+=======
+        if t is None or K != t.k:
+>>>>>>> 7af4d24fca3e
             self._one(j, node, bind(IX.Int8RowQuantV3, K=K, R=R))
             return
         s, i = t.at(self.cls, self.slot_index, self.position - 1)
@@ -695,9 +719,9 @@ def class_program(registered: Any, cls: WindowClass) -> Any:
 
 
 def stop_ids(registered: Any) -> tuple[int, ...]:
-    """The registered model's stop ids, its config's ``eos_token_id`` (an id, a list or none): outputs end at the first, kept."""
-    e = registered.phi.hf_config.get("eos_token_id")
-    return tuple(sorted({int(x) for x in ([] if e is None else [e] if isinstance(e, int) else e)}))
+    """The registered model's stop ids (`frontend.stop_rule.stop_ids`): outputs end at the first, kept."""
+    from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
+    return of_config(registered.phi.hf_config)
 
 
 @dataclass(frozen=True)
@@ -772,11 +796,20 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     else:
         held = ()
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
+<<<<<<< 94ca7fd0d18
                         tuple(openings), values=held, formats={v: ROW_FORMAT for v in held} if layout is not None else {})
+||||||| e10cf2c8559
+                        tuple(openings))
+=======
+                        tuple(openings), values=held)
+    wires = tuple(IF.coalesce(b.wires))
+    starts = {tid: [at - slot * n for at, n, slot, _step in runs] for tid, runs in b.spans.items()}
+>>>>>>> 7af4d24fca3e
     circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
                          external=(f"{descriptor_id(scan)}/state", f"{progs[0].entry_unit[0]}/o0"),
-                         wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg,
-                         blocks=IF.Blocks(programs, cls.positions, tuple(inference(b.spans, programs))))
+                         wires=wires, cuts=b.cuts, registered=reg,
+                         blocks=IF.Blocks(programs, cls.positions, tuple(inference(b.spans, programs))),
+                         order=IF.ordered(b.units, wires, starts) if wires else None)
     return Lowered(circuit, fn, tuple(progs), b.spans)
 
 

@@ -1,7 +1,40 @@
 module
 
-public import Proofs.Pouw.PeriodJ10RStrata
 public import Proofs.Pouw.PeriodJ10R.Honest
+public import Properties.Pouw.PeriodJ10RStrata
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.TS.Keyed
+import Proofs.Pouw.PeriodJ10RStrata
 
 /-!
 # An honest J10-R period over several tile strata meets `H1J10RCheckedCreditPeriodStrata`'s premises, and the
@@ -18,7 +51,7 @@ sample (`evOf`). Given three facts of those inputs, the witness meets every prem
 * `Credit.window` credits every window (`hacc`);
 * the registered salt, hex-decoded, is the round coin's bytes (`hsalt`);
 * the proof blocks `Credit.descriptorDrawn` samples are the union over `S` of the strata's coordinates of the block's sample
-  (`hdraw`), `StrataDrawIsCoin`'s body on every window.
+  (`hdraw`), `StrataSampleIsCoin`'s body on every window.
 
 At each stratum `s` the instance is `HonestJ10R`'s at `N_s = |stratum σ s|` with the rest of the block's sample as `Ξ`:
 `N_s` one-word proof blocks, one live round, `ρ = 1`, the twin's lucks, `δ_bind = δ_ks = 0`, `N_s` words fixed and folded a
@@ -40,7 +73,7 @@ namespace Properties.Pouw.PeriodJ10RStrata.SecurityProofs.HonestStrata
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.PeriodJ10RStrata
   Properties.Pouw.PeriodJ10RStrata.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposePeriod
+open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The honest instance -/
 
@@ -77,7 +110,7 @@ theorem strata_meets_period (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s (β s), unitOf b = u) (n : ℕ) :
-    RegisteredBeforeDraw (windows σ regOf evOf n) ∧ StrataDrawIsCoin σ k hk S unitOf (windows σ regOf evOf n) ∧
+    RegisteredBeforeDraw (windows σ regOf evOf n) ∧ StrataSampleIsCoin σ k hk S unitOf (windows σ regOf evOf n) ∧
     Properties.Pouw.Period.SaltIsLiveCoin Nat.one_pos (saltOf (windows σ regOf evOf n)) enc ∧
     ∀ x, (windows σ regOf evOf n).prefixLen x = n := by
   classical

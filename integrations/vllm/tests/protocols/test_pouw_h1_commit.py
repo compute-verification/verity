@@ -25,7 +25,7 @@ from torch import nn
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.spot import remote as R
 from verity.core.protocols.spot.one_stage import registered as G, registration as REG
 from verity.ml.circuits.codec import canonical_json
@@ -551,6 +551,7 @@ def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_t
     after the prover's last record, and one-stage's reuse form reads each of its tables from W in the log
     (`registration._earlier`). The named record R is chained right after W and registers each round's A table and
     input-ids table under the Commit's name with W's entry of it: R is the window's Commit record, one digest for every
+<<<<<<< 94ca7fd0d18
     reader (`registration.digest`, credit's `commit_of`), bound into calls_root before the sampling coin opens, and core's
     ROOTS1 steps pass on it."""
     previous, named = "12" * 64, _named("12" * 64)
@@ -615,6 +616,94 @@ def _kept_tables(monkeypatch) -> dict[str, np.ndarray]:
             kept[value] = whole.copy()
         return whole
     monkeypatch.setattr(SV.Served, "_a_rows", spy)
+||||||| e10cf2c8559
+=======
+    reader (`registration.digest`, credit's `commit_of`), bound into calls_root before the draw coin opens, and core's
+    ROOTS1 steps pass on it."""
+    previous, named = "12" * 64, _named("12" * 64)
+    record, run, _tap = _window(tmp_path, monkeypatch, commit_record=named)
+    window, rec = named.got
+    c = record["commitment"]
+    assert window["format"] == REG.FORMAT_V2 and window["previous"] == previous
+    assert window["program"] == run.served.program_digest and window["window"]["open_root"] == run.served.root
+    assert window["registered"] == c["served"]["entries"]
+    for e in window["registered"]:
+        want = {"leaves": e["leaves"], "words": e["words"], "word_bits": e.get(G.WIDTH_KEY, G.WORD_BITS)}
+        assert REG._earlier([window], REG.digest(window), "value", e["value"], want) == e
+    assert c["commit"] == canonical_json(rec).hex() == CT.record_of(run) != run.served.tap.hex(run.served)
+    assert CT.digest(c["commit"]).hex() == REG.digest(rec)
+    assert run.details["commit_record"] == {"named": True, "registration": REG.digest(window), "record": REG.digest(rec)}
+    assert PHC.manifest_reason(record) is None and _core(record, run) == (None, None)
+    assert c["draw"]["coin"] is not None and "refused" not in c["draw"]
+    assert all(v["credit"] for v in run.gated().values())
+
+
+def _registered(edit):
+    return lambda rec: {**rec, "registered": edit(rec["registered"])}
+
+
+def _fails(run):
+    raise ValueError("window-commit refused the window")
+
+
+@pytest.mark.parametrize("named,why", [
+    (_named(edit=_registered(lambda r: [r[0], {**r[1], "root": "00" * 64}, *r[2:]])),
+     f"registers {CR.commit_rows(0, K)} at another root, domain or leaf count"),
+    (_named(edit=_registered(lambda r: [e for e in r if e["value"] != CR.commit_ids(1)])),
+     f"registers {CR.commit_ids(1)} not"),
+    (_named(edit=_registered(lambda r: [*r, r[1]])), f"registers {CR.commit_rows(0, K)} twice"),
+    (_named(edit=lambda rec: {**rec, "previous": None}), "previous is not the window registration's digest"),
+    (_named(edit=lambda rec: {**rec, "format": REG.FORMAT}), "is not a Commit record credit reads"),
+    (_named(window=lambda w: {**w, "registered": w["registered"][1:]}), "the window's registration is not its own"),
+    (_fails, "ValueError: window-commit refused the window"),
+], ids=["a-table-root-off", "ids-table-missing", "a-table-twice", "not-chained-after-w", "v1", "not-its-registration",
+        "hook-fails"])
+def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_opens_no_draw_coin(tmp_path, monkeypatch,
+                                                                                                named, why):
+    """A named record that doesn't reuse the window's tables from its own registration, or a ``commit_record`` that
+    fails: the window binds no Commit record under calls_root (credit refuses it at ``commit``), its draw coin stays
+    unopened, its transcript says why, and its release raises ValueError, the window's visible refusal."""
+    with pytest.raises(ValueError, match="the window names no Commit record"):
+        _window(tmp_path, monkeypatch, commit_record=named)
+    record = json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
+    c, named = record["commitment"], record["details"]["commit_record"]
+    assert named["named"] is False and why in named["reason"]
+    assert c["commit"] is None and c["draw"]["coin"] is None and why in c["draw"]["refused"]
+    assert PHC.manifest_reason(record) is None and CR.commit_of(c["commit"]) == (None, ("commit", CR.COMMIT_FORM))
+
+
+class _Unforeseen(Exception):
+    pass
+
+
+@pytest.mark.parametrize("raised,returned", [(ValueError, True), (_Unforeseen, False), (KeyboardInterrupt, False)],
+                         ids=["named-type", "other-type", "base-exception"])
+def test_a_failing_hook_is_the_windows_refusal_and_any_other_failure_is_recorded_then_raised(raised, returned):
+    """A ``commit_record`` that fails with a type `named` names is the window's refusal, which `bind` records and returns
+    for the release to raise (above). One that fails with any other type, a BaseException included, is recorded as the
+    same refusal and raised as it is."""
+    def hook(run):
+        raise raised("window-commit failed")
+    run = SimpleNamespace(entry=ENTRY, commit_record=hook, commits={}, details={})
+    if returned:
+        assert CT.bind(run) == f"{ENTRY}: the window names no Commit record: ValueError: window-commit failed"
+    else:
+        with pytest.raises(raised, match="window-commit failed"):
+            CT.bind(run)
+    assert run.commits["commit"] is None
+    assert run.details["commit_record"] == {"named": False, "reason": f"{raised.__name__}: window-commit failed"}
+
+
+def _kept_tables(monkeypatch) -> dict[str, np.ndarray]:
+    """Each step's A table H1 commits, whole, by its name, as the window's served trees register it (`Served._register`)."""
+    kept, register = {}, SV.Served._register
+
+    def spy(self, run, value, words, *args, **kwargs):
+        if value.startswith(f"{SV.PREFIX}a/"):
+            kept[value] = words.copy()
+        return register(self, run, value, words, *args, **kwargs)
+    monkeypatch.setattr(SV.Served, "_register", spy)
+>>>>>>> 7af4d24fca3e
     return kept
 
 
@@ -865,24 +954,23 @@ def test_attach_builds_a_rows_sha512_commit_whose_port_is_the_steps_one_copy_of_
 
 
 def test_h1s_commit_refuses_a_sha256_run_root(monkeypatch):
-    """vllm-v1's committer (SHA-256 rows, 32-byte roots) is no Commit of H1's. `h1_commit.attach` refuses one built under
-    it, closed before anything is put on the engine; and `pouw_h1_commit.committed`, what a run records of the Commit
-    (the GPU harness's ``committer`` and each rank's release), refuses vllm-v1's real 32-byte run root, and a
+    """A committer of another scheme (an old record's vllm-v1: SHA-256 rows, 32-byte roots) is no Commit of H1's.
+    `h1_commit.attach` refuses one, closed before anything is put on the engine; and `pouw_h1_commit.committed`, what a run
+    records of the Commit (the GPU harness's ``committer`` and each rank's release), refuses its 32-byte run root, and a
     rows-sha512 committer's root of any length but 64. The offline core's rows-sha512 run root passes."""
     from tests.check import opened as O
-    steps = {0: [("step.input/ids", bytes(range(64)))]}
-    sha512 = O.commit_steps(steps, commit_scheme=CT.SCHEME, run_id="h1-rows")
-    sha256 = O.commit_steps(steps, run_id="h1-v1")
+    sha512 = O.commit_steps({0: [("step.input/ids", bytes(range(64)))]}, run_id="h1-rows")
+    old = O.committer(run_id="h1-v1")
+    old.commit_scheme = "vllm-v1"
     assert (sha512[0].commit_scheme, len(sha512[1].run_root)) == (CT.SCHEME, CT.ROOT_BYTES)
-    assert (sha256[0].commit_scheme, len(sha256[1].run_root)) == ("vllm-v1", 32)
     assert CT.committed(*sha512) == {"run_root": sha512[1].run_root.hex(), "commit_scheme": CT.SCHEME,
                                      "name": sha512[0].name}
-    with pytest.raises(ValueError, match=f"committed under vllm-v1 to a 32-byte run root, not under {CT.SCHEME} to a 64-byte"):
-        CT.committed(*sha256)
     short = SimpleNamespace(run_root=bytes(32), extra={})
+    with pytest.raises(ValueError, match=f"committed under vllm-v1 to a 32-byte run root, not under {CT.SCHEME} to a 64-byte"):
+        CT.committed(old, short)
     with pytest.raises(ValueError, match=f"committed under {CT.SCHEME} to a 32-byte run root"):
         CT.committed(Committer(), short)
-    old, model = sha256[0], Model()
+    model = Model()
     closed = []
     monkeypatch.setattr(old, "close", lambda: closed.append(True))
     monkeypatch.setattr(HC, "committer", lambda engine, run_id: old)

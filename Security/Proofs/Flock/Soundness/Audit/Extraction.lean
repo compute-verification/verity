@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.OneStage
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The one-stage audit with a randomized extractor

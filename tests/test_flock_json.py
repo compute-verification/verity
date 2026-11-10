@@ -21,11 +21,7 @@ ALLOWED = {
 }
 #: (file, declaration) still calling `Lean.Json.parse`, each with the switch that deletes its entry. An entry whose file
 #: is in the tree names a declaration that still calls it; one whose file isn't yet arrives with that file.
-PENDING = {
-    ("verity/core/service/spot/Spot/FilePart.lean", "unitIndices"):
-        "the population check's read of the public file's header, which moves to the total parser once that check is on "
-        "main",
-}
+PENDING: dict[tuple[str, str], str] = {}
 
 #: `/- … -/` and `-- …`, blanked so that line numbers stay
 COMMENT = re.compile(r"/-.*?-/|--[^\n]*", re.S)

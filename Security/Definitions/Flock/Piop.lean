@@ -2,6 +2,8 @@ module
 
 public import Definitions.Flock.Statement
 public import Definitions.Flock.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # One rep before Ligerito: zerocheck, lincheck, the claims and the opening

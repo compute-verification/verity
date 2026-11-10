@@ -75,8 +75,8 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_l
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.spot.one_stage import partition as P
 from verity.core.protocols.spot.one_stage import registered as G
 
@@ -120,11 +120,11 @@ FLAT, STRUCTURAL = "flat", "structural"
 
 def layout() -> str | None:
     """The statement's form: ``H1_TMPL`` unset, empty or ``flat``, None: the flat statement (``flock-circuit``, the unit's
-    netlist in the file), the one the Lean verifier accepts; ``structural``, the templated statement at `LAYOUT`
-    (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another
-    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The statement check covers H1's templated
-    statement with its ``--registered`` reads (`ProvedScope.scopeOkT`), but the knowledge-soundness form reads a flat
-    circuit (`KsScope`, `HmOut.parse`), so the Lean verifier refuses it after every other check, and it stays opt-in."""
+    netlist in the file); ``structural``, the templated statement at `LAYOUT` (``flock-circuit/tmpl``,
+    `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another layout mode
+    (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier takes either with its
+    ``--registered`` reads: the statement check and the knowledge-soundness form read a templated statement's template
+    (`ProvedScope.scopeOkT`, `KsScope`), and the soundness proof is at the flat circuit it unrolls to."""
     import os
     from verity_flock import tmpl as TM
     m = os.environ.get("H1_TMPL") or FLAT
@@ -139,8 +139,8 @@ def layout() -> str | None:
 def stager(definition, name: str, in_rows, out_rows, layout: str | None, **kw):
     """``definition``'s `UnitStager` (``kw`` its ``circuit``, ``bind`` and ``public_inputs``): with ``layout`` the
     templated statement of its structural lowering (`struct_lower`, ``structural``), the flat unit never built; with
-    None, or where struct_lower refuses the Definition (its NotImplementedError: assertions or table reads, or a
-    specialization of 2^32 columns), the flat statement. The H1 lane, combine and tile have neither at any K a block holds
+    None, or where struct_lower refuses the Definition (its NotImplementedError: an assertion, or a specialization of
+    2^32 columns), the flat statement. The H1 lane, combine and tile have neither at any K a block holds
     (K ≤ 4096 served; past K ≈ 5,041 the lane fits no 2^27 block in either form, and compose refuses it)."""
     import sys
     from verity_flock import class_statement as CS
@@ -454,7 +454,7 @@ class Shape:
 
     @cached_property
     def layout(self):
-        from verity.core.protocols.pouw.circuit import h1tile as H
+        from verity.ml.protocols.pouw.circuit import h1tile as H
         return H.Layout(self.r, self.c, self.k)
 
     @property
@@ -493,7 +493,7 @@ class Shape:
 
     def unit(self):
         """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by `tile`; J10-R's with ``j10r``)."""
-        from verity.core.protocols.pouw.circuit import h1tile as H
+        from verity.ml.protocols.pouw.circuit import h1tile as H
         if self.j10r:
             return HW._chunked(self.k, HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile5))
         return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if tile() == "v3" else None)

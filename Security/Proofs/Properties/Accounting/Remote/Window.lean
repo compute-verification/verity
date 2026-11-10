@@ -1,6 +1,7 @@
 module
 
 public import Properties.Accounting.Remote
+import Std.Data.HashMap.Lemmas
 
 /-!
 # Proofs of the window's properties

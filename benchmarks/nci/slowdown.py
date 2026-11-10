@@ -17,10 +17,10 @@ in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
   data and no decoding, kept as a check.
 * ``theta_cap``: a calibration without a cap on the committed parameters' size lets a row decode from a committed table
   (its ``decode_flops_table``) instead of regenerating it, as a seed-based method's noise.
-* ``chain``: the partial-sum rule, ``Nci.SecurityProofs.ContainedTraining``
-  (``Security/Definitions/Nci/Guarantees/Contained.lean``): ``rho >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
-  factor of ``b_w``, ``b_a`` and the chain's smallest inner dimension. Its assumptions are the support-form
-  incompressibility of one chain of the reference circuit at ``b_w`` and ``b_a``, and nothing structural. A chain charges
+* ``chain``: the partial-sum rule, ``Nci.SecurityProofs.IncompressibleContainedTraining``
+  (``Security/Definitions/Nci/Guarantees/Training.lean``): ``rho >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
+  factor of ``b_w``, ``b_a`` and the chain's smallest inner dimension. Its assumption is training's incompressibility
+  (``TrainingIncompressible``) of one chain of the reference circuit at ``b_w`` and ``b_a``, and nothing structural. A chain charges
   each weight once per layer of it, so it is one forward path: ``kappa_chain`` (a row's optional ``chain``) is that
   path's share of the work, below ``kappa``. Rows without a ``chain`` get none.
 """
@@ -53,15 +53,8 @@ INPUTS = {
     "flops_per_token": "the reference circuit's work per token",
 }
 
-CHAIN = {
-    "kappa": "share of the reference circuit's work in one chain's products, 2 flops each: a forward path of updated "
-             "matrix multiplications linked by injective maps",
-    "d": "the chain's smallest inner dimension",
-    "path": "the multiplications the chain runs through, per layer",
-}
-
 THREAD_THEOREM = "Nci.SecurityProofs.ThreadedTraining"
-CHAIN_THEOREM = "Nci.SecurityProofs.ContainedTraining"
+CHAIN_THEOREM = "Nci.SecurityProofs.IncompressibleContainedTraining"
 
 
 def rates(i: dict, K: float, b_tok: float) -> tuple[float, float, float, float]:

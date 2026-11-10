@@ -281,7 +281,7 @@ theorem decAgreeJ : DecAgree (P := (keyProg c hU n).partition (Layout.outsOf c h
   rw [hM2]
   exact block_witOf _ _ _ _ _ _ rfl rfl
 
-/-- **`lay` at `J` tables**: e2e-layout's `keyedLayout` at the public sites, moved to the `--zk` tables. -/
+/-- **`lay` at `J` tables**: `Layout.keyedLayout` at the public sites, moved to the `--zk` tables. -/
 noncomputable abbrev layZJ :
     LayoutZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ (Reg := Reg) dj y₀) (tabZJ dj y₀)
       (decodeOfPlace execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
@@ -325,7 +325,7 @@ theorem sitesShJ_bcSite :
       rw [tabOfShJ_eq, e]; exact y₀.x.refused_unsat (typedJ ht 0) _
     exact absurd hM (hns _)
 
-/-- **`rs` at `J` tables**: e2e-layout's `keyedRowsOuts` at the public sites, moved to the `--zk` tables. -/
+/-- **`rs` at `J` tables**: `Layout.keyedRowsOuts` at the public sites, moved to the `--zk` tables. -/
 noncomputable abbrev rsZJ : HmRowsZ (layZJ (Reg := Reg) dj y₀ ht hc hU (pub := pub)) :=
   HmRowsZ.ofShadow (planZJ_S dj y₀ ht) (decAgreeJ dj y₀ ht hc hU)
     (Layout.keyedRowsOuts (sitesShJ_parse dj y₀ ht hc) Hm.saltCol hc (Layout.scopeOk_spec hU hscope).1

@@ -19,12 +19,7 @@ holds before the sample, so the prover never chooses it.
 -/
 module
 
-public import Flock.Bytes
-public import Flock.Canon
 public import Flock.Firewall
-public import Flock.Hash
-public import Flock.Program
-public import Flock.Registered
 public import Spot.Registered
 
 @[expose] public section

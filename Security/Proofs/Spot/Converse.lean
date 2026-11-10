@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Spot.Transfer
 public import Definitions.Spot.AddressMap
+public import Proofs.Spot.Pointer
+import Mathlib.Tactic.Bound.Init
+import Proofs.Spot.Oblivious
 
 /-!
 # The converse: a corruptible address needs the padding's cones

@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.Compose
 public import Proofs.Accounting.TS.Stages
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The service's window budget: proof
@@ -31,7 +32,7 @@ open Accounting.SecurityProofs.TS.Stages (prob_prod sum_le_card_of_expect expect
 
 /-! ## The miss bound -/
 
-theorem forall_mem_subsetSample {N K : ℕ} (π : Equiv.Perm (Fin N)) (P : Fin N → Prop) :
+theorem forall_mem_subsetDraw {N K : ℕ} (π : Equiv.Perm (Fin N)) (P : Fin N → Prop) :
     (∀ v ∈ Pouw.Window.subsetDraw K π, P v) ↔ ∀ i : Fin N, i.val < K → P (π i) := by
   simp [Pouw.Window.subsetDraw]
 
@@ -82,8 +83,8 @@ theorem miss_le : ∀ (K N : ℕ) (B : Finset (Fin N)),
       by_cases hp : p ∈ B
       · rw [ite_eq_left hp, mul_zero]
         refine (prob_mono (q := fun _ : Equiv.Perm (Fin n) => False) fun e he => ?_).trans
-          (le_of_eq (by unfold prob; simp))
-        have := (forall_mem_subsetSample _ _).mp he 0 (Nat.succ_pos K)
+          (le_of_eq (by unfold prob Claims.prUniform; simp))
+        have := (forall_mem_subsetDraw _ _).mp he 0 (Nat.succ_pos K)
         rw [Equiv.Perm.decomposeFin_symm_apply_zero] at this
         exact this hp
       rw [ite_eq_right hp, mul_one]
@@ -105,8 +106,8 @@ theorem miss_le : ∀ (K N : ℕ) (B : Finset (Fin N)),
             _ ≤ ((rest B p).card : ℝ) / n := div_le_div_of_nonneg_right hBr hn'.le
       have h0 : 0 ≤ 1 - ((rest B p).card : ℝ) / n := sub_nonneg.mpr (div_le_one_of_le₀ hrest (Nat.cast_nonneg _))
       refine (prob_mono fun e he => ?_).trans (hmiss.trans (pow_le_pow_left₀ h0 hle K))
-      refine (forall_mem_subsetSample _ _).mpr fun i hi => ?_
-      have := (forall_mem_subsetSample _ _).mp he i.succ (by simp; omega)
+      refine (forall_mem_subsetDraw _ _).mpr fun i hi => ?_
+      have := (forall_mem_subsetDraw _ _).mp he i.succ (by simp; omega)
       rw [Equiv.Perm.decomposeFin_symm_apply_succ] at this
       simpa [rest] using this
     refine (expect_mono hstep).trans ?_

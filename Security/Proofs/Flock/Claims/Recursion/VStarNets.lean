@@ -103,8 +103,11 @@ theorem emitSections_run (u : VStar.UnitC) (l : Laid) (s : String) :
       (PUnit.unit, s ++ joinNl (secLs "unit" u.name l ++ secLs VStar.SHA_NET VStar.SHA_NET (shaLaid ()) ++
         secLs VStar.HM_NET VStar.HM_NET (hmLaid ()))) := by
   unfold VStar.emitSections
-  generalize shaLaid () = ls
-  generalize hmLaid () = lh
+  -- An `Exists` eliminator's variables, not `generalize`'s: the elaborated term substitutes `generalize`'s back, and
+  -- the kernel's check of the `simp` below then evaluates the two nets.
+  obtain ⟨ls, hls⟩ : ∃ ls, shaLaid () = ls := ⟨_, rfl⟩
+  obtain ⟨lh, hlh⟩ : ∃ lh, hmLaid () = lh := ⟨_, rfl⟩
+  rw [hls, hlh]
   simp [List.forIn_cons, List.forIn_nil, StateT.run_bind, StateT.run_modify, emitNet_run, secLs, joinNl_cons,
     joinNl_append, String.append_assoc]
   refine Prod.ext rfl ?_
@@ -484,6 +487,16 @@ theorem parse_nets (p1 p2 : ℕ) {tags : Tags} {bytes : ByteArray} {tables : Lis
   subst hc
   have hL : lines = linesOf text := rfl
   rw [← hL]
+  have hat0 : Sec lines 2 p1 → at0 = 2 := by
+    rintro ⟨-, n, hn, -⟩
+    have htl : HmRow.tmplLines tags lines = 0 := by
+      refine FlockVBridge.Names.tmplLines_eq_zero (Or.inl fun h2 => ?_)
+      generalize tokens (lines.getD 2 "") = t at hn h2
+      rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega), Option.getD_none,
+        FlockVBridge.Names.toNat_empty] at hn
+      cases hn
+    show 2 + HmRow.tmplLines tags lines = 2
+    omega
   have hQ : (∀ e ∈ s1.1.toList, NoWs e.2.name) ∧
       (Sec lines 2 p1 → Sec lines p1 p2 → Sec lines p2 lines.size → s1.1.size = 3) := by
     refine loop_inv' (fun b : Array (String × Net) × ℕ => (∀ e ∈ b.1.toList, NoWs e.2.name) ∧
@@ -494,7 +507,7 @@ theorem parse_nets (p1 p2 : ℕ) {tags : Tags} {bytes : ByteArray} {tables : Lis
         (Sec lines 2 p1 → Sec lines p1 p2 → Sec lines p2 lines.size → b.1.size = 3))
       (fun b => lines.size - b.2) ?_ _ (nets0, at0) s1 le_rfl
       ⟨fun e he => by have h00 : nets0 = #[] := rfl; simp [h00] at he,
-        fun _ _ _ => Or.inl ⟨rfl, rfl⟩⟩ hwhile
+        fun hs _ _ => Or.inl ⟨rfl, hat0 hs⟩⟩ hwhile
     intro b hb s h
     ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets at_ at h)
     split at h

@@ -84,6 +84,7 @@ KERNEL_OUTCOME = "kernel_outcome"
 KERNEL_OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
 KERNEL_REASON = "kernel_reason"
 UNIT_LOWERING = "unit_lowering"
+COMPILE_COST = "compile_cost"
 
 # ---- verification labels: an independent verifier, never the producer ----------------------------------------------------------------
 
@@ -162,16 +163,16 @@ AUTHENTICATION_VALUES = ("included", "included-hash", "included-hash-shared", "e
 MODES = ("interactive", "fiat-shamir")
 SCOPES = ("unit", "vu", "component")
 TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
-#: Mirrors the Glossary's backend families (`README.md`, "Backend family").  A `candidate` label written today names one of these.
+#: The proof systems (AGENTS.md's map).  A `candidate` label written today names one of these.
 BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
 #: The backend families, then the values the frozen ledger's import derived from a ledger lane, which recorded labels carry
 #: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not Flock), `SP1` (D-SP1 as the frozen ledger and
-#: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
+#: tables spell it) and `shared`.  `A`, the ledger import's older spelling (`VALUE_ALIASES`), is read as `A-GKR` and no longer written.
 CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
 APPROACH_STATUSES = ("live", "parked", "killed", "superseded", "merged")
 APPROACH_TYPES = ("scheme", "route", "attack")
 
-# ---- old spellings (2026-09-23 hygiene): accepted on read, never written anew ----------------------------------------------------------------
+# ---- old spellings: accepted on read, never written anew ----------------------------------------------------------------
 
 #: label key written -> the key it means.  Writers (`research data label`) store the canonical key only; readers (`vocab-check`)
 #: map an old key to its canonical one with `canonical_key`.
@@ -182,11 +183,11 @@ VALUE_ALIASES: dict[tuple[str, str], str] = {(CANDIDATE, "A"): "A-GKR"}
 #: Keys whose value names another store object: that is a `ref` (in the manifest at `put`, `--ref name=art:...`), not a label.
 #: `research data label` refuses them (without `--off-vocab`); `vocab-check` lists the ones already written.
 REF_KEYS = ("path", "result_artifact", "constructed_from_attempt")
-#: Measurements and run parameters lanes have written as labels (2026-09-22/23).  The number is already in the result (or goes in
+#: Measurements and run parameters lanes have written as labels.  The number is already in the result (or goes in
 #: the artifact's meta at `put`); a label is what a table selects on or a judgement about the result, so these are refused.
 MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "threads", "window", "rtt_ms_path", "native_peak", "accumulate",
                     "replicate", "encoder")
-#: A note in the notes repo, as a label's ref names it: `note:<lane>/<file name without .md>` (`note:kb/<name>` for kb/) or the notes
+#: A note in the notes repo, as a label's ref names it: `note:<lane>/<file name without .md>` (with `kb` as the lane for kb/) or the notes
 #: README's `note:<campaign>/<lane>/<name>`, either the same whichever month folder the file has moved to.  Not a bare name (a handoff
 #: sent to several lanes has the same name in each), and not a path (`.md`, a `YYYY-MM` or `DD` folder).
 NOTE_REF_RE = re.compile(r"^note:(?:(?![\d-]+/)[A-Za-z0-9][\w.-]*/){1,2}(?![\w.-]*\.md$)[\w.-]+$")
@@ -360,6 +361,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(UNIT_LOWERING, GROUP_RESULT, TEXT, "on a `benchmarks/unit_lowering` run, by its lane: the leaderboard's row, a JSON object "
        "(--value-json) {unit tile|lane|combine, k, tile [R, C], form flat|structural, peak_gib, wall_min, ands, bytes, k_log, "
        "guard pass|fail|n/a, approach, commit branch@sha}"),
+    _k(COMPILE_COST, GROUP_RESULT, TEXT, "on a `benchmarks/compile_cost` run, by its lane: its record, a JSON object (--value-json) "
+       "{window, layers, wall_min, peak_gib, root_nodes, digests [16-hex prefixes], workload, guard pass|fail|n/a, commit branch@sha}"),
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
        "Lean verifier's line, held exactly to line.py's; a line.py-only line is not of record), and the names of its conditional_on in "
@@ -403,9 +406,10 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head; a record only, which no merge waits on",
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
-       "again; a train member needs none (Q14)"),
+       "again unless its own change is the same (`StoreLabels`); a train member needs none (Q14)"),
     _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
-       "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner",
+       "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner, and at a new head "
+       "whose own change is the same",
        REVIEW_VERDICTS),
     _k(LABEL_AUTH, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` or `reviewed = land` by the same author: "
        "{for, token, delegation?}, a Cursor OIDC token whose nonce is the label's (`research.labelauth`); drive.toml's "

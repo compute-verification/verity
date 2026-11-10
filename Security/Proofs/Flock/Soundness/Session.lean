@@ -1,7 +1,13 @@
 module
 
+public import Definitions.Flock.Extract
+public import Definitions.Flock.Game
+public import Proofs.Flock.Soundness.CompiledTable
+public import Proofs.Flock.Soundness.Game
 public import Proofs.Flock.Soundness.Knowledge
-public import Proofs.Flock.Soundness.Game.Batch
+import Proofs.Flock.Soundness.CompiledAlign
+import Proofs.Flock.Soundness.Extract
+import Proofs.Flock.Soundness.Soundness
 
 /-!
 # A table inside a batched session (README.md §1.3)

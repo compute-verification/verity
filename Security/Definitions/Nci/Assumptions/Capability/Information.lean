@@ -22,7 +22,7 @@ The two measures make different scientific claims:
 
 `SourceHard` with `Recovers` derives a bound on a block's outputs from a hard source they reveal, rather than assuming
 one. Each premise's meaning is its item family's: updated slots (update hardness), operand scalars (activation hardness),
-or both in one budget (`Items.sum`, joint hardness).
+or both in one budget (one family holding both, joint hardness).
 -/
 
 @[expose] public section
@@ -46,8 +46,8 @@ often a block reuses it; and it is time-bounded. Its meaning is its item family'
 * **operand occurrences** (activation hardness): covers operands a block produces itself from what it holds, so a block
   that imports updated weights and cheaply generates many operands refutes it; a code rate for one tensor is not such a
   bound, and the exact-decoding experiments refute several uniform rates;
-* **both together** (`Items.sum`, joint hardness): stronger than the two separately, since the same bits can describe
-  both families; it is what an additive budget rests on.
+* **both together** (one family holding both, joint hardness): stronger than the two separately, since the same
+  bits can describe both families; it is what an additive budget rests on.
 
 Each decoder found gives an upper bound and can refute a price; failing to find a shorter one is evidence, not proof. -/
 def DescriptionHard (R : Committed) {ι : Type} (X : Items R.d.D ι) {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ)

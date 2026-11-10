@@ -274,7 +274,7 @@ def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
     """Each request Program's steps of record: its Build result's T + 1, else its rows' segment steps."""
     from verity_vllm.query.manifest import format as MF
 
-    return {k: (int(v["result"]["T"]) + 1) if (v.get("result") or {}).get("T") is not None else (len(MF.segment_steps(progs[k]["rows"])) if k in progs else None)
+    return {k: (int(v["result"]["T"]) + 1) if (v.get("result") or {}).get("T") is not None else (len(MF.segment_steps(progs[k]["rows"], progs[k].get("checks"))) if k in progs else None)
             for k, v in loaded.items()}
 
 
@@ -395,9 +395,10 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     if not plan and getattr(args, "memory_map", None):
         from verity_vllm.acquire.sources.kv_slots_source import caches_of
         from verity_vllm.check.oracle_compare import OpenedReader
-        from verity_vllm.pipeline import memory_map as MMP
-        MMP.after_commit(args.memory_map, loaded=_loaded, bmap=_bm, committed=OpenedReader(s.com, rc), manifest=s.manifest, arrivals=_arr,
-                         caches=caches_of(s.com), session=s.out / MMP.SESSION, cached_prefixes=cached_prefixes(reqs, _rl))
+        from verity_vllm import protocols
+        CM = protocols.driver("remote-bandwidth", "commit_map")
+        CM.after_commit(args.memory_map, loaded=_loaded, bmap=_bm, committed=OpenedReader(s.com, rc), manifest=s.manifest, arrivals=_arr,
+                        caches=caches_of(s.com), session=s.out / CM.SESSION, cached_prefixes=cached_prefixes(reqs, _rl))
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)
@@ -474,25 +475,7 @@ def reconcile(s: ReplaySources, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr
     from verity_vllm.commit import executed_prefix as EPX
 
     row, pair = s.row, s.pair
-    if getattr(s.com, "_padding", None):
-        # a PADDED Commit: the population of record is the FULL cap; the
-        # identities the replay excluded at n_exec are the padding's -- the named stratum `inactive_by_enablement`, every entry read back
-        # == the bot word; the one-mechanism reconciliation compares the Commit's padding classification against that bucket family by family
-        from verity_vllm.commit import padding_steps as _PSm
-        _pp = _PSm.padded_population(sr, _bm, _rd.or_none, _epr_r)
-        # the two documents agree on one number: oracle_compare.padding (by family, pairs) == this stratum
-        _pp["oracle_c3"] = _PSm.padding_vs_oracle(_pp, row["commit"].get("oracle_compare"), _bm)
-        row["commit"]["inactive_by_enablement"] = _pp
-        print(f"[delta] inactive-by-enablement stratum (pair {pair}): {'OK' if _pp['ok'] else 'FAIL'} -- {_pp['padding_entries']} padding entries, "
-              f"{_pp['checked_entries']} read back / {_pp['checked_words']:,} words == bot, {_pp['mismatches_n']} mismatches, {_pp['unread_n']} unread; "
-              f"population inactive {_pp['population_inactive_identities']}; by family "
-              + ", ".join(f"{f} {d['commit_padding_entries']}/{d['population_inactive']}" for f, d in _pp["by_family"].items())
-              + (f"; PROBLEMS {_pp['problems'][:3]}" if _pp["problems"] else ""), flush=True)
-        if not _pp["ok"]:
-            _cv = row["commit"].get("coverage")
-            if isinstance(_cv, dict) and _cv.get("ok"):
-                _cv["ok"], _cv["error"] = False, "inactive stratum: " + "; ".join(_pp["problems"][:3])
-    elif "executed_prefix" in _sr_kw and _epr_r["any_eos_stop"]:
+    if "executed_prefix" in _sr_kw and _epr_r["any_eos_stop"]:
         _cc = (((row["commit"].get("binding") or {}).get("population") or {}).get("manifest") or {}).get("not_executed_by_rule")
         _recon = EPX.reconcile_not_executed(_cc, (sr.get("population") or {}).get("not_executed_by_rule"), _epr_r, manifest_identities=s.ids_full)
         sr["not_executed_reconciliation"] = _recon

@@ -914,7 +914,7 @@ private theorem table_toy :
     (Merkle.root (Run.rowLeaves toyPoint.params toyPublic.salt toyDigests) == some toyPublic.root) = true := by
   decide +kernel
 
--- elaborating `checkAt_of`'s `rfl` arguments at the toy unfolds past the default depth (r20261027-032332-2478)
+-- elaborating `checkAt_of`'s `rfl` arguments at the toy unfolds past the default depth
 set_option maxRecDepth 100000 in
 private theorem checkAt_toy (pk sig : ByteArray)
     (hv : (MemoryChallenger.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig)

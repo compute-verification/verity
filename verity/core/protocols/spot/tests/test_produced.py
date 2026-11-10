@@ -1,5 +1,5 @@
 """Produced values (`one_stage.produced`): a value committed after the sample under a domain bound to the registration's
-digest, the verifier's own entries and ports for it, the post-draw record's check, the opened roots held to the record,
+digest, the verifier's own entries and ports for it, the record's check after the sample, the opened roots held to the record,
 and every session's opened rows held to the one opening the record (or the verifier's own known port) fixes."""
 from __future__ import annotations
 

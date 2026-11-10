@@ -158,7 +158,12 @@ class NativeCollectCommitter(NativeHostCommitter):
     M1 glue is `Fa2Wrap` -- no Python frame per producer; gather windows (P0/P1/P2 + step end) with 32 blocks per descriptor by default
     (size-adaptive, `auto_blocks`: up to 1024)."""
 
+<<<<<<< 94ca7fd0d18
     commit_scheme, rows = step_rows.NAME, True
+||||||| e10cf2c8559
+=======
+    ends_source_steps = True
+>>>>>>> 7af4d24fca3e
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
@@ -207,6 +212,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         if not self.retain_levels and not self.windowed:
             raise ValueError("retain_levels=False is implemented on the windowed path only (--window-mb > 0)")
         # the commitment scheme, rows-sha512 (`step_rows`: every step_rows.ROW_BYTES (4 KiB) chunk an hm96-sha512 hiding leaf in a
+<<<<<<< 94ca7fd0d18
         # frame-v3-sha512 tree, 64-byte roots), the windowed worker's.  Each step's salt key is fresh (`row_keys`); a replay that must
         # reproduce a run's trees takes that run's keys (`replay_row_keys`, set before the run and dropped by its finalize)
         if (commit_scheme or step_rows.NAME) != step_rows.NAME:
@@ -216,6 +222,31 @@ class NativeCollectCommitter(NativeHostCommitter):
                              "its own hiding leaves only")
         self.chunk = step_rows.ROW_BYTES          # a row is a chunk of the step's stream: the layout's leaves, the windows' and the tree's
         self.row_keys: dict[int, bytes] = {}
+||||||| e10cf2c8559
+        # the commitment scheme (`commit_scheme`, unset = rows-sha512): rows-sha512 (`step_rows`: every step_rows.ROW_BYTES (4 KiB)
+        # chunk an hm96-sha512 hiding leaf in a frame-v3-sha512 tree, 64-byte roots), on the windowed worker under chunk-leaf-v1, or
+        # vllm-v1 by name (a per-step-block collector, an old record's configuration).
+        # Each step's salt key is fresh (`row_keys`); a replay that must reproduce a run's trees takes that run's keys
+        # (`replay_row_keys`, set before the run and dropped by its finalize)
+        self.commit_scheme = commit_scheme or step_rows.NAME
+        if self.commit_scheme not in ("vllm-v1", step_rows.NAME):
+            raise ValueError(f"unknown commit scheme {self.commit_scheme!r} (vllm-v1 | {step_rows.NAME})")
+        self.rows = self.commit_scheme == step_rows.NAME
+        if self.rows and (not self.windowed or self.layout_v2 or self.hiding is not None):
+            raise ValueError(f"{step_rows.NAME} is implemented on the windowed worker (native worker + gather + --window-mb > 0) under "
+                             "chunk-leaf-v1 position leaves only: name vllm-v1 for any other collector")
+        if self.rows:
+            self.chunk = step_rows.ROW_BYTES      # a row is a chunk of the step's stream: the layout's leaves, the windows' and the tree's
+        self.row_keys: dict[int, bytes] = {}
+=======
+        # frame-v3-sha512 tree, 64-byte roots), the windowed worker's; a row is a chunk of the step's stream (`chunk`): the layout's
+        # leaves, the windows' and the tree's.  Each step's salt key is fresh (`row_keys`); a replay that must reproduce a run's trees
+        # takes that run's keys (`replay_row_keys`, set before the run and dropped by its finalize)
+        if (commit_scheme or step_rows.NAME) != step_rows.NAME:
+            raise ValueError(f"unknown commit scheme {commit_scheme!r}: the collector commits {step_rows.NAME}")
+        if not self.windowed:
+            raise ValueError(f"{step_rows.NAME} is implemented on the windowed worker (native worker + gather + --window-mb > 0)")
+>>>>>>> 7af4d24fca3e
         self.replay_row_keys: dict[int, bytes] | None = None
         self._row_tn: Any | None = None
         self._copy = None                           # the worker's stream for rows-sha512 level copies (created lazily on the worker thread)

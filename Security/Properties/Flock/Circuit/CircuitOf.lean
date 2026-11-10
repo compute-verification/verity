@@ -1,9 +1,10 @@
 module
 
-public import Definitions.Core.Boolean
 public import Definitions.Core.Partition
 public import Flock.Desc
 public import Properties.Flock.Circuit.Outs
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The registered circuit file as core's circuit
@@ -13,7 +14,7 @@ The circuit a Flock session checks is defined from its circuit file: the descrip
 file's `pub.n`) give the key program `keyProg D.unroll hU n`, whose circuit and partition (`keyCircuit`,
 `keyPartition`) the session's game is stated over. Here that circuit is core's:
 
-* `Verity.Circuit.ofAudit C`: a game circuit (`FlockSoundness.Audit.Circuit`) as core's (`Verity.Circuit`), the same
+* `Verity.Circuit.ofAudit C`: a game circuit (`Verity.Boolean.Circuit`) as core's (`Verity.Circuit`), the same
   gates, one bit each; `Verity.Partition.ofAudit P`, the same partition.
 * `circuitOf D hU n := .ofAudit (keyCircuit D hU n)` and `partsOf D hU n := .ofAudit (keyPartition D hU n)`: the
   parsed file as core's circuit and its `n` units.
@@ -29,17 +30,17 @@ The lemmas about them are `Proofs.Flock.Bridge.CircuitOf`'s.
 namespace Flock.Bridge
 
 /-- A game gate as the Boolean profile's: the same gate. -/
-def coreOp {N : ℕ} : FlockSoundness.Audit.Op N → FlockSoundness.Audit.Op N
+def coreOp {N : ℕ} : Verity.Boolean.Op N → Verity.Boolean.Op N
   | .input => .input
   | .and a b => .and a b
   | .xor a b => .xor a b
   | .not a => .not a
   | .row a b => .row a b
 
-theorem args_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) : (coreOp o).args = o.args := by
+theorem args_coreOp {N : ℕ} (o : Verity.Boolean.Op N) : (coreOp o).args = o.args := by
   cases o <;> rfl
 
-theorem isInput_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) : (coreOp o).isInput = o.isInput := by
+theorem isInput_coreOp {N : ℕ} (o : Verity.Boolean.Op N) : (coreOp o).isInput = o.isInput := by
   cases o <;> rfl
 
 end Flock.Bridge
@@ -50,24 +51,24 @@ open Flock.Bridge (coreOp args_coreOp isInput_coreOp)
 
 /-- **A game circuit as core's**: the Boolean profile's circuit of it, one bit a gate, written out so that its gates are
 the game circuit's. -/
-abbrev Circuit.ofAudit (C : FlockSoundness.Audit.Circuit) : Circuit where
+abbrev Circuit.ofAudit (C : Verity.Boolean.Circuit) : Circuit where
   N := C.N
   w _ := 1
   isInput g := (coreOp (C.op g)).isInput
   reads g := (coreOp (C.op g)).args.toFinset
   reads_lt g a ha := C.topo g a (by rwa [List.mem_toFinset, args_coreOp] at ha)
-  input_reads g h := by simp [FlockSoundness.Audit.Op.args_of_isInput h]
+  input_reads g h := by simp [Verity.Boolean.Op.args_of_isInput h]
   op g v := BitVec.ofBool ((coreOp (C.op g)).apply fun a => (v a).getLsbD 0)
   op_congr g v v' h := by
-    rw [FlockSoundness.Audit.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
+    rw [Verity.Boolean.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
   outputs := C.outputs
 
-theorem Circuit.ofAudit_isInput {C : FlockSoundness.Audit.Circuit} (g : Fin C.N) :
+theorem Circuit.ofAudit_isInput {C : Verity.Boolean.Circuit} (g : Fin C.N) :
     (Circuit.ofAudit C).isInput g = (C.op g).isInput :=
   isInput_coreOp _
 
 /-- A game partition as core's: the same units. -/
-def Partition.ofAudit {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) :
+def Partition.ofAudit {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) :
     Partition (Circuit.ofAudit C) n where
   unit := P.unit
   input_iff g := (P.input_iff g).trans (by rw [Circuit.ofAudit_isInput])
@@ -97,7 +98,7 @@ namespace Flock.Bridge
 
 /-- The key program's circuit at the descriptor `D`, its unit's rows `hU` and the population `n`. -/
 noncomputable abbrev keyCircuit (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) :
-    FlockSoundness.Audit.Circuit :=
+    Verity.Boolean.Circuit :=
   (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)
 
 /-- The key program's partition into its `n` units. -/

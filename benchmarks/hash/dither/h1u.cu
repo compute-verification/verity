@@ -609,7 +609,7 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #define H1U_JRCPF 0
 #endif
 // H1U_JPROBE = 1 (RW without RC): a timing probe, never a receipt: the column tiles are the row tile's words, not
-// hashed, so a unit's time less its column hash bounds what sharing the column tiles can save (unitsbench --probe).
+// hashed, so a unit's time less its column hash bounds what sharing the column tiles can save.
 // With JX, which reads no row tile, they are a multiply of their stream position into the midstate's words. Bits 2
 // and 4 (any RW unit) hold B's and A's (X's) segment loads at their first segments, which stay in L1, so the probe's
 // time against the unit's bounds what those loads' L2 latency costs
@@ -2751,7 +2751,7 @@ extern "C" int kh_one_peel(const void* A, const void* B, unsigned rows, unsigned
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
 }
 
-// J10 banded (measured only; noise=j10-banded, j10b_ref.py's reading of SharedNoise.lean): kh_one and
+// J10 banded (measured only; noise=j10-banded, a reading of SharedNoise.lean): kh_one and
 // kh_one_peel on band-leader rows, band column tiles a band; mode 0 noise then units, 1 the units alone, 2 the noise alone
 extern "C" int kh_one_band(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
                            const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
@@ -3459,7 +3459,7 @@ extern "C" unsigned long long kh_j10r_rows_bytes(unsigned M, unsigned K) {
   return H1U_JX ? jx_ad_off(M, K) + 4ull * (M / 32) * JX_AD_WORDS
                 : 64ull * M * (K / 512 + 1) + (H1U_JAP ? (unsigned long long)M * K : 0) + (H1U_JAY ? 128ull * M : 0);
 }
-// the row workspace's int32 word whose bit 0 unitsbench's row fault flips (after the rows, before the units): row 0's
+// the row workspace's int32 word whose bit 0 j10r_sm90's row fault flips (after the rows, before the units): row 0's
 // first block, or with H1U_JAP its A' bytes A'[0][0 .. 3], which the units read instead
 extern "C" unsigned long long kh_j10r_row_fault_word(unsigned M, unsigned N, unsigned K, int rc) {
   return H1U_JAP ? jap_words(M, N, K, rc != 0) : 0;
@@ -3571,8 +3571,8 @@ __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ call
 }
 
 // H1U_JSWZ = G (h1umjc; 0 is the launch's order): H1U_SWZ's order for its units, G row tiles at a time column tile by
-// column tile, so B's lines and the column tiles are read from DRAM once for G row tiles.  32: the fastest G of
-// unitsbench --j10r's sweep (0, 8, 16, 32, 64) at T = M = 2048, step_multi_j10rc
+// column tile, so B's lines and the column tiles are read from DRAM once for G row tiles; 32 unless set, under
+// step_multi_j10rc's units
 #ifndef H1U_JSWZ
 #define H1U_JSWZ 32
 #endif

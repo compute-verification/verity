@@ -1,8 +1,10 @@
 module
 
+public import Definitions.Spot.Dataflow
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Proofs.Spot.Determinacy
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # Skippable work: what the incorrect proof blocks' cones and luck bound

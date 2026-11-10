@@ -27,6 +27,7 @@
 #      H1_DRAWN_CHECK=0: no drawn.py check, for a caller whose credit verifies the statements itself
 #      H1_DRAWN_WORK (a private directory on the node: the scratch directory goes in it and is kept, so the proof files
 #      statements.json names outlive drawn.sh for that caller; it holds the staged witness)
+<<<<<<< 94ca7fd0d18
 #      H1_DRAWN_STAGED (a work dir `drawn.py stage` already wrote, its plan.json: proved and checked as it is, no staging;
 #      drawn_cost.sh's DC_REAL=0 fixture, whose stand-in tile the CLI's word reference can't restage)
 # Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's live verifier and prover then run side by side, each
@@ -47,6 +48,31 @@
 # LIVE verdict lines, both sides' wall seconds, peak RSS and CPU seconds, and the job cgroup's CPU seconds over the
 # session (cgroup.json, the ZK server's Lean processes among them), kept whether the session passed or failed;
 # serve is the verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
+||||||| e10cf2c8559
+# Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's ZK server and prover then run side by side, each under
+# an address-space cap (job.sh's vlimit): the server gets H1_ZK_SERVER_GB and the prover the rest of H1_DRAWN_MEM_GB. The
+# default is sized to a K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223 ANDs), which peaked
+# at 65.4 GiB resident in the server and 61.3 GiB in the prover, 238 s to prove at 8 threads (r20261102-160857-5d19):
+# each side's cap is its peak plus ~35%, since an address space outgrows resident memory by the allocator's arenas and
+# the threads' stacks. So a K 2048 window wants H1_DRAWN_MEM_GB >= 88 + 83 = 171 (a ~195 GB H200 host's 90% is ~174),
+# and drawn.sh refuses before staging only when the prover's share is below its 62 GB resident peak. A larger K's lane
+# is measured again before it runs.
+# Out: PIECE_DIR/drawn/ (statements.json and job.log, and sessions/<statement>/: the ZK server's log, the prover's LIVE
+# verdict lines and both sides' wall seconds and peak RSS, kept whether the session passed or failed; the server is the
+# verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
+=======
+# Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's ZK server and prover then run side by side, each under
+# an address-space cap (job.sh's vlimit): the server gets H1_ZK_SERVER_GB and the prover the rest of H1_DRAWN_MEM_GB. The
+# default is sized to a K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223 ANDs), which peaked
+# at 65.4 GiB resident in the server and 61.3 GiB in the prover:
+# each side's cap is its peak plus ~35%, since an address space outgrows resident memory by the allocator's arenas and
+# the threads' stacks. So a K 2048 window wants H1_DRAWN_MEM_GB >= 88 + 83 = 171 (a ~195 GB H200 host's 90% is ~174),
+# and drawn.sh refuses before staging only when the prover's share is below its 62 GB resident peak. A larger K's lane
+# is measured again before it runs.
+# Out: PIECE_DIR/drawn/ (statements.json and job.log, and sessions/<statement>/: the ZK server's log, the prover's LIVE
+# verdict lines and both sides' wall seconds and peak RSS, kept whether the session passed or failed; the server is the
+# verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
+>>>>>>> 7af4d24fca3e
 # and each statement's witness files and session) and job.sh's other logs, the prover's stderr among them, go to a
 # `mktemp -d` scratch directory removed on exit (kept with H1_DRAWN_WORK): PIECE_DIR is under the run's $OUT, and a staged
 # witness never goes there.

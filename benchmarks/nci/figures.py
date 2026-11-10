@@ -274,7 +274,7 @@ def ladder(out: Path) -> dict:
         "wipes, every proof block proved), hollow at T5 (1% of proof blocks sampled at today's proving cost, "
         f"{num(P['overhead'])}). "
         "Colour is how far the rung is from real: deployed, specified, modelled, conditional (on unproved links: F3, "
-        "F4, NET-35 and WipeFullUse for the memory rungs) or a policy choice. The memory rungs are by the fit bound, "
+        "F4, intake held to alpha F and WipeFullUse for the memory rungs) or a policy choice. The memory rungs are by the fit bound, "
         "the floors by the PoUW route (r̂ to 0, no memory cap; the closed form caps nothing at d = "
         f"{num(P['d'])}). D at T3 (T5): "
         + "; ".join(f"{r['name']} {num(r['D_rung']['T3'])} ({num(r['D_rung']['T5'])}), {r['status']}" for r in rows)

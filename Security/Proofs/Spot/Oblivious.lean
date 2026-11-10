@@ -1,8 +1,9 @@
 module
 
 public import Definitions.Spot.Oblivious
-public import Proofs.Spot.Determinacy
 public import Proofs.Spot.Pointer
+import Mathlib.Tactic.Bound.Init
+import Proofs.Spot.Determinacy
 
 /-!
 # Which programs are as good as circuits

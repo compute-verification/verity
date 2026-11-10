@@ -1,4 +1,4 @@
-"""Demo A's report: one or more block records (`block_record`, ``verity/block-record/v1``) and a measurements
+"""Demo A's report: one or more block records (`block_record`, ``verity/block-record/v2``) and a measurements
 file rendered as Markdown in three parts: 1. ran and proved, on one H200, one block;
 2. measured on the demo, the inputs to the scaling claim; 3. computed from the same theorem and the measured costs, not
 run; then what the demo didn't show, and every number's source.
@@ -127,7 +127,7 @@ STUBS = {
                        "demo's ACCEPT isn't yet \"no stubs\".",
 }
 DEMO_A = ("integrity", "pouw", "certifier")
-PROTOCOL_NAMES = {"integrity": "sampled proofs", "pouw": "PoUW", "certifier": "network certifier", "pous": "PoUS",
+PROTOCOL_NAMES = {"integrity": "SPOT", "pouw": "PoUW", "certifier": "network certifier", "pous": "PoUS",
                   "bandwidth": "the bandwidth audit", "wipe": "the wipe"}
 PERIODS = block_record.PERIODS
 #: retired words, and the old names of the six subprotocols; a code span (a field or a quoted verdict line) is exempt
@@ -164,7 +164,7 @@ RECORD: dict[str, str] = {
     "RECORD_RUN": "run",
     "BLOCK_SERVER": "server",
     "BLOCK_STEPS": "server_time's steps [lo, hi)",
-    "DEMO_A_VERDICT": "sampled proofs', PoUW's and the network certifier's answer.verdict on the block's server",
+    "DEMO_A_VERDICT": "SPOT's, PoUW's and the network certifier's answer.verdict on the block's server",
     "DRAWN_UNITS": "`integrity` › quantity.drawn",
     "UNITS_TOTAL": "`integrity` › quantity.of",
     "LEAN_VERDICT": "`integrity` › answer.verdict (the Lean verifier's audit)",
@@ -623,8 +623,8 @@ def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extr
     r = records[0]
     if (k := values.get("DRAWN_UNITS")) is not None and k.value != HANDFUL:
         lines.append(f"This block drew k = {_fmt(k.value)}, not M3's handful of {HANDFUL}.")
-    lines.append("The challenger and the network certifier run on the prover's node for the demo, not on a machine the "
-                 "prover doesn't control: the demo assumes the prover leaves them alone.")
+    lines.append("The challenger and the network certifier run on the developer's node for the demo, not on a machine the "
+                 "developer doesn't control: the demo assumes the developer leaves them alone.")
     for p in DEMO_A:
         lg = r["legs"].get(p)
         if lg is None or lg["server"] != r["server"]:
@@ -761,7 +761,7 @@ def vocabulary(text: str) -> None:
     for n, line in enumerate(text.splitlines(), 1):
         if m := BANNED.search(CODE_SPAN.sub("", line)):
             raise ValueError(f"the report says {m[0]!r} (line {n}: {line.strip()!r}): name each of the six "
-                             f"subprotocols (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, "
+                             f"subprotocols (SPOT, PoUW, PoUS, the bandwidth audit, the network certifier, "
                              f"the wipe), and say 'proof block', 'sampling block', 'server-time block' and 'subcircuit'")
 
 
@@ -895,7 +895,7 @@ def _misses(rows: Sequence[Mapping[str, Any]], failures: Sequence[Mapping[str, A
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Demo A's report from block records and a measurements file.")
     ap.add_argument("records", nargs="*", type=Path,
-                    help="block records (verity/block-record/v1); the first is the block. None for a report whose "
+                    help="block records (verity/block-record/v2); the first is the block. None for a report whose "
                          "measurements carry sections or proved (M3's report)")
     ap.add_argument("--measurements", type=Path)
     ap.add_argument("--record-label", help="the label every number read from the block records carries")

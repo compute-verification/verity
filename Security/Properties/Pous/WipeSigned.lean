@@ -3,6 +3,7 @@ module
 public import MemoryChallenger.WipeProtocol
 public import Properties.Pous.MemoryChallenger
 public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # An accepted wipe is the memory challenger's own run, and that run is the streamed wipe's accepted session
@@ -265,7 +266,7 @@ check accepts the honest challenger's session at the deployed parameters, the de
 of the wipe of record. Its nontrivial lemma: a session a verifier that accepts everything accepts is no run of the
 challenger's and carries no break, so `WipeRanAccepted` fails there. -/
 
-/-- The server of r20261026-094403-bb5f's honest wipe, named by its role: the prover's host. -/
+/-- The server of the honest wipe of record, named by its role: the prover's host. -/
 def MEASURED_SERVER : ByteArray := "prover-host".toUTF8
 
 /-- Its session id. -/

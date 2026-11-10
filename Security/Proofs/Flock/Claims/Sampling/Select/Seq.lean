@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.ExecDraw
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Flock.Soundness.Game
 
 /-!
 # A sequential sample from one byte source misses no more often than its stages' bounds multiplied

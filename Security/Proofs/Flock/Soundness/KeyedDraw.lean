@@ -1,11 +1,16 @@
 module
 
-public import Proofs.Flock.Soundness.ExecDrawOS
-public import Randomness
-public import Proofs.Flock.Soundness.PlanDraw
-public import Proofs.Flock.Soundness.Audit.Window
+public import Proofs.Flock.Soundness.Assumptions
 public import Proofs.Flock.Soundness.Audit.RegDraw
+public import Proofs.Flock.Soundness.Audit.Window
+public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecDrawOS
+public import Proofs.Flock.Soundness.PlanDraw
 import all Init.Data.String.Defs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game
+import Std.Data.HashMap.Lemmas
 
 /-!
 # The PoUW circuit's keyed sample escapes no more often than the model's

@@ -62,12 +62,20 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
 
 /-- **What a composite's verifier accepts, it accepted as a `same` composition**: an accepted composition of
+<<<<<<< ours
 its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store. -/
+||||||| base
+its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, and at
+remote every window of PoUW's period on the policy's record. -/
+=======
+its components whose record subprotocols committed to one record, every window of PoUW's period on the policy's record,
+and at onsite PoUS and PoUB-P2 on one store. -/
+>>>>>>> theirs
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
       Properties.Composition.answerAccepts (Onsite.protocol.on s.blobs) s.params s.commitment s.evidence h
-    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied [Onsite.store] ev
+    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied Onsite.ties ev
       (Composition.checkSame "verity/onsite/v0" Onsite.tied (s.components .onsite) ps c ev) pub prof hch
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
@@ -366,7 +374,7 @@ theorem namedFinder_collides {h : Option Hash.Digest} {F R : Array ByteArray} (h
       ∃ u v, (namedFinder h F R).out s = some (u, v) ∧ Claims.Collision sha512Msg u v :=
     fun _ => ⟨_, _, by simp only [namedFinder, if_neg hne], hl, hd⟩
   classical
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   rw [Finset.filter_true_of_mem fun s _ => hs s, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
 
@@ -395,6 +403,14 @@ theorem finderCROf_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G →
   unfold finderCROf
   exact List.forall_iff_forall_mem.2 fun f hf => f.cr_of_expectedCR σ (h f hf)
 
+/-- **`B^τ`'s collision premise gives its bound**: where subprotocol `a`'s finder meets `Claims.ExpectedCR`
+(`Vocab.FinderCR`), its calls within its budget (`Vocab.finderSpec`) put its collision probability at most `crBound`
+at the strategy's calls. -/
+theorem Vocab.finderPr_le_crBound {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α) {a : Subprotocol}
+    {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+    (h : V.FinderCR a θ F c σ) : (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ) :=
+  (V.finderSpec a θ F c).cr_of_expectedCR σ h
+
 namespace Idle
 
 /-- At `unbounded`, every subprotocol's error is `⊤`. -/
@@ -411,7 +427,7 @@ theorem target_unbounded (k : Verity.Registration.Composite) (a : Subprotocol) :
 
 /-- The idle finder outputs no collision. -/
 theorem finder_pr (H : Claims.Msg → Claims.Msg) : finder.Pr H = 0 := by
-  unfold Claims.Finder.Pr Claims.Pr
+  unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
   simp [finder]
   exact Or.inl rfl
 
@@ -425,7 +441,8 @@ theorem forger_pr (verify : Hash.Msg → Hash.Msg → Hash.Msg → Bool) : forge
 theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (exact.game θ F c)) :
     exact.error a θ F c σ = 0 := by
   unfold Vocab.error Accounting.condError
-  rw [if_pos ⟨trivial, le_of_eq (finder_pr _), fun _ _ => le_of_eq (forger_pr _)⟩]
+  rw [if_pos ⟨trivial, (finder_pr _).trans_le
+    (div_nonneg (Claims.Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)), fun _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
 
 /-- At `exact`, PoUW's claim fails on every play after the empty commitment: at onsite it certifies one gate computed,

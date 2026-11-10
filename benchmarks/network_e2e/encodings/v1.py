@@ -13,7 +13,7 @@ them as witness):
   its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the
   server holds its whole body;
 - each request's output ids, its id events' `token_id`s in order, and each output's release bucket (`Request.release`),
-  which the warden's fixed schedule sets (egress cell i in bucket a + D + ⌊i/r⌋).
+  which the network certifier's fixed schedule sets (egress cell i in bucket a + D + ⌊i/r⌋).
 The reference order is the warden's release order, the requests by (a, ordinal) (`release_order`).
 
 **Sent, the order**: the engine doesn't admit in that order. It admits in the API server's body-read order, which
@@ -839,9 +839,17 @@ def advice_of(trace: Any, record: CertifiedRequests) -> I1.Advice:
 INGRESS = ("client", "warden")
 
 
+<<<<<<< 94ca7fd0d18
 def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple[Any, CertifiedRequests, I1.Advice]:
+||||||| e10cf2c8559
+def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple[Any, Record, I1.Advice]:
+=======
+def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple[Any, Record, I1.Advice]:
+    """A trace-corpus trace, its certified record and its I1 v0 advice; a tick-served trace's record is on its own
+    certified tick's buckets, 100 ms buckets otherwise."""
+>>>>>>> 7af4d24fca3e
     tr = R.read_corpus_trace(path, ingress=ingress)
-    rec = record_of(tr, stop_ids)
+    rec = record_of(tr, stop_ids, **({} if tr.releases is None else {"bucket_s": tr.releases.tick.bucket_us / 1e6}))
     return tr, rec, advice_of(tr, rec)
 
 
@@ -982,7 +990,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("traces", nargs="+", help="LABEL=DIR: a trace's directory (steps.jsonl, requests.jsonl, meta.json, "
                                               "server.log)")
     ap.add_argument("--stops", default="128001", help="the registered stop ids, comma-separated, EOS first")
-    ap.add_argument("--T", type=int, default=600, help="the window, in 100 ms buckets")
+    ap.add_argument("--T", type=int, default=600, help="the window, in the trace's certified buckets: its tick's τ_b, "
+                                                          "100 ms without the tick")
     ap.add_argument("--ingress", choices=INGRESS, default="client",
                     help="the certified order's stand-in: the client's send (client; on a .released view, the warden's "
                          "release), or the engine's own arrival stamp (warden: no deviations)")

@@ -19,15 +19,16 @@ Its cryptographic hypotheses are instances of three assumptions, each for the fi
 * `SHA512CRExpected` (`ecr/sha-512`) through `hCR` (`LinkCR`);
 * A3 (`uniform/io-getrandombytes`) through `hA3` (`UniformRandomBytes`).
 
-The others are the named obligations `assumption-notes/e2e-checklist.md` lists: W6 and `Layout.Aliased` (`pp.placed`,
+The others are the named obligations `ASSUMPTIONS.md` lists under The headline: W6 and `Layout.Aliased` (`pp.placed`,
 `pp.aliased`), `HmRowComputes` (`hHm`), the layout's facts (`lay`, `rs`, in place of `vb`), the serving roots' rewinding
 (`tr`, in place of `hExec`; `TreeRewind.ofNever` builds it from `hExec` at `δ_tree = 0`), `hConst` and `hZero`. The rest
 (`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht`) are numeric conditions and the strata's match. The budgets must bound
 their finders' real SHA-512 evaluations, `qF, qT ≥ 2t′ + 2v` and `qS ≥ t′ + v` for `t′` one session run's and `v` one
 opening's verification, which Lean doesn't check (`ASSUMPTIONS.md`).
 
-It bounds incorrect proof blocks of the rows' circuit. That a correct unit computes a Definition additionally needs the unit's
-certificate (`RowsCert`, `IsRowsUnit.computes_of_cert`) and the Definition's Boolean semantics in Lean.
+It bounds incorrect proof blocks of the rows' circuit. That a correct unit computes a Definition is outside it: rows that
+`GateRows.rows` derives from a gate circuit, satisfied with the constant 1, carry its outputs (`GateRows.rows_sound`),
+but no theorem ties a unit's rows to its Definition's gate circuit, and the Definition's Boolean semantics isn't in Lean.
 
 Its proof coins are the model's: uniform, sampled each round after the prover's message. That the challenger's round
 coins are those is A6 (`uniform/flock-coin-server`, `ASSUMPTIONS.md`), which the model embodies rather than a hypothesis

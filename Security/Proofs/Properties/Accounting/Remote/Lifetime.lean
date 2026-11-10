@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Accounting.Remote.Released
+import Proofs.Properties.Accounting.Remote.Plan
 
 /-!
 # Each append's blocks are read within `lifetime` windows (`LifetimeCapped`)

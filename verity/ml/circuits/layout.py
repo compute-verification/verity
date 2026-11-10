@@ -144,13 +144,22 @@ def resolve_gate(scope: Scope, ref: Ref) -> tuple[int, PrimitiveDefinition]:
 
 
 class LazyOperands(Sequence):
-    """Operand references of a wide-fan-in gate (e.g. an embedding column of 151,936 weight values), resolved
-    on demand: `len`, `ops[j]`, iteration. Semantically identical to the tuple `_prim_member_args` returns."""
+    """Operand references of a gate, resolved on demand by ``res`` (`resolve` in ``scope`` when None): a wide-fan-in gate's
+    (e.g. an embedding column of 151,936 weight values), and on a walk that asks (`Circuit.gates`' ``lazy``) a gate whose
+    primitive reads its operands through ``evaluate_lazy`` (an expert GEMM's gather reads 2 of its E + 1).  `len`, `ops[j]`,
+    iteration.  Semantically identical to the tuple `_prim_member_args` returns, down to the `IndexError` past either end."""
 
-    __slots__ = ("scope", "node", "m", "_segments", "_n")
+    __slots__ = ("scope", "node", "m", "_segments", "_n", "_res")
 
+<<<<<<< 94ca7fd0d18
     def __init__(self, scope: Scope, node: BodyNode, m: int) -> None:
+||||||| e10cf2c8559
+    def __init__(self, scope: Scope, node: Node, m: int) -> None:
+=======
+    def __init__(self, scope: Scope, node: Node, m: int, res: Callable[[Ref], int] | None = None) -> None:
+>>>>>>> 7af4d24fca3e
         self.scope, self.node, self.m = scope, node, m
+        self._res = partial(resolve, scope) if res is None else res
         segs = []  # (start, count, refs-getter)
         start = 0
         axes = node.axes if node.form == "batch" else (None,) * len(node.args)
@@ -176,16 +185,16 @@ class LazyOperands(Sequence):
         if j < 0:
             j += self._n
         if not (0 <= j < self._n):
-            raise IndexError(j)
+            raise IndexError("tuple index out of range")
         for start, n, refs in self._segments:
             if j < start + n:
-                return resolve(self.scope, refs[j - start])
-        raise IndexError(j)
+                return self._res(refs[j - start])
+        raise IndexError("tuple index out of range")
 
     def __iter__(self):
         for start, n, refs in self._segments:
             for k in range(n):
-                yield resolve(self.scope, refs[k])
+                yield self._res(refs[k])
 
     def __eq__(self, other) -> bool:
         return tuple(self) == tuple(other)
@@ -202,11 +211,14 @@ def _prim_member_args(scope: Scope, node: BodyNode, m: int):
     return _member_operands(scope, node, m)
 
 
-def _member_operands(scope: Scope, node, m: int, res: Callable[[Ref], int] | None = None):
+def _member_operands(scope: Scope, node, m: int, res: Callable[[Ref], int] | None = None, lazy: bool = False):
     """`_prim_member_args` of ``node`` in ``scope``, each reference resolved by ``res`` (`resolve` in ``scope`` when None; a wide
-    gate's, lazily, always by `resolve`)."""
+    gate's, lazily, always by `resolve`).  With ``lazy``, a primitive with ``evaluate_lazy`` gets `LazyOperands` resolved by
+    ``res``, so only the operands its evaluator reads are resolved."""
     if sum(p.leaves for _, p in node.fn.params) > WIDE_FAN_IN:
         return LazyOperands(scope, node, m)
+    if lazy and getattr(node.fn, "evaluate_lazy", None) is not None:
+        return LazyOperands(scope, node, m, res)
     if res is None:
         res = partial(resolve, scope)
     if node.form == "primitive":
@@ -254,8 +266,8 @@ class _Bound:
         return g
 
 
-def _walk(b: _Bound, lo: int, hi: int) -> Iterator["Gate"]:
-    """`Circuit.gate` of each gate of the activation ``b`` in [lo, hi), in order."""
+def _walk(b: _Bound, lo: int, hi: int, lazy: bool = False) -> Iterator["Gate"]:
+    """`Circuit.gate` of each gate of the activation ``b`` in [lo, hi), in order (``lazy``: `Circuit.gates`')."""
     s = b.scope
     body = s.spec.body
     offs = body.offsets
@@ -270,12 +282,12 @@ def _walk(b: _Bound, lo: int, hi: int) -> Iterator["Gate"]:
         if isinstance(fn, PrimitiveDefinition):
             one = node.form in ("primitive", "call")
             for i in range(max(lo, start), min(hi, end)):
-                yield Gate(i, fn, _member_operands(s, node, 0 if one else i - start, b.ref), s)
+                yield Gate(i, fn, _member_operands(s, node, 0 if one else i - start, b.ref, lazy), s)
             continue
         G = fn.gates
         first, last = ((0, 0) if node.form == "call" else ((max(lo, start) - start) // G, (min(hi, end) - 1 - start) // G))
         for m in range(first, last + 1):
-            yield from _walk(_Bound(Scope(fn, start + m * G, s, k, m), b), lo, hi)
+            yield from _walk(_Bound(Scope(fn, start + m * G, s, k, m), b), lo, hi, lazy)
 
 
 @dataclass(frozen=True)
@@ -536,14 +548,16 @@ class Circuit:
                 return Gate(i, node.fn, _prim_member_args(scope, node, m), scope)
             scope = Scope(node.fn, node_off + m * node.fn.gates, scope, k, m)
 
-    def gates(self, lo: int = 0, hi: int | None = None) -> Iterator[Gate]:
+    def gates(self, lo: int = 0, hi: int | None = None, *, lazy: bool = False) -> Iterator[Gate]:
         """`gate(i)` for each i in [lo, hi), in order, in one walk down the hierarchy: each activation entered once, not once a
-        gate, and each of its parameter leaves resolved once (`_Bound`)."""
+        gate, and each of its parameter leaves resolved once (`_Bound`).  With ``lazy``, a gate whose primitive has
+        ``evaluate_lazy`` holds its operands as `LazyOperands`, each resolved when read: the same operands, but an evaluator that
+        reads two of a gather's E + 1 resolves two."""
         hi = self.size if hi is None else hi
         if lo < 0 and lo < hi:
             raise IndexError(lo)
         if lo < min(hi, self.size):
-            yield from _walk(_Bound(self.root_scope, None), lo, min(hi, self.size))
+            yield from _walk(_Bound(self.root_scope, None), lo, min(hi, self.size), lazy)
         if hi > max(lo, self.size):
             raise IndexError(max(lo, self.size))
 

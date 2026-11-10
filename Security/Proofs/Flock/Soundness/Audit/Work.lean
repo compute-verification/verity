@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Audit.Stratified
 public import Mathlib.Analysis.MeanInequalities
-public import Definitions.Flock.Guarantees.Audit
+public import Proofs.Flock.Lemmas.Audit
 
 /-!
 # The work sampling design

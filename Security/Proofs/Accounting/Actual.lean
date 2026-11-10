@@ -3,7 +3,6 @@ module
 public import Proofs.Accounting.Actual.Split
 public import Proofs.Accounting.Actual.Physical
 public import Proofs.Accounting.Actual.Windows
-public import Proofs.Accounting.Actual.Runtime
 public import Proofs.Accounting.Actual.Threaded
 public import Proofs.Accounting.Actual.Dampener
 public import Proofs.Accounting.Actual.Localization
@@ -28,7 +27,6 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   the developer's region into isolation blocks of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at
   most the state's part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and
   `G = univ`, isolation blocks of at most `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
-* `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
 * `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
   contains a threaded reference circuit, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start
   plus its ingress, from `WindowsAt` pulled back through the containment and NCI's `ThreadedReads` per window;

@@ -23,9 +23,9 @@ egress link, which it refuses. So it accepts every link-window `evaluate` accept
 
 The Program's grid of an egress link-window is `programGrid`, rows of `NetworkCertifier.expectedRow` under the syncs
 the link declares, which the check reads through `Records.expectedGridsOfBytes` (`RecordsBytes.expectedGridsOfBytes_eq`). Nothing is
-assumed of SHA-256, SHA-512 or LMS. A committed record's digest is the one `commitment.py` gives the Program's grid,
+assumed of SHA-512 or LMS. A committed record's digest is the one `commitment.py` gives the Program's grid,
 and any grid of `B`-byte frames with that digest holds the Program's frames, or two distinct strings the two digests
-hash have one SHA-256 digest. A certified record's certificate verifies under the parameters' key over its message in
+hash have one SHA-512 digest. A certified record's certificate verifies under the parameters' key over its message in
 their certifier session (LMS's verifier accepts it; that only the key's holder could sign is not claimed), and its head
 is the record head of the Program's grid, or two distinct strings the two heads' digests hash have one SHA-512 digest.
 -/
@@ -66,15 +66,10 @@ def CertificateVerifies (p : Params) (d : Direction) (l : String) (w : Nat) (r :
 
 /-! ## What a committed record's digest hashes (`commitment.py`) -/
 
-/-- What `tagged_sha256(tag, payload)` hashes: `"veritor/tagged-sha256/v1\0" ‖ u32be len(tag) ‖ tag ‖
-u64be len(payload) ‖ payload`. -/
-def taggedInput (tag : String) (payload : ByteArray) : ByteArray :=
-  "veritor/tagged-sha256/v1".toUTF8.push 0 ++ Flock.be32 tag.toUTF8.size.toUInt32 ++ tag.toUTF8 ++
-    Flock.be64 payload.size.toUInt64 ++ payload
-
-/-- What `row_digest` hashes for a row: its count and its real frames, padding elided. -/
-def rowInput (row : Array (Option ByteArray)) : ByteArray :=
-  taggedInput "verity-network-warden/row/v1"
+/-- What `row_digest` hashes for a row, `tagged_sha512`'s input (`Properties.Identity.taggedInput`): its count and its
+real frames, padding elided. -/
+def rowInput (row : Array (Option ByteArray)) : Flock.V ByteArray :=
+  Properties.Identity.taggedInput "verity-network-certifier/row-sha512/v1"
     ((row.filterMap id).foldl (· ++ ·) (Flock.be32 (row.filterMap id).size.toUInt32))
 
 /-- The header `record_digest` hashes for link-window `(l, w)` of a complete record under `g`, in the identity form
@@ -85,15 +80,18 @@ def header (l : String) (w : Nat) (g : Grid) : Flock.V String :=
     ("allocation", Lean.toJson g.allocation), ("frame_bytes", Lean.toJson g.frameBytes),
     ("bucket_ms", Lean.toJson g.bucketMs), ("status", .str "complete")])
 
-/-- What `record_digest` hashes for a grid under header `h`: the header and every row's digest. -/
-def recordInput (h : String) (grid : Records.RawGrid) : ByteArray :=
-  taggedInput "verity-network-warden/record/v1"
-    (grid.foldl (fun acc row => acc ++ Records.rowDigest row) (Flock.be32 h.toUTF8.size.toUInt32 ++ h.toUTF8))
+/-- What `record_digest` hashes for a grid under header `h`, `tagged_sha512`'s input: the header and every row's
+digest. -/
+def recordInput (h : String) (grid : Records.RawGrid) : Flock.V ByteArray := do
+  Properties.Identity.taggedInput "verity-network-certifier/record-sha512/v1"
+    (← grid.foldlM (fun acc row => do return acc ++ (← Records.rowDigest row))
+      (Flock.be32 h.toUTF8.size.toUInt32 ++ h.toUTF8))
 
-/-- The strings SHA-256 hashes for the record digest of `grid` at link-window `(l, w)` under `g`: each row's input and
+/-- The strings SHA-512 hashes for the record digest of `grid` at link-window `(l, w)` under `g`: each row's input and
 the record's. -/
 def committedInputs (l : String) (w : Nat) (grid : Records.RawGrid) (g : Grid) : List ByteArray :=
-  grid.toList.map rowInput ++ (header l w g).toOption.toList.map (recordInput · grid)
+  grid.toList.filterMap (fun row => (rowInput row).toOption) ++
+    ((header l w g).toOption.bind fun h => (recordInput h grid).toOption).toList
 
 /-- A grid's frames, row by row, padding elided: what its record digest commits to. -/
 def frames (grid : Records.RawGrid) : List (List ByteArray) := grid.toList.map fun row => (row.filterMap id).toList
@@ -106,14 +104,14 @@ def FramesOf (B : Nat) (grid : Records.RawGrid) : Prop :=
 
 /-- A committed record of `(l, w)` with digest `dg` commits to `P`: `dg` is the record digest of `P`, and every grid of
 `B`-byte frames with that digest holds `P`'s frames row by row, or two distinct strings the two digests hash have one
-SHA-256 digest. -/
+SHA-512 digest. -/
 def CommitsTo (p : Params) (l : String) (w : Nat) (dg : String) (P : Records.RawGrid) : Prop :=
   Records.committedDigest l w P p.grid = .ok dg ∧
     ∀ G : Records.RawGrid, FramesOf p.grid.frameBytes G → Records.committedDigest l w G p.grid = .ok dg →
       frames G = frames P ∨
         ∃ x ∈ committedInputs l w G p.grid ++ committedInputs l w P p.grid,
           ∃ y ∈ committedInputs l w G p.grid ++ committedInputs l w P p.grid,
-            x ≠ y ∧ Flock.Sha256.hash x = Flock.Sha256.hash y
+            x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
 
 /-- A certified egress record of `(l, w)` certifies `P`: its certificate verifies under the key over the digest `dg` of
 its head under its salt, `dg` is the digest of `record_head` of `P` (complete, settled, under the egress parameters digest `eg`), and

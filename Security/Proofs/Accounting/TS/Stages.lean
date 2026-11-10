@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.TS.Stages
 public import Proofs.Accounting.TS
+public import Proofs.Accounting.Lemmas.TS.Stages
 
 /-!
 # Sampled proofs under per-stage coins: proofs
@@ -91,7 +92,7 @@ theorem budget_point {s : ℕ} (hs : 2 ≤ s) {p m y : ℝ} (hp0 : Real.exp (-1)
 theorem prob_pi_all {D : Type} [Fintype D] (s : ℕ) (q : D → Prop) :
     prob (fun ds : Fin s → D => ∀ i, q (ds i)) = prob q ^ s := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   have key : ∀ (inst : DecidablePred fun ds : Fin s → D => ∀ i, q (ds i)) (inst' : DecidablePred q),
       (@Finset.filter _ (fun ds : Fin s → D => ∀ i, q (ds i)) inst Finset.univ).card =
         (@Finset.filter _ q inst' Finset.univ).card ^ s := by
@@ -131,7 +132,7 @@ theorem expect_empty {Ω : Type} [Fintype Ω] [IsEmpty Ω] (f : Ω → ℝ) : ex
   simp
 
 theorem prob_empty {Ω : Type} [Fintype Ω] [IsEmpty Ω] (q : Ω → Prop) : prob q = 0 := by
-  unfold prob
+  unfold prob Claims.prUniform
   simp
 
 theorem expect_lin {Ω : Type} [Fintype Ω] [Nonempty Ω] (f g : Ω → ℝ) (p : ℝ) :

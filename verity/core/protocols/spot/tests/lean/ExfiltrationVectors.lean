@@ -28,7 +28,7 @@ open scoped ENNReal
 def numerator (n H K : ℕ) : ℕ := 2 ^ H * ∑ j ∈ range (K + 1), n.choose j
 
 /-- `audit_exfiltration` itself, its bound read through `numerator`: this fails to build if the bound's term changes. -/
-theorem audit_exfiltration_numerator {C : Circuit} {n : ℕ} (P : Partition C n) {L : Law n} {Reg : Type}
+theorem audit_exfiltration_numerator {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {L : Law n} {Reg : Type}
     {session : Finset (Fin n) → Reg → Game Bool} {X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool)}
     {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
     {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]

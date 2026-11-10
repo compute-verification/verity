@@ -1,9 +1,24 @@
 module
 
 public import Proofs.Flock.Recursive.PublicAudit
-public import Proofs.Flock.Recursive.FirewallZK
-public import Proofs.Flock.Recursive.Loads
-public import Proofs.Flock.Recursive.ForkInnerC
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.ForkInnerC
+import Proofs.Flock.Recursive.Loads
+import Proofs.Flock.Recursive.Private
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The recursive audit at public units: its proof
@@ -104,7 +119,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **The recursive audit at public units, as the verifier runs it, with no A3.** -/
 theorem PublicAuditNoA3 : Flock.Guarantees.PublicAuditNoA3 := by

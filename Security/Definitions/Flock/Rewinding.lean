@@ -1,5 +1,7 @@
 module
 
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
 public import Definitions.Core.Rewinding
 
 /-!

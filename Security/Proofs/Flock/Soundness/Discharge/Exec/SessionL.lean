@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.FlockBatched
-public import Proofs.Flock.Soundness.Refine.Salted
+public import Proofs.Flock.Soundness.Instance
+public import Proofs.Flock.Soundness.SessionBatch
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The batched session under a leaf scheme (`Flock.Record`, `Flock.Merkle`)

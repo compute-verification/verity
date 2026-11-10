@@ -63,7 +63,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-MEMORY_CHALLENGER = HERE / "memory_challenger.py"
+MEMORY_CHALLENGER = ROOT / "verity" / "core" / "devices" / "memory_challenger" / "timed_audit.py"
 SALT = bytes(range(24))
 VECTORS = ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "fixtures" / "vectors.json"
 LATE_EXTRA_NS = 50_000

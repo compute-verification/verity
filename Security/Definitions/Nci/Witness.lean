@@ -7,7 +7,7 @@ public import Definitions.Nci.Links
 public import Definitions.Nci.Fit
 public import Definitions.Nci.Layered
 public import Definitions.Nci.Packed
-public import Definitions.Nci.BitDecl
+public import Definitions.Nci.BitView
 public import Definitions.Nci.Covering
 
 /-!
@@ -18,16 +18,13 @@ at the local bounds' toy circuit (`Nci.Capability.Toy.C`): a registered weight `
 gates `2` and `3` computing `0 ∧ 1`. Its registered circuit `Toy.D` registers the weight; `Dθ` registers the token too, so
 that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 
-* `idC`: a circuit contained in itself, and `M1` and `Mθ`, the toy in `Toy.D` and in `Dθ` through it; `ones`, the toy's
-  run with every input `1`;
+* `idC`: a circuit contained in itself, and `M1` and `Mθ`, the toy in `Toy.D` and in `Dθ` through it;
 * `ch1`: the one-product chain, `W[0, 0] x[0]` at gate `2`, its entry complete there; `ch0`, the chain of no
   multiplication;
 * `T1`: the toy's threading, one counted multiplication (gate `2`) of the weight by the token, the token the one
   thread's value; `T0`, the threading of no counted multiplication; `σ1` and `σ0`, their one parameter slot;
   `noLinks`, links with no sources; `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
-* `E0`, the registered circuit of no gates, which implements itself (`implE0`);
-* `mb0`, the cover theorem's multiplication blocks of no product on a registered circuit's bit view; `mbBits`, the covering
-  bound's two products of the toy's bit view (`Cover.bitDecl`), the weight's bit for each of two tokens;
+* `mb0`, the cover theorem's multiplication blocks of no product on a registered circuit's bit view;
 * `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `wrong` at every
   outcome, and no incorrect proof block (`bad`).
 -/
@@ -56,9 +53,6 @@ abbrev M1 : PartialContainment D D := PartialContainment.ofContainment (idC C)
 
 /-- The toy contained in itself with the token registered (`Dθ`). -/
 abbrev Mθ : PartialContainment D Dθ := PartialContainment.ofContainment (idC C)
-
-/-- The run of the toy with every input `1`: the weight at its registered value. -/
-def ones : C.Transcript := fun _ => 1
 
 /-- The one-product chain: one multiplication of inner and output dimension `1` at one position, its product
 `W[0, 0] x[0]` at gate `2`, which holds the complete entry. -/
@@ -144,32 +138,6 @@ def σ1 : T1.Slots where
   slot _ := 0
   reuse_le := by decide
 
-/-- The circuit of no gates. -/
-@[reducible] def C0 : Circuit where
-  N := 0
-  w := Fin.elim0
-  isInput := Fin.elim0
-  reads := Fin.elim0
-  reads_lt g := g.elim0
-  input_reads g := g.elim0
-  op g := g.elim0
-  op_congr g := g.elim0
-  outputs := ∅
-
-/-- The registered circuit of no gates. -/
-@[reducible] def E0 : RegisteredCircuit := .ofCircuit C0 ∅ fun _ h => absurd h (notMem_empty _)
-
-/-- The registered circuit of no gates implements itself. -/
-def implE0 : Implementation C0 C0 where
-  inp := id
-  inp_input g := g.elim0
-  inp_inj g := g.elim0
-  inp_w g := g.elim0
-  out := id
-  out_mem _ h := absurd h (notMem_empty _)
-  out_w _ h := absurd h (notMem_empty _)
-  correct _ _ h := absurd h (notMem_empty _)
-
 /-- Links with no sources: every activation is computed from no counted multiplication. -/
 def noLinks {r : RegisteredCircuit} (T : Threading r) : T.Links where
   src _ := ∅
@@ -234,26 +202,6 @@ def mb0 (r : RegisteredCircuit) : Cover.MulBlocks (Cover.Circuit.ofDecl r) Empty
   m_disjoint p := p.1.elim
   o p := p.1.elim
   m_outputs p := p.1.elim
-
-/-- Gate `2 + j` of the toy's bit view, which has the toy's four gates, each one bit wide. -/
-def productBit (j : Fin 2) : Fin (Cover.bitDecl D).D.N :=
-  Fin.cast (by decide : 4 = (Cover.bitDecl D).D.N) ⟨2 + j, by omega⟩
-
-/-- The toy's two products on its bit view: one weight, the bit of gate `0`, multiplied for two tokens, at gates `2`
-and `3`, each a block of its own output, with no token computation. -/
-def mbBits : Covering.MulBlocks (Cover.bitDecl D) where
-  nw := 1
-  nt := 2
-  P := univ
-  m p := {productBit p.2}
-  o p := productBit p.2
-  T _ := ∅
-  m_disjoint := by decide
-  m_computed := by decide
-  o_mem _ _ := mem_singleton_self _
-  reach _ _ g hg := by rw [mem_singleton.1 hg]; exact .refl (mem_singleton_self _)
-  T_disjoint _ _ _ := disjoint_empty_left _
-  T_θ _ := disjoint_empty_left _
 
 /-! One PoUW window of capacity `2` over the outcomes `Bool`, and no incorrect proof block. -/
 

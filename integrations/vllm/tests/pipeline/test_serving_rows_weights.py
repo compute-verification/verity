@@ -113,7 +113,8 @@ def test_the_committer_commits_each_read_by_reference_as_the_lean_verifier_opens
     entries); the window writes them as its members' ``registered`` and ``value_rows`` and records each value's root."""
     window, _rows, doc = served(PARTITION)
     values, data = values_and_rows(window, doc)
-    got, entries, roots = WT.by_reference(window, IF.declarations(doc)[2], data, values)
+    got, entries, roots, salts = WT.by_reference(window, IF.declarations(doc)[2], data, values)
+    assert salts == {}
     assert roots == {p: v.root.hex() for p, v in values.items()}
     assert {k: e["in1"]["positions"] for k, e in entries.items()} == {f"{T}/c{j}": [3 * (j % 3 == 2) + i for i in range(3)]
                                                                        for j in range(6)}
@@ -134,7 +135,7 @@ def test_a_read_whose_rows_are_not_its_values_is_refused_and_no_values_commit_ro
     window, _rows, doc = served(PARTITION)
     values, data = values_and_rows(window, doc)
     reg = IF.declarations(doc)[2]
-    assert WT.by_reference(window, reg, data, None) == (data, {}, {})
+    assert WT.by_reference(window, reg, data, None) == (data, {}, {}, {})
     other, _ = values_and_rows(window, doc, key=bytes(32))
     data[1]["rows"]["in1"] = data[1]["rows"]["in1"] ^ np.uint16(1)
     with pytest.raises(ValueError, match=re.escape(f"{T}/c1 in1: the rows its units read aren't 'weights/model.layers.1.mlp.gate.weight@32'")):

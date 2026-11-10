@@ -1,9 +1,9 @@
 module
 
-public import Batteries.Tactic.OpenPrivate
-public import Properties.Accounting.Remote
 public import Proofs.Properties.Accounting.Remote.Bisect
 public import Proofs.Properties.Accounting.Remote.Sort
+public import Properties.Accounting.Remote
+import Batteries.Tactic.OpenPrivate
 
 /-!
 # A pass's plan reads distinct blocks (`PlanReadsDistinct`, `ChangedReadsDistinct`)

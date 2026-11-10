@@ -1,30 +1,30 @@
 module
 
-public import Definitions.Nci.Guarantees.Contained
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Dark
 public import Proofs.Nci.Reads
 public import Proofs.Nci.Pull
 public import Proofs.Nci.Support
 public import Proofs.Nci.Rate
+public import Proofs.Nci.Lemmas.Reads
 
 /-!
 # Proofs of the partial-sum rule on a reference circuit
 
-Support form gives the reference circuit's incompressibility in reads (`activationsIncompressible_of_support`,
-`partialSumsIncompressible_of_support`). Then pull a compliant division of the containing declaration back to `c`
-(`pull`): each piece has no more gates than its IU and reads no more novel information (`novelReads_pull`), so the
-pieces form a division of `c` into IUs of at most `Γ` gates reading at most `αΓ` each. The reads form of the sampling design
-(`UpdatedMatMulReads`), applied to `c` with that division, bounds the pieces' total reads from below by `G · f(αΓ)`;
-the IUs read at least as much, and at most `α size(d)` in total.
+Pull a compliant division of the containing declaration back to `c` (`pull`): each piece has no more gates than its IU
+and reads no more novel information (`novelReads_pull`), so the pieces form a division of `c` into IUs of at most `Γ`
+gates reading at most `αΓ` each. The reads form of the sampling design (`UpdatedMatMulReads`), applied to `c` with that division,
+bounds the pieces' total reads from below by `G · f(αΓ)`; the IUs read at least as much, and at most `α size(d)` in total
+(`containedMatMul_of_reads`).
 
-Through a partial containment (`ContainedMatMulOn`), the pieces divide only the gates `S` that `d` computes. Adding each
-dark gate as a part of its own (`withDark`) divides all of `c`, and the partial-sum count runs over that division: the
-dark parts absorb partial sums, `Z` in total, which their values must hold, so `b_a Z ≤ width(dark)`. The reads count
-runs over the pieces alone, each within its IU's reads. A second per-piece bound counts products by columns, at most
+Through a partial containment, the pieces divide only the gates `S` that `d` computes. Adding each dark gate as a part
+of its own (`withDark`) divides all of `c`, and the partial-sum count runs over that division: the dark parts absorb
+partial sums, `Z` in total, at most what they read. The reads count runs over the pieces alone, each within its IU's
+reads. A second per-piece bound counts products by columns, at most
 `e_max` per input entry used at a position that is not full (`card_products_le_columns`, `max_mul_sum_le`).
 
-The count is one lemma over what the dark parts absorb, a budget `B` (`matMulOn_of_counts`): the support form bounds
-it by the dark gates' width, training's incompressibility by their reads (`IncompressibleContainedMatMulOn`), and at
-`μ = 1` it goes (`ContainedFanOutOn`).
+The count is one lemma over what the dark parts absorb, a budget `B` (`matMulOn_of_counts`): training's
+incompressibility bounds it by the dark gates' reads (`IncompressibleContainedMatMulOn`).
 -/
 
 @[expose] public section
@@ -33,19 +33,7 @@ namespace Nci.SecurityProofs
 
 open Verity Finset
 
-/-- **Support form gives partial-sum incompressibility**: an IU's gates take at most `2^novelReads` values. -/
-theorem partialSumsIncompressible_of_support {D : RegisteredCircuit} {θv : D.D.Transcript} {c : Chain D.D} {Γ : ℕ}
-    {K b_w b_a : ℝ} (h : Assumptions.PartialSumsSupport D θv c Γ K b_w b_a) :
-    Assumptions.PartialSumsIncompressible D c Γ K b_w b_a := by
-  intro n P hP
-  obtain ⟨s, hsum, hs⟩ := h n P hP
-  refine ⟨s, hsum, fun u => ?_⟩
-  have hc : (support D θv (P.gates u) : ℝ) ≤ (2 : ℝ) ^ (novelReads D (P.gates u) : ℝ) := by
-    rw [Real.rpow_natCast]
-    exact_mod_cast support_le D θv (P.gates_subset_computed u) (subset_refl _)
-  exact (Real.rpow_le_rpow_left_iff (by norm_num : (1 : ℝ) < 2)).mp ((hs u).trans hc)
-
-/-- The partial-sum rule on a reference circuit, in reads: `UpdatedMatMul` with its assumptions on the contained
+/-- The partial-sum rule on a reference circuit, in reads: `UpdatedMatMulReads` with its assumptions on the contained
 circuit `c`. -/
 theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (dd : ℕ)
     (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
@@ -74,51 +62,6 @@ theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : Registered
         field_simp
     _ ≤ α * d.D.size d.D.computed / α := div_le_div_of_nonneg_right htotal hα.le
     _ = d.D.size d.D.computed := by field_simp
-
-theorem ContainedMatMul_rate :
-    ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : RegisteredCircuit) (θv : c.D.Transcript) (ch : Chain c.D) (dd : ℕ)
-      (M : Containment c.D d.D),
-      0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → CompliesRate Γ α d →
-      Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
-      Assumptions.ActivationsSupport c θv ch (α * Γ + b_w + b_a) b_w b_a →
-      Assumptions.PartialSumsSupport c θv ch Γ (α * Γ) b_w b_a →
-        F α (α * Γ) b_w b_a dd * (2 * ch.G) ≤ d.D.size d.D.computed := by
-  intro Γ α b_w b_a c d θv ch dd M hα hw ha hd hP hB hA hPS
-  exact containedMatMul_of_reads Γ α b_w b_a c d ch dd M hα hw ha hd hP hB
-    (activationsIncompressible_of_support hw.le ha.le hA) (partialSumsIncompressible_of_support hPS)
-
-theorem ContainedTraining_rate :
-    ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : RegisteredCircuit) (θv : c.D.Transcript) (ch : Chain c.D) (dd : ℕ)
-      (M : Containment c.D d.D),
-      0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → CompliesRate Γ α d →
-      Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
-      Assumptions.ActivationsSupport c θv ch (α * Γ + b_w + b_a) b_w b_a →
-      Assumptions.PartialSumsSupport c θv ch Γ (α * Γ) b_w b_a →
-      κ * c.D.size c.D.computed ≤ 2 * ch.G →
-        κ * F α (α * Γ) b_w b_a dd * c.D.size c.D.computed ≤ d.D.size d.D.computed := by
-  intro Γ α b_w b_a κ c d θv ch dd M hα hw ha hd hP hB hA hPS hκ
-  have hF := ContainedMatMul_rate Γ α b_w b_a c d θv ch dd M hα hw ha hd hP hB hA hPS
-  have hF0 : 0 ≤ F α (α * Γ) b_w b_a dd := F_nonneg hα.le (by positivity) hw.le ha.le (by positivity)
-  calc κ * F α (α * Γ) b_w b_a dd * c.D.size c.D.computed
-      = F α (α * Γ) b_w b_a dd * (κ * c.D.size c.D.computed) := by ring
-    _ ≤ F α (α * Γ) b_w b_a dd * (2 * ch.G) := mul_le_mul_of_nonneg_left hκ hF0
-    _ ≤ d.D.size d.D.computed := hF
-
-/-- Support form bounds a set's charge by its novel reads: its values are functions of what it reads. -/
-theorem le_novelReads_of_support {D : RegisteredCircuit} {θv : D.D.Transcript} {R : Finset (Fin D.D.N)} {x : ℝ}
-    (hR : R ⊆ D.D.computed) (h : (2 : ℝ) ^ x ≤ support D θv R) : x ≤ novelReads D R := by
-  have hc : (support D θv R : ℝ) ≤ (2 : ℝ) ^ (novelReads D R : ℝ) := by
-    rw [Real.rpow_natCast]
-    exact_mod_cast support_le D θv hR (subset_refl _)
-  exact (Real.rpow_le_rpow_left_iff (by norm_num : (1 : ℝ) < 2)).mp (h.trans hc)
-
-/-- Support form bounds a set's charge by its width: it holds no more values than its bits. -/
-theorem le_width_of_support {D : RegisteredCircuit} {θv : D.D.Transcript} {R : Finset (Fin D.D.N)} {x : ℝ}
-    (h : (2 : ℝ) ^ x ≤ support D θv R) : x ≤ D.D.width R := by
-  have hc : (support D θv R : ℝ) ≤ (2 : ℝ) ^ (D.D.width R : ℝ) := by
-    rw [Real.rpow_natCast]
-    exact_mod_cast support_le_width D θv R
-  exact (Real.rpow_le_rpow_left_iff (by norm_num : (1 : ℝ) < 2)).mp (h.trans hc)
 
 section Dark
 
@@ -312,94 +255,9 @@ theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Registere
   refine hM.trans ?_
   linarith
 
-open Classical in
-/-- **The partial-sum rule with dark gates.** -/
-theorem ContainedMatMulOn_rate :
-    ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : RegisteredCircuit) (θv : c.D.Transcript) (ch : Chain c.D) (dd emax : ℕ)
-      (M : PartialContainment c d),
-      0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
-      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
-      (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
-      Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a →
-      Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a →
-        max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
-            (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
-          (Finset.univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
-            ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
-        α * d.D.size d.D.computed + (1 - μ) * c.D.width M.dark := by
-  intro Γ α K b_w b_a μ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he ⟨n, P, hP⟩ hB hX hA hPS
-  obtain ⟨s, hsum, hs⟩ := hPS _ (withDark M P) (withDark_caps hα hαK hΓ hP hB hX)
-  -- the charge of each piece, within its IU's reads, and of each dark gate, within its width
-  have hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
-      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ novelReads d (P.gates u) := fun u => by
-    have h := le_novelReads_of_support ((withDark M P).gates_subset_computed _)
-      (hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)))
-    rw [withDark_gates_inl] at h
-    exact h.trans (by exact_mod_cast novelReads_piece hB u)
-  have hsZ : ∀ v : {v // v ∈ M.dark},
-      b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤ c.D.w v.1 := fun v => by
-    have h := le_width_of_support (hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)))
-    rw [withDark_gates_inr] at h
-    simp only [Circuit.width, sum_singleton] at h
-    have : 0 ≤ b_w * ((ch.weightsUsed {v.1}).card : ℝ) := by positivity
-    linarith
-  have hZ : b_a * ∑ v : {v // v ∈ M.dark}, (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤
-      c.D.width M.dark := by
-    rw [mul_sum]
-    calc ∑ v : {v // v ∈ M.dark}, b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ)
-        ≤ ∑ v : {v // v ∈ M.dark}, (c.D.w v.1 : ℝ) := sum_le_sum fun v _ => hsZ v
-      _ = c.D.width M.dark := by
-          rw [Circuit.width, Nat.cast_sum]
-          exact sum_coe_sort M.dark fun g => (c.D.w g : ℝ)
-  have h := matMulOn_of_counts hα hK hw ha hdd hαK hμ₀ hμ₁ hd he hP hB
-    (activationsIncompressible_of_support (Γ := Γ) hw.le ha.le hA) (partialSums_count ha.le hsum hsP)
-  exact h.trans (by linarith [mul_le_mul_of_nonneg_left hZ (by linarith : (0 : ℝ) ≤ 1 - μ)])
-
 /-- The training form of a product bound `m G ≤ R`: when `κ S ≤ 2 G'` and `G' ≤ G + X`, `m (κ S − 2 X) ≤ 2 R`. -/
 theorem training_of_counts {m G X G' S κ R : ℝ} (hm : 0 ≤ m) (h : m * G ≤ R) (hκ : κ * S ≤ 2 * G')
     (hG : G' ≤ G + X) : m * (κ * S - 2 * X) ≤ 2 * R := by
   nlinarith [mul_le_mul_of_nonneg_left (show κ * S - 2 * X ≤ 2 * G by linarith) hm]
-
-/-- **Training is slowed, by the partial-sum rule, with dark gates**: the chain's products off the books are dark gates
-(`card_products_le_dark`). -/
-theorem ContainedTrainingOn_rate :
-    ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : RegisteredCircuit) (θv : c.D.Transcript) (ch : Chain c.D) (dd emax : ℕ)
-      (M : PartialContainment c d),
-      0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
-      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
-      (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
-      Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a →
-      Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a →
-      κ * c.D.size c.D.computed ≤ 2 * ch.G →
-        max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
-            (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
-          (κ * c.D.size c.D.computed - 2 * M.dark.card) ≤
-        2 * (α * d.D.size d.D.computed + (1 - μ) * c.D.width M.dark) := by
-  intro Γ α K b_w b_a μ κ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hA hPS hκ
-  exact training_of_counts (le_max_of_le_right (by positivity))
-    (ContainedMatMulOn_rate Γ α K b_w b_a μ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hA hPS) hκ
-    (by exact_mod_cast card_products_le_dark M ch)
-
-theorem ContainedMatMul : Guarantees.ContainedMatMul := by
-  intro c k b_w b_a r d θv ch dd M hc hk hw ha hd hP hB hA hPS
-  have h := ContainedMatMul_rate c (k / c) b_w b_a r d θv ch dd M (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc))
-    hw ha hd (compliesRate_of_complies hP) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
-  rwa [rate_mul _ hc] at h
-
-theorem ContainedTraining : Guarantees.ContainedTraining := by
-  intro c k b_w b_a κ r d θv ch dd M hc hk hw ha hd hP hB hA hPS hκ
-  have h := ContainedTraining_rate c (k / c) b_w b_a κ r d θv ch dd M (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc))
-    hw ha hd (compliesRate_of_complies hP) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc]) hκ
-  rwa [rate_mul _ hc] at h
-
-theorem ContainedMatMulOn : Guarantees.ContainedMatMulOn := by
-  intro c k K b_w b_a μ r d θv ch dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hA hPS
-  exact ContainedMatMulOn_rate c (k / c) K b_w b_a μ r d θv ch dd emax M (by positivity) hK hw ha hdd (by omega)
-    (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX hA hPS
-
-theorem ContainedTrainingOn : Guarantees.ContainedTrainingOn := by
-  intro c k K b_w b_a μ κ r d θv ch dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hA hPS hκ
-  exact ContainedTrainingOn_rate c (k / c) K b_w b_a μ κ r d θv ch dd emax M (by positivity) hK hw ha hdd (by omega)
-    (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX hA hPS hκ
 
 end Nci.SecurityProofs

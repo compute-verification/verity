@@ -17,9 +17,8 @@ from verity_flock import derive as D
 from verity_flock import layouts as LY
 from verity_flock import typed_statement as TS
 
-pytest.importorskip("verity_numerical")
 pytest.importorskip("verity.ml.definitions.registry.prims")
-from verity_numerical.bench import lowerings  # noqa: E402
+from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -63,10 +62,10 @@ def test_a_flat_class_carries_types_not_rows(template, params):
 
 
 def _set(sub, n, tmp_path):
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
-    return InputSet.open(generate(sub, n, 20260926, tmp_path)["path"])
+    return InputSet.open(synthetic_set(sub, n, 20260926, tmp_path)["path"])
 
 
 def _root_inputs(s, sub, T):

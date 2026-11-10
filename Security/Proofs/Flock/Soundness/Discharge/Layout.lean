@@ -25,6 +25,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.OutsP
 public import Proofs.Flock.Soundness.Discharge.Layout.Keyed
 public import Proofs.Flock.Soundness.Discharge.Layout.Tables
 public import Proofs.Flock.Soundness.Discharge.Layout.Scope
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # `lay` and `rs` of `Prog.flock_headline`, discharged
@@ -54,7 +55,7 @@ from the decoder's places and the executable's regions:
 * `OfRows`: readers whose commit strings are units' row ports and single gates (`Readers.ofRows`), with Δ's copies
   from the row bits alone (`ofRows_copies`), the rows' `b ‖ c` (`ofRows_bcPinned`) and the single gates' bits
   (`ofRows_valPinned`; 1 on the constant's gates and 0 on the zero's, `gate_pub`);
-* `KeyProg`: those readers at [e2e-placed]'s places of the circuit's program on Δ's source keys (`Placed.keyProg`),
+* `KeyProg`: those readers at `Discharge/Placed`'s places of the circuit's program on Δ's source keys (`Placed.keyProg`),
   with rows the message-keyed inputs (`keyRowOf`): Δ's copies (`keyProg_copies`), the rows' `b ‖ c`
   (`keyProg_bcPinned`), the single gates' bits (`keyProg_valPinned`), and `lay` and `rs` there (`keyLayout`,
   `keyRows`);
@@ -67,7 +68,7 @@ from the decoder's places and the executable's regions:
   (`keyRowsOut`);
 * `RowEnc`: the bytes `sha512/row/v1` hashes for a row (`rowEnc`, injective by `rowEnc_inj`; the layout's values carry
   their width, `BitVal`): at `keyProg`'s row port `q`, `rowPrefix words` and the row's bytes at the message columns
-  (`keyRow_enc`, [e2e-hm]'s `port_commit` row), and `rs` with it (`keyRowsEnc`);
+  (`keyRow_enc`, `Discharge.Hm.port_commit`'s row), and `rs` with it (`keyRowsEnc`);
 * `KeysRow`: `KeysRow` from the parse at row widths `16 · words` (`keysRow_of_parse`, `portRowW`), for a unit with only
   its leaf group whose rows read only port bits (`PortReads`, a circuit condition);
 * `Outs`: the returned outputs' bits as the program's outputs (`outsOf`, with `OutsOut` by `outsOut_outsOf`: a unit's
@@ -75,8 +76,8 @@ from the decoder's places and the executable's regions:
   `keyProg_reads`);
 * `OutsP`: `Outs` at `Placed.keyProgP` (`OutsOutP`, `outsOfP`, `outsOutP_outsOfP`, `keyProgP_reads`);
 * `Keyed`: `lay` and `rs` at the production program's places (`keyedLayout`, `keyedRows`, `keyedRowsOfParse`,
-  `keyedRowsOuts` at `outs := outsOf`), with [e2e-const]'s and [e2e-zero]'s constant and zero gates; `rs.Computes`
-  there is [e2e-hm]'s `Discharge.Hm.keyedRowsOuts_computes`;
+  `keyedRowsOuts` at `outs := outsOf`), with `Discharge/Const`'s and `Discharge/Zero`'s constant and zero gates; `rs.Computes`
+  there is `Discharge.Hm.keyedRowsOuts_computes`;
 * `Tables`: a population without shared rows (`pop.tables = none`, which `bc_drawn` reads) under any tag
   without shared-row files (`loadPublic_tables`);
 * `Scope`: `rs`'s circuit conditions (`h1`, `ho`, `PortReads`) as one check on the parsed circuit that runs

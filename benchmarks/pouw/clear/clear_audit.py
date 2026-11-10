@@ -196,8 +196,9 @@ class Lottery:
 @dataclass(frozen=True, slots=True)
 class WorkProfile:
     """What an accepted audit establishes, by Lean `EndToEnd`: for every ε_s in (0, 1] and every operator whose online
-    cost is at most T, ``Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + η``, under the certificate's conjecture and
-    hypotheses, with W the workload's total W_ref.  Without a γ only the sampling half holds: the incorrect tiles carry at
+    cost is at most T, ``Pr[accept ∧ T < (1 − g)(1 − ε_s)·W] ≤ (1 − ε_s)^t + δ``, under the certificate's conjecture and
+    hypotheses, with g the gap, δ the failure probability and W the workload's total W_ref.  Without a gap only the
+    sampling half holds: the incorrect tiles carry at
     most ε_s·W, except with probability (1 − ε_s)^t.  A lottery selection gives neither bound."""
 
     scheme: str
@@ -212,16 +213,19 @@ class WorkProfile:
         return (1 - Fraction(eps_s)) ** self.drawn if self.sampled else None
 
     def certified(self, eps_s: Fraction) -> Fraction | None:
-        """The work certified, (1 − γ)(1 − ε_s)·W, or None without a γ or a sampled audit."""
-        g = self.certificate.gamma
+        """The work certified, (1 − g)(1 − ε_s)·W, or None without a gap or a sampled audit."""
+        g = self.certificate.gap
         return None if g is None or not self.sampled else (1 - g) * (1 - Fraction(eps_s)) * self.work
 
     def to_json(self) -> dict:
+        """``gamma0`` and ``gamma`` keep the stored names of the target gap g₀ and the gap g (records written before the
+        rename hold them); ``eps`` is the advantage ε = g/(1 − g)."""
         c = self.certificate
         return {"scheme": self.scheme, "work": self.work, "drawn": self.drawn, "sampled": self.sampled,
-                "conjecture": c.conjecture, "gamma0": None if c.gamma0 is None else str(c.gamma0), "omega": str(c.omega),
-                "gamma": None if c.gamma is None else str(c.gamma), "claims": list(c.claims), "theorems": list(c.theorems),
-                "hypotheses": list(c.hypotheses), "allowances": list(c.allowances), "parameters": dict(c.parameters)}
+                "conjecture": c.conjecture, "gamma0": None if c.gap0 is None else str(c.gap0), "omega": str(c.omega),
+                "gamma": None if c.gap is None else str(c.gap), "eps": None if c.eps is None else str(c.eps),
+                "claims": list(c.claims), "theorems": list(c.theorems), "hypotheses": list(c.hypotheses),
+                "allowances": list(c.allowances), "parameters": dict(c.parameters)}
 
 
 @dataclass(frozen=True, slots=True)

@@ -36,7 +36,7 @@ bound), and that no refusal shows by round `n` from the admitted coins (`not_ref
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace Flock.Firewall.Finish
 open Flock Transcript

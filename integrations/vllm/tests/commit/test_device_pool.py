@@ -16,7 +16,6 @@ from verity_vllm.commit import step_rows as R
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.commit.committer import device_pool as DP
 from verity_vllm.commit.committer.host_retention import _HostRanges
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES
 
 
 def steps(k: int) -> dict:
@@ -25,19 +24,39 @@ def steps(k: int) -> dict:
             2: [("model.layers.0.mlp.down_proj", bytes(i % 251 for i in range(3000 * k)))]}
 
 
+<<<<<<< 94ca7fd0d18
 @pytest.fixture(params=[None, R.NAME], ids=["vllm-v1", R.NAME])
 def cs(request):
     return request.param
 
 
 def committed(cs, values=None, extra=None):
+||||||| e10cf2c8559
+@pytest.fixture(params=[None, R.NAME], ids=["vllm-v1", R.NAME])
+def cs(request):
+    return request.param
+
+
+def committed(cs, values=None):
+=======
+def committed(values=None):
+>>>>>>> 7af4d24fca3e
     """Steps committed as --retain host keeps them (their blocks, ``host``), then moved into a device pool as --retain device holds them:
+<<<<<<< 94ca7fd0d18
     ``values`` (`commit_steps`' form), else `steps`'; ``extra`` adds members by step."""
     k = (R.ROW_BYTES if cs else GPU_CHUNK_BYTES) // 256
     st = dict(values or steps(k))
     for s, members in (extra or {}).items():
         st[s] = st[s] + members
     dev, rc = commit_steps(st, commit_scheme=cs)
+||||||| e10cf2c8559
+    ``values`` (`commit_steps`' form), else `steps`'."""
+    k = (R.ROW_BYTES if cs else GPU_CHUNK_BYTES) // 256
+    dev, rc = commit_steps(values or steps(k), commit_scheme=cs)
+=======
+    ``values`` (`commit_steps`' form), else `steps`'."""
+    dev, rc = commit_steps(values or steps(R.ROW_BYTES // 256))
+>>>>>>> 7af4d24fca3e
     host = {s: bytes(blk.numpy()) for s, (blk, _u) in dev._gpu_blocks.items()}
     dev.device_pool = DP.DevicePool(sum(len(b) for b in host.values()) + 4096 * len(host), device="cpu")
     for s, (blk, used) in list(dev._gpu_blocks.items()):
@@ -57,8 +76,8 @@ def host_leaf(host, C, s, i):
     return host[s][i * C:(i + 1) * C]
 
 
-def test_the_release_keeps_exactly_the_drawn_leaves_byte_equal_to_host(cs, tmp_path):
-    host, rc, dev = committed(cs)
+def test_the_release_keeps_exactly_the_drawn_leaves_byte_equal_to_host(tmp_path):
+    host, rc, dev = committed()
     C = dev.chunk
     drawn = {0: [1, 2], 2: [0, 5]}
     assert leaf_bytes(dev, 0, 3) == host_leaf(host, C, 0, 3)
@@ -79,8 +98,8 @@ def test_the_release_keeps_exactly_the_drawn_leaves_byte_equal_to_host(cs, tmp_p
     assert sum((tmp_path / "w" / "raw" / f"s{s}.bin").stat().st_size for s in range(3)) == 4 * C
 
 
-def test_a_dropped_leaf_is_refused_by_name_never_replayed(cs, tmp_path):
-    host, rc, dev = committed(cs)
+def test_a_dropped_leaf_is_refused_by_name_never_replayed(tmp_path):
+    host, rc, dev = committed()
     DP.release(dev, {0: [1]})
     SD.dump(dev, rc, tmp_path)
     for com in (dev, SD.load(tmp_path)[0]):
@@ -89,13 +108,14 @@ def test_a_dropped_leaf_is_refused_by_name_never_replayed(cs, tmp_path):
             com.open_range(0, 0, 1)
         with pytest.raises(RuntimeError, match="draw-gated release"):
             com.open_range(1, 0, 1)
-    replay, _ = commit_steps(steps((R.ROW_BYTES if cs else GPU_CHUNK_BYTES) // 256), commit_scheme=cs)
+    replay, _ = commit_steps(steps(R.ROW_BYTES // 256))
     with pytest.raises(RuntimeError, match="draw-gated release"):
         dev.open([(0, 3)], values_from=replay)
     with pytest.raises(KeyError, match="draw-gated release"):
         dev._gpu_blocks[0][0][0:dev.chunk]
 
 
+<<<<<<< 94ca7fd0d18
 def test_a_released_window_dumps_slim_to_its_drawn_leaves(cs, tmp_path):
     C = R.ROW_BYTES if cs else GPU_CHUNK_BYTES
     host, rc, dev = committed(cs, {0: [("model.embed_tokens", (bytes(range(251)) * (200 * C // 251 + 1))[:200 * C])]})
@@ -123,6 +143,13 @@ def test_a_released_window_dumps_slim_to_its_drawn_leaves(cs, tmp_path):
 
 def test_a_release_names_only_committed_leaves_and_happens_once(cs):
     _host, _rc, dev = committed(cs)
+||||||| e10cf2c8559
+def test_a_release_names_only_committed_leaves_and_happens_once(cs):
+    _host, _rc, dev = committed(cs)
+=======
+def test_a_release_names_only_committed_leaves_and_happens_once():
+    _host, _rc, dev = committed()
+>>>>>>> 7af4d24fca3e
     with pytest.raises(KeyError, match="steps \\[7\\]"):
         DP.release(dev, {7: [0]})
     with pytest.raises(IndexError, match="leaves, not"):

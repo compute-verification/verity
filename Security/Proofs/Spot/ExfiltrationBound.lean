@@ -1,16 +1,34 @@
 module
 
+public import Definitions.Spot.Dataflow
+public import Definitions.Spot.Exfiltration
 public import Proofs.Spot.Exfiltration
 public import Proofs.Spot.Leakage
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
+import Mathlib.Logic.Equiv.PartialEquiv
+import Proofs.Spot.Determinacy
+meta import Lean.Meta.Tactic.NormCast
 
 /-!
 # Exfiltration before detection: from the sample and the population to the probability of theft
 
+<<<<<<< ours
 * `indepSample_acceptCoins`, `indepSample_isDist`: the sample that catches unit `u` independently with probability `a u` lets the
   incorrect set `B` escape with probability exactly `Π_{u ∈ B} (1 - a u)`.
+||||||| base
+* `indepSample_acceptCoins`, `indepSample_isDist`: the sample that catches unit `u` independently with probability `a u` lets the
+  wrong set `B` escape with probability exactly `Π_{u ∈ B} (1 - a u)`.
+=======
+* `indepSample_acceptCoins`: the sample that catches unit `u` independently, when its coin `p u` comes up `true`, lets the
+  wrong set `B` escape with probability exactly `Π_{u ∈ B} P(p u = false)`.
+>>>>>>> theirs
 * `pressure_of_sample`, `pressure_indepSample`: **detection pressure from the sample and the cone.** A window whose leak is at
   most its incorrect proof blocks' cone egress `Σ_{u ∈ B} E(u)`, under a sample that catches `u` with probability
-  `a u ≥ κ E(u)`, meets `DetectionPressure κ`.
+  at least `κ E(u)`, meets `DetectionPressure κ`.
 * `Dataflow.card_changed_le`: **a checked population is cone-local.** The egress slots where an assignment differs from
   the honest one, with the same inputs, number at most `Σ_{u ∈ incorrect} E(u)` (POP1's `eq_off_cone`, `card_coneEgress_le`).
 * `guess_le`: **bits to probability.** A view that is a deviation `d ∈ 𝓓` applied to the honest view gives up the target
@@ -31,18 +49,47 @@ public import Proofs.Spot.Leakage
 namespace Population.Exfil
 
 open Finset
+open Verity.Game (iid piLaw_toReal prodLaw prodLaw_toReal)
 
 /-! ## Detection pressure from the sample and the cone -/
 
+<<<<<<< ours
 /-- **The independent sample's acceptance probability**: the incorrect set `B` escapes with probability
 `Π_{u ∈ B} (1 - a u)`. -/
 theorem indepSample_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (a : U → ℝ) (B : Finset U) :
     ∑ c ∈ acceptCoins B, indepSample a c = ∏ u ∈ B, (1 - a u) := by
   let f : U → Bool → ℝ := fun u b => if u ∈ B ∧ b = true then 0 else if b then a u else 1 - a u
   have hpt : ∀ c : U → Bool, (if ∀ u ∈ B, c u = false then indepSample a c else 0) = ∏ u, f u (c u) := by
+||||||| base
+/-- **The independent sample's acceptance probability**: the wrong set `B` escapes with probability
+`Π_{u ∈ B} (1 - a u)`. -/
+theorem indepSample_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (a : U → ℝ) (B : Finset U) :
+    ∑ c ∈ acceptCoins B, indepSample a c = ∏ u ∈ B, (1 - a u) := by
+  let f : U → Bool → ℝ := fun u b => if u ∈ B ∧ b = true then 0 else if b then a u else 1 - a u
+  have hpt : ∀ c : U → Bool, (if ∀ u ∈ B, c u = false then indepSample a c else 0) = ∏ u, f u (c u) := by
+=======
+/-- A catch coin comes up `false` with the probability it doesn't come up `true`. -/
+theorem toReal_false_eq (q : PMF Bool) : (q false).toReal = 1 - (q true).toReal := by
+  have h := Verity.Game.sum_toReal_pmf q
+  rw [Fintype.sum_bool] at h
+  linarith
+
+theorem toReal_true_le_one (q : PMF Bool) : (q true).toReal ≤ 1 := by
+  have h := Verity.Game.sum_toReal_pmf q
+  rw [Fintype.sum_bool] at h
+  linarith [ENNReal.toReal_nonneg (a := q false)]
+
+/-- **The independent sample's acceptance probability**: the wrong set `B` escapes with probability
+`Π_{u ∈ B} P(p u = false)`. -/
+theorem indepSample_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (p : U → PMF Bool) (B : Finset U) :
+    Verity.Game.prPMFReal (indepSample p) (· ∈ acceptCoins B) = ∏ u ∈ B, (p u false).toReal := by
+  rw [Verity.Game.prPMFReal_mem]
+  let f : U → Bool → ℝ := fun u b => if u ∈ B ∧ b = true then 0 else (p u b).toReal
+  have hpt : ∀ c : U → Bool, (if ∀ u ∈ B, c u = false then (indepSample p c).toReal else 0) = ∏ u, f u (c u) := by
+>>>>>>> theirs
     intro c
     by_cases hc : ∀ u ∈ B, c u = false
-    · rw [ite_eq_left hc, indepSample]
+    · rw [ite_eq_left hc, indepSample, piLaw_toReal]
       refine prod_congr rfl fun u _ => ?_
       have : ¬ (u ∈ B ∧ c u = true) := fun ⟨hu, hcu⟩ => by simp [hc u hu] at hcu
       simp only [f, this, ite_false]
@@ -50,28 +97,23 @@ theorem indepSample_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (a : U �
       simp only [not_forall, Bool.not_eq_false] at hc
       obtain ⟨u, hu, hcu⟩ := hc
       exact (prod_eq_zero (mem_univ u) (by simp [f, hu, hcu])).symm
-  have hsum : ∀ u, ∑ b, f u b = if u ∈ B then 1 - a u else 1 := by
+  have hsum : ∀ u, ∑ b, f u b = if u ∈ B then (p u false).toReal else 1 := by
     intro u
-    by_cases hu : u ∈ B <;> simp [f, hu]
+    by_cases hu : u ∈ B
+    · rw [if_pos hu, Fintype.sum_bool]
+      simp [f, hu]
+    · have hf : ∀ b, f u b = (p u b).toReal := fun b => if_neg fun h => hu h.1
+      rw [sum_congr rfl fun b _ => hf b, if_neg hu, Verity.Game.sum_toReal_pmf]
   rw [acceptCoins, sum_filter, sum_congr rfl fun c _ => hpt c, ← Fintype.prod_sum, prod_congr rfl fun u _ => hsum u,
     prod_ite_mem, univ_inter]
-
-/-- The independent sample is a distribution when every catch probability is in `[0, 1]`. -/
-theorem indepSample_isDist {U : Type} [Fintype U] [DecidableEq U] {a : U → ℝ} (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) :
-    IsDist (indepSample a) := by
-  refine ⟨fun c => prod_nonneg fun u _ => ?_, ?_⟩
-  · split_ifs
-    · exact (ha u).1
-    · linarith [(ha u).2]
-  · have h := indepSample_acceptCoins a ∅
-    rwa [prod_empty, acceptCoins, filter_true_of_mem fun c _ u hu => absurd hu (notMem_empty u)] at h
 
 /-- **Detection pressure from the sample and the cone**: if each window's leak is at most its incorrect proof blocks' cone
 egress `Σ_{u ∈ B} E(u)`, and the window escapes with probability at most `Π_{u ∈ B} (1 - a u)` for catch probabilities
 `a u ≥ κ E(u)`, the strategy meets detection pressure `κ`. -/
-theorem pressure_of_sample {Ω U : Type} [Fintype Ω] {μ : Ω → ℝ} {κ : ℝ} (hκ : 0 ≤ κ) (A : Strategy Ω)
+theorem pressure_of_sample {Ω U : Type} {μ : PMF Ω} {κ : ℝ} (hκ : 0 ≤ κ) (A : Strategy Ω)
     (B : List Ω → Finset U) (E a : U → ℝ) (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) (hκE : ∀ u, κ * E u ≤ a u)
-    (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u) (hesc : ∀ h, ∑ c ∈ A.esc h, μ c ≤ ∏ u ∈ B h, (1 - a u)) :
+    (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u)
+    (hesc : ∀ h, Verity.Game.prPMFReal μ (· ∈ A.esc h) ≤ ∏ u ∈ B h, (1 - a u)) :
     DetectionPressure μ κ A := by
   intro h
   refine (hesc h).trans ((acceptProb_le_exp (B h) a fun u _ => ha u).trans (Real.exp_le_exp.2 ?_))
@@ -83,45 +125,53 @@ theorem pressure_of_sample {Ω U : Type} [Fintype Ω] {μ : Ω → ℝ} {κ : �
 
 /-- **The independent sample gives detection pressure**: a strategy whose window escapes exactly when its incorrect set `B h`
 does, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` under the sample catching `u` with probability
-`a u ≥ κ E(u)`. -/
-theorem pressure_indepSample {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (E a : U → ℝ)
-    (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) (hκE : ∀ u, κ * E u ≤ a u) (A : Strategy (U → Bool))
+`P(p u = true) ≥ κ E(u)`. -/
+theorem pressure_indepSample {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (E : U → ℝ)
+    (p : U → PMF Bool) (hκE : ∀ u, κ * E u ≤ (p u true).toReal) (A : Strategy (U → Bool))
     (B : List (U → Bool) → Finset U) (hA : ∀ h, A.esc h = acceptCoins (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u) :
-    DetectionPressure (indepSample a) κ A :=
-  pressure_of_sample hκ A B E a ha hκE hleak fun h => by rw [hA h, indepSample_acceptCoins]
+    DetectionPressure (indepSample p) κ A :=
+  pressure_of_sample hκ A B E (fun u => (p u true).toReal)
+    (fun u => ⟨ENNReal.toReal_nonneg, toReal_true_le_one (p u)⟩) hκE hleak fun h => by
+    rw [hA h, indepSample_acceptCoins]
+    exact (prod_congr rfl fun u _ => toReal_false_eq (p u)).le
 
 /-! ## Bits to probability -/
 
-open Classical in
 /-- **Bits to probability**: if the view is `F d` of the honest view `hon d` for a deviation `d = dv z`, and the honest
 view alone gives the target up with probability at most `g` for every `d ∈ 𝓓`, then any decoder of the view gets the
 target with probability at most `Pr[dv ∉ 𝓓] + #𝓓 · g`. The honest view may itself depend on the deviation (users who
 adapt to what they saw). -/
-theorem guess_le {Z D H X T : Type} [Fintype Z] {ρ : Z → ℝ} (hρ : ∀ z, 0 ≤ ρ z) (S : Z → T) (𝓓 : Finset D)
+theorem guess_le {Z D H X T : Type} [Fintype Z] (ρ : PMF Z) (S : Z → T) (𝓓 : Finset D)
     (hon : D → Z → H) (F : D → H → X) (dv : Z → D) {g : ℝ} (hT : ∀ d ∈ 𝓓, TrustedModel ρ S (hon d) g)
     (dec : X → T) :
-    ∑ z, ρ z * (if dec (F (dv z) (hon (dv z) z)) = S z then 1 else 0) ≤
-      ∑ z, ρ z * (if dv z ∈ 𝓓 then 0 else 1) + 𝓓.card * g := by
+    Verity.Game.prPMFReal ρ (fun z => dec (F (dv z) (hon (dv z) z)) = S z) ≤
+      Verity.Game.prPMFReal ρ (fun z => dv z ∉ 𝓓) + 𝓓.card * g := by
+  classical
+  rw [Verity.Game.prPMFReal_eq_sum_mul, Verity.Game.prPMFReal_eq_sum_mul]
+  have hT' : ∀ d ∈ 𝓓, ∑ z, (ρ z).toReal * (if dec (F d (hon d z)) = S z then (1 : ℝ) else 0) ≤ g := by
+    intro d hd
+    have := hT d hd fun h => dec (F d h)
+    rwa [Verity.Game.prPMFReal_eq_sum_mul] at this
   have hpt : ∀ z, (if dec (F (dv z) (hon (dv z) z)) = S z then (1 : ℝ) else 0) ≤
-      (if dv z ∈ 𝓓 then 0 else 1) + ∑ d ∈ 𝓓, (if dec (F d (hon d z)) = S z then (1 : ℝ) else 0) := by
+      (if dv z ∉ 𝓓 then 1 else 0) + ∑ d ∈ 𝓓, (if dec (F d (hon d z)) = S z then (1 : ℝ) else 0) := by
     intro z
     have hnn : ∀ d ∈ 𝓓, (0 : ℝ) ≤ if dec (F d (hon d z)) = S z then 1 else 0 := fun d _ => by
       split_ifs <;> norm_num
     by_cases hd : dv z ∈ 𝓓
-    · rw [ite_eq_left hd, zero_add]
+    · rw [if_neg (not_not.2 hd), zero_add]
       exact single_le_sum (f := fun d => if dec (F d (hon d z)) = S z then (1 : ℝ) else 0) hnn hd
-    · rw [ite_eq_right hd]
+    · rw [if_pos hd]
       have := sum_nonneg hnn
       split_ifs <;> linarith
-  calc _ ≤ ∑ z, ρ z * ((if dv z ∈ 𝓓 then 0 else 1) +
+  calc _ ≤ ∑ z, (ρ z).toReal * ((if dv z ∉ 𝓓 then 1 else 0) +
           ∑ d ∈ 𝓓, (if dec (F d (hon d z)) = S z then (1 : ℝ) else 0)) :=
-        sum_le_sum fun z _ => mul_le_mul_of_nonneg_left (hpt z) (hρ z)
-    _ = ∑ z, ρ z * (if dv z ∈ 𝓓 then 0 else 1) +
-          ∑ d ∈ 𝓓, ∑ z, ρ z * (if dec (F d (hon d z)) = S z then (1 : ℝ) else 0) := by
+        sum_le_sum fun z _ => mul_le_mul_of_nonneg_left (hpt z) ENNReal.toReal_nonneg
+    _ = ∑ z, (ρ z).toReal * (if dv z ∉ 𝓓 then 1 else 0) +
+          ∑ d ∈ 𝓓, ∑ z, (ρ z).toReal * (if dec (F d (hon d z)) = S z then (1 : ℝ) else 0) := by
         simp only [mul_add, sum_add_distrib, mul_sum]
         rw [sum_comm]
     _ ≤ _ := by
-        refine add_le_add le_rfl ((sum_le_sum fun d hd => hT d hd fun h => dec (F d h)).trans ?_)
+        refine add_le_add le_rfl ((sum_le_sum fun d hd => hT' d hd).trans ?_)
         rw [sum_const, nsmul_eq_mul]
 
 /-- The deviations that change at most `K` slots. -/
@@ -149,7 +199,6 @@ theorem card_devBall_le (Slot V : Type) [Fintype Slot] [DecidableEq Slot] [Finty
 
 /-! ## The end-to-end bound -/
 
-open Classical in
 /-- **The end-to-end bound.** The weights `w` are sampled from `ρ` and the deployment's `n` windows' coins from `μ`. The
 prover plays the adaptive strategy `A w`, with detection pressure `κ` and per-window leak at most `ℓ`. The outsider sees
 the egress, which is the honest egress `hon (d, y)` with the deviation `d = dv` applied, and the side channel
@@ -158,46 +207,44 @@ detection and `Δ` covers the windows between that detection and the halt. Suppo
 gives the target up with probability at most `g`. Then for every `K`, any decoder outputs the target with probability
 at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(m, j) · |V| ^ K · |Y| · g`, where `m` is the number of egress slots. -/
 theorem exfiltration_bound {Ω W T Slot V Y : Type} [Fintype Ω] [DecidableEq Ω] [Fintype W] [Fintype Slot]
-    [DecidableEq Slot] [Fintype V] [Nonempty V] [Fintype Y] {μ : Ω → ℝ} (hμ : IsDist μ) {ρ : W → ℝ}
-    (hρ : IsDist ρ) {κ ℓ Δ g : ℝ} (hκ : 0 ≤ κ) (hg : 0 ≤ g) (n K : ℕ) (A : W → Strategy Ω)
+    [DecidableEq Slot] [Fintype V] [Nonempty V] [Fintype Y] {μ : PMF Ω} {ρ : PMF W}
+    {κ ℓ Δ g : ℝ} (hκ : 0 ≤ κ) (hg : 0 ≤ g) (n K : ℕ) (A : W → Strategy Ω)
     (hP : ∀ w, DetectionPressure μ κ (A w)) (hL : ∀ w, LeakBounded ℓ (A w)) (S : W → T)
     (hon : Dev Slot V × Y → W × (Fin n → Ω) → Slot → V) (dv : W × (Fin n → Ω) → Dev Slot V)
     (side : W × (Fin n → Ω) → Y) (hdv : ∀ w cs, ((dv (w, cs)).1.card : ℝ) ≤ (A w).cum n [] cs + Δ)
-    (hT : ∀ d, TrustedModel (fun z : W × (Fin n → Ω) => ρ z.1 * pathWeight μ z.2) (fun z => S z.1) (hon d) g)
+    (hT : ∀ d, TrustedModel (prodLaw ρ (iid μ n)) (fun z => S z.1) (hon d) g)
     (dec : (Slot → V) × Y → T) :
-    ∑ w, ∑ cs, ρ w * pathWeight μ cs *
-        (if dec ((dv (w, cs)).apply (hon (dv (w, cs), side (w, cs)) (w, cs)), side (w, cs)) = S w then 1 else 0) ≤
+    Verity.Game.prPMFReal (prodLaw ρ (iid μ n))
+        (fun z => dec ((dv z).apply (hon (dv z, side z) z), side z) = S z.1) ≤
       Real.exp (-(κ * (K - Δ - ℓ))) +
         (∑ j ∈ range (K + 1), (Fintype.card Slot).choose j) * Fintype.card V ^ K * Fintype.card Y * g := by
-  let ρZ : W × (Fin n → Ω) → ℝ := fun z => ρ z.1 * pathWeight μ z.2
-  have hρZ : ∀ z, 0 ≤ ρZ z := fun z => mul_nonneg (hρ.1 z.1) (pathWeight_nonneg hμ.1 z.2)
+  classical
   let 𝓓 : Finset (Dev Slot V × Y) := devBall Slot V K ×ˢ univ
   have hmem : ∀ z, (dv z, side z) ∈ 𝓓 ↔ (dv z).1.card ≤ K := fun z => by
     simp [𝓓, devBall, mem_product, mem_sigma, mem_filter]
-  have key := guess_le hρZ (fun z => S z.1) 𝓓 hon (fun d e => (d.1.apply e, d.2)) (fun z => (dv z, side z))
-    (fun d _ => hT d) dec
+  have key := guess_le (prodLaw ρ (iid μ n)) (fun z => S z.1) 𝓓 hon (fun d e => (d.1.apply e, d.2))
+    (fun z => (dv z, side z)) (fun d _ => hT d) dec
   have hcard : (𝓓.card : ℝ) ≤
       (∑ j ∈ range (K + 1), (Fintype.card Slot).choose j) * Fintype.card V ^ K * Fintype.card Y := by
     rw [card_product, card_univ]
     exact_mod_cast Nat.mul_le_mul_right _ (card_devBall_le Slot V K)
-  refine le_trans (le_of_eq ?_) (key.trans (add_le_add ?_ (mul_le_mul_of_nonneg_right hcard hg)))
-  · rw [Fintype.sum_prod_type]
-  calc _ ≤ ∑ z : W × (Fin n → Ω), ρZ z * (if (K : ℝ) - Δ ≤ (A z.1).cum n [] z.2 then 1 else 0) := by
-        refine sum_le_sum fun z _ => mul_le_mul_of_nonneg_left ?_ (hρZ z)
-        split_ifs with hz hc hc
-        · norm_num
-        · norm_num
-        · norm_num
-        · have hK : (K : ℝ) < (dv z).1.card := by exact_mod_cast not_le.1 fun h => hz ((hmem z).2 h)
-          have := hdv z.1 z.2
-          exact absurd (by linarith) hc
-    _ = ∑ w, ρ w * prob μ n (fun cs => (K : ℝ) - Δ ≤ (A w).cum n [] cs) := by
-        rw [Fintype.sum_prod_type]
+  refine key.trans (add_le_add ?_ (mul_le_mul_of_nonneg_right hcard hg))
+  calc _ ≤ Verity.Game.prPMFReal (prodLaw ρ (iid μ n)) (fun z => (K : ℝ) - Δ ≤ (A z.1).cum n [] z.2) := by
+        refine Verity.Game.prPMFReal_mono _ fun z hz => ?_
+        have hK : (K : ℝ) < (dv z).1.card := by exact_mod_cast not_le.1 fun h => hz ((hmem z).2 h)
+        have := hdv z.1 z.2
+        linarith
+    _ = ∑ w, (ρ w).toReal * prob μ n (fun cs => (K : ℝ) - Δ ≤ (A w).cum n [] cs) := by
+        rw [Verity.Game.prPMFReal_eq_sum_mul, Fintype.sum_prod_type]
         refine sum_congr rfl fun w _ => ?_
-        simp only [ρZ, prob, ex, mul_sum, mul_assoc]
-    _ ≤ ∑ w, ρ w * Real.exp (-(κ * ((K : ℝ) - Δ - ℓ))) :=
-        sum_le_sum fun w _ => mul_le_mul_of_nonneg_left (tail_cum hμ hκ (hP w) (hL w) n [] ((K : ℝ) - Δ)) (hρ.1 w)
-    _ = _ := by rw [← sum_mul, hρ.2, one_mul]
+        rw [prob_eq_ex, ex, mul_sum]
+        refine sum_congr rfl fun cs _ => ?_
+        have hpr := prodLaw_toReal ρ (iid μ n) w cs
+        by_cases hc : (K : ℝ) - Δ ≤ (A w).cum n [] cs <;> simp [hc, hpr]
+    _ ≤ ∑ w, (ρ w).toReal * Real.exp (-(κ * ((K : ℝ) - Δ - ℓ))) :=
+        sum_le_sum fun w _ => mul_le_mul_of_nonneg_left (tail_cum hκ (hP w) (hL w) n [] ((K : ℝ) - Δ))
+          ENNReal.toReal_nonneg
+    _ = _ := by rw [← sum_mul, Verity.Game.sum_toReal_pmf, one_mul]
 
 /-! ## A deployment's windows -/
 
@@ -217,25 +264,24 @@ theorem card_changedThrough_le {Ω O : Type} [DecidableEq Ω] [DecidableEq O] (A
       exact card_changedThrough_le A chg hchg n (cs 0 :: h) (Fin.tail cs)
     · simp
 
-open Classical in
 /-- **The end-to-end bound over a deployment's windows.** Window `i` of `n` has egress slots `O`, so the deployment
 has `n · |O|`. The window after history `h` changes the slots `chg w h`, and its leak is their number. The egress
 deviates from honest only on the slots changed through the first detection and on at most `Δ` slots after it, before
 the halt. Then any decoder of the egress and the side channel outputs the target with probability at most
 `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(n |O|, j) · |V| ^ K · |Y| · g`. -/
 theorem exfiltration_bound_windows {Ω W T O V Y : Type} [Fintype Ω] [DecidableEq Ω] [Fintype W] [Fintype O]
-    [DecidableEq O] [Fintype V] [Nonempty V] [Fintype Y] {μ : Ω → ℝ} (hμ : IsDist μ) {ρ : W → ℝ}
-    (hρ : IsDist ρ) {κ ℓ g : ℝ} (hκ : 0 ≤ κ) (hg : 0 ≤ g) (n K Δ : ℕ) (A : W → Strategy Ω)
+    [DecidableEq O] [Fintype V] [Nonempty V] [Fintype Y] {μ : PMF Ω} {ρ : PMF W} {κ ℓ g : ℝ} (hκ : 0 ≤ κ)
+    (hg : 0 ≤ g) (n K Δ : ℕ) (A : W → Strategy Ω)
     (chg : W → List Ω → Finset O) (hchg : ∀ w h, (A w).leak h = (chg w h).card)
     (hP : ∀ w, DetectionPressure μ κ (A w)) (hL : ∀ w, LeakBounded ℓ (A w)) (S : W → T)
     (hon : Dev (Fin n × O) V × Y → W × (Fin n → Ω) → Fin n × O → V)
     (dv : W × (Fin n → Ω) → Dev (Fin n × O) V) (side : W × (Fin n → Ω) → Y)
     (lag : W × (Fin n → Ω) → Finset (Fin n × O)) (hlag : ∀ z, (lag z).card ≤ Δ)
     (hdv : ∀ w cs, (dv (w, cs)).1 ⊆ changedThrough (A w) (chg w) n [] cs ∪ lag (w, cs))
-    (hT : ∀ d, TrustedModel (fun z : W × (Fin n → Ω) => ρ z.1 * pathWeight μ z.2) (fun z => S z.1) (hon d) g)
+    (hT : ∀ d, TrustedModel (prodLaw ρ (iid μ n)) (fun z => S z.1) (hon d) g)
     (dec : (Fin n × O → V) × Y → T) :
-    ∑ w, ∑ cs, ρ w * pathWeight μ cs *
-        (if dec ((dv (w, cs)).apply (hon (dv (w, cs), side (w, cs)) (w, cs)), side (w, cs)) = S w then 1 else 0) ≤
+    Verity.Game.prPMFReal (prodLaw ρ (iid μ n))
+        (fun z => dec ((dv z).apply (hon (dv z, side z) z), side z) = S z.1) ≤
       Real.exp (-(κ * (K - Δ - ℓ))) +
         (∑ j ∈ range (K + 1), (n * Fintype.card O).choose j) * Fintype.card V ^ K * Fintype.card Y * g := by
   have hdv' : ∀ w cs, ((dv (w, cs)).1.card : ℝ) ≤ (A w).cum n [] cs + Δ := by
@@ -247,7 +293,7 @@ theorem exfiltration_bound_windows {Ω W T O V Y : Type} [Fintype Ω] [Decidable
     have h5 : ((dv (w, cs)).1.card : ℝ) ≤ (changedThrough (A w) (chg w) n [] cs).card + (lag (w, cs)).card := by
       exact_mod_cast h1.trans h2
     linarith
-  have := exfiltration_bound hμ hρ hκ hg n K A hP hL S hon dv side hdv' hT dec
+  have := exfiltration_bound hκ hg n K A hP hL S hon dv side hdv' hT dec
   rwa [Fintype.card_prod, Fintype.card_fin] at this
 
 end Population.Exfil

@@ -23,7 +23,9 @@ validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamRes
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
 each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
 certifier's id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
-scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``. Every
+scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
+engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
+``summary.json``'s ``stream_errors`` and the log), so the network certifier sees it unterminated. Every
 other request (the network certifier's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
 
 Sampling parameters are values the request brings: the server applies vLLM's neutral
@@ -32,9 +34,21 @@ engine's resulting parameters, the seed and its rule). A request without a ``see
 `engine.served_seed.DEFAULT_SEED`. A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's split count is not
 pinned yet, so its sample is not a function of the committed values.
 
+<<<<<<< 94ca7fd0d18
 The default precision is ``verity_int8`` (int8 linears, vLLM's attention), the one setting whose 16-token probe (0.81 s at 4 in
 flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even without the Commit. The ``verity_int8``
 quantization method is registered under every precision, so a pin whose checkpoint names it loads under ``--precision pin`` too.
+||||||| e10cf2c8559
+The default precision is ``verity_int8`` (int8 linears, vLLM's attention) with the committer's GPU tree: the one setting
+whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
+without the Commit. The ``verity_int8`` quantization method is registered under every precision, so a pin whose checkpoint
+names it loads under ``--precision pin`` too.
+=======
+The default precision is ``verity_int8`` (int8 linears, vLLM's attention), the one setting
+whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
+without the Commit. The ``verity_int8`` quantization method is registered under every precision, so a pin whose checkpoint
+names it loads under ``--precision pin`` too.
+>>>>>>> 7af4d24fca3e
 
 The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepped by one thread, the process's main
 thread (`serve_loop.EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
@@ -77,11 +91,27 @@ ingress, its finish, its committed rows and seeds, and its check), ``request_use
 `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
 and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
+<<<<<<< 94ca7fd0d18
 writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them; `serve_seal.scheme_refusal`).
 ``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_release.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
 device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
 blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
+||||||| e10cf2c8559
+writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
+recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
+window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
+commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
+device pool until every subprotocol named has sampled the window, then keeps on host, and seals, only the leaves their sampled
+blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's sampling coin is open,
+=======
+writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them;
+`serve_seal.scheme_refusal`). ``--seal`` seals each closed
+window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
+commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
+device pool until every subprotocol named has sampled the window, then keeps on host, and seals, only the leaves their sampled
+blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's sampling coin is open,
+>>>>>>> 7af4d24fca3e
 `serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
 window's finalize, its readback and records run on a thread of their own (`seal_stages.Sealer`), then its seal on a second,
 beside the next window's finalize, each in window order, while the engine serves on: the engine loop's part of a close only detaches the window from the
@@ -284,6 +314,7 @@ class Server:
         self.model_root, self.clock = model_root or served_name, clock
         self.served = 0
         self.streaming: set[asyncio.StreamWriter] = set()      # responses whose head is written
+        self.stream_errors: dict[str, Any] = {"n": 0, "first": []}
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
@@ -418,6 +449,14 @@ class Server:
         return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(proto.brought(req), params),
                               user_of(req.raw), release, dict(times or {}))
 
+    def stream_error(self, adm: Admission, proto: Any, error: str) -> None:
+        """A stream the engine failed, in the server's record (``summary.json``'s ``stream_errors``: the count and the
+        first ten) and its log, whatever the protocol puts on the wire."""
+        self.stream_errors["n"] += 1
+        if len(self.stream_errors["first"]) < 10:
+            self.stream_errors["first"].append({"http_id": adm.http_id, "engine_id": adm.engine_id, "protocol": proto.name, "error": error})
+        print(f"SERVE-OPENAI stream error ({proto.name}) {adm.http_id}: {error}", file=sys.stderr, flush=True)
+
     async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None,
                           proto: Any = None, times: Mapping[str, float] | None = None) -> None:
         proto = proto or self.proto
@@ -453,7 +492,11 @@ class Server:
                 d = await deltas.get()
                 finished = d.finished
                 if d.error:
-                    writer.write(frame(sse(error_body(d.error, 500, "InternalServerError").decode())))
+                    self.stream_error(adm, proto, d.error)
+                    end = proto.error_end(d.error)
+                    if end is None:
+                        return
+                    writer.write(frame(end))
                     break
                 if not d.text and not d.token_ids and not n_out:
                     continue                                     # vLLM: no empty chunk before the first token
@@ -613,7 +656,13 @@ def main(opts: Options) -> int:
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
+<<<<<<< 94ca7fd0d18
         arm = SPL.arm_of(opts, llm, com, out) or SH.arm_of(opts, llm, com, out, flush=trace.drain, day=day)
+||||||| e10cf2c8559
+        arm = SH.arm_of(opts, llm, com, out)
+=======
+        arm = SH.arm_of(opts, llm, com, out, flush=trace.drain)
+>>>>>>> 7af4d24fca3e
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -683,7 +732,15 @@ def main(opts: Options) -> int:
               "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
               "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("required_manifest", "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
+<<<<<<< 94ca7fd0d18
               "required_manifest_path": getattr(com, "required_manifest_path", None), **RL.retention_record(opts, com),
+||||||| e10cf2c8559
+              "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
+                                                                  "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
+              "required_manifest_path": getattr(com, "required_manifest_path", None), **SS.retention_record(opts, com),
+=======
+              "required_manifest_path": getattr(com, "required_manifest_path", None), **SS.retention_record(opts, com),
+>>>>>>> 7af4d24fca3e
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
@@ -698,7 +755,7 @@ def main(opts: Options) -> int:
         if mirror is not None:
             mirror()                                     # the requests closed at the stop, before the seals still pending
         def stopped(final: bool) -> dict[str, Any]:
-            got = {"final": final, "served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
+            got = {"final": final, "served": server.served, "stream_errors": server.stream_errors, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "tick": loop.gate.summary() if loop.gate is not None else None,
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),

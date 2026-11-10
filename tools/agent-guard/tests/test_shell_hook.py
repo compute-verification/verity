@@ -104,6 +104,12 @@ def test_a_checkout_without_the_guard_runs_the_cached_copy_so_a_branch_switch_ca
     "ps -f -u research",
     "ps -o args -C git",
     "ps -p 1,2 -o args",
+    "ps -ef --forest | grep -v -E 'xfce|dbus' | tail -30",  # an inverted filter prints every other line
+    "ps -eo pid,etime,args | grep -v kworker",
+    "ps aux | grep -iv lake",
+    "ps aux | rg --invert-match lake",
+    "ps aux | grep --inv lake",
+    "ssh n1 'ps -ef | grep -v grep'",
     "cat /proc/*/cmdline",
     "tmux -f /exec-daemon/tmux.portal.conf show-environment -g | cut -d= -f1",   # a multi-line key's lines
     "tmux show-environment",
@@ -152,6 +158,7 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "ps -u research",
     "ps -eo pid,args | grep \"[p]ytest\"",
     "ps aux | rg -i lake",
+    "ps -ef | grep -v grep | grep \"[p]ython\"",
     "ssh n1 'ps -eo pid,args | grep \"[s]lot.py\"'",
     "pgrep -af quick_tier",
     "tmux show-environment -g DISPLAY",
@@ -212,10 +219,43 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
         assert "1.9 GiB of 15.3 GiB available" in out["agent_message"] and "research run --on auto" in out["agent_message"]
     for command in passes:
         assert verdict(command, **gate) == "allow", command
-    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:    6000000 kB\n")
-    (cgroup / "memory.max").write_text(f"{8 * 2**30}\n")         # a cgroup limit tighter than the VM: its headroom counts
+    (tmp_path / "vmstat").write_text(f"balloon_inflate {3 * 2**20}\nballoon_deflate {2**20}\n")     # 8 GiB in the balloon
+    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "allow", \
+        "memory the balloon holds is available: the VM gets it back as it asks"
+
+
+def cgroup_gate(tmp_path: Path, stat: str | None) -> dict[str, str]:
+    """The memory gate's overrides for a VM with most of its 15.3 GiB available, under a cgroup limit of 8 GiB with 7 GiB in use
+    whose memory.stat is `stat` (None: there is none)."""
+    meminfo, cgroup = tmp_path / "meminfo", tmp_path / "cg"
+    cgroup.mkdir()
+    meminfo.write_text("MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:   14000000 kB\n")
+    (cgroup / "memory.max").write_text(f"{8 * 2**30}\n")
     (cgroup / "memory.current").write_text(f"{7 * 2**30}\n")
-    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "deny"
+    if stat is not None:
+        (cgroup / "memory.stat").write_text(stat)
+    return {"AGENT_GUARD_MEMINFO": str(meminfo), "AGENT_GUARD_MIN_AVAIL": "0.25", "AGENT_GUARD_CGROUP": str(cgroup)}
+
+
+def test_under_a_cgroup_limit_its_inactive_file_cache_counts_as_available(tmp_path):
+    """Under a cgroup limit tighter than the VM, the headroom is taken over the cgroup's working set: memory.current less
+    memory.stat's inactive_file, the file cache the kernel reclaims on demand (as container runtimes count it), so a cache that
+    fills the cgroup doesn't refuse a one-file test run while most of its memory is free; active_file still counts as used."""
+    gate = cgroup_gate(tmp_path, f"anon {2 * 2**30}\nfile {5 * 2**30}\ninactive_file {4 * 2**30}\nactive_file {2**30}\n")
+    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "allow"
+    (tmp_path / "cg" / "memory.stat").write_text(f"anon {2 * 2**30}\nfile {5 * 2**30}\ninactive_file {2**29}\nactive_file {9 * 2**29}\n")
+    out = answer("uv run pytest -q tests/test_x.py", **gate)
+    assert out["permission"] == "deny" and "1.5 GiB of 8.0 GiB available" in out["agent_message"]
+
+
+def test_under_a_cgroup_limit_without_memory_stat_all_of_memory_current_counts(tmp_path):
+    """Where memory.stat can't be read, or names no inactive_file, the headroom is the limit less all of memory.current."""
+    gate = cgroup_gate(tmp_path, None)
+    out = answer("uv run pytest -q tests/test_x.py", **gate)
+    assert out["permission"] == "deny" and "1.0 GiB of 8.0 GiB available" in out["agent_message"]
+    (tmp_path / "cg" / "memory.stat").write_text(f"anon {7 * 2**30}\nfile 0\n")
+    out = answer("uv run pytest -q tests/test_x.py", **gate)
+    assert out["permission"] == "deny" and "1.0 GiB of 8.0 GiB available" in out["agent_message"]
 
 
 @pytest.mark.parametrize("command", [
@@ -391,6 +431,11 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
     subprocess.run([sys.executable, str(ROOT / "tools/agent-guard/worktree_guard.py"), "hand", "coord", "bc-worker"], check=True,
                    capture_output=True, env={**os.environ, **env})
     assert ask("git push origin coord", "bc-worker")["permission"] == "allow"
+    hand = "python3 tools/agent-guard/worktree_guard.py hand coord bc-third"
+    out = ask(hand, "bc-coord")
+    assert out["permission"] == "deny" and "belongs to agent bc-worker" in out["agent_message"], "only the owner hands a branch on"
+    assert ask(hand, "bc-worker")["permission"] == "allow"
+    assert ask("python3 tools/agent-guard/worktree_guard.py hand unregistered bc-third", "bc-coord")["permission"] == "allow"
     assert ask("git checkout lane", "")["permission"] == "allow", "no conversation id: nothing to judge"
 
 
@@ -468,4 +513,32 @@ def test_a_merge_on_a_vm_that_never_ran_boot_sh_first_gets_the_record_merge_driv
     assert ask("git merge-tree --write-tree --name-only origin/next FETCH_HEAD") == "allow"
     assert driver() == "python3 m.py %O %A %B %P"
     subprocess.run(["git", "-C", str(ws), "config", "merge.lean-audit.driver", "mine"], check=True, env={**os.environ, **GIT_ENV})
-    assert ask("git merge origin/main") == "allow" and driver() == "mine", "a driver already set is left as it is"
+    assert ask("git merge origin/main") == "allow" and driver() == "mine", "without origin/main, one already set stays"
+
+
+def test_a_merge_sets_origin_main_s_merge_drivers_over_an_older_command(tmp_path):
+    """Git runs a driver from the worktree of the side merged into, and a VM keeps the command it was given: one whose
+    command ran that worktree's merge.py merged main's lock into an old branch by the branch's older copy, which collapsed
+    Security's lock to one `reads` group.  So where the repository has origin/main, each record driver whose value differs
+    from origin/main's RECORD_DRIVER is set to it, whatever the checkout's own clone.py says."""
+    ws = tmp_path / "ws"
+    clone_py = ws / "tools/research/src/research/clone.py"
+    clone_py.parent.mkdir(parents=True)
+    env = {**os.environ, **GIT_ENV}
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(ws), *args], capture_output=True, text=True, env=env, check=True).stdout.strip()
+    git("init", "-q")
+    clone_py.write_text('RECORD_DRIVER = {"merge.lean-audit.name": "n", "merge.lean-audit.driver": "python3 main.py %O %A %B %P"}\n')
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "main")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    clone_py.write_text('RECORD_DRIVER = {"merge.lean-audit.driver": "python3 worktree.py %O %A %B %P"}\n')
+    git("config", "merge.lean-audit.driver", "python3 old.py %O %A %B %P")
+    git("config", "merge.lean-audit.name", "n")
+    out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution",
+                                                                     "command": "git merge --no-edit origin/main",
+                                                                     "cwd": str(ws)}),
+                         capture_output=True, text=True, env={**env, "AGENT_GUARD_MIN_AVAIL": "0"}, check=True)
+    assert json.loads(out.stdout)["permission"] == "allow", out.stderr
+    assert git("config", "--get", "merge.lean-audit.driver") == "python3 main.py %O %A %B %P"

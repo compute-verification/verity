@@ -1,6 +1,20 @@
 module
 
 public import Proofs.Flock.VBridge.Family.Commits
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # The family's reads files, round map and round commitments
@@ -66,7 +80,7 @@ def recTags : List Accounting.Level → List Absorb
 
 /-- Compiled Ligerito's (`ligShape`): `T` (which the stream absorbs as Ligerito starts, `rec_algebra.py:751-752`), the
 first out-of-domain value, level 0's folding messages, then as `recTags`. -/
-def ligTags (sch : Accounting.Schedule) : List Absorb :=
+def ligTags (sch : FlockSoundness.Accounting.Schedule) : List Absorb :=
   match sch.levels with
   | [] => []
   | _ :: rest => .elts :: .elts :: (List.replicate sch.k0 .elts ++
@@ -76,7 +90,7 @@ def ligTags (sch : Accounting.Schedule) : List Absorb :=
 
 /-- **A rep's stream rounds**, in order (`repShape`'s coins): the zerocheck's, the lincheck's, the `claims` ring switches'
 and the opening's coin, then compiled Ligerito's. -/
-def streamTags (m kLog claims : ℕ) (sch : Accounting.Schedule) : List Absorb :=
+def streamTags (m kLog claims : ℕ) (sch : FlockSoundness.Accounting.Schedule) : List Absorb :=
   ([.none, .none, .elts] ++ List.replicate (m - 6) .elts) ++
     (([.elts, .none] ++ List.replicate (kLog - 6) .elts ++ [.elts]) ++
       ((List.replicate claims .elts ++ [.none]) ++ ligTags sch))
@@ -113,7 +127,7 @@ theorem coins_recShape (ext : ℕ) : ∀ levels, (Exec.recShape F K D ext levels
       coins_recShape ext (lv' :: rest)]
 
 /-- **The stream has one round per coin of the rep's spine**: `streamTags` lists `repShape`'s coins. -/
-theorem coins_repShape (m kLog nExtra : ℕ) (sch : Accounting.Schedule) :
+theorem coins_repShape (m kLog nExtra : ℕ) (sch : FlockSoundness.Accounting.Schedule) :
     (Exec.repShape F K D m kLog nExtra sch).countP isCoin = (streamTags m kLog (nExtra + 2) sch).length := by
   obtain ⟨m', k0, ls, ext⟩ := sch
   rcases ls with _ | ⟨lv₀, _ | ⟨lv₁, rest⟩⟩ <;>

@@ -1,8 +1,5 @@
 module
 
-public import CoreProtocol.Live
-public import Spot.ChallengerDraw
-public import Spot.OneStage
 public import Spot.OneStageZk
 
 /-!

@@ -1,10 +1,15 @@
 module
 
 public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.ENNReal.Basic
 public import Mathlib.Basic.ENNReal.BigOperators
 public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Data.Fintype.Card
 public import Mathlib.Order.CompleteLattice.Basic
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Public-coin interactions with live coins, and what it means for one to be sound
@@ -12,17 +17,17 @@ public import Mathlib.Order.CompleteLattice.Basic
 A `Game α` is the verifier's side of a public-coin interaction, written as a program:
 
 * `send M k`: the developer (the prover) sends a message `m : M` of its choice, and the interaction continues as `k m`;
-* `coin C k`: the verifier samples `c : C` uniformly at random, independently of everything before, and the interaction
-  continues as `k c`. This is a live coin: it is sampled after every earlier message is fixed (in Verity, the challenger's live-coin part
-  samples it from the operating system after recording the round's digest);
+* `coin C k`: the verifier flips a coin `c : C`, uniform and independent of everything before, and the interaction
+  continues as `k c`. This is a live coin: it is flipped after every earlier message is fixed (in Verity, the
+  challenger's live-coin part reads it from the operating system after recording the round's digest);
 * `ret a`: the interaction ends with the verifier's output `a`.
 
-Messages may be anything: a declaration, a commitment, whole tables of an interactive oracle proof. A deterministic
+Messages may be anything: a registration, a commitment, whole tables of an interactive oracle proof. A deterministic
 prover strategy (`Strategy g`) picks a message at every `send` node as a function of the history, which the subtree it
 sits in encodes. `prob p g s` is the exact probability, over the verifier's uniform coins, that the output satisfies
 `p`, and `value p g` is the same probability for an optimal, computationally unbounded prover. A randomized prover is a
 mixture of deterministic ones, so every bound on `value` bounds it too. `avg` and `prCoin` are the uniform average and
-probability over one coin, which every area's draw reads (`Definitions.Core.Draw`).
+probability over one coin, which every area's sampling design reads (`Definitions.Core.Draw`).
 
 `interleave g₁ g₂` runs two interactions side by side, the prover choosing at every step which one advances, and
 `batch` runs a list of them so. A strategy for a batch plays each of its games, and `InducedAt` names the strategies it
@@ -32,8 +37,8 @@ strategies are in the class (`Guarantees.ProbBatchInduced`).
 
 Every protocol's guarantee has one form (`Sound`): whatever the developer does, the probability that the verifier
 accepts while the claim `E` about the committed world is false is at most `δ`. Protocols differ only in their game,
-their acceptance and their claim. A policy is a check on the declaration inside `accept`, a game with no rounds of its
-own.
+their acceptance and their claim. A policy is a check on the registered circuit inside `accept`, a game with no rounds
+of its own.
 -/
 
 @[expose] public section

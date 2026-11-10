@@ -116,7 +116,7 @@ class V3(V1):
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
 
-    impl, live = "p2-v3-gpu", HERE.parent / "band_gpu" / "memory_challenger.py"
+    impl, live = "p2-v3-gpu", H.MEMORY_CHALLENGER
 
     def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
         from verity.core.protocols.pous import protocol, schemes
@@ -495,7 +495,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
         return {"implementation": {"name": fr.impl, "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
                                    "kernels": f"p2v1.cu: p2dec.cu's tuned decode with {fr.scheme} keys expanded by p2keys4.cuh (counter-mode "
                                               "SHA-512 from the key prefix's midstate); encode by an addition-chain root on CGBN's generic squaring",
-                                   "memory_challenger": str(fr.live.relative_to(HERE.parent)), "memory_challenger_args": list(fr.memory_challenger_args)},
+                                   "memory_challenger": str(fr.live.relative_to(H.ROOT)), "memory_challenger_args": list(fr.memory_challenger_args)},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
                 "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex(),
                           "salt_from": "pous" if fr.device is None else "bandwidth",

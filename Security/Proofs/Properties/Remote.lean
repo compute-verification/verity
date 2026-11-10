@@ -24,8 +24,10 @@ to each component accepting its own case, with sampled proofs' record the policy
 Commit record the period's windows name the policy's record too (`windows_tied`). The policy's
 acceptance is `NciCheck.Baseline.evaluate`'s with the record naming the circuit (`policy_accept`), which is
 `NciCheck.Desc.evaluate`'s and θ's provenance (`BaselineSteps.evaluate_ok`), whose verdict `DescReports`,
-`DescWitnesses` and `BaselineProvenance` read; `Nci.SecurityProofs.CompliesCK`, `ExpandComplies` and
-`Verity.Circuit.expand_boolean` give the padded `(c, k)`-partitions. The parse, declaration and division an acceptance
+`DescWitnesses` and `BaselineProvenance` read; `Nci.SecurityProofs.constInputs_isCK` and `constInputs_expand_isCK`
+give the `(c, k)`-partitions, of the declaration with its constants registered, which needs no assumption that it is
+Boolean or of positive fan-in; where it is, they are partitions of the declaration itself (`policyMet_old_clauses`).
+The parse, declaration and division an acceptance
 exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an expansion) and `Decodes` (that check's
 <<<<<<< ours
 verdicts are about a parse, a layout, a baseline and a division). Sampled proofs' acceptance is one-stage v1's check
@@ -203,15 +205,33 @@ theorem names_program {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Comm
   rw [hP] at hn
   simpa using hn
 
-/-- `PolicyMet` from its first clause, every inference block meeting both bounds, at `α ≥ 0`: the rest follows
-(`Nci.CompliesRate`, and the padded partitions by `CompliesCK`, `ExpandComplies` and `expand_boolean`). -/
-theorem policyMet_of_meets {d : RegisteredCircuit} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ} (hα : 0 ≤ α)
-    (h : ∀ u, Meets d U Γ α u) : PolicyMet d U Γ α := by
-  have hcomp : Nci.CompliesRate Γ α d := ⟨n, U, h⟩
-  refine ⟨h, hcomp, fun hB => Nci.SecurityProofs.CompliesCK _ _ d hB hcomp, ?_⟩
-  intro W hfan hw hW
-  exact Nci.SecurityProofs.CompliesCK _ _ d.expand (d.D.expand_boolean hfan)
-    (Nci.SecurityProofs.ExpandComplies Γ W _ d hα hw hW hcomp)
+/-- `PolicyMet` from its first clause, every inference block meeting both bounds: the rest follows
+(`Nci.CompliesRate`, and the partitions of the declaration with its constants registered by `constInputs_isCK` and
+`constInputs_expand_isCK`, on the division with its constants taken out). -/
+theorem policyMet_of_meets {d : RegisteredCircuit} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ}
+    (h : ∀ u, Meets d U Γ α u) : PolicyMet d U Γ α :=
+  ⟨h, ⟨n, U, h⟩, fun h1 => ⟨n, U.constInputs, Nci.SecurityProofs.constInputs_isCK h h1⟩,
+    fun _ hW => ⟨n, U.constInputs.expand, Nci.SecurityProofs.constInputs_expand_isCK h hW⟩⟩
+
+/-- **`PolicyMet` keeps its earlier partition clauses**: where their antecedents hold, `d` Boolean, or of positive
+fan-in in bits with every computed gate 1 to `W` bits wide, `d` has no constant, so its partitions with its constants
+registered are partitions of `d` and of its expansion, with the same units. -/
+theorem policyMet_old_clauses {d : RegisteredCircuit} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ}
+    (h : PolicyMet d U Γ α) :
+    (d.D.Boolean → ∃ (B : ℕ) (P : Partition d.D B), P.IsCK d Γ ⌊α * Γ⌋₊) ∧
+    ∀ W : ℕ, d.D.BitFaninPos → (∀ g, d.D.isInput g = false → 1 ≤ d.D.w g) → (∀ g, d.D.w g ≤ W) →
+      ∃ (B : ℕ) (P : Partition d.expand.D B), P.IsCK d.expand (Γ * W) ⌊α * (Γ * W : ℕ)⌋₊ := by
+  refine ⟨fun hB => ?_, fun W hf hw hW => ?_⟩
+  · have hc := d.D.isConst_false hB.bitFaninPos fun g _ => (hB.one_bit g).ge
+    obtain ⟨B, P, hP⟩ := h.2.2.1 hB.one_bit
+    refine ⟨B, Partition.ofConstInputs hc P, hB, fun u => hP.card u, fun u => ?_⟩
+    rw [← d.constInputs_unregistered_eq hc]
+    exact hP.reads u
+  · have hc := d.D.isConst_false hf hw
+    obtain ⟨B, P, hP⟩ := h.2.2.2 W hW
+    refine ⟨B, Partition.ofConstInputsExpand hc P, d.D.expand_boolean hf, fun u => hP.card u, fun u => ?_⟩
+    rw [← d.constInputs_expand_unregistered_eq hc]
+    exact hP.reads u
 
 /-- **Honest witness of the policy's existence clause**: a declaration and a division into nonempty inference blocks
 that meet the policy, `Nci.SecurityProofs.FitWitness`'s five-gate circuit in its two one-gate windows, at `Γ = 1` and
@@ -221,7 +241,7 @@ theorem policyMet_honest : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition 
   have hs : ∀ u, Nci.SecurityProofs.FitWitness.decl.D.size (Nci.SecurityProofs.FitWitness.windows.gates u) = 1 := by
     decide +kernel
   refine ⟨Nci.SecurityProofs.FitWitness.decl, 2, Nci.SecurityProofs.FitWitness.windows, 1, 3, by norm_num,
-    by decide +kernel, policyMet_of_meets (by norm_num) fun u => ⟨(hs u).le, ?_⟩⟩
+    by decide +kernel, policyMet_of_meets fun u => ⟨(hs u).le, ?_⟩⟩
   rw [hs u, Nat.cast_one, mul_one]
   exact Nci.SecurityProofs.FitWitness.reads_le u
 
@@ -246,8 +266,7 @@ theorem policy_met {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Evidenc
   intro j' i d hx hi hL hN hD
   have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
   have hR := (NciCheck.Properties.SecurityProofs.DescReports _ _ hd).2 j' hx i P d hi hP' hL hN hD
-  exact ⟨verifier_own hx hi,
-    policyMet_of_meets (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) (hR.2.2.1.1 hc)⟩
+  exact ⟨verifier_own hx hi, policyMet_of_meets (hR.2.2.1.1 hc)⟩
 
 /-- What the policy's acceptance establishes about its decoded case. -/
 theorem policyHeld {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitment}

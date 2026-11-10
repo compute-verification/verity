@@ -1,6 +1,6 @@
-"""Asks as Linear issues: `research msg ask` (and `send --to` one handle) files the ask in its owner's
-team, the registry's `linear` key, and rings on Slack with the issue's link; `close` and `close --declined` move the issue to done or
-canceled.
+"""Asks as Linear issues: `research msg ask` files the ask in its owner's team, the registry's `linear` key (a lane with no
+team of its own: its parent's, with its `linear_label`), on that team's current milestone (`current_milestone`), and rings on
+Slack with the issue's link; `send` files nothing.  `close` and `close --declined` move the issue to done or canceled.
 
 Credentials come from the environment only. LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET are an OAuth app's client-credentials
 grant (never the authorization-code flow): an `app` actor, so each issue and comment shows as filed by the asking handle
@@ -144,8 +144,9 @@ _title = title                                                   # `Linear.file`
 
 
 def owners(reg: dict) -> dict[str, str]:
-    """Each Linear team key a handle owns (the Slack registry's `linear`), to its handle."""
-    return {h["linear"]: h["handle"] for h in reg.get("handles", []) if h.get("linear")}
+    """Each Linear team key a handle owns (the Slack registry's `linear`), to its handle; a lane that files in its parent's
+    team (`linear_label`) owns none."""
+    return {h["linear"]: h["handle"] for h in reg.get("handles", []) if h.get("linear") and not h.get("linear_label")}
 
 
 def _pick(nodes: list[dict], prefix: str, what: str) -> dict:
@@ -344,20 +345,30 @@ class Linear:
                 raise
 
     def file(self, team: str, sender: str, body: str, parent: str | None = None, title: str | None = None,
-             asker: str | None = None) -> dict:
+             asker: str | None = None, label: str | None = None, current: bool = False) -> dict:
         """The ask as an issue in `team`, from `sender`: {id, identifier, url, project, projectMilestone}. With `parent` (an
         identifier such as TEAM-92) it is that issue's sub-issue, on its project and milestone, so it lands on the board of the
         deliverable it serves; where Linear refuses the project (the team isn't in it), under the parent alone, said on stderr.
-        `title` replaces the one derived from the body. `asker` names the person who asked for its outcome (`asker_label`)."""
-        i = {"teamId": self.team(team)["id"], "title": title.strip() if title else _title(body), "description": body,
-             "labelIds": [self.label(f"from:{sender}"), *([self.label(asker_label(asker))] if asker else [])]}
+        Without one, `current` puts it on the team's current milestone (`current_milestone`), and in no project, said on
+        stderr, when the team has none. `title` replaces the one derived from the body. `asker` names the person who asked
+        for its outcome (`asker_label`); `label` is one more label (a lane's `lane:<handle>` in its parent's team)."""
+        t = self.team(team)
+        i = {"teamId": t["id"], "title": title.strip() if title else _title(body), "description": body,
+             "labelIds": [self.label(f"from:{sender}"), *([self.label(asker_label(asker))] if asker else []),
+                          *([self.label(label)] if label else [])]}
         if self.app:
             i["createAsUser"] = sender
-        board = {}
+        board, on = {}, f"{parent}'s project"
         if parent:
             p = self.gql("query($id: String!) { issue(id: $id) { id project { id } projectMilestone { id } } }", {"id": parent})["issue"]
             i["parentId"] = p["id"]
             board = {k: x["id"] for k, x in (("projectId", p.get("project")), ("projectMilestoneId", p.get("projectMilestone"))) if x}
+        elif current:
+            if m := self.current_milestone(t["id"]):
+                board, on = {"projectId": m["project"]["id"], "projectMilestoneId": m["id"]}, f"{m['project']['name']} / {m['name']}"
+            else:
+                print(f"research msg: {t['key']} has no active project with a milestone not yet past; filed in no project",
+                      file=sys.stderr)
         q = ("mutation($i: IssueCreateInput!) { issueCreate(input: $i) { issue { id identifier url project { name } "
              "projectMilestone { name } } } }")
         try:
@@ -365,10 +376,23 @@ class Linear:
         except LinearError as e:
             if not board:
                 raise
-            print(f"research msg: Linear refused {parent}'s project for this issue ({e}); filed under {parent} alone", file=sys.stderr)
+            print(f"research msg: Linear refused {on} for this issue ({e}); filed " + (f"under {parent} alone" if parent else
+                  "in no project"), file=sys.stderr)
             issue = self.gql(q, {"i": i})["issueCreate"]["issue"]
         self._quiet(issue["id"])
         return issue
+
+    def current_milestone(self, team_id: str) -> dict | None:
+        """The milestone an ask to the team (its id) lands on: of the milestones not yet past (a target date today or later,
+        UTC) in the team's active projects, the earliest; a tie goes to the one earlier in its project's ladder, then to the
+        project first by name.  {id, name, targetDate, sortOrder, project: {id, name}}, or None when no active project of
+        the team has one (an undated milestone has no place on the ladder)."""
+        q = ('query($id: String!) { team(id: $id) { projects(first: 50, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
+             "{ nodes { id name projectMilestones(first: 50) { nodes { id name targetDate sortOrder } } } } } }")
+        today = datetime.fromtimestamp(self.now(), UTC).date().isoformat()
+        ms = [{**m, "project": {"id": p["id"], "name": p["name"]}} for p in self.gql(q, {"id": team_id})["team"]["projects"]["nodes"]
+              for m in p["projectMilestones"]["nodes"] if (m.get("targetDate") or "") >= today]
+        return min(ms, key=lambda m: (m["targetDate"], m.get("sortOrder") or 0, m["project"]["name"]), default=None)
 
     def tag(self, issue: str, name: str, remove: bool = False) -> str:
         """Add the label `name` to the issue (its identifier), or remove it: the issue's labels after."""
@@ -379,7 +403,7 @@ class Linear:
 
     def projects(self) -> list[dict]:
         """The active projects (not completed or canceled), each with its milestones: {id, name, projectMilestones}."""
-        q = ('{ projects(first: 100, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
+        q = ('{ projects(first: 50, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
              "{ nodes { id name projectMilestones(first: 50) { nodes { id name } } } } }")
         return self.gql(q)["projects"]["nodes"]
 
@@ -826,9 +850,11 @@ class Linear:
 
 
 def ask_issue(owner: str, sender: str, body: str, linear: Any = None, parent: str | None = None,
-              title: str | None = None, asker: str | None = None) -> tuple[dict | None, str | None]:
-    """`msg ask`'s issue: (issue, None), or (None, why) when it couldn't be filed, so the ask still goes out on Slack."""
+              title: str | None = None, asker: str | None = None, label: str | None = None) -> tuple[dict | None, str | None]:
+    """`msg ask`'s issue, on its parent's board or else its team's current milestone: (issue, None), or (None, why) when it
+    couldn't be filed, so the ask still goes out on Slack."""
     try:
-        return (linear or Linear()).file(owner, sender, body, parent=parent, title=title, asker=asker), None
+        return (linear or Linear()).file(owner, sender, body, parent=parent, title=title, asker=asker, label=label,
+                                         current=True), None
     except (LinearError, OSError, ValueError) as e:
         return None, str(e)

@@ -1,7 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Headline
-public import Proofs.Flock.Soundness.CROnly.Link
+public import Proofs.Flock.Soundness.CROnly.Defs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Binding.E2E
+import Proofs.Flock.Soundness.CROnly.Link
 
 /-!
 # The end-to-end theorems under `cr/sha-512` alone
@@ -34,7 +37,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 section Generic
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)

@@ -3,6 +3,7 @@ module
 public import PousCheck.RunProtocol
 public import MemoryChallenger.WipeProtocol
 public import Properties.Pous.EndToEndAt
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS and the wipe as components: what their compiled checks' acceptance gives the guarantees

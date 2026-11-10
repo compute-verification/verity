@@ -23,7 +23,7 @@ sessions of `streamed_wipe.WipeMemoryChallenger` (sequential reads, batch size 1
   Expect reject.
 - `resume-untimed`: the same under a 10-minute deadline with `UNTIMED_TRIES` keys searched at the first read.
   Expect reject: the deadline isn't what stops it.
-- `key-leak` (a premise broken): the prover is handed `K`, as a memory challenger on the prover's own machine can
+- `key-leak` (a premise broken): the prover is handed `K`, as a memory challenger on the developer's own machine can
   leak it. It keeps SHA-512's state after `LABEL_TAG ‖ K` and prior content in the whole store, and answers a read
   with one compression. Expect accept: the attack's mechanism, once the resume state is the prover's.
 - `untiered` (a premise broken): every label kept in memory the commitment doesn't declare, prior content in the

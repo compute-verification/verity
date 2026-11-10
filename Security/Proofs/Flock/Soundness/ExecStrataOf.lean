@@ -1,7 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.ExecStratified
-public import Proofs.Flock.Soundness.Refine.Setup
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The strata the verifier accepts are a partition's

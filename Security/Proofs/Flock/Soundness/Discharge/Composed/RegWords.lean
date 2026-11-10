@@ -1,10 +1,25 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Composed.Coined
-public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
-public import Proofs.Flock.Soundness.Discharge.Hidden.Public
-public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
-public import Proofs.Flock.Soundness.BindSound
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Layout.Region
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # A valid witness's registered values are the public ones
@@ -58,6 +73,7 @@ theorem whole_push {out : Array Flock.Region} {r : Flock.Region} (h1 : ∀ x ∈
   · exact h1 x hx
   · exact h2
 
+-- `split` at every branch of `HmRow.regions`' unfolded do-block, a bind step per region
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.regions`' regions are whole-word** once the output is the unit's and the circuit untyped: each port's
 "digest p" (`Layout.hmFree`) and the unit's "out" (`Circuit.outRegion`). -/

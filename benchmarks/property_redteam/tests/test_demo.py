@@ -23,7 +23,12 @@ CENSUS = {
 
 @pytest.fixture(scope="module")
 def prims():
+<<<<<<< 94ca7fd0d18
     return D.load_registry()
+||||||| e10cf2c8559
+=======
+    return D.primitives()
+>>>>>>> 7af4d24fca3e
 
 
 @pytest.mark.parametrize("carry", sorted(CENSUS))

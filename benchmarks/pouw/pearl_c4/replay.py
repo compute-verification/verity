@@ -54,9 +54,9 @@ from verity.ml.commitments import Commitment, MerkleTree, Opening
 
 from verity.core.protocols.pouw import audit as au
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, tagged
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
 from verity_config.settings import of
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
@@ -184,6 +184,7 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
         raise ValueError(f"{len(leaves)} bytes of leaves are not {len(refs)} tile leaves")
     tree = MerkleTree(au.transcript_domain(epoch, len(refs), s.commitment_hash), {i: leaves[32 * i:32 * i + 32] for i in range(len(refs))},
                       lambda _: au.TILE_SCHEMA)
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
     tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a, "sha256", public=True)
     tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b, "sha256", public=True)
@@ -194,6 +195,13 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
     tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a, s.commitment_hash)
     tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b, s.commitment_hash)
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+    tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a, s.commitment_hash)
+    tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b, s.commitment_hash)
+=======
+    tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a, s.commitment_hash, public=True)
+    tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b, s.commitment_hash, public=True)
+>>>>>>> 7af4d24fca3e
     real = call["real_rows"]
     fmap, done = _pool(workers, max(1, (real + n) // (4 * max(workers, 1))))
     try:

@@ -1,13 +1,13 @@
 # The inference-only policy
 
 The inference-only policy asks that the registered circuit D have an inference-block partition 𝓘: blocks with gate
-budget c (exactly c gates each) and fresh-input budget k (at most k bits of fresh input each), where fresh input is
+budget c (at most c gates each) and fresh-input budget k (at most k bits of fresh input each), where fresh input is
 every value outside the registered information θ, the models, code and data fixed before the monitoring period. It is
 a protocol with no rounds. Setup fixes θ and the registered compiler B. At the start of each verification phase, before
 any coin, B's output on the reported advice partitions that execution block into inference blocks, and the developer's
-ZK proof that B ran correctly and explains the committed trace can also show that each has c gates and reads at most k
-bits outside θ (`verity/core/protocols/remote/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`, in an older form
-(below), and its check is `NciCheck`.
+ZK proof that B ran correctly and explains the committed trace can also show that each has at most c gates and reads
+at most k bits outside θ (`verity/core/protocols/remote/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`; its
+check, `NciCheck`, decides the policy at a rate, `Nci.CompliesRate` (below).
 
 The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/core/protocols/composition`):
 `NciCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
@@ -31,12 +31,17 @@ scenarios register a policy as if it were a subprotocol.
 ## The Lean
 
 - **The definition**, `Security/Definitions/Nci.lean`. `Nci.Complies c k` says D has a (c, k)-partition
-  (`Verity.Partition.IsCK`): every block exactly c gates, padding included, and at most k fresh input bits
-  (`Nci.novelReads`). `Nci.CompliesRate c α` is the form the check reads: blocks of at most c gates,
-  each reading at most α fresh input bits per gate. A (c, k)-partition complies at rate α = k/c
-  (`Nci.SecurityProofs.compliesRate_of_complies`), and each guarantee is stated at (c, k). The way back is proved
-  too: `Nci.Guarantees.CompliesCK` pads a partition complying at rate α into a (c, ⌊αc⌋)-partition, and
-  `Nci.Guarantees.ExpandComplies` carries the rate through the bit-level expansion at c·W for gates up to W bits wide.
+  (`Verity.Partition.IsCK`): every block at most c gates and at most k fresh input bits (`Nci.novelReads`).
+  `Nci.CompliesRate c α` is the form the check reads: blocks of at most c gates, each reading at most α fresh input bits
+  per gate, so at most αc a block. Where the policy's guarantees assume the policy, they assume `Nci.CompliesRate`, what
+  the check checks; `Nci.Guarantees.Inference` concludes `Nci.Complies`. A (c, k)-partition whose blocks have exactly c
+  gates complies at rate α = k/c (`Nci.SecurityProofs.compliesRate_of_complies`, which takes that tiling as a
+  hypothesis). The way back is proved too: on a Boolean declaration a partition complying at rate α is
+  a (c, ⌊αc⌋)-partition (`Nci.Guarantees.CompliesCK`), and `Nci.Guarantees.ExpandComplies` carries the rate through the
+  bit-level expansion at c·W for gates up to W bits wide. With its constants registered
+  (`Verity.RegisteredCircuit.constInputs`) a declaration needs neither Boolean gates nor positive fan-in for those
+  partitions (`Nci.SecurityProofs.constInputs_isCK`, `constInputs_expand_isCK`), which is how the policy's acceptance
+  gives them (`Properties.Remote.PolicyMet`).
 - **The guarantees**, `Security/Definitions/Nci/Guarantees/`, each proved in `Security/Proofs/Nci/` as
   `Nci.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
@@ -49,7 +54,14 @@ scenarios register a policy as if it were a subprotocol.
   `Nci.Guarantees.DampenerRemote` and its relatives state the remote composition's overhead in the older form.
 =======
   `Nci.Guarantees.DampenerRemote` and its relatives state the remote composition's overhead at (c, k).
+<<<<<<< 94ca7fd0d18
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+=======
+- **The count of (c, k)-inference blocks**, `Nci.CompliesAtMost c k n` (`Security/Definitions/Nci.lean`): D's
+  computed gates divide into at most n proof blocks of a (c, k)-partition (`Verity.Partition.IsCK`,
+  `Security/Definitions/Core/Formalism.lean`).
+>>>>>>> 7af4d24fca3e
 - **The registered information's provenance**, `Nci.Assumptions.BaselineRegistered`: every θ entry is registered
   public data, never an earlier run's output.
 
@@ -64,9 +76,22 @@ nothing else but Lean core and the core interface (`core_protocol`).
 - `nci-check --count` runs `NciCheck.Count.check`, the count of (c, k)-inference blocks: the declaration names its block
   Definitions by descriptor key, and the check gives each one's Boolean gates (from a per-primitive gate table), its
   fresh input bits outside θ and its blocks, multiplied through batches and scans, and the root's total against n.
+<<<<<<< 94ca7fd0d18
   `NciCheck.Properties.DescCountsCK` (`Security/Properties/Nci/Count.lean`) states that an accepted count means
   `Nci.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. `nci-count-difftest` holds
   it to the Python reference's `check_count` (`lean/scripts/nci_reference.py`), run by
+||||||| e10cf2c8559
+=======
+  - Public: the judgment against n, `{"complies": true|false}`, or the refusal (`{"error": code}`, with a `message`
+    for some codes).
+  - Not public: the rows (each block Definition's gates, fresh bits and blocks), the total and which block failed.
+    `nci-check --count --detail` prints that whole verdict (`NciCheck.Count.checkDetail`) for the private record
+    only.
+
+  `NciCheck.Properties.DescCountsCK` (`Security/Properties/Nci/Count.lean`) states that a published `complies` means
+  `Nci.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. `nci-count-difftest` holds
+  both forms to the Python reference's `check_count` and `check_count_detail` (`lean/scripts/nci_reference.py`), run by
+>>>>>>> 7af4d24fca3e
   `../tests/test_nci_count_difftest.py`.
 - `nci-check --unrolled` runs the same with `NciCheck.check`, the check gate by gate, kept as the reference; its input
   format is in `NciCheck.Check`'s docstring. `nci-check --policy` runs the policy's check alone, without θ's

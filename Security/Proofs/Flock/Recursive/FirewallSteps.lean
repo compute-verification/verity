@@ -1,9 +1,8 @@
 module
 
-public import Flock.Firewall.Honest
-public import Proofs.Flock.Recursive.FirewallTemplate
-public import Proofs.Flock.Recursive.FirewallWire
 public import Proofs.Flock.Recursive.FirewallObj
+public import Proofs.Flock.Recursive.FirewallRun
+import Proofs.Flock.Recursive.FirewallWire
 
 /-!
 # The ZK server's steps on requests it takes

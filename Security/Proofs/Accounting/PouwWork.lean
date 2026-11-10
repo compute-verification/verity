@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.PouwWork
 public import Definitions.Pouw.Guarantees.Game
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # PoUW's work lower bound on an isolated node (proof)
@@ -22,7 +23,7 @@ namespace PouwWork
 
 theorem pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : ∀ x, E x → F x) : Pouw.pr E ≤ Pouw.pr F := by
   classical
-  unfold Pouw.pr
+  unfold Pouw.pr Claims.Pr Claims.prUniform
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hsub : (univ.filter E) ⊆ univ.filter F := fun x hx => by
     simp only [mem_filter, mem_univ, true_and] at hx ⊢
@@ -32,7 +33,7 @@ theorem pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : ∀ x, E x →
 theorem pr_or_le {α : Type} [Fintype α] (E F : α → Prop) :
     Pouw.pr (fun x => E x ∨ F x) ≤ Pouw.pr E + Pouw.pr F := by
   classical
-  unfold Pouw.pr
+  unfold Pouw.pr Claims.Pr Claims.prUniform
   rw [← add_div]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hsub : (univ.filter fun x => E x ∨ F x) ⊆ univ.filter E ∪ univ.filter F := fun x hx => by

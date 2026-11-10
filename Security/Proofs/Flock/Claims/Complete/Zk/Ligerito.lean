@@ -1,8 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Prover.Ligerito
-public import Proofs.Flock.Claims.Complete.Zk.Tape
-public import Flock.With.Zk
+public import Flock.Zk
 
 /-!
 # The masked prover's Ligerito opening

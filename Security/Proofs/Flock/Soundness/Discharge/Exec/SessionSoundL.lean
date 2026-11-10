@@ -2,7 +2,11 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
-public import Proofs.Flock.Soundness.Session
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.CompiledAlign
+import Proofs.Flock.Soundness.Extract
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Soundness
 
 /-!
 # A salted table inside a batched session

@@ -58,17 +58,16 @@ print(v.profile().statement())                                                 #
 ~~~
 
 On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device
-on a machine the prover doesn't control at the prover's site (the auditor's own VM or box, under the auditor's account),
-never a process on the prover's node. It commits its indices in a coin tree it keeps until the session is signed, hashes
-each whole answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's
-leaf, which `answer_circuit.py` opens), and signs the session's round records once, under a header bound to the setup's
-root of `C*`; only then does it release the coin tree's root (`commitment`) and its openings.
-A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has used. `verdict` checks a
-signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`
-(`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused. `verdict_circuit`'s
-`PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof block, its one output bit the public verdict: 1
-iff at most `M` of the `K` rounds miss, a round hitting when its record names it, is on time within `LIMIT` and holds
-the expected digest of its block (`PousVerdict.verdictProg_accepts`, `Security/Proofs/Pous/Continuous/Verdict.lean`).
+on a machine the developer doesn't control at the developer's site (the auditor's own VM or box, under the auditor's account),
+never a process on the developer's node. It commits its indices in a coin tree before the session, hashes each whole
+answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's leaf, which
+`verity/ml/protocols/pous/answer_circuit.py` opens), and signs the session's round records once, under a header bound
+to the setup's root of `C*`. A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has
+used. `verdict` checks a signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at
+`lms.DEPLOYED` (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
+`verity.ml.protocols.pous.verdict_circuit`'s `PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof
+block, its one output bit the public verdict: 1 iff at most `M` of the `K` rounds miss, a round hitting when its record
+names it, is on time within `LIMIT` and holds the expected digest of its block (`PousVerdict.verdictProg_accepts`, `Security/Proofs/Pous/Continuous/Verdict.lean`).
 Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`), are `verdictProg` gate for gate
 (`Security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
 compiled circuit to that code.
@@ -150,7 +149,7 @@ On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: t
 before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
 `foreign_bytes` makes the prover the cheat that keeps prior content in place of the fill's first labels (`fM`: one label
-past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the prover's node the stand-in for
+past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the developer's node the stand-in for
 one on its own host. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe

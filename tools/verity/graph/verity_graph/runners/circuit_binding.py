@@ -45,14 +45,14 @@ def cache() -> Path:
     return Path.home() / ".cache" / "verity-check" / "circuit-check"
 
 
-def checker(task: dict, work: Path, *args: str) -> tuple[int, dict | None]:
-    """`circuit-check ARGS` from the root on the task's cores and memory, its report in the work directory: (its exit, the
-    report, None when it wrote none)."""
+def checker(task: dict, work: Path, *args: str, env: dict[str, str] | None = None) -> tuple[int, dict | None]:
+    """`circuit-check ARGS` from the root on the task's cores and memory in ``env`` (this process's when None), its report in
+    the work directory: (its exit, the report, None when it wrote none)."""
     out = work / REPORT
     out.unlink(missing_ok=True)
     r = task["resources"]
     rc = call([sys.executable, "-m", "circuit_check", *args, "-q", "--jobs", str(max(1, int(r["cores"]))),
-               "--mem-gb", str(max(1, int(r["mem_gb"]))), "--out", str(out)], work, ROOT)
+               "--mem-gb", str(max(1, int(r["mem_gb"]))), "--out", str(out)], work, ROOT, env)
     try:
         return rc, json.loads(out.read_text())
     except (OSError, ValueError):

@@ -8,9 +8,17 @@ or `run.sh`.
 
 ## The remote protocol
 
+<<<<<<< 94ca7fd0d18
 Remote Verity (`verity/remote/v1`, `Core.Remote.V1` in `verity/core/protocols/remote/CoreRemote.lean`) is what the
 verifier establishes with no hardware of its own at the prover's site. It composes three protocols
 (`Core.Remote.V1.components`):
+||||||| e10cf2c8559
+Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/core/protocols/remote/CoreRemote.lean`) is what the verifier
+establishes with no hardware of its own at the prover's site. It composes three protocols (`Core.Remote.components`):
+=======
+Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/core/protocols/remote/CoreRemote.lean`) is what the verifier
+establishes with no hardware of its own at the developer's site. It composes three protocols (`Core.Remote.components`):
+>>>>>>> 7af4d24fca3e
 
 - integrity, by sampled proofs (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled
@@ -54,8 +62,8 @@ sampled proofs and PoUW on the served model, whose PoUW verdict is a development
 remote's sampled-proofs half. The inference-only policy runs in `lifecycle/` only: no served run produces the declared
 =======
 guarantee assumes; each subprotocol states its guarantee in `Security/`, and the composite states none of its own in Lean
-yet, so no demo's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
-Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only demo that steps through the whole remote composite, on CPU with a
+yet, so no demo's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet. `lifecycle/` is the
+only demo that steps through the whole remote composite, on CPU with a
 stand-in prover. Its demo is the vLLM demo (`verity demo vllm`): one served run of Llama-3.2-1B INT8 on one H200,
 sampled proofs and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs
 remote's sampled-proofs half. The inference-only policy runs in `lifecycle/` only: no served run produces the declared
@@ -71,7 +79,7 @@ A demo stands on two independent axes, and its `demo.toml` gives each. `run` is 
 | --- | --- | --- |
 | `moved` | its workload, placement and commands, and no end-to-end run yet | none |
 | `runs` | an end-to-end run: a run of record on its hardware, or a CPU test that runs it with stand-ins | a run of record (`runs`: `rYYYYMMDD-HHMMSS-xxxx` or `art:` ids), or a CPU test in a suite that runs it (`tests`: `PATH::NAME`) |
-| `placed` | a run of record where the auditor's parties run on machines the prover doesn't control | a run on a placement that puts every auditor role (`verifier`, `challenger`, `certifier`, `memory_challenger`) on `auditor-host`, and none of the prover's |
+| `placed` | a run of record where the auditor's parties run on machines the developer doesn't control | a run on a placement that puts every auditor role (`verifier`, `challenger`, `certifier`, `memory_challenger`) on `auditor-host`, and none of the developer's |
 
 `proof` is how far its guarantee is proved: a proof needs no run, and a run needs no proof.
 
@@ -80,7 +88,7 @@ A demo stands on two independent axes, and its `demo.toml` gives each. `run` is 
 | `none` | none |
 | `stated` | `guarantee` listed in a `lean-audit.json`, with its `honest` and `nontrivial` lemmas declared in Lean |
 | `proved` | `[evidence] proof`, the guarantee's `<Area>.SecurityProofs.G`, declared in Lean |
-| `measured` | `[evidence.premises]`: each premise, an assumption a lock lists, to the run that measured it |
+| `measured` | `[evidence.premises]`: each premise a lock lists (under `assumptions`, `domain` or `open`), to the run that measured it |
 
 A file that still gives the retired `level` instead of the two axes is read as `run` `moved`, `runs` or `placed` for 0, 1
 or 2, with `proof` `none`.
@@ -107,7 +115,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   through the whole remote composite; its tests (`examples/lifecycle/tests/test_lifecycle.py`) run each composite honest
   and with every deviation it lists refused. Nothing about it is proved.
 - `vllm/` (`run` `moved`, `proof` `none`): the vLLM demo, the remote protocol on a real served model. Llama-3.2-1B INT8
-  served by vLLM on one H200 through `verity_vllm`'s committing endpoint; `verity example vllm` serves one execution phase,
+  served by vLLM on one H200 through `verity_vllm`'s committing endpoint; `verity demo vllm` serves one execution phase,
   commits its values, and audits it through `benchmarks/one_stage/served_verdicts.sh`: live coins sample proof blocks,
   Flock `--zk` proves them and the Lean verifier checks them, PoUW runs on the served model, and onsite's subprotocols
   run where each has its piece. Its run is `moved`: PoUW's verdict is a development run that credits nothing, so no run of

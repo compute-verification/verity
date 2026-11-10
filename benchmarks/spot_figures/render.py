@@ -1,11 +1,16 @@
-"""Figure 1's PNG and SVG for one scope, sampled from `figure1.json` alone, so anything holding the JSON samples the same
-figure: three panels (exfiltration, infiltration, skipped work) against proof overhead, a colour per share of compute
-spent on verification, the panel's headline design solid and its comparisons dashed or dotted, the measured overhead as
-a vertical line, the references as dashed horizontal ones, and each panel's caption from the JSON.  A panel's y-axis
-spans its headline curves and the references up to `OFF_SCALE` above them, so a comparison curve may leave it at the
-top; a reference further up is named at the axis's top, and one at 0 only in the caption.
+"""The bounds against proof overhead as PNG and SVG for one scope, sampled from `figure1_overhead.json` alone, so anything
+holding the JSON samples the same figure: three panels (exfiltration, infiltration, skipped work) against proof overhead,
+a colour per share of compute
+spent on verification, the panel's headline design solid and thick, the uniform two-stage design solid and thin, the
+capped two-stage designs dash-dotted (`CAPPED`, `PATTERNS`; uniform thin), and the other comparisons dashed or dotted,
+the measured overhead as a vertical line, the references as grey horizontal ones in the style the JSON gives each, and
+each panel's caption from the JSON.  The main figure plots the series and references the JSON marks `main`; the
+appendix figure (`appendix_stem`) is the exfiltration panel with every design and the references the main figure
+leaves out.  A panel's y-axis spans its headline curves and the references up to `OFF_SCALE` above them, so a
+comparison curve may leave it at the top; a reference further up is named at the axis's top, and one at 0 is drawn along
+the axis's floor, labelled as at 0.
 
-    uv run python benchmarks/spot_figures/render.py DIR/figure1.json [--scope "world year"] [--out DIR]
+    uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json [--scope "world year"] [--out DIR]
 """
 from __future__ import annotations
 
@@ -22,24 +27,47 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FixedLocator, FuncFormatter, LogFormatterMathtext, NullLocator
 from matplotlib.transforms import offset_copy
 
+from figure1 import PRIMARY
+
 COLORS = ("#9ECAE1", "#3182BD", "#08306B")
-COMPARISON = {"one-stage": (0, (6, 3)), "request": (0, (1.2, 2.4))}
-NAMES = {"two-stage": "Two-stage", "one-stage": "One-stage, dot-product blocks", "request": "Request-level",
+CAPPED, PATTERNS = (0, (7, 2.5, 1.5, 2.5)), (0, (7, 2.5, 1.5, 2.5, 1.5, 2.5))
+COMPARISON = {"one-stage": (0, (6, 3)), "request": (0, (1.2, 2.4)), "two-stage-uniform": "-",
+              "two-stage-capped": CAPPED, "two-stage-capped-uniform": CAPPED, "two-stage-patterns": PATTERNS,
+              "two-stage-patterns-uniform": PATTERNS}
+#: a comparison's line width; the headline's is `HEADLINE_LW`
+THIN = {"two-stage-uniform": 1.2, "two-stage-capped": 2.6, "two-stage-capped-uniform": 1.2,
+        "two-stage-patterns": 2.6, "two-stage-patterns-uniform": 1.2}
+HEADLINE_LW, COMPARISON_LW = 3.2, 1.8
+NAMES = {"two-stage": "Two-stage, width-stratified", "two-stage-uniform": "Two-stage, uniform",
+         "two-stage-capped": "Capped at served bits, width-stratified",
+         "two-stage-capped-uniform": "Capped at served bits, uniform",
+         "two-stage-patterns": "Served patterns, width-stratified",
+         "two-stage-patterns-uniform": "Served patterns, uniform",
+         "one-stage": "One-stage, dot-product blocks", "request": "Request-level",
          "layer_of_token": "Deferred interiors, a layer of a token"}
+REFERENCE_STYLE = {"solid": "-", "dashed": (0, (4, 3))}
 VERTICAL = "#E69F00"
-PRIMARY = "world year"
 #: a reference line this far above the headline curves' top is named at the top of the axis instead of stretching it
 OFF_SCALE = 1e3
 #: reference lines within this relative distance coincide on the plot
 COINCIDENT = 0.02
-#: the least gap, in the axis's height, between two labels on one side
-LABEL_GAP = 0.045
+#: how far up its axis, in the axis's height, a reference line at 0 is drawn
+FLOOR = 0.012
+#: where a reference line's label may go, the axis's side it is aligned to and above or below its line; it takes the
+#: first that leaves the axis least, then overlaps the fewest labels already placed, then crosses the fewest other lines
+SPOTS = (("left", "bottom"), ("right", "bottom"), ("left", "top"), ("right", "top"))
+#: how far below its axis, in the axis's height, a caption starts; the appendix's budget legend starts there beside it
+CAPTION_DROP = 0.17
 PANELS = (("exfiltration", "Exfiltration capacity"), ("infiltration", "Infiltration"),
           ("skipped_work", "Skipped work (H100-hours)"))
 
 
 def stem(scope: str) -> str:
-    return "figure1" if scope == PRIMARY else "figure1_" + scope.replace(" ", "_")
+    return "figure1_overhead" if scope == PRIMARY else "figure1_overhead_" + scope.replace(" ", "_")
+
+
+def appendix_stem(scope: str) -> str:
+    return "figure1_overhead_appendix" if scope == PRIMARY else "figure1_overhead_appendix_" + scope.replace(" ", "_")
 
 
 def _bytes(v: float, _pos=None) -> str:
@@ -68,109 +96,204 @@ def _style(design: str, headline: str):
     return "-" if design == headline else COMPARISON[design]
 
 
-def _lines(references: list[dict], scope: str, scale: float) -> list[tuple[float, str]]:
-    """The panel's reference lines in `scope`, scaled and ascending: a line at 0 is in the caption, not here, and lines
-    within `COINCIDENT` of one another are plotted once, under the first one's label."""
-    rows = sorted(((r["value"] if "value" in r else r["by_scope"][scope]) * scale, r["label"]) for r in references
-                  if "value" in r or scope in r["by_scope"])
-    out: list[tuple[float, str]] = []
-    for amount, label in rows:
+def _width(design: str, headline: str) -> float:
+    return HEADLINE_LW if design == headline else THIN.get(design, COMPARISON_LW)
+
+
+def _lines(references: list[dict], scope: str, scale: float) -> list[tuple[float, str, str]]:
+    """The panel's reference lines in `scope`, scaled and ascending, each with its style: a line at 0 is `_floor`'s,
+    not here, and lines within `COINCIDENT` of one another are plotted once, under the first one's label."""
+    rows = sorted(((r["value"] if "value" in r else r["by_scope"][scope]) * scale, r["label"], r.get("style", "dashed"))
+                  for r in references if "value" in r or scope in r["by_scope"])
+    out: list[tuple[float, str, str]] = []
+    for amount, label, style in rows:
         if amount > 0 and not (out and amount <= out[-1][0] * (1 + COINCIDENT)):
-            out.append((amount, label))
+            out.append((amount, label, style))
     return out
 
 
-def render(out: dict, scope: str, outdir: Path) -> list[Path]:
-    """Sample `scope`'s figure from `out` into `outdir` as `stem(scope)`.png and .svg; returns their paths."""
+def _zeros(references: list[dict], scope: str) -> list[tuple[str, str]]:
+    """The panel's reference lines at 0 in `scope`, each with its style."""
+    return [(r["label"], r.get("style", "dashed")) for r in references
+            if ("value" in r or scope in r["by_scope"]) and (r["value"] if "value" in r else r["by_scope"][scope]) <= 0]
+
+
+def _fit(t) -> None:
+    """Wrap `t`, a label placed inside its axis, onto as few balanced lines as keep it inside the axis's width; the
+    axes must be positioned before it is measured."""
+    ax, text = t.axes, t.get_text()
+    renderer = ax.figure.canvas.get_renderer()
+    left, right = ax.get_window_extent(renderer).intervalx
+    for lines in range(1, 6):
+        width = -(-len(text) // lines)
+        while len(textwrap.wrap(text, width)) > lines:
+            width += 1
+        t.set_text(textwrap.fill(text, width))
+        box = t.get_window_extent(renderer)
+        if (box.x1 <= right) if t.get_horizontalalignment() == "left" else (box.x0 >= left):
+            return
+
+
+def _floor(ax, zeros: list[tuple[str, str]], styles: dict, fontsize: int) -> list:
+    """Draw each line at 0, which a log axis has no place for, along the axis's floor, its label saying it is at 0; the
+    panel leaves the decade above the floor clear of its curves for them.  Returns the labels."""
+    labels = []
+    for i, (label, style) in enumerate(zeros):
+        y = FLOOR * (1 + 3 * i)
+        ax.plot([0, 1], [y, y], transform=ax.transAxes, color="#909090", ls=styles[style], lw=1.3, zorder=1)
+        labels.append(ax.text(.01, y + FLOOR / 2, f"{label}: 0, on the axis's floor", transform=ax.transAxes,
+                              ha="left", va="bottom", fontsize=fontsize, color="#555555", zorder=5,
+                              bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5}))
+        _fit(labels[-1])
+    return labels
+
+
+def _panel(fig, ax, out: dict, scope: str, panel: str, ylabel: str, series: list[dict], references: list[dict],
+           caption: str, wrap: int = 62) -> None:
+    """One panel of `scope`'s figure: `series` and `references`, the panel's that the figure plots, with `caption`
+    under it."""
+    v, p = out["vertical"], out["panels"][panel]
+    colors = dict(zip(out["budgets"], COLORS))
+    lo_x, hi_x = out["inputs"]["overheads"]["value"]
+    ax.set_xscale("log")
+    ax.set_xlim(lo_x, hi_x)
+    ax.xaxis.set_major_locator(FixedLocator(_decades(lo_x, hi_x, 3) + [hi_x]))
+    ax.xaxis.set_major_formatter(LogFormatterMathtext())
+    ax.xaxis.set_minor_locator(NullLocator())
+    ax.set_xlabel("Marginal proof overhead", labelpad=8)
+    ax.set_ylabel(ylabel, labelpad=8)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    ax.text(0, -CAPTION_DROP, textwrap.fill(caption, wrap), transform=ax.transAxes, ha="left", va="top", fontsize=15,
+            color="#444444")
+    ax.axvline(v["x"], color=VERTICAL, lw=2.2, zorder=2)
+    if not series:
+        ax.set_yticks([])
+        ax.text(.5, .5, "Pending", transform=ax.transAxes, ha="center", va="center", fontsize=26, color="#909090")
+        return
+    scale = 1 / 8 if p["unit"] == "bit" else 1 / out["inputs"]["h100_hour_flop"]["value"]
+    fmt = _bytes if p["unit"] == "bit" else _power
+    refs = _lines(references, scope, scale)
+    ys = [y * scale for s in series for y in s["y"]]
+    head = [y * scale for s in series if s["design"] == p["headline"] for y in s["y"]] or ys
+    above = [r for r in refs if r[0] > max(head) * OFF_SCALE]
+    refs = [r for r in refs if r not in above]
+    top = head + [r[0] for r in refs]
+    lo, hi = 10.0 ** floor(log10(min(ys + top))), 10.0 ** (floor(log10(max(top))) + 1)
+    zeros = _zeros(references, scope)
+    lo /= 10 if zeros else 1
+    ax.set_yscale("log")
+    ax.set_ylim(lo, hi)
+    ax.yaxis.set_major_locator(FixedLocator(_decades(lo, hi, 3 if hi / lo > 1e12 else 2)))
+    ax.yaxis.set_major_formatter(FuncFormatter(fmt))
+    ax.yaxis.set_minor_locator(NullLocator())
+    ax.grid(which="major", color="#E2E2E2", lw=.45)
+    renderer = fig.canvas.get_renderer()
+    frame = ax.get_window_extent(renderer)
+    placed = [t.get_window_extent(renderer) for t in _floor(ax, zeros, REFERENCE_STYLE, 15)]
+
+    def spot(amount: float, label: str, side: str, va: str):
+        t = ax.text(lo_x * 1.5 if side == "left" else hi_x / 1.5, amount, label, ha=side, va=va, fontsize=15,
+                    color="#555555", zorder=5, bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5},
+                    transform=offset_copy(ax.transData, fig=fig, y=3 if va == "bottom" else -3, units="points"))
+        _fit(t)
+        return t, t.get_window_extent(renderer)
+
+    heights = [ax.transData.transform((lo_x, amount))[1] for amount, _, _ in refs]
+    for i, (amount, label, style) in enumerate(refs):
+        ax.axhline(amount, color="#909090", ls=REFERENCE_STYLE[style], lw=1.3, zorder=1)
+        others = heights[:i] + heights[i + 1:]
+        tries = [spot(amount, label, *where) for where in SPOTS]
+        best = min(tries, key=lambda tb: (not (frame.y0 <= tb[1].y0 and tb[1].y1 <= frame.y1),
+                                          sum(tb[1].overlaps(b) for b in placed),
+                                          sum(tb[1].y0 < y < tb[1].y1 for y in others)))
+        for t, _ in tries:
+            if t is not best[0]:
+                t.remove()
+        placed.append(best[1])
+    if above:
+        ax.text(lo_x * 1.5, hi, "Above the axis: " + "; ".join(f"{label} ({fmt(a)})" for a, label, _ in above),
+                ha="left", va="top", fontsize=14, color="#555555", wrap=True,
+                transform=offset_copy(ax.transData, fig=fig, y=-4, units="points"))
+    ax.text(v["x"] * 2.5, lo * (16 if zeros else 1.6), v["label"], color=VERTICAL, fontsize=15, ha="left", va="bottom",
+            rotation=90)
+    for s in series:
+        headline = s["design"] == p["headline"]
+        ax.plot(s["x"], [y * scale for y in s["y"]], color=colors[s["budget"]], ls=_style(s["design"], p["headline"]),
+                lw=_width(s["design"], p["headline"]), zorder=4 if headline else 3)
+    designs = list(dict.fromkeys(s["design"] for s in series))
+    rests = p.get("capped", {})
+    ax.legend([plt.Line2D([], [], color="#333333", ls=_style(d, p["headline"]), lw=THIN.get(d, 2.4)) for d in designs],
+              [NAMES[d] + (f" ({rests[d]['status']})" if d in rests else "") for d in designs],
+              loc="lower left", bbox_to_anchor=(0, 1.01), ncol=min(len(designs), 2),
+              frameon=False, fontsize=15, handlelength=2.4, columnspacing=1.2, borderaxespad=0)
+
+
+def _figure(out: dict, scope: str, panels: int, width: float, left: float):
     plt.rcParams.update({"font.family": "serif", "font.serif": ["STIXGeneral", "DejaVu Serif"],
                          "mathtext.fontset": "stix", "font.size": 20, "axes.labelsize": 22, "xtick.labelsize": 18,
                          "ytick.labelsize": 18, "savefig.facecolor": "white", "figure.facecolor": "white"})
-    fig, axes = plt.subplots(1, 3, figsize=(27, 10))
-    fig.subplots_adjust(left=.06, right=.99, bottom=.27, top=.86, wspace=.3)
-    info, v = out["scopes"][scope], out["vertical"]
+    top, bottom = .84 if panels > 1 else .8, .27
+    fig, axes = plt.subplots(1, panels, figsize=(width, 10), squeeze=False)
+    fig.subplots_adjust(left=left, right=.99, bottom=bottom, top=top, wspace=.3)
+    info = out["scopes"][scope]
     colors = dict(zip(out["budgets"], COLORS))
-    lo_x, hi_x = out["inputs"]["overheads"]["value"]
-    for ax, (panel, ylabel) in zip(axes, PANELS):
-        p = out["panels"][panel]
-        series = [s for s in p.get("series", []) if s["scope"] == scope]
-        ax.set_xscale("log")
-        ax.set_xlim(lo_x, hi_x)
-        ax.xaxis.set_major_locator(FixedLocator(_decades(lo_x, hi_x, 3) + [hi_x]))
-        ax.xaxis.set_major_formatter(LogFormatterMathtext())
-        ax.xaxis.set_minor_locator(NullLocator())
-        ax.set_xlabel("Marginal proof overhead", labelpad=8)
-        ax.set_ylabel(ylabel, labelpad=8)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-        ax.text(0, -.17, textwrap.fill(info["captions"][panel], 62), transform=ax.transAxes, ha="left", va="top",
-                fontsize=15, color="#444444")
-        ax.axvline(v["x"], color=VERTICAL, lw=2.2, zorder=2)
-        if not series:
-            ax.set_yticks([])
-            ax.text(.5, .5, "Pending", transform=ax.transAxes, ha="center", va="center", fontsize=26, color="#909090")
-            continue
-        scale = 1 / 8 if p["unit"] == "bit" else 1 / out["inputs"]["h100_hour_flop"]["value"]
-        fmt = _bytes if p["unit"] == "bit" else _power
-        refs = _lines(p["references"], scope, scale)
-        ys = [y * scale for s in series for y in s["y"]]
-        head = [y * scale for s in series if s["design"] == p["headline"] for y in s["y"]]
-        above = [(a, label) for a, label in refs if a > max(head) * OFF_SCALE]
-        refs = [r for r in refs if r not in above]
-        top = head + [r for r, _ in refs]
-        lo, hi = 10.0 ** floor(log10(min(ys + top))), 10.0 ** (floor(log10(max(top))) + 1)
-        ax.set_yscale("log")
-        ax.set_ylim(lo, hi)
-        ax.yaxis.set_major_locator(FixedLocator(_decades(lo, hi, 3 if hi / lo > 1e12 else 2)))
-        ax.yaxis.set_major_formatter(FuncFormatter(fmt))
-        ax.yaxis.set_minor_locator(NullLocator())
-        ax.grid(which="major", color="#E2E2E2", lw=.45)
-        last = {"left": -1.0, "right": -1.0}
-        for amount, label in refs:
-            ax.axhline(amount, color="#909090", ls=(0, (4, 3)), lw=1.3, zorder=1)
-            at = log10(amount / lo) / log10(hi / lo)
-            gap = {k: at - v for k, v in last.items()}
-            side = "left" if gap["left"] >= LABEL_GAP else max(gap, key=gap.get)
-            last[side] = at
-            ax.text(lo_x * 1.5 if side == "left" else hi_x / 1.5, amount, label, ha=side, va="bottom", fontsize=15,
-                    color="#555555", transform=offset_copy(ax.transData, fig=fig, y=3, units="points"), zorder=5,
-                    bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
-        if above:
-            ax.text(lo_x * 1.5, hi, "Above the axis: " + "; ".join(f"{label} ({fmt(a)})" for a, label in above),
-                    ha="left", va="top", fontsize=14, color="#555555", wrap=True,
-                    transform=offset_copy(ax.transData, fig=fig, y=-4, units="points"))
-        ax.text(v["x"] * 2.5, lo * 1.6, v["label"], color=VERTICAL, fontsize=15, ha="left", va="bottom", rotation=90)
-        for s in series:
-            headline = s["design"] == p["headline"]
-            ax.plot(s["x"], [y * scale for y in s["y"]], color=colors[s["budget"]],
-                    ls=_style(s["design"], p["headline"]), lw=3.2 if headline else 1.8, zorder=4 if headline else 3)
-        designs = list(dict.fromkeys(s["design"] for s in series))
-        ax.legend([plt.Line2D([], [], color="#333333", ls=_style(d, p["headline"]), lw=2.4) for d in designs],
-                  [NAMES[d] for d in designs], loc="lower left", bbox_to_anchor=(0, 1.01), ncol=len(designs),
-                  frameon=False, fontsize=15, handlelength=2.4, columnspacing=1.2, borderaxespad=0)
     where = "the world's compute" if info["who"] == "world" else "a datacenter's compute"
-    fig.text(.06, .985, f"{out['model']} served on all of {where} for a {info['period']}: {_sci(info['gpus'])} H200s, "
+    fig.text(left, .985, f"{out['model']} served on all of {where} for a {info['period']}: {_sci(info['gpus'])} H200s, "
              f"{_sci(info['requests'])} requests", ha="left", va="center", fontsize=23)
+    one = panels == 1
     fig.legend([plt.Line2D([], [], color=colors[b], lw=3.2) for b in out["budgets"]],
-               [f"{b * 100:g}%" for b in out["budgets"]], title="Share of compute for replays and proofs:",
-               loc="center right", bbox_to_anchor=(.99, .985), ncol=4, frameon=False, fontsize=18, title_fontsize=18,
-               alignment="left")
+               [f"{b * 100:g}%" for b in out["budgets"]],
+               title="Share of compute for\nreplays and proofs:" if one else "Share of compute for replays and proofs:",
+               loc="upper right" if one else "center right",
+               bbox_to_anchor=(.99, bottom - CAPTION_DROP * (top - bottom)) if one else (.99, .985),
+               ncol=1 if one else 4, frameon=False, fontsize=18, title_fontsize=18, alignment="left")
+    return fig, list(axes[0])
+
+
+def _save(fig, outdir: Path, name: str) -> list[Path]:
     outdir.mkdir(parents=True, exist_ok=True)
-    paths = [outdir / f"{stem(scope)}.{ext}" for ext in ("png", "svg")]
+    paths = [outdir / f"{name}.{ext}" for ext in ("png", "svg")]
     fig.savefig(paths[0], dpi=200, bbox_inches="tight", pad_inches=.1)
     fig.savefig(paths[1], bbox_inches="tight", pad_inches=.1, metadata={"Date": None})
     plt.close(fig)
     return paths
 
 
+def render(out: dict, scope: str, outdir: Path) -> list[Path]:
+    """Sample `scope`'s main figure from `out` into `outdir` as `stem(scope)`.png and .svg; returns their paths."""
+    fig, axes = _figure(out, scope, 3, 27, .06)
+    captions = out["scopes"][scope]["captions"]
+    for ax, (panel, ylabel) in zip(axes, PANELS):
+        p = out["panels"][panel]
+        _panel(fig, ax, out, scope, panel, ylabel,
+               [s for s in p.get("series", []) if s["scope"] == scope and s.get("main", True)],
+               [r for r in p["references"] if r.get("main", True)], captions[panel])
+    return _save(fig, outdir, stem(scope))
+
+
+def render_appendix(out: dict, scope: str, outdir: Path) -> list[Path]:
+    """Sample `scope`'s appendix figure, the exfiltration panel with every design and the references the main figure
+    leaves out, into `outdir` as `appendix_stem(scope)`.png and .svg; returns their paths."""
+    fig, (ax,) = _figure(out, scope, 1, 15, .1)
+    p = out["panels"]["exfiltration"]
+    _panel(fig, ax, out, scope, "exfiltration", PANELS[0][1], [s for s in p["series"] if s["scope"] == scope],
+           [r for r in p["references"] if not r.get("main", True)],
+           out["scopes"][scope]["captions"]["exfiltration_appendix"], wrap=90)
+    return _save(fig, outdir, appendix_stem(scope))
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("json", type=Path)
-    ap.add_argument("--scope", action="append", help="a scope's name, as figure1.json's `scopes` has it; default all")
+    ap.add_argument("--scope", action="append",
+                    help="a scope's name, as figure1_overhead.json's `scopes` has it; default all")
     ap.add_argument("--out", type=Path, help="default: the JSON's directory")
     args = ap.parse_args(argv)
     out = json.loads(args.json.read_text())
     for scope in args.scope or out["scopes"]:
-        for path in render(out, scope, args.out or args.json.parent):
+        for path in render(out, scope, args.out or args.json.parent) + render_appendix(out, scope,
+                                                                                         args.out or args.json.parent):
             print(path)
 
 

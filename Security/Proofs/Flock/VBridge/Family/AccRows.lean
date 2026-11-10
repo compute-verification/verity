@@ -2,7 +2,20 @@ module
 
 public import Proofs.Flock.VBridge.Family.Ends
 public import Proofs.Flock.VBridge.Family.Opened
-public import Proofs.Flock.VBridge.Family.Registrants
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # VBridge G at V*'s family: `rec-acc`'s rows keyed by their registration, and the openings' tops
@@ -148,12 +161,12 @@ section Two
 open FlockSoundness.Registered (ReadsX TwoOpenings)
 open FlockSoundness.Binding (HmRowsX Collides hm96Pair hm96Pair_spec)
 
-variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : FlockSoundness.Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : FlockSoundness.Binding.Layout P plan tab decode} {rs : HmRowsX lay}
-  {C' : FlockSoundness.Audit.Circuit} {n' : ℕ} {P' : FlockSoundness.Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
+  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : FlockSoundness.Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
   {plan' : Finset (Fin n') → Reg₁ → List (FlockSoundness.TabSpec mPts')}
   {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
   {decode' : FlockSoundness.Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
@@ -165,7 +178,8 @@ theorem opensLeaf_site {p p' : Flock.Registered.Port} (h : site p = site p') :
   simp only [site, Prod.mk.injEq] at h
   obtain ⟨-, hr, hl, -, -, hd, hs⟩ := h
   funext a b c
-  simp only [Flock.Registered.opensLeaf, hr, hl, hd, hs]
+  unfold Flock.Registered.opensLeaf
+  rw [hr, hl, hd, hs]
 
 /-- **`registrants_eq_or_collides` at one registration**: two registered reads of one registration (`site`) at one
 position carry one row's bytes, or their openings collide, or hm96's leaves do (`opensLeaf_site`). -/

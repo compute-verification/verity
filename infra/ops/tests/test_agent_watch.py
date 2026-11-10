@@ -1,4 +1,4 @@
-"""The agent watch (INF-69) frees a held run: RUNNING, its last event a finished tool call, then nothing but heartbeats for
+"""The agent watch frees a held run: RUNNING, its last event a finished tool call, then nothing but heartbeats for
 15 minutes. It cancels the run, starts a 'continue' run on the agent, and records it; it never cancels a long tool call."""
 import io
 import json
@@ -60,7 +60,7 @@ class FakeApi:
 
 
 def held_tool_call(w, run="run-1", cid="c1"):
-    """A tool call as the API streams it: the simple event, then its `interaction_update` twin (18 Oct: 220 of 240)."""
+    """A tool call as the API streams it: the simple event, then its `interaction_update` twin (nearly always)."""
     w.on_event(run, "tool_call", {"callId": cid, "name": "run_terminal_cmd", "status": "running"})
     w.on_event(run, "interaction_update", {"type": "tool-call-started", "callId": cid})
     w.on_event(run, "tool_call", {"callId": cid, "name": "run_terminal_cmd", "status": "completed"})
@@ -166,7 +166,7 @@ def test_the_same_agent_is_freed_at_most_once_an_hour(tmp_path):
 
 
 def test_an_unreadable_run_is_recorded_once_and_the_sweep_goes_on(tmp_path):
-    """18 Oct: a goal run's id (run-goal-...) got 400 from the runs endpoint and stopped every sweep."""
+    """A goal run's id (run-goal-...) gets 400 from the runs endpoint, which must not stop the sweep."""
     api = FakeApi([{"id": "bc-g", "status": "ACTIVE", "latestRunId": "run-goal-x"},
                    {"id": "bc-a", "status": "ACTIVE", "latestRunId": "run-1"}], {"run-1": {"status": "RUNNING"}})
     w, started = W.Watch(api, tmp_path / "events.jsonl", Clock()), []
@@ -182,7 +182,7 @@ def test_an_unreadable_run_is_recorded_once_and_the_sweep_goes_on(tmp_path):
 
 def test_a_run_unreadable_for_an_hour_is_recorded_again_once_for_a_person(tmp_path):
     """The first unreadable line is posted nowhere (a goal run is often brief); one still the latest an hour on is the relay's
-    to ring @top with."""
+    to ring top with."""
     api, clock = FakeApi([{"id": "bc-g", "status": "ACTIVE", "latestRunId": "run-goal-x"}], {}), Clock()
     w, first = W.Watch(api, tmp_path / "events.jsonl", clock), clock.t
     for _ in range(3 * 60):
@@ -194,7 +194,7 @@ def test_a_run_unreadable_for_an_hour_is_recorded_again_once_for_a_person(tmp_pa
 
 
 def test_a_run_stuck_in_creating_or_background_work_is_recorded_once_never_cancelled(tmp_path):
-    """18 Oct: circuits' latest runs sat in CREATING and WAITING_FOR_BACKGROUND_WORK from 09:49Z."""
+    """A coordinator's latest runs can sit in CREATING and WAITING_FOR_BACKGROUND_WORK for hours."""
     clock = Clock(W.epoch("2026-10-18T18:10:00Z"))
     api = FakeApi([{"id": "bc-c", "name": "circuits", "status": "ACTIVE", "latestRunId": "run-c"},
                    {"id": "bc-b", "status": "ACTIVE", "latestRunId": "run-b"},
@@ -258,7 +258,7 @@ def test_a_busy_agent_is_not_counted_as_restarted(tmp_path):
 
 
 def test_an_error_run_is_restarted_once_an_hour_and_three_times_in_a_row_at_most(tmp_path):
-    """vllm, 18 Oct: run after run ended in ERROR within a minute."""
+    """Run after run can end in ERROR within a minute."""
     api, clock, w, started = setup(tmp_path, status="ERROR")
     w.sweep(started.append)
     assert started == [] and [p for p, _ in api.posts] == ["/v1/agents/bc-a/runs"], "restarted once, not twice in the hour"
@@ -281,6 +281,30 @@ def test_an_error_run_is_restarted_once_an_hour_and_three_times_in_a_row_at_most
     clock.t += W.RECANCEL_S
     w.sweep(started.append)
     assert len(api.posts) == 3, "an IDLE agent not changed in 6 h isn't read"
+
+
+def test_an_idle_agent_whose_message_never_became_a_run_is_recorded_dropped_once_for_its_owner(tmp_path):
+    """A message reached a reviewer after its last run FINISHED and never became a run: Cursor shows it in ERROR, the API's
+    latest run reads FINISHED, so no restart sees it. An agent idle since its run ended, or changed within `DROPPED_S`, isn't
+    dropped."""
+    clock = Clock(W.epoch("2026-11-06T05:30:00Z"))
+    api = FakeApi([{"id": "bc-r", "name": "Reviewer review-2", "status": "IDLE", "latestRunId": "run-r",
+                    "updatedAt": "2026-11-06T01:45:11Z"},
+                   {"id": "bc-q", "name": "quiet", "status": "IDLE", "latestRunId": "run-q",
+                    "updatedAt": "2026-11-06T01:33:00Z"}],
+                  {"run-r": {"status": "FINISHED", "updatedAt": "2026-11-06T01:32:53Z"},
+                   "run-q": {"status": "FINISHED", "updatedAt": "2026-11-06T01:32:00Z"}})
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    w.workers["bc-r"] = {"lane": "ci", "handle": "ci"}
+    w.sweep(started.append)
+    clock.t += 60
+    w.sweep(started.append)
+    assert [(r["kind"], r["agent"], r["since"], r["ended"], r.get("owner")) for r in records(tmp_path)] == [
+        ("dropped", "bc-r", "2026-11-06T01:45:11Z", "2026-11-06T01:32:53Z", "ci")]
+    assert api.posts == [], "nothing is restarted: its owner resumes it or relaunches it"
+    api._agents[0]["updatedAt"] = "2026-11-06T05:20:00Z"
+    w.sweep(started.append)
+    assert [r["kind"] for r in records(tmp_path)] == ["dropped", "dropped"], "another dropped message is recorded again"
 
 
 def test_a_restart_seen_running_before_it_errors_still_counts_toward_the_limit(tmp_path):
@@ -352,7 +376,7 @@ def test_the_stream_parses_server_sent_events_until_done(monkeypatch):
 
 
 def test_a_sweeps_reads_stop_at_its_budget_and_its_actions_still_go(monkeypatch):
-    """26 Oct: with the API answering near its 60 s timeout, one sweep's serial reads took 24 min and the cloud watch alerted.
+    """With the API answering near its 60 s timeout, one sweep's serial reads could take 24 min, past the cloud watch's alert.
     A read past `reads_until` raises TimeoutError without asking, one before it waits at most what is left; a POST always goes."""
     class Resp:
         def __enter__(self):
@@ -376,7 +400,7 @@ def test_a_sweeps_reads_stop_at_its_budget_and_its_actions_still_go(monkeypatch)
 
 
 def test_the_agents_listing_halves_its_page_on_each_503_down_to_its_floor(monkeypatch):
-    """27 Oct: GET /v1/agents 503'd at the fixed page of 25 from ~00:00Z while 10 answered, and every sweep failed for 3.5 h."""
+    """GET /v1/agents can 503 at a fixed page of 25 for hours while 10 answers, which would fail every sweep."""
     class Resp:
         def __init__(self, doc):
             self.doc = doc
@@ -456,8 +480,8 @@ def test_api_get_takes_a_shorter_timeout_but_never_a_longer_one(monkeypatch):
 
 
 def test_a_tool_calls_interaction_update_twin_doesnt_hide_a_held_run(tmp_path):
-    """18 Oct, live streams: every `tool_call` completed is followed within milliseconds by an `interaction_update`
-    `tool-call-completed` (220 of 240 sampled). The watch took it for the agent's own text, so no run could ever be held."""
+    """In live streams nearly every `tool_call` completed is followed within milliseconds by an `interaction_update`
+    `tool-call-completed`. Taken for the agent's own text, it would keep any run from ever being held."""
     api, clock, w, started = setup(tmp_path)
     held_tool_call(w)
     w.on_event("run-1", "interaction_update", {"type": "token-delta", "tokens": 3})
@@ -479,10 +503,9 @@ def test_the_status_resent_on_every_reconnect_is_not_activity(tmp_path):
 
 
 def test_background_subagents_neither_hide_a_held_run_nor_count_as_a_long_call(tmp_path):
-    """A cloud `task` call stays `running` in the parent's stream while its subagent works (benchmarks, lean and
-    compute-accounting had four each on 18 Oct, the parent thinking and calling tools meanwhile), and the subagent's progress
-    streams as `tool-call-delta`. A coordinator always has some, so none could be held, and each was recorded as a 45-minute
-    tool call."""
+    """A cloud `task` call stays `running` in the parent's stream while its subagent works (a coordinator often
+    has several, thinking and calling tools meanwhile), and the subagent's progress streams as `tool-call-delta`. Read as the
+    parent's own, no coordinator could be held, and each would be recorded as a 45-minute tool call."""
     api, clock, w, started = setup(tmp_path)
     w.on_event("run-1", "tool_call", {"callId": "t1", "name": "task", "status": "running"})
     w.on_event("run-1", "interaction_update", {"type": "step-started", "stepId": "s2"})
@@ -550,7 +573,7 @@ def test_a_background_wait_with_working_subagents_is_left_alone_and_a_silent_one
 
 
 def test_a_background_wait_on_a_suspended_vm_is_stalled_cancelled_and_continued(tmp_path):
-    """INF-192: compute-accounting's research lane sat WAITING_FOR_BACKGROUND_WORK from 05:26 to 23:40Z on 23 Oct, its VM
+    """A lane can sit WAITING_FOR_BACKGROUND_WORK for most of a day with its VM
     suspended: nothing streamed and its agent's `updatedAt` still. Its local subagents are gone with the VM, so the wait is
     cancelled and continued after 2 h, once an hour at most; 2 h with nothing streamed while the agent moves stays recorded only."""
     api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
@@ -586,7 +609,7 @@ def test_a_worker_finishing_is_not_the_parent_finishing_a_tool_call(tmp_path):
 
 
 def test_a_call_finishing_that_started_before_the_watch_saw_it_is_background_work_in_a_wait(tmp_path):
-    """Shadow run, 20:06Z 18 Oct: memory-accounting's background wait read as after a finished tool call, a worker's `task`
+    """A background wait can read as after a finished tool call, a worker's `task`
     call whose start lay before the stream's replay; an hour without its workers' progress and the watch would cancel it."""
     api, clock, w, started = setup(tmp_path, status="WAITING_FOR_BACKGROUND_WORK")
     w.on_event("run-1", "tool_call", {"callId": "t1", "name": "task", "status": "completed"})
@@ -602,8 +625,8 @@ def test_a_call_finishing_that_started_before_the_watch_saw_it_is_background_wor
 
 
 def test_a_run_behind_one_cancelled_on_arrival_is_followed_and_freed(tmp_path):
-    """memory-accounting, 19:32Z 18 Oct: `latestRunId` was a run created and cancelled within 0.5 s, with run-7bb5675e RUNNING
-    behind it. The watch read only the latest, and dropped a followed run as soon as a newer one appeared."""
+    """`latestRunId` can be a run created and cancelled within 0.5 s, with the working run RUNNING behind it: the watch reads
+    past the latest, and keeps a followed run when a newer one appears."""
     api = FakeApi([{"id": "bc-m", "name": "memory-accounting", "status": "ACTIVE", "latestRunId": "run-1"}],
                   {"run-1": {"status": "RUNNING"}})
     clock, started = Clock(), []
@@ -625,8 +648,8 @@ def test_a_run_behind_one_cancelled_on_arrival_is_followed_and_freed(tmp_path):
 
 
 def test_a_run_creating_behind_the_latest_is_recorded_stuck(tmp_path):
-    """network-accounting, 18 Oct: a goal run RUNNING from 18:27:22Z, a run CREATING behind it from 18:27:29Z, and every later run
-    cancelled on arrival. The latest was always a cancelled one, so 1.5 h passed with nothing recorded (proofs from 08:26Z too)."""
+    """A goal run RUNNING, a run CREATING behind it, and every later run cancelled on arrival: the latest is always a
+    cancelled one, and the CREATING run must still be recorded as stuck."""
     clock = Clock(W.epoch("2026-10-18T19:52:00Z"))
     api = FakeApi([{"id": "bc-n", "name": "network-accounting", "status": "ACTIVE", "latestRunId": "run-z"}],
                   {"run-z": {"status": "CANCELLED"}, "run-y": {"status": "CANCELLED"},
@@ -641,8 +664,8 @@ def test_a_run_creating_behind_the_latest_is_recorded_stuck(tmp_path):
 
 
 def test_a_run_left_creating_with_a_newer_one_started_is_not_stuck(tmp_path):
-    """memory-accounting, 20:01Z 18 Oct: run-6fd1b6c4 CREATING from 19:50:43Z, but run-84157683, created 4 s after it, started
-    and waits on background work: the CREATING one blocks nothing (so does proofs' from 08:26Z, after 15:32Z)."""
+    """A run CREATING while one created seconds after it started and waits on background work: the CREATING one blocks
+    nothing."""
     clock = Clock(W.epoch("2026-10-18T20:05:00Z"))
     api = FakeApi([{"id": "bc-m", "name": "memory-accounting", "status": "ACTIVE", "latestRunId": "run-z"}],
                   {"run-z": {"status": "CANCELLED"},
@@ -657,8 +680,7 @@ def test_a_run_left_creating_with_a_newer_one_started_is_not_stuck(tmp_path):
 
 
 def test_a_run_creating_behind_a_followed_run_is_queued_not_stuck(tmp_path):
-    """infra, 20:07Z 18 Oct: run-1fba26b9 CREATING from 19:56:42Z behind run-87bda329, RUNNING from 19:55:57Z and followed,
-    every later run cancelled on arrival. The CREATING one waits its turn; the watch judges the run ahead of it."""
+    """A run CREATING behind a followed RUNNING one, every later run cancelled on arrival. The CREATING one waits its turn; the watch judges the run ahead of it."""
     clock = Clock(W.epoch("2026-10-18T20:14:00Z"))
     api = FakeApi([{"id": "bc-i", "name": "verity: infra", "status": "ACTIVE", "latestRunId": "run-z"}],
                   {"run-z": {"status": "CANCELLED"},
@@ -671,8 +693,8 @@ def test_a_run_creating_behind_a_followed_run_is_queued_not_stuck(tmp_path):
 
 
 def test_a_run_behind_a_full_page_of_runs_cancelled_on_arrival_is_still_followed(tmp_path):
-    """memory-accounting, 20:40Z 18 Oct: run-84157683 WAITING from 19:50:47Z sat third on the second page of its runs, behind 49
-    runs cancelled on arrival and a CREATING one; the watch read one page, lost the run and recorded the CREATING one stuck."""
+    """A waiting run can sit on the second page of its runs, behind 49 runs cancelled on arrival and a CREATING one: read
+    one page only, the watch would lose the run and record the CREATING one stuck."""
     clock = Clock(W.epoch("2026-10-18T20:40:30Z"))
     arrivals = [f"run-x{i}" for i in range(60)]
     runs = {i: {"status": "CANCELLED", "updatedAt": "2026-10-18T20:30:00.000Z"} for i in arrivals}
@@ -720,8 +742,8 @@ def test_the_stream_of_an_ended_run_is_closed(tmp_path):
 
 
 def test_the_hourly_memory_survives_a_restart_of_the_watch(tmp_path):
-    """The watch restarts on every deploy (six times from 17:58 to 18:24Z on 18 Oct). Its once-an-hour memory and its restart
-    counts were in memory only, so a run that held again was cancelled again after each restart."""
+    """The watch restarts on every deploy (several times an hour on a busy day). Its once-an-hour memory and its restart
+    counts outlive a restart, so a run that holds again isn't cancelled again after each one."""
     api, clock, w, started = setup(tmp_path)
     held_tool_call(w)
     clock.t += W.HELD_S
@@ -1012,7 +1034,7 @@ def test_each_sweeps_status_bytes_go_to_neon_the_table_created_once(tmp_path, ps
 
 
 def test_a_published_t_is_never_overwritten_and_a_different_body_there_is_a_fault(tmp_path, psql, capsys, monkeypatch):
-    """console reads a row as final once written (20:52Z, 18 Oct): a second publish at the same t keeps the first body, and one
+    """console reads a row as final once written: a second publish at the same t keeps the first body, and one
     that differs is printed as a FAULT, once per t; the same body again is silent."""
     pub = W.Publisher(PG_URL)
     first, other = b'{"schema":"verity/agent-watch-status/v1","n":1}\n', b'{"schema":"verity/agent-watch-status/v1","n":2}\n'
@@ -1074,8 +1096,8 @@ FINISHED = {"status": "FINISHED", "createdAt": "2026-10-18T19:10:00Z", "updatedA
 
 
 def coordinators(tmp_path, agents, runs, wake=False, bells=None, older=None, workers=None, timers=..., **kw):
-    """The registry: CO holds @circuits (its lane LANE posts as it), and @vllm still names OLD, though NEW holds vllm's inbox
-    (routes.d), as on 18 Oct. Both declare a 15-minute duty timer (`timers`; None writes no file). The watch over `agents`
+    """The registry: CO holds circuits (its lane LANE posts as it), and vllm still names OLD, though NEW holds vllm's inbox
+    (routes.d), as after a handover. Both declare a 15-minute duty timer (`timers`; None writes no file). The watch over `agents`
     (`older` as in FakeApi)."""
     reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
     reg.write_text(json.dumps({"handles": [
@@ -1151,7 +1173,7 @@ def test_an_archived_coordinator_is_never_woken(tmp_path):
 
 
 def test_a_coordinator_left_in_background_work_is_ready_to_wake(tmp_path):
-    """19:38Z, 18 Oct: 12 of 14 coordinators sat in WAITING_FOR_BACKGROUND_WORK between wakes, so a missed timer leaves that."""
+    """Coordinators mostly sit in WAITING_FOR_BACKGROUND_WORK between wakes, so a missed timer leaves that."""
     run = {"status": "WAITING_FOR_BACKGROUND_WORK", "createdAt": "2026-10-18T19:00:00Z", "updatedAt": "2026-10-18T19:40:00Z"}
     api, clock, w = coordinators(tmp_path, [{"id": NEW, "status": "ACTIVE", "latestRunId": "run-b"}], {"run-b": run})
     started = []
@@ -1233,8 +1255,8 @@ def test_wake_starts_one_run_an_hour(tmp_path):
 
 
 def test_a_coordinator_whose_latest_run_was_cancelled_on_arrival_is_judged_by_the_run_behind_it(tmp_path):
-    """W1-1. vllm, 20:23Z 18 Oct: its run FINISHED, then a doorbell mid-turn made a run cancelled within 0.5 s, and that is its
-    latestRunId (7 of 21 live agents read so). Judged by latestRunId, a coordinator whose timer then fails is never woken."""
+    """A run FINISHED, then a doorbell mid-turn made a run cancelled within 0.5 s, and that is its latestRunId (a third
+    of live agents read so). Judged by latestRunId, a coordinator whose timer then fails is never woken."""
     on_arrival = {"status": "CANCELLED", "createdAt": "2026-10-18T19:19:59.500Z", "updatedAt": "2026-10-18T19:20:00.000Z"}
     agents = [{"id": NEW, "status": "ACTIVE", "latestRunId": "run-x"},
               {"id": CO, "status": "IDLE", "latestRunId": "run-y"}]                 # IDLE for long: the sweep reads only latest
@@ -1253,8 +1275,8 @@ def test_a_coordinator_whose_latest_run_was_cancelled_on_arrival_is_judged_by_th
 
 
 def test_a_wake_refused_with_409_is_recorded_once_and_tried_again_in_an_hour(tmp_path):
-    """W1-2. memory-accounting, 18 Oct: zombie CREATING runs from 19:50Z, so the API called it busy for hours. A wake whose 409
-    dropped the hour's memory was posted every sweep, and nothing was recorded."""
+    """Zombie CREATING runs make the API call an agent busy for hours. A wake refused with 409 counts as the hour's, so it
+    is recorded, and not posted every sweep."""
     api, clock, w = coordinators(tmp_path, [{"id": CO, "status": "IDLE", "latestRunId": "run-f"}], {"run-f": dict(FINISHED)},
                                  wake=True)
     tries = []
@@ -1293,7 +1315,7 @@ def test_the_terminal_run_cache_and_the_runs_already_judged_are_kept_apart(tmp_p
     """W1-6. W1's watch cached terminal run records in `done`, which here is the runs judged once (state.json: run -> when). One
     dict for both: an ERROR run read is never restarted, state.json fills with records, and a cached record that dropped
     `updatedAt` reads as never active."""
-    agents = [{"id": CO, "status": "IDLE", "latestRunId": "run-f", "updatedAt": W.iso(T0)},
+    agents = [{"id": CO, "status": "IDLE", "latestRunId": "run-f", "updatedAt": FINISHED["updatedAt"]},
               {"id": "bc-e", "status": "IDLE", "latestRunId": "run-e", "updatedAt": W.iso(T0)}]
     api, clock, w = coordinators(tmp_path, agents, {"run-f": dict(FINISHED), "run-e": {"status": "ERROR"}}, wake=True)
     w.sweep(lambda r: None)
@@ -1356,8 +1378,34 @@ def test_workers_are_found_in_recent_notes_and_workers_d_minus_the_coordinators(
     assert found[W1_]["heard"] == T0 - 60
 
 
+def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_lane(tmp_path):
+    """A pool reviewer is a worker the list doesn't show: read by id, it is IDLE and moved 12 min after its latest run
+    FINISHED, which Cursor shows as ERROR. Its lane's handle is rung, once per `updatedAt`."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits reviewer ({W1_})")
+    idle = {**worker("IDLE", "2026-10-18T19:45:00Z", name="Reviewer review-2"), "latestRunId": "run-w"}
+    api, clock, w = coordinators(tmp_path, [], {"run-w": {"status": "FINISHED", "updatedAt": "2026-10-18T19:32:53Z"}},
+                                 workers={W1_: idle}, notes=notes)
+    w.sweep(lambda r: None)
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert [(r["kind"], r["agent"], r["run"], r["since"], r["ended"], r.get("owner"), r.get("role")) for r in records(tmp_path)
+            if r["kind"] == "dropped"] == [
+        ("dropped", W1_, "run-w", "2026-10-18T19:45:00Z", "2026-10-18T19:32:53Z", "circuits", "worker")]
+
+
+def test_the_workers_heard_most_recently_are_read_first_when_more_are_new_than_a_sweep_reads(tmp_path, monkeypatch):
+    """A backlog of workers heard days ago, sorted ahead by id, kept a reviewer heard today from being read for hours."""
+    monkeypatch.setattr(W, "WORKERS_NEW", 1)
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("IDLE", "2026-10-18T19:00:00Z"),
+                                                           W2_: worker("IDLE", "2026-10-18T19:00:00Z")})
+    w.workers = {W1_: {"heard": T0 - 5 * 86400 + 60, "lane": "x"}, W2_: {"heard": T0 - 60, "lane": "x"}}
+    w.sweep(lambda r: None)
+    assert f"/v1/agents/{W2_}" in api.gets and f"/v1/agents/{W1_}" not in api.gets
+
+
 def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
-    """20:06-20:47Z, 18 Oct: all 20 of proofs' workers stopped mid-step and nobody noticed until 23:08Z. A worker's updatedAt
+    """A lane's workers can all stop mid-step unnoticed. A worker's updatedAt
     moves on a status change, so the IDLE read gives when it stopped."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})")
@@ -1393,7 +1441,7 @@ def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
 
 
 def test_a_worker_whose_parent_got_its_task_result_is_not_recorded_idle_and_one_resumed_later_is(tmp_path):
-    """INF-277: a worker that ended its turn by reporting back (its parent's Task call completed as it stopped) needs no one,
+    """A worker that ended its turn by reporting back (its parent's Task call completed as it stopped) needs no one,
     whether the result streams in before the IDLE read or while the record is held; resumed (its Task call running again) and
     stopped without a result, it is recorded as before."""
     notes = tmp_path / "notes"
@@ -1502,8 +1550,8 @@ def test_worker_reads_are_bounded_and_a_long_idle_worker_is_read_only_when_a_not
 
 
 def test_idle_time_wakes_only_a_handle_that_declares_a_timer_and_a_doorbell_wakes_any(tmp_path):
-    """INF-90, 00:06Z 19 Oct: the watch woke comms for 'nothing has run for 31 min', but comms has no recurring timer by design
-    (it wakes on its inbox, COMM issue events and one-shot timers) and every doorbell had been handled. Here vllm plays comms
+    """A handle with no recurring timer by design (comms wakes on its inbox, issue events and one-shot timers) is never
+    woken for 'nothing has run for 31 min' when every doorbell has been handled. Here vllm plays comms
     (no timer declared) and circuits plays infra (900 s)."""
     finished = {"status": "FINISHED", "createdAt": "2026-10-18T18:55:00Z", "updatedAt": "2026-10-18T19:00:00Z"}
     agents = [{"id": NEW, "status": "IDLE", "latestRunId": "run-v"}, {"id": CO, "status": "IDLE", "latestRunId": "run-c"}]
@@ -1545,8 +1593,7 @@ def test_every_declared_timer_is_a_registry_handle_with_a_positive_interval():
 
 
 def test_an_agent_not_on_veritys_repository_is_never_acted_on_or_shown(tmp_path):
-    """02:21Z 19 Oct: the watch restarted Daniel's own 'Open calendar for Calendly' (repos null): the key sees every agent on
-    the account. One on another repository, or none, is never streamed, cancelled, restarted or woken, and isn't a status row."""
+    """The key sees every agent on the account, including a person's own (repos null). One on another repository, or none, is never streamed, cancelled, restarted or woken, and isn't a status row."""
     other = [{"url": "https://github.com/someone/calendly-helper"}]
     agents = [{"id": "bc-run", "status": "ACTIVE", "latestRunId": "run-1", "repos": other},
               {"id": "bc-err", "status": "IDLE", "latestRunId": "run-e", "updatedAt": W.iso(T0), "repos": None},
@@ -1689,8 +1736,99 @@ def test_a_push_to_the_branch_a_worker_moved_its_task_to_is_its_activity(tmp_pat
         and not W.same_task("cursor/lean-one18-fc8d", "cursor/lean-one18-9f2a")
 
 
+def test_a_research_run_a_worker_sent_is_its_activity_at_its_start_and_at_its_end(tmp_path):
+    """lean and circuits workers waiting on two-hour checks were rung silent while their runs ran. The start of a run the
+    worker sent, read while it runs, and its end are its activity; reading it while it runs doesn't use up its end's ring."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    (notes / "machines.d").mkdir(parents=True)
+    root = tmp_path / "vy-nebius-1"
+    (notes / "machines.d" / "vy-nebius-1.toml").write_text(
+        f'provider = "ssh"\nhost = "vy-nebius-1.example"\nuser = "research"\nproject = "verity"\nroot = "{root}"\n')
+    (tmp_path / "nodes.json").write_text(json.dumps({"nodes": ["vy-nebius-1"], "every_s": 300, "ssh": ["ssh"]}))
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=FakeSh({"cursor/w3-branch-c7a9": "a" * 40}),
+                                 nodes=tmp_path / "nodes.json", timers=None)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 60)
+    rid, started = "r20261018-200000-0001", clock.t
+    node_run(root, rid, started + 3600, by=f"https://cursor.com/agents/{W1_}", wall_s=3600)
+    status_json = root / "runs" / rid / "status.json"
+    status_json.write_text(json.dumps({"state": "running", "transitions": [{"state": "running", "t_utc": W.iso(started)}]}))
+    W.os.utime(status_json, (started, started))
+    sweeps(w, clock, 85)
+    assert silent(tmp_path) == [] and ended(tmp_path) == [], "the run's start is its sender's activity, and not an end"
+    sweeps(w, clock, 10)
+    assert [r["since"] for r in silent(tmp_path)] == [W.iso(started)]
+    status_json.write_text(json.dumps({"state": "done", "rc": 0, "wall_s": clock.t - started, "transitions": [
+        {"state": "running", "t_utc": W.iso(started)}, {"state": "done", "t_utc": W.iso(clock.t)}]}))
+    W.os.utime(status_json, (clock.t, clock.t))
+    finished = clock.t
+    sweeps(w, clock, 85)
+    assert len(silent(tmp_path)) == 1 and [r["run"] for r in ended(tmp_path)] == [rid], "its end is activity, and rings once"
+    sweeps(w, clock, 10)
+    assert [r["since"] for r in silent(tmp_path)][-1] == W.iso(finished)
+
+
+def test_a_push_to_a_pr_branch_whose_body_names_a_worker_is_its_activity(tmp_path):
+    """lean's workers push to `cursor/lean-...-fc8d` branches, which match none of a worker's known branches, and were rung
+    silent while pushing. A push to the branch of an open PR whose body names the worker, by full or short id, is its activity."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40, "cursor/lean-records-fc8d": "b" * 40})
+    prs = [{"branch": "cursor/lean-records-fc8d", "body": f"Lane lean\n\nRECORDS ({W.short_id(W1_)}) re-heads it."}]
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh, open_prs=lambda: prs)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 60)
+    sh.heads["cursor/lean-records-fc8d"] = "c" * 40
+    pushed = clock.t + 5 * 60
+    sweeps(w, clock, 90)
+    assert silent(tmp_path) == [], "the push to its PR's branch is activity"
+    sweeps(w, clock, 5)
+    (rec,) = silent(tmp_path)
+    assert rec["since"] == W.iso(pushed) and "cursor/lean-records-fc8d" in rec["branches"]
+    w.open_prs = lambda: (_ for _ in ()).throw(OSError("HTTP 502"))
+    w.prs_read = -float("inf")
+    w.read_prs(clock.t)
+    assert w.pr_branches == {W.short_id(W1_): {"cursor/lean-records-fc8d"}}, "a failed read keeps the last one"
+
+
+def test_github_prs_reads_every_page_of_open_prs_with_the_token_from_its_file(tmp_path, monkeypatch):
+    env = tmp_path / "relay.env"
+    env.write_text("SLACK_BOT_TOKEN=x\nGH_TOKEN=ghs_dummy_for_tests\n")
+    seen = []
+
+    class Resp:
+        def __init__(self, data):
+            self.data = data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return json.dumps(self.data).encode()
+
+    def urlopen(req, timeout):
+        seen.append((req.full_url, req.get_header("Authorization")))
+        page = int(req.full_url.rsplit("page=", 1)[1])
+        return Resp([{"head": {"ref": f"b{page}-{i}"}, "body": "x"} for i in range(100 if page == 1 else 3)])
+
+    monkeypatch.setattr(W.urllib.request, "urlopen", urlopen)
+    got = W.github_prs(REMOTE, env)()
+    assert len(got) == 103 and got[0] == {"branch": "b1-0", "body": "x"}
+    assert [u for u, _ in seen] == [
+        f"https://api.github.com/repos/compute-verification/verity/pulls?state=open&per_page=100&page={p}" for p in (1, 2)]
+    assert {a for _, a in seen} == {"Bearer ghs_dummy_for_tests"}
+    with pytest.raises(ValueError):
+        W.github_prs("/srv/git/verity.git", env)
+
+
 def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_top(tmp_path):
-    """top, 26 Oct: nine workers sat ACTIVE with no step for 30-64 h, each rung twice as silent and then by no one."""
+    """Workers can sit ACTIVE with no step for days, each rung twice as silent and then by no one."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
     sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40})
@@ -1709,8 +1847,7 @@ def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_t
 
 
 def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(tmp_path):
-    """26 Oct 21:05Z: no_step told @top to stop and archive compute-accounting's and network-accounting's coordinators, each
-    working in Slack within two minutes, with no note or push for 6 h. Its agent's `updatedAt` moving is activity to no_step,
+    """A coordinator working only in Slack makes no note or push for hours, and no_step must not tell top to archive it. Its agent's `updatedAt` moving is activity to no_step,
     not to silent; once that stops too, no_step counts from it."""
     run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0)}
     sh = FakeSh({"main": "m" * 40})
@@ -1736,8 +1873,7 @@ def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(
 
 
 def test_a_coordinators_lane_note_is_its_activity(tmp_path):
-    """top, 27 Oct: four silent rings on coordinators in 70 min were false; each was syncing notes signed with its lane, not its
-    id. A note under `lanes/<handle>/` counts for that handle's coordinator."""
+    """A coordinator syncing notes signed with its lane, not its id, is not silent. A note under `lanes/<handle>/` counts for that handle's coordinator."""
     run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0)}
     notes = tmp_path / "notes"
     sh = FakeSh({"main": "m" * 40})
@@ -1781,7 +1917,7 @@ def test_a_push_to_an_agents_branch_is_activity(tmp_path):
     (rec,) = silent(tmp_path)
     assert (rec["agent"], rec["handle"], rec["run"], rec["minutes"], rec["since"], rec["owner"]) == (
         CO, "circuits", "run-r", 60, W.iso(T0 + 105 * 60), "top"), \
-        "its last push was seen at the heads read after it; a coordinator is silent after an hour, and @top is rung"
+        "its last push was seen at the heads read after it; a coordinator is silent after an hour, and top is rung"
     assert rec["branches"] == ["cursor/api-named", f"cursor/by-suffix-{CO[-4:]}"]
     assert status(tmp_path)[CO]["watch_state"] == "silent"
 
@@ -1907,7 +2043,7 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
                                   "what": "slot --by vllm --", "rc": 1, "state": "failed", "after": "30 s", "lane": "vllm"}}
     assert {r["run"]: r.get("sender_status") for r in ended(tmp_path) if r["role"] != "unknown"} == {
         "r20261018-195000-0002": "IDLE", "r20261018-195500-0003": "ACTIVE", "r20261018-195500-0004": "unknown"}, \
-        "the sender's status at its run's end, for the relay to ring only a sender not in a turn (INF-277)"
+        "the sender's status at its run's end, for the relay to ring only a sender not in a turn"
     assert status(tmp_path)[CO]["watch_state"] != "run_ended", "a research run's end is not the agent's state"
     for _ in range(3):
         clock.t += 5 * 60
@@ -1920,7 +2056,7 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
 
 def test_a_run_a_worker_sent_is_its_activity(tmp_path):
     """A worker whose only sign of life was the runs it sent (no note, no push) was rung silent and then no_step while its runs
-    ended every hour. A run counts from when it was sent (its end less its wall time), learned when it ends."""
+    ended every hour. A run counts at its start and at its end."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})", age_s=2 * 3600)
     api, clock, w, sh, roots = nodes_setup(tmp_path, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, git_remote=REMOTE)
@@ -1929,20 +2065,16 @@ def test_a_run_a_worker_sent_is_its_activity(tmp_path):
     for i in range(6):
         sweeps(w, clock, 60)
         node_run(roots["vy-nebius-1"], f"r20261018-2{i}0000-000{i}", clock.t, by=f"https://cursor.com/agents/{W1_}", wall_s=600)
-    sent = clock.t - 600
+    last_end = clock.t
     assert silent(tmp_path) == [], "a run sent every hour is activity"
     sweeps(w, clock, 120)
     (rec,) = silent(tmp_path)
-    assert rec["agent"] == W1_ and rec["since"] == W.iso(sent), "silence counts from its newest run's sending"
+    assert rec["agent"] == W1_ and rec["since"] == W.iso(last_end), "silence counts from its newest run's end"
 
 
 def test_a_run_ends_sender_resolves_as_a_learned_worker_does_and_the_rest_are_one_record_for_infra(tmp_path):
-    """The pod's watch log, 19 Oct: 847 run ends "which no handle owns: not rung" since 05:28Z. Among them, vy-nebius-2's
-    r20261019-043737-f6de (05:28:58Z) sent by CENSUSAND (bc-fe356a9d), a worker learned from a Task call of circuits' generation
-    3 (bc-21f3d3de); r20261019-132935-493f (13:29:54Z) sent by compute-accounting's generation 2 (bc-ebc09a9a) after its
-    handover; and runs of workers the watch never learned: r20261019-052718-24a9 (bc-aede327f) and vy-nebius-cpu-2's
-    r20261019-192229-3606 (bc-df15df07, here on vy-nebius-1). The first two now ring their handle; the rest of a read are one
-    record, rung to @infra. A `submitted_by` that names a lane ($RESEARCH_AGENT_URL is free text) rings that lane."""
+    """Run ends whose sender is a worker learned from a coordinator's Task call, or a coordinator's older generation after
+    its handover, ring their handle; runs of workers the watch never learned are, for each read, one record, rung to infra. A `submitted_by` that names a lane ($RESEARCH_AGENT_URL is free text) rings that lane."""
     url = "https://cursor.com/agents/{}".format
     censusand, circuits3, ca2 = ("bc-fe356a9d-81e7-54a8-a5da-fbf425245da5", "bc-21f3d3de-28db-5e5d-964b-d357187449aa",
                                  "bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac")
@@ -1975,9 +2107,8 @@ def test_a_run_ends_sender_resolves_as_a_learned_worker_does_and_the_rest_are_on
 
 
 def test_a_run_ends_unknown_sender_is_rung_to_the_handle_its_branch_names(tmp_path):
-    """25 Oct: infra traced seven unknown senders by hand, each from the run's tree to the branch that had it as its head to the
-    lane (TOP-90 row 21). The branch's suffix in the registry's `branch_suffixes`, or a handle its name starts with, routes it;
-    a sha no branch had stays @infra's."""
+    """An unknown sender is traced from the run's tree to the branch that had it as its head to the lane. The branch's suffix in the registry's `branch_suffixes`, or a handle its name starts with, routes it;
+    a sha no branch had stays infra's."""
     url = "https://cursor.com/agents/{}".format
     api, clock, w, _, roots = nodes_setup(tmp_path)
     reg = json.loads((tmp_path / "registry.json").read_text())
@@ -2168,7 +2299,7 @@ def busy_once(api):
 
 
 def test_a_background_wait_that_refuses_the_resume_is_cancelled_first(tmp_path):
-    """proofs, 19 Oct: from 10:46 to 16:12Z its wakes got 409 hourly while its run sat in WAITING_FOR_BACKGROUND_WORK."""
+    """A wake gets 409 while the agent's run sits in WAITING_FOR_BACKGROUND_WORK, so that wait is cancelled first."""
     api, clock, w, sh, roots = nodes_setup(tmp_path)
     api._agents[0].update(status="ACTIVE", latestRunId="run-b")
     api._runs["run-b"] = {"status": "WAITING_FOR_BACKGROUND_WORK", "createdAt": "2026-10-18T19:00:00Z",
@@ -2267,9 +2398,8 @@ def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaun
 
 
 def test_a_relaunched_worker_with_no_recorded_branch_is_told_the_branches_its_newest_note_names(tmp_path):
-    """SALT-WIRE's relaunch (20:43Z 19 Oct): its workers.d entry named no branch, and its fresh launch read "Your branches: none
-    recorded", though its note opened with "Branch `cursor/ca-salt-wire-ea24`, stacked on #2817 (`cursor/net45-...`)". 17 of 18
-    workers.d entries name no branch, so the note's branches are named, the first written as the new worker's."""
+    """A relaunch whose workers.d entry names no branch must not read "Your branches: none recorded" when its note opens
+    with "Branch `cursor/ca-salt-wire-ea24`, stacked on ... (`cursor/net45-...`)". Most workers.d entries name no branch, so the note's branches are named, the first written as the new worker's."""
     (tmp_path / "workers.d").mkdir()
     (tmp_path / "workers.d" / "w1.json").write_text(json.dumps({"agent_id": W1_, "lane": "zk-port", "launched_by": NEW}))
     launch_api = FakeLaunchApi()
@@ -2293,17 +2423,15 @@ def test_a_relaunched_worker_with_no_recorded_branch_is_told_the_branches_its_ne
 
 
 def vllm_workers(d, *agents):
-    """workers.d entries for `agents`, launched by NEW (@vllm's coordinator), as a coordinator registers its workers."""
+    """workers.d entries for `agents`, launched by NEW (vllm's coordinator), as a coordinator registers its workers."""
     (d / "workers.d").mkdir(parents=True, exist_ok=True)
     for a in agents:
         (d / "workers.d" / f"{a[3:7]}.json").write_text(json.dumps({"agent_id": a, "lane": "vllm", "launched_by": NEW}))
 
 
 def test_a_worker_is_relaunched_only_unfinished_never_while_its_coordinator_is_active_and_once_per_idle(tmp_path):
-    """20:43-20:56Z 19 Oct, INF-141: the watch relaunched SALT-WIRE, STRAND and DSV4LAND fresh within a minute of launch.env
-    appearing, though each had finished and was waiting on its coordinator (STRAND's original was resumed at 21:00Z, and its
-    copy could have pushed over #2822). Now a worker whose last message reads as a report back (STRAND's "Nothing changed: ...",
-    DSV4LAND's paragraphs ending "or you can file it"), or whose run passed and that didn't stop mid-step, is recorded quietly
+    """A worker that finished and waits on its coordinator is not relaunched, since its copy could push over its original. A worker whose last message reads as a report back ("Nothing changed: ...",
+    paragraphs ending "or you can file it"), or whose run passed and that didn't stop mid-step, is recorded quietly
     as not relaunched; one whose run failed is relaunched, but never while its coordinator is ACTIVE, never on a conversation
     the API won't read, and never twice for one idle."""
     strand, dsv4, failed = W1_, W2_, W3_
@@ -2371,7 +2499,7 @@ def test_a_worker_is_relaunched_only_unfinished_never_while_its_coordinator_is_a
     ("Everything passes on the node.", False),
 ])
 def test_a_workers_last_message_reads_as_a_report_a_stop_mid_step_or_neither(said, relaunch):
-    """From the last messages of 19 Oct's idle workers (`GET /v0/agents/{id}/conversation`): a report back runs to paragraphs,
+    """From idle workers' last messages (`GET /v0/agents/{id}/conversation`): a report back runs to paragraphs,
     asks, or says final/report/nothing changed; a stop mid-step announces its next step; a wait it set itself is neither."""
     assert (not W.reported(said) and W.mid_step(said)) is relaunch
 
@@ -2384,9 +2512,8 @@ def cancelled(root, rid, reason):
 
 
 def test_a_run_its_own_lane_cancelled_is_posted_quietly_and_starts_no_clock(tmp_path):
-    """INF-141 (b): SALT-WIRE's r20261019-182846-7d10 ended rc=143 after "superseded by r20261019-194802-65ae at SALT-WIRE's
-    final head ... (research cancel by ubuntu)" (no --by: the user's name), and the watch rang its coordinator to resume it,
-    then relaunched it. A cancel whose reason or BY names the sender, or whose BY names its handle or an agent of it, is the
+    """A run that ended rc=143 after "superseded by ... at its final head ... (research cancel by ubuntu)" (no --by: the
+    user's name) is not rung for resuming or relaunched. A cancel whose reason or BY names the sender, or whose BY names its handle or an agent of it, is the
     lane's own: recorded quietly (no ring) with nothing to resume. Another lane's cancel is a failure like any."""
     salt, mine, other = W1_, W2_, W3_
     vllm_workers(tmp_path, salt, mine, other)
@@ -2413,9 +2540,9 @@ def test_a_run_its_own_lane_cancelled_is_posted_quietly_and_starts_no_clock(tmp_
 
 
 def test_a_sender_no_route_knows_is_learned_from_its_brief(tmp_path):
-    """INF-141 (4): circuits' WIDTHS (bc-c8838f5a, "a cloud worker of the circuits coordinator (agent bc-21f3d3de-...)") and
-    proofs' ZKS10 (bc-5f0b2ba2, "a worker for the proofs lane (@proofs)") ran under nobody's route: their Task calls were before
-    the watch followed their coordinators, and a learned worker was forgotten 2 days on. A sender no route knows is read for its
+    """A worker whose Task call came before the watch followed its coordinator runs under nobody's route unless its brief
+    ("a cloud worker of the circuits coordinator (agent ...)", "a worker for the proofs lane") is read, and a learned worker
+    must not be forgotten while it works. A sender no route knows is read for its
     brief (at most `LEARN_PER_READ` a node read, again only `LEARN_RETRY_S` later), and kept while it sends runs."""
     widths, zks10 = "bc-c8838f5a-e10e-54ad-be4f-bbad4534f555", "bc-5f0b2ba2-1013-5ed2-af26-b6fac7d3bc65"
     strangers = [f"bc-{c * 8}-{c * 4}-{c * 4}-{c * 4}-{c * 12}" for c in "789a0f"]
@@ -2456,8 +2583,62 @@ def test_a_sender_no_route_knows_is_learned_from_its_brief(tmp_path):
     assert widths in w.children, "a worker still sending runs is kept past WORKER_KEEP_S from its learning"
 
 
+def test_a_sender_no_route_knows_is_watched_as_infras_until_a_route_claims_it(tmp_path):
+    """A worker its coordinator never registered, whose brief names no coordinator, was rung to infra once at a run's end and
+    never watched: pous-prf hung for hours unseen. Such a sender is kept as infra's worker (`UNOWNED`), so going IDLE rings
+    infra, while its runs still go to infra as unowned (never resumed or relaunched as infra's). A workers.d entry claims it."""
+    stray = "bc-abababab-abab-abab-abab-abababababab"
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api.workers[stray] = worker("ACTIVE", W.iso(T0 - 600), "pous-prf: hiding budget per leaf")
+    api.convs[stray] = [("user_message", "You are pous-prf. Read the note and go on.")]
+    w.sweep(lambda r: None)
+    clock.t += 60
+    node_run(roots["vy-nebius-1"], "r20261105-110000-0001", clock.t, by=f"https://cursor.com/agents/{stray}", state="failed", rc=1)
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    (rec,) = [r for r in ended(tmp_path) if r["role"] == "unknown"]
+    assert w.children[stray]["owner"] == W.UNOWNED and stray not in w.awaiting, "unowned: rung to infra, no clock started"
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert w.workers[stray]["handle"] == W.UNOWNED
+    api.workers[stray] = worker("IDLE", W.iso(clock.t), "pous-prf: hiding budget per leaf")
+    for _ in range(W.BURST_S // 60 + 2):                    # a worker's idle is held to join its parent's others (`bursts`)
+        clock.t += 60
+        w.sweep(lambda r: None)
+    idle = [r for r in records(tmp_path) if r["kind"] in ("worker_idle", "workers_failed") and stray in json.dumps(r)]
+    assert idle and idle[-1]["handle"] == W.UNOWNED
+    (tmp_path / "workers.d").mkdir(exist_ok=True)
+    (tmp_path / "workers.d" / f"{stray}.json").write_text(json.dumps({"agent_id": stray, "lane": "vllm", "launched_by": NEW}))
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert stray not in w.children and w.workers[stray]["handle"] == "vllm"
+
+
+def test_a_listed_stray_stays_unowned_and_is_never_resumed_as_infras(tmp_path):
+    """A stray the agent list has (launched through the API) read as infra's owned agent: its next run routed as infra's worker
+    and the watch resumed it. Its owner is infra only for the watch's rings; its runs stay unowned, and nothing resumes it."""
+    stray = "bc-cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd"
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api._agents.append({"id": stray, "name": "an API-launched agent", "status": "IDLE", "latestRunId": "run-s",
+                        "updatedAt": W.iso(T0 - 1800)})
+    api._runs["run-s"] = dict(FINISHED)
+    api.convs[stray] = [("user_message", "Do the thing.")]
+    w.sweep(lambda r: None)
+    for i in range(2):
+        clock.t += 60
+        node_run(roots["vy-nebius-1"], f"r20261105-11000{i}-000{i}", clock.t, by=f"https://cursor.com/agents/{stray}")
+        clock.t += 5 * 60
+        w.sweep(lambda r: None)
+    assert stray not in w.owners and stray not in w.awaiting
+    assert all(r["role"] == "unknown" for r in ended(tmp_path)), "both runs go to infra as unowned"
+    while clock.t < T0 + 3 * 3600:
+        clock.t += 300
+        w.sweep(lambda r: None)
+    assert not [p for p, _ in api.posts if p == f"/v1/agents/{stray}/runs"], "never resumed"
+
+
 def test_a_relaunched_worker_routes_as_its_lanes_worker_and_the_watch_resumes_it(tmp_path):
-    """INF-143: a relaunched worker is an agent the list has, so `watch_workers` drops it from the workers it reads; its runs
+    """A relaunched worker is an agent the list has, so `watch_workers` drops it from the workers it reads; its runs
     resolved as nobody's. Its workers.d entry (launched by its coordinator) makes it its lane's worker: its run's end routes to
     the lane's handle as a worker's, and, being listed, the watch resumes it with the result."""
     new = "bc-77777777-7777-7777-7777-777777777777"
@@ -2527,7 +2708,7 @@ def test_a_coordinator_past_its_restarts_is_relaunched_from_its_handover_note_wi
     assert KEY not in written and KEY not in "".join(capsys.readouterr())
 
 
-# INF-126, 19 Oct: the 14 workers of proofs' generation 3 that stopped mid-step, each its last entry a tool call, a tool result
+# workers of one coordinator that stopped mid-step, each its last entry a tool call, a tool result
 # or thinking, with no assistant turn after, at seconds after the first (16:49:23Z), from their transcripts
 STOPS = [("REC1", 0), ("G2-1", 143), ("REC2", 423), ("G2-7", 632), ("ZKS10", 655), ("M18b", 655), ("G2-4", 670), ("INT7", 757),
          ("KSF1", 767), ("FIX2595", 774), ("G2-3", 795), ("G2-2", 815), ("G2-6", 836), ("G2-8", 862)]
@@ -2542,8 +2723,7 @@ def task_call(w, run, cid, agent, description, completed=False):
 
 
 def test_proofs_workers_that_stop_together_are_one_alert_to_their_parents_lane_naming_each_and_its_wake_up(tmp_path):
-    """INF-126: 14 of a coordinator's workers, known only from its Task calls (a handover note's body named them), stopped
-    over 14 min; the watch flagged none. Now they are watched as its workers, and their IDLE reads, a sweep every 5 min, make one
+    """Many of a coordinator's workers, known only from its Task calls, stopping over a few minutes are watched as its workers, and their IDLE reads, a sweep every 5 min, make one
     workers_failed to its handle naming all 14, with the wake-ups two said they set (the API's conversation has no tool calls,
     only what an agent says). A worker of another coordinator that stops meanwhile is its own record, to its own handle."""
     other = "bc-0000000f-0000-0000-0000-00000000000f"
@@ -2625,8 +2805,8 @@ def test_a_burst_held_when_the_watch_restarts_is_still_posted_once(tmp_path):
 
 
 def test_a_worker_learned_from_a_former_coordinators_task_call_inherits_that_coordinators_handle(tmp_path):
-    """#agent-alerts 1792438328.270299 (19 Oct): G2-1 was learned from a Task call of proofs' generation 3 after generation 4
-    took the inbox (routes.d), so `holders` no longer named its parent, and it was recorded with lane '' and no handle. Its
+    """A worker learned from a Task call of a coordinator's older generation, after a newer one took the inbox (routes.d),
+    has a parent `holders` no longer names, and must not be recorded with lane '' and no handle. Its
     parent's handle is the registry holder's, or the handle `launch_coordinator.py` made the parent a generation of."""
     reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
     api, clock, w = coordinators(tmp_path, [{"id": OLD, "name": "verity: vllm", "status": "ACTIVE", "latestRunId": "run-old",
@@ -2652,7 +2832,7 @@ def test_a_worker_learned_from_a_former_coordinators_task_call_inherits_that_coo
 
 
 def test_a_lane_named_after_a_handle_belongs_to_that_handle():
-    """kernels' workers run lanes like `kernels-hashproof`; the watch rang infra for each of their idle workers and runs (24 Oct)."""
+    """kernels' workers run lanes like `kernels-hashproof`; they belong to kernels, not infra."""
     names = {"kernels", "proofs", "infra", "kernels-x"}
     assert W.lane_handle("kernels", names) == "kernels"
     assert W.lane_handle("kernels-hashproof", names) == "kernels"
@@ -2676,8 +2856,8 @@ def test_every_holder_a_registry_handle_names_counts_for_held_unread(tmp_path):
 
 
 def test_a_lane_holder_waiting_on_a_streaming_worker_for_an_hour_is_cancelled_and_continued(tmp_path):
-    """compute-accounting's research lane (the registry's second holder) sat 17:25-21:45Z on 24 Oct in a resumed worker's
-    stream: a long call to the watch, and not a coordinator, so nothing rang. Owner top; the worker runs on."""
+    """A lane that posts as a handle (the registry's second holder) can sit for hours in a resumed worker's stream, a long
+    call to the watch and not a coordinator's run. Owner top; the worker runs on."""
     run = {"status": "RUNNING", "createdAt": "2026-10-18T19:59:00Z", "updatedAt": "2026-10-18T19:59:00Z"}
     api, clock, w = coordinators(tmp_path, [{"id": LANE, "status": "ACTIVE", "latestRunId": "run-l"}], {"run-l": run})
     w.sweep(lambda r: None)

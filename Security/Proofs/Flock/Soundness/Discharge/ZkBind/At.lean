@@ -1,9 +1,26 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
-public import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
-public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Place
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hm.Site
+import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
 
 /-!
 # The sites, the layout and the rows at the `--zk` tables
@@ -18,9 +35,9 @@ table of a `DrawSetupZK` at the challenger's sample `dj S`, a refused table othe
   statement is `stmtOf` of it, `Integrate.model_eq_stmtOf`).
 * `sitesZAt`: the `--zk` sites, each sampled proof block at its rank in the sample's proved units (`sitesZAt_at`), and
   `sitesZAt_parse` from the session's one circuit file.
-* `layZAt`, `rsZAt`: e2e-layout's `keyedLayout` and `keyedRowsOuts` at `tableSh`'s sites, moved to the `--zk` tables
-  (`LayoutZ.ofShadow`, `HmRowsZ.ofShadow`), the decoders agreeing (`decAgreeAt`); `rsZAt_computes` is e2e-hm's
-  `keyedRowsOuts_computes` moved along.
+* `layZAt`, `rsZAt`: `Layout.keyedLayout` and `Layout.keyedRowsOuts` at `tableSh`'s sites, moved to the `--zk` tables
+  (`LayoutZ.ofShadow`, `HmRowsZ.ofShadow`), the decoders agreeing (`decAgreeAt`); `rsZAt_computes` is
+  `Hm.keyedRowsOuts_computes` moved along.
 
 None of them takes a sample premise: like `tablesAtZK` they are defined at every sample. `sitesZAt_at` reads the sample's own
 `DrawSetupZK`, which item 3 gives from `AcceptsZK` and `DrawOkZK I dj mPts S` at the session's own sample `S`.
@@ -164,7 +181,7 @@ theorem decAgreeAt : DecAgree (P := (keyProg c hU n).partition (Layout.outsOf c 
   rw [hM2]
   exact block_witOf _ _ _ _ _ _ rfl rfl
 
-/-- **`lay` at the `--zk` tables**: e2e-layout's `keyedLayout` at the public sites, moved to the `--zk` tables. -/
+/-- **`lay` at the `--zk` tables**: `Layout.keyedLayout` at the public sites, moved to the `--zk` tables. -/
 noncomputable abbrev layZAt :
     LayoutZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt (Reg := Reg) dj y₀) (tabZAt dj y₀)
       (decodeOfPlace execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
@@ -193,7 +210,7 @@ theorem sitesSh_bcSite :
       rw [e]; exact y₀.x.refusedC_unsat (zkTyped ht) S
     exact absurd hM (hns _)
 
-/-- **`rs` at the `--zk` tables**: e2e-layout's `keyedRowsOuts` at the public sites, its circuit conditions from
+/-- **`rs` at the `--zk` tables**: `Layout.keyedRowsOuts` at the public sites, its circuit conditions from
 `scopeOk`, moved to the `--zk` tables. -/
 noncomputable abbrev rsZAt : HmRowsZ (layZAt (Reg := Reg) ht dj y₀ hc hU (pub := pub)) :=
   HmRowsZ.ofShadow (planZAt_S ht dj y₀) (decAgreeAt ht dj y₀ hc hU)
@@ -201,7 +218,7 @@ noncomputable abbrev rsZAt : HmRowsZ (layZAt (Reg := Reg) ht dj y₀ hc hU (pub 
       (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
       (sitesSh_bcSite ht dj y₀ hc hU hpub hpt hscope))
 
-/-- **`hHm` at the `--zk` tables' rows** (e2e-hm's `keyedRowsOuts_computes`, moved along): in a satisfying witness of a
+/-- **`hHm` at the `--zk` tables' rows** (`Hm.keyedRowsOuts_computes`, moved along): in a satisfying witness of a
 sampled proof block's `--zk` table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under
 the salt at its `hm96` slot. -/
 theorem rsZAt_computes : (rsZAt (Reg := Reg) ht dj y₀ hc hU hpub hpt hscope).Computes :=

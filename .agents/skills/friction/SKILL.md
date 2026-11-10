@@ -2,7 +2,7 @@
 name: friction
 description: >
   What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask its owner or your
-  coordinator when you can't tell, take only claims and his own clicks to Daniel, record a ruling where the next agent reads
+  coordinator when you can't tell, decide rather than wait on Daniel, record a ruling where the next agent reads
   it, or leave a friction note. Holds the standing rulings AGENTS.md and the other skills don't state (what an agent may
   change without asking, protocol and claim rulings) and the friction note format. Use when you worked around something,
   a step bit you twice or keeps you waiting, you see a better abstraction, you're unsure a change is yours, you just got a
@@ -45,9 +45,9 @@ A change is near the line when it changes what other agents must do or what a ga
 in-flight files, or deletes others' work. If `AGENTS.md`, the owning skill or a standing ruling below covers the case,
 follow it. Otherwise ask the owner of what the change touches, or your coordinator when owners disagree or you can't tell
 (a handle holder: `research msg send --to @HANDLE`; a worker: its report), with the case, the change and your
-recommendation in a few lines, and prepare the change meanwhile. Only keys and access, and claims (what a guarantee says
-or rests on), go on to Daniel (`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call
-of the lead whose line pays.
+recommendation in a few lines, and prepare the change meanwhile. Nothing waits on Daniel: a claim (what a guarantee says
+or rests on) goes to him decided provisionally, and a click only he can make gets a workaround where one exists
+(`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call of the lead whose line pays.
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`.
 
@@ -125,9 +125,8 @@ Keys and access:
 
 - Keys and access between our own machines and accounts are the lanes' call: the lane that needs a key or a grant
   (a lane key, a forced-command key, a challenger's or a wipe's key) sets it up with the machine's owner, infra for
-  shared nodes, with no ask and no wait. This is a simulation: nothing mimics deployment settings, and it needn't be
-  perfect. Daniel only clicks what needs an account he holds (the GitHub organization's admin, billing, the Nebius and
-  Cloudflare consoles).
+  shared nodes, with no ask and no wait. Daniel only clicks what needs an account he holds (the GitHub organization's
+  admin, billing, the Nebius and Cloudflare consoles).
 - The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
   so stopping a machine never waits on an agent VM.
 - Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
@@ -138,11 +137,37 @@ Keys and access:
 
 Landing:
 
+<<<<<<< 94ca7fd0d18
 - Lint ratchets are no-growth, and a change to a lint is judged like source; cleanup lanes pay the exceptions down and a
   feature PR owes none. `integrations/vllm/tools/ratchet_gate.py`'s docstring states the rules (the integration's ratchets
   and `noqa` count, `tests/lint/`'s lists, each changed file's lint). Fix the code, never the list: a rename moves its
   entries (`--move OLD NEW`), an environment read goes through the area's settings registry, and a swallowing handler
   re-raises, records the outcome, or narrows.
+||||||| e10cf2c8559
+- The vLLM integration's lint ratchets are no-growth: no change adds an
+  exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
+  cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
+- A `# noqa` is an exception too: in `integrations/vllm`, no
+  change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
+  retirement. The ratchet gate counts them, with no allowlist.
+- Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python,
+  as drive lands on `checked` before the suites run: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
+  list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
+  `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
+  the PR's base). No new swallowing handler: re-raise, record, or test first.
+=======
+- The vLLM integration's lint ratchets are no-growth: no change adds an
+  exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
+  cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
+- A `# noqa` is an exception too: in `integrations/vllm`, no
+  change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
+  retirement. The ratchet gate counts them, with no allowlist.
+- Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each landing's changed Python
+  after it lands, ringing its owner, never reverting: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
+  list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
+  `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
+  the PR's base). No new swallowing handler: re-raise, record, or test first.
+>>>>>>> 7af4d24fca3e
 
 Protocols and claims:
 
@@ -177,20 +202,26 @@ Protocols and claims:
   the protocol's properties into `Properties/`.
 - An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
-  premises outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
-- The prover controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes
+  assumptions outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
+- The developer controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
-  trusted third party, salted after the commitment with secrets the prover never sees, as one deployment variant.
+  trusted third party, salted after the commitment with secrets the developer never sees, as one deployment variant.
 - No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
   bound on `SquaringFloor` and `ChainSum` in the repriced gate model (a thin lane a compare-select unit), with the claims
   resting on them listed as conditional.
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
-  are for the whole node. PoUB treats the prover's resources as one pool (conservation, no identity
+  are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
+<<<<<<< 94ca7fd0d18
 - PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next. See `verity/core/protocols/pouw/README.md`.
 - PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
+||||||| e10cf2c8559
+- PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
+=======
+- PoUW's guarantees, and only PoUW's, may rest on random-oracle assumptions for SHA-512
+>>>>>>> 7af4d24fca3e
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
 - The deployed recursion's bound record states its inner claim at IVStar at the weight

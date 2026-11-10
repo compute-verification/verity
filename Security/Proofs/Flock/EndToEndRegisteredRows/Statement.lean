@@ -1,8 +1,27 @@
 module
 
 public import Flock.Desc
-public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+public import Proofs.Flock.Soundness.Registered.ReadsX
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # Flock's one-stage audit, end to end, with the rows link (trusted)
@@ -10,9 +29,9 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
 `EndToEndRegisteredRows` is `EndToEndRegisteredDrawn`'s statement with the rows link added to its event: at the sampled
 proof blocks, an accepted session's committed input rows are the rows the registered roots open to, and its committed output
 rows are the program's outputs on them, which `EndToEndHiddenDrawn` and `EndToEndRegisteredDrawn` leave unstated. Its
-proof is `Flock.SecurityProofs.EndToEndRegisteredRows`. It is stated over the circuit's descriptor `D` (`Flock.Desc`),
-as `EndToEndRegisteredDrawn` is, and `EndToEndRegisteredRowsFlat` is the same statement at a flat circuit file,
-`D = Desc.single c`.
+proof is `Flock.SecurityProofs.EndToEndRegisteredRows`. It is stated over the circuit's descriptor `D` (`Flock.Desc`)
+that `Desc.parse` reads, a flat file, at `EndToEndRegisteredDrawnFlat`'s rows; `EndToEndRegisteredRowsFlat` is the same
+statement at `D = Desc.single c`.
 
 It is the Flock side of PoUW's proof premise (`Accounting.TS.ProofLayer.SoundAt`), and does not discharge it: the
 bridge is open. That needs a probability bridge from a window's round and proof `(w, i)` to a Flock session,
@@ -20,7 +39,7 @@ the link from `ProofLayer`'s opening to the extracted plurality `XplurZC`, and a
 `OwnReadsHJ` here is over all of a session's registered reads, not per unit.
 
 Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Models.lean`, which the `security` package builds without
+`Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Definitions.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEndRegisteredRows` does.
 -/
 

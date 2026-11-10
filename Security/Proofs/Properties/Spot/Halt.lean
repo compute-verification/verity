@@ -1,6 +1,8 @@
 module
 
 public import Properties.Spot.Halt
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-! # Proofs of the proof system's halt (`Properties.Spot.Halt`)
 
@@ -85,6 +87,45 @@ theorem haltEndsOpen : HaltEndsOpen := by
     exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   · generalize hc : getD op "cause" = c at h ⊢
     cases c <;> simp [h1, h3, bind, Except.bind] at h
+
+namespace Halt
+
+theorem run_halt (p : Stream.Params) (s : Stream.State) (op : Json) (kvs : List (String × Json))
+    (hop : getD op "op" = .str "halt") (hs : s.halted = none) (hc : getD op "cause" = Json.mkObj kvs)
+    (hall : (s.opened.all fun o => s.entries.any (·.order == o)) = true) :
+    Stream.run p s op = .ok (.ok (natsJson s.opened), haltedState s (Json.mkObj kvs)) := by
+  obtain ⟨m, hm⟩ : ∃ m, Json.mkObj kvs = .obj m := ⟨_, rfl⟩
+  unfold Stream.run
+  rw [step_halt p s op hop, hc, hm]
+  simp only [hs, Option.isSome_none, hall, Bool.not_true, Bool.not_false, Bool.false_eq_true, ↓reduceIte]
+  first
+    | rfl
+    | simp only [bind, Except.bind, pure, Except.pure]
+
+end Halt
+
+/-- **`HaltEndsOpen`'s honest lemma**: the deployed stream accepts a halt, for an object cause, of a stream whose one
+registration (order `0`) is open, and its decision names that registration. -/
+theorem haltEndsOpen_honest :
+    ∃ s', Stream.run { budget := 1, rounds := 4, registrationDeadline := none, proofDeadline := 1, stream := "s" }
+      { size := 1, opened := #[0], entries := #[{ order := 0, registration := "r" }] }
+      (Json.mkObj [("op", .str "halt"), ("cause", Json.mkObj [])]) = .ok (.ok (natsJson #[0]), s') :=
+  ⟨_, run_halt _ _ _ [] (rfl) rfl (rfl) (by simp)⟩
+
+/-- **`HaltEndsOpen`'s nontrivial lemma**: a stream that accepts every op with `null` and keeps its state accepts the
+same halt, and then its decision names no registration, the stream is not halted and its registration `0` stays open,
+so `HaltEndsOpen`'s conclusion fails there. -/
+theorem haltEndsOpen_nontrivial :
+    ¬ ((Json.null : Json) = natsJson #[0] ∧
+      ({ size := 1, opened := #[0], entries := #[{ order := 0, registration := "r" }] } : Stream.State).halted =
+        some (getD (Json.mkObj [("op", .str "halt"), ("cause", Json.mkObj [])]) "cause") ∧
+      ({ size := 1, opened := #[0], entries := #[{ order := 0, registration := "r" }] } : Stream.State).opened =
+        #[]) := by
+  rintro ⟨-, h, -⟩
+  first
+    | exact Option.noConfusion h
+    | cases h
+    | simp at h
 
 namespace Halt
 

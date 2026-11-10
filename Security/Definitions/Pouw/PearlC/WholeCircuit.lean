@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.PearlC.RowCircuit
-public import Definitions.Core.Partition
 
 /-!
 # A whole Program's gate table from its units' tables (definitions only)

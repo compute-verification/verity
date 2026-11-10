@@ -13,7 +13,13 @@ from pathlib import Path
 
 import pytest
 
+<<<<<<< 94ca7fd0d18
 from verity.core.protocols.certifier.window_charge import Advice as W
+||||||| e10cf2c8559
+from verity.core.protocols.certifier.window_charge import Window as W
+=======
+from verity.ml.protocols.certifier.window_charge import Window as W
+>>>>>>> 7af4d24fca3e
 
 HERE = Path(__file__).resolve().parent
 

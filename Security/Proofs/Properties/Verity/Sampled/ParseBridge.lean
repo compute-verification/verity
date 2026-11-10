@@ -8,10 +8,10 @@ public import Proofs.Properties.Verity.Sampled.Trees
 
 v2 reads a session's record twice: `Flock.Zk.verify` decodes it (`Flock.Record.decode`), and
 `Spot.OneStageZk.treesHeld` holds it to the challenger's trees. Both parse it through `Flock.JsonParse.parse`,
-which is total, so a proof reads one parsed record out of both. The log readers read the sessions' records as
-`treesHeld` does (`Verity.Sampled.recordsOn`, which `logRead` reads, and `Verity.Sampled.recordsOf`, which `coinsRead`
-reads): where v2 verified a session's record, each reads exactly that record's parse (`sent_records`), the value the
-decoders' lemmas read off the record (`Verity.Sampled.Decoders`).
+which is total, so a proof reads one parsed record out of both. The log reader reads the sessions' records as
+`treesHeld` does (`Verity.Sampled.recordsOn`, which `coinsRead` reads): where v2 verified a session's record, it reads
+exactly that record's parse (`sent_records`), the value the decoders' lemmas read off the record
+(`Verity.Sampled.Decoders`).
 -/
 
 @[expose] public section
@@ -55,25 +55,6 @@ theorem recordsOn_single {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core
   rw [hJ]
   rfl
 
-/-- **`recordsOf` reads the session's record's parse**: of evidence naming one session whose record on the blobs sent
-parses to `J` through `Flock.JsonParse.parse`, the records `recordsOf` reads are `[J]`. -/
-theorem recordsOf_single {s : Verity.Sent} {e : _root_.Spot.OneStageZk.Evidence}
-    {rs : _root_.Spot.OneStageZk.RunFiles} {record : String} {J : Json} (he : e.sessions = #[rs])
-    (hr : sessionRecord e (_root_.Core.Blobs.ofArray s.blobs) = some record)
-    (hJ : Flock.JsonParse.parse record = .ok J) : recordsOf s e = some [J] := by
-  obtain ⟨b, hb, hu⟩ := sessionRecord_blob he hr
-  unfold recordsOf
-  rw [he]
-  refine mapM_single_some ?_
-  change (((_root_.Core.Blobs.ofArray s.blobs).get rs.record "record").toOption >>= fun b =>
-    String.fromUTF8? b >>= fun t => (Flock.JsonParse.parse t).toOption) = some J
-  rw [Trees.get_ok "record" hb]
-  change (String.fromUTF8? b >>= fun t => (Flock.JsonParse.parse t).toOption) = some J
-  rw [hu]
-  change (Flock.JsonParse.parse record).toOption = some J
-  rw [hJ]
-  rfl
-
 /-- **A record v2 verified parses** through `Flock.JsonParse.parse`: `Flock.Zk.verify` accepts only a record that
 `Flock.Record.decode` decodes, and that parses it first. -/
 theorem verified_parse {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
@@ -85,18 +66,17 @@ theorem verified_parse {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneS
   obtain ⟨J, _, _, hJ, -⟩ := Claims.Bridge.Custody.decode_ok hd
   exact ⟨J, hJ⟩
 
-/-- **The log readers read the record v2 verified**: where v2 verified a session's record on the blobs sent
+/-- **The log reader reads the record v2 verified**: where v2 verified a session's record on the blobs sent
 (`V2Verified`, which `sent_verified` gives where v2's case accepts), the record parses through `Flock.JsonParse.parse`,
-the parser `Flock.Record.decode` reads it through, to some `J`, and both readers of the sessions' records read exactly
-`[J]`: `recordsOn`, as `treesHeld` and `logRead` read them, and `recordsOf`, as `coinsRead` reads them. -/
+the parser `Flock.Record.decode` reads it through, to some `J`, and the sessions' records read exactly `[J]`:
+`recordsOn`, as `treesHeld` and `coinsRead` read them. -/
 theorem sent_records {s : Verity.Sent} {p : _root_.Spot.OneStageZk.Params}
     {e : _root_.Spot.OneStageZk.Evidence} {record : String} {spec : Flock.SessionSpec}
     {tabs : Array Flock.Setup} {rest : Json × Json} {proofs : Array ByteArray}
     (h : V2Verified p e (_root_.Core.Blobs.ofArray s.blobs) record spec tabs rest proofs) :
-    ∃ J, Flock.JsonParse.parse record = .ok J ∧ recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some [J] ∧
-      recordsOf s e = some [J] := by
+    ∃ J, Flock.JsonParse.parse record = .ok J ∧ recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some [J] := by
   obtain ⟨J, hJ⟩ := verified_parse h
   obtain ⟨_, _, _, _, _, he, -, -, -, -, hr, -⟩ := h
-  exact ⟨J, hJ, recordsOn_single he hr hJ, recordsOf_single he hr hJ⟩
+  exact ⟨J, hJ, recordsOn_single he hr hJ⟩
 
 end Verity.Sampled

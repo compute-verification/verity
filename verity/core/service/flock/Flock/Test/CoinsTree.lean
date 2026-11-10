@@ -8,6 +8,7 @@ puts the sample in, and the same canonical bytes (`publicDigest` hashes those).
 module
 
 public import Flock.HmRow
+public import Flock.Statement
 meta import Flock.HmRow
 
 @[expose] public section

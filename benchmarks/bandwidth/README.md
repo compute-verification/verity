@@ -26,8 +26,8 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
   of useful space (PoUS) commits them under a salt (`store_leaves`), which `gpu.py windows` calls under the lease, once
   the GPU is known.
 - The harness runs the verifier and its state on the GPU's node too, to measure. In a deployment the verifier is the
-  auditor's hardware, on a machine the prover doesn't control, and what runs on the GPU's node (`challenger_device`,
-  `Prover`) is the prover's (`PROTOCOL.md` §2).
+  auditor's hardware, on a machine the developer doesn't control, and what runs on the GPU's node (`challenger_device`,
+  `Prover`) is the developer's (`PROTOCOL.md` §2).
 - `run.sh` is one Attempt on vy-nebius-2. It builds and runs the reference outside the lease, then under
   `gpu-lease 1 --wait` runs `bwtag`'s gates, its timing and `gpu.py windows`. A failed gate times nothing. Its header
   lists the outputs.
@@ -85,8 +85,9 @@ control that writes nothing rejected).
   one thread a core over 1, 2, 4, ... cores and each NUMA node's. `run_write_host.sh` is one Attempt on the CPUs the job
   was given.
 
-`tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 and BLAKE3 constants read out
-of `tagger.cu`. It checks them against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
+`tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 constants read out of
+`verity/ml/kernels/sha512.cuh`, which `tagger.cu` includes, and the BLAKE3 constants out of `tagger.cu`. It checks them
+against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
 `tests/test_prover.py` checks, with a fake tagger, that every window the harness runs is prepared before its seed and is
 in the store's one challenger state under a nonce of its own. Run it with
 `uv run tools/verity/check/suites.py benchmarks/bandwidth`.

@@ -1,7 +1,32 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.PlainHJ.Defs
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # The decoder is right at a plain session of `J` hidden-output tables
@@ -137,7 +162,7 @@ variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)
   (x₀ : HiddenExec.DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
 
 set_option maxHeartbeats 4000000 in
-/-- **The decoder is right at a plain session of `J` hidden-output tables** (R11b at `--plain-tables --session-tables J`
+/-- **The decoder is right at a plain session of `J` hidden-output tables** (the decoder premise at `--plain-tables --session-tables J`
 under hidden outputs): given the tags, the session's circuit, `wr` the challenger's record and the challenger's samples
 setting each table up at `mPts` link points, `DecodesOnJ` holds at `planPHJ` with the decoder `decJ` on each table's two
 streams, single coins as field elements, no final messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and

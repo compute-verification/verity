@@ -3,6 +3,37 @@ module
 public import Definitions.Pouw.RelativeSecurity
 public import Properties.Pouw.Strata
 public import Properties.Spot.Draw
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The ε a served window's credit reports (`PouwCheck.Credit.established`, `PouwWindow.epsAt`)
@@ -29,10 +60,10 @@ at least ε of the credited work with probability at most δ.
 
 The sample is the one `PouwCheck.workUnits` runs: `Flock.Draw.stratified` over the strata `law` gives, stratum `i` sampling
 `Flock.Draw.subset` of its `k_i` units from its own stream of `need` bytes (`drawnOn`). The streams are modelled as
-independent and uniform, as `Properties.Served.SampleMissesSubset` and `Claims.Sampling.live_work_miss_le` model them:
-the service derives stratum `i`'s stream as `stream key ["draw", template] need`, its label distinct for each stratum
-(the templates are distinct, `StrataTile`), and these are that derivation in the random-oracle model. They add no named
-assumption: the probability is over the streams' bytes.
+independent and uniform, as `Properties.Served.SampleMissesSubset` models them: the service derives stratum `i`'s stream
+as `stream key ["draw", template] need`, its label distinct for each stratum (the templates are distinct,
+`StrataTile`), and these are that derivation in the random-oracle model. They add no named assumption: the probability
+is over the streams' bytes.
 -/
 
 @[expose] public section
@@ -62,9 +93,9 @@ def creditedWork (layout : Json) (got served : List ℕ) : ℕ :=
 credit reports: wherever `strata` accepts a layout with strata `ss`, `law` puts them under `work:K`, and
 `kPrime ε δ C W 1` (`W` the strata's work) answers `K′ ≤ K`, the sample over uniform streams (`drawnOn`) samples no unit of a
 set `B` whose units do at least `ε·C` of the work (`unitWork`) with probability at most `δ`. The streams are independent
-and uniform, as `Properties.Served.SampleMissesSubset` and `Claims.Sampling.live_work_miss_le` model them: the service
-derives stratum `i`'s as `stream key ["draw", template] need`, its label distinct for each stratum, and this is that
-derivation in the random-oracle model. -/
+and uniform, as `Properties.Served.SampleMissesSubset` models them: the service derives stratum `i`'s as
+`stream key ["draw", template] need`, its label distinct for each stratum, and this is that derivation in the
+random-oracle model. -/
 def WorkDrawMisses : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum) (eps δ : ℚ)
     (C k' : ℕ),

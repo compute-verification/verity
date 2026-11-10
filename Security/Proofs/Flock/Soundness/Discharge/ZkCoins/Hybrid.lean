@@ -1,11 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkCoins.Lazy
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Leaf
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Statements
-public import Proofs.Flock.Soundness.CROnly.Hiding
-public import Proofs.Flock.Soundness.CROnly.Hm96Sha512
-public import Proofs.Flock.Soundness.CROnly.ZKKey
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Weights
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.CROnly.Hm96Sha512
+import Proofs.Flock.Soundness.CROnly.ZKKey
+import Proofs.Flock.Soundness.Discharge.ZkCoins.Lazy
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Committed coins against live coins: a hybrid over committed rounds

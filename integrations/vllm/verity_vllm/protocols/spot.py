@@ -34,8 +34,16 @@ def schemes() -> tuple[str, ...]:
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     if ctx.stage != "commit":
+<<<<<<< 94ca7fd0d18
         return ("sampled proofs runs in the Commit stage: a row's (`verity-vllm row`, declared by the target's `protocols`) "
                 "or serve-openai's Commit windows; verity_vllm.LLM commits nothing",)
+||||||| e10cf2c8559
+        return ("sampled proofs runs in the Commit stage of a row (`verity-vllm row`, declared by the target's `protocols`); "
+                "verity_vllm.LLM commits nothing",)
+=======
+        return ("SPOT runs in the Commit stage of a row (`verity-vllm row`, declared by the target's `protocols`); "
+                "verity_vllm.LLM commits nothing",)
+>>>>>>> 7af4d24fca3e
     if scheme == RECORDED:
         return (f"{RECORDED} (SHA-256, 32-byte roots) is kept only to read recorded runs: a Commit commits under "
                 f"{DEFAULT_SCHEME}, so declare {NAME}:{DEFAULT_SCHEME}",)

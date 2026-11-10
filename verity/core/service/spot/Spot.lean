@@ -2,6 +2,7 @@ module
 
 public import Spot.Json
 public import Spot.Program
+public import Spot.Bits
 public import Spot.Partition
 public import Spot.PartitionRef
 public import Spot.Draw
@@ -10,6 +11,7 @@ public import Spot.Supplied
 public import Spot.Registration
 public import Spot.Produced
 public import Spot.Bound
+public import Spot.PlanCheck
 public import Spot.PyJson
 public import Spot.Record
 public import Spot.OneStage
@@ -22,6 +24,7 @@ public import Spot.Slots
 public import Spot.FilePart
 public import Spot.PopOrder
 public import Spot.Service
+public import Spot.SecondStage
 public import Spot.Run
 public import Spot.Stream
 public import Spot.Fleet
@@ -36,9 +39,13 @@ public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
 public import Spot.Wires
 public import Spot.WiresSpan
+public import Spot.WiresOrder
 public import Spot.WiresSound
 public import Spot.WiresComplete
 public import Spot.WiresDrawn
 public import Spot.SiteDifftest
+public import Spot.Interval
+public import Spot.FactorUpper
+public import Spot.TwoStageCheck
 
 @[expose] public section

@@ -39,11 +39,11 @@ stated on these objects.
   partition, is private. An inference block is a unit of a
   `Partition`; training's instance calls them serving blocks. No ordering of the inference blocks is required: Lemma 1
   and Theorem 3 read none, so the draft's "inter-block edges point forward" is dropped.
-* A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every inference block has exactly `c` gates, padding
-  included, and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size `c · B` for `B` inference blocks.
-  Inference blocks of at most `c` gates become exactly `c` by a `Pad`: registered padding gates in each inference block, read by
-  nothing of `d`.
-* The **size ratio** relative to a reference of size `T₀` is `|C| / T₀` (`slowdown`), a ratio of circuit sizes.
+* A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every inference block has at most `c` gates,
+  `|I| ≤ c`, and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size at
+  most `c · B` for `B` inference blocks.
+* The **size ratio** of `B` inference blocks of budget `c` relative to a reference of size `T₀` is `c · B / T₀`
+  (`slowdown`), each inference block priced at `c` gates: at least `|C| / T₀`.
 * **Local description length** (§4): `LDL M t r y` is the length of a shortest program on which the decoder `M`, with
   indexed access to the registered information `r`, outputs `y` within `t` steps, and `⊤` when none does. Side
   information `z` is registered information paired with it, `LDL M t (r, z) y`. The decoder is a parameter (`Decoder`):
@@ -112,27 +112,16 @@ that `S` reads is among them. -/
 def RegisteredCircuit.unregistered (d : RegisteredCircuit) (S : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
   d.D.into S \ d.θ
 
-/-- **A `(c, k)`-partition** of a Boolean declaration's operation gates: every inference block has exactly `c` gates and at
+/-- **A `(c, k)`-partition** of a Boolean declaration's operation gates: every inference block has at most `c` gates and at
 most `k` unregistered input bits. -/
 structure Partition.IsCK (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (c k : ℕ) : Prop where
   boolean : d.D.Boolean
-  card : ∀ u, (P.gates u).card = c
+  card : ∀ u, (P.gates u).card ≤ c
   reads : ∀ u, (d.unregistered (P.gates u)).card ≤ k
 
-/-- **A padding** of the partition `P` of `d` to the partition `P'` of `d'`, with as many inference blocks: `d'`'s circuit
-contains `d`'s (`M`), with the same registered gates among `d`'s, every gate of `d` stays in its inference block, and every
-other gate of `d'`, the padding, is a registered input gate or reads registered gates only. Padding is fixed and
-input-independent, so each inference block reads the unregistered gates it read before (`Verity.Pad.unregistered`).
-It completes the accounting; it is not evidence that hardware evaluated anything. -/
-structure Pad (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (d' : RegisteredCircuit) (P' : Partition d'.D B) where
-  M : Containment d.D d'.D
-  θ_emb : ∀ g, M.emb g ∈ d'.θ ↔ g ∈ d.θ
-  unit_emb : ∀ g, P'.unit (M.emb g) = P.unit g
-  pad_input : ∀ g', g' ∉ Set.range M.emb → d'.D.isInput g' = true → g' ∈ d'.θ
-  pad_reads : ∀ g', g' ∉ Set.range M.emb → ∀ a ∈ d'.D.reads g', a ∈ d'.θ
-
-/-- **The size ratio** of `C` relative to a reference circuit of size `T₀`: `|C| / T₀`. -/
-noncomputable def slowdown (C : Circuit) (T₀ : ℝ) : ℝ := ((C.size C.computed : ℕ) : ℝ) / T₀
+/-- **The size ratio** of `B` inference blocks of budget `c` relative to a reference circuit of size `T₀`: `c · B / T₀`,
+each inference block priced at `c` gates. -/
+noncomputable def slowdown (c B : ℕ) (T₀ : ℝ) : ℝ := ((c * B : ℕ) : ℝ) / T₀
 
 /-- **The committed registered circuit**: the committed trace (`trace`, the values committed in the execution phase,
 in commitment order), the registered circuit `d`, whose circuit `C`, registered inputs `θ`, partition `𝓘` into `d.n`

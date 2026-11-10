@@ -4,8 +4,37 @@ public import Proofs.Flock.Bridge.Targets
 public import Proofs.Flock.Bridge.PortRoots
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Bridge.RightRegZc
-public import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
-public import Proofs.Flock.Soundness.Assumptions.Finders
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The bridge's targets with canonical openings (targets, not proved)
@@ -34,8 +63,8 @@ targets read them:
   population of the game's `n` units in order (`Bridge.PopMatches`);
 * `Bridge.AssemblyTargetC`: those, `PartBlocksTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLiveV2`.
 
-`SampledKSLiveV3` (`Refused`) reads V2's file preconditions off the verifiers' acceptance, which refuses files that fail
-them.
+`Bridge.SampledKSLiveRoots` (`Refused`) and `SampledKSLiveV3` (`ScopeGate`) read V2's file preconditions off the
+verifiers' acceptance, which refuses files that fail them.
 -/
 
 @[expose] public section
@@ -80,7 +109,7 @@ openings at a wire the constants `κ` don't fix opens its wire's position under 
 any design `r` and strata `ns` of the population, at constants that fix only input gates (`progOf` lowers only an input
 to `.const`; a fixed computed wire would be neither a constant nor transported). -/
 def FaultyRightTargetC : Prop :=
-  ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
+  ∀ {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
     (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
     (roots : List Claims.Msg) (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n),
@@ -244,7 +273,8 @@ time `t'` and one opening's verification `v` per run: `2(t' + v)` for a rewindin
 two openings verified), `t' + v` for the self-clash finder (one run, one verification), and `t' + v` per run for the
 link finders (`LinkCRZC`), whose trials read each run's verdict. Its one bound on the prover is `t'`, where
 `SampledKSLive` takes the budgets `q_F`, `q_S` and the link finders' per-run cost apart from it. It takes cr/sha-512 and
-ecr/sha-512 at those finders as the named assumptions `Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`.
+ecr/sha-512 at those finders as `Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`, the named assumptions
+`SHA512CRStrict` and `SHA512CRExpected` at them.
 `SampledKSLive` implies it (`sampledKSLiveV2_of`). -/
 def SampledKSLiveV2 : Prop :=
   ∀ (n : ℕ) (Reg : Type)

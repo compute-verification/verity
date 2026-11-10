@@ -2,7 +2,7 @@ module
 
 public import PouwWindow.Draw
 public import PouwWindow.Public
-public import Lean.Data.Json
+public import Lean.Data.Json.Basic
 
 /-!
 # The execution phase's values as JSON

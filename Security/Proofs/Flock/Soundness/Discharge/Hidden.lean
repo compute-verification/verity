@@ -4,8 +4,8 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
-public import Proofs.Flock.Soundness.Discharge.Hidden.DerivedP
 public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.Hidden.Built
 public import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 public import Proofs.Flock.Soundness.Discharge.Hidden.Binding
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
@@ -19,7 +19,12 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
 public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 public import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 public import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Theorems
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Checked
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Upv
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape
@@ -42,9 +47,8 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Spec`: `setupHidden_spec'`, the walk of `Stmt.setupHidden` to its `Spec`;
 * `PortsP`: the public leaves `HmIn.parse` accepted (`publicCol_at`), and the rows `HmIn.delta` keeps (`keepCol`,
   `deltaEntry_inDelta`);
-* `DerivedP`: the public inputs the verifier derives itself (`derivedGroup_some`, `checkDerived_words`: instance `i`'s
-  word `i mod G`);
 * `Facts`: what is read off `Spec` and `HmOut.parse` (`setupHidden_hm96`, `setupHidden_wf`, `parse_untyped`, ...);
+* `Built`: an untyped statement's unit is built, from the parse (`built_of_parseStmt`);
 * `Binding`: the row commitment's extractor (`commitPair_spec'`) and `OutputsBinding` from `OutputsCommitted`;
 * `Public`: what the statement takes from the public file (`public_exposes'`);
 * `Delta`: Δ as `HmRow.delta`'s, then `outPairs` (`hidden_delta'`);
@@ -62,9 +66,8 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Committed`: an output row's registered `b ‖ c` at a sampled proof block is the commit string of its prefix and the output words
   its template instance computes (`outputs_committed'`);
 * `Theorems`: one theorem per frozen statement;
-* `Wide.Defs`, `Wide.Theorems`: `OutputsCommitted` and `OutputsBinding` widened to a tail that returns the outputs
-  (`…Tail`), `sha512/row/v2` rows (`…V2`) and shared rows (`…Wide`);
-* `Wide.Tail`: the Tail statements (`outputs_committed_tail'`, `outputs_binding_tail_of`);
+* `Wide.Defs`: `OutputsCommitted` and `OutputsBinding` widened to a tail that returns the outputs (`…Tail`, which no
+  theorem proves), `sha512/row/v2` rows (`…V2`) and shared rows (`…Wide`);
 * `Wide.RowCommit`: a row's commit string under any 128-byte prefix, with or without compressions (`port_commit_rowsP`,
   `port_commit_rows0`);
 * `Wide.Copies`: `HmRow.delta`'s Δ for any rows (`delta_flat_all`) and its copies at a row's own columns (`…_filterAll`);
@@ -106,8 +109,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
   refuses `units_per_vu = 0`;
 * `Wide.Block`: a template instance per block from acceptance (`check_g_pos`, `setupH_g_pos`), since `HmRow.check`
   refuses `vus_per_block = 0`;
-* `Wide.Checked`: the six widened statements without `0 < st.c.upv` (`…Checked`), proved in `Wide.Theorems`
-  (`…_checked`).
+* `Wide.Checked`: the six widened statements without `0 < st.c.upv` (`…Checked`), which no theorem proves.
 -/
 
 @[expose] public section

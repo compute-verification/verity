@@ -1,8 +1,9 @@
 module
 
 public import Properties.Accounting.Remote
-public import Proofs.Properties.Accounting.Remote.Bisect
-public import Proofs.Properties.Accounting.Remote.Sort
+import Proofs.Properties.Accounting.Remote.Bisect
+import Proofs.Properties.Accounting.Remote.Sort
+import Std.Data.HashMap.Lemmas
 
 /-!
 # The window's draws (`SampleIsSubset`)

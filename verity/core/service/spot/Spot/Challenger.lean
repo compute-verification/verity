@@ -28,6 +28,7 @@ The difftest's pieces (`Pieces.table`): `challenger_commitment`, `challenger_ope
 -/
 module
 
+public import Flock.FV3
 public import Flock.Hm96
 public import Flock.Net
 public import Flock.Public

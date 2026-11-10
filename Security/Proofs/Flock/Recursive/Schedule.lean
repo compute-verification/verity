@@ -1,8 +1,10 @@
 module
 
 public import Proofs.Flock.Recursive.Defs
-public import Proofs.Flock.Soundness.ExecDraw
 public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecDraw
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: an inner protocol on a fixed schedule

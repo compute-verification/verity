@@ -1,16 +1,55 @@
 module
 
+public import Definitions.Claims.Sampling
 public import Proofs.Flock.Claims.Sampling.Binding
-public import Proofs.Flock.Claims.Sampling.Cost
+public import Std.Tactic.BVDecide.Normalize.Prop
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Prob
 
 /-!
-# `B_ext` at the claims block's finder, and the block's bits from its KS
+# `B_ext`, and bits from a linear KS bound
 
-The claims block (`Definitions.Claims.Sampling`) states `KS` with the linear term `1 · Pr[B_ext]`, where `Bext` forks
-like `B`, runs the extractor in each branch, and outputs the first collision among the `H` calls the two extractions
-make themselves: the commitment's checks of the openings it keeps. The trace's commitment binds (`CommitmentScheme.Binds`), so
-two kept openings of one position to different values make such a collision. This file states that reduction at `Bext`
-and derives the block's `Bits` from its `KS`.
+The compiled sampled verifier's `KS` (`SamplingGeneric.Compiled.KS`) is stated with the linear term `1 · Pr[B_ext]`,
+where `Bext` forks like `B`, runs the extractor in each branch, and outputs the first collision among the `H` calls the
+two extractions make themselves: the commitment's checks of the openings it keeps. The trace's commitment binds
+(`CommitmentScheme.Binds`), so two kept openings of one position to different values make such a collision. This file
+states that reduction at `Bext`, at any extractor, and derives `BitsLin` from `KSLin`.
 
 * `OwnColl`: one extraction's own calls hold two different inputs with one output.
 * `Pr_ownColl_le_Bext`: **the reduction's probability step**. `B_ext`'s first branch is the extraction on the judged
@@ -23,8 +62,6 @@ and derives the block's `Bits` from its `KS`.
   runs of at most `t` calls.
 * `lamLin_bound`, `Bits_of_KSLin`: `κ + t·√γ·2^{−255.5} + t·2βc/2^256 ≤ t·2^{−lamLin κ γ β c}`, so `KSLin` on a
   scope (`KSLinOn`) with `StrictBirthday` for `B` and `ExpectedCR` for `Bext` gives `BitsLin` at `lamLin` on it.
-* `Bits_of_KS`: **the block's bits from its KS**, given the extractor's expected reruns and own calls (`Efficient`'s)
-  and a nonnegative table error.
 -/
 
 @[expose] public section
@@ -333,45 +370,8 @@ theorem Bits_of_KSLin {H : Msg → Msg} {V : Verifier Coin} {Scope : Msg → Pro
 
 end Bits
 
-/-! ## The block's bits -/
+/-! ## The waits' slack -/
 
-section Block
-
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem slack_pos : 0 < slack := by unfold slack; positivity
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem κF_nonneg (D : Deploy Coin Col T) (x : Msg) (hε : 0 ≤ D.εtable x) : 0 ≤ κF D x := by
-  unfold κF; positivity
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem κ_pos (D : Deploy Coin Col T) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) (hε : 0 ≤ D.εtable x) : 0 < κ D δ x := by
-  unfold κ
-  have h1 : 0 ≤ slack ^ 2 * (δ + κF D x) := mul_nonneg (pow_nonneg slack_pos.le 2) (by linarith [κF_nonneg D x hε])
-  have h2 : 0 < (1 + slack) * (2 * D.k x / D.cap x + Real.exp (-(D.k x : ℝ) / 8)) :=
-    mul_pos (by linarith [slack_pos]) (by positivity)
-  linarith
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem γ_nonneg (D : Deploy Coin Col T) (x : Msg) : 0 ≤ γ D x := by
-  unfold γ; have := slack_pos; positivity
-
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem work_pos (D : Deploy Coin Col T) (x : Msg) : 0 < work D x := by
-  unfold work; positivity
-
-/-- **Sampling: bits from KS**: the block's `KS`, with the extractor's expected reruns and own SHA-512 calls the ones
-`Efficient` states and the table error nonnegative, gives the block's `Bits`. -/
-theorem Bits_of_KS {H : Msg → Msg} {D : Deploy Coin Col T} (h : KS H D)
-    (hruns : ∀ decode, ExtractRunsExpLe H (E D decode)
-      (fun x => 1 + D.k x + (D.k x : ℝ) ^ 2 * (1 + nPU D x * D.innerWaits x * D.innerK x)))
-    (hown : ∀ decode, ExtractOwnLe H (E D decode) (fun x => D.k x ^ 2 * nPU D x * D.openCalls x))
-    (hε : ∀ x, 0 ≤ D.εtable x) : Bits H D := fun δ decode hδ hdec =>
-  Bits_of_KSLin (h δ decode hδ hdec) (hruns decode) (hown decode) (fun x => κ_pos D hδ x (hε x)) (γ_nonneg D)
-    (work_pos D) fun x => le_of_eq (by unfold work; push_cast; ring)
-
-end Block
 
 end Claims.Sampling

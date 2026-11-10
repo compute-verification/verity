@@ -6,11 +6,10 @@ public import Definitions.Nci.Assumptions.Info
 /-!
 # The inference-only policy over threads, each value charged once over its copies: the guarantees
 
-`ThreadedReadsInfoFmt`, `ThreadedContainedInfoFmt` and `ThreadedOfStateFmt` restated under `WeightsSupportFmt2`: Theorem
-1 with reads counted by information (`ThreadedReadsInfoFmt2`), through a containment (`ThreadedContainedInfoFmt2`), and
-for a set read by a state of `k` bits and an ingress (`ThreadedOfStateFmt2`). Each holds for a reference circuit whose
-sources meet the fan-out bound at `(b_a, e, n)` and keep its counted multiplications `k₀` steps off the registered
-information.
+Under `WeightsSupportFmt2`: Theorem 1 with reads counted by information (`ThreadedReadsInfoFmt2`), through a
+containment (`ThreadedContainedInfoFmt2`), and for a set read by a state of `k` bits and an ingress
+(`ThreadedOfStateFmt2`). Each holds for a reference circuit whose sources meet the fan-out bound at `(b_a, e, n)` and
+keep its counted multiplications `k₀` steps off the registered information.
 -/
 
 @[expose] public section

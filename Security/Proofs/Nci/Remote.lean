@@ -217,7 +217,7 @@ theorem sources_le_at {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC 
     (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ a * κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ)
     (hx : Mx ≤ κ * χ * (C + U) / 2) :
     efficiency κ M C U ≤
-      a * unmonitoredShare C U + (1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ := by
+      a * unregisteredShare C U + (1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ := by
   have hS : 0 < C + U := by linarith
   have hκi : κ * κ⁻¹ = 1 := mul_inv_cancel₀ hκ.ne'
   have hSi : (C + U) * (C + U)⁻¹ = 1 := mul_inv_cancel₀ hS.ne'
@@ -227,10 +227,10 @@ theorem sources_le_at {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC 
     linear_combination (-(κ * W / 2)) * hCi
   have hB : 0 ≤ a * κ * U / 2 + κ * C / 2 * residualShare W C + C / ρ + κ * χ * (C + U) / 2 - M := by
     linarith
-  have key : a * unmonitoredShare C U + (1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ -
+  have key : a * unregisteredShare C U + (1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ -
       efficiency κ M C U =
       2 / κ / (C + U) * (a * κ * U / 2 + κ * C / 2 * residualShare W C + C / ρ + κ * χ * (C + U) / 2 - M) := by
-    simp only [declaredShare, unmonitoredShare, efficiency]
+    simp only [declaredShare, unregisteredShare, efficiency]
     linear_combination
       (-(a * U * (C + U)⁻¹ + C * residualShare W C * (C + U)⁻¹ + χ * (C + U) * (C + U)⁻¹)) * hκi +
       (-(residualShare W C + 2 * κ⁻¹ * ρ⁻¹ + χ)) * hSi
@@ -259,14 +259,14 @@ theorem remote_core {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 
     (ha1 : a ≤ 1) (hM0 : 0 < M) (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ a * κ * U / 2)
     (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ) (hx : Mx ≤ κ * χ * (C + U) / 2) :
     efficiency κ M C U ≤
-        unmonitoredShare C U + (1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ ∧
-      remoteDampener a (unmonitoredShare C U)
-          ((1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ) ≤
+        unregisteredShare C U + (1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ ∧
+      remoteDampener a (unregisteredShare C U)
+          ((1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ) ≤
         hardwareMultiple a κ M C U := by
   have h := sources_le_at hκ hC hU hM hu hr hd hx
   have hS : 0 < C + U := by linarith
-  have hs0 : 0 ≤ unmonitoredShare C U := div_nonneg hU hS.le
-  have h2 : a * unmonitoredShare C U ≤ unmonitoredShare C U := by
+  have hs0 : 0 ≤ unregisteredShare C U := div_nonneg hU hS.le
+  have h2 : a * unregisteredShare C U ≤ unregisteredShare C U := by
     have := mul_le_mul_of_nonneg_right ha1 hs0
     linarith
   have hη : 0 < efficiency κ M C U := by
@@ -283,13 +283,11 @@ theorem residualShare_sub {W C εW ε L θ : ℝ} (hC : 0 < C) :
   linear_combination (ε + L + θ) * hCi
 
 theorem DampenerRemote : Guarantees.DampenerRemote := by
-  intro Ω _ μ N cap wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx c k b_w b_a r d T
-    dd e Mc hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hc hbw hba hdd hcomp
+  intro Ω _ μ N cap wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx Γ α b_w b_a r d T
+    dd e Mc hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hα hbw hba hdd hcomp
     hB hthr hW hsize hM0 hM hu hres hx
-  have hdecl : (T.M.card : ℝ) ≤ C / rhoT (k / c : ℝ) b_a (T.bound k b_w dd e) := by
-    have h := declared_le (Γ := c) (α := (k / c : ℝ)) (by positivity) hbw hba hdd (compliesRate_of_complies hcomp) hB
-      (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc]) hsize
-    rwa [rate_mul _ hc] at h
+  have hdecl : (T.M.card : ℝ) ≤ C / rhoT α b_a (T.bound (α * Γ) b_w dd e) :=
+    declared_le hα hbw hba hdd hcomp hB hthr hW hsize
   refine prob_ge_of_not μ ?_ ((prob_or_le μ (fun ω => ε * C < wrongCapacity cap (wrong ω))
     (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b)).trans
       (add_le_add (CertificateSlack Ω μ N cap wrong p ε C hp hε hC hcap0 hcC hsound)

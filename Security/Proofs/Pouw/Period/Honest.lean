@@ -1,32 +1,69 @@
 module
 
+public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
 public import Proofs.Pouw.Period
 public import Proofs.Pouw.Period.Accept
-public import Proofs.Accounting.ComposePeriod.Honest
+public import Properties.Pouw.Period
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # An honest live-salt period meets `H1CheckedCreditPeriod`'s premises
 
 The positive twin of `Properties.Pouw.Period.H1CheckedCreditPeriod`, as
-`Accounting.SecurityProofs.ComposePeriod.Honest` is of `CircuitWorkPeriod`: a period of `n ≥ 1` windows at H1's
+`Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest` is of `CircuitWorkMonitoringPeriod`: a period of `n ≥ 1` windows at H1's
 instance's own numbers, whose every window the deployed check (`PouwCheck.protocol.check`) accepts at the
-all-protocols leg's parameters (`Accept.h1Params`), and which meets every premise of the instance
+parameters `Accept.h1Params`, and which meets every premise of the instance
 (`h1_meets`).
 
-The leg's check takes these numbers: `verity/pouw/v1` accepts the loop's honest window with 128 real tiles of `N = 144`,
-all 24 sampled tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `DrawIsCoin` and this
-witness use are the leg's actual check's.
+The check takes these numbers at `h1Params`: `verity/pouw/v1` accepts the loop's honest window with 128 real tiles of `N = 144`,
+all 24 sampled tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `SampleIsCoin` and this
+witness use are the deployed check's own.
 
 * The circuit (`circuit`): 128 committed words, one a unit (H1's 128 real tiles a window), no operands, so no unit
   writes another late (`reaches_iff`) and each real tile's late cone is its own word; one round, live. The
   population is the grid's `N_p = 144`: tiles `128 … 143` are fillers of no words. So every real tile's share is
   `1/128` (`shareCone_eq`) and `ρ = 8/9` meets `ρ·N_p·share ≤ 1` with equality.
-* The scheme is the ComposePeriod twin's (operand luck pinned, `r_B = ½`, guess `½`), so the lucks are `½ ≤ 7/8` and
+* The scheme is the ComposeMonitoringPeriod twin's (operand luck pinned, `r_B = ½`, guess `½`), so the lucks are `½ ≤ 7/8` and
   `½ ≤ ½`.
 * The windows (`windows`): every window registers the loop's honest registration (`Accept.h1Reg`) and the service
   answers it with the units of the model's sample at the window's sampling coin, ascending (`unitsOf`), so the check accepts
   every window on every path (`accepted_all`, from `Accept.check_h1`), publishes `N = 144`, `K′ = 24` and exactly
-  those units (`drawIsCoin`), and its registration doesn't read the coins (`RegisteredBeforeDraw`).
+  those units (`sampleIsCoin`), and its registration doesn't read the coins (`RegisteredBeforeDraw`).
 * The salt is the window's round coin (`SaltIsLiveCoin` by definition), every tile is live and paid with its words
   right, and the openings are in `Unit`, so binding holds at `δ_bind = 0`, the service's soundness at `δ_ks = 0`, and
   the staged and flat relations are `True` (`StagedPins`).
@@ -43,7 +80,7 @@ namespace Properties.Pouw.Period.SecurityProofs.HonestH1
 open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs Properties.Pouw.Period.SecurityProofs.Accept
 open PouwCheck (Params UnitsOk Ascending)
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposePeriod
+open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The circuit -/
 
@@ -173,7 +210,7 @@ def period : (n : ℕ) → WindowPlay Bool Ω1 (Fin 144) circuit.rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) stages fun _ => period n
 
-/-- The check's parameters: the leg's (`h1_params`). -/
+/-- The check's parameters: `h1Params`. -/
 def prm : Params := h1Params ""
 
 /-- Every window's registration: the loop's honest one. -/
@@ -253,7 +290,7 @@ theorem acceptedUpTo_all (n : ℕ) (x : Paths Ω1 n) (w : Fin n) : (windows n).A
   fun w' _ => accepted_all n x w'
 
 /-- **The check's sample is the period's sampling coin**: it publishes `N = 144`, `K′ = 24` and the sample's units. -/
-theorem drawIsCoin (n : ℕ) : DrawIsCoin hK24 prm (windows n) := by
+theorem sampleIsCoin (n : ℕ) : SampleIsCoin hK24 prm (windows n) := by
   intro x w pub prof hc
   have he := hc.symm.trans (check_h1 "" "" "" "" ByteArray.empty (unitsOf (coinAt x w).2) (unitsOk _))
   injection he with hp
@@ -352,7 +389,7 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     (period n).EveryWindow (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
     PrefixOf (layer n) (play n).game ∧
     (∀ w, prob (fun x => (layer n).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (windows n) ∧ DrawIsCoin hK24 prm (windows n) ∧
+    RegisteredBeforeDraw (windows n) ∧ SampleIsCoin hK24 prm (windows n) ∧
     ServiceSound prm (windows n) opened (stagedAt salt staged) 0 ∧
     SaltIsLiveCoin hr1 (salt (n := n)) enc ∧ StagedPins staged flat ∧
     (period n).EveryWindow
@@ -368,7 +405,7 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     ∀ x, checkedLive Honest.scheme circuit (period n) prm (windows n) x = 128 * n := by
   refine ⟨by decide, rfl, scope hδs, fun t => ?_, fun j => ?_, fun t ht => ?_, rfl,
     period_every (P := fun live _ => DeadConeDead Honest.scheme circuit 144 live) (fun _ _ ht _ => by simp at ht) n,
-    fun x j _ => acceptsUpTo_period _ _ _ n j x, fun w => ?_, fun _ _ _ => rfl, drawIsCoin n, serviceSound n,
+    fun x j _ => acceptsUpTo_period _ _ _ n j x, fun w => ?_, fun _ _ _ => rfl, sampleIsCoin n, serviceSound n,
     fun _ _ => rfl, fun _ _ _ h => h,
     every_perLiveTile (P := fun k G _ => OperandHMu (Honest.scheme.mu k) G)
       (fun k t => Honest.operandHMu_of_zero _ _ _ _ _ (paid_share .folded (by decide) t)) n,

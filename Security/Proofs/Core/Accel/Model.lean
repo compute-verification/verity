@@ -2,10 +2,8 @@ module
 
 public import Definitions.Core.Assumptions.Accel
 public import Mathlib.Algebra.Order.Monoid.Canonical.Basic
-public import Mathlib.Tactic.GCongr
-public import Mathlib.Tactic.NormNum
 public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.Ring
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The machine 𝓜: an honest semantics, the rate bound, and the card premise's refutations

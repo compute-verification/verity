@@ -1,6 +1,37 @@
 module
 
 public import Proofs.Flock.Claims.ZK.Round0
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The masked session's tape at the executable's indices
@@ -36,7 +67,7 @@ open FlockSoundness.Discharge
 open CoinLayer
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -81,6 +112,19 @@ abbrev ExeBase : Type :=
 abbrev ExeCell : Type :=
   ExeBase × ((Fin (schMax + schMax) → ZkView.Salt) × (Fin 2 → Fin (_root_.Flock.Zk.Q + 2 ^ 64) → ZkView.Salt) ×
     (Fin 2 → ZkView.Salt)) × (ZkView.LeafPos zMax → ZkView.Bits × ZkView.Salt)
+
+/-- The base samples' `Fintype`. -/
+noncomputable instance ExeBase.fintype : Fintype ExeBase := inferInstance
+
+/-- **The cell's `Fintype`**, assembled from its components': a search over the salts' product exhausts the recursion
+depth, though each component's own search is quick. -/
+noncomputable instance ExeCell.fintype : Fintype ExeCell :=
+  @instFintypeProd _ _ ExeBase.fintype <|
+    @instFintypeProd _ _
+      (@instFintypeProd _ _ (inferInstance : Fintype (Fin (schMax + schMax) → ZkView.Salt)) <|
+        @instFintypeProd _ _ (inferInstance : Fintype (Fin 2 → Fin (_root_.Flock.Zk.Q + 2 ^ 64) → ZkView.Salt))
+          (inferInstance : Fintype (Fin 2 → ZkView.Salt)))
+      (inferInstance : Fintype (ZkView.LeafPos zMax → ZkView.Bits × ZkView.Salt))
 
 /-! ## A statement's reading of a cell -/
 

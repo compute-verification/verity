@@ -161,10 +161,13 @@ def register_int8_parts(target: Any) -> None:
 
 
 def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8, case: str = CASE,
-                      engine_args: dict[str, Any] | None = None, target: Any = None, execution: str | None = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+                      engine_args: dict[str, Any] | None = None, target: Any = None, execution: str | None = None,
+                      env: dict[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """The exact `LLM(**kw)` keyword set `build_engine` would build from these inputs (+ the env flags it applies and the
     checkpoint record), WITHOUT building: a hot worker compares it with its live engine's `kwargs` to decide reuse vs restart.  Applies the
-    same environment knobs as `build_engine` (idempotent).  Refusals (unknown execution, contradicting enforce_eager) are the same."""
+    same environment knobs as `build_engine` (idempotent), ``env`` (an engine class's, `engine_classes.env`) last, over the process's.
+    Refusals (unknown execution, contradicting enforce_eager, an Inductor that read a fixed switch otherwise:
+    `engine_env.require_inductor`) are the same."""
     from verity_vllm.engine import engine_profile as prof
 
     if execution is not None and execution not in EXECUTION_ENFORCE_EAGER:
@@ -175,6 +178,8 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     env_flags = served.apply(execution)
     if target is not None:
         env_flags.update(engine_env.apply_target(target.env()))
+    if env:
+        env_flags.update(engine_env.apply_target(env))
     env_flags = {**prof.apply_env(), **env_flags}
     register_int8_parts(target)
     cp = prof.checkpoint_for(case, checkpoints)
@@ -195,12 +200,13 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     if getattr(target, "int8_exact", None) is not None and kw.get("enforce_eager") is not True:
         # Inductor would fuse (and may re-round) the quantizer and dequantization, and replay the linears' call counters as constants
         raise RuntimeError(f"int8_exact {target.int8_exact!r} runs eagerly only; the engine args request enforce_eager={kw.get('enforce_eager')!r}")
+    engine_env.require_inductor(kw)
     return kw, env_flags, cp
 
 
 def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8,
                  verify_weights: bool = False, case: str = CASE, engine_args: dict[str, Any] | None = None, target: Any = None,
-                 execution: str | None = None) -> Engine:
+                 execution: str | None = None, env: dict[str, str] | None = None) -> Engine:
     from verity_vllm.engine import engine_profile as prof
 
     # `enforce_eager` comes from the workload's declared execution (`execution_of_workload`), not from a literal:
@@ -211,10 +217,12 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     # explicit CLI engine args override last and are recorded in versions.json/run.json.  All of it in
     # `engine_kwargs_for` (the hot worker computes the same keyword set to decide reuse vs restart).
     env0 = engine_env.snapshot()
-    kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target, execution=execution)
+    kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target,
+                                          execution=execution, env=env)
     from vllm import LLM  # after apply_env
 
-    from verity_vllm.engine import sparse_mla, topp_pin
+    from verity_vllm.engine import moe_align, sparse_mla, topp_pin
+    moe_align.arm()
     sparse_mla.arm()
     topp_pin.arm()
 
@@ -302,8 +310,8 @@ def target_mismatches(engine: Engine) -> list[str]:
     if fav != tp.effective_flash_attn_version() and (fav is not None or flash_attn_versions(engine.model)):
         bad.append(f"flash_attn_version declared {tp.flash_attn_version!r} (effective {tp.effective_flash_attn_version()}), layers report {fav!r}")
     # the engine must realise the declared EXECUTION: eager profile -> enforce_eager True; `piecewise` -> torch.compile
-    # (VLLM_COMPILE) + CUDAGraphMode PIECEWISE read back from the built vllm_config (an eager engine labelled compiled, or a compiled one
-    # labelled eager, is refused here before anything is recorded)
+    # (VLLM_COMPILE) + CUDAGraphMode PIECEWISE read back from the built vllm_config; `breakable` -> mode NONE, breakable CUDA graphs at the
+    # declared capture sizes (an eager engine labelled compiled, or a compiled one labelled eager, is refused here before anything is recorded)
     comp = compilation_facts(engine.llm)
     if comp:
         want = tp.COMPILATIONS.get(tp.compilation) if tp.compilation else None
@@ -314,8 +322,14 @@ def target_mismatches(engine: Engine) -> list[str]:
                 bad.append(f"profile declares compilation {tp.compilation!r}, engine built with enforce_eager={comp.get('enforce_eager')!r}")
             if comp.get("cudagraph_mode") != want["cudagraph_mode"]:
                 bad.append(f"profile declares cudagraph_mode {want['cudagraph_mode']!r}, engine runs {comp.get('cudagraph_mode')!r}")
-            if comp.get("mode") not in (want["mode"], "3"):
+            if comp.get("mode") not in ((want["mode"], "3") if want["mode"] == "VLLM_COMPILE" else (want["mode"],)):
                 bad.append(f"profile declares CompilationMode {want['mode']!r}, engine runs {comp.get('mode')!r}")
+            if bool(comp.get("breakable_cudagraph")) != bool(want.get("breakable")):
+                bad.append(f"profile declares breakable CUDA graphs {bool(want.get('breakable'))}, engine runs "
+                           f"VLLM_USE_BREAKABLE_CUDAGRAPH={comp.get('breakable_cudagraph')!r} (vLLM turns it on for the architectures in "
+                           f"DEFAULT_BREAKABLE_CUDAGRAPH_ARCHITECTURES: their compiled target is 'breakable')")
+            if "capture_sizes" in want and comp.get("capture_sizes") != list(want["capture_sizes"]):
+                bad.append(f"profile declares capture sizes {want['capture_sizes']}, engine captures {comp.get('capture_sizes')!r}")
             if bool(comp.get("emulate_precision_casts", False)) != bool(want.get("emulate_precision_casts", False)):
                 bad.append(f"profile declares Inductor emulate_precision_casts={want.get('emulate_precision_casts')!r}, engine compiled with "
                            f"{comp.get('emulate_precision_casts')!r} (inductor_compile_config {comp.get('inductor_compile_config')!r})")
@@ -355,6 +369,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
     (name; the pinned vLLM's IntEnum str() is the number, recorded too), CUDAGraphMode, capture sizes, inductor graph partition, enforce_eager,
     compile-cache switch.  Written into the run header's `compilation` block beside the profile's `effective_compilation` (the global match's G1
     compares a compiled Program's declared facts against it) and into commit_delta's versions.json (control and treatment must agree)."""
+    from verity_vllm.engine import engine_profile as prof
     out: dict[str, Any] = {}
     try:
         vc = llm.llm_engine.vllm_config
@@ -370,6 +385,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
         out["use_inductor_graph_partition"] = bool(getattr(cc, "use_inductor_graph_partition", False))
         out["backend"] = str(getattr(cc, "backend", None) or ("inductor" if out["mode_value"] == 3 else None))
         out["enforce_eager"] = bool(vc.model_config.enforce_eager)
+        out["breakable_cudagraph"] = prof.breakable_cudagraph()
         out["compile_cache"] = "disabled" if os.environ.get("VLLM_DISABLE_COMPILE_CACHE") == "1" else "enabled"
         # the Inductor config the pieces were compiled with: emulate_precision_casts makes the compiled kernels
         # perform the bf16 roundings the Program specifies at every module/op boundary (Inductor otherwise carries fp32 through fused

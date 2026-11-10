@@ -1,10 +1,10 @@
 module
 
 public import Batteries.Tactic.OpenPrivate
-public import Properties.Accounting.Remote.Coins
 public import Proofs.Properties.Accounting.Remote.Draw
 public import Proofs.Properties.Accounting.Remote.Session
 public import Proofs.Properties.Accounting.Remote.Window
+public import Properties.Accounting.Remote.Coins
 
 /-!
 # When the verifier reads a window's openings coin (`AcceptSamplesOpenable`, `OpeningsUnreadUntilSampled`)

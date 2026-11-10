@@ -2,6 +2,24 @@ module
 
 public import Proofs.Flock.VBridge.Unit
 public import VStar.Unit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # The bridge over V*'s circuits as core code
@@ -401,7 +419,7 @@ open FlockSoundness FlockSoundness.Audit
 (`unit_recOpen`). Let the verifier build `net` from the layout of `VStar.recOpenUnit LANES H` (`netOf`), and let unit `u`
 be an instance of `k` stacked copies of the net's rows, the transcript `X` carrying 1 at the stack's constant. Then at
 copy `j`'s column values (`copyVal`), `laid_recOpenUnit` holds. -/
-theorem unit_recOpenUnit {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
+theorem unit_recOpenUnit {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : X (I.wire ((Rows.ofNet hB).stack k).one) = true)
     (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) {LANES H : ℕ} {U : VStar.UnitC}

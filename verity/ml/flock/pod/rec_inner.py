@@ -59,8 +59,8 @@ def _population(sub, n: int, sets: Path, seed: int):
     """The input set of ``sub`` at ``n`` (seeded samples), its lowering, and the `verity/partition/v1` object
     `Q_template_instance` v0 over `population_program` of its template at ``n`` (instance i is unit i), with that program."""
     from verity.core.protocols.spot.one_stage import partition as P
-    from verity_numerical.bench.generate import generate
     from verity_flock.input_sets import InputSet
+    from verity_flock.synthetic import generate
 
     s = InputSet.open(generate(sub, n, seed, sets)["path"])
     template = s.subcircuit.definition(**FC.set_statics(s))

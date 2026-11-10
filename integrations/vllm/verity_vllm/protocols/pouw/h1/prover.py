@@ -161,6 +161,7 @@ def writer_of(directory: str | Path | None) -> Writer | None:
 
 @dataclass(frozen=True)
 class _Job:
+<<<<<<< 94ca7fd0d18
     #: its place in the order kept
     seq: int
     directory: str
@@ -313,6 +314,173 @@ class Writer:
             self._cv.notify_all()
         for t in self._threads:
             t.join()
+||||||| e10cf2c8559
+    d = private(Path(directory) / CALLS)
+    path = d / f"{int(index)}.npz"
+    with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        np.savez(f, a=np.asarray(a, np.int8), s_a=np.asarray(s_a, "<f4").reshape(-1),
+                 records=np.zeros((0, 0), np.uint8) if records is None else np.asarray(records))
+    return path
+=======
+    directory: str
+    index: int
+    lo: int
+    #: each array's (offset, bytes, dtype, shape) in the ring: a, s_a and, when the call has them, its records
+    spans: tuple[tuple[int, int, Any, tuple[int, ...]], ...]
+    #: the copies' event on the device's current stream (None: copied from the host before the job was queued)
+    copied: Any
+
+
+class Writer:
+    """`keep_call` off the serving thread: `keep` copies a call's rows, scales and records into a ring of ``bound`` bytes of
+    host memory (pinned when CUDA is up, so a CUDA tensor's copy is queued on its device's current stream, behind what the
+    stream has enqueued, and the caller never waits on the device), and one thread of the writer's own writes each call's
+    file from the ring, in the order kept, the bytes `keep_call` writes. The caller waits only while the ring is full: at
+    most ``bound`` bytes are in flight (serve-openai's is a window's, `kept_bytes` of each of its calls). A window's
+    directory is `open` on the writer until `wait` returns: once every call kept there is written, raising OSError when
+    any wasn't. A failure the writer doesn't expect stops it, raised on its thread: that call and each call queued or kept
+    after it fail their windows, so no `wait` waits on a call the writer won't write."""
+
+    def __init__(self, bound: int) -> None:
+        import torch
+
+        self.bound = _up(bound)
+        self._pinned = torch.empty(self.bound, dtype=torch.uint8, pin_memory=True) if torch.cuda.is_available() else None
+        self._ring = self._pinned.numpy() if self._pinned is not None else np.empty(self.bound, np.uint8)
+        self._cv = threading.Condition()
+        self._jobs: deque[_Job] = deque()
+        self._head, self._closed = 0, False
+        #: the failure that stopped the writer's thread (None while it runs)
+        self._stopped: str | None = None
+        self._dirs: dict[str, dict[str, Any]] = {}
+        self._thread = threading.Thread(target=self._run, name="h1-keep", daemon=True)
+        self._thread.start()
+
+    def open(self, directory: str | Path) -> None:
+        """Keep the calls of the window whose prover directory is ``directory`` here, until `wait`."""
+        key = str(Path(directory))
+        if key in _OPEN:
+            raise ValueError(f"{key} is already open on a writer")
+        with self._cv:
+            self._dirs[key] = {"calls": 0, "bytes": 0, "waits": 0, "pending": 0, "failed": []}
+        _OPEN[key] = self
+
+    def _fit(self, n: int) -> int | None:
+        """Where ``n`` bytes go in the ring, after every job still queued or being written, or None while they don't fit."""
+        if not self._jobs:
+            return 0
+        lo, head = self._jobs[0].lo, self._head
+        if head > lo:
+            return head if self.bound - head >= n else 0 if lo >= n else None
+        return head if lo - head >= n else None
+
+    def keep(self, directory: str | Path, index: int, a: Any, s_a: Any, records: Any) -> None:
+        """Call ``index``'s rows ``a`` (int8 [m, k]), scales ``s_a`` (f32, m) and records (uint8 [units, ZY_BYTES], or
+        None), tensors or arrays, kept under ``directory`` (open here) as `keep_call` keeps them, by the writer's thread."""
+        m = int(a.shape[0])
+        parts = [(_bytes_of(a), np.int8, (m, -1)), (_bytes_of(s_a), np.dtype("<f4"), (-1,))]
+        if records is not None:
+            parts.append((_bytes_of(records), np.uint8, tuple(int(d) for d in records.shape)))
+        n = sum(_up(int(b.shape[0])) for b, _dtype, _shape in parts)
+        if n > self.bound:
+            raise ValueError(f"call {index}'s {n} bytes are past the writer's bound, {self.bound}")
+        key = str(Path(directory))
+        with self._cv:
+            if self._closed:
+                raise RuntimeError(f"call {index}: the writer is closed")
+            st = self._dirs[key]
+            while self._stopped is None and (lo := self._fit(n)) is None:
+                st["waits"] += 1
+                self._cv.notify_all()
+                self._cv.wait()
+            if self._stopped is not None:
+                st["calls"] += 1
+                st["failed"].append(f"call {index}: the writer stopped at {self._stopped}")
+                return
+            at, spans, stream = lo, [], None
+            for b, dtype, shape in parts:
+                size = int(b.shape[0])
+                if isinstance(b, np.ndarray):
+                    self._ring[at:at + size] = b
+                else:
+                    import torch
+
+                    stream = torch.cuda.current_stream(b.device)
+                    self._pinned[at:at + size].copy_(b, non_blocking=True)
+                    # the copy is still queued when this returns: the allocator gives its source to no other stream till then
+                    b.record_stream(stream)
+                spans.append((at, size, dtype, shape))
+                at += _up(size)
+            copied = None
+            if stream is not None:
+                import torch
+
+                copied = torch.cuda.Event(blocking=True)
+                copied.record(stream)
+            self._jobs.append(_Job(key, int(index), lo, tuple(spans), copied))
+            self._head = lo + n
+            st["calls"] += 1
+            st["bytes"] += sum(s for _at, s, _dtype, _shape in spans)
+            st["pending"] += 1
+            self._cv.notify_all()
+
+    def _run(self) -> None:
+        while True:
+            with self._cv:
+                while not self._jobs and not self._closed:
+                    self._cv.wait()
+                if not self._jobs:
+                    return
+                job = self._jobs[0]
+            failed = None
+            try:
+                if job.copied is not None:
+                    job.copied.synchronize()
+                a, s_a, *records = (self._ring[at:at + n].view(dtype).reshape(shape) for at, n, dtype, shape in job.spans)
+                _savez(private(Path(job.directory) / CALLS) / f"{job.index}.npz", a, s_a, records[0] if records else None)
+            except (OSError, RuntimeError) as e:
+                # the file system's failures and the device's (torch raises a CUDA error as a RuntimeError) are the
+                # window's, raised by its `wait`
+                failed = f"call {job.index}: {type(e).__name__}: {e}"
+            except BaseException as e:
+                with self._cv:
+                    self._stopped = f"call {job.index}: {type(e).__name__}: {e}"
+                    for queued in self._jobs:
+                        st = self._dirs[queued.directory]
+                        st["pending"] -= 1
+                        st["failed"].append(self._stopped if queued is job else
+                                            f"call {queued.index}: the writer stopped at {self._stopped}")
+                    self._jobs.clear()
+                    self._cv.notify_all()
+                raise
+            with self._cv:
+                self._jobs.popleft()
+                st = self._dirs[job.directory]
+                st["pending"] -= 1
+                if failed is not None:
+                    st["failed"].append(failed)
+                self._cv.notify_all()
+
+    def wait(self, directory: str | Path) -> dict[str, int]:
+        """Once every call kept under ``directory`` is written, the directory closed on the writer: its calls, their bytes
+        and how often the ring was full when one came (``waits``). OSError naming the first call not written, if any."""
+        key = str(Path(directory))
+        _OPEN.pop(key, None)
+        with self._cv:
+            while self._dirs.get(key, {}).get("pending"):
+                self._cv.wait()
+            st = self._dirs.pop(key, None) or {"calls": 0, "bytes": 0, "waits": 0, "failed": []}
+        if st["failed"]:
+            raise OSError(f"{len(st['failed'])} of its {st['calls']} calls' prover state wasn't written: {st['failed'][0]}")
+        return {k: st[k] for k in ("calls", "bytes", "waits")}
+
+    def close(self) -> None:
+        """Every call kept so far written, and the writer's thread ended."""
+        with self._cv:
+            self._closed = True
+            self._cv.notify_all()
+        self._thread.join()
+>>>>>>> 7af4d24fca3e
 
 
 def locate(rows: Sequence[Mapping[str, Any]], unit: int) -> tuple[int, int]:

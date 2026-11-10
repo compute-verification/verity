@@ -10,7 +10,7 @@
 
 ``--statement`` is ``<subcircuit id>+<scheme id>`` (the render's statement ids); ``--input-set`` a census input set id (a
 backend's frozen set), an input-set directory, or an ``art:`` id of one (``input_sets``).  ``plan`` resolves the cell: the
-backend's driver (``bench.drivers``, one module per backend), the family's lowering of the statement (``bench.lowerings``: why
+backend's driver (``bench.drivers``, one module per backend), the family's lowering of the statement (``verity_flock.lowerings``: why
 not, or the relation name its scripts take), and whether the backend can run on the input set; it writes the cell and the
 ``research run`` of every job, which ``run`` launches in order.  The protocol is the backend's own scripts', wrapped, never
 rewritten: the plateau sweep (doubling from 1,024 until two doublings add < 2 %), warm + >= 5 timed runs + the timing guard, the
@@ -42,8 +42,10 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from . import census as CN
-from verity_numerical.bench import contract, drivers, interaction, lowerings as LW, placement as PL
-from verity_flock import input_sets as IS, subcircuit_templates as TM
+from . import contract, drivers, interaction, placement as PL
+from verity_flock import input_sets as IS
+from verity_flock import lowerings as LW
+from verity_flock import subcircuit_templates as TM
 
 FAMILIES = {"A": "A-GKR", "B": "B-Ligero", "C": "C-Flock", "D": "D-SP1"}
 BACKENDS = ("A-interactive", "A-fs", "A-route-a", "B-interactive", "B-fs", "C-interactive", "D-fs")

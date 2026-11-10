@@ -131,13 +131,13 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import pc8
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import pc8
 from verity.core.protocols.pouw.coins import Challenger as Coins
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_reason
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.spot import challenger as Ch
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import draw as D
@@ -258,7 +258,8 @@ def law_of(params: dict, ell: int) -> dict:
 
 
 def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
-    """P1's Spec of an execution phase at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
+    """P1's Spec of an execution phase at level `ell`: the entries and W committed, the rate K′/N of the level's N padded tiles
+    (`rate:K′/N`, subset:K′ at the level's N, scaled up with any N the prover registers past it), the tile template's
     Program and query as the check, and `LAYOUT` declared.  The check carries ``registration_deadline`` from `params`
     (seconds on the challenger's clock from the execution phase's salt coin's release, the ``salt`` request that opens it,
     `Pouw.AcceptsBy`'s td: `REGISTRATION_DEADLINE`), and parameters without one raise `ValueError` (`NO_DEADLINE`)
@@ -268,7 +269,7 @@ def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
         raise ValueError(NO_DEADLINE)
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
-                  selection=S.Law(f"subset:{law_of(params, ell)['k']}"),
+                  selection=S.Law(f"rate:{law_of(params, ell)['k']}/{work_at(params, ell).n}"),
                   check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d),
                                 proof_deadline=params.get("proof_deadline", PROOF_DEADLINE),
                                 registration_deadline=params.get("registration_deadline")),
@@ -985,7 +986,7 @@ class Challenger:
         """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
         Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
-        law = D.parse_design(st.spec.selection.text)
+        law = S.selection_law(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
         codes = self._of_record(name, self.record.registration,
@@ -1268,7 +1269,7 @@ def _pass(pass_dir: Path):
     PD = _pd()
     raw = (pass_dir / "manifest.json").read_bytes()
     man = json.loads(raw)
-    if man.get("schema") not in PD.MANIFEST_SCHEMAS:
+    if man.get("schema") not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
         raise SystemExit(f"{pass_dir}: not a retained pass ({man.get('schema')!r})")
     calls = [u for u in man["matmuls"] if u["k"] == K and u["n"] == K]
     if not calls:
@@ -1541,7 +1542,7 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     elif case != "resalted":
         raise ValueError(f"a coin variant is one of {', '.join(CASES)}")
     out = {k: v for k, v in man.items() if k != "beacon"}
-    return {**out, "schema": _pd().MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
+    return {**out, "schema": CC.MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
 
 
 def cmd_coin_variant(a) -> int:

@@ -1,12 +1,12 @@
 module
 
-public import Mathlib.Analysis.SpecialFunctions.Exp
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Logic.Equiv.Fin.Basic
-public import Mathlib.Order.ConditionallyCompleteLattice.Indexed
 public import Definitions.Pous.Game.Prob
-public import Proofs.Pous.Sanity
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.Pous.Sanity
+import Proofs.Pous.Prob
 
 /-!
 # The counting step of the continuous audit
@@ -41,7 +41,7 @@ theorem pr_toReal (P : α → Prop) [DecidablePred P] :
   rw [pr_def, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
 theorem pr_ne_top [Nonempty α] (P : α → Prop) : pr P ≠ ⊤ := by
-  unfold pr
+  simp only [Pous.pr_eq_card]
   exact ENNReal.div_ne_top (ENNReal.natCast_ne_top _) (by exact_mod_cast Fintype.card_ne_zero)
 
 open Classical in

@@ -1,9 +1,29 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-public import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 public import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+public import Proofs.Flock.Soundness.Discharge.Zero.Stack
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Proofs.Flock.Soundness.Discharge.Const.ConstCols
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Proofs.Flock.Soundness.Discharge.Zero.Cols
+import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 
 /-!
 # `ProgPlaces`, `hConst` and `hZero` from a hidden-output session's accept
@@ -114,7 +134,7 @@ theorem rows_eq (hi : a.tags.isTmpl = false) {c : Flock.Circuit} (hp : HmRow.par
   rw [Placed.ofNet_eq (Placed.lunit_of_parse hp hc) a.L.unit_built hU, hc]
 
 /-- **`Layout.Aliased` in `ProgPlaces`' form**, as `Placed.Accepted.aliased_of_layout`. -/
-theorem aliased_of_layout {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
+theorem aliased_of_layout {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
     (hR : R = a.rows) (inst : P.IsRowsUnit u R) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g)
     (hal : a.L.Aliased a.regs (hR ▸ inst) (Fin.cast a.nbl_eq.symm o) hg) :
     ∀ c c', inst.wire c = inst.wire c' → c.val < R.nIn → c'.val < R.nIn → ∀ z : Model.Witness T.m, T.Satisfies z →
@@ -127,7 +147,7 @@ theorem aliased_of_layout {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n
 
 /-- **Aliasing from keys**: an instance that puts template instance `g`'s stacked unit inputs on one gate only when they
 have one key (`Aliased.srcKey`) is aliased in the accepted statement. -/
-theorem aliased_of_key {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
+theorem aliased_of_key {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows a.st a.L.unit_built).stack a.st.c.upv))
     (o : Fin (2 ^ (a.L.model a.regs).nbl)) {g : ℕ} (hg : g < a.st.c.g)
     (hk : ∀ c c', inst.wire c = inst.wire c' →

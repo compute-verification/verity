@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Spot.Determinacy
+public import Definitions.Spot.Dataflow
+import Proofs.Spot.Determinacy
 
 /-!
 # Integrity: what the checker confirms is exactly determinacy for every choice of unit functions

@@ -568,7 +568,7 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
               "late_control", "recompute_control", "tampered_control", "signature_control", "fail_closed"):
         assert gates[g]["passed"], (g, gates[g])
     assert "certificate" not in gates and body["profile"] is None
-    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "memory_challenger": "memory_challenger/live.py",
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "memory_challenger": "benchmarks/pous/memory_challenger/live.py",
                                       "memory_challenger_args": ["--signer", "test"]}
     nb = _small().width_bytes
     raw = (tmp_path / "leaves-p2.bin").read_bytes()

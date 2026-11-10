@@ -467,8 +467,8 @@ theorem prob_le_messages (rd : Readings) (K : Constructions V) (hM : K.msgFinder
 omit θ F c in
 /-- **The coupling off the messages' misses**: at constructions whose two-continuation finders are these,
 `CouplingTarget` holds once the sampled verdict on the tapes that miss at no round and not at the record is at most as
-likely as the live audit's acceptance at the projected strategy, plus the hiding term, the read finder's collision and
-the forger's forgery. -/
+likely as the live audit's acceptance at the projected strategy, plus the square root of the bound digests' finder's
+success, the hiding term, the read finder's collision and the forger's forgery. -/
 theorem couplingTarget_of_noMiss (k : Verity.Registration.Composite) (rd : Readings) (K : Constructions V)
     (hM : K.msgFinder = msgFinder V rd) (hR : K.recordFinder = recordFinder V rd) (A : Live) (θ : ByteArray)
     (F : Array ByteArray)
@@ -477,7 +477,8 @@ theorem couplingTarget_of_noMiss (k : Verity.Registration.Composite) (rd : Readi
           V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd A θ F c) σ x) ≤
         FlockSoundness.Game.prob (fun o => FlockSoundness.Discharge.ZkHidden.LiveAcceptsZKP A.I A.own o)
             (K.live A θ F c σ).game (K.project A θ F c σ) +
-          (A.hidingTerm + ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
+          (ENNReal.ofReal (Real.sqrt ((K.bindFinder A θ F c σ).Pr sha512Msg)) + A.hidingTerm +
+            ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
             ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))) :
     CouplingTarget V k K A θ F := fun c σ =>
   (prob_le_messages V rd K hM hR A θ F c σ _).trans <| (add_le_add (h c σ) le_rfl).trans_eq (by ring)

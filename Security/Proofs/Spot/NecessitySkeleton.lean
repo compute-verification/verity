@@ -1,11 +1,20 @@
 module
 
 public import Definitions.Spot.Necessity
-public import Proofs.Spot.Leakage
-public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Abel
+public import Mathlib.Data.Fintype.Option
+public import Mathlib.Data.Fintype.Prod
+public import Proofs.Core.Coins
+public import Proofs.Spot.Egress
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Abel
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Proofs.Spot.Determinacy
+import Proofs.Spot.Leakage
 
 /-!
 # The skeleton theorem: tier 1 gives the sampling certificate, and each tier-1 item is needed
@@ -46,6 +55,7 @@ transcript; (ii) local checks; (iii) robust determinacy, which for opaque units 
 namespace Population.Iop
 
 open Finset
+open Verity.Game (iid_toReal)
 
 variable {U T : Type}
 
@@ -53,33 +63,32 @@ variable {U T : Type}
 
 section Prob
 
-variable [Fintype U] (π : U → ℝ) (k : ℕ)
+variable [Fintype U] (π : PMF U) (k : ℕ)
 
-theorem prob_mono (hπ : ∀ u, 0 ≤ π u) {E E' : (Fin k → U) → Prop} (h : ∀ d, E d → E' d) :
-    prob π k E ≤ prob π k E' := by
-  classical
-  unfold prob
-  refine sum_le_sum fun d _ => ?_
-  by_cases hE : E d
-  · simp [hE, h d hE]
-  · rw [ite_eq_right hE]
-    split_ifs
-    · exact prod_nonneg fun i _ => hπ _
-    · exact le_rfl
+theorem prob_mono {E E' : (Fin k → U) → Prop} (h : ∀ d, E d → E' d) : prob π k E ≤ prob π k E' :=
+  Verity.Game.prPMFReal_mono _ h
 
-theorem prob_false : prob π k (fun _ => False) = 0 := by
-  simp [prob]
+theorem prob_false : prob π k (fun _ => False) = 0 :=
+  Verity.Game.prPMFReal_false _
 
-theorem prob_congr {E E' : (Fin k → U) → Prop} (h : ∀ d, E d ↔ E' d) : prob π k E = prob π k E' := by
-  have : E = E' := funext fun d => propext (h d)
-  rw [this]
+theorem prob_congr {E E' : (Fin k → U) → Prop} (h : ∀ d, E d ↔ E' d) : prob π k E = prob π k E' :=
+  Verity.Game.prPMFReal_congr _ h
+
+/-- `prob` as a sum over the samples, each weighted by the product of its draws' weights. -/
+theorem prob_eq_sum (E : (Fin k → U) → Prop) [DecidablePred E] :
+    prob π k E = ∑ d : Fin k → U, if E d then ∏ i, (π (d i)).toReal else 0 := by
+  refine (Verity.Game.prPMFReal_eq_sum _ E).trans (sum_congr rfl fun d _ => ?_)
+  rw [iid_toReal]
+
+/-- The sample's weight on `B` is the sum of its units' weights. -/
+theorem mass_eq_sum (B : Finset U) : mass π B = ∑ u ∈ B, (π u).toReal :=
+  Verity.Game.prPMFReal_mem π B
 
 /-- **Independent samples**: the probability that all `k` samples land in `g` is `π(g)^k`. -/
 theorem prob_all (g : U → Prop) [DecidablePred g] :
-    prob π k (fun d => ∀ i, g (d i)) = (∑ u ∈ univ.filter g, π u) ^ k := by
+    prob π k (fun d => ∀ i, g (d i)) = (∑ u ∈ univ.filter g, (π u).toReal) ^ k := by
   classical
-  rw [sum_filter, Fintype.sum_pow]
-  unfold prob
+  rw [sum_filter, Fintype.sum_pow, prob_eq_sum]
   refine sum_congr rfl fun d _ => ?_
   rw [prod_ite_zero]
   simp
@@ -94,26 +103,33 @@ theorem disjoint_bad_iff (chk : U → T → Prop) (A : Finset U) (σ : T) :
   simp only [bad, disjoint_left, mem_filter, mem_univ, true_and]
   exact ⟨fun h u hu => by_contra fun hc => h hc hu, fun h u hc hu => hc (h u hu)⟩
 
-theorem mass_bad_le_one (hπ : Dist π) (chk : U → T → Prop) (σ : T) : mass π (bad chk σ) ≤ 1 := by
-  rw [← hπ.sum_one]
-  exact sum_le_sum_of_subset_of_nonneg (subset_univ _) fun u _ _ => hπ.nonneg u
+theorem mass_bad_le_one (chk : U → T → Prop) (σ : T) : mass π (bad chk σ) ≤ 1 :=
+  Verity.Game.prPMFReal_le_one _ _
 
 open Classical in
-theorem sum_good (hπ : Dist π) (chk : U → T → Prop) (σ : T) :
-    ∑ u ∈ univ.filter (fun u => chk u σ), π u = 1 - mass π (bad chk σ) := by
-  have h := sum_filter_add_sum_filter_not univ (fun u => chk u σ) π
-  rw [hπ.sum_one] at h
-  have : mass π (bad chk σ) = ∑ u ∈ univ.filter (fun u => ¬ chk u σ), π u := rfl
+theorem sum_good (chk : U → T → Prop) (σ : T) :
+    ∑ u ∈ univ.filter (fun u => chk u σ), (π u).toReal = 1 - mass π (bad chk σ) := by
+  have h := sum_filter_add_sum_filter_not univ (fun u => chk u σ) fun u => (π u).toReal
+  rw [Verity.Game.sum_toReal_pmf] at h
+  have : mass π (bad chk σ) = ∑ u ∈ univ.filter (fun u => ¬ chk u σ), (π u).toReal := mass_eq_sum π _
   rw [this]
   linarith
 
 /-- **A transcript fixed before the coins passes** with probability `(1 − π(B))^k` when no always-proved unit is
+<<<<<<< ours
 incorrect. -/
 theorem prob_accepts (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (σ : T) (hd : Disjoint (bad chk σ) A) :
+||||||| base
+wrong. -/
+theorem prob_accepts (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (σ : T) (hd : Disjoint (bad chk σ) A) :
+=======
+wrong. -/
+theorem prob_accepts (chk : U → T → Prop) (A : Finset U) (σ : T) (hd : Disjoint (bad chk σ) A) :
+>>>>>>> theirs
     prob π k (fun d => Accepts chk A d σ) = (1 - mass π (bad chk σ)) ^ k := by
   classical
   have hA := (disjoint_bad_iff chk A σ).1 hd
-  rw [← sum_good π hπ chk σ, ← prob_all]
+  rw [← sum_good π chk σ, ← prob_all]
   exact prob_congr π k fun d => ⟨fun h => h.2, fun h => ⟨hA, h⟩⟩
 
 /-- **It never passes when an always-proved unit is incorrect.** -/
@@ -127,17 +143,17 @@ theorem prob_accepts_eq_zero (chk : U → T → Prop) (A : Finset U) (σ : T) (h
 (`σ` does not depend on the sample) and every sample fixed before it (`π`, `A` and `k` do not depend on `σ`), the
 verifier accepts while an always-proved unit is incorrect or `π(B) > ε` with probability at most `(1 − ε)^k`. A
 randomized prover is a mixture of such transcripts, so the bound holds for it too. -/
-theorem certificate (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) {ε : ℝ} (hε : ε ≤ 1) (σ : T) :
+theorem certificate (chk : U → T → Prop) (A : Finset U) {ε : ℝ} (hε : ε ≤ 1) (σ : T) :
     prob π k (fun d => Accepts chk A d σ ∧ ¬ Certified chk π A ε σ) ≤ (1 - ε) ^ k := by
   have h1e : 0 ≤ 1 - ε := by linarith
   by_cases hc : Certified chk π A ε σ
   · rw [prob_congr π k (E' := fun _ => False) fun d => by simp [hc], prob_false]
     exact pow_nonneg h1e k
-  · refine (prob_mono π k hπ.nonneg fun d h => h.1).trans ?_
+  · refine (prob_mono π k fun d h => h.1).trans ?_
     by_cases hd : Disjoint (bad chk σ) A
-    · rw [prob_accepts π k hπ chk A σ hd]
+    · rw [prob_accepts π k chk A σ hd]
       have hm : ε < mass π (bad chk σ) := lt_of_not_ge fun h => hc ⟨hd, h⟩
-      exact pow_le_pow_left₀ (by linarith [mass_bad_le_one π hπ chk σ]) (by linarith) k
+      exact pow_le_pow_left₀ (by linarith [mass_bad_le_one π chk σ]) (by linarith) k
     · rw [prob_accepts_eq_zero π k chk A σ hd]
       exact pow_nonneg h1e k
 
@@ -147,7 +163,7 @@ theorem certificate (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) {ε 
 every transcript with damage above `g` and no always-proved unit incorrect passes the sample with probability
 `(1 − π(B))^k ≤ δ`. The best inferable bound is the largest damage among transcripts with
 `(1 − π(B))^k > δ`. -/
-theorem inference_iff (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (dmg : T → ℝ) (g δ : ℝ)
+theorem inference_iff (chk : U → T → Prop) (A : Finset U) (dmg : T → ℝ) (g δ : ℝ)
     (hδ : 0 ≤ δ) :
     (∀ σ, prob π k (fun d => Accepts chk A d σ ∧ g < dmg σ) ≤ δ) ↔
       ∀ σ, Disjoint (bad chk σ) A → g < dmg σ → (1 - mass π (bad chk σ)) ^ k ≤ δ := by
@@ -155,12 +171,12 @@ theorem inference_iff (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (d
   · intro h σ hd hg
     have := h σ
     rwa [prob_congr π k (E' := fun d => Accepts chk A d σ) fun d => by simp [hg],
-      prob_accepts π k hπ chk A σ hd] at this
+      prob_accepts π k chk A σ hd] at this
   · intro h σ
     by_cases hg : g < dmg σ
     · rw [prob_congr π k (E' := fun d => Accepts chk A d σ) fun d => by simp [hg]]
       by_cases hd : Disjoint (bad chk σ) A
-      · rw [prob_accepts π k hπ chk A σ hd]
+      · rw [prob_accepts π k chk A σ hd]
         exact h σ hd hg
       · rw [prob_accepts_eq_zero π k chk A σ hd]
         exact hδ
@@ -170,13 +186,12 @@ theorem inference_iff (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (d
 /-- **An amplification bound is a damage bound**: with damage at most `K` times the incorrect proof blocks' cost, and cost at
 most `C` times the sample weight, an accepted transcript has damage above `K C ε` with probability at most
 `(1 − ε)^k`. With `π ∝ c`, `C = Σ_u c(u)`. -/
-theorem inferable_of_amp (hπ : Dist π) {chk : U → T → Prop} {A : Finset U} {c : U → ℝ} {dmg : T → ℝ} {K C : ℝ}
-    (hK : 0 ≤ K) (hC : 0 ≤ C) (hamp : AmpLe chk A c dmg K) (hc : ∀ u, c u ≤ C * π u) {ε : ℝ} (hε : ε ≤ 1)
-    (σ : T) : prob π k (fun d => Accepts chk A d σ ∧ K * C * ε < dmg σ) ≤ (1 - ε) ^ k := by
-  refine (prob_mono π k hπ.nonneg fun d h => ⟨h.1, fun hcert => ?_⟩).trans (certificate π k hπ chk A hε σ)
+theorem inferable_of_amp {chk : U → T → Prop} {A : Finset U} {c : U → ℝ} {dmg : T → ℝ} {K C : ℝ}
+    (hK : 0 ≤ K) (hC : 0 ≤ C) (hamp : AmpLe chk A c dmg K) (hc : ∀ u, c u ≤ C * (π u).toReal) {ε : ℝ}
+    (hε : ε ≤ 1) (σ : T) : prob π k (fun d => Accepts chk A d σ ∧ K * C * ε < dmg σ) ≤ (1 - ε) ^ k := by
+  refine (prob_mono π k fun d h => ⟨h.1, fun hcert => ?_⟩).trans (certificate π k chk A hε σ)
   have h1 : ∑ u ∈ bad chk σ, c u ≤ C * mass π (bad chk σ) := by
-    unfold mass
-    rw [mul_sum]
+    rw [mass_eq_sum, mul_sum]
     exact sum_le_sum fun u _ => hc u
   have h2 : dmg σ ≤ K * C * ε := by
     calc dmg σ ≤ K * ∑ u ∈ bad chk σ, c u := hamp σ hcert.1
@@ -187,10 +202,10 @@ theorem inferable_of_amp (hπ : Dist π) {chk : U → T → Prop} {A : Finset U}
 
 /-- **No bound below a weightless damage is inferable**: a transcript with no always-proved unit incorrect and no sample
 weight on its incorrect proof blocks passes with probability one. -/
-theorem not_inferable_of_massless (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (σ : T)
+theorem not_inferable_of_massless (chk : U → T → Prop) (A : Finset U) (σ : T)
     (hd : Disjoint (bad chk σ) A) (h0 : mass π (bad chk σ) = 0) :
     prob π k (fun d => Accepts chk A d σ) = 1 := by
-  rw [prob_accepts π k hπ chk A σ hd, h0]
+  rw [prob_accepts π k chk A σ hd, h0]
   simp
 
 end Prob
@@ -273,17 +288,22 @@ theorem adaptive_card [Fintype U] [DecidableEq U] (A : Finset U) {k : ℕ} (d : 
   have h3 := card_le_univ (A ∪ univ.image d)
   omega
 
+<<<<<<< ours
 /-- **A sample chosen after the transcript dodges it**: the point mass on a correct unit is a sample distribution, and
 the transcript passes it with probability one, whatever its incorrect set. -/
+||||||| base
+/-- **A sample chosen after the transcript dodges it**: the point mass on a correct unit is a sample distribution, and
+the transcript passes it with probability one, whatever its wrong set. -/
+=======
+/-- **A sample chosen after the transcript dodges it**: the transcript passes the point mass on a correct unit with
+probability one, whatever its wrong set. -/
+>>>>>>> theirs
 theorem late_sample_dodges [Fintype U] [DecidableEq U] (chk : U → T → Prop) (A : Finset U) (σ : T) {u₀ : U}
     (h₀ : chk u₀ σ) (hA : ∀ u ∈ A, chk u σ) (k : ℕ) :
-    Dist (fun u => if u = u₀ then (1 : ℝ) else 0) ∧
-      prob (fun u => if u = u₀ then (1 : ℝ) else 0) k (fun d => Accepts chk A d σ) = 1 := by
-  have hπ : Dist (fun u => if u = u₀ then (1 : ℝ) else 0) :=
-    ⟨fun u => by split_ifs <;> norm_num, by simp⟩
-  refine ⟨hπ, not_inferable_of_massless _ k hπ chk A σ ((disjoint_bad_iff chk A σ).2 hA) ?_⟩
+    prob (PMF.pure u₀) k (fun d => Accepts chk A d σ) = 1 := by
+  refine not_inferable_of_massless _ k chk A σ ((disjoint_bad_iff chk A σ).2 hA) ?_
   classical
-  unfold mass
+  rw [mass_eq_sum]
   refine sum_eq_zero fun u hu => ?_
   have hu' : ¬ chk u σ := by simpa [bad] using hu
   have : u ≠ u₀ := fun e => hu' (e ▸ h₀)
@@ -518,22 +538,32 @@ theorem card_damaged_le [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a 
 committed before the coins on the given inputs and every sample fixed before it, the verifier accepts while any of
 `B ∩ A = ∅`, `π(B) ≤ ε` and "every damaged egress slot is in `B`'s cone" fails with probability at most `(1 − ε)^k`. -/
 theorem skeleton [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest : S → V}
-    (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) {π : U → ℝ} (hπ : Dist π)
+    (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) {π : PMF U}
     (A : Finset U) (k : ℕ) {ε : ℝ} (hε : ε ≤ 1) (O : Finset S) (σ : S → V) (hσ : ∀ s ∈ P.input, σ s = a s) :
+<<<<<<< ours
     prob π k (fun d => Accepts (corr P f) A d σ ∧ ¬ (Disjoint (P.incorrect f σ) A ∧ mass π (P.incorrect f σ) ≤ ε ∧
       damaged O σ honest ⊆ P.coneEgress O (P.incorrect f σ))) ≤ (1 - ε) ^ k := by
   refine (prob_mono π k hπ.nonneg
+||||||| base
+    prob π k (fun d => Accepts (corr P f) A d σ ∧ ¬ (Disjoint (P.wrong f σ) A ∧ mass π (P.wrong f σ) ≤ ε ∧
+      damaged O σ honest ⊆ P.coneEgress O (P.wrong f σ))) ≤ (1 - ε) ^ k := by
+  refine (prob_mono π k hπ.nonneg
+=======
+    prob π k (fun d => Accepts (corr P f) A d σ ∧ ¬ (Disjoint (P.wrong f σ) A ∧ mass π (P.wrong f σ) ≤ ε ∧
+      damaged O σ honest ⊆ P.coneEgress O (P.wrong f σ))) ≤ (1 - ε) ^ k := by
+  refine (prob_mono π k
+>>>>>>> theirs
     (E' := fun d => Accepts (corr P f) A d σ ∧ ¬ Certified (corr P f) π A ε σ)
     fun d hd => ⟨hd.1, fun hcert => hd.2 ⟨hcert.1, hcert.2,
       damaged_sub_coneEgress P h f a hh hc hσ O⟩⟩).trans ?_
-  exact certificate π k hπ (corr P f) A hε σ
+  exact certificate π k (corr P f) A hε σ
 
 /-- **Integrity, inferred**: sampling by cone egress (`E(u) ≤ C · π(u)`), an accepted run differs from the honest run
 on more than `C ε` egress slots with probability at most `(1 − ε)^k`. Amplification `1` at the cost `E`. -/
 theorem integrity_inferred [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest : S → V}
-    (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) {π : U → ℝ} (hπ : Dist π)
+    (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) {π : PMF U}
     (A : Finset U) (k : ℕ) {ε : ℝ} (hε : ε ≤ 1) (O : Finset S) {C : ℝ} (hC : 0 ≤ C)
-    (hE : ∀ u, ((P.coneEgress O {u}).card : ℝ) ≤ C * π u) (σ : S → V) (hσ : ∀ s ∈ P.input, σ s = a s) :
+    (hE : ∀ u, ((P.coneEgress O {u}).card : ℝ) ≤ C * (π u).toReal) (σ : S → V) (hσ : ∀ s ∈ P.input, σ s = a s) :
     prob π k (fun d => Accepts (corr P f) A d σ ∧ C * ε < (damaged O σ honest).card) ≤ (1 - ε) ^ k := by
   classical
   have hamp : AmpLe (corr P f) A (fun u => ((P.coneEgress O {u}).card : ℝ))
@@ -544,7 +574,7 @@ theorem integrity_inferred [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) 
     split_ifs with hτ
     · exact_mod_cast card_damaged_le P h f a hh hc hτ O
     · exact sum_nonneg fun _ _ => Nat.cast_nonneg _
-  have := inferable_of_amp π k hπ zero_le_one hC hamp hE hε σ
+  have := inferable_of_amp π k zero_le_one hC hamp hE hε σ
   rw [ite_eq_left hσ, one_mul] at this
   exact this
 

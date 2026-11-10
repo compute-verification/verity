@@ -1,13 +1,8 @@
 module
 
-public import Definitions.NetworkCertifier
 public import Definitions.NetworkCertifier.Assumptions
-public import Mathlib.Data.Sym.Card
 public import Mathlib.Data.Set.Card
-public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Order.Interval.Finset.Fin
-public import Mathlib.Algebra.BigOperators.Fin
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Sym.Sym2.Init
 
 /-!
 # The network certifier's lemmas

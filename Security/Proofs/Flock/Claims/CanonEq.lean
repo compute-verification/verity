@@ -2,6 +2,7 @@ module
 
 public import Flock.Canon
 public import Proofs.Flock.Claims.JsonEq
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # `canon` prints equivalent values alike

@@ -1,9 +1,11 @@
 """A planner for the sampling scheme: from a Program's partition candidates, a proof system's cost model and an objective,
 the plans on the Pareto frontier of expected cost against certified harm, over every budget.
 
-Nothing trusts it.  A plan is a stratified sampling design, `k_s` proof blocks of each subcircuit, which registers as `work:1` over a work
-table carrying the credited work and floors equal to the sizes (`work_law`: `one_stage.draw.work_k(1, w, n, W, f)` is
-`min(n, f)`).  Its certificate is recomputed from the sizes alone (`certify`): core's `Stratified.harm_bound` for the
+Nothing trusts it.  A plan is a stratified sampling design, `k_s` proof blocks of each subcircuit, the work law
+`work:1` over a work table carrying the credited work and floors equal to the sizes (`work_law`:
+`one_stage.draw.work_k(1, w, n, W, f)` is `min(n, f)`).  A stream's rule can't state it: a fixed count per stratum falls
+against the stratum as the prover pads it, so a stream registers a rate (`work-rate:NUM/DEN`, every stratum's floor at
+the rate).  Its certificate is recomputed from the sizes alone (`certify`): core's `Stratified.harm_bound` for the
 objective's harm and for credited work, and `density_bound`, the closed form that `work_escape_le`'s proof extends to any
 sizes.
 
@@ -19,7 +21,7 @@ committed at serve time whatever the draw: every proof block's outputs (`commit_
 and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A plan is thus a
-one-stage design (`two_stage` prices a two-stage one, below).  A sampled proof block's witness is built by replaying the
+one-stage design (`two_stage_design` prices a two-stage one, below).  A sampled proof block's witness is built by replaying the
 replay block of its `ReplayGrain` it lies in from the values the prover keeps, which commits nothing: a commitment is a
 hash, so unless serving retained intermediates a replay block starts at the external inputs and the registration's
 constants.
@@ -40,14 +42,15 @@ for `n` proof blocks of `b(s)` committed bytes at `h` a hashed byte, paid whethe
 cost) or the exfiltration target (`ExfiltrationOptimum`'s law), and `sqrt_grain` is the work target's optimum in closed
 form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block commits `β` bytes.
 
-**Two-stage.**  `grain_costs` at `design="two-stage"` over a `ReplayGrain` prices a two-stage design on the grain: serving
-commits only the replay blocks' boundaries, the first stage samples each replay block with probability q, the prover
-commits each sampled one's interior, and the second stage samples k of its n_ρ proof blocks with fresh coins.  An incorrect
-replay block is charged at its footprint w, which the second stage misses with probability C(n_ρ − w, k)/C(n_ρ, k)
-(`detection`): compute credit charges its whole work at any footprint, and a leak charges a replay block at most the bits it
-exports across its boundary, so its footprint needn't exceed `footprint_cap`.  `two_stage_rate` is the q that certifies
-the target at a k, and `two_stage` the k that prices cheapest.  One-stage is its case of one proof block a replay block and
-k = 1, where q is `work_draws`' and `leak_draws`' rate.
+**Two-stage.**  A two-stage design (`Claims.Sampling.Design.Two`): serving commits only the replay blocks' boundaries, the
+first stage samples each replay block with probability q, the prover commits each sampled one's interior, and the second
+stage samples k_t of the n_t proof blocks of each stratum t in it with fresh coins.  It certifies exfiltration alone
+(compute credit isn't certified with deferred interiors), in `CompiledTwo.Exfil`'s form: Σ over the admissible sets T of
+incorrect proof blocks of 2^{b(T)}, each T charged its own blocks' committed bits.  `two_stage_exfil` bounds that count's
+log2 (a wholly incorrect replay block is charged all its bits, so the bound is near Λ/q of them), `two_stage_price`
+prices a sampled replay block's proving, each type's statements its own or its registration's, padded to a public cap
+(`two_stage_statements`), and `two_stage_design` the design with the least bound at a budget, width-stratified
+(the public size classes up to a threshold in one stratum, each wider one in its own) or uniform (one stratum).
 """
 from __future__ import annotations
 
@@ -151,18 +154,17 @@ class ReplayGrain:
     """A replay grain: `replay_blocks` replay blocks (served requests, say, each re-run whole from its tokens and the weights),
     which the proof-block partition refines, each replayed at `cost` from the values the prover keeps to build the
     witnesses of the sampled proof blocks in it.  Under a one-stage design replay commits nothing: every value it recomputes
-    was committed at serve time.  Under a two-stage design (`two_stage`) serving commits each replay block's
+    was committed at serve time.  Under a two-stage design (`two_stage_design`) serving commits each replay block's
     `boundary_bytes`, the boundary commitment, and a sampled one's replay builds its interior, which the prover then
-    commits; `out_bits` is what one exports across its boundary, which bounds what an incorrect one can leak."""
+    commits."""
 
     replay_blocks: int
     cost: float
     boundary_bytes: float = 0.0
-    out_bits: float = inf
 
     def __post_init__(self) -> None:
-        if self.replay_blocks < 1 or not min(self.cost, self.boundary_bytes) >= 0 or not self.out_bits > 0:
-            raise ValueError("a replay grain needs replay_blocks >= 1, a non-negative cost and boundary, and out_bits > 0")
+        if self.replay_blocks < 1 or not min(self.cost, self.boundary_bytes) >= 0:
+            raise ValueError("a replay grain needs replay_blocks >= 1 and a non-negative cost and boundary")
 
 
 @dataclass(frozen=True)
@@ -946,9 +948,19 @@ def needs_benchmark(candidates: Sequence[Candidate], costs: CostModel, objective
 
 
 def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
+<<<<<<< 94ca7fd0d18
     """The plan as the rule the verifier registers today: `work:1` over a work table carrying the credited work and
     floors equal to the plan's sizes, which `one_stage.draw.work_k` draws exactly (the ceiling is at most 1 since
     w n <= W)."""
+||||||| e10cf2c8559
+    """The plan as the rule the verifier registers today: `work:1` over a work table carrying the credited work and
+    floors equal to the plan's sizes, which `one_stage.draw.work_k` samples exactly (the ceiling is at most 1 since
+    w n <= W)."""
+=======
+    """The plan as a work law: `work:1` over a work table carrying the credited work and floors equal to the plan's
+    sizes, which `one_stage.draw.work_k` samples exactly (the ceiling is at most 1 since w n <= W). It is a fixed count
+    per stratum, which a stream's rule refuses."""
+>>>>>>> 7af4d24fca3e
     chosen = [c for c in candidates if c.template in plan.sizes]
     if not any(c.work for c in chosen):
         raise ValueError("a work law needs a population that does some work")
@@ -1125,99 +1137,8 @@ def leak_draws(g: Grain, ell: float, delta: float) -> float:
     return 0.0 if k >= g.units else min(float(g.units), g.units * log(1 / delta) / (k + 1))
 
 
-def detection(n: float, w: float, k: float) -> float:
-    """At most 1 - C(n - w, k)/C(n, k), the chance that k of a replay block's n proof blocks, sampled uniformly without
-    replacement, meet one of its w incorrect ones: k/n at w = 1, else 1 - (1 - w/n)^k, sampling with replacement, which
-    misses more often, and 1 once k > n - w, or for a mean n (replay blocks of unequal sizes) only once k >= n."""
-    if w <= 0 or k <= 0:
-        return 0.0
-    if k >= n or (float(n).is_integer() and k > n - w):
-        return 1.0
-    return max(k / n, -expm1(k * log1p(-w / n)))
-
-
-def footprint_cap(g: Grain, rg: ReplayGrain) -> float:
-    """The footprint past which an incorrect replay block of `rg` leaks no more: it exports at most `out_bits`, which
-    ceil(out_bits / b) incorrect proof blocks of b bits already can, so a leak's worst case needs no larger one; at most
-    its n_ρ proof blocks.  The location bits would lower it; leaving them out only raises the rate."""
-    n = g.units / rg.replay_blocks
-    return n if not g.out_bits > 0 or rg.out_bits == inf else min(n, float(ceil(rg.out_bits / g.out_bits)))
-
-
-def two_stage_rate(g: Grain, rg: ReplayGrain, k: float, delta: float, *, work: float | None = None,
-                   leak: float | None = None) -> float:
-    """The first stage's rate q (possibly past 1) at which sampling each replay block with probability q, then k of its
-    n_ρ proof blocks, certifies the target at `delta`, the replay blocks escaping independently, each at most
-    1 - q + q C(n_ρ - w, k)/C(n_ρ, k) at its footprint w (`detection`).
-
-    * Free compute, C = `work`: an incorrect replay block forfeits its whole work n_ρ s at footprint 1, so the escape
-      bound holds below C when q (k/n_ρ) >= Λ n_ρ s / C, `Achievability`'s rate on replay blocks.
-    * Exfiltration, `leak` bits: footprints w_ρ, each counted up to W = `footprint_cap`, leak at most
-      b K' + locBits(n, K') bits at K' = Σ min(w_ρ, W) (each choice of the incorrect replay blocks and of K' proof blocks
-      in them is a distinct K'-set of the n), so the target holds while K' <= K = `leak_count`.  `detection` over w falls
-      as w grows, so K + 1 counted proof blocks escape least packed W to a replay block, and q (K + 1) detection(W) / W
-      >= Λ certifies; no rate is needed when every replay block at W counts at most K."""
-    if (work is None) == (leak is None):
-        raise ValueError("one target: work (C) or leak (bits)")
-    if g.units < rg.replay_blocks:
-        raise ValueError(f"grain {g.name!r}: {g.units} proof blocks can't refine {rg.replay_blocks} replay blocks")
-    n, lam = g.units / rg.replay_blocks, log(1 / delta)
-    if work is not None:
-        return lam * n * g.work / (work * detection(n, 1.0, k))
-    count, cap = leak_count(g, leak), footprint_cap(g, rg)
-    if rg.replay_blocks * cap <= count:
-        return 0.0
-    return lam * cap / ((count + 1) * detection(n, cap, k))
-
-
-def two_stage(g: Grain, rg: ReplayGrain, delta: float, *, h: float, weight: float = 1.0, work: float | None = None,
-              leak: float | None = None) -> dict:
-    """The cheapest two-stage design on the grain over replay grain `rg`: k over the powers of 2 up to n_ρ, the
-    footprint's k = n_ρ / W and a ternary search between half and twice the best of them, at `two_stage_rate`'s q where
-    it is at most 1, else every proof block proved (q = 1, k = n_ρ).  Its costs: `prove`, c(s) for each of the q R k
-    sampled proof blocks; `replay`, `rg.cost` for each of the q R sampled replay blocks; `boundary`, R boundaries' bytes
-    at h, paid at serve time; `interior`, the sampled replay blocks' n_ρ b(s) bytes at h, committed after the first
-    stage; and `total`, proving and replay plus `weight` times both commitments."""
-    n = g.units / rg.replay_blocks
-    rows: dict[float, dict] = {}
-
-    def price(k: float, q: float) -> dict:
-        sampled = q * rg.replay_blocks
-        boundary, interior = rg.replay_blocks * rg.boundary_bytes * h, sampled * n * g.commit_bytes * h
-        prove, replay = sampled * k * g.prove, sampled * rg.cost
-        return {"grain": g.name, "work": g.work, "units": g.units, "design": "two-stage", "n_rho": n,
-                "footprint": footprint_cap(g, rg) if leak is not None else 1.0, "q": q, "k": k if q else 0,
-                "replay_sample": sampled, "draws": sampled * k, "prove": prove, "replay": replay, "boundary": boundary,
-                "interior": interior, "commit": boundary + interior,
-                "total": prove + replay + weight * (boundary + interior)}
-
-    def total(k: int) -> float:
-        """The total less the boundaries, which every k pays alike and would round the rest away."""
-        if k not in rows:
-            q = two_stage_rate(g, rg, k, delta, work=work, leak=leak)
-            rows[k] = price(k, q) if q <= 1 else None
-        return inf if rows[k] is None else rows[k]["prove"] + rows[k]["replay"] + weight * rows[k]["interior"]
-
-    top = max(1, floor(n))
-    ladder = {min(top, 1 << i) for i in range(top.bit_length() + 1)}
-    if leak is not None:
-        ladder.add(min(top, max(1, ceil(n / footprint_cap(g, rg)))))
-    best = min(sorted(ladder), key=total)
-    if total(best) == inf:
-        return price(n, 1.0)
-    lo, hi = max(1, best // 2), min(top, 2 * best)
-    while hi - lo > 2:
-        a, b = lo + (hi - lo) // 3, hi - (hi - lo) // 3
-        lo, hi = (lo, b) if total(a) < total(b) else (a, hi)
-    for k in range(lo, hi + 1):
-        total(k)
-    return rows[min((k for k in rows if rows[k]), key=lambda k: (total(k), k))]
-
-
-DESIGNS = ("one-stage", "two-stage")
-
-
 def grain_costs(grains: Iterable[Grain], delta: float, *, h: float, weight: float = 1.0, work: float | None = None,
+<<<<<<< 94ca7fd0d18
                 leak: float | None = None, replay: ReplayGrain | None = None, design: str = "one-stage") -> list[dict]:
     """Each partition's expected cost at one target, the free-compute target `work` (C) or the exfiltration target `leak`
     (bits), at `delta`, in the grains' order.  One-stage: `prove`, c(s) times the target's draws; `commit`, n b(s) h, paid
@@ -1225,17 +1146,28 @@ def grain_costs(grains: Iterable[Grain], delta: float, *, h: float, weight: floa
     proving and replay plus `weight` times the commitment (`PROVING_ONLY` prices proving alone, Lean's model).
     Two-stage prices each grain's cheapest two-stage design over `replay` (`two_stage`), whose rows add `design`,
     `n_rho`, `footprint`, `q`, `k`, `replay_sample`, `boundary` and `interior`, `commit` being their sum."""
+||||||| e10cf2c8559
+                leak: float | None = None, replay: ReplayGrain | None = None, design: str = "one-stage") -> list[dict]:
+    """Each partition's expected cost at one target, the free-compute target `work` (C) or the exfiltration target `leak`
+    (bits), at `delta`, in the grains' order.  One-stage: `prove`, c(s) times the target's samples; `commit`, n b(s) h, paid
+    on every proof block; `replay`, with a replay grain, the replay blocks the samples meet (`met_replay`); and `total`,
+    proving and replay plus `weight` times the commitment (`PROVING_ONLY` prices proving alone, Lean's model).
+    Two-stage prices each grain's cheapest two-stage design over `replay` (`two_stage`), whose rows add `design`,
+    `n_rho`, `footprint`, `q`, `k`, `replay_sample`, `boundary` and `interior`, `commit` being their sum."""
+=======
+                leak: float | None = None, replay: ReplayGrain | None = None) -> list[dict]:
+    """Each partition's expected one-stage cost at one target, the free-compute target `work` (C) or the exfiltration
+    target `leak` (bits), at `delta`, in the grains' order: `prove`, c(s) times the target's samples; `commit`, n b(s) h,
+    paid on every proof block; `replay`, with a replay grain, the replay blocks the samples meet (`met_replay`); and
+    `total`, proving and replay plus `weight` times the commitment (`PROVING_ONLY` prices proving alone, Lean's
+    model).  A two-stage design is `two_stage_design`'s."""
+>>>>>>> 7af4d24fca3e
     if (work is None) == (leak is None):
         raise ValueError("one target: work (C) or leak (bits)")
     if not 0 < delta < 1 or not weight >= 0 or not h >= 0 or (work is not None and not work > 0):
         raise ValueError("needs 0 < delta < 1, weight >= 0, h >= 0 and a positive work target")
-    if design not in DESIGNS or (design == "two-stage" and replay is None):
-        raise ValueError(f"a design is one of {DESIGNS}, and a two-stage one needs a replay grain")
     rows = []
     for g in grains:
-        if design == "two-stage":
-            rows.append(two_stage(g, replay, delta, h=h, weight=weight, work=work, leak=leak))
-            continue
         draws = work_draws(g, work, delta) if work is not None else leak_draws(g, leak, delta)
         prove, commit = draws * g.prove, g.units * g.commit_bytes * h
         row = {"grain": g.name, "work": g.work, "units": g.units, "draws": draws, "prove": prove,
@@ -1261,12 +1193,413 @@ def sqrt_grain(beta: float, h: float, target: float, o: float, delta: float, wei
     return sqrt(weight * beta * h * target / (o * log(1 / delta)))
 
 
+#: the breakpoints of `two_stage_exfil`'s chords of the escape exponent h; past the last, h is taken at its value there.
+#: Dense from 3 to 8, where a wholly incorrect replay block's y = Σ_t k_t falls once there are a few strata
+CHORDS = (0.0, 2.0 ** -8, 2.0 ** -4, 2.0 ** -2, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0)
+#: `two_stage_design`'s family of designs, one at each κ.  Down to 2^-10: capped at a request's served bits, B is the
+#: capped charge, so the patterns' form's best designs sit at κ of 2^-9 to 2^-6
+KAPPAS = (0.0, *(2.0 ** e for e in range(-10, 5)))
+#: the tolerance in ln θ `two_stage_design` compares its designs at, each bound holding at any θ; the chosen one's is
+#: then taken to `two_stage_exfil`'s
+SCREEN = 1e-2
+#: the chance a registration samples more replay blocks than its statements' public cap holds, which refuses it
+OVERFLOW = 2.0 ** -40
+_LN2F = log(2.0)
+
+
+def _softplus(x: float) -> float:
+    return x + log1p(exp(-x)) if x > 0 else log1p(exp(x))
+
+
+def _log_expm1(x: float) -> float:
+    if x <= 0:
+        return -inf
+    return x + log1p(-exp(-x)) if x > 1 else log(expm1(x))
+
+
+def _logsumexp(xs: Sequence[float]) -> float:
+    top = max(xs)
+    return top if top == -inf else top + log(fsum(exp(x - top) for x in xs))
+
+
+@dataclass(frozen=True)
+class Cell:
+    """A proof-block type's blocks in each replay block, its part of `Claims.Sampling.cell` (ρ, t) for its stratum t:
+    `n` of them, each committing `bits` (its summand of `bitsOf`) and `commit_bytes` once a sampled replay block's
+    interior is committed, and proved at `prove` a block beside its statement's `fixed` cost, a statement holding at
+    most `cap` of the type's sampled blocks."""
+
+    n: float
+    bits: float
+    stratum: int = 0
+    prove: float = 0.0
+    fixed: float = 0.0
+    cap: float = 1.0
+    commit_bytes: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not self.n > 0 or not self.cap >= 1 or not min(self.bits, self.prove, self.fixed, self.commit_bytes) >= 0:
+            raise ValueError(f"a cell needs n > 0, cap >= 1, and non-negative bits and costs: {self}")
+
+
+def _strata(cells: Sequence[Cell], k: Mapping[int, float]) -> dict[int, float]:
+    """Each stratum's proof blocks in a replay block, n_t, refusing a `k` without k_t >= 1 in each (`WellFormed`)."""
+    out: dict[int, float] = {}
+    for c in cells:
+        out[c.stratum] = out.get(c.stratum, 0.0) + c.n
+    if not out or any(not k.get(t, 0) >= 1 for t in out):
+        raise ValueError(f"a well-formed design samples k >= 1 in each stratum: k {dict(k)} over strata {sorted(out)}")
+    return out
+
+
+def _log_expm1_exp(z: float) -> float:
+    """At least ln(e^{e^z} − 1), finite however small e^z is: ln z' + z' at z' = e^z once it is below 2^-40, as
+    e^{z'} − 1 <= z' e^{z'}."""
+    if z < -28:
+        return z + exp(z)
+    return _log_expm1(exp(z)) if z < 700 else inf
+
+
+def _log_grow(gs: Iterable[tuple[float, float, float]]) -> float:
+    """At least ln(∏ (1 + e^x)^n − 1) over (n, ln n, x), finite however small the e^x: once Σ n ln(1 + e^x) is below
+    2^-40, ln(e^{Σ n e^x} − 1) by `_log_expm1_exp`."""
+    gs = list(gs)
+    total = fsum(n * _softplus(x) for n, _, x in gs)
+    if total > 2.0 ** -40:
+        return _log_expm1(total)
+    return _log_expm1_exp(_logsumexp([ln_n + x for _, ln_n, x in gs])) if gs else -inf
+
+
+def _log_head(ln_x: float, m: float) -> float:
+    """ln Σ_{1<=j<=m} x^j/j!, at most e^x − 1 and, once x > m, its last term times min(m, 1/(1 − m/x)) (the terms
+    rise to it, each at most m/x of the next)."""
+    if m < 1:
+        return -inf
+    out = _log_expm1_exp(ln_x)
+    if m < inf and ln_x > (ln_m := log(m)):
+        out = min(out, m * ln_x - lgamma(m + 1) + min(ln_m, -log(-expm1(ln_m - ln_x))))
+    return out
+
+
+def _capped(g: tuple[float, ...], lw: float) -> tuple[float, float]:
+    """A group of n proof blocks of b bits each (`g`, from `two_stage_exfil`) at weight w = e^{lw}: ln of Light =
+    Σ_{1<=m<=m*} C(n, m)(2^b w)^m and of Heavy = Σ_{m>m*} C(n, m) w^m, at m* = ⌊S/b⌋ the most of them a set of at most
+    S bits holds, each at most (1 + 2^b w)^n − 1 or (1 + w)^n − 1 and the least of its closed forms by
+    C(n, m) <= n^m/m!."""
+    n, b, m, ln_n, lg_m, ln_m2 = g[:6]
+    light = -inf
+    if m >= 1:
+        ln_na = ln_n + b + lw
+        light = _log_grow([(n, ln_n, b + lw)])
+        if ln_na > (ln_m := log(m)):
+            light = min(light, m * ln_na - lg_m + min(ln_m, -log(-expm1(ln_m - ln_na))))
+    heavy = _log_grow([(n, ln_n, lw)])
+    if (ln_nw := ln_n + lw) < ln_m2:
+        heavy = min(heavy, (m + 1) * ln_nw - lg_m - log(m + 1) - log1p(-exp(ln_nw - ln_m2)))
+    return light, heavy
+
+
+def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: int, q: float, delta: float,
+                    served: float | None = None, union: bool = False, tol: float = 1e-6) -> float:
+    """`two_stage_rankin`'s bits."""
+    return two_stage_rankin(cells, k, replay_blocks, q, delta, served, union, tol)[0]
+
+
+def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: int, q: float, delta: float,
+                     served: float | None = None, union: bool = False, tol: float = 1e-6) -> tuple[float, float]:
+    """At least log2 of `CompiledTwo.Exfil`'s count, Σ_{T ∈ admissibleTwo} 2^{b(T)}, over `replay_blocks` replay blocks
+    (R) of the cells each, the first stage sampling each replay block with probability q and the second `k[t]` of
+    stratum t's n_t proof blocks in a sampled one.
+
+    The first stage's sample is Bernoulli, so T's acceptance is P̄_a = ∏_ρ (1 − q(1 − e_ρ)), and a cell's
+    `escCell(n, k, m) = C(n − m, k)/C(n, k) <= (1 − m/n)^k <= e^{−k m/n}` (0 once k >= n and m >= 1): P̄_a <=
+    exp(−Σ_ρ h(y_ρ)), at y_ρ = Σ r_v over T's proof blocks in ρ, r_v = k_t/n_t (∞ once k_t >= n_t), and h(y) =
+    −ln(1 − q(1 − e^{−y})).  An admissible T has Σ_ρ h(y_ρ) < Λ, so Rankin's bound at any θ > 0 gives
+    Σ_{T adm} 2^{b(T)} <= e^{θΛ} G^R, G = Σ_{T ⊆ ρ} 2^{b(T)} e^{−θ h(y(T))}.  h is concave, increasing and 0 at 0: past
+    `CHORDS[-1]` = Y_J it is at least h(Y_J), and between two breakpoints at least its chord a_j + s_j y, a_j >= 0, so
+    G − 1 <= Σ_j e^{−θ a_j}(∏_v (1 + 2^{b_v} e^{−θ s_j r_v}) − 1) + e^{−θ h(Y_J)}(∏_{r_v<∞} (1 + 2^{b_v}) − 1)
+    + e^{−θ h(∞)} ∏_{r_v<∞} (1 + 2^{b_v}) (∏_{r_v=∞} (1 + 2^{b_v}) − 1), each product over a replay block's proof
+    blocks, a T meeting a stratum proved whole at h(∞).  The bound takes the θ minimizing it, by golden section on ln θ
+    to within `tol` (it is convex in θ, and holds at any θ), and is at most R log2 ∏_v (1 + 2^{b_v}), every T counted
+    (θ = 0).  It returns the bits and that θ.
+
+    `served`, S, caps each replay block's charge at the bits it serves (a cap lemma in progress).  The sets' form
+    counts Σ_{T adm} 2^{Σ_ρ min(b(T_ρ), S)}: each product's factor over a group of n blocks of b bits and one rate
+    becomes Σ_m C(n, m) w^m 2^{min(m b, S)} <= 1 + Light + 2^S Heavy (`_capped`), by min(Σ_g x_g, S) <= Σ_g min(x_g, S),
+    and each sum over nonempty T is also at most 2^S (∏_v (1 + w_v) − 1), so a wholly incorrect replay block of N proof
+    blocks is charged about N + S bits, the sets it holds and what it serves.  The patterns' form (`union`) counts
+    the served outputs' patterns instead: a replay block's T_ρ either holds at most S bits, counted as itself, or
+    more, where all of them together serve at most 2^S outputs and each has y_ρ >= y_S = min_v r_v max(1, S/b_v) (as
+    Σ_v min(b_v, S) >= S over its blocks), so G <= Σ_{b(T)<=S} 2^{b(T)} e^{−θ h(y(T))} + 2^S e^{−θ h(y_S)}, the first sum bounded as above with each factor
+    1 + Light and also by 2^S Σ_{1<=j<=S/b_min} W^j/j!, W = Σ_v w_v."""
+    cells = list(cells)
+    if not 0 <= q <= 1 or not 0 < delta < 1 or replay_blocks < 1:
+        raise ValueError("needs 0 <= q <= 1, 0 < delta < 1 and replay_blocks >= 1")
+    if (served is None and union) or (served is not None and not served >= 0):
+        raise ValueError("a served-output cap is at least 0 bits, and the patterns' form needs one")
+    strata = _strata(cells, k)
+    groups: dict[tuple[float, float], float] = {}
+    for c in cells:
+        n = strata[c.stratum]
+        key = (c.bits, inf if k[c.stratum] >= n else k[c.stratum] / n)
+        groups[key] = groups.get(key, 0.0) + c.n
+    cap = 0.0 if served is None else served * _LN2F
+    parts = []
+    for (bits, r), n in groups.items():
+        m = inf if served is None or bits == 0 or served >= n * bits else floor(served / bits)
+        parts.append(((n, bits * _LN2F, m, log(n), lgamma(m + 1) if m < inf else 0.0, log(m + 2),
+                       log(m / 2) if 0 < m < inf else -inf), r))
+
+    def factor(g: tuple[float, ...], lw: float) -> float:
+        """ln of the group's factor at weight e^{lw}: uncapped, or where the cap binds (its blocks' mean count under
+        the tilted weights, n a/(1 + a), above m*/2), the least of that and its capped form."""
+        la = g[1] + lw
+        whole = g[0] * (sp := _softplus(la))
+        if g[2] == inf or g[3] + la - sp <= g[6]:
+            return whole
+        light, heavy = _capped(g, lw)
+        return min(whole, _softplus(light) if union else _logsumexp((0.0, light, cap + heavy)))
+
+    narrow = min(bits for bits, _ in groups)
+    most = inf if served is None or narrow == 0 else floor(served / narrow)
+
+    def light(gs: list[tuple[tuple[float, ...], float]]) -> float:
+        """ln of Σ over a replay block's nonempty T of these groups of T's charge times its weight: 2^{b(T)}, capped
+        at 2^S, or under `union` over the T of at most S bits; capped, also at most 2^S (∏_v (1 + w_v) − 1)."""
+        out = _log_expm1(fsum(factor(g, lw) for g, lw in gs))
+        if served is not None and gs:
+            out = min(out, cap + _log_grow([(g[0], g[3], lw) for g, lw in gs]))
+            if union and most < inf:
+                out = min(out, cap + _log_head(_logsumexp([g[3] + lw for g, lw in gs]), most))
+        return out
+
+    full = fsum(factor(g, 0.0) for g, _ in parts)
+    over = served is not None and fsum(n * bits for (bits, _), n in groups.items()) > served
+    if union and over:
+        full = _logsumexp((_softplus(light([(g, 0.0) for g, _ in parts])), cap))
+    elif served is not None:
+        full = min(full, (fsum(groups.values()) + served) * _LN2F)
+    every = replay_blocks * full / _LN2F
+    if q == 0 or full == 0:
+        return every, 0.0
+    lam = log(1 / delta)
+
+    def h_at(y: float) -> float:
+        return inf if q == 1 and y == inf else -log1p(q * expm1(-y))
+
+    hs = [h_at(y) for y in CHORDS]
+    chords = [((h1 - h0) / (y1 - y0), h0 - (h1 - h0) / (y1 - y0) * y0)
+              for y0, y1, h0, h1 in zip(CHORDS, CHORDS[1:], hs, hs[1:])]
+    finite = [(g, r) for g, r in parts if r < inf]
+    partial = fsum(factor(g, 0.0) for g, _ in finite)
+    tail = light([(g, 0.0) for g, _ in finite])
+    whole = partial + _log_expm1(fsum(factor(g, 0.0) for g, r in parts if r == inf))
+    if served is not None:
+        whole = min(whole, cap + fsum(g[0] for g, _ in finite) * _LN2F
+                    + _log_expm1(fsum(g[0] for g, r in parts if r == inf) * _LN2F))
+    h_whole = h_at(inf)
+    heavy, h_heavy = -inf, inf
+    if union and over:
+        heavy, h_heavy = cap, h_at(min(r * max(1.0, served / bits) if bits > 0 else inf for bits, r in groups))
+
+    def f(u: float) -> float:
+        theta = exp(u)
+        terms = [tail - theta * hs[-1], whole - theta * h_whole if whole > -inf else -inf,
+                 heavy - theta * h_heavy if heavy > -inf else -inf]
+        for s, a in chords:
+            terms.append(light([(g, -theta * s * r) for g, r in finite]) - theta * a)
+        return theta * lam + replay_blocks * _softplus(_logsumexp(terms))
+
+    scales = [(full + 1 + log(replay_blocks)) / hs[-1]]
+    scales += [(g[1] + 1 + log(g[0] * replay_blocks)) / (q * r) for g, r in finite]
+    lo, hi = log(min(scales)) - 8, log(max(scales)) + 8
+    gold = (sqrt(5) - 1) / 2
+    c, d = hi - gold * (hi - lo), lo + gold * (hi - lo)
+    fc, fd = f(c), f(d)
+    while hi - lo > tol:
+        if fc <= fd:
+            hi, d, fd = d, c, fc
+            c = hi - gold * (hi - lo)
+            fc = f(c)
+        else:
+            lo, c, fc = c, d, fd
+            d = lo + gold * (hi - lo)
+            fd = f(d)
+    best, u = min((fc, c), (fd, d))
+    return (best / _LN2F, exp(u)) if best / _LN2F < every else (every, 0.0)
+
+
+def registration_cap(sampled: float, span: float) -> int:
+    """The public cap on the replay blocks the first stage samples of a registration of `span` of them, `sampled` = Q
+    = q·span expected: the least K0 >= 1 with P(K > K0) <= `OVERFLOW`, at most ⌈span⌉, by P(K >= j) <= Q^j/j! (C(n, j)
+    q^j <= Q^j/j!) and, for j > Q, <= e^{−Q}(eQ/j)^j (Chernoff's, Bin(n, q)'s moment generating function at most
+    Poisson(Q)'s).  Both are at least 1 for j <= Q and fall in j past it, so the least j is found by bisection."""
+    if not sampled > 0:
+        return 0
+    lam = log(OVERFLOW)
+
+    def past(j: int) -> bool:
+        tail = j * log(sampled) - lgamma(j + 1)
+        if j > sampled:
+            tail = min(tail, j - sampled + j * log(sampled / j))
+        return tail <= lam
+
+    lo, hi = 0, ceil(2 * sampled - 2 * lam) + 2
+    while not past(hi):
+        hi *= 2
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        lo, hi = (lo, mid) if past(mid) else (mid, hi)
+    return min(max(1, hi - 1), ceil(span))
+
+
+def two_stage_statements(cells: Iterable[Cell], k: Mapping[int, float], q: float = 0.0,
+                         registration: float = 0.0) -> list[dict]:
+    """Each cell's statements, a sampled replay block's share of them: its stratum t's share of min(k_t, n_t) proof
+    blocks (`taken`), their `marginal` proving, and `prove`, with its statements' fixed costs.  A sampled replay block's
+    own statements hold at most `cap` of a type's blocks, a statement's `fixed` cost paid once (below one block, at the
+    chance the type is sampled).  A registration of `registration` replay blocks sampled at q may instead hold a type's
+    blocks of all its sampled ones, the statement's shape fixed before any coin: padded to `registration_cap` replay
+    blocks' worth, split into sessions of at most `cap` blocks padded to one size, and paid by every registration,
+    whatever it samples, its padding proved.  A type takes the registration's where they cost less (`shared`), and
+    `padding` is its proving of padding."""
+    cells = list(cells)
+    strata = _strata(cells, k)
+    sampled = q * registration
+    top = registration_cap(sampled, registration)
+    out = []
+    for c in cells:
+        taken = c.n * min(1.0, k[c.stratum] / strata[c.stratum])
+        marginal = taken * c.prove
+        row = {"taken": taken, "marginal": marginal, "prove": marginal + c.fixed * taken / max(1.0, min(c.cap, taken)),
+               "shared": False, "padding": 0.0}
+        if top and taken > 0:
+            blocks = ceil(top * taken - 1e-9)
+            sessions = ceil(blocks / c.cap)
+            padded = sessions * ceil(blocks / sessions) * c.prove / sampled
+            if (shared := sessions * c.fixed / sampled + padded) < row["prove"]:
+                row |= {"prove": shared, "shared": True, "padding": max(0.0, padded - marginal)}
+        out.append(row)
+    return out
+
+
+def two_stage_price(cells: Iterable[Cell], k: Mapping[int, float], q: float = 0.0,
+                    registration: float = 0.0) -> tuple[float, float, float]:
+    """A sampled replay block's proved proof blocks, their marginal proving and its proving with its statements' fixed
+    costs and padding (`two_stage_statements`)."""
+    rows = two_stage_statements(cells, k, q, registration)
+    return fsum(r["taken"] for r in rows), fsum(r["marginal"] for r in rows), fsum(r["prove"] for r in rows)
+
+
+def _registration_q(cells: list[Cell], k: Mapping[int, float], registration: float, replay: float, left: float,
+                    q: float) -> float:
+    """The most q at which a replay block costs at most `left`, q (`replay` + `two_stage_price`'s proving at q), its
+    proving rising with q: by bisection in ln q, from `q`, its own statements' (which cost at least as much), to the
+    q at which `replay` alone spends `left`."""
+    def fits(x: float) -> bool:
+        return x * (replay + two_stage_price(cells, k, x, registration)[2]) <= left
+
+    if fits(1.0):
+        return 1.0
+    lo, hi = q, min(1.0, left / replay) if replay > 0 else 1.0
+    while hi > lo * (1 + 1e-9):
+        mid = sqrt(lo * hi)
+        lo, hi = (mid, hi) if fits(mid) else (lo, mid)
+    return lo
+
+
+def _size_class(bits: float) -> int:
+    if (w := unit_class(ceil(bits))) is None:
+        raise ValueError(f"a proof block of {bits} bits fits no public size class (<= {UNIT_CLASS_MAX} bits)")
+    return w
+
+
+def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *, budget: float, replay: float,
+                     boundary: float = 0.0, h: float = 0.0, stratify: bool = True, served: float | None = None,
+                     union: bool = False, registration: float = 0.0) -> dict | None:
+    """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
+    (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`unit_class`) up
+    to a threshold into stratum 0 and gives each wider class a stratum of its own, the threshold chosen with κ: at the
+    narrowest class every class is its own stratum, and at the widest the design is the uniform one, so it is never
+    worse.  At each κ of `KAPPAS` it samples k_t = κ n_t (b_t + ℓ_t)/B of stratum t's n_t proof blocks, at least 1 and at
+    most n_t, at b_t the stratum's widest bits, ℓ_t = log2(e R n_t) and B a replay block's bits: at κ = 1 one incorrect
+    proof block of a stratum's widest, with its location, leaks as much a unit of escape as a wholly incorrect replay
+    block does.  Under a served-output cap (`served` and `union`, as `two_stage_exfil` takes them) b_t is at most the
+    cap and B is a replay block's capped charge, every T counted.  The first stage's q, at most 1, spends what
+    `boundary` (serving's boundary hashing) leaves of the budget on sampled replay blocks, each costing `replay`, its
+    interior's `commit_bytes` at `h` a byte, and
+    `two_stage_price`'s proving.  A statement holds one sampled replay block's proof blocks of one Definition, or with
+    `registration` (the replay blocks one interior registration spans) the registration's, padded to its public cap
+    where that costs less (`two_stage_statements`), q then the most the budget pays for (`_registration_q`).  Its row:
+    `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `registration`, `registration_sample` (Q, the
+    replay blocks a registration samples), `registration_cap` (K0), `shared` and `padding` (their shares of proving),
+    `bound` (bits) and the Rankin `theta` it takes, `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`,
+    `boundary`, `interior`, `commit` (their sum), `total` and `fill` (proving over its marginal); None when the boundary
+    alone is over the budget."""
+    cells = list(cells)
+    if not cells or not budget >= boundary:
+        return None
+    classes = [_size_class(c.bits) for c in cells]
+    thresholds = sorted(set(classes)) if stratify else [max(classes)]
+    charge = fsum(c.n * c.bits for c in cells)
+    if served is not None:
+        charge = two_stage_exfil(cells, {c.stratum: 1 for c in cells}, 1, 0.0, 0.5, served, union)
+    interior = fsum(c.n * c.commit_bytes for c in cells) * h
+    rows, seen = [], set()
+    for merged in thresholds:
+        split = [replace(c, stratum=0 if w <= merged else w) for c, w in zip(cells, classes)]
+        strata: dict[int, float] = {}
+        widest: dict[int, float] = {}
+        for c in split:
+            strata[c.stratum] = strata.get(c.stratum, 0.0) + c.n
+            widest[c.stratum] = max(widest.get(c.stratum, 0.0), min(c.bits, inf if served is None else served))
+        for kappa in KAPPAS:
+            k = {t: min(ceil(n), max(1, ceil(kappa * n * (widest[t] + 1 / _LN2F + log2(replay_blocks * n)) / charge)))
+                 if charge > 0 else 1 for t, n in strata.items()}
+            if (key := (merged, *sorted(k.items()))) in seen:
+                continue
+            seen.add(key)
+            left = (budget - boundary) / replay_blocks
+            per = replay + interior + two_stage_price(split, k)[2]
+            q = min(1.0, left / per) if per > 0 else 1.0
+            if registration and q < 1:
+                q = _registration_q(split, k, registration, replay + interior, left, q)
+            st = two_stage_statements(split, k, q, registration)
+            blocks, marginal, prove = (fsum(r[x] for r in st) for x in ("taken", "marginal", "prove"))
+            per = replay + interior + prove
+            sampled = q * replay_blocks
+            rows.append({"design": "stratified" if stratify else "uniform", "merged": merged, "kappa": kappa,
+                         "k": k, "q": q, "registration": registration, "registration_sample": q * registration,
+                         "registration_cap": registration_cap(q * registration, registration),
+                         "shared": fsum(r["prove"] for r in st if r["shared"]) / prove if prove > 0 else 0.0,
+                         "padding": fsum(r["padding"] for r in st) / prove if prove > 0 else 0.0, "split": split,
+                         "bound": two_stage_exfil(split, k, replay_blocks, q, delta, served, union, SCREEN),
+                         "replay_sample": sampled, "draws": sampled * blocks, "prove": sampled * prove,
+                         "replay": sampled * replay, "boundary": boundary, "interior": sampled * interior,
+                         "commit": boundary + sampled * interior, "total": boundary + sampled * per,
+                         "fill": prove / marginal if marginal > 0 else 1.0})
+    best = min(rows, key=lambda r: (r["bound"], r["total"]))
+    split = best.pop("split")
+    bound, theta = two_stage_rankin(split, best["k"], replay_blocks, best["q"], delta, served, union)
+    return best | {"bound": bound, "theta": theta}
+
+
 __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayGrain", "SHA512_ANDS", "SHA512_ROWS", "TemplateCost",
-           "DESIGNS", "acceptance_parts",
-           "certify", "density_bound", "density_exact", "detection", "fill", "footprint_cap", "for_budget", "for_target",
+           "OVERFLOW", "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayGrain", "SHA512_ANDS", "SHA512_ROWS",
+           "TemplateCost",
+           "CHORDS", "Cell", "KAPPAS", "acceptance_parts",
+           "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target",
            "frontier", "grain_costs", "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits",
            "max_harm", "max_harm_check", "met_replay", "needs_benchmark", "overlaps", "perturb", "pinned_ands",
+<<<<<<< 94ca7fd0d18
            "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost", "touched",
            "two_stage", "two_stage_rate", "weigh", "work_draws", "work_law"]
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+           "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost", "touched",
+           "two_stage", "two_stage_rate", "weigh", "work_draws", "work_law"]
+=======
+           "registration_cap", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
+           "touched", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin", "two_stage_statements", "weigh",
+           "work_draws", "work_law"]
+>>>>>>> 7af4d24fca3e

@@ -18,6 +18,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py pearlplus-period rule DIR --gate CMD --lane L --coin COIN_RECORD
     served_verdicts.py coin DIR --record FILE [--run RUN_ID] [--run-dir DIR]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
                               [--product P] [--deferred WHY] [--steps LO,HI] [--off-node]
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L] [--window-tie DIR]
@@ -29,6 +30,11 @@ sampled proofs, and the one record of every verdict (the block record).
 =======
                               [--product P]
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+                              [--product P]
+=======
+                              [--product P] [--deferred WHY]
+>>>>>>> 7af4d24fca3e
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
@@ -154,17 +160,19 @@ with each one's server) and from it the block record (``block-record.json``, `bl
 `block_record.check`), which composes only the answers about the record's node and carries the others as ``elsewhere``;
 an answer that names no server isn't carried. An accepted answer whose outputs are not its leg's certificate
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
-where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
-``accept`` only when every subprotocol accepted here.
-Those are the subprotocols of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
-product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and composed into no
-verdict, so remote's verdict is ``accept`` when sampled proofs and PoUW accepted here, whatever the onsite pieces.
-The report's ``composed`` and the block record's ``composed.onsite`` give that verdict with its reason (`said`), one clause
+where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written. Otherwise
+the verdict is the block record's, which is the Lean ``onsite check`` or ``remote check``'s answer; no Lean check runs
+here, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line name ``pending``.
+The subprotocols are those of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
+product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and in no block record's
+``missing``, so remote's is ``pending`` with nothing missing when sampled proofs and PoUW accepted here, whatever the
+onsite pieces. The report's ``composed`` gives that verdict with its reason (`said`), one clause
 a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
 (`terms`: when its weights were held and their share of the checkpoint, where its profile says, and each δ of the block
 record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
 with core's refusal of the window's credit. Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
 (the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
+<<<<<<< 94ca7fd0d18
 <<<<<<< HEAD
 elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
 is the record's node, and what it read, `COMPOSED_FROM`, or off that node `COPIED_FROM`), and with ``--deferred`` what
@@ -196,6 +204,14 @@ development piece's `DEV_VERDICT`), each missing one and why, each rejecting one
 =======
 elsewhere, and the reason.
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+elsewhere, and the reason.
+=======
+elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
+is the record's node, and what it read, `COMPOSED_FROM`, or off that node `COPIED_FROM`), and with ``--deferred`` what
+the run left to a follow-on and why (``deferred``: `served_verdicts.sh`'s step 6 on a node short of V3c's audit's
+memory), which composes the final record on another host, the record's node still ``--node``.
+>>>>>>> 7af4d24fca3e
 """
 from __future__ import annotations
 
@@ -226,6 +242,8 @@ for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interf
 
 #: the window report's format, kept from the all-protocols runner whose report it was
 REPORT_FORMAT = "verity/all-protocols-window/v1"
+#: the block record's verdict by the window report's name for it: ``-window/v1`` calls an undecided window pending
+WINDOW_VERDICT = {"undecided": "pending"}
 #: sampled proofs' owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
@@ -259,6 +277,7 @@ SERVED = "served.json"
 #: a development piece's document, written in place of its core answer
 DEVELOPMENT = "development.json"
 #: why a development piece's verdict credits nothing, so its subprotocol's row in the record stays missing
+<<<<<<< 94ca7fd0d18
 DEV_WHY = ("development run, credits nothing: the record takes no H1 piece as PoUW's verdict of record, and core's credit "
            "also needs the window in a period whose open commits its draw K, rows and weights")
 _PEARLPLUS_UNTIED = ("development run, credits nothing: Pearl+ (pearl-c-h100-v1-h3) served its own seeded load on this card "
@@ -361,6 +380,21 @@ WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.
                  "tokens*.json": "the requests' token ids", "match_stoch.json": "the sampler's rows",
                  "sampled_replay*.json": "the replay's executed prefixes", "*.npy": "a value array",
                  "*.npz": "a value array", "*.pt": "a tensor", "*.safetensors": "a checkpoint's weights"}
+||||||| e10cf2c8559
+DEV_WHY = ("development run, credits nothing: H1's coins come from vy-challenger-1's gate under the lane's development key, "
+           "and a window counts for credit only under the lane's own key; core's credit also needs the window in a period "
+           "whose open commits its draw K, rows and weights")
+=======
+DEV_WHY = ("development run, credits nothing: H1's coins come from vy-challenger-1's gate under the lane's development key, "
+           "and a window counts for credit only under the lane's own key; core's credit also needs the window in a period "
+           "whose open commits its draw K, rows and weights")
+#: what `record` composes from, until it runs on an auditor-side host reading each party's own answer
+COMPOSED_FROM = ("each piece's answer file as the served node wrote it, not the party that produced it: an edit to that "
+                 "file on the node changes its row")
+#: what `record` composes from off the served node (a deferral's follow-on): the prover's copy of those files
+COPIED_FROM = ("a prover-side copy of each piece's answer file as the served node wrote it, not the party that produced it: "
+               "an edit to that file on the node or to its copy changes its row")
+>>>>>>> 7af4d24fca3e
 #: a development piece's verdict in the ``RECORD`` line, in place of its row's ``missing``
 DEV_VERDICT = "development run, credits nothing"
 #: Pearl+'s verdict's protocol (`verify_run.PROTOCOL`)
@@ -1193,8 +1227,14 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
             (out / "ledger.jsonl").write_bytes(_gate_out(gate, "ledger"))
             (out / "pins.jsonl").write_bytes(_gate_out(gate, "pins"))
             got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check",
+<<<<<<< 94ca7fd0d18
                         {**inputs, **({"--draw-dir": str(tree / dsid)} if dsid else {}),
                          **({"--lean-answers": str(lean_answers)} if lean_answers is not None else {})})
+||||||| e10cf2c8559
+            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check", inputs)
+=======
+                        {**inputs, **({"--draw-dir": str(tree / dsid)} if dsid else {})})
+>>>>>>> 7af4d24fca3e
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
             reasons.append(f"coins: {type(e).__name__}: {e}"[:600])
         else:
@@ -2059,16 +2099,29 @@ def served_compare_line(path: Path) -> str:
 
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
            run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
+<<<<<<< 94ca7fd0d18
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+||||||| e10cf2c8559
+           run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite"
+           ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+=======
+           deferred: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+>>>>>>> 7af4d24fca3e
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; sampled proofs'
     answer is about ``node``, and a piece's that names no server isn't carried. ``deferred``: what the run left to a
+<<<<<<< 94ca7fd0d18
     follow-on and why, and ``served_compare``: the served compare's verdict line (`served_compare_line`), each of which
     the report and the line carry. ``off_node``: composed from the served node's compose
     hand-off (`HANDED_FROM`); ValueError on ``node`` itself. ``tree``: the composing tree's ``tree`` (its commit) and
     ``tree_on`` (the branch its host pinned it from), which ``composed_on`` carries."""
+||||||| e10cf2c8559
+    answer is about ``node``, and a piece's that names no server isn't carried."""
+=======
+    follow-on and why, which the report and the line carry."""
+>>>>>>> 7af4d24fca3e
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
@@ -2097,9 +2150,16 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
             except (KeyError, IndexError, TypeError, ValueError, ZeroDivisionError) as e:
                 rows[k] = {**r, "verdict": "error", "quantity": None, "epsilon": None,
                            "reason": f"its answer is not the block record's {legs[k]} leg: {type(e).__name__}: {e}"[:2000]}
+<<<<<<< 94ca7fd0d18
     where = {"host": host, "served_node": host == node,
              "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM, **(tree or {})}
     left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare)) if v}
+||||||| e10cf2c8559
+=======
+    host = socket.gethostname()
+    where = {"host": host, "served_node": host == node, "from": COMPOSED_FROM if host == node else COPIED_FROM}
+    left = {"deferred": deferred} if deferred else {}
+>>>>>>> 7af4d24fca3e
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
     verdicts = {NAMES[k]: DEV_VERDICT if "development" in r and r.get("verdict") == "missing" else r.get("verdict")
@@ -2110,9 +2170,17 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                       if r.get("verdict") not in ("missing", "dropped") and at[k][0] is None)
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
     dev = dev if dev["development"] else {}
+<<<<<<< 94ca7fd0d18
     answers = {NAMES[k]: r["answer_from"] for k, r in rows.items() if "answer_from" in r}
     named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, "composed_on": where,
              "answers": answers, **left, **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
+||||||| e10cf2c8559
+    named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere,
+             **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
+=======
+    named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, "composed_on": where,
+             **left, **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
+>>>>>>> 7af4d24fca3e
              **({"unserved": unserved} if unserved else {}), **dev}
     bad = sorted(NAMES[k] for k, r in rows.items()
                  if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
@@ -2127,9 +2195,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
     rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra, product=product)
-    report["composed"] = rec["composed"]["onsite"] = {"protocol": REPORT_FORMAT, "verdict": rec["composed"]["verdict"],
-                                                      "reason": said(rows, at, node, built)}
-    line = {"composed": rec["composed"]["verdict"], **named, "reason": report["composed"]["reason"],
+    verdict = WINDOW_VERDICT.get(rec["composed"]["verdict"], rec["composed"]["verdict"])
+    report["composed"] = {"protocol": REPORT_FORMAT, "verdict": verdict, "reason": said(rows, at, node, built)}
+    line = {"composed": verdict, **named, "reason": report["composed"]["reason"],
             "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
@@ -2236,6 +2304,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--deferred", help="what the run left to a follow-on and why, which the record carries")
+<<<<<<< 94ca7fd0d18
     r.add_argument("--served-compare", type=Path, help="the served compare's served_compare.json (served_compare.py), "
                                                        "whose verdict line the record names")
     r.add_argument("--steps", help="LO,HI: the window's engine steps, in place of picking them from the serve dir")
@@ -2262,6 +2331,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     cd.add_argument("out", type=Path)
     cd.add_argument("--gate-exit", type=int)
     cd.add_argument("--err", type=Path)
+||||||| e10cf2c8559
+=======
+>>>>>>> 7af4d24fca3e
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
         q.add_argument("--product", default="onsite")
@@ -2449,10 +2521,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                  if a.sampled_lean else spot_row(a.sampled_proofs, run))
     rows = {"integrity": integrity, **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
+<<<<<<< 94ca7fd0d18
                                servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred,
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare))
+||||||| e10cf2c8559
+                               servers={k: at for k, (_, at) in got.items()}, product=a.product)
+=======
+                               servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred)
+>>>>>>> 7af4d24fca3e
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

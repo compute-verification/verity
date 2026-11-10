@@ -1,10 +1,46 @@
 module
 
-public import Mathlib
 public import Definitions.Accounting.Guarantees.RateAuditPooled
 public import Definitions.Accounting.Guarantees.RateAuditNamed
 public import Proofs.Accounting.RateAudit.Pooled
 public import Proofs.Accounting.RateAudit.Named
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.RateAudit.Chain
+import Proofs.Accounting.RateAudit.Windows
+import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The pooled sample: windows and sessions, the proof
@@ -41,7 +77,7 @@ namespace Pooled
 theorem pr_sample' {α : Type} [Fintype α] (G : Finset α) (d : ℕ) :
     pr (fun I : Fin d → α => ∀ t, I t ∈ G) = ((G.card : ℝ≥0∞) / Fintype.card α) ^ d := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have hG : Finset.univ.filter (fun I : Fin d → α => ∀ t, I t ∈ G) = Fintype.piFinset (fun _ => G) := by
     ext I
     simp [Fintype.mem_piFinset]

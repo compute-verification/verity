@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.RateAuditRemote
+import Mathlib.Basic.ENNReal.Real
 public import Definitions.Accounting.RateAuditPooled
 
 /-!

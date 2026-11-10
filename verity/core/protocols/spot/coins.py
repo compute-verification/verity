@@ -14,10 +14,16 @@ bytes it read (`one_stage.verifier.select`).  A sample from the auditor's challe
 the challenger's commitment, and extended with the family's next coins, never stretched.  vLLM's legacy replay
 challenge derives its own (`verity_vllm.commit.challenge.replay_key`, under the domain
 `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
+
+A window's seed salt is a family of its own (`SEED_SALT_FAMILY`), which no sample reads: one coin, released after the
+window's open root, before the window serves (`draw_seed_salt`), and read back by the verifier from the challenger's log
+(`seed_salt_of`).  Every registration of the window names it as a certified input (`one_stage.registration`'s R6), which
+the window's circuits may read: a value they would otherwise take as the server's choice.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
 from typing import Any, NamedTuple
@@ -32,6 +38,7 @@ from .remote import MAX_BATCH
 
 _LAW_KEYS = {"subset": {"law", "k"}, "bernoulli": {"law", "p"}, "stratified": {"law", "k", "strata"},
              "work": {"law", "k", "strata"}}
+_HEX = re.compile(r"[0-9a-f]+")
 
 
 def _int(x: Any) -> bool:
@@ -355,6 +362,50 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
     return challenger_stream(commitment, segment, after, roots.get(label, ()))
 
 
+#: the challenger's family of a window's seed salt, which no sample reads
+SEED_SALT_FAMILY = "seed-salt"
+SEED_SALT_WINDOW = "a window's open root is lowercase hex of 64 bytes"
+SEED_SALT_ONE = ("a window's seed salt is one coin, its family's first, released after the window's open root: the "
+                 "challenger released another")
+
+
+def _window_root(window: Any) -> bool:
+    return type(window) is str and len(window) == 2 * 64 and _HEX.fullmatch(window) is not None
+
+
+def draw_seed_salt(coins: ChallengerCoins, window: str) -> bytes:
+    """A window's seed salt, drawn at the window's open, before it serves: the first coin of the challenger's
+    `SEED_SALT_FAMILY` (`coins`, over that family of the window's session), opened after the window's open root `window`
+    (lowercase hex, from the challenger's signed open) and read whole (`OwnRandomness`), with no derivation. The open
+    root is the only root a window has before it serves, so the salt is fixed before the window serves, and no
+    sample reads its family: a sample's coins stay their own family's, released after the registration's commitment.
+    Raises `CoinError` for coins of another family, a window root in another form, or a family with a coin open already
+    (a window's salt is drawn once, and nothing redraws it)."""
+    record = coins.record if isinstance(coins, ChallengerCoins) else None
+    if record is None or record.label != SEED_SALT_FAMILY:
+        raise CoinError(f"a window's seed salt is a coin of the challenger's {SEED_SALT_FAMILY} family")
+    if not _window_root(window):
+        raise CoinError(SEED_SALT_WINDOW)
+    if record.roots:
+        raise CoinError(f"a window's seed salt is drawn once: its {SEED_SALT_FAMILY} family has a coin open already")
+    coins.commit(bytes.fromhex(window))
+    return OwnRandomness(coins).read(COIN_BYTES)
+
+
+def seed_salt_of(key: ChallengerKey, window: str, coins: Any, verify: Verify) -> bytes:
+    """Lean `Challenger.seedSaltOf`: a window's seed salt as the verifier reads it from the challenger's log, from the
+    evidence `coins` (`draw_coins`'s, its segment the salt's): the `SEED_SALT_FAMILY` coins that the session the
+    auditor's ledger opens on `window` (its open root) under `key` released after that open root, which must be one
+    coin, the family's first. So the salt is the one coin the challenger released for it, and a server that saw others
+    could pick none of them. Raises `CoinError`."""
+    if not _window_root(window):
+        raise CoinError(SEED_SALT_WINDOW)
+    salt = draw_coins(key, window, SEED_SALT_FAMILY, bytes.fromhex(window), coins, verify)
+    if coins["segment"]["start"] != 0 or len(salt) != COIN_BYTES:
+        raise CoinError(SEED_SALT_ONE)
+    return salt
+
+
 class Limits(NamedTuple):
     """Bounds on the sizes of a sample's coin evidence (`coins_within`), each defined once in `challenger`, whose device
     code refuses past each (`remote`, "The device's caps")."""
@@ -415,6 +466,16 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
         raise ValueError("a closure widens a work draw only")
     if kind == "subset":
         k = law["k"]
+<<<<<<< 94ca7fd0d18
+||||||| e10cf2c8559
+        if k > population:
+            raise ValueError(f"a subset draw of {k} exceeds the population of {population}")
+=======
+        if k < 1:
+            raise ValueError("a subset law draws at least one unit")
+        if k > population:
+            raise ValueError(f"a subset draw of {k} exceeds the population of {population}")
+>>>>>>> 7af4d24fca3e
         units = randomness.stream(2 * k * _width(population) + 64, lambda read: _subset(k, population, read))
     elif kind == "bernoulli":
         num, den = _ratio(law["p"])
@@ -469,6 +530,15 @@ __all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "SEGME
            "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "read_reason"]
 =======
 __all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "LIMITS", "Limits", "MAX_HELLOS", "MAX_LEDGER_LINES", "MAX_PATH",
+<<<<<<< 94ca7fd0d18
            "MAX_PINS", "OwnRandomness", "SEGMENT_FORM", "Segment", "challenger_stream", "closure_of", "coins_reason",
            "coins_within", "draw_coins", "draw_first", "read_reason"]
 >>>>>>> 705be2b532
+||||||| e10cf2c8559
+           "MAX_PINS", "OwnRandomness", "SEGMENT_FORM", "Segment", "challenger_stream", "closure_of", "coins_reason",
+           "coins_within", "draw_coins", "draw_first", "read_reason"]
+=======
+           "MAX_PINS", "OwnRandomness", "SEED_SALT_FAMILY", "SEED_SALT_ONE", "SEED_SALT_WINDOW", "SEGMENT_FORM", "Segment",
+           "challenger_stream", "closure_of", "coins_reason", "coins_within", "draw_coins", "draw_first", "draw_seed_salt",
+           "read_reason", "seed_salt_of"]
+>>>>>>> 7af4d24fca3e

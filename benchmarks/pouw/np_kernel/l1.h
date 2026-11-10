@@ -203,7 +203,7 @@ inline Bytes leaf_prefix(const Bytes& key) {
   return b;
 }
 
-// pouw (verity.core.protocols.pouw.circuit.seeds)
+// pouw (verity.ml.protocols.pouw.circuit.seeds)
 inline Bytes call_seed_tag() { return str("verity/pouw/call-seed/v1", 24); }
 inline Bytes noise_tag() {
   Bytes t = str("verity/pouw/noise/v1");

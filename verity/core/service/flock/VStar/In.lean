@@ -1,8 +1,6 @@
 module
 
-public import Flock.RecCoins
 public import Flock.RecLinkPart
-public import VStar.Stage
 
 /-!
 # V*'s per-part port inputs: what `verity_flock.rec_vstage.stage` writes to each part's `inst.bin`

@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Spot.Egress
 public import Mathlib.Tactic.DeriveFintype
+public import Definitions.Spot.Dataflow
+public import Mathlib.Data.Fintype.Option
+public import Mathlib.Data.Fintype.Sum
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Tactic.Bound.Init
 
 /-!
 # Value-dependent reads: the VM pointer

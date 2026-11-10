@@ -22,10 +22,10 @@ from verity.ml.circuits.ops.fp32 import F32DivV2, F32FmaV2, F32MulV2
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le, SelectI32
 from verity.ml.circuits.silicon.models import HOPPER_BF16_WGMMA_K16
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_debit as D
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
@@ -624,8 +624,8 @@ def test_h3_is_the_default_and_h0_and_sha256_are_named():
     SHA-256 trees are taken only by name: Pearl-C's h0 schemes, and NCP and Pearl's port, whose 32-byte tile digests
     hm96 tile trees don't take.  A name with no hashing suffix still means h0."""
     from verity.core.protocols.pouw import audit
-    from verity.core.protocols.pouw.circuit import pc8
-    from verity.core.protocols.pouw.schemes import pearl_c4
+    from verity.ml.protocols.pouw.circuit import pc8
+    from verity.ml.protocols.pouw.schemes import pearl_c4
     from verity.core.protocols.pouw.serving import SchemeId
 
     assert C.PearlC(forming="v1").hashing == pearl_c4.PearlC4().hashing == "h3"
@@ -801,7 +801,7 @@ def tolerant_kernel(scheme, ctx, noise, a, b, tiles):
 @pytest.mark.parametrize("clause", [None, "finite", "live", "floor"])
 def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
     """`check_tile` refuses a tile one of whose weight rows fails a clause of `OperandOK`, as Lean's `TileCheck.Accepts`
-    asks each of the tile's weight rows to pass the protocol's `weightOK` (`PearlCSem.RowOK`). One row per clause: a
+    asks each of the tile's weight rows to pass the protocol's `fixedOK` (`PearlCSem.RowOK`). One row per clause: a
     non-finite word (Lean's `rowOK8_nonFinite`), three of 128 words `8.0` among `1.0`s (`rowOK8_notLive`), and every 8th
     word `2¹²⁶`, so ρ is not finite and the floor is 0 (`pc8Sem_squaresOverflow`). The tile beside it, whose weight rows
     pass, is accepted, and so are both on the honest weight."""

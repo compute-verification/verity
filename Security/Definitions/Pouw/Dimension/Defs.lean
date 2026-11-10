@@ -1,7 +1,8 @@
 module
 
-public import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
 public import Definitions.Pouw.NCP.Relation
+public import Mathlib.LinearAlgebra.Dimension.Finrank
+public import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
 
 /-!
 # Theorem D: the dimension bound in AlgM_16 (trusted statements)
@@ -146,16 +147,16 @@ def AlgBound : Prop :=
     CheckpointIndependent k 16 R → U ⊆ range N → (∀ f ∈ L, f ∈ V0 N m n k) → H16 P → Outputs k m n N R A B U P L →
     16 * (U.card * (m * n) * (3 * k / 16 - 1)) ≤ cost P
 
-/-- **TT_NCP in AlgM_16** at `γ₀ = 16/(3k)`, in the shape of TT_NCP's event (`Pouw.NCP.Assumptions.TTNCP`, used by
-`gammaFromTTNCP`): for every `γ₀ ∈ [16/(3k), 1)`, a program of AlgM_16 on inputs in `V₀` that outputs the non-final
-checked words of the units in `U`, for any `A = g(F₁)`, never has `cost/(1 − γ₀) < Σ_{u ∈ U} 3·W_mm`, with
+/-- **TT_NCP in AlgM_16** at `g₀ = 16/(3k)`, in the shape of TT_NCP's event (`Pouw.NCP.Assumptions.TTNCP`, used by
+`gapFromTTNCP`): for every `g₀ ∈ [16/(3k), 1)`, a program of AlgM_16 on inputs in `V₀` that outputs the non-final
+checked words of the units in `U`, for any `A = g(F₁)`, never has `cost/(1 − g₀) < Σ_{u ∈ U} 3·W_mm`, with
 `W_mm = m·k·n`. The event is impossible, not only unlikely: correctness is on the whole grid. -/
 def TTNCPAlg : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (L : List (Noise N m n k → ℚ)) (P : List (Instr (Noise N m n k))) (γ₀ : ℝ),
+    (L : List (Noise N m n k → ℚ)) (P : List (Instr (Noise N m n k))) (g₀ : ℝ),
     16 ∣ k → 0 < k → CheckpointIndependent k 16 R → U ⊆ range N → (∀ f ∈ L, f ∈ V0 N m n k) → H16 P →
-    Outputs k m n N R A B U P L → 16 / (3 * k : ℝ) ≤ γ₀ → γ₀ < 1 →
-    ¬ ((cost P : ℝ) / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
+    Outputs k m n N R A B U P L → 16 / (3 * k : ℝ) ≤ g₀ → g₀ < 1 →
+    ¬ ((cost P : ℝ) / (1 - g₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
 
 /-- **Theorem D's hypotheses hold jointly, and its bound is attained**: for every `k ≥ 1024` with `16 ∣ k`, every
 shape, `A = g(F₁)`, `B` and unit set, some `R` passes `Admissible` and is checkpoint independent (the shift by 24,
@@ -168,12 +169,12 @@ def AlgWitness : Prop :=
       (∀ f ∈ coords N m n k, f ∈ V0 N m n k) ∧ H16 P ∧ Outputs k m n N R A B U P (coords N m n k) ∧
       cost P = 16 * (U.card * (m * n) * (3 * k / 16 - 1))
 
-/-- **`γ₀ = 16/(3k)` is sharp in AlgM_16**: for every `γ₀ < 16/(3k)`, with at least one unit and `m·n > 0`, the
+/-- **`g₀ = 16/(3k)` is sharp in AlgM_16**: for every `g₀ < 16/(3k)`, with at least one unit and `m·n > 0`, the
 program of `AlgWitness` makes TT_NCP's event hold, for every `R`, `A` and `B`. -/
 def AlgSharp : Prop :=
-  ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ) (γ₀ : ℝ),
-    16 ∣ k → 0 < k → U ⊆ range N → U.Nonempty → 0 < m * n → γ₀ < 16 / (3 * k : ℝ) →
+  ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ) (g₀ : ℝ),
+    16 ∣ k → 0 < k → U ⊆ range N → U.Nonempty → 0 < m * n → g₀ < 16 / (3 * k : ℝ) →
     ∃ P : List (Instr (Noise N m n k)), H16 P ∧ Outputs k m n N R A B U P (coords N m n k) ∧
-      (cost P : ℝ) / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ)
+      (cost P : ℝ) / (1 - g₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ)
 
 end Pouw.Dimension

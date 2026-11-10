@@ -52,8 +52,8 @@ ideal-permutation model only, and none bounds an adversary at the reference `Π�
   else. The memory challenger issues `k` uniform block indices, all at once or one at a time. Each answer is due within
   the deadline, so the responder is `(D, Q)`-bounded, with no outside help. Whenever a challenge arrives the adversary's
   state is at most `ρ|C|` bits; `W` and `pp` are free.
-- **Deployment: help is accounted, not excluded.** No guarantee assumes trusted prover hardware,
-  so nothing attests the prover's machine and nothing asks that its responder be isolated. The game's "no outside
+- **Deployment: help is accounted, not excluded.** No guarantee assumes trusted developer hardware,
+  so nothing attests the developer's machine and nothing asks that its responder be isolated. The game's "no outside
   help" is read through the help-accounted row of console's actual-circuit model, the model a certificate cites under
   the id `perfect-isolation` (kept from the earlier model, since certificates pin it): on PoUS's challenge schedule,
   some challenge tick `t_j` has `mem_X(t_j) + 2^e·h ≥ S` for the audited location `X`, where `h` is the help `X`
@@ -462,7 +462,7 @@ prior content through the wipe had no room for the labels. The reference is `str
 game in `Security/Definitions/Pous/Model/StreamedWipe.lean`), both proved (`Security/Proofs/Pous/StreamedWipe/`), where
 `PousStreamedWipe.honest_accepts` shows the server that keeps every label accepted on every run.
 
-**Labels and coins.** The memory challenger, the auditor's device on a machine the prover doesn't control, derives every
+**Labels and coins.** The memory challenger, the auditor's device on a machine the developer doesn't control, derives every
 label itself, under a key fresh for each server and each wipe:
 
 ~~~text
@@ -598,7 +598,7 @@ and its least `k` (the H200 also at its deployed `k`), are:
 | 8×H200, HBM and 2 TB RAM | 3,128 GB | 8 × 0.3 + 1.5 GB | 2,922 | 261,229 | 1.0998 GB | 4.9998 GB | `StreamedWipeMeetsServer8H200HBMRAM` |
 | 8×H200, and 12 TB disk | 15,128 GB | 8 × 0.3 + 1.5 GB | 14,183 | 1,268,143 | 1.1000 GB | 4.99996 GB | `StreamedWipeMeetsServer8H200` |
 
-The H200 is vy-dc-h200-2's card as r20261026-003454-bfd2 measured it (`Pous.StreamedWipe.h200`): 143,771 MiB in all
+The H200 is vy-dc-h200-2's card as measured (`Pous.StreamedWipe.h200`): 143,771 MiB in all
 and a fill of 4,425 segments of 32 MiB, so `R` is 18,211,667,968 bits; the deployed row is `wipe_party --reads 5500` at
 its published `r = 62`. With today's fill-process contexts at zero reserve, `R = 8 × 1.2 GB = 9.6 GB` on its own, and no
 `r` reaches 5 GB. `8 × 0.3 GB + 1.5 GB` is a minimal context per GPU and a host OS, unmeasured: the minimal-context
@@ -613,7 +613,7 @@ premises, `M_s = 512·N + R`, `0 < N`, `(r − 1)^k · 2^129 ≤ r^k` and the 5 
 prover that writes its prior content into its memory and reads it back is accepted and keeps it with probability 1,
 while the PRF's advantage against the distinguisher built from it (`wipeDistinguisher P`) is 0. A prover that keeps nothing stays within `2^-q` (`Pous.Claims.keepNothing_within`).
 
-**Measured** (`r20261019-061002-ee6b`, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
+**Measured** (one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
 `benchmarks/pous/streamed_wipe/run.sh`; every gate passed, 76 vectors against `streamed_wipe.label`):
 
 | | |
@@ -721,10 +721,11 @@ a version bump in the strings they carry.
 
 `vk` (`docs/p3-instantiation.md` §4) is a SHA-512 Merkle tree over the blocks, with the shape of RFC 6962. Each leaf
 is `SHA512(0x00 || tag_s || u16(v) || R(c2_v))`, 99 bytes and one compression, where `R(c) = SHA512(P(8|c|) || c)` is
-the block's `sha512/row/v2` digest (`rowleaf.sha512_row_v2_digest`), the digest `answer_circuit`'s `PousRowDigest`
-checks; `tag_s` is 32 bytes and `v` 2, little-endian. Each node is `SHA512(0x01 || l || r)`. The memory challenger keeps
-the root and every 64-byte leaf digest, or only the root and checks the server's audit path. This follows the
-instantiation's byte format rather than `verity.ml.commitments`' frame v3.
+the block's `sha512/row/v2` digest (`rowleaf.sha512_row_v2_digest`), the digest
+`verity.ml.protocols.pous.answer_circuit`'s `PousRowDigest` checks; `tag_s` is 32 bytes and `v` 2, little-endian. Each
+node is `SHA512(0x01 || l || r)`. The memory challenger keeps the root and every 64-byte leaf digest, or only the root
+and checks the server's audit path. This follows the instantiation's byte format rather than `verity.ml.commitments`'
+frame v3.
 
 ## Rounds
 
@@ -1041,14 +1042,14 @@ Two gaps stood between these statements and the deployed verifier:
   every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
   `trusted-host` (`verity.core.claims`): "the auditor's device runs its stated code, timing
-  included, on a host the prover doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
+  included, on a host the developer doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
   host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
   audit has at most one session it can accept. On the served piece (`benchmarks/pous/served_piece.py`) the id is
   derived, not sampled: the memory challenger samples the setup's salt after the commitment to `W` and logs it under the
   window's binding (`memory_challenger.SaltLog`, one salt an audit), derives the id from the binding, the commitment
-  and the salt (`challenger_party.session_id`), and refuses a session whose setup doesn't publish exactly that
+  and the salt (`challenger_session.session_id`), and refuses a session whose setup doesn't publish exactly that
   commitment and salt. The verifier computes the same id from the binding and what setup published, never from the
   report. The salt is in the id because the signed header binds only the root of `C*`. The Lean states the check's side (`RunCheckAccepts`: an accepted session
   carries the designated id); the device's refusal is its code and log, which the Lean does not model.

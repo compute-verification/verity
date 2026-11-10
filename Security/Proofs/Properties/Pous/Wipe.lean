@@ -1,10 +1,15 @@
 module
 
-public import Properties.Pous.Wipe
-public import Proofs.Pous.StreamedWipe.Family
-public import Proofs.Pous.Sanity
-public import Mathlib.Tactic.SplitIfs
-public import Mathlib.Tactic.DefEqTransformations
+public import Proofs.Properties.Pous.Lemmas.Wipe
+public import Mathlib.Algebra.Group.End
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Sanity
+import Proofs.Pous.StreamedWipe.Family
+import Proofs.Pous.Prob
 
 /-!
 # Proof that an accepted wipe meets the survivor bound it publishes (`Properties.Pous.Wipe`)
@@ -106,7 +111,7 @@ theorem winIdeal_le_of_reads {n k r R q E : ℕ} (hn : 0 < n) (hr : 0 < r) (hk :
     simp only [Fintype.card_fun, Fintype.card_bool, Fintype.card_fin, ← pow_mul, mul_comm]
   let e : Pous.Bits (n * 512) ≃ (Fin n → Pous.Bits 512) := Fintype.equivOfCardEq hc
   have hreal : Pous.StreamedWipe.winReal e P = Pous.StreamedWipe.winIdeal P := by
-    unfold Pous.StreamedWipe.winReal Pous.StreamedWipe.winIdeal Pous.pr
+    unfold Pous.StreamedWipe.winReal Pous.StreamedWipe.winIdeal; simp only [Pous.pr_eq_card]
     congr 2
     · exact Finset.card_equiv ((Equiv.refl _).prodCongr e) fun x => by simp; exact Iff.rfl
     · simp only [Fintype.card_prod, hc]

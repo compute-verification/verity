@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["NetworkCheck"],
  "exempt": {
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
@@ -64,6 +65,12 @@
     "    (Except.instMonad.map NetworkCheck.Records.ByteEvidence.toEvidence (NetworkCheck.Records.evidenceOf j))"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
    "type_hash": "d7bf8ddfba8b0ea4d7cf8032d17af12ffd5866408dad0686344a41de65319ff6"
   },
   "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq": {
@@ -75,24 +82,42 @@
     "    (Option.some (NetworkCheck.Check.expectedGrid g W l.toLink w.val))"
    ],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
    "type_hash": "092871ea38ce03e4ffd45e0d031320be0fea5add9d8241fbea215d8ec39efa35"
   },
   "NetworkCheck.RecordsBytes.unhex_eq": {
    "owner": "@network-accounting",
    "signature": ["NetworkCheck.RecordsBytes.unhex_eq (s : String) : Eq (NetworkCheck.Records.unhex s) (Flock.unhex s)"],
    "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
    "type_hash": "47004c441f361d7380e6a9c49d91ceb2bc2b4739ca315db785465a279eeeb248"
   },
   "NetworkCheck.RecordsGrid.expectedGrids_eq": {
    "owner": "@network-accounting",
    "signature": [
-    "NetworkCheck.RecordsGrid.expectedGrids_eq (g : NetworkCheck.Check.Grid) (W : Nat) (l : NetworkCheck.Check.LinkOpening)",
+    "NetworkCheck.RecordsGrid.expectedGrids_eq (g : NetworkCheck.Check.Grid) (W : Nat) (l : NetworkCheck.Check.Link)",
     "  (w : Fin W) :",
     "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkCheck.Records.expectedGrids g W l) w.val)",
     "    (Option.some (NetworkCheck.Check.expectedGrid g W l w.val))"
    ],
    "assumptions": [],
-   "type_hash": "dbcc147c8dbdc7ca9944cc5dbab8f57d8f093fae2c773f4f64b4449524a75458"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "f01677158fd01ce797e4aeb4ee75e878a6814ba9c555769206aa657521ad7f85"
   }
  },
  "shape": {

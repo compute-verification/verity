@@ -4,6 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Moves
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import all Lean.Data.Json.Basic
+import Mathlib.Data.String.Basic
 
 /-!
 # Sampled proofs' link: the message the challenger opened the link points after
@@ -122,6 +123,7 @@ theorem checkBlobsAt_trees {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
   · rename_i r hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨ts, hts, hr⟩ := ebind_ok hr
+    obtain ⟨⟨⟩, -, hr⟩ := ebind_ok hr
     obtain ⟨⟨⟩, hth, -⟩ := ebind_ok hr
     exact ⟨ts, hts, hth⟩
 

@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.ZK.GK.Rand
 public import Proofs.Flock.Soundness.ZK.GK.Extract
+import Mathlib.Algebra.CharP.Defs
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Zero knowledge: the Goldreich–Kahan simulator for Flock ZK

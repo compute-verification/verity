@@ -1,6 +1,22 @@
 module
 
-public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.Firewall
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.OuterZK
+import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
 # Recursion: the committed-coin statements' `_hOuter` at V*'s sessions
@@ -34,7 +50,7 @@ open Game
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 /-- **Messages fixed before the first commitment**: `msgs` read as live-coin messages that read none of the commit
 strings before them. -/

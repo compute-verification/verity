@@ -2,6 +2,12 @@ module
 
 public import Proofs.Pouw.PearlC.Row4Words
 public import Proofs.Pouw.PearlC.TileCheck8Words
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.PearlC.Tile4Circuit
 
 /-!
 # `pc4`'s blocks in DeviceFp4's terms (proofs)

@@ -2,7 +2,6 @@ module
 
 public import PouwCommit.Draws
 public import Spot.Challenger
-public import Identity.Domains
 
 /-!
 # A live execution phase's round coins (`window.py`, "Live execution phases")

@@ -123,20 +123,22 @@ def lnTerms : Nat := 32
 /-- `optimize.LN_BITS`: `lnUpper` rounds up to a multiple of `2^-lnBits`. -/
 def lnBits : Nat := 64
 
-/-- At least `2 atanh t = ln((1 + t)/(1 − t))` for `0 ≤ t ≤ 1/3`: the series `2 ∑ i t^(2i+1)/(2i+1)` to `lnTerms` terms,
+/-- `s` plus `n` terms `p_i / (2i + 1)` of the atanh series from the `i`-th on, each power `p_{i+1} = p_i · t2`, and
+the next power: from `p_0 = t`, `t2 = t²`, the terms are `t^(2i+1) / (2i + 1)`. -/
+def atanhSum (t2 : Rat) : Nat → Nat → Rat → Rat → Rat × Rat
+  | 0, _, s, p => (s, p)
+  | n + 1, i, s, p => atanhSum t2 n (i + 1) (s + p / ((2 * i + 1 : Nat) : Rat)) (p * t2)
+
+/-- At least `2 atanh t = ln((1 + t)/(1 − t))` for `0 ≤ t < 1`: the series `2 ∑ i t^(2i+1)/(2i+1)` to `lnTerms` terms,
 plus `2 t^(2N+1) / ((2N + 1)(1 − t²))`, which bounds the rest. -/
-def twoAtanhUpper (t : Rat) : Rat := Id.run do
+def twoAtanhUpper (t : Rat) : Rat :=
   let t2 := t * t
-  let mut s : Rat := 0
-  let mut p := t
-  for i in [0:lnTerms] do
-    s := s + p / ((2 * i + 1 : Nat) : Rat)
-    p := p * t2
-  return 2 * (s + p / (((2 * lnTerms + 1 : Nat) : Rat) * (1 - t2)))
+  let st := atanhSum t2 lnTerms 0 0 t
+  2 * (st.1 + st.2 / (((2 * lnTerms + 1 : Nat) : Rat) * (1 - t2)))
 
 /-- `optimize.ln_upper`: a rational at least `ln(1/δ)` for `0 < δ < 1`, within about `2^-lnBits` of it. With
 `1/δ = 2^j z`, `1 ≤ z < 2`, it is `j ln 2 + ln z`, `ln 2 = 2 atanh(1/3)` and `ln z = 2 atanh((z − 1)/(z + 1))`, rounded
-up. -/
+up (`Properties.Spot.BoundLnUpperSound`). -/
 def lnUpper (δ : Rat) : Rat :=
   let y := 1 / δ
   let j0 := y.num.toNat.log2 - y.den.log2
@@ -189,21 +191,17 @@ escape `e(x) = ∏ s C(n_s − x_s, k_s)/C(n_s, k_s)` is at least δ. `maxHarmCh
 def lnPrec : Nat := 128
 
 /-- At most `2 atanh t` for `0 ≤ t < 1`: the series' first `lnTerms` terms. -/
-def twoAtanhLower (t : Rat) : Rat := Id.run do
-  let t2 := t * t
-  let mut s : Rat := 0
-  let mut p := t
-  for i in [0:lnTerms] do
-    s := s + p / ((2 * i + 1 : Nat) : Rat)
-    p := p * t2
-  return 2 * s
+def twoAtanhLower (t : Rat) : Rat := 2 * (atanhSum (t * t) lnTerms 0 0 t).1
 
-private def ln2Lower : Rat := twoAtanhLower (1 / 3)
-private def ln2Upper : Rat := twoAtanhUpper (1 / 3)
+/-- At most `ln 2 = 2 atanh(1/3)`. -/
+def ln2Lower : Rat := twoAtanhLower (1 / 3)
+
+/-- At least `ln 2 = 2 atanh(1/3)`. -/
+def ln2Upper : Rat := twoAtanhUpper (1 / 3)
 
 /-- `ln(a / b)` for `a ≥ b > 0`, a multiple of `2^-lnPrec` below it, or above it when `up`. With `a / b = 2^j z`,
 `1 ≤ z < 2`, it is `j ln 2 + ln z`, `z` first rounded to a multiple of `2^-lnPrec` (down, or up) and
-`ln z = 2 atanh((z − 1)/(z + 1))`. -/
+`ln z = 2 atanh((z − 1)/(z + 1))` (`Properties.Spot.BoundLnBoundSound`). -/
 def lnBound (a b : Nat) (up : Bool) : Rat :=
   let j0 := a.log2 - b.log2
   let j := if a < b * 2 ^ j0 then j0 - 1 else j0

@@ -1,8 +1,13 @@
 module
 
-public import Proofs.Spot.Oblivious
-public import Proofs.Spot.Leakage
-public import Proofs.Spot.Work
+public import Definitions.Spot.Oblivious
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Proofs.Spot.Pointer
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Fintype.BigOperators
+import Proofs.Spot.Oblivious
+import Proofs.Spot.Work
 
 /-!
 # The damage theorems need no obliviousness

@@ -113,7 +113,8 @@ def test_each_tables_readers_are_templates_of_their_own():
     readers = sorted((t.split("{")[0], *ts, "ROUND=1" in t) for t, ts in tables.items())
     assert readers == [("Int8RowQuant_v5", "row-table/0/k64", False)] * 2 + [("Int8RowQuant_v5", "row-table/1/k64", True)] * 2 + [
         ("ScanSlots_v2", "input-ids/0", False), ("SelectCollect_v2", "input-ids/1", True), ("TokenFeed_v1", "input-ids/0", False)]
-    assert {s for t, ts in tables.items() for s in ts} == set(c.registered.values)
+    assert {s for t, ts in tables.items() for s in ts} == {p for p in c.registered.params
+                                                            if p.startswith(("row-table/", "input-ids/"))}
     assert not any("ROUND=" in IF.descriptor_id(fn) for fn, _ in _lowered(None).circuit.templates)
 
 

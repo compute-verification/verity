@@ -1,10 +1,30 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
 public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
-public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
 public import Proofs.Flock.Soundness.Discharge.Layout.InRegion
-public import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The registered `b ‖ c` at a sampled proof block, at public inputs

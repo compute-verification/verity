@@ -18,16 +18,31 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # transformer.py plans with the sampled-proofs planner and core's Stratified law over the primitive circuits'
 # Definitions and their circuit-check pins (verity.ml.circuits, which reads verity.ml.kernels); the large model's test
 # reads the card's memory from the census; Demo A's tile stratum reads PoUW's `eps_at` (pouw/window.py, with the
+<<<<<<< ours
 # commitments and randomness it imports); the reporting deltas and monitoring periods are core's `wipe_monitoring`'s,
 # whose imports span PoUS and core's periods; a statement's cap (`inputs.cap`) reads C-Flock's composer's sizes
 # (verity.ml.windows.interface).
+||||||| base
+# commitments and randomness it imports); the reporting deltas and monitoring periods are core's `wipe_monitoring`'s,
+# whose imports span PoUS.
+=======
+# commitments and randomness it imports); the reporting deltas and monitoring periods are core's reporting grid's
+# (`verity.core.protocols.reporting`).
+>>>>>>> theirs
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/record.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/spot", "verity/core/claims",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/window.py",
+<<<<<<< ours
           "verity/core/periods/__init__.py",
           "verity/core/protocols/pous", "verity/ml/__init__.py", "verity/ml/windows",
           "verity/core/deploy", "verity/core/wire",  # wipe_monitoring reads pous/wipe_party, which runs on deploy.stream.Side
+||||||| base
+          "verity/core/protocols/pous", "verity/ml/__init__.py",
+          "verity/core/deploy", "verity/core/wire",  # wipe_monitoring reads pous/wipe_party, which runs on deploy.stream.Side
+=======
+          "verity/core/protocols/reporting.py", "verity/ml/__init__.py",
+>>>>>>> theirs
           "verity/ml/circuits", "verity/ml/kernels", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/randomness", "benchmarks/census/hardware.json",
           "verity/ml/windows",  # inputs.cap reads C-Flock's composer's sizes (verity.ml.windows.interface)

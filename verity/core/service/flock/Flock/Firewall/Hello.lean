@@ -16,7 +16,6 @@ module
 
 public import Flock.Witness
 public import Flock.Firewall.Coins
-public import Flock.JsonParse
 
 @[expose] public section
 
@@ -95,11 +94,12 @@ structure Setup where
 def FLAGS : String :=
   "[--statement ID] --circuit F --public F [--tables DIR] [--session-tables J] [--partition F] [--program F] [--stratified K] [--work K --work-table F] [--closure F]"
 
-/-- The `Setup` the statement flags `args` name, or why they name none (`usage`, the usage line). -/
+/-- The `Setup` the statement flags `args` name, or why they name none (`usage`, the usage line). `--statement` names its
+tags as `verify` reads them (`Tags.byName?`): a statement of `Tags.all`, else a templated one. -/
 def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup) := do
   let (some cf, some pf) := (Witness.argOf args "--circuit", Witness.argOf args "--public") | return .error usage
-  let some tags := Tags.find? ((Witness.argOf args "--statement").getD Tags.circuit.name)
-    | return .error s!"unknown statement; known: {Tags.all.map (·.name)}"
+  let some tags := Tags.byName? ((Witness.argOf args "--statement").getD Tags.circuit.name)
+    | return .error s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"
   if tags.plainLeaves then
     return .error s!"hello: refused: {tags.name}, a statement with plain SHA-512 leaves, has no --zk session"
   let some count := ((Witness.argOf args "--session-tables").getD "1").toNat? | return .error usage

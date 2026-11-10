@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Law
 public import Proofs.Flock.Soundness.Audit.Periods
-public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Definitions.Flock.Audit.Law
+import Proofs.Flock.Soundness.Audit.Law
 
 /-!
 # The pooled escape: incorrect proof blocks that escape every period's sample
@@ -20,9 +20,8 @@ and its total is `Σ_t |W_t|` (`Pooled.total`), the incorrect proof blocks that 
 * `pooled_escape_adapted`: the same for a wrong-set map on whole runs that doesn't look ahead
   (`Periods.Predictable`), which is a `Pooled` (`Pooled.ofAdapted`).
 
-Its forms in `Claims.Pr` (`pooled_escape_Pr`, `pooled_escape_log` at `δ`: with `q = kd/N`, the total reaches
-`ln(1/δ)/q` on an escape with probability at most `δ`, and `pooled_escape_log_adapted`) are in
-`Claims/Sampling/PooledPr.lean`, outside the audit layer.
+These are in `prCoin`. No theorem states them in `Claims.Pr` or at `δ` (with `q = kd/N`, since
+`(1 − q)^M ≤ e^{−qM}`, the total reaches `ln(1/δ)/q` on an escape with probability at most `δ`).
 
 Proof: these are the monitoring-period step (`Periods.lean`) at uniform `kd`-subset samples. Period `t`'s escape is
 adapted and its wrong set predictable (`Pooled.adapted_escapes`, `Pooled.predictable`), and given any history period
@@ -30,10 +29,9 @@ adapted and its wrong set predictable (`Pooled.adapted_escapes`, `Pooled.predict
 `Periods.prCoin_forall_le_prod` at those escapes, and `pooled_escape` is `Periods.prCoin_forall_sum_le_pow` at the
 weights `|W_t|` and `ρ = 1 − kd/N`.
 
-The network certifier's leak bound composes `pooled_escape_log` with the per-period D1 into
-`(ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + δ_link)`: each window's error adds once per window, so the
-second term grows with the number of windows in the monitoring period. That composition is `PooledLeakAccepted`'s,
-not this file's.
+The network certifier's leak bound, `(ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + δ_link)`, adds each
+window's error once per window, so its second term grows with the number of windows in the monitoring period. It is
+`PooledLeakAccepted`'s, which bounds its own pooled escape (`pr_adaptive_add_le`), not with this file's theorems.
 -/
 
 @[expose] public section

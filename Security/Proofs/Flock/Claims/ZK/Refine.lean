@@ -1,8 +1,38 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Release
 public import Proofs.Flock.Claims.ZK.CoinOpen
 public import Proofs.Flock.Claims.ZK.HelloLean
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Toward the item-stream refinement at the reference session
@@ -43,10 +73,10 @@ opening that fails (`strat_eval_cons`).
   `LiveRefine` and `FillRefine` hold there from more (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`): the
   release refuses after any opening that fails (`OpeningsRefused`, from `CheckIs`), no frame round past the last coin
   is live (the session ends at its `Finish`, so the deferred server takes no worker value past it,
-  `LeanRelease.live_lt_last`), and the frame's release of each worker round that passed
-  (`LiveRoundEq`), and of each scheduled round in a failed worker's place below the last (`FillRoundEq`), is the
-  session's message without its leading domain frame. `HelloRefine` and `OwnRefine` hold there where the server's
-  `Hello` is the session's (`HelloEq`, `helloRefine_withStops`) and the ZK server's own link and `Finish` are the
+  `LeanRelease.live_lt_last`), and the frame's release of each worker round that passed, at the deferred release's
+  own histories (`LiveRoundEqOwn`, which `LiveRoundEq` gives, `LiveRoundEq.own`), and of each scheduled round in a
+  failed worker's place below the last (`FillRoundEq`), is the session's message without its leading domain frame.
+  `HelloRefine` and `OwnRefine` hold there where the server's `Hello` is the session's (`HelloEq`, `helloRefine_withStops`) and the ZK server's own link and `Finish` are the
   session's link and last message (`LinkRoundEq`, `FinalRoundEq`, `ownRefine_withStops`): the per-round byte equality.
   So `Flock.zk_server_lean` holds at that session from those alone (`Flock.zk_server_lean_stops`), with no part of
   `ItemsRefine` assumed. `FrameRounds` gives `LiveRoundEq` and `FillRoundEq` wherever the device's frames are the
@@ -77,7 +107,7 @@ opening that fails (`strat_eval_cons`).
   stop rule and both its Props (`rfOf`, `stopsCausal_rfOf`, `stopsAt_of_readsCoins`). The rest is the tables' side:
   `S`'s Props (its switched causality at the coin vectors `Ok`, `SwCausalOn`, which take in every coin vector the stop
   rule lets through, `StopsOk`) and that `T`'s frame rounds, without a rep's leading domain frame, are the frame's bytes
-  (`LiveRoundEq`, `FillRoundEq`). `Claims/ZK/CoinPass.lean` has, at every tape, a history past the link whose answer
+  (`LiveRoundEqOwn`, `FillRoundEq`). `Claims/ZK/CoinPass.lean` has, at every tape, a history past the link whose answer
   and first opening the check passes (`LeanRelease.opens_coinPass`), so the premises leave the frame rounds a history
   to be live at.
 -/
@@ -784,18 +814,19 @@ theorem stopRefine_of_sessionFrames (S : RefSession) (vs : S.SwVals)
   stopRefine_of_sessionStops S vs L H n wk x w hA (sessionStops_of_frames S vs L H x w hF)
 
 /-- **After an opening the prover's check refuses, `LiveRefine` makes the frame's release the `abort` message**: at a
-live frame round whose last coins the frame takes, where some opening so far fails the coin-tree check, the
-frame's release of the worker's round is the switched reference prover's `abort`. -/
+live frame round of the deferred release's own run whose last coins the frame takes, where some opening so far fails
+the coin-tree check, the frame's release of the worker's round is the switched reference prover's `abort`. -/
 theorem release_eq_abort_of_liveRefine (S : RefSession) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg)
     (w : Flock.Wit) (hL : L.LiveRefine H (S.swP vs).prover wk x w) (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk)
     (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (v : Msg) (hk : L.kindAt x ((m₀, ρ₀) :: ops).length = .masked)
     (hl : L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true)
     (hr : L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false)
+    (hown : L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops))
     (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false))
     (hok : ((allOk ((S.swP vs).chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = false) :
     L.release x (ν, t) ((m₀, ρ₀) :: ops) false v = S.abort := by
-  have he := hL (ν, t) κ ((m₀, ρ₀) :: ops) v hk hl hr hv
+  have he := hL (ν, t) κ ((m₀, ρ₀) :: ops) v hk hl hr hown hv
   have hm : ((strat ((S.swP vs).hello x ν) (S.swP vs).abort (S.swP vs).dec ((S.swP vs).chk x ν)
       ((S.swP vs).msg x w ν t) ((m₀, ρ₀) :: ops)).eval H).1 = S.abort := by
     rw [strat_eval_cons, hok]
@@ -954,6 +985,26 @@ def LiveRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.r
     L.release x (ν, t) ((m₀, ρ₀) :: ops) false v =
       dropDom (S.swMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2))
 
+/-- **The live frame rounds' bytes at the worker's own histories**: `LiveRoundEq`'s equation after every history it
+reads whose messages are the deferred release's own (`ZkServer.OwnHist`, placed as `FinalRoundEq` places it), the only
+histories the deferred release meets. -/
+def LiveRoundEqOwn (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (v : Msg),
+    0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
+    L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
+    L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops) →
+    wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
+    L.release x (ν, t) ((m₀, ρ₀) :: ops) false v =
+      dropDom (S.swMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2))
+
+/-- `LiveRoundEq` gives its equation at the own histories. -/
+theorem LiveRoundEq.own {S : RefSession} {vs : S.SwVals} {L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)}
+    {H : Msg → Msg} {wk : L.toSrv.Worker} {x : Msg} {w : Flock.Wit} (hE : LiveRoundEq S vs L H wk x w) :
+    LiveRoundEqOwn S vs L H wk x w :=
+  fun ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr _ hv => hE ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv
+
 /-- At a frame round `ops.length + 1`, with the `Finish` one past the last coin, the openings are past the link and
 before the last coin. -/
 theorem ops_of_masked {W R : Type} {L : LeanRelease W R} {x : Msg} {ops : List (Msg × Msg)} {p : Msg × Msg}
@@ -963,15 +1014,16 @@ theorem ops_of_masked {W R : Type} {L : LeanRelease W R} {x : Msg} {ops : List (
   simp only [List.length_cons, hlast] at h1 h2
   omega
 
-/-- **`LiveRefine` at the session with the frame's stops**, from the stop link, the transport's refusal of a failed
-opening and the live frame rounds' bytes, with the `Finish` one past the last coin. A live run's frame rounds are below
-the `Finish` (`LeanRelease.live_lt_last`), so no history of more than `refK x` openings is live. -/
+/-- **`LiveRefine` at the session with the frame's stops**, at every worker, from the stop link, the transport's refusal
+of a failed opening and the live frame rounds' bytes at the worker's own histories (`LiveRoundEqOwn`), with the
+`Finish` one past the last coin. A live run's frame rounds are below the `Finish` (`LeanRelease.live_lt_last`), so no
+history of more than `refK x` openings is live. -/
 theorem liveRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg)
     (w : Flock.Wit) (hlast : L.last x = refK x + 1) (hR : StopsAt S Rf L H x) (hO : OpeningsRefused S L H x)
-    (hE : LiveRoundEq S vs L H wk x w) :
+    (hE : LiveRoundEqOwn S vs L H wk x w) :
     L.LiveRefine H ((S.withStops Rf L.stop).swP vs).prover wk x w := by
-  intro ρ κ h v hk hl hr hv
+  intro ρ κ h v hk hl hr hown hv
   obtain ⟨ν, t⟩ := ρ
   cases h with
   | nil => exact Kind.noConfusion (hk : Kind.own = Kind.masked)
@@ -990,7 +1042,8 @@ theorem liveRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
         simp only [List.length_map, Nat.min_eq_left hlen] at hRf
         show (S.withStops Rf L.stop).swMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2) = _
         exact (S.swMsgAt_withStops_frame Rf L.stop x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2)
-          (by simpa using hRf) (by simpa using h0) (by simpa using hlt)).trans (hE ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv).symm
+          (by simpa using hRf) (by simpa using h0) (by simpa using hlt)).trans
+          (hE ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hown hv).symm
       · have hlt := L.live_lt_last wk x w (ν, t) κ _ hk hl
         simp only [List.length_cons, hlast] at hlt
         omega
@@ -1416,9 +1469,9 @@ pass (`LeanRelease.StopsAt`), and a release whose `Finish` is one past the last 
 the transport's coin check being the session's up to the last coin
 (`LeanRelease.CheckIs`, which gives the release's refusal of a failed opening, `LeanRelease.openingsRefused_of_checkIs`),
 the server's `Hello`, the ZK server's own link and `Finish` being the session's (`LeanRelease.HelloEq`, `LinkRoundEq`,
-`FinalRoundEq`) and the per-round byte equality at the worker's frame rounds and the stand-in frame rounds
-(`LeanRelease.LiveRoundEq`, `LeanRelease.FillRoundEq`, each against the session's message without its leading domain
-frame): the item-stream refinement is proved from them
+`FinalRoundEq`) and the per-round byte equality at the worker's frame rounds, at its own histories, and the stand-in
+frame rounds (`LeanRelease.LiveRoundEqOwn`, `LeanRelease.FillRoundEq`, each against the session's message without its
+leading domain frame): the item-stream refinement is proved from them
 (`LeanRelease.helloRefine_withStops`, `ownRefine_withStops`, `liveRefine_withStops`, `fillRefine_withStops`,
 `stopRefine_withStops`). A transport that reads the history only through the decoded coins on the histories its check
 passes gives `Rf` and both its Props (`LeanRelease.rfOf`, `stopsCausal_rfOf`, `stopsAt_of_readsCoins`). The stop
@@ -1433,7 +1486,7 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
     (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
     (hlast : L.last x = refK x + 1) (hst : LeanRelease.StopsAt S Rf L H x)
     (hC : LeanRelease.CheckIs S L H x) (hH : LeanRelease.HelloEq S L x) (hLk : LeanRelease.LinkRoundEq S vs L x w)
-    (hF : LeanRelease.FinalRoundEq S vs L H wk x w) (hE : LeanRelease.LiveRoundEq S vs L H wk x w)
+    (hF : LeanRelease.FinalRoundEq S vs L H wk x w) (hE : LeanRelease.LiveRoundEqOwn S vs L H wk x w)
     (hEf : LeanRelease.FillRoundEq S vs L H wk x w)
     {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
     (Ev : List ((Msg × Out) × ℕ) → Prop) :
@@ -1465,7 +1518,7 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
 `Hello`'s answer, `CoinLayer.treeD`, `CoinLayer.parseD`) and the coin reading are the deployed ones, and the tables,
 with their round encoding `enc`, `fin` and `off`, are `T`'s, whose Props (the switched causality at the coin vectors
 `Ok`, which the stop rule's `StopsOk` takes in) and the frame rounds' bytes
-(`LeanRelease.LiveRoundEq`, `FillRoundEq`: `T`'s frame rounds, without their leading domain frame, are the frame's) are
+(`LeanRelease.LiveRoundEqOwn`, `FillRoundEq`: `T`'s frame rounds, without their leading domain frame, are the frame's) are
 the tables' side. Each premise on the transport is a named trust or, at the session loop (`Claims/ZK/SessionLean.lean`),
 a theorem:
 * the server's `Hello` is the Lean `Hello` at the tape's nonce (`LeanRelease.HelloIs`; that `Hello` is `CoinLayer.helloD`,
@@ -1508,7 +1561,7 @@ theorem Flock.zk_server_lean_coinLayer
     (hFw : LeanRelease.ReqsFollow nr T L x)
     (hLk : LeanRelease.LinkRoundEq (CoinLayer.session nr T) vs L x w)
     (hF : LeanRelease.FinalRoundEq (CoinLayer.session nr T) vs L CoinOpen.shaH wk x w)
-    (hE : LeanRelease.LiveRoundEq (CoinLayer.session nr T) vs L CoinOpen.shaH wk x w)
+    (hE : LeanRelease.LiveRoundEqOwn (CoinLayer.session nr T) vs L CoinOpen.shaH wk x w)
     (hEf : LeanRelease.FillRoundEq (CoinLayer.session nr T) vs L CoinOpen.shaH wk x w)
     {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
     (Ev : List ((Msg × Out) × ℕ) → Prop) :

@@ -1,6 +1,5 @@
 module
 
-public import Std.Data.HashMap
 public import CoreProtocol.Protocol
 public import RemoteAudit.Receipts
 
