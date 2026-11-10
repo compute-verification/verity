@@ -2,7 +2,7 @@
 
 The bandwidth audit's (PoUB, `verity/core/protocols/remote_bandwidth`) work on the GPU, and the tensor-core wide-word
 codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`, its byte-exact reference. `reader.cu`
-(with `reader.py`, `reader.sh`) is the device reader: the audit's receipts, leaves and receipt tree, gated byte for byte
+(with `reader.py`) is the device reader: the audit's receipts, leaves and receipt tree, gated byte for byte
 against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the audit's `sketch-sha512` receipt.
 `step.cu` (`step.py`, `step.sh`) is one decode step at HBM exhaustion, and `sha512.cuh` is SHA-512 for the kernels.
 
@@ -12,8 +12,7 @@ against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the 
 `verity/`, `benchmarks/`, `examples/`, `tests/` and `integrations/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/codec_tensor` checks `wide.py`, `sketch_receipt.py`
-and `sketching.py` against the audit's code and `tests/vectors.json`, and the decode step's plan, on the CPU. `run.sh`
-builds `wt.cu` for each field and runs `bench.py` on one GPU (`RECEIPT=1` adds `reader.cu`).
+and `sketching.py` against the audit's code and `tests/vectors.json`, and the decode step's plan, on the CPU.
 
 **Reads and writes:** the suite reads `benchmarks/word_codec`'s KV codec and the bandwidth audit's code; `bench.py`
 writes `codec-tensor.json` and `bench.log` into its `--out`, and the step and reader scripts their gates and timings as
