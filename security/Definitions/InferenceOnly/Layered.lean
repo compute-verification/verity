@@ -13,7 +13,7 @@ Each computed value of a thread has a *key*, one of its reads in the same thread
 * *roots*, each reading at least `d` values of its thread (its *legs*) whose key paths never meet: the steps of a
   matrix-product entry's `Dot16` chain after its first, whose legs are the previous step's accumulator and its 16
   activations;
-* *lookups*, each reading an input of its thread and a *column* of novel input gates at least `b` bits wide, the
+* *lookups*, each reading an input of its thread and a *column* of fresh input gates at least `b` bits wide, the
   columns of one thread's lookups disjoint: an embedding row, selected by the thread's token.
 
 Following keys from a value walks back through its thread until it reaches a stop or leaves a subcircuit. A small
@@ -41,7 +41,7 @@ inductive KeyPath {N : ℕ} (key : Fin N → Option (Fin N)) (stop : Finset (Fin
 /-- **A keyed reference circuit**: every computed thread value outside the roots and lookups has a key in its thread;
 each root has at least `d` legs whose key paths are disjoint; at most `e` counted multiplications have an activation
 whose key path reaches any one value, and at most `eLk` one that reaches any one lookup; each lookup reads an input of
-its thread and a column of novel inputs at least `b` bits wide, disjoint from the columns of its thread's other lookups;
+its thread and a column of fresh inputs at least `b` bits wide, disjoint from the columns of its thread's other lookups;
 and no thread value is baseline. -/
 structure Layered {c : RegisteredCircuit} (T : Threading c) (d e eLk b : ℕ) where
   /-- The key of a value: one of its reads, in its thread. -/
@@ -50,7 +50,7 @@ structure Layered {c : RegisteredCircuit} (T : Threading c) (d e eLk b : ℕ) wh
   key_thread : ∀ g k, key g = some k → T.thread k = T.thread g
   /-- The roots: wide gates whose legs' key paths are disjoint. -/
   roots : Finset (Fin c.D.N)
-  /-- The lookups: gates that read an input of their thread and a column of novel inputs. -/
+  /-- The lookups: gates that read an input of their thread and a column of fresh inputs. -/
   lookups : Finset (Fin c.D.N)
   keyed : ∀ g t, c.D.isInput g = false → T.thread g = some t → g ∉ roots ∪ lookups → (key g).isSome
   thread_θ : ∀ g t, T.thread g = some t → g ∉ c.θ
@@ -66,7 +66,7 @@ structure Layered {c : RegisteredCircuit} (T : Threading c) (d e eLk b : ℕ) wh
   reach_lookups : ∀ v ∈ lookups, ∀ X : Finset (Fin c.D.N), X ⊆ T.M →
     (∀ g ∈ X, KeyPath key (roots ∪ lookups) (T.act g) v) → X.card ≤ eLk
   lookup_input : ∀ v ∈ lookups, ∃ k ∈ c.D.reads v, c.D.isInput k = true ∧ T.thread k = T.thread v
-  /-- A lookup's column: the novel inputs it selects from. -/
+  /-- A lookup's column: the fresh inputs it selects from. -/
   col : Fin c.D.N → Finset (Fin c.D.N)
   col_reads : ∀ v ∈ lookups, col v ⊆ c.D.reads v
   col_input : ∀ v ∈ lookups, ∀ g ∈ col v, c.D.isInput g = true ∧ g ∉ c.θ
