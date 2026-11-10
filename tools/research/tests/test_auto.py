@@ -635,3 +635,123 @@ def test_the_share_comes_from_the_trees_description(tmp_path):
     (tmp_path / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "pous"\nnode = "{N2}"\ncpus = "0-7"\n'
                                              f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
     assert auto.share_cpus(tmp_path) == "48-95"
+
+
+@pytest.fixture
+def hold_25(monkeypatch):
+    """`expect`'s estimates at 25 min a run, whatever HOLD_MIN is set to."""
+    monkeypatch.setattr(auto, "HOLD_MIN", 25)
+
+
+def _held(n: int, **kw) -> list[dict]:
+    return [slot(f"r{i}", held=True, **kw) for i in range(n)]
+
+
+def test_a_launch_is_told_when_its_run_should_start_from_the_line_the_probe_read(hold_25):
+    """A launch that queued said nothing of its wait. It is read off the documents the placement already has: the runs ahead
+    and this one, per slot that runs, at HOLD_MIN each."""
+    at = f"{CPU1}'s research pool"
+    docs = {N2: share(waiters=56), CPU1: pool(slot("r0"))}
+    target, _ = auto.choose(docs, 4, 16)
+    assert (now := auto.expect(docs, target, 4, 16)) == auto.Wait(0, "", False) and now.told(at) == f"it starts now on {at}"
+    docs = {N2: DOWN, CPU1: pool(*_held(5))}
+    five = auto.expect(docs, auto.choose(docs, 4, 16)[0], 4, 16)
+    assert five == auto.Wait(5.0, "0 waiting ahead for the 5 slots that fit it, all held", False), "one run's hold over 5 slots"
+    assert five.told(at) == f"it should start in about 5 min on {at}: 0 waiting ahead for the 5 slots that fit it, all held"
+    docs = {N2: DOWN, CPU1: pool(*_held(5), waiters=7, minutes=29)}
+    forty = auto.expect(docs, auto.choose(docs, 4, 16)[0], 4, 16)
+    assert forty == auto.Wait(40.0, "7 waiting ahead (the oldest for 29 min) for the 5 slots that fit it, all held", True)
+    docs = {N2: DOWN, CPU1: pool(*_held(4), slot("r4"), waiters=1)}
+    assert auto.expect(docs, auto.choose(docs, 4, 16)[0], 4, 16) == \
+        auto.Wait(10.0, "1 waiting ahead for the 5 slots that fit it, 1 free", False), "the free slot is the waiter's; 10 min is on time"
+    docs = {N2: DOWN, CPU1: pool(*_held(5), waiters=7), CPU5: pool(*_held(5))}
+    target, _ = auto.choose(docs, 4, 16)
+    assert target == (CPU5, "research") and auto.expect(docs, target, 4, 16).minutes == 5, "the pool it takes has the least wait"
+    assert auto.expect(docs, (CPU1, "research"), 4, 16).minutes == 40
+    big = pool(slot("r8", cpus="0-31", mem=160, held=True), *_held(4), waiters=3)
+    assert auto.expect({N2: DOWN, CPU1: big}, (CPU1, "research"), 16, 150) == \
+        auto.Wait(100.0, "3 waiting ahead for the 1 slot that fit it, all held", True), "only a slot that fits the job drains its line"
+
+
+def test_a_wait_nothing_read_bounds_gets_no_estimate_and_only_a_stalled_line_is_late_for_it(hold_25):
+    """An estimate the probe can't back is not given: node 2's claims have no end it reads, and a Lean slot's line has no
+    rate. Neither is late on that alone. A stalled pool, placement's last resort, waits on memory however short its line."""
+    docs = {N2: share(free=8, waiters=3), CPU1: pool(slot("r0"))}
+    target, why = auto.choose(docs, 64, 300)
+    assert target is None and why.endswith(f"no pool fits, so {N2}'s line")
+    assert auto.expect(docs, target, 64, 300) == auto.Wait(None, "8 of its share's 48 CPUs are free under 2 claim(s), with 3 waiting, "
+                                                                 "and nothing read says when a claim ends", False)
+    docs = {N2: share(free=48, fits=True), CPU1: pool(slot("r0"))}
+    assert auto.expect(docs, auto.choose(docs, 32, 300)[0], 32, 300) == auto.Wait(0, "", False), "node 2 starts it now"
+    docs = {N2: DOWN, CPU1: pool(slot("r0", held=True), slot("r1"), waiters=3, minutes=88)}
+    target, why = auto.choose(docs, 4, 16)
+    assert target == (CPU1, "research") and "every pool that fits is stalled" in why
+    stalled = auto.expect(docs, target, 4, 16)
+    assert stalled == auto.Wait(None, "its line is stalled: a run has waited 88 min while slot r1 is free, for memory it asks "
+                                      "beyond what that slot shows", True)
+    assert stalled.told("there").startswith("no estimate of when it starts on there: its line is stalled")
+    no_lean = "then a wait in that slot for one of Lean pool `build`, which has no estimate (Lean `build`: 0 of 3 free, 2 waiting)"
+    docs = {N2: DOWN, CPU1: {**pool(slot("r0")), **lean(build=(3, 3, 2))}}
+    target, _ = auto.choose(docs, 4, 16, lean_pool="build")
+    assert auto.expect(docs, target, 4, 16, lean_pool="build") == auto.Wait(None, f"a CPU slot is free there now, {no_lean}", False)
+    docs = {N2: DOWN, CPU1: {**pool(*_held(5), waiters=7), **lean(build=(3, 3, 2))}}
+    assert auto.expect(docs, (CPU1, "research"), 4, 16, lean_pool="build") == auto.Wait(
+        None, f"about 40 min for a CPU slot (7 waiting ahead for the 5 slots that fit it, all held), {no_lean}", True), \
+        "late on its CPU slot alone"
+    docs = {N2: DOWN, CPU1: {**pool(slot("r0")), **lean(build=(3, 1, 0))}}
+    assert auto.expect(docs, (CPU1, "research"), 4, 16, lean_pool="build") == auto.Wait(0, "", False), "both slots free: now"
+
+
+def test_the_smallest_change_of_a_request_that_starts_now_keeps_the_most_of_what_it_asked(hold_25):
+    """A refused launch is told the way on that needs no wait: the request cut to a slot that is free now, the largest such."""
+    docs = {N2: DOWN, CPU1: pool(slot("r8", cpus="0-15", mem=160, held=True), waiters=7),
+            CPU5: pool(slot("r0", cpus="8-19", mem=40), slot("r1", cpus="20-23", mem=16))}
+    target, _ = auto.choose(docs, 16, 150)
+    assert target == (CPU1, "research") and auto.expect(docs, target, 16, 150).late
+    assert auto.smaller(docs, 16, 150) == (12, 40, (CPU5, "research")), "r0 keeps more of it than r1 does"
+    assert auto.choose(docs, 12, 40)[1].endswith("a slot is free there now")
+    assert auto.smaller(docs, 4, 16) is None, "it starts now as asked: nothing to cut"
+    docs[CPU5] = pool(slot("r0", cpus="8-19", mem=40, held=True), slot("r1", cpus="20-23", mem=16, blocked="window 02:00-06:00"))
+    assert auto.smaller(docs, 16, 150) is None, "no slot is free anywhere: no cut starts it"
+    docs[CPU5] = pool(slot("r0", cpus="8-19", mem=40), slot("r1", cpus="20-23", mem=16), waiters=2)
+    assert auto.smaller(docs, 16, 150) is None, "the free slots are their waiters'"
+
+
+def test_on_auto_says_when_the_run_should_start_and_warns_or_refuses_a_late_one(tmp_path, monkeypatch, capsys, hold_25):
+    """A launch that starts now or within START_WITHIN_MIN says so and goes. One that would wait 40 min is warned in one line
+    while REFUSE is off; with it on it is refused before anything is launched, with the ways on, and --accept-wait queues it."""
+    launched, read = [], {}
+    lines = {"now": {N2: DOWN, CPU1: pool(slot("r0"))}, "5 min": {N2: DOWN, CPU1: pool(*_held(5))},
+             "40 min": {N2: DOWN, CPU1: pool(*_held(5), waiters=7, minutes=29)}}
+    monkeypatch.setattr(auto, "read", lambda source, cpus: read["docs"])
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing([]))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    at, head = f"{CPU1}'s research pool", "research run --on auto: "
+
+    def launch(line: str, *flags: str) -> tuple[int, list[str]]:
+        """(`research run --on auto`'s exit with the probe reading ``line``, what it said after where the run went)"""
+        read["docs"] = lines[line]
+        rc = main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", *flags, "--", "pytest", "-q"])
+        err = capsys.readouterr().err.splitlines()
+        return rc, [e[len(head):] for e in err if e.startswith(head) and not e.startswith(head + "spilled to ")]
+
+    late = (f"it isn't expected to start within 10 min: it should start in about 40 min on {at}: 7 waiting ahead (the oldest "
+            f"for 29 min) for the 5 slots that fit it, all held")
+    assert auto.REFUSE is False, "off until infra turns it on"
+    assert launch("now") == (3, [f"it starts now on {at}"])
+    assert launch("5 min") == (3, [f"it should start in about 5 min on {at}: 0 waiting ahead for the 5 slots that fit it, all held"])
+    assert launch("40 min") == (3, [f"warning: {late}"]) and len(launched) == 3, "warned in one line, and launched"
+    monkeypatch.setattr(auto, "REFUSE", True)
+    assert launch("40 min") == (2, [f"refused: {late}. --accept-wait queues it there anyway"]) and len(launched) == 3
+    assert launch("40 min", "--accept-wait") == (3, [f"warning: {late}"]) and len(launched) == 4
+    assert launch("now")[0] == launch("5 min")[0] == 3 and len(launched) == 6, "a run on time is never refused"
+    lines["cut"] = {N2: DOWN, CPU1: pool(slot("r8", cpus="0-15", mem=160, held=True), waiters=7), CPU5: pool(slot("r0", cpus="8-19", mem=40))}
+    rc, (said,) = launch("cut", "--cpus", "16", "--mem-gb", "150")
+    assert rc == 2 and said.endswith(f". --accept-wait queues it there anyway; `--cpus 12 --mem-gb 40` starts now on {CPU5}'s research pool")
+    monkeypatch.setattr(auto, "REFUSE", False)
+    rc, (said,) = launch("cut", "--cpus", "16", "--mem-gb", "150")
+    assert rc == 3 and said.startswith("warning: ") and said.endswith(f". `--cpus 12 --mem-gb 40` starts now on {CPU5}'s research pool")
+    assert main(["run", "--on", CPU1, "--project", "verity", "--accept-wait", "--", "true"]) == 2 and len(launched) == 7
+    assert "--accept-wait is for --on auto" in capsys.readouterr().err
+

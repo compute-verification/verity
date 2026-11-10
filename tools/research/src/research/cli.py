@@ -198,7 +198,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--on", default=None, metavar="MACHINE",
                     help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
                          "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise, or "
-                         "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's SPILL)")
+                         "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's SPILL); the "
+                         "launch says where it went and when it should start")
+    ap.add_argument("--accept-wait", action="store_true",
+                    help="with --on auto: queue the run though it isn't expected to start within 10 minutes "
+                         "(research/auto.py's START_WITHIN_MIN). Such a launch is warned in one line, or refused once "
+                         "auto.REFUSE is on, and this is how it queues anyway")
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
@@ -323,6 +328,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             return 2
     if (ns.on or ns.queue) and not ns.claimed and (why := _short_bare_timeout(harness_opts)):
         print(f"research run: refused: {why}", file=sys.stderr)
+        return 2
+    if ns.accept_wait and ns.on != "auto":
+        print("research run: --accept-wait is for --on auto, whose launch it lets queue past its 10 minutes", file=sys.stderr)
         return 2
     if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
@@ -1079,8 +1087,9 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
 def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[str] = ()) -> list[str] | None:
     """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
     a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
-    kind's time as its --timeout. The harness options it runs with, or None when it is refused (`auto.Unplaceable`, or a GPU or
-    quiet job while AUTO_NODE is down or held, `auto.closed`)."""
+    kind's time as its --timeout. It then says when the run should start (`auto.expect`): a late one is warned in one line,
+    or under `auto.REFUSE` refused unless --accept-wait. The harness options it runs with, or None when it is refused (so,
+    `auto.Unplaceable`, or a GPU or quiet job while AUTO_NODE is down or held, `auto.closed`)."""
     from . import auto
 
     cpus = ns.cpus or AUTO_CPUS
@@ -1090,15 +1099,30 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     if gpu and (closed := auto.closed(auto.read(Path(ns.source), cpus, node_only=True).get(auto.AUTO_NODE))):
         print(f"research run --on auto: refused: {closed}, and a GPU or quiet job runs on no other node", file=sys.stderr)
         return None
+    told = None                                                # when it should start; a GPU job's wait is the queue's to say
     if why is None:
         lean = auto.lean_pool(command, ns.env)
         try:
-            target, why = auto.choose(auto.read(Path(ns.source), cpus, **({"lean": True} if lean else {})), cpus, mem, lean_pool=lean)
+            docs = auto.read(Path(ns.source), cpus, **({"lean": True} if lean else {}))
+            target, why = auto.choose(docs, cpus, mem, lean_pool=lean)
         except auto.Unplaceable as e:
             print(f"research run --on auto: refused: {e}", file=sys.stderr)
             return None
+        wait = auto.expect(docs, target, cpus, mem, lean_pool=lean)
+        told = wait.told(f"{target[0]}'s {target[1]} pool" if target else auto.AUTO_NODE)
+        if wait.late:
+            told = f"it isn't expected to start within {auto.START_WITHIN_MIN} min: {told}"
+            cut = auto.smaller(docs, cpus, mem, lean_pool=lean)
+            cut = f"`--cpus {cut[0]} --mem-gb {cut[1]:g}` starts now on {cut[2][0]}'s {cut[2][1]} pool" if cut else None
+            if auto.REFUSE and not ns.accept_wait:
+                print(f"research run --on auto: refused: {told}. --accept-wait queues it there anyway"
+                      + (f"; {cut}" if cut else ""), file=sys.stderr)
+                return None
+            told = f"warning: {told}" + (f". {cut}" if cut else "")
     if target is None:
         print(f"research run --on auto: queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", file=sys.stderr)
+        if told:
+            print(f"research run --on auto: {told}", file=sys.stderr)
         return harness_opts
     machine, pool = target
     if remote.flag_value(harness_opts, "--timeout") is None:
@@ -1108,6 +1132,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
+    print(f"research run --on auto: {told}", file=sys.stderr)
     return harness_opts
 
 

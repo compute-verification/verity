@@ -31,6 +31,11 @@ be read is skipped; with node 2 unread and no pool fitting, the job is refused (
 run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
 the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long.
 
+The launch is told when the job should start where `choose` sent it (`expect`, from the documents `read` already has): now, in
+about so many minutes behind the line it joins, or that nothing read gives an estimate. A job expected to wait past
+START_WITHIN_MIN is late. Its launch says so in one line; under REFUSE it is refused at once instead, with the ways on:
+`research run --accept-wait` queues it anyway, and `smaller` names the smaller request that starts now.
+
 Node 2 takes no `--on auto` job while it is held: until the time in its HOLD_FILE, which infra writes with the reason when one
 lane has the whole node. `choose` then treats it as a node 2 that is down, and the launcher is told until when and why (`off`).
 A stopped node 2 costs a launch NODE_CONNECT_S: its probe's ssh gives up connecting after that long, beside the pools' probes,
@@ -46,7 +51,7 @@ import subprocess
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
 #: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5, 6, 7, 8, 9 and 11 are any lane's
@@ -76,6 +81,14 @@ DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
 #: a pool whose line has waited this long beside a free slot is stalled on memory and takes no job (`_pool`), nor does one whose
 #: every fitting slot is idle and blocked with slot.py's memory reason, which contains MEMORY_BLOCK
 STALL_MIN, MEMORY_BLOCK = 5, " GB of memory free"
+#: a launch is on time when its run starts within this many minutes; one `expect` finds late is told so, or refused (REFUSE)
+START_WITHIN_MIN = 10
+#: how long a pool run holds its slot, in minutes, as `expect` takes it: the mean over the pools' runs, since a line of n runs
+#: on k slots drains in n means over k. A parameter of the estimate, set from the runs' own slot records, not read at launch
+HOLD_MIN = 25
+#: whether a late launch is refused, with the ways on (`research run --accept-wait` queues it anyway; a smaller request that
+#: starts now, `smaller`), or only warned in one line. Off until infra turns it on
+REFUSE = False
 #: a machine's Lean pools (lean_slot.py's file, which the probe's copy of LEAN_SLOT_PY reads): a run that takes a Lean slot of a
 #: pool goes only where that pool has one, since lean_changed.py refuses it at once elsewhere, or builds cold in its checkout
 LEAN_SLOTS = "/workspace/research/locks/lean-slots"
@@ -343,6 +356,12 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     return max(len(running), 1), len(free), waiting, why
 
 
+def _ahead(fit: int, free: int, waiting: int) -> float:
+    """A pool's line as a run joining it sees it (`_pool`'s numbers): 0 while a slot is free for every waiter and this run, else
+    the waiters ahead and this run, per slot that runs. `choose` ranks the pools by it and `expect` turns it into minutes."""
+    return 0 if free > waiting else (waiting + 1) / fit
+
+
 def _lean(doc: Any, pool: str | None) -> tuple[float, str]:
     """The line a run joins for a slot of Lean ``pool`` on the machine whose `read` document is ``doc``, and how to say it:
     0 with no ``pool`` to take, where the machine caps no Lean, or while a slot is free for every waiter and this run; else the
@@ -391,7 +410,7 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str
         notes.append(f"{machine}'s {pool} pool: {why}{lean}")
         if free > waiting and not line:
             return (machine, pool), "; ".join(notes) + ": a slot is free there now" + (f", and one{of} with it" if of else "")
-        ranked.append((line, 0 if free > waiting else (waiting + 1) / fit, i, (machine, pool)))
+        ranked.append((line, _ahead(fit, free, waiting), i, (machine, pool)))
     try:
         starts = share is not None and share.get("fits") and not share["waiters"] and not _lean(n2, lean_pool)[0]
     except LookupError:
@@ -420,3 +439,90 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str
     if starts:
         return None, "; ".join(notes) + f": no pool fits, and it starts on {AUTO_NODE} now"
     return None, "; ".join(notes) + f": no pool fits, so {AUTO_NODE}'s line"
+
+
+class Wait(NamedTuple):
+    """What a launch is told of its wait where `choose` sent it (`expect`): the minutes until it starts (0: it starts now; None:
+    no estimate), what it waits behind, and whether it is late: what is known of its wait is already past START_WITHIN_MIN."""
+
+    minutes: float | None
+    behind: str
+    late: bool
+
+    def told(self, place: str) -> str:
+        if self.minutes is None:
+            return f"no estimate of when it starts on {place}: {self.behind}"
+        if not self.minutes:
+            return f"it starts now on {place}"
+        return f"it should start in about {_whole(self.minutes)} min on {place}: {self.behind}"
+
+
+def _whole(minutes: float) -> int:
+    return max(int(minutes + 0.5), 1)
+
+
+def expect(docs: dict[str, dict | str], target: tuple[str, str] | None, cpus: int, mem_gb: float, lean_pool: str | None = None
+           ) -> Wait:
+    """The wait of a job `choose` sent to ``target`` (None: node 2's queue), from the same documents, so it costs no second
+    probe. In a pool it is `_ahead` times HOLD_MIN: the runs ahead and this one, per slot that runs, each holding its slot for
+    HOLD_MIN. That is wrong by as much as the runs ahead differ from HOLD_MIN, and it sees neither a waiter that gives up (it
+    then says too long) nor the launches that read the same line at once (too short). No estimate, and never late for it,
+    where nothing read says how long: node 2's line, whose claims have no known end, and a Lean slot's (the job takes its CPU
+    slot and waits for the Lean slot inside it; it is late only when the CPU slot alone is). A stalled pool, `choose`'s last
+    resort, has no estimate and is late: its line waits on memory, however short it is."""
+    cpus = max(cpus, 1)
+    doc = docs.get(AUTO_NODE if target is None else target[0])
+    try:
+        line, lean = _lean(doc, lean_pool)
+    except LookupError as e:
+        line, lean = math.inf, f"; {e}"
+    then = f", then a wait in that slot for one of Lean pool `{lean_pool}`, which has no estimate ({lean[2:]})" if line else ""
+    if target is None:
+        if (why := off(doc)) is not None:
+            return Wait(None, why, False)
+        share = doc["share"]
+        if share.get("fits") and not share["waiters"] and not line:
+            return Wait(0, "", False)
+        return Wait(None, f"{share['free']} of its share's {share['share']} CPUs are free under {share['claims']} claim(s), with "
+                          f"{share['waiters']} waiting, and nothing read says when a claim ends{then}", False)
+    try:
+        fit, free, waiting, _ = _pool(doc.get(target[1]) if isinstance(doc, dict) else doc, cpus, mem_gb)
+    except Stalled as e:
+        return Wait(None, str(e), True)
+    except (ValueError, TypeError, AttributeError) as e:
+        return Wait(None, str(e), False)
+    minutes = _ahead(fit, free, waiting) * HOLD_MIN
+    if not minutes and not line:
+        return Wait(0, "", False)
+    oldest = max((w.get("minutes") or 0 for w in doc[target[1]].get("waiters") or []), default=0)
+    behind = (f"{waiting} waiting ahead" + (f" (the oldest for {oldest:g} min)" if oldest else "")
+              + f" for the {fit} slot{'s' if fit > 1 else ''} that fit it, " + (f"{free} free" if free else "all held"))
+    if not line:
+        return Wait(minutes, behind, minutes > START_WITHIN_MIN)
+    cpu = f"about {_whole(minutes)} min for a CPU slot ({behind})" if minutes else "a CPU slot is free there now"
+    return Wait(None, cpu + then, minutes > START_WITHIN_MIN)
+
+
+def smaller(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str | None = None
+            ) -> tuple[int, float, tuple[str, str]] | None:
+    """The smallest change of a job's request that starts it now: (CPUs, GB, the pool that takes it), the request cut to a
+    slot that is free in some pool, which `choose` then sends there and `expect` gives no wait. Of several, the one that keeps
+    the most of what was asked, as its share of the CPUs plus its share of the memory. None when no smaller request starts
+    now."""
+    cpus = max(cpus, 1)
+    shapes = set()
+    for machine, pool in SPILL:
+        doc = docs.get(machine)
+        doc = doc.get(pool) if isinstance(doc, dict) else None
+        for s in (doc.get("slots") or []) if isinstance(doc, dict) else []:
+            if not s.get("trains") and s.get("holder") is None and not s.get("blocked"):
+                shapes.add((min(cpus, cpulist(s["cpus"])), mem_gb if s.get("mem") is None else min(mem_gb, s["mem"])))
+    shapes.discard((cpus, mem_gb))
+    for c, m in sorted(shapes, key=lambda cm: (-(cm[0] / cpus + (cm[1] / mem_gb if mem_gb else 1)), cm)):
+        try:
+            target, _ = choose(docs, c, m, lean_pool)
+        except Unplaceable:
+            continue
+        if target is not None and expect(docs, target, c, m, lean_pool).minutes == 0:
+            return c, m, target
+    return None
