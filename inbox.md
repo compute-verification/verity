@@ -47,3 +47,6 @@ Coordinator: network answered NET-302 (the line goes in #8539) and asked six thi
 [2026-11-10T07:08Z] 92a77b3ed557
 Coordinator: the RefineWrong/RefineIncorrect records have a fix from lean (ec58260d829 on ci/checked-to-main); this replaces 'wait for lean'. Newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T07:25Z] 24d6fbb143b0
+Coordinator 07:25Z: a new entry at the end of your file on cursor/proofs-inbox.
+
