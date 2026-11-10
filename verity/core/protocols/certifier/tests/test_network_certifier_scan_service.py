@@ -178,7 +178,7 @@ def test_an_honest_execution_phase_is_tied_with_every_bucket_proved(honest):
     assert tie.tie(run.stream) == SC.EgressTieVerdict(LINK, regs, (True,))
     roots = {r["port"]: r["root"] for r in run.stream.log[0]["roots"]}
     assert roots[SC.ROWS[EGRESS]] == run.cells.egress.root.hex() and roots[SC.STATE] == run.state.root.hex()
-    assert run.stream.population is not None and set(roots) == set(tie.values)
+    assert run.stream.program is not None and set(roots) == set(tie.values)
 
 
 @pytest.mark.slow
