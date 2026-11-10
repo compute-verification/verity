@@ -1,6 +1,15 @@
 module
 
+public import Definitions.Core.Game
+public import Definitions.Flock.ZK.RealView
+public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Dist
 public import Proofs.Flock.Soundness.ZK.RealLeaves
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.SHVZK
 
 /-!
 # Zero knowledge of one session of `J` masked tables
@@ -9,11 +18,11 @@ The paper's Lemmas A and B are per session, with `J` tables (`docs/zk-proof-publ
 `SHVZK` and `RealLeaves` are per table. The step between them is a product:
 
 * the session's tables use disjoint randomness (§2.2: table `j` reads its own ranges of the session's two ChaCha20 streams,
-  `purpose | j << 32`, and its own salt trees), which the PRG step makes independent uniform draws per table. The salts
+  `purpose | j << 32`, and its own salt trees), which the PRG step makes independent uniform samples per table. The salts
   are not a stream's: every leaf's salt is the operating system's bytes, uniform under A3
   (`Assumptions.UniformRandomBytes`; `Discharge.ZkView.OsSalts`), so the PRG step is the masks' and padding's only;
 * no claim or message reads two tables' witnesses or masks, so at fixed coins the session's view is the tuple of its
-  tables' views, each a function of its own table's randomness. The tables' witnesses may overlap (two drawn units in
+  tables' views, each a function of its own table's randomness. The tables' witnesses may overlap (two sampled proof blocks in
   different tables can read one row); they are fixed.
 
 The one place the tables meet is the link exchange, and it carries only public values: the link points are the verifier's
@@ -38,7 +47,7 @@ open Finset Game
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **Independent components.** Tuples of independent components have equal distributions when each component's do. -/
 theorem SameDist.pi {J : ℕ} {Ω Ω' V : Fin J → Type} [∀ j, Fintype (Ω j)] [∀ j, Fintype (Ω' j)]

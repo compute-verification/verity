@@ -1,16 +1,28 @@
 """`IntegrityProfile`: the audit's output, bounds on the incorrect proof blocks of a partition, per stratum, at `delta`.
 
 An audit protocol (one-stage, sampled proofs) produces it: the facts checked exhaustively, and the verifier's sampling
-law (decision 43) with its failure probability, from which the bounds on incorrect proof blocks follow (`bound`, `stratum_bounds`).
+design (decision 43) with its failure probability, from which the bounds on incorrect proof blocks follow (`bound`, `stratum_bounds`).
 It counts incorrect proof blocks and weights nothing.  Applications consume it without importing the protocol that produced it:
 each weights incorrect proof blocks by what one costs it, through the generic weighted bounds (`harm_bound`, `worst_case`), and
 its reader lives with the application, not in core.  One `delta` serves every consumer; the application's failure
 union counts it once.
 
+<<<<<<< 99c8914848
 The law is stated over named levels of a partition hierarchy (`verity.ml.circuits.partition.Level`): each level's members
 partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`, `Stratified`, `Work`) or
 only groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
 carries draws, never roles.
+||||||| merged common ancestors
+The law is stated over named levels of a partition hierarchy (`verity.ml.circuits.partition.Level`): each level's members
+partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`, `Stratified`) or only
+groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
+carries draws, never roles.
+=======
+The sampling design is stated over named levels of a partition hierarchy (`verity.ml.circuits.partition.Level`): each level's members
+partition the members of the level above, and a level is either sampled (`Bernoulli`, `Subset`, `Stratified`) or only
+groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
+carries samples, never roles.
+>>>>>>> 7af4d24fca3e
 """
 
 from __future__ import annotations
@@ -80,7 +92,7 @@ class Bernoulli:
 
 @dataclass(frozen=True, slots=True)
 class Subset:
-    """Exactly `k` members of the level are sampled, uniformly, inside each drawn member of the nearest drawn level
+    """Exactly `k` members of the level are sampled, uniformly, inside each sampled member of the nearest sampled level
     above (the whole transcript when none is)."""
 
     k: int
@@ -97,23 +109,36 @@ class Subset:
 class IntegrityProfile:
     """Checked by sampling over `levels`, coarse to fine: `sizes[0]` members at the top level, then `sizes[i]`
     members of level i inside each member of level i - 1.  The finest level is the checked one; each member of it
+<<<<<<< 99c8914848
     is one statement.  `draws` names the drawn levels: at most one `Bernoulli`, and a `Subset` only at the checked
     level; undrawn levels only group.  A `Stratified` or `Work` draw is the only draw, of the checked level, with its
     strata tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through
     `strata`.
     `drawn` counts the members actually drawn at each level, all passed.
+||||||| merged common ancestors
+    is one statement.  `draws` names the drawn levels: at most one `Bernoulli`, and a `Subset` only at the checked
+    level; undrawn levels only group.  A `Stratified` draw is the only draw, of the checked level, with its strata
+    tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through `strata`.
+    `drawn` counts the members actually drawn at each level, all passed.
+=======
+    is one statement.  `draws` names the sampled levels: at most one `Bernoulli`, and a `Subset` only at the checked
+    level; unsampled levels only group.  A `Stratified` sample is the only sample, of the checked level, with its strata
+    tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through `strata`.
+    `drawn` counts the members actually sampled at each level, all passed.
+>>>>>>> 7af4d24fca3e
 
-    A profile of more than one level is valid only when its checked level is committed before the first draw
-    (as serving commits every value, at serve time).  When the checked level is committed after
-    a sample it follows, the prover picks how many checked members of a drawn member are incorrect after seeing that sample,
-    and `accept(m)` over m incorrect checked members no longer bounds it; such a lifecycle's profile is over the level
-    committed first.
+    `accept(m)` reads m at a member's footprint.  When the checked level is committed before the first sample (as
+    serving commits every value, at serve time), m is the member's incorrect checked members.  Under a two-stage design
+    the checked level is committed after the sample it follows (the interior registration), so the prover picks a
+    sampled member's interior after seeing that sample; m is then its footprint, the fewest incorrect checked members
+    of any interior consistent with its boundary commitment, which is fixed before any coin, and an interior with more
+    only lowers `accept`.
 
     Let n be the checked members inside one Bernoulli member (the whole transcript when no level is Bernoulli-drawn,
-    with p = 1).  The k-subset is uniform over all n of them, so undrawn levels in between don't change the law: a
+    with p = 1).  The k-subset is uniform over all n of them, so unsampled levels in between don't change the sampling design: a
     strategy leaving m_i incorrect checked members in Bernoulli member i is accepted with probability
     prod_i exp(-rho(m_i)), and except with probability `delta` an accepted transcript satisfies
-    sum_i rho(m_i) < ln(1/delta).  A Bernoulli law over single statements is one level drawn `Bernoulli(p)`.
+    sum_i rho(m_i) < ln(1/delta).  A Bernoulli law over single statements is one level sampled `Bernoulli(p)`.
 
     Checked exhaustively:
         `programs`    digests of the evaluated Programs, in commit order;
@@ -267,9 +292,19 @@ class IntegrityProfile:
         return best if cap is None else min(best, float(cap))
 
     def strata(self) -> Stratified | None:
+<<<<<<< 99c8914848
         """The law as independent uniform draws inside strata of the checked level: its `Stratified` draw, a `Work`
         draw's at its k_s, or, when a `Subset(k)` of the checked level is the only draw, one stratum of all its members,
         named after the level.  None when a level is drawn `Bernoulli`."""
+||||||| merged common ancestors
+        """The law as independent uniform draws inside strata of the checked level: its `Stratified` draw, or, when a
+        `Subset(k)` of the checked level is the only draw, one stratum of all its members, named after the level.  None
+        when a level is drawn `Bernoulli`."""
+=======
+        """The sampling design as independent uniform samples inside strata of the checked level: its `Stratified` sample, or, when a
+        `Subset(k)` of the checked level is the only sample, one stratum of all its members, named after the level.  None
+        when a level is sampled `Bernoulli`."""
+>>>>>>> 7af4d24fca3e
         checked = self.levels[-1].name
         law = self.draws[checked]
         if isinstance(law, Stratified):
@@ -282,7 +317,7 @@ class IntegrityProfile:
 
     def bound(self) -> int | float:
         """Except with probability delta, an accepted transcript has at most this many incorrect checked members: exact
-        when the law has strata (`Stratified.count_bound`) or is one `Bernoulli` draw of the checked level
+        when the sampling design has strata (`Stratified.count_bound`) or is one `Bernoulli` sample of the checked level
         (`Bernoulli.count_bound`), else `worst_case` with utility m (the linear relaxation, from above)."""
         law, checked = self.strata(), self.levels[-1].name
         if law is not None:
@@ -300,7 +335,7 @@ class IntegrityProfile:
 
     def harm_bound(self, harm: float | Mapping[str, float | Sequence[tuple[float, int]]]) -> float:
         """An upper bound, at delta, on the total harm of the incorrect checked members: the generic weighted bound an
-        application reads with its own harm per member.  `harm` is one number for every member, or, when the law has
+        application reads with its own harm per member.  `harm` is one number for every member, or, when the sampling design has
         strata, per stratum a number or (harm, members) pairs (`Stratified.harm_bound`).  Under a `Bernoulli` level
         every member weighs the same: `worst_case` with utility harm * m."""
         law = self.strata()
@@ -367,16 +402,16 @@ def _key_lt(a: Stratum, ma: int, b: Stratum, mb: int) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class Stratified:
-    """The verifier's law as independent uniform draws inside disjoint strata of the partition's units (the `stratified`
+    """The verifier's law as independent uniform samples inside disjoint strata of the partition's units (the `stratified`
     law): the uniform k-subset is one stratum, and a template floor is a stratum with
-    k >= 1.  The strata are fixed by the agreement before registration, like every law.
+    k >= 1.  The strata are fixed by the agreement before registration, like every sampling design.
 
     An incorrect set with m_s units in stratum s escapes the sample with prod_s C(n_s - m_s, k_s) / C(n_s, k_s), which
     depends only on the counts.  Its risk rho = -ln(escape) is convex in each m_s, the increment from m to m + 1 being
     -ln(1 - k_s / (n_s - m)), so the worst case of any additive harm is a greedy fill in the order of increment per unit
     of harm: `miss` and `count_bound` exactly (increments ordered by k_s / (n_s - m), compared in integers, and the
     escape in rationals), `harm_bound` from above (the linear relaxation, which may take a fraction of its last
-    increment).  By the one-stage profile (`Audit/OneStage.lean` `audit_profile`, which holds for every law),
+    increment).  By the one-stage profile (`Audit/OneStage.lean` `audit_profile`, which holds for every sampling design),
     Pr[accept and at least K incorrect] <= miss(K) + epsilon."""
 
     strata: tuple[Stratum, ...]
@@ -398,7 +433,7 @@ class Stratified:
 
     @property
     def k(self) -> int:
-        """Units drawn."""
+        """Units sampled."""
         return sum(s.k for s in self.strata)
 
     def stratum(self, name: str) -> Stratum:

@@ -5,24 +5,33 @@
         [--lean-refuses-drawn WHY] [--lean-refuses-drawless WHY] [--jobs J] --out DIR --sessions DIR...
 
 `--upstream` is M0's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
-`circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
+`circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Its plain
+sessions are upstream's form, which the Lean verdict of record (`flock-verify verify`) refuses (`UPSTREAM_PLAIN`), so the
+Lean side is `flock-verify agree --upstream-plain`, which never accepts: upstream's verdicts come first, and it reports
+whether the Lean verifier's checks pass exactly when upstream accepted, the first check that fails, and the first refusal
+once every check has passed (`UPSTREAM_PLAIN` where no other refuses). `--zk` sessions and `--upstream live` ones are
+the deployed form, verified by `flock-verify verify` itself. Each
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
 is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
 `upstream_accepted` for an intended divergence (`verity/ml/flock/verifier/README.md`'s D list): upstream must then return that
-verdict instead of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a sample law no soundness claim draws by, which the Lean
+verdict instead of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a sample law no soundness claim samples by, which the Lean
 verifier refuses at setup: it must reject every session whose record carries a unit sample, one expected accepted with a
 reason starting `WHY` and one expected rejected with `WHY` or its expected reason (a statement that does not set up is
 refused for that first), and upstream must return each session's expected verdict; a session with none (a fuzz case) only
 needs the refusal. `--lean-refuses WHY` is D12 at a statement whose form the soundness proof does not cover, and
 `--lean-refuses-drawless WHY` at a session without a sample, both of which the Lean verifier refuses last, once every check
-has passed (the form's first): a session they cover (every session, and each without a sample; neither a drawn session of
+has passed (the form's first): a session they cover (every session, and each without a sample; neither a sampled session of
 `--lean-refuses-drawn`) refused with their `WHY` passed every check, and is compared as accepted, any other verdict as it
-is, and the Lean verifier must accept none of them. So is every session of a set without `--program`, which the Lean
-verifier refuses last (`NO_PROGRAM`). A session directory may carry its own public file (`pub.bin`, a forgery's false
+is, and the Lean verifier must refuse each of them for its own reason, never pass it or refuse it for upstream's form
+alone. So is every session of a set without `--program`, which the Lean verifier refuses last (`NO_PROGRAM`). Any other
+session of upstream's plain files that `agree` refuses for upstream's form alone passed every check, and is compared as
+accepted. A session directory may carry its own public file (`pub.bin`, a forgery's false
 statement), the verifier's own registered reads (`registered.json`, in place of `--registered`; null for none; upstream
 reads none) and its expected verdict (`case.json`, from the vectors patch's `forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
 their digests (`flock-verify --archive`); upstream reads the paths. Writes DIR/agreement.tsv, the two
-verdict logs and DIR/result.json; exits 1 if the verifiers disagree on any session or either misses an expectation.
+logs, DIR/upstream-verdicts.json (`agree`'s `--upstream-verdicts`) and DIR/result.json, whose `accepted` counts the sessions
+`flock-verify verify` accepted (none of upstream's plain files); exits 1 if the verifiers disagree on any session or either
+misses an expectation.
 """
 import argparse, hashlib, json, os, shutil, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
@@ -48,7 +57,7 @@ def groups(a):
 
 
 def drawn(s):
-    """The session's record carries a unit draw (M0 from eb90718f)."""
+    """The session's record carries a unit sample (M0 from eb90718f)."""
     try:
         return bool(json.loads((Path(s) / "session.json").read_text()).get("unit_draw"))
     except (OSError, ValueError):
@@ -74,9 +83,24 @@ def archived(a, path):
 NO_PROGRAM = "refused: a session without the verifier's program (--program)"
 
 
+#: the Lean verifier's refusal of upstream's plain proof files (`FlockVerify.UPSTREAM_PLAIN`): `verify` refuses every such
+#: session with it, and `agree` reports it for a session no other refusal meets once every check has passed
+UPSTREAM_PLAIN = ("refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; "
+                  "flock-verify agree compares the verifier's checks on them with upstream's verdicts")
+
+
 #: `--upstream live`: upstream's verdicts are its own live ones, recorded in each selftest session's `case.json`, for a
 #: prover build with no `replay` subcommand
 LIVE = "live"
+
+
+#: upstream's verdict on each session, by its directory, which `flock-verify agree --upstream-verdicts` reads
+UPSTREAM_VERDICTS = "upstream-verdicts.json"
+
+
+def upstream_plain(a):
+    """The sessions are upstream's plain files (an upstream binary's, without `--zk`): the Lean side is `flock-verify agree`."""
+    return a.upstream != LIVE and not getattr(a, "zk", False)
 
 
 #: sessions per verifier process at least, where there are enough: each process sets its statement up once (about 20 s)
@@ -93,12 +117,13 @@ def chunks(xs, k):
 def lean_cmd(a, public, registered=None):
     """The Lean verifier's command for a public file and the verifier's registered reads: every statement object from the
     run's archive, by SHA-512. An upstream binary's plain sessions are upstream's form (`--upstream-plain`: no zk patch,
-    so no `zk_level0` tag after the pair, `Flock.Proof`); `--zk` sessions are the zk patch's."""
+    so no `zk_level0` tag after the pair, `Flock.Proof`), which only `flock-verify agree` reads, against upstream's verdicts;
+    `--zk` sessions are the zk patch's, and the live ones the deployed prover's, which `flock-verify verify` verifies."""
     if a.tables:
         for t in sorted(Path(a.tables).glob("*.u32")):
             archived(a, t)
-    cmd = [a.lean, "verify", "--statement", a.statement, "--archive", str(a.out / "archive"), "--circuit", archived(a, a.circuit),
-           "--public", archived(a, public)]
+    cmd = [a.lean, "agree" if upstream_plain(a) else "verify", "--statement", a.statement, "--archive", str(a.out / "archive"),
+           "--circuit", archived(a, a.circuit), "--public", archived(a, public)]
     if a.comp:
         cmd += ["--comp", archived(a, a.comp)]
     if a.partition:
@@ -111,8 +136,8 @@ def lean_cmd(a, public, registered=None):
         cmd += ["--coins", a.coins]
     if getattr(a, "stratified", None):
         cmd += ["--stratified", a.stratified]
-    if a.upstream != LIVE and not getattr(a, "zk", False):
-        cmd += ["--upstream-plain"]
+    if upstream_plain(a):
+        cmd += ["--upstream-plain", "--upstream-verdicts", str(a.out / UPSTREAM_VERDICTS)]
     return cmd + modes(a) + ["--session"]
 
 
@@ -130,8 +155,9 @@ def upstream_cmd(a, public, extra=()):
 
 def verdicts(a, slots=None):
     """Both verifiers on every session, `--jobs` processes at once: per public file, the sessions dealt into chunks, one Lean and
-    one upstream process per chunk, and each drawn session in its own upstream process (`replay --drawn-only` builds only its
-    sampled proof blocks' statement; upstream leaks a statement's matrices, so one process holds one statement). A session's verdict does
+    one upstream process per chunk, and each sampled session in its own upstream process (`replay --drawn-only` builds only its
+    sampled proof blocks' statement; upstream leaks a statement's matrices, so one process holds one statement). On upstream's
+    plain files upstream runs first, since `flock-verify agree` reads its verdicts (`UPSTREAM_VERDICTS`). A session's verdict does
     not depend on its chunk: the logs are written in the sequential run's order (by public file, then session)."""
     tasks = []                                                        # (kind, order, command, sessions)
     order = {}
@@ -162,23 +188,37 @@ def verdicts(a, slots=None):
                 slots.release()
         return p.stdout, p.stderr
 
-    with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
-        done = list(ex.map(run, tasks))
     lean, up, logs = {}, {}, {"lean": ([], []), "upstream": ([], [])}
-    for (kind, _cmd, _c), (out, err) in zip(tasks, done):
-        lines, errs = logs[kind]
-        errs.append(err)
-        for line in out.splitlines():
-            if kind == "lean" and line.startswith("VERDICT "):
-                v = json.loads(line[8:])
-                lean[v["session"]] = {"accepted": v["accepted"], "why": v["why"]}
-                lines.append((order.get(v["session"], (1 << 30, 0)), line))
-            elif kind == "upstream" and line.startswith("UPSTREAM\t"):
-                v = json.loads(line.split("\t", 1)[1])
-                up[v["session"]] = v["verdict"]
-                lines.append((order.get(v["session"], (1 << 30, 0)), line))
-            else:
-                lines.append(((1 << 30, len(lines)), line))
+
+    def read(ts):
+        with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
+            done = list(ex.map(run, ts))
+        for (kind, _cmd, _c), (out, err) in zip(ts, done):
+            lines, errs = logs[kind]
+            errs.append(err)
+            for line in out.splitlines():
+                if kind == "lean" and line.startswith("VERDICT "):
+                    v = json.loads(line[8:])
+                    lean[v["session"]] = {"accepted": v["accepted"], "why": v["why"]}
+                    lines.append((order.get(v["session"], (1 << 30, 0)), line))
+                elif kind == "lean" and line.startswith("AGREEMENT "):
+                    v = json.loads(line[10:])
+                    # never an acceptance: the session failed a check, or was refused once every check had passed
+                    lean[v["session"]] = {"accepted": False, "why": v["check"] or v["refusal"]}
+                    lines.append((order.get(v["session"], (1 << 30, 0)), line))
+                elif kind == "upstream" and line.startswith("UPSTREAM\t"):
+                    v = json.loads(line.split("\t", 1)[1])
+                    up[v["session"]] = v["verdict"]
+                    lines.append((order.get(v["session"], (1 << 30, 0)), line))
+                else:
+                    lines.append(((1 << 30, len(lines)), line))
+
+    if upstream_plain(a):
+        read([t for t in tasks if t[0] == "upstream"])
+        (a.out / UPSTREAM_VERDICTS).write_text(json.dumps({s: v["accepted"] for s, v in up.items()}, indent=1))
+        read([t for t in tasks if t[0] == "lean"])
+    else:
+        read(tasks)
     if a.upstream == LIVE:
         for s in a.sessions:
             live = json.loads((Path(s) / "case.json").read_text()).get("live")
@@ -235,12 +275,16 @@ def main(argv=None, slots=None, quiet=False):
         refuses = [a.lean_refuses_drawn] if a.lean_refuses_drawn is not None and drawn(s) else []
         last = [] if refuses else [w for w, on in ((a.lean_refuses, True), (a.lean_refuses_drawless, not drawn(s)),
                                                    (NO_PROGRAM, a.program is None)) if w is not None and on]
+        # every check passed and no refusal met it but upstream's form's
+        unrefused = L is not None and (L["accepted"] or L["why"] == UPSTREAM_PLAIN)
         if last and L is not None:
-            if L["accepted"]:
+            if unrefused:
                 bad.append(name)
             elif L["why"].startswith(tuple(last)):
                 # refused last, once every check has passed: for the comparison, the Lean verifier's checks accept it
                 L, passed = {"accepted": True, "why": ""}, passed + 1
+        elif unrefused and not L["accepted"]:
+            L, passed = {"accepted": True, "why": ""}, passed + 1
         if refuses and e is not None:
             # a refusal replaces every verdict of a statement that sets up; one that doesn't keeps its setup's reason
             e = {"accepted": False, "whys": refuses + ([] if e["accepted"] else [e["why"]]),

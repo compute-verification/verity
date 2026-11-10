@@ -1,6 +1,47 @@
 module
 
-public import Proofs.Pouw.Eps1.WordLocal
+public import Definitions.Pouw.Guarantees.Eps1
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Pouw.Eps1.Basics
+import Proofs.Pouw.Eps1.WordLocal
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Theorem C's count in M3: class-P programs over issue slots
@@ -207,7 +248,7 @@ section Count
 variable {m n Lseg : ℕ} {FR FU : Type} {G : ℕ}
 
 /-- Every incidence has a creator: walk back from its writer through arguments that hold it. -/
-theorem exists_creates (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+theorem exists_creates (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) (τ : Tau m n Lseg) (p : Fin 32) : ∃ t, Creates P pk t τ p := by
   have key : ∀ k, ∀ t : Fin G, t.val < k → Holds P pk t τ p → ∃ t', Creates P pk t' τ p := by
     intro k
@@ -224,15 +265,15 @@ theorem exists_creates (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU 
 
 open Classical in
 /-- The incidences instruction `t` creates. -/
-noncomputable def creSet (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+noncomputable def creSet (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) (t : Fin G) : Finset (Tau m n Lseg × Fin 32) :=
   univ.filter fun x => Creates P pk t x.1 x.2
 
-theorem mem_creSet {P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G} {pk : Fin G → Option (Packing m n Lseg)}
+theorem mem_creSet {P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G} {pk : Fin G → Option (Packing m n Lseg)}
     {t : Fin G} {x : Tau m n Lseg × Fin 32} : x ∈ creSet P pk t ↔ Creates P pk t x.1 x.2 := by
   simp [creSet]
 
-theorem created_eq (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+theorem created_eq (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) (t : Fin G) : created P pk t = (creSet P pk t).card := by
   rw [created, ← Set.ncard_coe_finset]
   congr 1
@@ -240,7 +281,7 @@ theorem created_eq (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
   simp [mem_creSet]
 
 /-- The instructions create all `32·L·m·n` incidences. -/
-theorem total_le (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G) (pk : Fin G → Option (Packing m n Lseg)) :
+theorem total_le (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G) (pk : Fin G → Option (Packing m n Lseg)) :
     32 * (Lseg * m * n) ≤ ∑ t, created P pk t := by
   classical
   have hcard : (univ : Finset (Tau m n Lseg × Fin 32)).card = 32 * (Lseg * m * n) := by
@@ -257,7 +298,7 @@ theorem total_le (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G) (pk
 
 /-- An instruction that writes no output creates at most 65 incidences: none as a free word, and as a tuple only
 incidences of its fields at their own segments. -/
-theorem created_le_65 (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+theorem created_le_65 (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) (hP : ClassP P pk) (t : Fin G) (ht : ∀ τ, P.out τ ≠ t) :
     created P pk t ≤ 65 := by
   classical
@@ -297,7 +338,7 @@ theorem created_le_65 (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G
 
 /-- Distinct outputs have distinct writers: on the fiber of the later one (`rowF`, `colF` with entries `2`), its
 word is `2` and the other's is `1` or `0`. -/
-theorem out_injective (P : M3Algorithm (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+theorem out_injective (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (hC : P.Computes (fun _ U => ColsValid U) zeroOut) : Function.Injective P.out := by
   have key : ∀ τa τb : Tau m n Lseg, τb.1 ≤ τa.1 → τa ≠ τb → P.out τa ≠ P.out τb := by
     intro τa τb hle hne heq

@@ -1,16 +1,23 @@
 /-
 The integrity profile: what an accepted check established, as `verity.core.protocols.profile.IntegrityProfile`
+<<<<<<< ours
 records it. These are the facts checked exhaustively, the verifier's sampling design over named levels of a partition
 hierarchy (coarse to fine; the finest level is the checked one), the members drawn at each level, and δ. The JSON is
+||||||| base
+records it. These are the facts checked exhaustively, the verifier's law over named levels of a partition hierarchy
+(coarse to fine; the finest level is the checked one), the members drawn at each level, and δ. The JSON is
+=======
+records it. These are the facts checked exhaustively, the verifier's law over named levels of a partition hierarchy
+(coarse to fine; the finest level is the checked one), the members sampled at each level, and δ. The JSON is
+>>>>>>> theirs
 `IntegrityProfile.to_json`'s, except that δ is an exact ratio string (`Core.Ratio`) and not a float.
 
-A protocol whose acceptance is not a sampling law over proof units (a timed storage audit, a certificate check) declares
+A protocol whose acceptance is not a sampling design over proof blocks (a timed storage audit, a certificate check) declares
 its own profile type; this one is shared by the protocols that sample. `Integrity.ofJson` reads it back, for a protocol
 that consumes another's answer.
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Draw
 public import CoreProtocol.Ratio
@@ -34,6 +41,7 @@ structure Stratum where
   k : Nat
   deriving BEq, DecidableEq, Repr
 
+<<<<<<< ours
 /-- A stratum of the work sampling design: its name, size and `k`, the work of each of its members (an integer in any
 fixed unit, `0` for members that do none) and its floor, the fewest members it draws (`profile.WorkStratum`). -/
 structure WorkStratum extends Stratum where
@@ -46,6 +54,15 @@ uniformly, uniform draws inside disjoint strata of the checked level, or the wor
 strata whose `k_s` its rule sizes by work above each stratum's floor (`Flock.Draw.workK`) (`profile.Bernoulli`,
 `Subset`, `Stratified`, `Work`). The sample of a work design is a stratified one at its `k_s`. -/
 inductive SamplingDesign where
+||||||| base
+/-- How a level is drawn: each member independently with probability `p`, exactly `k` members uniformly, or uniform
+draws inside disjoint strata of the checked level (`profile.Bernoulli`, `Subset`, `Stratified`). -/
+inductive Draw where
+=======
+/-- How a level is sampled: each member independently with probability `p`, exactly `k` members uniformly, or uniform
+samples inside disjoint strata of the checked level (`profile.Bernoulli`, `Subset`, `Stratified`). -/
+inductive Draw where
+>>>>>>> theirs
   | bernoulli (p : Ratio)
   | subset (k : Nat)
   | stratified (strata : Array Stratum)
@@ -96,11 +113,11 @@ structure Integrity where
   prescribed : Array String
   /-- Every other `Input` equals a committed output of an earlier Program in the transcript. -/
   linked : Bool
-  /-- Gate families proved on every audit, outside the draws. -/
+  /-- Gate families proved on every audit, outside the samples. -/
   covered : Array String
   levels : Array Level
   delta : Ratio
-  /-- Members actually drawn at each level, all passed, in level order. -/
+  /-- Members actually sampled at each level, all passed, in level order. -/
   drawn : Array (String × Nat)
   deriving BEq, DecidableEq, Repr
 

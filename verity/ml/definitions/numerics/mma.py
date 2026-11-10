@@ -22,7 +22,6 @@ __all__ = [
     "MODELS",
     "TCModel",
     "f16_product",
-    "model_for",
     "tc_dot",
     "tc_dot_chain",
 ]
@@ -137,7 +136,3 @@ AMPERE_F16 = TCModel(
 )
 
 MODELS: dict[str, TCModel] = {m.name: m for m in (AMPERE_BF16, AMPERE_F16)}
-
-
-def model_for(dtype: str) -> TCModel:
-    return AMPERE_BF16 if dtype == "bf16" else AMPERE_F16

@@ -17,7 +17,7 @@ import pytest
 pytest.importorskip("torch")
 
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.protocols.pouw.h1 import served as SV
 
@@ -123,7 +123,7 @@ def test_the_live_templates_circuit_file_is_built_beside_the_strata_and_a_commit
     every stratum and the live template, at its own T and S."""
     from types import SimpleNamespace
 
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     from tests.protocols import pouw_h1_gpu as GPU
     d, raw = program
@@ -163,8 +163,8 @@ def test_past_the_piece_rows_the_live_file_is_bound_to_the_pieced_live_program()
     """At T past `live.PIECE_ROWS` (a V3 prefill round's T 8,192) the live Program is cut by rows: ``--live T,S`` binds
     the live file to `live.program_rows` of T / 64 pieces a round and its `live.query_rows` partition, and up to it to
     v2's."""
-    from verity.core.protocols.pouw.circuit import live as L
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.ml.protocols.pouw.circuit import live as L
+    from verity.core.protocols.spot.one_stage import partition as P
 
     for t, (program, query) in ((8192, (L.program_rows(8192, 1, "h1/"), L.query_rows(8192))),
                                 (64, (L.program_v2(64, 1, "h1/"), L.query_v2(64)))):
@@ -189,7 +189,7 @@ def test_a_j10r_program_builds_its_live_file_and_lowers_its_strata_as_j10r(tmp_p
     template the declared J10-R one (`h1tile.PouwH1Tile5`'s, here the served tests' stand-in): with ``--strata none``
     its live file and manifest are built, the files a period opens on; a stratum it lowers is lowered as J10-R's
     statement (``j10r``), never v1's."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
 
     from tests.protocols.test_pouw_h1_served import StandInJ10R
     j10r = _unit(defn=StandInJ10R)

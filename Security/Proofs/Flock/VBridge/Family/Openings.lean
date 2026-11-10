@@ -1,15 +1,30 @@
 module
 
 public import Proofs.Flock.VBridge.Family.Rep
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.VBridge.Algebra.BitsOk
 
 /-!
 # VBridge G at V*'s family: the openings' rows, `α` and `rec-acc`'s running sums
 
 `vbridge_of_reps` asks every opening's unit for `OpensAt`, whose input facts are `RegBit`: each input column a
 registered read whose registrant value is the opening's. V*'s openings read two private rows, the opened row and its
-siblings `aux`, under fresh salts (`rec_outer.stage`, rec_outer.py:8-10, 239-242: only `out`, `acc`, `coef`, `dirs` and
-`acc_out` are registered, `row` only with `link_rows`), so `OpensAt`'s `aux` conjunct fails at V*'s registration
-whenever a level climbs (`H ≥ 1`). This file reads the openings from the layers themselves instead.
+siblings `aux`, which the prover registers itself in `R₂` (`rec_outer.stage`: `rec-rows-L<level>` and
+`rec-aux-L<level>`) and no history fixes, so `OpensAt`'s `aux` conjunct is not given at V*'s registration whenever a
+level climbs (`H ≥ 1`). This file reads the openings from the layers themselves instead.
 
 * `OpensAtL`: copy `j` of unit `u` in the layer `bits`, a unit the verifier parsed as `rec-open/l<LANES>-h<H>`
   carrying 1 on its constant, holds the row `r`, `acc`'s first two elements `a` and the coefficients `cf` on its input
@@ -22,7 +37,7 @@ whenever a level climbs (`H ≥ 1`). This file reads the openings from the layer
   level `ℓ` of rep `r` is copy 0 of unit `unO ℓ r j`; its row the first `levelLanes` elements of its columns, the chain
   (`chainOf`, `rec_outer.chain_order`: rep-major, then level, then query) position `p`'s row of `rec-acc` the `acc`
   input of the opening at `p`, or, past the last, the `acc_out` output of the last; `α` the one `verifierRows`' Ligerito
-  run draws for the level (`ConsCtx.alpha`, `RecAlgebra.queryFold`).
+  run samples for the level (`ConsCtx.alpha`, `RecAlgebra.queryFold`).
 * `hUL_of`: `HUL` at those definitions, from the openings' units (`HOpenUnits`, `HOneOpen`), the registered `coef` read in
   the layer being the verifier's (`HCoefCols`) and the openings reading and writing one function `V`, the rows of the
   registration's `rec-acc` (`HAccRows`). `hReads_of`: `HReads`, from `HAccRows` and the algebra reading `V` at the reps'
@@ -437,7 +452,7 @@ noncomputable def accOf (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (p : ℕ)
     | some x => F.accOut l x
     | none => #[]
 
-/-- **Each rep's `α` of each level** (`rec_outer.coefficients`' `α`): the one the verifier's Ligerito run draws at the
+/-- **Each rep's `α` of each level** (`rec_outer.coefficients`' `α`): the one the verifier's Ligerito run samples at the
 level's queries (`RecAlgebra.queryFold`, `levelsLoop`: one `ConsCtx` per level, in level order), at the rep's coins. -/
 def alphaOf (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2)
     (ℓ : ℕ) : Array F128 :=
@@ -711,7 +726,7 @@ end VStarFamily
 /-- **VBridge G at V*'s statement family, the parts' and openings' outputs read in the layers**:
 `Flock.Assumptions.VBridge` at the family's sessions, statement, messages, commit strings and digests, from its
 obligations (`vbridge_of_reps`' composition at `HResL`, `algebraHolds_of_decodeL`, and `HUL`, `unitSums_of_opensAtL`;
-`CoefsAre` and `ConsAre` hold by definition) and `VFullR`, which V*'s full draw gives (`vFullR_of_read`). -/
+`CoefsAre` and `ConsAre` hold by definition) and `VFullR`, which V*'s full sample gives (`vFullR_of_read`). -/
 theorem vbridge_of_family (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs)
     (hsh : F.HShape dg N k Rw GS) (hres : F.HResL dg N k Rw gs) (hu : F.HUL dg N k Rw) (hrd : F.HReads dg N k Rw)

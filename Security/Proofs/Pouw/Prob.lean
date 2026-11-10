@@ -1,14 +1,18 @@
 module
 
 public import Definitions.Pouw.Basic.Prob
-public import Mathlib.Algebra.Order.Field.Basic
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Logic.Equiv.Prod
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.FieldSimp
-public import Mathlib.Tactic.Ring
-public import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.FieldSimp
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Positivity.Finset
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # Lemmas about `pr`
@@ -24,17 +28,17 @@ variable {α β : Type} [Fintype α] [Fintype β]
 
 theorem pr_eq_card (P : α → Prop) (s : Finset α) (hs : ∀ x, x ∈ s ↔ P x) :
     pr P = (s.card : ℝ) / Fintype.card α := by
-  unfold pr
+  unfold pr Claims.Pr Claims.prUniform
   congr 3
   ext x
   simp [hs]
 
 theorem pr_nonneg (P : α → Prop) : 0 ≤ pr P := by
-  unfold pr; positivity
+  unfold pr Claims.Pr Claims.prUniform; positivity
 
 theorem pr_le_one (P : α → Prop) : pr P ≤ 1 := by
   classical
-  unfold pr
+  unfold pr Claims.Pr Claims.prUniform
   rcases Nat.eq_zero_or_pos (Fintype.card α) with h | h
   · simp [h]
   · rw [div_le_one (by exact_mod_cast h)]
@@ -42,25 +46,25 @@ theorem pr_le_one (P : α → Prop) : pr P ≤ 1 := by
 
 theorem pr_mono {P P' : α → Prop} (h : ∀ x, P x → P' x) : pr P ≤ pr P' := by
   classical
-  unfold pr
+  unfold pr Claims.Pr Claims.prUniform
   apply div_le_div_of_nonneg_right _ (by positivity)
   exact_mod_cast Finset.card_le_card (Finset.monotone_filter_right _ (fun x _ => h x))
 
 theorem pr_eq_zero {P : α → Prop} (h : ∀ x, ¬ P x) : pr P = 0 := by
   classical
-  unfold pr
+  unfold pr Claims.Pr Claims.prUniform
   simp [Finset.filter_false_of_mem (fun x _ => h x)]
 
 theorem pr_eq_one [Nonempty α] {P : α → Prop} (h : ∀ x, P x) : pr P = 1 := by
   classical
-  unfold pr
+  unfold pr Claims.Pr Claims.prUniform
   rw [Finset.filter_true_of_mem (fun x _ => h x), Finset.card_univ]
   have : (0 : ℝ) < Fintype.card α := by exact_mod_cast Fintype.card_pos
   field_simp
 
 theorem pr_or_le (P P' : α → Prop) : pr (fun x => P x ∨ P' x) ≤ pr P + pr P' := by
   classical
-  unfold pr
+  unfold pr Claims.Pr Claims.prUniform
   rw [← add_div]
   apply div_le_div_of_nonneg_right _ (by positivity)
   norm_cast
@@ -71,7 +75,7 @@ theorem pr_or_le (P P' : α → Prop) : pr (fun x => P x ∨ P' x) ≤ pr P + pr
 
 theorem pr_equiv (e : α ≃ β) (P : β → Prop) : pr (fun x => P (e x)) = pr P := by
   classical
-  unfold pr
+  unfold pr Claims.Pr Claims.prUniform
   rw [Fintype.card_congr e]
   congr 2
   rw [← Fintype.card_subtype, ← Fintype.card_subtype]
@@ -80,7 +84,7 @@ theorem pr_equiv (e : α ≃ β) (P : β → Prop) : pr (fun x => P (e x)) = pr 
 /-- An event that reads only the first component has at most its marginal probability. -/
 theorem pr_fst_le (P : α → Prop) : pr (fun x : α × β => P x.1) ≤ pr P := by
   classical
-  unfold pr
+  unfold pr Claims.Pr Claims.prUniform
   have hf : (univ.filter fun x : α × β => P x.1) = (univ.filter P) ×ˢ (univ : Finset β) := by
     ext x; simp
   rw [hf, Finset.card_product, Fintype.card_prod, Finset.card_univ]
@@ -98,7 +102,7 @@ theorem pr_fst2_le {γ : Type} [Fintype γ] (P : α × β → Prop) :
 theorem pr_prod_le (P : α × β → Prop) (p : ℝ) (hp : 0 ≤ p) (h : ∀ a, pr (fun b => P (a, b)) ≤ p) :
     pr P ≤ p := by
   classical
-  unfold pr at *
+  unfold pr Claims.Pr Claims.prUniform at *
   rcases Nat.eq_zero_or_pos (Fintype.card β) with hb | hb
   · simp [Fintype.card_prod, hb, hp]
   rcases Nat.eq_zero_or_pos (Fintype.card α) with ha | ha

@@ -1,6 +1,44 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.CallsRep
+import Proofs.Flock.Claims.Recursion.CallsFast100
+public import Flock.With.VerifyE
+public meta import Std.Do.Triple.SpecLemmas
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.LogWalk
+import VCVio.Prelude.Core
 
 /-!
 # A verdict's SHA-512 calls on every run
@@ -451,14 +489,10 @@ theorem fast100_none_of_gt (m : ℕ) (h : 35 < m) : fast100 m = none := by
 
 /-- **Every fast100 schedule's Ligerito makes at most `2^16` calls** (64,568 at `m = 35`, the most). -/
 theorem ligC_fast100 {m : ℕ} {sch : Schedule} (hs : fast100 m = some sch) : ligC sch ≤ 2 ^ 16 := by
-  have key : ∀ m < 36, (match fast100 m with
-      | some s => decide (ligC s ≤ 2 ^ 16)
-      | none => true) = true := by
-    decide +kernel
   by_cases hm : m < 36
-  · have h := key m hm
+  · have h := fast100_calls m hm
     rw [hs] at h
-    simpa using h
+    simpa [ligC] using h
   · rw [fast100_none_of_gt m (by omega)] at hs
     cases hs
 

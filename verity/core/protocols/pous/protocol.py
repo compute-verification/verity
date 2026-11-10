@@ -14,7 +14,7 @@ honest answer is more than the stored label.  Everything else is written once, h
    The memory challenger refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
    gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
-Every coin is flipped here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
+Every coin is flipped here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme samples
 none.  The claims a certificate rests on are ids in `verity.core.claims`' format (`claim`).
 """
 
@@ -50,7 +50,7 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
     Entry("perfect-isolation", "model",
           "Help accounted: on PoUS's challenge schedule some challenge tick t_j has mem_X(t_j) + 2^e·h >= S for the "
           "audited location X, where h is the help X received (console's actual-circuit model; proved at e = 0 for a "
-          "location that does no arithmetic modulo p). Nothing attests the prover's machine",
+          "location that does no arithmetic modulo p). Nothing attests the developer's machine",
           "Help accounted"),
     Entry("sequential-step-floor", "assumption",
           "No call of the scheme's permutation completes faster than the certificate's call time on a CPU or GPU core "

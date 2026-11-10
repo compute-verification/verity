@@ -1,7 +1,7 @@
 """run.py prepare|summarize|cost: one served H1 leaf (32 × 32, at a small K: 448 by default; `h1zy.combine` takes K >= 384,
-the least whose partial row compresses before its last SHA-512 block, which C-Flock's circuit needs of a combine row)
+the least whose partial row compresses before its last SHA-512 block, which Flock's circuit needs of a combine row)
 proved as its 32 lanes and its combine (option A:
-`h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one C-Flock --zk statement each, every
+`h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one Flock --zk statement each, every
 statement reading the leaf's lane partials, a value committed after the sample (`one_stage.produced`), and the negatives.
 
 * **The statements.** All 32 lanes are one circuit (the lane index is a public input) and the combine another. Each
@@ -10,11 +10,11 @@ statement reading the leaf's lane partials, a value committed after the sample (
   its unit from its own copy of that Program (``--program``, ``--partition``). Each is flat, or under
   ``H1_TMPL=structural`` the templated statement of its Definition's structural lowering (`h1unit.layout`,
   `h1unit.stager`: struct_lower's template at `h1unit.LAYOUT`, the flat circuit never built; its template, ``unit.tmpl``,
-  is what the prover's ``flock-tmpl-unit`` places). The statement check and the soundness proof cover a templated
-  statement with the verifier's registered reads, but the sampled audit's knowledge-soundness form (`KsScope`) reads the
-  circuit as `HmOut.parse` does, which refuses a templated one, so the Lean verifier refuses these, once every other check
-  has passed (`TMPL_WHY`). Such a check is labelled `TEMPLATED`, never ACCEPT, and
-  counts as passing in place of an expected ACCEPT (summary's ``templated``; ``lean_accepts`` counts the real ones).
+  is what the prover's ``flock-tmpl-unit`` places). The Lean verifier takes either. It reads a templated statement's
+  circuit as its template's parse (`ProvedScope.circuitOf`), never `HmOut.parse`'s, which refuses its tags: the
+  statement check passes it with the verifier's registered reads on its template (`ProvedScope.scopeOkT`), the sampled
+  audit's knowledge-soundness form (`KsScope`) admits it there, and the soundness proof is at the flat circuit it
+  unrolls to.
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
   `h1tile.reference`). STAND-IN: in a served window these are the window's A, z
@@ -35,7 +35,7 @@ statement reading the leaf's lane partials, a value committed after the sample (
   Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwCheck.LeafOwn.leafOwn?`): from the
   window's descriptor and round log it places unit 0's reads (`placeOf`), and the file, as flock-verify parses it, holds
   the layout's data ports there at the roots of the records the verifier holds (``holds``), and each of the statement's
-  sessions draws every unit of its partition (`PouwWindow.Lanes.checkFull`, the sample policy).
+  sessions samples every unit of its partition (`PouwWindow.Lanes.checkFull`, the sample policy).
 * **The negatives**, each a statement proved and checked like the others:
   ``swap-lane3`` and ``swap-lane4``: a partials tree with rows 3 and 4 swapped (its record well-formed); each lane reads
   its own row, which holds the other lane's partial, so its ok is 0 (REJECT). ``swap-combine``: the combine on that tree,
@@ -101,13 +101,13 @@ from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import Coll, concat  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1tile as H  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1tile as H  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.spot.one_stage import produced as PR  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
+from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
 
 RC = (32, 32)
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -136,16 +136,6 @@ HOLDS = {"other-registration-file": "honest"}
 HELD = {"other-registration-file-held": "other-registration-file"}
 #: the combine row ``combine-skips-p5-bit``'s circuit leaves a bit of unread
 LAZY_ROW = 5
-#: the templated statement (`circuit.TMPL_STATEMENT`), and the Lean verifier's verdict on one whose every other check
-#: passed: the knowledge-soundness form (`KsScope.checkOf`) reads the circuit as `HmOut.parse` does, which refuses a
-#: templated statement's (`HmOut.parse`'s `Tags.isTmpl` refusal), so it refuses these for their form
-TMPL_STATEMENT = "verity/flock-circuit/tmpl"
-TMPL_WHY = (f"refused: a circuit that does not parse ({TMPL_STATEMENT}: a templated statement's circuit is read from its "
-            "template): a statement form the soundness proof does not cover")
-#: the verdict word of a templated check refused only for its form (`TMPL_WHY`): never ACCEPT
-TEMPLATED = "templated: Lean's knowledge-soundness form refuses a templated statement"
-
-
 def tile(k: int):
     return HW.h1_tile(k, RC, H.PouwH1Tile3 if U.tile() == "v3" else None)
 
@@ -671,22 +661,17 @@ def summarize(args) -> int:
         v = _verdict(out / "lean" / f"{tag}.out")
         own = _own(out / "lean" / f"{tag}.own")
         err = out / "lean" / f"{tag}.err"
-        templated = v is not None and c.get("statement") == TMPL_STATEMENT and not v["accepted"] and v["why"] == TMPL_WHY
-        flock = "NONE" if v is None else "ACCEPT" if v["accepted"] else TEMPLATED if templated else "REJECT"
-        passed = flock in ("ACCEPT", TEMPLATED)
-        word = "NONE" if v is None or own is None else (flock if passed and own["accepted"] else "REJECT")
+        flock = "NONE" if v is None else "ACCEPT" if v["accepted"] else "REJECT"
+        word = "NONE" if v is None or own is None else ("ACCEPT" if flock == "ACCEPT" and own["accepted"] else "REJECT")
         why = (v or {}).get("why") or (err.read_text(errors="replace").strip().splitlines()[-1:] if err.exists() else "")
         if own is not None and not own["accepted"]:
             why = own.get("why", "")
-        met = word == c["expect"] or (word == TEMPLATED and c["expect"] == "ACCEPT")
-        rows[tag] = {"expect": c["expect"], "lean": word, "as_expected": met and WHY.get(tag, "") in str(why),
+        rows[tag] = {"expect": c["expect"], "lean": word, "as_expected": word == c["expect"] and WHY.get(tag, "") in str(why),
                      "why": why, "flock_verify": flock, "statement": c.get("statement"), "leaf_own": own, "holds": c["holds"],
                      "ok": c["ok"], "ands": c["ands"], "prove": _time(out / tag / "prove.time"),
                      "lean_time": _time(out / "lean" / f"{tag}.time"), "registered": (v or {}).get("registered")}
-        if tag in plan["honest"] and word in ("ACCEPT", TEMPLATED):
-            # `produced.shared` reads only an accepted verdict's openings; a templated one's are those Lean reported
-            # before refusing the form, held to the produced record here and never reported as accepted
-            verdicts[tag] = {**v, "accepted": True, "of_record": True}
+        if tag in plan["honest"] and word == "ACCEPT":
+            verdicts[tag] = {**v, "of_record": True}
             known.update(c["known"])
             for e in (v.get("registered") or {}).values():
                 if opened.setdefault(e["value"], e["root"]) != e["root"]:
@@ -703,18 +688,17 @@ def summarize(args) -> int:
           and len(verdicts) == len(plan["honest"]) and not shared_codes and forged_codes == ["P-shared"])
     summary = {"ok": ok, "k": prep["k"], "tile": prep["tile"], "ands": prep["ands"], "circuits": prep.get("circuits"),
                "lean_accepts": sum(r["lean"] == "ACCEPT" for r in rows.values()),
-               "templated": sorted(t for t, r in rows.items() if r["lean"] == TEMPLATED),
                "produced_check": prep["produced_check"],
                "opened": opened, "opened_codes": opened_codes, "shared_codes": shared_codes,
                "shared_forged_lane5": forged_codes, "checks": rows, "registration": prep["registration"],
                "draw": prep["draw"], "produced": honest_record, "binding": prep["binding"]}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     for tag, r in rows.items():
-        why = "" if r["lean"] == TEMPLATED else str(r["why"])[:160]
-        print(f"{tag:26s} {r['lean']:7s} expect {r['expect']:7s} ok={r['ok']} {'ok' if r['as_expected'] else 'MISMATCH'}  {why}")
+        print(f"{tag:26s} {r['lean']:7s} expect {r['expect']:7s} ok={r['ok']} {'ok' if r['as_expected'] else 'MISMATCH'}  "
+              f"{str(r['why'])[:160]}")
     print(f"opened roots against the produced record: {opened_codes or 'ok'}; opened rows against its openings: "
           f"{shared_codes or 'ok'}, a forged lane-5 opening: {forged_codes}; ANDs {prep['ands']}; Lean ACCEPTs "
-          f"{summary['lean_accepts']}, {TEMPLATED}: {len(summary['templated'])}; all as expected: {ok}")
+          f"{summary['lean_accepts']}; all as expected: {ok}")
     return 0 if ok else 1
 
 

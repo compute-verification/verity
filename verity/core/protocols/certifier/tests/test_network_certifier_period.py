@@ -2,7 +2,7 @@
 period's salted roots committed before any coin is read, K of its execution phases sampled, only those registered and
 proved, the sample of record the Lean verifier's on the coins the sample read (`lean_draw`, stood in here by the sampler
 `coins.OwnRandomness` that `test_coins` holds byte for byte to Lean's `Flock.Draw.drawOn`), and what the sample
-established stated as faulty proof blocks at δ."""
+established stated as incorrect proof blocks at δ."""
 from __future__ import annotations
 
 import itertools
@@ -15,8 +15,8 @@ import pytest
 from verity.core.protocols.certifier import service as SVC
 from verity.core.protocols.certifier.certificate import CertifiedRecord
 from verity.core.protocols.certifier.service import PERIOD_DRAW, PERIOD_DRAWN
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.coins import OwnRandomness
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.coins import OwnRandomness
 
 from test_network_certifier_service import SALTS, Run, lean  # noqa: F401  (lean: the stand-in Lean, autouse)
 
@@ -95,8 +95,16 @@ def test_the_period_draw_commits_every_root_before_it_reads_a_coin(tmp_path):
         run.lw.period_draw(run.stream, roots(run, openings), 2, Coins())
 
 
+<<<<<<< 99c8914848
 def test_all_samples_every_window_and_reads_no_coin(tmp_path, lean_draw):
     """K = n leaves nothing to sample: no coin is read, no Lean draw runs, and the sample of record is every window."""
+||||||| merged common ancestors
+def test_all_draws_every_window_and_reads_no_coin(tmp_path, lean_draw):
+    """K = n leaves nothing to sample: no coin is read, no Lean draw runs, and the sample of record is every window."""
+=======
+def test_all_draws_every_window_and_reads_no_coin(tmp_path, lean_draw):
+    """K = n leaves nothing to sample: no coin is read, no Lean sample runs, and the sample of record is every window."""
+>>>>>>> 7af4d24fca3e
     run, coins = Run(tmp_path), Coins()
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), None, coins)
@@ -154,8 +162,16 @@ def test_a_prover_that_proves_another_k_subset_is_refused_by_name(tmp_path, k):
         assert set(verdict["refused"]) <= set(drawn["units"]) and verdict["refused"]
 
 
+<<<<<<< 99c8914848
 def test_a_lean_that_refuses_or_samples_otherwise_refuses_the_link_by_name(tmp_path, monkeypatch):
     """An honest period, proved: the verdict refuses it by name where the Lean can't draw on its coins, draws other
+||||||| merged common ancestors
+def test_a_lean_that_refuses_or_draws_otherwise_refuses_the_link_by_name(tmp_path, monkeypatch):
+    """An honest period, proved: the verdict refuses it by name where the Lean can't draw on its coins, draws other
+=======
+def test_a_lean_that_refuses_or_draws_otherwise_refuses_the_link_by_name(tmp_path, monkeypatch):
+    """An honest period, proved: the verdict refuses it by name where the Lean can't sample on its coins, samples other
+>>>>>>> 7af4d24fca3e
     windows than the sample object lists, or answers with a sample that isn't subset:K over the period's windows."""
     run = Run(tmp_path)
     openings = committed(run)
@@ -177,7 +193,7 @@ def test_a_lean_that_refuses_or_samples_otherwise_refuses_the_link_by_name(tmp_p
 
 
 def test_lean_draw_runs_flock_verify_draw_on_the_coins(tmp_path, monkeypatch):
-    """`lean_draw` runs the Lean verifier of record (`proofs.executable`) as ``draw --population n --k k
+    """`lean_draw` runs the Lean verifier (`proofs.executable`) as ``draw --population n --k k
     --stream-file F``, F the coins, and returns its one ``DRAW`` object; a failed run, no ``DRAW`` line or one that
     isn't JSON is a refusal, and so is a Lean that can't be built."""
     monkeypatch.undo()

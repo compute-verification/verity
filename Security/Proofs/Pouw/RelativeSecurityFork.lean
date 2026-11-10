@@ -83,7 +83,7 @@ theorem breakPr_le_breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Clai
     rw [ENNReal.ofReal_mul hβ, ENNReal.ofReal_sum_of_nonneg fun w _ => ?_]
     · unfold finderTerm
       exact mul_le_mul' le_rfl (Finset.sum_le_sum fun w _ => ofReal_finderPr_le_ecrBound _ _ _)
-    · unfold Claims.Finder.Pr Claims.Pr
+    · unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
       positivity
   exact (ENNReal.ofReal_add_le.trans (add_le_add ENNReal.ofReal_add_le le_rfl)).trans
     (add_le_add (add_le_add le_rfl (hfd fb _ βb hβb)) (hfd fz _ βz hβz))
@@ -115,11 +115,11 @@ theorem honestService_accepts (Ω : Type) [Fintype Ω] (lam : ℕ) (h : Fintype.
   ⟨fun _ => rfl, ⟨Classical.arbitrary _, rfl⟩⟩
 
 theorem prob_false {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
-  simp [prob]
+  simp [prob, Claims.prUniform]
 
 theorem prob_eq_one_of_forall {Ω : Type*} [Fintype Ω] [Nonempty Ω] {p : Ω → Prop} (h : ∀ ω, p ω) : prob p = 1 := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   rw [Finset.filter_true_of_mem fun ω _ => h ω, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 
@@ -204,7 +204,7 @@ theorem oCells_eq (c c' : OCells 1 (fun _ => 1) (fun _ => 1) (fun _ => 1)) : c =
   obtain rfl : d = d' := dCells_eq d d'
   rfl
 
-/-- The one-cell overlapped design's target: the one draw's `dTarget`. -/
+/-- The one-cell overlapped design's target: the one sample's `dTarget`. -/
 def oTarget : (OBits 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) → ZMod (2 ^ 32)) → ZMod (2 ^ 32) :=
   fun z => dTarget fun v => z ⟨0, v⟩
 
@@ -219,7 +219,7 @@ theorem oPrefix_cell (c : OCells 1 (fun _ => 1) (fun _ => 1) (fun _ => 1)) :
   obtain rfl := oCells_eq c ⟨0, 0, 0, 0⟩
   rfl
 
-/-- The honest overlapped run: one round of one draw, its one product slot the target. -/
+/-- The honest overlapped run: one round of one sample, its one product slot the target. -/
 def oRun : OverlapRun 1 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)) where
   play := .round (fun c z => (oneProd oTarget).val z 0 -
     dPrefix (fun _ _ _ => 0) (fun _ _ _ => 0) wRe c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) fun _ => .done
@@ -320,7 +320,7 @@ theorem ojPrefix_cell (c : OCells 1 (fun _ => 1) (fun _ => 1) (fun _ => 1)) :
   obtain rfl := oCells_eq c ⟨0, 0, 0, 0⟩
   rfl
 
-/-- The honest overlapped call run: one round of one call draw, its one product slot the target. -/
+/-- The honest overlapped call run: one round of one call sample, its one product slot the target. -/
 def ojRun : JOverlapRun 1 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)) where
   play := .round (fun c z => (oneProd ojTarget).val z 0 -
     jPrefix (fun _ _ _ => 0) (fun _ _ _ => 0) c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) fun _ => .done

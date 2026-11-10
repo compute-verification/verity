@@ -8,7 +8,8 @@ of the trace:
     descriptor.json.gz   the predicted Program, under the trace's annotations: the runtime correspondence (per Call, the fx occurrence
                          it was lowered from, its module, views and slots), which only the trace yields
     instances.json.gz    the predicted Program's instance sequence (`pipeline.build.write_instances`), with the Call and weight
-                         names the trace gave it (`traced_names`), which no digest covers and Match and the manifest read
+                         names the trace gave it (`traced_names`), which no digest covers and Match and the manifest read, and
+                         the predictor's checks (`BuildResult.checks`), which the replay reads
     the rest (CARRIED)   as the trace wrote them, with `aot` in result.json and construction_manifest.json: what predicted the
                          Program, from which trace
 
@@ -78,10 +79,11 @@ def traced_names(program, desc: dict, trace: str) -> tuple[dict[int, str | None]
     trace's, the descriptors being byte-equal) and each weights record field's leaf name (`derive-report.json`'s `provenance.weights`,
     in field order), refused where the fields differ in number or size."""
     from verity.ml.circuits.types import RecordType
+    from verity_vllm.check.weights_of_record import PARAM as WEIGHTS
     hints = {int(k): v for k, v in ((desc.get("annotations") or {}).get("node_hints") or {}).items()}
     params = []
     for n, t in program.fn.body.params:
-        if isinstance(t, RecordType):
+        if n == WEIGHTS and isinstance(t, RecordType):
             leaves = sorted(json.loads(Path(trace, "derive-report.json").read_text())["provenance"]["weights"], key=lambda w: w["field"])
             if (got := [f.leaves for _, f in t.fields]) != (want := [math.prod(w["shape"]) for w in leaves]):
                 raise UsageError(f"{trace}: the predicted {n} record's {len(got)} fields are not the trace's {len(want)} weight leaves in size")
@@ -112,8 +114,9 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
     os.makedirs(out, exist_ok=True)
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
         f.write(raw)
-    write_instances(out, r.program, r.digest, traced.get("correspondence_digest"), {"supplied": s} if (s := traced.get("supplied")) else {},
-                    names=names, params=params)
+    sup = dict(s) if (s := traced.get("supplied")) else {}
+    write_instances(out, r.program, r.digest, traced.get("correspondence_digest"), {"supplied": sup} if sup else {},
+                    names=names, params=params, checks=r.checks)
     block = {"mechanism": MECHANISM, "predicted_digest": r.digest, "code_version": S.code_version(), "timings": r.timings, **(aot or {})}
     for name in CARRIED:
         src = os.path.join(trace, name)
@@ -143,13 +146,13 @@ def _predict_rank(task: tuple[str, int, str, str, list[tuple[str, int, int]]]) -
     phi = phi_at(row, rank, config)
     st = json.loads(Path(step_dir, "result.json").read_text())
     out["step"] = getattr(timed("step", lambda: predict(phi, "step", M=int(st["M"]), pos0=int(st["pos0"]))), "digest", None)
-    canon, comps = {}, {}
+    comps = {}
     for name, LP, T in requests:
         if (r := timed(name, lambda: predict(phi, "request", LP=LP, T=T))) is not None:
             out["requests"][name] = r.digest
-            if (c := timed("workload", lambda: S.request_component(r, canon))) is not None:
+            if (c := timed("workload", lambda: S.request_component(r))) is not None:
                 comps[(LP, T)] = c
-    out["workload"] = (timed("workload", lambda: S.predict_workload(phi, comps, canon)) or {}).get("digest")
+    out["workload"] = (timed("workload", lambda: S.predict_workload(phi, comps)) or {}).get("digest")
     return out
 
 
@@ -239,15 +242,15 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
         raise UsageError(f"{out} is a traced row's dir: a predicted row's Build is written into a dir of its own")
     phi = S.phi_of({"row": row, "workload": w}, config=str(config))
     os.makedirs(out, exist_ok=True)
-    t0, canon, comps, requests = time.time(), {}, {}, {}
+    t0, comps, requests = time.time(), {}, {}
     for LP, T in phi.request_shapes():
         r = named_program(phi, LP, T)
         name = f"build_request_{PP.shape_name(PP.shape(LP, T))}"
         write_build(os.path.join(out, name), r.program, r.named)
-        requests[name], comps[(LP, T)] = r.digest, S.request_component(r, canon)
+        requests[name], comps[(LP, T)] = r.digest, S.request_component(r)
         if log:
             log(f"[predict] {name}: {r.digest[:16]}… ({r.n_root_nodes} nodes)")
-    wl = write_workload(phi, comps, canon, os.path.join(out, "build_workload"))
+    wl = write_workload(phi, comps, os.path.join(out, "build_workload"))
     policy = dict(word="16/32", norm_scales=True, taps=MN.taps_of(True, True), query=QUERY_OF_RECORD,
                   jobs=jobs or MN.cpus(), log=log)
     if len(phi.requests) > 1:
@@ -266,13 +269,13 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
     return rec
 
 
-def write_workload(phi: Phi, comps: dict, canon: dict, out: str):
+def write_workload(phi: Phi, comps: dict, out: str):
     """GP-01's workload Program over the predicted request components (`score.workload_program`) at `out`, as GP-01 writes its
     own: `workload_program.json`, the Program's artifact (`WorkloadProgram.artifact`) with the `lag` block and
     `applicability.engine.async_scheduling` the declared target resolves, and `descriptor.json.gz`, from which GM-01's
     `check.match.declaration.from_gprog` recomputes the workload digest and the `lag` static the block claims."""
     from verity.ml.circuits.codec import canonical_json, descriptor_size
-    wl = S.workload_program(phi, comps, canon)
+    wl = S.workload_program(phi, comps)
     lag = phi.target_profile().async_scheduling_declaration()
     desc = wl.descriptor
     os.makedirs(out, exist_ok=True)

@@ -1,7 +1,39 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.VStarBuild
-public import Proofs.Flock.C3.RegLevels.TopHold
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.RegLevels.TopHold
 
 /-!
 # When the stager accepts a part (`VStar.In.partIn`)
@@ -12,7 +44,7 @@ inputs `src`, written out, and `partIn_ok` is that `partIn` accepts wherever it 
 
 * **a level** (`LevelInFits`): its openings number `n`, each of `LANES` lanes and `H` siblings, the level's tops are
   read (`topsAt`), and each opening's top node is among them. That every opening is in the chain (`at?`) is proved:
-  `Array.qsort` keeps its elements (`qsort_mem`, through `TopHold.sort_spec`);
+  `Array.qsort` keeps its elements (`TopHold.qsort_mem`);
 * **an algebra part** (`AlgInFits`): each rep has an opening (`repEnds`), and each port is `acc0`, `acc1` or an `m<i>`
   whose message round holds two rows;
 * **a cap**: `capIn` accepts (`VStarPorts.capIn_ok`);
@@ -29,32 +61,6 @@ namespace RecDeploy.VStarBuild
 open _root_.Flock
 open Claims (Msg)
 
-theorem mem_of_sameOn {α : Type} {as : Array α} {r : Vector α as.size} {lo hi : ℕ}
-    (hS : FlockC3.RegLevels.TopHold.SameOn lo hi as.toVector r) (hlo : lo = 0) (hhi : as.size ≤ hi + 1) (x : α) :
-    x ∈ r.toArray ↔ x ∈ as := by
-  subst hlo
-  rw [Vector.mem_toArray_iff, Vector.mem_iff_getElem, Array.mem_iff_getElem]
-  constructor
-  · rintro ⟨j, hj, rfl⟩
-    obtain ⟨j', hj', -, -, e⟩ := (hS.2 r[j]).2 ⟨j, hj, Nat.zero_le _, by omega, rfl⟩
-    exact ⟨j', hj', e⟩
-  · rintro ⟨j, hj, rfl⟩
-    obtain ⟨j', hj', -, -, e⟩ := (hS.2 as[j]).1 ⟨j, hj, Nat.zero_le _, by omega, rfl⟩
-    exact ⟨j', hj', e⟩
-
-/-- **`Array.qsort` keeps its elements**, under an order whose negation is transitive. -/
-theorem qsort_mem {α : Type} (as : Array α) (lt : α → α → Bool) (hasym : ∀ a b, lt a b = true → lt b a = false)
-    (htr : ∀ a b c, lt a b = false → lt b c = false → lt a c = false) (x : α) : x ∈ as.qsort lt ↔ x ∈ as := by
-  unfold Array.qsort
-  split
-  · exact Iff.rfl
-  · rename_i h0
-    try simp only
-    obtain ⟨hS, -⟩ := FlockC3.RegLevels.TopHold.sort_spec lt hasym htr _ as.toVector (min 0 (as.size - 1))
-      (max (min 0 (as.size - 1)) (min (as.size - 1) (as.size - 1))) (by omega) (by omega) (by omega)
-      (Nat.lt_succ_self _)
-    exact mem_of_sameOn hS (Nat.zero_min _) (by omega) x
-
 theorem before_asym (a b : _root_.VStar.In.Query) (h : _root_.VStar.In.before a b = true) :
     _root_.VStar.In.before b a = false := by
   simp [_root_.VStar.In.before] at h ⊢ <;> omega
@@ -66,7 +72,7 @@ theorem before_trans (a b c : _root_.VStar.In.Query) (h1 : _root_.VStar.In.befor
 /-- An opening is in the chain's order exactly where it is one of the stager's. -/
 theorem mem_order {src : _root_.VStar.In.Src} {o : _root_.VStar.In.Query} :
     o ∈ _root_.VStar.In.order src ↔ o ∈ src.openings :=
-  qsort_mem _ _ before_asym before_trans o
+  FlockC3.RegLevels.TopHold.qsort_mem _ _ before_asym before_trans o
 
 theorem at?_some {src : _root_.VStar.In.Src} {o : _root_.VStar.In.Query} (h : o ∈ src.openings) :
     ∃ p, _root_.VStar.In.at? src o = some p := by
@@ -149,7 +155,7 @@ theorem levelIn_ok {src : _root_.VStar.In.Src} {prog : String} {level LANES H n 
   have hq : ∀ q, q ∈ (src.openings.filter (·.level == level)).qsort _root_.VStar.In.before ↔
       q ∈ src.openings ∧ q.level = level := by
     intro q
-    simp only [qsort_mem _ _ before_asym before_trans, Array.mem_filter, beq_iff_eq]
+    simp only [FlockC3.RegLevels.TopHold.qsort_mem _ _ before_asym before_trans, Array.mem_filter, beq_iff_eq]
   have h1 : (((src.openings.filter (·.level == level)).qsort _root_.VStar.In.before).size == n) = true := by
     rw [FlockC3.RegLevels.TopHold.qsort_size, hn]
     exact beq_self_eq_true n

@@ -1,4 +1,4 @@
-"""The H200 plan (`h200.py`): the block's units are circuits' partition, every execution phase is a uniform draw its tables
+"""The H200 plan (`h200.py`): the block's units are circuits' partition, every execution phase is a uniform sample its tables
 divide within the statement cap, its K0 is IntegrityPeriodLog's, commitments are priced beside the proving and not in
 it, both alternative cuts are priced, the frontier is monotone and an execution phase of `window_blocks` blocks proves within its
 GPU time."""
@@ -11,6 +11,13 @@ from math import ceil, log
 import pytest
 
 import h200 as H
+<<<<<<< 99c8914848
+||||||| merged common ancestors
+import transformer as X
+=======
+import transformer as X
+from inputs import observations
+>>>>>>> 7af4d24fca3e
 
 M = H.Shape()
 
@@ -64,6 +71,16 @@ def test_the_frontier_is_monotone_and_the_window_fits(plan):
     assert costs == sorted(costs)
     B = plan["window_blocks"]
     assert plan["cost"]["proving"] / B <= M.block_s < plan["cost"]["proving"] / (B - 1)
+
+
+def test_the_h200_card_prices_the_same_partition_in_its_own_seconds(plan):
+    """`--card h200` fits the deployed prover's sessions on GLM-5.3's proof blocks on one H200: the same windows, each
+    rate it charges positive and not the RTX PRO 6000's; a card the inputs don't hold is refused."""
+    o = H.report(M, H.SHARE, card="h200")
+    assert o["card"] == "h200" and [w["template"] for w in o["windows"]] == [w["template"] for w in plan["windows"]]
+    assert o["rates"]["statement_fixed"] > 0 and o["rates"]["per_and"] > 0 and o["rates"] != plan["rates"]
+    with pytest.raises(ValueError, match="no card"):
+        observations("b200")
 
 
 def test_a_longer_step_lengthens_the_block_not_the_units():

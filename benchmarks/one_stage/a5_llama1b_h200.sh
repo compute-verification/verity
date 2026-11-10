@@ -36,7 +36,7 @@ mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW"
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   uv sync --all-packages --extra torch-cpu || exit 5
   (cd verity/core/service/flock && lake build flock-verify flock-firewall) || exit 7
-  (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) || exit 7
+  (cd verity/core/service/spot && lake build sampled-proofs-verifier) || exit 7
   RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh || exit 6
 ) > "$OUT/prebuild.log" 2>&1 &
 PB=$!
@@ -46,7 +46,7 @@ if [ -z "${CUDA_HOME:-}" ]; then
   for c in /usr/local/cuda-12.9 /usr/local/cuda-12 /usr/local/cuda-13.0 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done
 fi
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
-export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
+export NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export GPU_LEASE=${GPU_LEASE:-gpu-lease} GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-sha512}

@@ -1,8 +1,25 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
-public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 @[expose] public section
 
@@ -22,7 +39,7 @@ guarantees over v2 rows hold of something (row-seg rows and a mix: `NonVacuousSe
   checked by evaluation.
 * `zk_session_soundHJ_nonvacuous_v2`: at a session `verify --zk` accepts whose circuit file parses as `witnessV2`, the
   premises the hidden-output headlines read of the circuit hold together (`Built`, `scopeOkH`, the rows that fit,
-  `Hidden.Any.RowsFitS`, with every row a v2 row), with `zk_session_soundHJ_nonvacuous`'s `y₀` and draw hypotheses.
+  `Hidden.Any.RowsFitS`, with every row a v2 row), with `zk_session_soundHJ_nonvacuous`'s `y₀` and sample hypotheses.
 
 Not covered: that a session over `witnessV2` exists (the verifier accepting one; the `_bit_row_toy` sessions show it at
 run time), `hRec`, `hpub`, `hpt`, `hkd`, `hA3`, the count curve's parameters and `TableCRZ`, as for
@@ -72,12 +89,12 @@ theorem witnessV2_scope :
     witnessV2.ports.all (·.v2) = true ∧ Layout.scopeOkH witnessV2 = true ∧ Layout.scopeOk witnessV2 = false := by
   decide +kernel
 
-/-- **The hidden-output headlines' circuit premises and draw hypotheses hold together at `witnessV2`.** At the coin
-server's draw file (`DrawFileZK`, `subset kd`, the tables dividing `kd`) and one session `verify --zk` accepts at the
-draw `dj S`, on untyped inputs under `TagsOkZHJ`'s tags whose circuit file parses as `witnessV2`: its unit is built,
+/-- **The hidden-output headlines' circuit premises and sample hypotheses hold together at `witnessV2`.** At the challenger's
+live-coin part's sample file (`DrawFileZK`, `subset kd`, the tables dividing `kd`) and one session `verify --zk` accepts at the
+sample `dj S`, on untyped inputs under `TagsOkZHJ`'s tags whose circuit file parses as `witnessV2`: its unit is built,
 `scopeOkH` admits it and `scopeOk` refuses it, its rows fit with every row a `sha512/row/v2` row
 (`Hidden.Any.RowsFitS`, `Hidden.rowV2`), and at `mPtsOf witnessV2.g (kd / nTab I)` link points there is a `y₀` (table
-0's setup), every table is set up, and `DrawOkZKHJ` holds at every draw (`zk_session_soundHJ_nonvacuous`, which applies
+0's setup), every table is set up, and `DrawOkZKHJ` holds at every sample (`zk_session_soundHJ_nonvacuous`, which applies
 `zk_session_soundHJ` to them). -/
 theorem zk_session_soundHJ_nonvacuous_v2 (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok witnessV2) (kd : ℕ) (hdiv : kd % nTab I = 0)

@@ -1,7 +1,8 @@
 """`pouw_h1_prover`'s kept call files and the `Writer` that writes them off the serving thread (serve-openai's
 ``--h1-prover``): each file is the bytes ``np.savez`` wrote before the writer, so what the prover reads (`open_call`,
-`kept`) is unchanged; a caller waits only while the writer's ring is full, so at most its bound is in flight; and a call
-whose file wasn't written is raised by its window's `Writer.wait`, the other windows unaffected."""
+`kept`) is unchanged; a caller waits only while the writer's ring is full, so at most its bound is in flight; a call
+whose file wasn't written is raised by its window's `Writer.wait`, the other windows unaffected; and a failure the writer
+doesn't expect stops it, failing every window still to be written rather than leaving one waiting."""
 from __future__ import annotations
 
 import threading
@@ -9,11 +10,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import records as ZR
 
 torch = pytest.importorskip("torch")
-
-from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import records as ZR  # noqa: E402
 
 
 def _today(path, a, s_a, records):
@@ -96,6 +96,7 @@ def test_a_call_goes_where_the_ring_is_free_and_the_caller_waits_only_while_it_i
     assert w._fit(n * PV.ALIGN) == (None if at is None else at * PV.ALIGN)
 
 
+<<<<<<< 99c8914848
 def test_two_threads_write_a_later_call_while_an_earlier_one_is_held_and_free_the_ring_in_order(tmp_path, monkeypatch):
     """With two writer threads, call 1's file is written while call 0's is still held, and a third call waits for room
     though call 1 is written: its bytes go where call 0's still are only once call 0 is written, so every file is
@@ -133,11 +134,23 @@ def test_two_threads_write_a_later_call_while_an_earlier_one_is_held_and_free_th
 def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch):
     """A write that fails is its window's: `wait` raises OSError naming the call once the window's other calls are
     written, and the next window on the writer is written whole."""
+||||||| merged common ancestors
+def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch):
+    """A write that fails is its window's: `wait` raises OSError naming the call once the window's other calls are
+    written, and the next window on the writer is written whole."""
+=======
+@pytest.mark.parametrize("error, named", [(OSError(28, "No space left on device"), r"OSError: .*No space"),
+                                          (RuntimeError("CUDA error: an illegal memory access was encountered"),
+                                           r"RuntimeError: CUDA error")])
+def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch, error, named):
+    """A write that fails, the file system's or the device's, is its window's: `wait` raises OSError naming the call once
+    the window's other calls are written, and the next window on the writer is written whole."""
+>>>>>>> 7af4d24fca3e
     savez = PV._savez
 
     def full(path, *arrays):
         if path.parent.parent.name == "w0" and path.name == "1.npz":
-            raise OSError(28, "No space left on device")
+            raise error
         return savez(path, *arrays)
     monkeypatch.setattr(PV, "_savez", full)
     a, s_a, r = _call(4)
@@ -147,7 +160,7 @@ def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch):
         for i in range(3):
             w.keep(tmp_path / window, i, a, s_a, r)
         if window == "w0":
-            with pytest.raises(OSError, match=r"1 of its 3 calls' prover state wasn't written: call 1: OSError: .*No space"):
+            with pytest.raises(OSError, match=rf"1 of its 3 calls' prover state wasn't written: call 1: {named}"):
                 w.wait(tmp_path / window)
             assert sorted(p.name for p in (tmp_path / window / PV.CALLS).iterdir()) == ["0.npz", "2.npz"]
         else:
@@ -155,6 +168,35 @@ def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch):
     w.close()
     with pytest.raises(RuntimeError, match="the writer is closed"):
         w.keep(tmp_path / "w1", 3, a, s_a, r)
+
+
+def test_an_unexpected_failure_stops_the_writer_and_no_window_waits_on_it(tmp_path, monkeypatch):
+    """A failure the writer doesn't expect (a ValueError, as a bug raises) is raised on the writer's thread, and fails its
+    call's window: `wait` raises at once, naming it, for that call and each kept after it, one kept while the ring was
+    full among them, and a window opened later fails the same way; `close` returns."""
+    savez, raised = PV._savez, []
+
+    def broken(path, *arrays):
+        if path.name == "1.npz":
+            raise ValueError("a bug")
+        return savez(path, *arrays)
+    monkeypatch.setattr(PV, "_savez", broken)
+    monkeypatch.setattr(threading, "excepthook", raised.append)
+    a, s_a, r = _call(6)
+    w = PV.Writer(_size(a, s_a, r))
+    w.open(tmp_path / "w0")
+    for i in range(3):
+        w.keep(tmp_path / "w0", i, a, s_a, r)
+    with pytest.raises(OSError, match=r"2 of its 3 calls' prover state wasn't written: call 1: ValueError: a bug$"):
+        w.wait(tmp_path / "w0")
+    assert sorted(p.name for p in (tmp_path / "w0" / PV.CALLS).iterdir()) == ["0.npz"]
+    w._thread.join()
+    assert [(x.exc_type, x.thread.name) for x in raised] == [(ValueError, "h1-keep")]
+    w.open(tmp_path / "w1")
+    w.keep(tmp_path / "w1", 0, a, s_a, r)
+    with pytest.raises(OSError, match=r"1 of its 1 calls' .* call 0: the writer stopped at call 1: ValueError: a bug$"):
+        w.wait(tmp_path / "w1")
+    w.close()
 
 
 def test_a_call_past_the_bound_is_refused_and_a_directory_opens_on_one_writer(tmp_path):

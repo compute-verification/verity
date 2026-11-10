@@ -1,4 +1,4 @@
-"""Registered reads (`Flock.HmRow`, `verity/core/protocols/sampled_proofs/README.md` "Registered values"): a statement whose port reads
+"""Registered reads (`Flock.HmRow`, `verity/core/protocols/spot/README.md` "Registered values"): a statement whose port reads
 rows of a registered value (RoPE's `cs`, rows of the program's `cs_table`, committed once at registration) opens every
 table row against the verifier's own registered root, at the position the verifier's own program reads, with the units
 derived from that program, or the Lean verifier refuses it. The statements are staged here over a hidden-output RoPE d64
@@ -6,7 +6,7 @@ circuit (`HmOut`, the default `verity/flock-circuit`) composed for the `Register
 v0 partition; the reads come from `reads` on that program (`statement`: setup, no proof; `verify`: setup of each table,
 with no proofs). Upstream's proved session over the public-output statement (`FIXTURE`, vectors.json's registered-reads
 set) is held to the same reads. Composing the 56 MB circuit takes about 30 s and each call sets it up (about 8 s), so the
-module is slow; it catches what the Python reference (`verity/core/protocols/sampled_proofs/tests/test_registered.py`) can't: the
+module is slow; it catches what the Python reference (`verity/core/protocols/spot/tests/test_registered.py`) can't: the
 executable verifier's own refusals, on both statements' setup paths."""
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array
 from verity_flock import circuit as FC
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
+from verity.core.protocols.spot.one_stage import partition as P, registered as G
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
@@ -49,8 +49,7 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 
 
 def _program() -> tuple[Program, dict]:
-    pytest.importorskip("verity_numerical")
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     template = TM.rope_head(64).definition()
     (_, xt), (_, ct) = template.signature()[0]
@@ -74,14 +73,14 @@ def stage(d: Path) -> SimpleNamespace:
     """The hidden-output circuit bound to the program and its partition, the registered cs table, x rows and output
     rows, the verifier's own reads file (its program's reads of cs and x, and the output rows), and the statement's
     bindings, under `d`."""
-    from verity_numerical.bench import templates as TM
-    from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock import subcircuit_templates as TM
+    from synthetic_sets import synthetic_set
+    from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     program, query = _program()
     part = P.partition(program, query)
-    s = InputSet.open(generate(TM.rope_head(64), len(POSITIONS), 20260928, d / "set")["path"])
+    s = InputSet.open(synthetic_set(TM.rope_head(64), len(POSITIONS), 20260928, d / "set")["path"])
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_digest(program),
                       statics=FC.set_statics(s))
     (d / "circuit.txt").write_text(text)
@@ -429,7 +428,7 @@ def test_a_registered_output_row_is_on_both_sides(staged):
 
 
 def test_each_table_of_a_session_is_held_to_the_registered_reads(staged):
-    """`verify` sets up every table's statement through the same check (`Stmt.setupTables`): with two tables, table 1's drawn statement
+    """`verify` sets up every table's statement through the same check (`Stmt.setupTables`): with two tables, table 1's sampled statement
     (units 4-7) is refused when the verifier's program moves unit 5's read, and under the honest reads setup passes, so the
     verifier goes on to read the (empty) session's proofs, which it names by the tables it set up."""
     sess = staged.dir / "session"
@@ -457,7 +456,7 @@ def test_a_drawn_session_draws_every_unit_reading_a_rounds_commitment_in_full(st
     committed tops `rec-top-L0`, or R's `rec-top-stacked-L0`; a `rec-c<k>` meets `checkPubRows` first) is refused at setup
     when the record's sample does not sample every unit reading it in full, with one table and with two (`buildSession`'s call:
     `verify` sets up every hm96 statement through `Stmt.setupTables`, and `buildStmt`'s hm96 path serves `statement`, which
-    has no sample). The full draw passes U4: `rec-top-L0` then meets `checkTopRows` and R's tops `checkPubRows`, since the
+    has no sample). The full sample passes U4: `rec-top-L0` then meets `checkTopRows` and R's tops `checkPubRows`, since the
     verifier holds no inner transcript to check them against. U4's Lean test (`Flock.Test.Full`) checks the function; this
     checks that `verify` calls it."""
     c = G.Registered.commit(P.program_digest(staged.program), value,
@@ -516,7 +515,7 @@ def _hexes(bs: list[bytes]) -> list[str]:
 
 
 def _inner_transcript(path: Path, root: list[bytes], tops: list[list[bytes]], points=LINK_POINTS) -> Path:
-    """The coin server's record of that session: Hello's one table, its `root_B` (`root`, a `b ‖ c` a node), rep `x`'s round 0
+    """The challenger's record of that session: Hello's one table, its `root_B` (`root`, a `b ‖ c` a node), rep `x`'s round 0
     absorbing one `c_k` and its round 1 committing its level-1 top `tops[x]`, and the link points, flat."""
     rounds = [r for x in (0, 1) for r in (
         {"stream": f"circuit/rep{x}", "k": 0, "tops": [], "level0": 0, "commits": _hexes([bytes([0xC0 + x]) * 128]), "n": 1,
@@ -533,10 +532,10 @@ def _inner_transcript(path: Path, root: list[bytes], tops: list[list[bytes]], po
 @pytest.mark.parametrize("level", [0, 1])
 def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
     """`RecVStar.checkTopRows`: a statement whose `out` reads the circuit table's level-`l` tops `rec-top-L<l>` (V*'s levels'
-    `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the coin server recorded there: at level
+    `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the challenger recorded there: at level
     0 node `x` of the table's `root_B`, above it rep 0's level-`l` top and then rep 1's (`rec_outer.TopValue`). Here the
     registered rows are the session's level-`l` tops: its `root_B`, or rep 0's top of six nodes and rep 1's of four. With
-    the inner transcript recording them the full draw passes setup (to the session's proof files, which it has none of); a
+    the inner transcript recording them the full sample passes setup (to the session's proof files, which it has none of); a
     transcript whose `root_B`, rep 0's top or rep 1's top differs at one node a row reads is refused at that row, and an
     inner session record whose link points are not the transcript's is refused before setup (`RecVStar.innerLink`). This
     is the one test of `root_B` on a statement: V*'s level 0 at the rec-coins fixture is 436 openings of 64 lanes, about
@@ -603,29 +602,34 @@ def rope(tmp_path_factory):
     return root
 
 
-def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
+def test_a_session_verified_with_registered_reads_is_held_to_them(rope, tmp_path):
     """`verify` builds every table's statement through the same check on the public-output statement too: the fixture's
     honest session, proved by upstream over a statement that registers only `cs` (its `x` rows and outputs committed
     afresh), is refused at setup under its own reads file, which names only `cs`, since a port no registered read names
     is refused (`Registered.checkComplete`), and under one that moves every position at that position. Re-registering its
     `x` and outputs would change its public file, and so its proof, which upstream's build made. Upstream's seed-injection
     build has no zk patch, so the session's plain files are upstream's form, without the `zk_level0 = None` tag the
-    deployed prover writes, and are read under `--upstream-plain` (§8.1)."""
+    deployed prover writes, which `verify` refuses and `agree --upstream-plain` reads (§8.1): upstream, reading no
+    registered values, accepts the session, and the Lean verifier's checks refuse it at setup."""
     program, _ = _program()
     assert canonical_json(encode_program(program)) == (rope / "stage" / "program.json").read_bytes()
     bound = ["--partition", str(rope / "stage" / "partition.json"), "--program", str(rope / "stage" / "program.json")]
+    session = str(rope / "vectors" / "honest")
+    upstream = tmp_path / "upstream-verdicts.json"
+    upstream.write_text(json.dumps({session: True}))
 
-    def verify(session: str, own: Path) -> dict:
-        p = subprocess.run([str(BIN), "verify", "--statement", f"{UPSTREAM_STATEMENT}+seed-injection", "--circuit",
+    def agree(own: Path) -> dict:
+        p = subprocess.run([str(BIN), "agree", "--statement", f"{UPSTREAM_STATEMENT}+seed-injection", "--circuit",
                             str(rope / "stage" / "circuit.txt"), "--public", str(rope / "registered" / "pub-8.bin"), *bound,
-                            "--registered", str(own), "--upstream-plain", "--session", str(rope / "vectors" / session)],
-                           capture_output=True, text=True, check=False)
-        (line,) = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
+                            "--registered", str(own), "--upstream-plain", "--upstream-verdicts", str(upstream),
+                            "--session", session], capture_output=True, text=True, check=False)
+        (line,) = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("AGREEMENT ")]
+        assert "accepted" not in line and line["upstream"] is True and line["agree"] is False and p.returncode == 1, line
         return line
 
-    ok = verify("honest", rope / "registered" / "own.json")
-    assert ok["accepted"] is False and ok["why"].startswith("setup: registered reads (complete): the statement's port "), ok
+    ok = agree(rope / "registered" / "own.json")
+    assert ok["check"].startswith("setup: registered reads (complete): the statement's port "), ok
     root = json.loads((rope / "registered" / "own.json").read_text())["ports"]["cs"]["root"]
     assert ok["registered"] == {"cs": {"value": VALUE, "root": root}}
-    moved = verify("honest", rope / "vectors" / "wrong-position" / "registered.json")
-    assert moved["accepted"] is False and "reads position" in moved["why"], moved
+    moved = agree(rope / "vectors" / "wrong-position" / "registered.json")
+    assert "reads position" in moved["check"], moved

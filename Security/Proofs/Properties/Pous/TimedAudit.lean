@@ -1,7 +1,9 @@
 module
 
 public import Properties.Pous.TimedAudit
-public import Proofs.Properties.NetworkCertifier.Bytes
+public import Proofs.Properties.NetworkCertifier.Check.Bytes
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The timed audit's property, proved
@@ -283,13 +285,13 @@ theorem gate_refused_nil {s : P2.Params} {k delta rtt : Nat} (h : (Certificate.g
 
 /-! ## The verdict -/
 
-theorem fault_null (t : String) : (Json.mkObj [("fault", .str t)]).getObjValD "accepted" = .null := rfl
+theorem fault_null (t : String) : (Json.mkObj [("fault", .str t)]).getObjValD "accepted" = .null := (rfl)
 
-theorem refused_null (t : String) : (Json.mkObj [("refused", .str t)]).getObjValD "accepted" = .null := rfl
+theorem refused_null (t : String) : (Json.mkObj [("refused", .str t)]).getObjValD "accepted" = .null := (rfl)
 
 theorem verdict_accepted (a b c d e f g : Json) :
     (Json.mkObj [("k", a), ("limit_ns", b), ("gaps", c), ("audits", d), ("audits_accepted", e), ("accepted", f),
-      ("profile", g)]).getObjValD "accepted" = f := rfl
+      ("profile", g)]).getObjValD "accepted" = f := (rfl)
 
 theorem verdict_ok {ready : Json} {leafBytes : ByteArray} {doc : Json} (h : TimedAuditAccepted ready leafBytes doc) :
     ∃ v, TimedAudit.verdictOf ready leafBytes doc = .ok v ∧ v.getObjValD "accepted" = .bool true := by

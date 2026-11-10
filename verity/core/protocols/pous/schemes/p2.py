@@ -46,8 +46,8 @@ leaves and challenge derivation), not with the expander.
   `Pous.Period.SecurityProofs.periodHeldAt`, for every block count `2^19 ≤ N ≤ 2^27` at the registered width and prime,
   the same `⌊ρ·|C|⌋` at `1% + 2^-128` (`PeriodHeldDemo` at Demo B's `1038·2^16` blocks: 1,060,008,348,186 bits).  It
   is in the ring model, not abstract M1, and rests on the open conjecture `P2RingRoundSecureWide` (unchecked in `N`
-  above `2^25`) and the device model `RingDeviceAt` (`WIDE_CLAIMS`).
-- **The instantiation assumption is not accepted** (spec decision 8): that
+  above `2^25`), the device model `RingDeviceAt` and the coin commitments' hiding at `N` (`WIDE_CLAIMS`).
+- **The instantiation assumption is not accepted** (spec decision 8, deferred by default): that
   square–mask–square with fresh per-block keys instantiates M1's slow-inverse permutation is a novel, algebraic
   assumption, and it is outside Lean.
 - So is SeqRoot: no 16,448-bit root, nor another computation with its effect on the challenged block, finishes within
@@ -102,15 +102,15 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - counter-mode SHA-512 as a random oracle for the keys (v4's, the spec's P2-EXP-IO), or SHAKE256 for v2's segment seeds
   (whose ChaCha8 streams P2-EXP-IO does not name);
 - the help-accounted row (`perfect-isolation`, the earlier model's id): the certificate bounds what the audited location
-  held plus the help it received, and nothing attests the prover's machine;
+  held plus the help it received, and nothing attests the developer's machine;
 - SHA-512 collision resistance for the commitment to W and for `vk`;
 - a live, designated verifier, whose memory challenger is the auditor's hardware, a VM under the auditor's account
-  that the prover doesn't control and nothing attests (core's `trusted-host`)."""
+  that the developer doesn't control and nothing attests (core's `trusted-host`)."""
 
-WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at")
+WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
 """What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the
-conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide` and the device model `Pous.Period.RingDeviceAt`.  It takes no
-hiding premise on the memory challenger's coin tree, whose root leaves the device only after the last answer."""
+conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide`, the device model `Pous.Period.RingDeviceAt` and the coin
+commitments' hiding `Pous.P2.Assumptions.CoinCommitHides (coinViewAt N)`."""
 
 WIDE320_CLAIMS = (*WIDE_CLAIMS, "prf/sha-512")
 """What `wide320_certificate` rests on: `WIDE_CLAIMS`, and `prf/sha-512` (`Hash.Assumptions.Sha512Prf`) for the
@@ -143,10 +143,8 @@ ROOT_CALL_NS = 854_029
 the `Δ + RTT` that SeqRoot's 2× margin must stay under.  The certificate allows no such call within the deadline.  The
 single-core floor is the timing red team's Zen 5 at 5.7 GHz with full-rate IFMA, 2,060.845 cycles = 361.55 ns per
 squaring (`regate.py`) over the root's 16,486 squaring-equivalents, 5,960.54 µs; the measured 8-core speedup on one
-Zen 4 chiplet is 2,716.7 / 778.5 = 3.48966× per squaring (run r20260929-060834-0ec4,
-art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).  So the cooperating root is 1,708,058.35 ns
-and half of it 854,029.18 ns (`note:20261004T2102Z-report-relay-p2-redteam-timing`,
-art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57)."""
+Zen 4 chiplet is 2,716.7 / 778.5 = 3.48966× per squaring.  So the cooperating root is 1,708,058.35 ns and half of it
+854,029.18 ns."""
 
 DELTA_NS = 500_000
 """Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node."""
@@ -467,8 +465,8 @@ class P2(Scheme):
         if (p.w, p.c0, p.blocks_per_segment) != POINT:
             return None
         return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                             theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
-                             claims=P2_CLAIMS)
+                           theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
+                           claims=P2_CLAIMS)
 
     def deadline_refusals(self, deadline_ns: int, rtt_allowance_ns: int) -> tuple[str, ...]:
         out = []
@@ -502,7 +500,7 @@ def family_certificate(params: P2Params) -> CapacityBound | None:
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
     return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                         theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
+                       theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
 
 
 def wide_certificate(params: P2Params) -> CapacityBound | None:
@@ -515,7 +513,7 @@ def wide_certificate(params: P2Params) -> CapacityBound | None:
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
     return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                         theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
+                       theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
 
 
 def wide320_certificate(params: P2Params) -> CapacityBound | None:

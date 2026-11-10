@@ -1,7 +1,23 @@
 module
 
-public import Proofs.Flock.C3.RegLevels.SrcRun
 public import Proofs.Flock.C3.RegLevels.SrcConss
+public import Proofs.Flock.C3.RegLevels.SrcOpened
+public import Proofs.Flock.C3.RegLevels.SrcRun
+public import Proofs.Flock.C3.RegLevels.SrcTie
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # n7's levels: `levelTie_of_run`'s `Opened` from R's units
@@ -81,7 +97,7 @@ theorem levelTie_of_units (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
       (∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) ∧ OpensUnits zs Lb sh ops sibs cap p lg ∧
       (∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened) ∧
       u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
-        (ligMsgs p capDig sh.sched) (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf)))
+        (ligMsgs p capDig sh.sched) (((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf)))
     (ho : ∀ ℓ j, u.os.1 2 ℓ j = openRow p sh.sched ℓ j) :
     LevelTie cap₀ (holoAt st hp) u := by
   obtain ⟨hf, hsch⟩ := schedOf_holoAt hell hsh
@@ -214,7 +230,7 @@ theorem levelTie_of_reads (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
       (∃ nc, OpenRel sh.sched.m nc rs.T rs.sws u.opened) ∧
       u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
         (ligMsgs (pR sh e0 w ops sb e) capDig sh.sched)
-        (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf)))
+        (((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf)))
     (ho : ∀ ℓ j, u.os.1 2 ℓ j = openRow (pR sh e0 w ops sb e) sh.sched ℓ j) :
     LevelTie cap₀ (holoAt st hp) u := by
   obtain ⟨hf, -⟩ := schedOf_holoAt hell hsh

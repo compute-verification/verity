@@ -23,7 +23,7 @@ has no amortization across words (the claim `rate-codec-work`).
 
 Everything else (the random oracle at a fresh seed, the certified stream, on-chip state laid out before the seed,
 device memory read only through `ingress`, side sources answering any function of the store and the chip's address, the
-side link's `L` bits with the stream's `ρ` among them, the `q` queries, the sample drawn after the output) is
+side link's `L` bits with the stream's `ρ` among them, the `q` queries, the sample sampled after the output) is
 `RateAudit.lean`'s, and a run's world is `Rate.World`, whose `store` answers completions.
 
 `RealizesRatePartial` is `RealizesRate` (`RateAuditJoint.lean`) for a joint run whose bandwidth audit a partial device
@@ -117,7 +117,7 @@ def queries (w : World N b h ρ) : PChip N b h ρ α → List (Bits ρ × Fin N 
 
 end PChip
 
-/-- A device with partial completion: `Device`'s on-chip state, device memory and free side sources, laid out from the
+/-- A device with partial completion: `Prover`'s on-chip state, device memory and free side sources, laid out from the
 store before the seed and the stream, and a chip program with completions from that state. In every world the program
 takes in at most `L` bits over the side link (free side sources and the certified stream together) and makes at most
 `q` oracle queries. -/

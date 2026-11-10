@@ -1,6 +1,38 @@
 module
 
 public import Proofs.Flock.Claims.ZK.PrefixLive
+import Flock.With.SimWalk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A cut rep stopped at body `n` is the one stopped later, up to its stop (`CutPrefix.repCut_cut_agree`)
@@ -11,7 +43,7 @@ body `n` and the later run's bodies extend it. Both answer each squeeze below `n
 the coupling at any size (`squeezeP_cut_agree`) and the walk needs none of `PrefixLive`'s size bounds.
 
 * **`repCut_cut_agree`**: the coupling at a rep.
-* `prefix_of_agree`, `eq_of_agree`: where the later run returns past body `n`, the run stopped at `n` threw with the
+* `prefix_of_agree`, `eq_of_agree`: where the later run ends past body `n`, the run stopped at `n` threw with the
   later run's first `n + 1` bodies; where it returns by body `n`, the two runs are one.
 * **`repCut_shift`**: a cut rep reads only its history's size; from two histories of one size it ends the same way after
   the same bodies (`Shift`, `go_of_shift`).
@@ -25,10 +57,10 @@ open Flock Transcript FlockComplete FlockDeploy With JsonRT PrefixAgree
 
 /-! ## What the coupling gives -/
 
-/-- **Where the later run returns past body `n`**, the run stopped at `n` threw, with its bodies the later run's first
-`n + 1`. -/
+/-- **Where the later run ends past body `n`**, returned or not, the run stopped at `n` threw, with its bodies the later
+run's first `n + 1`. -/
 theorem prefix_of_agree {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : Array Claims.Msg} (hl : l.size ≤ n)
-    {a : α} {l' : Array Claims.Msg} (hx : x.go l = (.ok a, l')) (hn : n < l'.size) :
+    {v : Except String α} {l' : Array Claims.Msg} (hx : x.go l = (v, l')) (hn : n < l'.size) :
     (∃ e, (y.go l).1 = .error e) ∧ (y.go l).2.size = n + 1 ∧ ∀ i < n + 1, (y.go l).2[i]! = l'[i]! := by
   rcases h.2 l hl with ⟨-, hs⟩ | ⟨he, hs, bs, hbs⟩
   · rw [hx] at hs
@@ -43,7 +75,7 @@ theorem prefix_of_agree {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l
 
 /-- `prefix_of_agree` with the stopped run's end named. -/
 theorem prefix_of_agree' {n : ℕ} {α : Type} {x y : PS α} (h : Agree n x y) {l : Array Claims.Msg} (hl : l.size ≤ n)
-    {a : α} {l' : Array Claims.Msg} (hx : x.go l = (.ok a, l')) (hn : n < l'.size) :
+    {v : Except String α} {l' : Array Claims.Msg} (hx : x.go l = (v, l')) (hn : n < l'.size) :
     ∃ e L, y.go l = (.error e, L) ∧ L.size = n + 1 ∧ ∀ i < n + 1, L[i]! = l'[i]! := by
   obtain ⟨⟨e, he⟩, hs, hi⟩ := prefix_of_agree h hl hx hn
   exact ⟨e, (y.go l).2, Prod.ext he rfl, hs, hi⟩
@@ -146,6 +178,7 @@ theorem piopCut_cut_agree (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap 
   sim_walk [zerocheckCut_cut_agree coin hnN, lincheckCut_cut_agree coin hnN, rankCheckP_agree,
     ringSwitchCut_cut_agree coin hnN]
 
+-- `sim_walk` down `ligeritoCut`'s unfolded run, a step lemma per call
 set_option maxHeartbeats 1000000 in
 theorem ligeritoCut_cut_agree (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)
     (lay : Zk.PadLayout) (src : RepSrc) :
@@ -312,6 +345,7 @@ theorem piopCut_shift (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap root
   unfold piopCut
   sim_walk [zerocheckCut_shift coin N, lincheckCut_shift coin N, rankCheckP_shift, ringSwitchCut_shift coin N]
 
+-- `sim_walk` down `ligeritoCut`'s unfolded run, a step lemma per call
 set_option maxHeartbeats 1000000 in
 theorem ligeritoCut_shift (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)
     (lay : Zk.PadLayout) (src : RepSrc) :

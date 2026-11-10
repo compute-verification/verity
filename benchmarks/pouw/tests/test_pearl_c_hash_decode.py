@@ -32,7 +32,7 @@ from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.core.protocols.pouw import audit  # noqa: E402
 from verity.core.protocols.pouw.audit import ROW_SCHEMA, TILE_SCHEMA, activation_binding, rows_domain  # noqa: E402
 from verity.core.protocols.pouw.protocol import Matmul, Shape  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
 
 #: pearl_c_sm120.cu's PD_VARIANT_LIST, the variants the cubin builds
 SERVED_LIST = re.search(r"#define PD_VARIANT_LIST\(X\) (.*)", (KERNEL / "pearl_c_sm120.cu").read_text()).group(1).strip()

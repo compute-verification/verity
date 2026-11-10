@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Remote.Held
 public import Definitions.Accounting.Remote.Sketch
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # What deriving the receipts' sketch bound assumes (trusted)
@@ -48,7 +49,7 @@ keyed by the seed (`SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)`) read as a function
 
 SHA-512 is one fixed function, and for it the premise is false in Lean at small `ε`: a fixed function's outputs are one
 family, not a spread of them (with `Hs` a point, `keys b D` takes one value). So it is a premise, read in the
-random-oracle model, and not a lemma. There `Hs` is SHA-512 drawn as a uniform function and `keys b D x` its outputs at
+random-oracle model, and not a lemma. There `Hs` is SHA-512 sampled as a uniform function and `keys b D x` its outputs at
 the seeds the prover's run tries. Distinct seeds' receipt hashes and 256-bit sign keys
 `K = derive(seed_i, SIGN_DOMAIN, …)` are fresh queries, uniform and independent, chosen adaptively or not. The signs are
 `K.stream` rows, `k_s × 4096` bits expanded from `K`'s 256, so two candidates whose `K` collide share their signs, and

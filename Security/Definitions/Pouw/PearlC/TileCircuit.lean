@@ -20,7 +20,7 @@ it reads in order, and its value from theirs. No evaluator for IR Programs: the 
     total. The last promotion is `C̃_ij` (`cGate`);
   * **U**: four `HopperBF16WgmmaDot16_v1` steps (`peelF`, `PeelExact.k16Step`) from `C̃_ij` over the slices of `P_A,i`
     and `P_B,j`. The last is `U_ij` (`uGate`).
-* **One proof unit** (`Spec.part`) holds every computed gate.
+* **One proof block** (`Spec.part`) holds every computed gate.
 
 Which gate reads which, the widths and the outputs are checked against the template's `CallGraph`, with the checked
 templates' descriptor digests pinned, by `tests/test_circuit_tile_lean.py`. The order of a gate's reads is not in the
@@ -36,7 +36,7 @@ open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact
 
 /-- One gate of a word circuit: its width, whether it is an input, the gates it reads in order, and its value from
 theirs as naturals. -/
-structure GateRow where
+structure Gate where
   w : ℕ
   input : Bool
   rd : List ℕ
@@ -45,7 +45,7 @@ structure GateRow where
 /-- A word circuit: `N` gates, each reading earlier gates only, inputs reading none. -/
 structure Spec where
   N : ℕ
-  gate : ℕ → GateRow
+  gate : ℕ → Gate
   outs : Finset ℕ
   rd_lt : ∀ g < N, ∀ a ∈ (gate g).rd, a < g
   input_rd : ∀ g < N, (gate g).input = true → (gate g).rd = []
@@ -81,7 +81,7 @@ variable (S : Spec)
     · rfl
   outputs := Finset.univ.filter fun g => g.val ∈ S.outs
 
-/-- One proof unit holding every computed gate. -/
+/-- One proof block holding every computed gate. -/
 def part : Verity.Partition S.toCircuit 1 where
   unit g := if (S.gate g).input then none else some 0
   input_iff g := by
@@ -121,7 +121,7 @@ def peelF (l : List ℕ) : ℕ := k16Step (l.headD 0) (fun i => l.getD (1 + i) 0
 /-- One gate of an entry's block, at position `r` of the block and gate `g`: the chain on the step `p` in windows of 4
 atoms over `A′_i`'s codes from gate `a` and `B̃_j`'s from gate `b` (per window four atoms and one promotion), then U's
 four K16 steps over the 64 BF16 words of `P_A,i` from gate `pa` and of `P_B,j` from gate `pb`. -/
-def entryGate (p : Pipeline) (K a b pa pb g r : ℕ) : GateRow :=
+def entryGate (p : Pipeline) (K a b pa pb g r : ℕ) : Gate :=
   if r < 5 * (K / 128) then
     if r % 5 < 4 then
       ⟨32, false, (if r % 5 = 0 then [] else [g - 1]) ++ (List.range 32).map (a + 32 * (4 * (r / 5) + r % 5) + ·) ++
@@ -144,7 +144,7 @@ def entryBase (K TM TN i j : ℕ) : ℕ := tileIn K TM TN + (i * TN + j) * block
 /-- `Pc8Tile_v1{K, TM, TN}`'s gates on the step `p`: the codes of `A′_i` (gates `i·K, …`) and `B̃_j` (`TM·K + j·K, …`),
 the BF16 words of `P_A,i` (`(TM + TN)·K + 64·i, …`) and `P_B,j` (`(TM + TN)·K + 64·TM + 64·j, …`), then entry
 `(i, j)`'s block (`entryGate`) for each entry in row-major order. -/
-def tileGate (p : Pipeline) (K TM TN g : ℕ) : GateRow :=
+def tileGate (p : Pipeline) (K TM TN g : ℕ) : Gate :=
   if g < (TM + TN) * K then ⟨8, true, [], fun _ => 0⟩
   else if g < tileIn K TM TN then ⟨16, true, [], fun _ => 0⟩
   else

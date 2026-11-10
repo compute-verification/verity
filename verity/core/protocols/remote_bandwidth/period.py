@@ -8,7 +8,7 @@ process, `Local`), in the protocol's order:
 1. the prover packs `store` into blocks (`payloads`), commits to them under fresh salts (`audit.payload_tree`), and the
    verifier samples the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
    (`audit.Store`);
-2. the verifier opens a session (`audit.AuditRun`) on coins its challenger commits to before the first one, drawn from
+2. the verifier opens a session (`audit.AuditRun`) on coins its challenger commits to before the first one, sampled from
    `coins` (`coins.local`), and the prover runs `passes` passes a window over the whole store (`audit.Prover`) under
    each window's challenge, sent as its value and the root it was opened after (`coins.Released`), each root sent
    before the window's boundary; the verifier waits each window out on its clock (`window_ns`) and each last deadline
@@ -29,7 +29,7 @@ made, min(s, U) of a draw's U receipts, which can be fewer.
 (`pous.period.records`, every copy of the auditor's ledger in them cut to the entries their window cites). The
 verifier and its challenger are a party of their own (`verifier_party`) on `period.json`'s `challenger_host`, with coins
 fresh from that host's OS, and the prover runs on the node. `trusted-host`'s premise, that they run on a machine
-the prover doesn't control, holds only when the challenger host isn't the node, and the leg says which
+the developer doesn't control, holds only when the challenger host isn't the node, and the leg says which
 (`verifier_party.placement`). The prover reads a store in its process's memory, not a remote node's.
 """
 
@@ -175,7 +175,7 @@ class Prover(Protocol):
         """Pass i of window t under `challenge`, after the root `previous`: its root."""
 
     def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[audit.Opening]:
-        """Window t's drawn receipts `(pass, position)` opened."""
+        """Window t's sampled receipts `(pass, position)` opened."""
 
     def end(self, commitment: C.LiveCommitment, openings: Sequence[C.LiveOpening]) -> None:
         """The session's coin commitment and every released coin's opening, once it has its outcome: refused unless
@@ -227,7 +227,7 @@ def run(node: str, store: bytes, coins: bytes, *, windows: int = 2, passes: int 
 
 def opened(reg: audit.Registration, coins: bytes, clock: Callable[[], int], *, not_before: int, windows: int, passes: int,
            samples: int, window_ns: int, deadline_ns: int) -> audit.AuditRun:
-    """The verifier's session over the store `reg` registers, on `clock`, its challenger's coins drawn from `coins`."""
+    """The verifier's session over the store `reg` registers, on `clock`, its challenger's coins flipped from `coins`."""
     params = audit.Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=passes, window_ns=window_ns,
                           codec=reg.codec, receipt=reg.receipt, rows=reg.rows)
     challenger = C.local(reg.digest, 0, windows, _Stream(coins, reg.node), clock=lambda: clock() / 1e9)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zk-cpu-steps: --zk's two single-threaded CPU steps (the mask-rank check zk_veil::mask_rank_ok, ZKRANK; level 0's hiding draw
+# zk-cpu-steps: --zk's two single-threaded CPU steps (the mask-rank check zk_veil::mask_rank_ok, ZKRANK; level 0's hiding sample
 # level0_zk) priced on node 1's GPU prover, one build against another, on 85-rec-reprice.sh's statements (one Call of
 # Gemm_v2{K, N=4096}, its GemmCoordinate_v2 shape at N instances). One step per job (research run --queue --cwd source);
 # binaries and statements stay under $FLOCK_WORK for the next step, out/ gets the records:
@@ -7,7 +7,9 @@
 #               same build with the selftests' seed-injection beside it, Lean's flock-verify (keyed by its sources), and each
 #               of STATEMENTS staged into data/k<K>/stage (class_statement --stage-only, BATCH=fixed N) with its partition object
 #   STEP=prove  (GPU) for each build of BUILDS (the keys build steps printed; default this tree's), in order, on statement K:
-#               loopback M0 (M0=1) and --zk, WARM + RUNS sessions each, upstream's replay --zk of the last --zk session, and
+#               loopback M0 (M0=1, on the coin tree: FC_COINS=tree) and --zk, WARM + RUNS sessions each, every session's
+#               coin tree from that loopback's own challenger (challenger.sh: serve --tree-from) and its records held to
+#               the challenger's release log, upstream's replay --zk of the last --zk session, and
 #               the seed-injection build's prover_is_deterministic --zk --gpu, every later build's transcript digest checked
 #               against the first's (equal: byte-identical proofs and transcripts)
 #   STEP=lean   (CPU) Lean's flock-verify verify --zk on each build's last --zk session of statement K; the job fails
@@ -15,6 +17,7 @@
 # The prover runs on the job's first PCPUS cores, the verifier (serve, replay) on the rest. Every step writes out/summary-$STEP.json.
 # env: FLOCK_WORK=/workspace/jobs/zk-cpu-steps  STATEMENTS="4096:2048 14336:512" (build: K:N each)  K=4096 N=2048 (prove, lean)
 #      BUILDS= (prove, lean)  M0=1  WARM=1  RUNS=3  PCPUS=16  SM=120
+#      RESOLVER=MODULE:FUNC (build: binds the statements' Gemm_v2 ids, class_statement --resolver; refused without)
 #      CUDA_TK=/workspace/jobs/rec-reprice/cuda-13.3.1 (node 1's host CUDA 13.0 ptxas doesn't know the kernels' clmad)
 #      WARM_FROM=/workspace/jobs/rec-reprice/flock-gpu-link (a checkout whose cargo target starts the first build warm)
 #      LEAN_FROM=/workspace/jobs/rec-reprice/cache (read only: its flock-verify of the same sources is used, not rebuilt)
@@ -50,7 +53,9 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
-export FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
+export FC_COINS=tree FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
+CHALLENGER_REPO=$REPO CHALLENGER_WORK=$FW/challengers/${RESEARCH_RUN_ID:-local-$$} CHALLENGER_PY=python3
+. verity/ml/flock/pod/challenger.sh
 GI=${CUDA_VISIBLE_DEVICES:-0}; GI=${GI%%,*}
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
@@ -82,17 +87,23 @@ EOF
   grep -h panicked $d/prove.err | head -3
 }
 
-# loopback NAME BIN [--zk]: a verifier process (BIN serve, on the verifier's cores, every session at once) and prove_live
-# against it; the sessions under $DD/prove-NAME/sessions, the last one's directory in $LAST
+# loopback NAME BIN [--zk]: a verifier process (BIN serve, on the verifier's cores, every session at once, each on a coin
+# tree its own challenger samples and opens: challenger.sh) and prove_live against it; the sessions under
+# $DD/prove-NAME/sessions, the last one's directory in $LAST, the challenger's record and audit.json under $O/prove/NAME/challenger
 loopback() {
   local name=$1 b=$2 zk=${3:-} s=$DD/prove-$1 PORT=$(free_port) PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
   rm -rf $s; mkdir -p $s $O/prove/$name
+  challenger_start $O/prove/$name/challenger || return 1
   taskset -c $VCPU $b serve $zk --listen 127.0.0.1:$PORT --out $s/sessions --instances $D/pub-$N.bin --circuit $D/circuit.txt --pin $PIN \
-    --operator loopback --concurrency $((NS + 1)) > $O/prove/$name/serve.log 2>&1 &
+    --operator loopback --concurrency $((NS + 1)) --sessions $NS "${TREE_FROM[@]}" > $O/prove/$name/serve.log 2>&1 &
   local SP=$!
   wait_serving $O/prove/$name/serve.log $SP || { tail -20 $O/prove/$name/serve.log; return 1; }
   prove_live $name $b 127.0.0.1:$PORT $zk
-  kill $SP; wait $SP 2>/dev/null
+  # serve closes after its last session, and its challenger once serve has; stop serve if the prover left a session open
+  [ "$(grep -c $'\tLIVE\t' $O/prove/$name/prove.tsv)" = $NS ] || kill $SP
+  wait $SP 2>/dev/null
+  challenger_end $O/prove/$name/challenger; echo "$name challenger exit $?"
+  challenger_audit $O/prove/$name/challenger $(dirname $(ls -1 $s/sessions/*/session.json)) > /dev/null; echo "$name audit exit $?"
   LAST=$(find $s/sessions -name session.json -printf '%T@ %h\n' | sort -n | tail -1 | cut -d' ' -f2)
 }
 
@@ -197,6 +208,7 @@ EOF
 
 case $STEP in
 build)
+  [ -n "${RESOLVER:-}" ] || { echo "REFUSED: STEP=build stages Gemm_v2{K, N=4096} by id: RESOLVER=MODULE:FUNC binds it (FUNC(id), the registered Definition)"; exit 2; }
   echo $KEY > $O/key.txt
   (
     export PATH=$HOME/.elan/bin:$PATH
@@ -215,19 +227,19 @@ build)
     [ -f $dd/stage/inst-$n.bin ] && [ -f $dd/stage/partition.json ] && [ -f $dd/stage/program.json ] && { du -sb $dd/stage/* > $so/sizes.txt; continue; }
     python3 -c "import json, sys; json.dump({'Gemm_v2{K=%s,N=4096,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}' % sys.argv[1]: 1151}, open(sys.argv[2], 'w'))" $k $so/defs.json
     FLOCK_STAGE_CACHE=$dd/stage-cache FLOCK_GEMM_TILE=${FLOCK_GEMM_TILE:-4x4} /usr/bin/time -v -o $so/time-stage.txt \
-      python3 -m verity_flock.class_statement --definitions $so/defs.json --partition q-word --out $so/out --stage-only --batch fixed \
+      python3 -m verity_flock.class_statement --definitions $so/defs.json --resolver "$RESOLVER" --partition q-word --out $so/out --stage-only --batch fixed \
       --n $n --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 > $so/stage.log 2>&1
     echo "stage k$k exit $?"; tail -5 $so/stage.log
     C=$(ls -td $dd/stage-cache/*/ 2>/dev/null | head -1)
     [ -n "$C" ] && [ -f $C/inst-$n.bin ] || { echo "no staged statement under $dd/stage-cache"; exit 1; }
     mkdir -p $dd/stage && for f in circuit.txt inst-$n.bin pub-$n.bin; do ln -f $C/$f $dd/stage/$f || cp $C/$f $dd/stage/$f; done
-    python3 - $k $dd/stage/partition.json $dd/stage/circuit.txt $dd/stage/program.json <<'EOF' || exit 1
+    python3 - $k $dd/stage/partition.json $dd/stage/circuit.txt $dd/stage/program.json "$RESOLVER" <<'EOF' || exit 1
 import json, sys
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity_flock import class_statement as CS, partition_units as PU
 defs = {'Gemm_v2{K=%s,N=4096,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % sys.argv[1]: 1151}
-program, _calls, _prov = CS.distinct_calls(None, None, defs, None)
+program, _calls, _prov = CS.distinct_calls(None, None, defs, None, definition=PU.resolver(sys.argv[5], "RESOLVER"))
 units = PU.partition_units(program, "q-word")
 obj = PO.build(units.program, units.query)
 with open(sys.argv[3]) as f:
@@ -267,6 +279,7 @@ prove)
   [ -f $D/inst-$N.bin ] || { echo "k$K: run STEP=build first"; exit 1; }
   for b in $BUILDS; do [ -x $(bin $b) ] && [ -x $(dirname $(bin $b))/flock-circuit-selftest ] || { echo "build $b: run STEP=build at its tree"; exit 1; }; done
   mkdir -p $O/prove
+  challenger_build; challenger_built || exit 1
   PIN_T=
   for b in $BUILDS; do
     B=$(bin $b)

@@ -6,19 +6,19 @@ With each level, that level's committed tops are staged too, every node held at 
 ``root_B`` under ``cap/``, a later level ``l``'s both reps' tops under ``cap/L<l>/``, `stage_cap`).
 
     python -m verity_flock.rec_vstage points INNER CIRCUIT PUBLIC > points.json
-    inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json os > fold.json    (tests/lean/InnerFold.lean)
+    inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json tree > fold.json    (tests/lean/InnerFold.lean)
     python -m verity_flock.rec_vstage stage INNER fold.json OUT [--levels all|none|0,1,..] [--no-algebra] [--forge KIND]
         [--salts FILE] [--part-jobs N]
     python -m verity_flock.rec_vstage stage-links CIRCUIT INST LINKS OUT [--forge link]
 
 ``stage`` refuses an inner session whose record holds no sample (`rec_live.inner_draw`, exit 2): the verifier refuses every
-session over it (`RecSetup.innerDrawn`), so the coin server answers ``Register`` with the verifier's full draw
+session over it (`RecSetup.innerDrawn`), so the challenger answers ``Register`` with the verifier's full sample
 (``rec_live --draw``).
 
 **The verifier's side** reads the inner session's public record and the inner statement, never the prover's records: the
 table's shape as its setup derives it (`shape`), each rep's coins (its stream's rounds), the fold points they give
 (`rec_algebra.fold_points`, ``points``), the extra claims at the link points and the comb at the fold points (``fold.json``,
-`InnerFold.lean`: the Lean verifier of record's `Stmt.extraClaims` and `CircuitFold.folded`, no proof read), then each rep's
+`InnerFold.lean`: the Lean verifier's `Stmt.extraClaims` and `CircuitFold.folded`, no proof read), then each rep's
 v, the final check's κ and its query rows (`rec_algebra.verifier_rows`), each opening's coefficients
 (`rec_outer.coefficients`, its position checked against `rec_vstar`'s), and the entries its reads files name: per round i that
 absorbs message elements, the value ``rec-c<i>`` rebuilt from that round's two ``c_k`` (`rec_residuals.commits_entry`), and
@@ -30,7 +30,7 @@ rep r's) under `rec_outer.session_program` of ``public.json``, which the chain s
 
 **Hidden unit circuits** (`verity_flock.rec_session`, ``fold.json``'s ``hidden``: ``InnerFold.lean --hide``): the comb is the
 public part's fold, the shape is holo (`rec_algebra.Shape.holo`), and h's round is one of the message rounds, its row
-registered as the others' are; z_partial's round draws no coins, which `rec_algebra.CoinSource` skips.
+registered as the others' are; z_partial's round flips no coins, which `rec_algebra.CoinSource` skips.
 
 **The sparse phase and R** (``--sparse``, with ``--circuit``): RecSparse over both reps' sparse streams (`stage_sparse`) and,
 when the session committed the stacked table R, R's levels as RecOpen statements, its openings on the chain after both
@@ -137,12 +137,12 @@ def _stream(public: dict, rep: int) -> list[dict]:
 
 
 def rep_coins(public: dict, rep: int) -> list[list[int]]:
-    """A rep's coins by round, as the coin server issued them."""
+    """A rep's coins by round, as the challenger issued them."""
     return [[G.of_hex(c) for c in r["coins"]] for r in _stream(public, rep)]
 
 
 def link_points(public: dict) -> list[list[str]]:
-    """The link points the coin server drew (``points × m`` coins), one list of ``m`` a point."""
+    """The link points the challenger drew (``points × m`` coins), one list of ``m`` a point."""
     spec, flat = public["hello"]["link"], public["link"]["points"]
     if len(flat) != spec["points"] * spec["m"]:
         raise ValueError(f"{len(flat)} link coins for {spec['points']} points of {spec['m']}")
@@ -198,7 +198,7 @@ def message_rounds(public: dict, private: dict, sh: A.Shape, streams: list[str] 
 def messages(program: str, mrs: list[dict], ports: list[tuple[str, str]] | None = None) -> tuple[dict, dict]:
     """The prover's registrations of the message rounds and the verifier's own entries of them (from the ``c_k`` alone), by
     port: ``ports`` (port, value) a round, default ``m<i>`` as ``rec-c<i>``."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
 
     regs, own = {}, {}
     for i, ((port, value), mr) in enumerate(zip(ports or [(f"m{i}", f"rec-c{i}") for i in range(len(mrs))], mrs, strict=True)):
@@ -217,7 +217,7 @@ def _sparse_stream(public: dict, rep: int) -> list[dict]:
 
 def sparse_reps(public: dict, private: dict, vf: SimpleNamespace, sp, rng: dict) -> list[tuple]:
     """Each rep's sparse phase (`rec_live.sparse_rounds` at the bucket's `rec_sparse.Shape` ``sp``, T = 1) as the session holds
-    it, per rep ``(coins, messages)``: its coins from the coin server's record of its stream (v2's round, which samples none,
+    it, per rep ``(coins, messages)``: its coins from the challenger's record of its stream (v2's round, which samples none,
     skipped), the inner points from the rep's coins (`rec_sparse.inner_points`) and the slots' layout factors from META's
     range ``rng`` of the hidden circuit (`rec_sparse.layout_factors`), all public; its messages the prover's rows of its
     rounds, h its rep's h round's, and the registered claim its claim round's, the last (the prover's ``Σ_p eq(ζ_p, p) u_p``,
@@ -248,7 +248,7 @@ def sparse_reps(public: dict, private: dict, vf: SimpleNamespace, sp, rng: dict)
 def sparse_messages(program: str, public: dict, private: dict, sp) -> tuple[dict, dict]:
     """The sparse streams' message rounds as `messages` registers them, port ``<p>`` as ``rec-sparse-<p>`` and ``claim``, the
     claim round's, as ``rec-claim`` (`rec_sparse.registrations`' values; row r rep r's), with the verifier's own entries:
-    ``rec-claim``'s rows are the ones the coin server's ``c_k`` commit, which RecSparse and R's opening both read."""
+    ``rec-claim``'s rows are the ones the challenger's ``c_k`` commit, which RecSparse and R's opening both read."""
     from .rec_outer import CLAIM_VALUE
 
     names = [nm for nm, _ in SP.message_ports(sp)][1:]
@@ -297,7 +297,7 @@ def opening_messages(public: dict, private: dict, sh: A.Shape, program: str) -> 
     """R's registered opening's messages (`messages`), port ``m<i>`` reading ``rec-opening-c<i>``: round i of
     `rec_algebra.rounds` at the opening-only shape ``sh`` (``Flock/RecOpening.lean``'s ``rounds``, which its unit's row ports
     follow: each claim's ring switch, then Ligerito's), the i-th round of ``stacked/rep0`` that commits a message. Each must sit
-    at a round `rec_live.stacked_rounds` absorbs a message in, so that the coin server recorded its ``c_k`` before it flipped
+    at a round `rec_live.stacked_rounds` absorbs a message in, so that the challenger recorded its ``c_k`` before it flipped
     that round's coins and every later one."""
     stream = f"{RL.STACKED}/rep0"
     ks = sorted(r["k"] for r in public["rounds"] if r["stream"] == stream and r["commits"])
@@ -452,8 +452,8 @@ def inner_rows(meta_: dict, inst: Path) -> SimpleNamespace:
 
 
 def drawn_rows(seed: int, units: int, n_in: int, n_out: int, links: list) -> SimpleNamespace:
-    """A drawn population in `inner_rows`' form, for the link part's tests: ``units`` units of ``n_in`` input and ``n_out``
-    output rows, each row a drawn digest under a drawn salt with its ``b || c``, and each link's (`rec_links.LinkEntry`)
+    """A sampled population in `inner_rows`' form, for the link part's tests: ``units`` units of ``n_in`` input and ``n_out``
+    output rows, each row a sampled digest under a sampled salt with its ``b || c``, and each link's (`rec_links.LinkEntry`)
     reader row its writer's digest under its own salt."""
     import random
 
@@ -494,8 +494,9 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     registered as ``rec-links`` at the part's program (`rec_links.register`, ``salts`` its rows', default fresh), which
     ``trow`` reads; each row's reader and writer rows are opened in the input and output rows' trees (`rec_link.Tree` over
     the rows' ``b || c``), a filler's at unit 0's row 0 of each; ``rin`` and ``rout`` are the verifier's own rows, the two
-    roots (`rec_link.expected`), as `Flock.RecLinkPart.check` holds them. ``xyr``, ``raux``, ``xyw`` and ``waux`` are under
-    fresh salts, drawn port by port in that order, row by row. These are `VStar.In.linkIn`'s port inputs, which the V*
+    roots (`rec_link.expected`), as `Flock.RecLinkPart.check` holds them. ``xyr``, ``raux``, ``xyw`` and ``waux`` are the
+    prover's own registrations ``rec-link-<port>`` under fresh salts, sampled port by port in that order, row by row, so the
+    reads file names every port of the part (`Registered.checkComplete`). These are `VStar.In.linkIn`'s port inputs, which the V*
     difftest (``part_in``) holds to this ``inst.bin``. With `rec_circuits`' cache the circuit text is built once per
     ``(UB, PB, N)``, and ``evaluate`` (the unit's replay against `rec_link.link_ref`) runs only when it is built.
 
@@ -503,10 +504,9 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     row, its openings honest. The prover keeps the outputs the verifier registers, which the unit's row then does not
     give, so no proof of the part holds."""
     import numpy as np
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import registered as G
     from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.ml.commitments import hm96
 
     from . import circuit as FC
     from . import rec_budget as RB
@@ -579,8 +579,13 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
         agrees = [bool((int(ok) >> i) & 1) and got[i].astype(np.uint16).tolist() == ref[i][0] + ref[i][1] for i in range(N)]
     in_rows, in_salts, in_entry = rin.statement(range(N))
     out_rows, out_salts, out_entry = rout.statement(range(N))
+    private = {p: G.Registered.commit(prog, f"rec-link-{p}", tables[p].tolist()) for p in LK.ROWS[1:]}
     read = lambda e: {**e, "word_bits": 16, "reads": list(range(N))}  # noqa: E731
-    own = {"format": G.READS, "ports": {"trow": read(reg.entry()), "rin": read(rin.entry()), "rout": read(rout.entry())}}
+    own = {"format": G.READS, "ports": {"trow": read(reg.entry()), **{p: read(r.entry()) for p, r in private.items()},
+                                        "rin": read(rin.entry()), "rout": read(rout.entry())}}
+    salts_, entries = {"trow": tsalts, "rin": in_salts, "rout": out_salts}, {"trow": tentry, "rin": in_entry, "rout": out_entry}
+    for p, r in private.items():
+        _rows, salts_[p], entries[p] = r.statement(range(N))
     RB.check(own, LK.TEMPLATE, N)
     d = Path(out) / LINKS_DIR
     d.mkdir(parents=True, exist_ok=True)
@@ -590,12 +595,10 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     (d / "registered.json").write_text(json.dumps(own))
     rec_links = f"{reg.root.hex()}:{N}"
     (d / "rec-links.txt").write_text(rec_links + "\n")
-    fresh = {p: [hm96.SHA512.fresh_salt() for _ in range(N)] for p in LK.ROWS[1:]}
     FC.write(text, SimpleNamespace(name=LK.TEMPLATE, subcircuit=sub), 0, N, d / "inst.bin", d / "pub.bin", None, list(range(N)),
              share_rows=True, outs={"rin": np.asarray(in_rows, np.uint16), "rout": np.asarray(out_rows, np.uint16)},
              tables=tables, refs={p: list(range(N)) for p in LK.ROWS},
-             salts={"trow": tsalts, **fresh, "rin": in_salts, "rout": out_salts},
-             registered={"trow": tentry, "rin": in_entry, "rout": out_entry})
+             salts=salts_, registered=entries)
     m = json.loads(text.split("\n", 2)[1][5:])
     return res | {"template": defn.id, "name": LK.unit_name(UB, PB), "UB": UB, "PB": PB, "instances": N, "links": len(links),
                   "holds": holds, "unit_agrees": agrees, "rec_links": rec_links, "in_root": tin.root.hex(),
@@ -618,7 +621,7 @@ def coefficients(vf: SimpleNamespace, queries: list[V.Query]) -> dict:
 
 
 def acc_salts(path: Path, n: int) -> list[bytes]:
-    """The running sums' ``n`` salts: drawn when ``path`` does not exist and kept there (the prover's), read back otherwise."""
+    """The running sums' ``n`` salts: sampled when ``path`` does not exist and kept there (the prover's), read back otherwise."""
     from verity.ml.commitments import hm96
 
     k = hm96.SHA512.salt_bytes
@@ -634,7 +637,7 @@ def acc_salts(path: Path, n: int) -> list[bytes]:
 
 def forge_chain(chain: O.Chain, row: int) -> O.Chain:
     """The prover's running sums with row ``row`` one bit off (its first word), every other row and every salt honest."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
 
     rows = [list(r) for r in chain.reg.rows]
     rows[row][0] ^= 1

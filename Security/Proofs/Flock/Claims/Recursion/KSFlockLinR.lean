@@ -1,7 +1,47 @@
 module
 
-public import Proofs.Flock.Claims.KS.PlainRConflict
+public import Proofs.Flock.Claims.KS.PlainAccPrR
 public import Proofs.Flock.Claims.KS.PlainRCapPrefix
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.PlainRConflict
+public import Proofs.Flock.Claims.Recursion.TopsOpens
+public import Proofs.Flock.Claims.Recursion.LastColsE
+public import Proofs.Flock.Claims.Recursion.ConflictTiedE
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Recursion.SetupCalls
+public import Proofs.Flock.Claims.Recursion.PartAccepts
 public import Proofs.Flock.Claims.Recursion.CallsAgreeE
 
 /-!
@@ -10,7 +50,7 @@ public import Proofs.Flock.Claims.Recursion.CallsAgreeE
 The bound record whose steps are the deployed reader's (`FlockDeploy.nextR rd`) and whose columns are the ones it
 opens, trimmed (`FlockDeploy.deployPlainTrimR`), has `DE` = `deployPlainTrimR` up to a weight `KSFlockLin` doesn't
 read (`RecDeploy.deE_R_trim`). So `KSFlockLin` there is `plainR_KSFlockLin`, from conflicts tied to collisions
-(`plainR_conflictTied`, proved) and the table bound at the abort law at `deployPlainR`
+(`plainR_conflictTied`, proved) and the table bound at the abort distribution at `deployPlainR`
 (`ksFlockLin_R_of_table`). That table bound is `plainR_tableBoundAbortLin_R`, from the reader's bound wherever some
 run accepts (`PlainRdInR`) alone, the level caps' prefix being proved (`capPrefixR`), so `ksFlockLin_R` takes exactly
 that one.
@@ -23,7 +63,7 @@ namespace RecDeploy
 open Claims (Msg)
 open FlockDeploy (Coin FinalP nextR)
 
-/-- **`KSFlockLin` at `DE` at the deployed reader's steps and trimmed columns, from the table bound at the abort law
+/-- **`KSFlockLin` at `DE` at the deployed reader's steps and trimmed columns, from the table bound at the abort distribution
 at `deployPlainR`**: `plainR_KSFlockLin` with `plainR_conflictTied`, as `DE` is `deployPlainTrimR` up to a weight
 `KSFlockLin` doesn't read (`deE_R_trim`). -/
 theorem ksFlockLin_R_of_table (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List Msg → Msg)

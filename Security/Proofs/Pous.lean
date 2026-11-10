@@ -17,7 +17,6 @@ public import Proofs.Pous.Chain.Family
 public import Proofs.Pous.Chain.FamilyRounds
 public import Proofs.Pous.Continuous
 public import Proofs.Pous.StreamedWipe
-public import Proofs.Pous.StreamedWipeInfo
 public import Proofs.Pous.Graded.Band
 public import Proofs.Pous.P2.Margin
 public import Proofs.Pous.P2.Bridge

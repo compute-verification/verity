@@ -25,8 +25,8 @@ the step's end); the tree is core's ``tree_levels`` (padded to a power of two wi
 over the tree root and the run root :func:`run_root`: 64-byte roots.  Every identity digest a root binds (program, ctx, geo, layout,
 names) is a whole SHA-512 digest, ``ID_BYTES`` = 64 (:func:`program_field` to :func:`names_digest`).  An opening carries the row, its salt
 and the frame path, from which ``h`` is recomputed and opened under the tree root by core's ``verify_opening``.  A range opening of
-leaves ``[lo, hi)`` carries their rows and salts and, per level, the run's boundary siblings (:func:`range_shape`); :func:`fold_range`
-folds them as core's ``verify_multiproof`` folds those leaves' multiproof, which is the path's siblings in order.
+leaves ``[lo, hi)`` carries their rows and salts and, per level, the run's boundary siblings (:func:`range_shape`), which in order are
+those leaves' multiproof, folded to the tree root by core's ``multiproof_root``.
 
 The registered weights are committed the same way (``NativeHostCommitter.register_weights``, which `pipeline.cpu_replay` opens
 against): registered tensor ``t``'s bytes are its rows (the last zero-padded), salted from ``Ks_t = SHA-512(WEIGHTS_TAG || Kw ||
@@ -52,9 +52,18 @@ from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_le
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
 from verity.ml.commitments.scheme import DIGEST_BYTES
 
+<<<<<<< 99c8914848
 __all__ = ["DOMAIN_TAG", "ID_BYTES", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG",
            "binding", "ctx_digest", "domain", "fold_range", "geo_digest", "hiding_leaf", "keyed_tensor_root", "layout_digest", "leaf", "levels",
            "names_digest", "offline_geo_digest", "path", "program_field", "range_shape", "row_prefix", "run_program_digest", "run_root", "salt",
+||||||| merged common ancestors
+__all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG", "binding",
+           "domain", "fold_range", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt",
+=======
+__all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG", "binding",
+           "domain", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "names_digest", "path", "program_field", "range_shape",
+           "row_prefix", "run_root", "salt",
+>>>>>>> 7af4d24fca3e
            "step_root", "t_nibbles", "t_table", "tensor_hs", "tensor_key", "tensor_root", "weights_domain", "weights_root", "weights_tree"]
 
 NAME = "rows-sha512"
@@ -124,30 +133,6 @@ def range_shape(n: int, lo: int, hi: int) -> tuple[tuple[bool, bool], ...]:
         out.append((lo % 2 == 1, hi % 2 == 1))
         lo, hi = lo // 2, (hi + 1) // 2
     return tuple(out)
-
-
-def fold_range(dom: CommitmentDomain, lo: int, hs: Sequence[bytes], sibs: Sequence[tuple[bytes | None, bytes | None]]) -> bytes | None:
-    """The tree root that leaves ``lo .. lo + len(hs) - 1`` with hiding digests ``hs`` and their boundary siblings ``sibs`` (per level
-    ``(left | None, right | None)``, :func:`range_shape`'s) stand for; None for a run or a path of the wrong shape."""
-    hi = lo + len(hs)
-    if not hs or not 0 <= lo < hi <= dom.count:
-        return None
-    shape = range_shape(dom.count, lo, hi)
-    if len(sibs) != len(shape) or any((left is None) == need_l or (right is None) == need_r
-                                      for (left, right), (need_l, need_r) in zip(sibs, shape)):
-        return None
-    if any(s is not None and (type(s) is not bytes or len(s) != dom.digest_bytes) for pair in sibs for s in pair):
-        return None
-    nodes = [leaf(dom, lo + k, h) for k, h in enumerate(hs)]
-    for d, (left, right) in enumerate(sibs):
-        if left is not None:
-            nodes.insert(0, left)
-            lo -= 1
-        if right is not None:
-            nodes.append(right)
-        lo >>= 1
-        nodes = [dom.node(d, lo + k, nodes[2 * k], nodes[2 * k + 1]) for k in range(len(nodes) // 2)]
-    return nodes[0]
 
 
 def _sized(value: bytes, name: str, n: int) -> bytes:
@@ -323,3 +308,17 @@ def t_nibbles(key: bytes = KEY) -> bytes:
                 src = 256 * (16 * u if hi else u) + 16 * c
                 out[4096 * hi + 256 * c + 16 * u:4096 * hi + 256 * c + 16 * u + 16] = t[src:src + 16]
     return bytes(out)
+
+
+def program_field(program_digest: str) -> bytes:
+    """The 32-byte ``program`` field the roots bind for a Program digest (hex): its first 32 bytes, so SHA-512 truncated to
+    256 bits for a Program digest (``codec.program_digest``), and the whole digest for a 32-byte one."""
+    d = bytes.fromhex(program_digest)
+    if len(d) < 32:
+        raise ValueError(f"a Program digest has at least 32 bytes, not {len(d)}")
+    return d[:32]
+
+
+def names_digest(names: Sequence[Sequence]) -> bytes:
+    """The weights root's names digest: SHA-256 of the compact JSON of ``[name, dtype, shape, nbytes]`` per tensor, in order."""
+    return hashlib.sha256(json.dumps(names, separators=(",", ":")).encode()).digest()

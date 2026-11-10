@@ -1,8 +1,26 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedCols
-public import Proofs.Flock.Soundness.Discharge.Layout.Keyed
 public import Proofs.Flock.Soundness.Discharge.Layout.PinsX
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
+import Proofs.Flock.Soundness.Discharge.Hm.Bc
+import Proofs.Flock.Soundness.Discharge.Layout.Outs
 
 @[expose] public section
 
@@ -20,10 +38,10 @@ bit region "out" pins (`Layout.outBitOf`), is here a bit of an output row whose 
   `Layout.outDecode`) is bit `16 k + t` of output row `nIn + jo`, where the copy's output word `lo[j]` is word `k` of
   output port `jo` (`outPortOf`);
 * `keyReadersH`: `Layout.Readers.ofRows` at those rows, their message columns (`keyRowAddrH`), `b ‖ c` (`keyBcAddrH`)
-  and salt (`keySaltAddrH`) at each drawn unit's site (`siteAddrH`), the registration's `b ‖ c` the population's public
+  and salt (`keySaltAddrH`) at each sampled proof block's site (`siteAddrH`), the registration's `b ‖ c` the population's public
   file's (`popOf R`), and single gates with `Layout.keyGate (fun _ _ => false)`;
 * `keyProgH_copies`: Δ's copies, from `copy_siteH` at an input row and `out_copyH` at an output row;
-* `keyProgH_bcPinned`: each row's `b ‖ c` at a drawn unit's site is the population's (`bc_site_ofH`, at a `BcSiteH`);
+* `keyProgH_bcPinned`: each row's `b ‖ c` at a sampled proof block's site is the population's (`bc_site_ofH`, at a `BcSiteH`);
 * `keyProgH_valPinned`: the single gates are the constant and the zero (`Layout.single_gate`, with every computed
   committed gate an output row's bit, `OutsOut`), so they hold 1 and 0 (`constCols_keyProgH`, `zeroCols_keyProgH`);
 * `encPortH`: the bytes a row port's hash reads for a value, `Layout.encSeg` at a `sha512/row-seg/v1` port and
@@ -297,7 +315,7 @@ variable {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabS
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   (si : SitesH plan tab)
 
-/-- **Bit `k` of row `q` at a drawn unit's site**: message bit `k % 8` of byte `k / 8` (`Typed.msgCol`) at the unit's
+/-- **Bit `k` of row `q` at a sampled proof block's site**: message bit `k % 8` of byte `k / 8` (`Typed.msgCol`) at the unit's
 template instance, in its block. -/
 noncomputable def keyRowAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (k : ℕ) :
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
@@ -306,7 +324,7 @@ noncomputable def keyRowAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fi
       (Typed.msgCol (si.acc S R u h).st.c (si.vu S R u h) q.val (k / 8) (k % 8)) :)
   else ⟨0, Nat.two_pow_pos _⟩
 
-/-- **Row `q`'s `b ‖ c` at a drawn unit's site**: its `hm96` slot's output (`Layout.bcAddr`) at the unit's template
+/-- **Row `q`'s `b ‖ c` at a sampled proof block's site**: its `hm96` slot's output (`Layout.bcAddr`) at the unit's template
 instance. -/
 noncomputable def keyBcAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (j : Fin 128)
     (t : Fin 8) : Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
@@ -314,7 +332,7 @@ noncomputable def keyBcAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin
     (siteAddrH (si.acc S R u h) (si.o S R u h) (Layout.bcAddr (si.acc S R u h).st.c (si.vu S R u h) q.val j.val t.val) :)
   else ⟨0, Nat.two_pow_pos _⟩
 
-/-- **Row `q`'s salt at a drawn unit's site**: its `hm96` slot's salt input (`Hm.saltCol`) at the unit's template
+/-- **Row `q`'s salt at a sampled proof block's site**: its `hm96` slot's salt input (`Hm.saltCol`) at the unit's template
 instance. -/
 noncomputable def keySaltAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n)
     (q : (Fin n × Fin c.ports.size) ⊕ Fin (keyN c hU n)) (j : Fin 192) (t : Fin 8) :
@@ -386,7 +404,7 @@ theorem keyProgH_copies : (keyReadersH hparse outs popOf).Copies (keyPlaceH hpar
     exact this
 
 include hparse in
-/-- **The rows' `b ‖ c` at `keyProg`'s sites in hidden-output tables is the registration's**: at each row a drawn unit
+/-- **The rows' `b ‖ c` at `keyProg`'s sites in hidden-output tables is the registration's**: at each row a sampled proof block
 reads, input or output, the bytes at its `hm96` output are the population's `b ‖ c` of the unit (`bc_site_ofH`), at
 every site whose rank is the unit (`BcSiteH`, at the sites whose table some witness satisfies). -/
 theorem keyProgH_bcPinned
@@ -470,8 +488,8 @@ noncomputable def keyRowsH
     Layout.bitCode Layout.bitCode_inj (keyProgH_copies hparse outs popOf ho hrf houts)
     (keyProgH_bcPinned hparse outs popOf hsite) (keyProgH_valPinned hparse outs popOf ho hrf houts hkeys)
 
-/-- **The bytes a row's hash reads at `keyProg`'s places in hidden-output tables** (`Layout.keyRow_enc`): at a drawn
-unit `u`'s site, the value a message holds at row `q` of unit `u'`, `16 · words` bits, has `encPortH` the bytes the row
+/-- **The bytes a row's hash reads at `keyProg`'s places in hidden-output tables** (`Layout.keyRow_enc`): at a sampled
+proof block `u`'s site, the value a message holds at row `q` of unit `u'`, `16 · words` bits, has `encPortH` the bytes the row
 hashes (`Hidden.Any.rowMsg`) for the `2 · words` bytes the witness holds at the unit's template instance's message
 columns, in its block. -/
 theorem keyRowH_enc {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S) (M : Binding.Msg plan tab S R u)
@@ -507,7 +525,7 @@ theorem keyRowH_enc {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S) (M
   · rw [hb, ← hrw, Layout.encSeg_row hrw hle, hbytes]
   · rw [Layout.rowEncP_row _ hrw hle, hbytes]
 
-/-- **`HmRowComputes` at `keyProg`'s rows in hidden-output tables** (`hHm` for `keyRowsH`): at every drawn unit's
+/-- **`HmRowComputes` at `keyProg`'s rows in hidden-output tables** (`hHm` for `keyRowsH`): at every sampled proof block's
 committed wire held by a row, input or output, in a satisfying witness of the unit's table, the `b ‖ c` at the row's
 `hm96` output is the commit string of the row's bytes (`rowEncP`) and the salt the witness holds at `Hm.saltCol`
 (`bc_site_commitH`, `keyRowH_enc`). -/

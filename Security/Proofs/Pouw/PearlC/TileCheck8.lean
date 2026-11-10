@@ -1,8 +1,10 @@
 module
 
-public import Definitions.Pouw.PearlC.TileCheck8
 public import Proofs.Pouw.PearlC.WholeCircuit
-public import Proofs.Pouw.PearlC.RowCircuit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Circuit
+import Proofs.Pouw.PearlC.TileCircuit
 
 /-!
 # `pc8`'s tile check: its units are its templates (proofs)
@@ -190,7 +192,7 @@ theorem reads_eq {C : Verity.Circuit} {g g' t t' : ℕ} {hg : g < C.N} {hg' : g'
     (⟨g', hg'⟩ : Fin C.N) ∈ C.reads ⟨t', ht'⟩ := by
   subst e1; subst e2; exact m
 
-theorem Whole.val_lt (W : Whole) (X : W.spec.toCircuit.Transcript) {g : ℕ} (hg : g < W.spec.toCircuit.N) :
+theorem Whole.val_lt (W : Whole) (X : W.spec.toCircuit.Trace) {g : ℕ} (hg : g < W.spec.toCircuit.N) :
     val X g < 2 ^ (W.gate g).w := by
   rw [val_of_lt X hg]
   exact (X ⟨g, hg⟩).isLt
@@ -199,7 +201,7 @@ theorem Whole.gate_in (W : Whole) {g : ℕ} (hg : g < W.nIn) : W.gate g = ⟨W.i
   unfold Whole.gate
   rw [ite_eq_left hg]
 
-theorem Whole.inst_w (W : Whole) {L1 L2 : List BlockKind} {B : BlockKind} (hW : W.blocks = L1 ++ B :: L2) {q : ℕ}
+theorem Whole.inst_w (W : Whole) {L1 L2 : List Block} {B : Block} (hW : W.blocks = L1 ++ B :: L2) {q : ℕ}
     (hq : q < B.cnt) {a : ℕ} (ha1 : B.nIn ≤ a) (ha2 : a < B.S.N) :
     (W.gate (W.nIn + blocksLen L1 + q * B.len + (a - B.nIn))).w = (B.S.gate a).w := by
   rw [W.gate_inst hW hq ha1 ha2]
@@ -212,13 +214,13 @@ section Whole8
 variable (p : Pipeline) (M K N TM TN : ℕ)
 
 /-- `whole8`'s RowB block. -/
-def blockB8 : BlockKind := ⟨(row8B p K).spec ops, rowIn K true, N, portB8 M N K⟩
+def blockB8 : Block := ⟨(row8B p K).spec ops, rowIn K true, N, portB8 M N K⟩
 
 /-- `whole8`'s RowA block. -/
-def blockA8 : BlockKind := ⟨(row8A p K).spec ops, rowIn K false, M, portA8 M N K⟩
+def blockA8 : Block := ⟨(row8A p K).spec ops, rowIn K false, M, portA8 M N K⟩
 
 /-- `whole8`'s tile block. -/
-def blockT8 : BlockKind := ⟨tileSpec p K TM TN, tileIn K TM TN, M / TM * (N / TN), portT8 p M N K TM TN⟩
+def blockT8 : Block := ⟨tileSpec p K TM TN, tileIn K TM TN, M / TM * (N / TN), portT8 p M N K TM TN⟩
 
 theorem whole8_B : (whole8 ops p M K N TM TN).blocks =
     [] ++ blockB8 ops p M K N :: [blockA8 ops p M K N, blockT8 p M K N TM TN] := rfl
@@ -231,22 +233,22 @@ theorem whole8_T : (whole8 ops p M K N TM TN).blocks =
 
 theorem rowB8_eq (j a : ℕ) : rowB8 p M N K j a = (whole8 ops p M K N TM TN).nIn + blocksLen [] +
     j * (blockB8 ops p M K N).len + (a - (blockB8 ops p M K N).nIn) := by
-  simp only [rowB8, whole8, blocksLen, BlockKind.len, blockB8, Rows.spec, add_zero]
+  simp only [rowB8, whole8, blocksLen, Block.len, blockB8, Rows.spec, add_zero]
 
 theorem rowA8_eq (i a : ℕ) : rowA8 p M N K i a = (whole8 ops p M K N TM TN).nIn + blocksLen [blockB8 ops p M K N] +
     i * (blockA8 ops p M K N).len + (a - (blockA8 ops p M K N).nIn) := by
-  simp only [rowA8, whole8, blocksLen, BlockKind.len, blockB8, blockA8, Rows.spec, add_zero]
+  simp only [rowA8, whole8, blocksLen, Block.len, blockB8, blockA8, Rows.spec, add_zero]
 
 theorem tile8_eq (e a : ℕ) : tile8 p M N K TM TN e a = (whole8 ops p M K N TM TN).nIn +
     blocksLen [blockB8 ops p M K N, blockA8 ops p M K N] + e * (blockT8 p M K N TM TN).len +
       (a - (blockT8 p M K N TM TN).nIn) := by
-  simp only [tile8, blocksLen, BlockKind.len, blockB8, blockA8, blockT8, whole8, add_zero, Nat.add_assoc]
+  simp only [tile8, blocksLen, Block.len, blockB8, blockA8, blockT8, whole8, add_zero, Nat.add_assoc]
   rfl
 
 theorem whole8_N : (whole8 ops p M K N TM TN).spec.toCircuit.N = in8 M N K + N * ((row8B p K).N - rowIn K true) +
     M * ((row8A p K).N - rowIn K false) + M / TM * (N / TN) * (tileN K TM TN - tileIn K TM TN) := by
   show in8 M N K + blocksLen _ = _
-  simp only [blocksLen, BlockKind.len, whole8, add_zero, Nat.add_assoc]
+  simp only [blocksLen, Block.len, whole8, add_zero, Nat.add_assoc]
   rfl
 
 /-! ### Inputs -/
@@ -314,7 +316,7 @@ theorem hnT8 : (blockT8 p M K N TM TN).nIn ≤ (blockT8 p M K N TM TN).S.N := by
 
 /-! ### Every port reads a gate of its input's width -/
 
-theorem hfit8B (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {j : ℕ} (hj : j < N) :
+theorem hfit8B (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N) :
     ∀ a < (blockB8 ops p M K N).nIn,
       val X ((blockB8 ops p M K N).port j a) < 2 ^ ((blockB8 ops p M K N).S.gate a).w := by
   intro a ha
@@ -326,7 +328,7 @@ theorem hfit8B (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {j : �
   rw [Rows.gate_in ops (row8B p K) ha, ← inW8_portB8 p M K N hj ha]
   exact h
 
-theorem hfit8A (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {i : ℕ} (hi : i < M) :
+theorem hfit8A (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {i : ℕ} (hi : i < M) :
     ∀ a < (blockA8 ops p M K N).nIn,
       val X ((blockA8 ops p M K N).port i a) < 2 ^ ((blockA8 ops p M K N).S.gate a).w := by
   intro a ha
@@ -344,7 +346,7 @@ theorem tileGate_w8 {a : ℕ} (h : a < (TM + TN) * K) : (tileGate p K TM TN a).w
 theorem tileGate_w16 {a : ℕ} (h1 : (TM + TN) * K ≤ a) (h2 : a < tileIn K TM TN) : (tileGate p K TM TN a).w = 16 := by
   unfold tileGate; rw [ite_eq_right (by omega), ite_eq_left h2]
 
-theorem hfit8T (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {e : ℕ} (he : e < M / TM * (N / TN)) :
+theorem hfit8T (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {e : ℕ} (he : e < M / TM * (N / TN)) :
     ∀ a < (blockT8 p M K N TM TN).nIn,
       val X ((blockT8 p M K N TM TN).port e a) < 2 ^ ((blockT8 p M K N TM TN).S.gate a).w := by
   intro a ha
@@ -491,28 +493,28 @@ section Cuts8
 variable (p : Pipeline) (M K N TM TN : ℕ)
 
 /-- RowB `j`'s cut holds on its inputs the transcript's values at its ports. -/
-theorem cutB8_input (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {j : ℕ} (hj : j < N) {a : ℕ}
+theorem cutB8_input (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N) {a : ℕ}
     (ha : a < rowIn K true) :
     val ((whole8 ops p M K N TM TN).cut X (blockB8 ops p M K N) j) a = val X (portB8 M N K j a) :=
   (whole8 ops p M K N TM TN).cut_input (whole8_B ops p M K N TM TN) hj X (hinB8 ops p M K N)
     (hfit8B ops p M K N TM TN X hj) (hnB8 ops p M K N) ha
 
 /-- RowA `i`'s cut holds on its inputs the transcript's values at its ports. -/
-theorem cutA8_input (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {i : ℕ} (hi : i < M) {a : ℕ}
+theorem cutA8_input (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {i : ℕ} (hi : i < M) {a : ℕ}
     (ha : a < rowIn K false) :
     val ((whole8 ops p M K N TM TN).cut X (blockA8 ops p M K N) i) a = val X (portA8 M N K i a) :=
   (whole8 ops p M K N TM TN).cut_input (whole8_A ops p M K N TM TN) hi X (hinA8 ops p M K N)
     (hfit8A ops p M K N TM TN X hi) (hnA8 ops p M K N) ha
 
 /-- Tile `e`'s cut holds on its inputs the transcript's values at its ports. -/
-theorem cutT8_input (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {e : ℕ} (he : e < M / TM * (N / TN))
+theorem cutT8_input (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {e : ℕ} (he : e < M / TM * (N / TN))
     {a : ℕ} (ha : a < tileIn K TM TN) :
     val ((whole8 ops p M K N TM TN).cut X (blockT8 p M K N TM TN) e) a = val X (portT8 p M N K TM TN e a) :=
   (whole8 ops p M K N TM TN).cut_input (whole8_T ops p M K N TM TN) he X (hinT8 p M K N TM TN)
     (hfit8T ops p M K N TM TN X he) (hnT8 p M K N TM TN) ha
 
 /-- Where RowB `j` is correct, its committed gates hold its cut's values. -/
-theorem cutB8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {j : ℕ} (hj : j < N)
+theorem cutB8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {j : ℕ} (hj : j < N)
     (hX : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_B ops p M K N TM TN) hj⟩)
     {a : ℕ} (ha1 : rowIn K true ≤ a) (ha2 : a < (row8B p K).N) {h : rowB8 p M N K j a < _}
@@ -524,7 +526,7 @@ theorem cutB8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {j :
     (hfit8B ops p M K N TM TN X hj) hX ha1 ha2 (fin_mem (rowB8_eq ops p M K N TM TN j a) hcom)
 
 /-- Where RowA `i` is correct, its committed gates hold its cut's values. -/
-theorem cutA8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {i : ℕ} (hi : i < M)
+theorem cutA8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {i : ℕ} (hi : i < M)
     (hX : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_A ops p M K N TM TN) hi⟩)
     {a : ℕ} (ha1 : rowIn K false ≤ a) (ha2 : a < (row8A p K).N) {h : rowA8 p M N K i a < _}
@@ -536,7 +538,7 @@ theorem cutA8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {i :
     (hfit8A ops p M K N TM TN X hi) hX ha1 ha2 (fin_mem (rowA8_eq ops p M K N TM TN i a) hcom)
 
 /-- Where tile `e` is correct, its committed gates hold its cut's values. -/
-theorem cutT8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {e : ℕ} (he : e < M / TM * (N / TN))
+theorem cutT8_at (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {e : ℕ} (he : e < M / TM * (N / TN))
     (hX : (whole8 ops p M K N TM TN).part.Correct X
       ⟨_, (whole8 ops p M K N TM TN).unit_lt (whole8_T ops p M K N TM TN) he⟩)
     {a : ℕ} (ha1 : tileIn K TM TN ≤ a) (ha2 : a < tileN K TM TN) {h : tile8 p M N K TM TN e a < _}
@@ -651,7 +653,7 @@ end Cone8
 
 section Chain8
 
-variable (p : Pipeline) (M K N TM TN : ℕ) (X : (whole8 ops p M K N TM TN).spec.toCircuit.Transcript) {i j : ℕ}
+variable (p : Pipeline) (M K N TM TN : ℕ) (X : (whole8 ops p M K N TM TN).spec.toCircuit.Trace) {i j : ℕ}
   (hTM : TM ∣ M) (hTN : TN ∣ N) (hi : i < M) (hj : j < N)
 
 include hTM hTN hi hj

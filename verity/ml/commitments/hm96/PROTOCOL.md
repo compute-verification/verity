@@ -15,8 +15,8 @@ key as an `hm96-sha512/v1` leaf (frame-v3's `PROTOCOL.md`, §6, "Keyed leaves").
 - **Vectors.** `vectors.json` (`hm96-sha256/v1`) and `vectors_sha512.json` (`hm96-sha512/v1`), written by
   `python -m verity.ml.commitments.hm96.vectors`. `--check` exits nonzero if either is stale.
 - **Conformance.** `verity/ml/commitments/tests/test_hm96.py` checks the reference against the vectors and a bit-level matrix
-  product; `test_hm96_batch.py` checks `batch` against the reference; `integrations/vllm/tests/commit/test_hiding.py` checks the
-  host committer's batch path against both.
+  product; `test_hm96_batch.py` checks `batch` against the reference; `verity/ml/windows/tests/test_hiding.py` checks
+  `verity.ml.windows.hiding`'s batch path against both.
 - **Source.** Halevi and Micali, "Practical and Provably-Secure Commitment Schemes from Collision-Free Hashing", CRYPTO 1996 (HM96):
   their first scheme, with the affine universal family below, applied to a digest of the value (their O(k) variant). The hiding bound
   uses the generalized leftover hash lemma of Dodis, Ostrovsky, Reyzin and Smith, "Fuzzy Extractors", SIAM J. Computing 38(1), 2008
@@ -67,7 +67,7 @@ leaf_prefix(key) = leaf tag ‖ H(key)         zero-padded to one block of H
 - **The family is universal.** For a nonzero d, the map `key ↦ M·d` is linear, with rows `d ≪ i` for `i < n`. Those rows are
   independent, so `M·d` is uniform over n bits when the key is. For `y ≠ y'`, `Pr[M·y = M·y'] = 2^-n`.
 - **The key is fixed and public.** Each instance's configured key is its pinned key (section 2a), a circuit
-  constant that fixes a gadget's XOR network. `fresh_key` draws a uniform key, which is the theorem's setting; it exists for tests.
+  constant that fixes a gadget's XOR network. `fresh_key` samples a uniform key, which is the theorem's setting; it exists for tests.
 - **The key is bound.** Every leaf binds `H(key)` through its prefix, and `scheme_digest(key)` names the configured rule for a root
   binding or statement. The verifier takes the key from its own statement, never from an opening. A key chosen after commitment
   would let a committer fit an opening to any value.

@@ -1,13 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Seq
+public import Proofs.Flock.Soundness.Game
 
 /-!
 # Zero knowledge: programs on finitely many uniform coins
 
-The Goldreich–Kahan simulator (`GK/Sim.lean`) is an algorithm that draws fresh uniform randomness for each run it makes and
+The Goldreich–Kahan simulator (`GK/Sim.lean`) is an algorithm that samples fresh uniform randomness for each run it makes and
 decides what to do next from what the runs returned. `Rand α` is such an algorithm: a `Game` without the prover's
-messages, so a tree whose nodes draw a uniform value of a finite type and whose leaves return a value. `ev f r` is the
+messages, so a tree whose nodes sample a uniform value of a finite type and whose leaves return a value. `ev f r` is the
 expectation of `f` at its output.
 
 * `Rand.ev_bind`, `Rand.ev_map`: sequencing, as `Game.expect_bind`;
@@ -149,7 +149,7 @@ theorem abs_avgR_sub_le {C : Type} [Fintype C] {f g k : C → ℝ} (h : ∀ c, |
     linarith
   · exact avgR_mono fun c => (abs_le.1 (h c)).2
 
-/-- A finite uniform program: draws of uniform values of finite types, then a result. -/
+/-- A finite uniform program: samples of uniform values of finite types, then a result. -/
 inductive Rand (α : Type) : Type 1 where
   | ret : α → Rand α
   | coin (C : Type) [Fintype C] [Nonempty C] : (C → Rand α) → Rand α

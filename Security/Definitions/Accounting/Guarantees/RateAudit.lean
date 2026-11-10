@@ -16,9 +16,8 @@ registry names, for a deployed device, the measurement or conjecture that carrie
 `bandwidth-instantiation` for the stored words).
 
 * `RateAudit`: in one window, an accepted device's footprint (residency) and ingress (bandwidth) reach the floor except
-  with probability `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`.
-* `RateHonest`: an honest device that reads every word once is accepted on every coin, with footprint and ingress
-  exactly `N·b`.
+  with probability `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`; its honest device is a lemma, `RateHonest`
+  (`Security/Proofs/Accounting/Lemmas/RateAudit.lean`).
 * `RateAuditWindows`: over `n` windows on one store, the time-averaged footprint.
 * `RateOfAudit`: in a joint run, the bandwidth account's reads, with the rebuilds charged as compute, so a compute
   account that did `W` of work leaves `F·T − W` for them.
@@ -84,27 +83,11 @@ rounds).
 Frozen (no-function, hash): a bound in the random-oracle model over an abstract chip program, which no Lean function of
 the rate audit's code computes. -/
 def RateAudit : Prop :=
-  ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.Device N b h ρ S L q),
+  ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.Prover N b h ρ S L q),
     pr (fun x : Store N b × Coins N b h ρ s =>
         A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
           A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
-
-/-- **Completeness of `RateAudit`: an honest device that reads every word once is accepted on every coin.** For every
-`N`, `b`, `h` and `ρ` there is a device with no on-chip state and no free side sources, whose link carries exactly the
-certified stream (`L = ρ`) and which makes `N` oracle queries (a `Device N b h ρ 0 ρ N`), that is accepted on every
-store, stream, oracle and sample, so with probability 1; its footprint and its ingress are exactly the store, `N·b`
-bits, and its compute is `N·c_tag`, with nothing rebuilt. It reads the stream, then reads every word once and queries
-the oracle at it under the stream. Against `RateAudit` at `S = 0`, `L = ρ` (so `c_free = 0`), `q = N` and
-`F = N·c_tag`, the honest `N·b` sits above the floor `k·b − λ − (N − k)·c_tag·b/c_enc` by the sample's slack
-`(N − k)·b`, about `ε_s·N·b`, plus `λ` and the tagging the sample's slack leaves unspent. Proof:
-`Accounting.SecurityProofs.RateHonest`.
-
-Frozen (completeness): the honest device's acceptance, which shows that `RateAudit`'s event is not vacuous. -/
-def RateHonest : Prop :=
-  ∀ N b h ρ : ℕ, ∃ A : Rate.Device N b h ρ 0 ρ N,
-    ∀ (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (s : ℕ) (I : Fin s → Fin N),
-      A.Accepts E R O I ∧ A.footprint E R O = N * b ∧ A.ingress E R O = N * b ∧ A.compute cTag cEnc E R O = N * cTag
 
 /-- **The rate audit over `n` windows: time-averaged residency.** Over a uniform store and `n` windows, each with its
 own uniform stream, oracle and sample, played by devices of `RateAudit`'s class (`Rate.Devices`: window `i`'s device
@@ -150,9 +133,9 @@ window and `T_bw` the bandwidth window's length. A bandwidth window that spans t
 `F·T − W` for every other account, the rebuilds and tags among them: `μ_rebuild = (F·T − W − tagging)/(N·c_enc)`, which
 is `(1 − τ)/x` with `τ = (W + tagging)/(F·T)` and `x = N·c_enc/(F·T)`. The compute audit's certificate is what makes `W`
 hold: a per-run compute guarantee bounding the probability that the compute audit accepts with the compute account's
-work below `W` by `ε_W` (lane `ra-per-run`'s `ComputeSoundPerRun`) gives, by a union bound, the probability that both
+work below `W` by `ε_W` (`Run.ComputeSoundPerRun`) gives, by a union bound, the probability that both
 audits accept and the bandwidth account read short of the floor at most `ε + ε_W`. Unlike `BandwidthOfAudit`, this is
-a per-run reading: the event is about the reads at the coins drawn. A `RealizesRate` for a deployed run must put the
+a per-run reading: the event is about the reads at the coins flipped. A `RealizesRate` for a deployed run must put the
 deadline and a round trip, `T + RTT`, inside `T_bw`, and every rebuild in the bandwidth window must fall in the compute
 window's work of the other accounts (`compute_le`). Proof: `Accounting.SecurityProofs.RateOfAudit`, from `RateAudit`.
 

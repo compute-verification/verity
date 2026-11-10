@@ -22,14 +22,14 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_exists_le pr_le_of_card pr_mono pr_or_le)
 
-namespace Device
+namespace Prover
 
 variable {N m ρ h S L q ks : ℕ}
 
 /-- Outside the low-rank event, a verbatim pass's correct receipts are paid for by its held sectors, memory reads,
 side-link sectors and rebuilt sectors. -/
 theorem pr_unpaid_rank_le
-    (A : Device N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
+    (A : Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (r X : ℕ)
     (hr32 : r ≤ 32)
     (hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
@@ -110,7 +110,7 @@ theorem pr_unpaid_rank_le
         (Ω := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
         (fun O => t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D)
         (2 ^ h) 1 (by positivity)
-        (by simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t)
+        (by simpa [Prover.correct, and_comm] using card_guess_le A sketch σ D t)
       push_cast at hbound
       simpa using hbound
     refine (Finset.sum_le_sum (fun t _ => ht t)).trans (le_of_eq ?_)
@@ -145,7 +145,7 @@ theorem pr_unpaid_rank_le
     rw [hcancel]
     simp [ENNReal.div_eq_inv_mul, mul_comm]
 
-end Device
+end Prover
 
 namespace SketchDeployedWindow
 
@@ -263,7 +263,7 @@ theorem pr_unpaid_good_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (σ :
       Finset.sum_le_sum fun _ _ => pr_exists_le _
     _ ≤ ∑ _j : Fin P, ∑ _c : Fin G, ε := Finset.sum_le_sum fun j _ =>
       Finset.sum_le_sum fun c _ => pr_unpaidAt_le A σ _ ε j c fun η =>
-        Device.pr_unpaid_rank_le (A.device j η c) σ r X hr32 hr (hX j η c)
+        Prover.pr_unpaid_rank_le (A.device j η c) σ r X hr32 hr (hX j η c)
     _ = (P : ℝ≥0∞) * (G * ε) := by
       simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
 
@@ -350,9 +350,9 @@ theorem pr_window_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (w : 
     rw [hη]
   simpa [e, hω, hc] using hy
 
-/-- A session's pooled draws as a causal family over the monitoring period, on any store `store ω` drawn before the
+/-- A session's pooled samples as a causal family over the monitoring period, on any store `store ω` sampled before the
 session's coins. -/
-theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
+theorem pr_samples_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d)
     (Ev : SketchStore N m → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Prop) (B : ℝ≥0∞)
     (hB : ∀ (X : Fin n → Type) [∀ w, Fintype (X w)]
@@ -400,8 +400,8 @@ theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → SketchSt
     fun ω w => Finset.card_map _
   exact hB X Gs hG e.symm E hmem hcard
 
-/-- A session's pooled draws as a causal family over the monitoring period. -/
-theorem pr_draws_of_causal (A : SketchDeployedSession n P N m ρ h S L q ks G d)
+/-- A session's pooled samples as a causal family over the monitoring period. -/
+theorem pr_samples_of_causal (A : SketchDeployedSession n P N m ρ h S L q ks G d)
     (Ev : SketchStore N m → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Prop) (B : ℝ≥0∞)
     (hB : ∀ (X : Fin n → Type) [∀ w, Fintype (X w)]
       (Gs : (w : Fin n) → ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Finset (Fin (P * N))),
@@ -414,16 +414,24 @@ theorem pr_draws_of_causal (A : SketchDeployedSession n P N m ρ h S L q ks G d)
           ((A.win w (f ω)).correctAll E (f ω w).1 (f ω w).2.1).card) →
         pr (fun ω => Ev E (f ω)) ≤ B) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) => Ev x.1 x.2) ≤ B :=
-  pr_draws_map_of_causal id A Ev B hB
+  pr_samples_map_of_causal id A Ev B hB
 
+<<<<<<< ours
 /-- The pooled draw over the whole monitoring period, on any store drawn before the session's coins. -/
 theorem pr_draws_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
+||||||| base
+/-- The pooled draw over the whole monitoring period, on any store drawn before the session's coins. -/
+theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
+=======
+/-- The pooled sample over the whole monitoring period, on any store sampled before the session's coins. -/
+theorem pr_samples_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
+>>>>>>> theirs
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
         ∑ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) := by
-  refine pr_draws_map_of_causal store A (fun E y =>
+  refine pr_samples_map_of_causal store A (fun E y =>
     (∀ w t, (y w).2.2 t ∈ (A.win w y).correctAll E (y w).1 (y w).2.1) ∧
       ∑ w, ((A.win w y).correctAll E (y w).1 (y w).2.1).card ≤ K) _
     (fun X _ Gs hG f E hmem hcard => ?_)
@@ -445,22 +453,36 @@ theorem pr_draws_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchSt
     rw [show (P : ℝ≥0∞) * N * (d * n) = d * (n * P * N) by ring]
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
 
+<<<<<<< ours
 /-- The pooled draw over the whole monitoring period. -/
 theorem pr_draws_pooled_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
+||||||| base
+/-- The pooled draw over the whole monitoring period. -/
+theorem pr_draws_horizon_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
+=======
+/-- The pooled sample over the whole monitoring period. -/
+theorem pr_samples_pooled_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
+>>>>>>> theirs
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
         ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
+<<<<<<< ours
   pr_draws_pooled_le_map id A K
+||||||| base
+  pr_draws_horizon_le_map id A K
+=======
+  pr_samples_pooled_le_map id A K
+>>>>>>> theirs
 
-/-- The pooled draw in every window, on any store drawn before the session's coins. -/
-theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
+/-- The pooled sample in every window, on any store sampled before the session's coins. -/
+theorem pr_samples_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (Kw : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
         ∃ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1).card ≤ Kw)
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) := by
-  refine pr_draws_map_of_causal store A (fun E y =>
+  refine pr_samples_map_of_causal store A (fun E y =>
     (∀ w t, (y w).2.2 t ∈ (A.win w y).correctAll E (y w).1 (y w).2.1) ∧
       ∃ w, ((A.win w y).correctAll E (y w).1 (y w).2.1).card ≤ Kw) _
     (fun X _ Gs hG f E hmem hcard => ?_)
@@ -470,16 +492,16 @@ theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchSt
     exact ⟨fun w t => hmem ω w t (hall w t), w, (hcard ω w).trans_le hw⟩
   · simp only [Nat.cast_mul, mul_assoc]
 
-/-- The pooled draw in every window. -/
-theorem pr_draws_window_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (Kw : ℕ) :
+/-- The pooled sample in every window. -/
+theorem pr_samples_window_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (Kw : ℕ) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
         ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card ≤ Kw)
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
-  pr_draws_window_le_map id A Kw
+  pr_samples_window_le_map id A Kw
 
-/-- Both pooled-draw readings, on any store drawn before the session's coins. -/
-theorem pr_draws_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
+/-- Both pooled-draw readings, on any store sampled before the session's coins. -/
+theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K Kw : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
@@ -488,18 +510,26 @@ theorem pr_draws_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   (pr_mono fun _ h => h.2.imp (fun hK => ⟨h.1, hK⟩) (fun hw => ⟨h.1, hw⟩)).trans
+<<<<<<< ours
     ((pr_or_le _ _).trans (add_le_add (pr_draws_pooled_le_map store A K)
       (pr_draws_window_le_map store A Kw)))
+||||||| base
+    ((pr_or_le _ _).trans (add_le_add (pr_draws_horizon_le_map store A K)
+      (pr_draws_window_le_map store A Kw)))
+=======
+    ((pr_or_le _ _).trans (add_le_add (pr_samples_pooled_le_map store A K)
+      (pr_samples_window_le_map store A Kw)))
+>>>>>>> theirs
 
 /-- Both pooled-draw readings. -/
-theorem pr_draws_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K Kw : ℕ) :
+theorem pr_samples_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K Kw : ℕ) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
         (∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card ≤ K ∨
           ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card ≤ Kw))
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
-  pr_draws_le_map id A K Kw
+  pr_samples_le_map id A K Kw
 
 /-- A session's unpaid windows from a per-window bound. -/
 theorem pr_unpaid_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (slack : ℕ) (ε : ℝ≥0∞)
@@ -520,8 +550,8 @@ theorem pr_unpaid_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (slac
     _ = (n : ℝ≥0∞) * ε := by
       simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
 
-/-- Session conservation in counts, from the pooled draws and an unpaid bound `ε_u` on some window's unpaid words, on
-any store `store ω` drawn before the session's coins. -/
+/-- Session conservation in counts, from the pooled samples and an unpaid bound `ε_u` on some window's unpaid words, on
+any store `store ω` sampled before the session's coins. -/
 theorem pr_paid_of_unpaid_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (slack K Kw : ℕ) (εu : ℝ≥0∞)
     (hu : pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
@@ -535,7 +565,7 @@ theorem pr_paid_of_unpaid_map {Ω : Type} [Fintype Ω] (store : Ω → SketchSto
             (Kw + 1) * (m * 256)))
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + εu := by
-  have h₁ := pr_draws_le_map store A K Kw
+  have h₁ := pr_samples_le_map store A K Kw
   refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ hu))
   obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
   · by_cases hD : ∑ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1).card ≤ K ∨
@@ -558,7 +588,7 @@ theorem pr_paid_of_unpaid_map {Ω : Type} [Fintype Ω] (store : Ω → SketchSto
     push Not at hD
     exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
 
-/-- Session conservation in counts, from the pooled draws and one per-window unpaid bound. -/
+/-- Session conservation in counts, from the pooled samples and one per-window unpaid bound. -/
 theorem pr_paid_of_window (A : SketchDeployedSession n P N m ρ h S L q ks G d) (slack K Kw : ℕ)
     (ε : ℝ≥0∞)
     (hε : ∀ w η, pr (fun y : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>
@@ -665,7 +695,7 @@ theorem sketchQueryTermCaps :
 
 /-- **The verbatim sketch session at the deployed receipt parameters, product form.** The multiplicative bound
 `2·2^-40 + n·ε + n·P·G·(N/2^512 + q/2^96)`: each grinding candidate at its own query cap `q`, which is the special
-case `qtot = G·q` of the deployed guarantee's shared budget (`Device.budget_of_bounded`). At the conservative caps
+case `qtot = G·q` of the deployed guarantee's shared budget (`Prover.budget_of_bounded`). At the conservative caps
 `q = G = 2^55` its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`), which is why the deployed
 guarantee (`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`, proved in `DeployedSketchSum.lean`)
 states the sum form instead. -/

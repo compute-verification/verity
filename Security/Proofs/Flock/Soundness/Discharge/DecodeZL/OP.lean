@@ -1,10 +1,26 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import all Init.Data.String.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 
 /-!
-# The opening's rounds carry its messages (R11b)
+# The opening's rounds carry its messages (`DecodesOn`'s message half)
 
 `op_carries`: the ring switches' rounds of `rsFrames`, read by `wOP`, are `opMsgs`, cut at `opShape`'s coins. Each ring
 switch's round closes at its `sq 2 7` and carries the switch's 128 values (`carries_switch`; the batch label rides in

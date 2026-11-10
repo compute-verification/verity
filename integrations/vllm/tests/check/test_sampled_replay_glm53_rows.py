@@ -35,7 +35,8 @@ MLA = dict(DR=16, DV=16, BN=16, DOT=HOP, INV=hopper.Fa3InvSum, SCALE=0.0625)
 #: (spec text as a Program spells it, the Definition bound at the same statics)
 CASES = [
     ('RMSNormCudaVector8_v1{N=64,EPS={"f64":"0x1.4f8b588e368f1p-17"},BLOCK=8}', bind(cuda_rmsnorm.RMSNormCudaVector8, N=64, EPS=1e-5, BLOCK=8)),
-    ('RMSNormFusedCudaVector8_v1{N=64,EPS=1e-05,BLOCK=3}', bind(cuda_rmsnorm.RMSNormFusedCudaVector8, N=64, EPS=1e-5, BLOCK=3)),
+    ('RMSNormFusedCudaVector8_v1{N=64,EPS=1e-05,BLOCK=3}', bind(cuda_rmsnorm.RMSNormFusedCudaVector8V1, N=64, EPS=1e-5, BLOCK=3)),
+    ('RMSNormFusedCudaVector8_v3{N=64,EPS=1e-05,BLOCK=3}', bind(cuda_rmsnorm.RMSNormFusedCudaVector8, N=64, EPS=1e-5, BLOCK=3)),
     ('LlBf16DotprodGemm_v1{N=3,K=128,BS=64,VEC=2,FMA=1}', bind(ll_bf16.LlBf16DotprodGemmWord, N=3, K=128, BS=64, VEC=2, FMA=1)),
     ('LlBf16SplitKGemm_v1{N=3,K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}',
      bind(ll_bf16.LlBf16SplitKGemmWord, N=3, K=128, SPLIT_K=2, TILE_K=32, WARPS=2, DOT=HOP)),
@@ -113,7 +114,7 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
     `splitk_rows`: at both gates, every M the capture runs that the dispatch table sends to the split-K kernel, at the table's
     SPLIT_K, TILE_K and WARPS, N words a token row; and the Definition's conformance cites the same record."""
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
-    from verity_vllm.program.frontend.conformance import status_of
+    from verity.ml.circuits.defs import conformance_label
     from verity.ml.definitions.numerics import batched_gemm_rows, glm53_rows
     from verity.ml.definitions.registry import bf16_gemm_check as BC
 
@@ -131,7 +132,7 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
         assert all((c["TILE_K"], c["WARPS"]) == (st["TILE_K"], st["WARPS"]) for st in split.values())
         assert c["mismatch"] == 0 and c["words"] == m.experts * sum(split)
     d = ll_bf16.LlBf16SplitKGemmWord
-    assert status_of(d.conformance) == "exact-model-tested"
+    assert conformance_label(d.conformance) == "exact-model-tested"
     assert p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
 
 

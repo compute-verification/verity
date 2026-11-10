@@ -23,11 +23,8 @@ own-region size, the count `derive`'s v2 rule makes; `check_ok` says acceptance 
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Canon
-public import Flock.Hash
 public import Flock.CircuitType
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

@@ -4,7 +4,7 @@ The checkpoint is a safetensors file of two decoder layers in the int8 pin's for
 [N, 1] scale, a bf16 embedding and norms) in an HF cache, held to a manifest the test writes; P2 runs at the small point's
 1,024-bit blocks, 8 a segment (`pous._base`), so the adapter encodes it in milliseconds. The memory challenger's side is
 `challenger_party.serve` in a thread, signed by the PoUS tests' test signer on a counter clock, and the prover answers it
-over a socket pair, as `challenger_party.session` would across hosts. The answer is read back as the composed run reads it
+over a socket pair, as `challenger_session.session` would across hosts. The answer is read back as the composed run reads it
 (`served_verdicts.piece_row`, `block_record.leg`).
 """
 from __future__ import annotations
@@ -30,7 +30,8 @@ from pathlib import Path
 import pytest
 
 from verity.core.deploy.stream import Side
-from verity.core.protocols.pous import challenger_party as CP
+from verity.core.devices.memory_challenger import challenger_party as CP
+from verity.core.protocols.pous import challenger_session as CS
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
 from verity.core.protocols.pous.schemes.p2 import POINT, P2Params
@@ -123,13 +124,13 @@ def served(tmp_path, monkeypatch) -> Served:
 
 
 def _in_process_party(signer, log, keep=None, record=lambda request: request):
-    """`challenger_party.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
-    test signer, a counter clock) and the prover's over a socket pair (`challenger_party.answer`); with `keep`, the
+    """`challenger_session.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
+    test signer, a counter clock) and the prover's over a socket pair (`challenger_session.answer`); with `keep`, the
     challenger's device, where it keeps `record` of each completed session's request as `challenger_party.main` does."""
     calls = []
 
     def session(party, request, respond):
-        CP.setup_of(request)
+        CS.setup_of(request)
         a, b = socket.socketpair()
 
         def challenger():
@@ -140,13 +141,13 @@ def _in_process_party(signer, log, keep=None, record=lambda request: request):
             served_side = pool.submit(challenger)
             try:
                 with a, a.makefile("rwb") as f:
-                    rounds = CP.answer(f, request["block_bytes"], respond)
+                    rounds = CS.answer(f, request["block_bytes"], respond)
             finally:
                 sid, signed = served_side.result()
         if keep is not None:
             CP.keep(keep, sid, record(request))
         calls.append((party, request))
-        return CP.report(sid, signed, signer.public_key) | {"host": party.host, "rounds": rounds - CP.WARMUPS}
+        return CP.report(sid, signed, signer.public_key) | {"host": party.host, "rounds": rounds - CS.WARMUPS}
     return session, calls
 
 
@@ -188,14 +189,14 @@ class Auditor:
         if not self.claim:
             return report
         pub = request["published"]
-        sid = CP.session_id(bytes.fromhex(request["audit"]), bytes.fromhex(pub["commitment"]), bytes.fromhex(pub["salt"]))
+        sid = CS.session_id(bytes.fromhex(request["audit"]), bytes.fromhex(pub["commitment"]), bytes.fromhex(pub["salt"]))
         return report | {"session_id": sid.hex()}
 
 
 def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, **kw):
     auditor = auditor or Auditor(tmp_path)
-    monkeypatch.setattr(CP, "salt", auditor.salt)
-    monkeypatch.setattr(CP, "session", auditor.session)
+    monkeypatch.setattr(CS, "salt", auditor.salt)
+    monkeypatch.setattr(CS, "session", auditor.session)
     monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
     kw.setdefault("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
@@ -229,7 +230,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
         "blocks": 48, "checkpoint_bytes": 7776, "share": str(Fraction(w_bytes, 7776)), "held": None}
     assert prof["outside"]["bytes"] == {"the embedding and the head": 2048, "the norms": 96, "the per-row scales": 1024}
     assert "KV cache" in prof["outside"]["serving"] and prof["window"] == 3
-    assert prof["placement"][CP.PREMISE].startswith(f"holds: the memory challenger ran on {AUDITOR}")
+    assert prof["placement"][CS.PREMISE].startswith(f"holds: the memory challenger ran on {AUDITOR}")
     assert set(period.profile(period.point_for(1))) <= set(prof)                      # the run protocol's own profile
     party, request = calls[0]
     assert party.host == AUDITOR and request["node"] == NODE and request["blocks"] == 48
@@ -240,7 +241,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert doc["key_pinned"] and not {"latency", "rounds_answered", "warmups", "reported_host"} & set(doc)
     run = json.loads((served.private / "run.json").read_text())
     assert run["point"]["k"] == 320 and run["rounds_answered"] == 320 and run["latency"]["late"] == 0
-    assert run["warmups"] == CP.WARMUPS and run["host"] == AUDITOR
+    assert run["warmups"] == CS.WARMUPS and run["host"] == AUDITOR
 
 
 def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(served, tmp_path, monkeypatch):
@@ -256,7 +257,7 @@ def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(se
     commitment, salt = bytes.fromhex(published["commitment"]), bytes.fromhex(published["salt"])
     assert len(auditor.sources) == 1 and auditor.salts.get(bind) == (commitment, salt)
     assert salt == period.setup.draw_salt(auditor.sources[0], commitment)
-    sid = CP.session_id(bind, commitment, salt)
+    sid = CS.session_id(bind, commitment, salt)
     assert run["session_id"] == sid.hex() == run["session"]["commitment"]["session"] and sid in auditor.log
     request = calls[0][1]
     assert request["audit"] == bind.hex() and request["published"] == published
@@ -264,9 +265,9 @@ def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(se
 
 
 def test_a_second_session_under_the_windows_binding_is_refused(served, tmp_path, monkeypatch):
-    """A prover that runs the window again finds the challenger draws no second salt for its binding; one that reuses the
+    """A prover that runs the window again finds the challenger samples no second salt for its binding; one that reuses the
     first salt's source, so setup publishes the logged salt, finds the challenger runs no second session for it. Each
-    is undecided with its reason, and no retry redraws."""
+    is undecided with its reason, and no retry resamples."""
     auditor = Auditor(tmp_path)
     first, _ = _run(served, tmp_path, monkeypatch, auditor)
     assert first["verdict"] == "accept", first["reason"]
@@ -432,7 +433,7 @@ def case_exe() -> Path:
 def registered(served, monkeypatch) -> Served:
     """`served` at PoUS's registered point, the one a P2 registration names (2,056-byte blocks, 4 a segment: the two
     layers' 8 linears in 2 segments, 2 units), with each segment's encode kept across the module's tests, so ``C*``,
-    whose salt `_bandwidth`'s challenger draws from a fixed source, is encoded once."""
+    whose salt `_bandwidth`'s challenger samples from a fixed source, is encoded once."""
     monkeypatch.setattr(pous, "_base", lambda scheme: REGISTERED)
     S = pous._p2("store")
     encode = S.CpuEncoder.encode
@@ -488,10 +489,10 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert bw["verdict"] == "accept", bw["reason"]
     published = json.loads((s.private / "run.json").read_text())["published"]
     request = calls[0][1]
-    setup = CP.setup_of(request)
+    setup = CS.setup_of(request)
     assert setup["root"] == request["binding"] == published["root"]
     assert setup["salt"] == published["salt"] and setup["commitment"] == published["commitment"]
-    assert setup["params"] == {k: getattr(REGISTERED.with_segments(2), k) for k in CP.PARAMS}
+    assert setup["params"] == {k: getattr(REGISTERED.with_segments(2), k) for k in CS.PARAMS}
 
     private = s.serve / "private" / "bandwidth"
     case = json.loads((private / p2_case.CASE).read_text())

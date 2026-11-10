@@ -36,8 +36,9 @@ lock is not in the line: it takes that slot whenever it frees.
 `python3 tools/verity/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
 running check, and priority waiters keep their own arrival order. Merges unblock everyone. With `--rank N`
-(drive's train checks: the train's first-parent depth, so the lowest train's is the least), priority
-waiters go by rank, then arrival: the train that lands next takes the next slot, ahead of trains above it that came first. A priority waiter without a rank (drive's post-landing run) goes after the ranked.
+(drive's after-landing run and lock run, rank 0: `research.drive.POSTLAND_SLOT_RANK`), priority waiters go by rank, then
+arrival, and a priority waiter without a rank (a `train.sh` launched by hand) goes after the ranked: the runs `main` waits on
+take the next slot, ahead of priority checks that came first.
 
 `--wait-max SECONDS`: a waiter that has no slot after SECONDS leaves the line and exits NOT_STARTED (75) without running CMD, so
 its caller can tell a check that never started from one that failed. `--run-max SECONDS`: CMD's time limit, counted from the slot
@@ -47,9 +48,9 @@ run so far plus SECONDS, through its harness's control file (research.telemetry.
 
 `CHECK_MIN_MEM_GB=GB` (MIN_MEM_ENV) in the environment: only a slot whose mem= is at least GB (or that sets none) is taken; on
 a machine that lists no such slot the waiter exits NOT_STARTED at once, naming the slots it has. `check.py --record --priority`
-sets it (`research run --env`) for a check that runs pytest or circuit-check (its TRAIN_GB), so a train never runs in a lane
-slot: in one, every parallel suite gets one test worker and circuit-check one target at a time, about twice a train slot's wall
-time. It is the environment, not an option, so the run's command stays the one `research merge` reads; CMD doesn't inherit it.
+sets it (`research run --env`) for a check that runs pytest, lean-suites or circuit-check (its TRAIN_GB), so a train never runs
+in a lane slot: in one, every parallel suite gets one test worker, the one-process suites one process between them and
+circuit-check one target at a time, two to four times a train slot's wall time. It is the environment, not an option, so the run's command stays the one `research merge` reads; CMD doesn't inherit it.
 
 `--twin PAIR` / `--twin PAIR@HOME`: one of a check's twins, the same check launched on each machine it may run on when none had a
 free slot (`check.py --record --on auto`), so it takes the first slot that frees on any of them, and never waits in one
@@ -74,6 +75,7 @@ why), held (which slot, since when) or left (why), so `research status` shows a 
 from __future__ import annotations
 
 import fcntl
+import importlib.util
 import json
 import os
 import re
@@ -86,8 +88,8 @@ from pathlib import Path
 
 SLOTS = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/slots"))
 #: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
-LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
-            'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
+LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+            'uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
 LINE = "check-line"
 POLL_S = 20
 #: the exit of a waiter that gave up (`--wait-max`): CMD never ran
@@ -286,7 +288,7 @@ def reserved_gb(proc: Path = Path("/proc"), priority: bool = False) -> int:
 def reserve(slot: dict, now: datetime, priority: bool = False) -> str | None:
     """A slot with mem=GB holds a research.mem reservation of that size while its check runs: `check-NAME.json` in RAMLOCK, in
     research.mem's format and under its admission lock, naming this process (CMD, after the exec) and its run, and marked
-    "priority" for a `--priority` waiter's check (a train's, or drive's post-landing run), which other train checks' gates count in
+    "priority" for a `--priority` waiter's check (a train's, or drive's after-landing run), which other train checks' gates count in
     full (`reserved_gb`). research.mem counts
     the GB less what the check's process tree holds, and stops counting it when that pid is gone or the run ended. Without it,
     research.mem would admit work beside two full checks until the machine ran out of memory. The line to print, or None
@@ -332,8 +334,15 @@ DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50
 def cache_disk() -> Path:
     """Where the check cache (`check.py`'s $CHECK_CACHE, default ~/.cache/verity-check) lives: its nearest existing directory.
     Its Lean build trees reach tens of GB, so its disk counts as DISK does; it is another disk (the 247 GB root) wherever
-    vm_setup.sh's link onto /workspace is missing."""
-    cache = Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check")
+    vm_setup.sh's link onto /workspace is missing. `common.cache_dir` names it, loaded by path since slot.py runs as a script;
+    shipped alone (check.py's and research.auto's slot reads send its source over ssh), it is the default path."""
+    try:
+        spec = importlib.util.spec_from_file_location("verity_check_common", Path(__file__).with_name("common.py"))
+        common = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(common)
+        cache = common.cache_dir()
+    except (NameError, OSError):
+        cache = Path.home() / ".cache" / "verity-check"
     return next((p for p in (cache, *cache.parents) if p.is_dir()), Path("/"))
 
 
@@ -735,7 +744,7 @@ def allowed() -> set[int]:
     return os.sched_getaffinity(0)
 
 
-DIRECT_CPUS_FIX = "a `research run` starts on /etc/vy/direct-cpus, so add the slot's cores there (`0-159` on node 1 since 6 Oct)"
+DIRECT_CPUS_FIX = "a `research run` starts on /etc/vy/direct-cpus, so add the slot's cores there (`0-159` on node 1)"
 
 
 def usable(slots: list[dict]) -> list[dict]:

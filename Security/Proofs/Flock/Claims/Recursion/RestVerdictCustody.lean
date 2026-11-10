@@ -1,8 +1,45 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.RestVerdictBases
-public import Proofs.Flock.Claims.Complete.ZkTables.Decode
-public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Hex
+import Proofs.Flock.Claims.Complete.ZkTables.Decode
+import Proofs.Flock.Claims.Complete.ZkTables.Names
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.Recursion.CallsAgree
 
 /-!
 # Custody at the reader's record (`CustodyRecJ`)
@@ -221,6 +258,8 @@ theorem roundJ_fill (spec : SessionSpec) (h : ByteArray → ByteArray) (k : ℕ)
 
 /-! ## The record's reads at the substituted value -/
 
+-- one proof of over a hundred lines down `liveOfJ` at the substituted record, `rw` and `simp` through `coinSubJ`'s and
+-- `Record.arr`'s unfolded bodies
 set_option maxHeartbeats 1000000 in
 /-- **`liveOfJ` at the substituted value of a record with the honest link and streams**: its `root_B`, no public
 words, and each rep stream's rounds retaining their bytes, where the tables are named apart, there is one `root_B` per

@@ -18,21 +18,54 @@ Rules encoded here:
   workload interpreter (``$PY``, default ``/workspace/venv312/bin/python``),
   probed via ``importlib.metadata`` so nothing heavy is imported.
 * ``closure`` is the integration's import closure: ``integrations/vllm/**``
+<<<<<<< 99c8914848:tools/research/src/research/store/vllm_tools.py
   plus Verity core, the root package ``verity`` (``package_dirs(tree, "verity")``
   of a source tree, which ``tests/test_store_vllm_tools.py`` holds it to).  It is
   stated rather than derived because this module also loads from the runner's
   tool snapshot, which is no workspace.
+||||||| merged common ancestors:integrations/vllm/verity_vllm/pipeline/research_tools.py
+  plus every directory that ships Verity core (``research.pythonpath.package_dirs``:
+  ``verity``, or each member's part of the namespace).
+  ``source_identity.code_identity`` is the one code identity over it (the
+  hot Commit worker's key, the TP Commit's tree of record).
+
+This module imports nothing beyond the standard library, ``research.store.tool``
+and ``research.pythonpath``, so it is loadable from any interpreter that can see
+``tools/research/src`` (``research`` loads it by dotted path or, failing
+that, by file — see ``research.store.tools_registry``).
+=======
+  plus every directory that ships Verity core (``research.pythonpath.package_dirs``:
+  ``verity``, or each member's part of the namespace).
+  ``source_identity.code_identity`` is the one code identity over it (the
+  hot Commit worker's key, the TP Commit's tree of record).
+
+This module imports only the standard library, so it is loadable from any interpreter (``research`` loads it by dotted path or,
+failing that, by file — see ``research.store.tools_registry``).  The names that read ``research.pythonpath`` and
+``research.store.tool`` (``FROM_RESEARCH``: the closure and the Tools) are computed when first read; where the tree leaves
+``research`` out, reading one is refused by name (``config.run_store``).
+>>>>>>> 7af4d24fca3e:integrations/vllm/verity_vllm/pipeline/research_tools.py
 """
 
 from __future__ import annotations
 
+import importlib
 import os
 import subprocess
 from pathlib import PurePosixPath
+from types import ModuleType
 from typing import Any
 
+<<<<<<< 99c8914848:tools/research/src/research/store/vllm_tools.py
 from research.store.settings import workload_python
 from research.store.tool import Tool
+||||||| merged common ancestors:integrations/vllm/verity_vllm/pipeline/research_tools.py
+from research.pythonpath import package_dirs, workspace_root
+from research.store.tool import Tool
+=======
+STAGES = ("build", "plan", "match", "commit", "replay")
+#: The names computed from ``research`` on first read (``__getattr__``).
+FROM_RESEARCH = frozenset({"CORE_DIRS", "CODE_DIRS", "CLOSURE", "TOOLS", *(f"VLLM_{s.upper()}" for s in STAGES)})
+>>>>>>> 7af4d24fca3e:integrations/vllm/verity_vllm/pipeline/research_tools.py
 
 DEFAULT_QUERY = "Q_word_v1{X=16,W=32,R=no-recompute}"
 DEFAULT_PY = "/workspace/venv312/bin/python"
@@ -41,8 +74,18 @@ COMMAND = ["verity-vllm", "row", "stage"]
 _CLI_MODULE = "verity_vllm.pipeline.cli"
 _SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # the shell runners of earlier records (same grammar as `row stage` / `row run`)
 
+<<<<<<< 99c8914848:tools/research/src/research/store/vllm_tools.py
 CLOSURE = ["integrations/vllm/**", "verity/**"]
 
+||||||| merged common ancestors:integrations/vllm/verity_vllm/pipeline/research_tools.py
+#: Each directory of this file's tree that ships Verity core, relative to the repository root.
+CORE_DIRS = package_dirs(workspace_root(__file__), "verity")
+#: The code the integration imports besides its own: `verity`, with the catalog, the kernels and the verifiers in it.
+CODE_DIRS = [*CORE_DIRS]
+CLOSURE = ["integrations/vllm/**", *(f"{d}/**" for d in CODE_DIRS)]
+
+=======
+>>>>>>> 7af4d24fca3e:integrations/vllm/verity_vllm/pipeline/research_tools.py
 # Row id grammar (see verity_vllm/ops/README):
 #   <model>__<dtype>__<hw>__tp<N>__b<N>__i<N>__o<N>__<arrivals>__<sampling>__<exec>
 _ROW_FIELDS = ("model_tag", "dtype", "hw", "tp", "batch", "input", "output", "arrivals", "sampling", "exec")
@@ -269,13 +312,13 @@ def _probe_pins(env: dict[str, Any] | None = None) -> dict[str, Any]:
     return out
 
 
-def _tool(stage: str) -> Tool:
+def _tool(tool: type, stage: str, closure: list[str]) -> Any:
     name = f"vllm.{stage}"
-    return Tool(
+    return tool(
         name=name,
         version="1",
         command=[*COMMAND, stage],
-        closure=CLOSURE,
+        closure=closure,
         key_params=[*ROW_KEY_PARAMS, *STAGE_KEY_FLAGS[stage].keys(), *KEY_FLAGS_WHEN_SET.get(stage, ())],
         key_conditions=["hw.family", f"tool.{name}.torch", f"tool.{name}.vllm"],
         param_artifacts=[],
@@ -285,16 +328,38 @@ def _tool(stage: str) -> Tool:
     )
 
 
-VLLM_BUILD = _tool("build")
-VLLM_PLAN = _tool("plan")
-VLLM_MATCH = _tool("match")
-VLLM_COMMIT = _tool("commit")
-VLLM_REPLAY = _tool("replay")
+def _research(module: str, name: str) -> ModuleType:
+    """``research``'s ``module``, which ``name`` reads.  research's own process, which loads this file without ``verity_vllm``,
+    has it; elsewhere its absence is ``config.run_store``'s refusal, naming ``name``."""
+    try:
+        return importlib.import_module(module)
+    except ModuleNotFoundError:
+        from verity_vllm.config import run_store
+        run_store(module, f"research_tools.{name}")
+        raise
 
-TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_PLAN, VLLM_MATCH, VLLM_COMMIT, VLLM_REPLAY)}
+
+def __getattr__(name: str) -> Any:
+    """``FROM_RESEARCH``, on first read: ``CORE_DIRS``, each directory of this file's tree that ships Verity core, relative to the
+    repository root; ``CODE_DIRS``, the code the integration imports besides its own (``verity``, with the catalog, the kernels and
+    the verifiers in it); ``CLOSURE`` over both; ``VLLM_<STAGE>``, each stage's Tool, and ``TOOLS`` by name.  A name already set
+    (a test's stand-in) is kept."""
+    if name not in FROM_RESEARCH:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    rp = _research("research.pythonpath", name)
+    core = rp.package_dirs(rp.workspace_root(__file__), "verity")
+    names: dict[str, Any] = {"CORE_DIRS": core, "CODE_DIRS": [*core], "CLOSURE": ["integrations/vllm/**", *(f"{d}/**" for d in core)]}
+    if name not in names:
+        tool = _research("research.store.tool", name).Tool
+        tools = {f"VLLM_{s.upper()}": _tool(tool, s, names["CLOSURE"]) for s in STAGES}
+        names.update(tools, TOOLS={t.name: t for t in tools.values()})
+    for k, v in names.items():
+        globals().setdefault(k, v)
+    return globals()[name]
+
 
 __all__ = [
-    "CLOSURE",
+    *sorted(FROM_RESEARCH),
     "COMMAND",
     "DEFAULT_QUERY",
     "ROW_KEY_PARAMS",
@@ -302,12 +367,6 @@ __all__ = [
     "KEY_FLAGS_WHEN_SET",
     "NON_KEY_FLAGS",
     "PRODUCES",
-    "VLLM_BUILD",
-    "VLLM_PLAN",
-    "VLLM_MATCH",
-    "VLLM_COMMIT",
-    "VLLM_REPLAY",
-    "TOOLS",
     "parse",
     "row_config",
 ]

@@ -1,27 +1,30 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Fin
-public import Mathlib.Data.Fintype.BigOperators
 public import Proofs.Flock.Sampled.Statements
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The sampled audit's statements, proved
 
-* `coverage_holds`: the coverage check routes the slots bijectively onto the draw's order, which is injective, so each
-  drawn unit is held by exactly one slot; and the slots, `Σ_b slots(b)` of them, number at least the draw.
+* `coverage_holds`: the coverage check routes the slots bijectively onto the sample's order, which is injective, so each
+  sampled proof block is held by exactly one slot; and the slots, `Σ_b slots(b)` of them, number at least the sample.
 * `slotBinding_holds`: a held slot off its unit's committed record opens the root at the unit's position with a record
   other than the committed one (the record's format), so the two openings give a SHA-512 collision: of the two tree
   leaves' inputs, or of the two openings' (`Flock.Registered.opensLeaf_binding`).
 * `slotsSound_holds`: from the two, and the statement's slot check.
-* `composition_holds`: at each draw, the recursion's soundness bounds the sessions verifying with the statement failing
-  by `ε`; at each outcome the run reaches where it holds, `slotsSound_holds` puts the draw clear of the wrong units or
-  gives a reached slot break, and the outcomes it doesn't reach carry probability 0 (`prob_mono_reaches`). So a draw
-  that hits a wrong unit accepts with probability at most `ε`, and averaging over the draws gives the escape plus
+* `composition_holds`: at each sample, the recursion's soundness bounds the sessions verifying with the statement failing
+  by `ε`; at each outcome the run reaches where it holds, `slotsSound_holds` puts the sample clear of the incorrect proof blocks or
+  gives a reached slot break, and the outcomes it doesn't reach carry probability 0 (`prob_mono_reaches`). So a sample
+  that hits an incorrect proof block accepts with probability at most `ε`, and averaging over the samples gives the escape plus
   `E_ω[ε]`.
 * `zeroKnowledge_holds`: the recursion's `hides` at the honest audit's reveal list.
 * `menuComplete_holds`, `menuCompleteAt_holds`, `zeroKnowledgeAt_holds`: the honest prover fills a fitting batching's
-  held slots with the trace's values (`fillValues`); so it aborts only where the draw doesn't fit; and at every other
-  draw its audit's view is `zeroKnowledge_holds`'s.
+  held slots with the trace's values (`fillValues`); so it aborts only where the sample doesn't fit; and at every other
+  sample its audit's view is `zeroKnowledge_holds`'s.
 -/
 
 @[expose] public section
@@ -31,7 +34,7 @@ namespace FlockSampled
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit
 open scoped ENNReal
 
-/-- The draw's `j`-th unit, for `j < |S|`. -/
+/-- The sample's `j`-th unit, for `j < |S|`. -/
 theorem drawOrder_fin {N : ℕ} (S : Finset (Fin N)) (j : Fin S.card) :
     drawOrder S j = some (S.orderEmbOfFin rfl j) := by
   unfold drawOrder

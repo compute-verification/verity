@@ -26,6 +26,7 @@ import pytest
 torch = pytest.importorskip("torch")
 from tests.check.opened import commit_steps, meta, retained_block  # noqa: E402
 from verity_vllm.check import oracle_compare as OC  # noqa: E402
+from verity_vllm.commit.step_rows import ROW_BYTES  # noqa: E402
 from verity_vllm.acquire.sources import oracle_witness as OW  # noqa: E402
 from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
 
@@ -166,7 +167,7 @@ def test_a_member_changed_in_the_retained_copy_after_the_commit_is_not_verified_
     """On the TP path: after the commit the rank's retained copy of the MoE received output is overwritten with another tensor's bytes,
     and the oracle agrees with the overwrite -- a compare of the committer's memory would PASS 3/3.  The opening of that member does not
     verify against the rank's run root: not_verified, FAIL by name; the members in other leaves still compare equal."""
-    p0, p1, o0, o1 = _tensors(rows=16)                                         # 256 B each: one leaf per member
+    p0, p1, o0, o1 = _tensors(rows=ROW_BYTES // 16)                            # a row each: one leaf per member
     src, rd = _src({0: [_meta(f"{OPROJ}/part_rank0", p0), _meta(f"{MOE}/part_rank0", p1), _meta(f"{MOE}/out", o1)]})
     m = meta(src.c, 0, f"{MOE}/out")
     retained_block(src.c, 0)[m.dev_off:m.dev_off + m.nbytes] = torch.frombuffer(bytearray(tps._bytes(o0)), dtype=torch.uint8)

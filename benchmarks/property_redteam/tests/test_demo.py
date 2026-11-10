@@ -23,7 +23,7 @@ CENSUS = {
 
 @pytest.fixture(scope="module")
 def prims():
-    return D.load_registry()
+    return D.primitives()
 
 
 @pytest.mark.parametrize("carry", sorted(CENSUS))

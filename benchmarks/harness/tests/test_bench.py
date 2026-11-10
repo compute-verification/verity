@@ -129,6 +129,7 @@ def test_sweep_expansion_and_staggered_mixed_requests():
     assert {p.prompt_tokens for p in full} == {512, 8192}
     assert {p.traffic for p in full} == {"decode-heavy", "prefill-heavy", "mixed"}
     assert [r.arrive_step for r in quick[0].requests()] == [0, 0, 1, 1, 2, 2, 3, 3]
+    assert [(p.id, p.to_json()["sampling"]) for p in quick] == [("b8-p512-mixed", "greedy"), ("b32-p512-mixed", "greedy")]
 
 
 def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
@@ -461,8 +462,8 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
 
 
 def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_their_libraries_built():
-    spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth")
-    assert spec.arms == ("stock-fp8", "bandwidth-plain", "bandwidth-audit")
+    spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    assert spec.arms == ("stock-fp8", "bandwidth-plain", "bandwidth-audit", "stock-fp8@compiled")
     assert spec.arm_modules == ("benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT")
     assert spec.env["VERITY_VLLM_BENCH_KV_RECEIPTS"] == "on"
     stock = resolve_spec("llama31-8b-fp8-1gpu")
@@ -478,16 +479,11 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
         assert (root / source).is_file(), source
 
 
-def test_the_served_bandwidth_spec_is_the_bandwidth_spec_with_compiled_stock_beside_its_graph_path_at_six_reps():
+def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_graph_path_at_six_reps():
     from verity_bench.vllm import runner
 
-    graph, served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth"), resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
-    assert served_spec.arms == (*graph.arms, "stock-fp8@compiled") and served_spec.reps == 6
-    assert served_spec.arm_settings["stock-fp8@compiled"].control == "none"
-    assert replace(graph.preset, id=served_spec.preset.id) == served_spec.preset
-    same = dict(id=served_spec.id, arms=served_spec.arms, arm_settings=served_spec.arm_settings, preset=served_spec.preset,
-                reps=served_spec.reps)
-    assert replace(graph, **same) == served_spec
+    served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    assert served_spec.reps == 6 and served_spec.arm_settings["stock-fp8@compiled"].control == "none"
 
     stock, compiled = resolve_arms("stock-fp8,stock-fp8@compiled", (), served_spec.arm_settings)
     assert compiled.control is None and compiled.execution == "compiled"
@@ -1417,24 +1413,14 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
                                  "lag_ends": True, "whole_tree_sm": True, "aside_ends": True} and whole.schedule == "serial"
 
 
-def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():
-    served_points = expand_sweep("served")
-    assert [(p.batch, p.sampling) for p in served_points] == [
-        (b, s) for b in (1, 8, 32, 64) for s in ("greedy", "stochastic")
-    ]
-    assert [p.id for p in served_points[4:6]] == ["b32-p512-mixed", "b32-p512-mixed-stochastic"]
-    assert [p.headline for p in served_points[4:6]] == [True, False]
-    assert served_points[5].to_json()["sampling"] == "stochastic"
-    assert {p.sampling for p in expand_sweep("quick")} == {"greedy"}
-
-
-def test_an_unknown_sampling_refuses(tmp_path, monkeypatch):
+def test_a_sweep_that_samples_other_than_greedily_refuses(tmp_path, monkeypatch):
     from verity_bench.vllm import presets
 
-    (tmp_path / "odd.toml").write_text(
-        (SPEC_ROOT / "served.toml").read_text().replace('id = "served"', 'id = "odd"').replace('"stochastic"', '"beam"'))
+    quick = (presets.SPEC_ROOT / "quick.toml").read_text().replace('id = "quick"', 'id = "odd"')
+    sampled = quick.replace("[output_tokens]", 'sampling = ["greedy", "stochastic"]\n\n[output_tokens]')
+    (tmp_path / "odd.toml").write_text(sampled)
     monkeypatch.setattr(presets, "SPEC_ROOT", tmp_path)
-    with pytest.raises(presets.ConfigError, match="unknown sampling"):
+    with pytest.raises(presets.ConfigError, match="every point samples greedily"):
         presets.load_sweep("odd")
 
 

@@ -52,8 +52,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.certifier import ingress_scan as IS
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.protocols.certifier import ingress_scan as IS
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.refs import runs
@@ -525,6 +525,7 @@ class Rows:
             for lo, hi, r in [*pieces, *((lo, lo + r.words, r) for lo, r in sums)]:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
                 self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
+<<<<<<< 99c8914848
             if (r := P.ys.get(j)) is not None:
                 if 2 * len(w) != r.words:
                     raise ValueError(f"{P.name}: node {j}'s {len(w)} words are not the {r.words // 2} bf16 its y row widens")
@@ -540,6 +541,13 @@ class Rows:
                 raise ValueError(f"{P.name}: node {j}'s x is {len(x)} {x.dtype} elements, not the {r.words // 2} bf16 its A row "
                                  "widens")
             self._put(r.tid, r.unit, r.out, np.stack([np.zeros_like(x), x], axis=1).reshape(1, r.words), EVALUATED)
+||||||| merged common ancestors
+=======
+            if (r := P.packed.get(j)) is not None:
+                if len(w) != r.words:
+                    raise ValueError(f"{P.name}: node {j}'s {len(w)} words are not its leaf row {r}'s {r.words}")
+                self._put(r.tid, r.unit, r.out, w.reshape(1, r.words), S.source[j])
+>>>>>>> 7af4d24fca3e
         emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
         for p, (j, feed) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]
@@ -729,9 +737,9 @@ def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence
 
 
 def index_salt(key: bytes, index: int) -> bytes:
-    """Window ``index``'s index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): drawn under the
+    """Window ``index``'s index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): sampled under the
     committer's secret ``key`` at salt nonce `INDEX_NONCE` plus the window's ``index``, which no other value under ``key``
-    takes, so the committer draws it again from its key alone."""
+    takes, so the committer samples it again from its key alone."""
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
     return H1R.salts(key, INDEX_NONCE + index, 1)

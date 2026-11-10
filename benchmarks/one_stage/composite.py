@@ -10,11 +10,11 @@ Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`) in the period's place; ``remo
 Each ``--cases`` is a private directory (0700, its files 0600, as the pieces write it) holding one subprotocol's case,
 or a directory whose subdirectories each hold one. A case is the subprotocol's case as its own `serve` reads it,
 ``case.json``: ``{"params", "commitment", "evidence"}`` with the commitment and evidence hex, and ``blobs``, the paths
-of the files it reads; beside its own Lean answer on that case,
-``answer.json``, whose ``protocol`` is its id and ``commitment`` its digest (null when its commitment didn't decode, and
-then the case's own commitment stands in, which a rejection never binds). The inference-only policy's case
-(`verity/inference-only/v0`) is one subprotocol's like any other; its record's digest must be the one sampled proofs'
-case commits to (and PoUW's, at remote), which the product checks.
+of the files it reads (sampled proofs' is a5's ``case-sampled.json``, one-stage v2's case in its one-stage form);
+beside its own Lean answer on that case, ``answer.json``, whose ``protocol`` is its id and ``commitment`` its digest
+(null when its commitment didn't decode, and then the case's own commitment stands in, which a rejection never binds).
+The inference-only policy's case (`verity/inference-only/v0`) is one subprotocol's like any other; its record's digest
+must be the one sampled proofs' case commits to (and PoUW's, at remote), which the product checks.
 
 A case's evidence is witness, and so are its params' bodies, so the output is split. ``--private-out`` (created 0700,
 its files 0600) gets the product's params (``params.json``), commitment (``commitment.bin``: `bind` of the digests in
@@ -59,9 +59,17 @@ PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0", "remote-
 #: list them; read only to name the missing ones.
 COMPONENTS = {
     "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+<<<<<<< 99c8914848
                "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/one-stage/v1", "verity/wipe/v0"),
     "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"),
     "remote-v1": ("verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"),
+||||||| merged common ancestors
+               "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/one-stage/v1", "verity/wipe/v0"),
+    "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/one-stage/v1"),
+=======
+               "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"),
+    "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"),
+>>>>>>> 7af4d24fca3e
 }
 #: The subprotocols a product composes in the clear, as a stated exception to everything-zero-knowledge, each with the
 #: line its record carries (`Core.Remote`'s and `Core.Onsite`'s docstrings say the same).

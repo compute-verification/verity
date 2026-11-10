@@ -6,6 +6,7 @@ public import Proofs.Accounting.RateAudit.DeployedSketchSum
 public import Proofs.Accounting.RateAudit.DeployedRelay
 public import Proofs.Accounting.Requirement
 public import Proofs.Accounting.Gates
+import Proofs.Pous.Prob
 
 /-!
 # Stacking: the carrier lemma and the stacked session
@@ -31,7 +32,7 @@ is unpaid on its own store (`SketchDeployedWindow.exists_unpaidOn`). That store 
 prefix before the pass, which `KeyBinding` moves to a uniform store independent of the session's coins, where the
 deployed guarantee's one-pass family bound holds (`SketchDeployedSession.pr_pass_le`). So the unpaid windows cost
 `n·ε + n·P·(G·N/2^h + qtot/2^(8r) + δ)` (`SketchDeployedSession.pr_unpaidOn_le`). The passes' correct receipts are a
-causal family of the windows' draws, whatever stores they are on (`pr_draws_causal_le`), so the draws' terms are the
+causal family of the windows' samples, whatever stores they are on (`pr_samples_causal_le`), so the samples' terms are the
 deployed guarantee's (`pr_deployed_of_unpaid_causal`).
 
 `Accounting.SecurityProofs.StackedSessionConservationRelay` simulates each pass device by one that reruns its carrier's
@@ -211,7 +212,7 @@ open scoped ENNReal
 theorem pr_prod_eq_sum_div {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → Prop) :
     pr Q = (∑ y, pr fun x => Q (x, y)) / Fintype.card Y := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have e : (Finset.univ.filter Q).card = ∑ y, (Finset.univ.filter fun x => Q (x, y)).card := by
     rw [Finset.card_filter, Fintype.sum_prod_type_right]
     simp only [Finset.card_filter]
@@ -767,7 +768,7 @@ theorem pr_pass_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r
   refine Rate.pr_le_of_fiber _ _ (fun sd => ?_)
   by_cases hr : RankGood r sd.1
   · exact (pr_mono fun z hz => hz.2).trans (pr_unpaidPass_le A sd.1 _ _ j fun η =>
-      Device.pr_unpaid_rank_family_le (fun c => A.device j η c) sd.1 r X qtot hr32 hr
+      Prover.pr_unpaid_rank_family_le (fun c => A.device j η c) sd.1 r X qtot hr32 hr
         (fun c => hX j η c sd.1) (hq j η sd.1))
   · calc _ ≤ pr (fun _ : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) => False) :=
           pr_mono fun _ hz => hr hz.1
@@ -807,7 +808,7 @@ theorem pr_pass_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (r X qt
     fun η => SketchDeployedWindow.pr_pass_le (A.window w η) r X qtot hr32 (hX' η)
       (fun j ι σ Os D => hq w η j ι σ Os D) j
 
-/-- The rank tail of window `w`'s signs, on any `ω` drawn before the session. -/
+/-- The rank tail of window `w`'s signs, on any `ω` sampled before the session. -/
 theorem pr_rank_le {Ω : Type} [Fintype Ω] (r : ℕ) (ε : ℝ≥0∞) (hRank : Accounting.Assumptions.SketchRank ks m r ε)
     (w : Fin n) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) => ¬ RankGood r (x.2 w).1) ≤ ε := by
@@ -876,10 +877,10 @@ theorem pr_unpaidOn_le {Ω : Type} [Fintype Ω] (A : SketchDeployedSession n P N
           simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
           ring
 
-/-- **The draws are causal in any correct sets that read each window's earlier windows, signs and passes**, on any `ω`
-drawn before the session: both pooled-draw readings of `pr_draws_le_map`, for correct sets `cor` in place of one
+/-- **The samples are causal in any correct sets that read each window's earlier windows, signs and passes**, on any `ω`
+sampled before the session: both pooled-draw readings of `pr_samples_le_map`, for correct sets `cor` in place of one
 store's. -/
-theorem pr_draws_causal_le {Ω : Type} [Fintype Ω]
+theorem pr_samples_causal_le {Ω : Type} [Fintype Ω]
     (cor : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → Finset (Fin P × Fin N))
     (hcor : ∀ o x x' w, (∀ v, v < w → x v = x' v) → (x w).1 = (x' w).1 → (x w).2.1 = (x' w).2.1 →
       cor o x w = cor o x' w) (K Kw : ℕ) :
@@ -933,7 +934,7 @@ theorem pr_draws_causal_le {Ω : Type} [Fintype Ω]
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
   · simp only [Nat.cast_mul, mul_assoc]
 
-/-- Session conservation in counts from the pooled draws and an unpaid bound `ε_u`, for causal correct sets `cor`
+/-- Session conservation in counts from the pooled samples and an unpaid bound `ε_u`, for causal correct sets `cor`
 and reads `rd`: `pr_paid_of_unpaid_map` with them in place of one store's. -/
 theorem pr_paid_of_unpaid_causal {Ω : Type} [Fintype Ω]
     (cor : Ω → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin n → Finset (Fin P × Fin N))
@@ -948,7 +949,7 @@ theorem pr_paid_of_unpaid_causal {Ω : Type} [Fintype Ω]
           ∃ w, rd z.1 z.2 w + P * slack < (Kw + 1) * (m * 256)))
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + εu := by
-  have h₁ := pr_draws_causal_le cor hcor K Kw
+  have h₁ := pr_samples_causal_le cor hcor K Kw
   refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ hu))
   obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
   · by_cases hD : ∑ w, (cor x.1 x.2 w).card ≤ K ∨ ∃ w, (cor x.1 x.2 w).card ≤ Kw
@@ -1015,7 +1016,7 @@ theorem pr_conservation_of_unpaid_causal {Ω : Type} [Fintype Ω]
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
-/-- `pr_deployed_of_unpaid` for causal correct sets `cor` and reads `rd`: the draws' terms are at most `2·2^-40`. -/
+/-- `pr_deployed_of_unpaid` for causal correct sets `cor` and reads `rd`: the samples' terms are at most `2·2^-40`. -/
 theorem pr_deployed_of_unpaid_causal {Ω : Type} [Fintype Ω]
     (cor : Ω → (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin n → Finset (Fin P × Fin N))
     (rd : Ω → (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin n → ℕ)

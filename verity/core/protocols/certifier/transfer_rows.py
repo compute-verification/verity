@@ -16,12 +16,28 @@ port reads in segments, as `EmbeddingRead_v1` reads a token's embedding):
     leaf_r = row_leaf(D, r, hm96.SHA512.tree_leaf(default_key, b‖c_r), schema)
     root   = the frame-v3-sha512 root of the rows' leaves under D = registered.domain(program, value, words, rows, word_bits)
 
+<<<<<<< 99c8914848
 D leaves the window out, as a value the verifier holds across windows does, so the root is the one `registration.check`
 holds a pinned value's entry to (`pinned`) and the one the verifier's `--registered` port opens; the head and its
 certificate bind the link and the execution phase. `program` is the circuit's program digest (``circuit.json``'s
 ``program``), public. salt_r is 192 bytes the certifier draws from the operating system for row r and no other row. The
 salts are witness, which the certifier hands to the prover alone (`Transfer.witness`); the rows are what the host
 received, which the prover holds.
+||||||| merged common ancestors
+D leaves the window out, as a value the verifier holds across windows does, so the root is the one
+`registration.check` holds a pinned value's entry to (`pinned`) and the one the verifier's `--registered` port opens;
+the head and its certificate bind the link-window. `program` is the circuit's program digest (``circuit.json``'s
+``program``), public. salt_r is 192 bytes the certifier draws from the operating system for row r and no other row.
+The salts are witness, which the certifier hands to the prover alone (`Transfer.witness`); the rows are what the server
+sent or received, which the prover holds.
+=======
+D leaves the window out, as a value the verifier holds across windows does, so the root is the one
+`registration.check` holds a pinned value's entry to (`pinned`) and the one the verifier's `--registered` port opens;
+the head and its certificate bind the link-window. `program` is the circuit's program digest (``circuit.json``'s
+``program``), public. salt_r is 192 bytes the certifier samples from the operating system for row r and no other row.
+The salts are witness, which the certifier hands to the prover alone (`Transfer.witness`); the rows are what the server
+sent or received, which the prover holds.
+>>>>>>> 7af4d24fca3e
 
 **The signed head** (`TransferHead`) is public, as a hiding root is:
 
@@ -61,8 +77,8 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.core.protocols.certifier.certificate import DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text, _u
-from verity.core.protocols.sampled_proofs.one_stage import produced
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import produced
+from verity.core.protocols.spot.one_stage import registered as G
 
 TRANSFER_TAG = "verity-network-certifier/transfer/v1"
 REGISTRATION = "verity-network-certifier/transfer-registration/v1"

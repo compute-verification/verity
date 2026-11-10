@@ -1,10 +1,48 @@
 module
 
-public import Proofs.Flock.SessionLoop.FinishParts
-public import Proofs.Flock.Claims.ZK.FrameRankFault
 public import Proofs.Flock.Claims.ZK.FrameLinks
-public import Proofs.Flock.VBridge.Family.Structure
+public import Proofs.Flock.Claims.ZK.FrameRankFault
 public import Proofs.Flock.Claims.ZK.PrefixLive
+public import Proofs.Flock.SessionLoop.FinishParts
+public import Proofs.Flock.VBridge.Family.Structure
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.Scope.Check
+import Proofs.Flock.Claims.Scope.Sizes
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # (b) `FinPoints`: the link points at the opened coins
@@ -31,6 +69,7 @@ open FlockSoundness.Discharge
 open CoinLayer
 
 open _root_.Flock FlockSoundness.Refine in
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **What `Stmt.setupH` returns has each region's bytes its free bits** (its `checkRegionBytes`). -/
 theorem setupH_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
@@ -47,6 +86,7 @@ theorem setupH_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins} {ta
     assumption
 
 open _root_.Flock FlockSoundness.Refine in
+-- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **What `Stmt.setupHidden` returns has each region's bytes its free bits** (its `checkRegionBytes`). -/
 theorem setupHidden_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
@@ -136,7 +176,7 @@ theorem viewPoints_eq (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     calc p * spec.mPts + j < p * spec.mPts + spec.mPts := by omega
       _ = (p + 1) * spec.mPts := by rw [Nat.succ_mul]
       _ ≤ spec.points * spec.mPts := Nat.mul_le_mul_right _ hp'
-  have hw := wordsAt_slot Masked.dataE x ops hl (s := ops.length) (p := 0) (e := p * spec.mPts + j) hpos le_rfl
+  have hw := wordsAt_slot Masked.dataE x ops hl.le (s := ops.length) (p := 0) (e := p * spec.mPts + j) hpos le_rfl
     (by rw [List.take_length]; exact hlt)
   rw [List.take_length] at hw
   have hge : (wordsAt x (ops.map fun e => CoinLayer.rd e.2) 0).getD (p * spec.mPts + j) 0 =

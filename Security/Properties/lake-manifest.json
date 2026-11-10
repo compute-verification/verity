@@ -45,10 +45,10 @@
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
-   "name": "core_sampled_proofs",
+   "name": "core_spot",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../verity/core/service/sampled_proofs",
+   "dir": "../../verity/core/service/spot",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -56,6 +56,13 @@
    "manifestFile": "lake-manifest.json",
    "inherited": false,
    "dir": "../../verity/core/protocols/network/lean",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
+   "name": "core_firewall",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../verity/core/service/firewall",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -129,6 +136,13 @@
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
+   "name": "core_vstar_recursive",
+   "manifestFile": "lake-manifest.json",
+   "inherited": true,
+   "dir": "../../verity/core/protocols/onsite/../../service/vstar/recursive",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
    "name": "core_protocol",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
@@ -140,7 +154,13 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
+<<<<<<< 99c8914848
    "../../verity/core/protocols/onsite/../remote/../../service/vstar/recursive/../../sampled_proofs/../../difftest/lean",
+||||||| merged common ancestors
+   "../../verity/core/protocols/onsite/../remote/../../service/sampled_proofs/../../difftest/lean",
+=======
+   "../../verity/core/protocols/onsite/../remote/../../service/vstar/recursive/../../spot/../../difftest/lean",
+>>>>>>> 7af4d24fca3e
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -156,7 +176,13 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
+<<<<<<< 99c8914848
    "../../verity/core/protocols/onsite/../remote/../../service/vstar/recursive/../../sampled_proofs/../../primitives/lms/lean",
+||||||| merged common ancestors
+   "../../verity/core/protocols/onsite/../remote/../../service/sampled_proofs/../../primitives/lms/lean",
+=======
+   "../../verity/core/protocols/onsite/../remote/../../service/vstar/recursive/../../spot/../../primitives/lms/lean",
+>>>>>>> 7af4d24fca3e
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

@@ -2,10 +2,20 @@
 computed by its own `EgressBucket_v1` proof block, its computed row, output ``o1``, registered against the network
 certifier's signed root
 (`warden_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
+<<<<<<< 99c8914848
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), which name every port of the
 statement (`Flock.Registered.checkComplete`); each unit's one public output, its 16-bit ``o0`` (1 when the state
 renders a row), read off a value the verifier registers itself at known content, every word 1. Standalone: no Spec
 holds these units yet (`verity.core.protocols.certifier.egress`).
+||||||| merged common ancestors
+by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
+16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
+(`verity.core.protocols.certifier.egress`).
+=======
+by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
+16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
+(`verity.ml.protocols.certifier.egress`).
+>>>>>>> 7af4d24fca3e
 
     python benchmarks/network_traces/egress_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
 
@@ -55,7 +65,8 @@ sys.path.insert(0, str(HERE))
 import warden_zk as WZ  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
-from verity.core.protocols.certifier import egress as EG, io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
+from verity.ml.protocols.certifier import egress as EG  # noqa: E402
+from verity.core.protocols.certifier import io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
@@ -285,7 +296,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"],
                       "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
+    law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the warden's link-window {at.window} "
                                       "(egress_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},

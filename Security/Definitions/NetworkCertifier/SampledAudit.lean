@@ -1,18 +1,48 @@
 module
 
 public import Definitions.Claims.Sampling
+public import Definitions.Claims.SamplingGeneric
 public import Definitions.NetworkCertifier.Run
-public import Mathlib.Logic.Relation
-public import Mathlib.Order.Interval.Finset.Nat
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The sampled audit and acceptance: what an accepted audit says about the egress, at `δ`
 
 Definitions only. Network accounting writes the whole computation as one program `C` of the Boolean profile,
 each machine a subcircuit, and audits its committed trace with sampled proofs (`Claims.Sampling`). The transfer-gate
-units and N2's head checks are classes drawn `all`, and the internal step units are sampled. This module says what an
-accepted audit then establishes about the egress, in the network certifier's terms (`EgressPrediction`, `Accepted`), on
-sampling's own vocabulary: its statement, partition, design, faulty set and `M_δ`.
+units and N2's head checks are classes sampled `all`, and the internal step units are sampled. This module says what an
+accepted audit then establishes about the egress, in the network certifier's terms (`Program`, `Accepted`), on
+sampling's own vocabulary: its statement, partition, design, incorrect set and `M_δ`.
 
 **The layout** (`BoundaryGates`, public, part of the statement) says which of `C`'s gates hold each step's egress rows
 (per slot, a presence gate and the frame's bit gates) and its ingress (input gates, in bit order). It fits the program
@@ -22,15 +52,15 @@ whose layout doesn't fit, as it refuses one outside the sampling scope.
 
 **The circuit's Program** (`circuitProgram`) is `C` run on the ingress up to step `t` and the declared advice, read off
 at step `t`'s egress gates. The advice is the inputs other than the ingress, plus values held at a set of gates
-(`valOver`). A faulty proof block's committed values need not be what its gates compute, so they enter as advice.
+(`valOver`). An incorrect proof block's committed values need not be what its gates compute, so they enter as advice.
 
 **The relation** (`RAcc`) has three parts:
 
-* the sampling relation: the faulty set is in `M_δ`;
-* the faulty set holds no proof block of a class sampled `all` (which `M_δ` implies at `δ ≥ 0`, since such a class's
+* the sampling relation: the incorrect set is in `M_δ`;
+* the incorrect set holds no proof block of a class sampled `all` (which `M_δ` implies at `δ ≥ 0`, since such a class's
   `P_a` factor is `0` on any set that meets it), so the transfer-gate proof blocks and head checks are exact, an error
   of `0`;
-* some advice, holding values only at the faulty proof blocks' committed gates, makes `Accepted` by the circuit's
+* some advice, holding values only at the incorrect proof blocks' committed gates, makes `Accepted` by the circuit's
   Program every observation sequence and operator that the trace's transfer gates carry (`Carries`) with every status
   complete (`Covered`).
 
@@ -86,7 +116,7 @@ def BoundaryGates.inputOf {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins :
 run on the ingress up to `t` and the declared advice `(a, free)`: the inputs other than the ingress (`a`), and the gates
 held at values (`free`). -/
 def circuitProgram {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) :
-    EgressPrediction L S (List Bool) ((ℕ → Bool) × (ℕ → Option Bool)) where
+    Program L S (List Bool) ((ℕ → Bool) × (ℕ → Option Bool)) where
   rows t ins adv ℓ := rowOf (valOver C (lay.inputOf k ins adv.1) adv.2) (lay.egress t ℓ)
 
 /-- Gate `g` of `C` depends on gate `i`: it is `i`, or it reads a gate that depends on `i`. -/
@@ -120,11 +150,16 @@ network check reads. -/
 def Covered {L K S : ℕ} (k : ℕ) (o : List (Obs L K S)) : Prop :=
   ∀ t (_ : t < k) (h : t < o.length), ∀ κ, o[t].status κ = Status.complete
 
-/-- Gate `g` is a committed gate of a faulty unit: it is on the boundary of the proof unit at a slot of `F`. -/
+/-- Gate `g` is a committed gate of an incorrect proof block: it is on the boundary of the proof block at a slot of `F`. -/
 def FaultyGate (C : Prog) (P : Partition) (F : Finset ℕ) (g : ℕ) : Prop :=
   ∃ v ∈ F, ∃ u, P.blocks[v]? = some u ∧ g ∈ u ∧ C.Boundary u g = true
 
-/-- The slots of the classes the rules draw `all`, from slot `o`, as `classesPa` walks the classes. -/
+open Classical in
+/-- **The trace's held gates**: every committed gate of the incorrect proof blocks `F`, at the trace's value. -/
+noncomputable def heldAdv (C : Prog) (P : Partition) (F : Finset ℕ) (ref : ℕ → Option Bool) (g : ℕ) : Option Bool :=
+  if FaultyGate C P F g then some (traceVal C ref g) else none
+
+/-- The slots of the classes the rules sample `all`, from slot `o`, as `classesPa` walks the classes. -/
 def allSlotsFrom : List OneStage → List (List (List (List ℕ))) → ℕ → Finset ℕ
   | r :: rs, c :: cs, o =>
     (match r with
@@ -132,13 +167,13 @@ def allSlotsFrom : List OneStage → List (List (List (List ℕ))) → ℕ → F
       | _ => ∅) ∪ allSlotsFrom rs cs (o + c.flatten.length)
   | _, _, _ => ∅
 
-/-- **The slots drawn `all`**: the proof units of the classes whose rule draws every member. -/
+/-- **The slots sampled `all`**: the proof blocks of the classes whose rule samples every member. -/
 def allSlots (d : Design) (P : Partition) : Finset ℕ := allSlotsFrom d.rules P.classes 0
 
 /-- **The sampled audit's relation** at `δ`, on the statement's bytes. The statement parses, its query evaluates, and:
-the sampling relation holds (`RelS`: the faulty set is in `M_δ`); the faulty set holds no slot sampled `all`; and the
+the sampling relation holds (`RelS`: the incorrect set is in `M_δ`); the incorrect set holds no slot sampled `all`; and the
 advice `(traceVal C ref, free)`, its inputs the trace's committed values and `free` holding values exactly at the
-faulty proof blocks' committed gates (`FaultyGate`), makes `Accepted` by the circuit's Program, over the horizon, every
+incorrect proof blocks' committed gates (`FaultyGate`), makes `Accepted` by the circuit's Program, over the horizon, every
 observation sequence and operator the trace's transfer gates carry (`Carries`) with every status complete (`Covered`). The inputs
 are pinned to the trace, so the registered ones are what the registration commits. -/
 def RAcc (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
@@ -153,22 +188,25 @@ def RAcc (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option 
 
 section Claim
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+open Claims.SamplingGeneric (Arg Compiled)
 
-/-- **The sampled audit's scope**: the sampling scope (`Scope`), and the statement's layout fits its program over its
-horizon (`BoundaryGates.Fits`). -/
-def ScopeAcc {L S : ℕ} (D : Deploy Coin Col T) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (x : Msg) : Prop :=
-  Scope D x ∧ ∃ s, D.parse x = some s ∧ (lay s).Fits s.prog (k s)
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The sampled audit implies `Accepted`** at the deployment `D`, at the public layout `lay` and horizon `k` of each
-statement. It holds on the statements in its scope (`ScopeAcc`), at every `δ ≥ 0`, at the sampling extractor and every
-decoder that lists every trace within Flock's radius: `Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind`, with `KS`'s errors
-(`ε_ks = κ − δ + √(γ·Pr[B])`, Flock's error at the proof blocks' sessions; `ε_bind = Pr[B_ext]`). The selection enters only
-through `M_δ`. -/
-def KSAccepted (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) : Prop :=
-  ∀ (δ : ℝ) decode, 0 ≤ δ → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
-    KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ) (γ D)
-      (fun _ => 1) (Bext H D.V (E D decode))
+/-- **The sampled audit's scope**: the sampling scope (`Compiled.Scope`), and the statement's layout fits its program
+over its horizon (`BoundaryGates.Fits`). -/
+def ScopeAcc {L S : ℕ} (D : Compiled Coin A) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
+    (x : Msg) : Prop :=
+  D.Scope x ∧ ∃ s, D.parse x = some s ∧ (lay s).Fits s.prog (k s)
+
+/-- **The sampled audit implies `Accepted`** at the compiled sampled verifier `D`, at the public layout `lay` and
+horizon `k` of each statement. It holds on the statements in its scope (`ScopeAcc`), at every `δ ≥ 0`, at the compiled
+extractor: `Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind`, with `Compiled.KS`'s errors (`ε_ks = κ − δ + √(γ·Pr[B])`, the
+proof system's error at the proof blocks' sessions; `ε_bind = Pr[B_ext]`). The selection enters only through `M_δ`. -/
+def KSAccepted (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) : Prop :=
+  ∀ δ : ℝ, 0 ≤ δ →
+    KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) D.E (D.κ δ) D.γ
+      (fun _ => 1) (Bext H D.V D.E)
 
 end Claim
 

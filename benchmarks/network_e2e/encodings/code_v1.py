@@ -61,7 +61,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
+<<<<<<< 99c8914848
 from verity.core.protocols.certifier.window_charge import Advice
+||||||| merged common ancestors
+from verity.core.protocols.certifier.window_charge import Window
+=======
+from verity.ml.protocols.certifier.window_charge import Window
+>>>>>>> 7af4d24fca3e
 
 HERE = Path(__file__).resolve().parent
 

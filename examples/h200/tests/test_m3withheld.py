@@ -13,7 +13,7 @@ sys.path.insert(0, str(HERE))
 import m3coin as COIN  # noqa: E402
 import m3reg as REG  # noqa: E402
 import m3withheld as MW  # noqa: E402
-from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
+from verity.core.protocols.spot import remote as R  # noqa: E402
 
 PIN = "c0" * 20
 UTC = "2026-10-27T00:00:00Z"
@@ -29,7 +29,7 @@ def _setup(tmp_path):
 
 def test_an_honest_withheld_session_is_accepted_and_its_root_comes_only_at_its_close(tmp_path):
     """The open's answer carries no root and the coin's opening, with the root, comes at the signed close; the ledger
-    opens the session withheld on the registration's digest, and the check accepts its coin and its draw."""
+    opens the session withheld on the registration's digest, and the check accepts its coin and its sample."""
     reg, main = _setup(tmp_path)
     row = MW.withheld(reg, tmp_path / "w", PIN, main, UTC, "vy-nebius-cpu-4")
     assert row["rc"] == 0 and row["root_at_open"] is None and row["withheld_on"] is True

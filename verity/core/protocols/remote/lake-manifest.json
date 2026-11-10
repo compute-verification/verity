@@ -24,10 +24,10 @@
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
-   "name": "core_sampled_proofs",
+   "name": "core_spot",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../service/sampled_proofs",
+   "dir": "../../service/spot",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -70,7 +70,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../service/vstar/recursive/../../sampled_proofs/../../difftest/lean",
+   "../../service/vstar/recursive/../../spot/../../difftest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -78,7 +78,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../service/vstar/recursive/../../sampled_proofs/../../primitives/lms/lean",
+   "../../service/vstar/recursive/../../spot/../../primitives/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -102,6 +102,7 @@
    "inherited": true,
    "dir":
    "../pouw/lean/check/../window/../commit/../../../../primitives/randomness",
+<<<<<<< 99c8914848
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -109,6 +110,10 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir": "../pouw/lean/pearlplus/../../../../primitives/evaluate",
+||||||| merged common ancestors
+   "dir": "../pouw/lean/check/../window/../commit/../../../../primitives/randomness",
+=======
+>>>>>>> 7af4d24fca3e
    "configFile": "lakefile.toml"}],
  "name": "core_remote",
  "lakeDir": ".lake",

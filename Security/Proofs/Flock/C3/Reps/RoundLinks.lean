@@ -1,9 +1,25 @@
 module
 
-public import Std.Data.String.ToNat
-public import Proofs.Flock.C3.Compose.RsFacts
 public import Proofs.Flock.C3.Compose.HoloEncoded
+public import Proofs.Flock.C3.Compose.RsFacts
 public import Proofs.Flock.C3.Reps.SentKeys
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.VStarList.Shape
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.VBridge.Pinned
+import Std.Data.String.ToNat
 
 /-!
 # The round reads' links
@@ -45,8 +61,8 @@ theorem index_pre (p : String) (k : ℕ) {n : ℕ} (hn : p.length = n) :
     exact ⟨(toString k).toList, by simp⟩
   have hd : ((p ++ toString k).drop n).toString = toString k := by
     apply String.toList_inj.1
-    show ((p ++ toString k).drop n).copy.toList = _
-    rw [String.toList_copy_drop, String.toList_append, ← hn, ← String.length_toList, List.drop_left]
+    rw [String.Slice.toString_eq, String.toList_copy_drop, String.toList_append, ← hn, ← String.length_toList,
+      List.drop_left]
   simp only [hs, ↓reduceIte, hd]
   exact Nat.toNat?_repr k
 

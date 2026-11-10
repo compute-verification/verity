@@ -98,7 +98,13 @@ def test_conformance_record_names_the_evidence():
 
 
 def test_scan_records_match_the_conformance_record():
+<<<<<<< 99c8914848
     """The two store scans, B0's and B1's (`root`'s `B0.json` and `B1.json`), are what the record states."""
+||||||| merged common ancestors
+    """The two store scans (`data/l8-nan-scan-2026-09-07/`) are what the record states."""
+=======
+    """The two store scans (the B0 and B1 files under the test's ``data/`` scan directory) are what the record states."""
+>>>>>>> 7af4d24fca3e
     root = Path(__file__).resolve().parents[2] / "data" / "l8-nan-scan-2026-09-07"
     stated = CF.NAN_CANONICALISATION["recorded_traces_finite"]
     for config in ("B0", "B1"):

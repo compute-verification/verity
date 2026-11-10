@@ -1,7 +1,46 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FrameRanked
+public import Batteries.Data.ByteArray
+public import Flock.Firewall.Skeleton
+public import Flock.With.Sim
+public import Mathlib.NumberTheory.LucasLehmer
 public import Proofs.Flock.Claims.ZK.FrameCount
+public import Proofs.Flock.Claims.ZK.FrameParse
+public import Proofs.Flock.Claims.ZK.FrameRanked
+import Flock.With.SimWalk
+import all Init.Data.Array.Basic
+import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FrameSched
 
 /-!
 # The algebraic phase's rounds pass over the frame's phase
@@ -61,7 +100,7 @@ theorem qpend_empty : QPend ByteArray.empty := ⟨[], rfl, fun _ h => nomatch h�
 /-- **A recording program keeps quiet**: from plain pending bytes, wherever it returns, its pending bytes are plain and
 the rounds it recorded are quiet. -/
 def Quiet {α : Type} (p : TMW RecM α) : Prop :=
-  ∀ (t : Transcript) (s : Array (ByteArray × ℕ) × ℕ) (a : α) (t' : Transcript) (s' : Array (ByteArray × ℕ) × ℕ),
+  ∀ (t : Flock.Transcript) (s : Array (ByteArray × ℕ) × ℕ) (a : α) (t' : Flock.Transcript) (s' : Array (ByteArray × ℕ) × ℕ),
     (p.run t).run s = .ok ((a, t'), s') → QPend t.pending →
       QPend t'.pending ∧ ∃ new : List (ByteArray × ℕ), s'.1.toList = s.1.toList ++ new ∧ ∀ r ∈ new, QRound r
 
@@ -144,7 +183,7 @@ theorem squeezeP_quiet (kind : UInt8) (n : ℕ) (hk : kind = 2 ∨ (kind = 1 ∧
   by_cases h0 : n = 0
   · subst h0
     have e : ((squeezeP recAsks kind 0).run t).run (rs, k) =
-        .ok ((#[], { t with pending := Transcript.framed t kind 0 }), (rs, k)) := rfl
+        .ok ((#[], { t with pending := Flock.Transcript.framed t kind 0 }), (rs, k)) := rfl
     rw [e] at h
     cases h
     have hk2 : kind = 2 := hk.resolve_right fun h => absurd h.2 (by decide)
@@ -156,16 +195,16 @@ theorem squeezeP_quiet (kind : UInt8) (n : ℕ) (hk : kind = 2 ∨ (kind = 1 ∧
           { t with pending := ByteArray.empty, k := t.k + 1,
                    rounds := t.rounds.push ⟨n, ByteArray.empty,
                      (Array.range n).map fun i => _root_.Flock.Firewall.Skeleton.coin (k + i + 1),
-                     some (Transcript.framed t kind n)⟩ }),
-          (rs.push (Transcript.framed t kind n,
-            (_root_.Flock.u64OfLE (Transcript.framed t kind n) ((Transcript.framed t kind n).size - 8)).toNat),
-           k + (_root_.Flock.u64OfLE (Transcript.framed t kind n) ((Transcript.framed t kind n).size - 8)).toNat)) := by
+                     some (Flock.Transcript.framed t kind n)⟩ }),
+          (rs.push (Flock.Transcript.framed t kind n,
+            (_root_.Flock.u64OfLE (Flock.Transcript.framed t kind n) ((Flock.Transcript.framed t kind n).size - 8)).toNat),
+           k + (_root_.Flock.u64OfLE (Flock.Transcript.framed t kind n) ((Flock.Transcript.framed t kind n).size - 8)).toNat)) := by
       simp only [squeezeP, StateT.run, h0, if_false]
       rfl
     rw [e, Count.framed_count t kind hn] at h
     cases h
     obtain ⟨fs, hfs, hall⟩ := hp
-    refine ⟨qpend_empty, [(Transcript.framed t kind n, n)], by simp, fun r hr => ?_⟩
+    refine ⟨qpend_empty, [(Flock.Transcript.framed t kind n, n)], by simp, fun r hr => ?_⟩
     rw [List.mem_singleton.1 hr]
     exact ⟨fs, kind, by rw [FlockSoundness.Refine.framed_enc, hfs], hall, hk, h0, hn⟩
 
@@ -204,7 +243,7 @@ theorem repPiop_quiet (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout
   unfold repPiop
   sim_walk [zerocheckFw_quiet st.m st.digest cap root lay mk hm hd hc hr, lincheckFw_quiet]
 
-theorem quiet_run' {α : Type} {p : TMW RecM α} (hp : quietS.R p p) {t : Transcript}
+theorem quiet_run' {α : Type} {p : TMW RecM α} (hp : quietS.R p p) {t : Flock.Transcript}
     {s : Array (ByteArray × ℕ) × ℕ} {a : α} {s' : Array (ByteArray × ℕ) × ℕ}
     (h : (p.run' t).run s = .ok (a, s')) (ht : QPend t.pending) :
     ∃ new : List (ByteArray × ℕ), s'.1.toList = s.1.toList ++ new ∧ ∀ r ∈ new, QRound r := by
@@ -224,7 +263,7 @@ theorem rounds_quiet {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} 
   have hT := quietS.bind (repPiop_quiet st (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) cap
     (ByteArray.mk (Array.replicate 64 0)) #[] (fun _ => 0) hm hd hc
     (show (Array.replicate 64 (0 : UInt8)).size < 2 ^ 64 by simp)) fun _ => quietS.pure ()
-  have h0 : QPend (Transcript.init #[] dom).pending :=
+  have h0 : QPend (Flock.Transcript.init #[] dom).pending :=
     ⟨[.dom dom], by rw [FlockSoundness.Refine.init_enc]; simp [encs], fun f hf => by
       rw [List.mem_singleton.1 hf]; exact ⟨hdom, fun b e => by cases e⟩⟩
   unfold _root_.Flock.Firewall.Skeleton.rounds at h

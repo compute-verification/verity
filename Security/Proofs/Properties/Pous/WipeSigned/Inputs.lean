@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Properties.Pous.WipeSigned.Tree
-public import Proofs.Properties.Pous.MemoryChallenger.Inputs
+import all Init.Data.String.Defs
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Properties.Pous.MemoryChallenger.Inputs
 
 /-!
 # What the wipe's hashes read

@@ -69,7 +69,7 @@ w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bou
 * **chain** runs chain_record.sh's network certifier path on the kept fetch (CR_PATH=warden,
   CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's report (``--endpoint``, ``endpoint``'s art), or a dry rehearsal's endpoint records (KEEP/RUN/endpoint
-  by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period drawn
+  by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period sampled
   on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
   at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every proof block, or ``--draw K`` of them, on the
   verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
@@ -84,7 +84,7 @@ session's coins over ssh to that port of P's loopback, where the sample's client
 run's witness are the auditor's, so the sample never runs on the served node, which is the prover's: a ``--coin-peer``
 that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
 node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (with its /etc/vy/peers entry), and on
-a node without one the chain draws on the verifier's coins. ``--main`` is the verifier's copy of main's first-parent
+a node without one the chain samples on the verifier's coins. ``--main`` is the verifier's copy of main's first-parent
 history, fetched from the tree's origin into KEEP/RUN by default (`first_parent`); ``--challenger-key`` is the
 deployment's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run. CR_SCAN_ARGS and
 CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
@@ -99,7 +99,7 @@ ids as the network certifier's cells carry them and its finish (`finish`): the e
 certified I/O, not the prover's record of it. The certified I/O is ``io``'s file, written in KEEP on `AUDITOR`: it
 reaches the served node over a private route (``endpoint --io -`` on an ssh stdin, or a ``--send`` the step moves out of
 the run dir), never through a run's custody, and the served node already holds its values. The check then runs on the
-prover's node, and the chain's report says so (`chain_record.WARDEN_SERVED_STUBBED`). Its art (``--endpoint ART``,
+developer's node, and the chain's report says so (`chain_record.WARDEN_SERVED_STUBBED`). Its art (``--endpoint ART``,
 ``endpoint``'s ``$OUT``) is report.json, windows.jsonl and serve.json.
 
 The runs (the lane's gate key is on `AUDITOR`, a CPU node; KEEP is the lane's gate directory there):
@@ -510,7 +510,13 @@ def input_file(path: Path, what: str) -> Path:
 
 
 def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
+<<<<<<< 99c8914848
     """The scan's sample arguments: none (every proof block), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
+||||||| merged common ancestors
+    """The scan's sample arguments: none (every unit), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
+=======
+    """The scan's sample arguments: none (every unit), ``--draw K`` on the verifier's coins, or K on the gate's, sampled on
+>>>>>>> 7af4d24fca3e
     the auditor's side (`--coin-peer`)."""
     if a.coins == "verifier":
         return [] if a.draw is None else ["--draw", str(a.draw)]
@@ -703,7 +709,7 @@ def chain(a: argparse.Namespace) -> int:
             raise Refused(f"{kv!r}: CR_K=V, a chain_record.sh variable")
         if k in ("CR_SCAN_ARGS", "CR_SCAN_CMD") and any(w in v for w in ("--draw", "--challenger", "--peer")):
             raise Refused(f"{k}: the scan's draw and its coins are --draw and --coins's, which keep the draw off the "
-                          "prover's node")
+                          "developer's node")
         env[k] = v
     coins = coin_args(a, fetch)
     if any(c.isspace() for w in coins for c in w):

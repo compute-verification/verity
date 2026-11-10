@@ -17,6 +17,8 @@ from verity_vllm.pipeline import hot as hc
 from verity_vllm.pipeline import source_identity
 from verity_vllm.pipeline import timeline as tlm
 
+pytestmark = pytest.mark.usefixtures("outside_a_checkout")
+
 CORE = Path("verity")
 
 

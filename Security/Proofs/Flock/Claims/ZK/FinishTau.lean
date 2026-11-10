@@ -1,20 +1,55 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FinishRows
-public import Proofs.Flock.Claims.ZK.FinishLane
-public import Proofs.Flock.Claims.ZK.FinishZc
-public import Proofs.Flock.Claims.ZK.FinishRank
-public import Proofs.Flock.Claims.ZK.FinishSrc
-public import Proofs.Flock.Claims.ZK.PiopSrcLc
-public import Proofs.Flock.Claims.ZK.SimLig
 public import Proofs.Flock.Claims.Complete.Zk.ConsReplay
-public import Proofs.Flock.Claims.Complete.Zk.Json.Session
+public import Proofs.Flock.Claims.ZK.FinishLane
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.FinishRows
+public import Proofs.Flock.Claims.ZK.FinishZc
+import Flock.With.SimWalk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.CausalExe
+import Proofs.Flock.Claims.ZK.FinishSrc
+import Proofs.Flock.Claims.ZK.InnerTauLig
+import Proofs.Flock.Claims.ZK.PiopSrcLc
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 
 /-!
-# The firewall's seven rows at a worker's values
+# The ZK server's seven rows at a worker's values
 
-`FinishStopAt.rowsAt_of_cons` asks that the firewall's constraints be the first seven rows on the view's masked values,
-constants included. Here they are at the firewall's own run (`repFwC` answered by `asksCut` from a log `l`
+`FinishStopAt.rowsAt_of_cons` asks that the ZK server's constraints be the first seven rows on the view's masked values,
+constants included. Here they are at the ZK server's own run (`repFwC` answered by `asksCut` from a log `l`
 and no rounds): its zerocheck and lincheck send the masked values `vals + h` and leave rounds answered by the coins at
 their sends, which the rounds after them keep (`growS`), so the replay reads its masked proof as the view's
 (`FinishZc`, `FinishRows`' `zcOf_eq`, …) under the coins `coin (l.size + j)`, and `FinishRows.replay_rows` applies; its
@@ -177,7 +212,7 @@ open Flock Model ZkSession ZkView ZK Refine
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **The replay's five rows at the firewall's own run's steps**: the replay's three and the two ring-switch rows are
+/-- **The replay's five rows at the ZK server's own run's steps**: the replay's three and the two ring-switch rows are
 `rowsOf`'s first five, at the zerocheck, lincheck, ring switch and Ligerito runs and the replay that `repCut_fw`'s
 `hinner` is handed (`h₁`, …, `hrp`), under `tauFw`'s premises on the coins, masked values, fold and switched vectors. -/
 theorem tauFw_at_replay {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2) {nE : ℕ}
@@ -307,7 +342,7 @@ theorem tauFw_at_replay {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Co
   exact replay_rows Tz stm c r v sh T' ρσ st _ ic.root hm hSm hSk hrp' hzc hrd hzp' ez er eρ eρ' eα eβ eτ er'
     hfold ss hs0 hs1 lgc k hk
 
-/-- **The firewall's seven rows at its own run's steps**: `tauFw`'s rows, at the zerocheck, lincheck, ring switch and
+/-- **The ZK server's seven rows at its own run's steps**: `tauFw`'s rows, at the zerocheck, lincheck, ring switch and
 Ligerito runs, the replay and level 0's constraints that `repCut_fw`'s `hinner` is handed (`h₁`, …, `hlgc`), under
 `tauFw`'s premises on the coins, masked values, fold, switched vectors and level 0. -/
 theorem tauFw_at {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2) {nE : ℕ}
@@ -395,7 +430,7 @@ theorem tauFw_at {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (
     hrow k']
   fin_cases k' <;> rfl
 
-/-- **The firewall's seven rows at its own run's steps, by coefficient**: `tauFw_at`'s coefficients, with level 0's
+/-- **The ZK server's seven rows at its own run's steps, by coefficient**: `tauFw_at`'s coefficients, with level 0's
 two rows of the layout's length, where level 0's record holds the model's coins (`LaneCoins`) rather than all of
 level 0 being read at the view (`LaneAt`): `lanesA` reads only those. -/
 theorem tauFw_at_coef {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK (RestOf Tz stm)) (r : Fin 2)
@@ -473,7 +508,7 @@ theorem tauFw_at_coef {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : Coin
   refine ((hrow k').2 i).trans ?_
   fin_cases k' <;> rfl
 
-/-- **The firewall's seven rows are `rowsOf`'s**: where `repFwC`, answered by `asksCut` from a log `l` and no rounds,
+/-- **The ZK server's seven rows are `rowsOf`'s**: where `repFwC`, answered by `asksCut` from a log `l` and no rounds,
 returns, its constraints pass on the pads, and the replay's three, the two ring-switch rows and level 0's two lane rows
 are `rowsOf`'s first seven, constants included, wherever the coins from `l.size` on are the model's (`hz`, …, `hr'`),
 the masked values `vals + h` are the view's below `zp 64` (`hmk`), the fold folds as the model's (`hfold`), the ring

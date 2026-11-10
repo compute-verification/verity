@@ -19,7 +19,7 @@ RUN_EXPIRY after the marker's `verified_utc`; priority `normal`. Nothing is writ
 
 Policy `default` (POLICY) acts when the root's filesystem is over high-pct (or with --force) and deletes, lowest priority first and
 then the oldest expiry, until it is under low-pct. A filesystem's use is the larger of its blocks' and its inodes' (`inode_usage`):
-a disk out of inodes refuses every write as one out of blocks does (vy-dc-h200, 26 Oct: inodes at 100%, blocks at 32%). A path qualifies only with a valid record (explicit or implicit) recorded on
+a disk out of inodes refuses every write as one out of blocks does, even with most of its blocks free. A path qualifies only with a valid record (explicit or implicit) recorded on
 this node that is expired, `low` or `normal`, and preserved or regenerable; a preserved path also needs its artifact to hold every
 file now under it at its size, and the artifact PRESERVED on the remote, checked just before the deletion (`store_check`); and no
 file in the job-script directories may name it (`JobScripts`). An implicit record also needs its marker to still vouch for the run
@@ -565,7 +565,9 @@ def covers(man: Any, path: Path) -> str | None:
 def store_check(store_root: str | None = None) -> Callable[[str, Path], str | None]:
     """The default remote check, run just before a deletion: the artifact holds the path's files (`covers`), and
     `preserved.check` in head mode finds it PRESERVED (remote sizes, and the single-part ETag against the local blob's MD5 where
-    the blob is here, else a read-back; `LocalStore.verify` would read back every blob). None when both hold, else why not."""
+    the blob is here, else a read-back; `LocalStore.verify` would read back every blob). None when both hold, else why not.
+    Without a usable remote (a node holds no store key) it is `recorded` mode: the remote replica the store's catalog verified
+    when custody pushed it, which is what the store eviction trusts too (without it, a node skips every expired run)."""
     st = None
 
     def chk(art: str, path: Path) -> str | None:
@@ -577,7 +579,7 @@ def store_check(store_root: str | None = None) -> Callable[[str, Path], str | No
             st = st or LocalStore(store_root)
             if why := covers(st.get_manifest(art), path):
                 return why
-            rep = P.check(st, [art], mode="head")
+            rep = P.check(st, [art], mode="head" if st.remote is not None else "recorded")
         except Exception as e:  # noqa: BLE001  any failure is a failed check: the path stays
             return f"{type(e).__name__}: {e}"
         if rep["preserved"]:
@@ -826,8 +828,8 @@ def _refusal(path: Path, root: Path, approved_by: str, top: Found | None, below:
 
 
 CODE_DIRS = frozenset({".venv", "venv", "site-packages", "dist-packages", "node_modules", ".lake", "__pycache__"})
-"""Directories that hold code, never a retained pass: not walked for PASSES (INF-264: torch's and vLLM's `passes` packages in every
-venv refused proofs' twelve approved trees on cpu-1, 4.47M inodes)."""
+"""Directories that hold code, never a retained pass: not walked for PASSES (torch's and vLLM's `passes` packages sit in every
+venv, and taken for passes they would refuse every approved tree holding one)."""
 
 
 def _pass_dir(d: Path) -> bool:

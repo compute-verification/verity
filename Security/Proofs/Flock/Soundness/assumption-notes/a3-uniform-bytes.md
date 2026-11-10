@@ -15,16 +15,20 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   taking it vacuous. At run time, Lean v4.34.0's runtime implements it as `lean_io_get_random_bytes`
   (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on Windows. Re-read it at every
   toolchain bump.
-- **What ties the statement to the verifier** is `drawOS_def`: the live sample `Flock.Draw.drawOS` is
-  `Flock.Draw.drawWith` with every stream's bytes from `IO.getRandomBytes`, and the theorems are about `drawWith`. The
-  step from `IO` to the model rests on `drawWith` being generic in its monad, together with A3.
+- **What ties the statement to the verifier.** The verifier has no randomness of its own: the live sample is
+  `Flock.Draw.drawWith` on the challenger's coins, read in order (`Spot.Draw.drawUnits`), which the challenger
+  flips from `IO.getRandomBytes` on its own host (`sampled-proofs-verifier`'s `coins`). The theorems are about
+  `drawWith`, and `drawOS_def` states that `Flock.Draw.drawOS` is `drawWith` with every stream's bytes from
+  `IO.getRandomBytes`. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with A3.
+  That the challenger releases the coins only after the registration they sample is recorded rests on `trusted-host`,
+  not on A3.
 - **Where it is used.** `drawOS_subset_escape_le`, `drawOS_stratified_escape_le`, `drawOS_work_escape_le`,
   `execOS_escape_le` and `execOS_subset_escape_le` (`ExecDrawOS.lean`). They hold for every number of
-  bytes `L` the model reads. The live verifier reads as many as its reruns need, and its acceptance probability is the
+  bytes `L` the model reads. The live sample reads as many as its reruns need, and its miss probability is the
   limit as `L` grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take
   uniform streams as their probability space, the same assumption. The recursive audit's sessions of V* need none of
-  it: their law is the full sample, which samples every unit at every byte string (`execOS_subset_full_mem`,
-  `execOS_subset_full_escape`), so `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditC3` are proved from
+  it: their sampling design is the full sample, which samples every unit at every byte string (`execOS_subset_full_mem`,
+  `execOS_subset_full_escape`), so `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditHolo` are proved from
   their forms with no A3 premise (`…NoA3`). `RecursiveSound` is proved the same way but is no longer a guarantee: its
   form admits a possibilistic break, and the recursion's guarantee is `Flock.Guarantees.RecursiveKS`. Those are fork
   forms and state no bits; the recursion's knowledge form, `Claims.Recursion.KS`, is at its level
@@ -49,7 +53,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt and the pads tree's salts. The tap
   (`flock-firewall tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
   salts and the coin tree's nonce. What ties them to the model is `Claims.ZKServer.frame_cmd` and `frame_draws` (the
-  frame's read, on rep `i`'s stream of the tape, is the release's samples), as `drawOS_def` is for the unit sample;
+  frame's read, on rep `i`'s stream of the tape, is the release's samples), as `drawOS_def` is for a unit sample;
   `Claims/ZK/Os.lean` takes the ZK server's three theorems to those bytes (`zkServerLeanOs`). So no premise on a stream
   generator is left on the salts or the masks.
 - **What is outside it.** A VM snapshot restored more than once repeats the kernel's CRNG state unless the kernel

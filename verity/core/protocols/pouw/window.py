@@ -1,23 +1,23 @@
-"""PoUW's audit window as the proof system sees it: what the window makes public, the grid its tile count is padded to,
-the size of the uniform draw, and the window's advice (its per-call entries and the map from a drawn index to a tile).
+"""PoUW's audit execution phase as the proof system sees it: what the execution phase makes public, the grid its tile count is padded to,
+the size of the uniform sample, and the execution phase's advice (its per-call entries and the map from a sampled index to a tile).
 
 **Public items** (`PUBLIC`), the draft's list and the rows' fixed length.  The service refuses a registration
-that makes anything else public; the window's own root and W's root are salted roots, which the rule allows.
+that makes anything else public; the execution phase's own root and W's root are salted roots, which the rule allows.
 
     item       kind         source     what it is
-    verdict    output       outcome    every drawn tile proved and opened, or not
-    work       output       window     the credited work, as the tile count N padded to a grid level (`bucket`)
+    verdict    output       outcome    every sampled tile proved and opened, or not
+    work       output       execution phase     the credited work, as the tile count N padded to a grid level (`bucket`)
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
-    sampling   structure    parameter  ε, δ, the grid and the law subset:K′ they fix with the work level (`k_prime`)
+    sampling   structure    parameter  ε, δ, the grid and the sampling design subset:K′ they fix with the work level (`k_prime`)
     length     structure    parameter  the rows of record's fixed length: each slot's public max_tokens (`length_item`)
-    flipped      coins        outcome    the verifier's own draw, after the receipt
+    flipped      coins        outcome    the verifier's own sample, after the receipt
     root_W     commitment   parameter  the weights' salted root
 
 **The grid** (`GRID_BITS` = s): the positive integers with at most s + 1 significant bits, so consecutive points above
-2^(s+1) differ by a factor of at most 1 + 2^-s (9/8 at s = 3).  A window with N_real real tiles registers one level ℓ, the
+2^(s+1) differ by a factor of at most 1 + 2^-s (9/8 at s = 3).  An execution phase with N_real real tiles registers one level ℓ, the
 largest point g_ℓ <= N_real: it is credited g_ℓ tiles' work and pads its tiles to N = g_(ℓ+1) > N_real with filler tiles,
-at least one.  So N is `pad(N_real + 1)`, the least grid point at or above the real tiles and the one filler a window
-always has: the private partition's unit-count bucket n_b on the same grid, one bucket and not two.  Both outputs are fixed by ℓ, so the window's influenceable public output is one grid level, and over a
+at least one.  So N is `pad(N_real + 1)`, the least grid point at or above the real tiles and the one filler an execution phase
+always has: the private partition's unit-count bucket n_b on the same grid, one bucket and not two.  Both outputs are fixed by ℓ, so the execution phase's influenceable public output is one grid level, and over a
 declared range [lo, hi] it takes `levels(lo, hi)` = q values: log2 q bits in the draft's leakage bound.  The honest cost is
 under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <= 1 + 2^-s in K′.
 
@@ -32,38 +32,38 @@ public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": 
 and is not of record.
 
 **The advice** (L2): one entry per committed call, then one filler entry, then empty entries up to the public bound P, each
-an `Entry` row committed in one window root registered before the sample.  A call's sides are dense: each side tree holds only
+an `Entry` row committed in one execution phase root registered before the sample.  A call's sides are dense: each side tree holds only
 the rows its tiles keep (a row the scheme refused is no tile's), in order, so its tiles are the products of A's rows and
 B's, row-major, and index u of its range is (u div n_b, u mod n_b); each side row carries its place in the call (I, J), and
 the call's record, which the entry binds by SHA-512, lists them (``keep``).  A call's entry also holds the root of its
-pass's -h3 tile tree, where each drawn tile's served leaf is read, and the call's place in that pass (tile0, cols, m), so a
+pass's -h3 tile tree, where each sampled tile's served leaf is read, and the call's place in that pass (tile0, cols, m), so a
 unit computes the leaf and its word in it from the rows it reads (`tile_read`).  The filler entry holds zero rows on both
-sides and the range [N_real, N).  `tile_at` maps a drawn index to its entry and rows, and `window_problem` is the window
+sides and the range [N_real, N).  `tile_at` maps a sampled index to its entry and rows, and `window_problem` is the execution phase
 statement (L4) in Python over the entry rows: the rows are entry rows, the ranges tile [0, N) in order, each call's range
 is its tiles, the filler covers the rest, every call's -h3 root is the pass's, the calls' pass tiles are ordered and
 disjoint, and the registered level is `bucket` of the real tiles; given the records and the side rows' indices it also
 holds those to the entries.  It is not proved yet: no Program states it.
 
 **The layout for gates** is the Lean's (`PouwWindow.Entry`, `PouwWindow.Side`, `PouwWindow.Inputs`): the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the dense side trees of 2^D
-leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`,
+leaves (`DEPTHS`) padded with frame-v3's pad leaf under the execution phase's side domains (`side_domain`, `side_levels`,
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
 `public_inputs`); `tests/vectors/window.json` pins them.
 
-**Live windows**.  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
-(`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
-derivation from the salt and the prover's roots.  A live window's comes from the proof system's challenger
-(`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
+**Live execution phases**.  The check item's optional ``coins`` is the execution phase's coin mode, ``live`` or ``seeded``
+(`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded execution phase's noise is its scheme's
+derivation from the salt and the prover's roots.  A live execution phase's comes from the proof system's challenger
+(`verity.core.protocols.spot.challenger`), whose first client this is: the execution phase's coins are the layout
 `live_families(R)` under `LIVE_SCHEME`, its salt coin and R round coins (``pouw/round``, rounds numbered from 0 as
-Compose's `Declared.round` numbers them), all committed before the epoch. Its sampling coin is a session of its own
-(`DRAW_FAMILIES`), opened withheld on the window's draw root, so its coin root reaches the prover only after that root
+Compose's `Declared.round` numbers them), all committed before the execution phase. Its sampling coin is a session of its own
+(`DRAW_FAMILIES`), opened withheld on the execution phase's sample root, so its coin root reaches the prover only after that root
 (`credit._credited`, Lean `Properties.Pouw.Credit.DrawWithheld`). The salt and round coins' session stays plain: each coin
 opens after its own root, so a coin root released before them hides no choice the prover makes, and its commitment's
 root is in the salt and every round's noise key.  The salt coin opens once, after the
-window's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
+execution phase's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
 rule is `core_check.salt`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
-round r commits, and round r's noise key is `round_key` of that coin and that root.  `rounds_reason` is the rule on a
-window's round coins (Lean: `PouwWindow.Rounds`).  A Pearl-C pass's session takes its salt coin alone
-(`SALT_FAMILIES`, `salt_epoch_reason`; Lean `Properties.Pouw.LiveSalt.SaltEpoch`), opened after its epoch's root
+round r commits, and round r's noise key is `round_key` of that coin and that root.  `rounds_reason` is the rule on an
+execution phase's round coins (Lean: `PouwWindow.Rounds`).  A Pearl-C pass's session takes its salt coin alone
+(`SALT_FAMILIES`, `salt_epoch_reason`; Lean `Properties.Pouw.LiveSalt.SaltEpoch`), opened after its execution phase's root
 (`salt.epoch_open_root`), so it ends complete once that coin is released.
 """
 from __future__ import annotations
@@ -78,7 +78,7 @@ from fractions import Fraction
 from functools import lru_cache
 from typing import Any, Mapping, Sequence
 
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.identity import identity_digest_sha512
@@ -90,7 +90,7 @@ from verity.ml.randomness import Key, derive
 
 GRID_BITS = 3
 
-#: (item, kind, source, reason): the window's public items, in the service's `Public` form
+#: (item, kind, source, reason): the execution phase's public items, in the service's `Public` form
 PUBLIC = (
     ("verdict", "output", "outcome", "what the credit rests on: every drawn tile was proved and opened, or not"),
     ("work", "output", "window", "the credited work, as the tile count padded to a grid level: the draw ranges over its N "
@@ -172,13 +172,13 @@ def point(ell: int, bits: int = GRID_BITS) -> int:
 
 
 def levels(lo: int, hi: int, bits: int = GRID_BITS) -> int:
-    """q: the grid levels a window's tile count in [lo, hi] can register."""
+    """q: the grid levels an execution phase's tile count in [lo, hi] can register."""
     return level(floor_point(hi, bits), bits) - level(floor_point(lo, bits), bits) + 1
 
 
 @dataclass(frozen=True)
 class Work:
-    """A window's work level: it is credited `credited` tiles, point(level), and pads to `n` tiles, point(level + 1)."""
+    """An execution phase's work level: it is credited `credited` tiles, point(level), and pads to `n` tiles, point(level + 1)."""
     level: int
     credited: int
     n: int
@@ -192,7 +192,7 @@ class Work:
 
 
 def bucket(real: int, bits: int = GRID_BITS) -> Work:
-    """The level of a window of `real` real tiles: credited floor_point(real), padded to the next point."""
+    """The level of an execution phase of `real` real tiles: credited floor_point(real), padded to the next point."""
     return Work.at(level(floor_point(real, bits), bits), bits)
 
 
@@ -260,7 +260,7 @@ EPS_BITS = 32
 
 
 def eps_at(k: int, delta: Fraction, credited: int, n: int, w_max: int) -> Fraction:
-    """`k_prime` inverted: the least ε = j/2^`EPS_BITS` (1 <= j <= 2^`EPS_BITS`) whose K′ at δ and the window's inputs
+    """`k_prime` inverted: the least ε = j/2^`EPS_BITS` (1 <= j <= 2^`EPS_BITS`) whose K′ at δ and the execution phase's inputs
     (`k_prime(ε, δ, credited, n, w_max)`) is at most `k`, so a sample of `k` establishes ε at δ, rounded up to the grid.
     Bisection over j, K′ being nonincreasing in ε; ValueError when `k` isn't a positive integer, the inputs are outside
     `k_prime`'s domain, or not even ε = 1 has K′ <= `k`."""
@@ -284,7 +284,7 @@ def eps_at(k: int, delta: Fraction, credited: int, n: int, w_max: int) -> Fracti
 
 
 def sampling(eps: Fraction, delta: Fraction, work: Work, tile_work: int, bits: int = GRID_BITS) -> dict[str, Any]:
-    """The `sampling` item: ε, δ, the grid and the law they fix with the level (every tile does `tile_work`)."""
+    """The `sampling` item: ε, δ, the grid and the sampling design they fix with the level (every tile does `tile_work`)."""
     k = k_prime(eps, delta, work.credited * tile_work, work.n, tile_work)
     return {"eps": str(Fraction(eps)), "delta": str(Fraction(delta)), "grid_bits": bits, "law": {"law": "subset", "k": k}}
 
@@ -297,7 +297,7 @@ LENGTH_KEYS = ("max_tokens", "served", "stop")
 
 
 def length_item(max_tokens: Sequence[int]) -> dict[str, Any]:
-    """The `length` item of a window whose slots serve `max_tokens`: stop mode fixed, each slot served its max_tokens."""
+    """The `length` item of an execution phase whose slots serve `max_tokens`: stop mode fixed, each slot served its max_tokens."""
     return {"max_tokens": list(max_tokens), "served": list(max_tokens), "stop": STOP_FIXED}
 
 
@@ -306,7 +306,7 @@ def _nats(x: Any) -> list[int] | None:
 
 
 def length_problem(item: Any, max_tokens: Sequence[int]) -> str | None:
-    """Why a registered `length` item is not a fixed-length window's at the verifier's `max_tokens` (one per slot), or
+    """Why a registered `length` item is not a fixed-length execution phase's at the verifier's `max_tokens` (one per slot), or
     None, the first rule it breaks: it is ``{max_tokens, served, stop}``; its stop mode is fixed, not EOS-keyed; its
     max_tokens and served are lists of natural numbers; its max_tokens is the verifier's; and each slot served its
     max_tokens."""
@@ -337,7 +337,7 @@ T_BITS = 40
 #: the side trees' public depths: A holds a call's kept activation rows (at most the served batch's 8,192 tokens), B its
 #: kept weight rows
 DEPTHS = {"a": 13, "b": 17}
-#: the window root's port, and the schema its entry rows are committed under
+#: the execution phase root's port, and the schema its entry rows are committed under
 PORT = "entries"
 ENTRY_SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 ENTRY_BYTES = 336
@@ -359,7 +359,7 @@ ROW_STEP = 16
 
 @dataclass(frozen=True)
 class Entry:
-    """One entry of the window root, as its committed bit row holds it (Lean `PouwWindow.Entry`): its kind, its tile range
+    """One entry of the execution phase root, as its committed bit row holds it (Lean `PouwWindow.Entry`): its kind, its tile range
     [lo, hi), each side's row count and root, its pass's -h3 tile-tree root, a call's record's SHA-512, and where the call
     sits in its pass: its first tile there `tile0`, its tile columns `cols` = ⌈n/64⌉ and its rows `m`.  `row` and
     `from_row` encode any values that fit the row's fields; `layout_problem` holds them to the layout."""
@@ -498,14 +498,14 @@ def entry_bc(entry: Entry, salt: bytes) -> bytes:
 
 
 def entry_leaf(dom: CommitmentDomain, e: int, bc: bytes) -> bytes:
-    """Entry e's frame-v3-sha512 leaf in the window root, its row an ``hm96-sha512/row/v2`` row."""
+    """Entry e's frame-v3-sha512 leaf in the execution phase root, its row an ``hm96-sha512/row/v2`` row."""
     return row_leaf(dom, e, _HM.tree_leaf(_HM.default_key, bc), ENTRY_SCHEMA)
 
 
 # ---- the side trees -----------------------------------------------------------------------------------------------------
 
 SIDE_DOMAIN = domains.POUW_PERIOD_SIDE_DOMAIN
-#: the frame's owner, as C-Flock's statement domains have it
+#: the frame's owner, as Flock's statement domains have it
 OWNER = -1
 #: a side row's index field: the row's place in its call (I < 2^13 for A, J < 2^17 for B) as a u32, two u16 words low
 #: first, then six zero words, so the field is one 128-bit word after the row's operand words
@@ -530,7 +530,7 @@ def side_index(row: Sequence[int]) -> int:
 
 
 def side_domain(window_domain: bytes, side: str) -> CommitmentDomain:
-    """The domain of every side-`side` tree of the window whose root's domain id is `window_domain`: 2^D positions, bound
+    """The domain of every side-`side` tree of the execution phase whose root's domain id is `window_domain`: 2^D positions, bound
     to that id, the side and D."""
     if side not in DEPTHS:
         raise ValueError(f"a side is one of {sorted(DEPTHS)}, not {side!r}")
@@ -582,7 +582,7 @@ def side_path(dom: CommitmentDomain, levels: Sequence[Sequence[bytes]], index: i
     return out
 
 
-# ---- the advice and the window statement --------------------------------------------------------------------------------
+# ---- the advice and the execution phase statement --------------------------------------------------------------------------------
 
 def tiles(entry: Entry) -> int:
     return entry.n_a * entry.n_b if entry.kind != "none" else 0
@@ -596,7 +596,7 @@ def tile_in(entry: Entry, t: int) -> tuple[int, int]:
 
 
 def tile_at(entries: Sequence[Entry], t: int) -> tuple[int, int, int]:
-    """(entry, A row, B row) of drawn index t."""
+    """(entry, A row, B row) of sampled index t."""
     for e, entry in enumerate(entries):
         if entry.kind != "none" and entry.lo <= t < entry.hi:
             return (e, *tile_in(entry, t))
@@ -616,7 +616,7 @@ def tile_read(entry: Entry, i: int, j: int) -> tuple[int, int]:
 def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes, bits: int = GRID_BITS,
                    records: Sequence[Mapping[str, Any] | None] | None = None,
                    indices: Sequence[Mapping[str, Sequence[int]] | None] | None = None) -> str | None:
-    """The window statement (L4) on the committed entry rows, or None: `bound` rows, each an entry row of the layout
+    """The execution phase statement (L4) on the committed entry rows, or None: `bound` rows, each an entry row of the layout
     (`Entry.from_row`, `layout_problem`); the calls, then one filler, then empty entries; the ranges tile [0, work.n) in
     order; a call's range is its tiles; the filler's holds the rest, within its rows; every call's -h3 root is `root_h3`,
     the pass's published tile commitment; the calls' pass tiles are in order and disjoint; and the level is `bucket` of
@@ -624,7 +624,7 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes
 
     The gates read the entry rows only.  Given the calls' `records` (per entry, None past the calls) it also holds each to
     its entry (`record_problem`), and given each entry's side rows' `indices` (`side_index`, per side) it holds a call's to
-    its record's keep and the filler's to zero: so i -> I and j -> J are injective, and no two window tiles read one
+    its record's keep and the filler's to zero: so i -> I and j -> J are injective, and no two execution phase tiles read one
     word."""
     if len(root_h3) != _DIGEST:
         raise ValueError("the pass's -h3 tile root is 64 bytes")
@@ -686,7 +686,7 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes
 
 # ---- the tile instances' public inputs ------------------------------------------------------------------------------------
 
-#: C-Flock's format of the verifier's own ``--public-inputs`` file (Lean's ``HmIn.checkOwn``, in ``Flock.HmRow``)
+#: Flock's format of the verifier's own ``--public-inputs`` file (Lean's ``HmIn.checkOwn``, in ``Flock.HmRow``)
 PUBLIC_INPUTS_FORMAT = domains.FLOCK_PUBLIC_INPUTS
 #: a tile instance's public input ports, in order, as its circuit's META ``public_inputs`` must name them: each port's u16
 #: words (whole 128-bit words, so no row leaf shares one), the public datum it is recomputed from and its rule.  t is a
@@ -700,12 +700,12 @@ PUBLIC_PORTS = (
     {"port": "domain_b", "words": 32, "seed": "registration", "derivation": domains.POUW_PERIOD_SIDE_DOMAIN_B},
     {"port": "domain_h3", "words": 32, "seed": "pass", "derivation": domains.POUW_PERIOD_DOMAIN_H3},
 )
-#: C-Flock's largest session: m = k_log + nbl <= 35, nbl = max(3, ⌈log2 blocks⌉) (its Lean ``Flock.Schedule``, `shape_in_range`)
+#: Flock's largest session: m = k_log + nbl <= 35, nbl = max(3, ⌈log2 blocks⌉) (its Lean ``Flock.Schedule``, `shape_in_range`)
 M_MAX = 35
 
 
 def session_cap(k_log: int, per_block: int = 1) -> int:
-    """The most instances one session holds when each block of 2^`k_log` bits holds `per_block` of them (C-Flock's
+    """The most instances one session holds when each block of 2^`k_log` bits holds `per_block` of them (Flock's
     m <= `M_MAX`)."""
     if not (_positive(k_log) and k_log <= M_MAX - 3 and _positive(per_block)):
         raise ValueError(f"a block of 2^{k_log!r} bits does not fit a session of m <= {M_MAX}")
@@ -713,7 +713,7 @@ def session_cap(k_log: int, per_block: int = 1) -> int:
 
 
 def sessions(k: int, cap: int) -> int:
-    """S, the fixed-shape sessions of `cap` instances that hold a window's K′ = `k` drawn tiles.  Served windows draw
+    """S, the fixed-shape sessions of `cap` instances that hold an execution phase's K′ = `k` sampled tiles.  Served execution phases sample
     K′ <= 31,178 (ε = 0.1%, δ = 2^-40 over levels 87 to 143) and K′ <= 9,937 (ε = 1%, δ = 2^-128)."""
     if not (_positive(k) and _positive(cap)):
         raise ValueError(f"K′ and the cap are positive, not {k!r} and {cap!r}")
@@ -731,7 +731,7 @@ def _registered_root(registration: Mapping[str, Any]) -> tuple[bytes, bytes]:
 
 
 def instance_ts(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int) -> list[int]:
-    """Session σ's tile indices: drawn[σ·cap + s] while that is sampled, N − 1 after.  Raises ValueError unless `drawn` is
+    """Session σ's tile indices: sampled[σ·cap + s] while that is sampled, N − 1 after.  Raises ValueError unless `drawn` is
     the registration's K′ distinct indices of [0, N), ascending, and σ one of its S sessions."""
     n, law = registration.get("population"), registration.get("law")
     if not _positive(n) or n > 1 << T_BITS:
@@ -750,10 +750,10 @@ def instance_ts(registration: Mapping[str, Any], drawn: Sequence[int], sigma: in
 
 def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int, domain_h3: bytes) -> bytes:
     """F_σ: the verifier's own ``--public-inputs`` file for session σ's `cap` tile instances, from the registration (the
-    one-stage record: its population N, its law subset:K′ and its window root and domain at port `PORT`), its own draw,
-    σ, the cap and `domain_h3`, the domain id of the pass's -h3 tile tree (the verifier's own, from the pass's epoch and
+    one-stage record: its population N, its sampling design subset:K′ and its execution phase root and domain at port `PORT`), its own sample,
+    σ, the cap and `domain_h3`, the domain id of the pass's -h3 tile tree (the verifier's own, from the pass's execution phase and
     tile count).  A header line ``{format, instances, ports}`` (`PUBLIC_PORTS`), then each instance's words
-    (`instance_ts`'s t, the root, the window domain, side A's and side B's domains, domain_h3), u16 LE, instance-major."""
+    (`instance_ts`'s t, the root, the execution phase domain, side A's and side B's domains, domain_h3), u16 LE, instance-major."""
     root, dom = _registered_root(registration)
     if len(domain_h3) != _DIGEST:
         raise ValueError("the pass's -h3 domain id is 64 bytes")
@@ -763,27 +763,27 @@ def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: 
     return json.dumps(head, sort_keys=True).encode() + b"\n" + body
 
 
-# ---- live windows -----------------------------------------------------------------------------------------------------------
+# ---- live execution phases -----------------------------------------------------------------------------------------------------------
 
 def mode(check: Mapping[str, Any]) -> str:
-    """A window's coin mode (`MODES`), its check item's ``coins``: seeded when the item names none."""
+    """An execution phase's coin mode (`MODES`), its check item's ``coins``: seeded when the item names none."""
     return check.get(COINS, "seeded")
 
 
 def live_families(rounds: int) -> tuple[tuple[str, int], ...]:
-    """A live epoch's coin layout: its salt coin and `rounds` round coins, the most rounds a window takes. Its sampling
+    """A live execution phase's coin layout: its salt coin and `rounds` round coins, the most rounds an execution phase takes. Its sampling
     coin is a session of its own (`DRAW_FAMILIES`)."""
     return ((SALT, 1), (ROUND, rounds))
 
 
 def live_challenger(epoch: int, rounds: int, entropy: Callable[[int], bytes]) -> Ch.LiveChallenger:
-    """A live epoch's challenger, its coins and hm96 salts sampled from `entropy`: a served one's is the Lean verifier of
-    record's (`verifier.coins`, `IO.getRandomBytes`, A3)."""
+    """A live execution phase's challenger, its coins and hm96 salts sampled from `entropy`: a served one's is the Lean
+    verifier's (`verifier.coins`, `IO.getRandomBytes`, A3)."""
     return Ch.LiveChallenger(LIVE_SCHEME, epoch, live_families(rounds), entropy)
 
 
 def live_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
-    """Why `commitment` is not a live epoch's coin commitment (`LIVE_SCHEME`, `live_families`); None when it is."""
+    """Why `commitment` is not a live execution phase's coin commitment (`LIVE_SCHEME`, `live_families`); None when it is."""
     if commitment.scheme != LIVE_SCHEME:
         return f"the coin commitment's scheme is {commitment.scheme}, not {LIVE_SCHEME}"
     f = commitment.families
@@ -792,19 +792,19 @@ def live_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
     return None
 
 
-#: a live window's draw session's layout: its draw coin alone, released after the window's draw root by a session the
+#: a live execution phase's sample session's layout: its sampling coin alone, released after the execution phase's sample root by a session the
 #: gate opens withheld on that root (`remote.open_session(..., withhold=True)`), so the challenger's coin root reaches
-#: the prover only after the prover's draw root (`credit._credited`, `challenger.withheld_on`)
+#: the prover only after the prover's sample root (`credit._credited`, `challenger.withheld_on`)
 DRAW_FAMILIES = ((DRAW, 1),)
 
 
 def draw_challenger(epoch: int, entropy: Callable[[int], bytes]) -> Ch.LiveChallenger:
-    """A live window's draw session's challenger (`DRAW_FAMILIES`), its coin and hm96 salt drawn from `entropy`."""
+    """A live execution phase's sample session's challenger (`DRAW_FAMILIES`), its coin and hm96 salt sampled from `entropy`."""
     return Ch.LiveChallenger(LIVE_SCHEME, epoch, DRAW_FAMILIES, entropy)
 
 
 def draw_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
-    """Why `commitment` is not a live window's draw session's coin commitment (`LIVE_SCHEME`, `DRAW_FAMILIES`); None when
+    """Why `commitment` is not a live execution phase's sample session's coin commitment (`LIVE_SCHEME`, `DRAW_FAMILIES`); None when
     it is."""
     if commitment.scheme != LIVE_SCHEME:
         return f"the coin commitment's scheme is {commitment.scheme}, not {LIVE_SCHEME}"
@@ -829,7 +829,7 @@ def salt_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
 
 
 def rounds_reason(commitment: Ch.LiveCommitment, roots: Sequence[bytes], openings: Sequence[Ch.LiveOpening]) -> str | None:
-    """Why `openings` are not a live window's round coins over the round roots the verifier recorded, `roots` in order:
+    """Why `openings` are not a live execution phase's round coins over the round roots the verifier recorded, `roots` in order:
     round r's coin opened once, after round r's root, and every recorded round's coin opened; None when they are."""
     return live_epoch_reason(commitment) or Ch.order_reason(commitment, ROUND, roots, openings)
 

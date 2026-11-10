@@ -88,7 +88,7 @@ def registry_level(status: str | None) -> Level:
 
 
 #: Elements with 0 mismatches on the anchor SKU for PINNED.  One default ``tc_probe --sweep`` is ~2.5e7 elements, so 1e7 demands a
-#: full sweep (the 1.4e5-element FP8-family run alone cannot pin) while one run suffices; at 1e7 independent draws a per-element
+#: full sweep (the 1.4e5-element FP8-family run alone cannot pin) while one run suffices; at 1e7 independent samples a per-element
 #: defect of rate 5e-7 is accepted with probability e^-5 < 1%.
 N_MIN = 10_000_000
 #: Honest proof blocks the prover's relation must accept (bit-exact against ``Model.step``) and mutations it must reject.
@@ -381,7 +381,7 @@ def _target_aliases() -> dict[str, Target]:
 
 
 def subjects(name: str) -> Subject:
-    """Resolve a target name (``first-campaign-target/2026-09-21``), a target constant (``FIRST``) or an instruction id."""
+    """Resolve a target name (a key of ``TARGETS``), a target constant (``FIRST``) or an instruction id."""
     aliases = _target_aliases()
     if name in aliases:
         t = aliases[name]

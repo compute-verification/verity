@@ -8,7 +8,8 @@ session.sh's own variables (CUDA, CUBIN_ONLY, REPLAY, ROWS, VERITY_BENCH_VENV, L
 """
 from __future__ import annotations
 
-from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, ints, not_zero, one, present
+from verity_config.settings import DEBUG, VALUE, WHERE, Registry, ints, not_zero, one, present
+from verity_config.settings import Setting as S
 
 REGISTRY = Registry(
     __file__, ("UNITS_",),

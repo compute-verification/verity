@@ -1,11 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
 public import Proofs.Flock.Soundness.Discharge.Exec.Shape
 public import Proofs.Flock.Soundness.Discharge.Exec.Decode
+public import Proofs.Flock.Soundness.Discharge.Exec.Emit
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
-# The per-Kind decoder (R11b)
+# The per-Kind decoder, the `dec` that `DecodesAll` asks for
 
 `DecodesAll` asks for a decoder `dec : ℕ → ByteArray → List Msg` from a round's retained bytes to the messages the
 round carries. A round retains the encodings of its chunk's frames (`Exec.RepRounds`), and frames are recoverable from

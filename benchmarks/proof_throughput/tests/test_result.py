@@ -35,6 +35,7 @@ def test_the_fingerprint_carries_the_identity_the_comparisons_need(record, hardw
     fp = point(record, hardware, LEAN)["workload_fingerprint"]
     assert (fp["K"], fp["B"], fp["profile"], fp["proof_class"], fp["zk_mode"]) == (6144, 16, W.profile, "NON_ZK_PROOF", "none")
     assert fp["security"]["target"] == -100 and fp["hardware"] == hardware
+    assert fp["coins"] == "coin-tree" and fp["security"]["coins"] == RS.COINS["coin-tree"]          # the sweep record's coins
     assert fp["instances"] is None and fp["population"]["range"] == [0, W.n_max] and fp["population"]["tier"] == W.name
     assert fp["draw"]["law"] == "stratified" and fp["draw"]["k"] == 16
     assert fp["workload"] == W.name and fp["vu"] == W.vu and fp["config"] == "plain"

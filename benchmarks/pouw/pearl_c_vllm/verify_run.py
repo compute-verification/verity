@@ -1,25 +1,47 @@
-"""The reference replay on a vLLM pass's transcript (``pouw_pearl_c_device``'s retained pass): the work law
+"""The reference replay on a vLLM pass's transcript (``pouw_pearl_c_device``'s retained pass): the work sampling design
 (`clear_work`), over the pass's whole workload, with the prover's openings read from the pass's files.
 
   python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json --coins COINS.json [--draws T] [--jobs J] [--commit SHA] [--fast]
 
+<<<<<<< 99c8914848
 - **The epoch** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
   against the epoch's coin commitment as the challenger published it (``--coins``, not the pass's copy; a live session's
   when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the weights' root (a live
   session's after its salt epoch's root), and the salt must be the manifest's.  A pass recorded before epoch coins (a v1 manifest)
+||||||| merged common ancestors
+- **The epoch** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
+  against the epoch's coin commitment as the challenger published it (``--coins``, not the pass's copy), as the salt coin,
+  opened after the weights' root, and the salt must be the manifest's.  A pass recorded before epoch coins (a v1 manifest)
+=======
+- **The execution phase** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
+  against the execution phase's coin commitment as the challenger published it (``--coins``, not the pass's copy), as the salt coin,
+  opened after the weights' root, and the salt must be the manifest's.  A pass recorded before the execution phase's coins (a v1 manifest)
+>>>>>>> 7af4d24fca3e
   carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
 - **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
   `served_passes.py` holds a run's passes of one salt to distinct indices too.
+<<<<<<< 99c8914848
 - **The records** (each matmul's real rows, width, excluded and voluntary rows; each weight's excluded and voluntary rows)
   are the manifest's (`records_of`).  Their root must be the one the pass published before any draw.
 - **The draws' source** is 32 bytes of the Lean verifier's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
   `uniform/io-getrandombytes`), the verifier's own, drawn here after the transcript is fixed: a
+||||||| merged common ancestors
+- **The records** (each matmul's real rows, width and excluded rows; each weight's excluded rows) are the manifest's.
+  Their root must be the one the pass published before any draw.
+- **The draws' source** is 32 bytes of the Lean verifier's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
+  `uniform/io-getrandombytes`), the verifier's own, drawn here after the transcript is fixed: a
+=======
+- **The records** (each matmul's real rows, width and excluded rows; each weight's excluded rows) are the manifest's.
+  Their root must be the one the pass published before any sample.
+- **The samples' source** is 32 bytes of the Lean verifier's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
+  `uniform/io-getrandombytes`), the verifier's own, sampled here after the transcript is fixed: a
+>>>>>>> 7af4d24fca3e
   `clear_work.RecordedDraw` of round 1, after the commitment's 0.
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,
   B's rows and tree levels per weight, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
   (-h3's) a node is 64 bytes and each value is followed by its salt, `audit.hm96_salt` under the manifest's
   ``hm96_salt_key`` (the prover's, retained for this replay), and the scheme reads the value less its salt.
-- **The tiles** are `clear_work.audit`'s: its t work-weighted draws (`draw`) and one tile per excluded row
+- **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
   forms, with the first tile and every ``--cross-check``-th after it, in the draw's order, replayed on the scalar reference
@@ -123,6 +145,7 @@ from verity.core.protocols.pouw.audit import (
 from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw.coins import CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
+<<<<<<< 99c8914848
 from verity.core.protocols.pouw.protocol import Matmul, Shape, Tile, tagged
 from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
@@ -132,6 +155,13 @@ from verity.core.protocols.sampled_proofs.challenger import LiveCommitment
 from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
 from verity.errors import ProtocolError
 from verity.ml.randomness import derive
+||||||| merged common ancestors
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
+from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+=======
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
+>>>>>>> 7af4d24fca3e
 from verity_vllm.protocols.pouw import pearl_c as PD
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
@@ -418,6 +448,7 @@ def replay(passes: list[Pass], todo: list[tuple[int, int, int]], jobs: int, fast
 
 
 def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None = None, fast: bool = False,
+<<<<<<< 99c8914848
            cross_check: int = 0, coins: CoinCommitment | LiveCommitment | None = None, recorded: bool = False) -> dict:
     """The pass's verdict, its epoch re-started under `coins`, the epoch's published coin commitment
     (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before epoch coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
@@ -425,18 +456,86 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
     it in the draw's order (`check`) on the scalar reference too: any verdict that differs is ``cross_check_failed``, and the
     pass is not accepted."""
     man, digest, named = read(path)
+||||||| merged common ancestors
+           cross_check: int = 0, coins: CoinCommitment | None = None, recorded: bool = False) -> dict:
+    """The pass's verdict, its epoch re-started under `coins`, the epoch's published coin commitment
+    (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before epoch coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
+    promoted device; otherwise the scalar reference, ``replay``), and every `cross_check`-th tile id on the scalar reference
+    too: any verdict that differs is ``cross_check_failed``, and the pass is not accepted."""
+    raw = path.read_bytes()
+    man, digest = json.loads(raw), hashlib.sha256(raw).hexdigest()
+    named = f"{man.get('run')}:{path} sha256:{digest}"
+=======
+           cross_check: int = 0, coins: CoinCommitment | None = None, recorded: bool = False) -> dict:
+    """The pass's verdict, its execution phase re-started under `coins`, the execution phase's published coin commitment
+    (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before the execution phase's coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
+    promoted device; otherwise the scalar reference, ``replay``), and every `cross_check`-th tile id on the scalar reference
+    too: any verdict that differs is ``cross_check_failed``, and the pass is not accepted."""
+    raw = path.read_bytes()
+    man, digest = json.loads(raw), hashlib.sha256(raw).hexdigest()
+    named = f"{man.get('run')}:{path} sha256:{digest}"
+>>>>>>> 7af4d24fca3e
     out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": draws,
            "replay": "batch" if fast else "scalar"}
     try:
         p = load(path, coins, recorded, man)
         scheme, records, c, out["salt"] = p.scheme, p.records, man["commitment"], p.salt
         source = PV.coins(32) if source is None else source
+<<<<<<< 99c8914848
         key = CW.replay_key(CW.RecordedDraw(1, source), p.transcript.commitment.root, bytes.fromhex(man["records_root"]), p.epoch.salt)
         todo = [(0, pos, tid) for pos, tid in p.tile_ids(CW.draw(scheme, records, key, draws) + CW.exclusion_tiles(scheme, records))]
         verdicts, fast = replay([p], todo, jobs, fast, cross_check)
         out["replay"] = "batch" if fast else "scalar"
         differ = [t for _, t, _, _, _, same in verdicts if same is False]
         ok = all(v[2] for v in verdicts) and not differ
+||||||| merged common ancestors
+        key = CW.replay_key(CW.RecordedDraw(1, source), transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt)
+        ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
+        picks = CW.draw(scheme, records, key, draws)
+        picks += CW.exclusion_tiles(scheme, records)
+        todo = [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in picks]
+        if fast and (scheme.forming != "v1" or scheme.device.g is None):
+            fast, out["replay"] = False, "scalar"
+        _JOB.clear()
+        _JOB.update(scheme=scheme, epoch=epoch, transcript=transcript, records=records, verifier=verifier,
+                    prover=Opened(man, Files(path.parent), verifier.refs), cross_check=cross_check,
+                    undo=FT.install(scheme) if fast else None)
+        try:
+            if jobs > 1 and len(todo) > 1:
+                # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
+                with multiprocessing.get_context("fork").Pool(min(jobs, len(todo))) as pool:
+                    verdicts = pool.map(check, todo, chunksize=1)
+            else:
+                verdicts = [check(p) for p in todo]
+        finally:
+            if _JOB.get("undo") is not None:
+                _JOB.pop("undo")()
+        differ = [t for t, _, _, same in verdicts if same is False]
+        ok = all(v[1] for v in verdicts) and not differ
+=======
+        key = CW.replay_key(CW.RecordedDraw(1, source), transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt)
+        ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
+        drawn, excluded = CW.draw(scheme, records, key, draws), CW.exclusion_tiles(scheme, records)
+        todo = [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in drawn + excluded]
+        if fast and (scheme.forming != "v1" or scheme.device.g is None):
+            fast, out["replay"] = False, "scalar"
+        _JOB.clear()
+        _JOB.update(scheme=scheme, epoch=epoch, transcript=transcript, records=records, verifier=verifier,
+                    prover=Opened(man, Files(path.parent), verifier.refs), cross_check=cross_check,
+                    undo=FT.install(scheme) if fast else None)
+        try:
+            if jobs > 1 and len(todo) > 1:
+                # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
+                with multiprocessing.get_context("fork").Pool(min(jobs, len(todo))) as pool:
+                    verdicts = pool.map(check, todo, chunksize=1)
+            else:
+                verdicts = [check(p) for p in todo]
+        finally:
+            if _JOB.get("undo") is not None:
+                _JOB.pop("undo")()
+        differ = [t for t, _, _, same in verdicts if same is False]
+        ok = all(v[1] for v in verdicts) and not differ
+>>>>>>> 7af4d24fca3e
         w_ref, credit = CW.work(scheme, records)
         bad = "; ".join(f"tile {t}: {r}" for _, t, good, r, *_ in verdicts if not good)
         if differ:
@@ -447,10 +546,22 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         at = CW.draw_wref(scheme)
         out.update(accepted=ok, scheme=scheme.name, source=source.hex(), tiles=[t for _, t, *_ in verdicts],
                    draw_wref=at.statement if at else "wref",
+<<<<<<< 99c8914848
                    drawn=draws, exclusion_tiles=len(todo) - draws,
                    verdicts=[{"tile": t, "ok": g, "reason": r} for _, t, g, r, *_ in verdicts], w_ref=str(w_ref), credit=str(credit))
         out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({draws} drawn, "
                        f"{len(todo) - draws} for excluded rows) of {c['count']} over {len(records)} matmuls"
+||||||| merged common ancestors
+                   drawn=draws, exclusion_tiles=len(todo) - draws,
+                   verdicts=[{"tile": t, "ok": g, "reason": r} for t, g, r, _ in verdicts], w_ref=str(w_ref), credit=str(credit))
+        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({draws} drawn, "
+                       f"{len(todo) - draws} for excluded rows) of {c['count']} over {len(matmuls)} matmuls"
+=======
+                   drawn=len(drawn), exclusion_tiles=len(excluded),
+                   verdicts=[{"tile": t, "ok": g, "reason": r} for t, g, r, _ in verdicts], w_ref=str(w_ref), credit=str(credit))
+        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({len(drawn)} drawn, "
+                       f"{len(excluded)} for excluded rows) of {c['count']} over {len(matmuls)} matmuls"
+>>>>>>> 7af4d24fca3e
                        f"{'' if ok else ' (' + bad + ')'}; transcript root {c['root'][:16]}, records {man['records_root'][:16]}, "
                        f"source {source.hex()[:16]}; transcript {named}; verifier {commit}"
                        f"{'; batch replay, ' + str(len(out['cross_checked'])) + ' tiles cross-checked' if fast else ''}")

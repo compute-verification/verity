@@ -1,9 +1,44 @@
 module
 
-public import Proofs.Flock.Claims.ZK.SimZerocheck
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.Claims.ZK.CutSession
 public import Proofs.Flock.Claims.ZK.FrameMask
-public import Proofs.Flock.Claims.ZK.Release
 public import Proofs.Flock.Claims.ZK.Refine
+public import Proofs.Flock.Claims.ZK.SimZerocheck
+import all Init.Data.Array.Basic
+import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The cut's zerocheck and lincheck, round by round, and the frame's release of the device's
@@ -71,7 +106,7 @@ def zcBodies (m : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadL
       (Frame.sq 1 1).enc) ::
     (List.range (m - 6)).map fun i => encs [.one (mk (lay.ml i 0)), .one (mk (lay.ml i 1))] ++ (Frame.sq 1 1).enc
 
-theorem sampleVecP_cut_ok (coin : ℕ → ℕ → F128) {n k : ℕ} (hk : k ≠ 0) (t : Transcript) {l : Array Claims.Msg}
+theorem sampleVecP_cut_ok (coin : ℕ → ℕ → F128) {n k : ℕ} (hk : k ≠ 0) (t : Flock.Transcript) {l : Array Claims.Msg}
     (hl : l.size < n) :
     ((sampleVecP (asksCut coin n) k).run t).go l =
       (.ok ((Array.range k).map (coin l.size), afterSq t 2 k (coin l.size)),
@@ -80,7 +115,7 @@ theorem sampleVecP_cut_ok (coin : ℕ → ℕ → F128) {n k : ℕ} (hk : k ≠ 
 
 /-- **A loop of `n` steps whose every step yields**, as `Replay.forIn_go`, with each step's hypothesis below `n` only:
 under `asksCut` a step past the openings throws. -/
-theorem forIn_go_lt {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (S : ℕ → σ) (T : ℕ → Transcript)
+theorem forIn_go_lt {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (S : ℕ → σ) (T : ℕ → Flock.Transcript)
     (B : ℕ → Claims.Msg) (L n : ℕ)
     (hbody : ∀ i < n, ∀ (l : Array Claims.Msg), l.size = L + i →
       ((body i (S i)).run (T i)).go l = (.ok (.yield (S (i + 1)), T (i + 1)), l.push (B i)))
@@ -107,30 +142,30 @@ theorem forIn_go_lt {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (S
 
 /-- `forIn_go_lt` from any transcript `t`, the loop's transcripts `T t` a function of where it starts. -/
 theorem forIn_go_from {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (S : ℕ → σ)
-    (T : Transcript → ℕ → Transcript) (B : Transcript → ℕ → Claims.Msg) (L n : ℕ) (hT : ∀ t, T t 0 = t)
+    (T : Flock.Transcript → ℕ → Flock.Transcript) (B : Flock.Transcript → ℕ → Claims.Msg) (L n : ℕ) (hT : ∀ t, T t 0 = t)
     (hbody : ∀ t, ∀ i < n, ∀ (l : Array Claims.Msg), l.size = L + i →
       ((body i (S i)).run (T t i)).go l = (.ok (.yield (S (i + 1)), T t (i + 1)), l.push (B t i)))
-    (t : Transcript) (l : Array Claims.Msg) (hl : l.size = L) :
+    (t : Flock.Transcript) (l : Array Claims.Msg) (hl : l.size = L) :
     ((forIn [:n] (S 0) body).run t).go l = (.ok (S n, T t n), l ++ ((List.range n).map (B t)).toArray) := by
   have h := forIn_go_lt body S (T t) (B t) L n (hbody t) l hl
   rwa [hT] at h
 
 /-- The transcript of a loop round `i` that absorbs the two masked values `g i 0` and `g i 1` (a residual round's of
 the zerocheck, a round's of the lincheck), before its squeeze. -/
-def pairPre (g : ℕ → ℕ → F128) (i : ℕ) (t : Transcript) : Transcript :=
+def pairPre (g : ℕ → ℕ → F128) (i : ℕ) (t : Flock.Transcript) : Flock.Transcript :=
   ⟨t.rounds, t.k, pF (g i 1) (pF (g i 0) t.pending)⟩
 
 /-- The transcript of such a loop from `t₀`: round `i` absorbs `g i 0` and `g i 1` and squeezes the coin at body
 `L + i`. -/
-def pairLoopT (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Transcript) : ℕ → Transcript
+def pairLoopT (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) : ℕ → Flock.Transcript
   | 0 => t₀
   | i + 1 => afterSq (pairPre g i (pairLoopT g coin L t₀ i)) 1 1 (coin (L + i))
 
 /-- The body such a loop's round `i` sends. -/
-def pairLoopB (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Transcript) (i : ℕ) : Claims.Msg :=
+def pairLoopB (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) (i : ℕ) : Claims.Msg :=
   Claims.toMsg (framed (pairPre g i (pairLoopT g coin L t₀ i)) 1 1)
 
-theorem pairLoopT_pending (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) {t₀ : Transcript}
+theorem pairLoopT_pending (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) {t₀ : Flock.Transcript}
     (hz : t₀.pending = ByteArray.empty) : ∀ i, (pairLoopT g coin L t₀ i).pending = ByteArray.empty
   | 0 => hz
   | _ + 1 => rfl
@@ -138,7 +173,7 @@ theorem pairLoopT_pending (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F12
 theorem empty_toList : ByteArray.empty.data.toList = [] := rfl
 
 /-- Each round's body is its two masked values' frames and its coin's squeeze. -/
-theorem pairLoopB_enc (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) {t₀ : Transcript}
+theorem pairLoopB_enc (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (L : ℕ) {t₀ : Flock.Transcript}
     (hz : t₀.pending = ByteArray.empty) :
     pairLoopB g coin L t₀ = fun i => encs [.one (g i 0), .one (g i 1)] ++ (Frame.sq 1 1).enc := by
   funext i
@@ -149,7 +184,7 @@ theorem pairLoopB_enc (g : ℕ → ℕ → F128) (coin : ℕ → ℕ → F128) (
 round `n`, it returns, having sent `zcBodies` after `t`'s pending bytes, and leaves the finals' two masked values
 pending. -/
 theorem zerocheckCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray)
-    (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (t : Transcript) (l : Array Claims.Msg)
+    (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (t : Flock.Transcript) (l : Array Claims.Msg)
     (hl : l.size + 3 + (m - 6) ≤ n) :
     ∃ res t' L', ((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l = (.ok (res, t'), L') ∧
       L'.toList = l.toList ++ zcBodies m digest cap root lay mk t.pending.data.toList ∧
@@ -351,7 +386,7 @@ def lcBodies (kLog : ℕ) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) 
 round `n` and the circuit's fold defined at `α`, it returns, having sent `lcBodies` after `t`'s pending bytes, with
 nothing pending. -/
 theorem lincheckCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) (c : _root_.Flock.CircuitFold) (m : ℕ)
-    (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (zc : _root_.Flock.ZcOut) (t : Transcript)
+    (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → F128) (zc : _root_.Flock.ZcOut) (t : Flock.Transcript)
     (l : Array Claims.Msg) (hl : l.size + 3 + (c.kLog - 6) ≤ n)
     (hf : ∃ v, c.fold (coin l.size 0) (_root_.Flock.skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok v) :
     ∃ res t' L', ((lincheckCut (asksCut coin n) c m lay mk zc).run t).go l = (.ok (res, t'), L') ∧
@@ -808,7 +843,7 @@ theorem liveRoundEq_of_honest (S : RefSession) (vs : S.SwVals)
   liveRoundEq_of_frames S vs L H wk x w fun ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv =>
     L.roundFrames_of_honest x _ _ v _ (hF ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv)
 
-/-- **The stand-in frame rounds in frames**: at every stand-in frame round `FillRoundEq` reads, the firewall's scheduled
+/-- **The stand-in frame rounds in frames**: at every stand-in frame round `FillRoundEq` reads, the ZK server's scheduled
 round, at the values its transcript reports, and the session's switched message are a frame round in frames of a
 stopped rep (`RoundFrames`), whose masked values the frame releases as their pads alone. -/
 def FillFrames (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))

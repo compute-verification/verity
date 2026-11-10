@@ -1,29 +1,65 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VerdictRowDSide
-public import Proofs.Flock.Claims.Recursion.RecordCanon
-public import Proofs.Flock.Claims.Recursion.NextShaDec
-public import Proofs.Flock.Claims.Recursion.CallsAgree
 public import Proofs.Flock.Claims.DeployK
+public import Proofs.Flock.Claims.Recursion.OpenPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRowDSide
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Decode
+import Proofs.Flock.Claims.Recursion.CallsAgree
+import Proofs.Flock.Claims.Recursion.VerdictRowG
 
 /-!
 # Row D's coin tie: the position a `rec-open` piece reads
 
 `DecAt.rowD_of_pieces` takes a `posAt` that reads each `rec-open` piece's position off the statement and the coins,
-and asks it to be the one the verifier rows draw for the piece's query (`hpos`). This file fixes that reader and proves
+and asks it to be the one the verifier rows sample for the piece's query (`hpos`). This file fixes that reader and proves
 the tie.
 
 * `canonRounds`: rep `k`'s coins as the coins alone fix them: its schedule's round count, round `j` the first `n_j` (its
   schedule's) values of the coin at the rep's offset plus `j` among the coins after the link.
 * `posAt`: at a statement that sets up, the verifier rows at table `table`'s shape, the extra claims at the first
   coin's link points and `canonRounds` (comb empty: the rows' `info` doesn't read it, `verifierRows_comb`), and the
-  position they draw for the piece's query.
+  position they sample for the piece's query.
 * `coins_of_decode`: the decoded session's rep stream `k` has `canonRounds`' coins. The record `decR` hands over
   (`recJ`) writes rep `k`'s rounds with its schedule's counts and `repLens` rounds per rep; the coin substitution
   (`coinSubJ`) erases every round's coins and fills round `j` of stream `name` with the first `n` values of the coin at
   `streamOffset + j`, and at distinct names `streamOffset` is the rounds of the reps before it.
 * `DecAt.posAt_eq`, `DecAt.hpos`: at a decision of an inner statement read at the dense form, `posAt` reads the
-  position the verifier rows at rep `r`'s values draw, in `runs_assembled`'s form.
+  position the verifier rows at rep `r`'s values sample, in `runs_assembled`'s form.
 -/
 
 @[expose] public section
@@ -453,7 +489,7 @@ theorem verifierRows_comb (sh : Shape) (rounds : Array (Array F128)) (extras : A
 /-- **The position a `rec-open` piece reads off the statement and the coins**: at a statement that sets up, the
 verifier rows at table `table`'s shape (its `fast100` schedule and its extra claims at the first coin's link points),
 those extra claims, rep `k = 2 table + rep`'s `canonRounds` at the coins after the link, and no comb (`info` doesn't
-read it, `verifierRows_comb`); the position they draw for query `query` of level `level`. -/
+read it, `verifierRows_comb`); the position they sample for query `query` of level `level`. -/
 def posAt (x : Claims.Msg) (cs : List Coin) (q : OpenPiece) : ℕ :=
   match setupOf false x with
   | some v =>
@@ -487,8 +523,8 @@ theorem names_nodup {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement}
   rw [hsp, hdspec]
   exact FlockDeploy.KS.repNames_nodup (FlockDeploy.KS.tables_nodup hs hpi)
 
-/-- **A piece reads its query's drawn position**: at a decision where the rep streams' names are distinct, a piece of
-table `i` and rep `r` reads the position the verifier rows at rep `r`'s values draw for its query. -/
+/-- **A piece reads its query's sampled position**: at a decision where the rep streams' names are distinct, a piece of
+table `i` and rep `r` reads the position the verifier rows at rep `r`'s values sample for its query. -/
 theorem posAt_eq (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (r : Fin 2) {v : Array F128} {info : RecAlgebra.Info RecAlgebra.Lin}
     {kappa : Array (Array (Array F128))}
@@ -549,7 +585,7 @@ theorem posAt_eq (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : i <
 
 /-- **`hpos`, the coin tie, in `runs_assembled`'s form**: at a decision of an inner statement read at the dense form
 and a table `i` of the statement, at the verifier rows at rep `r`'s values, every piece of rep `r` of table `i` reads
-the position the rows draw for its query through `posAt`. -/
+the position the rows sample for its query through `posAt`. -/
 theorem hpos {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (pieces : List OpenPiece) :

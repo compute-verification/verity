@@ -9,6 +9,7 @@ module
 
 public import Flock.HmRow
 public import Mathlib.Data.List.Basic
+import all Init.Data.String.Defs
 
 @[expose] public section
 
@@ -44,6 +45,9 @@ theorem prefix_length (l : ℕ) : (rowPrefixV2 l).data.toList.length = 128 := by
   rw [prefix_data]
   simp only [List.length_append, Array.length_toList, ByteArray.size_data, tag_size, digits_size, List.length_cons,
     List.length_nil, List.length_replicate]
+
+theorem packBits_length (bs : List Bool) : (Flock.HmRow.packBits bs).length = (bs.length + 7) / 8 := by
+  simp [packBits]
 
 theorem byte_eq {a b : ℕ} (h : (a % 256).toUInt8 = (b % 256).toUInt8) : a % 256 = b % 256 := by
   have := congrArg UInt8.toNat h

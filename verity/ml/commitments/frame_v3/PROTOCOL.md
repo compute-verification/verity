@@ -116,7 +116,7 @@ frame-v3 with SHA-512 in place of SHA-256 for every hash the framing computes, f
 - `leaf_prefix` is the same prefix over the 64-byte domain id, so `leaf = SHA-512(prefix ‖ value)`.
 
 **The binding.** `binding` is the caller's identity digest of what the commitment may not outlive: a header, a replay phase or a
-weights tag. It is an identity from the protocol and the IR, not something the frame computes. Under every frame it is 64 bytes, an
+weights tag. It is an identity from the protocol and the Program, not something the frame computes. Under every frame it is 64 bytes, an
 `identity_digest_sha512` or another SHA-512 digest (one hash, SHA-512), or 32 bytes, a SHA-256 identity
 digest as recorded statements carry it. The domain message frames every part with its u64be length, so a 64-byte binding and a
 32-byte one never give the same message, and the frame version does not change. `binding64_trees` in
@@ -177,7 +177,7 @@ P(ℓ)      = ( "verity/sha512-row/v2\0" ‖ u64be ℓ )  zero-padded to 128 byt
 digest    = SHA-512( P(ℓ) ‖ row bytes )
 ~~~
 
-- **Elements.** A row of elements lists each element's bits least significant first, elements in order: the Boolean IR's element
+- **Elements.** A row of elements lists each element's bits least significant first, elements in order: the circuit format's element
   convention. For every format in use the row bytes are then the tensor's memory: two E2M1 codes a byte, the first in the low nibble;
   one byte per E4M3 element or scale; two little-endian bytes per BF16 element. An NVFP4 or MXFP4 row is its k codes followed by its
   scales, as one row (4k + 8·k/16 or 4k + 8·k/32 bits), so an NVFP4 row's bytes are §4a's `nvfp4_row_bytes`. Which values form a
@@ -197,7 +197,7 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
   verifier's own registration: it holds the file's roots and domain ids before the proof, and within one verification it reads
   them as given. Any consumer that carries a registered root into another statement or commitment recomputes that root's domain
   id from its own derivation of the binding, and refuses a root whose recorded domain differs (R3-domain in
-  `verity.core.protocols.sampled_proofs.one_stage.registration` does).
+  `verity.core.protocols.spot.one_stage.registration` does).
 - **Reference and conformance.** `verity.ml.commitments.rowleaf`: `bit_row`, `sha512_row_v2_prefix`, `_layout` and `_digest`, the last
   refusing a nonzero fill. The vectors in `vectors_sha512.json` are `bit_row_leaves`, `bit_row_trees` and `bit_row_hiding_leaves`:
   random rows at ℓ = 0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172 and 8192 (888 and 896 straddle the length whose SHA-512 padding
@@ -298,5 +298,5 @@ and `test_rowleaf_bits.py` check them.
   domain id, the positions' identity, leaves, pads, nodes and roots. Binding a value to a position inside a verifier-held domain
   rests on `cr/sha-512` alone.
 - **What may still rest on SHA-256.** Which statement and which session a root belongs to also rests on `binding`. A 64-byte binding
-  rests on `cr/sha-512`; a 32-byte SHA-256 identity digest from the protocol or the IR does not, and a Table 1 row that cites this
+  rests on `cr/sha-512`; a 32-byte SHA-256 identity digest from the protocol or the Program does not, and a Table 1 row that cites this
   frame over one cites `cr/sha-256` beside `cr/sha-512`.

@@ -1,7 +1,15 @@
 """GLM-5.3's linears under pearl-c-h100-v1-h3 (benchmarks/pouw/pearl_c_sm90/glm53.py): one TP8 rank's shapes from the
+<<<<<<< 99c8914848
 checkpoint's config, the sm_90a kernels' domain verdict on each, γ's formula against a Lean price twin, Llama-3.2-1B's
 (llama32_1b.py) beside them, the H200 session's shapes each model's table's, glm53_timing's slowdowns and --whole over a
 stand-in card, and glm53_passes' full check of a retained pass."""
+||||||| merged common ancestors
+checkpoint's config, the sm_90a kernels' domain verdict on each, γ's formula against a Lean price twin, the H200
+session's shapes the table's, glm53_timing's --whole over a stand-in card, and glm53_passes' full check of a retained pass."""
+=======
+checkpoint's config, the sm_90a kernels' domain verdict on each, the gap's formula against a Lean price twin, the H200
+session's shapes the table's, glm53_timing's --whole over a stand-in card, and glm53_passes' full check of a retained pass."""
+>>>>>>> 7af4d24fca3e
 
 from __future__ import annotations
 
@@ -44,8 +52,8 @@ def test_linears_are_one_tp8_ranks():
 
 def test_domain_refuses_the_short_k_and_narrow_n():
     """k = 512 is under the record's k ≥ 1,024 and not its census k = 256 (which takes both down projections); n = 160 is
-    not a multiple of 64.  Every other linear is in, with γ at both FADD readings, the data sheet's (cheaper add) a little
-    above the record's, and γ falling with n."""
+    not a multiple of 64.  Every other linear is in, with the gap at both FADD readings, the data sheet's (cheaper add) a little
+    above the record's, and the gap falling with n."""
     rows = {r["name"]: r for r in G.table()}
     refused = {name for name, r in rows.items() if r["refused"]}
     assert refused == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj"}
@@ -71,10 +79,10 @@ def test_expert_parallel_brings_the_experts_into_the_domain():
 
 
 def test_gamma_is_the_lean_twins():
-    """`Pouw.PearlC.pearlCGammaSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
-    at 32 (24 over the credited 8), γ = 173561/22302500."""
-    from verity.core.protocols.pouw.schemes import pearl_c as C
-    from verity.core.protocols.pouw.schemes.pearl_c_device import SM120
+    """`Pouw.PearlC.pearlCGapSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
+    at 32 (24 over the credited 8), the gap 173561/22302500."""
+    from verity.ml.protocols.pouw.schemes import pearl_c as C
+    from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120
 
     s = C.PearlC(forming="v1", device=replace(SM120, cap=Fraction(1, 400)), hashing="h3")
     assert G.gamma(s, 8192, 8192, Fraction(24)) == Fraction(173561, 22302500)
@@ -572,6 +580,7 @@ def retained(tmp_path_factory):
     from clear_audit import Prover
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
+    from verity.core.protocols.pouw import core_check as CC
     from verity.core.protocols.pouw.audit import (
         HM96_TRANSCRIPT,
         HM96_WEIGHTS,
@@ -588,7 +597,7 @@ def retained(tmp_path_factory):
     )
     from verity.core.protocols.pouw.coins import Challenger
     from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+    from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
     from verity.ml.commitments.merkle import tree_levels
 
     scheme = "pearl-c-h100-v1-h3"
@@ -642,7 +651,7 @@ def retained(tmp_path_factory):
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
     dt = transcript_domain(epoch, count, s.commitment_hash)
-    head = {"schema": PPD.MANIFEST_SCHEMA, "run": "r20261023-120000-test", "entry": f"pouw:{scheme}", "scheme": scheme,
+    head = {"schema": CC.MANIFEST_SCHEMA, "run": "r20261023-120000-test", "entry": f"pouw:{scheme}", "scheme": scheme,
             "instance": {"k_min": 32, "tile": [16, 16]}, "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(),
             "salt": epoch.salt.hex(), "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tr.commitment.root.hex(), "count": count}, "leaves": PPD._write(d / "leaves", b"".join(leaves)),

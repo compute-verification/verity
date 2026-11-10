@@ -17,7 +17,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import composite as C
 
+<<<<<<< 99c8914848
 SAMPLED = "verity/sampled-proofs/v1"
+||||||| merged common ancestors
+V1 = "verity/sampled-proofs/one-stage/v1"
+=======
+V1 = "verity/sampled-proofs/v1"
+>>>>>>> 7af4d24fca3e
 POUW = "verity/pouw/period/v1"
 POLICY = "verity/inference-only/v0"
 PEARL_PLUS = "verity/pouw/pearl-plus/v1"

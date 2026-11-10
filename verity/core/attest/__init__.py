@@ -3,7 +3,7 @@ through the prover's zero-knowledge proofs.
 
 An auditor party (a memory challenger, a network certifier) on a device holds a lower HSS key the device's identity
 certified for it in the deployment (`verity.ml.crypto.lms.Identity.issue`, `PartyKey`). Over one certification period it
-commits every sampling block's records, each a byte string, as the leaves of one frame-v3-sha512 tree (`root`):
+commits every execution phase's records, each a byte string, as the leaves of one frame-v3-sha512 tree (`root`):
 
 * the domain is `verity.ml.commitments.merkle.CommitmentDomain(BINDING, -1, RangeU64Domain(0, count), "sha512")`,
   ``BINDING`` = SHA-512(``verity/period-records/v1``), and record ``r`` is leaf ``(rank r, position r, SCHEMA)``; its id
@@ -11,9 +11,10 @@ commits every sampling block's records, each a byte string, as the leaves of one
   the count it signs to the tree its reads open in one compression (``AttestPeriod_v1``);
 * the tree pads to ``2^depth`` leaves, ``depth = bit_length(count - 1)``, and a period with no records has the empty root.
 
-`Period` is the party's side. `Period.block` appends a sampling block's records and returns the block's liveness record,
-"block ``w`` of the period was certified" with no content (`lms.liveness_message`): the party's one public message per
-block, which the verifier checks in the clear (`lms.verify_liveness`). `Period.close` signs the root once
+`Period` is the party's side. `Period.block` appends an execution phase's records and returns the phase's liveness
+record, "block ``w`` of the period was certified" with no content (`lms.liveness_message`): the party's one public
+message per execution phase, which the verifier checks in the clear (`lms.verify_liveness`). `Period.close` signs
+the root once
 (`lms.period_root_message`, binding the deployment's hash, the party, the attachment id the challenger drew, the link,
 the period's index and the record count) and returns the `SignedPeriod`, which goes to the prover only, as witness. The
 party's lower key and the identity's certificate of it are public: every liveness record shows them in the clear. The
@@ -173,9 +174,9 @@ class SignedPeriod:
 
 @dataclass
 class Period:
-    """One certification period of a party: its records, sampling block by sampling block, under the party's lower key
-    ``signer``, which it starts on the attachment (`Signer.start`). Each block is certified once, in increasing order,
-    and the period is closed once."""
+    """One certification period of a party: its records, execution phase by execution phase, under the party's lower
+    key ``signer``, which it starts on the attachment (`Signer.start`). Each phase is certified once, in increasing
+    order, and the period is closed once."""
 
     signer: Signer
     attachment: bytes
@@ -189,7 +190,7 @@ class Period:
         self.signer.start(self.attachment)
 
     def block(self, block: int, records: Sequence[bytes]) -> bytes:
-        """Sign sampling block ``block``'s public liveness record, then append the block's records; the record's bytes.
+        """Sign execution phase ``block``'s public liveness record, then append the phase's records; the record's bytes.
         A refused signature appends nothing."""
         if self._closed:
             raise ValueError(f"period {self.period} is closed")

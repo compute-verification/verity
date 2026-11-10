@@ -1,6 +1,5 @@
-"""A10's registered tensors that vLLM rewrites at load (`Committed.rewritten`) open against their committed tensor roots under the
-weights tree's scheme (`cpu_replay.tensor_root_of`): under rows-sha512, a tensor composed as vLLM rewrites it opens and one composed
-otherwise is mismatched by name."""
+"""A10's registered tensors that vLLM rewrites at load (`Committed.rewritten`) open against their committed rows-sha512 tensor roots
+(`cpu_replay.tensor_root_of`): a tensor composed as vLLM rewrites it opens and one composed otherwise is mismatched by name."""
 
 from __future__ import annotations
 

@@ -24,6 +24,7 @@ from dataclasses import asdict, dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
+from verity_vllm.program.frontend.compilations import COMPILATIONS
 from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
 
 if TYPE_CHECKING:
@@ -79,6 +80,8 @@ class TargetProfile:
                            The Program itself is DERIVED eagerly by construction (`engine_args(execution=False)` omits the compile knobs);
                            what the declaration claims for the compiled execution is stated in `modelled_engine()` (boundary-level
                            conformance on committed bytes; fused region == composed relations NOT established).
+                           `"breakable"`: no torch.compile, the eager kernels replayed from breakable CUDA graphs at the declared
+                           capture sizes (`compilations`); execution label `compiled`, the eager Program at the padded tokens.
                            Omitted from `to_json()` when None: eager profiles serialise (and digest) exactly as before.
     fp8_block_gemm      -> env `VLLM_USE_DEEP_GEMM`: the ONLY knob of the pinned vLLM's block-scaled FP8 linear kernel choice
                            (`kernels/linear._POSSIBLE_FP8_BLOCK_KERNELS[CUDA]`, first that `can_implement`: FlashInfer-DeepGEMM,
@@ -138,12 +141,12 @@ class TargetProfile:
                            `registry.sampling_vocab.SHARED_GREEDY` entry (the same function), which computes it once for both.  Omitted from
                            `to_json()` when None.
     fp8_scale_construction -> how the blockwise FP8 GEMM's scale products `sx[kb] * sw[nb][kb]` are constructed (a Program static,
-                           declared-and-bound, never attested).  `"shared-per-block"` (the default when None) binds
-                           `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.
-                           `"per-coordinate"` binds `ScaledMmFp8Block_v1`, whose every coordinate forms its own.  Omitted from `to_json()` when None.
+                           declared-and-bound, never attested).  `"shared-per-block"` (the default when None, and the one value) binds
+                           `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.  Omitted
+                           from `to_json()` when None.
     protocols           -> the protocol set the run executes (`verity_vllm.protocols`; grammar `config.parse_protocols`).  None =
                            sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
-                           whole set in its one spelling, sampled proofs included (a profile is the target of sampled proofs' Program);
+                           whole set in its one spelling, sampled proofs included (a profile is the target of SPOT's Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
                            committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
@@ -173,20 +176,7 @@ class TargetProfile:
     flash_attn_version: int | None = None
     compilation: str | None = None
 
-    #: the one admitted compiled execution and the vLLM facts it applies / declares (`vllm/config/compilation.py`)
-    #: keys from GP-01's COMPILATION_FACT_KEYS (mode, cudagraph_mode, capture_sizes, use_inductor_graph_partition, compile_cache) in the run
-    #: header's read-back form (vllm_adapter.compilation_facts); `capture_sizes` (depends on the row's batch) and `compile_cache` (a process
-    #: switch; cached and fresh Inductor graphs are the same code) are NOT declared = not constrained (GM-01 compares only keys both sides carry)
-    # `piecewise` = vLLM's PRODUCTION DEFAULT compiled configuration (default Inductor config: fp32 carried through
-    # the fused regions) -- the panel's bi-compiled workloads; its Program is P_compiled at Inductor-kernel granularity (S1/S2).  `piecewise-emu`
-    # = the SEPARATE declared specialization with Inductor emulate_precision_casts (the eager roundings performed inside the fused kernels;
-    # a different numerical computation) -- not a panel workload unless added by a 7-field note.
-    COMPILATIONS = {"piecewise": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
-                                  "emulate_precision_casts": False,
-                                  "attention": "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"},
-                    "piecewise-emu": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
-                                      "emulate_precision_casts": True,
-                                      "attention": "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"}}
+    COMPILATIONS = COMPILATIONS  # the admitted compiled executions (`compilations`)
     fp8_block_gemm: str | None = None
     int8_exact: str | None = None        # the layers on exact int8 (None = none; see the doc); applied and read back
     #: the fused-MoE experts kernel (None = vLLM's selection; see the doc); applied and read back
@@ -216,7 +206,7 @@ class TargetProfile:
     DEFAULT_WEIGHT_ONLY_CALLS = "once"
     SAMPLER_CONSTRUCTIONS = ("greedy-check-per-stage", "shared-greedy")
     DEFAULT_SAMPLER_CONSTRUCTION = "shared-greedy"
-    FP8_SCALE_CONSTRUCTIONS = ("per-coordinate", "shared-per-block")
+    FP8_SCALE_CONSTRUCTIONS = ("shared-per-block",)
     DEFAULT_FP8_SCALE_CONSTRUCTION = "shared-per-block"
 
     # the registered block-scaled FP8 GEMM selections: value -> the vLLM kernel class the selector must have taken
@@ -317,9 +307,9 @@ class TargetProfile:
             if got != canon:
                 raise ValueError(f"protocols must be spelled {list(canon)} (one entry per protocol, in install order); got {list(got)}")
             if not any(e.startswith("sampled-proofs:") for e in canon):
-                raise ValueError(f"protocols {list(canon)} lacks sampled-proofs: a TargetProfile is the target of sampled proofs' Program")
+                raise ValueError(f"protocols {list(canon)} lacks sampled-proofs: a TargetProfile is the target of SPOT's Program")
             if canon == DEFAULT_ROW_PROTOCOLS:
-                raise ValueError(f"protocols {list(canon)} is the default (sampled proofs alone): declare None")
+                raise ValueError(f"protocols {list(canon)} is the default (SPOT alone): declare None")
             object.__setattr__(self, "protocols", canon)
         if self.ir is not None and self.ir not in self.IRS:
             raise ValueError(f"ir must be None (word) or one of {list(self.IRS)}; got {self.ir!r}")
@@ -444,8 +434,9 @@ class TargetProfile:
         if execution and self.compilation is not None:
             c = self.COMPILATIONS[self.compilation]
             kw["enforce_eager"] = False
-            kw["compilation_config"] = {"cudagraph_mode": c["cudagraph_mode"],
-                                        "inductor_compile_config": {"emulate_precision_casts": bool(c["emulate_precision_casts"])}}
+            kw["compilation_config"] = {"cudagraph_mode": c["cudagraph_mode"], **(
+                {"cudagraph_capture_sizes": list(c["capture_sizes"])} if c.get("breakable") else
+                {"inductor_compile_config": {"emulate_precision_casts": bool(c["emulate_precision_casts"])}})}
         if execution and self.async_scheduling is not None:
             # an EXPLICIT declaration configures the engine for the declared scheduler (vLLM still resolves and the header attests the
             # read-back: `resolved_async_scheduling`, compared with the Program's declaration by GM-01 G1); None leaves vLLM's own resolution
@@ -459,6 +450,10 @@ class TargetProfile:
         sampled ids checked on the committed bytes), kernel interiors Inductor-fused and NOT certified launch-by-launch."""
         if self.compilation is None:
             return {"enforce_eager": True}
+        if self.graph_capture_sizes():
+            return {"enforce_eager": False, "compilation": {**self.COMPILATIONS[self.compilation], "profile": self.compilation},
+                    "program_derivation": "the eager Program's Definitions, each captured launch-dependent selection at the step's padded tokens",
+                    "claim": "the eager kernels replayed from breakable CUDA graphs (no torch.compile): eager's Definitions at the capture size"}
         return {"enforce_eager": False, "compilation": {**self.COMPILATIONS[self.compilation], "profile": self.compilation},
                 "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact (compiled_relations.py; "
                                        "GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
@@ -619,7 +614,14 @@ class TargetProfile:
         env = {"VLLM_BATCH_INVARIANT": "1" if self.batch_invariant else "0"}
         if self.fp8_block_gemm == "cutlass":
             env["VLLM_USE_DEEP_GEMM"] = "0"   # excludes FlashInfer-DeepGEMM + DeepGEMM; the selector then takes CUTLASS (cc 9.x)
+        if self.graph_capture_sizes():
+            env["VLLM_USE_BREAKABLE_CUDAGRAPH"] = "1"
         return env
+
+    def graph_capture_sizes(self) -> tuple[int, ...]:
+        """The breakable CUDA graphs' capture sizes, which a step's captured kernels run padded to (`targets.graph_tokens`); () if none."""
+        c = self.COMPILATIONS[self.compilation] if self.compilation is not None else {}
+        return tuple(c["capture_sizes"]) if c.get("breakable") else ()
 
 
 DEFAULT_TARGET = TargetProfile.default()

@@ -101,6 +101,8 @@ struct Pub {
   uint64_t first;   // the first salt's position
 };
 static_assert(sizeof(Pub) == 8 * PUB_WORDS + 16, "Pub is 42 words");
+static_assert((8 * PUB_WORDS + 8 + 4 + 17 + 127) / 128 * 128 <= 8 * PUB_WORDS + 64,
+              "counter_salt's message buffer holds the longest salt message and its padding");
 
 // Position ``pos``'s salt, SHA-512(head || u64be pos || c) for c = 0, 1, 2 as a ``width``-byte big-endian counter, into
 // ``out`` as its 192 bytes.

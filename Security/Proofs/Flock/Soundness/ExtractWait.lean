@@ -1,7 +1,16 @@
 module
 
+public import Definitions.Flock.Game
 public import Proofs.Flock.Soundness.ExtractAcc
-public import Proofs.Flock.Soundness.Game.Seq
+public import Proofs.Flock.Soundness.Game
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Extract
+meta import Lean.Meta.Tactic.NormCast
 
 /-!
 # The expected-time extractor as an algorithm: waits of at most `R` runs

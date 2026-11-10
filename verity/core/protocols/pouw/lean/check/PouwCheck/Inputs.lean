@@ -1,24 +1,24 @@
 module
 
-public import CoreProtocol.Protocol
 public import CoreProtocol.Profile
+public import CoreProtocol.Protocol
 public import Flock.Draw
 public import Flock.WindowRecord
+public import Identity.Domains.Pouw
 public import PouwCheck.Json
 public import PouwCheck.Tile
 public import PouwWindow.Length
-public import Identity.Domains
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
 
-* `Params`: the verifier's own parameters of the window: the check item, ε and δ, the grid's bits, the declared range
-  of tile counts, the window's context and the check query's SHA-512; its template one the verifier pins (`tiles`), with
+* `Params`: the verifier's own parameters of the execution phase: the check item, ε and δ, the grid's bits, the declared range
+  of tile counts, the execution phase's context and the check query's SHA-512; its template one the verifier pins (`tiles`), with
   that template's tile work and query; and the rows' fixed length: stop mode `fixed` and each slot's max_tokens.
-* `Registration`: one-stage's record of the window (`registration.record`), canonical JSON, with what PoUW's rule reads;
+* `Registration`: one-stage's record of the execution phase (`registration.record`), canonical JSON, with what PoUW's rule reads;
   its digest is the record's own, `registration.digest`.
 * `Evidence`: the proof system's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
-  registration it is for, and what it said (on acceptance, the integrity profile and the verifier's draw as one-stage's
+  registration it is for, and what it said (on acceptance, the integrity profile and the verifier's sample as one-stage's
   `draw.py` writes it).
 
 Each decoder refuses with `core_check.py`'s message, and `Core.Protocol.answer` prefixes it with the input's name.
@@ -39,7 +39,7 @@ def checkKeys : List String := ["entries", "scheme", "template", "tile_work"]
 /-- `window.COINS` and `window.MODES`: the check item's optional key and the coin modes it may name. -/
 def coinsKey : String := "coins"
 def coinModes : List String := ["live", "seeded"]
-/-- `core_check.LIVE_PARAM`, `LIVE` and `LIVE_PARAMS`: a live window's parameters' salt session inputs. -/
+/-- `core_check.LIVE_PARAM`, `LIVE` and `LIVE_PARAMS`: a live execution phase's parameters' salt session inputs. -/
 def liveKey : String := "live"
 def liveKeys : List String := ["key", "ledger", "main", "pins", "session"]
 def LIVE_PARAMS : String :=
@@ -47,7 +47,7 @@ def LIVE_PARAMS : String :=
     "key, the auditor's ledger, the host's pins log, main's first-parent history and the salt session's files"
 
 /-- The `check` item: the tile template, its work per tile, the commitment scheme, the public bound on entries, and the
-window's coin mode when the item names one (`window.mode`: seeded when it names none). -/
+execution phase's coin mode when the item names one (`window.mode`: seeded when it names none). -/
 structure CheckItem where
   entries : Nat
   scheme : String
@@ -75,7 +75,7 @@ structure Params where
   hi : Nat
   /-- Each slot's max_tokens, which a row of record serves whatever it samples (stop mode `fixed`, `ignore_eos`). -/
   maxTokens : List Nat
-  /-- A live window's salt session's inputs as its verifier holds them (`liveKeys`); `none` for any other window. -/
+  /-- A live execution phase's salt session's inputs as its verifier holds them (`liveKeys`); `none` for any other execution phase. -/
   live : Option Json := none
 
 def isHexDigest (s : String) : Bool := s.length = 128 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
@@ -143,13 +143,23 @@ def rootOf? (j : Json) : Option Root := do
   guard (keys j == some ["domain", "leaves", "port", "root"])
   pure ⟨← str? (get j "port"), ← str? (get j "root"), ← nat? (get j "leaves"), ← str? (get j "domain")⟩
 
-/-- `core_check.WINDOW_VALUES`: the window's optional groups of committed values, the activations it committed before
+/-- `core_check.WINDOW_VALUES`: the execution phase's optional groups of committed values, the activations it committed before
 its salt and the registered weights' entries (`valuesRoot?`). -/
 def WINDOW_VALUES : List String := ["activations", "registered"]
 
+<<<<<<< ours
 /-- The record's `window` item, its execution block: its kind, its context, the items it registers, and its groups of
 committed values (`WINDOW_VALUES`), each `some` exactly when the item has the key, whatever its value. -/
 structure ExecutionBlockItem where
+||||||| base
+/-- The record's `window`: its kind, its context, the items it registers, and its groups of committed values
+(`WINDOW_VALUES`), each `some` exactly when the window has the key, whatever its value. -/
+structure Window where
+=======
+/-- The record's `window`: its kind, its context, the items it registers, and its groups of committed values
+(`WINDOW_VALUES`), each `some` exactly when the execution phase has the key, whatever its value. -/
+structure Window where
+>>>>>>> theirs
   kind : String
   context : String
   items : Json
@@ -198,21 +208,55 @@ def registrationOf (b : ByteArray) : V Registration := do
         "and registered")
   pure { bytes := b, format, program, query, partition, scheme, population, law, roots, window }
 
-/-- `registration.digest`: the window record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
+/-- `registration.digest`: the execution phase record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
 bytes it was read from. -/
 def Registration.digest (c : Registration) : ByteArray := Flock.WindowRecord.digestOf c.format c.bytes
 
+<<<<<<< ours
 /-! The service's draw, as one-stage's `draw.py` writes it: a `Flock.Draw.UnitDraw`, decoded with this check's own
 refusals (`core_check.py`'s `unit_draw`), which read only its keys and leave its law to `outcome`. -/
+||||||| base
+/-! The service's draw, as one-stage's `draw.py` writes it. -/
+=======
+/-! The service's sample, as one-stage's `draw.py` writes it. -/
+>>>>>>> theirs
 
 deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.Law
 
+<<<<<<< ours
 /-- `parse_law`'s spelling. -/
 def lawName : Flock.Draw.Law → String
+||||||| base
+/-- `parse_law`'s spelling. -/
+def Law.name : Law → String
+=======
+/-- `parse_design`'s spelling. -/
+def Law.name : Law → String
+>>>>>>> theirs
   | .subset k => s!"subset:{k}"
   | .bernoulli a b => s!"bernoulli:{a}/{b}"
   | .stratified k _ => s!"stratified:{k}"
+<<<<<<< ours
   | .work k _ => s!"work:{k}"
+||||||| base
+  | .work k _ _ => s!"work:{k}"
+
+/-- The verifier's draw: its law, over a population, and the units it drew. -/
+structure UnitDraw where
+  law : Law
+  population : Nat
+  units : Array Nat
+  deriving DecidableEq, Repr
+=======
+  | .work k _ _ => s!"work:{k}"
+
+/-- The verifier's sample: its sampling design, over a population, and the units it drew. -/
+structure UnitDraw where
+  law : Law
+  population : Nat
+  units : Array Nat
+  deriving DecidableEq, Repr
+>>>>>>> theirs
 
 def keysAre (j : Json) (ks : List String) (ctx : String) : V Unit :=
   unless keys j == some ks do throw s!"{ctx}: keys are not {", ".intercalate ks}"
@@ -250,8 +294,16 @@ def pOf (s ctx : String) : V (Nat × Nat) :=
   | _ => throw s!"{ctx}.p: not num/den"
 
 /-- The public outputs `{"draw": d}`, `d` one of `draw.py`'s laws with exactly its keys (`check_draw`'s), and optionally a
+<<<<<<< ours
 live window's `salt` (`saltOf`). -/
 def drawOf (j : Json) : V Flock.Draw.UnitDraw := do
+||||||| base
+live window's `salt` (`saltOf`). -/
+def drawOf (j : Json) : V UnitDraw := do
+=======
+live execution phase's `salt` (`saltOf`). -/
+def drawOf (j : Json) : V UnitDraw := do
+>>>>>>> theirs
   unless keys j == some ["draw"] || keys j == some ["draw", "salt"] do
     throw "public: keys are not draw, and optionally salt"
   let d := get j "draw"
@@ -277,7 +329,7 @@ def drawOf (j : Json) : V Flock.Draw.UnitDraw := do
       pure (.work k (strata.map fun (s, work, floor) => { toStratum := s, work, floor }), closure)
   pure ⟨l, population, ← natsOf d "units" ctx, closure⟩
 
-/-- A live window's `salt` among the public outputs, an object (`windowSaltReason` reads it), or `none`. -/
+/-- A live execution phase's `salt` among the public outputs, an object (`windowSaltReason` reads it), or `none`. -/
 def saltOf (j : Json) : V (Option Json) :=
   match PouwWindow.field? j "salt" with
   | none => pure none

@@ -93,9 +93,15 @@ def code_version(repo: Path) -> dict:
         if isinstance(d, dict):
             return {"source": "EXPORT.json", "commit": d.get("commit"), "dirty_patch_sha256": d.get("patch_sha256") or d.get("dirty_patch"),
                     "untracked": d.get("untracked"), "fallback": d.get("fallback")}
+    code = [f":/{d}" for d in research_tools.CODE_DIRS]   # outside the try: its refusal without the run store is no "unknown" version
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, timeout=10).stdout.strip()
+<<<<<<< 99c8914848
         code = [f":/{d}" for d in core_dirs(TREE)]
+||||||| merged common ancestors
+        code = [f":/{d}" for d in research_tools.CODE_DIRS]
+=======
+>>>>>>> 7af4d24fca3e
         dirty = subprocess.run(["git", "status", "--porcelain", "--", "verity_vllm", *code], cwd=repo,
                                capture_output=True, text=True, timeout=20).stdout.strip()
         return {"source": "git", "commit": sha or None, "dirty": bool(dirty)}

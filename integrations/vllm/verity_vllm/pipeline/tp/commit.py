@@ -10,7 +10,7 @@ rank's `chunk-leaf-v1` step stream, frame-v3-sha512 trees, 64-byte roots), and (
 i.e. per-rank run roots combined deterministically, rank-tagged, in rank order — the option "per-rank roots combined into the run
 root" of the charter.  ``--commit-scheme`` takes rows-sha512 alone (`rows_only`); vllm-v1's 32-byte ``verity/tp-run-root/v1``
 roots are only reread from recorded runs.  Every rank's root is fixed (finalize on every rank returns) BEFORE the pair's coins
-are drawn (`pipeline.commit_coins`: with ``--challenger-gate``, the auditor host's challenger opens them after the TP run root;
+are flipped (`pipeline.commit_coins`: with ``--challenger-gate``, the auditor host's challenger opens them after the TP run root;
 without it they are this process's own, a measurement); the challenge of rank r is `challenge_positions(tp_run_root,
 leaves_per_step_r, k, salt=pair/rank r)` from the pair's positions coin, and its population openings come from the identities coin,
 so no rank's values can be recomputed after the challenge.  FAIL-CLOSED: a rank that does not return a root (fewer
@@ -60,7 +60,14 @@ def tree_of_record(root: str | os.PathLike | None = None) -> dict:
     tree cannot pass as the tagged commit by git_head alone."""
     from verity_vllm.pipeline import source_identity
     root = Path(root) if root is not None else source_identity.TREE
+<<<<<<< 99c8914848
     return {"source": "source_identity.code_identity", "root": str(root), "closure": source_identity.closure(), **source_identity.code_identity(root)}
+||||||| merged common ancestors
+    return {"source": "source_identity.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **source_identity.code_identity(root)}
+=======
+    ident = source_identity.code_identity_of("the TP Commit's tree of record", root)
+    return {"source": "source_identity.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **ident}
+>>>>>>> 7af4d24fca3e
 
 
 def weights_as_loaded(pin: dict | None) -> partial | None:
@@ -253,6 +260,7 @@ def main(args: Options) -> int:
     kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k not in ("tensor_parallel_size",)})
     kw.update(parse_engine_args(args.engine_arg), worker_extension_cls=EXTENSION)
     print(f"[tp2commit] tp={args.tp} case={case} committer={args.committer} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
+    engine_env.require_inductor(kw)
     llm, build_s, topo = PH.engine(lambda: LLM(**kw), args.tp, args.rpc_timeout, model=cp["repo"], enforce_eager=kw.get("enforce_eager"), case=case, max_num_seqs=args.max_num_seqs)
     TT.require_ranks(llm, target, args.rpc_timeout)
     served = SV.require(llm, wl, target, out, args.rpc_timeout)
@@ -261,7 +269,7 @@ def main(args: Options) -> int:
     versions = {"schema": SCHEMA, "git_head": git_head(), "tree": tree_of_record(), "argv": sys.argv, "tp": args.tp, "build_s": round(build_s, 1),
                 "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
                 "effective_execution": va.effective_execution_doc(llm), "target": TT.as_json(target), "served": served,
-                "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT", "HIDDEN_GPU"))}),
+                "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT"))}),
                 "env_required": {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}, "ranks": topo,
                 "root_combination": "tp_run_root = SHA-512(tag || u32 world || (u32 rank || root_rank)...)",
                 "root_tag": RT.TP_ROOT_TAG.decode(), "commit_scheme": args.commit_scheme,

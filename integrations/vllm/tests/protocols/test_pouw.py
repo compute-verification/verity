@@ -19,7 +19,7 @@ from verity.core.protocols.pouw.audit import (HM96, HM96_WEIGHTS, Epoch, Workloa
 from verity.core.protocols.pouw.coins import Challenger, CoinCommitment, CoinOpening, coin_reason
 from verity.core.protocols.pouw.protocol import Context as UnitContext
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import SCHEMES, get
+from verity.ml.protocols.pouw.schemes import SCHEMES, get
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
@@ -59,7 +59,7 @@ def _rng(seed=0):
 
 
 def _coins(seed=0):
-    """The epoch's challenger on a seeded entropy (a served one's is the Lean verifier of record's, `pouw.verifier.coins`)."""
+    """The epoch's challenger on a seeded entropy (a served one's is the Lean verifier's, `pouw.verifier.coins`)."""
     return Challenger(0, random.Random(seed).randbytes)
 
 
@@ -78,7 +78,7 @@ def _int7_linear(x, w, bias=None):
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
 def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the_lead_are_executed():
-    from verity.core.protocols.pouw import circuit
+    from verity.ml.protocols.pouw import circuit
     from verity_vllm.protocols.pouw import h1 as pouw_h1
     from verity_vllm.protocols.pouw import lead as pouw_lead
     assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
@@ -88,7 +88,7 @@ def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the
     assert "executor runs" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
 
 
-def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_sampled_proofs():
+def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_spot():
     scheme = "pearl-c-sm120-v1-h3"
     assert scheme in pouw.EXECUTED
     assert any("device only" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}")))
@@ -115,7 +115,7 @@ def test_a_run_the_adapter_cannot_serve_is_refused(kw, match):
     assert any(match in r for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", **kw)))
 
 
-def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_sampled_proofs():
+def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_spot():
     assert pouw.EXECUTES == ("LinearBase.quant_method.apply",) and "pouw" in PO.SITES[pouw.EXECUTES[0]]
     assert not hasattr(pouw, "traced_as") and "ncp-v2" in pouw.schemes() and "ncp-v2" in pouw.EXECUTED
     for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"):
@@ -352,7 +352,7 @@ def test_served_fp8_claims_registered_weights_only_under_the_shared_rule(monkeyp
     """Served FP8 applies no keyed rotation, so its weights register only from the curated list, through the one
     registered-weights rule Pearl-C4 reads too; refused, the claim says it is about nothing and names why."""
     from verity.core.protocols.pouw import registration
-    from verity.core.protocols.pouw.schemes import pearl_c
+    from verity.ml.protocols.pouw.schemes import pearl_c
     s, seen = PPD.scheme_of("pearl-c-sm120-v1-h3"), []
     assert pouw.SERVED_TRANSFORMS == () and pearl_c.check_registration is registration.check_registration
     monkeypatch.setattr(pearl_c, "check_registration", lambda *a: seen.append(a) or registration.check_registration(*a))

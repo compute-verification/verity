@@ -1,5 +1,5 @@
 """The ingress tie through the proof system: each bucket row of an ingress link-window of the warden's cells proved as
-`io_request.IoTieRequest`, and the verifier of record that builds `IoTieVerdict`, the tie of a link's requests to its
+`io_request.IoTieRequest`, and the verifier that builds `IoTieVerdict`, the tie of a link's requests to its
 certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md, "The ingress
 tie").
 
@@ -27,15 +27,15 @@ bucket and its request cells a bucket), which the verifier takes in the clear as
 gap), never from the prover. The proof's ``pub`` row is a unit's lanes, its ``wit`` row the unit's bucket row under the
 warden's salt, and its ``o0`` row one u16 word holding the output bit (`IngressTie.layout`). Every port is one of the
 verifier's own registered reads (`IngressTie.registered`), so no row the unit reads or outputs is committed afresh and
-free in the relation the verifier checks (C-Flock's `Registered.checkComplete`): ``wit`` reads the warden's root, and
+free in the relation the verifier checks (Flock's `Registered.checkComplete`): ``wit`` reads the warden's root, and
 ``pub`` and ``o0`` read values the verifier registers at known content (`IngressTie.known`), row t its own lanes of
 bucket t and the one word 1, each under a public salt, which hides nothing since both rows are public.
 
-**The verifier of record** is `IngressTie.verify(…, advice=A, releases=…, head=…)`, which decides on the delivered
-proof and public inputs alone. It accepts the window when the verifier's own run of C-Flock's Lean verifier, with its
+**The verifier** is `IngressTie.verify(…, advice=A, releases=…, head=…)`, which decides on the delivered
+proof and public inputs alone. It accepts the window when the verifier's own run of Flock's Lean verifier, with its
 own registered reads (`registered`: the warden's root, its own lanes and the output words 1), accepts every session,
 they prove this tie's registered unit (`proved`: its gate names the pinned digest, every session the registered
-Program) and every drawn unit, and each unit's ``pub`` row opens, under the salt delivered, to the verifier's own lanes
+Program) and every sampled proof block, and each unit's ``pub`` row opens, under the salt delivered, to the verifier's own lanes
 and its ``o0`` row to 1. Its public outputs are `verdict` and `advice`, A's `digest`. A proof on another
 advice's lanes or another release, or of an output word 0, fails the registered read of ``pub`` or ``o0``, and a row
 that isn't the warden's fails ``wit``'s.
@@ -78,11 +78,11 @@ from verity.core.protocols.certifier import advice as ADV, head_check as HC, io_
 from verity.core.protocols.certifier import service as SVC, warden_rows as WR
 from verity.core.protocols.certifier.certificate import Direction
 from verity.core.protocols.certifier.warden import WardenParams
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, produced, proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as R
-from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
-from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import partition as P, produced, proofs as PF
+from verity.core.protocols.spot.one_stage import registered as G, registration as R
+from verity.core.protocols.spot.one_stage.proofs import Finding
+from verity.core.protocols.spot.one_stage.verdict import Verdict
 
 SPEC = "verity-network-certifier/ingress-tie-spec/v1"
 STATEMENT = "verity-network-certifier/ingress-tie-statement/v1"
@@ -260,7 +260,7 @@ def prompt_lens(advice: LinkAdvice) -> tuple[int, ...]:
 @dataclass(frozen=True)
 class Delivered:
     """An ingress link-window's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its
-    circuit file the auditor's own lowering of the unit), and for each drawn unit, by its index, the salts of its
+    circuit file the auditor's own lowering of the unit), and for each sampled proof block, by its index, the salts of its
     public row and its output row (``pub``, ``o0``, the known values' public salts, `IngressTie.known_tree`) and its
     output word, which the verifier opens against the public file's commitments to those rows. Never a witness row's
     salt: the warden's, which the registered read holds."""
@@ -337,7 +337,7 @@ class IngressTie:
         return bind(_UNIT, **dict(zip(_STATICS, self.key)))
 
     @cached_property
-    def proof_unit(self):
+    def proof_block(self):
         """The proof block a proof's circuit lowers: `unit` with its gate the Definition it names (`head_check.expand`,
         a `ValueError` for an unpinned size class)."""
         return bind(_PROOF_UNIT, **dict(zip(_STATICS, self.key)))
@@ -436,7 +436,7 @@ class IngressTie:
 
     def registered(self, head: WR.CellsHead, lanes: Sequence[Sequence[Q.Lane]] | None,
                    reads_from: int = 0) -> dict[str, Any] | None:
-        """The verifier's own `--registered` file, which names every port of the statement (C-Flock's
+        """The verifier's own `--registered` file, which names every port of the statement (Flock's
         `Registered.checkComplete`): unit `reads_from + t`'s ``wit`` row reads row t of the warden's root
         (`warden_rows.bucket_port`), and its ``pub`` and ``o0`` rows row t of the values the verifier registers at
         known content on its own `lanes` (`known`), each named with its rows and salts (`KNOWN_KEY`), from which the
@@ -514,7 +514,7 @@ class IngressTie:
         bits = [b for n in self.layout[row] for b in args[n]]
         return bytes(sum(b << j for j, b in enumerate(bits[k:k + 8])) for k in range(0, len(bits), 8))
 
-    # the verifier of record
+    # the verifier
 
     def gates(self) -> list[PrimitiveDefinition]:
         return [gate(*self.key)]
@@ -540,11 +540,11 @@ class IngressTie:
     def verify(self, draw: S.Draw, delivered: Delivered, *, circuit_sha512: str, advice: Any,
                releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> dict[str, Any]:
         """The verdict of record on the window's delivered proof, from public inputs and the proof alone: accepted when
-        the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
+        the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
         `circuit_sha512`, and the verifier's own registered reads, `registered`: the warden's root at `head`, the
         warden's head of the registered root, and its own lanes of each bucket from `advice` and `releases`, `lanes`,
-        and the output words 1) accepts every session, they prove this tie's registered unit (`proved`) and every drawn
-        unit, and each drawn unit's public row opens to the verifier's own copy (`public_arguments` on its lanes) and
+        and the output words 1) accepts every session, they prove this tie's registered unit (`proved`) and every sampled
+        proof block, and each sampled proof block's public row opens to the verifier's own copy (`public_arguments` on its lanes) and
         its output row to 1. Without lanes for every bucket nothing is verified and the window is refused. It reports
         `advice`'s digest (`digest`), None without an `LinkAdvice`. A head that isn't the registered
         root's refuses. `opening` (the witness) is for a debug comparison only: given, the verdict also carries
@@ -584,7 +584,7 @@ class IngressTie:
 
     def outcome(self, stream: S.Stream, draw: S.Draw, delivered: Delivered, *, circuit_sha512: str, advice: Any,
                 releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> S.Outcome:
-        """`stream.outcome` on the verifier of record's verdict (`verify`), with the registered root as the session's."""
+        """`stream.outcome` on the verifier's verdict (`verify`), with the registered root as the session's."""
         verdict = self.verify(draw, delivered, circuit_sha512=circuit_sha512, advice=advice, releases=releases,
                               head=head, opening=opening)
         return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
@@ -629,10 +629,10 @@ class IngressTie:
 @dataclass(frozen=True)
 class Ties:
     """The verifier's own tie source on one link: the ingress tie, its stream of record, the challenger's and the
-    verifier of record's, never the prover's, and the warden's ingress release as the verifier read it off the ingress
+    verifier's, never the prover's, and the warden's ingress release as the verifier read it off the ingress
     record (`releases`, the named gap). `registrations` is the stream's registrations (each one's
     `registration.digest`, in order) and `verdict` is `IngressTie.tie` on the stream, so IoTieRequest's verdict comes
-    only from outcomes the verifier of record decided on proofs. Each raises `ValueError` on another link than the
+    only from outcomes the verifier decided on proofs. Each raises `ValueError` on another link than the
     tie's."""
 
     ingress: IngressTie

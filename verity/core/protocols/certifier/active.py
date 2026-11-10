@@ -89,7 +89,7 @@ certifier (`prover_key`, over `weights_message`), while p's first ingress tick, 
 before the salt, and no one else can fix them. The record's open cells (`Accounting.Attribution.openCells`) are the
 grids, a function of the traffic, and what the certifier sends into the block is a function of its record.
 `reveal(p, registration)` takes the PoUW window's registration as the proof system returned it
-(`sampled_proofs.service.WindowCommitmentRecord`) and fails closed without it: it refuses unless the receipt is that
+(`spot.service.WindowCommitmentRecord`) and fails closed without it: it refuses unless the receipt is that
 registration's (`one_stage.registration.receipt`) and `registered` reads p off the registration, while p's last
 ingress record is unpublished (t_d), once the certifier's clock is more than `reveal_deadline` past p's end (one PoUW
 window by default), for a window whose salt was never sampled, and for one it has revealed already. So the salt reaches
@@ -97,7 +97,7 @@ one registration of p, made within the deadline after p's work. `check_salts` is
 ingress record holds exactly one salt frame of p, the placeholder's, and the revealed salt has `salt_bits` bits.
 
 **The reveal over the network** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the certifier runs on
-the link, off the prover's node, and the auditor's challenger on an auditor host. With the keys, `reveal` and
+the link, off the developer's node, and the auditor's challenger on an auditor host. With the keys, `reveal` and
 `committed` take the challenger's `request`: its LMS signature under `challenger_key`, the key the auditor's
 deployment record (never the prover's configuration) registered for it, over `reveal_request_message(signer.key_id,
 run_id, ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`, where `run_id` is the 32 bytes the proxy
@@ -212,8 +212,8 @@ from verity.core.protocols.certifier.online import Prover, Refused
 from verity.core.protocols.certifier.pacer import Pacer, Report
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
+from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.spot.service import WindowCommitmentRecord
 
 HEADER = struct.Struct(">BII")
 PAD, DATA, SALT = 0, 1, 3
@@ -1440,8 +1440,16 @@ class Proxy:
 
         await self._ticks("ingress", p, self.bucketer.certifier, tick)
 
+<<<<<<< 99c8914848
     def _fresh_salt(self, window: int) -> bytes | None:
         """At a PoUW window's first certifier window, draw its salt and give the certifier's own frame, the
+||||||| merged common ancestors
+    def _draw_salt(self, window: int) -> bytes | None:
+        """At a PoUW window's first certifier window, draw its salt and give the certifier's own frame, the
+=======
+    def _draw_salt(self, window: int) -> bytes | None:
+        """At a PoUW window's first certifier window, sample its salt and give the certifier's own frame, the
+>>>>>>> 7af4d24fca3e
         placeholder's."""
         if window % self.pouw_window:
             return None

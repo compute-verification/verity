@@ -2,7 +2,9 @@ module
 
 public import Properties.Pous.MemoryChallenger
 public import Proofs.Properties.Pous.MemoryChallenger.Device
-public import Mathlib.Tactic.SplitIfs
+import Mathlib.Algebra.Order.Ring.Nat
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # Proofs of the memory challenger's verdict's properties (`Properties.Pous.MemoryChallenger`)
@@ -17,8 +19,6 @@ rounds gave none and every round passed.
 -/
 
 @[expose] public section
-set_option backward.privateInPublic true
-set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger.Properties.SecurityProofs
 

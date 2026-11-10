@@ -85,11 +85,27 @@ class GateSessions:
 
     def reserve_draw(self, window: int, session: str) -> dict[str, Any]:
         """Window `window`'s sampling session, reserved withheld right after its session `session` (``reserve ...
+<<<<<<< 99c8914848
         --withhold``, `pouw_h1_window.reserve_draw`) and held as its ``draw``. `CoinError` when the gate refuses, or
         reserves it plain."""
         from verity_vllm.protocols.pouw.h1 import window as PHW
 
         reserved = PHW.reserve_draw(self.gate.call, self.peer)
+||||||| merged common ancestors
+=======
+        --withhold``) and held as its ``draw``. `CoinError` when the gate refuses, or reserves it plain."""
+        from verity.core.protocols.spot.challenger import CoinError
+
+        from verity_vllm.protocols.pouw.h1 import challenger as PHC
+        from verity_vllm.protocols.pouw.h1 import window as PHW
+
+        answer = self.gate.call("reserve", "--peer", self.peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(),
+                                "--withhold")
+        if answer.get("withheld") is not True:
+            raise CoinError(f"the gate reserved sampling session {answer.get('session')} plain, not withheld")
+        reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)},
+                                   "draw_session")
+>>>>>>> 7af4d24fca3e
         self.held_of(session)["draw"] = dict(reserved)
         print(f"[serve-h1] window {window}: reserved sampling session {reserved['session']} on {self.peer}", flush=True)
         return reserved

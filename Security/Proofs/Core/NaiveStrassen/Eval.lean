@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Core.NaiveStrassen.Check
 public import Proofs.Core.NaiveStrassen.Size
 
 /-!

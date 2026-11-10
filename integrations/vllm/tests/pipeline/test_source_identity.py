@@ -3,7 +3,7 @@
 A Commit under --gpu-tree without the tree variable (VERITY_TREE) can import the core package from the pod's DEFAULT tree (another
 release) while `verity_vllm` runs the release tree and versions.json names the release.  These tests reproduce the leak -- a SECOND
 tree on sys.path ahead of the tree of record -- and require the precheck to fail BY NAME, plus the positive (one tree), the shipped-tree
-sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / canary.sh / hidden_gpu.py with a foreign $VERITY_TREE).
+sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / canary.sh with a foreign $VERITY_TREE).
 
 Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from the root, `verity_vllm` from integrations/vllm.
 REPO must be a git checkout: the positive precheck, the requested-sha mismatch and the `.git`-before-markers resolution read its
@@ -19,7 +19,6 @@ import os
 import shutil
 import subprocess
 import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -59,7 +58,15 @@ def _other_tree(tmp_path: Path, name: str = "other", commit: str = "deadbeefdead
 
 def test_module_layout_is_verity():
     assert sid.TREE == REPO and sid.normalise_tree(None) == os.path.realpath(REPO)
+<<<<<<< 99c8914848
     assert set(sid.PACKAGES) == {"verity", "verity_vllm", "hidden_gpu"}
+||||||| merged common ancestors
+    assert set(sid.PACKAGES) == {"verity", "verity_vllm", "hidden_gpu", "research"}
+    assert "vllm-poc" not in sid.PACKAGES and "telemetry" not in sid.PACKAGES
+=======
+    assert set(sid.PACKAGES) == {"verity", "verity_vllm", "research"}
+    assert "vllm-poc" not in sid.PACKAGES and "telemetry" not in sid.PACKAGES
+>>>>>>> 7af4d24fca3e
     assert all((REPO / m).exists() for m in sid.ROOT_MARKERS)
 
 
@@ -86,8 +93,16 @@ def test_precheck_passes_from_one_tree(tmp_path, tree_arg):
         assert p["git_sha"] == doc["requested"]["git_sha"], name
         assert p["sys_path_entry"] == p["expected_sys_path_entry"], name
     assert doc["packages"]["verity"]["sys_path_entry"] == os.pathsep.join(os.path.realpath(REPO / e) for e in CORE_ENTRIES)
+<<<<<<< 99c8914848
     hg = doc["packages"]["hidden_gpu"]
     assert hg["resolved_path"].endswith("hidden_gpu.py") and hg["repo_root"] == os.path.realpath(REPO) and len(hg["file_sha256"]) == 64
+||||||| merged common ancestors
+    assert doc["packages"]["research"]["sys_path_entry"] == os.path.realpath(REPO / "tools" / "research" / "src")
+    hg = doc["packages"]["hidden_gpu"]
+    assert hg["resolved_path"].endswith("hidden_gpu.py") and hg["repo_root"] == os.path.realpath(REPO) and len(hg["file_sha256"]) == 64
+=======
+    assert doc["packages"]["research"]["sys_path_entry"] == os.path.realpath(REPO / "tools" / "research" / "src")
+>>>>>>> 7af4d24fca3e
     assert doc["sys_path0"] is not None
 
 
@@ -171,13 +186,79 @@ def test_negative_verity_tree_naming_another_tree_is_refused(tmp_path):
     assert r.returncode == 3 and r.stderr.startswith(sid.FAIL_CLASS) and "VERITY_TREE" in r.stderr, r.stderr
 
 
+<<<<<<< 99c8914848
 def test_the_module_repairs_no_sys_path():
     """A package that cannot be imported is a broken environment, reported as one: nothing here puts a tree on sys.path."""
     text = Path(sid.__file__).read_text()
     assert "sys.path.append" not in text and "sys.path.insert" not in text
+||||||| merged common ancestors
+def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
+    """No sys.path hack for `research`: without tools/research/src on the path the import fails with a message naming the fix."""
+    r = subprocess.run([PY, "-c", "import verity_vllm.pipeline.source_identity"], cwd=INTEGRATION,
+                       env=_env(PYTHONPATH=os.pathsep.join([str(INTEGRATION), *(str(REPO / e) for e in CORE_ENTRIES)])), capture_output=True, text=True)
+    if r.returncode == 0:
+        pytest.skip("`research` is importable from site-packages in this interpreter; the missing-package path cannot be exercised here")
+    assert "tools/research/src" in r.stderr and "verity-vllm row" in r.stderr, r.stderr
+    assert "sys.path.append" not in Path(sid.__file__).read_text() and "sys.path.insert" not in Path(sid.__file__).read_text()
 
 
-def test_in_process_check_and_loaded_module_guard(tmp_path):
+def _from_harness_tool(rec: dict) -> bool:
+    """`research` resolved from the harness's own snapshot (`research run` puts `<root>/tool/<RESEARCH_TOOL_SNAPSHOT>` first on
+    PYTHONPATH), not from the tree under test."""
+    snap = os.environ.get("RESEARCH_TOOL_SNAPSHOT")
+    path = rec.get("resolved_path")
+    return bool(snap and path) and any(p.name == snap and p.parent.name == "tool" for p in Path(path).parents)
+
+
+def test_only_researchs_copy_in_the_harness_tool_snapshot_is_left_out(monkeypatch):
+    shipped = {"resolved_path": "/workspace/research/tool/ab12/research/__init__.py"}
+    monkeypatch.delenv("RESEARCH_TOOL_SNAPSHOT", raising=False)
+    assert not _from_harness_tool(shipped)
+    monkeypatch.setenv("RESEARCH_TOOL_SNAPSHOT", "ab12")
+    assert _from_harness_tool(shipped)
+    assert not _from_harness_tool({"resolved_path": "/elsewhere/ab12/research/__init__.py"})
+    assert not _from_harness_tool({"resolved_path": str(REPO / "tools" / "research" / "src" / "research" / "__init__.py")})
+    assert not _from_harness_tool({"resolved_path": None})
+=======
+def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
+    """No sys.path hack for `research`: without tools/research/src on the path the module still imports, and the Commit's precheck
+    is refused by name with a message naming the fix."""
+    probe = "\n".join([
+        "import importlib.util, sys",
+        "if importlib.util.find_spec('research') is not None: raise SystemExit(99)",
+        "from verity_vllm.pipeline import source_identity as sid",
+        "sid.precheck('commit')",
+    ])
+    r = subprocess.run([PY, "-c", probe], cwd=INTEGRATION,
+                       env=_env(PYTHONPATH=os.pathsep.join([str(INTEGRATION), *(str(REPO / e) for e in CORE_ENTRIES)])), capture_output=True, text=True)
+    if r.returncode == 99:
+        pytest.skip("`research` is importable from site-packages in this interpreter; the missing-package path cannot be exercised here")
+    assert r.returncode != 0 and "UsageError: the Commit is refused" in r.stderr, r.stderr
+    assert "tools/research/src" in r.stderr and "verity-vllm row" in r.stderr, r.stderr
+    assert "sys.path.append" not in Path(sid.__file__).read_text() and "sys.path.insert" not in Path(sid.__file__).read_text()
+
+
+def _from_harness_tool(rec: dict) -> bool:
+    """`research` resolved from the harness's own snapshot (`research run` puts `<root>/tool/<RESEARCH_TOOL_SNAPSHOT>` first on
+    PYTHONPATH), not from the tree under test."""
+    snap = os.environ.get("RESEARCH_TOOL_SNAPSHOT")
+    path = rec.get("resolved_path")
+    return bool(snap and path) and any(p.name == snap and p.parent.name == "tool" for p in Path(path).parents)
+
+
+def test_only_researchs_copy_in_the_harness_tool_snapshot_is_left_out(monkeypatch):
+    shipped = {"resolved_path": "/workspace/research/tool/ab12/research/__init__.py"}
+    monkeypatch.delenv("RESEARCH_TOOL_SNAPSHOT", raising=False)
+    assert not _from_harness_tool(shipped)
+    monkeypatch.setenv("RESEARCH_TOOL_SNAPSHOT", "ab12")
+    assert _from_harness_tool(shipped)
+    assert not _from_harness_tool({"resolved_path": "/elsewhere/ab12/research/__init__.py"})
+    assert not _from_harness_tool({"resolved_path": str(REPO / "tools" / "research" / "src" / "research" / "__init__.py")})
+    assert not _from_harness_tool({"resolved_path": None})
+>>>>>>> 7af4d24fca3e
+
+
+def test_in_process_check(tmp_path):
     other = _other_tree(tmp_path)
     ids = sid.resolve(str(REPO))
     assert sid.check(ids, str(REPO)) == []
@@ -257,7 +338,6 @@ def test_shipped_tree_takes_its_sha_from_research_source_sha(tmp_path):
     for name in ("verity", "verity_vllm"):
         assert doc["packages"][name]["repo_root"] == str(t.resolve()) and doc["packages"][name]["git_sha"] == "f" * 40, name
         assert doc["packages"][name]["git_sha_source"] == "RESEARCH_SOURCE_SHA", name
-    assert doc["packages"]["hidden_gpu"]["resolved_path"] is None      # optional: not shipped in the stub, not a mismatch
     assert "f" * 9 in r.stdout and doc["RESEARCH_SOURCE_SHA"] == "f" * 40
     # --sha wins over the environment and is checked against it: a differing env sha is not a package mismatch (env is only a fallback)
     r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ), "--sha", "e" * 40, "--out", str(out)], cwd=integ,
@@ -303,62 +383,6 @@ def test_a_namespace_with_a_portion_from_another_tree_is_a_mismatch(tmp_path):
     assert mixed["resolved_path"] == str((ours / "src" / "nsprobe").resolve()) and mixed["repo_root"] is None
     [m] = sid.check({"nsprobe": mixed}, str(ours))
     assert "namespace portion(s) outside the requested tree" in m["why"] and str((other / "src" / "nsprobe").resolve()) in m["why"]
-
-
-# ---- hidden_gpu.py: REPO from the importing tree, never from the environment ----------------------------------------------------------------------
-
-def _fake_tree_with_hidden_gpu(tmp_path: Path, name: str) -> Path:
-    """An integration-root-shaped tree (hidden_gpu.py walks up to the first ancestor holding verity_vllm/)."""
-    t = tmp_path / name
-    for d in ("verity_vllm/commit/committer/hidden_gpu_src", "out/gen/r9/cmt-hidden/src", "verity_vllm"):
-        (t / d).mkdir(parents=True, exist_ok=True)
-    (t / "verity_vllm" / "__init__.py").write_text("")
-    src = (INTEGRATION / "verity_vllm" / "commit" / "committer" / "hidden_gpu_src" / "hidden_gpu.py").read_text()
-    (t / "verity_vllm" / "commit" / "committer" / "hidden_gpu_src" / "hidden_gpu.py").write_text(src)
-    (t / "out" / "gen" / "r9" / "cmt-hidden" / "src" / "hidden_gpu.py").write_text(src)
-    return t
-
-
-@pytest.mark.parametrize("copy", ["verity_vllm/commit/committer/hidden_gpu_src", "out/gen/r9/cmt-hidden/src"])
-def test_hidden_gpu_resolves_repo_from_its_own_file_not_the_environment(tmp_path, copy):
-    """Both copies (the shipped one, and the r9 path native_host inserts) find the SAME tree by walking up from __file__; a foreign
-    $VERITY_TREE is refused BEFORE torch/numpy load (so this runs torch-free); an agreeing one gets past the identity step."""
-    a = _fake_tree_with_hidden_gpu(tmp_path, "treeA")
-    b = _fake_tree_with_hidden_gpu(tmp_path, "treeB")
-    probe = f"import sys; sys.path.insert(0, {str(a / copy)!r}); import hidden_gpu"
-    # the leak vector: hidden_gpu from tree A while the environment names tree B -> refused by name
-    r = subprocess.run([PY, "-c", probe], env=_env(VERITY_TREE=str(b)), capture_output=True, text=True, cwd=tmp_path)
-    assert r.returncode != 0 and "PRECHECK_FAIL_SOURCE_IDENTITY" in r.stderr and str(a.resolve()) in r.stderr, r.stderr
-    # no environment at all: REPO = tree A (the file's tree); the import proceeds past identity (fails later only on torch/numpy/hs here)
-    r = subprocess.run([PY, "-c", probe + "; print('REPO', hidden_gpu.REPO)"], env=_env(), capture_output=True, text=True, cwd=tmp_path)
-    assert "PRECHECK_FAIL_SOURCE_IDENTITY" not in r.stderr
-    if r.returncode == 0:
-        assert r.stdout.strip().endswith(str(a.resolve()))
-    else:
-        # torch-free laptop: the identity step passed, the heavy imports did not (the fake tree's verity_vllm.commit is a bare namespace)
-        assert "No module named" in r.stderr or "cannot import name 'hidden_stream'" in r.stderr, r.stderr
-    # the environment agreeing with the file's tree is fine
-    r = subprocess.run([PY, "-c", probe], env=_env(VERITY_TREE=str(a)), capture_output=True, text=True, cwd=tmp_path)
-    assert "PRECHECK_FAIL_SOURCE_IDENTITY" not in r.stderr
-
-
-def test_hidden_gpu_refuses_a_verity_vllm_already_imported_from_another_tree(tmp_path):
-    a = _fake_tree_with_hidden_gpu(tmp_path, "treeA")
-    b = _fake_tree_with_hidden_gpu(tmp_path, "treeB")
-    probe = (f"import sys; sys.path.insert(0, {str(b)!r}); import verity_vllm; "
-             f"sys.path.insert(0, {str(a / 'out/gen/r9/cmt-hidden/src')!r}); import hidden_gpu")
-    r = subprocess.run([PY, "-c", probe], env=_env(), capture_output=True, text=True, cwd=tmp_path)
-    assert r.returncode != 0 and "PRECHECK_FAIL_SOURCE_IDENTITY" in r.stderr and "verity_vllm" in r.stderr, r.stderr
-
-
-def test_shipped_and_r9_copies_of_hidden_gpu_are_identical():
-    a = (INTEGRATION / "verity_vllm" / "commit" / "committer" / "hidden_gpu_src" / "hidden_gpu.py").read_bytes()
-    r9 = INTEGRATION / "out" / "gen" / "r9" / "cmt-hidden" / "src" / "hidden_gpu.py"
-    if not r9.exists():
-        pytest.skip("out/gen/r9 is not part of the Verity tree (materialised on the pod by pod_hidden_gpu.sh)")
-    assert r9.read_bytes() == a
-    code = b"\n".join(l for l in a.splitlines() if l.startswith(b"REPO = "))                  # module-level assignments only, not the docstring
-    assert code == b"REPO = _repo_of_this_file()"                                             # the default-tree line is gone from both copies
 
 
 # ---- runners set VERITY_TREE from their own tree ---------------------------------------------------------------------------------------------------

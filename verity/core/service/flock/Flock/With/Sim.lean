@@ -11,6 +11,7 @@ related oracles. `sim_walk` (`Flock.With.SimWalk`) walks two copies of one defin
 module
 
 public import Flock.With.Transcript
+import all Init.Data.List.Control
 
 @[expose] public section
 
