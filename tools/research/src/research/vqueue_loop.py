@@ -10,7 +10,10 @@ lacks, and the `queue/*` branches it ignores.
 The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`refs/vqueue/`), so drive's clone, its worktree and
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
-`signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner or under the low-risk
+`signed_verdicts`, a mark carried to a head with the same own change, or with an older head's own change mapped across the moves
+`main` landed since, as `tools/move/restack.py` carries a branch, from an older head with a land verdict of its own only, since
+mapping runs its tree's code: `Queue.mapped_change`, which the end of a tick starts working
+out, `--move-carry-jobs` heads at once on threads no tick waits on), with a land verdict by a non-owner or under the low-risk
 rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by
 its merge), not on `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files`
 is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`) of a change that
@@ -206,6 +209,10 @@ FAILED_FIELDS = frozenset(f.name for f in fields(Failed))
 JOBS = 8
 #: the most failures of a step off the gate a ring quotes (`Loop._off_gate`)
 OFF_SAID = 10
+#: the old heads mapped across `main`'s moves at once, each on a thread the end of a tick starts and no tick waits on
+#: (`Queue.work_out_mapped`; `--move-carry-jobs`): each runs every move's script on a whole tree, so few, leaving the control
+#: pod's few cores room for the loop
+MAPPED_JOBS = 2
 
 
 def stamp(t: float) -> str:
@@ -556,7 +563,7 @@ class World:
         self.keys = cache / "issuer-keys.json" if cache is not None else None
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
-            q._kept_at = cache / "own-changes.json"
+            q._kept_at, q._mapped_at = cache / "own-changes.json", cache / "mapped-changes.json"
             q._kept = json.loads(q._kept_at.read_text()) if q._kept_at.is_file() else {}
         self.post: Callable[[str, tuple[str, ...]], bool] = post or merge_thread_post
         #: graph2's subcommands it was found to lack (`_graph2`)
@@ -602,10 +609,12 @@ class World:
     def _relabel(self, main: str) -> None:
         """New labels, read as drive's tick reads them (one `StoreLabels` keeps what it pulled, so a mark, a verdict or a
         withdrawal written since would go unread): marks from drive.toml's `marked_after` at ``main`` on (else the queue
-        rules'), authenticated under its `signed_verdicts`, and a head's carried to a new head with the same own change."""
+        rules'), authenticated under its `signed_verdicts`, and a head's carried to a new head with the same own change, or,
+        while the queue maps heads across moves (`Queue.mapped_jobs`), whose own change is the head's mapped across them."""
         q, flags = self.q, flags_at(self.repo, main)
         self.labels = labels = self.labels_at()
         labels.since, labels.change = flags.marked_after or q.rules().marked_after, q.own_change
+        labels.moved, labels.owners = q.mapped_change if q.mapped_jobs else None, self._owners
         if flags.signed_verdicts:
             labels.verify = label_verifier(self.repo, MAIN, self.keys, q.log)
         q.ready, q.before_cutoff, q.marked_by, q.marked_at, q.prefetch = (labels.ready, labels.before_cutoff, labels.marked_by,
@@ -615,6 +624,11 @@ class World:
         if self._prs is None:
             self._prs = {p.number: p for p in self.q.github.open_prs()}
         return self._prs
+
+    def _owners(self, n: int) -> set[str | None]:
+        """Whose land verdict on PR ``n`` counts at none of its heads (`StoreLabels.owners`): its owner and that owner's handle,
+        as `review_owners` has them, with each head's mark's author."""
+        return {p.owner, self.q.handle(p)} if (p := self.open().get(n)) else set()
 
     def _missing(self, shas: Iterable[str]) -> set[str]:
         if not (shas := list(dict.fromkeys(shas))):
@@ -1710,6 +1724,10 @@ class Loop:
         if past.bad:
             self.out(f"research queue vqueue: tick {t.n}: {len(past.bad)} line(s) of {self.log_path} read as none: {past.bad[0]}")
         self.keep(t)
+        try:
+            self.world.q.work_out_mapped()
+        except (QueueError, OSError, subprocess.SubprocessError) as e:
+            self.out(f"research queue vqueue: tick {t.n}: mapping old heads across `main`'s moves failed: {e}")
         return logged
 
     def keep(self, t: Tick) -> None:
@@ -2356,10 +2374,18 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
+    ap.add_argument("--move-carry-jobs", type=int, default=MAPPED_JOBS, metavar="N",
+                    help=f"old heads mapped across `main`'s moves at once, each on a thread the end of a tick starts and none "
+                         f"waits on, running every move's script on a scratch worktree under --merged-root, so an old head's "
+                         f"land verdict and mark carry to a head whose own change is theirs mapped (`Queue.mapped_change`), "
+                         f"from a head with a land verdict of its own only (`StoreLabels.lands`); those "
+                         f"`research queue map-moves` mapped elsewhere count once copied into mapped-changes.d/ beside the "
+                         f"log; 0 carries none across a move (default {MAPPED_JOBS})")
     ap.add_argument("--merged-root", type=Path, default=None, metavar="DIR",
                     help="where the worktrees a build checks out go (`queue.merged_worktree`, one a merge for `ported`'s "
-                         "codemod), and where one a killed tick left is swept (default the temporary directory; the control "
-                         "pod's TMPDIR is a network volume, where each worktree add and remove takes minutes)")
+                         "codemod) and those a move's script runs on for --move-carry-jobs (`queue.mapped_tree`), and where "
+                         "one a killed tick left is swept (default the temporary directory; the control pod's TMPDIR is a "
+                         "network volume, where each worktree add and remove takes minutes)")
     a = ap.parse_args(argv)
     queue.MERGED_ROOT = a.merged_root or queue.MERGED_ROOT
     if a.no_slim and not (a.shadow or a.dry_run):
@@ -2390,7 +2416,7 @@ def main(argv: list[str]) -> int:
         q = _Clone(a.repo, remote=remote, github=GitHub(slug), ready=labels.ready, store=store,
                    auth=credential_args(a.repo, remote), before_cutoff=labels.before_cutoff, marked_by=labels.marked_by,
                    marked_at=labels.marked_at, prefetch=labels.prefetch, land_into="main")
-        q.branch = "main"
+        q.branch, q.mapped_jobs = "main", max(0, a.move_carry_jobs)
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, on=a.on,
