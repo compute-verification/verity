@@ -2,7 +2,9 @@
 at a capacity (`history_root`), the registered root held to it (`history_check`), and each position's source from the
 program's runs (`history_order`), on valid and broken inputs at capacities up to 64, and once at the pinned capacity,
 `2^17`. The named cases hold what the guarantee reads off the check: a rank past the table's length opens as the public
-placeholder, and the root binds the rows' order and the capacity."""
+placeholder, and the root binds the rows' order and the capacity. The strings come from the writer's members' public
+bodies as the circuit prover lays them out (`history_strings`), and each table's root from bodies the leaf layer binds
+(`history_roots`), each held to its Python mirror (`history.table_strings`, `history.roots_of`)."""
 
 from __future__ import annotations
 
@@ -11,6 +13,7 @@ import json
 import math
 import re
 import shutil
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -20,7 +23,8 @@ import verity_difftest as D
 from verity.ml.commitments import history as H
 
 PACKAGE = Path(__file__).resolve().parents[1]
-PIECES = "sampled-proofs-difftest"
+PIECES = next(e["name"] for e in tomllib.loads((PACKAGE / "lakefile.toml").read_text())["lean_exe"]
+              if e["root"] == "Spot.DifftestMain")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 #: `Flock.unhex`'s domain: pairs of lowercase hex digits
@@ -328,3 +332,127 @@ def test_refused_orders(pieces, name, j):
     assert pieces.call("history_order", j)[0] == "reject"
     with pytest.raises(D.Reject):
         reference_order(j)
+
+
+def _body(rows: list[list[bytes]]) -> str:
+    """A member's public body of one row a unit a port, as `rows.Committed.public_body` writes it: unit-major."""
+    return b"".join(b"".join(r) for r in rows).hex()
+
+
+def _shared(tables: list[list[bytes]], refs: list[list[int]]) -> str:
+    """A shared-row member's public body: each port's table rows, port-major, then each unit's refs (u32 LE, unit-major)."""
+    return (b"".join(b"".join(t) for t in tables) + b"".join(r.to_bytes(4, "little") for u in refs for r in u)).hex()
+
+
+def _strings(**change) -> dict:
+    """Writer `W`'s units 0-4 in two members, `x` then `o` a unit: positions 2-4 its units 4, 3, 2's `o`, after an earlier
+    window's rows 1 and 2 of `E`."""
+    a = [[_bc(2, 10 * u), _bc(3, u)] for u in range(3)]
+    b = [[_bc(2, 10 * u), _bc(3, u)] for u in range(3, 5)]
+    j = {"runs": [{"start": 2, "count": 3, "writer": "W", "out": "o", "radix": [3], "base": 4, "step": [-1]},
+                  {"start": 0, "count": 2, "held": "E", "row": 1}],
+         "length": 5, "writer": "W", "out": "o", "first": 7, "units": 5,
+         "members": [{"base": 10, "n": 2, "ports": ["x", "o"], "body": _body(b)},
+                     {"base": 7, "n": 3, "ports": ["x", "o"], "body": _body(a)}],
+         "held": {"E": _hex_of([_bc(4, r) for r in range(3)])}}
+    return {**j, **change}
+
+
+def _py_strings(j: dict) -> dict:
+    """The Python mirror's `history_strings`: `history.table_strings` over the piece's input."""
+    held = {v: [bytes.fromhex(x) for x in ss] for v, ss in j["held"].items()}
+    return {"bcs": _hex_of(H.table_strings(j["runs"], j["length"], j["writer"], j["out"], j["first"], j["units"],
+                                           [H.member_of(m) for m in j["members"]], held))}
+
+
+def test_strings_from_the_writers_public_bodies(pieces):
+    """Each position's string is its writer unit's `o` string as its member's body holds it, the members in unit order,
+    and a held run's the verifier's own of the earlier window."""
+    want = [_bc(4, 1), _bc(4, 2), _bc(3, 4), _bc(3, 3), _bc(3, 2)]
+    assert _call(pieces, "history_strings", _strings()) == {"bcs": _hex_of(want)} == _py_strings(_strings())
+
+
+def test_strings_from_a_shared_row_body(pieces):
+    """A shared-row body: unit `u`'s string is the row its ref names in its port's table."""
+    xs, os_ = [_bc(5, 0)], [_bc(6, 0), _bc(6, 1)]
+    refs = [[0, 1], [0, 0], [0, 1]]
+    j = {"runs": [{"start": 0, "count": 3, "writer": "W", "out": "o", "radix": [3], "base": 0, "step": [1]}],
+         "length": 3, "writer": "W", "out": "o", "first": 0, "units": 3, "held": {},
+         "members": [{"base": 0, "n": 3, "ports": ["x", "o"], "tables": {"x": 1, "o": 2}, "body": _shared([xs, os_], refs)}]}
+    assert _call(pieces, "history_strings", j) == {"bcs": _hex_of([os_[1], os_[0], os_[1]])} == _py_strings(j)
+    past = dict(j, members=[dict(j["members"][0], body=_shared([xs, os_], [[0, 2], [0, 0], [0, 1]]))])
+    assert pieces.call("history_strings", past)[0] == "reject"
+    with pytest.raises(ValueError):
+        _py_strings(past)
+
+
+@pytest.mark.parametrize("name, j", [
+    ("a unit no member's body holds", _strings(members=_strings()["members"][:1])),
+    ("members that leave a gap", _strings(first=6)),
+    ("a body that is not its units' strings", _strings(members=[dict(m, n=m["n"] + 1) for m in _strings()["members"]])),
+    ("a member without the table's row", _strings(out="y", runs=[{"start": 0, "count": 5, "writer": "W", "out": "y",
+                                                                 "radix": [5], "base": 0, "step": [1]}])),
+    ("a shared-row member's null tables", _strings(members=[dict(m, tables=None) for m in _strings()["members"]])),
+    ("a body in uppercase hex", _strings(members=[dict(m, body=m["body"].upper()) for m in _strings()["members"]])),
+], ids=lambda x: x if isinstance(x, str) else "")
+def test_refused_strings(pieces, name, j):
+    assert pieces.call("history_strings", j)[0] == "reject"
+    with pytest.raises(ValueError):
+        _py_strings(j)
+
+
+def _roots(unbound: str | None = None, **change) -> dict:
+    """`_strings`' table `k_hist` at capacity 16, its writer's two members and a reader's body under the leaf layer
+    `rows.leaf_layer` makes of all three (of all but `unbound`), the window registering the root over its rows."""
+    from verity.ml.windows import rows as CS
+    s = _strings()
+    members = [dict(m, key=f"W/{i}") for i, m in enumerate(s["members"])]
+    publics = {m["key"]: bytes.fromhex(m["body"]) for m in members if m["key"] != unbound} | {"R/0": b"the reader's body"}
+    dom, ph = H.domain("p", "k_hist", 64, 16), H.placeholder(64)
+    bcs = [_bc(4, 1), _bc(4, 2), _bc(3, 4), _bc(3, 3), _bc(3, 2)]
+    j = {"leaf_layer": CS.leaf_layer(publics),
+         "digests": {k: hashlib.sha512(b).hexdigest() for k, b in publics.items()},
+         "tables": [{"name": "k_hist", "program": "p", "writer": "W", "out": "o", "words": 64, "runs": s["runs"],
+                     "capacity": 16, "first": s["first"], "units": s["units"], "members": members}],
+         "held": {"k_hist": s["held"]}, "registered": {"k_hist": H.root(dom, bcs, ph).hex()}}
+    return {**j, **change}
+
+
+def test_roots_from_the_bodies_the_leaf_layer_binds(pieces):
+    """Each table's root is recomputed from its writer's bodies, which the leaf layer over every member's body binds, and
+    the root and domain its reads open against are the registered root, held to it, and the table's domain."""
+    from verity.ml.windows import rows as CS
+    j = _roots()
+    dom = H.domain("p", "k_hist", 64, 16).domain_id.hex()
+    want = {"roots": {"k_hist": {"domain": dom, "root": j["registered"]["k_hist"]}}}
+    assert _call(pieces, "history_roots", j) == want == _py_roots(j)
+    publics = {m["key"]: bytes.fromhex(m["body"]) for m in j["tables"][0]["members"]} | {"R/0": b"the reader's body"}
+    assert H.leaf_layer(j["digests"]) == CS.leaf_layer(publics) == j["leaf_layer"]
+
+
+def _py_roots(j: dict) -> dict:
+    """The Python mirror's `history_roots`: `history.roots_of` over the piece's input."""
+    return {"roots": {n: {"domain": d.hex(), "root": r.hex()} for n, (r, d) in H.roots_of(j["leaf_layer"], j).items()}}
+
+
+def _tampered_body() -> dict:
+    j = _roots()
+    m = j["tables"][0]["members"][0]
+    body = bytearray.fromhex(m["body"])
+    body[-1] ^= 1
+    j["tables"][0]["members"][0] = dict(m, body=body.hex())
+    return j
+
+
+@pytest.mark.parametrize("name, j", [
+    ("a body that is not the one the leaf layer binds", _tampered_body()),
+    ("a writer member the leaf layer doesn't name", _roots(unbound="W/1")),
+    ("another leaf layer", _roots(leaf_layer="00" * 64)),
+    ("a registered root over other rows", _roots(registered={"k_hist": _roots()["registered"]["k_hist"][::-1]})),
+    ("no registered root", _roots(registered={})),
+    ("a table named twice", _roots(tables=_roots()["tables"] * 2)),
+], ids=lambda x: x if isinstance(x, str) else "")
+def test_refused_roots(pieces, name, j):
+    assert pieces.call("history_roots", j)[0] == "reject"
+    with pytest.raises(ValueError):
+        _py_roots(j)

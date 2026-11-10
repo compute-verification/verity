@@ -10,7 +10,10 @@ holds before the sample, so the prover never chooses it.
   them, a window that is an object of the canonical domain; none without a binding);
 * a row is its sources' bytes in order (a root the record names, its last entry, as R3 and R7 read a name twice; hex
   non-empty lowercase of whole bytes), read as the parameter's leaves of `w` bits (`bytesLeaves`: each big-endian
-  32-bit half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32 bits or 512 of one);
+  32-bit half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32 bits or 512 of one), except
+  where the parameter's leaves are whole `Digest`s (`digests`: `Array<8, Array<64, Value<1>>>` or an array of them),
+  read as a circuit's `Digest` holds them (`digestLeaves`: each big-endian 64-bit word's 64 bits least significant
+  first);
 * `root`: the rows, as many as the verifier's own entry's `leaves`, each of its `words` leaves, committed as any registered
   value's rows (`Registered.commit`: `sha512/row/v1` of its u16 words, hm96-sha512 under the default key, the frame-v3-sha512
   tree under the value's domain) with row `i` salted by `salt`: 192 bytes of SHA-512 in counter mode over
@@ -71,6 +74,21 @@ def bytesLeaves (data : ByteArray) (bits : Nat) : V (Array Nat) := do
     let h := (List.range 4).foldl (fun acc k => acc * 256 + (data.get! (4 * i + k)).toNat) 0
     (Array.range (32 / bits)).map fun j => h / 2 ^ (bits * j) % 2 ^ bits
 
+/-- `registered.digests`: a parameter whose leaves are whole `Digest`s, eight SHA-512 words of 64 one-bit leaves each
+(`gates.rowleaf.digest_bits`'s order), or an array of them. -/
+def digests : Flock.Program.Ty → Bool
+  | .array 8 (.array 64 (.value 1)) => true
+  | .array _ (.array 8 (.array 64 (.value 1))) => true
+  | _ => false
+
+/-- `registered.digest_leaves`: `data` as whole `Digest`s' leaves, each big-endian 64-bit word's 64 bits least
+significant first. -/
+def digestLeaves (data : ByteArray) : V (Array Nat) := do
+  if data.size % 64 != 0 then throw s!"{data.size} bytes are no whole digests"
+  return (Array.range (data.size / 8)).flatMap fun i =>
+    let h := (List.range 8).foldl (fun acc k => acc * 256 + (data.get! (8 * i + k)).toNat) 0
+    (Array.range 64).map fun j => h / 2 ^ j % 2
+
 /-- `registered.log_base`: the first position after the log's records, the sum of their populations. -/
 def logBase (log : Array Json) : V Nat :=
   log.foldlM (fun base e => match int? (getD e "population") with
@@ -117,14 +135,15 @@ def sourceBytes (rec : Json) (log : Array Json) (binding : Option (String × Str
     if s.isEmpty then throw s!"supplied value {value}: {kind} {name} is no bytes"
     Flock.unhex s
 
-/-- `registered.supplied_rows`: each row its sources' bytes as the parameter's leaves. -/
+/-- `registered.supplied_rows`: each row its sources' bytes as the parameter's leaves, `Digest`s' where its leaves are
+whole digests (`digests`). -/
 def rows (rec : Json) (log : Array Json) (binding : Option (String × String)) (ps : Array Registered.Param)
     (supplied : Array String) (value : String) (rs : Rows) : V (Array (Array Nat)) := do
   let some p := ps.find? (·.name == value) | throw s!"{value} is not a parameter of the program"
   let [w] := Registered.widthSet p.ty | throw s!"parameter {value}: its leaves are not one width"
   rs.mapM fun r => do
     let data ← r.foldlM (fun acc s => return acc ++ (← sourceBytes rec log binding supplied value s)) ByteArray.empty
-    bytesLeaves data w
+    if digests p.ty then digestLeaves data else bytesLeaves data w
 
 /-- A registered row's u16 words: each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks. -/
 def rowWords (row : Array Nat) (wordBits : Nat) : Array Nat :=
