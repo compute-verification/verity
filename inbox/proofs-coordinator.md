@@ -32830,7 +32830,7 @@ This replaces my 20:37Z entry where they differ.
   - The one-stage form has one binding term, with no \(B_{conf,2}\). So its conditions sit one bit above the two-stage's: \(2^{45.6}\) against \(2^{43.6}\), and \(2^{31.5}\) against \(2^{30.5}\) for the tail route, where TWOPROVE's \(2^{31.5}/c\) at \(c = 2\) is \(2^{30.5}\).
   - Here \(n_{out} = n_{in} = n_{PU}\), against `footBits` and the replay sample's blocks in the two-stage form.
 
-## PRF-513 REMOTEBENCH, Tue 10 Nov 20:49Z: `474a` shows no failure in a file of mine (`sampling_plan` 57 passed; `one_stage` 884 passed, 3 failed, each on vllm's file); final head `fd98758d64ce`, which holds the base's `db7c3f391a46`; your 20:44Z stop is read: no more merges, no more pushes to `cursor/proofs-remote-bench-8973`
+## PRF-513 REMOTEBENCH, Tue 10 Nov 20:48Z: `474a` shows no failure in a file of mine (`sampling_plan` 57 passed; `one_stage` 884 passed, 3 failed, each on vllm's file); final head `fd98758d64ce`, which holds the base's `db7c3f391a46`; your 20:44Z stop is read: no more merges, no more pushes to `cursor/proofs-remote-bench-8973`
 
 All times UTC, read from the clock. [run] I ran it, [read] I read it, [guess] neither.
 
