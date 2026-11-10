@@ -1272,6 +1272,63 @@ def test_a_pearlplus_piece_names_its_provers_give_up_on_the_card_its_cross_check
                               "finished": 3, "of": 3}
 
 
+def test_a_published_serve_dir_carries_none_of_the_give_ups_counts(tmp_path, live):
+    """The piece's give-up document (`give_up`: the A and B rows given up, the tiles over a cap before and left after,
+    those the card marks non-finite and those replayed on the CPU, the passes finished) is the retained values', and
+    `publish` holds it whole: in ``development.json``, in the piece's line (its log's and the verdicts'), in the record's
+    row, in a JSON string and in an object cut short. So are the same counts in text: ``served_passes.py volunteer``'s
+    line, a pass's with its rows by call, and the tiles a round ``retain`` dropped left over a cap. No published file
+    names one of the counts; each file is in full under the private dir. What the grid form publishes of the give-up
+    stays: the work's padded ``give_up``, its draws over a cap and its ε. A piece with no give-up says so (None)."""
+    served, verified = _pearlplus_run()
+    work = {**verified["answer"]["public"]["work"], "over_cap_draws": 2, "give_up": 335_544_320}
+    verified = {**verified, "answer": {**verified["answer"], "public": {**verified["answer"]["public"], "work": work}}}
+    counts = {"tiles": 800_081, "over": 60_631, "left": 7_013, "voluntary_a": 40_417, "voluntary_b": 20_219}
+    device = {"cubin": "/s/debit/debit_sm90.cubin", "cubin_sha256": "ab" * 32, "cross_check": 1024, "replayed": 90_917,
+              "bad_tiles": 11_093, "form_s": 50.0, "device_s": 30.0, "replay_s": 20.0}
+    volunteered = {"s": 110.0, "jobs": 32, "ok": False, "node": "vy-dc-h200", "of": 3, "passes": [{"pass": 0}] * 3,
+                   "device": device, **counts}
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    doc = S.pearlplus(out / "pieces" / "pouw", served, verified, volunteered=volunteered, **live[1])
+    line = S.development_line(doc)
+    own = [str(v) for v in (*counts.values(), device["replayed"], device["bad_tiles"])]
+    assert all(str(v) in json.dumps(doc["give_up"]) for v in own) and line["give_up"] == doc["give_up"]
+    (out / "pieces" / "pouw" / "piece.log").write_text(
+        "POUW volunteer: served_passes.py volunteer --device exit 1 after 12 min: volunteer FAIL: 3 passes, 800081 tiles "
+        "counted on the device (90917 replayed on the CPU too) in 110 s on 32 processes, 60631 over a cap; gave up 40417 A "
+        "rows and 20219 B rows; 7013 tiles left over a cap\n"
+        "POUW volunteer: served_passes.py volunteer on the CPU exit 124 after 60 min: pass-00002: FAIL: 800081 tiles "
+        "replayed, 60631 over a cap; gave up 40417 A rows (call 3: [40417, 5]) and 20219 B rows (weight 5: 20219); 7013 "
+        "tiles left over a cap; credit kept 0.997531; records root ab -> cd\n"
+        "POUW retain: served_passes.py retain exit 0: retain PASS: 2 of 3 passes with calls retained, 1 dropped before "
+        "the coin (credit nothing, declared still); round 2: 7013 tiles left over a cap after its give-up\n"
+        f"POUW-DEV {json.dumps(line)}\n"
+        f"POUW {json.dumps({'stdout': json.dumps({'give_up': doc['give_up'], 'credit': work})})}\n"
+        f"POUW {json.dumps(line)[:json.dumps(line).index('a_rows') + 12]}\n")
+    (out / "verdicts.txt").write_text(f"POUW (development run, credits nothing) {json.dumps(line, sort_keys=True)}\n")
+    (out / "record").mkdir()
+    (out / "record" / "record.json").write_text(json.dumps({"rows": [{"protocol": "pouw", "development": doc}]}, default=str))
+    full = {p.relative_to(out).as_posix(): p.read_text() for p in out.rglob("*") if p.is_file()}
+    assert S.publish(out, private) == sorted(full)
+    for rel, text in full.items():
+        shown = (out / rel).read_text()
+        assert (private / rel).read_text() == text and not [v for v in own if v in shown], rel
+        assert "a_rows" not in shown and "bad_tiles" not in shown and "credit kept" not in shown, rel
+    pub = json.loads((out / "pieces" / "pouw" / "development.json").read_text())
+    assert "give_up" not in pub and pub["credit"] == work and pub == {k: v for k, v in json.loads(
+        full["pieces/pouw/development.json"]).items() if k != "give_up"}
+    log = (out / "pieces" / "pouw" / "piece.log").read_text().splitlines()
+    assert log[0].endswith("volunteer FAIL: " + S.GAVE_UP) and log[1].endswith("pass-00002: FAIL: " + S.GAVE_UP)
+    assert log[2].endswith("round 2: tiles left over a cap after its give-up")
+    shown = json.loads(log[3].removeprefix("POUW-DEV "))
+    assert shown == {k: v for k, v in line.items() if k != "give_up"} and shown["credit"]["epsilon"] == work["epsilon"]
+    assert json.loads(json.loads(log[4].removeprefix("POUW "))["stdout"]) == {"credit": work} and log[5] == "POUW " + S.CUT
+    assert S.publish(out, private) == []
+    plain = S.pearlplus(tmp_path / "plain", served, verified, **live[1])
+    assert S.public_json(plain) == plain and plain["give_up"] is None
+    assert S.public_json({"work": work}) == {"work": work}
+
+
 def test_a_pearlplus_piece_names_the_rounds_its_prover_dropped_before_the_coin(tmp_path, live):
     """A verdict over a retention that dropped rounds before the coin (``served_passes.py retain``) names them in the
     piece and its line: the verdict is the retained passes', and the dropped ones stay in the declared share."""

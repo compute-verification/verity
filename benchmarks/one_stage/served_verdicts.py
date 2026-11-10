@@ -32,8 +32,9 @@ sampled proofs, and the one record of every verdict (the block record).
 
 What leaves the node names no window and counts none of a window's own: no window's number, no count of the windows closed,
 sealed or refused, and no engine step, request count or user of one; nor a load's tokens or span (`OWN_AT`), whose tokens
-count its blocks; nor Pearl+'s exclusion tiles, their count and every tile's id (`OWN_AT`, `_tile_verdicts`), which the
-retained rows' values decide. ``public-lines`` prints each line of stdin in its published form (`public_line`), the line in full
+count its blocks; nor Pearl+'s exclusion tiles, their count and every tile's id (`OWN_AT`, `_tile_verdicts`), nor its
+prover's give-up before the coin (`OWN_DOCS`, `GIVE_UP_TEXT`), which the retained rows' values decide.
+``public-lines`` prints each line of stdin in its published form (`public_line`), the line in full
 appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and ``publish`` holds each file of OUT, once the run
 is done, in full under DIR where it names or counts a window or holds a load's own field (`publish`), its public form in
 its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
@@ -458,6 +459,25 @@ NUMBERED = frozenset({"window", "steps", "requests", "refused"})
 #: tiles, is the retained values' to decide: neither is an output, structure, a coin or a commitment. A drawn tile's id
 #: is the coin's through the passes' tickets, which the given-up rows weigh, so the list is held whole.
 OWN_AT = frozenset({("loads", "tokens"), ("loads", "span_s"), ("profile", "exclusion_tiles"), ("profile", "tiles")})
+#: Fields held where their value is a document. ``give_up`` is Pearl+'s prover's give-up before the coin (`give_up`, in
+#: the piece's ``development.json`` and its line): the A and B rows it gave up, the tiles over a cap before it and left
+#: after, the tiles the card marks non-finite and those replayed on the CPU, the passes it finished and whether it left
+#: none over a cap. The retained values decide each, and they are the counts the grid form keeps out of the credit
+#: (`verify_run.grid_work`), so the document is held whole. That form's own ``give_up``, the give-up in MACs padded up to
+#: H1's window grid, is a number among the work and stays, with the draws over a cap and ε.
+OWN_DOCS = frozenset({"give_up"})
+#: what a published line says in place of the give-up's own counts
+GAVE_UP = "(its counts stay on the node, in the serve dir's private)"
+#: The give-up's counts in text: `served_passes.py volunteer`'s line and a pass's (`volunteer_pass`), from its passes'
+#: or tiles' count to the line's end (the passes finished, the tiles replayed and over a cap, the rows given up, by call
+#: and weight in a pass's, the credit kept and the replay's seconds); the count of tiles a dropped round left over a cap
+#: (`served_passes.py retain`'s reason); and an `OWN_DOCS` document quoted in a string.
+GIVE_UP_TEXT = (
+    (re.compile(r"\b((?:PASS|FAIL): )(?:[\d,]+ passes, )?[\d,]+ tiles (?:replayed|counted on the device)\b[^\n]*"),
+     r"\1" + GAVE_UP),
+    (re.compile(r"\b[\d,]+ (tiles left over a cap)\b"), r"\1"),
+    (re.compile(r'\\?"(?:%s)\\?": ?\{[^{}]*\}(?:, ?)?' % "|".join(sorted(OWN_DOCS))), ""),
+)
 #: A window's number, step range or count in text, each with what the published text says in its place
 WINDOW_TEXT = (
     (re.compile(r'\\?"(?:%s)\\?": ?(?:-?\d+(?:\.\d+)?|\[[^\]]*\]|\{[^{}]*\}|true|false)(?:, ?)?'
@@ -472,7 +492,8 @@ WINDOW_TEXT = (
 #: A window's number in a file's path under the published dir: the file is held whole
 NAMED = re.compile(r"(?<![A-Za-z0-9])w\d+(?![A-Za-z0-9])")
 _OPEN = re.compile(r'\{\s*"')
-_FIELD = re.compile(r'\\?"(?:%s)\\?":' % "|".join(sorted(OWN | NUMBERED)))
+_FIELD = re.compile(r'\\?"(?:%s)\\?":|\\?"(?:%s)\\?": ?\{'
+                    % ("|".join(sorted(OWN | NUMBERED)), "|".join(sorted(OWN_DOCS))))
 _AT_KEYS = {p: "|".join(sorted(k for q, k in OWN_AT if q == p)) for p in sorted({p for p, _ in OWN_AT})}
 #: An `OWN_AT` field in text, by parent: the parent's list opening, and each of its keys holding a number inside that list
 AT_TEXT = tuple((re.compile(r'\\?"%s\\?": ?\[' % re.escape(p)),
@@ -511,7 +532,7 @@ def _tile_verdicts(key: Any, value: Any) -> bool:
 
 
 def _held(key: Any, value: Any, parent: Any = None) -> bool:
-    if (parent, key) in OWN_AT or _tile_verdicts(key, value):
+    if (parent, key) in OWN_AT or _tile_verdicts(key, value) or (key in OWN_DOCS and isinstance(value, Mapping)):
         return True
     if key == "refused":
         return not isinstance(value, str)
@@ -536,16 +557,17 @@ def _at_text(s: str) -> str:
 
 
 def public_text(s: str) -> str:
-    """``s`` with each window number, step range and window count `WINDOW_TEXT` finds in its published form, and no load's
-    own field (`OWN_AT`)."""
-    for pat, sub in WINDOW_TEXT:
+    """``s`` with each window number, step range and window count `WINDOW_TEXT` finds in its published form, none of the
+    counts of Pearl+'s give-up (`GIVE_UP_TEXT`), and no load's own field (`OWN_AT`)."""
+    for pat, sub in (*WINDOW_TEXT, *GIVE_UP_TEXT):
         s = pat.sub(sub, s)
     return _at_text(s)
 
 
 def public_json(o: Any, parent: Any = None) -> Any:
     """``o`` with no field of a window's own (`OWN`, `NUMBERED`), of a load's or of Pearl+'s exclusion tiles (`OWN_AT`,
-    by ``parent``, the key ``o`` is under; `_tile_verdicts`) and each string in its `public_text` form."""
+    by ``parent``, the key ``o`` is under; `_tile_verdicts`), no give-up document (`OWN_DOCS`) and each string in its
+    `public_text` form."""
     if isinstance(o, Mapping):
         return {public_text(k) if isinstance(k, str) else k: public_json(v, k) for k, v in o.items() if not _held(k, v, parent)}
     if isinstance(o, list):
@@ -555,7 +577,8 @@ def public_json(o: Any, parent: Any = None) -> Any:
 
 def public_line(line: str) -> str:
     """A verdict line as the run publishes it: each JSON object in it in its `public_json` form, one cut short that names a
-    window's or a load's own field replaced by `CUT` to the line's end, and the rest in its `public_text` form."""
+    window's or a load's own field or a give-up document replaced by `CUT` to the line's end, and the rest in its
+    `public_text` form."""
     dec, out, i = json.JSONDecoder(), [], 0
     while (j := line.find("{", i)) >= 0:
         out.append(public_text(line[i:j]))
@@ -609,9 +632,9 @@ def public_doc(text: str) -> str:
 def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
     `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window or holds a load's own
-    field or Pearl+'s exclusion tiles (`public_doc`) held in full, under ``private`` at its path under ``out``, its public
-    form left in its place. A file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The
-    paths held, in order."""
+    field, Pearl+'s exclusion tiles, its exact credit or its prover's give-up (`public_doc`) held in full, under
+    ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text is held whole.
+    Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
@@ -1406,7 +1429,8 @@ def give_up(volunteered: Mapping[str, Any]) -> dict[str, Any]:
     (``counts``: ``device``, the card's from the debit cubin ``cubin_sha256``, every ``cross_check``-th tile and each with
     a word the card marks non-finite (``bad_tiles``) replayed on the CPU too, ``replayed`` in all; ``cpu``, every tile
     replayed), the A and B rows it gave up, the tiles over a cap before it and left over after, the passes it finished of
-    ``of``, and whether it left none over a cap."""
+    ``of``, and whether it left none over a cap. The piece's document and its line carry it on the node; `publish` holds
+    it whole (`OWN_DOCS`)."""
     dev = volunteered.get("device")
     return {"counts": "cpu" if dev is None else "device",
             **{k: (dev or {}).get(k) for k in ("cubin_sha256", "cross_check", "replayed", "bad_tiles")},
