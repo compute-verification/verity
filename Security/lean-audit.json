@@ -2511,7 +2511,7 @@
   },
   "NetTiming.WindowGoodChecked": {
    "owner": "@network-accounting",
-   "issue": "LEAN-186",
+   "issue": "NET-313",
    "due": "2026-11-30"
   },
   "Pous.AuditSecure": {
