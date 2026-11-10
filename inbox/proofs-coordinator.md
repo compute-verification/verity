@@ -27083,3 +27083,83 @@ Your 07:20Z and 07:32Z notes are read. Before I rework the page: the three condi
 - **What I suggest you tell soundness now** (yours to send): "CMP-381's form is posted since 05:49Z (`note:compute-research/20261110T0530Z-report-stratum-split-form`, reviewed in `note:proofs/20261110T0655Z-review-stratum-split-form`). Its parts are cut from the sample by rank, so (a) and (c) fail by construction and (b) holds in timing only. Is your size for slices as strata, and what is it for parts by rule?"
 - **What I do with the page meanwhile.** I rework it under 900 words as you said at 07:20Z (the table out with a link to TOP-394, the duration clause out, "one at a time" with its label). For the cost I state both honestly: soundness's size and date, labelled as for slices fixed before the draw, and that for the rule the page recommends the step is not sized until soundness reads the form. I do not state (a) to (c) as what the serve must do, because the recommended form does not do (a) or (c) and is not meant to. If you want the page to offer slices as strata as an option of its own, say so and I add it with what it changes (the sampling design, and Pearl+'s one work stratum). In your inbox well before 16:00Z.
 - **"Does the served split draw do it today":** nothing serves a split draw today. No audit calls `split` or `check_split` (the branch's own docstring, `draw.py:54-58`), and `main`'s v2 accepts one session.
+
+## LEDGER, Tue 10 Nov 07:36Z: NET-300 follow-up (your 07:26Z): the 111,636 and 520,703 ANDs were `StopCheck_v1`'s; nothing counts `StopRule_v1` itself; the comment for PRF-456
+
+- **Start.** The resume restarted my VM at 07:26Z; I rebuilt from origin. No other execution of me: my note's last commit is my own `43ae345fd1` (07:03Z), and the last LEDGER entry here was my 06:46Z one. [run: `git log`; no process listing]
+- **Trees.** `origin/main` 7af4d24fca; the stop rule's seven files are the same on `checked` 00d07520b3. [run: `git diff`, empty] I ran nothing but reads, greps and arithmetic on figures already recorded. Tags: [read] the file at that line; [run]; [relayed]; [guess] mine.
+
+**1. Where the two figures come from, and what they count**
+
+- **They are mine.** [run] My run of Tue 10 Nov 06:15Z at tree 7af4d24fca, kept as `/opt/cursor/artifacts/net300-stop-check-size.log` on my VM. I gave them in my 06:24Z entry here (commit `d72768b784`, section 2's table), and you posted them on NET-300 at 06:36Z. [read: NET-300]
+- **Both count `StopCheck_v1`, not `StopRule_v1`.** [run] The bindings, from the script as my transcript holds it (the log prints every static but `MAX_TOKENS`):
+
+| figure | Definition | T | `MAX_TOKENS` | `PROMPT_LEN` | `MAX_MODEL_LEN` | `STOP` | `FINISH` |
+|---|---|---|---|---|---|---|---|
+| 111,636 | `StopCheck_v1` | 875 | 875 | 130,197 | 131,072 | (154820, 154827, 154829) | 2 |
+| 520,703 | `StopCheck_v1` | 4,096 | 4,096 | 126,976 | 131,072 | the same three | 2 |
+
+  - NSTOP is 3 for the rule inside: the check binds it at `len(stops)`. [read: `verity/ml/definitions/registry/stop_check.py:58`]
+  - T is the exact output count, equal to `max_tokens`, not a class: 875 is the post's cap (#8405), and it is not a power of two.
+- **How they were counted.** [read] `benchmarks/one_stage/m1_families.py:48` (`estimate`) sums a Definition's body node by node (`:75-81`), each leaf primitive lowered once on fresh inputs (`:36-45`). "Constants folded and ANDs shared across leaves are not taken off, so it is an upper bound" (`:8-9`).
+- **What the check is beside the rule.** [read] `stop_check.py:58-59` Calls `StopRule_v1{T, NSTOP=len(stops)}` with the statics as constant words; `:60` returns the AND of two i32 equalities on its two outputs. The estimator adds over nodes, so the check's figure is the rule's plus those three gates' cost: about 63 ANDs. [guess: 31 an equality, as `boolean_stop_rule.py:5` gives it]
+- **So** each figure bounds `StopRule_v1{T, NSTOP=3}` at the same T from above, by the same estimator, and is about 63 ANDs over it. [guess: worked, not run]
+
+**2. `StopRule_v1` alone at the class's O**
+
+- **No count of it exists.**
+  - The tree: the only pins are `StopRule_v2`'s, at (T, NSTOP) = (4, 1), (5, 2) and (32, 3): 482, 676 and 3,547 ANDs. [read: `boolean_stop_rule.circuit-check.json`] `stop_rule.circuit-check.py:15-17` binds `StopRule_v1` at the same three and has no pins file. [run: `git ls-tree`] circuit-check pins a count only for a primitive or a Boolean Definition. [read: `tools/verity/circuit_check/src/circuit_check/checks.py:954-964`]
+  - My recorded run: `StopCheck_v1` and `StopRule_v2` only.
+  - Notes: 25 notes name `StopRule_v1`, and no line that names it beside `AND` or `gates` gives it a count. [run: `rg` over the notes clone; I read the hits, not the 25 notes] GLMLINK's 44 and 108 ANDs an id are worked from the three `_v2` pins. [read: `network-accounting/20261110T0612Z-draft-net300-addendum`, section 5]
+  - Not searched: the evidence store's run records. I know no query by Definition name.
+- **What the recorded run does hold: the rule on gates.** `StopRule_v2` "is it on gates" (`stop_rule.py:23`), and "its word view is its `_v1` at the same statics" (`boolean_stop_rule.py:1-2`). [read] Same run, same log [run]:
+
+| T | `StopCheck_v1`, estimator (upper bound) | `StopRule_v2{T, NSTOP=3}`, gates | its input bits | its output bits | its block, log2 |
+|---|---|---|---|---|---|
+| 32 | 4,575 | 3,547 (equals its pin) | 1,024 + 32 + 96 + 32 + 32 | 32 + 32 | 22 |
+| 875 | 111,636 | 91,420 | 28,000 + 192 | 64 | 23 |
+| 4,096 | 520,703 | 438,612 | 131,072 + 192 | 64 | 24 |
+| 8,192 | 1,040,895 | 885,075 | 262,144 + 192 | 64 | 25 |
+
+  - The gate form is 18% under the check's figure at 875 and 16% under at 4,096. It folds the constants i + 1 (`boolean_stop_rule.py:6-7`); the estimator folds none. [read]
+- **The class's O is 1,024 for the 875 cap, and my run has no figure there.** [read] Network's note puts a request in class (P, O), the least powers of two covering its counts (section 1.3), and names "O = 1,024 (the class of the 875 cap)" (section 1.4's table). `boundary_rows.py:69`, `:90` is that rule on `main`. My T values were 32, 875, 4,096 and 8,192.
+- **Worked, not run** [guess]:
+  - The check's four figures are exactly 127·T + 511. So the estimator would give `StopRule_v1{T, NSTOP=3}` 127·T + 448: 111,573 at 875, 130,496 at 1,024, 520,640 at 4,096.
+  - On gates at 1,024: about 1.09e5. GLMLINK's fit (95 + ⌈log₂ (T + 2)⌉ ANDs an id and 330 fixed) is 0.4% to 0.9% over each of my four run figures.
+- **It needs a run. The commands; I ran none.**
+  - The estimator, the same measure as the two figures (35 s for eight bindings on my VM at 06:15Z [run]):
+
+~~~text
+echo '{"requests":{}}' > /tmp/none.json
+uv run python benchmarks/one_stage/m1_families.py --estimate /tmp/none.json --out /tmp/stop_sized.json \
+  --also 'StopRule_v1{T=1024,NSTOP=3}' --also 'StopRule_v2{T=1024,NSTOP=3}' \
+  --also 'StopRule_v1{T=4096,NSTOP=3}' --also 'StopRule_v2{T=4096,NSTOP=3}'
+~~~
+
+    [read: `m1_families.py:141-165`, `:114-133`] `_bind` took both specs at T = 875 in my 06:16Z template log. [run] The command-line form itself is untried: my run called `estimate` and `block` from a script. [guess]
+  - circuit-check, the tree's own check, which lowers the Definition through Flock: on a node, about 24 GB a process (`tools/verity/circuit_check/README.md:22-23`). [read]
+
+~~~text
+research run --on auto --cwd source -- uv run circuit-check 'StopRule_v1{T=1024,NSTOP=3}' 'StopRule_v2{T=1024,NSTOP=3}'
+~~~
+
+    That its report prints a word composite's AND count is my reading of `checks.py`, not something I saw. [guess]
+  - The staged block, the figure a card row would carry: `benchmarks/served_units/stage.py 'census:StopRule_v2{T=1024,NSTOP=3}' N OUT` on SERVEDCARD's (bc-013624b7-e3ef-5b9f-9e2d-e1534630b379) launch branch `cursor/proofs-servedcard-final-c5f8` at c6cadd0e32 (`stage.py:8-9` there). [read] `main`'s stager has no `census:NAME`: its `CENSUS` is four named types (`stage.py:221-227`). [read]
+- **A correction to my 06:24Z entry.** It cited `benchmarks/served_units/stage.py:1-5` for "takes `census:` specs" without naming the tree. That is SERVEDCARD's branch, not `main`.
+
+**3. The comment for PRF-456** (86 words by `wc -w`)
+
+~~~text
+Both figures were `StopCheck_v1`'s, not `StopRule_v1`'s [run: the census's estimator, `benchmarks/one_stage/m1_families.py:48`, at 7af4d24fca; T = 875 and 4,096, three stop ids, `max_tokens` = T]. The check Calls `StopRule_v1{T, NSTOP=3}` and adds two equalities and an AND [read: `verity/ml/definitions/registry/stop_check.py:58-60`], so each bounds the rule from above. The same run sized the rule on gates, `StopRule_v2` [read: `stop_rule.py:23`], two output words: 91,420 ANDs at T = 875, 438,612 at 4,096 [run]. Nothing counts `StopRule_v1` itself, nor either form at the class's O = 1,024: that needs a run.
+~~~
+
+**What this changes in what you posted at 06:36Z**
+
+- "at most 111,636 ANDs at 875 outputs and 520,703 at 4,096" still holds as an upper bound for the rule. "One output bit" does not: the rule returns two words, 64 bits, and reads 192 more input bits in four more ports (`max_tokens`, the stop ids, the prompt length, the model's length). [run: the `_v2` rows above]
+- The block of the gate form is one size up at 875: 2^23 against the check's 2^22. At 4,096 both are 2^24. [run]
+
+**What I did not check**
+
+- I ran no estimator, no circuit-check and no stager this turn, as you said. Every figure for `StopRule_v1` itself is arithmetic.
+- Which form a class Program would hold, and so which price applies: `StopRule_v1` lowered through Flock's word pieces (at most the estimator's 127·T + 448) or `StopRule_v2` on gates (104 to 108 ANDs an id at 875 to 8,192 outputs). Network pins `StopRule_v1` by closure digest; the class's request Definition is vllm's. [guess: nobody has said]
+- Whether the 4,096 cap's class is 4,096 or 8,192: network's note counts 4,097 egress cells (section 3.1), and I did not read how a class counts the end cell.
