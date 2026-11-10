@@ -39,7 +39,7 @@ what they leave of `k` printed as unexplained. For the built class: the rows a b
 
 A policy is `(c, k, n)`: blocks of at most `c` gates, each reading at most `k` fresh input bits, at most `n` of them. The
 number is `min_cut.bound`'s slowdown on one block: `max(1, N / cap)`, where `N` is the block's own work in MACs and
-`cap` is the most training work the count lets one block of the policy finish. The benchmark passes the bound `N`, the
+`cap` is the most training work the count lets one block of the policy finish (`Bound.macs_a_block`). The benchmark passes the bound `N`, the
 output wires `O = N × o × b` (`o` the output values a MAC of the model's own forward matmuls, `b` a BF16 value's 16
 wires) and the circuit's size `c`; the work is taken as training of the model's own matmul shapes with its weights
 outside θ. A number of 1 says the bound shows no slowdown: one block's `k` lets it hold all of its own work as training.

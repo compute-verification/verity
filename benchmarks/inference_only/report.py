@@ -24,7 +24,7 @@ import policy as P
 from rho import lean, min_cut
 
 UNIT = ("the least slowdown of training run inside one inference block of the policy, max(1, N / cap): N the block's "
-        "work and cap the most training work one block finishes, in the policy's own MACs")
+        "work and cap the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs")
 #: rho's command for a deployment's slowdown per monitoring period
 CALCULATOR = "uv run python benchmarks/rho/periods.py"
 
@@ -80,14 +80,14 @@ def priced(p: P.Policy, sh: P.Shape, blocks: float = 1.0) -> dict[str, Any]:
         "check": p.check,
         "bound": {"statement": b.statement, "premises": list(b.premises), "N": N, "O": N * sh.outputs * min_cut.BF16 / sh.macs,
                   "size": p.c, "o": [sh.outputs, sh.macs], "b": b.b, "beta_w": b.beta_w, "beta_x": b.beta_x, "F": b.F,
-                  "alpha": b.alpha, "cap": b.cap, "blocks": b.blocks},
+                  "alpha": b.alpha, "macs_a_block": b.macs_a_block, "blocks": b.blocks},
         "value": b.slowdown, "rests_on": rests_on(p, b),
     }
 
 
 def headline(row: dict[str, Any], p: P.Policy) -> list[str]:
     """The number and why, in the words a reader needs first."""
-    N, cap, value = row["work"]["N"], row["bound"]["cap"], row["value"]
+    N, cap, value = row["work"]["N"], row["bound"]["macs_a_block"], row["value"]
     holds = (f"the bound lets one block hold {_n(cap / N)} times its own work as training, so it shows no slowdown"
              if value == 1 else f"one block finishes at most 1/{_n(value)} of its own work as training")
     lines = [f"{p.model}, class {','.join(map(str, p.cls))}, {p.label}."]
@@ -102,6 +102,7 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
     """One policy's lines: what it is, what k is made of, a block's work, the check's verdict, the bound and the
     number with what it rests on."""
     w, bd, check = row["work"], row["bound"], row["check"]
+    cap = bd["macs_a_block"]
     positions = P.window_class(p.cls).positions
     width = max(len(f"{bits:,}") for bits in (*(b for _, b, _ in p.parts), p.unexplained, 0))
     out = [
@@ -136,7 +137,7 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
         f"            o = {sh.outputs:,} output values over {sh.macs:,} MACs of the model's own forward matmuls, b = "
         f"{bd['b']:g} bits a value",
         f"            {bd['statement']}, β_w = {bd['beta_w']:g}, β_x = " + (_g(bd["beta_x"]) if bd["beta_x"] else "none")
-        + f", F = {bd['F']:g}: cap {_n(bd['cap'])} MACs of training a block, N / cap = {_g(w['N'] / bd['cap'])}",
+        + f", F = {bd['F']:g}: cap {_n(cap)} MACs of training a block, N / cap = {_g(w['N'] / cap)}",
         "            the work is taken as training of the model's own matmul shapes, its weights outside θ, at most two "
         "of its three kinds of product charged (F = 1)",
         f"  number    {_n(row['value'])} = max(1, N / cap)",
@@ -207,7 +208,7 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
               "check ran on the session's Program)")
         head = ("division", "blocks a session", "c", "k", "N a block", "cap", "number")
         table = [head] + [(d["division"], _n(d["blocks_a_session"]), f"{d['c']:,}", f"{d['k']:,}", _n(d["work"]["N"]),
-                           _n(d["bound"]["cap"]), _n(d["value"])) for d in divisions]
+                           _n(d["bound"]["macs_a_block"]), _n(d["value"])) for d in divisions]
         widths = [max(len(r[i]) for r in table) for i in range(len(head))]
         for r in table:
             print("    " + "  ".join(x.ljust(w) if i == 0 else x.rjust(w) for i, (x, w) in enumerate(zip(r, widths))))
@@ -215,7 +216,8 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
             kinds = "; ".join(f"{x['bits']:,} {x['kind']}" for x in d["k_by_kind"][:3])
             print(f"    {d['division']}: its largest block's k is {kinds}" + (" …" if len(d["k_by_kind"]) > 3 else ""))
 
-    periods = [{"policy": p["label"], **row} for p in policies for row in P.periods(p["work"]["N"], p["bound"]["cap"])]
+    periods = [{"policy": p["label"], **row} for p in policies
+               for row in P.periods(p["work"]["N"], p["bound"]["macs_a_block"])]
     print("\nOver a monitoring period, all of a fleet's compute in the policy's blocks at capacity")
     print("  (the slowdown calculator's fleets and periods, benchmarks/rho; a fleet's rate is its cards' data-sheet dense "
           "int8 rate)")

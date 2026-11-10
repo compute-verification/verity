@@ -95,7 +95,7 @@ def test_the_number_is_the_bounds(k: int) -> None:
     else:
         assert row["value"] > 1
         assert min_cut.macs_at_most(row["value"], k, bd["O"], q, bd["b"]) == pytest.approx(N, rel=1e-9)
-        assert row["value"] == pytest.approx(N / bd["cap"], rel=1e-12)
+        assert row["value"] == pytest.approx(N / bd["macs_a_block"], rel=1e-12)
 
 
 def test_the_divisions_count_a_block_gates_and_each_row_it_reads_once(counted) -> None:

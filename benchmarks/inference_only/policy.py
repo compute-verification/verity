@@ -1,11 +1,12 @@
-"""An inference-only policy's number: the least slowdown of training run inside the policy's declared blocks.
+"""An inference-only policy's number: the least slowdown of training run inside the policy's inference blocks.
 
 A policy is `(c, k, n)`: blocks of at most `c` gates, each reading at most `k` bits from outside itself and outside θ, at
 most `n` of them (`Nci.CompliesAtMost c k n`). Its number is the slowdown `min_cut.bound` gives it
 (`benchmarks/rho/rho/min_cut.py`, the arithmetic of `Nci.Cut.Guarantees.HE`) on one block's work: `N` the block's work
 in the policy's own MACs, `O = N o b` its output wires (`o` the output values a MAC of the model's forward matmuls,
 `Shape.outputs / Shape.macs`, and `b` a bf16 value's wires) and the circuit's size `c`. That is `max(1, N / cap)`, `cap`
-the most of such work one block of the policy finishes: the number is 1 where a block holds its own work in training.
+the most of such work one block of the policy finishes (`Bound.macs_a_block`): the number is 1 where the count lets a
+block hold all of its own work as training.
 
 `stated` reads a policy's public numbers from a file (`served.toml`, whose keys README.md lists) and says what its `k`
 is made of; `built.py` builds a class's policy from this tree. `periods` sets a block's cap beside the blocks a fleet
@@ -162,8 +163,8 @@ def bound(p: Policy, sh: Shape, blocks: float = 1.0) -> min_cut.Bound:
 
 def periods(work: float, cap: float) -> list[dict[str, Any]]:
     """For each of the slowdown calculator's fleets and monitoring periods (rho's `periods.FLEETS` and `PERIODS`): the
-    declared blocks the fleet holds at capacity, each of ``work`` MACs, the training MACs they hold at most at ``cap`` a
-    block, and that as a share of the fleet's compute. A fleet's rate is its locations' data-sheet dense rate
+    policy's blocks the fleet holds at capacity, each of ``work`` MACs, the training MACs they hold at most at ``cap``
+    a block, and that as a share of the fleet's compute. A fleet's rate is its locations' data-sheet dense rate
     (`location.<name>.flops`, two FLOPs a MAC)."""
     import periods as rho_periods
 
