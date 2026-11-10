@@ -796,11 +796,15 @@ paths = [
 ]
 
 [drop]
+# `benchmarks/pouw/contents/filler/receipts.toml`: the entry of `benchmarks/pouw`'s filler table for `../receipts/`,
+# which leaves `benchmarks/pouw`.
+# `benchmarks/pouw/contents/paths/clear.toml`: the entry of `benchmarks/pouw`'s contents for `clear/`, which leaves
+# `benchmarks/pouw`.
 # `benchmarks/pouw/contents/paths/machine_model.toml`: the entry of `benchmarks/pouw`'s contents for
 # `machine_model/`, which leaves `benchmarks/pouw`.
 # `benchmarks/pouw/contents/paths/np_kernel.toml`: the entry of `benchmarks/pouw`'s contents for `np_kernel/`, which
 # goes to `archive/`.
-paths = ["benchmarks/pouw/contents/paths/machine_model.toml", "benchmarks/pouw/contents/paths/np_kernel.toml"]
+paths = ["benchmarks/pouw/contents/filler/receipts.toml", "benchmarks/pouw/contents/paths/clear.toml", "benchmarks/pouw/contents/paths/machine_model.toml", "benchmarks/pouw/contents/paths/np_kernel.toml"]
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
