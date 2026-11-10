@@ -18,12 +18,12 @@ import math
 import numpy as np
 import torch
 
-from verity.ml.circuits.ops import scalar as SC
-from verity.ml.circuits.refs import Affine, Coll, Strided, broadcast, concat
-from verity.ml.circuits.types import Array, Value
-from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry import ref_prims as R
-from verity.ml.definitions.registry import torch_words as W
+from verity.definitions.ops import scalar as SC
+from verity.circuits.refs import Affine, Coll, Strided, broadcast, concat
+from verity.circuits.types import Array, Value
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import ref_prims as R
+from verity.definitions.registry import torch_words as W
 from verity_vllm.program.frontend.derive import StaticIndex, refuse
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import OpRule

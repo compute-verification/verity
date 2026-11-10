@@ -202,7 +202,7 @@ two (`Completeness`).
 
 ## `Receipt`: the receipt folds
 
-`Duo`: duo's step, runs of one to four words and of any length (`benchmarks/pouw/receipts/receipt_folds.py`,
+`Duo`: duo's step, runs of one to four words and of any length (`verity/protocols/pouw/receipts/receipt_folds.py`,
 `duo_word`). `Fx1`: sm_120's fold, one keyed IMAD by an odd multiplier in front of duo's step (decision 83). `Li`: li's
 half step, a chain of them and a checkpoint, the XOR of several chains' states (`li_step`). Their binding statements
 are `Definitions.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import Coll, array_of
+from verity.circuits.refs import Coll, array_of
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, row_value, rows_of, shape
@@ -12,7 +12,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _untransposed, aten
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
-from verity.ml.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
+from verity.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
 
 
 # -- block-scaled FP8 linears: vLLM's sm_90 default dynamic route, and the explicit CUTLASS route ------------------------------

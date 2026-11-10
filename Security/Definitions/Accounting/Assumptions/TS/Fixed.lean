@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 
 Option A proves `Accounting.Assumptions.TS.UnitFixed` from the fixed word of `Definitions.Accounting.TS.Fixed`
 (`Accounting.Guarantees.TS.UnitFixedOfWords`). Two premises stay, each a named `Prop` of `Accounting.TS`'s vocabulary
-taken as a hypothesis, never an `axiom`, its docstring opening with its claim id (`verity/core/claims/__init__.py`).
+taken as a hypothesis, never an `axiom`, its docstring opening with its claim id (`verity/claims/__init__.py`).
 `CountsFixed` is not weaker than `UnitFixed`: it counts every fixed word, and a good fixed unit's words are fixed
 words, so it asks more than `UnitFixed`'s first half. What it gains is its object: a property of the values (fixed
 under option A, computed, every steering unit computed) that the labelling defines, where `UnitFixed` reads the run's

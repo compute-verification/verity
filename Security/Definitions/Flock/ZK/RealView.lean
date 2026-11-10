@@ -47,7 +47,7 @@ noncomputable def simWith [CharP F 2] (w0 : W) (σ : T.SimRand) (L : T.Hid → D
     leaves0 := (v.leaves0.1, fun q => L (.inl q))
     leavesP := fun r => ((v.leavesP r).1, fun k => L (.inr (r, k))) }
 
-/-- **hm96 leaves** (`verity/ml/commitments/hm96/PROTOCOL.md`): a leaf of content `col` under salt `y` is
+/-- **hm96 leaves** (`verity/commitments/hm96/PROTOCOL.md`): a leaf of content `col` under salt `y` is
 `H(dig(col) + M·y, c(y))`, with `dig(col)` the content's digest, `M·y` the pinned key's hash of the salt and
 `c(y) = H(sp ‖ y)`; an ideal leaf of seed `(U, y)` is `H(U, c(y))`. Also the two codes at the positions nobody opens,
 whose columns the hidden leaves commit. -/

@@ -28,8 +28,8 @@ import h1unit as U  # noqa: E402
 def description(definition) -> dict:
     """The unit's Program descriptor (`codec.encode_program`), the description a templated read would be bounded by: its
     canonical bytes, its Definitions and their nodes, and the Program's gates."""
-    from verity.ml.circuits import codec
-    from verity.ml.circuits.program import Program
+    from verity.circuits import codec
+    from verity.circuits.program import Program
 
     prog = Program(definition)
     desc = codec.encode_program(prog)

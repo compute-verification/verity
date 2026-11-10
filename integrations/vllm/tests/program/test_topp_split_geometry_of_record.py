@@ -24,7 +24,7 @@ import os
 import numpy as np
 import pytest
 
-from verity.ml.definitions.registry import topp_split as TS
+from verity.definitions.registry import topp_split as TS
 
 f32 = np.float32
 HERE = os.path.dirname(os.path.abspath(__file__))

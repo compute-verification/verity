@@ -14,7 +14,7 @@ bit `i` LSB first (`bitsOf`), with its three pieces at their bit lowerings rathe
 * `PouwXor32_v2` (`boolean.PouwXor32`, pinned `{"and": 0}` in `boolean.circuit-check.json`): the 32 bits' XORs
   (`xor32Bits`);
 * `PouwEq32_v2` (`segment.PouwEq32`, `segment._eq`, not pinned): `and_reduce` of the 32 bits' XNORs, `and_reduce`
-  (`verity/ml/circuits/boolean/forms.py`) being the pairwise AND tree with `1` for the empty list (`eq32Bits`);
+  (`verity/circuits/boolean/forms.py`) being the pairwise AND tree with `1` for the empty list (`eq32Bits`);
 * `PouwAndBit_v2` (`h1zy.PouwAndBit`, pinned `{"and": 1}` in `h1zy.circuit-check.json`): one AND, `andBit` itself.
 
 They compose as on words (`Definitions.Pouw.H1Zy.Combine`): per word a `tree` of `xor32Bits` over the lanes, its

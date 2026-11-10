@@ -8,7 +8,7 @@ binds) on every head.  The device gate runs first and nothing else runs when it 
   gate     `fa2_target_capture_gpu.gate`.
   binary   `fa2_target_capture_gpu.binary`: the SASS and PTX `_vllm_fa2_C` and `_C` carry.
   mufu     `fa2_target_capture_gpu.mufu`: ex2 / rcp tables and reduction rule on all 2^32 inputs, JIT compute_80 PTX and native.
-  tanh     `verity/ml/definitions/numerics/cuda/tanh_probe.cu` built as compute_80 PTX (JIT-compiled by the driver, as FA2 is):
+  tanh     `benchmarks/definitions/numerics/cuda/tanh_probe.cu` built as compute_80 PTX (JIT-compiled by the driver, as FA2 is):
            `tanh.approx.f32` on every 32-bit word against `MufuTanh_v1`'s three rules and its measured table, and its odd symmetry.
            A mismatch keeps the device's table over the shard (`tanh_sm*.bin`), the table another MufuTanh version would pin.
   launch   `fa2_target_capture_gpu.launch_geometry` of every case (torch.profiler).
@@ -41,8 +41,8 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.ml.definitions.numerics import rows as RK
-from verity.ml.definitions.numerics import softcap_rows as SR
+from verity.definitions.numerics import rows as RK
+from verity.definitions.numerics import softcap_rows as SR
 from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
 from verity_vllm.properties.record import seal as seal_record
 
@@ -50,7 +50,7 @@ SCHEMA = "verity-vllm/fa2-softcap-capture/v1"
 RECORD = "fa2_softcap_capture.json"
 HDIMS = (128, 256)
 CAP = 50.0
-TANH_SRC = C.REPO_ROOT / "verity/ml/definitions/numerics/cuda/tanh_probe.cu"
+TANH_SRC = C.REPO_ROOT / "benchmarks/definitions/numerics/cuda/tanh_probe.cu"
 #: (heads, KV heads, head dim) of the pinned Gemma-2 checkpoints whose selector scale is D^-0.5 (`query_pre_attn_scalar == head_dim`)
 MODELS = {"gemma-2-2b": (8, 4, 256), "gemma-2-9b": (16, 8, 256)}
 #: finite heads per launch the reference evaluator also runs (the twin's own check)
@@ -60,7 +60,7 @@ FINITE_SAMPLE = 2
 # ------------------------------------------------------------------------------------------------------------------------ tanh
 def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
     """`MufuTanh_v1`'s table words over its shard, decoded from the in-tree blocks: (words, lo, the shard's record)."""
-    from verity.ml.circuits.ops import mufu
+    from verity.definitions.ops import mufu
 
     (s,) = mufu.mufu_tanh_shards()
     words = np.concatenate([s.block(k) for k in range(len(s.header["blocks"]))]).astype("<u4")
@@ -70,7 +70,7 @@ def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
 
 
 def tanh_probe(work: Path, outdir: Path, ref: Path, lo: int, hi: int, sm: str) -> dict[str, Any]:
-    from verity.ml.circuits.ops import mufu
+    from verity.definitions.ops import mufu
 
     R = mufu.MUFU_TANH_RULES
     exe = work / "tanh_probe_jit_compute_80"
@@ -115,13 +115,13 @@ def case_list() -> list[dict[str, Any]]:
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against `AttentionSoftcap_v2` (a worker process: numpy words in, a record out)."""
-    from verity.ml.circuits.evaluation.reference import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation.reference import evaluate
+    from verity.circuits.defs import bind
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity.ml.definitions.numerics import derived_rows as DR
-    from verity.ml.definitions.registry import b1, hopper
-    from verity.ml.definitions.registry import fa2_softcap as F2S
-    from verity.ml.definitions.registry import prims as P
+    from verity.definitions.numerics import derived_rows as DR
+    from verity.definitions.registry import b1, hopper
+    from verity.definitions.registry import fa2_softcap as F2S
+    from verity.definitions.registry import prims as P
     from verity_vllm.program.frontend import targets as TG
 
     table = np.memmap(job["tanh_table"], dtype="<u4", mode="r")

@@ -24,14 +24,14 @@ from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.tp_steps import compile_tp
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import Builder, bind
-from verity.ml.circuits.ops import gemm as GE
-from verity.ml.circuits.refs import Affine, Coll
-from verity.ml.circuits.types import Array
-from verity.ml.definitions.registry import moe, tp_allreduce as TA
-from verity.ml.definitions.registry.prims import BF16
-from verity.ml.windows import interface as I, wiring as WI
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import Builder, bind
+from verity.definitions.ops import gemm as GE
+from verity.circuits.refs import Affine, Coll
+from verity.circuits.types import Array
+from verity.definitions.registry import moe, tp_allreduce as TA
+from verity.definitions.registry.prims import BF16
+from verity.windows import interface as I, wiring as WI
 
 RUN, LAW, CAP, W = "ab" * 64, {"law": "stratified", "k": 2}, 4, 2
 #: the fused bodies' hidden row: four chunks of 64 (`grain.chunk`)
