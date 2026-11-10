@@ -827,9 +827,9 @@ def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the
     lean = gs[2]
     assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-agreement"]
     assert [n for n, _, _ in gs[3]] == ["lean-audit"] and gs[3][0][1][4].endswith("tools/verity/lean/lean_audit.py")
-    assert [n for n, _, _ in gs[5]] == ["lean-suites"] and CHECK.AFTER["lean-suites"] == "lean-build"
+    assert [n for n, _, _ in gs[4]] == ["lean-suites"] and CHECK.AFTER["lean-suites"] == "lean-build"
     assert all(pytest[pytest.index(s) - 1] == "--skip" for s in CHECK.AFTER_LEAN)
-    argv = gs[5][0][1]
+    argv = gs[4][0][1]
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
     assert "--timeouts" in pytest and " --timeouts " in argv[2], \
