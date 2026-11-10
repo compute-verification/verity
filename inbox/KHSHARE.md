@@ -63,3 +63,17 @@ queued a run for 13:15Z, cancel it (`research cancel`) and queue again.
    wait, end your turn naming the run; the lead resumes you.
 2. **Never list command lines, even filtered:** no `ps ... args`, `ps -ef`, `ps aux`, `pgrep -af` or `pgrep -a`. The
    exec daemon's arguments hold tokens. To find a process use `pgrep -f PATTERN` (pids only), and kill by pid.
+
+## Tue 10 Nov 07:54Z: STOP. Daniel pushed this goal back; push what you have and end your turn
+
+Daniel, Mon 11:44 PM PST (top on TOP-394, 07:50Z): a fast check and the repository's new layout come first, every other
+goal is pushed back, and every lead stops each worker on a pushed-back goal that is more than 2 hours from its result.
+Yours is HASH-100, which serves goal 6, and its next result is hours away. So:
+
+- **Start nothing.** Do NOT queue the node A run. HASH-100 keeps its answer from the stored profile; the two-size run waits.
+- **The lead cancels your runs itself, now:** r20261110-072924-87f6 and r20261110-074607-5c5d (the two CPU runs). Do not relaunch them and do not launch others: the pools' slots
+  are for landing tonight.
+- **Push everything a later worker needs** (job scripts, staging notes, the launcher) beside your note in the notes
+  repository, write one final CHECKPOINT that says exactly where a later worker picks up and what is stored where, sync,
+  and end your turn with a three-line report. Take no more than 15 minutes over it.
+- Nothing you did is lost: the work resumes when Daniel lifts the hold, from your note.

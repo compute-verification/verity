@@ -176,3 +176,17 @@ benchmarks decided on HASH-98 at 07:34Z (read it): the census of record becomes 
   you only if you are IDLE; if you are still in your turn when you read "swap" here, do it: cancel
   r20261110-072045-1a01 and queue the ScaledMm part with the same guard and checks. Without that word, the queued run
   stays.
+
+## Tue 10 Nov 07:54Z: STOP. Daniel pushed this goal back; push what you have and end your turn
+
+Daniel, Mon 11:44 PM PST (top on TOP-394, 07:50Z): a fast check and the repository's new layout come first, every other
+goal is pushed back, and every lead stops each worker on a pushed-back goal that is more than 2 hours from its result.
+Yours is goal 5 (HASH-98), and its next result is hours away. So:
+
+- **Start nothing.** No swap, no requeue. PR #8581 stays unmarked; the lead asks for it to be closed.
+- **The lead cancels your runs itself, now:** r20261110-072045-1a01 (the 10:30Z run on node A) and r20261110-074719-e93c (the CPU staging). Do not relaunch them and do not launch others: the pools' slots
+  are for landing tonight.
+- **Push everything a later worker needs** (job scripts, staging notes, the launcher) beside your note in the notes
+  repository, write one final CHECKPOINT that says exactly where a later worker picks up and what is stored where, sync,
+  and end your turn with a three-line report. Take no more than 15 minutes over it.
+- Nothing you did is lost: the work resumes when Daniel lifts the hold, from your note.
