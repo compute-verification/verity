@@ -31420,3 +31420,33 @@ The records run at the old cross. Its lock differs from `main`'s by 10 lines, th
 - `38f3`'s verdict goes into #8539's body.
 - Wed 12:00Z: the pooled field's Lean half, and PRF-504's commit with its records.
 - Wed 16:00Z: PRF-504's text, and the `RequestsCover` recommendation after BREAKEVEN's 00:00Z entry.
+
+## PRF-460 TWOWITNESS, Tue 10 Nov 19:12Z: (a) is in the setup: Program.decode, the template units and HmLinks.check are walked at the instance; three tries running on cpu-12
+
+- **Head:** `85fc1d2c37` on `cursor/proofs-twowitness-0d28`, pushed. [run]
+- **The 17:14Z clause is gone.** The InstanceStmt files no longer say "its units come from its header, and `HmLinks.check` never runs" (`git grep`). [run]
+- **What changed since 17:44Z** [read]:
+  - `aef04d5107`: the reference statement carries its program again, `progBytes` with digest `progHex` under META's `program_digests`.
+  - `7b971364c2`: the shared walker (`Concrete/Fwd.lean`) walks values outside `Except`, let-applied computations, and matches inside conditions.
+  - `38e727df7b`: `decode_prog`, `Program.decode progBytes = .ok progX`.
+  - `e2234eebba`: `descParse_X`, `TemplateQuery.Desc.parse progBytes = .ok descX`, with `descX_hex` (its digest is `progHex`), and loop equations in `Except`.
+  - `79fd0f41ac`: the setup takes its program branch. `deriveTemplateUnits_X` gives the drawn unit as an instance of `T_v1`, and `linksCheck_X` gives `HmLinks.check` = 0 cut wires (META has no `links`). `setup_stX` and `setupTables_X` are now stated at `(some progBytes)`.
+  - `85fc1d2c37`: new `InsSetup.lean`, with `Zk.shapeOk` at the statement, `setup_X` (`Ins.setup`) and `setupOf_x : FlockDeploy.setupOf true (x r) = some (ins r, tabAt r)` where the two fixed nets build.
+- **Verified so far:** local plain-Lean probes only [run]. They cover the decode walk, the `Desc.parse` walk, `deriveTemplateUnits` on a stand-in circuit, and the kernel's decisions (`isInputId`, `def?`, `locate`, `Array.mapM`). Nothing since `84d0ac371c` has passed on a node yet.
+- **Last node verdicts (cadc, at `84d0ac371c`)** [run]:
+  - `Texts`: exit 0, 19 theorems, axioms `propext`, `Classical.choice` and `Quot.sound` only.
+  - `Setup`: exit 1. `load_pubX`'s digest condition was stuck, and `setup_stX` stopped at `checkPartition`.
+  - `SetupAt`: exit 1, from its dependency on `Setup`.
+- **Runs on cpu-12** (`--pool proofs`; ETAs [guess]):
+  - `r20261110-185731-46ed` at `79fd0f41ac`: Decode, Setup, SetupAt. ETA about 20:45Z.
+  - `r20261110-190937-b385` at `85fc1d2c37`: InsSetup, and `EndToEndRegistered/Nontrivial`. Together they re-elaborate every walk the changed walker serves: Concrete's `File`, `Inputs`, `Public` and `Setup`, and `Nontrivial`. ETA about 21:15Z.
+  - `r20261110-181723-3020` at `9ecb41c6fb`: Setup with `checkPartition_X` traced. 46ed supersedes it; I'm leaving it to finish for the trace. ETA about 19:45Z.
+- **(A) still needs, in order:**
+  1. Node passes of Decode, Setup, SetupAt and InsSetup, fixing forward from 46ed and b385.
+  2. `zkOk (x r) = true`, from `setupOf_x` and the bounds on `tabAt`'s statement (m, kLog, regions, points).
+  3. `templateOk` at `x r`: `readOf_x`, `Desc.parse_single` with `parseOut_cX` at the fixed nets, `unitLog ≤ 32`, one statement in `shapeOf`, and `v2Row` on both ports.
+  4. TWOINSTANCE's `scope` field: `scopeOk (bitsProgs (ms2 (x r))) (membersPart (ms2 (x r))) ⟨part2 (x r), design1, [1]⟩`.
+  5. C's facts, already in the tree: `decode_x`, `checked_stmt`, `good_drawJ`. [read]
+  6. Remove the trace from `checkPartition_X`, then a records run and `--siblings` on the new modules.
+- **Thursday 18:00Z holds** if the node tries pass within two rounds of fixes. I'll say so by Wed 18:00Z if not. [guess]
+- **Ready to paste on PRF-460:** "TWOWITNESS: the two-instance statement carries its program again. The setup's program branch (`Program.decode`, the template units, `HmLinks.check` with no cut wire) is walked at the instance, and `Ins.setup` and `setupOf true` at the statement are stated (`InsSetup.lean`). Node tries are running on cpu-12 (46ed, b385)."
