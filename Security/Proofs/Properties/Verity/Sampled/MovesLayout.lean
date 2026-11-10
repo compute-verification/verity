@@ -121,7 +121,7 @@ theorem decode_sha {spec : Flock.SessionSpec} {text : String} {sess : Flock.RunR
 /-- **Each opening v2's read shows of a record's stream answers the record's round's digest** (`rep_rounds`'s
 `hans`): where v2 read the release log `lines` of one coin tree as the releases `pre ++ y :: post`, `y` opening tree
 `i`'s stream `s`, named `name` in the `Hello`s before it, the line `y` reads opens round `openedOf pre i s` of that
-stream (`readLog_round`) after the bytes `y` answers; the record `challengePhaseTreeReason` accepts is of that tree
+stream (`readLog_round`) after the bytes `y` answers; the record `sessionTreeReason` accepts is of that tree
 (`root_of_keyAt`) and gives that round's `msg_sha512` as the `after` of the opening the tree shows (`rounds_held`),
 which is that line's (`opening_after`); and under SHA-512 digests `Record.decode` reads the round's digest as those
 bytes (`decode_sha`). -/
@@ -129,7 +129,7 @@ theorem rep_answers {label : String} {after : ByteArray} {J : Json} {ξ : ByteAr
     {pre post : List Release} {y : Release} {trees : Array LoggedTree} {i s n : ℕ} {name : String}
     {spec : Flock.SessionSpec} {record : String} {sess : Flock.RunRecord} {st : Flock.StreamRec}
     (hR : readLog label after [J] ξ lines = some (pre ++ y :: post)) (hct : coinTreesOf lines = .ok trees)
-    (h1 : trees.size = 1) {tabsB : Array (String × Option ℕ)} (hJt : challengePhaseTreeReason trees tabsB J = none)
+    (h1 : trees.size = 1) {tabsB : Array (String × Option ℕ)} (hJt : sessionTreeReason trees tabsB J = none)
     (hy : y.frame = .opening i s n) (hO : ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some name)
     (hd : Flock.Record.decode spec record = .ok sess) (hJ : Flock.JsonParse.parse record = .ok J)
     (h512 : spec.sha512Digests = true) (hst : sess.streams.find? (·.name == name) = some st)

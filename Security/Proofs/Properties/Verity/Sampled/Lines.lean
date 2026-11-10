@@ -30,7 +30,7 @@ coins the device opened, so they are the device's or bytes of one SHA-512 with t
   survives (`pending_none`). The head is the commitment's value's text (`head_canon`), so where `releasedRootsOf`
   accepts a log, `readLog` reads it as `readTail` reads the lines after its head (`readLog_head`).
 * **The trees v2 accepts** (`TreesOf`, `trees_log`): `coinTreesOf`'s acceptance gives each tree a root no other tree
-  has, a spec of distinct streams, and each round opened once, so where a session's record passes `challengePhaseTreeReason`,
+  has, a spec of distinct streams, and each round opened once, so where a session's record passes `sessionTreeReason`,
   each round it gives coins of has the coins whose SHA-512 the round's line shows (`TreeLines`, `tree_lines`).
 * **The induction** (`read_prints`, `read_run`): over what the device printed, `readTail` reads each release
   (`ReadOf`): its frame and the bytes it answered, and its coins where it read any, the device's, or, at a round opened,
@@ -898,7 +898,7 @@ theorem TreeLines.sub {lines lines' : List String} (h : TreeLines recs lines) (h
 a tree's root is no other tree's, and its round is opened once (`trees_log`), so a record's round is that line's
 (`Trees.round_held`). -/
 theorem tree_lines {log : List String} {ts : Array LoggedTree} (h : coinTreesOf log = .ok ts)
-    (hrecs : ∀ rec ∈ recs, ∃ tabs, challengePhaseTreeReason ts tabs rec = none) : TreeLines recs log := by
+    (hrecs : ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none) : TreeLines recs log := by
   have hT := trees_log h
   refine ⟨hT.spec, fun l hl j hev hnt hop R S k C hR hS hk hC rec hrec htree cs hcs => ?_⟩
   obtain ⟨t, ht, htr, o, ho, hoc⟩ := hT.opened l hl j hev hnt hop R S k C hR hS hk hC
@@ -1046,7 +1046,7 @@ printed. -/
 theorem read_run {dev : History} {log : List Release} (hP : PrintsLog dev log) {pk : ByteArray} {w : String}
     {r : Properties.Challenger.Run} (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id)
     (hcr : ∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) {ts : Array LoggedTree}
-    (hts : coinTreesOf r.log = .ok ts) (hrecs : ∀ rec ∈ recs, ∃ tabs, challengePhaseTreeReason ts tabs rec = none)
+    (hts : coinTreesOf r.log = .ok ts) (hrecs : ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none)
     {out : List Release} (h : readLog label after recs (r.released label after) r.log = some out) :
     List.Forall₂ ReadOf out log := by
   obtain ⟨hp, hξ⟩ := hP pk w r hr ho

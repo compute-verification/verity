@@ -36,7 +36,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   `json.dumps(row, sort_keys=True)`, and the window's Commit record's digest, `commitOf?`), the last round's receipts and
   every round's root and coin (`drawRoot`) must be the one root the challenger's log shows its sampling coin followed, read
   through the sample's own session (`draw`'s `session`), the one the auditor's signed ledger opens on that root, run from
-  a commit the host's pins log records on main's first-parent line (`trustedChallengePhaseOf`, over `pinnedChallengePhase`), and
+  a commit the host's pins log records on main's first-parent line (`trustedSessionOf`, over `pinnedSession`), and
   opened withheld (`Spot.Challenger.withheldOn`), so its challenger released no coin root before the prover's
   sample root. So a credit bit changed after the sampling coin is refused.
 * `drawn` is `credit.drawn`: the units the sampling coin samples from the window's own layout, `drawCheck`'s rule under the
@@ -77,8 +77,8 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   `Internal.live`.
 * `period` is `credit.period`: the windows presented are exactly those the auditor's ledger lists in the period's
   close, in its order, each window's session and then its sample's, and the close is complete; `periodCredit` is `credit.period_credit`, every window's session run
-  from main's code and the window proving the period's committed circuit (`creditedChallengePhase`, the pin first, then the
-  circuit) and credited. Every path here that credits reads its session through `pinnedChallengePhase`, against the host's
+  from main's code and the window proving the period's committed circuit (`creditedSession`, the pin first, then the
+  circuit) and credited. Every path here that credits reads its session through `pinnedSession`, against the host's
   pins log (`pins`) and the verifier's own copy of main's first-parent history (`main`).
 * `Internal.aLink` is `credit._a_link`: each registered A value (`aValue?`) is the frame-v3 SHA-512 tree over the
   aligned subtrees each round's root commits (`roundRoot`). Of S rounds, round s's tile a window's `…/a/<K>` of L rows
@@ -125,7 +125,7 @@ namespace PouwCheck.Credit
 
 open Lean (Json)
 open PouwCommit (Part tagged Domain)
-open Spot.Challenger (ChallengerKey LiveOpening trustedChallengePhaseOf liveReason)
+open Spot.Challenger (ChallengerKey LiveOpening trustedSessionOf liveReason)
 
 def CALLS_TAG : ByteArray := "verity/pouw/h1/calls/v2".toUTF8.push 0
 def DRAW_TAG : String := "verity/pouw/h1/draw/v1"
@@ -321,11 +321,11 @@ def commitOf? (commit : Json) : Option (ByteArray × Array Json) :=
   else none
 
 /-- `credit._credited`'s sample session: the coin commitment and roots of the session the auditor's ledger opens on the
-sample root `root` (its hex) under `k`, from the session's files `session` (`trustedChallengePhaseOf`), when the ledger opens it
+sample root `root` (its hex) under `k`, from the session's files `session` (`trustedSessionOf`), when the ledger opens it
 withheld (`withheldOn`); else the refusal (`coin`). -/
 def drawSession (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
     R (Spot.Challenger.LiveCommitment × Spot.Challenger.Roots) := do
-  let got ← (trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
+  let got ← (trustedSessionOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
     fun e => ("coin", s!"the draw's session is not trusted: {e}")
   unless Spot.Challenger.withheldOn ledger root do throw ("coin", Spot.Challenger.WITHHELD)
   pure got
@@ -1753,7 +1753,7 @@ to the weights' root its period's open signed (`committedWeights`); else the ref
 def periodWeights (key ledger window rounds layout entries : Json) (program : String) (prefix_ : Json) :
     R (String × String) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  let a ← (Spot.Challenger.auditedChallengePhase ledger window k).mapError fun e =>
+  let a ← (Spot.Challenger.auditedSession ledger window k).mapError fun e =>
     ("coin", s!"the challenger's session is not trusted: {e}")
   let some name := a.period
     | weightsRefuse ("the window is in no period of the auditor's ledger, so no period-open signed the weights' " ++
@@ -2181,7 +2181,7 @@ def DRAW_UNIT : String := "the draw session of window"
 `main`, is too old for the period: its pin more than the period's freshness floor of first-parent commits behind the
 commit the period's open recorded (`periodPin`, `committedPin`; `floor`, `committedFloor`, default 0 when the open pins
 but records no floor), measured from that pin and never from main's head; `none` when it is recent enough or the open
-records no pin. The per-window pin and circuit are `creditedChallengePhase`'s; this is the period-level hygiene on top.
+records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top.
 `unit` names what `i` counts (`DRAW_UNIT` for a window's sample session). -/
 def pinHygiene (name : String) (i : Nat) (main : Json) (pinned : String) (periodPin : Option String)
     (floor : Option Nat) (unit : String := "window") : Option (String × String) :=
@@ -2221,7 +2221,7 @@ def PeriodCredit.toJson (c : PeriodCredit) : Json :=
 committed K (`committedK`) and the table rows T (`committedRows`) and signed the weights' root every window's registered B rows fold to (`committedWeights`),
 each window's session ran a commit the host's pins log `pins` records on the verifier's copy of main's first-parent
 history `main` and the window proves the circuit the period's open committed (`circuit`: the pin first, then its
-descriptor hashing to it, `Spot.Challenger.creditedChallengePhase`, and likewise its sample session), each window's
+descriptor hashing to it, `Spot.Challenger.creditedSession`, and likewise its sample session), each window's
 session and its sample session pinned within the period's
 freshness floor (`committedFloor`, first-parent commits, default 0) of the commit the period's open recorded
 (`committedPin`), counted from that pin and never from main's head, both optional and refused with `pin` (`pinHygiene`),
@@ -2251,10 +2251,10 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
     let some d := (match f "descriptor" with
         | .str s => if isHexBytes s then hex? (.str s) else none
         | _ => none) | throw ("circuit", s!"window {i} of period {nm}: {DESCRIPTOR_HEX}")
-    let a ← (Spot.Challenger.creditedChallengePhase ledger (f "window") k pins main d).mapError fun e =>
+    let a ← (Spot.Challenger.creditedSession ledger (f "window") k pins main d).mapError fun e =>
       ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
     if let some why := pinHygiene nm i main a.pinned periodPin floor then throw why
-    let dr ← (Spot.Challenger.creditedChallengePhase ledger (Json.mkObj [("root", rootOf (f "draw"))]) k pins main
+    let dr ← (Spot.Challenger.creditedSession ledger (Json.mkObj [("root", rootOf (f "draw"))]) k pins main
       d).mapError fun e =>
       ("circuit", s!"window {i}'s draw session of period {nm} doesn't count toward it, so the period earns nothing: {e}")
     if let some why := pinHygiene nm i main dr.pinned periodPin floor DRAW_UNIT then throw why

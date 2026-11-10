@@ -27,7 +27,7 @@ parse one way: the `root_B`s are its last bytes, of their tables' lengths in tab
   the statement fixes, so the message determines it (`ByteArray.append_right_inj`) without a length prefix.
 
 The steps: what v2's check held of its one session's record (`checkBlobsAt_trees`, `treesHeld_one`,
-`sessionsTreeReason_one`), what a record `challengePhaseTreeReason` accepts shows of its link (`sessionTreeReason_link`), the
+`sessionsTreeReason_one`), what a record `sessionTreeReason` accepts shows of its link (`sessionTreeReason_link`), the
 one table of the session v2 sets up (`setupAt_tables`), the one entry of a JSON object with one key (`keys?_single`,
 `get?_mem`), and `Flock.Record`'s readers against `Spot.getD` (`fld_getD`, `str_getD`, `str_get?`).
 `checkBlobsAt_link` reads that table's `root_B` length off `rootBTables` at the schedule `zk_verify_ok` gives.
@@ -134,7 +134,7 @@ theorem treesHeld_one {p : _root_.Spot.OneStageZk.Own} {ts : Array _root_.Spot.C
     {rs : _root_.Spot.OneStageZk.RunFiles} {recB : ByteArray} {record : String} (hs : e.sessions = #[rs])
     (hb : bs.get rs.record s!"session {rs.name}'s record" = .ok recB) (hr : String.fromUTF8? recB = some record)
     (h : _root_.Spot.OneStageZk.treesHeld p ts e bs = .ok ()) :
-    _root_.Spot.Challenger.challengePhasesTreeReason ts
+    _root_.Spot.Challenger.sessionsTreeReason ts
       #[(rs.name, _root_.Spot.OneStageZk.rootBTables p bs record,
         (Flock.JsonParse.parse record).toOption.getD Json.null)] = none := by
   unfold _root_.Spot.OneStageZk.treesHeld at h
@@ -146,20 +146,20 @@ theorem treesHeld_one {p : _root_.Spot.OneStageZk.Own} {ts : Array _root_.Spot.C
     #[(rs.name, _root_.Spot.OneStageZk.rootBTables p bs record,
       (Flock.JsonParse.parse record).toOption.getD Json.null)] from rfl] at h
   revert h
-  cases _root_.Spot.Challenger.challengePhasesTreeReason ts
+  cases _root_.Spot.Challenger.sessionsTreeReason ts
     #[(rs.name, _root_.Spot.OneStageZk.rootBTables p bs record,
       (Flock.JsonParse.parse record).toOption.getD Json.null)] with
   | none => intro _; rfl
   | some w => intro h; cases h
 
-/-- **`challengePhasesTreeReason` on one session**: its record's coins are a logged tree's, and the log shows one tree. -/
+/-- **`sessionsTreeReason` on one session**: its record's coins are a logged tree's, and the log shows one tree. -/
 theorem sessionsTreeReason_one {trees : Array _root_.Spot.Challenger.LoggedTree}
     {tables : Array (String × Option ℕ)} {n : String} {J : Json}
-    (h : _root_.Spot.Challenger.challengePhasesTreeReason trees #[(n, tables, J)] = none) :
-    _root_.Spot.Challenger.challengePhaseTreeReason trees tables J = none ∧ trees.size = 1 := by
-  unfold _root_.Spot.Challenger.challengePhasesTreeReason at h
+    (h : _root_.Spot.Challenger.sessionsTreeReason trees #[(n, tables, J)] = none) :
+    _root_.Spot.Challenger.sessionTreeReason trees tables J = none ∧ trees.size = 1 := by
+  unfold _root_.Spot.Challenger.sessionsTreeReason at h
   simp only [← Array.forIn_toList, List.forIn_cons, List.forIn_nil] at h
-  cases hr : _root_.Spot.Challenger.challengePhaseTreeReason trees tables J with
+  cases hr : _root_.Spot.Challenger.sessionTreeReason trees tables J with
   | some w => simp [hr, Id.run] at h
   | none =>
     refine ⟨rfl, ?_⟩
@@ -169,19 +169,19 @@ theorem sessionsTreeReason_one {trees : Array _root_.Spot.Challenger.LoggedTree}
       exact h1.symm
     · cases h
 
-/-- **What a record `challengePhaseTreeReason` accepts on one table `x` of length `n?` shows of its link**: a logged tree
+/-- **What a record `sessionTreeReason` accepts on one table `x` of length `n?` shows of its link**: a logged tree
 `t`, the record's `link.root_b` an object whose one entry is `x`'s, a string naming bytes `rb`, `n?`'s length where it
 is one (`LINK_ROOT_LEN`, refused before the hash), and the tree's `session` round 0 opened after the SHA-512 of the
 link's `root_F` bytes, then `rb`. -/
 theorem sessionTreeReason_link {trees : Array _root_.Spot.Challenger.LoggedTree} {x : String}
-    {n? : Option ℕ} {J : Json} (h : _root_.Spot.Challenger.challengePhaseTreeReason trees #[(x, n?)] J = none) :
+    {n? : Option ℕ} {J : Json} (h : _root_.Spot.Challenger.sessionTreeReason trees #[(x, n?)] J = none) :
     ∃ t kvs s rb sf rootF o, t ∈ trees ∧
       Spot.getD (Spot.getD J "link") "root_b" = .obj kvs ∧ kvs.toArray = #[(x, .str s)] ∧
       Flock.unhex s = .ok rb ∧ (∀ n, n? = some n → rb.size = n) ∧
       Spot.getD (Spot.getD J "link") "root_f" = .str sf ∧
       Flock.unhex sf = .ok rootF ∧ t.opening _root_.Spot.Challenger.TREE_SESSION 0 = some o ∧
       o.after = Flock.hexOf (Flock.Sha512.hash (rootF ++ rb)) := by
-  unfold _root_.Spot.Challenger.challengePhaseTreeReason at h
+  unfold _root_.Spot.Challenger.sessionTreeReason at h
   simp only [Id.run] at h
   split at h
   · rename_i t htf
@@ -295,7 +295,7 @@ record as `sess` with one table's `root_B`, `rb`, of the length the session's ta
 level-0 cap of `2^cap₀` digests), the challenger's log shows one coin tree `t`, and the challenger opened `t`'s
 `session` round 0, the link points, after the SHA-512 of the link's message `linkMsg record spec.tables`: the
 statement's `Σ`, then `rb`. The message has no length prefix; v2 refuses any other length of `rb` before it hashes the
-message (`Spot.Challenger.LINK_ROOT_LEN` in `challengePhaseTreeReason`, at the lengths
+message (`Spot.Challenger.LINK_ROOT_LEN` in `sessionTreeReason`, at the lengths
 `Spot.OneStageZk.rootBTables` reads off the session it sets up), and that fixed length is what makes the
 message parse one way, as `Σ` then `rb`. So the prover fixed that table's `root_B` before the link's coins. -/
 theorem checkBlobsAt_link {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}

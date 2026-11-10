@@ -2517,7 +2517,7 @@
     {"file": "Security/Proofs/Properties/Challenger/Commitment.lean", "count": 1},
     {"file": "Security/Proofs/Properties/Challenger/Drawn.lean", "count": 27},
     {"file": "Security/Proofs/Properties/Challenger/Limits.lean", "count": 10},
-    {"file": "Security/Proofs/Properties/Challenger/ChallengePhase.lean", "count": 13},
+    {"file": "Security/Proofs/Properties/Challenger/Session.lean", "count": 13},
     {"file": "Security/Proofs/Properties/Challenger/Window.lean", "count": 19},
     {"file": "Security/Proofs/Properties/Firewall.lean", "count": 8},
     {"file": "Security/Proofs/Properties/Nci.lean", "count": 14},

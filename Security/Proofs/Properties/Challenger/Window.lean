@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Challenger.ChallengePhase
+public import Proofs.Properties.Challenger.Session
 public import Proofs.Properties.Challenger.CanonRead
 import all Init.Data.String.Defs
 import all Init.Data.Ord.String
@@ -9,8 +9,8 @@ import all Lean.Data.Json.Basic
 /-!
 # A sample's window is one the device's own ledger opens, or a break
 
-`drawCoins` reads its session from the auditor's ledger: `pinnedChallengePhase` takes the v2 open whose root is the window's
-(`Ledger.auditedOpen_ok`), `challengePhaseNamed` reads the session that open names (`challengePhaseNamed_sid`), and `withheldOn`
+`drawCoins` reads its session from the auditor's ledger: `pinnedSession` takes the v2 open whose root is the window's
+(`Ledger.auditedOpen_ok`), `sessionNamed` reads the session that open names (`sessionNamed_sid`), and `withheldOn`
 requires every open of the window's root to be withheld (`drawCoins_withheld`, `withheld_of`). `verifyLedger` checked
 every ledger entry's LMS signature over its message under the window's key (`verifyLedger_sig`), and that pair is one the
 finder checks (`ledger_mem_signatures`). So the device signed the open's message, or the finder outputs a forgery
@@ -21,7 +21,7 @@ messages hash equal tagged digests, and equal digests are equal strings, or a co
 canonical text (`taggedBytes_inj2`). Every entry holds its keys in order (`ledgerEntry?`'s `sortedKeys` guard), so two
 entries whose unsigned canonical texts agree have equivalent fields other than `sig` (`entry_fields_equiv`, by
 `CanonRead.canon_inj`). The device's line is then an open of the same session, under v2, of the window's root, withheld
-(`executionPhase_opens`), and `drawCoins_opens` adds it to `Session.sessionOf_bound`'s run.
+(`window_opens`), and `drawCoins_opens` adds it to `Session.sessionOf_bound`'s run.
 -/
 
 @[expose] public section
@@ -43,7 +43,7 @@ open Properties.Pouw.LiveSalt.Coin (enc enc_inj taggedBytes tagged_ok)
 open Properties.Pouw.LiveSalt.Ledger (of_triple of_triple_opt throw_spec ok_spec bind_ok recordOfJson_spec mapM_spec
   none_spec failure_spec toOption_spec ledgerTag_spec nat_spec some_pure_spec forIn_array_zipIdx_ok wp_ite restart
   join_spec mem_snoc)
-open Properties.Challenger.ChallengePhase (ledgerBytes ledgerBytes_bs recordBytes recordBytes_bs record_role_size
+open Properties.Challenger.Session (ledgerBytes ledgerBytes_bs recordBytes recordBytes_bs record_role_size
   ledger_role_size enc_ne)
 open Properties.Challenger.CanonRead (getD_equiv sorted_getD equiv_str equiv_bool getD_unsigned sorted_unsigned)
 
@@ -100,7 +100,7 @@ theorem digest_str {j : Json} {n : Nat} (h : isDigest j n = true) : ∃ s, j = .
 /-- A v2 open's window root is a string. -/
 theorem open_root {body : Json} (h : isBodyOf "open" true body = true) :
     ∃ r, getD (getD body "window") "root" = .str r := by
-  simp only [isBodyOf, isExecutionPhase, ite_true, Bool.and_eq_true] at h
+  simp only [isBodyOf, isWindow, ite_true, Bool.and_eq_true] at h
   exact digest_str h.1.1.1.1.2
 
 /-! ## What `verifyLedger` and `drawCoins` check -/
@@ -139,18 +139,18 @@ theorem verifyLedger_sig {es : Array LedgerEntry} {r : Array Win × Array Monito
     mvcgen [-Spec.throw_Except, throw_spec, ledgerMessage_eq_spec, join_spec]))
   all_goals refine ⟨_, rfl, sig_step hI ‹_› ‹_›⟩
 
--- `mvcgen` splits `challengePhaseNamed` into one goal per check it makes of the session's files
+-- `mvcgen` splits `sessionNamed` into one goal per check it makes of the session's files
 set_option maxHeartbeats 1000000 in
-/-- **The session `challengePhaseNamed` reads is the one the audited open names.** -/
-theorem challengePhaseNamed_sid {a : Audited} {session : Json} {r : LiveCommitment × Roots}
-    (h : challengePhaseNamed a key session = .ok r) :
-    ∃ r', challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") = .ok r' ∧
+/-- **The session `sessionNamed` reads is the one the audited open names.** -/
+theorem sessionNamed_sid {a : Audited} {session : Json} {r : LiveCommitment × Roots}
+    (h : sessionNamed a key session = .ok r) :
+    ∃ r', sessionOf key (getD session "record") (getD session "log") (getD session "close") = .ok r' ∧
       r'.1 = r.1 ∧ r'.2.1 = r.2 ∧ r'.2.2 = a.session := by
   refine of_triple (Q := fun r => ∃ r',
-    challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") = .ok r' ∧
+    sessionOf key (getD session "record") (getD session "log") (getD session "close") = .ok r' ∧
       r'.1 = r.1 ∧ r'.2.1 = r.2 ∧ r'.2.2 = a.session) ?_ h
   clear h
-  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, Session.sessionOf_ok_spec, recordOfJson_spec, mapM_spec]
+  mvcgen [sessionNamed, -Spec.throw_Except, throw_spec, Session.sessionOf_ok_spec, recordOfJson_spec, mapM_spec]
   all_goals exact ⟨_, ‹_›, rfl, rfl, beq_iff_eq.1 ‹_›⟩
 
 -- `mvcgen` splits `drawCoins` into one goal per check it makes of the record's form, the window and the family
@@ -301,11 +301,11 @@ theorem opens_of_text {line : Json} {o e : LedgerEntry} {w : String} (ho : ledge
 
 /-- **The session the ledger opens for the window is one the device's own ledger opens on it, withheld, under v2**, or
 the finder outputs a break. -/
-theorem executionPhase_opens {w : String} {pins main : Json} {a : Audited}
-    (hp : pinnedChallengePhase (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key pins main = .ok a)
+theorem window_opens {w : String} {pins main : Json} {a : Audited}
+    (hp : pinnedSession (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key pins main = .ok a)
     (hwd : withheldOn (getD coins "ledger") w = true) :
     OpensOn dev key.pub w a.session ∨ Break dev key label coins := by
-  obtain ⟨ob, hao⟩ := Properties.Pouw.LiveSalt.Ledger.pinnedChallengePhase_ok hp
+  obtain ⟨ob, hao⟩ := Properties.Pouw.LiveSalt.Ledger.pinnedSession_ok hp
   obtain ⟨wp, win, en, hch, hfw, hsch, -, -, -, hsid, -⟩ := Properties.Pouw.LiveSalt.Ledger.auditedOpen_ok hao
   obtain ⟨es, hes, hvl⟩ := Properties.Pouw.LiveSalt.Ledger.checked_ok hch
   obtain ⟨v2, hI⟩ := Properties.Pouw.LiveSalt.Ledger.verifyLedger_inv hvl
@@ -402,8 +402,8 @@ theorem drawCoins_opens {w : String} {after ξ : ByteArray} (h : drawCoins key w
   obtain ⟨c, roots, ht, hs⟩ := Session.drawCoins_ok h
   refine ⟨c, roots, hs, ?_⟩
   obtain ⟨a, hp, hn⟩ := Session.trustedSessionOf_ok ht
-  obtain ⟨⟨c', roots', sid⟩, ho, rfl, rfl, rfl⟩ := challengePhaseNamed_sid hn
-  rcases executionPhase_opens (dev := dev) (label := label) hp (drawCoins_withheld h) with hopen | b
+  obtain ⟨⟨c', roots', sid⟩, ho, rfl, rfl, rfl⟩ := sessionNamed_sid hn
+  rcases window_opens (dev := dev) (label := label) hp (drawCoins_withheld h) with hopen | b
   · rcases Session.sessionOf_bound (dev := dev) (label := label) ho with ⟨s, hs', hc, hid, he, hr⟩ | b
     · exact .inl ⟨s, hs', hid ▸ hopen, hc, he, hr⟩
     · exact .inr b

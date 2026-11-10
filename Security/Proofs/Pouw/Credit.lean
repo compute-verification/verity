@@ -400,7 +400,7 @@ theorem establishedSound : EstablishedSound := establishedSound_of Properties.Po
 
 section Withheld
 
-open Spot.Challenger (ChallengerKey trustedChallengePhaseOf withheldOn)
+open Spot.Challenger (ChallengerKey trustedSessionOf withheldOn)
 
 theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {v : β} (h : (x >>= f) = .ok v) :
     ∃ a, x = .ok a ∧ f a = .ok v := by
@@ -438,9 +438,9 @@ theorem drawWithheld : DrawWithheld := by
   exact creditedDraw_withheld hu
 
 /-- The sample session's step (`drawSession`) accepts every session the ledger opens withheld on the sample root and
-`trustedChallengePhaseOf` trusts, as a withheld deployment's is. -/
+`trustedSessionOf` trusts, as a withheld deployment's is. -/
 theorem drawSession_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
-    (ht : trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
+    (ht : trustedSessionOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
     (hw : withheldOn ledger root = true) : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x := by
   simp [PouwCheck.Credit.drawSession, ht, hw, Except.mapError]
 

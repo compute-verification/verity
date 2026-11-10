@@ -77,7 +77,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Sampled.Deployed",
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Challenger.Limits",
-  "Proofs.Properties.Challenger.ChallengePhase", "Proofs.Properties.Challenger.CanonRead",
+  "Proofs.Properties.Challenger.Session", "Proofs.Properties.Challenger.CanonRead",
   "Proofs.Properties.Challenger.Window", "Proofs.Properties.Challenger.Coins", "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Verity.Soundness", "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Verity.Sampled.Unbound",

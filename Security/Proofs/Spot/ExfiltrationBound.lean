@@ -30,7 +30,7 @@ meta import Lean.Meta.Tactic.NormCast
   `cum + Δ` slots changed, `cum` what leaves through the first detection under an adaptive strategy with detection
   pressure `κ` and per-window leak `ℓ`, then any decoder of the egress and the side channel `Y` outputs the target
   with probability at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(m, j) · |V| ^ K · |Y| · g`, for every `K`.
-* `card_changedThrough_le`, `exfiltration_bound_executionPhases`: **over a deployment's windows.** The slots the windows change
+* `card_changedThrough_le`, `exfiltration_bound_windows`: **over a deployment's windows.** The slots the windows change
   through the first detection number at most `cum`, so the deviation-size premise holds whenever each window's egress
   differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its incorrect proof blocks'
   cone egress), plus at most `Δ` slots after the detection. The count is over the deployment's `n · |O|` slots.
@@ -245,7 +245,7 @@ has `n · |O|`. The window after history `h` changes the slots `chg w h`, and it
 deviates from honest only on the slots changed through the first detection and on at most `Δ` slots after it, before
 the halt. Then any decoder of the egress and the side channel outputs the target with probability at most
 `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(n |O|, j) · |V| ^ K · |Y| · g`. -/
-theorem exfiltration_bound_executionPhases {Ω W T O V Y : Type} [Fintype Ω] [DecidableEq Ω] [Fintype W] [Fintype O]
+theorem exfiltration_bound_windows {Ω W T O V Y : Type} [Fintype Ω] [DecidableEq Ω] [Fintype W] [Fintype O]
     [DecidableEq O] [Fintype V] [Nonempty V] [Fintype Y] {μ : PMF Ω} {ρ : PMF W} {κ ℓ g : ℝ} (hκ : 0 ≤ κ)
     (hg : 0 ≤ g) (n K Δ : ℕ) (A : W → Strategy Ω)
     (chg : W → List Ω → Finset O) (hchg : ∀ w h, (A w).leak h = (chg w h).card)

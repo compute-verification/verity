@@ -120,13 +120,13 @@ theorem noOpening_frames :
 
 /-- **v2's read of the release log's first opening shows the record's link points**: where v2 reads the release log
 `lines`, with the one record `J`, as `pre ++ y :: post`, `coinTreesOf` reads the log to one tree, which `J` holds to
-(`challengePhaseTreeReason`), `y` opens a round and no release of `pre` does, and `y` opens the stream `TREE_SESSION` of the
+(`sessionTreeReason`), `y` opens a round and no release of `pre` does, and `y` opens the stream `TREE_SESSION` of the
 tree it opens (by the specs `pre` shows sampled), `y`'s coins are the bits of the coins `J` gives the session stream's
 round 0. -/
 theorem link_read {label : String} {after : ByteArray} {J : Json} {ξ : ByteArray} {lines : List String}
     {pre post : List Verity.Release} {y : Verity.Release} {trees : Array LoggedTree} {i s n : ℕ}
     (hR : readLog label after [J] ξ lines = some (pre ++ y :: post)) (hct : coinTreesOf lines = .ok trees)
-    (h1 : trees.size = 1) {tabs : Array (String × Option ℕ)} (hJ : challengePhaseTreeReason trees tabs J = none)
+    (h1 : trees.size = 1) {tabs : Array (String × Option ℕ)} (hJ : sessionTreeReason trees tabs J = none)
     (hpre : ∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') (hy : y.frame = .opening i s n)
     (hO : ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some TREE_SESSION) :
     ∃ b, recordRound J TREE_SESSION 0 = some b ∧ y.coins = Verity.bitsOfBytes b := by

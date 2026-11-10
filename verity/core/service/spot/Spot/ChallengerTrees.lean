@@ -11,7 +11,7 @@ session's signed close covers them:
 
 `coinTreesOf` reads those lines (`coin_trees_of`): each tree's key, nonce and root in lowercase hex and a spec the
 challenger samples (`isTreeSpec`), no root or key twice; each round of a tree sampled on an earlier line, of one of its
-streams, that stream's next round, below `2^rounds_log`, at most `block` coins. `challengePhaseTreeReason` holds a session's
+streams, that stream's next round, below `2^rounds_log`, at most `block` coins. `sessionTreeReason` holds a session's
 record on its tables, each with the byte length its statement fixes for its `root_B` where the caller set one up, to
 them (`session_tree_reason`): its `coin_tree` a logged tree, its link's `root_b` keys exactly its session's tables
 (`LINK_TABLES`), each entry that table's length (`LINK_ROOT_LEN`), its link points that tree's `session` round 0, opened
@@ -19,10 +19,10 @@ after its link's `root_F` and each table's `root_B` in table-name order (`linkAf
 streams that tree's round `k` of the stream, opened after its `msg_sha512`, its `n` coins hashing to the logged digest
 (each coin's 16 bytes as the record's 32 hex digits write them); and each round the tree shows opened one the record
 gives its stream (`recordRounds`, `EXTRA_OPENING`), so the tree opens its `session` stream once, each stream the record
-names exactly its `rounds`, and no other stream. `challengePhasesTreeReason` holds an audit's sessions on one
+names exactly its `rounds`, and no other stream. `sessionsTreeReason` holds an audit's sessions on one
 statement's tables to them (`sessions_tree_reason`): each session's record so, at its own tables' lengths, no tree two
 sessions', and every tree a session's, so no statement's coins are flipped twice. `trustedTreesOf` reads the trees from
-the one session the auditor's ledger opens on the verifier's window (`trustedChallengePhaseOf`), the session the sample's coins
+the one session the auditor's ledger opens on the verifier's window (`trustedSessionOf`), the session the sample's coins
 come from. `sampleLinkFirst` holds the log's order (`sample_link_first`): the sample, then the link, then the other
 rounds; no coin of the sample released after a round is opened, and the first round opened a tree's `session` stream,
 the link points.
@@ -205,7 +205,7 @@ def EXTRA_OPENING : String :=
 /-- `session_tree_reason` (module docstring): why `record`, a `--zk` session's record on the tables `tables`, each with
 its `root_B`'s byte length where its statement is set up, doesn't show its coins to be ones the release log shows the
 challenger released (`trees`, `coinTreesOf`'s); `none` when it does. -/
-def challengePhaseTreeReason (trees : Array LoggedTree) (tables : Array (String × Option Nat)) (record : Json) :
+def sessionTreeReason (trees : Array LoggedTree) (tables : Array (String × Option Nat)) (record : Json) :
     Option String := Id.run do
   let ct := getD record "coin_tree"
   let some t := trees.find? (fun (t : LoggedTree) => jsonStrIs (getD ct "root") t.root) | return some NO_TREE
@@ -246,15 +246,15 @@ def challengePhaseTreeReason (trees : Array LoggedTree) (tables : Array (String 
   return none
 
 /-- `sessions_tree_reason` (module docstring): why the `--zk` sessions `records`, each its name, its tables with their
-`root_B` lengths (`challengePhaseTreeReason`'s) and its record, don't show their coins to be the ones the release log shows
+`root_B` lengths (`sessionTreeReason`'s) and its record, don't show their coins to be the ones the release log shows
 sampled and opened (`trees`), one tree a session; `none` when they do. In order, each session's coins its tree's
-(`challengePhaseTreeReason`), a tree no earlier session's (`SHARED_TREE`); then every tree a session's (`UNUSED_TREE`). -/
-def challengePhasesTreeReason (trees : Array LoggedTree) (records : Array (String × Array (String × Option Nat) × Json)) :
+(`sessionTreeReason`), a tree no earlier session's (`SHARED_TREE`); then every tree a session's (`UNUSED_TREE`). -/
+def sessionsTreeReason (trees : Array LoggedTree) (records : Array (String × Array (String × Option Nat) × Json)) :
     Option String := Id.run do
   let mut used : Array String := #[]
   for (name, tables, record) in records do
     let root := strOf (getD (getD record "coin_tree") "root")
-    let why := challengePhaseTreeReason trees tables record <|> if used.contains root then some SHARED_TREE else none
+    let why := sessionTreeReason trees tables record <|> if used.contains root then some SHARED_TREE else none
     if let some w := why then
       return some s!"session {name}'s coins are not the challenger's: {w}"
     used := used.push root
@@ -264,10 +264,10 @@ def challengePhasesTreeReason (trees : Array LoggedTree) (records : Array (Strin
 
 /-- The coin trees the one session the auditor's ledger opens on `window` under `key` shows the challenger sampled and
 opened (`coinTreesOf`), from the sample's coin evidence `{ledger, main, pins, segment, session}` (`drawCoins`'s, read
-through `trustedChallengePhaseOf`). -/
+through `trustedSessionOf`). -/
 def trustedTreesOf (key : ChallengerKey) (window : String) (coins : Json) : V (Array LoggedTree) := do
   unless keys? coins == some #["ledger", "main", "pins", "segment", "session"] do throw DRAW_FORM
-  let _ ← trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key (getD coins "pins")
+  let _ ← trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key (getD coins "pins")
     (getD coins "main") (getD coins "session")
   let .arr ls := getD (getD coins "session") "log" | throw LOG_FORM
   coinTreesOf (← ls.toList.mapM fun | .str s => pure s | _ => throw LOG_FORM)
@@ -320,7 +320,7 @@ opening a coin tree's round (`openLine`), and the first such line opens the stre
 first round is the link points. A coin tree's own line may come anywhere. In v2's one-stage audit `label` is the
 parameters' challenger family and `after` the registration's digest, so the coins so released are the sample's
 (`challengerStream` holds the sample to every one of them), and the rounds opened are the sessions' links and their
-streams' rounds (`challengePhasesTreeReason`). -/
+streams' rounds (`sessionsTreeReason`). -/
 def sampleLinkFirst (label : String) (after : ByteArray) (log : List String) : Bool :=
   sampleLinkFirstFrom label after false none log
 
@@ -359,7 +359,7 @@ def coinTreesPiece (j : Json) : V Json := do
 
 /-- `{"log", "records": [{name, record, tables: {table: length or null}}, ...]}` to `sessions_tree_reason`'s over
 `coin_trees_of`'s trees of `log`, `{"reason"}`. -/
-def challengePhaseTreesPiece (j : Json) : V Json := do
+def sessionTreesPiece (j : Json) : V Json := do
   unless keys? j == some #["log", "records"] do throw "a request's keys are log, records"
   let lines ← logOf j
   let .arr rs := getD j "records" | throw "records is not a list of {name, record, tables}"
@@ -372,7 +372,7 @@ def challengePhaseTreesPiece (j : Json) : V Json := do
       | _, none => throw "a record's tables are not lengths or null"
     pure (name, tables, getD r "record")
   pure <| refusing do
-    let why := challengePhasesTreeReason (← coinTreesOf lines) records
+    let why := sessionsTreeReason (← coinTreesOf lines) records
     return Json.mkObj [("reason", why.elim Json.null Json.str)]
 
 /-- `{"after", "label", "log"}` to `sample_link_first`'s over the release log `log` after its head, at family `label` and

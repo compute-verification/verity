@@ -12,7 +12,7 @@ under `fieldEnc`, every outcome the joint law reaches off the empty classes at t
 `roundEmptyAt`), beside an accepted play that misses nowhere and whose log v2 read is the device's, it reaches off the
 empty classes (`CountsReach`): each stop's opening asks for the count of coins the stop releases. It needs no verifier
 fact beyond those `MovesReach` reads: v2 reads each opening frame's count off the line that opens its round, and
-`challengePhaseTreeReason` holds that line's count to the record's.
+`sessionTreeReason` holds that line's count to the record's.
 
 * **The count a line opening a round shows** (`opening_count`): the line of an accepted release log opening a round a
   tree shows opened has that opening's `n` (`opened_after`).
@@ -259,7 +259,7 @@ round `j`'s cut at the most likely message `w`, the rest of the trace runs from 
 has the opening frame `.opening i s n` after the log `m` at which the cuts the stop fixes are at the bytes that frame
 answers and which opened that stream `k` times, under `stop_round`'s premises on v2's read and the record, `n` is
 `tailCount w`: v2 read the frame off the line opening round `k` of that stream (`readLog_round`), whose `n` is the one
-the record's tree shows opened (`opening_count`), which `challengePhaseTreeReason` holds to the record's count
+the record's tree shows opened (`opening_count`), which `sessionTreeReason` holds to the record's count
 (`Trees.round_counted`, `recordCount_decode`), `tailCount` of the round's message (`rep_tailCount_accepted`), which is
 `w` (`RoundsReach.stop_modes_reveal`). -/
 theorem stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
@@ -282,7 +282,7 @@ theorem stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
     (hF : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) (CoinTape.run (V.game θ F c) σ o.2).log)
     (hread : readLog label after [Jr] ξ lines = some lr) (hct : coinTreesOf lines = .ok trees)
     (h1 : trees.size = 1) {tabsB : Array (String × Option ℕ)}
-    (hJt : challengePhaseTreeReason trees tabsB Jr = none) {text : String} {spec : Flock.SessionSpec}
+    (hJt : sessionTreeReason trees tabsB Jr = none) {text : String} {spec : Flock.SessionSpec}
     {tabs : Array Flock.Setup} {proofs : Array ByteArray} {sess : Flock.RunRecord}
     (hrec : sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text)
     (hJ : Flock.JsonParse.parse text = .ok Jr) (hd : Flock.Record.decode spec text = .ok sess)
@@ -357,7 +357,7 @@ theorem stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
 sampled verdict accepts, the log v2's check read is the device's, and the device's first opening `r`, after releases
 `L₀` that open none, opens the stream `TREE_SESSION` of the tree it opens with the frame `.opening i s n`, `n` is
 `A.mP + A.mP`: v2 read the frame off the line opening that stream's round 0 (`readLog_round`), whose `n` is the one
-the record's tree shows opened (`opening_count`), which `challengePhaseTreeReason` holds to a coin a 16 bytes of the record's
+the record's tree shows opened (`opening_count`), which `sessionTreeReason` holds to a coin a 16 bytes of the record's
 link coins (`Trees.session_counted`), both points' coordinates (`link_count`), `A.mP` each at the record's sample
 (`SetsUp.mPts_eq`). -/
 theorem link_frameCount {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}

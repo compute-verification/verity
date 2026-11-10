@@ -5,7 +5,7 @@ holds before the sample, so the prover never chooses it.
 * `sources`: the verifier's `{value: [[source, ...], ...]}`, each source `{"port": P}` (the record's `roots` entry of port
   P), `{"value": V}` (its `registered` entry of value V, never a supplied value's), `{"bytes": hex}` (the verifier's own
   bytes), `{"position": "K"}` (K, a decimal below the record's population, after every unit of the log's records,
-  `logBase`, as a u64 big-endian) or `{"window": hex}` (`runSalt`: SHA-512 of `WINDOW_SALT`, the coin, the verifier's
+  `logBase`, as a u64 big-endian) or `{"window": hex}` (`windowSalt`: SHA-512 of `WINDOW_SALT`, the coin, the verifier's
   binding, its stream's digest and its prover's identity as hex, and the record's window as canonical JSON, NUL between
   them, a window that is an object of the canonical domain; none without a binding);
 * a row is its sources' bytes in order (a root the record names, its last entry, as R3 and R7 read a name twice; hex
@@ -79,7 +79,7 @@ def logBase (log : Array Json) : V Nat :=
 
 /-- `registered.window_salt`: the salt of the record's window under the verifier's coin and its binding
 `(stream, prover)`. -/
-def runSalt (coin : ByteArray) (binding : Option (String × String)) (window : Json) : V ByteArray := do
+def windowSalt (coin : ByteArray) (binding : Option (String × String)) (window : Json) : V ByteArray := do
   let some (stream, prover) := binding
     | throw "a window salt is bound to a stream and a prover: the verifier holds no binding"
   if !(window matches .obj _) || (Flock.Program.domainError window).isSome then
@@ -104,7 +104,7 @@ def sourceBytes (rec : Json) (log : Array Json) (binding : Option (String × Str
       return Flock.be64 p.toUInt64
     if kind == "window" then
       if name.isEmpty then throw s!"supplied value {value}: window {name} is no bytes"
-      return (← runSalt (← Flock.unhex name) binding (getD rec "window"))
+      return (← windowSalt (← Flock.unhex name) binding (getD rec "window"))
     let text ← if kind == "bytes" then pure (Json.str name) else do
       if kind == "value" && supplied.contains name then
         throw s!"supplied value {value} reads supplied value {name}'s root"

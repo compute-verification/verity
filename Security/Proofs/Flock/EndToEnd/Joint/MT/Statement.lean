@@ -251,7 +251,7 @@ noncomputable def run (W : ℕ → StratifiedBlockMT) (T : ℕ) (s : Strategy (g
 /-- **The strategies the period plays sampling block `t` with**: `τ` plays sampling block `t` on some run of the period
 at `s`. -/
 def Plays (W : ℕ → StratifiedBlockMT) (T : ℕ) (s : Strategy (game W T)) (t : ℕ) (τ : Strategy (W t).game) : Prop :=
-  MonitoringPeriodPlays (fun t => (W t).game) 0 T s t τ
+  PeriodPlays (fun t => (W t).game) 0 T s t τ
 
 /-- **The most harm in the period's confidence set**: the largest total weight over every choice of an incorrect set
 in each of the run's sampling blocks that their samples miss together with probability at least `δ`. -/

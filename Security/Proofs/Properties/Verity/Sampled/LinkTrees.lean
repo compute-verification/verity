@@ -6,13 +6,13 @@ public import Proofs.Properties.Verity.Sampled.Trees
 # The release log's first opening, and the one coin tree of v2's sessions
 
 v2 holds a `--zk` session's record to the coin trees the release log shows sampled (`coinTreesOf`), one tree a session
-(`challengePhasesTreeReason`):
+(`sessionsTreeReason`):
 
 * **One tree a session** (`sessions_size`, `treesHeld_size`): where `treesHeld` accepts, the log shows as many trees as
-  the evidence names sessions, since `challengePhasesTreeReason` refuses a tree no session records.
+  the evidence names sessions, since `sessionsTreeReason` refuses a tree no session records.
 * **The first opening** (`FirstRound`, `first_round`): `coinTreesOf` takes a stream's round `k` only as its `k`-th
   opened, so the log's first line opening a round opens round 0, of a tree the log shows sampled.
-* **The link's coins** (`link_some`): a record `challengePhaseTreeReason` accepts gives the coins of its session stream's
+* **The link's coins** (`link_some`): a record `sessionTreeReason` accepts gives the coins of its session stream's
   round 0 (`Verity.Sampled.recordRound`), its link points.
 -/
 
@@ -65,10 +65,10 @@ theorem ret_count {α γ β : Type}
     rw [e] at h
     exact ⟨Prod.snd (forIn (m := Id) xs.toList (none, u₀) f), by rw [hs, Array.length_toList], h⟩
 
-/-- **Sessions `challengePhasesTreeReason` accepts use every tree**: as many as the log shows. -/
+/-- **Sessions `sessionsTreeReason` accepts use every tree**: as many as the log shows. -/
 theorem sessions_size {trees : Array LoggedTree} {records : Array (String × Array (String × Option Nat) × Json)}
-    (h : challengePhasesTreeReason trees records = none) : trees.size = records.size := by
-  unfold challengePhasesTreeReason at h
+    (h : sessionsTreeReason trees records = none) : trees.size = records.size := by
+  unfold sessionsTreeReason at h
   dsimp only [Id.run] at h
   have hc := ret_count ?_ (fun w _ hw => by cases hw) h
   · obtain ⟨u, hu, hg⟩ := hc
@@ -94,11 +94,11 @@ theorem treesHeld_size {p : Spot.OneStageZk.Own} {ts : Array LoggedTree}
   have hI := Trees.forIn_inv
     (I := fun pre (named : Array (String × Array (String × Option Nat) × Json)) => named.size = pre.length) ?_
     e.sessions.toList [] #[] named (by simp) hn
-  · have hsess : challengePhasesTreeReason ts named = none := by
+  · have hsess : sessionsTreeReason ts named = none := by
       split at hrest
       case h_1 => cases hrest
       rename_i hne
-      cases hw : challengePhasesTreeReason ts named with
+      cases hw : sessionsTreeReason ts named with
       | none => rfl
       | some w => exact (hne w hw).elim
     rw [sessions_size hsess, hI]
@@ -122,12 +122,12 @@ theorem eq_of_size_one {β : Type} {xs : Array β} (h : xs.size = 1) {a b : β} 
 
 /-! ## The link's coins -/
 
-/-- **A record `challengePhaseTreeReason` accepts, at any tables, gives its link points' coins**, its session stream's
+/-- **A record `sessionTreeReason` accepts, at any tables, gives its link points' coins**, its session stream's
 round 0. -/
 theorem link_some {trees : Array LoggedTree} {tables : Array (String × Option Nat)} {record : Json}
-    (h : challengePhaseTreeReason trees tables record = none) :
+    (h : sessionTreeReason trees tables record = none) :
     ∃ cs, Verity.Sampled.recordRound record TREE_SESSION 0 = some cs := by
-  unfold challengePhaseTreeReason at h
+  unfold sessionTreeReason at h
   dsimp only [Id.run] at h
   split at h
   case h_2 => cases h

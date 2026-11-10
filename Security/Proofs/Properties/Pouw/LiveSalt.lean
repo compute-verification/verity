@@ -33,7 +33,7 @@ open Lean (Json)
 open Std.Do
 open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj)
 open Spot.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots familiesJson liveReason
-  pinnedChallengePhase challengePhaseNamed)
+  pinnedSession sessionNamed)
 open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple ok_spec throw_spec ledgerShows_of sessionNamed_root)
 
 /-- The epoch's root is the port's: `PouwCheck.epochOpenRoot`. -/
@@ -122,8 +122,8 @@ theorem map_ok {ε α β : Type} {x : Except ε α} {f : α → β} {b : β} :
 
 theorem saltSession_ok {key ledger pins main window session : Json} {res : Audited × LiveCommitment × Roots}
     (h : PouwCheck.saltSession key ledger pins main window session = .ok res) :
-    ∃ ck, ChallengerKey.ofJson key = .ok ck ∧ pinnedChallengePhase ledger window ck pins main = .ok res.1 ∧
-      challengePhaseNamed res.1 ck session = .ok res.2 := by
+    ∃ ck, ChallengerKey.ofJson key = .ok ck ∧ pinnedSession ledger window ck pins main = .ok res.1 ∧
+      sessionNamed res.1 ck session = .ok res.2 := by
   unfold PouwCheck.saltSession at h
   rw [bind_ok] at h
   obtain ⟨ck, hck, h⟩ := h

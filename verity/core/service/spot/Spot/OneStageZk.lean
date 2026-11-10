@@ -26,7 +26,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   round's coins as the challenger logged them, its link's `root_b` naming exactly the session's tables
   (`sessionTables`), the roots the link points are opened after, each entry the length its table's statement fixes,
   `2^cap₀` digests (`rootBTables`, `Challenger.LINK_ROOT_LEN`), refused before the link's message is hashed, which is
-  what makes that message parse one way, and every tree logged must be a session's (`Challenger.challengePhasesTreeReason`);
+  what makes that message parse one way, and every tree logged must be a session's (`Challenger.sessionsTreeReason`);
   else the check refuses, before any session is verified. A session whose statement sets up no table has no length to
   hold, and its own verdict rejects;
 * **population** (`popHeld`): the registration's population held to the verifier's program: under its query, the
@@ -596,7 +596,7 @@ def rootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String ×
 
 /-- The evidence's sessions held to the challenger's trees `ts` (module docstring, **trees**): each session's record
 on the blobs, refused as `verdicts` refuses it when no blob holds it or it isn't UTF-8, read as `Flock.Record.decode`
-reads it (`Flock.JsonParse.parse`), then `Challenger.challengePhasesTreeReason`, each session at its tables with the `root_B`
+reads it (`Flock.JsonParse.parse`), then `Challenger.sessionsTreeReason`, each session at its tables with the `root_B`
 lengths its statement fixes on the verifier's own files `p` (`rootBTables`). -/
 def treesHeld (p : Own) (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : Core.Blobs) : V Unit := do
   let mut named : Array (String × Array (String × Option Nat) × Json) := #[]
@@ -604,7 +604,7 @@ def treesHeld (p : Own) (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : 
     let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
       | throw s!"session {s.name}'s record is not UTF-8"
     named := named.push (s.name, rootBTables p bs record, (Flock.JsonParse.parse record).toOption.getD Json.null)
-  if let some why := Challenger.challengePhasesTreeReason ts named then throw why
+  if let some why := Challenger.sessionsTreeReason ts named then throw why
 
 /-- The evidence's one session (module docstring, **evidence**): evidence naming none or several refuses. -/
 def oneSession (sessions : Array RunFiles) : V Unit :=

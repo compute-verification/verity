@@ -7,9 +7,9 @@ public import Proofs.Properties.Pouw.LiveSalt.Coin
 import all Init.Data.String.Defs
 
 /-!
-# A session `challengePhaseOf` accepts is a run the device closed, or a break
+# A session `sessionOf` accepts is a run the device closed, or a break
 
-`challengePhaseOf` accepts a session's files only when its close's LMS signature verifies under the verifier's key over the
+`sessionOf` accepts a session's files only when its close's LMS signature verifies under the verifier's key over the
 close message, which hashes the record's message (itself over the host and the commitment's tagged digest), the
 session's id, the log's chain and how the session ended, and only when the release log it read chains to the close's
 chain and the session's client closed it. Each of those strings is one the finder hashes (`readHashed`), and so is each
@@ -20,11 +20,11 @@ two the finder hashes (`eq_or_break`). A close's string names its record's messa
 end (`closeBytes_inj`), a record's its host and its commitment's tagged digest (`recordBytes_inj`), and a chain its
 lines (`chain_bind`), each step's string being the previous digest, 64 bytes, then the line's field.
 A commitment's identity bytes name it (`Commitment.canon_inj`). So `sessionOf_run` concludes that the
-commitment, the roots and the session id `challengePhaseOf` returns are those of a run of the device under the key whose client
+commitment, the roots and the session id `sessionOf` returns are those of a run of the device under the key whose client
 closed it, read from that run's own release log, which is the session's log, or the finder outputs a break
 (`sessionOf_bound` without the log).
 
-`challengePhaseOf`'s, `challengePhaseNamed`'s and `drawCoins`' facts are Hoare triples proved by `mvcgen` (`sessionOf_ok`,
+`sessionOf`'s, `sessionNamed`'s and `drawCoins`' facts are Hoare triples proved by `mvcgen` (`sessionOf_ok`,
 `sessionNamed_ok`, `drawCoins_ok`), read back at an `.ok` result by `of_triple`.
 -/
 
@@ -32,7 +32,7 @@ closed it, read from that run's own release log, which is the session's log, or 
 
 set_option mvcgen.warning false
 
-namespace Properties.Challenger.ChallengePhase
+namespace Properties.Challenger.Session
 
 open Lean (Json)
 open Std.Do
@@ -266,7 +266,7 @@ theorem chain_bind (hU : field LOG_TAG.toUTF8 ∈ readHashed key label coins ++ 
         · exact .inr b
       · exact .inr b
 
-/-! ## What `challengePhaseOf` read when it accepts -/
+/-! ## What `sessionOf` read when it accepts -/
 
 theorem mapM_str {f : Json → Flock.V String} (hf : ∀ j s, f j = .ok s → j = .str s) :
     ∀ {l : List Json} {xs : List String}, l.mapM f = .ok xs → l = xs.map Json.str
@@ -324,12 +324,12 @@ theorem mapM_ok_spec {α β : Type} (f : α → Flock.V β) (l : List α) :
 theorem releasedRootsOf_ok_spec (c : LiveCommitment) (log : List String) :
     ⦃⌜True⌝⦄ releasedRootsOf c log ⦃⇓? a => ⌜releasedRootsOf c log = .ok a⌝⦄ := ok_spec _
 
--- `mvcgen` splits `challengePhaseOf` into one goal per check it makes of the record, the close and the log
+-- `mvcgen` splits `sessionOf` into one goal per check it makes of the record, the close and the log
 set_option maxHeartbeats 4000000 in
-/-- What `challengePhaseOf` read when it accepts: its record, its close and the close's message, whose signature verifies under
+/-- What `sessionOf` read when it accepts: its record, its close and the close's message, whose signature verifies under
 the key, its log's lines, which chain to the close's chain, a session its client closed, and the roots its log shows. -/
 theorem sessionOf_read {key : ChallengerKey} {record log close : Json} {res : LiveCommitment × Roots × String}
-    (h : challengePhaseOf key record log close = .ok res) :
+    (h : sessionOf key record log close = .ok res) :
     ∃ (r : ChallengerRecord) (c : ChallengerClose) (m : ByteArray) (ls : Array Json) (lines : List String),
       ChallengerRecord.ofJson record = .ok r ∧ ChallengerClose.ofJson close = .ok c ∧
       closeMessage (key.pub.extract 0 16) r.host r.commitment c.session c.lines c.chain c.ended = .ok m ∧
@@ -344,7 +344,7 @@ theorem sessionOf_read {key : ChallengerKey} {record log close : Json} {res : Li
       logChain lines = c.chain ∧ c.ended = none ∧ releasedRootsOf r.commitment lines = .ok res.2.1 ∧
       res = (r.commitment, res.2.1, c.session)) ?_ h
   clear h
-  mvcgen [challengePhaseOf, -Spec.throw_Except, throw_spec, recordReason_spec, recordOfJson_ok_spec, closeMessage_ok_spec,
+  mvcgen [sessionOf, -Spec.throw_Except, throw_spec, recordReason_spec, recordOfJson_ok_spec, closeMessage_ok_spec,
     mapM_ok_spec, releasedRootsOf_ok_spec]
   all_goals
     refine ⟨_, _, _, _, _, by assumption, by assumption, by assumption, lms_of_check (by assumption),
@@ -354,30 +354,30 @@ theorem sessionOf_read {key : ChallengerKey} {record log close : Json} {res : Li
       by assumption, rfl⟩
 
 theorem sessionOf_ok_spec (key : ChallengerKey) (record log close : Json) :
-    ⦃⌜True⌝⦄ challengePhaseOf key record log close ⦃⇓? a => ⌜challengePhaseOf key record log close = .ok a⌝⦄ := ok_spec _
+    ⦃⌜True⌝⦄ sessionOf key record log close ⦃⇓? a => ⌜sessionOf key record log close = .ok a⌝⦄ := ok_spec _
 
--- `mvcgen` splits `challengePhaseNamed` into one goal per check it makes of the session's record and files
+-- `mvcgen` splits `sessionNamed` into one goal per check it makes of the session's record and files
 set_option maxHeartbeats 1000000 in
-/-- `challengePhaseNamed` returns what `challengePhaseOf` returns of the session's files. -/
+/-- `sessionNamed` returns what `sessionOf` returns of the session's files. -/
 theorem sessionNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
-    (h : challengePhaseNamed a key session = .ok r) :
-    ∃ sid, challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") = .ok (r.1, r.2, sid) := by
+    (h : sessionNamed a key session = .ok r) :
+    ∃ sid, sessionOf key (getD session "record") (getD session "log") (getD session "close") = .ok (r.1, r.2, sid) := by
   refine of_triple (Q := fun r => ∃ sid,
-    challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") = .ok (r.1, r.2, sid)) ?_ h
+    sessionOf key (getD session "record") (getD session "log") (getD session "close") = .ok (r.1, r.2, sid)) ?_ h
   clear h
-  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, sessionOf_ok_spec, recordOfJson_spec, mapM_spec]
+  mvcgen [sessionNamed, -Spec.throw_Except, throw_spec, sessionOf_ok_spec, recordOfJson_spec, mapM_spec]
   all_goals exact ⟨_, by assumption⟩
 
-/-- `trustedChallengePhaseOf` returns what `challengePhaseNamed` returns of the session the ledger pins. -/
+/-- `trustedSessionOf` returns what `sessionNamed` returns of the session the ledger pins. -/
 theorem trustedSessionOf_ok {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
-    {r : LiveCommitment × Roots} (h : trustedChallengePhaseOf ledger window key pins main session = .ok r) :
-    ∃ a, pinnedChallengePhase ledger window key pins main = .ok a ∧ challengePhaseNamed a key session = .ok r := by
-  unfold trustedChallengePhaseOf at h
+    {r : LiveCommitment × Roots} (h : trustedSessionOf ledger window key pins main session = .ok r) :
+    ∃ a, pinnedSession ledger window key pins main = .ok a ∧ sessionNamed a key session = .ok r := by
+  unfold trustedSessionOf at h
   exact bind_ok.1 h
 
 theorem trustedSessionOf_ok_spec (ledger window : Json) (key : ChallengerKey) (pins main session : Json) :
-    ⦃⌜True⌝⦄ trustedChallengePhaseOf ledger window key pins main session
-      ⦃⇓? a => ⌜trustedChallengePhaseOf ledger window key pins main session = .ok a⌝⦄ := ok_spec _
+    ⦃⌜True⌝⦄ trustedSessionOf ledger window key pins main session
+      ⦃⇓? a => ⌜trustedSessionOf ledger window key pins main session = .ok a⌝⦄ := ok_spec _
 
 theorem challengerStream_ok_spec (c : LiveCommitment) (segment : Json) (after : ByteArray)
     (roots : Option (List ByteArray)) :
@@ -390,11 +390,11 @@ set_option maxHeartbeats 1000000 in
 against its commitment and the roots its log shows received for the family. -/
 theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray} {coins : Json} {ξ : ByteArray}
     (h : drawCoins key w label after coins = .ok ξ) :
-    ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key (getD coins "pins")
+    ∃ c roots, trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key (getD coins "pins")
         (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ := by
-  refine of_triple (Q := fun ξ => ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)])
+  refine of_triple (Q := fun ξ => ∃ c roots, trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)])
       key (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ) ?_ h
@@ -651,17 +651,17 @@ theorem utf8_size_le (s : String) : s.toUTF8.size ≤ 4 * s.length := by
   have := Char.utf8Size_le_four c
   omega
 
-theorem session_size {s : String} (h : isChallengePhaseId s = true) : s.toUTF8.size ≤ 512 := by
+theorem session_size {s : String} (h : isSessionId s = true) : s.toUTF8.size ≤ 512 := by
   have hl : s.length ≤ 128 := by
-    unfold isChallengePhaseId at h
+    unfold isSessionId at h
     simp only [Bool.and_eq_true, decide_eq_true_eq] at h
     exact h.1
   have := utf8_size_le s
   omega
 
 theorem close_form {chain : ByteArray} {lines : Nat} {session : String}
-    (h : (chain.size == 64 && 1 ≤ lines && lines ≤ MAX_LOG_LINES && isChallengePhaseId session) = true) :
-    chain.size = 64 ∧ isChallengePhaseId session = true := by
+    (h : (chain.size == 64 && 1 ≤ lines && lines ≤ MAX_LOG_LINES && isSessionId session) = true) :
+    chain.size = 64 ∧ isSessionId session = true := by
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
   exact ⟨h.1.1.1, h.2⟩
 
@@ -669,18 +669,18 @@ theorem close_form {chain : ByteArray} {lines : Nat} {session : String}
 set_option maxHeartbeats 1000000 in
 /-- A close's chain is 64 bytes and its session id at most 128 characters. -/
 theorem closeOfJson_ok {j : Json} {c : ChallengerClose} (h : ChallengerClose.ofJson j = .ok c) :
-    c.chain.size = 64 ∧ isChallengePhaseId c.session = true := by
-  refine of_triple (Q := fun c => c.chain.size = 64 ∧ isChallengePhaseId c.session = true) ?_ h
+    c.chain.size = 64 ∧ isSessionId c.session = true := by
+  refine of_triple (Q := fun c => c.chain.size = 64 ∧ isSessionId c.session = true) ?_ h
   clear h
   mvcgen [ChallengerClose.ofJson, -Spec.throw_Except, throw_spec]
   all_goals exact close_form (by assumption)
 
-/-- **A session `challengePhaseOf` accepts from a sample's record is a run the device closed, its log that run's**, or the
-finder outputs a break: the commitment, the roots and the session id `challengePhaseOf` returns from the record's session
+/-- **A session `sessionOf` accepts from a sample's record is a run the device closed, its log that run's**, or the
+finder outputs a break: the commitment, the roots and the session id `sessionOf` returns from the record's session
 files are a run's of the device under the key, a run its client closed, the roots the ones that run's own release log
 shows, and the session's log is that run's lines. -/
 theorem sessionOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
-    (h : challengePhaseOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
+    (h : sessionOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
       (getD (getD coins "session") "close") = .ok (c, roots, sid)) :
     (∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.id = sid ∧ s.ended = none ∧
       releasedRootsOf c s.log = .ok roots ∧
@@ -742,10 +742,10 @@ theorem sessionOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
     · exact .inr b
   · exact .inr b
 
-/-- **A session `challengePhaseOf` accepts from a sample's record is a run the device closed**, or the finder outputs a break:
+/-- **A session `sessionOf` accepts from a sample's record is a run the device closed**, or the finder outputs a break:
 `sessionOf_run` without the log. -/
 theorem sessionOf_bound {c : LiveCommitment} {roots : Roots} {sid : String}
-    (h : challengePhaseOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
+    (h : sessionOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
       (getD (getD coins "session") "close") = .ok (c, roots, sid)) :
     (∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.id = sid ∧ s.ended = none ∧
       releasedRootsOf c s.log = .ok roots) ∨ Break dev key label coins := by
@@ -769,4 +769,4 @@ theorem drawCoins_session {w : String} {after ξ : ByteArray} (h : drawCoins key
   · exact .inl ⟨s, hs', hc, he, hr⟩
   · exact .inr b
 
-end Properties.Challenger.ChallengePhase
+end Properties.Challenger.Session

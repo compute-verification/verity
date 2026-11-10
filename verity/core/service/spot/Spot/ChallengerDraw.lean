@@ -4,7 +4,7 @@ family, never the evidence's.
 
 `drawCoins key window label after coins` reads the evidence `{ledger, main, pins, segment, session}`: the auditor's
 ledger, the verifier's copy of main's first-parent history, the host's pins log, the sample's segment and the session's
-files. The session is the one the ledger opens on `window` under `key` (`trustedChallengePhaseOf`), a withheld one
+files. The session is the one the ledger opens on `window` under `key` (`trustedSessionOf`), a withheld one
 (`withheldOn`: its challenger released no root, salt or path before it closed). The segment must be of
 family `label`, and its openings exactly the coins that session's signed log shows released after `after`
 (`challengerStream`). The result is their concatenation, the bytes a sample reads. A component whose check reads its
@@ -35,7 +35,7 @@ under `key` released after `after`, read from `coins`, in order: the bytes a sam
 one (`withheldOn`). -/
 def drawCoins (key : ChallengerKey) (window label : String) (after : ByteArray) (coins : Json) : V ByteArray := do
   unless keys? coins == some #["ledger", "main", "pins", "segment", "session"] do throw DRAW_FORM
-  let (c, roots) ← trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+  let (c, roots) ← trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
     (getD coins "pins") (getD coins "main") (getD coins "session")
   unless withheldOn (getD coins "ledger") window do throw WITHHELD
   let segment := getD coins "segment"
