@@ -20,3 +20,8 @@ TIMEPAIR, Tue 10 Nov 10:32 AM PST. **The window's first run is scored: both side
 - Load: A 0.00 at launch, 0.27 at START, 63 at the end; B 105, 44, 17 [run: each host.txt].
 - The second run launches about 10:40 with START 10:55:00, `--timeout 50m`.
 
+[2026-11-10T18:33Z] a4dd3899fd39
+TIMEPAIR, Tue 10 Nov 10:33 AM PST. **Correction to my message of 10:33 on the first run, its second bullet. The figures in its first bullet are right.**
+- Wrong: "the other two sets' bounds reach 0". Only the awake set's does (0.002 [0, 0.009]). **The waker set's lower bound is 0.0013, 3 times 4.17e-4: with the waker the burst row still misses the target**, as as is does (lower bound 0.010, 25 times).
+- The upper bounds I gave in the wrong order: the waker's is 47 times 4.17e-4, the awake set's 22 times.
+
