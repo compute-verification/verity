@@ -11,7 +11,7 @@ open. The period the served windows join opens, through infra's own gate, on the
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
 gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
-front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
+front doesn't take, a front whose endpoint isn't on the certifier's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
 written; its preflight refuses the split beside the certifier's whole piece, or without V3c. What it publishes holds a
@@ -348,7 +348,7 @@ def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_
 def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
     """The CERTIFIER-FRONT line carries `FRONT_PUBLIC` of the front's session and none of its prompts, request, kept
     fetch, gate or verdict's cells; a refused front's line names no reason, and a missing session says so."""
-    session = {"rc": 0, "run": "c1", "prompts": {"count": 4, "ids": 64}, "request": "warden-rehearse --requests 4",
+    session = {"rc": 0, "run": "c1", "prompts": {"count": 4, "ids": 64}, "request": "certifier-rehearse --requests 4",
                "keep": "/serve/private/fetch.tar.gz", "gate": {"run": "g"}, "ended": "the rehearsal ended",
                "ended_utc": "t", "session_s": 128.0, "pinned": "ab" * 20, "leaked_removed": [], "origin_unix": 1,
                "verdict": {"cells": [7] * 3, "requests": 4, "wire_bits": 9}}
@@ -527,7 +527,7 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
 
 
 def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
-    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, draws
+    """The network certifier's answer as its piece writes it when the certifier ran on the gate's host and its checks, draws
     and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
     accept isn't read as the auditor's devices having placed it."""
     premise = ("assumed, the auditor's devices not placed: the network certifier ran on 204.12.178.84, not the prover's "
@@ -1088,7 +1088,7 @@ IDS = "--protocol ids --id-payload 503"
     ("varied", FRONT, "--gate --warmup --bucket-ms-x", IDS, "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this "
                                                              "tree's certifier front doesn't take"),
     ("front", "", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
-    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's warden sends "
+    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's certifier sends "
      "id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
 ])
 def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_front_load_with_no_front(

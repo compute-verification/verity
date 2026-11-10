@@ -1,13 +1,13 @@
 """The ingress tie through the proof system (`tie_service`): each bucket row of an ingress execution phase of the
 network certifier's
-cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and decided by
+cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the certifier's root and decided by
 the verifier of record on its own lanes), and `tie_service.IoTieVerdict` built from the stream's outcomes of record
 alone. An honest link is tied, and `Ties`, the tie, its stream and the release, gives the verdict only on its own link
 and stream; the verifier's registered reads name every port of the statement, as C-Flock's Lean verifier requires
 (`Registered.checkComplete`, which the stand-in mirrors); a carried field count, a forged advice and the swapped split
 are refused, as are an output 0 or rows under fresh salts, an outcome on another
 advice, in the clear or late, a stream short of the advice's windows, out of order or past them, a profile that frames
-requests otherwise than the warden cuts them, a row that isn't the warden's, a head of another window, an advice whose
+requests otherwise than the certifier cuts them, a row that isn't the certifier's, a head of another window, an advice whose
 `received` isn't the release's, and an unpinned size class. Nothing in `verity` but the tie service builds the
 verdict."""
 
@@ -22,7 +22,7 @@ import pytest
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
 from verity.core.protocols.certifier import advice as ADV, head_check as HC, io_request as Q, service as SVC, \
-    tie_service as TS, warden as W, warden_rows as WR
+    tie_service as TS, certifier as W, certifier_rows as WR
 from verity.core.protocols.certifier.active import id_request
 from verity.core.protocols.certifier.certificate import Direction
 from verity.core.protocols.sampled_proofs import service as S
@@ -32,7 +32,7 @@ import standin
 
 B = 512
 #: two lanes of r = 2 slots, 4-bucket windows
-PARAMS = W.WardenParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
+PARAMS = W.CertifierParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
 LINK, RUN = "requests", "r-tie-test"
 SESSION = hashlib.sha512(b"tie-test").digest()
 #: a span: request 1 (40 tokens) takes 2 cells, its DATA in bucket 3 and its END in bucket 4, so it
@@ -73,7 +73,7 @@ SERVED = _serve()
 
 
 class Run:
-    """An ingress link's tie: the network certifier's cells of each window (`warden_rows.Cells`, under fixed salts), the
+    """An ingress link's tie: the network certifier's cells of each window (`certifier_rows.Cells`, under fixed salts), the
     challenger's stream on injected coins and clock, and each window decided by the verifier of record on a stand-in
     proof, the in-the-clear check beside it."""
 
@@ -137,7 +137,7 @@ def test_an_honest_link_is_tied(tmp_path):
 
 def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_path):
     """C-Flock's Lean verifier rejects every session of a statement with a port its `--registered` file doesn't name
-    (`Registered.checkComplete`), which the stand-in mirrors: the verifier's own file names ``wit`` at the warden's
+    (`Registered.checkComplete`), which the stand-in mirrors: the verifier's own file names ``wit`` at the certifier's
     root and ``pub`` and ``o0`` at known content, its own lanes of each bucket and the output word 1 under public
     salts, so an honest window's proof is proved and accepted, where a file naming ``wit`` alone rejects it at
     ``pub``."""
@@ -165,7 +165,7 @@ def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_
 
 def test_an_output_0_or_rows_under_fresh_salts_fail_the_registered_reads(tmp_path, monkeypatch):
     """The ``o0`` row is read off the verifier's known root of output words 1, and the ``pub`` row off its known root
-    of its own lanes under their public salts: the forged advice's proof of window 0, on the warden's rows and the
+    of its own lanes under their public salts: the forged advice's proof of window 0, on the certifier's rows and the
     verifier's own lanes, fails ``o0``'s read at the bucket IoTieRequest refuses, whatever word it delivers, and a
     proof whose ``pub`` and ``o0`` rows are committed under fresh salts fails ``pub``'s."""
     forged, advice = _advice((5, 45, 5)), _advice(SPAN)
@@ -311,9 +311,9 @@ def test_a_short_stream_one_out_of_order_or_one_past_the_advice_refuses_every_wi
 @pytest.mark.parametrize("profile", [TS.AdvisedProfile(2, tuple(n + 1 for n in FRAMING), 0),
                                      TS.AdvisedProfile(2, FRAMING[:39], 0), TS.AdvisedProfile(2, FRAMING, 1)],
                          ids=["framing", "short-framing", "own"])
-def test_a_profile_that_frames_requests_otherwise_than_the_warden_refuses_every_window(tmp_path, profile):
-    """The tie reads the profile's framing: under one that isn't the warden's cut at B for the advice's prompt
-    lengths, or that names an own frame, which the warden's ingress has none of, every window is refused."""
+def test_a_profile_that_frames_requests_otherwise_than_the_certifier_refuses_every_window(tmp_path, profile):
+    """The tie reads the profile's framing: under one that isn't the certifier's cut at B for the advice's prompt
+    lengths, or that names an own frame, which the certifier's ingress has none of, every window is refused."""
     run, advice = Run(tmp_path), _advice(SPAN)
     assert run.link(advice) == [True, True]
     assert run.verdict(advice, profile).accepted == (False, False)
@@ -328,9 +328,9 @@ def test_an_advice_whose_received_isnt_the_release_refuses_every_window(tmp_path
     assert run.verdict(moved).accepted == (False, False)
 
 
-def test_a_row_that_isnt_the_wardens_is_refused(tmp_path):
+def test_a_row_that_isnt_the_certifiers_is_refused(tmp_path):
     """Each proof block's witness row is read off the network certifier's root at its own bucket
-    (`warden_rows.bucket_port`): a proof on another row (window 1's bucket 1, which IoTieRequest accepts on its own
+    (`certifier_rows.bucket_port`): a proof on another row (window 1's bucket 1, which IoTieRequest accepts on its own
     lanes) or on the window's rows read by swapped proof blocks fails the registered read, and so do its sessions."""
     advice = _advice(SPAN)
     run = Run(tmp_path / "row")
@@ -381,7 +381,7 @@ def test_the_tie_gate_names_its_pinned_circuit_digest():
 def test_an_unpinned_size_class_is_refused(tmp_path):
     """IoTieRequest at L = 3 has no pinned circuit digest, so its gate names none and no proof of its proof block is
     accepted, even one Lean accepts."""
-    params = W.WardenParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1)
+    params = W.CertifierParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1)
     served = _serve(params=params, windows=2)
     run, advice = Run(tmp_path, params=params, served=served), _advice(SPAN)
     assert not HC.pinned(run.tie.gates()[0])

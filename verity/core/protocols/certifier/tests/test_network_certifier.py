@@ -1,4 +1,4 @@
-"""The active network certifier (`warden`), a relay that knows bytes only: driven tick by tick on a `VirtualClock`, its
+"""The active network certifier (`certifier`), a relay that knows bytes only: driven tick by tick on a `VirtualClock`, its
 clients in-memory connections speaking cells and its server an in-memory one whose bytes the test schedules, it releases
 honest traffic exactly on its schedule, fails a late byte closed, queues past its lanes then refuses (and withholds that
 window's records from `publish`), passes both directions'
@@ -17,11 +17,11 @@ import pytest
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.core.protocols.certifier.grid import Reason
 from verity.core.protocols.certifier.release import read_watermark, release_of, watermark_head, with_release
-from verity.core.protocols.certifier.warden import (END, FAIL, KIND_NAMES, REASONS, REFUSED, WRITE_BACKLOG, Shim,
-                                                    Warden, WardenParams, audit, cell, cells, read_cell, read_reason,
+from verity.core.protocols.certifier.certifier import (END, FAIL, KIND_NAMES, REASONS, REFUSED, WRITE_BACKLOG, Shim,
+                                                    Certifier, CertifierParams, audit, cell, cells, read_cell, read_reason,
                                                     reason_frame)
 
-PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=2, window=24, ingress_cells=8,
+PARAMS = CertifierParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=2, window=24, ingress_cells=8,
                       ingress_buckets=6, egress_cells=12)
 B, P, R, D = PARAMS.cell_bytes, PARAMS.payload, PARAMS.slots, PARAMS.delay
 TAU = PARAMS.bucket_ms / 1000
@@ -108,19 +108,19 @@ class ServerConn:
 class Client:
     """One client connection: its cells in its reader, and every write with the bucket it was made in."""
 
-    def __init__(self, warden: Warden, data: bytes | tuple[bytes, bool]) -> None:
-        self.warden, self.writes, self.closed = warden, [], False
+    def __init__(self, certifier: Certifier, data: bytes | tuple[bytes, bool]) -> None:
+        self.certifier, self.writes, self.closed = certifier, [], False
         self.transport = self
         data, eof = data if isinstance(data, tuple) else (data, True)
         self.reader = asyncio.StreamReader()
         self.reader.feed_data(data)
         if eof:
             self.reader.feed_eof()
-        self.task = asyncio.create_task(warden.handle(self.reader, self))
+        self.task = asyncio.create_task(certifier.handle(self.reader, self))
 
     def write(self, data: bytes) -> None:
         assert not self.closed
-        self.writes.append((self.warden.ticks, bytes(data)))
+        self.writes.append((self.certifier.ticks, bytes(data)))
 
     def is_closing(self) -> bool:
         return self.closed
@@ -154,10 +154,10 @@ class SocketClient(Client):
     """A client whose connection's network certifier end is a socket, the one a paced network certifier's pacer writes
     to, and whose other end the test reads (`received`) once the run is over."""
 
-    def __init__(self, warden: Warden, data: bytes | tuple[bytes, bool]) -> None:
+    def __init__(self, certifier: Certifier, data: bytes | tuple[bytes, bool]) -> None:
         self.ours, self.peer = socket.socketpair()
         self.ours.setblocking(False)
-        super().__init__(warden, data)
+        super().__init__(certifier, data)
 
     def get_extra_info(self, name: str):
         return self.ours if name == "socket" else None
@@ -174,11 +174,11 @@ class SocketClient(Client):
         return bytes(out)
 
 
-def settled(warden: Warden, server: Server) -> bool:
+def settled(certifier: Certifier, server: Server) -> bool:
     cap = PARAMS.egress_cells * P
-    if sum(c.server is None and c.upstream is None for c in warden.active) != len(server.held):
+    if sum(c.server is None and c.upstream is None for c in certifier.active) != len(server.held):
         return False
-    for c in warden.active:
+    for c in certifier.active:
         if c.problem is None and not c.ingress_ended and c.reader._buffer:
             return False
         if c.server is not None:
@@ -189,43 +189,43 @@ def settled(warden: Warden, server: Server) -> bool:
 
 
 async def drive(server: Server, arrivals: dict[int, list[bytes]], *, windows: int = 1, late: dict | None = None,
-                params: WardenParams = PARAMS, client: type[Client] = Client, **hooks):
+                params: CertifierParams = PARAMS, client: type[Client] = Client, **hooks):
     """Connect `arrivals[t]` (each a client's raw cell bytes) just before bucket t's tick, let the server answer what is
     due and the network certifier read it, then tick, and with `paced` wait for the pacer to report the bucket's
     release, for `windows` windows; `late[t]` puts tick t that many seconds late. `hooks` are the network certifier's
     `publish`, `release` and `paced`."""
     clock = VirtualClock(-TAU / 2)
-    warden = Warden(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
-    running = asyncio.create_task(warden.run())
+    certifier = Certifier(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
+    running = asyncio.create_task(certifier.run())
     clients: list[Client] = []
     for t in range(windows * params.window):
         for data in arrivals.get(t, ()):
-            clients.append(client(warden, data))
+            clients.append(client(certifier, data))
             count = len(clients)
-            await warden.until(lambda w, n=count: w.ordinals + w.refused == n)
+            await certifier.until(lambda w, n=count: w.ordinals + w.refused == n)
         server.release(t)
-        await warden.until(lambda w: settled(w, server))
+        await certifier.until(lambda w: settled(w, server))
         clock.advance(t * TAU + (late or {}).get(t, 0))
-        await warden.until(lambda w, t=t: w.ticks > t)
-        await warden.until(lambda w: not any(w._unreleased.values()))
+        await certifier.until(lambda w, t=t: w.ticks > t)
+        await certifier.until(lambda w: not any(w._unreleased.values()))
     await running
     await asyncio.gather(*(c.task for c in clients))
-    return warden, clients
+    return certifier, clients
 
 
 def run(answers, arrivals, **kw):
     server = answers if isinstance(answers, Server) else Server(answers)
-    warden, clients = asyncio.run(drive(server, arrivals, **kw))
-    return warden, clients, server
+    certifier, clients = asyncio.run(drive(server, arrivals, **kw))
+    return certifier, clients, server
 
 
-def records(warden: Warden):
-    return tuple([r for r in warden.records if r.link == link] for link in ("requests", "responses", "fails"))
+def records(certifier: Certifier):
+    return tuple([r for r in certifier.records if r.link == link] for link in ("requests", "responses", "fails"))
 
 
-def reasons(warden: Warden) -> list[tuple[int, int, str]]:
+def reasons(certifier: Certifier) -> list[tuple[int, int, str]]:
     """(bucket, ordinal, reason) of every frame of the `fails` record."""
-    return [(r.window * PARAMS.window + b, *read_reason(f, B)) for r in records(warden)[2]
+    return [(r.window * PARAMS.window + b, *read_reason(f, B)) for r in records(certifier)[2]
             for b, row in enumerate(r.grid) for f in row if f is not None]
 
 
@@ -247,9 +247,9 @@ def test_honest_traffic_is_released_exactly_on_schedule_passes_bytes_unchanged_a
     reqs = [request(10, 1), request(3 * P + 5, 2), request(P, 3), request(1, 4)]
     resps = [bytes(range(256)) * 2, b"", bytes(3 * P), b"z" * (P + 1)]
     answers = [[(0, resp), (0, EOF)] for resp in resps]
-    warden, clients, server = run(answers, {1: [cells(reqs[0], B)], 2: [cells(reqs[1], B)],
+    certifier, clients, server = run(answers, {1: [cells(reqs[0], B)], 2: [cells(reqs[1], B)],
                                             3: [cells(reqs[2], B), cells(reqs[3], B)]}, windows=2)
-    log = {e["ordinal"] - 1: e for e in warden.log}
+    log = {e["ordinal"] - 1: e for e in certifier.log}
     assert [server.conns[k].received for k in range(4)] == reqs
     for k, client in enumerate(clients):
         e = log[k]
@@ -261,8 +261,8 @@ def test_honest_traffic_is_released_exactly_on_schedule_passes_bytes_unchanged_a
         assert e["ingress_end"] - e["admitted"] == 1 + (-(-len(reqs[k]) // P) - 1) // R
     # FIFO: 2 takes the first lane to free (1's), 3 the next (0's)
     assert [log[k]["admitted"] for k in range(4)] == [1, 2, log[1]["ended"] + 1, log[0]["ended"] + 1]
-    assert max(warden.lateness) == 0
-    verdict = audit(PARAMS, *records(warden))
+    assert max(certifier.lateness) == 0
+    verdict = audit(PARAMS, *records(certifier))
     assert verdict["accepted"], verdict["windows"]
     assert [(c["ordinal"], c["admitted"], c["ingress_end"], c["ended"]) for c in verdict["connections"]] == \
         [(k + 1, log[k]["admitted"], log[k]["ingress_end"], log[k]["ended"]) for k in range(4)]
@@ -273,9 +273,9 @@ def test_honest_traffic_is_released_exactly_on_schedule_passes_bytes_unchanged_a
 
 def test_the_records_are_the_wire():
     """The egress record's frames are exactly the cells the clients got, in ordinal order a bucket."""
-    warden, clients, _ = run([[(0, b"hello"), (0, EOF)], [(0, b"x" * 100), (0, EOF)]],
+    certifier, clients, _ = run([[(0, b"hello"), (0, EOF)], [(0, b"x" * 100), (0, EOF)]],
                              {0: [cells(request(5), B), cells(request(70), B)]})
-    _, egress, _ = records(warden)
+    _, egress, _ = records(certifier)
     rows = [f for r in egress for row in r.grid for f in row if f is not None]
     by_bucket = {}
     for k, client in enumerate(clients):
@@ -308,22 +308,22 @@ def test_a_late_byte_fails_its_connection_closed_at_its_cell():
     then a FAIL in the slot of the third, padding to the bucket's end, and the connection closes; the late bytes never
     reach it, and the audit refuses the window, naming the cell and the reason the `fails` record holds."""
     answer = [(0, b"a" * (2 * P + 7)), (40, b"b" * 100), (40, EOF)]
-    warden, (client,), _ = run([answer], {1: [cells(request(5), B)]})
-    (e,) = warden.log
+    certifier, (client,), _ = run([answer], {1: [cells(request(5), B)]})
+    (e,) = certifier.log
     assert (e["failed"], e["failed_at"]) == ("late", 2)
     shim = client.shim()
     assert (bytes(shim.data), shim.outcome) == (b"a" * (2 * P), "fail")
     assert [(t, k) for t, k, _ in client.cells()] == expected_egress(1, 3, FAIL)
-    assert reasons(warden) == [(e["ended"], 1, "late")]
-    verdict = audit(PARAMS, *records(warden))
+    assert reasons(certifier) == [(e["ended"], 1, "late")]
+    verdict = audit(PARAMS, *records(certifier))
     assert not verdict["accepted"]
     assert verdict["windows"][0]["problems"] == ["connection 1 failed closed (late) at egress cell 2"]
     assert verdict["connections"][0]["failed"] == "late"
 
 
 def test_a_server_that_never_answers_fails_at_the_first_egress_slot():
-    warden, (client,), _ = run([[]], {0: [cells(request(5), B)]})
-    (e,) = warden.log
+    certifier, (client,), _ = run([[]], {0: [cells(request(5), B)]})
+    (e,) = certifier.log
     assert (e["failed"], e["failed_at"], e["ended"]) == ("late", 0, e["admitted"] + D)
     assert client.shim().outcome == "fail"
 
@@ -333,14 +333,14 @@ def test_a_server_failure_shows_only_at_an_egress_slot():
     the server chooses whether and at which egress cell a connection fails, and nothing else: the FAIL cell is the
     same bytes whatever the reason, which only the `fails` record holds."""
     server = Server([[]], refuse=(0,))
-    warden, (client,), _ = run(server, {0: [cells(request(5), B)]})
-    (e,) = warden.log
+    certifier, (client,), _ = run(server, {0: [cells(request(5), B)]})
+    (e,) = certifier.log
     assert (e["failed"], e["failed_at"], e["ended"]) == ("upstream", 0, e["admitted"] + D)
     assert [(t, k) for t, k, _ in client.cells()] == expected_egress(0, 1, FAIL)
-    silent_warden, (silent,), _ = run([[]], {0: [cells(request(5), B)]})
+    silent_certifier, (silent,), _ = run([[]], {0: [cells(request(5), B)]})
     assert client.writes == silent.writes and client.shim().outcome == "fail"
-    assert records(warden)[1] == records(silent_warden)[1]
-    assert (reasons(warden), reasons(silent_warden)) == ([(D, 1, "upstream")], [(D, 1, "late")])
+    assert records(certifier)[1] == records(silent_certifier)[1]
+    assert (reasons(certifier), reasons(silent_certifier)) == ([(D, 1, "upstream")], [(D, 1, "late")])
 
 
 def test_a_server_slow_to_accept_its_connection_moves_nothing():
@@ -351,28 +351,28 @@ def test_a_server_slow_to_accept_its_connection_moves_nothing():
     req, resp = request(3 * P + 5), b"r" * (2 * P + 3)
     wires = []
     for hold in ({}, {0: 2}, {0: 3}):
-        warden, (client,), server = run(Server([[(0, resp), (0, EOF)]], hold=hold), {1: [cells(req, B)]})
+        certifier, (client,), server = run(Server([[(0, resp), (0, EOF)]], hold=hold), {1: [cells(req, B)]})
         assert server.conns[0].received == req and client.shim().data == resp
-        assert (warden.log[0]["admitted"], warden.log[0]["ingress_end"]) == (1, 3)
+        assert (certifier.log[0]["admitted"], certifier.log[0]["ingress_end"]) == (1, 3)
         wires.append(client.writes)
     assert wires[0] == wires[1] == wires[2]
-    warden, (client,), _ = run(Server([[(0, resp), (0, EOF)]], hold={0: 1 + D + 1}), {1: [cells(req, B)]})
-    assert (warden.log[0]["failed"], warden.log[0]["failed_at"]) == ("late", 0)
+    certifier, (client,), _ = run(Server([[(0, resp), (0, EOF)]], hold={0: 1 + D + 1}), {1: [cells(req, B)]})
+    assert (certifier.log[0]["failed"], certifier.log[0]["failed_at"]) == ("late", 0)
     assert client.shim().outcome == "fail"
 
 
 def test_egress_past_its_cells_fails_at_the_last_and_the_rest_never_reaches_the_client():
     answer = [(0, b"q" * (PARAMS.egress_cells * P + 500)), (0, EOF)]
-    warden, (client,), _ = run([answer], {0: [cells(request(5), B)]})
-    (e,) = warden.log
+    certifier, (client,), _ = run([answer], {0: [cells(request(5), B)]})
+    (e,) = certifier.log
     assert (e["failed"], e["failed_at"]) == ("limit", PARAMS.egress_cells - 1)
     assert bytes(client.shim().data) == b"q" * ((PARAMS.egress_cells - 1) * P)
 
 
 def test_a_response_of_the_most_cells_ends():
     resp = b"q" * ((PARAMS.egress_cells - 1) * P + 3)
-    warden, (client,), _ = run([[(0, resp), (0, EOF)]], {0: [cells(request(5), B)]})
-    assert warden.log[0]["failed"] is None and bytes(client.shim().data) == resp
+    certifier, (client,), _ = run([[(0, resp), (0, EOF)]], {0: [cells(request(5), B)]})
+    assert certifier.log[0]["failed"] is None and bytes(client.shim().data) == resp
 
 
 def test_a_client_cell_of_another_kind_or_ingress_past_its_bounds_fails_closed():
@@ -382,25 +382,25 @@ def test_a_client_cell_of_another_kind_or_ingress_past_its_bounds_fails_closed()
     bad = cell(DATA, 0, b"a" * P, B) + encode_frame(PAD, 0, b"", B)
     long = cells(b"a" * (PARAMS.ingress_cells * P + 1), B)
     slow = (cell(DATA, 0, b"a" * P, B), False)  # never ends, nor closes
-    warden, clients, server = run([[(0, b"x"), (0, EOF)]] * 3, {0: [bad, long], 1: [slow]}, params=params)
-    assert sorted((e["ordinal"], e["failed"]) for e in warden.log) == [(1, "malformed"), (2, "ingress"),
+    certifier, clients, server = run([[(0, b"x"), (0, EOF)]] * 3, {0: [bad, long], 1: [slow]}, params=params)
+    assert sorted((e["ordinal"], e["failed"]) for e in certifier.log) == [(1, "malformed"), (2, "ingress"),
                                                                         (3, "ingress")]
     assert all(c.shim().outcome == "fail" for c in clients)
-    assert sorted((o, why) for _, o, why in reasons(warden)) == [(1, "malformed"), (2, "ingress"), (3, "ingress")]
+    assert sorted((o, why) for _, o, why in reasons(certifier)) == [(1, "malformed"), (2, "ingress"), (3, "ingress")]
     assert all(b"x" not in bytes(c.shim().data) for c in clients)
-    slow_log = next(e for e in warden.log if e["ordinal"] == 3)
+    slow_log = next(e for e in certifier.log if e["ordinal"] == 3)
     assert slow_log["ended"] - slow_log["admitted"] + 1 == PARAMS.ingress_buckets
 
 
 def test_a_late_tick_faults_both_grids_window_and_the_audit_refuses_it():
-    warden, _, _ = run([[(0, b"hi"), (0, EOF)]], {1: [cells(request(5), B)]}, windows=2, late={5: 2 * 0.025})
-    statuses = {(r.link, r.window): r.status.reason for r in warden.records}
+    certifier, _, _ = run([[(0, b"hi"), (0, EOF)]], {1: [cells(request(5), B)]}, windows=2, late={5: 2 * 0.025})
+    statuses = {(r.link, r.window): r.status.reason for r in certifier.records}
     assert statuses == {(link, w): Reason.MONITOR_UNAVAILABLE if w == 0 else None
                         for link in ("requests", "responses", "fails") for w in (0, 1)}
-    assert [w["accepted"] for w in audit(PARAMS, *records(warden))["windows"]] == [False, True]
+    assert [w["accepted"] for w in audit(PARAMS, *records(certifier))["windows"]] == [False, True]
 
 
-def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
+def test_a_paced_certifiers_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
     """With `paced`, each connection's cells reach its socket from the pacer, the bytes the loop writes unpaced. On the
     injected clock a bucket's time (origin 0, on the host's monotonic clock) has long passed when its tick hands it, so
     each reaches the pacer late, and the report of a window's first bucket handed faults the three grids' window
@@ -426,12 +426,12 @@ def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_
         [(r.link, r.window, faulted(r)) for r in plain.records]
     assert [r.t for r in paced.releases] == live and all(r.written for r in paced.releases)
     with pytest.raises(ValueError, match="past the slack"):
-        Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
+        Certifier(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
 
 
 def test_the_audit_refuses_a_record_whose_cells_are_not_the_schedules():
-    warden, _, _ = run([[(0, b"x" * 200), (0, EOF)]], {0: [cells(request(5), B)]})
-    ingress, egress, fails = records(warden)
+    certifier, _, _ = run([[(0, b"x" * 200), (0, EOF)]], {0: [cells(request(5), B)]})
+    ingress, egress, fails = records(certifier)
     (record,) = egress
     rows = [list(row) for row in record.grid]
     t = next(t for t, row in enumerate(rows) if any(f is not None and f[0] == DATA for f in row))
@@ -448,17 +448,17 @@ def test_over_capacity_queues_fifo_then_refuses():
     """Two lanes and a queue of two: two connections take the lanes, and of three more the next bucket two wait and
     are admitted in order as lanes free, and the third gets one REFUSED cell and takes no ordinal."""
     answers = [[(0, b"r%d" % k), (0, EOF)] for k in range(4)]
-    warden, clients, server = run(answers, {1: [cells(request(5, k), B) for k in range(2)],
+    certifier, clients, server = run(answers, {1: [cells(request(5, k), B) for k in range(2)],
                                             2: [cells(request(5, k), B) for k in range(2, 5)]})
-    assert warden.refused == 1 and warden.ordinals == 4
+    assert certifier.refused == 1 and certifier.ordinals == 4
     refused = clients[4]
     assert [(k, len(p)) for _, k, p in refused.cells()] == [(REFUSED, 0)] and refused.shim().outcome == "refused"
-    log = sorted(warden.log, key=lambda e: e["ordinal"])
+    log = sorted(certifier.log, key=lambda e: e["ordinal"])
     assert [e["admitted"] for e in log] == [1, 1, log[0]["ended"] + 1, log[1]["ended"] + 1]
     assert [bytes(c.shim().data) for c in clients[:4]] == [b"r0", b"r1", b"r2", b"r3"]
     assert [conn.received for conn in server.conns] == [request(5, k) for k in range(4)]
-    assert warden.refused_windows == {0} and not warden.records
-    assert [(r.link, r.window) for r in warden.withheld] == [("requests", 0), ("responses", 0), ("fails", 0)]
+    assert certifier.refused_windows == {0} and not certifier.records
+    assert [(r.link, r.window) for r in certifier.withheld] == [("requests", 0), ("responses", 0), ("fails", 0)]
 
 
 def test_a_window_with_a_refusal_goes_to_withhold_whole():
@@ -467,11 +467,11 @@ def test_a_window_with_a_refusal_goes_to_withhold_whole():
     in place of `publish`, and the first's three are published."""
     T = PARAMS.window
     answers = [[(0, b"r%d" % k), (0, EOF)] for k in range(4)]
-    warden, clients, _ = run(answers, {T: [cells(request(5, k), B) for k in range(2)],
+    certifier, clients, _ = run(answers, {T: [cells(request(5, k), B) for k in range(2)],
                                        T + 1: [cells(request(5, k), B) for k in range(2, 5)]}, windows=2)
-    assert warden.refused == 1 and warden.refused_windows == {1}
-    assert [(r.link, r.window) for r in warden.records] == [("requests", 0), ("responses", 0), ("fails", 0)]
-    assert [(r.link, r.window) for r in warden.withheld] == [("requests", 1), ("responses", 1), ("fails", 1)]
+    assert certifier.refused == 1 and certifier.refused_windows == {1}
+    assert [(r.link, r.window) for r in certifier.records] == [("requests", 0), ("responses", 0), ("fails", 0)]
+    assert [(r.link, r.window) for r in certifier.withheld] == [("requests", 1), ("responses", 1), ("fails", 1)]
     assert [bytes(c.shim().data) for c in clients[:4]] == [b"r0", b"r1", b"r2", b"r3"]
 
 
@@ -496,8 +496,8 @@ def test_the_wire_is_a_function_of_admission_and_egress_length_alone():
     burst = [(0, resp[:3]), (D - 1, resp[3:]), (D - 1, EOF)]
     wires = []
     for answer in ([(0, resp), (0, EOF)], trickle, burst, [(0, other), (0, EOF)]):
-        warden, (client,), _ = run([answer], {2: [cells(request(30), B)]})
-        assert warden.log[0]["failed"] is None, answer
+        certifier, (client,), _ = run([answer], {2: [cells(request(30), B)]})
+        assert certifier.log[0]["failed"] is None, answer
         wires.append([(t, k, len(c)) for t, k, c in client.cells()])
         assert {len(d) % B for _, d in client.writes} == {0}
     assert all(w == wires[0] for w in wires)
@@ -514,7 +514,7 @@ def test_cells_cut_bytes_the_same_way_however_they_arrive():
         assert len(parsed) == max(1, -(-n // P))
 
 
-def test_read_cell_refuses_what_the_warden_would_not_make():
+def test_read_cell_refuses_what_the_certifier_would_not_make():
     good = cell(DATA, 3, b"a" * P, B)
     assert read_cell(good, B) == (DATA, 3, b"a" * P)
     end = cell(END, 3, b"a", B)
@@ -536,9 +536,9 @@ def http(body: bytes, extra: bytes = b"") -> bytes:
     return b"POST /v1/completions HTTP/1.1\r\nhost: s\r\n%scontent-length: %d\r\n\r\n%s" % (extra, len(body), body)
 
 
-def signed_ends(warden: Warden) -> list[tuple[int, int]]:
+def signed_ends(certifier: Certifier) -> list[tuple[int, int]]:
     """(bucket, ordinal) of every `END` cell of the signed ingress records, in record order."""
-    return [(r.window * PARAMS.window + b, read_cell(f, B)[1]) for r in records(warden)[0]
+    return [(r.window * PARAMS.window + b, read_cell(f, B)[1]) for r in records(certifier)[0]
             for b, row in enumerate(r.grid) for f in row if f is not None and read_cell(f, B)[0] == END]
 
 
@@ -553,12 +553,12 @@ def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends
             http(b"{}", b"X-Verity-Release: 0\r\n")]
     assert [-(-len(r) // P) for r in reqs] == [2 * R, R]
     run_id = bytes(range(100, 132))
-    warden, clients, server = run([[(0, b"r0"), (0, EOF)], [(0, b"r1"), (0, EOF)]],
+    certifier, clients, server = run([[(0, b"r0"), (0, EOF)], [(0, b"r1"), (0, EOF)]],
                                   {1: [cells(reqs[0], B), cells(reqs[1], B)]},
                                   run_nonce=lambda n: run_id[:n])
-    ends = signed_ends(warden)
-    assert [o for _, o in ends] == [2, 1] and warden.run_id == run_id and warden.requests_released == 2
-    log = {e["ordinal"]: e for e in warden.log}
+    ends = signed_ends(certifier)
+    assert [o for _, o in ends] == [2, 1] and certifier.run_id == run_id and certifier.requests_released == 2
+    log = {e["ordinal"]: e for e in certifier.log}
     assert log[1]["admitted"] == log[2]["admitted"] == 1 and log[2]["ingress_end"] < log[1]["ingress_end"]
     for k, req in enumerate(reqs):
         n = [o for _, o in ends].index(k + 1)
@@ -568,7 +568,7 @@ def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends
     assert b"X-Verity" not in server.conns[1].received
     assert release_of(server.conns[0].received) == (1, run_id, log[1]["ingress_end"]) == (1, run_id, ends[1][0])
     assert server.conns[0].received.count(b"x-verity-release-bucket") == 1
-    verdict = audit(PARAMS, *records(warden))
+    verdict = audit(PARAMS, *records(certifier))
     assert verdict["accepted"], verdict["windows"]
     assert [c["ingress_sha256"] for c in verdict["connections"]] == [hashlib.sha256(r).hexdigest() for r in reqs]
     assert [bytes(c.shim().data) for c in clients] == [b"r0", b"r1"]
@@ -578,13 +578,13 @@ def test_a_connection_that_fails_before_its_end_is_never_numbered_and_its_server
     """A client that never ends fails at s + D with nothing sent to its server, and takes no place in the order: the
     next request's N is 0. Each network certifier samples its own run id."""
     slow = (cell(DATA, 0, b"a" * P, B), False)
-    warden, _, server = run([[], [(0, b"r"), (0, EOF)]], {0: [slow], 4: [cells(http(b"{}"), B)]})
-    log = {e["ordinal"]: e for e in warden.log}
+    certifier, _, server = run([[], [(0, b"r"), (0, EOF)]], {0: [slow], 4: [cells(http(b"{}"), B)]})
+    log = {e["ordinal"]: e for e in certifier.log}
     assert (log[1]["failed"], log[1]["release"], log[2]["failed"], log[2]["release"]) == ("late", None, None, 0)
     assert server.conns[0].received == b"" and \
-        release_of(server.conns[1].received) == (0, warden.run_id, log[2]["ingress_end"])
+        release_of(server.conns[1].received) == (0, certifier.run_id, log[2]["ingress_end"])
     other, _, _ = run([[(0, b"r"), (0, EOF)]], {0: [cells(http(b"{}"), B)]})
-    assert len(warden.run_id) == len(other.run_id) == 32 and warden.run_id != other.run_id
+    assert len(certifier.run_id) == len(other.run_id) == 32 and certifier.run_id != other.run_id
 
 
 # --- the watermark ---------------------------------------------------------------------------------------------------
@@ -732,14 +732,14 @@ def test_the_watermark_closes_each_bucket_after_its_releases_and_only_advances()
     answers, arrivals, hold = tick_traffic()
     run_id = bytes(range(32))
     server = Ordered(answers, hold=hold)
-    warden, clients, _ = run(server, arrivals, watermark=server.watermark, run_nonce=lambda n: run_id[:n])
-    ends = signed_ends(warden)
+    certifier, clients, _ = run(server, arrivals, watermark=server.watermark, run_nonce=lambda n: run_id[:n])
+    ends = signed_ends(certifier)
     assert [t for t, _ in ends] == [2, 3, 9, 15, 15] and [o for _, o in ends] == [2, 1, 3, 4, 5]
     admitted, buckets, lines, ended, early = tick_engine(server.events, run_id)
-    assert ended and server.closed and warden.watermark_error is None and early == []
+    assert ended and server.closed and certifier.watermark_error is None and early == []
     assert buckets == dict(enumerate(t for t, _ in ends))
     assert lines == [(t, sum(a <= t for a, _ in ends), ()) for t in range(PARAMS.window)]
-    assert warden.watermarked == lines[-1][:2] == (PARAMS.window - 1, 5) and warden.watermark_lost == []
+    assert certifier.watermarked == lines[-1][:2] == (PARAMS.window - 1, 5) and certifier.watermark_lost == []
     assert {T: ns for T, ns in admitted.items() if ns} == {2: [0], 3: [1], 9: [2], 15: [3, 4]}
     assert sorted(admitted) == list(range(PARAMS.window))
     position = positions(server.events, run_id)
@@ -747,9 +747,9 @@ def test_the_watermark_closes_each_bucket_after_its_releases_and_only_advances()
     for n, a in buckets.items():
         assert position[("bucket", a)] < position[("request", n)] < position[("line", a)]
     assert position[("bucket", 10)] < position[("request", 2)] < position[("line", 9)] < position[("line", 10)]
-    assert max(warden.lateness) == 0
+    assert max(certifier.lateness) == 0
     assert [bytes(c.shim().data) for c in clients] == [b"r0", b"r1", b"r2", b"r3", b"r4"]
-    verdict = audit(PARAMS, *records(warden))
+    verdict = audit(PARAMS, *records(certifier))
     assert verdict["accepted"], verdict["windows"]
 
 
@@ -763,14 +763,14 @@ def test_a_release_its_server_connection_loses_is_counted_and_named_on_its_bucke
     run_id = bytes(range(32))
     lossy = {"hold": {2: 10, 3: 16}, "refuse": (3,), "close_at": {0: 2}}
     server = Ordered(answers, **lossy)
-    warden, clients, _ = run(server, arrivals, watermark=server.watermark, run_nonce=lambda n: run_id[:n])
-    ends = signed_ends(warden)
+    certifier, clients, _ = run(server, arrivals, watermark=server.watermark, run_nonce=lambda n: run_id[:n])
+    ends = signed_ends(certifier)
     assert [t for t, _ in ends] == [2, 3, 9, 15, 15]
     admitted, buckets, lines, ended, early = tick_engine(server.events, run_id)
-    assert ended and warden.watermark_error is None and early == [] and max(warden.lateness) == 0
+    assert ended and certifier.watermark_error is None and early == [] and max(certifier.lateness) == 0
     lost = {3: (1,), 15: (3,)}
     assert lines == [(t, sum(a <= t for a, _ in ends), lost.get(t, ())) for t in range(PARAMS.window)]
-    assert warden.watermark_lost == [1, 3] and warden.watermarked == (PARAMS.window - 1, 5)
+    assert certifier.watermark_lost == [1, 3] and certifier.watermarked == (PARAMS.window - 1, 5)
     assert {T: ns for T, ns in admitted.items() if ns} == {2: [0], 9: [2], 15: [4]}
     assert sorted(admitted) == list(range(PARAMS.window)) and sorted(buckets) == [0, 2, 4]
     assert server.conns[0].received == server.conns[3].received == b""
@@ -778,7 +778,7 @@ def test_a_release_its_server_connection_loses_is_counted_and_named_on_its_bucke
     assert position[("bucket", 16)] < position[("line", 15)]
     plain = Ordered(answers, **lossy)
     without, plain_clients, _ = run(plain, arrivals, run_nonce=lambda n: run_id[:n])
-    assert [(r.link, r.window, r.grid, r.status) for r in warden.records] == \
+    assert [(r.link, r.window, r.grid, r.status) for r in certifier.records] == \
         [(r.link, r.window, r.grid, r.status) for r in without.records]
     assert [c.writes for c in clients] == [c.writes for c in plain_clients]
     assert [c.received for c in server.conns] == [c.received for c in plain.conns]
@@ -793,10 +793,10 @@ def test_a_release_still_in_its_transports_buffer_holds_its_line_until_it_is_wri
     run_id = bytes(range(32))
     for flushed, lost in ((11, []), (12, [2])):
         server = Ordered(answers, hold=hold, flush_at={2: flushed})
-        warden, clients, _ = run(server, arrivals, watermark=server.watermark, run_nonce=lambda n: run_id[:n])
+        certifier, clients, _ = run(server, arrivals, watermark=server.watermark, run_nonce=lambda n: run_id[:n])
         admitted, buckets, lines, ended, early = tick_engine(server.events, run_id)
-        assert ended and warden.watermark_error is None and early == [] and max(warden.lateness) == 0
-        assert warden.watermark_lost == lost and lines[9] == (9, 3, tuple(lost)) and len(lines) == PARAMS.window
+        assert ended and certifier.watermark_error is None and early == [] and max(certifier.lateness) == 0
+        assert certifier.watermark_lost == lost and lines[9] == (9, 3, tuple(lost)) and len(lines) == PARAMS.window
         assert {T: ns for T, ns in admitted.items() if ns} == {2: [0], 3: [1], **({} if lost else {9: [2]}), 15: [3, 4]}
         assert sorted(buckets) == [0, 1, 2, 3, 4]
         position = positions(server.events, run_id)
@@ -816,28 +816,28 @@ def test_the_watermark_moves_nothing_certified_and_never_waits_on_the_server():
     def served(watermark: bool = True, **kw):
         server = Ordered(answers, hold=hold, **kw)
         hooks = {"watermark": server.watermark} if watermark else {}
-        warden, clients, _ = run(server, arrivals, run_nonce=bytes, **hooks)
-        wire = ([(r.link, r.window, r.grid, r.status) for r in warden.records], [c.writes for c in clients],
+        certifier, clients, _ = run(server, arrivals, run_nonce=bytes, **hooks)
+        wire = ([(r.link, r.window, r.grid, r.status) for r in certifier.records], [c.writes for c in clients],
                 [c.received for c in server.conns])
-        assert max(warden.lateness) == 0 and audit(PARAMS, *records(warden))["accepted"]
-        return warden, server, wire
+        assert max(certifier.lateness) == 0 and audit(PARAMS, *records(certifier))["accepted"]
+        return certifier, server, wire
 
     plain = served(watermark=False)
     assert plain[0].watermarked is None and not [e for e in plain[1].events if e[0] == "watermark"]
     cases = {"open": {}, "refused": {"refuse_watermark": True}, "unopened": {"opens": 10 ** 6},
              "backlog": {"buffered": WRITE_BACKLOG + 1}}
     for name, kw in cases.items():
-        warden, server, wire = served(**kw)
+        certifier, server, wire = served(**kw)
         assert wire == plain[2], name
-        assert warden.watermarked == (PARAMS.window - 1, 5), name
+        assert certifier.watermarked == (PARAMS.window - 1, 5), name
         sent = [e for e in server.events if e[0] == "watermark"]
-        assert warden.watermark_error == {"open": None, "refused": "ConnectionRefusedError: refused",
+        assert certifier.watermark_error == {"open": None, "refused": "ConnectionRefusedError: refused",
                                           "unopened": "unopened", "backlog": "backlog"}[name]
         assert bool(sent) == (name == "open") and server.closed == (name in ("open", "backlog")), name
 
 
 def test_the_parameters_digest_binds_every_parameter():
-    fields = [f.name for f in dataclasses.fields(WardenParams)]
+    fields = [f.name for f in dataclasses.fields(CertifierParams)]
     digests = {PARAMS.digest} | {dataclasses.replace(PARAMS, **{f: getattr(PARAMS, f) + 1}).digest for f in fields}
     assert len(digests) == len(fields) + 1 and all(len(d) == 64 for d in digests)
     assert set(KIND_NAMES) == {PAD, DATA, END, FAIL, REFUSED} and len(set(REASONS)) == len(REASONS)

@@ -313,8 +313,8 @@ PARTIES: dict[str, dict[str, Piece]] = {
     },
     "certifier": {
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate: its "
-                                 "warden in front of serve-openai before the requests (CERTIFIER_FRONT, which the served "
-                                 "window runs), and its piece, the chain and the period check on the kept warden run",
+                                 "certifier in front of serve-openai before the requests (CERTIFIER_FRONT, which the served "
+                                 "window runs), and its piece, the chain and the period check on the kept certifier run",
                                  scripts=(CERTIFIER_PIECE,), binds=("gate",), hooks=_certifier_piece),
         VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),
     },

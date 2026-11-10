@@ -2,7 +2,7 @@
 `IoTieRequest` with the prompt ids' values held to the Commit's `c00.input/ids` rows, so the model computes on the
 prompt the user sent (IoTieRequest counts each request's prompt fields and checks each is a u32, but ties the ids'
 values to nothing). Like IoTieRequest it is one proof block a bucket row of the network certifier's registered ingress
-(`warden_rows.bucket_port`).
+(`certifier_rows.bucket_port`).
 
 **The Commit side** (the fake upstream's layout, what the served path's Commit exposes): one `hm96-sha512/row/v2` row a
 step under a fresh salt, the step's input ids u32be in the forward's token order (its batch rows in order, row r's n_r
@@ -557,7 +557,7 @@ IoTieRequestIds = CompositeDefinition(
         "ordinal to its carry-out), and the bucket's prompt fields (`IoTieIdsSlots`), each given its class by the "
         "routed records (`IoTieRoute`, `IoTieIdsKeys`), and the entries of the S Commit rows of P input ids, sorted by "
         "class by the switches (`IoTieRoute`), hold one value a class, each class starting with a field "
-        "(`IoTieIdsChain`): the ingress-ids tie of one bucket row of the warden's registered root, every cell opened, "
+        "(`IoTieIdsChain`): the ingress-ids tie of one bucket row of the certifier's registered root, every cell opened, "
         "the row and the Commit's rows at the bucket's steps each the proof system's registered read")
 
 

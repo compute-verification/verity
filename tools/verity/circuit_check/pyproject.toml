@@ -97,7 +97,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/core/protocols/sampled_proofs/remote.py",
           "verity/core/protocols/certifier/io_request.py", "verity/core/protocols/certifier/io_request.circuit-check.py",
           "verity/core/protocols/certifier/io_request.circuit-check.json",
-          "verity/core/protocols/certifier/warden.py", "verity/core/protocols/certifier/pacer.py",
+          "verity/core/protocols/certifier/certifier.py", "verity/core/protocols/certifier/pacer.py",
           "verity/core/protocols/certifier/release.py",
           "verity/core/protocols/certifier/io_ids.py", "verity/core/protocols/certifier/io_ids.circuit-check.py",
           "verity/core/protocols/certifier/io_ids.circuit-check.json",
@@ -144,7 +144,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/core/protocols/certifier/compile_slice_v3.py",
           "verity/core/protocols/certifier/compile_slice_v3.circuit-check.py",
           "verity/core/protocols/certifier/compile_slice_v3.circuit-check.json",
-          "verity/core/protocols/certifier/served_rows.py", "verity/core/protocols/certifier/warden.py",
+          "verity/core/protocols/certifier/served_rows.py", "verity/core/protocols/certifier/certifier.py",
           "verity/core/protocols/certifier/release.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

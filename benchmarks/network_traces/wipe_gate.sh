@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Network certification's side of a memory wipe: one network certifier session through the auditor's gate
-# (`warden-rehearse --scan --prompts`, the toy's class) spanning the wipe's session, under the lane's gate key
+# (`certifier-rehearse --scan --prompts`, the toy's class) spanning the wipe's session, under the lane's gate key
 # (GATE_KEY), inside a job on the machine that holds it (site.json's auditor), cwd = the source tree; everything into
 # $OUT. GATE_KEY, CHALLENGER, PEER and KEEP default to site.json's gate_key (under ~/.ssh), gate, peer and keep.
 #
@@ -20,8 +20,8 @@
 # releases the rest (exit 3 when it found one). A signal, a guard past its budget or one that fails releases nothing:
 # the outputs stay in the hold, out of the record, and the job fails. PY is the guard's interpreter (python3).
 #
-# 1700 requests, the gate's most (`auditor.WARDEN_REQUESTS`), on the gate's most prompts, 400 (`WARDEN_PROMPTS`; request
-# j sends the (j mod n)-th), are 1064 execution phases at its fixed seed (`warden_serve.prompt_traffic`): 3404.8 s from
+# 1700 requests, the gate's most (`auditor.CERTIFIER_REQUESTS`), on the gate's most prompts, 400 (`CERTIFIER_PROMPTS`; request
+# j sends the (j mod n)-th), are 1064 execution phases at its fixed seed (`certifier_tcp_serve.prompt_traffic`): 3404.8 s from
 # the session's origin, which is about 16 s after the request at HEIGHT 13. At about 5 one-time signatures an execution
 # phase they take about 5300 of height 13's 8192 (height 12's 4096 sign about 819 windows). A gate pinned before 1700
 # takes 400 requests at most, 259 execution phases: give it REQUESTS=400 HEIGHT=12 MINUTES=20. A wipe whose [t0, t1)
@@ -43,7 +43,7 @@ SSH=(ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -o ServerAliveInterval=15 -i 
 KEEP=$(realpath -m "${KEEP:-$(site keep)}")
 case "$KEEP/" in "$(realpath -m "${RESEARCH_RUN_DIR:-$OUT}")/"*|"$(realpath -m "$OUT")/"*)
   echo "KEEP $KEEP is inside the run dir, which custody publishes: give a directory outside it"; exit 2;; esac
-REQUEST="warden-rehearse --peer $PEER --port $PORT --minutes $MINUTES --requests $REQUESTS --height $HEIGHT --scan"
+REQUEST="certifier-rehearse --peer $PEER --port $PORT --minutes $MINUTES --requests $REQUESTS --height $HEIGHT --scan"
 REQUEST+=" --prompts --tokens 24"
 
 ID=${RESEARCH_RUN_ID:-$$} PUB=$OUT SIGNALED= RUN=

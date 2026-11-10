@@ -1,5 +1,5 @@
-"""A request's arrival on each side of the wire: the client's read of a response the warden's cells carried, the API
-server's accept stamp, and the summary's arrival orders and its views of a warden trace for the replay."""
+"""A request's arrival on each side of the wire: the client's read of a response the certifier's cells carried, the API
+server's accept stamp, and the summary's arrival orders and its views of a certifier trace for the replay."""
 from __future__ import annotations
 
 import asyncio
@@ -101,9 +101,9 @@ def test_inversions_count_the_pairs_put_the_other_way_round(mod):
     assert summary.inversions(["b", "x", "a"], ["a", "b"]) == 1
 
 
-def warden_trace(root):
-    """A corpus of one trace through the warden: four requests sent in order r0..r3 and admitted together at bucket 1;
-    r0's request takes four ingress buckets, so the warden releases r1, r2 (bucket 2) and r3 (3) before it (4), and the
+def certifier_trace(root):
+    """A corpus of one trace through the certifier: four requests sent in order r0..r3 and admitted together at bucket 1;
+    r0's request takes four ingress buckets, so the certifier releases r1, r2 (bucket 2) and r3 (3) before it (4), and the
     engine schedules them in that order."""
     d = root / "w"
     (d / "raw").mkdir(parents=True)
@@ -146,7 +146,7 @@ def warden_trace(root):
     (d / "server.log").write_text("GPU KV cache size: 1,024 tokens\n")
     params = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "delay": 3, "window": 600}
     (d / "warden" / "deployment.json").write_text(json.dumps({"params": params, "origin_unix": 999.95, "windows": 1}))
-    (d / "warden" / "warden.json").write_text(json.dumps({"connections": [
+    (d / "warden" / "certifier.json").write_text(json.dumps({"connections": [
         {"ordinal": k, "arrived": 1, "admitted": 1, "ingress_end": released[f"r{k}"], "ended": 9, "ingress_cells": 2,
          "egress_cells": 1, "bytes_in": 9, "bytes_out": 9, "failed": None, "failed_at": None, "upstream": None,
          "cut": False} for k in range(4)], "refused": 0, "lateness_ms": {"n": 10, "p50": 0.1, "p99": 0.5, "max": 0.6,
@@ -156,9 +156,9 @@ def warden_trace(root):
     return d
 
 
-def test_summary_orders_arrivals_along_the_wire_and_writes_the_wardens_views(tmp_path, mod):
+def test_summary_orders_arrivals_along_the_wire_and_writes_the_certifiers_views(tmp_path, mod):
     summary = mod("summary")
-    d = warden_trace(tmp_path)
+    d = certifier_trace(tmp_path)
     t = summary.summarize(tmp_path)["traces"]["w"]
     reqs = {r["id"]: r for r in summary.read_jsonl(d / "requests.jsonl")}
     r0 = reqs["r0"]
@@ -168,11 +168,11 @@ def test_summary_orders_arrivals_along_the_wire_and_writes_the_wardens_views(tmp
                             "ingress_cells": 2, "egress_cells": 1, "failed": None}
     o = t["arrival_order"]
     got = {k: (v["requests"], v["inversions_vs_engine"], v["inversions_vs_previous"]) for k, v in o.items() if k != "pairs"}
-    assert got == {"client send": (4, 3, None), "warden arrival": (4, 3, 0), "warden admission": (4, 3, 0),
-                   "warden release": (4, 0, 3), "server accept": (4, 3, 3), "server headers": (4, 3, 0),
+    assert got == {"client send": (4, 3, None), "certifier arrival": (4, 3, 0), "certifier admission": (4, 3, 0),
+                   "certifier release": (4, 0, 3), "server accept": (4, 3, 3), "server headers": (4, 3, 0),
                    "server body": (4, 0, 3), "vLLM arrival": (4, 0, 0), "engine add": (4, 0, 0),
                    "engine first scheduled": (4, 0, 0)}
-    assert o["pairs"] == 6 and math.isclose(o["warden admission"]["lag_s"]["max"], 0.05)
+    assert o["pairs"] == 6 and math.isclose(o["certifier admission"]["lag_s"]["max"], 0.05)
     w = t["warden"]
     assert (w["connections"], w["failed"], w["ingress_buckets"]["max"], w["check"]) == (4, {}, 4, None)
     assert t["views"] == ["w.admitted", "w.released"]
@@ -186,7 +186,7 @@ def test_summary_orders_arrivals_along_the_wire_and_writes_the_wardens_views(tmp
             assert math.isclose(r["send_unix"] + r["chunks"][0][0], reqs[x]["send_unix"] + 1.5, abs_tol=1e-6)
         assert (tmp_path / f"w.{view}" / "steps.jsonl").read_text() == (d / "steps.jsonl").read_text()
     text = (tmp_path / "README.md").read_text()
-    assert "## The warden" in text and "## Arrival order" in text and "| warden release | 4 | 0 | 3 |" in text
-    assert "D counted from the warden's release a (the ingress end)." in text
+    assert "## The certifier" in text and "## Arrival order" in text and "| certifier release | 4 | 0 | 3 |" in text
+    assert "D counted from the certifier's release a (the ingress end)." in text
     assert "| w | 0-1 / 2 / 3 | 2 | 1 / 0 / 0 / 0 / 1 / 0 / 0 / 0 | 1 | 2.0 / 2.0 | None | None |" in text
     assert (w["ticks"]["over_slack"], w["client_loop"]["stalls"], w["egress_base"]) == (1, 0, "release a (the ingress end)")

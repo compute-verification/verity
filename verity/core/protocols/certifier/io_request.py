@@ -3,11 +3,11 @@ the proof block a bucket row that binds each request's prompt_len and arrival or
 certified ingress cells, its reference in the clear and the Boolean Definitions it is built from. Nothing here is in a
 Spec or proved.
 
-**The cells are the network certifier's** (`warden.Warden._ingress`, its rows as `warden_rows` registers them, a row a
+**The cells are the network certifier's** (`certifier.Certifier._ingress`, its rows as `certifier_rows` registers them, a row a
 bucket). An execution phase's ingress is T rows, row t bucket t's L·R slots of B bytes, R the network certifier's r. A
 bucket's live connections, admitted and not past their ingress `END`, hold R slots each, ranked by ordinal (lane ρ:
 slots ρ·R … ρ·R + R − 1), and a slot no connection holds is B zero bytes. Connection q's cells are its client's bytes
-cut as `warden.cells` cuts them: byte k in its request cell ⌊k / P⌋, a `DATA` of exactly P = B − 9 bytes while more
+cut as `certifier.cells` cuts them: byte k in its request cell ⌊k / P⌋, a `DATA` of exactly P = B − 9 bytes while more
 follow, then an `END` with the last 1 … P; and a `PAD` on q (no payload) where fewer than P of its bytes wait and its
 client hasn't ended, and after its `END`. So a bucket's R cells on q are `DATA` cells, then its `END` or none, then
 `PAD`s. The bytes are a canonical id request (`active.id_request` at offset 0: the cells carry the bytes alone, no
@@ -32,7 +32,7 @@ whatever buckets it spans (a carry checked alone would accept any added count).
 ordinal, no request cell after a pad or after the request's `END`, each request cell that cell of a canonical id
 request with its header's length (P for a `DATA`, the bytes left for the `END`), leaving the carry-out with no count
 past 2^32; a lane of ordinal 0 is B zero bytes a slot. That the row is row t of the network certifier's registered root
-is the proof system's registered read, outside the proof block (`warden_rows.bucket_port`).
+is the proof system's registered read, outside the proof block (`certifier_rows.bucket_port`).
 
     IoTieRequestFrame{B}(cell: Array<B, Byte>, left, q: Array<32>) -> Array<68>
         pad, req, start, ended, the bytes left after it (u32) and its prompt fields (u32), LSB first
@@ -65,7 +65,7 @@ from verity.ml.circuits.types import Array
 from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import io_tie as IT
-from verity.core.protocols.certifier import warden as W
+from verity.core.protocols.certifier import certifier as W
 from verity.core.protocols.certifier.active import (DATA, HEADER, ID_DIGITS, ID_FIELD_BYTES, ID_NAME_BYTES,
                                                    ID_REQUEST_HEAD, PAD, id_request)
 from verity.core.protocols.certifier.grid import Certifier
@@ -356,7 +356,7 @@ def lanes(shape: Shape, prompt_lens: Sequence[int], releases: Sequence[Release],
 # --- the fake upstream: the network certifier's own ingress ----------------------------------------------------------
 
 class ServedIngress(NamedTuple):
-    """A link's ingress served through the warden: its rows, a bucket each (a slot no connection holds B zero bytes),
+    """A link's ingress served through the certifier: its rows, a bucket each (a slot no connection holds B zero bytes),
     each connection's release, and the ingress records its grid closed, a window each."""
 
     rows: list[list[bytes]]
@@ -364,14 +364,14 @@ class ServedIngress(NamedTuple):
     records: tuple = ()
 
 
-def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
+def serve(params: W.CertifierParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
           buckets: int, hold: int = 0) -> ServedIngress:
-    """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], and the warden's own ingress
-    (`warden.Warden._ingress`) serves it: admitted in arrival order at the first bucket with a free lane, which it
+    """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], and the certifier's own ingress
+    (`certifier.Certifier._ingress`) serves it: admitted in arrival order at the first bucket with a free lane, which it
     holds until `hold` buckets after its ingress `END` (standing in for its egress), its client's bytes arriving
     rate[k] a bucket from its admission (its `END` with the last)."""
     B = params.cell_bytes
-    warden = SimpleNamespace(params=params, requests_released=0, run_id=None)
+    certifier = SimpleNamespace(params=params, requests_released=0, run_id=None)
     conns = [W._Connection(ordinal=k + 1, reader=None, writer=None, done=None, arrived=a)
              for k, a in enumerate(arrivals)]
     queue, active, grid, rows, records = list(conns), [], Certifier("requests", params.grid), [], []
@@ -387,7 +387,7 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
             c.ingress += requests[k][c.bytes_in:sent]
             c.bytes_in, c.ingress_ended = sent, sent == len(requests[k])
             if c.ingress_end is None:
-                frames = W.Warden._ingress(warden, c, t)
+                frames = W.Certifier._ingress(certifier, c, t)
                 got.setdefault(c.ordinal, []).append(sum(f[0] in (DATA, W.END) for f in frames))
                 for f in frames:
                     grid.enqueue(f)
@@ -645,7 +645,7 @@ IoTieRequest = CompositeDefinition(
     doc="1 iff each of the bucket row's L lanes, its R cells scanned from the lane's carry-in (left, fields) on its "
         "ordinal q, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, is pads and canonical id-request cells on q, "
         "none after a pad or the request's END, leaving its carry-out (left_out, fields_out) with no count past 2^32 "
-        "(`IoTieRequestEnd`): the ingress tie of one bucket row of the warden's registered root (the row the proof "
+        "(`IoTieRequestEnd`): the ingress tie of one bucket row of the certifier's registered root (the row the proof "
         "system's registered read, bit 8k + i bit i of byte k), every cell opened; a link-window's tie is its T rows'")
 IoTieRequest.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins (`tie_service.gate`)
 #: the circuit digests circuit-check pins (`head_check.pinned_digest`)

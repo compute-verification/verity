@@ -73,8 +73,8 @@ class SecretBits:
     from `rehearsal`/honest/deployment.json and the plan's calibration once `serve` has written them. `writes` holds
     each token written in a slot: its bucket and how late after the slot it was written, in ms."""
 
-    def __init__(self, rehearsal: Path, secret: bytes, warden: bool = False) -> None:
-        self.rehearsal, self.secret, self.warden = rehearsal, secret, warden
+    def __init__(self, rehearsal: Path, secret: bytes, certifier: bool = False) -> None:
+        self.rehearsal, self.secret, self.certifier = rehearsal, secret, certifier
         self.grid: tuple[float, float] | None = None
         self.writes: list[list] = []
 
@@ -87,7 +87,7 @@ class SecretBits:
         """Whether the grid is known: the origin on this host's monotonic clock as the client takes it, from the
         deployment's `origin_unix`, and the egress bucket in seconds (a network certifier's, from its own
         `deployment.json`)."""
-        if self.grid is None and self.warden and (path := self.rehearsal / "deployment.json").exists():
+        if self.grid is None and self.certifier and (path := self.rehearsal / "deployment.json").exists():
             try:
                 d = json.loads(path.read_text())
             except ValueError:  # still being written
@@ -265,11 +265,11 @@ def _paced(paced: dict, buckets: int, slack: float) -> dict:
                      if a > 0 or s > slack or not w]}
 
 
-def warden_summary(run: Path) -> dict:
-    """A network certifier rehearsal's (`--warden`) tick lateness (`warden.json`), its pacer's reports (`paced`), and
+def certifier_summary(run: Path) -> dict:
+    """A network certifier rehearsal's (`--certifier`) tick lateness (`certifier.json`), its pacer's reports (`paced`), and
     from `check.json` its verdict, each refused window's records with their status (`uncertified` for a record without
     its certificate) and its connections that didn't end."""
-    log = json.loads((run / "warden.json").read_text())
+    log = json.loads((run / "certifier.json").read_text())
     dep = json.loads((run / "deployment.json").read_text())
     buckets, slack, ticks = dep["params"]["window"], dep["slack_ms"], log["ticks_ms"]
     out = {"slack_ms": slack, "egress": {
@@ -378,14 +378,14 @@ def jitter(run: Path, bits: SecretBits) -> dict:
     return _jitter(lag, log["lateness_ms"]["egress"], log.get("paced"), bits)
 
 
-def warden_lags(run: Path) -> list[float | None]:
+def certifier_lags(run: Path) -> list[float | None]:
     """Per bucket of a network certifier rehearsal `run`, when its first cell reached a client after its boundary, in ms
-    (None: no connection's): each cell's bucket is the egress record's (`warden_serve.egress_cells`), its arrival the
+    (None: no connection's): each cell's bucket is the egress record's (`certifier_tcp_serve.egress_cells`), its arrival the
     client's."""
-    import warden_serve as ws
+    import certifier_tcp_serve as ws
 
     dep = json.loads((run / "deployment.json").read_text())
-    params = ws.WardenParams(**dep["params"])
+    params = ws.CertifierParams(**dep["params"])
     schedule = ws.egress_cells(ws.read_records(run, params)[ws.EGRESS], params)
     lag: list[float | None] = [None] * (dep["windows"] * params.window)
     for conn in json.loads((run / "client.json").read_text())["connections"]:
@@ -398,12 +398,12 @@ def warden_lags(run: Path) -> list[float | None]:
     return lag
 
 
-def warden_jitter(run: Path, bits: SecretBits) -> dict:
-    """`jitter.json` of a network certifier rehearsal (`--warden`): `jitter`'s, with each bucket's client offset the
-    first of its cells to reach a client (`warden_lags`), the buckets no connection had cells in left out, and each
-    tick's lateness and the pacer's release starts from `warden.json`."""
-    log = json.loads((run / "warden.json").read_text())
-    return _jitter(warden_lags(run), log["ticks_ms"], log.get("paced"), bits)
+def certifier_jitter(run: Path, bits: SecretBits) -> dict:
+    """`jitter.json` of a network certifier rehearsal (`--certifier`): `jitter`'s, with each bucket's client offset the
+    first of its cells to reach a client (`certifier_lags`), the buckets no connection had cells in left out, and each
+    tick's lateness and the pacer's release starts from `certifier.json`."""
+    log = json.loads((run / "certifier.json").read_text())
+    return _jitter(certifier_lags(run), log["ticks_ms"], log.get("paced"), bits)
 
 
 def _jitter(lag: list[float | None], ticks: list[float], paced: dict | None, bits: SecretBits) -> dict:
@@ -452,22 +452,22 @@ def main(argv=None) -> int:
     ap.add_argument("--secret-bit", action="store_true",
                     help="time the stub's writes by a secret bit per egress bucket and write jitter.json")
     ap.add_argument("--paced-ms", type=float, help="the rehearsal's --paced-ms (certifier_serve.py's or "
-                                                   "warden_serve.py's default if not given; 0: each bucket is written "
+                                                   "certifier_tcp_serve.py's default if not given; 0: each bucket is written "
                                                    "on the certifier's loop)")
-    ap.add_argument("--warden", action="store_true",
-                    help="rehearse the network certifier (warden_serve.py rehearse) instead of the proxy: --requests at --rate a "
+    ap.add_argument("--certifier", action="store_true",
+                    help="rehearse the network certifier (certifier_tcp_serve.py rehearse) instead of the proxy: --requests at --rate a "
                          "second, each of at most --tokens, windows of --window buckets")
-    ap.add_argument("--rate", type=float, default=1.0, help="with --warden: the requests' Poisson arrivals a second")
-    ap.add_argument("--window", type=int, default=60, help="with --warden: the network certifier's window, in buckets")
+    ap.add_argument("--rate", type=float, default=1.0, help="with --certifier: the requests' Poisson arrivals a second")
+    ap.add_argument("--window", type=int, default=60, help="with --certifier: the network certifier's window, in buckets")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     cpus = sorted(os.sched_getaffinity(0))
-    bits = SecretBits(a.out / "rehearsal", os.urandom(64), warden=a.warden) if a.secret_bit else None
+    bits = SecretBits(a.out / "rehearsal", os.urandom(64), certifier=a.certifier) if a.secret_bit else None
     port = serve_endpoint(a.token_ms / 1000, bits)
     cpu_list = ",".join(map(str, cpus))
     paced = [] if a.paced_ms is None else ["--paced-ms", str(a.paced_ms)]
-    if a.warden:
-        command = [sys.executable, str(HERE / "warden_serve.py"), "rehearse", "--upstream", f"127.0.0.1:{port}",
+    if a.certifier:
+        command = [sys.executable, str(HERE / "certifier_tcp_serve.py"), "rehearse", "--upstream", f"127.0.0.1:{port}",
                    "--model", "stub-model", "--requests", str(a.requests), "--rate", str(a.rate), "--max-tokens",
                    str(a.tokens), "--window", str(a.window), "--tail", str(a.window / 10),
                    "--out", str(a.out / "rehearsal"), *paced]
@@ -488,18 +488,18 @@ def main(argv=None) -> int:
             h.wait()
     doc = {"cpus": cpus, "hogs": len(hogs), "rehearse_exit": rc, "token_ms": a.token_ms, "requests": a.requests,
            "in_flight": a.in_flight, "delta_buckets": a.delta_buckets, "profile": a.profile,
-           "strategies": a.strategies, "paced_ms": a.paced_ms, "warden": a.warden}
-    run = a.out / "rehearsal" if a.warden else a.out / "rehearsal" / "honest"
-    if a.warden and (run / "warden.json").exists():
-        doc |= {"rate": a.rate, "window": a.window} | warden_summary(run)
+           "strategies": a.strategies, "paced_ms": a.paced_ms, "warden": a.certifier}
+    run = a.out / "rehearsal" if a.certifier else a.out / "rehearsal" / "honest"
+    if a.certifier and (run / "certifier.json").exists():
+        doc |= {"rate": a.rate, "window": a.window} | certifier_summary(run)
     elif (run / "proxy.json.gz").exists():
         doc |= summary(run)
     (a.out / "ticks.json").write_text(json.dumps(doc, indent=1))
     print(json.dumps({k: doc.get(k) for k in ("verdict", "refused_windows")} |
                      {g: {k: doc[g][k] for k in ("ticks", "p999_ms", "max_ms")} | {"past_slack": len(doc[g]["past_slack"])}
                       for g in ("egress", "ingress") if g in doc}), flush=True)
-    if bits is not None and a.warden and (run / "client.json").exists() and (run / "warden.json").exists():
-        j = warden_jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict")}
+    if bits is not None and a.certifier and (run / "client.json").exists() and (run / "certifier.json").exists():
+        j = certifier_jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict")}
     elif bits is not None and (run / "client" / "peer.json").exists() and (run / "proxy.json.gz").exists():
         j = jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict")}
     else:

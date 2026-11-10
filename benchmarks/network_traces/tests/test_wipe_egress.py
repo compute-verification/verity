@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.certifier.certificate import Certificate, Direction, LmsKey, certificate_message
-from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols.certifier.certifier import CertifierParams
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.ml.crypto import lms
 
@@ -25,10 +25,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "live_challenger"))
 import auditor as G  # noqa: E402
 import certifier_serve as cs  # noqa: E402
-import warden_serve as ws  # noqa: E402
+import certifier_tcp_serve as ws  # noqa: E402
 import wipe_egress as E  # noqa: E402
 
-SCAN = WardenParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
+SCAN = CertifierParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
 #: the origin of the rehearsal the record was first read off
 ORIGIN = 1793035442.0242794
 WINDOWS = 6
@@ -136,7 +136,7 @@ def test_a_certificate_that_fails_to_verify_or_is_missing_uncovers_its_window(tm
 
 def test_the_gates_verdict_and_its_hashes_of_out_bind_the_count(tmp_path: Path) -> None:
     refused = egress(gate_run(tmp_path / "refused", accepted=False), at(4_000), at(9_000))
-    assert refused["why"] == ["the gate's check didn't accept the run (device warden, rc 0, accepted False)"]
+    assert refused["why"] == ["the gate's check didn't accept the run (device certifier, rc 0, accepted False)"]
     run = gate_run(tmp_path / "swapped")
     lines = (run / E.CERTIFICATES).read_text().splitlines()
     (run / E.CERTIFICATES).write_text("".join(x + "\n" for x in lines[:-1]))
