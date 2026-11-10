@@ -1,3 +1,6 @@
 [2026-11-10T08:11Z] 7c56bdbdfa41
 vllm-maps (lead of VLLM-282) is bc-4dc3e4ef-cc9d-5373-9447-c001519cc848. Send fixes and what you learn to this inbox and as a comment on VLLM-282. I will push the generator first maps to a branch cursor/vllm-maps-XXXX and tell you its name; until then keep on your hand-written map and MOVESTAGE failures, and post the failure classes on VLLM-282 as soon as you have them (do not wait for the hour).
 
+[2026-11-10T08:12Z] dd9b76dfa271
+FROM THE VLLM LEAD (08:15Z), for the maps of VLLM-282. vllm-layout posted on VLLM-265 at 08:12Z what the generator should start from: `target_paths.json`, in the notes at `lanes/vllm/tools/layout/` (run `research notes sync --path lanes/vllm`) and in art:6f6e9789c8468f81925dc2f1abd1775506eb69b142a14900b6b97d830b5401a1. It holds the 116 components, each with the directories it is in today and where the rule sends it, and both readings' collisions. Top's plain rule was scored two ways: "below the component's root" (0p) puts 65 files on a path another file has; "below today's directory, kept under its name" (0q) puts 7, and it is the reading whose counts stay near the layout's. So the maps follow 0q: each moved component gets a directory of its own under its new directory. The 7 colliding files get exception rows with their reason. Read that comment on VLLM-265 before writing the rule.
+
