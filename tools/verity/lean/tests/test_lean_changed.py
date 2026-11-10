@@ -906,13 +906,14 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
 def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox(trying, tmp_path, monkeypatch, capsys):
     """`--try` and `--build` compile most of what lanes change, and each module they compile in the sandbox goes into the
     node's artifact cache, so the records run after them restores it. Outside the sandbox (this run's, or check.py's
-    stricter probe of it) compile-time code could leave any output in the build, and nothing is stored."""
+    stricter probe of it) compile-time code could leave any output in the build, and nothing is stored. `--try` stores
+    what `lake build` compiled before `lean` reads the file itself, whose code no build has read."""
     tree, calls = trying
     (slots := tmp_path / "lean-slots").write_text("build 1\n")
     monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
-    put, marks = [], []
-    monkeypatch.setattr(LC.LA.LakeArtifacts, "put",
-                        lambda self, reports, since=None, log=print: put.append((self.store, reports, since)) or 4)
+    put, marks, ran = [], [], []
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: (
+        ran.append(len(calls["build"])), put.append((self.store, reports, since))) and 4)
     mark = LC.mark
     monkeypatch.setattr(LC, "mark", lambda t, **what: marks.append(what) or mark(t, **what))
     store = (tmp_path / "lean-artifacts").resolve()
@@ -920,8 +921,8 @@ def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox
         monkeypatch.setattr(LC, "sandboxed", lambda: mine)
         monkeypatch.setattr(LC.AUDIT, "sandboxed", lambda: checks)
         for phase in ("try", "build"):
-            put.clear(), marks.clear()
-            said = []
+            put.clear(), marks.clear(), ran.clear()
+            said, before = [], len(calls["build"])
             if phase == "try":
                 assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 0
             else:
@@ -930,6 +931,8 @@ def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox
             assert (last["phase"], last["sandbox"]) == (phase, stored) and isinstance(last["since"], float)
             assert put == ([(store, {tree / "Sec/Proofs": {"sandbox": True}}, last["since"])] if stored else [])
             assert (f"lean-{phase}: Sec/Proofs: 4 module version(s) new in the artifact cache" in said) == stored
+            assert ran == ([before + 1] if stored else []) and len(calls["build"]) == before + (2 if phase == "try" else 1), \
+                "stored after `lake build`, and for a try before `lake env lean`"
     capsys.readouterr()
 
 

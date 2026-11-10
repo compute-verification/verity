@@ -44,7 +44,8 @@ tree is thus the index's version, and a module version is compiled once a node, 
 not index (`UNSTORED`), like one without a key, is left to Lake.
 
 A module enters the index (`LakeArtifacts.put`) only from a run that compiled it in the sandbox, whether the run then
-passed, failed or was killed, and only when its compile ended (its trace whole, each output under the hash the trace
+passed, failed or was killed, from sources none of which runs code while it compiles outside a reviewed listing
+(`lean_audit.runs_code`), and only when its compile ended (its trace whole, each output under the hash the trace
 names and no newer than the `.hash` beside it), under the key the outputs its
 build holds give it (`read_digests`), and only where Lake read its header as `headers.py` does (`indexable`): the
 workspace modules its `ir/<module>.setup.json` lists (`importArts`, every module it imports, transitively) are the closure

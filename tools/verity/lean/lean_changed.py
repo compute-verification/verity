@@ -474,8 +474,9 @@ def mark(tree: Path, **what) -> None:
 def put_built(artifacts, reps: dict[Path, dict], since: float, log=print, who: str = "lean-records") -> None:
     """Put what the builds of ``reps`` ({package: what says its build ran in the sandbox}) compiled since ``since`` into the
     node's artifact cache (`LakeArtifacts.put`), whatever became of the run: a module is stored for what its compile read,
-    which a failure elsewhere in the package, or a kill, doesn't change. Before anything writes the tree again: a key is
-    computed from the sources the tree holds."""
+    which a failure elsewhere in the package, or a kill, doesn't change, unless a source of the build runs code while it
+    compiles (`LA.runs_code`). Before anything writes the tree again: a key is computed from the sources the tree
+    holds, and those are the sources `put` reads for such code."""
     try:
         log(f"{who}: {artifacts.put(reps, since, log)} module version(s) new in the artifact cache")
     except (OSError, ValueError) as e:
@@ -1427,6 +1428,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 f"{''.join(o + ' ' for o in opts)}on {PROBE.COPIES / rel}, {rel} with the axiom probe after its last line"
                 f"{', then the sibling check' if siblings else ''})")
             step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox)
+            if storing:                                 # before `lean` reads the file itself, whose code then runs
+                put_built(artifacts, {tree / pkg: {"sandbox": True}}, since, log, f"lean-try: {pkg}")
             plan = SIBLINGS.plan(tree / pkg, rel) if siblings and rc == 0 else None
             if isinstance(plan, str):
                 log(f"lean-try: {file}: no sibling check: {plan}")
@@ -1454,8 +1457,6 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                     log(f"lean-try: {file}: {line}")
             if said:
                 log(f"lean-try: {file}: {said}")
-            if storing:
-                put_built(artifacts, {tree / pkg: {"sandbox": True}}, since, log, f"lean-try: {pkg}")
             (tree / DIRTY).unlink(missing_ok=True)
             return rc
     finally:

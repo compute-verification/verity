@@ -654,6 +654,51 @@ def test_a_build_whose_sampled_recompile_differs_indexes_nothing(tmp_path):
     assert LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED | {"failures": ["records: differ"]}}) == 3
 
 
+def test_a_build_whose_sources_run_code_while_they_compile_indexes_nothing(tmp_path):
+    """In the sandbox a build still writes its own `.lake`, so code a module runs while it compiles can leave any other
+    module's outputs, hashes and trace there, as Lake would. A passing audit says its package has no such code, and a
+    build is stored whatever its audit came to, so `put` reads the build's sources itself: where one runs code outside
+    a listing reviewed at its digest, nothing of the build goes in, and each module it compiled is recorded as left to
+    Lake, so the next build of the tree keeps it rather than compile it again."""
+    pkg = _package(tmp_path)
+    (pkg / "P" / "A.lean").write_text("theorem a : True := trivial\n-- run_cmd in a comment runs nothing\n/- #eval 1 -/\n")
+    assert LA.runs_code(pkg) is None
+    (pkg / "P" / "B.lean").write_text("import P.A\n\nopen Nat in\nrun_cmd pure ()\n")
+    why = LA.runs_code(pkg)
+    assert why == "pkg/P/B.lean:4 runs code while it compiles (run_cmd), outside a `compile_time` listing reviewed at its digest"
+    store, said = tmp_path / "store", []
+    arts = LA.LakeArtifacts(store)
+    assert arts.put({pkg: SANDBOXED}, log=said.append) == 0 and not (store / "keys").exists()
+    assert not (store / "artifacts").exists() and len(said) == 1 and why in said[0]
+    left = [json.loads(f.read_text()) for f in sorted((store / LA.MK.UNSTORED).iterdir())]
+    assert sorted(d["module"] for d in left) == ["P", "P.A", "P.B"] and {d["why"] for d in left} == {why}
+
+    def listed(digest: str) -> None:
+        (pkg / "lean-audit.json").write_text(json.dumps({"compile_time": {"P.B": {"why": "a reviewed command", "digest": digest}}}))
+
+    listed(hashlib.sha256((pkg / "P" / "B.lean").read_bytes()).hexdigest())
+    assert LA.runs_code(pkg) is None and arts.put({pkg: SANDBOXED}, log=said.append) == 3 and len(said) == 1
+    assert not list((store / LA.MK.UNSTORED).iterdir()), "indexed, a module is no longer left to Lake"
+    (pkg / "P" / "B.lean").write_text("import P.A\n\n#eval 1\n")
+    assert "pkg/P/B.lean:3 runs code while it compiles (#eval)" in LA.runs_code(pkg), "the listing was reviewed at another digest"
+    (pkg / "lean-audit.json").write_text(json.dumps({"compile_time": {"P.B": "listed, with no digest of what was reviewed"}}))
+    assert "pkg/P/B.lean:3" in LA.runs_code(pkg)
+    (pkg / "lean-audit.json").write_text("[")
+    assert LA.runs_code(pkg) == "pkg: its sources or its lock could not be read (JSONDecodeError)"
+    (pkg / "lean-audit.json").unlink()
+    (pkg / "P" / "B.lean").write_text("import P.A\n")
+    assert LA.runs_code(pkg) is None
+    dep = tmp_path / "dep"
+    (dep / "D").mkdir(parents=True)
+    (dep / "D" / "X.lean").write_text("@[simp] initialize counter : IO.Ref Nat ← IO.mkRef 0\n")
+    (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": [{"type": "path", "name": "d", "dir": "../dep"}]}))
+    assert "dep/D/X.lean:1 runs code while it compiles (initialize)" in LA.runs_code(pkg), \
+        "a build of the package writes the `.lake` of each package it requires by path"
+    (dep / "D" / "X.lean").write_text("def x := 1\n")
+    (dep / "lakefile.lean").write_text("import Lake\n")
+    assert LA.runs_code(pkg) == "dep/lakefile.lean runs code whenever Lake loads the package"
+
+
 def test_a_build_that_compiled_nothing_hashes_nothing(tmp_path, monkeypatch):
     """Every build puts now, and most compile a handful of modules: only those and what they load are read."""
     pkg = _package(tmp_path)

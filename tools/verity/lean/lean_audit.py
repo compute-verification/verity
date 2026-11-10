@@ -136,7 +136,46 @@ def sandboxed() -> bool:
     """Whether check.py builds in its sandbox on this node, by its own probe (`check.sandboxed`). Outside it a build's
     compile-time code runs as the user and may leave any output, and the sampled recompile, which binds a restored module to
     its source, doesn't run, so nothing a build restores would be checked."""
-    return _module(Path(__file__).resolve().parent / "check.py", "lean_check_for_lean_audit").sandboxed()
+    return _check().sandboxed()
+
+
+_CHECK: list = []
+
+
+def _check():
+    """check.py, loaded once."""
+    if not _CHECK:
+        _CHECK.append(_module(Path(__file__).resolve().parent / "check.py", "lean_check_for_lean_audit"))
+    return _CHECK[0]
+
+
+def runs_code(pkg: Path) -> str | None:
+    """The first source that runs code while it compiles, in ``pkg`` or a package it requires by path, or None: as
+    check.py scans for it (`check.COMPILE_TIME`, comments aside), outside a `compile_time` listing of its package's lock
+    reviewed at the file's digest (`check.listings`); or a `lakefile.lean`, which runs whenever Lake loads its package. A
+    lock or a source that can't be read counts as one.
+
+    Those packages are the ones whose `.lake` a build of ``pkg`` writes (`check.writable`), in the sandbox too, and code
+    a module runs while it compiles can write there what it likes: another module's outputs, their `.hash` files and
+    its trace, which nothing then tells from Lake's. A passing audit says there is no such code in the package it
+    audits (`check.scans`); the artifact cache takes builds no audit passed, so `LakeArtifacts.put` asks it of every
+    build, the sources being the ones the build read: the sandbox lets no build write them."""
+    a = _check()
+    for d in [pkg.resolve(), *a.path_deps(pkg)]:
+        try:
+            if (d / "lakefile.lean").exists():
+                return f"{d.name}/lakefile.lean runs code whenever Lake loads the package"
+            listed = (a.load(d).get("compile_time") or {}) if (d / a.POLICY).is_file() else {}
+            for m, rel in sorted(a.lean_modules(d).items()):
+                if isinstance(e := listed.get(m), dict) and e.get("digest") == a.sha256(d / rel):
+                    continue
+                text = a.strip_comments((d / rel).read_text(errors="replace"))
+                if hit := a.COMPILE_TIME.search(text):
+                    return (f"{d.name}/{rel}:{text.count(chr(10), 0, hit.start()) + 1} runs code while it compiles "
+                            f"({hit.group(1) or hit.group(2)}), outside a `compile_time` listing reviewed at its digest")
+        except (OSError, ValueError, AttributeError, TypeError) as e:
+            return f"{d.name}: its sources or its lock could not be read ({type(e).__name__})"
+    return None
 
 
 def _sha(p: Path) -> str:
@@ -978,8 +1017,9 @@ class LakeArtifacts:
     (`module_keys.settle`); it stays on its node. The builds of check's audit and of a
     records run read it through a Lake cache directory of their own, which `module_keys.stage` fills with the modules
     whose keys it indexes (`check.py --artifacts`), and never write it; after every build of check's audit, of a records run, of `--try` and of `--build`, whatever
-    became of the run, each module the build compiled in the sandbox goes in (`put`). A module is stored for what its
-    compile read, and no verdict of a run is read from here, so a failed run's compile is worth what a passing run's is. A
+    became of the run, each module the build compiled in the sandbox goes in (`put`), unless a source of the build runs
+    code while it compiles (`runs_code`). A module is stored for what its compile read, and no verdict of a run is read
+    from here, so a failed run's compile is worth what a passing run's is. A
     module version any earlier run on this node compiled is then restored whatever tree comes next, not only the one
     its package's kept build (`WarmBuilds`) came from. The audit still checks every statement against the restored `.olean` files and replays
     every declaration through the kernel, and compiles a random sample of the modules it restored again, failing on any
@@ -1005,10 +1045,13 @@ class LakeArtifacts:
         """Index each module of the builds of ``reports``' packages (each with what check.py said of its build: its report,
         or `builds`' record of a run that didn't end) that the build compiled (a trace written after ``since``, and not
         one Lake restored) under its key; the number of entries new to the index. Whether the run passed is not read: a
-        key names what a compile read, and a failed or killed run's compile of those is the compile a passing run's is.
+        key names what a compile read, and a failed or killed run's compile of those is the compile a passing run's is,
+        given the two things a passing audit said of the build, which are asked here of every build instead.
         Only a build that says it ran in the sandbox (`"sandbox": true`) goes in: outside it, compile-time
         code runs as the user and could leave any outputs, traces and `setup.json` it chose in the build, each then indexed
-        as its module's. A module goes in only when `module_keys.indexable`, when its trace is whole and each output it
+        as its module's. And only a build none of whose sources runs code while it compiles, outside a reviewed listing
+        (`runs_code`): in the sandbox such code can still write the build's own `.lake`, every other module's outputs
+        there included. A module goes in only when `module_keys.indexable`, when its trace is whole and each output it
         names is in the build with that hash (`<file>.hash`) and no newer than the file that says so (`_built`: Lake
         writes the outputs, then their hashes, then the trace, so a build that was stopped leaves no module that passes),
         and once every workspace module it loads is indexed, under the key the
@@ -1017,8 +1060,8 @@ class LakeArtifacts:
         under the same key, so the entries of a module and its imports stay one build's. A module the run compiled whole
         and that still can't go in (not `indexable`, a module it loads not indexed, an artifact's name taken) is recorded
         under its key (`module_keys.UNSTORED`), so the next build leaves it to Lake rather than compile it again for
-        nothing (`module_keys.settle`). Only what the compiled modules
-        load is read, so a build that compiled nothing costs its traces' `stat`s."""
+        nothing (`module_keys.settle`), and so is each module of a build refused for the code its sources run. Only what
+        the compiled modules load is read, so a build that compiled nothing costs its traces' `stat`s."""
         with self._lock():
             n = 0
             for pkg in sorted(reports):
@@ -1041,6 +1084,9 @@ class LakeArtifacts:
                     if (m := todo.pop()) not in need:
                         need.add(m)
                         todo += MK.loads(m, keyed)
+                if refused := runs_code(pkg) if need else None:
+                    log(f"lean-audit: {pkg}: {refused}. Such code can write any module's outputs in the build, so none of "
+                        "its modules go into the artifact cache")
                 outs = MK.read_digests({m: k for m, k in keyed.items() if m in need},
                                        {(m, a.split(".", 1)[1]): d for m, b in built.items() if not isinstance(b, str)
                                         for a, (_, d) in b[2].items()})
@@ -1051,15 +1097,15 @@ class LakeArtifacts:
                     loaded = MK.loads(mod, keyed)
                     key = MK.key(mod, keyed, outs, loaded)
                     got = self._index(mod, key, k.package.name, built[mod], MK.record(mod, keyed, outs, loaded)) \
-                        if key is not None and all(i in indexed for i in loaded) else None
+                        if refused is None and key is not None and all(i in indexed for i in loaded) else None
                     if got is not None:
                         indexed.add(mod)
                         n += got
                         MK.unstored_path(self.store, key).unlink(missing_ok=True)
                     elif key is not None and (not isinstance(b := built[mod], str) or isinstance(b, Unindexable)):
-                        self._unstored(mod, key, k.package.name, b if isinstance(b, str) else next(
+                        self._unstored(mod, key, k.package.name, refused or (b if isinstance(b, str) else next(
                             (f"it loads {i}, which is not indexed" for i in loaded if i not in indexed),
-                            "the cache holds an artifact of its name with other bytes"))
+                            "the cache holds an artifact of its name with other bytes")))
             self.prune()
         return n
 
