@@ -1555,6 +1555,21 @@ def test_a_moved_path_after_what_the_mover_reads_as_the_root_is_certified(tmp_pa
                 "protocols/pous", "security_proofs/pous")] and r["rules"] == {}, case
 
 
+def test_a_rule_lists_only_the_paths_whose_lines_it_rewrote(tmp_path):
+    """A line with a moved path after a root prefix, rewritten, and a reference to the split directory left as written
+    is the prefix rule's alone."""
+    line = 'cp "$T/wt-$c/verity/ml/flock/pod/10-link.sh" verity/ml/flock/\n'
+    repo, base = _repo(tmp_path, {**FLOCK, "run.sh": line})
+    _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
+    _move(repo, "verity/ml/flock/pod", "verity/flock/pod")
+    _write(repo, {**FLOCK_MOVED, "run.sh": line.replace("verity/ml/flock/pod", "verity/flock/pod")})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+    r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+    assert r["certified"], r["refusals"]
+    assert r["rules"]["prefixes"] == ["run.sh"] and "run.sh" not in r["rules"]["tokens"]
+
+
 def test_a_file_the_maps_drop_lists_may_be_deleted(tmp_path):
     """The map the move's commit names lists the files the move deletes (`[drop] paths`); any other deleted file, and the
     same one in a range whose commit names no map, is still refused."""

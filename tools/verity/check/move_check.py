@@ -331,15 +331,16 @@ def substitute(text: str, pmap: dict[str, str]) -> str:
                                                                           text)
 
 
-def either(old: str, new: str, refs: list[tuple]) -> bool:
-    """Whether `new` is `old` with each of ``refs`` ((start, end, what it becomes[, the rule that reads it, whether it must
-    change])) either rewritten or, unless it must change, left as it was."""
+def either(old: str, new: str, refs: list[tuple]) -> list[tuple] | None:
+    """The ``refs`` ((start, end, what it becomes[, the rules that read it, whether it must change])) that `new` rewrites,
+    when it is `old` with each either rewritten or, unless it must change, left as it was; else None."""
     parts, at = [], 0
     for s, e, to, *more in refs:
         was = [] if more[1:] and more[1] else [re.escape(old[s:e])]
-        parts += [re.escape(old[at:s]), f"(?:{'|'.join([*was, re.escape(to)])})"]
+        parts += [re.escape(old[at:s]), f"({'|'.join([*was, re.escape(to)])})"]
         at = e
-    return bool(parts) and re.fullmatch("".join(parts) + re.escape(old[at:]), new) is not None
+    m = re.fullmatch("".join(parts) + re.escape(old[at:]), new) if parts else None
+    return m and [r for r, got in zip(refs, m.groups()) if got != old[r[0]:r[1]]]
 
 
 def partly(old: str, new: str, pmap: dict[str, str]) -> bool:
@@ -348,7 +349,7 @@ def partly(old: str, new: str, pmap: dict[str, str]) -> bool:
     if not pmap:
         return False
     return either(old, new, [(m.start(2), m.end(2), pmap[m[2]])
-                             for m in _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).finditer(old)])
+                             for m in _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).finditer(old)]) is not None
 
 
 def short_forms(pmap: dict[str, str], base: Tree) -> dict[str, str]:
@@ -1078,13 +1079,14 @@ class Rows:
         return out
 
     def reads(self, old: str, new: str, pair=None, resolved: bool = False) -> set[str]:
-        """The rules by which the line ``new`` is ``old`` with each reference rewritten or left, or (``pair``) what `pair`
-        takes ``old`` with every one rewritten to; empty when a moved path alone would do, which is not these rows' to say."""
+        """The rules of the references ``new`` rewrites, when it is ``old`` with each reference rewritten or left, or
+        (``pair``) what `pair` takes ``old`` with every one rewritten to; empty when a moved path alone would do, which is
+        not these rows' to say."""
         refs = self.references(old, resolved) if self.pmap or self.tokens else []
-        rules = {r for _, _, _, rs, _ in refs for r in rs}
-        if not rules or not (either(old, new, refs) or (pair and pair(rewritten(old, refs), new))):
-            return set()
-        return rules
+        took = either(old, new, refs)
+        if took is None and pair and refs and pair(rewritten(old, refs), new):
+            took = refs
+        return {r for _, _, _, rs, _ in took or () for r in rs}
 
 
 def rewritten(text: str, refs: list[tuple]) -> str:
