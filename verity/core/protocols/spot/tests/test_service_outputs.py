@@ -50,7 +50,8 @@ def _public(ports) -> tuple[S.Public, ...]:
     return (S.Public("population", "structure", "N, the sample's range"),
             S.Public("window", "structure", "provenance: served, on test prompts"),
             *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k}") for v in ports for k in ("leaves", "domain")),
-            *(S.Public(f"{k}:state", "structure", f"the state's {k}") for k in ("leaves", "words", "domain")))
+            *(S.Public(f"{k}:state", "structure", f"the state's {k}") for k in ("leaves", "words", "domain")),
+            FC.SEED_ITEM)
 
 
 def _spec() -> S.Spec:

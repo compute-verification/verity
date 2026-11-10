@@ -397,6 +397,21 @@ def seed_salt_of(key: ChallengerKey, window: str, coins: Any, verify: Verify) ->
     return salt
 
 
+SEED_SALT_FORM = ("a seed salt's evidence is {key, ledger, main, pins, segment, session}: the challenger's key, the "
+                  "auditor's ledger, the verifier's copy of main's first-parent history, the host's pins log, the salt's "
+                  "coin (Segment.to_json) and the challenger session's files")
+
+
+def seed_salt_in(coins: Any, window: str, verify: Verify) -> bytes:
+    """Lean `Challenger.seedSaltIn`: `seed_salt_of` on evidence in `coins_reason`'s form, `{key, ledger, main, pins,
+    segment, session}`, under its key, as the stream's run reads the window's seed salt (`Run.seedSaltOf`). Raises
+    `CoinError`."""
+    if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "main", "pins", "segment", "session"]:
+        raise CoinError(SEED_SALT_FORM)
+    return seed_salt_of(ChallengerKey.from_json(coins["key"]), window, {k: v for k, v in coins.items() if k != "key"},
+                        verify)
+
+
 class Limits(NamedTuple):
     """Bounds on the sizes of a sample's coin evidence (`coins_within`), each defined once in `challenger`, whose device
     code refuses past each (`remote`, "The device's caps")."""
@@ -493,6 +508,6 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
 
 
 __all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "LIMITS", "Limits", "MAX_HELLOS", "MAX_LEDGER_LINES", "MAX_PATH",
-           "MAX_PINS", "OwnRandomness", "SEED_SALT_FAMILY", "SEED_SALT_ONE", "SEED_SALT_WINDOW", "SEGMENT_FORM", "Segment",
-           "challenger_stream", "closure_of", "coins_reason", "coins_within", "draw_coins", "draw_first", "draw_seed_salt",
-           "read_reason", "seed_salt_of"]
+           "MAX_PINS", "OwnRandomness", "SEED_SALT_FAMILY", "SEED_SALT_FORM", "SEED_SALT_ONE", "SEED_SALT_WINDOW",
+           "SEGMENT_FORM", "Segment", "challenger_stream", "closure_of", "coins_reason", "coins_within", "draw_coins",
+           "draw_first", "draw_seed_salt", "read_reason", "seed_salt_in", "seed_salt_of"]
