@@ -1709,7 +1709,8 @@ class Watch:
             if info.get("repos") and not verity(info):
                 return None
             name = str(info.get("name") or "")
-            self.worker_status[agent] = str(info.get("status") or "unknown")
+            if agent not in self.names:             # a listed agent has its row in status.json already
+                self.worker_status[agent] = str(info.get("status") or "unknown")
         name = name[:120]
         if not (found := issue_lane(name, self.registry)):
             return None
