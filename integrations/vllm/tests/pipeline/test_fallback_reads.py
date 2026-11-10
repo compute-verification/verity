@@ -1,9 +1,8 @@
-"""The pipeline's best-effort reads fall back on exactly the failures they name: an unreadable or malformed file, a git that
-cannot run.  Each case pins the value the caller gets."""
+"""The pipeline's best-effort reads fall back on exactly the failures they name: an unreadable or malformed file.  Each case
+pins the value the caller gets; `experiment.code_version`'s fallbacks to git are test_experiment_index's."""
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -31,34 +30,6 @@ def test_code_version_reads_export_json(tmp_path: Path):
     (tmp_path / "EXPORT.json").write_text(json.dumps({"commit": "c0ffee", "patch_sha256": "ab", "untracked": 2, "fallback": False}))
     assert EXP.code_version(tmp_path) == {"source": "EXPORT.json", "commit": "c0ffee", "dirty_patch_sha256": "ab", "untracked": 2,
                                           "fallback": False}
-
-
-@pytest.mark.parametrize("export", ["[1, 2]", "{broken", '"a string"'])
-def test_code_version_falls_back_to_git_past_an_unusable_export_json(tmp_path: Path, monkeypatch, export: str):
-    (tmp_path / "EXPORT.json").write_text(export)
-    calls = []
-
-    def run(cmd, **kw):
-        calls.append(cmd[:2])
-        return subprocess.CompletedProcess(cmd, 0, stdout="abc123\n" if cmd[1] == "rev-parse" else " M verity_vllm/x.py\n", stderr="")
-
-    monkeypatch.setattr(EXP.subprocess, "run", run)
-    assert EXP.code_version(tmp_path) == {"source": "git", "commit": "abc123", "dirty": True}
-    assert calls == [["git", "rev-parse"], ["git", "status"]]
-
-
-def test_code_version_is_unknown_when_git_cannot_run(tmp_path: Path, monkeypatch):
-    def no_tree(cmd, **kw):
-        raise FileNotFoundError(2, "No such file or directory", str(kw["cwd"]))
-
-    monkeypatch.setattr(EXP.subprocess, "run", no_tree)
-    assert EXP.code_version(tmp_path / "no-such-tree") == {"source": "unknown"}
-
-    def timeout(cmd, **kw):
-        raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
-
-    monkeypatch.setattr(EXP.subprocess, "run", timeout)
-    assert EXP.code_version(tmp_path) == {"source": "unknown"}
 
 
 def test_write_spec_leaves_an_unreadable_spec_alone(tmp_path: Path):

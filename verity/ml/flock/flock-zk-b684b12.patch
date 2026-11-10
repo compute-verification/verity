@@ -320,7 +320,7 @@ index 31b6d20..a25080b 100644
 +        pub t_pad: usize,
 +        /// this opening's repetition: it folds, sums and pads only its own pair ([`rep_lanes`])
 +        pub rep: usize,
-+        pub extra: [Vec<F128>; EXTRA_LANES],
++        pub extra: std::sync::Arc<[Vec<F128>]>,
 +        pub pads: Vec<Vec<F128>>,
 +        /// a dishonest prover (the negatives): 1 folds another first extra lane than the committed one, 2 sends another
 +        /// `T'`, 3 another `ybar`, 4 another `e_0` (with the honest `T'`)

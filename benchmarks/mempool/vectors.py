@@ -7,7 +7,7 @@ window's touched list and the fingerprints under fixed coins that pool_ram's own
 A window starts from the memory as it stands, each value read as written at time 0: its first access of an address reads
 time 0, its list's initial records are those values and its final records the last written. Each operation keeps all its
 positions (`pool_ram.SHAPE`), an unused one zero but for its now, as the circuit's are. The vectors are the RAM pool's own
-log, held to vLLM's pool (the replay's `_KV`) after every call by `pool_ram.run`.
+log, held to vLLM's pool (the replay's `BlockPool`) after every call by `pool_ram.run`.
 """
 from __future__ import annotations
 

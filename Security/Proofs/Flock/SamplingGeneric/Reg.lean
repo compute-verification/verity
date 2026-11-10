@@ -51,20 +51,21 @@ against the committed trace's incorrect set (`Compiled.Freg` at the plurality `C
 fixes before the window's coins), so its sampling term is the acceptance probability `P_a(Freg)` of a set fixed at
 registration.
 
-* `kept`, `opensAt_eq`: what a run's extractions keep (`runExt`, slot by slot of the sample); `opensAt` is the
+* `kept`, `opensAt_eq`: what a run's extractions keep (`runExt`, session by session of the sample); `opensAt` is the
   assembled witness's value there.
 * `InConf`, `OffReg`, `Conflict`: a run's extractions keep two openings of one position that disagree; they open a gate
   of the program off the committed trace; two runs' extractions open one gate two ways.
 * `reg_split`: **the deterministic half**. At an accepted run that samples a proof block of `Freg`, the block's session
-  is not extracted, or the run's extractions disagree with themselves or open a gate off the committed trace: otherwise
-  the committed trace on the gates, the kept openings elsewhere, makes the block correct (`Sessions.opens`).
+  is not extracted at its first slot, or the run's extractions disagree with themselves or open a gate off the
+  committed trace: otherwise the committed trace on the gates, the kept openings elsewhere, makes the block correct
+  (`Sessions.opens`).
 * `pr_inConf_le`, `pr_conflict_le`: a disagreement within one run, or between two runs at one tape, is a collision
   `B_conf` finds (`CommitmentScheme.Binds`).
 * `pr_offReg_le`: **the rewinding lemma** (`FlockSoundness.Rewinding.prBad_le`) at the runs' openings of the program's
   gates (`opTable`), the committed trace being their plurality (`plur`, `regVal_eq_plur`): a run opens a gate off it
   with probability at most `N·√Pr[conflict]`.
-* `pr_unfound_le`: the sessions' bound at the selection `selReg` (the first slot of the sample whose block is in
-  `Freg`), averaged by Jensen's inequality.
+* `pr_unfound_le`: the sessions' bound at the selection `leadSel selReg` (the first slot of the session of the first
+  slot of the sample whose block is in `Freg`), averaged by Jensen's inequality.
 * `ksReg_of_sessionKS`, `compilerKSReg_of`: **`KSReg`**: the union of the three, and on the sample, a set refused at `δ`
   missed with probability at most `P_a ≤ δ` (`Sessions.draws`).
 -/
@@ -211,18 +212,20 @@ theorem selReg_some (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Pro
 
 set_option synthInstance.maxSize 1024 in
 /-- **The deterministic half**: at an accepted run whose sample holds proof block `u` of the committed trace's
-incorrect set at slot `i`, `u`'s session is not extracted at the slot's coins, or the run's extractions disagree with
-themselves or open a gate off the committed trace. Otherwise the values that are the committed trace on the program's
-gates and the kept openings elsewhere, with the interior values the kept openings give, agree with every opening `u`'s
-witness reveals that passes, so they make `u` correct (`Sessions.opens`); but `u ∈ Freg` says no such values do. -/
+incorrect set at slot `i`, the session of `i` is not extracted at its first slot `i₀`'s coins, or the run's extractions
+disagree with themselves or open a gate off the committed trace. Otherwise the values that are the committed trace on
+the program's gates and the kept openings elsewhere, with the interior values the kept openings give, agree with every
+opening the session's witness reveals at `u` that passes (`u`'s slot shows `i₀`'s session, `Sessions.shared`), so they
+make `u` correct (`Sessions.opens`); but `u ∈ Freg` says no such values do. -/
 theorem reg_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
     {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hin : InScope Pt s)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x)
     (hacc : (run H P L.V x ω r).out = .acc) (i u : Fin (L.nPU x)) (hiu : (L.checked x r)[i.val]? = some u.val)
-    (hF : u.val ∈ L.Freg H P x ω) :
-    ¬ L.Found H x (run H P L.V x ω) u r (c i u) ∨ L.InConf H P x s ω r c ∨ L.OffReg H P x ω r c := by
+    (hF : u.val ∈ L.Freg H P x ω) (i₀ u₀ : Fin (L.nPU x)) (hlead : L.leadOf x (L.checked x r) i = some i₀)
+    (hu₀ : (L.checked x r)[i₀.val]? = some u₀.val) :
+    ¬ L.Found H x (run H P L.V x ω) u₀ r (c i₀ u₀) ∨ L.InConf H P x s ω r c ∨ L.OffReg H P x ω r c := by
   have hu := List.mem_of_getElem? hiu
-  by_cases hfd : L.Found H x (run H P L.V x ω) u r (c i u)
+  by_cases hfd : L.Found H x (run H P L.V x ω) u₀ r (c i₀ u₀)
   swap
   · exact Or.inl hfd
   by_cases hconf : L.InConf H P x s ω r c
@@ -238,7 +241,14 @@ theorem reg_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x
   have hnG : L.nG x = s.prog.gates.length := by simp only [Compiled.nG, hs]
   have hpart : L.part s = Pt := by simp only [Compiled.part, hPt, Option.getD_some]
   obtain ⟨xS, vS, hsess, hsh, w, hw, hR⟩ := hfd
-  obtain ⟨b, hb, hcor⟩ := hS.opens x s Pt Ω P ω r u xS vS w hs hPt hin hacc hu hsess hR
+  obtain ⟨hk, hc, hfirst⟩ := of_leadOf hlead
+  have hsu : L.session x u (run H P L.V x ω r).seen = some (xS, vS) := by
+    rw [← hS.shared x Ω P ω r _ _ _ _ hacc hu₀ hiu hk]
+    exact hsess
+  have hub : u.val ∈ L.sessBlocks x (L.checked x r) i₀ := by
+    rw [sessBlocks, hc]
+    exact List.mem_filterMap.2 ⟨i.val, self_mem_sessSlots hiu u.isLt, hiu⟩
+  obtain ⟨b, hb, hcor⟩ := hS.opens x s Pt Ω P ω r u xS vS w hs hPt hin hacc hu hsu hR
   simp only [Freg, hs, mem_filter, mem_range] at hF
   rw [hpart] at hF
   refine hF.2 ⟨b, hb, fun g => if g < s.prog.gates.length then L.regVal H P x ω g else L.opensAt H P x ω r c g,
@@ -247,8 +257,8 @@ theorem reg_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x
   · show (if g < s.prog.gates.length then L.regVal H P x ω g else L.opensAt H P x ω r c g) = L.regVal H P x ω g
     exact ite_eq_left hg
   · have hqk : q ∈ L.kept H P x s ω r c :=
-      L.mem_runExt H x (run H P L.V x ω) s r _ c hiu u.isLt
-        (L.unitExt_mem H x (run H P L.V x ω) s u r (c i u) hsess hsh hw hq hok)
+      L.mem_runExt H x (run H P L.V x ω) s r _ c hu₀ u₀.isLt hfirst
+        (L.sessExt_mem H x (run H P L.V x ω) s _ u₀ r (c i₀ u₀) hsess hsh hw hub hq hok)
     refine ⟨fun hr => ?_, fun hi => ?_⟩
     · have hv : L.opensAt H P x ω r c q.2.pos = some q.2.val := by
         rw [L.opensAt_eq H P x ω hs]
@@ -472,9 +482,9 @@ theorem pr_unfound_le (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Ty
 
 set_option synthInstance.maxSize 1024 in
 /-- **`KSReg` from the sessions' bound**: at each tape, an accepted run that samples a proof block of `Freg` has the
-first such block unfound (the sessions' bound at `selReg`), or its extractions disagree with themselves (`B_conf`) or
-open a gate off the committed trace (the rewinding lemma); and a set refused at `δ` is missed with probability at most
-`P_a ≤ δ` (`Sessions.draws`). -/
+first such block's session unfound at its first slot (the sessions' bound at `leadSel selReg`), or its extractions
+disagree with themselves (`B_conf`) or open a gate off the committed trace (the rewinding lemma); and a set refused at
+`δ` is missed with probability at most `P_a ≤ δ` (`Sessions.draws`). -/
 theorem ksReg_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
     (hSK : L.SessionKS H) : L.KSReg H := by
   intro x hsc Ω _ _ P
@@ -489,7 +499,7 @@ theorem ksReg_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.co
   have hper : ∀ ω, Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
       ∃ u ∈ L.checked x r, u ∈ L.Freg H P x ω) ≤
       Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.selReg H P x ω (L.checked x rc.1) = some i ∧
+        ∃ i, L.leadSel x (L.selReg H P x ω) (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
       (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) +
@@ -504,11 +514,13 @@ theorem ksReg_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.co
       ∃ u ∈ L.checked x r, u ∈ L.Freg H P x ω)).symm.trans_le (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
     obtain ⟨hacc, v, hvl, hvF⟩ := hrc
     obtain ⟨i, hi, u, hiu, huF⟩ := L.selReg_some H P x ω (hS.slots x rc.1) (hFlt ω) hvl hvF
-    rcases reg_split hS hs hPt hin P ω rc.1 rc.2 hacc i u hiu huF with h | h | h
-    · exact Or.inl ⟨hacc, i, hi, u, hiu, h⟩
+    obtain ⟨i₀, u₀, hlead, hu₀⟩ := leadOf_some hiu u.isLt
+    rcases reg_split hS hs hPt hin P ω rc.1 rc.2 hacc i u hiu huF i₀ u₀ hlead hu₀ with h | h | h
+    · exact Or.inl ⟨hacc, i₀, by rw [leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
     · exact Or.inr (Or.inl h)
     · exact Or.inr (Or.inr h)
-  have hT := L.pr_unfound_le H P β hβ0 hβ (L.selReg H P x) fun ω r => hκ ω r (L.selReg H P x ω)
+  have hT := L.pr_unfound_le H P β hβ0 hβ (fun ω => L.leadSel x (L.selReg H P x ω))
+    fun ω r => hκ ω r (L.leadSel x (L.selReg H P x ω))
   have hI := pr_inConf_le hbind hs P
   have hC : Ex (fun ω : Ω => Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
       ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr)) ≤ Real.sqrt ((Bconf H L Ω P x).Pr H) :=

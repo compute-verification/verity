@@ -54,16 +54,6 @@ def AuditRO : Prop :=
         Accepts A x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
-/-- **Completeness of `AuditRO`: an honest device is accepted, and its ingress is exactly the store.** For every `N`,
-`b` and `h` there is a device with no on-chip state, no side sources and no regeneration that makes `N` oracle queries
-(a `Device N b h 0 0 0 N`) whose tags are accepted on every store, oracle and sample, and whose ingress is exactly `N·b`
-bits. The device reads every block once and queries the oracle at it. Against `AuditRO` at `S = c = G = 0` and `q = N`,
-the honest `N·b` sits above the floor `k·b − λ` by the sample's slack `(N − k)·b`, about `ε_s·N·b`, plus `λ`. Proof:
-`Bandwidth.SecurityProofs.HonestPasses`. -/
-def HonestPasses : Prop :=
-  ∀ N b h : ℕ, ∃ A : Device N b h 0 0 0 N,
-    ∀ (E : Store N b) (O : Oracle N b h) (s : ℕ) (I : Fin s → Fin N), Accepts A E O I ∧ A.ingress E O = N * b
-
 /-- **The bandwidth audit v0 with relayed tags, in the random-oracle model.** `AuditRO` for a `RelayDevice`, whose side
 sources may depend on the oracle: a peer holding a copy of the store can compute tags after the seed and relay them,
 and every bit the chip reads from it counts against `c`. For every `m`, the probability that the verifier accepts while

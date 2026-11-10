@@ -37,8 +37,8 @@ theorem eo_some_staged (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : 
       ws[s].1 = (L.stmts x (run H P L.V x ω r).msgs).getD s [] ∧ A.check ws[s].1 ws[s].2 = true := by
   have hacc : (run H P L.V x ω r).out = .acc := by
     by_contra hn
-    simp [Extractor.eval, Compiled.EO, RP.eval, Trace.seen, hn] at h
-  simp only [Extractor.eval, Compiled.EO, RP.eval, Trace.seen, hacc, ↓reduceIte] at h
+    simp [Extractor.eval, Compiled.EO, RP.eval, Transcript.seen, hn] at h
+  simp only [Extractor.eval, Compiled.EO, RP.eval, Transcript.seen, hacc, ↓reduceIte] at h
   have hf := collect_some H _ _ ws h
   have hlen := hf.length_eq
   rw [List.length_map, List.length_finRange] at hlen

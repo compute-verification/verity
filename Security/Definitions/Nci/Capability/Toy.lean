@@ -158,12 +158,12 @@ def M : Decoder Unit where
     exact free p (mem p y h) p' (mem p' y' h') hp
 
 /-- The inputs with the token `b` and every other gate `1`. -/
-def tok (b : Bool) : C.Transcript := fun g => if g = 1 then BitVec.ofBool b else 1
+def tok (b : Bool) : C.Trace := fun g => if g = 1 then BitVec.ofBool b else 1
 
 /-- The run distribution: the token sampled uniformly. -/
-noncomputable def μ : PMF C.Transcript := (PMF.uniformOfFintype Bool).map tok
+noncomputable def μ : PMF C.Trace := (PMF.uniformOfFintype Bool).map tok
 
 /-- The product's value at both gates computing it, the source the toy recovers. -/
-def z (T : C.Transcript) : List Bool := [(T 2).getLsbD 0, (T 3).getLsbD 0]
+def z (T : C.Trace) : List Bool := [(T 2).getLsbD 0, (T 3).getLsbD 0]
 
 end Nci.Capability.Toy

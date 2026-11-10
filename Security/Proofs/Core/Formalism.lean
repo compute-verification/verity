@@ -22,7 +22,7 @@ namespace Verity
 
 open Finset
 
-theorem Circuit.length_bits {C : Circuit} (hC : C.Boolean) (X : C.Transcript) (l : List (Fin C.N)) :
+theorem Circuit.length_bits {C : Circuit} (hC : C.Boolean) (X : C.Trace) (l : List (Fin C.N)) :
     (C.bits X l).length = l.length := by
   induction l with
   | nil => rfl
@@ -31,7 +31,7 @@ theorem Circuit.length_bits {C : Circuit} (hC : C.Boolean) (X : C.Transcript) (l
     rw [ih, hC.one_bit g]
     omega
 
-theorem Committed.recompute_eval (R : Committed) {a : R.d.D.Transcript} (ha : R.Honest a) (u : Fin R.d.n) :
+theorem Committed.recompute_eval (R : Committed) {a : R.d.D.Trace} (ha : R.Honest a) (u : Fin R.d.n) :
     R.recompute (R.d.D.eval a) u = R.d.D.eval a := by
   funext g
   induction g using WellFoundedLT.induction with
@@ -48,7 +48,7 @@ theorem Committed.recompute_eval (R : Committed) {a : R.d.D.Transcript} (ha : R.
       exact R.d.D.op_congr g _ _ fun x hx => ih x (R.d.D.reads_lt g x hx)
     · rw [recompute, R.d.D.run_fixed (b := R.d.D.eval a g) (by simp [hθ, hu])]
 
-theorem length_blockProgram (R : Committed) (hC : R.d.D.Boolean) (e : List Bool) (X : R.d.D.Transcript)
+theorem length_blockProgram (R : Committed) (hC : R.d.D.Boolean) (e : List Bool) (X : R.d.D.Trace)
     (u : Fin R.d.n) :
     (blockProgram R e X u).length = e.length + Nat.clog 2 R.d.n + (R.d.unregistered (R.d.𝓘.gates u)).card := by
   simp [blockProgram, indexCode, Circuit.length_bits hC, Finset.length_sort]

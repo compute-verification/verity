@@ -19,6 +19,7 @@ public import Definitions.Nci.Assumptions.PackedTraining
 public import Definitions.Nci.Support
 public import Definitions.Nci.Guarantees.CoverTraining
 public import Definitions.Nci.Guarantees.Remote
+public import Definitions.Nci.Cut.Toy
 
 /-!
 # The inference-only policy's guarantees: their witnesses
@@ -36,7 +37,8 @@ witnesses at the toy circuit (`Nci.Capability.Toy`, with the instances of `Nci.W
 The premise each `X_nontrivial` drops is the one the bound rests on: the coverage `κ` when the bound is a share of the
 reference circuit (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
 in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `WindowsHold`
-for the dampener, and PoUW's soundness (`PouwSound`) for the remote dampener. The cover theorem's join
+for the dampener, and PoUW's soundness (`PouwSound`) for the remote dampener, whose witnesses take its declared
+computation at the min-cut toy (`Nci.Cut.Toy`), where the count verdict `CompliesAtMost` holds under (H) and (E). The cover theorem's join
 (`Nci.Cover.Guarantees.CoverTraining`) is stated at the multiplication blocks `mb0` of no product, where coverage
 `α₀ > 0` fails.
 -/
@@ -78,6 +80,66 @@ def ThreadedTrainingOn_nontrivial : Prop :=
     ¬ (1 * (1 / 2) * D.D.size D.D.computed ≤
         2 * (1 / 2) * M1.dark.card +
           2 * (1 / 2 : ℝ) * (T0 D).bound 1 (1 / 2) 1 0 * D.D.size D.D.computed)
+
+/-- **`ThreadedThrottled`'s, `ThreadedThrottledOn`'s and `ThreadedThrottledDark`'s premises hold together**:
+`ThreadedTraining_honest`'s instance, which needs no coverage. -/
+def ThreadedThrottled_honest : Prop :=
+  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
+    T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 1 (1 / 2) (1 / 2)
+
+/-- **`ThreadedThrottled` without `ThetaRegistered`**: `Dθ` complies at `α = 0`, so at read cap `α Γ = 0`, and the bound
+`b_a #M ≤ α Λ size(d)` fails, its right side `0` and gate `2` the counted multiplication of `T1`. -/
+def ThreadedThrottled_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * T1.M.card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
+/-- **`ThreadedThrottledOn` without `ThetaRegistered`**: `ThreadedThrottled_nontrivial`'s instance, where `Dθ` computes
+gate `2`, so that it is in `M ∩ S`. -/
+def ThreadedThrottledOn_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * (T1.M ∩ Mθ.S).card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
+/-- **`ThreadedThrottledDark` without `ThetaRegistered`**: `ThreadedThrottled_nontrivial`'s instance, with no dark gate:
+`#M = 1` exceeds `#dark + α Λ size(d) / b_a = 0`. -/
+def ThreadedThrottledDark_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((T1.M.card : ℝ) ≤ Mθ.dark.card + 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed / (1 / 2))
+
+/-- **`ThreadedThrottledSlots`', `ThreadedThrottledOnSlots`' and `ThreadedThrottledDarkSlots`' premises hold
+together**: `ThreadedThrottled_honest`'s instance, the weight in its own parameter slot (`σ1`). -/
+def ThreadedThrottledSlots_honest : Prop :=
+  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
+    T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 1 (1 / 2) (1 / 2)
+
+/-- **`ThreadedThrottledSlots` without `ThetaRegistered`**: `ThreadedThrottled_nontrivial`'s instance, the weight in its
+own parameter slot (`σ1`). -/
+def ThreadedThrottledSlots_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * T1.M.card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
+/-- **`ThreadedThrottledOnSlots` without `ThetaRegistered`**: `ThreadedThrottledOn_nontrivial`'s instance, the weight
+in its own parameter slot (`σ1`). -/
+def ThreadedThrottledOnSlots_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * (T1.M ∩ Mθ.S).card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
+/-- **`ThreadedThrottledDarkSlots` without `ThetaRegistered`**: `ThreadedThrottledDark_nontrivial`'s instance, the
+weight in its own parameter slot (`σ1`). -/
+def ThreadedThrottledDarkSlots_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((T1.M.card : ℝ) ≤ Mθ.dark.card + 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed / (1 / 2))
 
 /-- **`ActivationsBoundOn`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `K = 1`, `b_w = b_a = 1/2`,
 `r = d = Toy.D`, the threading `T1` with no links, `dd = 1` and `e = 1`: the token enters one counted multiplication. -/
@@ -241,6 +303,28 @@ def IncompressibleContainedTrainingOn_nontrivial : Prop :=
         (1 * D.D.size D.D.computed - 2 * Mθ.dark.card) ≤
       2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
 
+/-- **`IncompressibleThreadedThrottled`'s and `IncompressibleThreadedThrottledOn`'s premises hold together**:
+`ThreadedThrottled_honest`'s instance under `TrainingIncompressible` at the chain `ch1`. -/
+def IncompressibleThreadedThrottled_honest : Prop :=
+  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
+    T1.Threaded 2 1 1 0 ∧ Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2)
+
+/-- **`IncompressibleThreadedThrottled` without `ThetaRegistered`**: `ThreadedThrottled_nontrivial`'s instance under
+`TrainingIncompressible` at the chain `ch1`. -/
+def IncompressibleThreadedThrottled_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.TrainingIncompressible D ch1 T1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * T1.M.card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
+/-- **`IncompressibleThreadedThrottledOn` without `ThetaRegistered`**: `ThreadedThrottledOn_nontrivial`'s instance
+under `TrainingIncompressible` at the chain `ch1`. -/
+def IncompressibleThreadedThrottledOn_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.TrainingIncompressible D ch1 T1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * (T1.M ∩ Mθ.S).card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
 /-- **`PackedIncompressibleContainedMatMulOn`'s premises hold together**: `IncompressibleContainedMatMulOn_honest`'s
 instance, `ch1` as a packed chain of one product to a gate. -/
 def PackedIncompressibleContainedMatMulOn_honest : Prop :=
@@ -280,29 +364,31 @@ def PackedIncompressibleContainedTrainingOn_nontrivial : Prop :=
         (1 * D.D.size D.D.computed - 2 * (1 * Mθ.dark.card)) ≤
       2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
 
-/-- **`DampenerRemote`'s premises hold together** at `DampenerThreaded_honest`'s declaration, threading and charges,
-over the outcomes `Bool` sampled uniformly: one PoUW window of capacity `C = 2`, its certificate never wrong (`p = 0`), all
-of it certified (`W = 2`), no incorrect proof block, so that every detection holds at `q = 1` and the residual is `0`, and
-one counted multiplication, the declared one. -/
+/-- **`DampenerRemote`'s premises hold together** over the outcomes `Bool` sampled uniformly: one PoUW window of capacity
+`C = 2`, its certificate never wrong (`p = 0`), all of it certified (`W = 2`), no incorrect proof block, so that every
+detection holds at `q = 1` and the residual is `0`, and the declaration the toy `Nci.Cut.Toy`, complying with
+`CompliesAtMost 1 2 2` under (H) at unit costs and (E) at `b = 2`, whose two MACs are the counted multiplications. -/
 def DampenerRemote_honest : Prop :=
   Assumptions.WithinCompute OneWindow.cap 2 ∧ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 ∧
     (∀ ω, Assumptions.TerminalDetection (OneWindow.bad ω) (OneWindow.bad ω) OneWindow.ident OneWindow.time 0) ∧
     Assumptions.SampledDetection (PMF.uniformOfFintype Bool) OneWindow.bad OneWindow.bad OneWindow.ident
       OneWindow.time 1 ∧
-    CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧ T1.Threaded 2 1 1 0 ∧
-    Assumptions.WeightsIncompressible D T1 2 1 (1 / 2) (1 / 2) ∧ (D.D.size D.D.computed : ℝ) ≤ 2 ∧
-    1 ≤ 0 + 0 + T1.M.card + 0 ∧
+    CompliesAtMost 1 2 2 Cut.Toy.d ∧ Cut.ValuesInjective Cut.Toy.W Cut.Toy.val ∧
+    Cut.NoSharedPair Cut.Toy.W Cut.Toy.val ∧ Cut.Assumptions.Hardness Cut.Toy.d Cut.Toy.arrays Cut.Toy.val ![1, 1] 2 ∧
+    Cut.Assumptions.Exports Cut.Toy.W 2 ∧ Assumptions.SourcesCover 2 0 0 Cut.Toy.W.N 0 ∧
     (∀ ω, Assumptions.ResidualAtMost 0 2 2 0 2 (wrongCapacity OneWindow.cap (OneWindow.right ω))
       (∑ b ∈ OneWindow.bad ω, OneWindow.time b))
 
-/-- **`DampenerRemote` without PoUW's soundness**: the window's certificate is wrong at every outcome, so the residual
-holds its capacity, `M_r = 2` counted multiplications at the threading `T0`, all of `C = 2` certified, `κ = 2`, `ε' = 1/2`
-and `θ = 1/4`. The efficiency `1` exceeds the bound `ε' + θ = 3/4` at every outcome, so the event has probability `0`,
+/-- **`DampenerRemote` without PoUW's soundness**: one window of capacity `C = 100`, its certificate wrong at every
+outcome, so the residual holds its capacity, `M_r = 100` counted multiplications, all of `C` certified, `κ = 2`,
+`ε' = 1/2` and `θ = 1/4`, beside `DampenerRemote_honest`'s declaration, whose bound `X = 8` is `8/100` of the compute.
+The efficiency `1` exceeds the bound `ε' + θ + 8/100 = 83/100` at every outcome, so the event has probability `0`,
 below `1 − δ = 1`. -/
 def DampenerRemote_nontrivial : Prop :=
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ i, 0 ≤ OneWindow.cap i) ∧ Assumptions.WithinCompute OneWindow.cap 2 ∧
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ i, 0 ≤ (fun _ : Fin 1 => (100 : ℝ)) i) ∧
+    Assumptions.WithinCompute (fun _ : Fin 1 => (100 : ℝ)) 100 ∧
     ¬ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.wrong 0 ∧
-    (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) * 1 ≤ 2 ∧
+    (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) * 1 ≤ 100 ∧
     (∀ ω, ∀ b ∈ OneWindow.bad ω, OneWindow.ident b ∈ (∅ : Finset Unit)) ∧
     (∀ ω, Assumptions.TerminalDetection (OneWindow.bad ω) (OneWindow.bad ω) OneWindow.ident OneWindow.time 0) ∧
     (∀ ω j t, ∑ b ∈ OneWindow.bad ω with OneWindow.ident b = j ∧ t ≤ OneWindow.time b ∧ OneWindow.time b ≤ t + 0,
@@ -311,24 +397,25 @@ def DampenerRemote_nontrivial : Prop :=
     (∀ ω, ∀ b ∈ OneWindow.bad ω, OneWindow.time b ≤ 0) ∧
     Assumptions.SampledDetection (PMF.uniformOfFintype Bool) OneWindow.bad OneWindow.bad OneWindow.ident
       OneWindow.time 1 ∧
-    (0 : ℝ) < 2 ∧ (0 : ℝ) < 2 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (1 : ℝ) ≤ 1 ∧ (0 : ℝ) ≤ 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧
-    (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧ (T0 D).Threaded 2 1 1 0 ∧
-    Assumptions.WeightsIncompressible D (T0 D) 2 1 (1 / 2) (1 / 2) ∧ (D.D.size D.D.computed : ℝ) ≤ 2 ∧
-    0 < 2 ∧ 2 ≤ 0 + 2 + (T0 D).M.card + 0 ∧ ((0 : ℕ) : ℝ) ≤ 1 * 2 * 0 / 2 ∧
-    (∀ ω, Assumptions.ResidualAtMost 2 2 2 0 2 (wrongCapacity OneWindow.cap (OneWindow.wrong ω))
+    (0 : ℝ) < 2 ∧ (0 : ℝ) < 100 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (1 : ℝ) ≤ 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧
+    (0 : ℝ) < 2 ∧ CompliesAtMost 1 2 2 Cut.Toy.d ∧ Cut.ValuesInjective Cut.Toy.W Cut.Toy.val ∧
+    Cut.NoSharedPair Cut.Toy.W Cut.Toy.val ∧ Cut.Assumptions.Hardness Cut.Toy.d Cut.Toy.arrays Cut.Toy.val ![1, 1] 2 ∧
+    Cut.Assumptions.Exports Cut.Toy.W 2 ∧
+    0 < 100 ∧ Assumptions.SourcesCover 100 0 100 Cut.Toy.W.N 0 ∧ ((0 : ℕ) : ℝ) ≤ 1 * 2 * 0 / 2 ∧
+    (∀ ω, Assumptions.ResidualAtMost 100 2 100 0 100 (wrongCapacity (fun _ : Fin 1 => (100 : ℝ)) (OneWindow.wrong ω))
       (∑ b ∈ OneWindow.bad ω, OneWindow.time b)) ∧
-    ((0 : ℕ) : ℝ) ≤ 2 * 0 * (2 + 0) / 2 ∧
-    ¬ (1 - (0 / (1 / 2) + ((∅ : Finset Unit).card : ℝ) * ((1 - 1) / 1 * 0) / (1 / 4 * 2)) ≤
-      prob (PMF.uniformOfFintype Bool) (fun _ => efficiency 2 2 2 0 ≤
-          unregisteredShare 2 0 +
-              (1 - unregisteredShare 2 0) *
-                (residualShare 2 2 + 0 * 2 / 2 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
-            declaredShare 2 (rhoT (1 / 2) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0 ∧
-        remoteDampener 1 (unregisteredShare 2 0)
-            ((1 - unregisteredShare 2 0) *
-                (residualShare 2 2 + 0 * 2 / 2 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
-              declaredShare 2 (rhoT (1 / 2) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0) ≤
-          hardwareMultiple 1 2 2 2 0))
+    ((0 : ℕ) : ℝ) ≤ 2 * 0 * (100 + 0) / 2 ∧
+    ¬ (1 - (0 / (1 / 2) + ((∅ : Finset Unit).card : ℝ) * ((1 - 1) / 1 * 0) / (1 / 4 * 100)) ≤
+      prob (PMF.uniformOfFintype Bool) (fun _ => efficiency 2 100 100 0 ≤
+          unregisteredShare 100 0 +
+              (1 - unregisteredShare 100 0) *
+                (residualShare 100 100 + 0 * 100 / 100 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
+            efficiency 2 (Cut.workHE 2 2 (1 * 1) 2 Cut.Toy.W.O) 100 0 + 0 ∧
+        remoteDampener 1 (unregisteredShare 100 0)
+            ((1 - unregisteredShare 100 0) *
+                (residualShare 100 100 + 0 * 100 / 100 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
+              efficiency 2 (Cut.workHE 2 2 (1 * 1) 2 Cut.Toy.W.O) 100 0 + 0) ≤
+          hardwareMultiple 1 2 100 100 0))
 
 end Nci.Guarantees
 

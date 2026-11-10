@@ -90,13 +90,13 @@ open Classical in
 /-- **The units `X` doesn't bind**: those wrong in `X`, and those that read or write a committed value (`Partition.io`)
 that `opens` doesn't open to `X`'s value there. -/
 noncomputable def unbound {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
-    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Transcript) : Finset (Fin n) :=
+    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Trace) : Finset (Fin n) :=
   Finset.univ.filter fun u => ¬ P.Correct X u ∨ ∃ g ∈ P.io u, ¬ opens g (X g)
 
 /-- **The integrity claim on a transcript**, at share `ε`: at most an `ε` share of `P`'s units are unbound in `X` under
 the openings `opens`. -/
 def IntegrityHolds {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
-    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Transcript) (ε : ℝ) : Prop :=
+    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (X : C.Trace) (ε : ℝ) : Prop :=
   ((unbound P opens X).card : ℝ) ≤ ε * n
 
 /-- **The world a run realized** on device `d` with accounts `α`: whose account each resource is charged to, the window,
@@ -121,7 +121,7 @@ structure PeriodLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : V
   /-- the commitment opens gate `g` to `v` -/
   opens : (g : Fin C.N) → BitVec (C.w g) → Prop
   /-- `E`: the transcript the period's extractor reads off the strategy, on the run -/
-  extract : Verity.Game.Strategy G → O → C.Transcript
+  extract : Verity.Game.Strategy G → O → C.Trace
   /-- `B`: a subprotocol's collision finder, built from the strategy -/
   finder : Audit → Verity.Game.Strategy G → Claims.Finder
   /-- the circuit's gates the run computed after their window's coin, over the period's windows -/
