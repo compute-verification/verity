@@ -158,13 +158,15 @@ def _header(f: Path):
 def workspace(pkg: Path) -> list[Path]:
     """``pkg`` and then each package it requires by path, as its `lake-manifest.json` lists them (Lake's flat list, the
     ones its requirements require among them): the packages whose modules one of ``pkg``'s can import, the fetched
-    dependencies aside. A package with no manifest, or one that can't be read, requires none."""
+    dependencies aside. A package with no manifest requires none; ValueError for a manifest that is not Lake's, which
+    would hide the packages it requires."""
     out = [pkg.resolve()]
-    try:
-        listed = json.loads((pkg / "lake-manifest.json").read_text()).get("packages")
-    except (OSError, ValueError, AttributeError):
+    if not (manifest := pkg / "lake-manifest.json").is_file():
         return out
-    for d in listed if isinstance(listed, list) else []:
+    doc = json.loads(manifest.read_text())
+    if not isinstance(doc, dict) or not isinstance(listed := doc.get("packages", []), list):
+        raise ValueError("it lists no packages")
+    for d in listed:
         if isinstance(d, dict) and d.get("type") == "path" and isinstance(d.get("dir"), str) \
                 and (q := (pkg / d["dir"]).resolve()) not in out and q.is_dir():
             out.append(q)
@@ -233,13 +235,17 @@ def plan(pkg: Path, rel: str) -> Plan | str:
     if (mod := next((m for m, f in mods.items() if f == path), None)) is None:
         return (f"{rel} is not a module of its package's libraries or executables" if source_dir(pkg) else
                 "its package has no lakefile.toml to read its libraries from")
+    try:
+        packages = workspace(pkg)
+    except (OSError, ValueError) as e:
+        return f"its package's lake-manifest.json can't be read for the packages it requires ({e})"
     #: {module: (its source, its package's `LIB`)} over the workspace: each package's modules, and whatever else it holds
     #: both a product and a source of; FILE's package's first where two packages hold one name
     at: dict[str, tuple[Path, Path]] = {}
     #: the modules some package of the workspace holds a product of and no source for
     lost: set[str] = set()
     have: dict[Path, dict[str, bool]] = {}
-    for q in workspace(pkg):
+    for q in packages:
         lib, src, listed = q / LIB, (source_dir(q) or (q, None))[0], mods if q == root else modules(q)
         have[lib] = products(lib)
         for m, f in listed.items():

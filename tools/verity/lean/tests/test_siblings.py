@@ -184,6 +184,11 @@ def test_a_sibling_that_loads_a_build_from_before_a_source_in_another_package_ch
     builds name is what their sources name."""
     ident, commit, proofs = moved(tmp_path)
     assert S.workspace(proofs) == [proofs, commit, ident] and S.workspace(ident) == [ident], "its manifest's path packages"
+    for text in ('{"packages": [{"type": "path", "dir": "../comm', "[]", '{"packages": {}}'):
+        (ident / "lake-manifest.json").write_text(text)
+        assert "lake-manifest.json can't be read for the packages it requires" in S.plan(ident, "Identity/Domains.lean"), \
+            f"no check on a manifest that would hide a required package: {text}"
+    (ident / "lake-manifest.json").unlink()
     assert S.plan(proofs, "Proofs/File.lean") == S.Plan("Proofs.File", True, ["Proofs.Alone", "Proofs.New"],
                                                         ["Proofs.Far", "Proofs.Old"])
     built(commit, "PouwCommit.Bindings")
