@@ -107,9 +107,9 @@ PLAIN_READS = [
     "AGENT_GUARD_LOCAL_OK=1 ssh n1 'cat /root/.config/verity/*'",
 ]
 
-#: words that name a printer judged on no word after it, and the ways such a word stands ahead of a command without running it
+#: words that name a printer judged on no word after it, and the ways a word stands ahead of a command without being it
 NAMESAKES = ["openssl", "tee", "tr", "dd"]
-AHEAD = ["{word} {command}", "ssh {word} {command}", "docker run alpine/{word} {command}", "env PATH=/opt/{word} {command}"]
+AHEAD = ["ssh {word} {command}", "docker run alpine/{word} {command}", "env PATH=/opt/{word} {command}"]
 #: where a command can sit
 PLACES = ["{}", "ssh n1 {}", "ssh n1 '{}'", "research pods ssh vy-nebius-1 -- {}", "research pods ssh vy-nebius-1 -- '{}'",
           "bash -c '{}'", "sudo sh -c '{}'", "echo \"$({})\"", "KEY=$({})"]
@@ -124,6 +124,10 @@ REFUSED = PLAIN_READS + [
     "docker run alpine/openssl sh -c 'cat /k.pem'",
     "ssh sort 'cat x.env | cut -d= -f1'",
     "ssh cmp head -1 /root/.config/verity/r2.env",
+    "ssh grep 'cat x.env'",
+    "docker run alpine/grep sh -c 'cat /k.pem'",
+    "docker run alpine/sed -i cat /k.pem",
+    "find awk -name '*.pem' -exec cat {} +",
     "docker run alpine/diff -q cat /k.pem",
     "tee cat x.pem",
     "dd status=none cat x.pem",
@@ -476,14 +480,19 @@ ALLOWED = [
     "base32 README.md",
     "openssl enc -aes-256-cbc -in key.pem -out key.enc",
     "openssl enc -base64 -in notes.txt",
-    # a grep's, sed's or awk's later words are its pattern, its script and its files, whatever they spell
+    # a grep, sed or awk that is the command itself, here or on the far side: its later words are its pattern, its script
+    # and its files, whatever they spell
     "grep -l sort x.env",
     "grep -c cat x.env",
     "rg -l tee secrets/",
     "sed -i 's/cat/dog/' x.env",
-    "sed -i -e s/tar/zip/ x.env",
+    "sudo sed -i -e s/tar/zip/ x.env",
     "ssh n1 grep -l tar /etc/vy/env/root.env",
+    "ssh -t n1 sudo grep -c tail /etc/vy/env/root.env",
+    "ssh n1 grep 'cat x.env' notes.md",
+    "research pods ssh vy-nebius-1 -- grep -c head /etc/verity/lean-cache.env",
     "awk 'BEGIN { print \"cat x.env\" }'",
+    "find . -name '*.py' | xargs grep -l sort",
     # a word that shares a printer's name ahead of a command that shows no contents
     "ssh tee ls -la ~/.ssh",
     "docker run alpine/openssl sha256sum /k.pem",
@@ -552,11 +561,12 @@ def test_a_command_that_shows_no_secret_files_contents_passes(hook, command):
 
 @pytest.mark.parametrize("command", PLAIN_READS)
 def test_a_word_that_only_shares_a_printers_name_hides_no_plain_read(hook, command):
-    """Every plain read stays refused with a namesake ahead of it: the first word that names a printer is not the only one
-    judged, so one that names no file of its own (a host called `tee`, an image `alpine/openssl`) lifts no refusal."""
-    hidden = [line for line in (form.format(word=word, command=command) for form in AHEAD for word in NAMESAKES)
-              if hook.secret_file_reason(line) is None]
-    assert not hidden
+    """Every plain read stays refused with any printer's name ahead of it (a host called `tee`, an image `alpine/grep`, a
+    directory `/opt/tar`): the first word that names a printer is not the only one judged. As the command itself the name
+    lifts none either, a grep, sed or awk apart, whose later words are its pattern, its script and its files."""
+    lines = [form.format(word=word, command=command) for form in AHEAD for word in sorted(hook.PRINTERS)]
+    lines += [f"{word} {command}" for word in sorted(hook.PRINTERS - hook.SCRIPTED)]
+    assert not [line for line in lines if hook.secret_file_reason(line) is None]
 
 
 @pytest.mark.parametrize("place", PLACES)

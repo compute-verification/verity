@@ -580,13 +580,14 @@ def secret_read(text: str, where: str | None = None, sunk: bool = False) -> tupl
     ssh's remote command, after `research pods ssh POD --`, behind `xargs`, as `find`'s `-exec`), is judged on the files it
     names, its input (`< FILE`), the variable of a `for` loop over such files and, behind `xargs`, the names the commands
     piped into it carry; so are a loop's or `read`'s input (`done < FILE`) and `$(<FILE)`. A word that only shares a
-    printer's name (a host, an image, a directory) therefore hides no reader after it. The first grep, sed or awk is the
-    last word judged: what follows it is its pattern, its script and its files. The quoted strings up to it are read as
-    commands in turn, which is how a wrapper script's argument, `bash -c`'s and an interpreter's code are seen. `git`'s
-    arguments and those of a `research` command that runs nothing (no `--`) are prose and are not read. `where` is the
-    directory the commands run in when they run on this machine, None on another or once a `cd` can't be followed: there a
-    command that reads a file itself (behind nothing but `sudo`, `timeout` and the like without options, or in such a
-    `bash -c`) reads one git has committed freely (`tracked`). `sunk` says the output of `text` as a whole goes to a command
+    printer's name (a host, an image, a directory) therefore hides no reader after it. A grep, sed or awk that is the
+    command itself, here or the one ssh or `research pods ssh` has the far side run, is the last word judged: what follows
+    it is its pattern, its script and its files. The quoted strings up to it are read as commands in turn, which is how a
+    wrapper script's argument, `bash -c`'s and an interpreter's code are seen. `git`'s arguments and those of a `research`
+    command that runs nothing (no `--`) are prose and are not read. `where` is the directory the commands run in when they
+    run on this machine, None on another or once a `cd` can't be followed: there a command that reads a file itself (behind
+    nothing but `sudo`, `timeout` and the like without options, or in such a `bash -c`) reads one git has committed freely
+    (`tracked`). `sunk` says the output of `text` as a whole goes to a command
     that only unpacks it. Inside `text` a command's does when a `|` hands it to one (`unpacks`) that shares the pipe with no
     other command (no subshell or group), or `text`'s own does and the command is piped nowhere, and it is redirected nowhere
     but to `/dev/null`; so then does the output of the command it has another machine run (`far_words`). Only a `tar` that
@@ -619,7 +620,7 @@ def secret_read(text: str, where: str | None = None, sunk: bool = False) -> tupl
             where = os.path.join(where, words[1]) if followed else None
         ats = [i for i, w in enumerate(words) if WRAPS.sub("", os.path.basename(w)) in PRINTERS
                or INTERPRETER.fullmatch(os.path.basename(w)) and any(CODE_OPTION.fullmatch(a) for a in words[i + 1:-1])]
-        last = next((i for i in ats if os.path.basename(words[i]) in SCRIPTED), len(words))
+        last = next((i for i in ats if i in direct and os.path.basename(words[i]) in SCRIPTED), len(words))
         reads = [(at, *printed(words, at, inputs, upstream, into and at in direct)) for at in ats if at <= last]
         if opened or (inputs and not words):             # `$(<FILE)`: the shell itself reads the file into the command line
             reads.append((first, "$(<", words[:1] + inputs, []))
