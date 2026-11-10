@@ -79,7 +79,7 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/PeriodConditions.lean  trusted: a period statement's conditions: WindowsPlaced,
                                a record read back under a registered parameter (RecordFormat.ReadsBy), the sender's
                                channel over those (PeriodChannelReg), the windows' count (windowsCount)
-../../Definitions/NetworkCertifier/Assumptions/RegisteredInputs.lean  trusted: the trace holds the registration's
+../../Definitions/NetworkCertifier/RegisteredInputs.lean  trusted: the trace holds the registration's
                                values at the registered inputs (RegisteredInputsHeld), an open premise
 ../../Definitions/NetworkCertifier/PeriodChecked.lean  trusted: the run at the network certifier's rows
                                (certifierRun), the leak relation there with a valid run (RLeakCertifierChecked), a
