@@ -592,7 +592,7 @@ def OneTable (x : Msg) : Prop :=
 end Dep
 
 /-- The SHA-512 calls of one run: the prover's and the verifier's. -/
-def runCalls (t : Claims.Trace) : ℕ := t.pLog.length + t.vLog.length
+def runCalls (t : Claims.Transcript) : ℕ := t.pLog.length + t.vLog.length
 
 /-- **The recursive session inside the causal game** at composite `k`, `θ`, `F`, `c` and the strategy `σ`: the
 coupling of the device log (`Vocab.families`, `Vocab.coinsRead`) with the session.

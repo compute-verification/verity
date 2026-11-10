@@ -136,10 +136,10 @@ CANONICAL: dict[str, tuple[str, ...]] = {
 <<<<<<< HEAD
     "Store": (f"{CORE}Requirement.lean::Accounting.Requirement.Store", f"{REQ}::CircuitRequirement.Store",
               f"{REQ_PY}::Store"),
-    "Transcript": (f"{CORE}Circuit.lean::Verity.Circuit.Transcript", f"{FLOCK}Transcript.lean::Flock.Transcript"),
+    "Transcript": (f"{CORE}Circuit.lean::Verity.Circuit.Trace", f"{FLOCK}Transcript.lean::Flock.Transcript"),
 ||||||| merged common ancestors
     "Store": (f"{REQ}::CircuitRequirement.Store", f"{REQ_PY}::Store"),
-    "Transcript": (f"{CORE}Circuit.lean::Verity.Circuit.Transcript", f"{FLOCK}Transcript.lean::Flock.Transcript"),
+    "Transcript": (f"{CORE}Circuit.lean::Verity.Circuit.Trace", f"{FLOCK}Transcript.lean::Flock.Transcript"),
 =======
     "Store": (f"{REQ}::CircuitRequirement.Store", f"{REQ_PY}::Store"),
     "Strategy": (f"{CORE}Game.lean::Verity.Game.Strategy",),
@@ -521,11 +521,11 @@ KNOWN: dict[str, str] = {
         "homonym, a hiding commitment to a partition's rows: rename (proofs)",
     "Security/Definitions/Core/Boolean.lean::FlockSoundness.Audit.Circuit":
         "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
-    "Security/Definitions/Core/Circuit.lean::Verity.Circuit.Transcript":
+    "Security/Definitions/Core/Circuit.lean::Verity.Circuit.Trace":
         "homonym, one run's gate values, which the Glossary calls a trace: rename, then the canonical trace (proofs)",
     "Security/Definitions/Core/Compose.lean::Claims.ZKMal.Layout":
         "homonym, a run in parts (a first part, then sessions) that RecZK reads: rename (lean)",
-    "Security/Definitions/Core/Interaction.lean::Claims.Trace":
+    "Security/Definitions/Core/Interaction.lean::Claims.Transcript":
         "homonym, a run's messages, oracle calls and decision, which the Glossary calls a transcript: rename, then the canonical transcript (proofs)",
     "Security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
         "duplicate of `Flock.Stmt`: becomes a reading of its shape (lean)",

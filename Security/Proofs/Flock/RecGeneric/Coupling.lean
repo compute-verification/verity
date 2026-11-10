@@ -53,11 +53,11 @@ theorem innerFO_acc_iff (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : �
   constructor
   · intro h
     by_contra hk
-    have e : K.innerFO I S H P x decC ω d = abortTrace := by
+    have e : K.innerFO I S H P x decC ω d = abortTranscript := by
       unfold Comp.innerFO
       rw [ite_eq_right hk]
     rw [e] at h
-    simp [abortTrace] at h
+    simp [abortTranscript] at h
   · intro hk
     obtain ⟨⟨w, hw, hRO⟩, hacc, ha⟩ : K.GivesRO H P x ω d ∧
         (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d)).out = .acc ∧ K.AgreesO I S H P x ω d := by
@@ -184,11 +184,11 @@ theorem innerFO_vLog_sub (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : 
     · exact Or.inl fun e he => h e (hrun.2.2 e he)
     · exact Or.inr h
   · refine Or.inl fun e he => ?_
-    have e0 : K.innerFO I S H P x decC ω d = abortTrace := by
+    have e0 : K.innerFO I S H P x decC ω d = abortTranscript := by
       unfold Comp.innerFO
       rw [ite_eq_right hk]
     rw [e0] at he
-    simp [abortTrace] at he
+    simp [abortTranscript] at he
 
 omit [Nonempty Coin] in
 /-- **A collision among `P_O`'s aborting runs' calls is one among their reruns' searched evaluations**, where every
