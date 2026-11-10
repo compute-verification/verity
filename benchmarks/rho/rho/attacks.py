@@ -45,7 +45,7 @@ class Comply:
 
 @dataclass(frozen=True)
 class StateFits:
-    """A block whose novel input holds the whole trained state trains unthrottled (the small-state exception, N1): it
+    """A block whose fresh input holds the whole trained state trains unthrottled (the small-state exception, N1): it
     reads the state in, runs the reference algorithm on its compute, and leaves the state behind for the next."""
 
     name: str = "state-fits"
@@ -69,7 +69,7 @@ def search(state: float, splits: bool, flops: float, cut: float, data: float, de
            shared: float = math.inf) -> float:
     """The most reference work one block does by `benchmarks/nci/bracket.py`'s `search`: it covers a slice, a fraction
     `φ` of every token's computation, for `T` tokens, reading the slice's state (`φ U`, or all of `U` when it doesn't
-    split), the `cut` bits per token crossing into it (none at `φ = 1`) and `data` novel bits per token, and decoding
+    split), the `cut` bits per token crossing into it (none at `φ = 1`) and `data` fresh input bits per token, and decoding
     its slice (`φ decode`). Only slices within the largest contiguous run every token shares (`φ U ≤ shared`) are taken,
     so that `T` tokens hold no more of it and cross only at its two ends. 0 when no slice fits. One sequential chain of
     blocks, as there: the state carries what a block hands on inside a step (`Profile.token_state_bits`)."""
@@ -145,7 +145,7 @@ class Tile:
 
 @dataclass(frozen=True)
 class Point:
-    """A measured execution's block: `bits` novel bits and `flops` FLOPs (`None`: any compute), which did the
+    """A measured execution's block: `bits` fresh input bits and `flops` FLOPs (`None`: any compute), which did the
     reference work of `flops / rho` FLOPs (`rho` of the block's own compute when `flops` is `None`)."""
 
     bits: float

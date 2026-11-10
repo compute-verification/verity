@@ -357,7 +357,7 @@ def test_the_export_is_reported_by_port_and_charged_only_when_certifiers_cover_e
     values leaving a block were free, and something off the block can read them. The export, λ_out, is the committed
     bits that cross a certified boundary out of a block, to another block or outside, by egress port and within the
     epoch, read from the declared crossings: h out of a and y out of b, 512 bits each, and not x, which comes in.
-    It counts as novel information read by its receivers once network certifiers cover every link,
+    It counts as fresh input read by its receivers once network certifiers cover every link,
     and not before. The test datacenter's world-to-leaf link is uncovered, so the export is reported and not
     applicable; with the world behind a certifier, the same run's export is charged. The covert budget is the same in
     both."""

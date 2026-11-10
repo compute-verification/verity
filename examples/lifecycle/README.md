@@ -176,7 +176,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
   field names the registered compiler, with the advice so far, and its d.D, one `Circuit`, is B.init θ ‖ B(a_1) ‖ … ‖ B(a_k) (`Circuit.append`): each execution block
   appended after the ones before it, reading their gates along the state wire (block k's state input is block k − 1's
   state output, not an input gate); d.θ, the registered information, is theta's and the initial state's input gates, the
-  gates of B.init θ. `Baseline` is d before any block, and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
+  gates of B.init θ. `Baseline` is d before any block, and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are fresh input gates.
 - **State crosses execution blocks as a committed value.** A sampled proof block at the start of block k opens block k − 1's
   last row (or the registered initial state), so one unit's statement reads three commitments. `Core.Protocol`'s answer carries
   one commitment: the cross-block read and the chain live outside every subprotocol, in `check_declaration` and
