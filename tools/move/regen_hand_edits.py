@@ -35,10 +35,6 @@ EDITS = {
         ('[[words_in]]\nfiles = ["benchmarks/circuit_properties/run.py", "verity/protocols/inference_only/nci/statement.py"]\n'
          "words = { 'HERE.parent / \"rho\"' = 'HERE.parent / \"slowdown\"' }\n\n", "", 1),
         ('[[words_in]]\nfiles = ["benchmarks/README.md"]\nwords = { "`rho/`" = "`slowdown/`" }\n\n', "", 1),
-        # "rho's": the files that say it, where the layout puts them
-        ('files = ["benchmarks/**"]',
-         'files = ["benchmarks/**", "verity/spot/spot_figures/**", "verity/spot/sampling_plan/**", '
-         '"verity/protocols/inference_only/nci/**"]', 1),
         # a path that ends in the directory and then 's ("verity/protocols/inference_only/rho's shapes") is a path
         ("'lanes/[\\w.-]+']", "'lanes/[\\w.-]+', \"(?<=/)rho's\"]", 1),
     ],
@@ -51,7 +47,6 @@ COMMENT_DIRS = [
     ("verity/core/protocols/composition", "verity/composite/verifier/composition"),
     ("benchmarks/nci", "verity/protocols/inference_only/nci"),
     ("benchmarks/rho", "verity/protocols/inference_only/rho"),
-    ("benchmarks/spot_figures", "verity/spot/spot_figures"),
     ("examples/lifecycle", "workloads/lifecycle"),
     ("Security/", "security/"),
 ]

@@ -10,7 +10,9 @@ REF (the rehearsal's renames, new -> old), for a glob that names such a path.
 For each path entry of each map (a scoped table's `files`, `[keep_in]`, `[keep_paths]`, and the `[rewrite]` globs that
 name a moved place) it finds the files the entry matches on REF, moves them, and writes the entry with its literal
 directory moved the same way. The rewrite stands only when the new entry matches, among REF's moved files, exactly
-those: otherwise the entry is reported as `by hand`, with the files it would gain or lose, and left as it was.
+those. A scoped table's glob whose files leave more than one way is split into the globs of the places where the
+files that spell the table's words go (`split`). Otherwise the entry is reported as `by hand`, with the files it would
+gain or lose, and left as it was.
 Each map is written to DIR with only those strings changed; the maps given are not touched. It also lists the comment
 lines and word rows that still spell a moved directory, which are hand edits.
 """
@@ -67,6 +69,29 @@ def rewrite(glob: str, old: list[str], move) -> str | None:
     return None
 
 
+def split(glob: str, old: list[str], words: list[str], spells, moved: dict, moved_files: list[str], rows) -> list[str] | None:
+    """A scoped table's `glob` whose files leave more than one way, as the globs of the places its words' files go.
+
+    Only a file that spells one of the table's words matters to it. The glob stays if such a file stays under it, and
+    each directory row that takes such a file out adds its destination. None unless the new globs reach every such
+    file and no file from outside the old glob that spells a word.
+    """
+    dirs = sorted(((o, n) for o, n in rows if o.endswith("/")), key=lambda r: -len(r[0]))
+    said = spells(words)
+    new = []
+    for p in sorted(said & set(old)):
+        g = glob if fnmatch.fnmatchcase(moved[p], glob) else next((n + "**" for o, n in dirs if p.startswith(o) and moved[p].startswith(n)), None)
+        if g is None:
+            return None
+        if g not in new:
+            new.append(g)
+    old_of = {v: k for k, v in moved.items()}
+    got = {old_of[p] for p in moved_files if any(fnmatch.fnmatchcase(p, g) for g in new)}
+    if not new or (said & set(old)) - got or (got - set(old)) & said:
+        return None
+    return new
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ref", required=True)
@@ -92,6 +117,11 @@ def main() -> None:
     moved = {p: move(p) for p in tracked}
     moved_files = sorted(set(moved.values()))
     old_dirs = sorted({o for o, _ in rows if o.endswith("/")}, key=len, reverse=True)
+
+    def spells(words: list[str]) -> set[str]:
+        args = [x for w in words for x in ("-e", w)]
+        got = subprocess.run(["git", "-C", a.repo, "grep", "-l", "-I", "-F", *args, a.ref], capture_output=True, text=True).stdout
+        return {line.split(":", 1)[1] for line in got.split("\n") if line}
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     report = []
@@ -123,6 +153,13 @@ def main() -> None:
             if new and got == image:
                 text, n = re.subn(r'(?<=")' + re.escape(glob) + r'(?=")', new.replace("\\", r"\\"), text)
                 report.append((path.name, sec, glob, new, f"rewritten ({n} place{'s' if n != 1 else ''})", len(old)))
+                continue
+            its_words = sorted({w for t in data.get("words_in", []) if glob in t["files"] for w in t["words"]})
+            parts = split(glob, old, its_words, spells, moved, moved_files, rows) if sec.startswith("words_in") and not via else None
+            if parts:
+                text, n = re.subn(r'(?<=")' + re.escape(glob) + r'(?=")', '", "'.join(parts).replace("\\", r"\\"), text)
+                report.append((path.name, sec, glob, ", ".join(parts), f"split ({n} place{'s' if n != 1 else ''}) "
+                               f"into where the files that spell its words go", len(old)))
             else:
                 why = "no one directory moves all its files" if not new else (
                     f"the rewrite {new!r} would gain {len(got - image)} and lose {len(image - got)} files"
