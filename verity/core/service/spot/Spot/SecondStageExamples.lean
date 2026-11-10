@@ -44,7 +44,7 @@ private def exRef : Json :=
   Json.mkObj [("scheme", "frame-v3-sha512/hm96-sha512"), ("set", "unit-Pair_v0"), ("units", Json.mkObj []),
     ("frame_v3", Json.mkObj [("schemas", exSchemas), ("bindings", Json.mkObj [("x", "00"), ("out", "00")])])]
 
-/-- A replay sample of blocks 1 and 3 of 4, three proof blocks of one template in each, units 2 and 4 drawn. -/
+/-- A replay sample of blocks 1 and 3 of 4, three proof blocks of one template in each, units 2 and 4 sampled. -/
 private def exOwn : Own :=
   { sample := #[1, 3], parts := parts 2 #[("Pair_v0", #[(0, 6)])], interior := exInterior,
     boundary := exRec 4 [("bx", 5, 6)], drawn := #[2, 4], refs := #[("Pair_v0", exRef)],
@@ -60,7 +60,7 @@ private def exStmt (indices units : List Nat) : Json :=
     ("draw", Json.mkObj [("law", "subset"), ("population", (6 : Nat)), ("k", Lean.toJson units.length),
       ("units", natsJson units.toArray)])]
 
-/-- `own` with a verifier of record that checked statements `ss`' sessions, naming each one's header, registered reads
+/-- `own` with a verifier that checked statements `ss`' sessions, naming each one's header, registered reads
 and sample (`Stmt.checked`). -/
 private def exVerifying (ss : Array Json) (own : Own := exOwn) : Own :=
   { own with verified := ss.filterMap fun j => (Stmt.ofJson? j).bind Stmt.checked }
@@ -70,7 +70,7 @@ reference statement's, as an honest run's are. -/
 private def exReferring (ss : Array Json) (own : Own) : Own :=
   { own with refReads := ss.filterMap fun j => (Stmt.ofJson? j).map fun s => (s.template, s.registered) }
 
-/-- Round 2's check of statements `ss`, each one's session checked by a verifier of record and its template's reference
+/-- Round 2's check of statements `ss`, each one's session checked by the verifier and its template's reference
 statement reading registered what it reads. -/
 private def exCheck (allow : Bool) (own : Own) (ss : Array Json) : Check :=
   check allow (exVerifying ss (exReferring ss own)) (some ss)
@@ -133,7 +133,7 @@ private def exHeader (f : Json → Json) : Json :=
 /-- Header `h` with its object `k`'s field `f` set to `v`. -/
 private def exIn (k f : String) (v : Json) (h : Json) : Json := h.setObjVal! k ((getD h k).setObjVal! f v)
 
-/-- Round 2's codes, the form allowed, for `exHeader f` alone, its session checked by a verifier of record. -/
+/-- Round 2's codes, the form allowed, for `exHeader f` alone, its session checked by the verifier. -/
 private def exCodes (own : Own) (f : Json → Json) : Array String := (exCheck true own #[exHeader f]).codes
 
 #guard (exCodes exOwn id).isEmpty
@@ -236,13 +236,37 @@ private def exAt (per : Nat) (runs : Array Run) (reads : List Nat) (held : Nat :
   (exReferring #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]] exOwn)))
   (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-verified"]
 
+/-- A read of `leaves` leaves, slot `k` reading row `reads[k]`. -/
+private def exRows (leaves : Nat) (reads : List Nat) : Json :=
+  Json.mkObj [("leaves", Lean.toJson leaves), ("reads_from", (0 : Nat)), ("reads", natsJson reads.toArray)]
+
+-- a slot reads its unit's first row, so in a tree of two rows a unit it can't pick its unit's other
+#guard rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 6 [0, 1, 2, 3, 4, 5]) 6 some
+#guard rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 12 [0, 2, 4, 6, 8, 10]) 6 some
+#guard !rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 12 [1, 3, 5, 7, 9, 11]) 6 some
+#guard !rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 12 [0, 2, 4, 6, 8, 11]) 6 some
+
+/-- `exOwn` with the boundary registering value `w`, a tree of `leaves` leaves. -/
+private def exRegisteringW (leaves : Nat) : Own :=
+  { exOwn with boundary := (exRec 4 [("bx", 5, 6)]).setObjVal! "registered" (Json.arr #[Json.mkObj [("value", "w"),
+    ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson leaves)]]) }
+
+/-- A read of registered value `w` at its root and domain, its tree of `leaves` leaves. -/
+private def exReadW (leaves : Nat) : Json :=
+  Json.mkObj [("value", "w"), ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson leaves)]
+
+-- a read's positions are 64-bit, so its tree has at most `2^64` leaves
+#guard readOk (exRegisteringW (2 ^ 64)) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW (2 ^ 64))
+#guard !readOk (exRegisteringW (2 ^ 64 + 1)) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW (2 ^ 64 + 1))
+#guard !readOk (exRegisteringW 6) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW 7)
+
 /-- `exOwn`, the interior registration registering values `w1` and `w2`, six leaves each at its own root and domain. -/
 private def exRegistering : Own :=
   { exOwn with interior := exInterior.setObjVal! "registered" (Json.arr #[
       Json.mkObj [("value", "w1"), ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson (6 : Nat))],
       Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]]) }
 
-/-- Round 2's codes for statement `j` alone, its session checked by a verifier of record, the params giving its
+/-- Round 2's codes for statement `j` alone, its session checked by the verifier, the params giving its
 template's reference statement the registered reads of statement `r`. -/
 private def exValues (own : Own) (r j : Json) : Array String :=
   (check true (exVerifying #[j] (exReferring #[r] own)) (some #[j])).codes

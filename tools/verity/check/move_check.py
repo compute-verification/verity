@@ -53,6 +53,8 @@ Every path git sees changed must be one of:
 - in a JSON pin of `tools/verity/check/pins.py`, a Lake manifest's digest rewritten likewise, since a move changes a
   manifest only in where its path packages sit, which no pinned output reads (`manifest_pin`);
 - an entry appended to research's `moves.json` whose paths agree with the range's (`moves_change`);
+- a new, empty `__init__.py` in a directory at or above a `.py` file the range moved there out of a package (its old
+  directory had an `__init__.py`): the package level `tools/move/layout.py` writes so the module imports by its new name;
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise; or a Lean declaration of a `.lean` file the range edits, to a name
@@ -1382,6 +1384,13 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
     def new_lake(p: str) -> bool:
         return new_dir(p) and H.is_package(p) and posixpath.join(p, "lean-audit.json") in H.set
 
+    def package_level(d: str) -> bool:
+        """Whether an empty `__init__.py` added in `d` is a package level the move needs: a module the range moved to `d` or
+        below it was a package's at BASE, so it is importable by its new name only if each directory above it is a package
+        (`tools/move/layout.py` writes these)."""
+        return any(n.endswith(".py") and n.startswith(d + "/") and posixpath.join(posixpath.dirname(o), "__init__.py") in B.set
+                   for o, n in renamed)
+
     new_projects = set()
     for e in entries:
         if e["status"] == "A" and posixpath.basename(e["new"]) == "pyproject.toml" and new_dir(posixpath.dirname(e["new"])):
@@ -1436,6 +1445,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                 refuse(e, f"not a copy of {src_path}: {why[0]}", why[1])
             else:
                 report["edits"].append({"path": new, "copy_of": src_path, "kind": "copy"})
+            continue
+        if st == "A" and name == "__init__.py" and text(e, 1) == "" and package_level(posixpath.dirname(new)):
+            report["edits"].append({"path": new, "kind": "package level"})
             continue
         if st not in "RM":
             refuse(e, {"A": "added", "D": "deleted", "C": "copied", "T": "type changed"}.get(st, f"status {st}"))

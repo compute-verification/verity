@@ -77,6 +77,8 @@ SH_SELF = re.compile(r'^\s*(?:export\s+|readonly\s+|local\s+)?(?P<v>[A-Za-z_]\w*
                      r'(?:\$\(cd\s+"\$\(dirname\s+"(?P<a>\$0|\$\{BASH_SOURCE\[0\]\})"\)"\s+&&\s+pwd\)/\$\(basename\s+"(?P=a)"\)'
                      r'|\$\((?:realpath|readlink\s+-f)\s+"(?:\$0|\$\{BASH_SOURCE\[0\]\})"\))(?P=q)\s*$', re.M)
 SH_OWN = {"0", "BASH_SOURCE", "BASH_SOURCE[0]"}
+#: what stands before a shell variable's default (`${DEFS:-verity/x.json}`): the `-` there is no part of a longer word
+SH_DEFAULT = re.compile(r"\$\{\w+:?-\Z")
 
 
 def is_shell(path: str, text: str) -> bool:
@@ -516,12 +518,12 @@ class Run:
             pre, p, rest = m.group("pre") or "", m.group("p"), m.group("rest")
             start = m.start("p") if not pre else m.start()
             before = text[start - 1] if start > 0 else ""
-            if not pre and before and (before.isalnum() or before in "_.-/"):
+            if not pre and before and (before.isalnum() or before in "_.-/") and not SH_DEFAULT.search(text, 0, start):
                 return m.group(0)
             token = p + rest
             trail = ""
-            while token and token[-1] in ".,":
-                token, trail = token[:-1], token[-1] + trail
+            while token and (token[-1] in ".," or (token[-1] == "}" and token.count("}") > token.count("{"))):
+                token, trail = token[:-1], token[-1] + trail    # a `}` no `{` of the token opens closes what holds the path
             if "/" not in token:
                 after = text[m.end("p"):m.end("p") + 1]
                 ours = token in self.L.words            # [rewrite] words: a name no key or run directory shares

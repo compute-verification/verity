@@ -151,6 +151,22 @@ def test_a_new_file_is_refused(tmp_path):
     assert (f["path"], f["status"], f["reason"]) == ("security_proofs/pous/NEW.md", "A", "added")
 
 
+def test_an_empty_init_for_a_package_level_the_move_makes_is_certified(tmp_path):
+    """`tools/move/layout.py` writes an empty `__init__.py` in each new directory above a moved package module, so the
+    module imports by its new name. Only that is let in: one with a line in it, or one above no module that was a
+    package's at BASE (`verity_pouw/x.py` has no `__init__.py` beside it), is a new file like any other."""
+    repo, base = _repo(tmp_path, BASE_FILES)
+    _move(repo, "protocols/pous/src/verity_pous/codec.py", "security/pous/codec.py")
+    _move(repo, "protocols/pouw/src/verity_pouw/x.py", "loose/pouw/x.py")
+    _write(repo, {"security/__init__.py": "", "security/pous/__init__.py": "", "loose/pouw/__init__.py": "",
+                  "tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity_pous.codec", "security.pous.codec")})
+    r = _check(repo, base, {"verity_pous.codec": "security.pous.codec"})
+    assert [(f["path"], f["reason"]) for f in r["refusals"]] == [("loose/pouw/__init__.py", "added")]
+    assert {e["path"] for e in r["edits"] if e["kind"] == "package level"} == {"security/__init__.py", "security/pous/__init__.py"}
+    _write(repo, {"security/pous/__init__.py": "X = 1\n"})
+    assert ("security/pous/__init__.py", "added") in [(f["path"], f["reason"]) for f in _check(repo, base)["refusals"]]
+
+
 def test_names_with_spaces_and_odd_characters(tmp_path):
     files = {"old dir/a file.txt": "one\n", "old dir/tab\there.txt": "two\n", 'old dir/quo"te.txt': "three\n"}
     repo, base = _repo(tmp_path, files)
