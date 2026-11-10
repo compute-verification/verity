@@ -160,3 +160,18 @@ such key takes its move's value, and posts the fixed head on VLLM-265 and TOP-39
   directory named for it).
 - Three `[tokens]` rows exist only in the one map (`verity/core/protocols/network/`, `benchmarks/bandwidth/`,
   `examples/`): say what each does to a bare `Path(__file__).parent` in a file under it.
+
+## Tue 10 Nov 11:01Z: THE GO ABOVE EXPIRES AT 11:15Z. Read the clock before you push
+
+At 11:01Z #8619's head is still 611e0aae98, so you had not read the go of 10:46Z. A push is safe only while #8619
+is in no candidate, and a new candidate can take it once one of the two in flight ends (about 11:30Z). A push to a
+member drops its candidate: 17 pull requests and 40 minutes of check (ci, CI-489 10:50Z).
+
+- **If `date -u` says before 11:15Z when you read this:** do the one commit, push, mark by label, comment the new
+  head on HASH-102, as in the GO section. Nothing else first.
+- **If it is 11:15Z or later: DO NOT PUSH to #8619, and do not mark anything.** Keep the patch beside your note
+  (`tools/kmove/8619_followup.patch`) with its one-map test, comment on HASH-102 that it was not pushed, and go on
+  to the rerun on vllm's fixed head. The line is then covered by vllm's fix of the one map's row, or by the
+  stager's second commit, and the lead says so on VLLM-265.
+From now on read this file every 10 minutes, not at each 30-minute checkpoint: tonight a message can be worth a
+candidate.
