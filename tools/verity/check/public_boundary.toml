@@ -90,6 +90,18 @@ benchmarks = [
     "benchmarks/one_stage/{pyproject.toml,README.md}",
     # the CPU reference of the int8 attention's gate, which vLLM's int8 attention tests hold the served kernels to
     "benchmarks/pouw/edited_gemm/{fattn_ref.py,pyproject.toml}",
+    # Pearl-C's kernels, which the vLLM integration serves through: `verity_vllm.protocols.pouw.pearl_c.kernel` loads
+    # `run.py`, `fixture.py` and the cubin from the directory its `kernel` setting names (a path the run gives it, which no
+    # import shows: `tests/test_public_boundary.py` holds it), and `pearl_c.grouped` the `grouped.py` beside sm_90a's
+    # `run.py`. With them, what builds each cubin: `build.sh`, the sources it compiles and the gate it runs on the SASS
+    "benchmarks/pouw/pearl_c_sm120/{run.py,fixture.py,build.sh,sass_gate.py}",
+    "benchmarks/pouw/pearl_c_sm120/{pearl_c_sm120.cu,hash_fast.cuh,hash_decode.cuh,mainloop_sm120.cuh}",
+    "benchmarks/pouw/pearl_c_sm90/{run.py,fixture.py,grouped.py,build.sh,sass_gate.py}",
+    "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h}",
+    # the -h3 hashing both cubins include
+    "benchmarks/pouw/pearl_c/{hash_h3.cuh,sha512.cuh}",
+    # the PoUW harness's SASS gate, whose `mma_gate` each build's gate runs, and the pins it reads
+    "benchmarks/pouw/harness/{sass_gate.py,sass_pins.json}",
 ]
 
 [private]
