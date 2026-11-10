@@ -3,14 +3,14 @@ and its served C2 replay challenge after each run's root of record.
 
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
   the Commit reserves a challenge phase on the auditor's challenger gate (`ChallengerGate`: ``reserve --peer NAME --scheme SCHEME --families
-  families(runs)``, `benchmarks/live_challenger/auditor.py` on the auditor host, under the caller's own gate key). Once its
+  families(runs)``, `verity/composite/device/live_challenger/auditor.py` on the auditor host, under the caller's own gate key). Once its
   first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`; a TP Commit's run
   root v2, `tp.run_root`), it opens that challenge phase on it (``open --session S --root R``): the gate signs the open entry
   binding the challenge phase to the root before the challenger serves a coin, and refuses a second challenge phase for the root, ever.
   The Commit then reaches the challenger on its own 127.0.0.1 (this machine's certifier coin link), refuses one whose coin
   commitment isn't the gate's answer before its first coin (`pouw_h1_window.connect`), and for run i opens coin i of
   each family in `FAMILIES` after run i's root (`ChallengePhase.draw`); it closes the challenge phase after its last run. The samples
-  derive from the coins (`verity.ml.randomness.derive`): opening positions (`positions`) and population identities
+  derive from the coins (`verity.commitments.randomness.derive`): opening positions (`positions`) and population identities
   (`identities`) from `POSITIONS` and `IDENTITIES`, and the served C2 replay's challenge (`replay_challenge`) is the
   `REPLAY` coin.
 * **Without a gate** each run's coins are this process's own bytes (``source`` ``in-process``): the run is a measurement,
@@ -35,9 +35,9 @@ import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import remote
-from verity.core.protocols.spot.challenger import CoinError, LiveOpening, live_reason
+from verity.spot.device import challenger as Ch
+from verity.spot.device import remote
+from verity.spot.device.challenger import CoinError, LiveOpening, live_reason
 
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import window as PHW

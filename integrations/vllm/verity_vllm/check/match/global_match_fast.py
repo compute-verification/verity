@@ -389,10 +389,10 @@ class _MemoProjection(_CanonMemo, PJ.Projection):
 # and (c) the dep-order scan as an any() before the per-tuple loop that names violations.  Each returns exactly what the original does.
 
 def _runs_fast(refs):
-    """verity.ml.circuits.refs.runs for an Affine or a Concat of Affines (every operand of a fold descriptor: 1.40 M affine + 137 k concat, and
+    """verity.circuits.refs.runs for an Affine or a Concat of Affines (every operand of a fold descriptor: 1.40 M affine + 137 k concat, and
     the alias chains codec._decode_refs splices flat are Concats of Affines) -- one loop, no recursion, no closures; the merge rule is
     the record's `push` (adjacent runs of the same (space, idx) with hi == next lo fuse).  Anything else goes to the original."""
-    from verity.ml.circuits.refs import Affine, Concat
+    from verity.circuits.refs import Affine, Concat
     if type(refs) is Affine:
         return [(refs.space, refs.idx, refs.base, refs.base + refs.count)] if refs.count else []
     if type(refs) is Concat:
@@ -413,7 +413,7 @@ def _runs_fast(refs):
             out.append((s, i, b, b + c))
         else:
             return out
-    from verity.ml.circuits.refs import runs
+    from verity.circuits.refs import runs
     return runs(refs)
 
 
@@ -489,7 +489,7 @@ def _spec_id_memo(fn):
         return fn.__dict__["_gmf_spec_id"]
     except (AttributeError, KeyError):
         pass
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
     sid = descriptor_id(fn)
     try:
         fn.__dict__["_gmf_spec_id"] = sid

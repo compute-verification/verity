@@ -1,6 +1,6 @@
-"""The integration's one challenge module: every sample over committed values, on `verity.ml.randomness`.
+"""The integration's one challenge module: every sample over committed values, on `verity.commitments.randomness`.
 
-Each sample derives through `verity.ml.randomness.derive` from a `source`, the run's live coin (`pipeline.commit_coins`:
+Each sample derives through `verity.commitments.randomness.derive` from a `source`, the run's live coin (`pipeline.commit_coins`:
 the auditor host's challenger opens it after the run's root), with the run root and the sample's other bindings as
 context.  A sample without its coin is refused by name:
 
@@ -24,7 +24,7 @@ from typing import Any, TypeVar
 
 import numpy as np
 
-from verity.ml.randomness import Key, derive
+from verity.commitments.randomness import Key, derive
 
 POSITIONS_DOMAIN = "verity/vllm-commit/opening-positions/v1"
 IDENTITIES_DOMAIN = "verity/vllm-commit/opening-identities/v1"

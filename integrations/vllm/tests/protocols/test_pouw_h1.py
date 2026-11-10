@@ -20,16 +20,16 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw import salt as PS  # noqa: E402
-from verity.core.protocols.pouw import window as Wd  # noqa: E402
-from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
-from verity.core.protocols.spot import challenger as LC  # noqa: E402
-from verity.core.protocols.spot import remote as R  # noqa: E402
-from verity.core.protocols.spot.challenger import CoinError, LiveRecord  # noqa: E402
-from verity.ml.circuits.refs import runs  # noqa: E402
+from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
+from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
+from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
+from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
+from verity.protocols.pouw.verifier.coins import Challenger  # noqa: E402
+from verity.spot.device import challenger as LC  # noqa: E402
+from verity.spot.device import remote as R  # noqa: E402
+from verity.spot.device.challenger import CoinError, LiveRecord  # noqa: E402
+from verity.circuits.refs import runs  # noqa: E402
 from verity_vllm import protocols as PO  # noqa: E402
 from verity_vllm.engine import hooks  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
@@ -461,7 +461,7 @@ def _vllm_with(runner):
 def engine(monkeypatch):
     """`verity_vllm.LLM`'s engine build replaced by a toy int8_exact model and a stand-in vLLM whose model runner is
     ``engine["runner"]``; the in-process coins' entropy is seeded."""
-    from verity.core.protocols.pouw import verifier
+    from verity.protocols.pouw.verifier import verifier
     from verity_vllm.engine import vllm_adapter as va
     rng = random.Random(1)
     monkeypatch.setattr(verifier, "coins", rng.randbytes)
@@ -1192,7 +1192,7 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
     answer naming another root or another challenge phase is refused before any coin, and so is a challenge phase of
     H1's layout (salt and round coins: one a Pearl-C pass would leave incomplete), which is closed before its first
     coin."""
-    from verity.core.protocols.pouw.audit import salt_of
+    from verity.protocols.pouw.verifier.audit import salt_of
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
     salt_only = LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, CH.entropy(1))
@@ -1427,7 +1427,7 @@ def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
 def test_hiding_rows_is_core_commit_rows_with_its_salts_drawn_as_one_stream(n, width, nonce):
     """`pouw_h1_requests.hiding_rows`, which H1's tables commit through, is `audit.commit_rows` under hm96 at the same salt
     key and nonce, leaf for leaf: its one RFC 8439 stream is `audit.hm96_salt`'s chunks."""
-    from verity.core.protocols.pouw.audit import HM96, commit_rows
+    from verity.protocols.pouw.verifier.audit import HM96, commit_rows
     rng, key = random.Random(n), hashlib.sha256(b"key").digest()
     values = [rng.randbytes(width) for _ in range(n)]
     want = commit_rows(SALT, 5, values, hash=HM96, salt_key=key, nonce=nonce)
@@ -1439,7 +1439,7 @@ def test_a_rounds_request_and_slot_tables_are_core_commit_rows():
     """A round's request table (entries of their own lengths, then `EMPTY_REQUEST` again and again) and slot table (each
     owner over its rows, then `EMPTY_SLOT`), whose repeated preimages `hiding_rows` digests once, are `audit.commit_rows`'
     trees of the same leaves: the root and every opening."""
-    from verity.core.protocols.pouw.audit import HM96, commit_rows
+    from verity.protocols.pouw.verifier.audit import HM96, commit_rows
     rng, t, r = random.Random(7), 40, 3
     entries = [RQ.RequestEntry(i, r, 5 * i, 16, tuple(rng.randrange(1 << 17) for _ in range(1 + 3 * i))) for i in range(4)]
     owners = [0] * 5 + [1] * 5 + [2] * 5 + [3] * 7 + [None] * 3

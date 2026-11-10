@@ -38,16 +38,16 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.refs import Coll, Explicit, concat
-from verity.ml.circuits.types import Array, Value
-from verity.ml.commitments.gates import sha512 as H
-from verity.ml.commitments.gates.lms import Sha512Compress
-from verity.ml.definitions.registry.sampling import bit_at
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.definitions.ops.prims import const
+from verity.circuits.refs import Coll, Explicit, concat
+from verity.circuits.types import Array, Value
+from verity.commitments.gates import sha512 as H
+from verity.commitments.gates.lms import Sha512Compress
+from verity.definitions.registry.sampling import bit_at
 from verity_vllm.engine import served_seed
 
 __all__ = ["COIN", "NAME", "PARAMS", "SeedBlocks", "SeedCheck", "SeedCheckWord", "SeedEqual", "SeedSelect", "SeedWord", "ServedSeed",

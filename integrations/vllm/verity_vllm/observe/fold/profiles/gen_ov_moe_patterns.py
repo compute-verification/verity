@@ -38,9 +38,9 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.ml.circuits.defs import bind
-from verity.ml.definitions.registry import act as _ACT
-from verity.ml.definitions.registry import moe as _MOE
+from verity.circuits.defs import bind
+from verity.definitions.registry import act as _ACT
+from verity.definitions.registry import moe as _MOE
 from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.quarantine.ov_moe import moe as Q
 
@@ -459,7 +459,7 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
         if (dot := T.moe_expert_dot(target_of(ctx)[0])) is not None:
             return unsupported(node, f"padded construction on a target whose fused_moe_kernel runs the k16 step {dot.id}: MoeFfnFixedL_v1's "
                                "expert bodies run the Ampere one", dot=dot.id)
-        from verity.ml.definitions.registry import moe_pad as MP  # the padded Definitions register on first use, as vocab.py's kind does
+        from verity.definitions.registry import moe_pad as MP  # the padded Definitions register on first use, as vocab.py's kind does
         if self.renormalize:
             return unsupported(node, "padded construction with renormalize=True: MoeFfnFixedL_v1 states the MoeRouterTopK_v1 (unnormalised) router only",
                                renormalize=True)

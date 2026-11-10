@@ -16,10 +16,10 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.core.protocols.pouw.audit import HM96, rows_domain  # noqa: E402
-from verity.core.protocols.pouw.protocol import tagged  # noqa: E402
-from verity.ml.commitments.limits import VerificationLimits  # noqa: E402
-from verity.ml.commitments.merkle import Commitment, verify_opening  # noqa: E402
+from verity.protocols.pouw.verifier.audit import HM96, rows_domain  # noqa: E402
+from verity.protocols.pouw.verifier.protocol import tagged  # noqa: E402
+from verity.commitments.limits import VerificationLimits  # noqa: E402
+from verity.commitments.merkle import Commitment, verify_opening  # noqa: E402
 from verity_vllm.engine import int8_ops  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402

@@ -52,7 +52,7 @@ without stopping the others.
 GO needs every phase's words compared with 0 mismatches and 0 unresolved (a non-finite logit accumulator; these operands keep every
 logit finite), the reference with 0 disagreements wherever it ran (every instance of the score, compress, fill and inv_rope cases
 unless --quick, a sample of the logits), deterministic reruns (the prefill logits on the words they write, `logits_rerun`), and the
-checks above.  The score and head twins, and the word steps every twin here runs on, are `verity.ml.definitions.numerics.dsv4_indexer_twin`'s,
+checks above.  The score and head twins, and the word steps every twin here runs on, are `verity.definitions.numerics.dsv4_indexer_twin`'s,
 the replay's row kernels for those two Definitions.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
@@ -84,8 +84,8 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as X
-from verity.ml.definitions.numerics.dsv4_indexer_twin import OPS, heads_twin, score_twin
-from verity.ml.definitions.registry import dsv4_indexer as I
+from verity.definitions.numerics.dsv4_indexer_twin import OPS, heads_twin, score_twin
+from verity.definitions.registry import dsv4_indexer as I
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-indexer-capture/v1"
@@ -629,12 +629,12 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any] | None) -> dict[str, Any]:
     """vLLM's top-k kernels at TOPK 1024: prefill on the served logits (twice) and on synthetic rows from row start 5; on the decode
     logits the kernel vLLM picks; the decode kernels on synthetic rows; the reference `DsaTopKShortRow_v1{1024}` on its lengths."""
     import torch
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
-    from verity.ml.definitions.registry import dsa
+    from verity.definitions.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}
     cooperative = bool(current_platform.has_device_capability(90) and not current_platform.is_device_capability_family(120))
@@ -735,7 +735,7 @@ def _ref_rows(lo: int, hi: int, every: int) -> list[int]:
 
 
 def _reference(rec: dict[str, Any], fn, want: np.ndarray, lo: int, rows: list[int], args) -> None:
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.evaluation import evaluate
 
     for i in rows:
         y = evaluate(fn, *args(i))
@@ -745,7 +745,7 @@ def _reference(rec: dict[str, Any], fn, want: np.ndarray, lo: int, rows: list[in
 
 def compare_score(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """State rows [lo, hi): their score words against the twin, the reference `Dsv4CompressorScore_v1{256}` on every ref_every-th."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     a = _load(job["paths"])
     lo, hi = job["rows"]
@@ -758,7 +758,7 @@ def compare_score(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_entries(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Cache entries [lo, hi): bytes and scale against the twin, the reference `Dsv4IndexerCompress_v1{128,64,1e-06}` on every
     ref_every-th."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     a = _load(job["paths"])
     lo, hi = job["rows"]
@@ -775,7 +775,7 @@ def compare_entries(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_heads(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """(token, head)s [lo, hi) (id = token * 16 + head): bytes and scales against the twin, the reference
     `Dsv4InvRopeQuantHead_v1{4,128,64}` on every ref_every-th."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     a = _load(job["paths"])
     lo, hi = job["rows"]
@@ -789,7 +789,7 @@ def compare_heads(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_fill(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Fill rows [lo, hi) against the twin, the reference `Dsv4ShortContextTopK_v1{1024,4}` on every ref_every-th."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     a = _load(job["paths"])
     lo, hi = job["rows"]
@@ -802,9 +802,9 @@ def compare_fill(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Entries [a, b) of the prefill or decode logits: the twin against the kernel's words, `DsaMqaLogit_v3{64,128}` on the first two."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.definitions.registry import dsa
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.definitions.registry import dsa
 
     a = _load(job["paths"])
     kr, kc, kg = job["keys"]
@@ -878,8 +878,8 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import dsa
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import dsa
 
     targets = {f"Dsv4CompressorScore_v1{{W={STATE_W}}}": lambda: bind(I.Dsv4CompressorScore, W=STATE_W),
                f"Dsv4CompressColumn_v1{{ROWS={ROWS}}}": lambda: bind(I.Dsv4CompressColumn, ROWS=ROWS),

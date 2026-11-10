@@ -5,7 +5,7 @@
 # PRED is the row's Build of record, which `verity-vllm predict row` writes for ROW's name before the lease, as served_verdicts.sh's),
 # --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, served_verdicts.sh's T), --admit release-order and --window-requests
 # SLOTS, and --window-steps WINDOW_STEPS when it is set (unset: not passed), under served_verdicts.sh's engine environment
-# (VLLM_BATCH_INVARIANT=1, eager), then LOADS loads of `examples/vllm/serve_load.py --varied` with served_verdicts.sh's
+# (VLLM_BATCH_INVARIANT=1, eager), then LOADS loads of `workloads/vllm/serve_load.py --varied` with served_verdicts.sh's
 # REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a release run of its own. With FIXED (unset: the varied load) each
 # load is served_verdicts.sh's LOAD=fixed instead, `serve_load.py --fixed FIXED --prompt-range PROMPTS --window-steps
 # WINDOW_STEPS` with SEED: FIXED requests of PROMPTS tokens, each with ignore_eos and max_tokens WINDOW_STEPS, which FIXED
@@ -71,7 +71,7 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
   fi
   for j in $(seq 1 "$LOADS"); do
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
-    "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
+    "$PY" "$TREE/workloads/vllm/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
       --release "$release" --seed "$SEED" --out "$D/load-$j.jsonl" > "$D/load-$j.log" 2>&1 || rc=$?
     echo "$1 LOAD $j (exit $rc, release run $release): $(tail -1 "$D/load-$j.log" | sed -E 's/, prompts .*//' | cut -c1-300)" \
       >> "$PRIV/stock.txt"

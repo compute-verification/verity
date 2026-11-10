@@ -1,6 +1,6 @@
 """Stage MoE, spec + tiny circuit on CPU — **padded baseline (experimental)**.
 
-The registered fused-MoE block (`verity/ml/definitions/registry/moe.py`: router top-k → expert row gather with the expert index as an
+The registered fused-MoE block (`verity/definitions/registry/moe.py`: router top-k → expert row gather with the expert index as an
 I32 VALUE → expert GEMMs → routed sum) lifted by node replay (`lifted.lift_def`), on a tiny per-token MoE FFN (E=4 experts, TOPK=2,
 K=16 hidden, N=16 intermediate, silu_and_mul).  What this establishes, gate for gate:
 
@@ -26,14 +26,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import Program, bind
-from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest
-from verity.ml.circuits.defs import composite
-from verity.ml.circuits.refs import Coll, array_of, coll_concat, tuple_of
-from verity.ml.definitions.registry import b1, lifted as L, moe, prims as P
-from verity.ml.definitions.numerics import serve3_reference as ref
-from verity.ml.definitions.registry.prims import BF16, F32, I32
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import Program, bind
+from verity.circuits.codec import descriptor_id, encode_program, program_digest
+from verity.circuits.defs import composite
+from verity.circuits.refs import Coll, array_of, coll_concat, tuple_of
+from verity.definitions.registry import b1, lifted as L, moe, prims as P
+from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry.prims import BF16, F32, I32
+from verity.circuits.types import Array, Tuple
 
 E, TOPK, VPT, K, N = 4, 2, 2, 16, 16
 BOT16, BOT32 = L.enc_bot(16), L.enc_bot(32)
@@ -101,7 +101,7 @@ def _run(sp, inputs):
 def _gate_for_gate(pl, tl, pu, tu):
     """The lifted Program has ONE more gate -- the enable Input (its LAST prescribed input); every other gate, in order,
     carries the unlifted word (an Active word is its payload; G1 keeps the weights unwidened)."""
-    from verity.ml.circuits.layout import resolve
+    from verity.circuits.layout import resolve
     last = pl.input_coll(len(pl.root.signature()[0]) - 1)
     eg = {resolve(pl.circuit.root_scope, r) for r in last.refs}
     assert len(eg) == 1 and pl.gates == pu.gates + 1, (pl.gates, pu.gates)

@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import (and_mul_operands, call_args, dtype_is, from_rows, row_value, rows_of, scalar_kind,
                                                       shape)
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
-from verity.ml.definitions.registry.dsv4_moe import limit_bits
+from verity.definitions.registry.dsv4_moe import limit_bits
 
 
 # -- generic elementwise / activation bindings (dense2 vocabulary; none names a model) ----------------------------------------

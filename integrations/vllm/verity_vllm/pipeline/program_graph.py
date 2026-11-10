@@ -32,14 +32,14 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
-from verity.ml.circuits.codec import definition_digest
-from verity.ml.circuits.defs import bind
+from verity.circuits.codec import definition_digest
+from verity.circuits.defs import bind
 
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
-from verity.ml.definitions.encoding import encode_specialization, word_values
-from verity.ml.definitions import word as word_query
+from verity.definitions.encoding import encode_specialization, word_values
+from verity.definitions import word as word_query
 from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
 
 SCHEMA = "vllm-program-graph/v1"
@@ -492,7 +492,7 @@ def with_definitions(g: dict[str, Any]) -> dict[str, Any]:
         x["definition_ids"] = ids[lo:lo + n]
     g["definitions"] = defs
     g.setdefault("rules", {})["definitions"] = ("one entry per distinct specialization the groups use, down to primitives, in the codec's v0 node form "
-                                                 "(verity.ml.circuits.codec.encode_program) with fold hints: runs of >= 3 consecutive nodes of one callee, "
+                                                 "(verity.circuits.codec.encode_program) with fold hints: runs of >= 3 consecutive nodes of one callee, "
                                                  "chained when each reads the one before; a varying group names its smallest and largest representative")
     return g
 
@@ -598,7 +598,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
                       "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
                       "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}
     g.setdefault("rules", {})["q_word_v1"] = (
-        "verity.ml.definitions.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
+        "verity.definitions.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
         "committed once at serving (the Call's inputs are committed; a program's values, its weights, constants and tables and a request's "
         "data and parameters, are registered or run inputs, committed under hiding leaves; only an operation's own constant bits and "
         "wiring are structure); outputs of <= X "
@@ -660,7 +660,7 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         with gzip.open(root / "definitions" / f"{p2}.json.gz", "wt") as fh:
             json.dump(m, fh, separators=(",", ":"))
     (root / "definitions" / "index.json").write_text(json.dumps({"schema": f"{SCHEMA}/definitions", "shard": "definitions/<digest[:2]>.json.gz",
-                                                                 "digest": "the definition's digest (verity.ml.circuits.codec.definition_digest, PROTOCOL.md 4.8)",
+                                                                 "digest": "the definition's digest (verity.circuits.codec.definition_digest, PROTOCOL.md 4.8)",
                                                                  "definitions": index}, separators=(",", ":")) + "\n")
     return index
 
