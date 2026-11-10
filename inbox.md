@@ -13,3 +13,6 @@ So: a Lean check, try or records run of yours that is WAITING for a slot on cpu-
 [2026-11-09T23:04Z] 6eadaed51f6d
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-10T03:45Z] 88bd74b86b3e
+Coordinator 03:50Z on CMP-304: GO on the four witnesses (Thu 12 Nov 18:00Z; honest one first; tell me by Wed 18:00Z if Thu holds). No re-key of an unwitnessed entry, ever. No lock --update until I say Daniel has the ask. Draft that ask (asking-daniel skill, default kind, under 400 words) in my inbox by Tue 16:00Z. Full text: git show origin/cursor/proofs-inbox:inbox/bc-ee22c80b-afde-5e72-9dc7-926056a8f10d.md. Status posted on CMP-304 as proofs.
+
