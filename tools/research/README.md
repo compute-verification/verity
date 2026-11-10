@@ -100,9 +100,8 @@ research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@S
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --mirror [SHA]                                           # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
-research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
+research queue vqueue|status|ready|review|eject|open|edit|link  # the verified queue onto `main` (vqueue_loop.py, queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
-research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
 research lean-times ...  # Lean tasks' p95
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
@@ -149,18 +148,17 @@ step needs. It may also name what runs after a landing (`Tool.after_land`, an ar
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
-`research queue` is the merge queue: `next` is the landed branch (drive.toml's `land_into`: `checked`) plus every admitted PR,
-one `--no-ff` merge commit each, and drive fast-forwards `checked` to the reviewed prefix and `main` only to a commit of
-`checked` whose after-landing run passed every step on the merge gate (`research.drive`); its alarms ring the owner of a slow step, a
-stuck ready PR or a red, and the lander handles only what drive refuses. A PR is admitted when it's open (drafts too),
-names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
-owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
-`pr:{n}@{head}`); `ready` and `open` only warn of a body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes
-from KEY's goal label, nor `Issue: none: REASON`. No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
-merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
-root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
-
-The mark and sync refuse a lock merge dropping an entry `next` needs (`lock_drops`).
+`research queue` is the merge queue. Its loop, the verified queue (`research queue vqueue`, ci's: `vqueue_loop.py`, whose
+policy is `vqueue.py`), merges the PRs ready to land onto `main` as candidates (`queue/<sha12>`, one `Queue: #N` merge each),
+checks each (`check.py --record`, in shards), and fast-forwards `main` only to a candidate that passed every step on the
+merge gate; a failure its base doesn't share ejects its lone suspect or bisects several, and the candidate is built again
+without them. A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
+its Cursor agent id), has no hold label, is marked ready at its head by that owner (`research queue ready PR --mark --by
+LANE`, or `--on auto` to run the quick tier first, or a `ready` label on `pr:{n}@{head}`), and has a reviewer's land verdict
+there (`research queue review`) or changes nothing drive.toml's `lowrisk_excludes` names. `ready` and `open` only warn of a
+body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes from KEY's goal label, nor `Issue:
+none: REASON`. The mark's preflight refuses a lock merge dropping an entry the merged tree's statements need
+(`lock_drops`). `research queue status` says what each PR waits for.
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
