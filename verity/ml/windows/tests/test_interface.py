@@ -25,12 +25,16 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import ONE
+from verity.ml.circuits.codec import definition_digest, definition_entry, descriptor_id, encode_program
+from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops.boolean import cast as BC, gemm as BG
+from verity.ml.circuits.population import mixed_population_program
+from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as E
@@ -610,6 +614,30 @@ WEIGHTS = 512 + 4 * 16
 PIN = {"weights": "ab" * 64}
 
 
+def reader(select: SpecializedDefinition) -> SpecializedDefinition:
+    """A Definition under `EMB`'s name and descriptor id, with its rows and a body of one call: of ``select``, a Definition
+    under ``EmbeddingReadSelect_v1{V=4,H=16}``'s name, on the token, a bit of the path and the row. A record can't tell it
+    from `EMB`, and its closure digest costs nothing to take, where `EMB`'s reads every SHA-512 compression it reaches."""
+    def body(B, S, tok, root, domain, row, salt, path):
+        return B.call(select, tok, Coll(E.BIT, TR._refs([path.refs[0]])), row)
+
+    return bind(CompositeDefinition("EmbeddingRead", 1, ("V", "H"), E._signature, body, register=False), V=4, H=16)
+
+
+#: a reader whose verdict reads its path (`embedding.EmbeddingReadSelect`: ``ok`` is the bit, or 1 outside the vocabulary),
+#: the one the verifier pins in these tests; and one with the same body, calling under that name a Definition whose
+#: verdict is a constant 1, which holds its ports to nothing
+CHECKS = reader(bind(E.EmbeddingReadSelect, V=4, H=16))
+FORGED = reader(bind(TR.part("EmbeddingReadSelect", ("V", "H"), E._sig_select, lambda C, S, tok, opened, *row: [*row, [ONE]],
+                             "a select under EmbeddingReadSelect_v1's name, its verdict 1", register=False), V=4, H=16))
+
+
+def with_reader(fn: SpecializedDefinition):
+    """`declared`'s and `embedding`'s templates by descriptor id with ``fn`` for the embedding read, as a caller's own
+    ``resolve`` gives `input_count` a record's Definitions."""
+    return {EID: fn, G8ID: G8, GID: GEMM}.__getitem__
+
+
 def declared(**edit) -> I.Circuit:
     """Three positions' embedding reads (ingress at step 0 for the first two, the third's token free), each read's row two
     ``Gemm_v2{K=16, N=8}`` slices of one fan-out, and a ``Gemm_v2{K=16, N=16}`` a position reading its ``x`` cut in two, a
@@ -741,14 +769,16 @@ def test_a_window_commits_a_cut_ports_rows_each_under_its_writers_salt():
 
 
 def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_the_description():
-    """`input_count` counts each kind of input from the circuit's description alone, never its program; the one free row is
-    the third token. A declaration outside its port, units, parameter or table, or on a row another fills, is refused."""
+    """`input_count` counts each kind of input from the circuit's description alone, never its program; with the opening's
+    reader one the verifier pinned (`CHECKS`), the one free row is the third token. A declaration outside its port, units,
+    parameter or table, or on a row another fills, is refused."""
     rec = declared().description()
     words = 3 * (2 + 32 + 32 + 16 + 96 + 64) + 6 * (16 + 128) + 3 * (16 + 256)
-    assert I.input_count(rec, pins=PIN, roots=PIN) == {"units": 12, "inputs": 16 * words, "wired": 16 * (6 * 16 + 6 * 8),
-                                                       "registered": 16 * (6 * 128 + 3 * 256 + 3 * 64 + 3 * 176),
-                                                       "ingress": 16 * 2 * 2, "free": 32}
-    assert I.input_count({**rec, "ingress": [{**rec["ingress"][0], "units": 3}]}, pins=PIN, roots=PIN)["free"] == 0
+    held = dict(resolve=with_reader(CHECKS), pins=PIN, roots=PIN, readers=[I.reader_digest(CHECKS)])
+    assert I.input_count(rec, **held) == {"units": 12, "inputs": 16 * words, "wired": 16 * (6 * 16 + 6 * 8),
+                                          "registered": 16 * (6 * 128 + 3 * 256 + 3 * 64 + 3 * 176),
+                                          "ingress": 16 * 2 * 2, "free": 32}
+    assert I.input_count({**rec, "ingress": [{**rec["ingress"][0], "units": 3}]}, **held)["free"] == 0
     c = declared()
     reg = c.registered
     for edit, why in [
@@ -772,29 +802,97 @@ def test_a_registered_read_is_registered_only_where_the_windows_root_is_the_one_
     """The third token read from ``acts``, a parameter whose root the prover commits in the window, is free; the same read
     at a pinned root the window's registration records is registered. A window whose ``weights`` root is another than the
     pin, or records none, has every read, table read and opening of ``weights`` free, and so has a window with no pins
-    (a bare string is none). A set of names is no pins: refused, as is a root not hex."""
+    (a bare string is none), its opening's reader pinned or not. A set of names is no pins: refused, as is a root not
+    hex."""
     reg = declared().registered
     rec = declared(registered=replace(reg, params={**reg.params, "acts": 2}, reads=(
         *reg.reads, I.Read(EID, "tok", "acts", at=2, radix=(1,), base=0, step=(0,))))).description()
-    pinned = I.input_count(rec, pins=PIN, roots=PIN)
+
+    def count(pins=None, roots=None):
+        return I.input_count(rec, with_reader(CHECKS), pins, roots, [I.reader_digest(CHECKS)])
+
+    pinned = count(PIN, PIN)
     weights = 16 * (6 * 128 + 3 * 256 + 3 * 64 + 3 * 176)
     assert (pinned["registered"], pinned["free"]) == (weights, 32)
     both = {**PIN, "acts": "12" * 64}
-    assert I.input_count(rec, pins=both, roots=both) == {**pinned, "registered": weights + 32, "free": 0}
-    assert I.input_count(rec, pins=both, roots={**both, "acts": "13" * 64}) == pinned
-    assert I.input_count(rec, pins=PIN, roots={"weights": PIN["weights"].upper()}) == pinned
+    assert count(both, both) == {**pinned, "registered": weights + 32, "free": 0}
+    assert count(both, {**both, "acts": "13" * 64}) == pinned
+    assert count(PIN, {"weights": PIN["weights"].upper()}) == pinned
     free = {**pinned, "registered": 0, "free": weights + 32}
-    assert (I.input_count(rec) == I.input_count(rec, pins="weights") == I.input_count(rec, pins=PIN)
-            == I.input_count(rec, pins=PIN, roots={"weights": "cd" * 64}) == I.input_count(rec, pins="weights", roots=PIN)
-            == free)
+    assert (count() == count("weights") == count(PIN) == count(PIN, {"weights": "cd" * 64}) == count("weights", PIN)
+            == I.input_count(rec) == free)
     assert I.held_params(PIN, {"weights": "cd" * 64, "acts": "ab" * 64}) == frozenset()
     for pins, roots in [({"weights"}, PIN), (["weights"], PIN), (PIN, {"weights"}), ({"weights": "zz"}, PIN),
                         ({"weights": bytes(64)}, PIN), (PIN, {"weights": None})]:
         with pytest.raises(ValueError, match=r"\{param: root\}"):
-            I.input_count(rec, pins=pins, roots=roots)
+            count(pins, roots)
     assert I.registered_roots({"run": RUN, "registered_roots": PIN}) == PIN and I.registered_roots({"run": RUN}) == {}
     with pytest.raises(ValueError, match=r"\{param: root\}"):
         I.registered_roots({"registered_roots": {"weights": {"root": PIN["weights"]}}})
+
+
+def test_an_opening_is_registered_only_where_its_reader_is_a_definition_the_verifier_pinned():
+    """An opening of a table over a held parameter fills ``registered`` only where its reader is a Definition the verifier
+    pinned by its closure digest (`reader_digest`); read by any other it is free, the table reads of the root and domain
+    registered still. With no reader pinned, the catalog's embedding read's row, salt and path are free beside the third
+    token. `CHECKS` and `FORGED` are both the record's ``EmbeddingRead_v1{V=4,H=16}``, with one layout and one body of
+    their own (`codec.definition_digest`), and differ only under the select they call, `FORGED`'s verdict a constant 1:
+    on one record at one pin `CHECKS`' opening is registered and `FORGED`'s is free, so the count takes the reader from
+    the Definition it resolves and digests everything that Definition reaches, never the name the record gives. A pin of
+    another Definition holds nothing, the pins decide which Definition counts, and a pinned reader's opening at another
+    root than the pinned one is free. Readers that aren't a list of digests are refused: a template's name, a bare
+    digest, one in capitals or cut short, a mapping."""
+    rec = declared().description()
+    pin, forged = I.reader_digest(CHECKS), I.reader_digest(FORGED)
+    assert descriptor_id(CHECKS) == descriptor_id(FORGED) == EID and I.layout(CHECKS) == I.layout(FORGED) == I.layout(EMB)
+    assert definition_digest(definition_entry(CHECKS)) == definition_digest(definition_entry(FORGED)) and pin != forged
+    weights, opened = 16 * (6 * 128 + 3 * 256 + 3 * 64), 16 * 3 * (16 + 96 + 64)
+    held = I.input_count(rec, with_reader(CHECKS), PIN, PIN, [pin])
+    assert (held["registered"], held["free"]) == (weights + opened, 32)
+    loose = {**held, "registered": weights, "free": 32 + opened}
+    assert I.input_count(rec, pins=PIN, roots=PIN) == I.input_count(rec, pins=PIN, roots=PIN, readers=[]) == loose
+    assert I.input_count(rec, with_reader(FORGED), PIN, PIN, [pin]) == loose
+    assert I.input_count(rec, with_reader(CHECKS), PIN, PIN, [forged, "ab" * 64]) == loose
+    assert I.input_count(rec, with_reader(CHECKS), PIN, PIN) == loose
+    assert I.input_count(rec, with_reader(FORGED), PIN, PIN, {forged, pin}) == held
+    assert I.input_count(rec, with_reader(CHECKS), PIN, {"weights": "cd" * 64}, [pin]) == {
+        **held, "registered": 0, "free": 32 + weights + opened}
+    for bad in (EID, [EID], pin, [pin.upper()], [pin[:-1]], {pin: EID}, [pin, None], pin.encode(), iter([pin])):
+        with pytest.raises(ValueError, match="readers are a list of closure digests"):
+            I.input_count(rec, with_reader(CHECKS), PIN, PIN, bad)
+
+
+def test_a_pinned_readers_opening_is_registered_only_where_its_units_read_the_tables_root_and_domain():
+    """Under the pin of its reader an opening still fills ``registered`` only where one table read of its table's root and
+    one of its domain id, by its reader, cover its units (`rooted`). With neither read, with one of the two, with a root
+    read of two of its three units or two that cover them only together, or with the root and domain rows declared among
+    the opening's own ports, the pinned reader checks the opening against a root or domain of the prover's own, and its
+    row, salt and path are free; the table reads that remain are registered still."""
+    reg = declared().registered
+    (root, domain), (opening,) = reg.roots, reg.openings
+    reads, table, opened = 16 * (6 * 128 + 3 * 256), 16 * 3 * 32, 16 * 3 * (16 + 96 + 64)
+
+    def count(roots, ports=opening.ports) -> tuple[int, int]:
+        rec = declared(registered=replace(reg, roots=tuple(roots), openings=(replace(opening, ports=ports),)))
+        n = I.input_count(rec.description(), with_reader(CHECKS), PIN, PIN, [I.reader_digest(CHECKS)])
+        return n["registered"], n["free"]
+
+    assert count([root, domain]) == (reads + 2 * table + opened, 32)
+    assert count([]) == (reads, 32 + 2 * table + opened)
+    assert count([root]) == count([domain]) == (reads + table, 32 + table + opened)
+    assert count([replace(root, units=2), domain]) == (reads + table // 3 * 5, 32 + table // 3 + opened)
+    assert count([replace(root, units=2), replace(root, at=2, units=1), domain]) == (reads + 2 * table, 32 + opened)
+    assert count([], ("root", "domain", *opening.ports)) == (reads, 32 + 2 * table + opened)
+
+
+def test_a_readers_digest_is_its_definitions_in_any_program():
+    """`reader_digest` takes a Definition's closure digest over its population of one, and it is `closure_digest` of the
+    Definition's key in any Program that holds it, here a population of two templates: a Definition's digest reads
+    nothing of its Program but what the Definition reaches."""
+    desc = encode_program(mixed_population_program([(CHECKS, 3), (G8, 6)]))
+    assert I.closure_digest(desc, EID) == I.reader_digest(CHECKS) != I.reader_digest(FORGED)
+    assert I.closure_digest(desc, G8ID) == I.reader_digest(G8) != I.reader_digest(CHECKS)
+    assert re.fullmatch("[0-9a-f]{128}", I.reader_digest(G8))
 
 
 def test_coalesce_merges_runs_of_like_patterns():
@@ -1574,26 +1672,40 @@ def test_a_listed_records_tables_table_reads_and_openings_count_as_a_stated_reco
     """A listed record carries a table, its table reads and its openings beside its members, as a served window reads the
     expert a router chose: each read's root and domain rows its table's supplied values, its row, salt and path the units'
     own, which its verdict holds to the table's root at the hidden key. `input_count` counts them as it counts the stated
-    record with the same declarations: registered where the table's parameter is held, free without a pin or where the
-    window's root is another, and a key a wire fills still wired. A table that isn't its parameter's every row, a table
+    record with the same declarations: registered where the table's parameter is held and, for an opening, its reader is
+    a Definition the verifier pinned (`CHECKS`), free without a pin or where the window's root is another, and a key a
+    wire fills still wired. An opening whose reader is no pinned Definition (`FORGED` under the same name, or no readers
+    pinned) is free in both, the table reads registered still, and so is a pinned reader's whose units read the table's
+    domain id and no root (`rooted`). A table that isn't its parameter's every row, a table
     read of no declared table or off a 64-byte input row, an opening whose members lack its key or verdict, a declaration
     over part of a member, outside its template's units or of no template, over a row a wire fills, or over another's rows
     is refused by the count, as by the record and the verifier's window (`listed_reads`)."""
     c, listed, pins = embedding(), listed_embedding(), {"embed": "ab" * 64}
     lay = I.layout(EMB)
     words = dict(lay.rows)
-    stated = I.input_count(c.description(), pins=pins, roots=pins)
+    held = dict(resolve=with_reader(CHECKS), readers=[I.reader_digest(CHECKS)])
+    stated = I.input_count(c.description(), pins=pins, roots=pins, **held)
     opened = 16 * 3 * (words["row"] + words["salt"] + words["path"])
     assert stated == {"units": 3, "inputs": 16 * 3 * sum(words.values()), "wired": 0, "registered": 16 * 3 * 64 + opened,
                       "ingress": 0, "free": 16 * 3 * words["tok"]}
-    assert I.input_count(listed, pins=pins, roots=pins) == {**stated, I.WINDOW_INGRESS: 0}
+    assert I.input_count(listed, pins=pins, roots=pins, **held) == {**stated, I.WINDOW_INGRESS: 0}
+    loose = {**stated, "registered": 16 * 3 * 64, "free": 16 * 3 * words["tok"] + opened}
+    for unpinned in ({**held, "resolve": with_reader(FORGED)}, {**held, "readers": None}, {}):
+        assert I.input_count(c.description(), pins=pins, roots=pins, **unpinned) == loose
+        assert I.input_count(listed, pins=pins, roots=pins, **unpinned) == {**loose, I.WINDOW_INGRESS: 0}
     for p, r in ((None, pins), (pins, {"embed": "cd" * 64}), (pins, {})):
-        assert I.input_count(listed, pins=p, roots=r) == {**stated, I.WINDOW_INGRESS: 0, "registered": 0,
-                                                          "free": stated["inputs"]}
-    keyed = I.input_count(listed_embedding(("tok", "o0", (5, 6))), pins=pins, roots=pins)
+        assert I.input_count(listed, pins=p, roots=r, **held) == {**stated, I.WINDOW_INGRESS: 0, "registered": 0,
+                                                                  "free": stated["inputs"]}
+    keyed = I.input_count(listed_embedding(("tok", "o0", (5, 6))), pins=pins, roots=pins, **held)
     assert keyed == {**stated, I.WINDOW_INGRESS: 0, "wired": 16 * 2 * words["tok"], "free": 16 * words["tok"]}
     reg = c.registered
     root, opening = reg.roots[0], reg.openings[0]
+    unrooted = replace(reg, roots=reg.roots[1:])
+    assert reg.roots[1].of == "domain" and I.input_count(embedding(registered=unrooted).description(), pins=pins,
+                                                         roots=pins, **held) == {
+        **stated, "registered": 16 * 3 * 32, "free": 16 * 3 * (words["tok"] + 32) + opened}
+    assert I.input_count(listed_embedding(registered=unrooted), pins=pins, roots=pins, **held) == {
+        **stated, I.WINDOW_INGRESS: 0, "registered": 16 * 3 * 32, "free": 16 * 3 * (words["tok"] + 32) + opened}
     for bad, why in [(replace(reg, params={"embed": 80}), "its registered parameter's every row"),
                      (replace(reg, roots=(replace(root, table="other"),)), "a declared table's root or domain id"),
                      (replace(reg, roots=(replace(root, port="row"),)), "is not a 64-byte port"),

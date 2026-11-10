@@ -15,7 +15,8 @@ import re
 
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, KEY, ROPE, SCAN_PIN, WINDOW, _alone, _checkpoint, _label, held
+from tests.program.predict.test_window_circuit import (CLASS, KEY, OPENED, ROPE, SCAN_PIN, WINDOW, _alone, _checkpoint, _label,
+                                                       held, opened)
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import window_builder as WB
@@ -75,8 +76,9 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     params = dict(circuit.registered.params)
     assert params.pop(SCAN_STATE) == 16 * 4548 and len(params) == 25
     assert {p.split("/", 1)[0] for p in params} == {WC.WEIGHTS}
+    assert opened(circuit) == OPENED
     assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit)) == {
-        "units": 1568, "inputs": 10547104, "wired": 0, "registered": 9161856, "ingress": 0, "free": 1385248}
+        "units": 1568, "inputs": 10547104, "wired": 0, "registered": 9161856 - OPENED, "ingress": 0, "free": 1385248 + OPENED}
 
 
 @pytest.mark.parametrize("flip, param", [("model.layers.1.mlp.down_proj.weight", "model.layers.1.mlp.down_proj.weight@512"),
@@ -89,7 +91,8 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
     and the scan state at its own root, every weight read but the rotary table's is registered. A committer serving one
     byte changed in a linear's codes, or in its scales, refuses to register that weight, and a window that serves it
     commits another root for that parameter alone, whose reads are then not registered. Pinned on the unwired lowering
-    (module docstring), whose node-output reads are free for want of a wire."""
+    (module docstring), whose node-output reads are free for want of a wire, and the embedding's openings for want of a pin
+    of their reader (`opened`)."""
     reg = _registered()
     doc = json.loads(json.dumps(_unwired(reg).description()))
     d, man = _checkpoint(tmp_path, quant=INT8_EXACT_QUANT)
@@ -99,8 +102,8 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
     assert set(pins) == set(_unwired(reg).registered.params) - {ROPE, SCAN_STATE}
     rope, both = _alone(doc, ROPE), {**pins, **SCAN_PIN}
     held_ = IF.input_count(doc, pins=both, roots=both)
-    assert held_ == {"units": 1568, "inputs": 10547104, "wired": 0, "registered": 9161856 - rope, "ingress": 0,
-                     "free": 1385248 + rope}
+    assert held_ == {"units": 1568, "inputs": 10547104, "wired": 0, "registered": 9161856 - OPENED - rope, "ingress": 0,
+                     "free": 1385248 + OPENED + rope}
     served = WW.record_words(reg, *_checkpoint(tmp_path / "served", flip=flip, quant=INT8_EXACT_QUANT))
     refused = {param.rpartition("@")[0]: "served words that aren't the checkpoint's"}
     with pytest.raises(ValueError, match=re.escape(f"no weight registered: {refused} ")):

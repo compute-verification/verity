@@ -3,8 +3,9 @@ each table of each expert stack's weights and scales on the rank (`expert_rows.t
 of the weight as `check.weights_of_record` composes it from the checkpoint's shards for the rank) committed as core's
 ``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows under the committer's secret key, at the rank's program (`program`)
 and the table's nonce (`nonces`), written before the first window's coins as the record `records.expert_tables.ExpertTables`:
-the ``{program, values}`` the verifier pins (``records_audit.py audit --registered``), so a window's table read and opening count
-registered exactly where the window's root for the table is this one.  The key is minted for these nonces (`mint_key`, whose
+the ``{program, values}`` the verifier pins (``records_audit.py audit --registered``), so a window's table read counts
+registered exactly where the window's root for the table is this one, and its opening there only under the verifier's pin of
+its reader's Definition (`interface.input_count`'s ``readers``).  The key is minted for these nonces (`mint_key`, whose
 sidecar `key_of` requires) and never leaves the committer; a window's committer commits the tables it serves under the same key at
 the program and nonces the record names (`expert_rows.committer`, `serving_rows.after_commit`'s ``tables``), so a table served as
 registered has its registered root and any other's reads are free.

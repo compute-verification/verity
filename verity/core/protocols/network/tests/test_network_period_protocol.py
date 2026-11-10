@@ -28,6 +28,8 @@ from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.certificate import Certificate
 from verity.core.protocols.certifier.schedule import SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
+from verity.ml.circuits.defs import bind
+from verity.ml.windows import interface as IF
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
 
@@ -240,6 +242,24 @@ def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkey
         with monkeypatch.context() as mp:
             mp.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, other))
             assert reference(case)["verdict"] == ACCEPT, (n, reference(case))
+
+
+def test_an_opening_readers_digest_is_the_one_lean_pins_a_template_by(server, monkeypatch):
+    """`interface.input_count` holds an opening's reader to the verifier's pin by `interface.reader_digest`, the
+    Definition's closure digest over its population of one. On the slot entry's Definition that is the digest Lean's
+    `slotEntryDigest` takes of it in a period's Program: `reader_digest` of `PC.slot_entry` is `slotEntryPins`' first,
+    and Lean takes an honest rows period, whose link-window only a template of a pinned digest wires. Of the template
+    under that name with another body it is that body's digest, none of the pins, by which Lean refuses the period."""
+    assert IF.reader_digest(PC.slot_entry()) == PC.SLOT_ENTRY_PINS[0]
+    renamed = IF.reader_digest(bind(PC.RENAMED_SLOT_ENTRY, **PC.SLOT_BINDING))
+    assert renamed == PC.slot_entry_digest(json.loads(PC.audit_descriptor(((1, 2),), (2,), True)), PC.SLOT_KEY)
+    assert renamed not in PC.SLOT_ENTRY_PINS
+    honest = build("rows-honest", 0, small=True)
+    assert reference(honest)["verdict"] == ACCEPT and D.replay(PORT, honest, server)[0] == ACCEPT
+    monkeypatch.setattr(PC, "UNWIRES", ("body",))
+    body = build("rows-prog-unwired", 0, small=True)
+    verdict, out = D.replay(PORT, body, server)
+    assert verdict == REJECT and "whose template is a pinned SlotEntry_v1" in json.loads(out)["reason"], out
 
 
 def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):

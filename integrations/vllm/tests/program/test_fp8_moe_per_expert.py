@@ -238,7 +238,8 @@ def _cut(layers: int, tokens: int, fused: bool = False) -> tuple[WI.Circuit, dic
 @pytest.mark.parametrize("fused", [False, True], ids=["read-then-gemm", "fused"])
 def test_the_cut_is_a_circuit_the_window_interface_takes(fused: bool) -> None:
     """Two layers of two tokens: the templates' proof blocks compose, the wires and declarations check, the tables commit, and
-    the free input bits are the ports left open alone where the tables are pinned, those and the openings where they aren't."""
+    the free input bits are the ports left open and the openings where the tables are pinned and no opening's reader is
+    (`interface.input_count`'s ``readers``), those and the table reads where the tables aren't."""
     L, T = 2, 2
     circuit, params = _cut(L, T, fused)
     lays, gemms = circuit.layouts, FUSED if fused else GEMMS
@@ -256,8 +257,8 @@ def test_the_cut_is_a_circuit_the_window_interface_takes(fused: bool) -> None:
     left = bits(descriptor_id(ROUTER), OPEN_PORTS["router"]) + sum(bits(descriptor_id(gemms[p]), OPEN_PORTS[p]) for p in gemms)
     pins = {p: f"{i:0128x}" for i, p in enumerate(sorted(params))}
     held = WI.input_count(circuit.description(), pins=pins, roots=pins)
-    assert held["registered"] == opened + table_reads and held["ingress"] == 0
-    assert held["free"] == left and held["wired"] == held["inputs"] - left - opened - table_reads
+    assert held["registered"] == table_reads and held["ingress"] == 0
+    assert held["free"] == left + opened and held["wired"] == held["inputs"] - left - opened - table_reads
     unpinned = WI.input_count(circuit.description())
     assert unpinned["registered"] == 0 and unpinned["free"] == left + opened + table_reads
 

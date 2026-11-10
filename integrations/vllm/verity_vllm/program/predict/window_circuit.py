@@ -119,7 +119,9 @@ serving ran is held by the units' proofs on their committed rows, never by this 
 
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
 verifier pinned that weight's own parameter, ``weights/<label>@<words>``, before the run, at the root the window's
-registration records for it; anywhere else they are free. The pins are the hiding roots the committer registered once per
+registration records for it; anywhere else they are free. Its openings count registered only where the verifier pinned the
+embedding read's Definition too, by its closure digest (`input_count`'s ``readers``): a root holds nothing a reader of
+the developer's own opens. The pins are the hiding roots the committer registered once per
 model and key, never roots the verifier computes (`window_weights`). Its scan state reads are held otherwise: the window
 commits the scan's state rows it reads as `scan_state.SCAN_STATE` (`ingress_scan.window_state`, `window_rows.state_value`)
 and the scan's own state ports read that root under its domain, so the scan's chain and the window's reads are one tree.

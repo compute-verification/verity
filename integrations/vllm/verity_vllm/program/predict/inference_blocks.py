@@ -20,8 +20,10 @@ gives a grid level of each and never the counts; the entries, and which units ma
 block): an entry's slot digit is of radix m, so it gives every block the same share of its units. ``k`` is a block's fresh
 input in bits, |in(I) ∖ θ|, θ the weights (`window_builder.WEIGHTS`' parameters) held at their registered roots: what is
 neither wired nor θ's (`interface.input_count`'s ``free`` and ``ingress`` with only the weights held), the scan state among
-it, over the m blocks. Every slot is the same class Program lowered side by side and no wire crosses slots, so each block's
-fresh input is the circuit's over m.
+it, over the m blocks. An opening of a table over θ (the embedding's row, salt and path) is among it too: it is θ's only
+under the verifier's pin of its reader's Definition (`input_count`'s ``readers``), and B holds no pin of the verifier's.
+Every slot is the same class Program lowered side by side and no wire crosses slots, so each block's fresh input is the
+circuit's over m.
 
 **Table** (private; `rows`, `decode`). `ROW_BYTES`-byte rows, integers little-endian: row 0 the header (`MAGIC`, the
 SHA-512 of the circuit's Program, m, the entry count), then one row an entry: its template (`partition_v2.id_digest`,
