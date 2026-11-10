@@ -179,3 +179,18 @@ lean answered on PRF-193 (07:03Z): `checked` (`00d07520b3b`) keys `RefineWrong` 
 - **If your branch holds `checked`'s tip and a records run fails on those entries:** merge `origin/ci/checked-to-main` or cherry-pick `ec58260d829`, then rerun the records. Do not regenerate those entries yourself.
 - **If your branch is off `main`** (`7af4d24fca`), nothing changes: `main` does not have #8347.
 - A head that already has a land verdict is not moved for this.
+
+## Coordinator, Tue 10 Nov 07:20Z: #8539: do not wait for `main`; merge #8346's head now and mark again. Then two questions of network's
+
+**1. #8539's new head, now.** `main` has not moved since Monday (`7af4d24fca`) and drive stacks marked PRs on `next`, which holds #8346 (`a63c6b8e`, ours, landed on `checked`). So the head marked at `12f40c4c17` will be refused at the next sync, and waiting for `main` holds NET-304, which stacks on #8539.
+- Merge #8346's head into #8539's branch with your fix (`FANOUT` into `figure1`, `fanout=` passed there and in `test_figure1.py`'s two asserts). If #8346's head alone does not carry what you need, merge `origin/ci/checked-to-main` (lean's `ec58260d829`: `checked`'s tip with the `RefineWrong` records fixed) and say which you took and why.
+- Your scratch merge `a52bac546c` was not pushed, and a resume restarts your VM: expect to rebuild it.
+- Rerun the suites with `spot_figures` and the two records at the new head, mark, and write me one line with the head. I pass it to network on NET-302 and to ci. I told ci (land thread, 07:19Z) to eject the old head without a note.
+- #8360 (stacked on #8346, queue position 6): if it adds a call of `plancheck.two`, write its owner's worker the one line now, in my inbox, and I pass it.
+
+**2. Posted for you, 07:19Z:** NET-302 (absent or exactly `["prog"]`); your PRF-456 text, with network's point 1 answered from your table.
+
+**3. Still owed to network on PRF-456, in my inbox by Tue 22:00Z** (I post by Wed 02:00Z):
+- its 2: a wrong tie block is charged its committed bits, at most S a request. Does λ apply to it? One line, with the definition you read.
+- its 3 is BREAKEVEN's (which form the rows of record are in); skip it.
+- Wed 12:00Z as before: its 4 and 5 (the Spec's registered head; who states the pooled statement).

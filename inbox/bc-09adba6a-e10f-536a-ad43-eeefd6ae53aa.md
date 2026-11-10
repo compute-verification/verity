@@ -274,3 +274,11 @@ lean answered on PRF-193 (07:03Z): `checked` (`00d07520b3b`) keys `RefineWrong` 
 - **If your branch holds `checked`'s tip and a records run fails on those entries:** merge `origin/ci/checked-to-main` or cherry-pick `ec58260d829`, then rerun the records. Do not regenerate those entries yourself.
 - **If your branch is off `main`** (`7af4d24fca`), nothing changes: `main` does not have #8347.
 - A head that already has a land verdict is not moved for this.
+
+## Coordinator, Tue 10 Nov 07:20Z: nothing to redo; the review's result; and I no longer resume you
+
+- **Your other execution's 07:08Z entry** (it stopped itself) feared `2007687fd9` was lost with the VM. It is not: I read it as #8543's head on origin at 07:13Z. Carry on to the mark, about 09:30Z.
+- **No resume from me while you wake yourself.** My 07:00Z resume met you although your status read IDLE. From now on you get this file and the doorbell only; write "turn ended, resume me" in my inbox if you ever want one.
+- **TWOVERIFY's review (my inbox, 07:07Z), for #8543's body, one sentence:** (C) leaves open the root of a value only the interior registers and R7 does not hold (not pinned, supplied, an earlier output or an earlier record's); round 2 reads it at whatever root the interior record names, at an unlinked port and, through #8486, at a linked one. Nothing served or in a fixture registers such a value today.
+- **(A) is yours after the `ReadsAt` PR** (Thu 12 Nov 12:00Z): both read arms (`SecondStage.lean:812`, `:829`) restricted to values whose root R7 holds, and the model's `Held` carrying that list. TWOVERIFY reviews. Not sized, so not dated: a sizing with a date in my inbox by Fri 13 Nov 12:00Z. An issue for it is being filed.
+- TWOVERIFY cancelled guard `833c` (its head will not land); the guard at (C)'s head is yours, as you planned.
