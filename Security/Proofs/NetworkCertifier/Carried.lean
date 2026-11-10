@@ -293,8 +293,8 @@ theorem rLeak_of_rLeakCarried {H : Msg → Msg} {Cm : CommitmentScheme Bool} {pa
   exact ⟨hl, hD, F, hF, a, ha, free, hfree, hacc⟩
 
 /-- **`KSLinOn` moves from `RAcc δ` to the leak relation from the trace's rows**, on the statements where the check holds
-on the trace's run except with probability `εchk` (`CheckedWitness`), at `κ + εchk`: `ksLinOn_rLeakChecked`'s argument
-at `rLeakCarried_of`. -/
+on the trace's run except with probability `εchk` (`CheckedWitness` at `traceRun`), at `κ + εchk`:
+`ksLinOn_rLeakChecked`'s argument at `rLeakCarried_of`. -/
 theorem ksLinOn_rLeakCarried {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
@@ -302,7 +302,7 @@ theorem ksLinOn_rLeakCarried {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhab
     (εchk : Msg → ℝ) (Dj : ℕ)
     (h : KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) D.E (D.κ δ) D.γ
       (fun _ => 1) (Bext H D.V D.E)) :
-    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D valid εchk x)
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D (traceRun H D.commit) valid εchk x)
       (RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj)
       D.E (fun x => D.κ δ x + εchk x) D.γ (fun _ => 1) (Bext H D.V D.E) := by
   intro x hx Ω _ _ P
@@ -321,7 +321,7 @@ theorem ksLinOn_rLeakCarried {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhab
         by_cases hv : valid s (valOver s.prog (traceVal s.prog (w.val H D.commit s))
             (heldAdv s.prog Pt (faulty H D.commit s Pt w) (w.val H D.commit s)))
         · exact absurd (rLeakCarried_of H D lay k reg valid prow nrow hopen Dj hx.1 hs hP hRel hdisj hv) hng
-        · exact Or.inr ⟨hacc, w, s, Pt, rfl, hs, hP, hdisj, hv⟩
+        · exact Or.inr ⟨hacc, w, s, Pt, rfl, hs, hP, hdisj, _, Set.mem_singleton _, hv⟩
       · exact Or.inl ⟨hacc, hR⟩
   · beta_reduce
     ring
