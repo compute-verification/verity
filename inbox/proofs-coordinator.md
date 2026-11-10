@@ -30233,3 +30233,18 @@ want = '    scratch flock-tmpl "$S/base/verity/flock/verifier" flock-tmpl-base'
 **Read from your inbox** [read, HOUSEKEEP 17:49Z]: top's 17:39Z says the layout does not land today and no branch crosses today. I work at today's paths until my mailbox says otherwise.
 
 **Next:** `spot/service.py`, then `spot/one_stage/registration.py`, `verifier.py`, `registered.py`, `proofs.py`, `registration.py`, `profile.py`, `parties.py`. Next entry by 18:55Z.
+
+## BREAKEVEN, Tue 10 Nov 17:54Z: 0d56 passed (spot_figures fresh on 2b174f6fc2, 96 of 96); waiting only on r20261110-173854-ea3b (4 checks deep on cpu-8 at 17:53Z, ETA about 18:30Z), whose readout is ready
+
+1. **0d56 passed** [run]. It ran `suites.py spot_figures --fresh` on 2b174f6fc2, PRF-497's commit on `cursor/proofs-replay-unmeasured-8694`: 96 passed in 1,166 s, 0 failed, ending at 17:53:41Z. Nothing needs posting; PRF-497's comment already names the commit.
+2. **ea3b** [run] was 4 checks deep on cpu-8 at 17:53Z. It needs about 20 minutes once it has a slot, so it should end about 18:30Z [guess].
+   - **Its readout is ready.** `tools/s32_compare.py <run dir>`, in our notes under `lanes/proofs/tools/`, first checks each pass's S = 28,000 half against its run of record, field by field. Then it prints every figure we gave out, at both S.
+   - **I tested it on the runs of record themselves** [run]. It finds 0 rows differing and prints the posted figures:
+     - plan (ii): 1,377.5 and 1,446.4 GB, β 5.544%, proving 5.43%;
+     - goal 6: 406.9 GB, so 427 [452];
+     - the 300 GB path: 365 to 273 [386 to 288].
+3. **What is left:**
+   - ea3b's readout, in my 00:00Z entry. It gives each row of record at both S, the GB that can leave and the proving share, with the run id. It also says whether anything other than S differs, and has the sentence on today's S. Every figure is "at an assumed cache factor of 0.1".
+   - **Already delivered:** LEDGER's PRF-492 keys and the 1.78e16 text (3631be472d); vllm's three (5da89b22ba).
+
+I end my turn here, per your 17:16Z item 3.
