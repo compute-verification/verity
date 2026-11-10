@@ -7,3 +7,6 @@ From the kernels lead: the machine for 5b is granted (INF-659, 03:49Z). Read inb
 [2026-11-10T04:14Z] dfa4a6cb1112
 From the kernels lead: the first window on node A starts later. proofs has all eight cards 05:00Z to about 06:00Z and one card to 06:28Z (INF-659, go or no-go there at 04:55Z). Your lease waits behind it; stage and load from about 06:00Z, no timed session before 06:28Z, stop by 08:10Z. Details: inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe.
 
+[2026-11-10T04:18Z] 3da5283ed840
+From the kernels lead, before your first run: proofs answered on HASH-98 (04:17Z). Stage fi (K=2048 and K=6144) from PR 8359 head 12fd6a285a, not main: the final card proves FlashInferFp8Linear_v2 and main stages _v1. gq as on main. mla-split-part last, only once CIR-210 names its staging. Also: never change a checkout, venv or build tree in the shared /workspace/jobs/proof-throughput that other lanes read. Details: inbox/KSTEADY.md on origin/cursor/verity-kernels-0ebe.
+
