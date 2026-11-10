@@ -1,0 +1,32 @@
+# The inference-only check's place: what `tools/move/layout.py --map tools/move/inference_only_check_map.toml` moves and
+# rewrites. `verity/protocols/inference_only/verifier/inference_only/`, the policy's check under the name
+# `inference_only_map.toml` gives its directory, is `verity/protocols/inference_only/verifier/`: the layout leaves a
+# directory's name out where the new directory, less `verifier/`, already ends in it. It runs after that map and after
+# `slowdown_calculator_map.toml`, whose package root it names.
+# Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "verity/hardware/machine_model/verity_machine_model", datacenter = "verity/composite/datacenter/datacenter", slowdown = "verity/protocols/inference_only/slowdown/slowdown" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "verity/hardware/machine_model/verity_machine_model", datacenter = "verity/composite/datacenter/datacenter", slowdown = "verity/protocols/inference_only/slowdown/slowdown" }
+
+[paths]
+"verity/protocols/inference_only/verifier/inference_only/" = "verity/protocols/inference_only/verifier/"
+
+[retired]
+paths = ["verity/protocols/inference_only/verifier/inference_only/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, the archive, and `move_check.py` and its tests.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**", "archive/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/check/move_check.py",
+           "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"verity.protocols.inference_only.verifier.inference_only" = "verity.protocols.inference_only.verifier"
