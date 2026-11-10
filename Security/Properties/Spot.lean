@@ -128,8 +128,12 @@ registered or lists as tied (`Partition.readAlone`, of `Partition.sharedInputs`,
 `Registration.tiedGates`): no batch of more than one member broadcasts one or reads a leaf of one twice, and no two
 instance nodes read one leaf. A value one proof block computes that the program takes as an Input joins no proof
 blocks in the fan-out (`Partition.fanout`), so a run Input two proof blocks read could hold rows one of them computed.
-A tied value's rows are tied to the registrations that computed them by a check outside this one, which the
-registration piece names (`Registration.tiedThrough`); R8 says nothing of them. -/
+R8 claims nothing of a tied value's rows: its Input is outside the claim, and the registration piece names each one it
+let through (`Registration.tiedThrough`, published as `rests_on_period_check`). The network period check holds them:
+`Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries
+port, and `Properties.NetworkPeriod.RowsTiedSampled` has that audit sample every unit. That the rows under that root are
+the outputs of the proof blocks that computed them (one-stage's ports and the commitment's binding) is not composed
+with those into a theorem: unproved. -/
 def R8 (v : Registration.Verifier) : Prop :=
   (Registration.tiedBad v).isEmpty = true ∧
     Partition.readAlone v.program v.query (Registration.heldGates v ++ Registration.tiedGates v) = true
