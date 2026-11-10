@@ -72,7 +72,11 @@ after-landing check gates in graph2's place: the run beside each candidate, and 
 as `--shards` shards on `--on`'s machines (`vqueue_slim.start` with ``shards``: N, ci.toml's plan, or `auto:N`, an auto
 plan of the candidate's tree, which splits pytest by suite), judged on every step `main` waits for,
 and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  A failed step
-is inherited by its failing tests, those the run beside its base's check failed too.  graph2's check is enqueued, read,
+is inherited by its failing tests, those the run beside its base's check failed too.  A shard that failed a step it is
+judged on, or a suite of one, fails it while the other shards still run (an early red, `vqueue_slim.judge`), decided as a
+finished fail is: on the lowest candidate at once, on one above it once its base's check has ended (`vqueue_slim.based`),
+nothing built on it meanwhile.  Its check is cancelled with the candidates above it, and its drop's line says when the
+first failure was written and when it was dropped (`early_red`).  graph2's check is enqueued, read,
 retried with the check and cancelled at a drop as before, in shadow: its verdict (`Judged.shadow`) holds, ejects and
 advances nothing, no candidate is held or rung for a task the loop and graph2 dispute or a base graph2 hasn't listed, and
 once it and the check have both ended they are compared in one logged line, `agree` or `disagree` with the tasks graph2
@@ -1310,6 +1314,22 @@ class World:
         return self._slim
 
 
+def _running(j: Judged | None) -> dict:
+    """The record of the run beside a judged candidate's check while that runs: pending, or a check that gates failed before
+    it ended, a fail `vqueue_slim.judge` doesn't keep; {} once it ended."""
+    if j is None or j.slim is None or not (j.slim.state == PENDING or j.slim.state == FAIL
+                                           and "verdict" not in (j.record or {})):
+        return {}
+    return j.record or {}
+
+
+def _failing_tests(f: Failed, most: int = 5) -> str:
+    """The failing tests ``f`` names, the first ``most`` of them, for an owner to read: not what it fails beyond them
+    (`vqueue_slim.unnamed`)."""
+    tests = sorted(x for x in f.tests if not x.split("::")[-1].startswith("unnamed:"))
+    return ", ".join(tests[:most]) + (f" and {len(tests) - most} more" if len(tests) > most else "")
+
+
 def _target(key: str) -> str:
     """What the failure `vqueue_slim.failures` keys ``key`` failed: circuit-check's target (its key `CHECK/CODE TARGET`), else
     the key itself (a merge's name, the step's)."""
@@ -1735,10 +1755,11 @@ class Loop:
         logged (to ``wrote`` too) whenever it changed; with --dry-run neither started nor judged, so pending.  A check that
         failed to list stays list-failed beside a run that hasn't ended, which `combine` reads as pending: one that never
         starts would hold it so.  Each step it failed is compared with the run beside its base's check (``below``: its record
-        and start, `_below` for ``main``), which `vqueue.decide` takes as inherited when that run failed it too; a fail whose
-        every other failure is inherited waits (pending) while that run, started at most `pending_s` ago, hasn't said.
-        Where the check gates (`CHECK_GATE`), the run's verdict alone is the candidate's, graph2's kept beside it
-        (`Judged.shadow`, its note marked so), and a run started while graph2 gated counts as none started."""
+        and start, `_below` for ``main``), which `vqueue.decide` takes as inherited when that run failed it too, a base
+        candidate's still running by what it failed so far (`vqueue_slim.based`); a fail whose every other failure is
+        inherited waits (pending) while the run beside ``main``, started at most `pending_s` ago, hasn't said.  Where the
+        check gates (`CHECK_GATE`), the run's verdict alone is the candidate's, graph2's kept beside it (`Judged.shadow`, its
+        note marked so), and a run started while graph2 gated counts as none started."""
         started, rec = past.slim(sha)
         started, gates = started and not self._other(rec), self.gate == GRAPH2_GATE
         line = dict(sha=sha, base=base, members=prs, heads=heads)
@@ -1756,7 +1777,7 @@ class Loop:
                 wrote.append(got)
         if gates and j.verdict.state == LIST_FAILED and v.state == PENDING:
             return replace(j, slim=v, record=rec)
-        v = self.slim.based(v, below[0])
+        v = self.slim.based(v, below[0], so_far=base != main)
         both = self.slim.combine(j.verdict, v) if gates else v
         if not gates:
             j = replace(j, shadow=j.verdict, note=f"graph2, in shadow, reads {j.verdict.state}: {j.note}" if j.note else "")
@@ -2021,19 +2042,23 @@ class Loop:
         """Cancel ``c``'s check and the run beside it while that runs (it would hold drive's machines for nothing), delete its
         branch and log its outcome.  A run still launching (its shards, of a sharded one) has no run ids yet: its record is
         logged (`beside_launching`), and `_launched` cancels it once it has them; an auto plan still being made is given up
-        (`vqueue_slim.abandon`), so no shard of it launches."""
+        (`vqueue_slim.abandon`), so no shard of it launches.  One decided on a check that gates failed while it ran (an early
+        red) logs when its first failure was written and when it was dropped (``early_red``)."""
         w, j = self.world, t.judged.get(c.sha)
         cancel = w.cancel(c.sha)
-        rec = (j.record or {}) if j is not None and j.slim is not None and j.slim.state == PENDING else {}
+        rec = _running(j)
         if "plan" in rec:
             self.slim.abandon(rec)
         ids = list(rec.get("ids") or ())
         failed = w.cancel_runs(ids, f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}") if ids else {}
         w.push("", branch(c.sha), c.sha)
+        early = (rec.get("early") or {}).get("at") if rec and a.outcome is not None and j.slim.state == FAIL else None
         return self.record(t, "drop", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, outcome=a.outcome,
                            failed=c.verdict.failed, cancel=cancel, done=True,
                            **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}),
-                           **({"beside_launching": rec} if "launch" in rec or "shards" in rec else {}))
+                           **({"beside_launching": rec} if "launch" in rec or "shards" in rec else {}),
+                           **({"early_red": {"failed_at": stamp(early), "dropped_at": stamp(self.now())}}
+                              if early is not None else {}))
 
     def _launched(self, t: Tick) -> list[dict]:
         """The run beside each dropped candidate's check that was still launching at its drop (`Past.launching`), judged each
@@ -2060,7 +2085,8 @@ class Loop:
 
     def _eject(self, a: Eject, t: Tick) -> dict:
         w = self.world
-        tasks = "; ".join(f"{f.task} (key {f.key})" for f in a.failed) or "none named"
+        tasks = "; ".join(f"{f.task} (key {f.key}" + (f", failing {named}" if (named := _failing_tests(f)) else "") + ")"
+                          for f in a.failed) or "none named"
         text = (f"#{a.number} at {a.head[:12]} is ejected from the verified queue: {a.why}. Failed: {tasks}. Each result, its "
                 f"log's digest with it: `research data labels task:<key> --key result --history`. Fix it and mark it ready "
                 f"again")
@@ -2121,9 +2147,13 @@ class Loop:
         if said is None:
             return [self.record(t, "rerun", **line, why="graph2 has no `rerun`: the failure stands", failed=failed,
                                 keys=list(a.keys), absent=True, done=False)]
+        stopped = list(_running(j).get("ids") or ()) if set(a.keys) & beside else []
+        stop_failed = w.cancel_runs(stopped, f"vqueue: candidate {c.sha[:12]}'s failure is rerun afresh") if stopped else {}
         again = self._start(t, c.sha, c.base, line, "started again: its failure is rerun") if set(a.keys) & beside else []
         return [self.record(t, "rerun", **line, why=f"the lone member's own failures, afresh: {said or 'the run beside'}",
-                            failed=failed, keys=list(a.keys), counts=counts, done=True), *again]
+                            failed=failed, keys=list(a.keys), counts=counts, done=True,
+                            **({"beside_cancelled": stopped} if stopped else {}),
+                            **({"beside_cancel_failed": stop_failed} if stop_failed else {})), *again]
 
     def _relist(self, t: Tick, c: Candidate, line: dict, failed: list[Failed], keys: tuple[str, ...], why: str) -> dict:
         """A rerun graph2 refused: it prunes a check an hour after its verdict once nothing of it runs, and reruns none of it
@@ -2243,8 +2273,8 @@ class Loop:
 
     def _compare(self, t: Tick) -> list[dict]:
         """Where the check gates (`CHECK_GATE`): graph2's verdict of each candidate (`Judged.shadow`) beside its check's, once
-        both ended (neither reads pending, graph2's fail with no task still running, the check's not infra, which a retry
-        answers), as one line, logged and printed, once a candidate and line: `agree` when both read alike with their
+        both ended (neither reads pending, neither's fail has a task or a shard still running, the check's not infra, which a
+        retry answers), as one line, logged and printed, once a candidate and line: `agree` when both read alike with their
         inherited failures set aside (`vqueue._reading`), else `disagree`, with the tasks graph2 failed or erred on and the
         steps the check failed."""
         def said(v: Verdict) -> str:
@@ -2254,7 +2284,7 @@ class Loop:
         recs = []
         for c in t.snap.candidates:
             j = t.judged[c.sha]
-            if j.shadow is None or (j.shadow.state == FAIL and not j.shadow.ended):
+            if j.shadow is None or any(v.state == FAIL and not v.ended for v in (j.shadow, c.verdict)):
                 continue
             theirs, mine = vqueue._reading(j.shadow), vqueue._reading(c.verdict)
             if theirs == PENDING or mine not in (PASS, FAIL):
