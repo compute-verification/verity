@@ -1,6 +1,7 @@
 """``vllm-v1``: the reference reproduces its conformance vectors, and its verifier accepts exactly the
 vector openings and rejects the rejection vectors.  That vLLM's own code produces the same bytes is checked in
-``integrations/vllm/tests/commit/test_production_vectors.py``."""
+``integrations/vllm/tests/commit/test_production_vectors.py``.  ``vllm-v1-sha512``: the reference reproduces its vectors,
+openings verify only under their own hash, and a configuration never mixes hashes."""
 
 from __future__ import annotations
 
@@ -9,11 +10,15 @@ import hashlib
 import pytest
 
 from verity.ml.commitments import vllm_v1 as ref
+from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.leaves import LIFT_TAG, NODE_TAG, H
 from verity.ml.commitments.scheme import CommitmentScheme
 from verity.ml.commitments.vllm_v1 import vectors as V
+from verity.ml.commitments.vllm_v1 import vectors_sha512 as V512
 from verity.errors import InvalidArtifact
 
 VECTORS = V.load()
+VECTORS_SHA512 = V512.load()
 
 
 def _b(text: str) -> bytes:
@@ -178,3 +183,93 @@ def test_headers_refuse_fields_that_would_alias() -> None:
                           ok0=True, ok1=True)
     with pytest.raises(InvalidArtifact):
         ref.step_root(b"\0" * 31, *(b"\0" * 32,) * 3, 1, b"\0" * 32)
+
+
+# --- vllm-v1-sha512 ----------------------------------------------------------------------------------------------
+
+
+def test_sha512_vectors_file_is_what_the_reference_generates() -> None:
+    assert V512.main(["--check"]) == 0, "rerun `python -m verity.ml.commitments.vllm_v1.vectors_sha512`"
+
+
+def test_sha512_leaves_and_tree_hash_vectors() -> None:
+    for case in VECTORS_SHA512["hash"]:
+        assert H(case["tag"], *[_b(p) for p in case["parts"]], hash="sha512").hex() == case["digest"]
+    for case in VECTORS_SHA512["pos_leaves"]:
+        value = _b(case["value"])
+        assert ref.pos_leaf(value, "sha512").hex() == case["leaf"]
+        assert ref.pos_leaf_layout(len(value), "sha512").digest(value).hex() == case["leaf"]
+        assert case["leaf"] == hashlib.sha512(ref.POS_LEAF_TAG + len(value).to_bytes(8, "big") + value).hexdigest()
+    for case in VECTORS_SHA512["chunk_leaves"]:
+        assert ref.chunk_header(**case["fields"]).hex() == case["header"]
+        assert ref.chunk_leaf(_b(case["header"]), _b(case["chunk"]), "sha512").hex() == case["leaf"]
+    for case in VECTORS_SHA512["thread_leaves"]:
+        assert ref.thread_leaf(_b(case["header"]) + _b(case["words"]), "sha512").hex() == case["leaf"]
+
+
+@pytest.mark.parametrize("case", VECTORS_SHA512["trees"], ids=lambda c: f"n{c['leaf_count']}")
+def test_sha512_tree_vectors(case: dict) -> None:
+    leaves = [_b(x) for x in case["leaves"]]
+    root = _b(case["root"])
+    assert ref.TREE_SHA512.root(leaves) == root and len(root) == 64
+    for i in range(case["leaf_count"]):
+        path = tuple(_path(case["paths"][i]))
+        assert ref.TREE_SHA512.path(leaves, i) == path
+        assert ref.TREE_SHA512.verify_path(root, case["leaf_count"], i, leaves[i], path)
+        assert not ref.TREE.verify_path(root, case["leaf_count"], i, leaves[i], path)
+    if case["leaf_count"] == 3:
+        a, b, c = leaves
+        assert root == H(NODE_TAG, H(NODE_TAG, a, b, hash="sha512"), H(LIFT_TAG, c, hash="sha512"), hash="sha512")
+
+
+def test_sha512_root_vectors() -> None:
+    fns = {"semantic": ref.semantic_root, "step": ref.step_root, "run": ref.run_root, "weights": ref.weights_root,
+           "stream": ref.stream_root, "thread": ref.thread_root}
+    for case in VECTORS_SHA512["roots"]:
+        i = case["inputs"]
+        args = {
+            "semantic": lambda: (_b(i["program_digest"]), _b(i["query_id"]), _b(i["template_digest"]), _b(i["ctx_digest"]), i["epoch"], i["n"],
+                                 _b(i["tree_root"])),
+            "step": lambda: (_b(i["program_digest"]), _b(i["ctx_digest"]), _b(i["geo_digest"]), _b(i["layout_digest"]), i["n"], _b(i["tree_root"])),
+            "run": lambda: (_b(i["program_digest"]), _b(i["geo_digest"]), [_b(s) for s in i["step_roots"]]),
+            "weights": lambda: (_b(i["geo_digest"]), _b(i["names_digest"]), [_b(t) for t in i["tensor_roots"]]),
+            "stream": lambda: (_b(i["layout_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
+            "thread": lambda: (_b(i["geo_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
+        }[case["kind"]]()
+        assert fns[case["kind"]](*args, hash="sha512").hex() == case["root"]
+        if case["kind"] == "stream":
+            assert ref.stream_ctx_digest(launch_tag=i["launch_tag"], src_mask=i["src_mask"], chunk_words=i["chunk_words"],
+                                         leaf_count=i["leaf_count"], hash="sha512").hex() == i["ctx_digest"]
+        if case["kind"] == "thread":
+            assert ref.thread_ctx_digest(launch_tag=i["launch_tag"], src_mask=i["src_mask"], hash="sha512").hex() == i["ctx_digest"]
+
+
+def test_sha512_openings_accept_exactly_the_honest_values() -> None:
+    assert [(c["kind"], c["accept"]) for c in VECTORS_SHA512["openings"]] == [(k, a) for k in ("semantic", "step", "stream") for a in (True, False)]
+
+
+def test_sha512_configuration_names_its_hash_and_never_mixes() -> None:
+    d = hashlib.sha256(b"cfg").digest()
+    s512 = ref.StepDomain(d, d, d, d, 3, hash="sha512")
+    scheme = ref.VllmV1({"v": s512}, value_nbytes={"v": lambda _i: 8})
+    assert isinstance(scheme, CommitmentScheme)
+    assert (scheme.name, scheme.hashes) == (ref.NAME_SHA512, ("sha512",)) == (VECTORS_SHA512["scheme"], ("sha512",))
+    leaves = [scheme.tree_leaf("v", i, scheme.leaf_layout("v", i).digest(bytes(8))) for i in range(3)]
+    root = scheme.root("v", leaves)
+    assert scheme.verify_path("v", root, 3, 1, leaves[1], scheme.path("v", leaves, 1))
+    with pytest.raises(InvalidArtifact):
+        scheme.tree_leaf("v", 0, bytes(32))
+    with pytest.raises(InvalidArtifact):
+        ref.VllmV1({"a": s512, "b": ref.StepDomain(d, d, d, d, 3)})
+    assert ref.domain_digest(s512) != ref.domain_digest(ref.StepDomain(d, d, d, d, 3))
+    assert ref.VllmV1({}).name == ref.NAME
+
+
+def test_sha512_domain_digests_are_sha512() -> None:
+    d = hashlib.sha256(b"dd").digest()
+    s512 = ref.StepDomain(d, d, d, d, 3, hash="sha512")
+    doc = {"kind": "step", "leaf_count": 3, "program_digest": d.hex(), "ctx_digest": d.hex(), "geo_digest": d.hex(), "layout_digest": d.hex(),
+           "chunk": None, "hash": "sha512"}
+    assert ref.domain_digest(s512) == identity_digest_sha512(ref.DOMAIN_DIGEST_TAG, doc)
+    assert len(ref.domain_digest(s512)) == 64 and len(ref.domain_digest(ref.StepDomain(d, d, d, d, 3))) == 32
+    assert all(len(_b(c["domain_digest"])) == 64 for c in VECTORS_SHA512["openings"])

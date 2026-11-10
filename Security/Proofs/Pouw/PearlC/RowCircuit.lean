@@ -131,7 +131,7 @@ theorem Spec.out_eq (S : Spec) (X : S.toCircuit.Trace) (hX : S.part.Correct X 0)
     (hlt : g < S.N) : val X g = val (S.toCircuit.eval X) g := by
   have hw : S.part.wrong X = ∅ := by
     ext u
-    simp only [Verity.Partition.mem_wrong, Finset.notMem_empty, iff_false, not_not]
+    simp only [Verity.Partition.mem_incorrect, Finset.notMem_empty, iff_false, not_not]
     rwa [Subsingleton.elim u 0]
   have hg' : (⟨g, hlt⟩ : Fin S.toCircuit.N) ∈ S.part.committed :=
     Verity.Partition.mem_committed_of_output _ (Finset.mem_filter.2 ⟨Finset.mem_univ _, hg⟩)
