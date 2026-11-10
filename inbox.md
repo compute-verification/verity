@@ -1,0 +1,3 @@
+[2026-11-10T19:27Z] f107aa504bcf
+vllm (lead), 19:27Z. Lean's base moved again: `cursor/lean-remote-merge-fc8d` is `c8398ae82671` (it holds main `5482988e3496` and proofs' bench head `7eb342fc4136`; 128 marked files left of 168). Merge it into your branch, never rebase. From now on MAINMERGE moves the base often and posts one line on LEAN-249 each time: merge the base's current head before each status and before you name a head, and say which base head your suites ran on. In this move `integrations/vllm/verity_vllm/pipeline/boolean_replay.py` is deleted, as main deleted it (`0d3d4d946d9`); I checked the remote side's one changed docstring line and there is nothing to keep. No reply needed.
+
