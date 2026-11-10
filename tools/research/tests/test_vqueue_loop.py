@@ -337,10 +337,10 @@ def test_a_member_that_conflicts_with_a_candidate_below_names_its_member_and_one
     assert [p.rsplit(": ", 1)[1] for p in env.posts[1:]] == ["merge `main` into it once #1 is on it", "merge `main` into it"]
 
 
-def test_a_member_whose_head_what_it_merges_onto_holds_is_left_out_untold_and_then_logged_once_as_carried(env):
+def test_a_member_whose_head_what_it_merges_onto_holds_is_left_out_untold_and_then_logged_once_as_riding(env):
     """A member whose head an earlier member's holds merges nothing: it reaches `main` with the build, so its owner isn't told
     it doesn't merge (`held`), and while that candidate is on `main`'s chain the PR is no ready PR: no build takes it, so
-    nobody is told to merge `main` into it, and it is logged once a head and candidate (`carried`)."""
+    nobody is told to merge `main` into it, and it is logged once a head and candidate (`riding`)."""
     one = env.put(1, {"a.txt": "1\n"})
     env.o.gh.put(2, env.o.change({"b.txt": "2\n"}, base=one))
     loop = env.loop(lambda s: [] if s.candidates else [Build((2, 1), s.main, 5)])
@@ -348,14 +348,14 @@ def test_a_member_whose_head_what_it_merges_onto_holds_is_left_out_untold_and_th
     assert (skip["action"], skip["number"], skip["heads"], skip["held"], skip["done"]) == ("skip", 1, [one], True, False)
     assert skip["why"] == f"its head {one[:12]} is already in what it merges onto: #2's head holds it" and "text" not in skip
     assert built["members"] == [2] and env.posts == []
-    (carried,) = loop.tick()
-    assert (carried["action"], carried["number"], carried["heads"], carried["sha"]) == ("carried", 1, [one], built["sha"])
-    assert carried["why"] == f"{built['sha'][:12]} holds its head without it as a member: it reaches `main` with it"
+    (riding,) = loop.tick()
+    assert (riding["action"], riding["number"], riding["heads"], riding["sha"]) == ("riding", 1, [one], built["sha"])
+    assert riding["why"] == f"{built['sha'][:12]} holds its head without it as a member: it reaches `main` with it"
     assert loop.tick() == [] and env.posts == []
     assert [r.number for r in loop.snapshot(L.Past.read(env.log, 0), 9).snap.ready] == [2]
 
 
-def test_a_pr_carried_by_a_candidate_after_its_own_mark_lands_with_it_and_is_never_built_or_told(env):
+def test_a_pr_riding_in_a_candidate_after_its_own_mark_lands_with_it_and_is_never_built_or_told(env):
     """A PR stacked on an unmarked PR of the same owner carries that PR's change (`Queue.entries`), so it is built alone; once
     the PR below is marked, its head is a ready PR the candidate holds: no build takes it, nobody is told, and it reaches
     `main` with the candidate."""
@@ -366,8 +366,8 @@ def test_a_pr_carried_by_a_candidate_after_its_own_mark_lands_with_it_and_is_nev
     (built,) = loop.tick()
     assert (built["members"], built["heads"]) == ([2], [two]), built
     env.o.gh.ready.add((1, one))
-    (carried,) = loop.tick()
-    assert (carried["action"], carried["number"], carried["sha"]) == ("carried", 1, built["sha"]), carried
+    (riding,) = loop.tick()
+    assert (riding["action"], riding["number"], riding["sha"]) == ("riding", 1, built["sha"]), riding
     assert loop.tick() == [] and env.posts == []
     keys = env.listed(built["sha"], {"pytest:b": ["b.txt"]})
     env.result(keys["pytest:b"], "pytest:b", "pass")

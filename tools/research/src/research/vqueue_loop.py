@@ -17,7 +17,7 @@ out, `--move-carry-jobs` heads at once on threads no tick waits on), with a land
 rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by
 its merge), not on `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains, and
 held by no candidate on `main`'s chain it isn't a member of (one that is reaches `main` with that candidate: it is logged
-once a head and candidate, `carried`, and nobody is told); `files` is its change against its merge base with `main`, `lean`
+once a head and candidate, `riding`, and nobody is told); `files` is its change against its merge base with `main`, `lean`
 drive's Lean-change test (`queue.lean_change`) of a change that compiles (a lock's alone doesn't), and `conflict` whether
 `Queue._merge` merges it onto `main`, kept by (head, `main`).  The owner of one that doesn't is told once a head the files it
 conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`), unless `main` fetched again holds that
@@ -367,9 +367,9 @@ class Past:
         return {h for r in self.of("conflict") if r.get("done") or r.get("shadow") for h in heads(r)} | self._posting(
             "conflict", heads)
 
-    def carried(self) -> set[tuple[str, str]]:
-        """Each (head, candidate) logged as carried (`Loop._carried`)."""
-        return {(h, r.get("sha")) for r in self.of("carried") for h in r.get("heads") or ()}
+    def riding(self) -> set[tuple[str, str]]:
+        """Each (head, candidate) logged as riding (`Loop._riding`)."""
+        return {(h, r.get("sha")) for r in self.of("riding") for h in r.get("heads") or ()}
 
     def reds(self, base: str) -> set[str]:
         """The tasks ``base`` was told red on."""
@@ -1178,7 +1178,7 @@ class World:
 
     def _holder(self, head: str, base: str, main: str, merged: list[Member]) -> str:
         """What of a build holds ``head``: the first member above ``main`` whose head does, else ``base``.  ``main`` holds no
-        head a build merges: a ready PR's head isn't on it (`ready`), nor in a candidate on its chain (`Tick.carried`)."""
+        head a build merges: a ready PR's head isn't on it (`ready`), nor in a candidate on its chain (`Tick.riding`)."""
         return next((f"#{m.pr}'s head" for m in self._above(base, main, merged) if self._ancestor(head, m.head)),
                     f"the candidate {base[:12]}")
 
@@ -1596,7 +1596,7 @@ class Tick:
     below: dict | None = None
     #: each ready PR a candidate on `main`'s chain holds without it as a member, left out of `snap.ready` (a build of it
     #: merges nothing): {number: (head, the lowest such candidate)}
-    carried: dict[int, tuple[str, str]] = field(default_factory=dict)
+    riding: dict[int, tuple[str, str]] = field(default_factory=dict)
     #: the candidate this tick advanced `main` to, what its build reads as `main`
     advanced: str | None = None
     #: `main` fetched again, the first time this tick a notice needed it (`Loop._landed`)
@@ -1681,12 +1681,12 @@ class Loop:
         chain = [c.sha for c in cands if chained(c.sha)]
         members = {m for c in cands if c.sha in chain for m in c.members}
         holds = w.holding([x.head for x in ready if x.number not in members], chain, main) if chain else {}
-        carried = {x.number: (x.head, holds[x.head]) for x in ready if x.number not in members and x.head in holds}
+        riding = {x.number: (x.head, holds[x.head]) for x in ready if x.number not in members and x.head in holds}
         history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
-        snap = Snapshot(main, tuple(sorted((x for x in ready if x.number not in carried), key=lambda x: x.rank)), tuple(cands),
+        snap = Snapshot(main, tuple(sorted((x for x in ready if x.number not in riding), key=lambda x: x.rank)), tuple(cands),
                         history, self.batch, self.depth, lean=self.lean, now=self.now(), pending_s=self.pending_s,
                         tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)))
-        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], carried=carried)
+        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], riding=riding)
 
     def _shadow_main(self, past: Past, origin: str) -> str:
         """The shadow's `main`: the newest candidate it advanced (`SHADOW`, else its log's newest advance) while origin's `main`
@@ -1801,7 +1801,7 @@ class Loop:
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
                for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._flaky(t) + self._bases(t) \
             + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t) + self._off_gate(t)) + self._conflicts(t) \
-            + self._carried(t)
+            + self._riding(t)
         new += self._launched(t)
         new += [self._on_main(t, adv, told) for adv, told in t.past.moved()]
         for rec in new:
@@ -2368,13 +2368,13 @@ class Loop:
                 recs.append(self.record(t, "conflict", **line, done=True, posted=True))
         return recs
 
-    def _carried(self, t: Tick) -> list[dict]:
-        """A line for each ready PR a candidate on `main`'s chain holds without it as a member (`Tick.carried`), once a head and
+    def _riding(self, t: Tick) -> list[dict]:
+        """A line for each ready PR a candidate on `main`'s chain holds without it as a member (`Tick.riding`), once a head and
         candidate: it reaches `main` with that candidate, so nobody is told."""
-        logged = t.past.carried()
-        return [self.record(t, "carried", sha=sha, members=[n], heads=[head], number=n, done=True,
+        logged = t.past.riding()
+        return [self.record(t, "riding", sha=sha, members=[n], heads=[head], number=n, done=True,
                             why=f"{sha[:12]} holds its head without it as a member: it reaches `main` with it")
-                for n, (head, sha) in sorted(t.carried.items()) if (head, sha) not in logged]
+                for n, (head, sha) in sorted(t.riding.items()) if (head, sha) not in logged]
 
     def _landed(self, t: Tick, head: str) -> str | None:
         """`main` fetched again when it holds ``head``, else None: nobody is told of a head `main` holds.  Fetched once a tick,
