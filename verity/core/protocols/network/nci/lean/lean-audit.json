@@ -65,6 +65,14 @@
    },
    "generate": ["python3", "scripts/desc_fuzz_programs.py", "{repo}", "--out", "{out}"]
   },
+  "NciCheck.DescLivenessMain": {
+   "why": "13 descriptions naming 2^22 to 2^52 + 1 scan iterations or batch members, past what NciCheck.Desc walks one by one (NciCheck.Desc.WALK): a scan of pass-through iterations a gate reads and one nothing reads, a batch returning its shared input read whole, by a gate and through a mapped argument, scans swapping their carry an odd and an even number of times, carries leaving through an xs row, and gates reading a carry or part of an xs row; on each one NciCheck.Desc.check gives a verdict, the one it gives on the same description at a small count (the novel reads for a description whose reads grow with it), which NciCheck.check gives on that one expanded gate by gate",
+   "args": ["{desc_liveness/cases.jsonl}", "13"],
+   "data": {
+    "desc_liveness/cases.jsonl": "481b3a6d30e820f52e496e918a7a6653b4f2bcd903f75cd1f24f5332cd5e18a2"
+   },
+   "generate": ["python3", "scripts/desc_liveness_vectors.py", "{repo}", "--out", "{out}"]
+  },
   "NciCheck.RecordDifftestMain": {
    "why": "612 execution phases' circuit records with their Programs, registration logs in R6's chain, pins and the count's limits: 600 random (one to four templates, their units laid out by inference entries with the slot digit anywhere among the digits, wires that keep to the reader's slot, cross slots or do either unit by unit, registered reads, a table with its table reads and opening, ingress, the first record registering some of the parameters under the root the run commits or another, and pins of most templates' Definitions), two in five broken in one of 44 ways, each refused at one stage; and 12 in the shape of a served class, at two slots and three positions and at four slots and 35: the weights registered at the start of the deployment, none registered, none committed, another root, the opening's root read dropped, the opening's reader another Definition whose verdict is a constant 1, one wire from the next slot, the order given beside the record, and the run's record first in the log. On each, NciCheck.Record.checkDetail gives what scripts/nci_record_reference.py's check_detail computes row by row of every unit (the summary's counts, the verdict and the failure, or the first refusal's code), NciCheck.Record.check its check and no other field, NciCheck.Record.kinds its kinds of some rows, and NciCheck.RecordCount.checkDetail its count; and SPOT's reader reads, from the instance Python builds from its own layout of each template, the wiring it reads from the form's, which refuses the wires exactly where SPOT does",
    "args": ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", "612"],
@@ -73,14 +81,6 @@
     "record_difftest/python.jsonl": "c5c7ca3f217da4f0e1a0d8341a9bdec60f90b512c0aba67c40ed9fab7817e92c"
    },
    "generate": ["python3", "scripts/record_difftest_vectors.py", "{repo}", "--out", "{out}"]
-  },
-  "NciCheck.DescLivenessMain": {
-   "why": "13 descriptions naming 2^22 to 2^52 + 1 scan iterations or batch members, past what NciCheck.Desc walks one by one (NciCheck.Desc.WALK): a scan of pass-through iterations a gate reads and one nothing reads, a batch returning its shared input read whole, by a gate and through a mapped argument, scans swapping their carry an odd and an even number of times, carries leaving through an xs row, and gates reading a carry or part of an xs row; on each one NciCheck.Desc.check gives a verdict, the one it gives on the same description at a small count (the novel reads for a description whose reads grow with it), which NciCheck.check gives on that one expanded gate by gate",
-   "args": ["{desc_liveness/cases.jsonl}", "13"],
-   "data": {
-    "desc_liveness/cases.jsonl": "481b3a6d30e820f52e496e918a7a6653b4f2bcd903f75cd1f24f5332cd5e18a2"
-   },
-   "generate": ["python3", "scripts/desc_liveness_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.DifftestMain": {
    "why": "4,000 random declarations and divisions, the description-sized difftest's 335 on E_REINTERPRET (references naming leaves of other widths than their types give them, which both sides refuse as program, and their well-typed neighbours, expanded gate by gate where the Program decodes), and three pinned ones (θ with an input bound per run, refused theta-not-registered, θ the registered input, accepted, and a declaration with a Const8 gate, which reads nothing, accepted), on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
@@ -98,16 +98,6 @@
    "except": [],
    "why": "the check is code: Lean core and C-Flock's program decoder only, no Mathlib and nothing of Security"
   },
-  "NciCheck.Record": {
-   "imports": ["Flock.TemplateQuery", "Spot.Wires", "NciCheck.Baseline", "NciCheck.DefinitionDigest"],
-   "except": [],
-   "why": "the check of an execution phase's circuit record is code, as NciCheck.Baseline is: θ's provenance check and what it imports, Flock's template queries, SPOT's reader of the record's wires and the Definition's closure digest; nothing of NciCheck.Count, no Mathlib and nothing of Security"
-  },
-  "NciCheck.RecordCount": {
-   "imports": ["NciCheck.Record", "NciCheck.Count"],
-   "except": [],
-   "why": "the count of (c, k)-inference blocks on a circuit record is code: the record's summary (NciCheck.Record) and each Definition's Boolean gates by the gate table (NciCheck.Count)"
-  },
   "NciCheck.Desc": {
    "imports": ["Std", "Flock.Program", "NciCheck.Check"],
    "except": [],
@@ -122,6 +112,16 @@
    "imports": ["Std", "Flock.Program", "NciCheck.Check", "NciCheck.Desc"],
    "except": [],
    "why": "the count of (c, k)-inference blocks is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder, the check's instance format and refusals, and the description-sized check's summaries and θ"
+  },
+  "NciCheck.Record": {
+   "imports": ["Flock.TemplateQuery", "Spot.Wires", "NciCheck.Baseline", "NciCheck.DefinitionDigest"],
+   "except": [],
+   "why": "the check of an execution phase's circuit record is code, as NciCheck.Baseline is: θ's provenance check and what it imports, Flock's template queries, SPOT's reader of the record's wires and the Definition's closure digest; nothing of NciCheck.Count, no Mathlib and nothing of Security"
+  },
+  "NciCheck.RecordCount": {
+   "imports": ["NciCheck.Record", "NciCheck.Count"],
+   "except": [],
+   "why": "the count of (c, k)-inference blocks on a circuit record is code: the record's summary (NciCheck.Record) and each Definition's Boolean gates by the gate table (NciCheck.Count)"
   },
   "NciCheck.Protocol": {
    "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
