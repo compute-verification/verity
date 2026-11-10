@@ -103,6 +103,14 @@ def regPorts : Array Registered.Port := (Registered.ofJson regJ).toOption.getD #
 
 theorem ofJson_reg : Registered.ofJson regJ = .ok regPorts := by kernel_rfl
 
+/-- `Option.mapM` of a file that is there, as `Raw.ins` reads the sample, the partition and the registered reads:
+unfolded, it is a `Functor.map` with a projection at its head, which no rule matches. Its side condition is walked. -/
+theorem optMapM_ok {α β ε : Type} {f : α → Except ε β} {a : α} {b : β} (h : f a = .ok b) :
+    (some a).mapM f = .ok (some b) := by
+  rw [Option.mapM_some, h] <;> rfl
+
+theorem map_norm_draw : (some drawJ).map Flock.norm = some drawJ := congrArg some norm_draw
+
 /-- What the verifier reads of the statement. -/
 def rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : Read :=
   { I := { tags := t0, circuitFile := bytesOf ls lh, publicFile := pubOf r (hexOf H) (hexOf C),
@@ -116,7 +124,8 @@ def insX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : Ins :=
 
 theorem ins_x (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) :
     (rawOf r ls lh H C).ins = .ok (insX r ls lh H C) := by
-  fwd_walk [byName_t0, plain_t0, jsonOf_draw, norm_draw, jsonOf_part, jsonOf_reg, ofJson_reg]
+  fwd_walk [byName_t0, plain_t0, optMapM_ok, jsonOf_draw, map_norm_draw, norm_draw, jsonOf_part, jsonOf_reg,
+      ofJson_reg]
     block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, canon, canonUtf8, Net.parse, Registered.ofJson, Flock.norm,
       FlockDeploy.jsonOf, printJson]
     shallow [metaText]
