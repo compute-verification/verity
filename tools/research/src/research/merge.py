@@ -35,8 +35,8 @@ the diff from its tip either way.  The merge commit carries a `Check: <attempt i
 With --verdicts (opt-in) the same refusals hold before any verdict, and in place of a passing attempt of REF, REF is
 admitted when the target's `check.py --plan REF --packs-only --base HEAD` (`PLAN`, `verdict_gate`) shows every part it
 requires passed under its key at REF, each by a pass that a recorded check's verdict pack holds: an attempt of the tool that
-ended, ran the declared command whole or as a shard, and lists that pack, by sha256, among its run files (`pack_refusal`); or a
-post-landing run's (`check.py --deferred`, the declared command with `--deferred STEPS`, recorded as no tool: `post_landing`).
+ended, ran the declared command whole or as a shard, and lists that pack, by sha256, among its run files (`pack_refusal`); or an
+after-landing run's (`check.py --deferred`, the declared command with `--deferred STEPS`, recorded as no tool: `post_landing`).
 Every Lake package's audit and every step the change requires (`required_steps`) is among those parts, so a skip passes
 nothing; a part with no key is never passed, a build step (`plan.IMPLIED`) is `implied` only by the cited passes of the parts
 that read what it builds (its `implied_by`), and a pass kept only in a machine's cache is cited by nothing.
@@ -166,7 +166,7 @@ def invocation(argv, command) -> tuple[str, object]:
 
 
 def post_landing(argv, command) -> str | None:
-    """The steps of a post-landing run (`check.py --record --deferred STEP,...`, which drive launches through `train.sh
+    """The steps of an after-landing run (`check.py --record --deferred STEP,...`, which drive launches through `train.sh
     --deferred` and records without `--tool check`) when ``argv`` is the declared ``command`` run whole (`invocation`) but for
     `--deferred STEPS` once; else None.  No gate takes it as a check of its commit; `--verdicts` cites its packs part by part."""
     if not (isinstance(argv, list) and argv.count("--deferred") == 1) or (i := argv.index("--deferred")) + 1 >= len(argv):
@@ -676,8 +676,8 @@ def run_plan(repo: Path, commit: str, base: str, also: tuple[str, ...] = (), on:
 
 def pack_refusal(store, rid: str, sha256: str, tool: str, command: tuple[str, ...]) -> str | None:
     """Why the verdict pack of sha256 ``sha256`` can't be cited as attempt ``rid``'s, or None: the attempt's record says it is
-    a ``tool`` attempt that ended (`PACK_STATES`), ran the declared ``command`` whole or as a shard (`invocation`), or is a
-    post-landing run of it, whatever tool it was recorded as (`post_landing`), and lists one of `PACKS` of that sha256 among its
+    a ``tool`` attempt that ended (`PACK_STATES`), ran the declared ``command`` whole or as a shard (`invocation`), or is an
+    after-landing run of it, whatever tool it was recorded as (`post_landing`), and lists one of `PACKS` of that sha256 among its
     run files."""
     try:
         doc = store.get_attempt(rid)

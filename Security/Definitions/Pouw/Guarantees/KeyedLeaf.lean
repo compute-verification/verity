@@ -7,7 +7,7 @@ public import Definitions.Pouw.Assumptions.LeadCommit
 # The keyed leaf hides and binds (trusted)
 
 A window's lead commits each instance as a keyed leaf, `d = H(ks ‖ salt ‖ M_top)` under the window's key `ks` and live
-salt `salt` (`Hash.Keyed`), and records the key leaf, the hm96 leaf over `ks`, before the salt is drawn.
+salt `salt` (`Hash.Keyed`), and records the key leaf, the hm96 leaf over `ks`, before the salt is sampled.
 
 * `Hides`: two windows' views (the key leaf and the digests, `Pouw.KeyedLeaf.view`) are indistinguishable. For any
   predicate `A` of the view, its probabilities at the tops `t` and `t'` differ by at most `A`'s advantage
@@ -19,7 +19,7 @@ salt `salt` (`Hash.Keyed`), and records the key leaf, the hm96 leaf over `ks`, b
   distinct domain ids at bytes 49 to 112 of each top message make them prefix-free. Both read `ks` and `y₀` as uniform:
   they are OS bytes (`uniform/io-getrandombytes`). Distinct instances are at distinct positions, and their domain ids,
   hashes of the positions, are distinct unless SHA-512 collides (`cr/sha-512`).
-* `Binds`: under the premises `SubtreeLayout` and `SaltDerivation`, two values a drawn unit's proofs open at one rank of
+* `Binds`: under the premises `SubtreeLayout` and `SaltDerivation`, two values a sampled proof block's proofs open at one rank of
   one instance are equal, or the messages those openings hashed hold a collision of `H`.
 -/
 
@@ -39,8 +39,8 @@ def Hides : Prop :=
       |real H key salt (tops dom t) A - real H key salt (tops dom t') A| ≤
         advantage H key salt (tops dom t) A + advantage H key salt (tops dom t') A
 
-/-- **A keyed leaf binds its values.** Under `SubtreeLayout` and `SaltDerivation`, two values `v₁` and `v₂` that drawn
-units' proofs open at `rank` of instance `pos` are equal, or the messages the openings hashed (the key leaf's under each
+/-- **A keyed leaf binds its values.** Under `SubtreeLayout` and `SaltDerivation`, two values `v₁` and `v₂` that sampled
+proof blocks' proofs open at `rank` of instance `pos` are equal, or the messages the openings hashed (the key leaf's under each
 key, and each keyed climb's) hold a collision of `H`. -/
 def Binds : Prop :=
   ∀ (H : Msg → Digest) (key : Msg) (keyLeaf salt : Digest) (dom : ℕ → Tree.Domain) (schema : String)

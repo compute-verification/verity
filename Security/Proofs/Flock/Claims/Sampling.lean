@@ -31,9 +31,9 @@ public import Proofs.Flock.Claims.Sampling.Universal
 public import Proofs.Flock.Claims.Sampling.Wait
 public import Proofs.Flock.Claims.Sampling.ZK
 
-/-! The sampling compiler's lemmas: each registered draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the
-executable Bernoulli draw's bound (`Sampling.ExecBernoulli`), the audit layer's pooled escape (`Sampling.PooledPr`) and every law's live draw's (`Sampling.Live`); each
-design's acceptance probability as its model draw's miss probability, the nested escape and the classes' product
+/-! The sampling compiler's lemmas: each registered sampling design's miss bound in `Claims.Pr` (`Sampling.Draws`), the
+executable Bernoulli sample's bound (`Sampling.ExecBernoulli`), the audit layer's pooled escape (`Sampling.PooledPr`) and every sampling design's live sample's (`Sampling.Live`); each
+design's acceptance probability as its model sample's miss probability, the nested escape and the classes' product
 (`Sampling.Escape`), and the deployed count bound at the claims' designs (`Sampling.Count`); `P_a` antitone and `M_δ`
 closed downward at a one-class uniform subset design (`Sampling.Down`); the extractor's rerun
 programs (`Sampling.Extract`, `Sampling.Cost`), its rerun and own-call bounds (`Sampling.Runs`) and its expected reruns
@@ -42,7 +42,7 @@ registered path check (`Sampling.Path`) and at its hm96 leaf (`Sampling.Leaf`); 
 KS (`Sampling.Bext`); the waits' truncation and union bound (`Sampling.Wait`); the block's KS, its count form and its
 bits from Flock's KS at the checked units' sessions and the deployed sampled verifier's named facts (`Sampling.KS`);
 Flock's KS at those sessions from `Claims.Flock.KS` (`Sampling.Session`), and at a raised `N₀` with the weight scaled
-by `k` (`Sampling.Raise`); the deployed draw's miss bound and `DrawLaw` from it (`Sampling.Select`); the universal
+by `k` (`Sampling.Raise`); the deployed sample's miss bound and `DrawLaw` from it (`Sampling.Select`); the universal
 unit's gates running its private circuit (`Sampling.Universal`); the block's claims assembled, with what remains as
 hypotheses (`Sampling.Assembled`, at any Flock record; at SHA-512 at the plain one, `Sampling.AssembledPlain`), and at the
 deployed record over any Flock record (`Sampling.Deployed`); its zero knowledge by sequential composition of the

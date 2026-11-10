@@ -4,16 +4,16 @@ public import Proofs.Flock.Claims.ZK.FinishSwFw
 public import Proofs.Flock.Claims.Complete.ZkTables.View
 
 /-!
-# The firewall's PIOP's points and switched claims at the coins
+# The ZK server's PIOP's points and switched claims at the coins
 
-`repCut_fw`'s `hlig` reads the firewall's PIOP's switched claims (`basisVals sws`) and the log it leaves (`l₃.size`).
+`repCut_fw`'s `hlig` reads the ZK server's PIOP's switched claims (`basisVals sws`) and the log it leaves (`l₃.size`).
 Answered by `asksCut`, those are the coins' alone, whatever the masked values: the zerocheck's `z`, `ρ` and `r` are its
 coins' (`ZcOutAt`), the lincheck's `r'` and `r_in` are its coins' (`LcOutAt`), and a ring switch's switched claims are
-`Rs.sws` at its coins of claims with its claims' points. So the firewall's are the session's closed form at any trace.
+`Rs.sws` at its coins of claims with its claims' points. So the ZK server's are the session's closed form at any trace.
 
 * `zerocheckCut_at`, `lincheckCut_at`: a returned zerocheck's and lincheck's points, and the bodies each sent.
 * `ringSwitchCut_sws`: a returned ring switch's switched claims, and the bodies it sent.
-* **`piopFw_at`**: the firewall's PIOP's switched claims are `Rs.sws` of the closed-form claims (`Zc.out`, `Lc.out` at
+* **`piopFw_at`**: the ZK server's PIOP's switched claims are `Rs.sws` of the closed-form claims (`Zc.out`, `Lc.out` at
   any trace) at the coins from its base, after `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies.
 -/
 
@@ -228,7 +228,7 @@ theorem ringSwitchCut_sws (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → 
     obtain ⟨⟨rfl, -⟩, rfl⟩ := hx
     exact hR.2
 
-/-- **The firewall's PIOP's switched claims at the coins**: answered by `asksCut` from `l`, where the firewall's PIOP
+/-- **The ZK server's PIOP's switched claims at the coins**: answered by `asksCut` from `l`, where the ZK server's PIOP
 returns, its switched claims are `Rs.sws` of the closed-form claims at any trace `tr` (the zerocheck's and lincheck's
 points are their coins', and a switched claim reads its claim's point alone, `Rs.sws_congr`) at the ring switch's coins,
 and it sent `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies, all before the cut's stop `n`. -/

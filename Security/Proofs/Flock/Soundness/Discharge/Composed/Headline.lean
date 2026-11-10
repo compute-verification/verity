@@ -16,15 +16,15 @@ public import Proofs.Flock.Soundness.ZK.PadNonvanishing40
   (lp-zkbind's `sitesZAt`, `rsZAt`): `ZkBind.zk_flock_countC_execOS_at` at the simulated prover `simZ … τ`, with
   `δ_tree = 0` (`execAccept` is acceptance, so the tree's event is empty: `TreeRewind.ofNever`), carried to
   flock-verify's acceptance by `zk_headline_exec_on`;
-* **zero knowledge**: at every draw `verify --zk` sets up, the verifier's view of the session's table at the executable's
+* **zero knowledge**: at every sample `verify --zk` sets up, the verifier's view of the session's table at the executable's
   leaves (`coinedOf P (tablesAtZK dj y₀ S R)`) is within `2·|Hid|·2^-193` of `S_shvzk`'s, which reads only the public
   values, both ways (Lemma B, `session_shvzk_hm96`, with `PadOnto` from `PadNonvanishing` by `padOnto_M1`, which
-`ZK.padNonvanishing40` proves at C-Flock ZK's padding constant).
+`ZK.padNonvanishing40` proves at Flock ZK's padding constant).
 
 What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`: `⊤` at a prover whose link finders break
-it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `DrawOkZK` at each of the law's draws),
+it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `DrawOkZK` at each of the sampling design's samples),
 and `hash-derived-key` (`Assumptions.HashDerivedKey` at hm96-sha512's key). `CoinedOfSetup` is proved
-(`coinedOf_setup`), and `RunsZC` at the law's draws is `ZkExec.runsZC_live`.
+(`coinedOf_setup`), and `RunsZC` at the sampling design's samples is `ZkExec.runsZC_live`.
 
 The zero knowledge holds at every coin the prover doesn't refuse (`CoinedSetup.Admits`, a zerocheck outer coin `1` among
 the refused), with the coins committed at `Hello` under `keyed-cr` (not modelled; `ASSUMPTIONS.md`, zero knowledge's
@@ -66,7 +66,7 @@ theorem zkViewAt_of_ok (C : CoinedSetup) (hC : CoinedOK execArith (fOf Zk.PAD_C)
 
 variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
-/-- **The registered values of a `setupH` draw's table are public at every valid witness** once the circuit's output is
+/-- **The registered values of a `setupH` sample's table are public at every valid witness** once the circuit's output is
 the unit's (`ho`): its regions are whole-word (`setupH_whole`, untyped by `parse_facts`). -/
 theorem coinedOf_reg_setupH (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {S : Finset (Fin n)}
@@ -78,9 +78,9 @@ theorem coinedOf_reg_setupH (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
     Except.ok.inj (hc.symm.trans (setupH_spec ((ZkExec.zkTags_typed I).trans ht) y.x.h).1)
   exact coinedOf_reg P Tz y.x.st y.x.wf.1 y.x.wf.2 hS (setupH_whole y.x.h ho (parse_facts hc).typed)
 
-/-- **One `--zk` sampled session is zero knowledge.** At every draw `verify --zk` sets up, at every coin vector the honest
+/-- **One `--zk` sampled session is zero knowledge.** At every sample `verify --zk` sets up, at every coin vector the honest
 prover doesn't refuse (`refused_coins`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank, `ρ₀, ρ₁` independent, no
-zerocheck outer coin `1`), the verifier's view of the draw's table at the executable's leaves, at any valid witness, is
+zerocheck outer coin `1`), the verifier's view of the sample's table at the executable's leaves, at any valid witness, is
 within `2·|Hid|·δ₁` of `S_shvzk`'s at any `w0`, both ways, where `δ₁` is any bound at which hm96 hides (`hT1`):
 `hidingGap My saltHash` with no premise (`CROnly.hm96Hiding_gap`), `2^-193` under `hash-derived-key`.
 
@@ -117,12 +117,12 @@ theorem zk_session_composed
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOk c = true)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's draw at each of the law's draws
+    -- the challenger's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZK I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     -- the verify command's tags and the challenger's record of the live session
     (hTags : TagsOk I) (hRec : RecordsLiveZK I dj wr)

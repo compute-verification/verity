@@ -195,7 +195,7 @@ def _tool(name: str) -> str | None:
 @pytest.mark.slow
 @pytest.mark.skipif(not _tool("nvcc"), reason="needs nvcc (CUDA 13)")
 def test_build_hostdraw_and_sass(tmp_path):
-    """What the CPU tests can't: emu8.cu's own generator draws what the host regenerates, and today's nvcc compiles each
+    """What the CPU tests can't: emu8.cu's own generator samples what the host regenerates, and today's nvcc compiles each
     timed mainloop to its declared MMA count (the run's SASS gate), with no spills."""
     binary = tmp_path / "emu8"
     subprocess.run([_tool("nvcc"), "-std=c++17", "-O3", "-gencode", "arch=compute_120a,code=sm_120a", "-o", str(binary),

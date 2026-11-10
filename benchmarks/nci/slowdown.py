@@ -17,7 +17,7 @@ in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
   data and no decoding, kept as a check.
 * ``theta_cap``: a calibration without a cap on the committed parameters' size lets a row decode from a committed table
   (its ``decode_flops_table``) instead of regenerating it, as a seed-based method's noise.
-* ``chain``: the partial-sum law, ``Nci.SecurityProofs.ContainedTraining``
+* ``chain``: the partial-sum rule, ``Nci.SecurityProofs.ContainedTraining``
   (``Security/Definitions/Nci/Guarantees/Contained.lean``): ``rho >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
   factor of ``b_w``, ``b_a`` and the chain's smallest inner dimension. Its assumptions are the support-form
   incompressibility of one chain of the reference circuit at ``b_w`` and ``b_a``, and nothing structural. A chain charges
@@ -100,7 +100,7 @@ def read_factor(K: float, b_w: float, b_a: float, d: float, steps: int = 4000) -
 
 
 def chain_lower(i: dict, chain: dict, K: float, Gamma: float, b_tok: float, d_model: float) -> float:
-    """The partial-sum law at ``rates``'s weight rate, the activation rate capped by a token and by a boundary crossing
+    """The partial-sum rule at ``rates``'s weight rate, the activation rate capped by a token and by a boundary crossing
     spread over the residual's ``d_model`` entries, since every activation the chain charges is computed from one."""
     alpha = K / Gamma
     b_w = rates(i, K, b_tok)[0]

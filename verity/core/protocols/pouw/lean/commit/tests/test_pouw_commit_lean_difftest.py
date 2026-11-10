@@ -1,8 +1,8 @@
-"""The Python held to PoUW's commitments in Lean (`PouwCommit`), PoUW's verifier of record (`pouw.verifier`).
+"""The Python held to PoUW's commitments in Lean (`PouwCommit`), PoUW's verifier (`pouw.verifier`).
 
 `tests/difftest_vectors.py` writes generated cases and this checkout's outcome on each (`tagged`, the bindings and
-`weights_root`, domain ids, `commit_rows` and transcript roots, `verify_opening`, `coin_reason`, the epoch salts, the sample
-keys and the work-weighted draws), and `PouwCommit/DifftestMain.lean` computes every case from the Lean and fails on any
+`weights_root`, domain ids, `commit_rows` and transcript roots, `verify_opening`, `coin_reason`, the execution phase salts, the sample
+keys and the work-weighted samples), and `PouwCommit/DifftestMain.lean` computes every case from the Lean and fails on any
 case whose Python outcome is not the Lean's, naming the Lean's. `test_the_python_is_the_lean` runs it here on the cases
 this checkout writes, so a change to the Python that the Lean doesn't make fails with the Lean's verdict. `check` also runs
 it in the package's Lean audit (`runs` in `lean-audit.json`) on the data the record pins, whose pass is cached on the Lean
@@ -105,7 +105,7 @@ def test_the_salt_and_draw_cases_reach_every_branch():
 
 
 def test_no_case_names_an_outcome_of_its_own():
-    """Every case is held to the Lean's outcome, none to one it names: an opening whose epoch is not an integer or whose
+    """Every case is held to the Lean's outcome, none to one it names: an opening whose execution phase is not an integer or whose
     label is not a string, which Python's `==` once compared, is refused on both sides."""
     assert all(set(c) == {"kind", "in", "python"} for c in cases())
     odd = [c for c in _of("coins") if type(c["in"]["opening"].get("epoch", 0)) is not int

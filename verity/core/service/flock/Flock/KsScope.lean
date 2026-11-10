@@ -11,7 +11,7 @@ of a statement outside them is refused, beside `ProvedScope.check` and `PortRoot
   (`sharedWhy`): the circuit's public input ports parse (`HmIn.parse`), the file loads over them (`HmIn.loadPublic`),
   and no two ports' roots over its tables are one root under different domains (`collidesT`, V5's `RootFixesDomainL` at
   the file's leaf map). A file without shared rows is V3's form (`pub.tables = none`).
-* `drawWhy count draw`: at more than one table, a session whose record holds no draw that parses, or whose subset draw's
+* `drawWhy count draw`: at more than one table, a session whose record holds no sample that parses, or whose subset sample's
   `k` the tables don't divide (V3's `kd % nTab = 0`).
 
 `checkOf parsed tags publicFile count draw` runs them on the circuit as `HmOut.parse` reads it and the public file as
@@ -80,8 +80,8 @@ def filesWhy (tags : Tags) (c : Circuit) (pub : Public) (publicFile : ByteArray)
   else if pub.tables.isSome then sharedWhy tags c publicFile
   else none
 
-/-- The session's draw (`draw`, the record's `unit_draw`) at `count` tables: none to check at one table; at more, a draw
-that parses, and a subset draw's `k` a multiple of `count`, so every table proves `k / count` units. -/
+/-- The session's sample (`draw`, the record's `unit_draw`) at `count` tables: none to check at one table; at more, a sample
+that parses, and a subset sample's `k` a multiple of `count`, so every table proves `k / count` units. -/
 def drawWhy (count : Nat) (draw : Option Json) : Option String :=
   if count ≤ 1 then none
   else match draw with
@@ -95,7 +95,7 @@ def drawWhy (count : Nat) (draw : Option Json) : Option String :=
 
 /-- **`verify --zk`'s files are in the form the sampled audit's knowledge soundness covers**: the tags (`tagsWhy`), on the
 circuit `parsed` (`HmOut.parse`'s) and the public file as `HmOut.loadPublic` loads it the unit's form and no shared rows
-(`filesWhy`, or V5's shared-row form), and the session's draw (`drawWhy`). -/
+(`filesWhy`, or V5's shared-row form), and the session's sample (`drawWhy`). -/
 def checkOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count : Nat) (draw : Option Json) :
     Except String Unit :=
   match tagsWhy tags with
@@ -189,7 +189,7 @@ theorem filesWhy_none {tags : Tags} {c : Circuit} {pub : Public} {publicFile : B
     next => exact ⟨by simpa using h1, Or.inr (sharedWhy_none h)⟩
     next h2 => exact ⟨by simpa using h1, Or.inl (by simpa using h2)⟩
 
-/-- **At more than one table, a passing draw parses, and its subset `k` is a multiple of the tables.** -/
+/-- **At more than one table, a passing sample parses, and its subset `k` is a multiple of the tables.** -/
 theorem drawWhy_none {count : Nat} {draw : Option Json} (h : drawWhy count draw = none) (hc : ¬ count ≤ 1) :
     ∃ j d, draw = some j ∧ Draw.UnitDraw.ofJson j = .ok d ∧ ∀ k, d.law = .subset k → k % count = 0 := by
   unfold drawWhy at h
@@ -208,7 +208,7 @@ theorem drawWhy_none {count : Nat} {draw : Option Json} (h : drawWhy count draw 
 
 /-- **What `check` passing says of the files**: the tags pass `tagsWhy`, and at the circuit `HmOut.parse` reads and the
 public file `HmOut.loadPublic` loads, the circuit is in `scopeOkH`, the public file has no shared rows (V4's form) or is
-in V5's shared-row form (`SharedOk`), and the draw passes `drawWhy`. -/
+in V5's shared-row form (`SharedOk`), and the sample passes `drawWhy`. -/
 theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : Nat}
     {draw : Option Json} {c : Circuit} {pub : Public} (h : check tags cf pf tables count draw = .ok ())
     (hc : HmOut.parse tags cf tables = .ok c) (hpub : HmOut.loadPublic tags c pf = .ok pub) :

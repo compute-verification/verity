@@ -30,7 +30,7 @@ def RP.serve {R₁ R₂ α : Type} (q : R₁ → RP R₂ Seen) : RP R₁ α → 
   | .hash m k => .hash m fun a => RP.serve q (k a)
   | .rerun r k => (q r).bind fun v => RP.serve q (k v)
 
-/-- The draws a program reruns at, in order, against `H` and the runs `run`. -/
+/-- The samples a program reruns at, in order, against `H` and the runs `run`. -/
 def RP.rerunsAt {R α : Type} (H : Msg → Msg) (run : R → Trace) : RP R α → List R
   | .ret _ => []
   | .hash q k => RP.rerunsAt H run (k (H q))
@@ -41,7 +41,7 @@ own (the outer stage's are counted where it runs). -/
 def servedRun {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace) (r : R₁) : Trace :=
   ⟨((q r).eval H run).1.msgs, [], [], ((q r).eval H run).1.out⟩
 
-/-- A program reruns once per draw it reruns at. -/
+/-- A program reruns once per sample it reruns at. -/
 theorem RP.eval_runs_eq {R α : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) :
     (p.eval H run).2.2 = (p.rerunsAt H run).length := by
   induction p with
@@ -57,7 +57,7 @@ theorem RP.eval_bind_hashes {R α β : Type} (H : Msg → Msg) (run : R → Trac
   | hash q k ih => simp only [RP.bind, RP.eval]; rw [ih]; ring
   | rerun r k ih => simp only [RP.bind, RP.eval]; rw [ih]; ring
 
-/-- A bound program reruns at the first part's draws and then the continuation's. -/
+/-- A bound program reruns at the first part's samples and then the continuation's. -/
 theorem RP.rerunsAt_bind {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
     (p.bind f).rerunsAt H run = p.rerunsAt H run ++ (f (p.eval H run).1).rerunsAt H run := by
   induction p with
@@ -70,8 +70,8 @@ theorem servedRun_seen {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R�
     (servedRun H q run r).seen = ((q r).eval H run).1 := rfl
 
 /-- **Serving, exactly**: against the prover's runs `run`, the served program returns the inner stage's result against
-the served runs; its SHA-512 calls are the inner stage's against them plus the outer stage's at each draw the inner
-stage reruns at; and its reruns are the outer stage's at each of those draws, summed. -/
+the served runs; its SHA-512 calls are the inner stage's against them plus the outer stage's at each sample the inner
+stage reruns at; and its reruns are the outer stage's at each of those samples, summed. -/
 theorem RP.serve_eval {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace) (p : RP R₁ α) :
     ((p.serve q).eval H run).1 = (p.eval H (servedRun H q run)).1 ∧
       ((p.serve q).eval H run).2.1 = (p.eval H (servedRun H q run)).2.1 +
@@ -94,7 +94,7 @@ theorem RP.serve_eval {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R
       ring
     · rw [(RP.eval_bind H run _ _).2, h3]
 
-/-- **The served reruns, as reals**: the outer stage's reruns at each draw the inner stage reruns at, summed. -/
+/-- **The served reruns, as reals**: the outer stage's reruns at each sample the inner stage reruns at, summed. -/
 theorem RP.serve_runs_cast {R₁ R₂ α : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace)
     (p : RP R₁ α) :
     (((p.serve q).eval H run).2.2 : ℝ) =

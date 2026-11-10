@@ -969,7 +969,7 @@ theorem p1024_squarings : p1024.squarings = 1021 := by
 `p ≡ 3 mod 4`). `2^n − c` with `n ≥ 68` and `c ≡ 1 mod 4`, `c ≤ 2^66`, is inside it, p1024 among them. Outside it the
 premises claim nothing, so the counterexamples outside it don't refute them: at `ε = 0`, at `k = 0` and at a field
 narrower than a byte `ChainSum` holds, and the one-draw circuit behind the `ε = 0` counterexample is right on more than
-`ε` of the draws at no `ε` and field the floor admits. -/
+`ε` of the samples at no `ε` and field the floor admits. -/
 
 /-- A field `2^n − c` with `n ≥ 68`, `c ≡ 1 mod 4` and `c ≤ 2^66` is inside the premises' floor on `p`. -/
 theorem floor_of_pow_sub (n c : ℕ) (hn : 68 ≤ n) (hc : c % 4 = 1) (hc' : c ≤ 2 ^ 66) :
@@ -1006,8 +1006,8 @@ example (F : Field) (B e εnum εden : ℕ) : ChainSum F 0 B e εnum εden := by
   intro _ hk
   exact absurd hk (lt_irrefl 0)
 
-/-- Inside the floor one draw is never more than `ε` of the draws, so the circuit behind
-`encodeChainHardness_false_eps0`, right on one draw, computes no word at any `ε` and field the floor admits. -/
+/-- Inside the floor one sample is never more than `ε` of the samples, so the circuit behind
+`encodeChainHardness_false_eps0`, right on one sample, computes no word at any `ε` and field the floor admits. -/
 example (F : Field) (k εnum εden : ℕ) (d : Draw k) (hε : εden ≤ 2 ^ 64 * εnum) (hk : 0 < k)
     (hp : 2 ^ 66 ≤ F.p) : ¬ MoreThan (draws F k) {d} εnum εden := by
   intro h

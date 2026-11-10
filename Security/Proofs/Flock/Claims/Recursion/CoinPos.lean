@@ -4,9 +4,9 @@ public import Proofs.Flock.Claims.Recursion.CoinTie
 import all Init.Data.String.Defs
 
 /-!
-# The coin server's round the coin tie names is the only one of its stream and round number
+# The challenger's live-coin part's round the coin tie names is the only one of its stream and round number
 
-`CoinTie` gives, for each round `m` of rep `r`'s coins as check 5 loads them, a round `g` of the coin server's record
+`CoinTie` gives, for each round `m` of rep `r`'s coins as check 5 loads them, a round `g` of the challenger's live-coin part's record
 `R` of that rep's stream at round `sp m` whose coins they are. Check 5's verdict reads the inner session's rounds by
 stream and position, so a consumer of the tie that pins `g` by its stream and round number needs `g` to be the only
 such round of `R`. This file proves that from what the verifier checks, with no premise:

@@ -4,7 +4,7 @@ public import Definitions.Nci.Assumptions
 public import Definitions.Nci.Dark
 
 /-!
-# The inference-only policy's partial-sum law on a reference circuit
+# The inference-only policy's partial-sum rule on a reference circuit
 
 `UpdatedMatMul` states its incompressibility assumptions about the declared circuit, whose wiring the prover controls,
 and they are false there. These guarantees state the same law with the chain and both assumptions on a reference
@@ -15,7 +15,7 @@ piece of `r` holds at least `b_w` bits per updated weight entry it uses and `b_a
 sum it does not compute itself. `b_w` and `b_a` are rates, below the entries' widths by whatever they compress to, so
 these guarantees are parameterized by how compressible training is.
 
-`ContainedMatMulOn` and `ContainedTrainingOn` state the law when the declaration contains `r` only partly
+`ContainedMatMulOn` and `ContainedTrainingOn` state the sampling design when the declaration contains `r` only partly
 (`PartialContainment`): the products it computes are throttled, less what the dark gates, computed off the books, absorb
 of the partial sums, which is at most their width.
 
@@ -44,7 +44,7 @@ def ContainedMatMul : Prop :=
     Assumptions.PartialSumsSupport r θv ch c k b_w b_a →
       F (k / c) k b_w b_a dd * (2 * ch.G) ≤ d.D.size d.D.computed
 
-/-- **Training is slowed, by the partial-sum law**: when the chain's products, at 2 flops each, are a fraction `κ` of
+/-- **Training is slowed, by the partial-sum rule**: when the chain's products, at 2 flops each, are a fraction `κ` of
 the reference circuit's size, every declaration that contains it and complies at `(c, k)`, with its registered
 information free of the reference circuit's fresh input (`ThetaRegistered`), is larger by a factor of at least `κ F`.
 -/
@@ -58,7 +58,7 @@ def ContainedTraining : Prop :=
     Assumptions.Coverage κ r (2 * ch.G) →
       κ * F (k / c) k b_w b_a dd * r.D.size r.D.computed ≤ d.D.size d.D.computed
 
-/-- **The partial-sum law with dark gates**: a declaration `d` that complies at `(c, k)` and contains `r` partly
+/-- **The partial-sum rule with dark gates**: a declaration `d` that complies at `(c, k)` and contains `r` partly
 (`PartialContainment`, computing the gates `S` of `r` and leaving the rest dark) computes the chain's products in `S`,
 `G_S` of them, with
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ (k / c) size(d) + (1 − μ) width(dark)` for each `μ ∈ [0, 1]`,
@@ -80,7 +80,7 @@ def ContainedMatMulOn : Prop :=
           ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
       (k / c : ℝ) * d.D.size d.D.computed + (1 - μ) * r.D.width M.dark
 
-/-- **Training is slowed, by the partial-sum law, with dark gates**: when the chain's products, at 2 flops each, are a
+/-- **Training is slowed, by the partial-sum rule, with dark gates**: when the chain's products, at 2 flops each, are a
 fraction `κ` of the reference circuit's size, each product off the books is a dark gate, so
 `max (min c₁ c₂) (μ b_a / Λ) · (κ size(r) − 2 #dark) ≤ 2 ((k / c) size(d) + (1 − μ) width(dark))`. -/
 def ContainedTrainingOn : Prop :=

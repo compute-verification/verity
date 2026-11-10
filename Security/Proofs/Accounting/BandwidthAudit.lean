@@ -11,7 +11,7 @@ At a value of the other audits' coins, the game's ingress is covered by the band
 coin where the audit accepts with those reads (or a bound `B` on them on every bandwidth coin) below the certificate,
 the game's device is accepted with its ingress, plus `S_chip + c + G·b + λ`, short of `k·b` bits. AuditRO bounds that
 event in `ℝ≥0∞`, and with `N > 0` its bound is finite and is the certificate's error as a real number
-(`pr_short_le_error`). The sure bound gives `BandwidthOfAudit`, the reads at the coins drawn `BandwidthOfAuditPerRun`.
+(`pr_short_le_error`). The sure bound gives `BandwidthOfAudit`, the reads at the coins flipped `BandwidthOfAuditPerRun`.
 -/
 
 @[expose] public section

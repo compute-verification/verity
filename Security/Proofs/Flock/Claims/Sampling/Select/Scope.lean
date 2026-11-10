@@ -7,8 +7,8 @@ public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
 # The sampling scope check from the deployed design (`Claims.Sampling.ScopeMatches`, `Refuses`)
 
 The readable scope (`InScope`) is a program part (a topologically ordered program, and a partition of it into proof
-units) and a design part (`Design.WellFormed`). The design part holds of every statement the sampled verifier lays out
-and draws on (`designWellFormed`), so the scope check need check only the program part:
+blocks) and a design part (`Design.WellFormed`). The design part holds of every statement the sampled verifier lays out
+and samples on (`designWellFormed`), so the scope check need check only the program part:
 
 * `ProgramScope`: the scope check takes a statement exactly when it parses, its query evaluates, and the program part
   holds.
@@ -29,7 +29,7 @@ open Properties.SampledProofs Properties.SampledProofs.SecurityProofs
 variable {Coin Col T : Type}
 
 /-- **The scope check is the readable scope's program part**: it takes a statement exactly when it parses, its query
-evaluates to a partition, the program is topologically ordered and the partition partitions it into proof units whose
+evaluates to a partition, the program is topologically ordered and the partition partitions it into proof blocks whose
 committed values fit their public size classes. The design part it need not check (`scopeMatches_of`). The program is the statement's bit
 gates, its word gates' Boolean lowering, and a `Q_word` unit is the set of its word gates' bit gates. -/
 def ProgramScope (D : Deploy Coin Col T) : Prop :=

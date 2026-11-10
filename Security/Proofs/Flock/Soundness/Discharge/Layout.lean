@@ -41,15 +41,15 @@ from the decoder's places and the executable's regions:
   unit returns them (`out_pinned`, at `outAddr`; region "out"'s bytes `outRegion_bytes`, its packing `pack_bit`);
 * `Pins`: `lay` and `rs` from fixed readers (`Readers`) and three facts of every satisfying witness: Δ's copies
   (`Readers.Copies`), the rows' pinned `b ‖ c` (`Readers.BcPinned`) and the other pinned values (`Readers.ValPinned`);
-* `Drawn`: at a drawn statement, the pinned `b ‖ c` of a proved unit's `hm96` slot is the unit's in the registered
+* `Drawn`: at a sampled statement, the pinned `b ‖ c` of a proved unit's `hm96` slot is the unit's in the registered
   population's public file (`bc_drawn`);
 * `SharedRows`: the same with or without shared rows (`bc_drawnS`), from the shared-row population's row pieces;
-* `QSort`: every proved unit of a draw is in the population, with or without a closure (`proved_lt_population`, by
+* `QSort`: every proved unit of a sample is in the population, with or without a closure (`proved_lt_population`, by
   `all_qsort`: `Array.qsort` keeps a property of every element);
-* `Site`: at a drawn unit's site in its table's accepted statement, the population's `b ‖ c` at port `p`'s `hm96` output
+* `Site`: at a sampled proof block's site in its table's accepted statement, the population's `b ‖ c` at port `p`'s `hm96` output
   (`bc_site`) and, at each message-keyed unit input, its row's bit (`copy_site`);
-* `OutSite`: at a drawn statement, region "out"'s outputs at a proved unit's slot are the unit's in the registered
-  population's public file (`outVal_drawn`, `out_drawn`), and at a drawn unit's site the bits at its template instance's
+* `OutSite`: at a sampled statement, region "out"'s outputs at a proved unit's slot are the unit's in the registered
+  population's public file (`outVal_drawn`, `out_drawn`), and at a sampled proof block's site the bits at its template instance's
   output columns are those outputs' (`out_site`);
 * `OfRows`: readers whose commit strings are units' row ports and single gates (`Readers.ofRows`), with Δ's copies
   from the row bits alone (`ofRows_copies`), the rows' `b ‖ c` (`ofRows_bcPinned`) and the single gates' bits

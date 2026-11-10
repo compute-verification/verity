@@ -1,9 +1,9 @@
-"""The protocol's commitments and epoch, the same for every `PoUWScheme` (``PROTOCOL.md``, "Lifecycle"): what the served
+"""The protocol's commitments and execution phase, the same for every `PoUWScheme` (``PROTOCOL.md``, "Lifecycle"): what the served
 path's prover commits and its verifier reads.
 
-0. **Coins.**  Before the epoch the challenger publishes its coin commitment over the epoch's coins (`coins`).
+0. **Coins.**  Before the execution phase the challenger publishes its coin commitment over the execution phase's coins (`coins`).
 1. **Weights.**  Each weight is committed as its rows along k; `weights_root` binds every weight root.
-2. **Salt.**  The challenger opens the epoch's salt coin after it recorded the weights' root, and the salt is
+2. **Salt.**  The challenger opens the execution phase's salt coin after it recorded the weights' root, and the salt is
    ``derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": root, "weights": weights_root})`` (`Epoch.start`).
 3. **Units.**  For each matmul the prover commits the activation rows, bound to the salt and the index
    (`activation_binding`, `commit_rows`).
@@ -11,8 +11,7 @@ path's prover commits and its verifier reads.
    (`tile_refs`).
 
 The clear audit that sampled, opened and recomputed tiles in the clear (`Prover`, `Verifier`, `Sampled`, `WorkProfile`) is a
-reference tool, not a verifier: ``benchmarks/pouw/clear/clear_audit.py``.  Served windows are checked by PoUW's verifier of
-record, the Lean (`lean/check`, `core_check`).
+reference tool, not a verifier: ``benchmarks/pouw/clear/clear_audit.py``.  Served execution phases are checked by PoUW's verifier, the Lean (`lean/check`, `core_check`).
 
 Commitments are `verity.ml.commitments.merkle` trees under the scheme's frame hash, by default ``"hm96-sha512"`` (`HM96`,
 hashing format h3's; a scheme on SHA-256 trees, Pearl-C's h0 or NCP, names ``"sha256"``).  `HM96` is
@@ -161,8 +160,8 @@ class Workload:
 
 @dataclass(frozen=True, slots=True)
 class Epoch:
-    """The committed weights, the salt sampled after them, and the challenger's coin commitment the epoch's coins open
-    against (None for an `unverified` epoch's salt with no sampling coin)."""
+    """The committed weights, the salt sampled after them, and the challenger's coin commitment the execution phase's coins open
+    against (None for an `unverified` execution phase's salt with no sampling coin)."""
 
     workload: Workload
     weight_roots: Mapping[int, bytes]
@@ -176,8 +175,8 @@ class Epoch:
     @classmethod
     def start(cls, workload: Workload, weight_roots: Mapping[int, bytes], coins: CoinCommitment, opening: CoinOpening
               ) -> Epoch:
-        """The epoch whose salt is the challenger's salt coin: `opening` must be epoch `coins.epoch`'s salt coin, opened
-        against `coins` (the commitment the challenger published before the epoch) after it recorded the weights' root."""
+        """The execution phase whose salt is the challenger's salt coin: `opening` must be execution phase `coins.epoch`'s salt coin, opened
+        against `coins` (the commitment the challenger published before the execution phase) after it recorded the weights' root."""
         _check_weights(workload, weight_roots)
         root = weights_root(weight_roots)
         reason = coin_reason(coins, opening, "salt", root)
@@ -188,9 +187,9 @@ class Epoch:
     @classmethod
     def unverified(cls, workload: Workload, weight_roots: Mapping[int, bytes], seed: bytes,
                    coins: CoinCommitment | None = None) -> Epoch:
-        """The epoch whose salt is keyed by bare bytes under ``verity/pouw/salt/v1``, with no coin behind it: test
+        """The execution phase whose salt is keyed by bare bytes under ``verity/pouw/salt/v1``, with no coin behind it: test
         instances, replays of recorded runs, and integrations whose salt claims nothing.  `coins`, when given, is the
-        commitment the epoch's sampling coin opens against."""
+        commitment the execution phase's sampling coin opens against."""
         _check_weights(workload, weight_roots)
         salt = derive(seed, SALT_DOMAIN, {"weights": weights_root(weight_roots)}).stream("salt", 32)
         return cls(workload, dict(weight_roots), salt, coins)
@@ -198,10 +197,10 @@ class Epoch:
     @classmethod
     def certified(cls, workload: Workload, weight_roots: Mapping[int, bytes], windows: Sequence[int], k: int,
                   reveal: bytes, stream: bytes, prover: bytes, coins: CoinCommitment | None = None) -> Epoch:
-        """The epoch of PoUW window p, the network certifier's windows `windows` with k per PoUW window (p·k … p·k + k − 1,
+        """The execution phase of PoUW execution phase p, the network certifier's execution phases `windows` with k per PoUW execution phase (p·k … p·k + k − 1,
         refused unless whole and aligned at 0: `salt.pouw_window`), registered under `stream` and `prover`, whose salt is
         `salt.pouw_salt(reveal, p, stream, prover)`, 64 bytes: `reveal` is p's certifier salt as `salt.revealed` read it.
-        `coins`, when given, is the commitment the epoch's sampling coin opens against."""
+        `coins`, when given, is the commitment the execution phase's sampling coin opens against."""
         _check_weights(workload, weight_roots)
         return cls(workload, dict(weight_roots), pouw_salt(reveal, pouw_window(windows, k), stream, prover), coins)
 
@@ -212,7 +211,7 @@ def _check_weights(workload: Workload, weight_roots: Mapping[int, bytes]) -> Non
 
 
 def salt_of(coins: CoinCommitment, coin: bytes, weights_root: bytes) -> bytes:
-    """The epoch's 32-byte salt from its opened salt coin.  A live window's salt coin opens after the window's open root
+    """The execution phase's 32-byte salt from its opened salt coin.  A live execution phase's salt coin opens after the execution phase's open root
     (`salt.window_open_root`), and its salt is still keyed by `weights_root`, the weights' root: the coin and `coins` are
     its own session's."""
     return derive(coin, EPOCH_SALT_DOMAIN, {"epoch": coins.epoch, "coins": coins.root, "weights": weights_root}

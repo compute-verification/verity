@@ -6,10 +6,10 @@ public import Proofs.Flock.Claims.Recursion.KSLin2Committed
 /-!
 # The recursive verifier's knowledge soundness at Hello-committed coins (trusted)
 
-`RecursiveKS` reads the recursive verifier's run at coins drawn after each message. Deployed, the coin server commits
+`RecursiveKS` reads the recursive verifier's run at coins flipped after each message. Deployed, the challenger's live-coin part commits
 them at Hello in an hm96 coin tree (`coin-tree/hm96-sha512`) and opens each round's coin with its answer; a V\* session
 before the last one that accepts is answered with `[]`, and no coin is opened there: that round is the session's
-`Finish`, which C-Flock's live server answers with its verdict alone (it opens coins only at `Commit` and at each
+`Finish`, which Flock's live server answers with its verdict alone (it opens coins only at `Commit` and at each
 `Round`, `committed_coins`), and the ZK server's contract lets coins out only as a scheduled round's coins, none at
 `finish` (`Flock.Firewall.Contract.step`). `RecursiveKSDeployed` is
 `RecursiveKS`'s bound at that run (`KSLin2OnC`, at `RecursiveKS`'s record, bound record, outer record, caps and
@@ -28,7 +28,7 @@ open FlockDeploy (Coin FinalP)
 open scoped ENNReal
 
 /-- **`RecursiveKSAt` at Hello-committed coins**, at the deployed reader, weights and last part's pieces, the brings
-`b` and the coin server's record: `KSLin2OnC` where `RecursiveKSAt` has `KSLin2On`, at the leaf hiding bound `δ₁`. -/
+`b` and the challenger's live-coin part's record: `KSLin2OnC` where `RecursiveKSAt` has `KSLin2On`, at the leaf hiding bound `δ₁`. -/
 def RecursiveKSDeployedAt (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) (δ₁ : ℝ≥0∞) : Prop :=
   Claims.Recursion.KSLin2OnC FlockDeploy.sha512
@@ -41,8 +41,8 @@ def RecursiveKSDeployedAt (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.Re
     (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt δ₁
 
 /-- **Knowledge soundness of the recursive verifier at Hello-committed coins** (`RecursiveKSDeployedAt` at the
-deployed brings' setup), for every leaf hiding bound `δ₁`, every other field of the brings and every record the coin
-server keeps. -/
+deployed brings' setup), for every leaf hiding bound `δ₁`, every other field of the brings and every record the challenger's
+live-coin part keeps. -/
 def RecursiveKSDeployed : Prop :=
   ∀ (δ₁ : ℝ≥0∞) (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),

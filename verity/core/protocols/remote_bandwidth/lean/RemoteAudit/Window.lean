@@ -9,9 +9,9 @@ public import RemoteAudit.Receipts
 `verifyWindow` takes what the verifier holds of window t once its roots are final (its challenge, each pass's root,
 plan and the appends' head received before it, the root before its first pass, the session's appends with their coins)
 and its openings coin, draws `s` distinct receipts uniformly from the window's `U_t = Σ_i L_i`, and checks the prover's
-openings of them, in the order drawn. Each opening, in `_check`'s order, fails with the first of:
+openings of them, in the order sampled. Each opening, in `_check`'s order, fails with the first of:
 
-1. `malformed`: not the drawn (pass, position), a block not 4096 bytes, a tile (none is bound), a salt not 192 bytes, a
+1. `malformed`: not the sampled (pass, position), a block not 4096 bytes, a tile (none is bound), a salt not 192 bytes, a
    path sibling not 64 bytes, or a payload digest `d_j` present for a registered block or absent for an appended one;
    or receipts not the size of the position's leaf;
 2. `receipt-path`: the leaf, under its salt and path, not that leaf of the pass's receipt tree (bound to the pass's seed
@@ -194,7 +194,7 @@ def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Appe
   if receipter.receipt j o.block != y then return some .receipt
   return none
 
-/-- `Session.verify` on drawn receipts: the first opening that fails, with its draw, or accept. -/
+/-- `Session.verify` on sampled receipts: the first opening that fails, with its draw, or accept. -/
 def checkWindow (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (drawn : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
   if openings.size ≠ drawn.size then return .reject .malformed none
@@ -225,7 +225,7 @@ def checkWindowChunked (size : Nat) (reg : Registration) (digest : ByteArray) (a
     if let .reject f at? := t.get then return .reject f at?
   return .accept
 
-/-- Window t's verdict: its draws from the openings coin, then each opening checked in the order drawn. `none` only if
+/-- Window t's verdict: its draws from the openings coin, then each opening checked in the order sampled. `none` only if
 the draw runs past its doubled reads, which it does with probability below 2^-256. -/
 def verifyWindow (reg : Registration) (appends : Array Append) (w : WindowRecord) (openingsCoin : ByteArray)
     (samples : Nat) (openings : Array Opening) : Option Verdict := do

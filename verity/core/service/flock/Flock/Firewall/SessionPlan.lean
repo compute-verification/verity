@@ -1,5 +1,5 @@
 /-
-# The schedule a firewalled session's coins follow (live PROTOCOL.md §10.4)
+# The schedule a ZK server session's coins follow (live PROTOCOL.md §10.4)
 
 The pure part of the session loop (`Session.lean`), at the statement its setup computed (`Hello.Setup.setup`): which
 openings leave and in what order (`planOf`, `reqAt`), and the session `Hello` the coin check reads (`helloOf`). Both are

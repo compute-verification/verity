@@ -5,7 +5,7 @@ public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 public import Proofs.Flock.Soundness.Refine.Exec
 
 /-!
-# The firewall's inner proof is the masked session's where no constraint fails on the pads
+# The ZK server's inner proof is the masked session's where no constraint fails on the pads
 
 `Flock.Firewall.Finish`'s pads commitment and inner proof are copies of `FlockComplete.innerCommitP` and
 `FlockComplete.innerP` on its own `PadsZk` and `InnerCommit` (the same fields, read through `PadsZk.toC` and

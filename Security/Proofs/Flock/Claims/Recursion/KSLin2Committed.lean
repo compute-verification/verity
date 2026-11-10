@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.Bridge.CommittedNil
 /-!
 # `KSLin2On` at Hello-committed coins
 
-`KSLin2On` reads the compiled recursive verifier's run at coins drawn after each message. Deployed, the coins are
+`KSLin2On` reads the compiled recursive verifier's run at coins flipped after each message. Deployed, the coins are
 committed at Hello in an hm96 coin tree and each opened with its round's answer, except where that answer is `[]` (a
 V\* session before the last one, accepted). The prover reads every root at Hello, so a deployment that sends a tree's
 root later gives it less. `KSLin2OnC` is `KSLin2On`'s bound at that run: every hm96 tree whose leaves hide at `δ₁ ≠ ∞`

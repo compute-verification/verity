@@ -8,13 +8,13 @@ public import Proofs.Core.Game.InterleaveBridge
 
 `Constructions.project`, the strategy of the live audit a strategy `σ` of the period's game is read as: it simulates
 `σ` (`Verity.Game.Pos`, in `Proofs.Core.Game.InterleaveBridge`). It registers the decoding of the record's most likely
-message; on the draw's widened sample it starts a tape of the period's game (the coin map's `start`); at each stop, the
+message; on the sample's widened sample it starts a tape of the period's game (the coin map's `start`); at each stop, the
 first node of `σ`'s play on the tape where a round's cut (`roundCut`) fixes a message, it sends the decoding of the most
 likely message there (`Commit`'s roots at the first stop, a round's submission at each later one) and writes the live
 coin it gets back into the tape there (the coin map's `link` and `round`); after the last round it sends the proof files
 decoded from the play's output on the tape.
 
-* **The parameters** (`Decoders`, `CoinMap`): the decoders, and the coin map with the widening of the draw's sample
+* **The parameters** (`Decoders`, `CoinMap`): the decoders, and the coin map with the widening of the sample's sample
   it reads. They are the projection's two inputs: what each stop's message decodes to, and how the live coins become
   the period's.
 * **The projection** (`projectOf`, `Constructions.withProject`), and **the joint law** it simulates (`jointG`, `jointS`):
@@ -28,7 +28,7 @@ decoded from the play's output on the tape.
 * **The coin map's premise, off local ones** (`couples_of_preserves`, `couplingTarget_withProject_of_preserves`):
   `Couples` holds wherever the coin map writes each round's coins and the link points in as the tape's own
   (`CoinMap.RoundPreserves`, `CoinMap.LinkPreserves`), its start leaves the tape from the first stop fresh given the
-  draw (`FirstStopFresh`), and its start is within the hiding term of the uniform tape (`StartClose`). Over a uniform
+  sample (`FirstStopFresh`), and its start is within the hiding term of the uniform tape (`StartClose`). Over a uniform
   tape from any position, the rounds' and the session's joint laws give an event of the tape its share of the tapes
   through the position (`avg_roundsW_tape`, `avg_linkW_tape`), from `Verity.Game.Pos.avg_toStop` and the tape law's
   indifference to everything but the stops (`prob_roundsW_tape`).
@@ -131,8 +131,8 @@ structure Decoders (R : ℕ) (Reg : Type) where
   sub : (J : ℕ) → (Fin R → Option Claims.Msg) → Option (SubmitJ J)
   proofs : Exchange → Array ByteArray
 
-/-- **The coin map a projection reads**, at a strategy `σ` of the period's game `g`: the widening of the draw's
-sample (`T`); the period's tape on the draw's sample and the widening (`start`); and at a stop, the period's tape from
+/-- **The coin map a projection reads**, at a strategy `σ` of the period's game `g`: the widening of the sample's
+sample (`T`); the period's tape on the sample's sample and the widening (`start`); and at a stop, the period's tape from
 there with the live link points (`link`) or a round's live coins (`round`) written in. -/
 structure CoinMap (g : Game Exchange) (σ : Strategy g) (Ω : Type) (R mPts : ℕ) where
   T : Type
@@ -497,7 +497,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 abbrev Live.mP (A : Live) : ℕ :=
   FlockSoundness.Discharge.Exec.mPtsOf A.D.unroll.g (A.kd / FlockSoundness.Discharge.Composed.nTab A.I)
 
-/-- The tables at a draw and a registration. -/
+/-- The tables at a sample and a registration. -/
 noncomputable abbrev Live.J (A : Live) (S : Finset (Fin A.n)) (R : A.Reg) : ℕ :=
   (FlockSoundness.Discharge.ZkHidden.planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length
 
@@ -516,7 +516,7 @@ noncomputable def regOf (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.gam
   D.reg ((recordCut V θ F c rd).cut.modeHere σ)
 
 /-- **The projection** of `σ` at the session `A`, the reading `rd`, the decoders `D` and the coin map `M`: the
-registration decoded from the record's most likely message; on the draw's widened sample `ω`, the session's projection
+registration decoded from the record's most likely message; on the sample's widened sample `ω`, the session's projection
 from the play's start on `M`'s tape at `ω`, at the rounds' cuts. -/
 noncomputable def projectOf (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) :
@@ -596,7 +596,7 @@ def Couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (
     prob (fun o => Q o.2) (jointG V θ F c A rd σ D M) (jointS V θ F c A rd σ D M) + A.hidingTerm
 
 /-- **The coin map's start leaves the tape from the first stop fresh**: over the widened sample, any reading of the
-draw and the projection's first stop has the mean of its average over the tapes from the stop. -/
+sample and the projection's first stop has the mean of its average over the tapes from the stop. -/
 def FirstStopFresh (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
     (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) : Prop :=
   ∀ G : Finset (Fin A.n) → Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → ℝ≥0∞,

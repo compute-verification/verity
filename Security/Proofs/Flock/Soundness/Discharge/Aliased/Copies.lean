@@ -287,7 +287,7 @@ theorem setupH_aliased (ht : tags.typed = false)
     (setupH_layout ht h).Aliased regs inst o hg :=
   aliased_of_copies _ regs _ inst hg hcp o
 
-/-- **A drawn unit's place, from the executable's accept step** (`unitPlace_of_setupH` with `setupH_aliased`): template
+/-- **A sampled proof block's place, from the executable's accept step** (`unitPlace_of_setupH` with `setupH_aliased`): template
 instance `g`'s stacked unit slots in block `o`, for an instance that wires their inputs as Δ copies them. -/
 noncomputable def setupH_unitPlace (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)

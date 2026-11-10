@@ -526,7 +526,7 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
     (cap : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray)
     (lig : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Fin 2 → LigeritoProof)
 
-/-- **Each rep's positions of each level**: the ones the verifier's Ligerito run draws for the level's queries
+/-- **Each rep's positions of each level**: the ones the verifier's Ligerito run samples for the level's queries
 (`RecAlgebra.query`, `ConsCtx.pos`), at the rep's coins. -/
 def posOf (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (l : (j : Fin F.stmts.size) → (F.Vs j).Bits) (r : Fin 2)
     (ℓ : ℕ) : Array ℕ :=
@@ -568,7 +568,7 @@ holds the `dirs` port's registration to its rep's query positions (`dirsRow`, `c
 `coef` for `HCoefCols`.
 **The `dirs` the openings read are the verifier's positions** (`rec_outer.stage`: `dirs` registered, rec_outer.py:
 239-242): at every accepted outer proof, the `dirs` columns of rep `r`'s opening `j` of level `ℓ` spell, bit `h` at
-column `h`, the position the verifier's Ligerito run draws for the query (`posOf`). -/
+column `h`, the position the verifier's Ligerito run samples for the query (`posOf`). -/
 def HDirCols : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ r, ∀ ℓ < F.sh.sched.levels.size,
     ∀ j < F.q ℓ, ∀ h < F.depth ℓ,

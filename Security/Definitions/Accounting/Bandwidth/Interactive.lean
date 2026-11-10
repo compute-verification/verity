@@ -11,7 +11,7 @@ chip sees it in the actual-circuit model: a peer,
 the host or a network that sees what the chip sends (the seed, partial tags, which blocks it wants) and answers
 adaptively. Sends are not bounded, so the chip may send any number `e` of bits that depend on the seed. Every bit the
 chip reads from a side source still counts against `c`. Its on-chip state and device memory are still laid out from
-the store before the seed, and the sample is still drawn after the output.
+the store before the seed, and the sample is still sampled after the output.
 -/
 
 @[expose] public section

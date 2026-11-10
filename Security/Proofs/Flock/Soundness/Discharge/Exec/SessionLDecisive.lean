@@ -996,7 +996,7 @@ end SessionAccept
 
 /-! ## The session -/
 
-/-- **Can accept.** For every hash, encoding, leaf scheme, plan, draw and registration, some run of the salted batched
+/-- **Can accept.** For every hash, encoding, leaf scheme, plan, sample and registration, some run of the salted batched
 session accepts. -/
 theorem batchedSessionL_reaches_true (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
@@ -1005,7 +1005,7 @@ theorem batchedSessionL_reaches_true (H : List UInt8 → D) (E : Merkle.Enc (Lis
   obtain ⟨outs, h, hacc⟩ := sessionBL_accept execArith H E Lf (plan S R)
   exact reaches_map_of h (by simp [hacc])
 
-/-- **Can reject.** When the plan has a table on the draw, some run of the salted batched session rejects. -/
+/-- **Can reject.** When the plan has a table on the sample, some run of the salted batched session rejects. -/
 theorem batchedSessionL_reaches_false (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (S : Finset (Fin n)) (R : Reg) (hne : plan S R ≠ []) :
@@ -1020,7 +1020,7 @@ theorem batchedSessionL_productive (H : List UInt8 → D) (E : Merkle.Enc (List 
     Productive (batchedSessionL H E Lf plan S R) :=
   productive_map _ (sessionBL_productive execArith H E Lf (plan S R))
 
-/-- **The salted batched session is decisive** on a draw where the plan has a table. -/
+/-- **The salted batched session is decisive** on a sample where the plan has a table. -/
 theorem batchedSessionL_decisive (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (S : Finset (Fin n)) (R : Reg) (hne : plan S R ≠ []) :
@@ -1030,13 +1030,13 @@ theorem batchedSessionL_decisive (H : List UInt8 → D) (E : Merkle.Enc (List �
 
 /-! ## The one-stage audit over it -/
 
-/-- **The audit can accept**, on every registration and every draw. -/
+/-- **The audit can accept**, on every registration and every sample. -/
 theorem audit_reaches_accept (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (R : Reg) (ω : L.Ω) :
     Reaches (audit L Reg (batchedSessionL H E Lf plan)) (true, L.draw ω) :=
   ⟨R, ω, reaches_map (fun ok => (ok, L.draw ω)) (batchedSessionL_reaches_true H E Lf plan (L.draw ω) R)⟩
 
-/-- **The audit can reject**, on every registration and every draw where the plan has a table. -/
+/-- **The audit can reject**, on every registration and every sample where the plan has a table. -/
 theorem audit_reaches_reject (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (R : Reg) (ω : L.Ω)
     (hne : plan (L.draw ω) R ≠ []) :
@@ -1049,7 +1049,7 @@ theorem audit_productive [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : 
     Productive (audit L Reg (batchedSessionL H E Lf plan)) :=
   ⟨inferInstance, fun R ω => productive_map _ (batchedSessionL_productive H E Lf plan (L.draw ω) R)⟩
 
-/-- **The audit is decisive** when registrations exist and the plan has a table on every draw. -/
+/-- **The audit is decisive** when registrations exist and the plan has a table on every sample. -/
 theorem audit_decisive [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (hne : ∀ S R, plan S R ≠ []) :

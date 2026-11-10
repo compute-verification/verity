@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 public import Definitions.Claims.Sampling
 
 /-!
-# The claims' faulty set inside the game's wrong set
+# The claims' incorrect set inside the game's wrong set
 
 `Claims.Sampling.faulty` counts the slots of the claims' partition whose proof block no interior makes correct on the
 witness's openings; `FlockSoundness.Discharge.ZkLink.wrongRegZ` counts the game's units not right on the registration at

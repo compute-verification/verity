@@ -13,7 +13,7 @@ reads a party's messages takes of one party `p`, each a named `Prop` about one r
 owns and the prover doesn't control is why we believe them, not an assumption.
 
 * `Faithful` (`faithful`): `p` runs its code on its true inputs, each step's input being what was delivered to it, its
-  own clock's true reading or its own coin source's draw, and each step starts from the state the last one left: its
+  own clock's true reading or its own coin source's sample, and each step starts from the state the last one left: its
   state persists and is never rolled back to an earlier copy, so an LMS leaf is never used twice.
 * `Secret` (`secret`): the prover never reads or sets `p`'s secret state: its signing keys, its LMS state, and its coins
   not yet released.
@@ -37,7 +37,7 @@ inductive Dest
   deriving DecidableEq
 
 /-- An auditor party's code: its state from its own coins, and one step: from its state and an input (a message
-delivered to it, a reading of its clock, a draw of its coin source), its next state and the messages it sends, each on
+delivered to it, a reading of its clock, a sample of its coin source), its next state and the messages it sends, each on
 one of its declared channels. -/
 structure Code (Ω S I Ch M : Type*) where
   init : Ω → S
@@ -55,7 +55,7 @@ def Code.trace (c : Code Ω S I Ch M) : S → List I → List S × List (Ch × M
 def Code.messages (c : Code Ω S I Ch M) (ω : Ω) (xs : List I) : List (Ch × M) := (c.trace (c.init ω) xs).2
 
 /-- One run of an auditor party as it happened: its coins; at each step its true input (what was delivered to it, its
-clock's true reading, its coin source's draw) and the input it took; the state each step started from, then its last;
+clock's true reading, its coin source's sample) and the input it took; the state each step started from, then its last;
 the messages it sent on its declared channels; everything it emitted on any wire, each with where it went; the prover's
 accesses (reads and writes) to its secret state; and the messages on its path to the prover that someone other than
 the party and the prover observed. -/

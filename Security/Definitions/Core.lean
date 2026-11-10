@@ -27,8 +27,8 @@ public import Definitions.Core.ValueSalts
 # Core's protocol: the model every protocol states its guarantees in
 
 The developer declares a circuit `D` and its baseline `θ` (`RegisteredCircuit`), runs `D` and commits the values of its
-committed wires, and the verifier draws with live coins (`Game`), which it reads from a challenger's log
-(`Challenger`), by a draw law over units (`Draw`). Every protocol package states its guarantees about
+committed wires, and the verifier samples with live coins (`Game`), which it reads from a challenger's log
+(`Challenger`), by a sampling design over units (`Draw`). Every protocol package states its guarantees about
 these objects and defines none of its own: a circuit, its transcripts, a partition into units and a unit's correctness
 are the ones here.
 

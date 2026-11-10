@@ -1014,7 +1014,7 @@ def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_o
 
 
 def test_the_reader_takes_no_stopped_step_for_the_failed_one(tmp_path):
-    """r20261026-141511-8d3f: drive cancelled the post-landing run for a failed suite, and lean-agreement, stopped with an empty
+    """r20261026-141511-8d3f: drive cancelled the after-landing run for a failed suite, and lean-agreement, stopped with an empty
     log, was posted as the step that failed, its first failing line `none`. A stopped step found nothing: the run is a cancel."""
     slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
     write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=143,

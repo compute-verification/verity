@@ -14,13 +14,13 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
              the slots < m, s/<s>/<w>), z tables (each slot row's N int32 LE, z/<s>/<w>, domain 'z-table'), the a-step,
              admit-step and z-step trees and the round over the three ('round'); step s - 1's receipt trees (r/<s-1>/<w>); the
              round root read back, recorded through `sampled_proofs.challenger.LiveRecord` before its coin opens
-             (the window's coins), the salt `h1tile.live_salt`, step s's seeds (`h1r_launch` version 0) into the buffer
+             (the execution phase's coins), the salt `h1tile.live_salt`, step s's seeds (`h1r_launch` version 0) into the buffer
              step s + 1's launches read
 
-The window's coins are served_h1's (`coins.open_coins`, a live window of `ROUNDS` rounds at epoch 1): with
-``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the session the
-challenger's gate opened, and its secret: `coins.session`) the challenger off the node, one session a window, opened at
-the window's build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
+The execution phase's coins are served_h1's (`coins.open_coins`, a live execution phase of `ROUNDS` rounds at `epoch` 1): with
+``$POUW_CHALLENGER`` (HOST:PORT), ``$POUW_CHALLENGER_SESSION`` and ``$POUW_CHALLENGER_SECRET_FILE`` (the challenge phase the
+challenger's gate opened, and its secret: `coins.session`) the challenger off the node, one challenge phase per execution phase, opened at
+the execution phase's build; else `window.live_challenger` in this process.  `stats` says which (``coins``: ``off-node session ID at
 HOST:PORT (unchecked)`` or ``in-process (not certified)``).  Only the round's coin changes source: the salt, the seeds
 and what they read are the same either way.
 
@@ -29,7 +29,7 @@ With ``rc="side"`` (`patch`) no `h1f` launch computes receipts: after step s's c
 s - 1's (they read the slots step s + 1 overwrites).  What is committed, before which coin, and every receipt are the same.
 
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows (SERVE-H1 admits
-from its queue); the window's registration, queue commit and close are not run (once a window, not a step); a window is
+from its queue); the execution phase's registration, queue commit and close are not run (once an execution phase, not a step); an execution phase is
 the engine's life up to `ROUNDS` steps.  The z table and the third round leaf are this harness's rendering of the
 credit's form (a z table in the row-table format, a root per step before the coin); the credit fixes the kind, fields
 and labels.  Its stats, checks and verdict say form=beside (`forms.form_of`): not `forms.FORM_A`.
@@ -83,7 +83,7 @@ class _F(C.Structure):
 
 
 class DitherState:
-    """A window's device state: per linear two parities of A, scale and z slots; the h1c sets (B tables once; per parity
+    """An execution phase's device state: per linear two parities of A, scale and z slots; the h1c sets (B tables once; per parity
     the A, admit and z tables, the step trees and the round); the receipts' call tables (one per parity, sharing one seeds
     and one receipts buffer) and the receipt trees; the `h1f` table and step struct; the live coins."""
 
@@ -185,7 +185,7 @@ class DitherState:
         """Capture `names` in turn, each at the next step of m tokens once the one before has its receipts: its parity's
         A, scale and z slots and the y dump poisoned with 0xA5 before its forward, the receipts and seeds before they are
         written; "control" also with the no-write flags (`F_NW_TILES` on its step, `F_NW_UNITS` on the next), so the
-        transcript buffers keep the poison and `check` must refuse it."""
+        trace buffers keep the poison and `check` must refuse it."""
         self.arms, self.arm_m = list(names), m
         self.caps = {n: {} for n in names}
 
@@ -434,7 +434,7 @@ def patch(t: int, h1c: str, h1f: str, key: bytes | None = None, gate: bool = Fal
 
 
 def hook(llm) -> DitherState:
-    """The step hook around the engine's runner (`execute_model`), and the window (built at the engine's first forward)."""
+    """The step hook around the engine's runner (`execute_model`), and the execution phase (built at the engine's first forward)."""
     from verity_vllm.engine import handle
     runner = handle.model_runner(llm)
     win = WIN if WIN is not None else _window(torch.device("cuda"))

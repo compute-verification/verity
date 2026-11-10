@@ -11,7 +11,7 @@ ports, over a public file with or without shared-row tables (no `pub.tables = no
 registered port outside a shared-row file's tables, so with that premise the event would be empty). Its first
 conjunct is `zk_session_sound`'s bound at the event `LiveAcceptsZKR I own` and the rows `rsZAtS`; its second is the
 registered check's consequence at every accepted outcome: the layout's registered reads that are the verifier's own
-at the outcome's draw (`OwnReads`) are `Checked` at the outcome's registration, through the paths the drawn statement
+at the outcome's sample (`OwnReads`) are `Checked` at the outcome's registration, through the paths the sampled statement
 gives (`regPaths`). That is the hypothesis a registered-reads binding theorem takes as `hchk`, here a consequence of
 acceptance.
 
@@ -39,12 +39,12 @@ theorem zk_session_soundR
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOk c = true)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's draw at each of the law's draws
+    -- the challenger's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZK I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     -- the verify command's tags and the challenger's record of the live session
     (hTags : TagsOk I) (hRec : RecordsLiveZK I dj wr)

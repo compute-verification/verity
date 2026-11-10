@@ -440,7 +440,7 @@ local notation "𝕂" => FlockLevel3.GF256
 variable {n mPts : ℕ} {Reg : Type}
 
 /-- **An output's openings are its reps' rows at table `j`**: `OpensEntries` with each row whole, at the setup at
-the draw `d`, table `j`'s `Zk.schedule` schedule and the session's two rep streams of table `j`, at `2·|regions|` extra
+the sample `d`, table `j`'s `Zk.schedule` schedule and the session's two rep streams of table `j`, at `2·|regions|` extra
 claims on the streams' rounds and table `j`'s proof files; each rep's pads are its proof file's, recorded at its
 stream's query words (`PadsRep`); and each rep's recorded caps are its decoded proof file's recursive caps. -/
 def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : TabZK 𝔽 mPts)
@@ -473,7 +473,7 @@ def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : 
       (if r = 0 then out.pend.1 else out.pend.2).lig.caps =
         (List.range (sch.levels.size - 1)).map (fun i => capDig zp.proof.ligerito.recursiveCaps[i]!)
 
-/-- **`runsZCJ_live` at the setup at each draw, with the rows**: `runsAtZCJ_live_entries` at `OpensRows`
+/-- **`runsZCJ_live` at the setup at each sample, with the rows**: `runsAtZCJ_live_entries` at `OpensRows`
 (`zk_table_rows₀Z`). -/
 theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
@@ -647,7 +647,7 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`runsZCJH_liveI` at the setup at each draw, with the rows**: `runsAtZCJH_live_entries` at `OpensRows`
+/-- **`runsZCJH_liveI` at the setup at each sample, with the rows**: `runsAtZCJH_live_entries` at `OpensRows`
 (`zk_table_rows₀Z`). -/
 theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
@@ -819,7 +819,7 @@ open FlockSoundness.Discharge.Tables (DecodesTable LiveOutJ)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **The deployed `--zk` decoders are right at `zkTabs` at the rows, at one outcome**: where `verify --zk` sets its
-session up at the empty draw `dj ∅`, on untyped inputs under `TagsOkZJ`, the openings `opnD` and decoder `decD` at
+session up at the empty sample `dj ∅`, on untyped inputs under `TagsOkZJ`, the openings `opnD` and decoder `decD` at
 `tabsJ` of `zkTabs` are right at `OpensRows` of `o₀`'s transcript at `wrS`, on `o₀` where `verify --zk` accepts that
 transcript (`decodesTableW_zkTabs` with `runsAtZCJ_live_rows`). -/
 theorem decodesTableR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : Composed.TagsOkZJ I) {n : ℕ}

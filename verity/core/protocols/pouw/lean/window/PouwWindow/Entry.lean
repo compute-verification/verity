@@ -9,12 +9,12 @@ public import PouwCommit.Frame
 /-!
 # The entry row (`window.py`, "The entry row")
 
-One entry of the window root as its committed 336-byte row holds it (PoUW's PROTOCOL.md, "The served audit window"):
+One entry of the execution phase root as its committed 336-byte row holds it (PoUW's PROTOCOL.md, "The served audit execution phase"):
 six u64s little-endian (kind, lo, hi, n_a, n_b, a zero pad), the side roots A and B and the pass's -h3 root (64 bytes
 each), tile0, cols, m and a zero u64, then the call's record's SHA-512. An `Entry` here holds what a row can hold: u64s
 and 64-byte digests (`Entry.fromRow?`); Python's dataclass holds any values, and `Entry.row` refuses the rest, so the
 functions of an entry agree on the entries that encode. `layoutProblem` holds an entry to the layout; `tileIn?`, `tileAt?`
-and `tileRead?` map a drawn index to its rows and its word in the pass's -h3 leaf; `entryDigest`, `entryBc` and `entryLeaf`
+and `tileRead?` map a sampled index to its rows and its word in the pass's -h3 leaf; `entryDigest`, `entryBc` and `entryLeaf`
 commit the row as an `hm96-sha512/row/v2` row.
 -/
 
@@ -51,7 +51,7 @@ def Side.ofName? : String → Option Side
 
 def sides : List Side := [.a, .b]
 
-/-- `PORT`: the window root's port. -/
+/-- `PORT`: the execution phase root's port. -/
 def port : String := "entries"
 /-- `ENTRY_SCHEMA`: `hm96-sha512/row/v2`. -/
 def entrySchema : String := HmRow.ROW_SCHEMA_V2
@@ -221,7 +221,7 @@ def bc? (e : Entry) (salt : ByteArray) : Except String ByteArray :=
 
 end Entry
 
-/-- `tile_at`: (entry, A row, B row) of drawn index `t`: the first entry, not empty, whose range holds it. -/
+/-- `tile_at`: (entry, A row, B row) of sampled index `t`: the first entry, not empty, whose range holds it. -/
 def tileAt? (entries : List Entry) (t : Int) : Except String (Nat × Nat × Nat) :=
   match entries.zipIdx.find? (fun (x, _) => x.kind != .none && x.lo ≤ t && t < x.hi) with
   | some (x, e) => do
@@ -229,7 +229,7 @@ def tileAt? (entries : List Entry) (t : Int) : Except String (Nat × Nat × Nat)
     pure (e, i, j)
   | none => .error s!"index {t} is in no entry's range"
 
-/-- `entry_leaf`: entry `e`'s frame-v3-sha512 leaf in the window root over its b ‖ c (128 bytes, as hm96's `tree_leaf`
+/-- `entry_leaf`: entry `e`'s frame-v3-sha512 leaf in the execution phase root over its b ‖ c (128 bytes, as hm96's `tree_leaf`
 refuses any other). -/
 def entryLeaf? (dom : PouwCommit.Domain) (e : Nat) (bc : ByteArray) : Except String ByteArray :=
   if bc.size != HmRow.BC_BYTES then .error s!"an hm96-sha512 commit string b || c is {HmRow.BC_BYTES} bytes"

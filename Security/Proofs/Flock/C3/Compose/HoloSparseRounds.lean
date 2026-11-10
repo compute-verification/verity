@@ -7,7 +7,7 @@ public import Proofs.Flock.VBridge.Sparse.Defs
 /-!
 # The sparse phases' rounds at the map read
 
-`heldBefore_sparse_size`: a sparse phase's stream rounds take `nc` history rounds in all, one per coin its phase draws
+`heldBefore_sparse_size`: a sparse phase's stream rounds take `nc` history rounds in all, one per coin its phase samples
 (`FlockVBridge.Sparse.nc` at `sparseOf`), from `holoSizes_sparse`'s count.
 `roundAt_sparse`: the history order of a sparse phase's rounds at the map read, in `holoStreams`' order: sparse phase
 `x`'s round `q` is past the link points, both reps' coin rounds and, for phase 1, phase 0's rounds, plus phase `x`'s
@@ -34,7 +34,7 @@ theorem heldBefore_size (s : HoloStream) (rs : Array SchedRound) :
   simp [hn]
 
 /-- **A sparse phase's rounds take `nc` history rounds**: its stream rounds' coin counts sum to the coins its phase
-draws, ζ_c's and ζ_r's twelve, H3's `ν + S_LOG`, ζ_p's `P_LOG` and ρ_t's `T_LOG` (`holoSizes_sparse`). -/
+samples, ζ_c's and ζ_r's twelve, H3's `ν + S_LOG`, ζ_p's `P_LOG` and ρ_t's `T_LOG` (`holoSizes_sparse`). -/
 theorem heldBefore_sparse_size (x : Fin 2) (sp : RecSparse.Shape) :
     heldBefore (.sparse x) (sparseRounds sp) (sparseRounds sp).size = FlockVBridge.Sparse.nc (sparseOf sp) := by
   have hs : holoSizes [(.sparse x, sparseRounds sp)] =

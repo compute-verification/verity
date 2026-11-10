@@ -10,7 +10,7 @@ public import Definitions.Core.Rewinding
 /-!
 # The rewinding lemma: openings off the plurality table cost collisions
 
-C-Flock's compiled theorem (its soundness package's `README.md` §1.2) covers every prover,
+Flock's compiled theorem (its soundness package's `README.md` §1.2) covers every prover,
 including one that never "knows" a table. Its committed table is the **plurality** table: at
 each position, the column the prover opens in the most runs (`IsPlurality`). A run is `bad` when
 it opens some position to a column off the plurality; a pair of runs `conflict`s when both open

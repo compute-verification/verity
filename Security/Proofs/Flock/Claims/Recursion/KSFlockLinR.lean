@@ -10,7 +10,7 @@ public import Proofs.Flock.Claims.KS.PlainRCapPrefix
 The bound record whose steps are the deployed reader's (`FlockDeploy.nextR rd`) and whose columns are the ones it
 opens, trimmed (`FlockDeploy.deployPlainTrimR`), has `DE` = `deployPlainTrimR` up to a weight `KSFlockLin` doesn't
 read (`RecDeploy.deE_R_trim`). So `KSFlockLin` there is `plainR_KSFlockLin`, from conflicts tied to collisions
-(`plainR_conflictTied`, proved) and the table bound at the abort law at `deployPlainR`
+(`plainR_conflictTied`, proved) and the table bound at the abort distribution at `deployPlainR`
 (`ksFlockLin_R_of_table`). That table bound is `plainR_tableBoundAbortLin_R`, from the reader's bound wherever some
 run accepts (`PlainRdInR`) alone, the level caps' prefix being proved (`capPrefixR`), so `ksFlockLin_R` takes exactly
 that one.
@@ -23,7 +23,7 @@ namespace RecDeploy
 open Claims (Msg)
 open FlockDeploy (Coin FinalP nextR)
 
-/-- **`KSFlockLin` at `DE` at the deployed reader's steps and trimmed columns, from the table bound at the abort law
+/-- **`KSFlockLin` at `DE` at the deployed reader's steps and trimmed columns, from the table bound at the abort distribution
 at `deployPlainR`**: `plainR_KSFlockLin` with `plainR_conflictTied`, as `DE` is `deployPlainTrimR` up to a weight
 `KSFlockLin` doesn't read (`deE_R_trim`). -/
 theorem ksFlockLin_R_of_table (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List Msg → Msg)

@@ -75,7 +75,7 @@ theorem regLeaf_eq {R : Reg} {path : lay.Pos → ByteArray} (hc : rd.Checked R p
   · exact Or.inr ((rd.openings R path p).collides ⟨h, hc p hp, rd.committed p hp⟩)
 
 /-- **`registered_weights_hm96` at a registered read.** Where the verifier's registered check holds at the registration
-`R`, in a satisfying witness of a drawn unit's table, the row the witness holds at a registered read is the row the
+`R`, in a satisfying witness of a sampled proof block's table, the row the witness holds at a registered read is the row the
 registrant committed there (`wv`), or SHA-512 collides: in hm96's leaf (`hm96Pair`), or between the session's opening of
 the registered root and the registrant's. -/
 theorem registered_weights (hHm : rs.Computes) {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S)

@@ -149,10 +149,10 @@ theorem swTau_of_rows {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some
         (by simp [_root_.Flock.Zk.triple])]
       exact tripleSwE x c w v τ j r q i
 
-/-- **`τ`'s commitment at the switched source, at the firewall's pads**: where table `j`'s rows hold at its base, the
-firewall's pads are the request's draws and the tape's pads are those draws' (`pads_frame_eq`'s premises), and `cons`
+/-- **`τ`'s commitment at the switched source, at the ZK server's pads**: where table `j`'s rows hold at its base, the
+ZK server's pads are the request's samples and the tape's pads are those samples' (`pads_frame_eq`'s premises), and `cons`
 is the worker's view's first seven rows (`SwRows`), the switched source's `τ` commitment is `τ` over `cons` at the
-firewall's pads and the inner proof's coins, committed through SHA-512 under the pads' `τ` salt. -/
+ZK server's pads and the inner proof's coins, committed through SHA-512 under the pads' `τ` salt. -/
 theorem swSrcE_tau_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin)
     {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
@@ -177,7 +177,7 @@ theorem swSrcE_tau_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ 
     (swTau_of_rows hs c w v τ j r cons hcons).symm
 
 /-- **`repCut_fw`'s `hinner` at the switched source from the worker's view's rows**: `swSrcE_innerSrc_frame` with its
-`τ` premise met by `swSrcE_tau_frame`, so `InnerSrc` holds at the switched source and the firewall's pads wherever the
+`τ` premise met by `swSrcE_tau_frame`, so `InnerSrc` holds at the switched source and the ZK server's pads wherever the
 batched constraint holds there and `cons` is the worker's view's first seven rows. -/
 theorem swSrcE_innerSrc_rows {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)

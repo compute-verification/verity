@@ -66,7 +66,7 @@ noncomputable abbrev bdKS :=
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols DeployedR.wER FlockDeploy.joinR
     rowInDeployed DeployedR.finalR DeployedR.wR
 
-/-- **The compiled record** `Flock.Guarantees.RecursiveKSAt` is stated at, at the brings `b` and the coin server's
+/-- **The compiled record** `Flock.Guarantees.RecursiveKSAt` is stated at, at the brings `b` and the challenger's live-coin part's
 record, its inner view running `bdKS`'s `IVStar`. -/
 noncomputable abbrev recKS (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) :
@@ -75,7 +75,7 @@ noncomputable abbrev recKS (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecR
     (DeployedR.layR OpenRows.elemR)).record bdKS.IVStar
 
 /-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement the compiled verifier accepts**, at the brings
-`b` and the coin server's record (`aux`, `nOf`, `hd`, `recRest`): for every inner and outer decoder meeting the
+`b` and the challenger's live-coin part's record (`aux`, `nOf`, `hd`, `recRest`): for every inner and outer decoder meeting the
 list-decoding spec (`decOK`), every dense statement `x`, every prover `P` making at most `t ≥ 1` SHA-512 calls per run,
 under `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, each charged `|S(x_I)|` and the
 verifier's own calls at `n = nR` and `v = 2^32`. -/
@@ -121,7 +121,7 @@ def RecursiveBitsKTightAt (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRe
       2 ^ (-(167.7 : ℝ)) + t * 2 ^ (-(174.95 : ℝ))
 
 /-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement the compiled verifier accepts**, at the deployed
-brings `deployedB b`, every other field of the brings and every record the coin server keeps: `recursiveBitsK` at
+brings `deployedB b`, every other field of the brings and every record the challenger's live-coin part keeps: `recursiveBitsK` at
 `n = nR` and `v = 2^32`, whose call premises `lamLin2_R_ge_in` and `setupCalls_deployedB_le_32` prove at a run the
 compiled verifier accepts, with `kappa_eps_deployed` at the sizes that run gives (`sizesAt_of_run_acc`). -/
 theorem recursiveBitsK_tight (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)

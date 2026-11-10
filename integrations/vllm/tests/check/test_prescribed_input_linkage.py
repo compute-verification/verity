@@ -9,7 +9,7 @@ to their approved source at Commit, independently of whether a random replay sam
     as an unlinked token boundary; a greedy row (no declared seed, constant S) checks nothing and says so, its verdict byte-identical.
 
 Why this is required beside the selector's evaluator: the form-(A) evaluator makes the COMMITTED seed load-bearing, not
-the DECLARED one -- a prover that commits ids drawn with its own seed replays consistently.  The linkage ties the committed word to the
+the DECLARED one -- a prover that commits ids sampled with its own seed replays consistently.  The linkage ties the committed word to the
 workload of record.  Fixtures: a `_Store` of committed words by identity (the stoch test's shape), B=1 and B=3 with staggered arrivals
 so live(s) changes and SplitsFor_v1's S changes with it (142 SMs: live 1..4 -> 32, 5..8 -> 16; 132 SMs on Hopper likewise 1..4 -> 32).
 """

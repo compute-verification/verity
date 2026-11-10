@@ -13,16 +13,16 @@ the inner statement's files where it holds them (`RecCoins.Source`), its own inn
 `RecVStar.statements` refuses, at candidate 3's sparse shape one whose inner statement `RecCoins.checkAtC3`
 refuses (`checkInnerRange`), and where it holds the inner statement's files one that is not the inner statement's, or an
 inner statement set up otherwise than its files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`); every V*
-statement carries those files (`RecCoins.filesInput` refuses them in part). Its verdict refuses a V* session whose record holds no draw (`ProvedScope.drawLaw`) or
-whose draw is not every unit of its population (`RecSetup.fullDraw`), and a session over an inner session whose
-record holds no draw (`RecSetup.innerDrawn`), and a holo or sparse inner shape (`RecSetup.denseOnly`); the compiled
-statement's reader refuses an inner statement without a draw (`RecDeploy.innerOk`). There is no other recursion-level refusal.
+statement carries those files (`RecCoins.filesInput` refuses them in part). Its verdict refuses a V* session whose record holds no sample (`ProvedScope.drawLaw`) or
+whose sample is not every unit of its population (`RecSetup.fullDraw`), and a session over an inner session whose
+record holds no sample (`RecSetup.innerDrawn`), and a holo or sparse inner shape (`RecSetup.denseOnly`); the compiled
+statement's reader refuses an inner statement without a sample (`RecDeploy.innerOk`). There is no other recursion-level refusal.
 
 * `parseOf`: the deployed parser, what the verifier reads where its setup accepts the inner shape, readable (`toStmt`);
 * `scopeCheckOf`: the parser accepts, the inner scope check takes the inner statement, `RecSetup.fullDraw` takes
-  every V* session's draw at the verifier's inner shape (`fullDrawOk`), and `RecSetup.denseOnly` takes the inner shape
+  every V* session's sample at the verifier's inner shape (`fullDrawOk`), and `RecSetup.denseOnly` takes the inner shape
   (`dense`: the verdict's refusal of the holo and sparse forms, which `RecursiveKS` doesn't cover);
-* `inScope_iff`: at a statement the parser accepts, `InScope` holds exactly when every V* session's draw is full and the
+* `inScope_iff`: at a statement the parser accepts, `InScope` holds exactly when every V* session's sample is full and the
   inner shape is dense, the setup's checks giving every other condition on the inner shape (`statements_ok`,
   `candidate3_ok`). `checkAtC3_ok` and `checkInnerRange_ok` state what the setup checks of a sparse shape, which the
   scope doesn't admit;
@@ -62,7 +62,7 @@ def rangeOk (sp : RecSparse.Shape) (st : Stmt) : Bool :=
       (Array.replicate (st.c.kLog - 6) (0 : F128)) rng).isOk
   | .error _ => false
 
-/-- A draw, readable: its `subset` law's `k`, population, units and closure. -/
+/-- A sample, readable: its `subset` law's `k`, population, units and closure. -/
 def drawOf (D : Draw.UnitDraw) : Claims.Recursion.DrawRecord where
   subset := match D.law with
     | .subset k => some k
@@ -71,7 +71,7 @@ def drawOf (D : Draw.UnitDraw) : Claims.Recursion.DrawRecord where
   units := D.units.toList
   closure := D.closure.toList
 
-/-- A V* session's draw as its record holds it, readable; `none` where the record holds none, or one that doesn't
+/-- A V* session's sample as its record holds it, readable; `none` where the record holds none, or one that doesn't
 read. -/
 def recordDrawOf (record : String) : Option Claims.Recursion.DrawRecord :=
   (Witness.recordDraw record).bind fun d => match Draw.UnitDraw.ofJson d with
@@ -80,7 +80,7 @@ def recordDrawOf (record : String) : Option Claims.Recursion.DrawRecord :=
 
 /-- **The recursion's statement, readable**, from what the verifier reads: no circuit commitment (the compiled verifier
 has no private-circuit variant), the inner statement's dimensions as it sets it up, its inner shape as the form,
-each V* session's draw, and the link table's root and row count. -/
+each V* session's sample, and the link table's root and row count. -/
 def toStmt (r : Read) : Claims.Recursion.CompiledStatement where
   inner := r.inner
   innerDims := (innerStmt r.src).map fun st => (st.m, st.c.kLog, st.regions.size)
@@ -112,7 +112,7 @@ def parseBytes (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option R
 def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Claims.Recursion.CompiledStatement :=
   (parseBytes decode x).map toStmt
 
-/-- **A V* session's draw passes the verdict's refusals** under the verifier's inner shape `i`: its record holds a draw
+/-- **A V* session's sample passes the verdict's refusals** under the verifier's inner shape `i`: its record holds a sample
 (`ProvedScope.drawLaw` refuses a session without one), and `RecSetup.fullDraw` takes it, as `verify` calls it in a
 recursive session (under an inner shape its `rec` flag changes nothing, `fullDraw_some`). -/
 def fullDrawOk (i : RecVStar.Inner) (record : String) : Bool :=
@@ -136,7 +136,7 @@ theorem dense_iff (i : RecVStar.Inner) : dense i = true ↔ i.holo = false ∧ i
       Except.toBool]
 
 /-- **The deployed scope check**: the parser accepts, the inner scope check `ivScope` takes the inner statement, every
-V* session's draw passes, and the verifier's inner shape is dense (`RecSetup.denseOnly`, the verdict's refusal of the
+V* session's sample passes, and the verifier's inner shape is dense (`RecSetup.denseOnly`, the verdict's refusal of the
 forms `RecursiveKS` doesn't cover). -/
 def scopeCheckOf (ivScope : Claims.Msg → Bool) (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Bool :=
   match parseBytes decode x with
@@ -253,7 +253,7 @@ theorem checkAtC3_ok {i : RecVStar.Inner} {src : Option RecCoins.Source} {sp : R
     · exact ⟨st, by simp [innerStmt, hf, Except.toOption], h⟩
   · cases h
 
-/-! ## The full draw -/
+/-! ## The full sample -/
 
 /-- Under an inner shape, `RecSetup.fullDraw` doesn't read whether the session is recursive: its `noInner` refusal is of
 a recursive session without one. -/
@@ -284,7 +284,7 @@ theorem fullDrawOk_iff (i : RecVStar.Inner) (record : String) :
 
 /-! ## The scope -/
 
-/-- **`InScope` at a statement the setup accepts** holds exactly when every V* session's draw passes and the verifier's
+/-- **`InScope` at a statement the setup accepts** holds exactly when every V* session's sample passes and the verifier's
 inner shape is dense: the setup's checks give every other condition on the inner shape, and at a dense shape candidate
 3's list has no R (`candidate3_ok`). -/
 theorem inScope_iff {r : Read} (hr : accepts r = true) :
@@ -317,7 +317,7 @@ theorem inScope_iff {r : Read} (hr : accepts r = true) :
     exact (fullDrawOk_iff r.shape rec).1 (List.all_eq_true.1 hall rec hrec)
 
 /-- **The readable scope at the verifier's parser**: the setup accepts what the verifier reads, the inner statement is
-in the inner scope, every V* session's draw passes, and the verifier's inner shape is dense. -/
+in the inner scope, every V* session's sample passes, and the verifier's inner shape is dense. -/
 theorem scope_iff {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W) (decode : Claims.Msg → Option Read)
     (hparse : D.parse = parseOf decode) (x : Claims.Msg) :

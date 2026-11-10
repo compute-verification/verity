@@ -217,7 +217,7 @@ theorem inWords_recOpen {LANES H : ℕ} {p : Ports} {outBits : Array ℕ} {name 
 the verifier build `net` from `recOpenLaid` (`netOf`), and let unit `u` be an instance of `k` stacked copies of the
 net's rows (`Rows.ofNet`), the transcript `X` carrying 1 at the stack's constant. Then at copy `j`'s column values
 (`copyVal`), `laid_recOpen` holds: if the copy's input columns hold the row, `acc`, the coefficients, the siblings and
-the position's bits, its output columns from `outStart` hold the verifier of record's climb and 64 zero bytes, then the
+the position's bits, its output columns from `outStart` hold the verifier's climb and 64 zero bytes, then the
 consistency term at `k = 0, 1` and the rest of `acc`. -/
 theorem unit_recOpen {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)

@@ -10,10 +10,10 @@ public import Proofs.Core.Game.Prob
 (`Wipe.blank_separates`), and meets the survivor bound at the constant `2^-128` for every `foreignBits ≥ 128`
 (`Wipe.blank_survivorBound`), so `Wipe.Separates` and `Wipe.SurvivorBound` hold together on some wipe of every device.
 
-On a run whose view at the boundary is distributed as the wipe's game draws it (`Wipe.OfRun.Preserves`), the run's event
+On a run whose view at the boundary is distributed as the wipe's game samples it (`Wipe.OfRun.Preserves`), the run's event
 that the wipe accepts while foreign content past the survivor threshold survives (`Wipe.OfRun.Kept`) is the preimage of
 the wipe's game's, so the survivor bound bounds it at the run's moves (`Wipe.OfRun.prob_kept_le`). A run that, after
-any game, draws the foreign content, the seed and the spot reads at the boundary meets `Preserves` at every strategy,
+any game, samples the foreign content, the seed and the spot reads at the boundary meets `Preserves` at every strategy,
 for every wipe (`Wipe.OfRun.drawn_preserves`); on it the blank wipe's event has probability at most `2^-128`
 (`Wipe.OfRun.blank_drawn`).
 -/
@@ -74,7 +74,7 @@ theorem Wipe.blank_survivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonemp
     _ ≤ 2⁻¹ ^ 128 := pow_le_pow_right_of_le_one' (by norm_num) hS'
 
 /-- **The survivor bound on a run.** If the wipe `w` meets its survivor bound at `foreignBits` and `ε`, and the run's
-view at the boundary is distributed as the wipe's game draws it at the strategy `t`, then on the run the probability
+view at the boundary is distributed as the wipe's game samples it at the strategy `t`, then on the run the probability
 that the wipe accepts while foreign content past the survivor threshold survives is at most `ε` at the run's moves. -/
 theorem Wipe.OfRun.prob_kept_le [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] {w : Wipe d s b Ω Ch}
     {foreignBits : ℕ}
@@ -106,8 +106,8 @@ theorem Wipe.OfRun.prob_bind_eq {α β : Type} (f : α → Game β) (p : β → 
   | @Game.coin _ _ _ _ k, t =>
       (congrArg Game.avg (funext fun c => Wipe.OfRun.prob_bind_eq f p V hf (k c) (t c))).trans (Game.avg_const V)
 
-/-- **The run that draws its foreign content with the wipe's coins**: after the game `g`, whatever was played there,
-the run draws the foreign content of `S_φ` bits, the seed and the spot reads, and the view reads them; `hold` and `keep`
+/-- **The run that samples its foreign content with the wipe's coins**: after the game `g`, whatever was played there,
+the run samples the foreign content of `S_φ` bits, the seed and the spot reads, and the view reads them; `hold` and `keep`
 are the run's moves at the boundary. -/
 def Wipe.OfRun.drawn [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (w : Wipe d s b Ω Ch) {O₀ : Type}
     (g : Game O₀) (S_φ : ℕ) (hold : (Fin S_φ → Bool) → Device.State d)
@@ -118,8 +118,8 @@ def Wipe.OfRun.drawn [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (w : 
   keep := keep
   view := Prod.snd
 
-/-- **The map exists at every wipe** on a run that draws its foreign content with the wipe's coins: its view is
-distributed as the wipe's game draws it at every strategy. -/
+/-- **The map exists at every wipe** on a run that samples its foreign content with the wipe's coins: its view is
+distributed as the wipe's game samples it at every strategy. -/
 theorem Wipe.OfRun.drawn_preserves [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (w : Wipe d s b Ω Ch)
     {O₀ : Type} (g : Game O₀) (S_φ : ℕ) (hold : (Fin S_φ → Bool) → Device.State d)
     (keep : Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool)
@@ -127,7 +127,7 @@ theorem Wipe.OfRun.drawn_preserves [Fintype Ω] [Nonempty Ω] [Fintype Ch] [None
     (Wipe.OfRun.drawn w g S_φ hold keep).Preserves t := fun P =>
   Wipe.OfRun.prob_bind_eq _ (fun o => P o.2) (Game.value P (Game.draw _)) (fun _ _ => rfl) g t
 
-/-- **The blank wipe on the run that draws its foreign content**: for every `foreignBits ≥ 128`, the run's event that
+/-- **The blank wipe on the run that samples its foreign content**: for every `foreignBits ≥ 128`, the run's event that
 the wipe accepts while foreign content past the survivor threshold survives has probability at most `2^-128`, so the
 premises of a statement over runs (`Wipe.SurvivorBound` and `Wipe.OfRun.Preserves`) hold together. -/
 theorem Wipe.OfRun.blank_drawn [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] {foreignBits : ℕ}

@@ -7,11 +7,11 @@ needs a reason in the PR.
 
 Inputs are derived, not stored: case c's rows are the first ``rows (K + 4)`` bytes of SHAKE256(`LABEL`, NUL, c), row r
 the r-th K + 4 of them, its K int8 codes and then its f32 scale little-endian, whose bits are set into [2^-7, 2^-6)
-(``0x3C000000 | bits & 0x007FFFFF``) so it is finite. The program digest (a stand-in for the window Program
-descriptor's SHA-512), the window's open root and the 32-byte salt key are SHAKE256(`LABEL`, NUL, ``program`` /
+(``0x3C000000 | bits & 0x007FFFFF``) so it is finite. The program digest (a stand-in for the execution phase Program
+descriptor's SHA-512), the execution phase's open root and the 32-byte salt key are SHAKE256(`LABEL`, NUL, ``program`` /
 ``window`` / ``key``), 64, 64 and 32 bytes. Leaf j's salt is `audit.hm96_salt(key, nonce, j)` at the case's nonce:
-the served A table of call 0's (vllm's ``pouw_h1_served.nonce(0, "a")``, `A_NONCE`), which binds the window, and the
-weights' ``b/<K>`` at `weights.B_NONCE` (K the window's only K), which binds none. Each case pins every leaf's SHA-512 of
+the served A table of call 0's (vllm's ``pouw_h1_served.nonce(0, "a")``, `A_NONCE`), which binds the execution phase, and the
+weights' ``b/<K>`` at `weights.B_NONCE` (K the execution phase's only K), which binds none. Each case pins every leaf's SHA-512 of
 its words' bytes, its ``sha512/row/v2`` digest and its frame-v3 leaf, and the value's domain id and root, all as
 `registered.Registered.commit` gives them under ``hm96-sha512/row/v2``."""
 
@@ -32,7 +32,7 @@ OUT = Path(__file__).with_name("vectors") / "splitk_rows.json"
 LABEL = b"verity/pouw/splitk-rows-vectors/v1"
 #: the served A table of call 0's salt nonce: vllm's ``REQUESTS_NONCE + 2^42 + 2 * 0 + TABLES.index("a")``
 A_NONCE = (1 << 61) + (1 << 42)
-#: (case, value, K, rows, nonce, binds the window)
+#: (case, value, K, rows, nonce, binds the execution phase)
 CASES = (("a-14336-s0", "a/14336@0", 14336, 64, A_NONCE, True),
          ("b-6144", "b/6144", 6144, 64, Wt.B_NONCE, False))
 

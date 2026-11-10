@@ -9,11 +9,11 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
 
 A masked rep's lockstep (`lockRepZ`) meets its level-`ℓ + 1` cap's table node, `slotOf r (ℓ + 1)` moved four up, after
 the same number of coins on every path that meets it: the masked zerocheck's, lincheck's and opening's coins (the
-non-ZK session's shapes), level 0's two first coins, its `k0` masked lane rounds and its `e` extra draws, then, per
+non-ZK session's shapes), level 0's two first coins, its `k0` masked lane rounds and its `e` extra samples, then, per
 level passed, plain's count (`RepDist`). The pads root and `τ`'s commitment sit at slots below four, and a path whose
 opening rejects goes to the inner proof and meets no cap.
 
-* `coinsK_foldShapeZ`, `coinsK_replicate_coin`: the masked lane rounds' and the extra draws' coins;
+* `coinsK_foldShapeZ`, `coinsK_replicate_coin`: the masked lane rounds' and the extra samples' coins;
 * `noSlot_lockQueryZ`, `noSlot_lockFoldZK`, `noSlot_lockQuery0Z`, `noSlot_lockInnerZ`: the phases between caps, and
   the inner proof, have no level table node;
 * `dist_lockRecZ`, `dist_lockLigTailZ`, `dist_lockLigPadZ`, `dist_lockRestZ`, `dist_lockMaskedZ`: each cap's distance
@@ -225,7 +225,7 @@ theorem dist_lockLigTailZ (A : Arith F K) (r : ℕ) (hr : r < 2) (sch : Schedule
         omega
 
 /-- The coins from the masked level 0's start to its level-`ℓ + 1` cap: its two first coins, its `k0` lane rounds,
-its `e` extra draws, then `ligSlotDist`. -/
+its `e` extra samples, then `ligSlotDist`. -/
 def ligPadSlotDist (sch : Schedule) (e ℓ : ℕ) : ℕ :=
   ligSlotDist sch.levels.tail ℓ + e + sch.k0 + 1 + 1
 

@@ -23,7 +23,7 @@ budget `qF` and the self-clash finder at budget `qS`, each built from the prover
 def TableCRAt := @Discharge.Exec.TableCRL
 
 /-- **A2 at the prover's link finders** (`Discharge.Exec.LinkCRL`): `SHA512CRExpected` for the finder built for each
-commit string a draw can read, at the registration and the prover's continuation. -/
+commit string a sample can read, at the registration and the prover's continuation. -/
 def LinkCRAt := @Discharge.Exec.LinkCRL
 
 /-- **`SHA512CRStrict` at table `j`'s finders in a batched `--zk` session** (`Discharge.ZkLink.TableCRZ`), as

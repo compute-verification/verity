@@ -15,7 +15,7 @@ The two guards a bound gets beside it (one adversary form):
   probability `1 > δ`.
 * `card_wrong_lt_of_relS_nontrivial`: its conclusion fails for an accept-everything verifier. On `notCircuit` (an
   input and its negation, the output, one unit), the witness that opens nothing leaves its one unit wrong, so "fewer
-  than `1` wrong unit" fails there, and `RelS` refuses it.
+  than `1` incorrect proof block" fails there, and `RelS` refuses it.
 -/
 
 @[expose] public section
@@ -80,7 +80,7 @@ def notPartition : FlockSoundness.Audit.Partition notCircuit 1 where
   input_iff := by decide
 
 /-- **`card_wrong_lt_of_relS`'s conclusion fails for an accept-everything verifier**: on `notCircuit`, at any strata of
-its one unit, the witness that opens nothing leaves its one unit wrong, so "fewer than `K₀ = 1` wrong units" fails,
+its one unit, the witness that opens nothing leaves its one unit wrong, so "fewer than `K₀ = 1` incorrect proof blocks" fails,
 and `RelS` refuses that witness. -/
 theorem card_wrong_lt_of_relS_nontrivial (kd : ℕ) {ns : List ℕ} (hns : ns.sum = 1) (desc : Claims.Msg) (q : Query)
     (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) :

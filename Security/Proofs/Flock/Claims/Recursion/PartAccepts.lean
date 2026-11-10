@@ -32,7 +32,7 @@ of the code side's choice (one stated against the element-level verdict's steps,
 both facts does.
 
 `ksLin2_deployed_partAccepts` and `bitsLin2_deployed_partAccepts` are `ksLin2_deployed_recRead` and
-`bitsLin2_deployed_recRead` at the coin server's record (`recTr`), with the pair replaced by `DecompB` at
+`bitsLin2_deployed_recRead` at the challenger's live-coin part's record (`recTr`), with the pair replaced by `DecompB` at
 `PartAccepts`, the same premise, `ReadsBackB` from `readsBack_recTr` (`recRead` reads that record back at every
 accepted run) and `ReadersTrue` from `readersTrue_layoutBTops` (every hm96 slot `layoutBTops` reads outputs its commit
 string at the outer relation, `hmSlotsCommit_of_full`). What they take: `DecompB` there, and nothing else.
@@ -132,7 +132,7 @@ open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record
 (`recTr`), from `DecompB` alone**: `ksLin2_deployed_recRead` at the brings whose transcript is
 `recTr aux nOf hd recRest`, with its inner check `PartAccepts` (`partChecksBV_partAccepts`), `recRead` reading that
 transcript back (`readsBack_recTr`) and the readers' calls true (`readersTrue_layoutBTops`,
@@ -159,7 +159,7 @@ theorem ksLin2_deployed_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.Re
     (fun shape hsh => (Claims.Recursion.VStarB.exists_chk_iff _ _ _ _ _ _ _ _).2 (hD shape hsh))
     (readersTrue_layoutBTops (finOpen rest) Bd.IVStar bR _ hmSlotsCommit_of_full)
 
-/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record
+/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record
 (`recTr`), from `DecompB` alone**: `bitsLin2_deployed_recRead` at `recTr aux nOf hd recRest`, with its inner check
 `PartAccepts`, `ReadsBackB` from `readsBack_recTr` and `ReadersTrue` from `readersTrue_layoutBTops`. It reads
 `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployed_partAccepts`'s open

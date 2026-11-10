@@ -22,7 +22,7 @@ take it as the named assumptions `Assumptions.TableCRZAt` and `Assumptions.LinkC
 namespace Flock.Bridge
 
 /-- **`verify --zk`'s inputs for one session of the files `cf` and `pf`**: `verity/flock-circuit`'s tags, one table, no
-session tables, on the coin tree `verify --zk` draws them on. The partition and the program it also reads are none here:
+session tables, on the coin tree `verify --zk` samples them on. The partition and the program it also reads are none here:
 no hypothesis on the files reads them. -/
 def servedI (cf pf : ByteArray) : FlockSoundness.Discharge.Exec.Inputs :=
   { tags := Flock.Tags.circuit, circuitFile := cf, publicFile := pf,

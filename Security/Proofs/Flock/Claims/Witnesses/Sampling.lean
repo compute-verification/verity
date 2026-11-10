@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 # Refutation witnesses: the sampling compiler's claims
 
 Each of the sampling compiler's claims (`Definitions.Claims.Sampling`) fails at a toy deployment. The statement is
-`toyStmt`: one input gate, returned, drawn `all`, its partition `toyPart` one proof unit `{0}`, in scope
+`toyStmt`: one input gate, returned, sampled `all`, its partition `toyPart` one proof block `{0}`, in scope
 (`inScope_toy`), so the witnesses hold whether or not `KS`, `KSCount` and `Bits` are read on the scope only.
 
 * `sksD`: the verifier accepts after one round, and no opening passes (`rejCm`), so every unit is faulty and no
@@ -85,7 +85,7 @@ def rejCm : CommitmentScheme Bool := ⟨fun _ _ => .ret false, fun _ _ _ => []�
 /-- One input gate, returned. -/
 def toyProg : Prog := ⟨[.input], [0]⟩
 
-/-- The program, drawn `all`. -/
+/-- The program, sampled `all`. -/
 def toyStmt : AuditStatement := ⟨[], toyProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
 /-- One class of one stratum of one proof block, `{0}`. -/

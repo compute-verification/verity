@@ -7,7 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 # Level 0's cut opening at the pads and at zero pads
 
 `ligeritoPZk_cutL0` gives the bodies the masked Ligerito sends at level 0 at any pads. The rep runs it at the frame's
-draws' pads `d.h`, the firewall's live opening (`openLive`) at zero pads. Bodies `0` and `k_0 + 3` carry no pad, and
+samples' pads `d.h`, the ZK server's live opening (`openLive`) at zero pads. Bodies `0` and `k_0 + 3` carry no pad, and
 each body `1 ≤ i ≤ k_0 + 2` is one of level 0's masked rounds with its squeeze, the zero-pad round and the round at the
 pads of an `L0Round`, so the frame releases the live opening's body as the rep's:
 
@@ -69,7 +69,7 @@ theorem l0Sent_pair (hk : 0 < lay.k0) (z : Array F128) (hz : ∀ i < 2, ∀ c < 
   ⟨_, _, Claims.ZKServer.l0Round_e lay d mk hk _ _ z hz, l0BodyAt_e, l0BodyAt_e⟩
 
 /-- **At zero pads every masked body is a sent level-0 round**: body `1 ≤ i ≤ k_0 + 2` at `openLive`'s zero pads and
-at the draws' pads, its squeeze one coin of kind `1` or two of kind `2`. -/
+at the samples' pads, its squeeze one coin of kind `1` or two of kind `2`. -/
 theorem l0Sent_zero (hk : 0 < lay.k0) (hkk : sch.k0 ≤ lay.k0) (len : ℕ) {i : ℕ} (hi1 : 1 ≤ i)
     (hi : i ≤ sch.k0 + 2) :
     ∃ p n k nc, (k = 2 ∨ (k = 1 ∧ nc = 1)) ∧ nc ≠ 0 ∧
@@ -143,7 +143,7 @@ end Release
 /-! ## The two openings, cut -/
 
 /-- **The live opening and the rep's, cut at level 0**: answered by `asksCut` from `l` and cut after level 0's `j`-th
-send (`j < k_0 + 4`), the masked Ligerito at `openLive`'s zero pads and at the draws' pads `d.h` both stop past the
+send (`j < k_0 + 4`), the masked Ligerito at `openLive`'s zero pads and at the samples' pads `d.h` both stop past the
 openings, each having sent its first `j + 1` level-0 bodies after `l`; the two agree at the bodies without pads, and
 each body `1 ≤ i ≤ k_0 + 2` is a sent level-0 round, the live opening's its zero-pad round. -/
 theorem ligeritoPZk_cutL0_live (coin : ℕ → ℕ → F128) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule)

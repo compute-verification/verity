@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.ZK.LinkRecheck
 /-!
 # (a) `FinCommits`: the commitments the session reads from the views
 
-At a statement in the masked scope with a witness (so `Live`, `Masked.live_of`), where the loop draws the tape's level 0
+At a statement in the masked scope with a witness (so `Live`, `Masked.live_of`), where the loop samples the tape's level 0
 (`Loop.Level0Src`, `Loop.Src`'s level-0 half):
 
 * `FlockComplete.commit0Cut_cap`: through SHA-512 under `hm96-sha512/v1`, `commit0Cut` returns, its cap layer `d − cap`
@@ -118,7 +118,7 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **(a) at the deployed scope**: at a statement in the masked scope with a witness, where the loop draws the tape's
+/-- **(a) at the deployed scope**: at a statement in the masked scope with a witness, where the loop samples the tape's
 level 0 (`Level0Src`), the schedules return, level 0's commitments from the views send nothing and carry the loop's
 roots, and each rep's pads commitment sends nothing. -/
 theorem finCommits_of (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)

@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.FinishRep
 
 /-!
-# The firewall's rounds as the session's
+# The ZK server's rounds as the session's
 
 `flock-firewall finish` runs a rep in `StateT Nat V`, answering the rep's round `k`, counted from `0`, with the rep's
 coins `coins[k]` (`asksOf`). The session runs it in `FlockComplete.PS`, logging every send and answering the session's
@@ -144,7 +144,7 @@ theorem ringSwitchCut_rel (hio : AsksRel S io io') (sv : ℕ → Array F128) (cl
   unfold FlockComplete.ringSwitchCut FlockComplete.sampleVecP
   sim_walk [squeezeP_rel S hio]
 
-/-- **The firewall's rep under a simulation** that relates its sends and hashes. -/
+/-- **The ZK server's rep under a simulation** that relates its sends and hashes. -/
 theorem repFwC_rel [LawfulMonad M] [LawfulMonad N] (hio : AsksRel S io io') {hs : Hashes M} {hs' : Hashes N}
     (hh : S.Hashes hs hs') (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128)
     (cm0 : FlockComplete.Commit) (extras : Array Claim) (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit)
@@ -232,7 +232,7 @@ theorem asksOf_rel (coins : Array (Array F128)) (base n : ℕ) (hn : base + coin
           rw [Array.size_push, hl]
           rfl
 
-/-- **The firewall's rep is the session's rounds from `base`**: where `flock-firewall finish`'s rep (`repFw` at
+/-- **The ZK server's rep is the session's rounds from `base`**: where `flock-firewall finish`'s rep (`repFw` at
 `commitFw`, answered by its coins from round `0`, in `StateT Nat V`) returns a proof and transcript at round `k'`,
 `repFwC` answered by `asksCut` at those coins from the session's round `base`, from a log of `base` sends, returns the
 same with a log of `base + k'`, wherever the cut is past the rep's last round. -/

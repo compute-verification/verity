@@ -1,4 +1,4 @@
-"""The staging decode: a layer's matrices from the P2-encoded store into plaintext staging buffers on the GPU, by
+"""The store's load: a layer's matrices from the P2-encoded store into plaintext load buffers on the GPU, by
 memory-accounting's decode unchanged (`libp2v1.so` from `benchmarks/pous/p2_v1/`, built for sm_90a by `build.sh`, through
 its own wrapper `p2_v1.gpu.Kernels`), with the refusals the store's reference decode (`p2_v1/store.py`'s `decode_range`)
 makes that the library's fast decode leaves to its caller.
@@ -15,7 +15,7 @@ Every chunk is screened on the device and nothing is fixed silently. `Store.chec
 flag bits, for anything decoded since the last check that the reference refuses: bit 2 for a decoded row whose two lead
 bytes aren't zero (wider than the payload: a corrupt row or other keys) or a row at or above p (a row whose first eight
 bytes are all 0xFF is compared with p exactly), bit 3 for a tensor's last block nonzero past the tensor's end, and the
-library's own flags (bit 0: a tweak's first candidate at or above p, where the spec draws the next). `decode_matrix` and
+library's own flags (bit 0: a tweak's first candidate at or above p, where the spec samples the next). `decode_matrix` and
 `decode_layer` call it before they return.
 
 With a pass of PoUB attached (`store.sketch = sketch.Pass(...)`), `decode_rows` sketches the units
@@ -72,7 +72,7 @@ def scatter(m: Any, j0: int, out: Any, offset: int, size: int) -> int:
 
 
 def flat(buf: Any) -> Any:
-    """`buf`'s bytes as a flat uint8 view (a staging buffer is any contiguous tensor)."""
+    """`buf`'s bytes as a flat uint8 view (a load buffer is any contiguous tensor)."""
     if not buf.is_contiguous():
         raise ValueError("a staging buffer is contiguous")
     return buf.view(-1).view(torch.uint8)
@@ -170,7 +170,7 @@ def decode_matrix(store: Store, layer: int, tensor: str, out: Any, *, check: boo
 
 
 def decode_layer(store: Store, layer: int, staging: Any, *, check: bool = True) -> Any:
-    """Layer `layer`'s staging buffer into `staging` (contiguous, exactly `staging_bytes(layer)` bytes): each tensor at
+    """Layer `layer`'s load buffer into `staging` (contiguous, exactly `staging_bytes(layer)` bytes): each tensor at
     its `staging_offset`, zero between them, as the fixture's `decode_layer(c_star, layout, layer, prefix, staging)`
     writes; `staging`."""
     dst, total = flat(staging), store.layout.staging_bytes(layer)

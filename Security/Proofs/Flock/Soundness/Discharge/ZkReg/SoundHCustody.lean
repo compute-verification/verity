@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
 
 `zk_session_soundHR_custody`: `zk_session_soundHR` with `hRec` and `hDraw` replaced by `RecordCustodyZK`
 (`live-verifier`), exactly as `ZkHidden.zk_session_soundH_custody` replaces them in `zk_session_soundH`: the custody
-assumption reads only the record and its draws, which neither the shared rows nor the registered check change.
+assumption reads only the record and its samples, which neither the shared rows nor the registered check change.
 -/
 
 @[expose] public section
@@ -22,7 +22,7 @@ open scoped ENNReal
 variable {n : ℕ} {Reg : Type}
 
 /-- **One hidden-output `--zk --registered` sampled session is sound under `live-verifier`, and its registered reads
-are checked.** `zk_session_soundHR` at the link points of the law's own draws, `mPtsOf c.g (∑ s, ks s)`, with the
+are checked.** `zk_session_soundHR` at the link points of the sampling design's own samples, `mPtsOf c.g (∑ s, ks s)`, with the
 record's custody (`RecordCustodyZK`) in place of `hRec` and `hDraw`, as `zk_session_soundH_custody` is
 `zk_session_soundH`'s. -/
 theorem zk_session_soundHR_custody
@@ -31,16 +31,16 @@ theorem zk_session_soundHR_custody
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the record, at the link points of the law's draws
+    -- the record, at the link points of the sampling design's samples
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut (mPtsOf c.g (∑ s, ks s)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verify command's tags, and live-verifier: the record and its draw file are the live session's
+    -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
     (hTags : TagsOkH I) (hCust : Assumptions.Zk.RecordCustodyZK I dj wr (.stratified Kd (Array.ofFn St)) pop)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

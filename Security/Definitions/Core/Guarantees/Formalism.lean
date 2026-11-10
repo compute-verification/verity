@@ -10,7 +10,7 @@ Stated on core's circuit and partition (`Definitions.Core.Formalism`). Appendix 
 into NCI's coverings is `Nci.Guarantees.PartitionCovers`, and NCI's policy as a padded `(c, k)`-partition is
 `Nci.Guarantees.CompliesCK`. The serving blocks are a `Padding` at `c_S` of the inference blocks reading at most `k_S`,
 summed by `ServingBlockSum`, with each serving block's inference cap from `InferenceCap`. The AND count `andSize`, in
-which credit and reporting are stated, is at most `size` (`AndSizeLe`), and on C-Flock's circuits counts its AND gates
+which credit and reporting are stated, is at most `size` (`AndSizeLe`), and on Flock's circuits counts its AND gates
 and rows (`ToCircuitAnd`). Credit under the pinned lowering is at most the lowered circuit's size (`CreditSizeLe`).
 -/
 
@@ -34,7 +34,7 @@ number of operation gates of its lowered circuit. -/
 def CreditSizeLe : Prop :=
   ∀ (lower : RegisteredCircuit → Circuit) (d : RegisteredCircuit), creditSize lower d ≤ (lower d).size (lower d).computed
 
-/-- **C-Flock's AND gates are `IsAnd`.** On a C-Flock circuit, an AND gate of `toCircuit` is an `and` or a row (its XOR,
+/-- **Flock's AND gates are `IsAnd`.** On a Flock circuit, an AND gate of `toCircuit` is an `and` or a row (its XOR,
 NOT and input gates are not AND gates); `and a b` with `a ≠ b` is one; and so is a row `(⊕ a) ∧ (⊕ b)` with a gate `x`
 in `a` an odd number of times and in `b` an even number, and a gate `y` the other way round (the two XORs differ). -/
 def ToCircuitAnd : Prop :=

@@ -7,25 +7,25 @@ public import Mathlib.Analysis.SpecialFunctions.Log.Base
 /-!
 # Optimal partitioning: the model
 
-A computation is divided into `n` proof units. Unit `u` does work `w u`, and proving it costs `c u`. The verifier draws
-units by a law `L` (`Law`), a drawn wrong unit is caught, and the prover fixes its transcript before the draw. These are
+A computation is divided into `n` proof blocks. Unit `u` does work `w u`, and proving it costs `c u`. The verifier samples
+units by a sampling design `L` (`Law`), a sampled incorrect proof block is caught, and the prover fixes its transcript before the sample. These are
 the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
 
 * `cost L c = ∑_u incl(u) · c(u)`, the verifier's expected proving cost, and `meanDraws L = ∑_u incl(u)`, the expected
-  number of units it draws;
-* `unitCost f o s = f + o · s`, the simple cost model: a fixed cost `f` per drawn unit plus an overhead `o` per unit of
+  number of units it samples;
+* `unitCost f o s = f + o · s`, the simple cost model: a fixed cost `f` per sampled proof block plus an overhead `o` per unit of
   work;
-* `MeetsTarget L w C δ`, the free-compute target: every set of wrong units whose work is at least `C` escapes with
+* `MeetsTarget L w C δ`, the free-compute target: every set of incorrect proof blocks whose work is at least `C` escapes with
   probability at most `δ`;
 * `locBits n K = log₂ ∑_{j ≤ K} C(n, j)`, the location term of `audit_exfiltration`, and `CertifiesLeak L b δ ℓ`, the
   exfiltration target: with unit `u` exporting `b u` bits, `audit_exfiltration`'s bound certifies at most `ℓ` bits at
   `δ`;
 * `detectionRisk N k p m = −ln(1 − p + p · C(N − m, k) / C(N, k))`, the detection risk of a replay unit holding `m` wrong
-  proof units out of `N`, when the verifier draws the replay unit with probability `p` and then `k` of its proof units
+  proof blocks out of `N`, when the verifier samples the replay unit with probability `p` and then `k` of its proof blocks
   uniformly;
-* `nested R N k a b`, the law that draws so: over `R` replay units of `N` proof units each, numbered as `R * N` proof
-  units, each replay unit with probability `a / b`, then `k` of its proof units uniformly; and `wrongIn B i`, the number
-  of proof units of `B` in replay unit `i`.
+* `nested R N k a b`, the sampling design that samples so: over `R` replay units of `N` proof blocks each, numbered as `R * N` proof
+  blocks, each replay unit with probability `a / b`, then `k` of its proof blocks uniformly; and `wrongIn B i`, the number
+  of proof blocks of `B` in replay unit `i`.
 -/
 
 @[expose] public section
@@ -40,13 +40,13 @@ variable {n : ℕ}
 /-- The verifier's expected proving cost: each unit's cost `c u`, weighted by its inclusion probability. -/
 noncomputable def cost (L : Law n) (c : Fin n → ℝ) : ℝ := ∑ u, (L.incl u).toReal * c u
 
-/-- The expected number of units a law draws. -/
+/-- The expected number of units a sampling design samples. -/
 noncomputable def meanDraws (L : Law n) : ℝ := ∑ u, (L.incl u).toReal
 
-/-- The simple cost model: a fixed cost `f` per drawn unit plus an overhead `o` per unit of work `s`. -/
+/-- The simple cost model: a fixed cost `f` per sampled proof block plus an overhead `o` per unit of work `s`. -/
 def unitCost (f o s : ℝ) : ℝ := f + o * s
 
-/-- **The free-compute target**: every set of wrong units whose work is at least `C` escapes with probability at most
+/-- **The free-compute target**: every set of incorrect proof blocks whose work is at least `C` escapes with probability at most
 `δ`. -/
 def MeetsTarget (L : Law n) (w : Fin n → ℝ) (C δ : ℝ) : Prop :=
   ∀ B : Finset (Fin n), C ≤ ∑ u ∈ B, w u → (L.escape B).toReal ≤ δ
@@ -63,22 +63,22 @@ def CertifiesLeak (L : Law n) (b : Fin n → ℕ) (δ ℓ : ℝ) : Prop :=
   ∃ H K : ℕ, IsHarmBound L (fun u => (b u : ℝ)) (ENNReal.ofReal δ) H ∧ L.miss (K + 1) < ENNReal.ofReal δ ∧
     (H : ℝ) + locBits n K ≤ ℓ
 
-/-- **The detection risk** of a replay unit holding `m` wrong proof units out of `N`: the verifier draws the replay unit
-with probability `p`, then `k` of its proof units uniformly, and the replay unit escapes with probability
+/-- **The detection risk** of a replay unit holding `m` wrong proof blocks out of `N`: the verifier samples the replay unit
+with probability `p`, then `k` of its proof blocks uniformly, and the replay unit escapes with probability
 `1 − p + p · C(N − m, k) / C(N, k)`. This is its negative logarithm. -/
 noncomputable def detectionRisk (N k : ℕ) (p : ℝ) (m : ℕ) : ℝ :=
   -Real.log (1 - p + p * ((N - m).choose k : ℝ) / (N.choose k : ℝ))
 
-/-- **The nested law** over `R` replay units of `N` proof units each, proof unit `j` of replay unit `i` being
-`finProdFinEquiv (i, j)`: each replay unit is drawn independently with probability `a / b` (`Law.bernoulli`), and inside
-each drawn one, `k` of its `N` proof units uniformly (`Law.subset`), independently across replay units. -/
+/-- **The nested law** over `R` replay units of `N` proof blocks each, proof block `j` of replay unit `i` being
+`finProdFinEquiv (i, j)`: each replay unit is sampled independently with probability `a / b` (`Law.bernoulli`), and inside
+each sampled one, `k` of its `N` proof blocks uniformly (`Law.subset`), independently across replay units. -/
 def nested (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) : Law (R * N) where
   Ω := (Law.bernoulli R a b).Ω × (Fin R → (Law.subset N k hk).Ω)
   draw ω := Finset.univ.filter fun v =>
     (finProdFinEquiv.symm v).1 ∈ (Law.bernoulli R a b).draw ω.1 ∧
       (finProdFinEquiv.symm v).2 ∈ (Law.subset N k hk).draw (ω.2 (finProdFinEquiv.symm v).1)
 
-/-- The number of proof units of `B` in replay unit `i`, numbered as in `nested`. -/
+/-- The number of proof blocks of `B` in replay unit `i`, numbered as in `nested`. -/
 def wrongIn {R N : ℕ} (B : Finset (Fin (R * N))) (i : Fin R) : ℕ :=
   (Finset.univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B).card
 

@@ -11,7 +11,7 @@ rep (`repHE`) both return at one history `l'`, their inner proofs open the same 
 
 * `FlockComplete.RunPost`: what every returning run satisfies, with its `bind`, `ite` and `throw` rules.
 * `FlockComplete.repCut_padsAt`, `FlockComplete.repPZk_padsAt`: answered by `asksCut`, both reps open their pads
-  commitment at `padQs`, the last round's `Q` coins mod the commitment's size (`PadsAt`): the draw is the last thing
+  commitment at `padQs`, the last round's `Q` coins mod the commitment's size (`PadsAt`): the sample is the last thing
   `innerCut` and `innerP` do (`sampleVecP_asksCut`).
 * `Masked.colPAt_exe`, `Masked.srcV_pads`: at an opened position's tree position the views' columns and salt are the
   codes of `h ‖ pad_h` and `μ ‖ pad_μ` and the tape's pads salt fitted to 192 bytes, as in the session's commitment
@@ -69,7 +69,7 @@ theorem mono {x : TMW PS β} {Q : β → Transcript → Array Claims.Msg → Pro
 
 end RunPost
 
-/-- **A draw of `m ≠ 0` coins answered by `asksCut`** returns the coin of its round, the last of its history. -/
+/-- **A sample of `m ≠ 0` coins answered by `asksCut`** returns the coin of its round, the last of its history. -/
 theorem sampleVecP_asksCut (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : m ≠ 0) :
     RunPost (sampleVecP (asksCut coin n) m) fun v _ l => v = (Array.range m).map (coin (l.size - 1)) := by
   intro s l v t l' e

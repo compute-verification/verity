@@ -1,7 +1,7 @@
 """One-stage audit, run A11: GLM-5.3 TP8 B1 (row ``glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager``), rank 0, through
 the one-stage audit A6 ran on stand-in coordinates: each Definition kind (family) whose unit M0 lowers (`a11_kinds.py`'s table)
-is a template, its units staged from the step's own values, sampled by the stratified law in one audit, proved by M0 under
-``--zk`` and held by the Lean verifier of record.
+is a template, its units staged from the step's own values, sampled by the stratified sampling design in one audit, proved by M0 under
+``--zk`` and held by the Lean verifier.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a11.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\

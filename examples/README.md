@@ -13,7 +13,7 @@ establishes with no hardware of its own at the prover's site. It composes three 
 
 - integrity, by sampled proofs (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled
-  proof block in C-Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
+  proof block in Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
 - work, by PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too): the GPU's time is credited
   to useful matmuls through receipts the live coins open, the period's windows all or nothing, each window's Commit
   record the one record the policy and the one-stage audit committed to;

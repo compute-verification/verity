@@ -9,7 +9,7 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             ci.toml) and what their jobs need, after the preflight; outside a
                                                             recorded run, since no gate takes part of a check
     ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
-                                                            post-landing run drive launches on `checked`'s tip (`train.sh
+                                                            after-landing run drive launches on `checked`'s tip (`train.sh
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
                                                             with --shard K/N, only those of shard K's parts, the last
                                                             shard's with those no shard holds (ratchet-gate) (drive's
@@ -274,7 +274,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 #: `ci.py`, the agreement job of the Lean verifier against upstream's Rust verifier, and its other scripts
 FLOCK_VERIFIER = ROOT / "verity" / "ml" / "flock" / "verifier"
-#: the Lean verifier of record, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
+#: the Lean verifier, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
 #: the Lean package away from the scripts rewrites it)
 FLOCK_LEAN = ROOT / "verity" / "core" / "service" / "flock"
 #: environment variables that say nothing about what a step computes (the shell's own bookkeeping)
@@ -382,7 +382,7 @@ TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check")
 
 def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combining: bool) -> int | None:
     """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs pytest,
-    lean-suites or circuit-check, all of a check (``parts`` None) or a shard or post-landing run holding one; else None."""
+    lean-suites or circuit-check, all of a check (``parts`` None) or a shard or after-landing run holding one; else None."""
     if not priority or pool is not None or combining:
         return None
     return TRAIN_GB if parts is None or any(p.partition(":")[0] in TRAIN_STEPS for p in parts) else None
@@ -1149,7 +1149,7 @@ def record(argv: list[str]) -> int:
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
-    # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
+    # an after-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
     # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake,
     # so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None and not records else []), "--project", "verity",
@@ -1322,7 +1322,7 @@ SIBLINGS_GB = 350
 
 def cc_mem_gb(slot_gb: int, beside: bool, lean: bool = True) -> int:
     """circuit-check's --mem-gb in a slot of ``slot_gb``: all of it alone (a shard without pytest or Lean), else what
-    `SIBLINGS_GB` leaves, but never under a quarter of the slot; beside pytest without ``lean`` (a post-landing run of
+    `SIBLINGS_GB` leaves, but never under a quarter of the slot; beside pytest without ``lean`` (an after-landing run of
     circuit-check and pytest), what pytest's share of that (`tests_gb`, half, the other half lean-suites') leaves."""
     if not beside:
         return slot_gb
@@ -1585,7 +1585,7 @@ def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
 
 #: a shard's result kind, which the tool doesn't produce: no gate takes a shard alone, only a `--combine` check of its set
 SHARD_KIND = "check-shard/v1"
-#: a post-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to revert a landing
+#: an after-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to revert a landing
 DEFERRED_KIND = "check-deferred/v1"
 
 
@@ -1856,7 +1856,7 @@ def shard_plan_main(argv: list[str]) -> int:
 def auto_shard(spec: str, gated: bool = True, plan_file: Path | None = None, jobs: set[str] | None = None) -> dict:
     """`--shard auto:K/N`: {"k", "n", "parts": shard K's parts of the auto plan, "all": the plan's parts, "plan": its summary}.
     The plan is ``plan_file`` (in a recorded run, its `AUTO_PLAN` input); DeclarationError when there is none, or its parts aren't exactly this tree's: every part of the jobs on the gate (not ``gated``: of every job), of
-    ``jobs`` alone when given (a post-landing run's steps and what they need)."""
+    ``jobs`` alone when given (an after-landing run's steps and what they need)."""
     m = AUTO_SHARD.fullmatch(spec)
     if not m or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: an auto shard is auto:K/N, K in 1..N")
@@ -2778,8 +2778,8 @@ def reuse_lines(r: dict) -> list[str]:
 def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
                  nondeterministic: list[dict] = (), shard: dict | None = None, stopped_by: str | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
-    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran); for a
-    post-landing run (`--deferred`), `DEFERRED_KIND`, the same under `deferred`.  A run
+    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran); for an
+    after-landing run (`--deferred`), `DEFERRED_KIND`, the same under `deferred`.  A run
     ``stopped_by`` a signal is `not_run`: no verdict, so a job queue runs it again."""
     if shard is not None:
         done = [{**s, "parts": got} if (got := [p for p in shard["parts"] if p.partition(":")[0] == s["step"]]) else s
@@ -2811,7 +2811,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
 
 
 def live_record(out: Path, run_dir: Path | None, sharded: dict | None, picked: list[str]):
-    """The run's `LIVE.Live`: what it checks (a shard, a post-landing run's steps, parts, or the whole check) of which commit, published
+    """The run's `LIVE.Live`: what it checks (a shard, an after-landing run's steps, parts, or the whole check) of which commit, published
     with the run's custody key when it has one (`custody_dir`)."""
     what = (f"shard {sharded['k']}/{sharded['n']}" if sharded and "k" in sharded else
             f"deferred {','.join(sharded['deferred'])}" if sharded and sharded.get("deferred") else

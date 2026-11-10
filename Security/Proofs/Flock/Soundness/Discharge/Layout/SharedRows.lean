@@ -10,7 +10,7 @@ set_option Elab.async false
 # Shared-row populations
 
 A shared-row population keeps its tables' rows as its `b ‖ c` and reads instance `i`'s row `p` at table `p`'s row
-`refs[i · np + p]` (`Public.digest`); `HmRow.drawn` keeps the rows and takes the proved units' refs. So a drawn instance's
+`refs[i · np + p]` (`Public.digest`); `HmRow.drawn` keeps the rows and takes the proved units' refs. So a sampled instance's
 `b ‖ c` is its proved unit's in the population (`drawn_digestW`), and every one is 128 bytes (`pop_digest_sizeW`:
 `HmRow.loadPublic` checks every ref against its table's count, and the tables' rows are `BC_BYTES`-long pieces of the
 body, `loadPublic_shared`). `bc_drawnS` is `bc_drawn` without `pop.tables = none`: a registered value's rows are read
@@ -155,7 +155,7 @@ theorem pop_digest_sizeW {tags : Tags} {c : Circuit} {file : ByteArray} {pop : P
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
     exact h128 _ (Array.getElem_mem hi)
 
-/-- **Instance `r`'s `b ‖ c` in a drawn statement is its proved unit's in the population's**, with or without shared
+/-- **Instance `r`'s `b ‖ c` in a sampled statement is its proved unit's in the population's**, with or without shared
 rows. -/
 theorem drawn_digestW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : Public} {d : Lean.Json}
     {D : Draw.UnitDraw} (hload : HmRow.loadPublic tags c file = .ok pop) (h : HmRow.drawn c pop d = .ok pub)
@@ -179,7 +179,7 @@ theorem drawn_digestW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : 
     rw [hrs, ← hpopn]
     nlinarith
 
-/-- **A drawn statement's `hm96` chunk at block `o`, template instance `g`** is, at a proved unit, that unit's
+/-- **A sampled statement's `hm96` chunk at block `o`, template instance `g`** is, at a proved unit, that unit's
 population `b ‖ c`, with or without shared rows. -/
 theorem bcChunk_drawnW {tags : Tags} {c : Circuit} {file : ByteArray} {pop pub : Public} {d : Lean.Json}
     {D : Draw.UnitDraw} (hload : HmRow.loadPublic tags c file = .ok pop) (h : HmRow.drawn c pop d = .ok pub)
@@ -200,7 +200,7 @@ namespace FlockSoundness.Discharge.Layout
 
 open Refine FlockSoundness.Discharge.Hidden
 
-/-- **`bc_drawn` with or without shared rows**: the `b ‖ c` a satisfying witness of a drawn statement holds at a proved
+/-- **`bc_drawn` with or without shared rows**: the `b ‖ c` a satisfying witness of a sampled statement holds at a proved
 unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public file, at every row. -/
 theorem bc_drawnS {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}

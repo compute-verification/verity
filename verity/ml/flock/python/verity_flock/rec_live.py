@@ -53,15 +53,15 @@ session.
 
 **The send check.** With ``--lean`` (required) every session's send check is Lean's: each
 request goes to ``flock-firewall live`` (`LeanFirewall`, `Flock.Firewall.liveWith`) before the proxy handles it, a refusal
-there stops the session, and every call on the coin server is one of the messages Lean sent for the request (`deliver`),
+there stops the session, and every call on the challenger's live-coin part is one of the messages Lean sent for the request (`deliver`),
 with the salts Lean drew. The proxy handles the request too, for the prover's side (the answers, the session record,
-``private.json``), and stops the session unless it sends the same messages and draws the same salts. Under the coin tree
-Lean is given the tree's spec and holds the prover's ``Hello`` to it (`Flock.Firewall.treeHello`); the coin server's
+``private.json``), and stops the session unless it sends the same messages and samples the same salts. Under the coin tree
+Lean is given the tree's spec and holds the prover's ``Hello`` to it (`Flock.Firewall.treeHello`); the challenger's live-coin part's
 messages are the live-coin session's. Lean's firewall refuses a binding round of a registered top, so
 `verity_flock.rec_session.serve`'s sessions keep the Python send check, held to Lean's by ``test_firewall_agreement``.
 
-**Live coins.** Each round's coins are flipped by the coin server when the round's commitments reach it, never before
-(`RecursiveKS`'s game and `RecursiveZK` draw them so, and `Flock.Firewall.Contract`'s ``coins`` rule lets coins out only
+**Live coins.** Each round's coins are flipped by the challenger's live-coin part when the round's commitments reach it, never before
+(`RecursiveKS`'s game and `RecursiveZK` sample them so, and `Flock.Firewall.Contract`'s ``coins`` rule lets coins out only
 after the commitments the schedule owes); `serve`'s challenger commits to none. A challenger may instead commit to every
 coin before the session (`CoinServer.commit_coins`, from the schedule alone: one hm96-sha512 commitment a round, the link
 points as round 0 of stream ``link``, each to `coin_message` under a fresh salt of the challenger's). A proxy given those
@@ -69,23 +69,23 @@ commitments (``commitments``) stops a session whose coins do not open their comm
 proxy given none stops one whose coins come with an opening, as the contract decides under the public input's ``coins``.
 
 **The coin tree.** Under the challenger's coin tree (``--coin-tree``, `INNER_COIN_SPEC`; the prover under ``FC_COINS=tree``
-with ``FC_COIN_STREAMS`` naming the streams after the circuit's reps) the coin server takes each session's tree from its
-source (`TreeSource`): the challenger's device (``--tree-from``), which at ``Hello`` draws a nonce of its own, then the tree's
+with ``FC_COIN_STREAMS`` naming the streams after the circuit's reps) the challenger's live-coin part takes each session's tree from its
+source (`TreeSource`): the challenger's device (``--tree-from``), which at ``Hello`` samples a nonce of its own, then the tree's
 key and every coin of the session (`verity.ml.commitments.coin_tree`), logs the tree and answers with the nonce, the root and
 the key, and opens each round only once given what the round answers (`link_after`, `round_after`), logging each opening;
 or, in tests alone, this host's generator (``--tree-test-os``, `OsTree`). The proxy answers the prover's ``Hello`` with the
 root and the key, checks each round's coins against the root before it hands them on (`coin_tree.check`; a coin that does
-not open stops the session), and hands on the coins alone, so the firewall's contract sees live coins without an opening.
+not open stops the session), and hands on the coins alone, so the ZK server's contract sees live coins without an opening.
 The prover's ``Hello`` must name the tree's spec (its own nonce is not the session's); the session record's ``Hello`` is the
 pinned one with Σ and the coins with the challenger's nonce, and its ``coin_tree`` the key, nonce, root and spec
 (`Flock.CoinTree.checkHello`, ``checkRecord``).
 
-**The sample.** ``Register`` is answered with the verifier's sample (``--draw``, `full_draw`: the stratified law at K = the
+**The sample.** ``Register`` is answered with the verifier's sample (``--draw``, `full_draw`: the stratified sampling design at K = the
 population over the verifier's own program and partition object, so every stratum samples all its units), or ``null``
 without one; the session record keeps it as ``unit_draw``. The prover then proves the sampled proof blocks' statement, the
-population's in order with the sample in its header, so its Σ is the drawn statement's and its shape (and the schedule) the
-population's. ``verify`` holds the sample to its own law (``--stratified N --program --partition``): a session without one
-is refused (D12), and the soundness headline at the full draw has no sampling term.
+population's in order with the sample in its header, so its Σ is the sampled statement's and its shape (and the schedule) the
+population's. ``verify`` holds the sample to its own sampling design (``--stratified N --program --partition``): a session without one
+is refused (D12), and the soundness headline at the full sample has no sampling term.
 
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (`Flock.Transcript`). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (committed as its salted
@@ -449,7 +449,7 @@ def rep_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], in
     """One fast100 rep's rounds for a table of ``2^m`` packed elements, ``2^k_log`` a block, with ``claims`` claims (2 and the
     statement's extra ones): each round's coin count, the node counts of the tops it commits, its copies of level 0's top
     (committed once, at ``Commit``) and the number of field elements the prover absorbs before its squeeze (one message row
-    when there are any: `message_rows`), in `rec_algebra.run`'s order of draws."""
+    when there are any: `message_rows`), in `rec_algebra.run`'s order of samples."""
     sch = fast100(m)
     lv, R = sch.levels, len(sch.levels) - 1
     cap = lambda level: [1 << lv[level].cap]
@@ -505,7 +505,7 @@ def stacked_rounds(m: int) -> list[tuple[int, list[int], int, int]]:
 
 
 def sparse_rounds(sh) -> list[tuple[int, list[int], int, int]]:
-    """A rep's sparse phase at `verity_flock.rec_sparse`'s shape ``sh`` (`rec_sparse.prove`'s draws, each message one row): ζ_c,
+    """A rep's sparse phase at `verity_flock.rec_sparse`'s shape ``sh`` (`rec_sparse.prove`'s samples, each message one row): ζ_c,
     H2's rounds, v2's (no coins), H3's, u's (ζ_p), with T > 1 vt's (ρ_t), and last the registered claim's (no coins), whose
     ``c_k`` fixes ``rec-claim``'s row."""
     from .rec_sparse import PRE_ROUNDS
@@ -545,7 +545,7 @@ def schedule_for(statement: dict, holo: bool = False, stacked: int | None = None
 
 
 def full_draw(program, query: dict) -> dict:
-    """The verifier's sample for an inner session over its own program and partition query: the stratified law at K = the
+    """The verifier's sample for an inner session over its own program and partition query: the stratified sampling design at K = the
     population (`one_stage.draw.derive`), whose every stratum samples all its units (`stratum_k(N, size, N) = size`), so the
     sample is every unit, ascending. ``verify --stratified N --program --partition`` derives the same law."""
     from verity.core.protocols.sampled_proofs.one_stage import draw as D
@@ -669,9 +669,9 @@ def on_schedule(record: dict, schedule: dict) -> None:
 # --- the verifier's side ----------------------------------------------------------------------------------------------------------
 
 class TreeSource(Protocol):
-    """Where the coin server takes a session's coin tree from: the challenger's device (``--tree-from``,
-    `verity.core.protocols.sampled_proofs.remote.RemoteChallenger`), or in tests `OsTree`. ``tree`` draws a tree of spec
-    ``spec`` (its JSON) under ``nonce`` (None: the source draws it) and returns its nonce, root and key; ``tree_open`` opens
+    """Where the challenger's live-coin part takes a session's coin tree from: the challenger's device (``--tree-from``,
+    `verity.core.protocols.sampled_proofs.remote.RemoteChallenger`), or in tests `OsTree`. ``tree`` samples a tree of spec
+    ``spec`` (its JSON) under ``nonce`` (None: the source samples it) and returns its nonce, root and key; ``tree_open`` opens
     the first ``n`` coins of round ``rnd`` of stream ``stream`` of the tree under ``root``, once given ``after`` (64 bytes:
     what the round answers), and returns the coins and their opening words. Each stream's rounds open in order, each once.
     ``close`` ends the source's session, which the device then signs."""
@@ -684,7 +684,7 @@ class TreeSource(Protocol):
 
 
 class OsTree:
-    """A `TreeSource` that draws on this host from ``rand`` (default the operating system's generator), for tests alone
+    """A `TreeSource` that samples on this host from ``rand`` (default the operating system's generator), for tests alone
     (``--tree-test-os``): its coins are this host's, not the challenger's. It refuses what the device refuses: a round out
     of its stream's order or opened twice, more than a block of coins, and an ``after`` other than 64 bytes."""
 
@@ -712,26 +712,26 @@ class OsTree:
 
 
 def link_after(roots: dict[str, list[bytes]]) -> bytes:
-    """What the link points are opened after: the SHA-512 of ``Commit``'s salted tops as the coin server records them
+    """What the link points are opened after: the SHA-512 of ``Commit``'s salted tops as the challenger's live-coin part records them
     (``link.roots``, `canonical`)."""
     return hashlib.sha512(canonical({t: [b.hex() for b in bcs] for t, bcs in sorted(roots.items())}).encode()).digest()
 
 
 def round_after(entry: dict) -> bytes:
-    """What a round's coins are opened after: the SHA-512 of the coin server's record of the round (``rounds``' entry,
+    """What a round's coins are opened after: the SHA-512 of the challenger's live-coin part's record of the round (``rounds``' entry,
     `canonical`) without its coins."""
     return hashlib.sha512(canonical({k: v for k, v in entry.items() if k != "coins"}).encode()).digest()
 
 
 def tree_held_reason(log: list[str], sessions: list[tuple[str, dict, dict]]) -> str | None:
-    """Why the inner sessions ``sessions`` (each its name, its ``coin_tree`` and its coin server's record, ``public.json``)
+    """Why the inner sessions ``sessions`` (each its name, its ``coin_tree`` and its live-coin part's record, ``public.json``)
     don't show their coins to be the ones the challenger's release log ``log`` shows it sampled and opened; None when they
     do. Each session's tree must be one the log sampled, under its key, nonce, root and spec, and no earlier session's; its
     link points that tree's ``session`` round 0, opened after `link_after` of the record's ``link.roots``; each round of
     its record its stream's round, opened after `round_after` of the round; and the log must show no tree and no opening
     that no session records, and no round read twice. `challenger.sessions_tree_reason` holds a `flock-circuit serve`
     session to the log the same way, after what that server answers. It mirrors `SampledProofs.Challenger.innerTreesReason`,
-    the verifier of record, which the recursive audit reads (`test_challenger_inner_trees.py` in the sampled proofs
+    the verifier, which the recursive audit reads (`test_challenger_inner_trees.py` in the sampled proofs
     service's tests holds the two together)."""
     from verity.core.protocols.sampled_proofs import challenger as C
 
@@ -793,7 +793,7 @@ def _integral(v) -> bool:
 
 
 def _inner_reads(public: dict) -> list[tuple[str, int, int, str, str]]:
-    """What the coin server's record ``public`` reads of its tree, in order (`SampledProofs.Challenger.innerReads`): the
+    """What the challenger's live-coin part's record ``public`` reads of its tree, in order (`SampledProofs.Challenger.innerReads`): the
     link points as the tree's ``session`` round 0, then each round; each its stream, round, coin count, what it was
     opened after and its coins' SHA-512, in hex. TypeError or ValueError for a record rec_live doesn't write."""
     link, rounds = public["link"], public["rounds"]
@@ -812,9 +812,9 @@ def _inner_reads(public: dict) -> list[tuple[str, int, int, str, str]]:
 
 
 class CoinServer:
-    """The verifier's coin server: public data in, coins out, every exchange recorded (``record``). ``rand(n)`` returns n
+    """The verifier's live-coin part: public data in, coins out, every exchange recorded (``record``). ``rand(n)`` returns n
     bytes (default the operating system's generator). ``tree``: the session's coin tree (`coin_tree.Spec`), from
-    ``source`` (`TreeSource`): at ``Hello`` the source draws the tree under a nonce of its own, and the coin server answers
+    ``source`` (`TreeSource`): at ``Hello`` the source samples the tree under a nonce of its own, and the challenger's live-coin part answers
     with the nonce and ``Hello``'s answer (the root and the key); each round's coins are then the tree's, opened after what
     the round answers (`link_after`, `round_after`) and sent with their opening (``tree_openings``). The nonce is the
     challenger's, not the prover's: the ZK server shows the challenger the schedule's ``Hello`` alone
@@ -971,7 +971,7 @@ def _opening(cap: bytes, salts: list[bytes]) -> dict:
 
 def register_top(program: str, table: str, cap: bytes, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt) -> dict:
     """A table's level-0 top registered with the private circuit (``program``, the registration's) at staging: the
-    registered value ``table`` whose rows are the top's nodes (`top_rows`), each under its own salt, drawn here, once
+    registered value ``table`` whose rows are the top's nodes (`top_rows`), each under its own salt, sampled here, once
     (one-stage ``registered.Registered``, whose ``b || c`` are `commit_top`'s). Its opening (``nodes``, ``salts``) and
     ``b || c`` a node (``top``) are the prover's; its ``entry`` is what the circuit registration names
     (`verity_flock.inner_registered.bind`)."""
@@ -1002,7 +1002,7 @@ def registered_entry(registration: dict | None, table: str) -> dict | None:
 
 
 def deliver(coins: CoinServer, m: dict):
-    """One message to the coin server, in `Flock.Firewall.sentJson`'s form, as the call it names on ``coins``; its answer."""
+    """One message to the challenger's live-coin part, in `Flock.Firewall.sentJson`'s form, as the call it names on ``coins``; its answer."""
     (tag, v), = m.items()
     if tag == "hello":
         return coins.start(v)
@@ -1023,9 +1023,9 @@ def deliver(coins: CoinServer, m: dict):
 
 class LeanFirewall:
     """The inner phase's send check, Lean's ``flock-firewall live`` (`Flock.Firewall.liveWith`) on one session held to
-    ``schedule``: `step` hands it a request before the proxy handles it, and it answers with every message the coin server
+    ``schedule``: `step` hands it a request before the proxy handles it, and it answers with every message the challenger's live-coin part
     gets for the request (`Flock.Firewall.sentJson`) and the salts it drew for them, ``{"sent", "salts"}``, or the refusal
-    that stops the session, ``{"stop": why}``. A firewall that exits or answers otherwise stops the session too. ``tree``:
+    that stops the session, ``{"stop": why}``. A ZK server that exits or answers otherwise stops the session too. ``tree``:
     the session is on the challenger's coin tree of that spec (`coin_tree.Spec.to_json`), whose ``Hello`` Lean holds to it."""
 
     def __init__(self, binary: str | Path, schedule: dict, tree: dict | None = None):
@@ -1059,7 +1059,7 @@ class LeanFirewall:
         return got
 
     def step(self, req: bytes) -> tuple[list[dict], list[bytes]]:
-        """``req``'s messages to the coin server and the salts drawn for them, in order; a refusal raises it."""
+        """``req``'s messages to the challenger's live-coin part and the salts sampled for them, in order; a refusal raises it."""
         got = self._ask(req.hex())
         if set(got) == {"stop"} and isinstance(got["stop"], str):
             raise ValueError(f"the Lean firewall: {got['stop']}")
@@ -1087,8 +1087,8 @@ class Proxy:
     ``unit_draw``.
 
     ``lean``: the send check is Lean's (`LeanFirewall`, on this session's ``schedule``). Each request goes to it first, and
-    its refusal stops the session; the coin server gets the messages it sent, in its order, and the salts are the ones it
-    drew. The proxy's own handling of the request must send the same messages and draw the same salts, or the session stops:
+    its refusal stops the session; the challenger's live-coin part gets the messages it sent, in its order, and the salts are the ones it
+    drew. The proxy's own handling of the request must send the same messages and sample the same salts, or the session stops:
     it keeps the prover's side (the session record, ``private.json``, the answers) and relays. Lean's firewall holds no
     registered top."""
 
@@ -1104,7 +1104,7 @@ class Proxy:
         self.coins = coins
         self.draw = draw
         self.lean = lean
-        #: under ``lean``: the messages it sent and the salts it drew for the request in hand, not yet relayed or drawn
+        #: under ``lean``: the messages it sent and the salts it drew for the request in hand, not yet relayed or sampled
         self.lean_sent: list[dict] = []
         self.lean_salts: list[bytes] = []
         self.fresh_salt = fresh_salt if lean is None else self._lean_salt
@@ -1163,8 +1163,8 @@ class Proxy:
         return self.lean_salts.pop(0)
 
     def _send(self, m: dict):
-        """A message to the coin server (`Flock.Firewall.sentJson`'s form), delivered (`deliver`); under ``lean``, the next
-        one the Lean firewall sent, which must be this one."""
+        """A message to the challenger's live-coin part (`Flock.Firewall.sentJson`'s form), delivered (`deliver`); under ``lean``, the next
+        one the Lean ZK server sent, which must be this one."""
         if self.lean is not None:
             tag = next(iter(m))
             if not self.lean_sent:
@@ -1232,7 +1232,7 @@ class Proxy:
             if self.lean_sent or self.lean_salts:
                 raise ValueError(refused("the Lean firewall sent or drew more for the request than the proxy"))
             return out
-        except Exception as e:  # noqa: BLE001 - a request the firewall cannot handle stops its session, never the firewall
+        except Exception as e:  # noqa: BLE001 - a request the ZK server cannot handle stops its session, never the ZK server
             why = f"rec proxy: {e}" if isinstance(e, ValueError) else \
                 f"rec proxy: {refused(f'a request the firewall cannot read ({type(e).__name__}: {e})')}"
             self.stop(why)
@@ -1438,7 +1438,7 @@ class Proxy:
 
 
 def write_stopped(d: Path, coins: CoinServer) -> None:
-    """A stopped session's directory: the coin server's record, ``public.json``, and its coin tree's record,
+    """A stopped session's directory: the challenger's live-coin part's record, ``public.json``, and its coin tree's record,
     ``coin_tree.json``, when it has one."""
     d.mkdir(parents=True, exist_ok=True)
     (d / "public.json").write_text(record_bytes(coins.record()))
@@ -1456,7 +1456,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     a prover's ``--warm`` and ``--runs`` sessions), write each into ``out``, or ``out/s<k>`` when there are several, and
     return their summaries, each also passed to ``done`` as it ends. A session that finishes is written whole
     (`Proxy.write`); one that stops (a refusal, or a connection that ends without ``Finish``: closed, reset, or cut inside a
-    frame) has only the coin server's record, ``public.json``, and its coin tree's record, ``coin_tree.json``, when it has
+    frame) has only the challenger's live-coin part's record, ``public.json``, and its coin tree's record, ``coin_tree.json``, when it has
     one, and counts as one of the ``sessions``. Without ``tree`` each session's coins
     are live: the challenger commits to none. ``ready`` is called with the bound address. Every session is held to ``schedule`` (`schedule_for`'s, from public data alone), written to
     ``out/schedule.json`` before the first is served. With ``firewall`` (a `verity_flock.firewall.Firewall`), each session
@@ -1469,7 +1469,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     connection was accepted, so that no release time depends on how long the inner session took. A recursive session the
     ZK server cannot open as given (other than `Refused`: the caller's fault, such as a schedule for other statements)
     closes the connection unserved, and ``serve`` raises. ``draw``: the verifier's sample every session's ``Register`` is
-    answered with (`Proxy`). ``tree``: each session's coins are the challenger's coin tree of that spec, drawn by
+    answered with (`Proxy`). ``tree``: each session's coins are the challenger's coin tree of that spec, sampled by
     ``source`` at its ``Hello`` (`CoinServer`). ``lean``: Lean's ``flock-firewall``, each session's send check
     (`LeanFirewall`, one process a session, closed when it ends); a session it cannot start on ``schedule`` makes ``serve``
     raise before it serves anything."""

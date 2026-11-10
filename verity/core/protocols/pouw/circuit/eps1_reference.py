@@ -14,7 +14,7 @@ Everything else is sampled proofs': hm96 leaves, the live sampling coin, one aud
 
     seed_j = SHA-512(TAG ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))
 
-for matmul j, with `salt` the epoch coin, `(forward, position)` the call's place in the serve (so two calls on the same
+for matmul j, with `salt` the execution phase coin, `(forward, position)` the call's place in the serve (so two calls on the same
 operand roots take different noise, `test_eps1_attacks`), and `root(A_j)`, `root(B_j)` the operands' hiding commitments.
 The verifier computes the seed and, from it, the noise (`noise`), and passes the noise as a public input: there is no hash
 in gates, and the noise is a function of a coin and two commitments, each of which may be public (the everything-ZK rule's
@@ -41,8 +41,8 @@ call against its receipt leaf, every absorbed word recomputed from the committed
 binding by SHA-512 alone (a meet-in-the-middle over free witness words, which v2 admits, cannot forge it —
 `test_eps1_attacks`, `test_circuit_segment`).
 
-**The unit, the work table and the closure.** A unit is a whole dot product: here a thread's call, drawn
-under the work law in proportion to `W_ref`, the served MACs it covers (`work_table`; `ops.s8.counts` is the per-coordinate
+**The unit, the work table and the closure.** A unit is a whole dot product: here a thread's call, sampled
+under the work sampling design in proportion to `W_ref`, the served MACs it covers (`work_table`; `ops.s8.counts` is the per-coordinate
 census, `K` served MACs a dot).  The closure is empty: no unit's soundness rests on another's, because the noise is the
 verifier's and every absorbed word is recomputed in the unit's own proof (ncp-v2's digest, node and key units, and their
 closures, do not arise).
@@ -112,7 +112,7 @@ def _u64(x: int) -> bytes:
 
 def seed(salt: bytes, forward: int, position: int, root_a: bytes, root_b: bytes) -> bytes:
     """`seed_j = SHA-512(TAG ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))`.  `salt` is the
-    epoch coin, `root_a`/`root_b` the operands' hiding roots, `(forward, position)` the call's place; all public."""
+    execution phase coin, `root_a`/`root_b` the operands' hiding roots, `(forward, position)` the call's place; all public."""
     return hashlib.sha512(TAG + bytes(salt) + _u64(forward) + _u64(position) + bytes(root_a) + bytes(root_b)).digest()
 
 
@@ -155,7 +155,7 @@ def noise(the_seed: bytes, receipt: bytes, shape: Shape, tile: int, ctid: int) -
     """The public noise of one thread's H1 call: the dither bits `b`, the served coin bits `c`, the keyed word `U` and the
     digit coins `z` from `seed_j` (`the_seed`), and the fx1 fold keys `st` (the chains' starts) from `σ_R`
     (`receipt`), never from seed_j.  The verifier computes these and passes them as public inputs to
-    `PouwCallCheck_v1`; nothing here is a witness.  `tile`, `ctid` place the thread (the draw's, from the same seed)."""
+    `PouwCallCheck_v1`; nothing here is a witness.  `tile`, `ctid` place the thread (the sample's, from the same seed)."""
     ks, m = shape.ks, SG.n_digits(shape.ks)
     sb = _Stream(the_seed, b"b")
     sc = _Stream(the_seed, b"c")
@@ -203,7 +203,7 @@ def templates(shape: Shape) -> dict[str, Any]:
 
 
 def unit(shape: Shape):
-    """The drawn unit: a thread's whole call under `PouwCallCheck_v1` (a unit is a whole dot product)."""
+    """The sampled proof block: a thread's whole call under `PouwCallCheck_v1` (a unit is a whole dot product)."""
     shape.check()
     return check(shape.ks)
 
@@ -211,7 +211,7 @@ def unit(shape: Shape):
 # ---- the work table and the closure -------------------------------------------------------------------------------------
 
 def work_ref(shape: Shape) -> dict[str, int]:
-    """`W_ref` per dot product: `K` served MACs a output coordinate (`ops.s8.counts`), and the call's and the window's totals.
+    """`W_ref` per dot product: `K` served MACs a output coordinate (`ops.s8.counts`), and the call's and the execution phase's totals.
     The sample law weights a unit by the MACs its thread's call covers; the closure is empty (`closure`)."""
     shape.check()
     per_dot = OS8.counts({"N": 1, "K": shape.k, "TAIL": _TAIL})["served_macs"]  # = K
@@ -230,7 +230,7 @@ def closure(shape: Shape) -> tuple:
 
 def vector(the_seed: bytes, receipt: bytes, shape: Shape, tile: int, ctid: int) -> dict[str, Any]:
     """An honest thread's call and its receipt, the noise from `seed_j` and the fold keys from `σ_R` (`noise`): the committed
-    operand leaves (`x`, `w`), the public noise and draw (`xsel`, `wsel`, `b`, `c`, `u`, `z`, `st`), and the receipt leaf
+    operand leaves (`x`, `w`), the public noise and sample (`xsel`, `wsel`, `b`, `c`, `u`, `z`, `st`), and the receipt leaf
     (`rc`) and the thread's one-hot position (`rsel`).  `check`'s word view returns 1 on it (`segment.call_check`); the attack
     library and the one-stage harness build from this."""
     shape.check()

@@ -5,10 +5,10 @@ public import Definitions.Claims.Sampling
 /-!
 # The end-to-end error inside the claims form's (A2 of the bridge)
 
-`Flock.Guarantees.EndToEnd` bounds `Pr[accept ∧ K₀ ≤ #wrong]` by `miss + ε_ks + δ_link` in `ℝ≥0∞`: the draw's miss
-`C(n−K₀, kd)/C(n, kd)` (with `η` beside it in `EndToEndPerTest`), `ksAvgStrictZ` and the link term. `Claims.Sampling.KS`
+`Flock.Guarantees.EndToEnd` bounds `Pr[accept ∧ K₀ ≤ #wrong]` by `miss + ε_ks + δ_link` in `ℝ≥0∞`: the sample's miss
+`C(n−K₀, kd)/C(n, kd)` (with `η` beside it in `EndToEndPerTest`), `ksAvgStrictZ` and the binding error. `Claims.Sampling.KS`
 bounds `PrBad` in `ℝ` by `κ D δ x + √(γ·Pr[B]) + Pr[B_ext]`. `e2e_error_le_ks` puts the first sum under the second at a
-deployment `D` whose `δ` covers the draw's miss and whose `4·ε_table` covers the knowledge and link terms; the
+deployment `D` whose `δ` covers the sample's miss and whose `4·ε_table` covers the knowledge and binding errors; the
 square-root and `B_ext` terms are only required to be nonnegative. -/
 
 @[expose] public section
@@ -50,7 +50,7 @@ theorem δ_add_εtable_le_κ (D : Deploy Coin Col T) (δ : ℝ) (x : Msg) (hδ :
   le_trans (by linarith [four_εtable_le_κF D x]) (δ_add_κF_le_κ D δ x hδ hε)
 
 /-- **A2, the error terms**: an error `miss + ks + link` in `ℝ≥0∞` whose miss is at most `δ` and whose knowledge and
-link terms are at most `4·ε_table` is at most `KS`'s error `κ D δ x + a + b`, at any nonnegative `a` (`√(γ·Pr[B])`)
+binding errors are at most `4·ε_table` is at most `KS`'s error `κ D δ x + a + b`, at any nonnegative `a` (`√(γ·Pr[B])`)
 and `b` (`Pr[B_ext]`). -/
 theorem e2e_error_le_ks (D : Deploy Coin Col T) (δ : ℝ) (x : Msg) (hδ : 0 ≤ δ) (hε : 0 ≤ D.εtable x)
     {miss ks link : ℝ≥0∞} (hmiss : miss ≤ ENNReal.ofReal δ) (hkl : ks + link ≤ ENNReal.ofReal (4 * D.εtable x))

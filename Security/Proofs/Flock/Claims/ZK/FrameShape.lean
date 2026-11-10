@@ -6,14 +6,14 @@ public import Proofs.Flock.Claims.ZK.FrameParse
 # The frame reads a round's shape alone
 
 The loop's release runs each rep's frame on the scheduled rounds
-at placeholder draws, salts and level-0 cap, so the frame's state after a round must not read what those change: the
-draws' values (the pads, their root and rows), a bytes frame's body (a commitment's cap), an observe's values, and
+at placeholder samples, salts and level-0 cap, so the frame's state after a round must not read what those change: the
+samples' values (the pads, their root and rows), a bytes frame's body (a commitment's cap), an observe's values, and
 whether the rep is stopped. Over a round's frames (`roundFree_encs`), the frame's step (`stepAt`) reads a label's bytes,
 a bytes frame's size, an observe's length and the configuration's layout, and nothing else of them:
 
 * `RelM f x y`: two runs alike in `f` (both return, at results equal under `f`, or both fail with one error), with its
   `bind` and `map` (`relM_bind`, `relM_map`).
-* `CfgAlike`: two configurations of one layout, mask slot and pad count, whatever their draws; `unstop`: a state but
+* `CfgAlike`: two configurations of one layout, mask slot and pad count, whatever their samples; `unstop`: a state but
   for `stopped`.
 * `Alike`: two frames of one shape (the same frame but for a bytes frame's body and an observe's values).
 * `absorb_alike`, `label_alike`, `absorb1_alike`, `foldlM_absorb1_alike`, `stepAt_alike`: each step, at alike frames and
@@ -69,7 +69,7 @@ theorem relM_map {α β γ δ : Type} {f : α → γ} {g : β → δ} {x y : V �
     | error e' => exact (h : False).elim
     | ok b => exact hk a b h
 
-/-- **Two configurations of one rep's layout**: equal but for the draws (the pads' values, their root and the rows). -/
+/-- **Two configurations of one rep's layout**: equal but for the samples (the pads' values, their root and the rows). -/
 structure CfgAlike (c c' : Cfg) : Prop where
   lay : c.lay = c'.lay
   order : c.order = c'.order

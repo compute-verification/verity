@@ -79,7 +79,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw**: `plain_clash₀AtK_of` at what
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample**: `plain_clash₀AtK_of` at what
 `wrPDK keep` writes for `o` (`plain_clash₀At`). -/
 theorem plain_clash₀AtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
@@ -100,7 +100,7 @@ theorem plain_clash₀AtK (keep : Bool → Bool)
   plain_clash₀AtK_of keep hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o (recordsLiveAtDK_wrPDK keep _ d o)
     hacc pend' hp hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under hm96 leaves**:
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under hm96 leaves**:
 `plain_clash₀HAtK_of` at what `wrPDK keep` writes for `o` (`plain_clash₀HAt`). -/
 theorem plain_clash₀HAtK (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)

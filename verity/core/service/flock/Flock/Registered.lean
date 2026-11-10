@@ -477,8 +477,8 @@ def roundCommitment (value : String) : Bool :=
   let index (s : String) := !s.isEmpty && s.all Char.isDigit
   roundNamed.contains value || roundIndexed.any fun pre => value.startsWith pre && index (value.drop pre.length).toString
 
-/-- Whether every draw by `d`'s law draws unit `u`: a subset draw of the whole population, a `p = 1` draw, or a unit whose
-stratum draws all of its units (`k_s = n_s`). -/
+/-- Whether every sample by `d`'s law samples unit `u`: a subset sample of the whole population, a `p = 1` sample, or a unit whose
+stratum samples all of its units (`k_s = n_s`). -/
 def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
   let full (s : Draw.Stratum) := s.units.any (fun (lo, hi) => lo ≤ u && u < hi) && s.k == s.size
   match d.law with
@@ -488,16 +488,16 @@ def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
   | .work _ strata => strata.any (full ·.toStratum)
 
 /-- The first port of `own` and unit that reads a round's commitment (`roundCommitment`) by `own`'s reads, and that `d`
-does not draw in full. -/
+does not sample in full. -/
 def fullMiss (own : Array Port) (d : Draw.UnitDraw) : Option (Port × Nat) :=
   own.findSome? fun p =>
     if roundCommitment p.value then
       ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !drawsInFull d u).map (p, ·)
     else none
 
-/-- U4 (`Flock.HmRow`): a drawn statement draws in full every unit that reads a round's commitment by the verifier's
+/-- U4 (`Flock.HmRow`): a sampled statement samples in full every unit that reads a round's commitment by the verifier's
 own reads `own` (`fullMiss`), so no stage's message is read off a sample. `draw` is the record's; a statement without a
-draw proves its whole population. -/
+sample proves its whole population. -/
 def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
   let (some own, some j) := (own, draw) | pure ()
   let d ← Draw.UnitDraw.ofJson j

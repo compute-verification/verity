@@ -21,7 +21,7 @@ deployed `Slots.layout` lays one stratum per template; `subset kd`'s miss doesn'
 
 **Input rows.** `Bridge.partOf P κ ns` puts each input row in the proof block of the unit that owns it, its first reader
 (`Bridge.blockOf`), and has no input class: that is what the deployed verifier checks, whose session (`HmRow.drawn`)
-opens only the rows its drawn units read, while registration opens none. So a unit whose owned input row doesn't open is a
+opens only the rows its sampled proof blocks read, while registration opens none. So a unit whose owned input row doesn't open is a
 faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed
 `Slots.layout` still lays a separate input class, which the claims' design reads `all`, so `partOf` is not yet its
 partition.
@@ -44,7 +44,7 @@ open scoped ENNReal
 
 open Classical in
 /-- **The circuit's constants**: `keyProg`'s constant wire `oneG` is `1` and its zero `zeroG` is `0`, public circuit
-structure, so `progOf` lowers them to constants (`.const`), which a proof unit reads with no opening. -/
+structure, so `progOf` lowers them to constants (`.const`), which a proof block reads with no opening. -/
 noncomputable def _root_.Flock.Bridge.constsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
     (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
   if g = Discharge.Layout.oneG then some true else if g = Discharge.Layout.zeroG then some false else none

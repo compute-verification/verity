@@ -4,9 +4,9 @@ public import Proofs.Core.Game.Basic
 public import Definitions.Flock.Game
 
 /-!
-# C-Flock's game library is Core's: `Basic`
+# Flock's game library is Core's: `Basic`
 
-Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Basic`, so C-Flock's soundness proofs
+Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Basic`, so Flock's soundness proofs
 and every other protocol's read one game library.
 -/
 

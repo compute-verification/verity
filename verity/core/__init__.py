@@ -1,5 +1,5 @@
 """Trusted code: the verifiers, every part with proven properties or on its way to them. Lean is the definition and the
-verifier of record (AGENTS.md "Design rules"): C-Flock's executable verifier (`service/flock/`), and the Lean in
+verifier (AGENTS.md "Design rules"): Flock's executable verifier (`service/flock/`), and the Lean in
 `primitives`, `protocols`, `service` and `devices`, which takes over each protocol from its Python verifier
 (`protocols`, with the integrity profile, and `claims`) on evidence (`.agents/skills/friction/SKILL.md`); `difftest`
 holds the Python that mirrors each one to the Lean. `Security/Definitions/` names the verifiers whose properties aren't

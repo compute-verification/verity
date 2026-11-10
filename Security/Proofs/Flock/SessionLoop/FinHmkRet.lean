@@ -7,12 +7,12 @@ public import Proofs.Flock.Claims.ZK.FinishSwFc
 /-!
 # The views' masked values below `zp 64`, `final_c`'s included, from the cut session's own return
 
-`Loop.swSrcE_hmk_fw` reaches `final_c` through the firewall's rep, so it needs the firewall's pads commitment to be the
+`Loop.swSrcE_hmk_fw` reaches `final_c` through the ZK server's rep, so it needs the ZK server's pads commitment to be the
 switched cut's (`hicE`), and that holds only where table `j`'s rows do: elsewhere the switched pads are shifted and the
 two roots differ. The cut session's own rep at stream `2j + r`, returning (`hprev`'s body at `k = 2j + r`), needs
 neither: its PIOP returns (`piopCut_of_repCut`, so `swSrcE_hmk_cut` applies without `hpiop`), and the same rep cut at
 its inner proof's first round stops there with that round's body (`repCut_inner_of_ret`), at `repSlot … (innerOff 0)`
-(`Masked.innerAt_slot`), which is `swSrcE_hmk_cut_fc`'s premise. It reads no rows, no firewall run and no level-0 values.
+(`Masked.innerAt_slot`), which is `swSrcE_hmk_cut_fc`'s premise. It reads no rows, no ZK server run and no level-0 values.
 
 * **`Loop.swSrcE_hmk_ret`**: every masked value of the views' source below `zp 64` is the request's plus its pad.
 -/

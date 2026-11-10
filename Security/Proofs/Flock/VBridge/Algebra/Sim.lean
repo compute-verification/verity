@@ -7,12 +7,12 @@ public import Proofs.Flock.Soundness.Refine.Arith
 # V*'s algebra over symbolic values, evaluated
 
 `run_sim`: `run` over the symbolic values (`Lin`), evaluated at the message elements' values, is `run` over F on the
-evaluated messages, with the same coins drawn: the residuals are the symbolic residuals evaluated, and the coin-derived
+evaluated messages, with the same coins flipped: the residuals are the symbolic residuals evaluated, and the coin-derived
 points are the same.
 
 * `Lin.eval` reads a symbolic value at the elements' values; it is a `Hom`: it commutes with every operation `run`
   uses (zero, `^`, `sm`, `mv` where it succeeds, constants).
-* `Sim f x y`: whenever the coin computation `x` succeeds, `y` succeeds with `f` of its result, the same coins drawn;
+* `Sim f x y`: whenever the coin computation `x` succeeds, `y` succeeds with `f` of its result, the same coins flipped;
   `SimL` is the same through Ligerito's state. Each function `run` calls has its lemma, in the order `run` calls them.
 -/
 
@@ -205,7 +205,7 @@ end Hom
 
 /-! ## Computations and their images -/
 
-/-- `y` is `x`'s image under `f`: when `x` succeeds, `y` succeeds with `f` of its result, the same coins drawn. -/
+/-- `y` is `x`'s image under `f`: when `x` succeeds, `y` succeeds with `f` of its result, the same coins flipped. -/
 def Sim {A B : Type} (f : A → B) (x : CM A) (y : CM B) : Prop :=
   ∀ k src a k', x k src = .ok (a, k') → y k src = .ok (f a, k')
 

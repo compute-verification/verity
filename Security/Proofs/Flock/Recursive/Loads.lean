@@ -22,7 +22,7 @@ equation:
   (`scope_of_accepts`) and so is `Vs j`'s circuit (`VStarParsesScoped`). The verifier compares the tags by name only; the inputs' tags are the
   statement their name names (`TagsFound`, an obligation on our code), so they are V*'s (`find?_circuit`).
 * `typable_of_accepts`: a session that accepts and loads `Q` types (`ZkOuterR.Typable`): `Loads` gives its circuit and
-  population, and the record's draw sets table 0 up (`setupZHJ_of_acceptsZKI`, at the record's custody).
+  population, and the record's sample sets table 0 up (`setupZHJ_of_acceptsZKI`, at the record's custody).
 * `prob_sessionsR_untypable`, `prob_recT_le`: where a session of some index never types, the raw sessions' event is
   empty when every session accepts as V*'s statement of its index; elsewhere the raw recursive audit's event is no
   likelier than the typed sessions' (`zsOf`) at the transported strategy (`recT`).
@@ -64,7 +64,7 @@ theorem loads_of_check {t₀ : Flock.Tags} {Q : VStmt} {Reg' : Type} (x : Q.Oute
   rw [parse_zkTags_vstar hT, htab, hp] at hZ
   exact ⟨(Except.ok.inj hZ).symm, hn⟩
 
-/-- **A session the verifier of record accepts as V*'s statement `j`, under the family's bindings for it, loads
+/-- **A session the verifier accepts as V*'s statement `j`, under the family's bindings for it, loads
 `Vs j`**, where its inputs pass the statement check, at V*'s tags: `--rec-part j` makes the session's statement the
 `j`th of the inner shape's, `--rec-bindings` makes its file that statement's under `bind j`, and the verifier refuses
 lookup tables (`vstarFile_of_accepts`); then `loads_of_check` at the obligation. Refusal (5) compares the tags' names
@@ -85,8 +85,8 @@ theorem loads_of_verifiesV {S : ℕ} {i : RecVStar.Inner} {bind : Fin S → VSta
   obtain ⟨hc, hnv⟩ := hob j ss s _ _ hss hj hf hZ (scope_of_accepts x t hacc hck)
   exact ⟨hc, hn.trans hnv.symm⟩
 
-/-- **A session the verifier of record accepts types**, where its inputs pass the statement check at untemplated tags
-and load V*'s statement (`hL`): the record carries the draw (custody), at which table 0 sets up
+/-- **A session the verifier accepts types**, where its inputs pass the statement check at untemplated tags
+and load V*'s statement (`hL`): the record carries the sample (custody), at which table 0 sets up
 (`setupZHJ_of_acceptsZKI`). -/
 theorem typable_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg')
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => Q.J) x.wr) (ω : Q.law.live.Ω) (R : Reg') (o : LiveOutJ Q.J Q.mPts)

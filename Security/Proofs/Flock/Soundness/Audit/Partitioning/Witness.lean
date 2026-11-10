@@ -8,26 +8,26 @@ public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.W
 /-!
 # The partitioning guarantees are not vacuous
 
-For each guarantee, an instance whose hypotheses all hold and whose bound is positive. `Law.subset n n` draws every unit,
+For each guarantee, an instance whose hypotheses all hold and whose bound is positive. `Law.subset n n` samples every unit,
 so it meets every target. Two more show that `RiskConcave`'s hypotheses can't be dropped.
 
 * `converse`: the uniform 2-subset of 4 units has `miss 2 = 1/6`, and at `δ = 1/6` both converse bounds are positive,
-  the exact one above 1 (the law draws 2).
-* `achievability`: two units of work 1, `C = 2`, `δ = 1/2`, `ε = 1/4`: each unit is drawn with probability below 1.
+  the exact one above 1 (the sampling design samples 2).
+* `achievability`: two units of work 1, `C = 2`, `δ = 1/2`, `ε = 1/4`: each unit is sampled with probability below 1.
 * `granularity`: 1,000 units of work 1, or 500 of work 2, with `C = 10` and `δ = 1/2`: the target is met, and both
   granularities' factors are positive.
-* `heavyUnit`: one unit doing all of `C = 1`, under a law meeting the target.
+* `heavyUnit`: one unit doing all of `C = 1`, under a sampling design meeting the target.
 * `unequal`: 50 units of work 1 and 50 of work 2, `ρ = 2`, `C = 10`, `δ = 1/2`, `f = 0`, `o = 1`: the target is met and
   both unequal bounds are positive.
-* `exfiltration`: 4 units 1 bit wide, `K = 1`, `ℓ = 4`, `δ = 1/2`: `ℓ` is in `K`'s window, a law certifies it, and the
+* `exfiltration`: 4 units 1 bit wide, `K = 1`, `ℓ = 4`, `δ = 1/2`: `ℓ` is in `K`'s window, a sampling design certifies it, and the
   lower bound is positive and below the upper one.
 * `refinement`: 4 units 16 bits wide split in 2 of 16 bits, `K = 1`, `ℓ = 20`, `δ = 1/2`, `s = 1`, `f = 0`, `o = 1`: every
-  hypothesis holds, a law on the split partition certifies `ℓ`, and the factor is positive.
+  hypothesis holds, a sampling design on the split partition certifies `ℓ`, and the factor is positive.
 * `riskConcave_needs_k_two`: at `k = 1` (`N = 2`, `p = 1/2`) the detection risk's increments rise.
 * `riskConcave_needs_small_p`: at `k = 2`, `p = 4/5` (`N = 3`) they rise too.
-* `concentration`: at `N = k = 2`, `p = 1/2`, two wrong proof units in one replay unit are strictly less detectable than
+* `concentration`: at `N = k = 2`, `p = 1/2`, two wrong proof blocks in one replay unit are strictly less detectable than
   one in each of two.
-* `nestedEscape`: under `nested` with two replay units of two proof units, `k = 1` and `p = 1/2`, one wrong proof unit
+* `nestedEscape`: under `nested` with two replay units of two proof blocks, `k = 1` and `p = 1/2`, one wrong proof block
   escapes with probability `3/4`, strictly between `1 − p` and 1.
 -/
 

@@ -14,7 +14,7 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-  ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`), else not established.
+  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`), else not established.
   A leg whose ``server`` is not the block's is carried but not composed.
 * ``composed``: ``verdict`` (`compose`: reject when a composed leg rejects or errs, accept when every leg of its product
   ran on the block's server and accepted, else pending with what is ``missing``), the run's own composed answer
@@ -59,7 +59,7 @@ def frac(x: Any) -> Fraction:
 
 
 def integrity_bound(n: int, kd: int, delta: Fraction) -> int:
-    """The most wrong units of ``n`` an accepted uniform sample of ``kd`` leaves except with ``δ``: the integrity profile's
+    """The most incorrect proof blocks of ``n`` an accepted uniform sample of ``kd`` leaves except with ``δ``: the integrity profile's
     count bound (`Stratified.count_bound`), the largest ``K`` whose sampling term ``C(n − K, kd)/C(n, kd)`` is at least
     ``δ``."""
     return Stratified.uniform(n, kd).count_bound(delta)

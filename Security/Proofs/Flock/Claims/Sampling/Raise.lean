@@ -217,7 +217,7 @@ theorem oldEscZ_fitsFork_zk_raise (rel : Readable.Parsed → Readable.Relation) 
   rw [hk]
   linarith
 
-/-- C-Flock ZK's level 0 reads at least 218 positions at every `m` it serves. -/
+/-- Flock ZK's level 0 reads at least 218 positions at every `m` it serves. -/
 theorem m1_queries₀_ge : ∀ m : Fin 11,
     218 ≤ ((FlockSoundness.Accounting.m1Schedule (m.val + 25)).levels.headD default).queries := by
   decide +kernel

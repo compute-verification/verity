@@ -713,7 +713,7 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
                     cleared="*Cleared:* the public export holds every fixture main registers.")]
 
 
-#: drive's queue state on the control pod, whose `drive.postland.verified` is the last `main` a post-landing run passed
+#: drive's queue state on the control pod, whose `drive.postland.verified` is the last `main` an after-landing run passed
 DRIVE_STATE = "root/.research/queue/verity.state.json"
 DRIVE_LOG = "data/drive/drive.log"
 UNVERIFIED_S = 3 * 3600
@@ -735,12 +735,12 @@ def drive_ticking(ctx: Ctx) -> bool:
 
 
 def unverified_main(ctx: Ctx) -> list[Finding]:
-    """`main` has carried commits no post-landing run verified for over 3 h (top, 26 Oct: 467 PRs landed on an unverified main for
+    """`main` has carried commits no after-landing run verified for over 3 h (top, 26 Oct: 467 PRs landed on an unverified main for
     a day and a half with nobody outside ci told): drive's last verified commit (its state's `drive.postland.verified`) against
     main, timed from the oldest landing after it: main's first-parent commits after it, drive's `Queue: #N` merges, each
     committed when drive merged it (`git log --first-parent` in `$RESEARCH_DEPLOY_REPO`, the relay's clone, fetched here).
     GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
-    hundreds hold no landing (ci, 26 Oct). One event per further hour behind, to ci and top, until a post-landing run verifies
+    hundreds hold no landing (ci, 26 Oct). One event per further hour behind, to ci and top, until an after-landing run verifies
     main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
     (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead."""
     if drive_ticking(ctx):
@@ -1052,7 +1052,7 @@ FAILED_RECENT_S = 6 * 3600
 CLASSIFY_S = 120
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
-#: drive's reason when it cancels a landed train's check (drive.py, `postland`): its deferred steps run in the post-landing run, so
+#: drive's reason when it cancels a landed train's check (drive.py, `postland`): its deferred steps run in the after-landing run, so
 #: the step it killed did not fail (INF-144)
 DRIVE_LANDED_CANCEL = "deferred steps run in the post-landing run"
 BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")

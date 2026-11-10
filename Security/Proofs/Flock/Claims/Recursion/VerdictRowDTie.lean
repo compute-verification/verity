@@ -183,7 +183,7 @@ theorem verifierRows_filter {sh : Shape} {a b : Array (Array F128)} {extras : Ar
   unfold RecAlgebra.verifierRows
   rw [e]
 
-/-- **`verifierRows` reads a round**: the zerocheck draws its first coins before anything else, so no rows come of no
+/-- **`verifierRows` reads a round**: the zerocheck flips its first coins before anything else, so no rows come of no
 rounds. -/
 theorem verifierRows_pos {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
     {w : Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128))}

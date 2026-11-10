@@ -13,7 +13,7 @@ session's pads.
 * `Replay.Lc.combT_lcU`, `zrT_lcV`: the prover's halved circuit and witness columns after `j` rounds are the model's
   `lcU`, `lcV` folded at the first `j` round coins (`foldl_halve`, `FoldRealizes.fold`, `zr0_hcol`), so its round-`j`
   message is the model's (`msg_lcMsg`).
-* `Masked.rhoF_out`, `tsF_lc`, `lcH_exe`: the draw's residual and round coins are the zerocheck's output `ρ` and the
+* `Masked.rhoF_out`, `tsF_lc`, `lcH_exe`: the sample's residual and round coins are the zerocheck's output `ρ` and the
   `lcCoins` round coins, so the cut's honest lincheck message is `lcMsg` at the executable's coins.
 * `Masked.src_lc0`, `src_lc1`, `src_zp`: `PiopSrc`'s lincheck fields at the deployed source.
 -/
@@ -157,7 +157,7 @@ theorem arr_eq_pushes {α : Type} [Inhabited α] {a : Array α} {f : ℕ → α}
   rw [← getElem!_pos a k h1, ← getElem!_pos (FlockComplete.Replay.pushes f n) k h2, h k (lt_of_lt_of_eq h1 hs),
     FlockComplete.Replay.pushes_get f n k (lt_of_lt_of_eq h1 hs)]
 
-/-- **The draw's residual coins are the zerocheck's output `ρ`** at the opened coins. -/
+/-- **The sample's residual coins are the zerocheck's output `ρ`** at the opened coins. -/
 theorem rhoF_out {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2)
     (tr : FlockComplete.Trace) :
     Composed.rhoF (zkTab x j).table (stAt x j) (czExe PE x c j) r =
@@ -165,7 +165,7 @@ theorem rhoF_out {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf
   show _ = FlockComplete.Replay.pushes (zcE c j r).ρ ((zkTab x j).table.S.m - 6)
   exact arr_eq_pushes (by unfold Composed.rhoF; exact Array.size_ofFn) (rhoF_czExe c j r)
 
-/-- **The draw's round coins are the lincheck's** (`lcCoins`) at the opened coins. -/
+/-- **The sample's round coins are the lincheck's** (`lcCoins`) at the opened coins. -/
 theorem tsF_lc {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
     Composed.tsF (zkTab x j).table (stAt x j) (czExe PE x c j) r =
       FlockComplete.Replay.pushes (lcE c j r).τ ((zkTab x j).table.S.kLog - 6) := by

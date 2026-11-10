@@ -125,7 +125,7 @@ theorem ract_readX {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as
 
 /-- **The compiled verifier refuses an accepted run out of scope**: every accepted run is of a statement that `parse`
 reads, and what it reads is in `InScope` (`acc_parse`: the last session's decision refuses an inner shape the setup
-doesn't accept, and a record that doesn't draw every unit). -/
+doesn't accept, and a record that doesn't sample every unit). -/
 theorem run_acc_inScope (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {Ω : Type} {P : Claims.Prover Ω} {ω : Ω}
     {r : Fin ((deployRec IV ivScope b).V.k x) → Coin}

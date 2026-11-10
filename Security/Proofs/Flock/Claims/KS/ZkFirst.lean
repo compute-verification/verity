@@ -9,10 +9,10 @@ public import Proofs.Flock.Claims.KS.PlainThird
 `PlainFirst` and `PlainThird` under `--zk`, at the live session at `J` tables and the witness-lane verdict at table
 `j` (`AccTxJ`). `zk_first_of_sim` bounds `V true`'s accepting runs whose reader looks up no column of table `j` off
 `C` by the average over a tape of the live session's `AccTxJ`, from a simulation alone (`ZkSim`): coins `Φ (u, r')` of
-`V true` with the law of uniform coins, and a prover `P'` of the live session whose live outcome at the tape `(ω, u)`
+`V true` with the sampling design of uniform coins, and a prover `P'` of the live session whose live outcome at the tape `(ω, u)`
 is the run's wherever `V true` accepts at `Φ (u, r')` (`ZkSimRun`, `viewOf`). Unlike the plain bound it reads no
-draw in the record: `accTxJ_of_run` reads the setup at the statement's draw. At `zkCoins`, where each deployed coin
-takes a live coin's first entries and the rest from the tape, the law holds (`zkSim_of_run`), so `zk_first_of_run`
+sample in the record: `accTxJ_of_run` reads the setup at the statement's sample. At `zkCoins`, where each deployed coin
+takes a live coin's first entries and the rest from the tape, the sampling design holds (`zkSim_of_run`), so `zk_first_of_run`
 asks only for `ZkSimRun`, deterministic; and at those coins a deployed event that a live event implies bounds the
 mixture, the third bound's form (`zkMix_le_of_run`).
 -/
@@ -59,7 +59,7 @@ def ZkSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (J : 
 
 end Gen
 
-/-- **A prover of the live session at `J` tables simulates `P`**, under `--zk`: the coins `Φ (u, r')` have the law of
+/-- **A prover of the live session at `J` tables simulates `P`**, under `--zk`: the coins `Φ (u, r')` have the sampling design of
 uniform coins, and `P'` simulates `P` on them (`ZkSimRun`). -/
 def ZkSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (J : Claims.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
     (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire nMax (J x) mPts) {τ : Type}
@@ -72,7 +72,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A prover of the live session at `J` tables simulates `P`**, under `--zk`: the coins `Φ (u, r')` have the law of
+/-- **A prover of the live session at `J` tables simulates `P`**, under `--zk`: the coins `Φ (u, r')` have the sampling design of
 uniform coins, and `P'` simulates `P` on them (`ZkSimRun`). -/
 def ZkSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (J : Claims.Msg → ℕ) (mPts : ℕ) {nMax : ℕ}
     (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire nMax (J x) mPts) {τ : Type}
@@ -103,7 +103,7 @@ variable [S : ZkSetup]
 
 open Classical in
 /-- **The masked mixture's first bound, from a simulation**: at a masked statement `x` that sets up at `s₀` with inputs
-`I` and draw `d`, at `J x ≤` its tables above `j`, if a prover `P'` of the live session at `J` tables simulates `P`
+`I` and sample `d`, at `J x ≤` its tables above `j`, if a prover `P'` of the live session at `J` tables simulates `P`
 (`ZkSim`), then the accepting runs whose reader looks up no column of table `j` off `C` are no likelier than the
 average over `u` of `AccTxJ` at table `j` against `P'`'s strategies, at the root of `P`'s first message
 (`Pr_le_liveMix`, `accTxJ_of_run`). -/
@@ -148,7 +148,7 @@ end Gen
 
 open Classical in
 /-- **The masked mixture's first bound, from a simulation**: at a masked statement `x` that sets up at `s₀` with inputs
-`I` and draw `d`, at `J x ≤` its tables above `j`, if a prover `P'` of the live session at `J` tables simulates `P`
+`I` and sample `d`, at `J x ≤` its tables above `j`, if a prover `P'` of the live session at `J` tables simulates `P`
 (`ZkSim`), then the accepting runs whose reader looks up no column of table `j` off `C` are no likelier than the
 average over `u` of `AccTxJ` at table `j` against `P'`'s strategies, at the root of `P`'s first message
 (`Pr_le_liveMix`, `accTxJ_of_run`). -/
@@ -171,7 +171,7 @@ theorem zk_first_of_sim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω 
 
 open Classical in
 /-- **The masked mixture's first bound, from a simulation of the runs**: `zk_first_of_sim` with the deployed coins as
-the tape and `zkCoins` as the coins, whose law is uniform (`zkSim_of_run`), so it asks only for `ZkSimRun`,
+the tape and `zkCoins` as the coins, whose sampling design is uniform (`zkSim_of_run`), so it asks only for `ZkSimRun`,
 deterministic. -/
 theorem zk_first_of_run {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {M : ℕ}
     (C : Fin M → List 𝔽) (j : ℕ) (J : Claims.Msg → ℕ) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec}

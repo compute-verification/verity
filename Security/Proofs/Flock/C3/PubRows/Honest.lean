@@ -15,7 +15,7 @@ public import Proofs.Flock.C3.PubRows.Check
 * `hPubRows_of_check'`: `HPubRows` at `C3Family.honest`, from the verifier's check of each accepted session's public
   file (`ChecksPubRows`: `RecVStar.checkPubRows` on each statement the session's record sets up, as `FlockVerify`'s
   `--rec-inner` path runs it after setup; `AcceptsZKR` does not make it, gap n1b) where the check reads every row
-  `HPubRows` does: every unit, which a transcript the session writes draws (`rowsHeld`, at the labels `checkLabels`
+  `HPubRows` does: every unit, which a transcript the session writes samples (`rowsHeld`, at the labels `checkLabels`
   makes the units), the first port of a name (`PortsNamed`) and a rec-sparse unit's rows at its own shape
   (`SparseAtShape`, `PubRows/Check.lean`).
 * `hTape_of_frame`: `HTape` at the honest family from `HFrame`. The stages' obligations read only the decode, and no
@@ -106,7 +106,7 @@ theorem hTape_of_frame {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hfr : HFra
   hTape_iff_frame.2 hfr
 
 /-- **(n1) The public rows at the honest family, from the verifier's check**, where it reads every row `HPubRows`
-does: a transcript a session writes and accepts draws every unit (`rowsHeld`), labelled as the units by the check's
+does: a transcript a session writes and accepts samples every unit (`rowsHeld`), labelled as the units by the check's
 `checkLabels` (`label_of_checked`), each circuit names each port once (`PortsNamed`) and V*'s rec-sparse units are at
 the verifier's shape (`SparseAtShape`). -/
 theorem hPubRows_of_check' (hchk : ChecksPubRows 𝓗 wr reg) (hnames : PortsNamed 𝓗) (hsp : SparseAtShape 𝓗) :

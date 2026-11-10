@@ -12,7 +12,7 @@ runs it: the memory challenger streams `n` labels of 512 bits into the device's 
 at a time and reads each label back under a deadline.
 
 * **The labels** (`Labels n`): the table of `n` labels of 512 bits. The deployed labels are SHA-512's PRF of a key the
-  challenger draws and keeps (`prf/sha-512`): `prf K` for a uniform key `K`.
+  challenger samples and keeps (`prf/sha-512`): `prf K` for a uniform key `K`.
 * **The spot reads** (`Reads n k`): `k` indices into the labels, uniform and independent.
 * **The prover's strategy** (`Strategy`): any fill of the device's state from its state at the boundary and the labels,
   with any egress, any answer to each spot read from the device's state when the fill ends, the egress, the reads

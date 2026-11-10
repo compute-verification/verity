@@ -83,7 +83,7 @@ its repair.
 
   The activation families can't make the chain cheap for this reason. Every committed row that passes the rules
   carries fresh salted noise of scale σ·α ≥ 1 quantized unit on every element, and at most k/64 of its entries lie
-  above 8σ. So each product's low bits depend on the salt, and no atom is predictable before the noise is drawn. Zero
+  above 8σ. So each product's low bits depend on the salt, and no atom is predictable before the noise is sampled. Zero
   rows fail the noise floor and are rejected. The standing test is the census `benchmarks/pouw/pearlc_census.py`,
   which covers all of these families under `--forming s5`. -/
 def TTOutPearlC [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (sem : PearlCSem Q R S)
@@ -104,7 +104,7 @@ def TTOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMode
 
 /-- **The named assumption TT_OUT(1/400) for Pearl-C, per audit tile**: `TTOutTile` at `pearlCProtocol sem c ρ`, its
 tiles `pearlCTiles sem c ρ` (the audit's `64 × 64` grid), `pearlCDomain Params.pi`, `γ₀ = 1/400` and `εPearlC`. It is
-`TTOutPearlC` with three changes, for a verifier that checks drawn tiles only. It is falsified as
+`TTOutPearlC` with three changes, for a verifier that checks sampled tiles only. It is falsified as
 `TTOutPearlC` is, by the first-promotion skip (rating D), and rev1 per tile (`TTOutTilePearlCDevRev1`) is its repair.
 
 - **Tiles, not units.** It credits the good tiles of any committed unit, including a unit some of whose other tiles are

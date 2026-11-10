@@ -2,7 +2,7 @@
 # The release side around the session loop (`core-firewall session`, live PROTOCOL.md §10.5)
 
 `Flock.Firewall.Session`'s loop, each of its sessions one outer session of the recursive session `--session` at the
-statement `--part`, held to the record's rules (`Firewall.Record`, `Firewall.Release`) on the firewall's state directory
+statement `--part`, held to the record's rules (`Firewall.Record`, `Firewall.Release`) on the ZK server's state directory
 `--state`, the files `verity_flock.firewall` keeps: `record.jsonl`, read whole and appended under `record.lock` at each
 op, and `slot.lock`, the outer slot. Both are `flock(2)` locks (`IO.FS.Handle.lock`), so Python's processes and these
 exclude each other.
@@ -43,8 +43,8 @@ open Flock (V)
 def lockFile (dir : System.FilePath) (name : String) : IO IO.FS.Handle :=
   IO.FS.Handle.mk (dir / name) .append
 
-/-- `f` on the record as one op of the firewall's: under `record.lock`, `record.jsonl` read whole (`Record.op` reads it
-again and refuses a line the firewall doesn't write), and the lines `f` adds appended. -/
+/-- `f` on the record as one op of the ZK server's: under `record.lock`, `record.jsonl` read whole (`Record.op` reads it
+again and refuses a line the ZK server doesn't write), and the lines `f` adds appended. -/
 def withRecord {α : Type} (dir : System.FilePath) (f : Record → V (α × Record)) : IO α := do
   let lock ← lockFile dir "record.lock"
   lock.lock
@@ -73,7 +73,7 @@ def sleepUntilMs (t : Nat) : IO Unit := do
     if now ≥ t then break
     IO.sleep (min (t - now) 60000).toUInt32
 
-/-- **One outer session of `s` at `part`** on the firewall whose state directory is `dir`, as the loop's hold, its
+/-- **One outer session of `s` at `part`** on the ZK server whose state directory is `dir`, as the loop's hold, its
 statement's registrations given by `reads` if the loop admits them (`seat`). -/
 def hold (dir : System.FilePath) (s part : String) (reads : Option (Events → Except String (Array Nat))) :
     IO Flock.Firewall.Session.Hold := do

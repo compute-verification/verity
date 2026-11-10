@@ -60,7 +60,7 @@ VARIANTS = (H100,)
 H100_UNPROMOTED = replace(H100, name="h100-unpromoted", g=None)
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
 COINS = b"verity-pouw/pearl-c-sm90-gpu-check/coins"
-#: the check's prover hm96 salt key (a served run draws its own)
+#: the check's prover hm96 salt key (a served run samples its own)
 SALT_KEY = hashlib.sha256(b"verity-pouw/pearl-c-sm90-gpu-check/salt-key").digest()
 
 

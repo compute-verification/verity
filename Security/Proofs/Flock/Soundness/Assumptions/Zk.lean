@@ -10,7 +10,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 
 The instances of `HashDerivedKey` and `PadNonvanishing` that `--zk` headlines take, stated as Prop constants so the
 audit names them, and the record's custody (`live-verifier`) that `--zk`'s soundness takes: `RecordCustodyZK` at one
-table, `RecordCustodyZKJ` at `J` under the subset draw, `RecordCustodyZKJS` at `J` under a stratified draw.
+table, `RecordCustodyZKJ` at `J` under the subset sample, `RecordCustodyZKJS` at `J` under a stratified sample.
 -/
 
 @[expose] public section
@@ -28,14 +28,14 @@ def PadNonvanishing40 : Prop :=
 
 /-- **The record is the live session's** (`live-verifier`; the custody of `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`, with A6,
 `uniform/flock-coin-server`, for the coins in it). Nothing in a session record authenticates its writer, and
-`flock-verify verify --zk` reads the draw and the proofs only from the record, so no check of the record establishes
+`flock-verify verify --zk` reads the sample and the proofs only from the record, so no check of the record establishes
 either fact:
 
 * `RecordsLiveZK I dj wr`: the record `verify --zk` reads is the one the challenger wrote for the live
-  session. At every transcript it accepts, its draw is `dj S`, its proofs are the prover's, and its root, link points
+  session. At every transcript it accepts, its sample is `dj S`, its proofs are the prover's, and its root, link points
   and rounds are the live outcome's.
-* `DrawFileZK dj law pop`: the draw file is the one `flock-verify draw` printed for the verifier's own draw. Every draw
-  file `dj S` that `UnitDraw.ofJson` decodes decodes to `drawOf law pop S`, the draw of `S` under `law` over
+* `DrawFileZK dj law pop`: the sample file is the one `flock-verify draw` printed for the verifier's own sample. Every sample
+  file `dj S` that `UnitDraw.ofJson` decodes decodes to `drawOf law pop S`, the sample of `S` under `law` over
   `[0, pop)`.
 
 Both are stated at what flock-verify parses, so the record's serialization is outside them. -/
@@ -46,8 +46,8 @@ def RecordCustodyZK {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj 
 
 /-- **The record is the live session's, at `J` tables** (`live-verifier`, as `RecordCustodyZK`): the record
 `verify --zk --session-tables J` reads is the one the challenger wrote for the live session
-(`RecordsLiveZKJ`: its draw, proofs and link points, and each table's root and rounds, are the live outcome's), and its
-draw file the one `flock-verify draw` printed for the verifier's own draw under the subset law (`DrawFileZK` at
+(`RecordsLiveZKJ`: its sample, proofs and link points, and each table's root and rounds, are the live outcome's), and its
+sample file the one `flock-verify draw` printed for the verifier's own sample under the subset sampling design (`DrawFileZK` at
 `subset kd` over the `n` units; `RecordCustodyZKJS` is its stratified form). -/
 def RecordCustodyZKJ {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
     (Jf : Finset (Fin n) → Reg → ℕ)
@@ -55,13 +55,13 @@ def RecordCustodyZKJ {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj
     (kd : ℕ) : Prop :=
   Discharge.Composed.RecordsLiveZKJ I dj Jf wr ∧ Discharge.ZkLink.DrawFileZK dj (.subset kd) n
 
-/-- **The record is the live session's, at `J` tables, under a stratified draw** (`live-verifier`, as
+/-- **The record is the live session's, at `J` tables, under a stratified sample** (`live-verifier`, as
 `RecordCustodyZKJ`): the record `verify --zk --session-tables J` reads is the one the challenger wrote for the live
-session (`RecordsLiveZKJ`: its draw, proofs and link points, and each table's root and rounds, are the live outcome's),
-and its draw file the one `flock-verify draw` printed for the verifier's own draw under the stratified law
-`stratified Kd strata` over `[0, pop)` (`DrawFileZK`). That one draw covers the sampling block's units, every stratum
-of every table, and `verify` gives table `j` part `j` of its units (`drawJ`, `partS`), so the tables' draws are its
-parts and form one stratified law together. Only the record's custody is assumed: the parts and their link points are
+session (`RecordsLiveZKJ`: its sample, proofs and link points, and each table's root and rounds, are the live outcome's),
+and its sample file the one `flock-verify draw` printed for the verifier's own sample under the stratified sampling design
+`stratified Kd strata` over `[0, pop)` (`DrawFileZK`). That one sample covers the sampling block's units, every stratum
+of every table, and `verify` gives table `j` part `j` of its units (`drawJ`, `partS`), so the tables' samples are its
+parts and form one stratified sampling design together. Only the record's custody is assumed: the parts and their link points are
 flock-verify's own arithmetic (`ZkHidden.drawOkZKHJ_of_size`). -/
 def RecordCustodyZKJS {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
     (Jf : Finset (Fin n) → Reg → ℕ)

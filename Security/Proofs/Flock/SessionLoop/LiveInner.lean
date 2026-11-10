@@ -524,7 +524,7 @@ theorem maskFrames_own (c : Cfg) (s : Masker) (w t : ByteArray) :
   | _ + 3, _ => maskFrames_vec _
 
 /-- **The inner proof's rounds 1 to 3 pass only as themselves outside every masked phase**: where the frame's check
-passes the device round `v` against the firewall's own round `k`, at a state outside a masked phase, `v` is that round
+passes the device round `v` against the ZK server's own round `k`, at a state outside a masked phase, `v` is that round
 and leaves as it came. -/
 theorem check_innerAt {c : Cfg} {m s' s : Masker} {w t : ByteArray} (hw : w.size = 16) (ht : t.size = 64) {k n : ℕ}
     (hk0 : 0 < k) (hk4 : k < 4) (hon : m.on = false) (hrow : c.rowH.size < 2 ^ 64) {v out : ByteArray}

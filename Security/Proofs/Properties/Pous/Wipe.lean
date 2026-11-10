@@ -46,7 +46,7 @@ namespace MemoryChallenger.Properties.SecurityProofs
 open Verity
 open scoped ENNReal
 
-/-- The value of a draw with no prover move is the fraction of the coins on which the event holds. -/
+/-- The value of a sample with no prover move is the fraction of the coins on which the event holds. -/
 theorem value_draw {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) [DecidablePred p] :
     Game.value p (Game.draw X) = ((Finset.univ.filter p).card : ℝ≥0∞) / Fintype.card X := by
   classical
@@ -55,7 +55,7 @@ theorem value_draw {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) [Decidab
   refine Finset.sum_congr rfl fun x _ => ?_
   by_cases hx : p x <;> simp [hx]
 
-/-- The value of a draw with no prover move is the probability of its event. -/
+/-- The value of a sample with no prover move is the probability of its event. -/
 theorem value_draw_pr {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) :
     Game.value p (Game.draw X) = Pous.pr p := by
   classical

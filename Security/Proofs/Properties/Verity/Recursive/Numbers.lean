@@ -14,12 +14,12 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 Part `s`'s staged statement at inner rounds `ms` (`RecDeploy.staged`) differs from the one at `ms'` only in what
 the rounds put in it: the part's public file, the inner session's record and the transcript. Its numbers (`numsOf`:
 `ε_table`, `N₀`, the weight and the rounds) read only its one table's `m`, `k_log`, region count and `m_pts`, and
-those read the circuit, the tables, the draw and the unit count `n`:
+those read the circuit, the tables, the sample and the unit count `n`:
 
 * `RecSetup.oneFull`, under the inner shape every staged statement carries, passes one table only.
 * `RecVStar.checkStmt` passes only `verity/flock-circuit`, a statement with hidden outputs, so the table is
   `Stmt.setupHidden`'s.
-* With a draw, `n` is the draw's proved units (`HmRow.drawn`). Without one, the public file records no population
+* With a sample, `n` is the sample's proved units (`HmRow.drawn`). Without one, the public file records no population
   (`HmRow.loadPublic`), so `n` is the table's population, which `checkStmt` pins to V*'s statement `s` at the inner
   shape.
 
@@ -96,7 +96,7 @@ theorem setupTables_hidden (hh : tags.hiddenOutputs = true)
        exact Or.inr ⟨by omega, hsz⟩)
 
 set_option maxHeartbeats 4000000 in
-/-- What `setupHidden`'s table is made of, at any public input words: its circuit, its population and draw, the unit
+/-- What `setupHidden`'s table is made of, at any public input words: its circuit, its population and sample, the unit
 count `n` the shape reads, and its regions. -/
 theorem setupHidden_shape {st : Flock.Stmt}
     (h : Flock.Stmt.setupHidden tags cf pf coins tables draw partition program publicInputs = .ok st) :
@@ -178,7 +178,7 @@ theorem staged_ins {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claim
   have h' : (partRaw r st x ms s p).ins.toOption = some i := by simpa using h
   exact ⟨r, p, hr, hp, by simpa [partRaw] using hz, RecRaw.ins_base (toOption_eq_some h')⟩
 
-/-- **The staged statements at any two rounds are read alike**: the same tags, circuit file, tables and draw. -/
+/-- **The staged statements at any two rounds are read alike**: the same tags, circuit file, tables and sample. -/
 theorem reads_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Msg × Claims.Out)} {s : ℕ} {i i' : RecIns}
     (hi : insO (staged st x ms s) = some i) (hi' : insO (staged st x ms' s) = some i') :
     i.base.read.tags = i'.base.read.tags ∧ i.base.read.I.circuitFile = i'.base.read.I.circuitFile ∧
@@ -199,7 +199,7 @@ theorem reads_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Msg × Cla
 
 /-! ## One staged table's shape -/
 
-/-- The unit count a staged table must have: the draw's proved units, else V*'s statement `s`'s instances. -/
+/-- The unit count a staged table must have: the sample's proved units, else V*'s statement `s`'s instances. -/
 def nOf (r : XR) (s : ℕ) : Option Json → Option ℕ
   | some d => (Draw.UnitDraw.ofJson d).toOption.map (·.proved.size)
   | none => ((RecVStar.statements r.shape).toOption.bind (·[s]?)).map (·.instances)

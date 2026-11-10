@@ -1,4 +1,4 @@
-"""Sampled proofs' parties on the deployment layer (`verity.core.deploy`): the challenger, the firewall, the workers and the
+"""Sampled proofs' parties on the deployment layer (`verity.core.deploy`): the challenger, the ZK server, the workers and the
 verifier, the roles `verity run CONFIG --party ROLE` runs, and their table (`PROTOCOL`; `PROTOCOLS` by id).
 
 ~~~text
@@ -16,7 +16,7 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
   whose coins are its own, never the verifier's or the prover's, answering a session's open and finish at ``address``
   and pinned on main's first-parent commit ``pin``;
 - the verifier's ``audit(block, registration, challenger, firewall) -> (answer, case)``: the block's one-stage audit
-  drawn on that challenger's coins, its answer (``verdict``, and its ``commitment``) and its case for the product
+  sampled on that challenger's coins, its answer (``verdict``, and its ``commitment``) and its case for the product
   (`COMPOSED`'s, in its one-stage form), or None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
   digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
   remote or onsite).
@@ -46,7 +46,7 @@ leaves before it said what the verifier waits on (``closed``); it tells the chal
 however it finishes, and the challenger stops its host on ``Done`` or when the verifier leaves.
 
 What stays the machine's (the capabilities above): the toy's serving, the records audit that runs the prover's sessions
-behind the ZK server on the drawn members, the challenger's host (its LMS key, ledger and pins log) and the Lean product
+behind the ZK server on the sampled members, the challenger's host (its LMS key, ledger and pins log) and the Lean product
 over the record. Until the audit's sample, its witnesses and its proofs are messages of their own (the configuration's
 ``draw``, ``witness`` and ``proof`` channels), the verifier and the workers share the machine the block's rows are on.
 """

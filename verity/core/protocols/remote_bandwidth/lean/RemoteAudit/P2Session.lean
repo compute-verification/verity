@@ -139,7 +139,7 @@ challenger's to set as it releases them), before its first event. -/
 def init (held : Held) (params : Session.Params) (coins : Array ByteArray) (notBeforeNs : Nat) : Session.State :=
   { Session.State.init params (standIn held.reg) coins #[] notBeforeNs with digest := held.reg.digest }
 
-/-- `p2.Session.verify` on window `w`'s draws: each opening checked on PoUS's vk root in the order drawn
+/-- `p2.Session.verify` on window `w`'s draws: each opening checked on PoUS's vk root in the order sampled
 (`P2.checkOpeningWith`, each pass's seed and sign rows derived once), the first that fails with its draw, or accept;
 `malformed` for another number of openings than draws. -/
 def checkOpenings (reg : P2.Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) (openings : Array P2.Opening) :

@@ -38,7 +38,7 @@ open Flock.Program (Ty)
 open Flock.TemplateQuery (Desc)
 
 /- A registered value's domain, its leaf widths, its row formats (`registered.SCHEMAS`) and the default width, which the
-domain and the entry name only by leaving `word_bits` out: C-Flock's, which reads the same registered values. -/
+domain and the entry name only by leaving `word_bits` out: Flock's, which reads the same registered values. -/
 export Flock.Registered (REGISTERED_DOMAIN SCHEMAS WORD_BITS WIDTHS WIDTH_KEY domain)
 
 def SCHEMA : String := Flock.HmRow.ROW_SCHEMA

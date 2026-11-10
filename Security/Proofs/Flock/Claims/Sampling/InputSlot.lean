@@ -6,9 +6,9 @@ public import Proofs.Flock.SamplingBoundary
 # Input slots
 
 The deployed verifier lays an input class after the population (`Slots.layout`): one stratum of a one-gate proof
-block per input gate, in gate order, which `Slots.checked` lists on every draw. No run opens an input row on its own:
-the session proves the drawn units (`HmRow.drawn`), and registration opens no row, so an input row is opened only
-through a drawn unit that reads it.
+block per input gate, in gate order, which `Slots.checked` lists on every sample. No run opens an input row on its own:
+the session proves the sampled proof blocks (`HmRow.drawn`), and registration opens no row, so an input row is opened only
+through a sampled proof block that reads it.
 
 * `faulty_input_iff`: at a slot whose proof block is `[p]`, `p` an input gate, the slot is faulty exactly when the
   witness opens no value at `p`. An input's computed value is its committed value, so an opened input
@@ -16,7 +16,7 @@ through a drawn unit that reads it.
 * `withInputs P C`: `P`'s classes, then the input class of `C` (`inputClass`). `P`'s slots keep their indices
   (`withInputs_getElem?_of_lt`), slot `|P| + i` is the `i`th input gate's (`withInputs_getElem?_input`), and it is
   faulty exactly when that gate's value is unopened (`faulty_withInputs_iff`).
-* `InScope`'s input clause: every input gate of `C` is in a proof unit of `withInputs P C` (`input_mem_withInputs`), so
+* `InScope`'s input clause: every input gate of `C` is in a proof block of `withInputs P C` (`input_mem_withInputs`), so
   where `P` covers every other gate but the constants, `withInputs P C` covers every gate but the constants
   (`covers_withInputs`), which gives `Partitions`' covering clause.
 -/
@@ -101,7 +101,7 @@ theorem faulty_withInputs_iff {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s 
     Faulty H Cm s (withInputs P s.prog) w (P.blocks.length + i) ↔ w.val H Cm s g = none :=
   faulty_input_iff (withInputs_getElem?_input P s.prog hi) (mem_inputsAt.1 (List.mem_of_getElem? hi))
 
-/-- **`InScope`'s input clause**: every input gate of `C` is in a proof unit of `withInputs P C`. -/
+/-- **`InScope`'s input clause**: every input gate of `C` is in a proof block of `withInputs P C`. -/
 theorem input_mem_withInputs (P : Partition) {C : Prog} {g : ℕ} (hg : C.gates[g]? = some .input) :
     g ∈ (withInputs P C).gates := by
   unfold Partition.gates

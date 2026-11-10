@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.ZK.FrameOpen
 
 The masked Ligerito (`FlockComplete.ligeritoPZk`), answered by `asksCut` from a log `l` and cut `j` rounds on, stops
 past the openings having sent exactly level 0's first `j + 1` bodies, for every `j` up to `ρ_1`'s squeeze, at any pads
-`h` and grinding nonces: the rep's (`h` its pads) and the firewall's live opening's (`openLive`, zero pads) alike.
+`h` and grinding nonces: the rep's (`h` its pads) and the ZK server's live opening's (`openLive`, zero pads) alike.
 Its bodies are the rounds `FrameOpen` releases (`oodFr`, `pairFr`), at the values SimLig's `LigHyp` reads, the coins
 those of rounds `l.size`, `l.size + 1`, …:
 

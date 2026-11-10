@@ -16,7 +16,7 @@ commitment fixed before the coin. An inner verifier that ignores the last round'
   `finds_forkG_ref` with the last message free.
 * `InnerAtLeavesL`, `innerAtLeavesL_of_forkOn`: `InnerAtLeaves` with the decoded last message free, from
   `InnerSoundForkOn` at a verifier and a pick that ignore the last coin, unless the recursive prover has an inner fork.
-* `schedInner_lastFree`, `clashPickCL_lastFree`, `clashPickHL_lastFree`: the three for C-Flock's inner protocols.
+* `schedInner_lastFree`, `clashPickCL_lastFree`, `clashPickHL_lastFree`: the three for Flock's inner protocols.
 -/
 
 @[expose] public section

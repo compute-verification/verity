@@ -16,7 +16,7 @@ is held to (the binding's `Logged`: the log the check read is the device's):
   signatures let `Binds` hold is open.
 * **(b), the logged coupling** (`LoggedCoupling`): an accepted play that `P` holds of, on a tape that misses at no
   round and not at the record (`NoMiss`), is at most as likely as the live audit's acceptance at the projected
-  strategy, plus the hiding term. Its pieces are the draw, the rounds and the messages at their cuts, at the projection
+  strategy, plus the hiding term. Its pieces are the sample, the rounds and the messages at their cuts, at the projection
   the constructions give.
 
 The two meet by the union bound on the tape (`noMiss_le_of_logged`): an accepted play that misses nowhere either is

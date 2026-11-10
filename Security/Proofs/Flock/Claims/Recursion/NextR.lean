@@ -32,7 +32,7 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
   what it reads of the last message changes no absorbed value (`readRep_last`). The nonces are absorbed
   (`.bytes (le64 n)`) but no opened row carries one, so the fit fixes them at `0`, the only nonce a deployed prover
   sends: every grinder ignores its bits (`LiveChallenger`'s `pow_nonce` is `0` outside flock-live's R4 test, and the
-  firewall device's is `0`), and the recorded inner proofs carry only
+  ZK server device's is `0`), and the recorded inner proofs carry only
   zeros. A proof with another nonce is decided by
   no fit. An honest prover's rounds read back (some fit exists, and it is the prover's proof), which `RecursiveKS` at
   `nextR` needs to be non-vacuous: `NextRHonest.lean` states it (`RepReadsBack`, `ReadsBack`) and `NextRFits.lean`
@@ -45,8 +45,8 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
 * **The record custody and the verdict read** (`recJ`, `recStreams`): the reader's, not the prover's: the honest
   record's form at SHA-512, whose rep streams retain the round messages, each round counting its schedule's coins
   (`RecDeploy.repSchedAt`) and holding its coin's first that many. This is what the shipped recursion enforces of the
-  inner record: check 5 holds its coins to the coin server's round for round (`RecVStar.innerCommits`, `CoinTie`), and
-  the coin server's rounds to the schedule (`RecVStar.checkSchedule`). At any hash but SHA-512 the record's digests
+  inner record: check 5 holds its coins to the challenger's live-coin part's round for round (`RecVStar.innerCommits`, `CoinTie`), and
+  the challenger's live-coin part's rounds to the schedule (`RecVStar.checkSchedule`). At any hash but SHA-512 the record's digests
   disagree with the verdict's, which then refuses.
 * **(a)** (`decR_fits`): at a decision, every rep's proof fits its opened rounds. **(b)** (`decR_publics`, `decR_s8`,
   `decR_rootB`): round 0 carries no public words; the link's are empty, and S8 passes on each.

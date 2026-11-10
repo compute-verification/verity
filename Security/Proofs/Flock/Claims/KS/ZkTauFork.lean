@@ -211,7 +211,7 @@ def ZkTauAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readab
 end Gen
 
 /-- **The simulated fork is aligned with the masked fork rounds at `τ`**: at every masked statement in scope that sets
-up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s `τ` node
+up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s `τ` node
 against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of `TauForkEvZ`
 (`ZkTauAlignQ`). -/
 def ZkTauAlign (x : Claims.Msg) : Prop :=
@@ -231,7 +231,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The simulated fork is aligned with the masked fork rounds at `τ`**: at every masked statement in scope that sets
-up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s `τ` node
+up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s `τ` node
 against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of `TauForkEvZ`
 (`ZkTauAlignQ`). -/
 def ZkTauAlign (x : Claims.Msg) : Prop :=
@@ -248,7 +248,7 @@ def ZkTauAlign (x : Claims.Msg) : Prop :=
 
 end Gen
 
-/-- **The live `τ` fork event's collision**: at every masked statement in scope that sets up at a draw, every prover
+/-- **The live `τ` fork event's collision**: at every masked statement in scope that sets up at a sample, every prover
 and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's coins
 whose decoded live outcomes have `TauForkEvZ` collide among the verifier's calls in the two. -/
 def ZkTauClash (x : Claims.Msg) : Prop :=
@@ -281,7 +281,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The live `τ` fork event's collision**: at every masked statement in scope that sets up at a draw, every prover
+/-- **The live `τ` fork event's collision**: at every masked statement in scope that sets up at a sample, every prover
 and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's coins
 whose decoded live outcomes have `TauForkEvZ` collide among the verifier's calls in the two. -/
 def ZkTauClash (x : Claims.Msg) : Prop :=

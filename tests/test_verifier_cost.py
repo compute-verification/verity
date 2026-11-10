@@ -1,6 +1,6 @@
-"""A verifier of record costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
+"""A verifier costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
-A scan over the Lean under `verity/core/` (the verifiers of record and the code they run) refuses the forms an unrolled
+A scan over the Lean under `verity/core/` (the verifiers and the code they run) refuses the forms an unrolled
 walk takes there: locating gates one by one through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a
 range or loop bounded by a Definition's gate count (`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`), and an
 array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`), a range or

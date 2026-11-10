@@ -2,7 +2,7 @@
 
 A plan selects and samples gates of a Program for checking; it is verification policy, not computation (README
 "Protocols").  Each gate class has a rate: the
-probability a gate of the class is checked, each gate drawn independently.
+probability a gate of the class is checked, each gate sampled independently.
 
 Prescribed inputs are sampled gates (IR §E): `Input[k] : () -> Value<w_k>` is an ordinary one-output gate of the
 fault model.  It belongs to a proof block under the selected plan and is sampled like any other gate.  WB's
@@ -38,13 +38,13 @@ class GateClass:
 
 @dataclass(frozen=True)
 class UnconditionalObligation:
-    """A proof obligation required on EVERY audit, outside the sampling draw (GUIDANCE §31.3).
+    """A proof obligation required on EVERY audit, outside the sampling sample (GUIDANCE §31.3).
 
     The prover supplies a proof that every gate the class selects satisfies its relation on the committed
     boundary values, and the verifier checks that proof on every audit, before any sampling -- exactly as it
     checks the public inputs.  A trace violating a covered gate is rejected with probability 1 up to
     the proof system's soundness error, so covered fault classes have acceptance probability 0.
-    This is NOT p = 1: a class's rate is a draw, and the obligation holds outside it.  `statement` names the relation
+    This is NOT p = 1: a class's rate is a sample, and the obligation holds outside it.  `statement` names the relation
     the proof establishes (e.g. the authenticated boundary relation of an inactive region)."""
 
     gate_class: GateClass

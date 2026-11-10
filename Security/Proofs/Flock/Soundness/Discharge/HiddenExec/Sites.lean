@@ -7,13 +7,13 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedLinear
 # The sites of a one-table hidden-output session
 
 Integrate's `sitesAt` and `sitesAt_parse` (`Integrate/Sites.lean`) at the hidden tables (`planAtH`, `tabAtH`), at the
-session's statement circuit `c` (`HmOut.parseStmt`, a templated file's committed circuit unrolled). A drawn table's
+session's statement circuit `c` (`HmOut.parseStmt`, a templated file's committed circuit unrolled). A sampled table's
 acceptance (`TableH.accS`) is its `Stmt.setupHidden` run, with the layout `Hidden.SpecC.unpinLayout` gives of its
 statement without Δ's pinned copies, its unit slots' rows its flat twin's (`unitRowsFlatC_unpin`, at rows that fit),
 and the table's statement `stmtOf` of it, whose twin without the pinned copies (`TableH.twinA`, `twinB`) is the layout's
 block R1CS (`Hidden.SpecC.model_eq_unpin`) and holds at every witness (`TableH.satS`).
 
-`sitesAtHS` holds each drawn unit's acceptance, template instance and block; every acceptance's statement circuit is the
+`sitesAtHS` holds each sampled proof block's acceptance, template instance and block; every acceptance's statement circuit is the
 session's (`sitesAtHS_parse`). `TableH.acc`, `sitesAtH` and `sitesAtH_parse` are them at a flat session's `HmOut.parse`.
 So `ppH`, `hConstH` and `hZeroH` are `ProgPlaces`, `hConst` and `hZero` for `Placed.keyProg` at the hidden tables.
 -/
@@ -71,22 +71,22 @@ namespace TableH
 variable {S : Finset (Fin n)} (x : TableH I mPts S)
 
 include hc in
-/-- A drawn table's statement is on the session's one circuit. -/
+/-- A sampled table's statement is on the session's one circuit. -/
 theorem c_eq : x.st.c = c := setupHidden_c_of_parse hc x.h
 
 include ht hcS in
-/-- **A drawn table's statement circuit is the session's**: its committed circuit unrolls to `c`. -/
+/-- **A sampled table's statement circuit is the session's**: its committed circuit unrolls to `c`. -/
 theorem unrolled_eq : HmOut.unrolled x.st.c = c :=
   Except.ok.inj (((Hidden.setupHidden_specCC x.h).parseStmt_eq ht).symm.trans hcS)
 
-/-- **A drawn table's statement without Δ's pinned copies** (`Hidden.unpin`), its matrices at the table's blocks. -/
+/-- **A sampled table's statement without Δ's pinned copies** (`Hidden.unpin`), its matrices at the table's blocks. -/
 noncomputable def twinA : Matrix (Fin (2 ^ x.T.S.kLog)) (Fin (2 ^ x.T.S.kLog)) (ZMod 2) :=
   fun r j => matA (Hidden.unpin x.st) r.val j.val
 
 noncomputable def twinB : Matrix (Fin (2 ^ x.T.S.kLog)) (Fin (2 ^ x.T.S.kLog)) (ZMod 2) :=
   fun r j => matB (Hidden.unpin x.st) r.val j.val
 
-/-- **A drawn table's acceptance**, at the session's statement circuit `c` (`HmOut.parseStmt`): its `Stmt.setupHidden`
+/-- **A sampled table's acceptance**, at the session's statement circuit `c` (`HmOut.parseStmt`): its `Stmt.setupHidden`
 run, with the layout `Hidden.SpecC.unpinLayout` gives and its unit slots' rows its flat twin's (`unitRowsFlatC_unpin`);
 the table's statement without Δ's pinned copies is the layout's block R1CS at the table's regions
 (`Hidden.SpecC.model_eq_unpin`, and `TableH.hT`). -/
@@ -109,7 +109,7 @@ noncomputable def accS : AcceptedH (twin x.T.S x.twinA x.twinB) where
   hT := ((Hidden.setupHidden_specCC x.h).model_eq_unpin ht _ (Hidden.unpin_wf x.hwf) x.regs).trans (twin_of_eq x.hT)
 
 include ht hcS hv1 in
-/-- **A witness of a drawn table satisfies its statement without Δ's pinned copies**: one output row per output port
+/-- **A witness of a sampled table satisfies its statement without Δ's pinned copies**: one output row per output port
 pins no output (`Hidden.Committed.unpinned_of_rep`), so no pinned bit is left to be a linear row
 (`twin_sat_of_linear`). -/
 theorem satS (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S x.twinA x.twinB).Satisfies z :=
@@ -120,27 +120,27 @@ theorem satS (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S 
     sc.self.db
     (fun y hy => by rw [Hidden.pinnedCols_nil hpin] at hy; cases hy) hz
 
-/-- **A drawn table's acceptance** at a flat session's circuit (`accS` at `HmOut.parse`'s). -/
+/-- **A sampled table's acceptance** at a flat session's circuit (`accS` at `HmOut.parse`'s). -/
 noncomputable abbrev acc : AcceptedH (twin x.T.S x.twinA x.twinB) := x.accS ht (parseStmt_of_parseH hc) hv1
 
 include ht hc hv1 in
-/-- **A witness of a drawn table satisfies its statement without Δ's pinned copies**, at a flat session's circuit
+/-- **A witness of a sampled table satisfies its statement without Δ's pinned copies**, at a flat session's circuit
 (`satS`). -/
 theorem sat (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S x.twinA x.twinB).Satisfies z :=
   x.satS ht (parseStmt_of_parseH hc) hv1 z hz
 
-/-- **A drawn table's statement circuit is the session's**: `unrolled_eq` at its acceptance. -/
+/-- **A sampled table's statement circuit is the session's**: `unrolled_eq` at its acceptance. -/
 theorem accS_unrolled : HmOut.unrolled (x.accS ht hcS hv1).st.c = c := x.unrolled_eq ht hcS
 
-/-- **A drawn table's statement circuit is the session's one circuit**, at a flat session's (`accS_unrolled`). -/
+/-- **A sampled table's statement circuit is the session's one circuit**, at a flat session's (`accS_unrolled`). -/
 theorem acc_unrolled : HmOut.unrolled (x.acc ht hc hv1).st.c = c := x.unrolled_eq ht (parseStmt_of_parseH hc)
 
 end TableH
 
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
 
-/-- **The sites of the one-table hidden plan**, at the session's statement circuit: each drawn unit's acceptance,
-template instance and block are its draw's table's. -/
+/-- **The sites of the one-table hidden plan**, at the session's statement circuit: each sampled proof block's acceptance,
+template instance and block are its sample's table's. -/
 noncomputable def sitesAtHS : SitesH (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀) where
   A S _ _ _ := (tableAtH dj x₀ S).twinA
   B S _ _ _ := (tableAtH dj x₀ S).twinB

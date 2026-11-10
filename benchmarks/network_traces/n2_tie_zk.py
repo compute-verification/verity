@@ -1,8 +1,8 @@
 """The ingress tie in zero knowledge: each ingress execution phase's T bucket rows of the network certifier's cells,
 each proved as IoTieRequest (`tie_service.IngressTie`, its proof block `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`),
-registered on the link's own stream, proved by Flock `prove --zk` behind the Lean firewall with each proof block's
+registered on the link's own stream, proved by Flock `prove --zk` behind the Lean ZK server with each proof block's
 witness row read off the network certifier's
-root (`warden_rows.bucket_port`), delivered, decided by the tie's verifier of record on its own lanes from the advice
+root (`warden_rows.bucket_port`), delivered, decided by the tie's verifier on its own lanes from the advice
 and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `tie_service.IoTieVerdict` on
 the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
 through `tie_service.Ties`, the verifier's tie source).
@@ -39,11 +39,11 @@ through `tie_service.Ties`, the verifier's tie source).
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file every port
   of which is a registered read, ``wit`` the window's bucket rows under the warden's salts and paths, and ``pub`` and
   ``o0`` the prover's rows under the known values' public salts (`known`). A round registers, selects, proves live
-  behind the firewall, delivers, and decides on the proof: the verifier's own Lean run with its own registered reads
+  behind the ZK server, delivers, and decides on the proof: the verifier's own Lean run with its own registered reads
   (`IngressTie.registered`: the warden's root, and at known content its own lanes from the advice and the release
   and the output word 1), each ``pub`` row opened to its own copy and each ``o0`` row read. Per window: prove (the
-  session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean
-  included). The members run one after another, one firewalled session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is
+  session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier's run, Lean
+  included). The members run one after another, one ZK server session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is
   1).
 * **What the verifier receives** is `RECEIVED` per window and the advice (``advice.json``), scanned for every piece of
   the windows' held cells and their salts but those the public circuit or an empty slot holds, and a member fails on a
@@ -449,12 +449,12 @@ def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNa
 def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleNamespace, out: Path,
            port: int) -> dict:
     """The member's execution phases on its own stream, in order: the network certifier registers, the challenger
-    selects, the prover proves the statement live behind the firewall and delivers, and the verifier of record decides
+    selects, the prover proves the statement live behind the ZK server and delivers, and the verifier decides
     on the proof (`IngressTie.outcome`); then the tie from the stream's outcomes of record (`IngressTie.tie`). Writes
     what the verifier receives under ``out / "verifier"`` (`RECEIVED`), each window's files prefixed by its window."""
     stream = tie.stream(budget=len(rd.windows), delta=cs.DELTA, challenger="n2-tie-zk", coins=cs._no_coins,
                         clock=time.monotonic)
-    # the firewall rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
+    # the ZK server rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
     # FIREWALL-REFUSED otherwise), as a8's fw arm does
     env = {**Z.firewall(M, sg), **({"FC_HOST_WITNESS": "1"} if a.gpu else {})}
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=a.gpu)

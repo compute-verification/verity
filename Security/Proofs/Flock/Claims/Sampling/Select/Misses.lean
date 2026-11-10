@@ -5,10 +5,10 @@ public import Proofs.Flock.Claims.Sampling.Select.Bounds
 /-!
 # `Slots.select` misses a set of slots no more often than the claims' `P_a` (`Properties.SampledProofs.DrawMisses`)
 
-* `misses_layout`: a draw that checks no proof unit at a slot of `B` leaves `B` no input slot, and proves no unit at a
+* `misses_layout`: a sample that checks no proof block at a slot of `B` leaves `B` no input slot, and proves no unit at a
   population slot of `B`.
 * `pa_slots`: the design's `P_a` on `Slots.layout`'s partition, the population's first stage times the input class's.
-* `drawMisses`: the draw is accepted and misses `B` with probability at most `missBound`.
+* `drawMisses`: the sample is accepted and misses `B` with probability at most `missBound`.
 -/
 
 @[expose] public section
@@ -55,7 +55,7 @@ theorem inputClass_blocks (d : Program) : ∀ b ∈ popBlocks (inputClass d), b.
     obtain ⟨g, -, rfl⟩ := hb
     rfl
 
-/-- **A draw that misses `B`**, over a layout of the population's strata `S` and an input class: no slot of `B` is an
+/-- **A sample that misses `B`**, over a layout of the population's strata `S` and an input class: no slot of `B` is an
 input slot, and no unit at a population slot of `B` is proved. -/
 theorem misses_layout (S : Array (String × Array (ℕ × ℕ))) (pop ic : Array (Array Slots.ProofBlock))
     (hlays : List.Forall₂ LaysOut S.toList pop.toList)
@@ -175,8 +175,8 @@ theorem totalWork_eq (ws : Array Flock.Draw.WorkStratum) :
   | nil => simp
   | cons s l ih => intro a; simp only [List.foldl_cons, ih, List.map_cons, List.sum_cons, Nat.mul_comm s.work]; omega
 
-/-- **The population's first stage misses `W`** with probability at most the claims' `P_a(W)` of the law it samples, on
-the population's strata: the units `drawUnits` draws hold none at a slot of `W`. -/
+/-- **The population's first stage misses `W`** with probability at most the claims' `P_a(W)` of the sampling design it samples, on
+the population's strata: the units `drawUnits` samples hold none at a slot of `W`. -/
 theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
     (he : Partition.evaluate d query = .ok rs) (pop : Array (Array Slots.ProofBlock))
     (hlays : List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList

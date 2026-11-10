@@ -13,7 +13,7 @@ bandwidth window.
 
 `BandwidthOfAudit` keeps AuditRO's numbers but not its per-run reading: `BandwidthSound`, the form `Joint` takes, is about
 a bound on the bandwidth account's reads on every one of the bandwidth audit's own coins, its worst case over them.
-AuditRO bounds the ingress at the coins drawn, so it also gives the per-run form, `BandwidthSoundPerRun`, the one
+AuditRO bounds the ingress at the coins flipped, so it also gives the per-run form, `BandwidthSoundPerRun`, the one
 `JointPerRun` takes: `BandwidthOfAuditPerRun`, at the same certificate and error.
 
 Proved by `Accounting.SecurityProofs.BandwidthOfAudit : Accounting.Guarantees.BandwidthOfAudit` and
@@ -42,7 +42,7 @@ def BandwidthOfAudit : Prop :=
         ((((k - 1 : ℕ) : ℝ) / N) ^ s + (s : ℝ) / 2 ^ h +
           (((d.rate .oracle * (r.win .bandwidth).len).choose k : ℕ) : ℝ) / 2 ^ lam)
 
-/-- **The bandwidth audit's guarantee is the per-run bandwidth guarantee.** `BandwidthOfAudit` at the coins drawn: for
+/-- **The bandwidth audit's guarantee is the per-run bandwidth guarantee.** `BandwidthOfAudit` at the coins flipped: for
 any run on any device whose bandwidth audit realizes the bandwidth audit's game, at any value of the other audits' coins,
 the bandwidth audit accepts while the bandwidth account read fewer than `k·b − S_chip − c − G·b − λ` bits from device
 memory over the bandwidth window with probability at most `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ` over the bandwidth

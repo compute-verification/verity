@@ -39,8 +39,8 @@ theorem pooled_escape_Pr {hk : kd ≤ N} {T : ℕ} (A : Pooled N kd hk T) (M : �
   rw [ENNReal.toReal_pow, ENNReal.toReal_sub_of_le hle ENNReal.one_ne_top, ENNReal.toReal_one,
     ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
-/-- **The pooled escape at `δ`.** With `q = kd/N`, an adaptive adversary escapes every period's draw with at least
-`ln(1/δ)/q` wrong units over the monitoring period, pooled, with probability at most `δ`. -/
+/-- **The pooled escape at `δ`.** With `q = kd/N`, an adaptive adversary escapes every period's sample with at least
+`ln(1/δ)/q` incorrect proof blocks over the monitoring period, pooled, with probability at most `δ`. -/
 theorem pooled_escape_log {hk : kd ≤ N} {T : ℕ} (A : Pooled N kd hk T) (hq : 0 < kd) {δ : ℝ} (hδ : 0 < δ) :
     Claims.Pr (fun ω => A.Escapes ω ∧ Real.log (1 / δ) / ((kd : ℝ) / N) ≤ (A.total ω : ℝ)) ≤ δ := by
   have hN : (0 : ℝ) < N := by exact_mod_cast hq.trans_le hk

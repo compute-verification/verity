@@ -3,7 +3,7 @@
 run of Flock's Lean verifier (`proofs.verify`), which reads each session's verdict from the session file the stand-in
 prover writes. The proof's output word is the proof block's on the prover's opening by each gate's reference
 (`LinkWindows.outputs`, `IngressTie.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim
-another. So the tests check everything the verifier of record does around the proof: its run's findings, the public row
+another. So the tests check everything the verifier does around the proof: its run's findings, the public row
 opened to the verifier's own copy, the output row, the certificates and the sync."""
 
 from __future__ import annotations
@@ -187,7 +187,7 @@ def lean(proof: PF.Proof, *, circuit_sha512: str, program: bytes, partition: dic
 
 def decide(lw: SVC.LinkWindows, stream: S.Stream, draw: S.Draw, opening: SVC.Hidden, syncs: Sequence[Any], out: Path,
            *, certificates: Sequence[Any] | None = None, **kw: Any) -> S.Outcome:
-    """The drawn link-window proved on `opening` (`prove`, with `kw`), delivered and decided by the verifier of record
+    """The sampled link-window proved on `opening` (`prove`, with `kw`), delivered and decided by the verifier
     on the proof and the certificates (by default the opening's), with the opening's in-the-clear check beside it as the
     debug comparison, which must agree with the proof's verdict when nothing is forged."""
     delivered = prove(lw, opening, draw, syncs, out, **kw)

@@ -5,7 +5,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 /-!
 # Per-row seeds (P2) as the per-unit game on the split layout (trusted definitions; nothing assumed)
 
-P2 seeds A's noise per row: row `i` of unit `u` draws E_A from the oracle input the per-unit scheme uses for a one-row
+P2 seeds A's noise per row: row `i` of unit `u` samples E_A from the oracle input the per-unit scheme uses for a one-row
 unit ("Row additivity for P2: it reduces to the per-unit TT_OUT").
 So the row-seeded game on a workload `U` is the per-unit game on its **split workload**, where every row is its own
 unit, and rev1's TT_OUT on the split workload bounds it (`ttOutRowSeed_of_ttOut`, and per audit tile
@@ -106,7 +106,7 @@ def PearlCDevice.RowLocal (d : PearlCDevice) : Prop :=
     (i : Fin m) (j : Fin n),
     d.useful A B FA FB beA beB i j = d.useful (fun _ : Fin 1 => A i) B FA FB (fun _ => beA i) beB 0 j
 
-/-- The noise `sem` draws for row `i` of unit `u` as its own unit: `sem`'s noise at the one-row unit `rowIdx u i` of the
+/-- The noise `sem` samples for row `i` of unit `u` as its own unit: `sem`'s noise at the one-row unit `rowIdx u i` of the
 split workload, on that row's activations. -/
 noncomputable def PearlCSem.splitNoise (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u i : ℕ)
     (act : Codes) :=
@@ -206,7 +206,7 @@ def TTOutTileRowSeed [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : C
 
 /-! ## The code-form seed (`-h3`) -/
 
-/-- **(C1-h3) The code-form seed:** `semC` draws its noise from the oracle at the code's inputs, and a fixed permutation
+/-- **(C1-h3) The code-form seed:** `semC` samples its noise from the oracle at the code's inputs, and a fixed permutation
 `π L` of the oracle's inputs (one per layout) carries `sem'`'s inputs to them: `semC` at `H` is `sem'` at `H ∘ π L`.
 For P2's rows, `π L` takes the one-row unit's input at `rowIdx L u i` to the code's, indexed `u·2³² + i` with `leaf_i`
 framed inside unit `u`; the chain, scales and floor are `sem'`'s. -/
@@ -350,7 +350,7 @@ def CostModel.FragmentPriced (CM : CostModel Q R S) {sem : PearlCSem Q R S} {p :
 /-- Row `i`'s words in a `k`-column operand. -/
 def rowWords (k : ℕ) (act : Codes) (i : ℕ) : Fin k → ℕ := fun l => act i l
 
-/-- **(C6) Each row's noise is one oracle draw**, a condition for the statement reviewer. The ruling's item 4 takes it
+/-- **(C6) Each row's noise is one oracle sample**, a condition for the statement reviewer. The ruling's item 4 takes it
 from C1, but C1 relates `sem'` to `sem` on the split workload and leaves which oracle inputs `sem.noise` reads
 abstract. At salt `s` on unit `u` of `U`, `sem` reads the per-job noise (`F_A`, `E_B`, `F_B`) from the oracle at the
 job's input `xJ` only, and row `i`'s `E_A` line from the oracle at `key i w` and `xJ` only, `w` the row's `k` words.

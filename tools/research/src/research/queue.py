@@ -351,7 +351,7 @@ PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 #: the codemod that puts the in-tree Lake packages' Lean on Lean's module system, and the one reading of a Lean header it reads
 #: with: a merge into a tree on the module system runs the codemod over the merged tree (`ported`)
 MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
-#: the root modules of Security's `Definitions` library and C-Flock's `Flock`, which the port makes modules: a tree holding
+#: the root modules of Security's `Definitions` library and Flock's `Flock`, which the port makes modules: a tree holding
 #: the codemod is on the module system when each is a module (`on_modules`)
 PORTED_ROOTS = ("Security/Definitions.lean", "verity/core/service/flock/Flock.lean")
 #: what the codemod's run over a tree reads besides the codemod and its header reader: a merge that changes none of these onto
@@ -5431,7 +5431,7 @@ def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     (`Driver._unbaselined`), and a later failure reverts only a landing above SHA.  When those steps cover every step on the merge
     gate there (not circuit-check: `Driver._gating`), drive moves `main` to SHA (`Driver._promote`).  It drops a bisection still open (it reverted
     nothing), ends each red record at or below SHA of a step it records (a `suite` record once it records every one of
-    `SUITE_STEPS`), as a run that passes it does (`Driver._green`), and is refused while a post-landing run runs, for a SHA the
+    `SUITE_STEPS`), as a run that passes it does (`Driver._green`), and is refused while an after-landing run runs, for a SHA the
     branch doesn't hold, and off drive (`/data/infra/drive.sh queue baseline SHA --by ci` on the control pod)."""
     from .drive import AFTER_LANDING
 

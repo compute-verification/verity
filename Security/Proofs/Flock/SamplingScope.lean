@@ -6,7 +6,7 @@ public import Definitions.Claims.Sampling
 # The sampling scope: what it excludes, and that `KS` keeps content in it
 
 `KS`, `KSCount` and `Bits` hold on the statements in scope (`Claims.Sampling.Scope`), which excludes every design whose
-`P_a` is not its draw's miss probability. On a program of two input gates, partitioned into two units:
+`P_a` is not its sample's miss probability. On a program of two input gates, partitioned into two units:
 
 * `subset 3` is the hole: `P_a = 0` at every set (`Pa_hole`), so at every `δ ≥ 0` no witness is in the relation
   (`not_relS_hole`), and `KS` there would be vacuous. It is out of scope (`not_inScope_hole`).
@@ -35,10 +35,10 @@ def toyQuery : Query := ⟨"", 0, []⟩
 /-- One class of one stratum of two proof blocks, `{0}` and `{1}`. -/
 def toyPart : Partition := ⟨[[[[0], [1]]]]⟩
 
-/-- The program, drawn `subset 1`: in scope. -/
+/-- The program, sampled `subset 1`: in scope. -/
 def toyStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[.subset 1]⟩, []⟩
 
-/-- The program, drawn `subset 3` from two units: out of scope. -/
+/-- The program, sampled `subset 3` from two units: out of scope. -/
 def holeStmt : AuditStatement := ⟨[], toyProg, toyQuery, ⟨[.subset 3]⟩, []⟩
 
 /-- A `K`-subset of fewer than `K` members misses every set with probability `0`. -/
@@ -60,7 +60,7 @@ theorem not_relS_hole (H : Msg → Msg) (Cm : CommitmentScheme Bool) {δ : ℝ} 
   rw [Pa_hole] at h'
   linarith
 
-/-- **The hole is out of scope**: its rule draws more units than its class has. -/
+/-- **The hole is out of scope**: its rule samples more units than its class has. -/
 theorem not_inScope_hole : ¬ InScope toyPart holeStmt := by
   rintro ⟨_, _, _, hw⟩
   have := hw (.subset 3, [[[0], [1]]]) (by simp [holeStmt, toyPart])

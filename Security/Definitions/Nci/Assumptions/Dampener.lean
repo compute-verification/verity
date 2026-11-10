@@ -36,7 +36,7 @@ def WithinCompute {ι : Type} [Fintype ι] (x : ι → ℝ) (C : ℝ) : Prop :=
   ∑ i, x i ≤ C
 
 /-- **Every counted multiplication has a source**: `M ≤ M_U + M_r + M_d + M_χ`, unmonitored compute, the monitored
-residual, the declared computation and faulty proof blocks. -/
+residual, the declared computation and incorrect proof blocks. -/
 def SourcesCover (M Mu Mr Md Mx : ℕ) : Prop :=
   M ≤ Mu + Mr + Md + Mx
 
@@ -51,7 +51,7 @@ of the monitored compute `C` is certified correctly, less the wrong windows' cap
 def ResidualAtMost (Mr : ℕ) (κ C εW W wc skipped : ℝ) : Prop :=
   (Mr : ℝ) ≤ κ * (C - (1 - εW) * W + wc + skipped) / 2
 
-/-- **Faulty proof blocks inject at most the cheating share** `χ`: `M_χ ≤ χ κ (C + U) / 2`. -/
+/-- **Incorrect proof blocks inject at most the cheating share** `χ`: `M_χ ≤ χ κ (C + U) / 2`. -/
 def CheatingAtMost (Mx : ℕ) (κ χ C U : ℝ) : Prop :=
   (Mx : ℝ) ≤ κ * χ * (C + U) / 2
 

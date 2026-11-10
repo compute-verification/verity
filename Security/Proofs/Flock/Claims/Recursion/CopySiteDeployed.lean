@@ -213,7 +213,7 @@ theorem eq_range_of_lt {a : Array ℕ} {N : ℕ} (hs : a.size = N)
 theorem getD_of_lt {a : Array ℕ} {j : ℕ} (hj : j < a.size) : a.getD j 0 = a[j]! := by
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj, Option.getD_some, getElem!_pos a j hj]
 
-/-- **The table's labels ascend, one per instance** (`loadPublic`'s order, kept by a full draw). -/
+/-- **The table's labels ascend, one per instance** (`loadPublic`'s order, kept by a full sample). -/
 def LabelsAscend (pub : Public) : Prop :=
   ∃ idx, Registered.unitIndices pub = .ok idx ∧ idx.size = pub.n ∧ ∀ j, 0 < j → j < pub.n → idx[j - 1]! < idx[j]!
 

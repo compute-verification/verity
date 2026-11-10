@@ -14,7 +14,7 @@ ports are V\*'s (`checkParsed`), so that holds where V\*'s row ports at the stat
 
 The tops two reps commit at a level above 0 are two runs of the level's cap (`topsAt`) unless they agree in every node
 and every 192-byte salt (`sameTop`); salts that differ anywhere keep them apart (`sameTop_false_of_salt`). The salts
-are the inner prover's tape's independent uniform draws, so two reps' tops coincide with probability at most
+are the inner prover's tape's independent uniform samples, so two reps' tops coincide with probability at most
 `2^-1536` a pair: the honest theorem's tape exception.
 -/
 

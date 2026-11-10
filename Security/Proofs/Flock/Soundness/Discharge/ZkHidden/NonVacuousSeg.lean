@@ -26,7 +26,7 @@ there, so their guarantees over row-seg rows, and over a PoUW tile's mix of them
 * `zk_session_soundHJ_nonvacuous_seg`, `zk_session_soundHJ_nonvacuous_mix`: `zk_session_soundHJ_nonvacuous_v2` at
   them: at a session `verify --zk` accepts whose circuit file parses as the witness, the premises the hidden-output
   headlines read of the circuit hold together (`Built`, `scopeOkH`, `Hidden.Any.RowsFitS`), with
-  `zk_session_soundHJ_nonvacuous`'s `y₀` and draw hypotheses.
+  `zk_session_soundHJ_nonvacuous`'s `y₀` and sample hypotheses.
 
 Not covered, as for `zk_session_soundHJ_nonvacuous_v2`: that a session over the witnesses exists, `hRec`, `hpub`, `hpt`,
 `hkd`, `hA3`, the count curve's parameters and `TableCRZ`.
@@ -76,7 +76,7 @@ theorem witnessMix_scope :
       Layout.scopeOk witnessMix = false := by
   decide +kernel
 
-/-- **The hidden-output headlines' circuit premises and draw hypotheses hold together at `witnessSeg`**:
+/-- **The hidden-output headlines' circuit premises and sample hypotheses hold together at `witnessSeg`**:
 `zk_session_soundHJ_nonvacuous_v2` at a circuit file that parses as `witnessSeg`. -/
 theorem zk_session_soundHJ_nonvacuous_seg (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok witnessSeg) (kd : ℕ) (hdiv : kd % nTab I = 0)
@@ -97,7 +97,7 @@ theorem zk_session_soundHJ_nonvacuous_seg (I : Inputs) (ht : I.tags.typed = fals
   obtain ⟨hy, hall, hok⟩ := zk_session_soundHJ_nonvacuous I ht hTags hc hU hH kd hdiv dj hdj h hd
   exact ⟨hU, hH, hS, rowsFit_of_scopeH ht' hc hH, hy, hall, hok⟩
 
-/-- **The hidden-output headlines' circuit premises and draw hypotheses hold together at `witnessMix`**:
+/-- **The hidden-output headlines' circuit premises and sample hypotheses hold together at `witnessMix`**:
 `zk_session_soundHJ_nonvacuous_v2` at a circuit file that parses as `witnessMix`. -/
 theorem zk_session_soundHJ_nonvacuous_mix (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok witnessMix) (kd : ℕ) (hdiv : kd % nTab I = 0)

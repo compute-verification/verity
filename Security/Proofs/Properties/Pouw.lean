@@ -133,7 +133,7 @@ theorem drawMisses : DrawMisses := fun eps δ credited n w B k hk =>
 /-! ## Completeness
 
 The other half of the refusals: every input on a function's domain is answered. Each comes with one answered input of the
-served grid and draw. -/
+served grid and sample. -/
 
 theorem grid_complete (bits : Nat) (n lo : Int) :
     (1 ≤ n → floorPoint? bits n = .ok (floorPoint bits n.toNat) ∧ pad? bits n = .ok (pad bits n.toNat) ∧

@@ -21,7 +21,7 @@ value V* registers as its unit's outputs, all-zero rows under `zeroSalt` (`rec_r
 checked the same way (`checkZero`: `rec-residuals-zero` at `checkResiduals` and `checkOpening`, `rec-sparse-zero` at
 `checkSparse`).
 
-Candidate 3's statements are checked the same way at coins the prover's record does not hold, the coin server's record of
+Candidate 3's statements are checked the same way at coins the prover's record does not hold, the challenger's live-coin part's record of
 the session (`C3`, `--rec-inner-transcript` with the verifier's inner shape `rec-inner --sparse`): RecSparse's `v`
 (`rec-sparse-v`, `checkSparse`) at each rep's inner points and `sparse/rep<r>`'s coins; R's levels' `coef` and `dirs`
 (`checkStackedLevel`) and R's opening's `v` (`checkOpening`) at `stacked/rep0`'s coins and the two reps' claim points; an R
@@ -31,7 +31,7 @@ session's setup, whatever its unit (`checkAtC3`, `checkInnerRange`).
 
 RecCap (`rec-cap/n<N>` at level 0, `rec-cap/n<N>-l<l>` at a later level `l`) registers no value from the coins: its `top`
 reads the level's tops `rec-top-L<l>` at row `i` in instance `i`, every node of them, and its `out` is V*'s zero rows
-`rec-cap-zero` (`checkCap`); its rows are held to the coin server's `root_B`, or to both reps' level-`l` tops
+`rec-cap-zero` (`checkCap`); its rows are held to the challenger's live-coin part's `root_B`, or to both reps' level-`l` tops
 (`checkLink`, `RecVStar.checkTopRows`).
 -/
 module
@@ -104,7 +104,7 @@ def commitRow (row : Array Nat) (salt : ByteArray) : ByteArray :=
   Hm96.Default512.commitString (Firewall.rowDigest (padTo row (Registered.rowWords row.size 16))) salt
 
 /-- How Flock's plain verifier is told to set the inner statement up, as the verifier holds it
-(`--rec-inner-statement`, `--rec-inner-tables`, `--rec-inner-draw`): the statement id, its lookup tables, and its draw's
+(`--rec-inner-statement`, `--rec-inner-tables`, `--rec-inner-draw`): the statement id, its lookup tables, and its sample's
 bytes. `RecSetup.checkForm` holds them to the setup the inner statement's files give it. -/
 structure InnerForm where
   statement : String
@@ -158,7 +158,7 @@ def Files.stmt (unit : String) (f : Files) : V (SessionSpec × Stmt) := do
   let some st := sts[0]? | throw s!"rec-coins: {unit}: the inner statement has no table"
   return (spec, st)
 
-/-- A session record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`), as `verify` reads it
+/-- A session record's `unit_draw`, when it is a sample (not absent, not null), rebuilt (`norm`), as `verify` reads it
 (`Main.recordDraw`). -/
 def recordDraw (record : String) : Option Json :=
   match JsonParse.parse record with
@@ -168,12 +168,12 @@ def recordDraw (record : String) : Option Json :=
     | .error _ => none
   | .error _ => none
 
-/-- The spec a recursive inner session's record decodes against, `spec` and `st` the inner statement's without a draw and
-`setupAt d` the statement at draw `d`: `spec` for a record without a draw (whose session `verify` refuses last in its
-verdict, `RecSetup.innerDrawn`), and for a record whose draw proves every one of
-`st`'s units, in order, the drawn statement's spec (the coin server's full draw, `rec_live.full_draw`, which `verify`
-holds to its own law with `--stratified`, `--program` and `--partition`). The drawn statement has `st`'s units, `m` and
-regions; its header carries the draw, so its Σ and Hello are its own. A draw that leaves a unit out is refused: V*
+/-- The spec a recursive inner session's record decodes against, `spec` and `st` the inner statement's without a sample and
+`setupAt d` the statement at sample `d`: `spec` for a record without a sample (whose session `verify` refuses last in its
+verdict, `RecSetup.innerDrawn`), and for a record whose sample proves every one of
+`st`'s units, in order, the sampled statement's spec (the challenger's live-coin part's full sample, `rec_live.full_draw`, which `verify`
+holds to its own sampling design with `--stratified`, `--program` and `--partition`). The sampled statement has `st`'s units, `m` and
+regions; its header carries the sample, so its Σ and Hello are its own. A sample that leaves a unit out is refused: V*
 recurses on an inner session that proves every unit. -/
 def drawnSpec (setupAt : Json → V Stmt) (spec : SessionSpec) (st : Stmt) (record : String) : V SessionSpec := do
   let some d := recordDraw record | return spec
@@ -182,14 +182,14 @@ def drawnSpec (setupAt : Json → V Stmt) (spec : SessionSpec) (st : Stmt) (reco
     throw s!"the session's draw proves {D.proved.size} units, not every one of the statement's {st.n} in order"
   return (← setupAt d).spec
 
-/-- `drawnSpec` at the inner files: the inner statement set up at the record's draw as `Files.stmt` sets it up without one. -/
+/-- `drawnSpec` at the inner files: the inner statement set up at the record's sample as `Files.stmt` sets it up without one. -/
 def Files.drawnSpec (f : Files) (spec : SessionSpec) (st : Stmt) : V SessionSpec :=
   RecCoins.drawnSpec (fun d => Stmt.setupHidden innerTags f.circuit f.pub RecVStar.innerTree [] (some d) (some f.partition)
     f.program) spec st f.record
 
 /-- The inner statement as the recursive audit's event reads it (`AcceptsStmt`): set up from its circuit and public files
-on the coin server's coins, with an `m` that `Zk.schedule` accepts, and its session's record decoded (at the record's full
-draw when it has one, `Files.drawnSpec`). -/
+on the challenger's live-coin part's coins, with an `m` that `Zk.schedule` accepts, and its session's record decoded (at the record's full
+sample when it has one, `Files.drawnSpec`). -/
 def Inner.load (unit : String) (f : Files) : V Inner := do
   let (spec, st) ← f.stmt unit
   if let some i := f.inner then
@@ -342,14 +342,14 @@ def SPARSE_V_VALUE : String := "rec-sparse-v"
 def SPARSE_ZERO_VALUE : String := "rec-sparse-zero"
 
 /-- What check 5 reads of candidate 3's session beside the inner statement: the verifier's own inner shape (`rec-inner
---sparse`: the bucket's RecSparse shape, and R's, the inner circuit's META's) and the coin server's record of the session
+--sparse`: the bucket's RecSparse shape, and R's, the inner circuit's META's) and the challenger's live-coin part's record of the session
 (`--rec-inner-transcript`, `RecVStar.innerCommits`), whose sparse phases' and R's coins the prover's record does not hold. -/
 structure C3 where
   sparse : RecSparse.Shape
   stacked : Option RecVStar.StackedShape
   commits : RecVStar.InnerCommits
 
-/-- Stream `s`'s coins by round, as the coin server drew them. -/
+/-- Stream `s`'s coins by round, as the challenger's live-coin part drew them. -/
 def C3.coins (c3 : C3) (unit s : String) : V (Array (Array F128)) := do
   let some st := c3.commits.stream? s | throw s!"rec-coins: {unit}: the inner transcript has no stream {s}"
   return st.coins
@@ -363,7 +363,7 @@ structure SparseCoins where
   zetaP : Array F128
   rho : Array F128
 
-/-- Rep `r`'s sparse-phase coins: of `sparse/rep<r>`'s rounds that draw any (`rec_live.sparse_rounds`), 6 for `ζ_c`, one a
+/-- Rep `r`'s sparse-phase coins: of `sparse/rep<r>`'s rounds that sample any (`rec_live.sparse_rounds`), 6 for `ζ_c`, one a
 round for H2's 6 and H3's `NU + S_LOG`, `P_LOG` for `ζ_p` (u's round) and at T > 1 `T_LOG` for `ρ_t` (vt's); refused at any
 other count. -/
 def sparseCoins (c3 : C3) (unit : String) (r : Nat) : V SparseCoins := do
@@ -421,7 +421,7 @@ def sparseV (sh : RecSparse.Shape) (c : SparseCoins) (alpha z : F128) (xRest yRe
 
 /-- A `rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` statement at the verifier's RecSparse shape: two instances (rep `r`
 instance `r`), each instance's `v` the verifier's (`sparseV`) at rep `r`'s inner points (its circuit stream's coins) and its
-sparse stream's coins (the coin server's), and the inner circuit's unit range (`rec_vstage.stage_sparse`). -/
+sparse stream's coins (the challenger's live-coin part's), and the inner circuit's unit range (`rec_vstage.stage_sparse`). -/
 def checkSparse (inn : Inner) (c3 : C3) (c : Circuit) (pub : Public) (own : Array Registered.Port) (sh : RecSparse.Shape) :
     V Unit := do
   let unit := c.unit.name
@@ -634,7 +634,7 @@ def CAP_ZERO_VALUE : String := "rec-cap-zero"
 
 /-- **RecCap holds every node of level `l`'s committed tops at a fixed row** (`VStar.capName l N`, `VStar.capUnit`): the
 reads file's `top` reads `rec-top-L<l>`, a registration of `N` rows of `VStar.CAP_TOP_WORDS` words, instance `i` reading
-row `i` whatever the coins draw, its table labels its instances `0` to `n - 1` in order (`Registered.unitIndices`), as
+row `i` whatever the coins sample, its table labels its instances `0` to `n - 1` in order (`Registered.unitIndices`), as
 V*'s stage writes it, so instance `i` reads node `i`, and its `out` is V*'s `N` zero rows of `VStar.CAP_OUT_WORDS` words
 under `zeroSalt` (`checkRows` at `rec-cap-zero`), so every held row's words past its node are zero.
 `RecVStar.checkTopRows` holds each table row of `top` to its node of `root_B` or of the reps' level-`l` tops
@@ -712,9 +712,9 @@ def checkLevelTopReads (unit : String) (own : Array Registered.Port) (l q H top0
     throw (s!"rec-coins: {unit}: rec-top-L{l}: the reads file does not read rep r's opening j at node pos[j] >>> {H} " ++
       s!"of its rep's top, rep 1's after rep 0's {first} rows")
 
-/-- **A circuit-table level's openings climb to the coin server's tops**: at a `rec-open/l<LANES>-h<H>` statement, the
+/-- **A circuit-table level's openings climb to the challenger's live-coin part's tops**: at a `rec-open/l<LANES>-h<H>` statement, the
 level `l` of the inner schedule `checkOpen` finds, its `out` reads `rec-top-L<l>` at each opening's node above its `H`
-siblings at its rep's coins (`checkLevelTopReads`), rep 1's rows after rep 0's level-`l` top as the coin server recorded
+siblings at its rep's coins (`checkLevelTopReads`), rep 1's rows after rep 0's level-`l` top as the challenger's live-coin part recorded
 it (`lk`). -/
 def checkOpenTops (inn : Inner) (c : Circuit) (own : Array Registered.Port) (lk : RecVStar.InnerLink) (LANES H : Nat) :
     V Unit := do
@@ -733,10 +733,10 @@ def checkOpenTops (inn : Inner) (c : Circuit) (own : Array Registered.Port) (lk 
   let top0 := ((lk.tops[0]?.bind (·[l - 1]?)).map (·.2.size)).getD 0
   checkLevelTopReads unit own l q H top0 pos[0]! pos[1]!
 
-/-- **Check 5's link points and its levels' tops are the coin server's**: a `rec-open/…`, `rec-residuals/…` or
+/-- **Check 5's link points and its levels' tops are the challenger's live-coin part's**: a `rec-open/…`, `rec-residuals/…` or
 `rec-sparse/…` statement, whose check 5 takes the extra claims at the inner session's record's link points, is refused
 unless the verifier holds the inner transcript (`link`, `RecVStar.innerLink`, which holds those points to the ones the
-coin server drew); and at a circuit-table level its `out` reads the tops the coin server recorded (`checkOpenTops`). A
+challenger's live-coin part drew); and at a circuit-table level its `out` reads the tops the challenger's live-coin part recorded (`checkOpenTops`). A
 RecCap statement is refused without the inner transcript, whose `root_B` (level 0) or both reps' level-`l` tops (a later
 level) its rows are held to (`RecVStar.checkTopRows`), and unless those have its `N` nodes. Any other unit passes. -/
 def checkLink (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Source)

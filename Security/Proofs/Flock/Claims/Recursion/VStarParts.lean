@@ -136,7 +136,7 @@ theorem partCols_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st) (
 /-- **The rec-open parts: a satisfied table's copies climb.** Let `RecOpen.check` accept the table's circuit, its unit
 named for `LANES` and `H` (`params`). In every block, at every VU and copy, whose columns are `v` (`copyCol`): if the
 input columns hold a row `r`, `H` siblings `ss`, `acc`'s first elements `a` and the rest `rest`, the coefficients `cf`
-and the position's bits `idx`, the output columns hold the verifier of record's climb from the row's leaf
+and the position's bits `idx`, the output columns hold the verifier's climb from the row's leaf
 (`Flock.climb`) and 64 zero bytes, then the consistency term at `k = 0, 1` and `rest`: `laid_unit` at the verifier's
 net (`RecOpen.check_ok`). -/
 theorem climb_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st) (hfl : st.c.tmpl = none)

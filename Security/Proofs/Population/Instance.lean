@@ -120,7 +120,7 @@ theorem correct_iff {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) (u : 
     rw [P.fns_encode hW X u]
     exact congrArg (BitVec.setWidth W) (h s.1.1 s.1.2 ((P.mem_writes).1 s.2))
 
-/-- **The bridge**: the population's wrong units are the partition's. -/
+/-- **The bridge**: the population's incorrect proof blocks are the partition's. -/
 theorem wrong_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) :
     P.toDataflow.wrong (P.fns W) (P.encode W X) = P.wrong X := by
   ext u
