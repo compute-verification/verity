@@ -84,12 +84,12 @@ def fleets() -> list[dict]:
 
 
 def _min_cut():
-    """The calculator's module for the bound of record, its `min_cut`; None where it has none."""
+    """The calculator's module for the bound of record, its `min_cut`; None where its package has no such file."""
     _calculator()
-    try:
-        from rho import min_cut
-    except ImportError:
+    if not (CALCULATOR / CALCULATOR.name / "min_cut.py").exists():
         return None
+    from rho import min_cut
+
     return min_cut
 
 
