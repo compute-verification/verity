@@ -7,7 +7,7 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 | --- | --- |
 | `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build), `ratchet-gate` (the vLLM integration's ratchet gate on each merge above the check's base: on a train, it names the PR whose merge grows a lint allowlist) |
 | `circuits` | `flock-circuit-build`, `flock-rust-tests` (Flock's Rust), `circuit-check` (the property checks every circuit passes) |
-| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), `lean-changed` (the early Lean check on a merge, which halts the run; off the gate and in no shard), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
+| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
 
 `verity check tests|circuits|lean` runs only those parts and what their jobs need. `check.py`'s docstring lists the rest: shards,
 `--deferred STEP,...`, `--plan` and `--slots`.
@@ -20,10 +20,8 @@ culprit, no revert, no hold on `main`) until it expires, and then rings its owne
 applies `main`'s allowances the same way.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
-merge` requires it of no check. Today those are `circuit-check`, `ratchet-gate` and `lean-changed`. `lean-changed` catches
-nothing the audit doesn't, so no shard runs it, of a plan or an auto one (`shards.NO_SHARD`): neither a recorded check nor a
-candidate's sharded check runs it. Each of the other two runs after landing, in the run that checks `checked`'s tip, and
-doesn't hold `main`; under drive.toml's `executor = "on"`, `ratchet-gate` runs with
+merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
+checks `checked`'s tip, and doesn't hold `main`; under drive.toml's `executor = "on"`, `ratchet-gate` runs with
 `lean-agreement` in a run of their own beside the executor's check of the tip, and `main` waits for that run's preflights and
 `lean-agreement`, not its `ratchet-gate`. A red `circuit-check` names its culprit, fixed forward or else reverted, as every
 after-landing red does, and while it is red no PR touching its inputs lands. A red `ratchet-gate` names as culprits the

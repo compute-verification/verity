@@ -10,10 +10,8 @@ schema = "policy/v0"
 # after-landing run (`--deferred`, every job), where a red names its culprit on `checked`. Under drive.toml's `executor = "on"`
 # ratchet-gate runs in a train.sh run beside the executor's check instead, and is off the gate there too. circuit-check returns to the gate
 # once `circuit-check --all` fits inside the rest of the check (under 30 minutes); ratchet-gate judges the merges above the
-# run's base, and no plan holds it. lean-changed, which catches nothing the audit doesn't, runs in no shard either, of a
-# plan or an auto one (`shards.NO_SHARD`), so neither a recorded check nor a candidate's runs it. A job here has no
-# `merge_requires`, and no job on the gate `needs` it or runs `after` it.
-off_gate = ["circuit-check", "lean-changed", "ratchet-gate"]
+# run's base, and no plan holds it. A job here has no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
+off_gate = ["circuit-check", "ratchet-gate"]
 
 # Allowances: a failure drive doesn't take as red while its allowance is unexpired. It names no culprit, reverts nothing,
 # holds no promotion, and the after-landing run that failed only on such failures verifies its tip. Expired, it is as if absent,
