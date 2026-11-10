@@ -30,13 +30,14 @@ What a trace says depends on how Lake came by the module. One it built states th
 (`built_from`), which is compared with the hash of the source as it is (`lake_hash`). That says what a modification time
 can't: a tree that goes from one branch to another and back holds sources written after the products built from the
 same text, which Lake never rebuilds, and a product the artifact cache links is touched whenever the cache is read. One
-Lake took from its artifact cache has a trace that states no input (`synthetic`), written when Lake found the module's
-outputs under the hash of its inputs as they were then, its source among them: such a module counts while its trace is
-at least as new as its source, which `sync` rewrites only when its text changes, and git likewise. That errs only
-towards unchecked: a source written again as it was leaves a module taken from the cache unchecked until Lake builds
-it. A trace of neither kind (another Lake's schema) says nothing, so its module is unchecked, never taken as built. A
-module of a fetched dependency (`.lake/packages`) is taken as built: its sources change only with the manifest, and its
-products with them.
+Lake took rather than built has a trace that states the hash of all its inputs (`depHash`) and none of them: Lake's own
+for outputs it found in its artifact cache (`synthetic`), or `leantar`'s for a module unpacked from its `.ltar` archive.
+Either was written when Lake found the module's outputs under the hash of its inputs as they were then, its source
+among them, so such a module counts while its trace is at least as new as its source, which `sync` rewrites only when
+its text changes, and git likewise. That errs only towards unchecked: a source written again as it was leaves a module
+Lake took unchecked until Lake builds it. Any other trace (one cut short, another schema's) says nothing, so its module
+is unchecked, never taken as built. A module of a fetched dependency (`.lake/packages`) is taken as built: its sources
+change only with the manifest, and its products with them.
 
 It is opt-in because of what it costs: on Security/Proofs' warm tree its stub imports some 3,200 modules in under 20 s
 at a peak near 8 GB, past the 1 GB a try on an agent VM has. So it runs only with `--siblings`, on Security on a node
@@ -204,18 +205,20 @@ def lake_hash(text: bytes) -> str:
 
 
 def built_from(trace: Path, name: str) -> tuple[str | None, bool]:
-    """What ``trace`` (a module's, as Lake wrote it) says of the source its module is of: (the hash it states for the
-    source Lake built the module from, which is the one of its `inputs` that a path to a file called ``name`` names, or
-    None; whether it is the trace of a module Lake took from its artifact cache, `synthetic`, which states no input).
-    (None, False) when it says nothing this reads: no trace, one cut short, or another schema's."""
+    """What ``trace`` (a module's, as Lake left it) says of the source its module is of: (the hash it states for the source
+    Lake built the module from, which is the one of its `inputs` that a path to a file called ``name`` names, or None;
+    whether it is the trace of a module Lake took rather than built, which states a `depHash` under a schema and no input:
+    `"inputs": []` as Lake writes it for its artifact cache's outputs, no `inputs` as `leantar` writes it on unpacking an
+    `.ltar`). (None, False) when it says nothing this reads: no trace, one cut short, or another shape."""
     try:
         doc = json.loads(trace.read_text())
         inputs = doc.get("inputs")
+        took = inputs in (None, []) and isinstance(doc.get("depHash"), str) and isinstance(doc.get("schemaVersion"), str)
     except (OSError, ValueError, AttributeError):
         return None, False
     got = [e[1] for e in inputs if isinstance(e, list) and len(e) == 2 and isinstance(e[0], str) and isinstance(e[1], str)
            and e[0].replace("\\", "/").rsplit("/", 1)[-1] == name] if isinstance(inputs, list) else []
-    return (got[0] if len(got) == 1 else None), doc.get("synthetic") is True and inputs == []
+    return (got[0] if len(got) == 1 else None), took
 
 
 def plan(pkg: Path, rel: str) -> Plan | str:
@@ -265,16 +268,16 @@ def plan(pkg: Path, rel: str) -> Plan | str:
     def current(m: str) -> bool:
         """Whether ``m``'s build is of its source as it is, and names the imports read here: its `.olean` and trace are
         there, its header is one `headers.py` reads, no package holds a product of its name with no source, which Lean
-        could load in its place, and the trace states this source's hash or, of a module Lake took from its cache, is at
-        least as new as the source (for a source that is a link, as the link too, which `sync` remakes alone)."""
+        could load in its place, and the trace states this source's hash or, of a module Lake took rather than built, is
+        at least as new as the source (for a source that is a link, as the link too, which `sync` remakes alone)."""
         f, lib = at[m]
         if not have[lib].get(m) or m in lost or headers[m] is None:
             return False
         trace = lib.joinpath(*m.split(".")).with_suffix(".trace")
-        stated, fetched = built_from(trace, f.name)
+        stated, took = built_from(trace, f.name)
         if stated is not None:
             return stated == lake_hash(f.read_bytes())
-        return fetched and trace.stat().st_mtime >= max(f.stat().st_mtime, f.lstat().st_mtime)
+        return took and trace.stat().st_mtime >= max(f.stat().st_mtime, f.lstat().st_mtime)
 
     def loads(m: str) -> bool:
         """Whether every build a stub that imports ``m`` loads is of its source as it is: ``m``'s own (`current`) and that

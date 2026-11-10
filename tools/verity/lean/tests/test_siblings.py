@@ -75,12 +75,17 @@ def test_a_trace_states_its_source_by_file_name_or_states_none(tmp_path):
     assert S.built_from(trace, "A.lean") == ("42d00b9fd865c9a6", False)
     assert S.built_from(trace, "B.lean") == (None, False) == S.built_from(tmp_path / "none.trace", "A.lean")
     for text in ("{}", "[]", '{"inputs": [["/tree/p/P/A.lean", "42d0', '{"inputs": {"/tree/p/P/A.lean": "42d00b9fd865c9a6"}}',
-                 '{"inputs": [["/a/A.lean", "1"], ["/b/A.lean", "2"]]}', '{"synthetic": true, "inputs": [["options", "06bb"]]}',
-                 '{"synthetic": "true", "inputs": []}', '{"synthetic": true}'):
+                 '{"inputs": [["/a/A.lean", "1"], ["/b/A.lean", "2"]]}',
+                 '{"synthetic": true, "schemaVersion": "2025-09-10", "inputs": [["options", "06bb"]], "depHash": "b3c1e3c25b4816c6"}',
+                 '{"synthetic": true, "inputs": []}', '{"synthetic": true, "schemaVersion": "2025-09-10", "inputs": []}',
+                 '{"depHash": "12345678901234567890"}', '{"schemaVersion": "2025-09-10", "depHash": 7, "outputs": {}}',
+                 '{"schemaVersion": "2025-09-10", "depHash": "b3c1e3c25b4816c6", "inputs": {}}', "12345678901234567890"):
         trace.write_text(text)
         assert S.built_from(trace, "A.lean") == (None, False), text
     trace.write_text('{"synthetic": true, "schemaVersion": "2025-09-10", "outputs": {}, "log": [], "inputs": [], "depHash": "b3c1e3c25b4816c6"}')
     assert S.built_from(trace, "A.lean") == (None, True), "as Lake writes it for a module it took from its cache"
+    trace.write_text('{"schemaVersion":"2025-09-10","depHash":"255a6a20482e9767","outputs":{"m":true,"o":["3775597e598b9774.olean"]}}')
+    assert S.built_from(trace, "A.lean") == (None, True), "as leantar writes it for a module unpacked from its .ltar"
 
 
 def test_the_stub_imports_the_built_modules_that_import_file_neither_directly_nor_through_others(tmp_path):
@@ -201,17 +206,20 @@ def test_a_source_written_again_as_it_was_built_from_leaves_its_build_checked(tm
     assert S.plan(proofs, "Proofs/File.lean").unchecked == []
 
 
-def test_a_module_lake_took_from_its_cache_counts_until_its_source_is_written_again(tmp_path):
-    """Lake writes a trace with no input for a module it finds in its artifact cache, as a node's records runs leave most
-    of a slot tree: there is no source hash to compare. Lake took it for the source as it was then, so it is a sibling
-    while its trace is at least as new as its source, and unchecked, with what imports it, once a sync has written the
-    source again. The `.olean` itself is a link into the cache, touched whenever the cache is read: its time says
-    nothing."""
+@pytest.mark.parametrize("took", ['{"synthetic": true, "schemaVersion": "2025-09-10", "outputs": {}, "log": [], "inputs": [], '
+                                  '"depHash": "b3c1e3c25b4816c6"}',
+                                  '{"schemaVersion":"2025-09-10","depHash":"255a6a20482e9767","outputs":{}}'], ids=["cache", "ltar"])
+def test_a_module_lake_took_rather_than_built_counts_until_its_source_is_written_again(tmp_path, took):
+    """Lake writes a trace with no input for a module it finds in its artifact cache, and `leantar` one for a module
+    unpacked from its `.ltar`, as a node's records runs leave most of a slot tree, the definitions everything imports
+    among them: there is no source hash to compare. Lake took it for the source as it was then, so it is a sibling while
+    its trace is at least as new as its source, and unchecked, with what imports it, once a sync has written the source
+    again. The `.olean` itself is a link into the cache, touched whenever the cache is read: its time says nothing."""
     pkg, then = tmp_path / "p", 2_000_000_000.0
     write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P"), "P/File.lean": "module\n", "P/A.lean": "module\n",
                 "P/B.lean": "module\nimport P.A\n"})
     built(pkg, "P.A", "P.B")
-    (trace := pkg / S.LIB / "P" / "A.trace").write_text('{"synthetic": true, "inputs": [], "depHash": "b3c1e3c25b4816c6"}')
+    (trace := pkg / S.LIB / "P" / "A.trace").write_text(took)
     os.utime(pkg / "P" / "A.lean", (then, then))
     os.utime(trace, (then, then))
     os.utime(pkg / S.LIB / "P" / "A.olean", (then - 500, then - 500))
