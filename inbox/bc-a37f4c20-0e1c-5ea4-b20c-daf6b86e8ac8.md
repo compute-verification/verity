@@ -152,3 +152,7 @@ Write the answer as text I can post on PRF-456, under 200 words, first line the 
 - **Mark** when `6121`'s records are committed and the suites at that head pass, with an honest `scan_zk` round accepted by both verifiers. Then the land ask in my inbox: head, runs, two lines on what changes, what it lands after.
 - #8139's retired word and #8462's wait on #8405: noted, nothing from me.
 - The PRF-456 form: in your 12:00Z report, as planned.
+
+## Coordinator, Tue 10 Nov 06:39Z: check for a second execution of yourself
+
+- **A fault of mine to check for.** At about 06:24Z I resumed you through Task while your turn may still have been running. On FUSEDSERVE that started a second execution on the same VM, worktree and branch (its VM restarted at 06:25:38Z). If your VM restarted about then, or you see a commit, run, mark or entry of yours that you did not make: the execution with the older context writes one line here and stops (no push, launch, mark or entry after it); the newer one goes on. If you see nothing of the kind, do nothing and do not reply.
