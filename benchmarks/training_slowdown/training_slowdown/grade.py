@@ -15,9 +15,9 @@ writes `OUT/slowdown.json` (`SCHEMA`):
   and the gain from the start's loss l0 to a loss is the ratio of the two (`gain_from`), so the target at gain g is
   E + (l0 − E)·g^(−γ) (`target`), l0 being the start's loss on the record's own split;
 - **the seeds** (`seed_at`): a seed reaches the gain at its first scored checkpoint at or below its target, and its
-  |C| is that checkpoint's counted gates (`formalism.measure`; a checkpoint it refuses or can't measure is unscored,
-  with the reason); else the seed is not reached, at its last. A config's C is the mean over its seeds that reach,
-  with their spread (`spread`);
+  |C| is the gates counted through that checkpoint (`counted`: the parts of `formalism.of_record`; a checkpoint of an
+  invalid record, or with no loss, is unscored, with the reason); else the seed is not reached, at its last. A
+  config's C is the mean over its seeds that reach, with their spread (`spread`);
 - **H**, the least counted |C| reaching the gain: the honest config's C, and the least C over every config given
   (the attack, the honest one and `--also`'s);
 - **p** = C/H against each, with its range over the seeds (C's least over H's greatest, to C's greatest over H's
@@ -25,7 +25,7 @@ writes `OUT/slowdown.json` (`SCHEMA`):
   final record, else the search split, and the block says which;
 - **ρ**, the attack's own cost at the config's policy (`policy.named`): `formalism.published` at (c, k) on the traced
   search record, at its first checkpoint reaching the gain on the search split, else at its last, which the block
-  says. An untraced search record has no ρ, and then there is no S;
+  says. An untraced search record, or a traced step `formalism.measure` refuses, has no ρ, and then there is no S;
 - **S = p·ρ** against each H, a lower bound where ρ is one (`partial`), with what each factor rests on;
 - **the bound of record** at the same policy (`calculator.bound`): what every partition of the attack's traced
   circuit pays at the least, beside S, what this attack pays, and never mixed into it;
@@ -57,7 +57,7 @@ FORM = "L(C) = E + A*C^-gamma"
 PER_DECADE, FIT_MIN, FIT_SPAN, FIT_TARGET, PARAMS, DIGITS = 20, 3, 10.0, 5, 3, 6
 #: γ's grid, refined about its best by golden section
 GAMMAS = np.linspace(0.01, 2.0, 399)
-#: a checkpoint's facts about its output that `formalism.measure` reads
+#: a checkpoint's facts about its output that `formalism.measure` reads, where the record has them
 OUTPUT = ("e_bytes", "format", "rebuild_macs", "decoder_gates")
 #: the theorem's inputs on a traced step, as `formalism.he_products` names them
 WORK = ("N", "O", "beta_w", "beta_x", "b_y", "F")
@@ -170,14 +170,17 @@ def rows_of(record: dict) -> list[dict]:
     return out
 
 
-def checkpoints(run: dict, shape: dict, start: str) -> list[dict]:
+def counted(row: dict) -> float | None:
+    """A row's counted |C| in gates: its `formalism` block's parts' (`formalism.of_record`); None without them."""
+    parts = (row.get("formalism") or {}).get("parts")
+    return sum(p["gates"] for p in parts) if parts else None
+
+
+def checkpoints(run: dict, start: str) -> list[dict]:
     """A job's checkpoints by step (`run`: its `seed`, its `split` and its `record`, or its `rows`): each one's loss,
-    the start's loss on the job's split and its |C| in gates (`formalism.measure`, kept as `m`), or why it has none. A
-    job from another start, or scored on another split than its place says, is refused."""
-    rows = run.get("rows")
-    if rows is None:
-        rows, fwd = rows_of(run["record"]), run["record"].get("forward_macs_per_token")
-        shape = shape | ({"forward_macs_per_token": fwd} if fwd else {})
+    the start's loss on the job's split and its counted |C| in gates (`counted`), or why it has none. A job from
+    another start, or scored on another split than its place says, is refused."""
+    rows = rows_of(run["record"]) if run.get("rows") is None else run["rows"]
     where = f"seed {run['seed']}, {run['split']}"
     out = []
     for r in sorted(rows, key=lambda r: r["checkpoint_step"]):
@@ -185,18 +188,10 @@ def checkpoints(run: dict, shape: dict, start: str) -> list[dict]:
             raise ValueError(f"grade: the record at {where} is from start {r['start']!r}, not the config's {start!r}")
         if r.get("split") not in (None, run["split"]):
             raise ValueError(f"grade: the record at {where} was scored on {r['split']!r}")
-        cp = {"step": r["checkpoint_step"], "bpb": r.get("val_bpb"), "l0": r.get("start_bpb"), "gates": None, "row": r}
         why = ("invalid: " + "; ".join(map(str, r["invalid"])) if r.get("invalid") else
-               "unscored" if r.get("val_bpb") is None else None)
-        if why is None:
-            try:
-                cp["m"] = F.measure(r, shape)
-                cp["gates"] = cp["m"].gates
-            except F.Refused as e:
-                why = f"refused: {e}"
-            except ValueError as e:
-                why = f"unmeasured: {e}"
-        out.append(cp | ({"why": why} if why else {}))
+               "unscored" if r.get("val_bpb") is None else None if counted(r) else "uncounted")
+        out.append({"step": r["checkpoint_step"], "bpb": r.get("val_bpb"), "l0": r.get("start_bpb"),
+                    "gates": None if why else counted(r), "row": r} | ({"why": why} if why else {}))
     return out
 
 
@@ -246,11 +241,11 @@ def ratio(c: dict | None, h: dict | None) -> dict | None:
 
 # ---- ρ, the bound of record and the periods --------------------------------------------------------------------------
 
-def rho_of(run: dict | None, f: dict, g: float, pol: dict) -> dict:
-    """ρ at the policy `pol` from the config's search job `run`: `formalism.published` at (c, k) on its first scored
-    checkpoint at or below its target, else on its last (`at` says which), with the theorem's inputs there (`work`,
-    where its products term has them) and the capture that traced it. No ρ, with why, without a search record,
-    without a scored checkpoint, or on an untraced one."""
+def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> dict:
+    """ρ at the policy `pol` from the config's search job `run`, a start of `shape`: `formalism.published` at (c, k) on
+    its first scored checkpoint at or below its target, else on its last (`at` says which), with the theorem's inputs
+    there (`work`, where its products term has them) and the capture that traced it. No ρ, with why, without a search
+    record, without a scored checkpoint, on an untraced one, or on one `formalism.measure` refuses or can't measure."""
     if run is None:
         return {"rho": None, "why": "unmeasured: the config has no search record"}
     at = seed_at(run["checkpoints"], f, g)
@@ -259,13 +254,20 @@ def rho_of(run: dict | None, f: dict, g: float, pol: dict) -> dict:
         return {"rho": None, "why": f"unmeasured: the search record has no scored checkpoint ({at.get('why')})"}
     if (cp["row"].get("formalism") or {}).get("trace") is None:
         return {"rho": None, "why": "unmeasured: the search record is untraced, and ρ reads a traced step"}
+    fwd = (run.get("record") or {}).get("forward_macs_per_token")
+    try:
+        m = F.measure(cp["row"], shape | ({"forward_macs_per_token": fwd} if fwd else {}))
+    except F.Refused as e:
+        return {"rho": None, "why": f"refused: {e}"}
+    except ValueError as e:
+        return {"rho": None, "why": f"unmeasured: {e}"}
     c, k = pol["c_gates"], pol["k_bits"]
-    term, _, got = F.he_products(cp["m"], c, k)
-    return F.published(cp["m"], c, k) | {
+    term, _, got = F.he_products(m, c, k)
+    return F.published(m, c, k) | {
         "seed": run["seed"], "checkpoint_step": cp["step"], "C_gates": cp["gates"],
         "at": "its first checkpoint reaching the gain" if at["reached"] else
               f"its last checkpoint: the search record doesn't reach {g:g}x",
-        "capture": (cp["m"].products or {}).get("capture"),
+        "capture": (m.products or {}).get("capture"),
         "work": None if term is None else {x: got.get(x) for x in WORK} | {"C_gates": cp["gates"]}}
 
 
@@ -308,7 +310,7 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
         raise ValueError(f"grade: the {len(data)} starts on data {entry.get('data')!r} give no fit: it takes "
                          f"{FIT_MIN} frontier points spanning a factor {FIT_SPAN:g} in C0")
     me, hon = config["name"], config["honest"]
-    jobs = {n: [r | {"checkpoints": checkpoints(r, entry["shape"], config["start"])} for r in rs]
+    jobs = {n: [r | {"checkpoints": checkpoints(r, config["start"])} for r in rs]
             for n, rs in ({me: runs, hon: honest} | (others or {})).items()}
     sides = {n: side(n, rs, f, g, config.get("seeds") if n == me else None) for n, rs in jobs.items()}
     lacking = [n for n in (me, hon) if not any(r["split"] == "final" for r in jobs[n])]
@@ -320,7 +322,7 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
     p = {k: ratio(C, h["C"]) for k, h in H.items()}
     wanted = (config.get("seeds") or {}).get("search") or [None]
     search = next((r for r in jobs[me] if r["split"] == "search" and wanted[0] in (None, r["seed"])), None)
-    rho = rho_of(search, f, g, pol)
+    rho = rho_of(search, f, g, pol, entry["shape"])
     why = (rho.get("why") or "ρ is unmeasured") if rho["rho"] is None else \
         None if C else f"no seed of the config reaches {g:g}x on {SPLITS[basis]}"
     S = {k: None if why or not p[k] else p[k]["p"] * rho["rho"] for k in H} | {

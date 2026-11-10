@@ -45,22 +45,23 @@ CONFIG = {"name": "attack", "start": "s", "target": {"gain": 1.1}, "policy": "co
 
 
 def record(losses: list, split: str = "final", start: str = "s", invalid=(), per: int = 1) -> dict:
-    """A job's record: one checkpoint per loss after each `per` steps, so checkpoint i has counted (i + 1)·per steps."""
+    """A job's record as the harness writes it: one checkpoint per loss after each `per` steps, so checkpoint i has
+    counted (i + 1)·per steps."""
     steps = [{"step": i, "tokens": 512, "struct": "a", "by": {"fwd/theta": 80}} for i in range(per * len(losses))]
     return {"training_slowdown": "0", "start": {"name": start}, "split": split, "invalid": list(invalid),
             "forward_macs_per_token": 51_342_080, "setup": {"by": {}}, "steps": steps, "tail": {"by": {}},
             "structures": {"a": {"updated": [["w", 0, 80]], "log": LOG}},
-            "checkpoints": [{"step": per * (i + 1) - 1, "score": {"bpb": loss, "start_bpb": L0, "split": split},
-                             "e_bytes": 100, "format": "full"} for i, loss in enumerate(losses)]}
+            "checkpoints": [{"step": per * (i + 1) - 1, "bpb": loss, "source": "output",
+                             "score": {"bpb": loss, "start_bpb": L0, "split": split}} for i, loss in enumerate(losses)]}
 
 
 def job(losses: list, seed: int = 0, split: str = "final", **kw) -> dict:
     return {"seed": seed, "split": split, "record": record(losses, split, **kw)}
 
 
-def traced(losses: list) -> dict:
+def traced(losses: list, **trace) -> dict:
     """A search job as its traced rows, a checkpoint each `PER` steps: the 45M dense step's products as each prefix's
-    trace."""
+    trace, with `trace`'s fields over it."""
     block = json.loads((FIXTURES / "dense_45m.products.json").read_text())
     rows = []
     for i, loss in enumerate(losses):
@@ -68,7 +69,7 @@ def traced(losses: list) -> dict:
         rec["structures"]["a"] |= {"updated": [], "affected_share": 0.5, "sigma": 1.0, "token_factor": 1.0,
                                    "delta_grad_bits": 1e9}
         rec["formalism"] = {"trace": {"products": block, "data_dependent": [], "carried_scalars": [],
-                                      "affected_share": 0.5, "u1_bits": 1e6}}
+                                      "affected_share": 0.5, "u1_bits": 1e6} | trace}
         rows.append({"checkpoint_step": PER * (i + 1) - 1, "val_bpb": loss, "start_bpb": L0, "start": "s", "training_slowdown": "0",
                      "formalism": F.of_record(rec), "output": {"e_bytes": 1e8}})
     return {"seed": 0, "split": "search", "rows": rows}
@@ -181,12 +182,18 @@ def test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
     assert at["S"]["why"] == at["rho"]["why"] and at["p"] == s["p"] and at["per_period"] is None
 
 
-def test_no_rho_without_a_traced_search_record():
+def test_no_rho_without_a_traced_search_record_the_formalism_measures():
+    """p reads the count alone, so it stands where ρ has no traced step, or one the formalism refuses."""
     ref = [job([UNDER])]
     assert "no search record" in graded([job([UNDER])], ref)["S"]["why"]
     s = graded([job([UNDER]), job([OVER, UNDER], split="search")], ref)
     assert s["rho"] == {"rho": None, "why": "unmeasured: the search record is untraced, and ρ reads a traced step"}
     assert s["S"]["any"] is None and s["p"]["any"]["p"] == 1
+    read_back = {"kind": "a comparison of a read-back float", "where": "train.py:9", "steps": [0, 3]}
+    s = graded([job([UNDER]), traced([OVER, UNDER], data_dependent=[read_back])], ref)
+    assert s["rho"]["rho"] is None and s["rho"]["why"].startswith("refused: data-dependent: not measured")
+    assert s["S"]["why"] == s["rho"]["why"] and s["p"]["any"]["p"] == 1
+    assert s["attack"]["splits"]["search"]["seeds"]["0"]["reached"]
 
 
 def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
@@ -269,10 +276,13 @@ def test_a_records_rows_carry_its_prefix_and_the_command_reads_a_tree_of_jobs(tm
     """`rows_of` gives each checkpoint its prefix's op log, the last one the whole run's. The command reads
     `<seed>/<split>/run.json`, or a traced record's `rows.jsonl.gz` in its place, prints the block and writes
     `slowdown.json`."""
-    rows = G.rows_of(record([OVER, UNDER]))
+    coded = record([OVER, UNDER])
+    coded["checkpoints"][1] |= {"e_bytes": 100, "format": "full"}
+    rows = G.rows_of(coded)
     assert [r["macs_log"] for r in rows] == [{"by": {"fwd/theta": 80 * n}, "ops": {"fwd theta mm [[8]]": [n, 80 * n]}}
                                              for n in (1, 2)]
-    assert rows[1]["output"] == {"e_bytes": 100, "format": "full"} and rows[1]["split"] == "final"
+    assert [r["output"] for r in rows] == [{}, {"e_bytes": 100, "format": "full"}] and rows[1]["split"] == "final"
+    assert [G.counted(r) for r in rows] == pytest.approx([STEP_GATES, 2 * STEP_GATES]) and G.counted({}) is None
 
     def put(root: str, seed: int, split: str, losses: list) -> None:
         d = tmp_path / root / str(seed) / split
