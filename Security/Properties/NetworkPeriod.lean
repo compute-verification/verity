@@ -20,15 +20,22 @@ supplies each of the statement's quantities as at most the check's number:
   of its `N` units, `β` at most `b · bits` with `bits` the most one of its Program's units commits (`faulty_bits`), and
   `Dj^k` at most `jitter ^ steps`;
 - in the rows form the windows are the link-windows' scans: `#Ss ≤ ∏_c (cap_c + 1)` (a schedule is its lanes'
-  lengths), a window's free inputs at most its scan's Program's and its tied audits' (`free`: the egress renders the
-  outputs of the audits its scan's `prog` is tied to, so the bits the prover chose of their inputs are the window's),
-  each window's faulty sets at most the sets of at most `b` of its `N` units, `β` at most `b · max(b_ing, b_eg)`
-  (`faulty_bits`) and, when a tied audit is sampled in part with a bound of at least one incorrect proof block, every
-  slot entry bit (`faulty_entries`, `E_w`), and `Dj^k` at most `jitter ^ steps`.
+  lengths), each window's faulty sets at most the sets of at most `b` of its `N` units, `β` at most
+  `b · max(b_ing, b_eg)` (`faulty_bits`), `Dj^k` at most `jitter ^ steps`, and what the prover chose of the window's
+  inputs by its scan's draw:
+  - the scan sampled in part: the window's free inputs at most its scan's Program's and its tied audits' (`free`: the
+    egress renders the outputs of the audits its scan's `prog` is tied to, so the bits the prover chose of their inputs
+    are the window's) and, when a tied audit is sampled in part with a bound of at least one incorrect proof block,
+    every slot entry bit (`faulty_entries`, `E_w`);
+  - every unit of the scan proved (`Facts.whole`): the scan's Program's free inputs and its slot entries' bits once
+    (`entries`, `E_w`), in place of its tied audits' free inputs and `faulty_entries` together. The reader supplies
+    that such a window's count is at most `2 ^ E_w` times its scan's own factors; no property here states it.
 
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
 proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
-state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`,
+state is the scan's own; where every unit of the scan is proved they charge the scan's slot entries once instead, with
+no minimum of the two charges. The check accepts a tied audit at any sample; the consistency check of one is
+`RowsProgWired`,
 `RowsStateTied` and `RowsCircuitHeld`. `RowsProgWired` says it accepts no phase whose scan's `prog` is not a
 compute audit's slot entries, a lane's tree the entries port of its chunk of a `SlotEntry_v1` or `SelectEntry_v1`
 template of that audit's own Program. `RowsStateTied` says it accepts no phase whose scan's state is not the
@@ -53,12 +60,14 @@ anchor's bucket, so with `RowsStateTied` a slot's Program reads the state the sc
 are an empty rows-form period `check` accepts, beside a tied audit whose record reads row `b` at unit `l · 2 + b`
 (`anchorAudit 0`), and an explicit period whose record reads from base 3 (`RowsStateAnchoredAt` false).
 
-`RowsStateHeld` says the check's term of a link-window counts a tied audit's reads of the scan's state as no free
-inputs only where that audit's `SCAN_STATE` is the scan's state, at its registration's root and domain, in every phase
-the audit is tied to (`stateHeldIn`), and else counts its whole free inputs: the term never subtracts what the state tie
-doesn't fix. Its witnesses are an empty rows-form period `check` accepts, beside an audit whose `SCAN_STATE` is its one
-phase's scan's state and is charged its `stateFree`, and an explicit period and public charging `stateFree` for an
-audit whose `SCAN_STATE` is at another root (`RowsStateHeldAt` false).
+`RowsStateHeld` says the check's term of a link-window whose scan is sampled in part counts a tied audit's reads of the
+scan's state as no free inputs only where that audit's `SCAN_STATE` is the scan's state, at its registration's root and
+domain, in every phase the audit is tied to (`stateHeldIn`), and else counts its whole free inputs: the term never
+subtracts what the state tie doesn't fix. The term of a link-window whose scan has every unit proved counts no tied
+audit's free inputs and charges the scan's slot entries. Its witnesses are an empty rows-form period `check` accepts,
+beside an audit whose `SCAN_STATE` is its one phase's scan's state and is charged its `stateFree`, and an explicit
+period and public, of a scan sampled in part, charging `stateFree` for an audit whose `SCAN_STATE` is at another root
+(`RowsStateHeldAt` false).
 -/
 
 namespace Properties.NetworkPeriod
@@ -81,14 +90,19 @@ def ClockKBoundsCount : Prop :=
 connections, the facts `w` of `n` link-windows' scans, their tied audits' free inputs `tied` (`tiedAudits`) and the
 slot entry bits their tied audits' wrong units can set `faulty` (`faultyEntries`), under one scan's terms `scan`, the
 jitter bound `jitter` and the charged audits' facts `charged`: `#Ss` and `∏_c (cap_c + 1)` each at `∏_j (caps j + 1)`
-(`schedules` and `cells`), and window `i`'s `2^#(free inputs)` at `2 ^ (scan.free + tied i)`, `#faultySets` at
-`atMost N b`, `2^β` at `2 ^ (b · max(b_ing, b_eg))` times `2 ^ faulty i` and `Dj^k` at `jitter ^ scan.steps`, their
-product is at most `2 ^ K`. -/
+(`schedules` and `cells`), and window `i`'s `2^#(free inputs)`, `#faultySets` at `atMost N b`, `2^β` at
+`2 ^ (b · max(b_ing, b_eg))` times its entries' factor and `Dj^k` at `jitter ^ scan.steps`, their product is at most
+`2 ^ K`. Window `i`'s free inputs and entries' factor are by its scan's draw: every unit of the scan proved
+(`Facts.whole`), `2 ^ (scan.free + scan.entries)`, the scan's slot entries once, and no factor more, whatever `tied i`
+and `faulty i`; the scan sampled in part, `2 ^ (scan.free + tied i)` and `2 ^ faulty i`. This is the arithmetic alone:
+that a period's count is this product at these numbers is the bound's reader's to supply. -/
 def RowsKBoundsCount : Prop :=
   ∀ (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (w : Fin n → Facts)
     (tied faulty : Fin n → ℕ) (charged : Array Facts),
-    (∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * ∏ i, (2 ^ (scan.free + tied i) * atMost (w i).units (w i).wrong *
-        2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps * 2 ^ faulty i)) ≤
+    (∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * ∏ i,
+        (2 ^ (scan.free + if (w i).whole then scan.entries else tied i) * atMost (w i).units (w i).wrong *
+          2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps *
+          2 ^ (if (w i).whole then 0 else faulty i))) ≤
       2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows
         charged).K
 
@@ -201,17 +215,22 @@ def RowsStateAnchored : Prop :=
     check p c e = .accept pub prof → RowsStateAnchoredAt p c
 
 /-- What `RowsStateHeld` says of a period its check accepted with public `pub`: in the rows form, each link-window's
-term's free inputs are its scan's and, for each audit tied to it (`tiedAudits`), that audit's free inputs with its
-reads of the scan's state held (`Audit.stateFree`) where its `SCAN_STATE` is the scan's state in every link-window tied
-to it (`stateHeldIn`), else its whole free inputs (`Audit.free`). -/
+term, by its scan's facts, either charges the scan's slot entries (`Scan.entries`) and as free inputs its scan's
+alone, where every unit of the scan is proved (`Facts.whole`); or, where the scan is sampled in part, has as free
+inputs its scan's and, for each audit tied to it (`tiedAudits`), that audit's free inputs with its reads of the scan's
+state held (`Audit.stateFree`) where its `SCAN_STATE` is the scan's state in every link-window tied to it
+(`stateHeldIn`), else its whole free inputs (`Audit.free`). -/
 def RowsStateHeldAt (p : Params) (c : Commitment) (pub : Public) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg →
-      ∃ t ∈ pub.units[i]?, t.free = scan.free + (tiedAudits c.audits reg).foldl (fun n j => n +
-        (p.audits[j]?.map fun a => if stateHeldIn c.audits c.windows j then a.stateFree else a.free).getD 0) 0
+      ∃ t ∈ pub.units[i]?,
+        (t.facts.whole = true → t.free = scan.free ∧ t.entries = scan.entries) ∧
+        (t.facts.whole = false → t.free = scan.free + (tiedAudits c.audits reg).foldl (fun n j => n +
+          (p.audits[j]?.map fun a => if stateHeldIn c.audits c.windows j then a.stateFree else a.free).getD 0) 0)
 
 /-- **The rows form charges a tied audit its reads of the scan's state only where they are of the scan's own state.**
-If the check accepts a period in the rows form, its public's term of each link-window counts as free inputs its scan's
+If the check accepts a period in the rows form, its public's term of each link-window whose scan is sampled in part
+counts as free inputs its scan's
 and, for each audit its scan's `prog` is an output of (`tiedAudits`), that audit's: with its reads of
 `verity/certifier/scan-state/v1` held (`Audit.stateFree`) only where its registration has a state entry
 (`auditStateEntries`: of its `roots` or `registered`, or its `window`'s `activations.values` entry of that value) and, in
@@ -220,7 +239,10 @@ every link-window it is tied to, each of its state entries is at the root and do
 (`Audit.free`). So the term leaves out no input the prover chose of an audit whose state reads the scan's chain does
 not fix (`RowsStateTied` holds the scan's state to that chain from the empty state). That `stateFree` counts the audit's
 circuit record with the scan's state as a pinned parameter, and `free` without it, is the parameters' reading
-(`auditOf`), not stated here. -/
+(`auditOf`), not stated here. The term of a link-window whose scan has every unit proved (`Facts.whole`) counts no
+tied audit's free inputs, held or not: it charges the scan's slot entries (`Scan.entries`) in their place, and as free
+inputs the scan's alone. That those entries bound what such a link-window's egress can carry of its tied audits'
+inputs is no statement here. -/
 def RowsStateHeld : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateHeldAt p c pub
@@ -299,10 +321,11 @@ def heldAudit : Audit := { slotAudit with free := 9, stateFree := 4 }
 def heldParams : Params :=
   ⟨#[heldAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
 
-/-- A public whose one link-window's term counts 4 free inputs: the held audit's `stateFree`. -/
+/-- A public whose one link-window's term, of a scan sampled at one of its two units, counts 4 free inputs: the held
+audit's `stateFree`. -/
 def heldPublic : Public :=
   { audits := #[], cells := 0, schedules := 0, windows := 1,
-    units := #[{ facts := { units := 0, drawn := 0, delta := ⟨0, 1⟩, wrong := 0 }, free := 4, faultySets := 0,
-                 faultyBits := 0, jitter := 0 }] }
+    units := #[{ facts := { units := 2, drawn := 1, delta := ⟨0, 1⟩, wrong := 0, draw := .subset 1 }, free := 4,
+                 faultySets := 0, faultyBits := 0, jitter := 0 }] }
 
 end Properties.NetworkPeriod
