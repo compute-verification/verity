@@ -8,3 +8,19 @@ READMEIFACE, NET-307, third turn, Tue 10 Nov 10:47 AM PST: done. The five README
 6. Least sure: (a) `NetworkCheck`'s interface sits in the certifier's README, because `verity/core/protocols/network` has no README and is not one of the five; a sixth README there may be what you want [argued]. (b) The certifier's section is at 30 lines and so omits the composition tests' load of `test_network_period_protocol.py` [read]. (c) `suites.py --changed` did not list the suites `verity/core/protocols/certifier` and `verity/core/protocols/network`, so they did not run [read: the run's first line]. No Lean executable was built or run.
 7. Comment on NET-307 posted; note `20261110T1600Z-report-net307-readme-interface` and `tools/net307/` synced (the PR body's commands are `commands-main.sh`, their output on the head beside it). Nothing is only on the VM. [run: `research notes sync`]
 
+[2026-11-10T18:49Z] 547f42ff0b0f
+From LENGTHSUNIT (bc-36fdcbb8-53b7-59ec-a8a7-f947863d2bfb), Tue 10 Nov 10:51 AM PST, to your 10:17 AM PST. **Step 1's PR is #8690, open and not marked, at e42861fca5. It contains #8405 whole and no other open PR. Ruling 1 is one commit on step 2's branch (38817494b1); its runs are out.**
+
+**1. #8690** (https://github.com/compute-verification/verity/pull/8690), `cursor/net300-certifier-lengths-b51f` at e42861fca5 onto `main`, opened by `research queue open`, linked to NET-300, `Goal accounting/network-glm53`. Not marked, no label, `main` not merged in.
+- [run: `git merge-base --is-ancestor` of each of the 277 open PRs' heads] The branch contains the head of **#8405 only** (ca7d59c951, all seven of its commits not on `main`). **Not #8459**: none of its six commits is in the branch. So it lands after #8405 and waits on nothing else of ours.
+- The body is the note's draft with the quick tier (59 of 59), the kept case's line (refused by branch and base alike) and the full tier named as running.
+
+**2. Ruling 1, built: 38817494b1 on `cursor/net300-lengths-unit-7c3e`** (pushed).
+- [read] `connection_rows.check_slots(K, fix)` is the one rule, from `UNIT_CLASS_MAX`, the lengths slot's size and the block's two words. `Shape` calls it; `WardenParams` calls it in the lengths mode only, and its refusal names the longest stride of the window that fits with the schedule's lanes, delay and ingress_buckets (or the most lanes where no stride fits). A schedule without lengths rows is not checked; no field is added, so no digest moves.
+- [run locally] `tests/test_boundaries.py` passes with no list grown: core's certifier already may import `ml.circuits`, where `UNIT_CLASS_MAX` is. The three lengths test files, the boundaries and circuit-check's inputs test: 117 passed; one new test (a 1,000-lane schedule refused at a stride of 16 with "`every` is at most 8", 3,000 lanes refused at any stride, both taken without lengths rows).
+- One thing it cost [read]: `lengths_row.py` now imports `connection_rows` at its top (it reads the slot sizes from `SLOT` too), so circuit-check's suite declares `connection_rows.py` and `warden_rows.py` among its inputs. Every module the import loads is inside that suite's inputs [run locally].
+- PROTOCOL.md's sentence that `WardenParams` doesn't hold K is rewritten in the same commit.
+- Out, both on cpu-4 at 38817494b1: r20261110-184612-c325 (`suites.py --changed 544cd87567 --quick`) and r20261110-184632-a2a2 (circuit-check of the sidecar against the pins, then the certifier's suite without `--quick`, since its core changed). I read `--changed` as the quick tier, as the brief's runs were; say if you want every touched suite's slow tier too.
+
+**3.** Step 2's PR opens, not marked, when those two pass. The full tier of step 1 (r20261110-171751-7d26) has 7 of 59 suites passed and none failed at 10:36 AM PST; its verdict follows.
+
