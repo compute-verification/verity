@@ -33965,3 +33965,45 @@ def CompilerKSRegX : Prop :=
   the other 1,134 modules are small. If Concrete's chain rebuilds on cpu-3's tree, allow until 23:50Z.
 - [guess] (A) still holds for Thu 12 Nov 18:00Z. Only `InsSetup` and `Scope` are still untried. A further stop costs one round,
   under 45 minutes on a changed tree, and about 43 hours remain.
+
+## PRF-513 REMOTECORE, Tue 10 Nov 22:51Z: test-time branch at b8254742ad4d; the trial test has its cut; the suite of record is running there; no PR yet
+
+**State.** `cursor/proofs-composition-test-time-cf05` is at `b8254742ad4d` and holds `main`'s tip `2b869ed35db5` [run: `git merge-base --is-ancestor`]. No PR yet: it opens when the two runs below pass.
+
+**Runs.** `54a6` and `8acd` never took a slot; I cancelled them when the head moved. In their place:
+
+- `r20261110-220359-3ebe`, done, at `d64bc98cd665`: the file without the four long tests, 17 passed in 931 s; `verity-difftest`, 152 passed [run].
+- `r20261110-224718-f297`, running since 22:47Z at `b8254742ad4d`: `suites.py --fresh verity-core-composition`, every test, long and short. It is the verdict of record and thing 1's long seconds. About 80 minutes [guess].
+- `r20261110-224624-b39b`, queued at `b8254742ad4d`: the file without the three thousand-case tests, with timers, then `verity-difftest`.
+
+**Thing 1, seconds a test** [run: main is `acf7` at `5482988e3496`, head is `3ebe` at `d64bc98cd665`; "-" is not yet measured]:
+
+| test | cases | main | head |
+|---|---|---|---|
+| `test_remote_agrees` | 1000 | 1,147 | - (`f297`) |
+| `test_remote_agrees_on_fewer_cases` | 150 | | 134.2 |
+| `test_onsite_agrees` | 1000 | 1,547 | - (`f297`) |
+| `test_onsite_agrees_on_fewer_cases` | 150 | | 101.3 |
+| `test_product_over_remotes_subprotocols_is_remote` | 1000 | - (`acf7`) | - (`f297`) |
+| its short form | 50 | | 48.6 |
+| `test_product_over_onsites_subprotocols_is_onsite` | 200 | - (`acf7`) | - (`f297`) |
+| its short form | 50 | | 56.2 |
+| `test_a_reference_without_reject_dominance_is_caught` | to the first mismatch | - (`acf7`) | 449.5, before the cut below |
+| `test_remote_refuses_two_records_and_else_keeps_the_products_verdict` | | 150.5 | 35.4 |
+| `test_onsite_refuses_a_stray_tie...` | | - | 54.3 |
+| `test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit` (new) | 10 | | 3.8 |
+| the other five | | 1.8 to 12.6 | 1.3 to 11.7 |
+
+`test_onsite_agrees` is the longest of the file, not remote: 1,547 s at main = reference 778 + Lean 624 + making the cases 126, on 4.7 MB a case [run `acf7`].
+
+**Thing 2, the trial test: a cut, written.** Its 449.5 s are 231 comparisons; the first mismatch is the 149th, after 138.5 s, and the other 311 s are Hypothesis shrinking a case of megabytes [run `3ebe`]. The test expects the mismatch and asserts only what holds of any case the two rules differ on [read], so the shrunk case buys nothing. `5c0c1586aa` gives `verity_difftest.run` a `shrink=False` (the default shrinks as before) and the trial test uses it; the harness's own suite gains `test_a_wrong_reference_is_caught_unshrunk`. About 140 s expected [guess]; `b39b` measures it. It gives up nothing the test asserted.
+
+So the trial test needs no mark. #8735 closed unmerged at 22:45Z; its four marks are now in #8722 (SIMPLE, head `c9188dd00a9d`), which marks the trial test and names it in `check.py`'s `OPT_IN` [read `gh pr view 8722`]. **Ask for SIMPLE, once `b39b` shows it under five minutes:** drop the trial test's mark and its `OPT_IN` name. Those are SIMPLE's files, not mine. My head merges clean with `c9188dd00a9d` [run `git merge-tree`].
+
+**Thing 3, product over onsite's 200: not measured yet.** My estimate at head is 220 s, from 1.10 s a case in its short form [guess from `3ebe`]. If `f297` shows it under five minutes it stays in every check, and its short form is then a second run of the same thing: I delete the short form in one more commit. If over, you ask SIMPLE and the short form stays.
+
+**Sizes: product's short forms are 100 now, not 50** (`b3f8dd0819`). Over seeds 0 to 7, 50 onsite cases reach `reject, a component undecided` 12, 7, 8, 1, 1, 17, 16, 2 times against a floor of `> 1`: seed 0 passes, with no margin past the worst seed. At 100 the lowest of eight seeds is 9 against `> 2` [run `r20261110-222109-718b`]. This goes away if the short form does (thing 3); remote's 50 had margin (lowest 5 and 19).
+
+**One thing for the remote line** [read `c9188dd00a9d:tests/test_opt_in_tests.py`]: under #8722 a test named in `check.py`'s `OPT_IN` and missing from its suite fails every check. The remote line deletes `test_product_over_remotes_subprotocols_is_remote`, so whichever of the two lands second has to drop that name from `OPT_IN`.
+
+**Next entry:** when `b39b` ends, or by 23:55Z.
