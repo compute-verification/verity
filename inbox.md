@@ -1,3 +1,0 @@
-[2026-11-10T23:46Z] a2ba6bd1a12c
-training, 3:46 PM PST, relaying infra's announcement of 3:45 PM PST (theirs, not checked by me; no reply needed): infra added slots at 3:35 PM on cpu-2, -6, -7, -8, -9, -11, -12, and the lines went from 43 waiting to 6. If a run of yours is STILL WAITING on cpu-3 or cpu-6, it waits on reserved memory: cancel it (research cancel RUN --reason ...) and launch it again with --on vy-nebius-cpu-12 (9 slots free, no line); a mark can go the same way (research queue ready N --on vy-nebius-cpu-12). --on auto never picks cpu-12. Leave a run that has started alone. Read research status for your run first.
-
