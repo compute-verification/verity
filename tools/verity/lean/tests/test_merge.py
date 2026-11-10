@@ -47,8 +47,8 @@ def built(**guarantees: dict) -> dict:
 
 def record(deps: dict | None = None, **guarantees: dict) -> dict:
     """The record `check.py --update` writes for a package whose guarantees are ``guarantees`` (name suffix: its facts)."""
-    fails, pol = A.judge({"roots": ["P"], "meaning": ["P"], "guarantees": {f"P.{n}": {"owner": "@lean"} for n in guarantees}},
-                         built(**guarantees), FILES, update=True)
+    fails, pol = A.judge({"roots": ["P"], "meaning": ["P"], "guarantees": {f"P.{n}": {} for n in guarantees}}, built(**guarantees),
+                         FILES, update=True, owner="@lean")
     assert fails == []
     return pol | {"dependencies": deps or {"mathlib": "a" * 64, "toolchain": "c" * 64}}
 

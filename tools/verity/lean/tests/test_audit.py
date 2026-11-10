@@ -297,21 +297,54 @@ def test_a_lock_with_no_lane_field_is_unowned_and_owes_no_owner_and_no_ticket():
     assert A.unowned_lock({"guarantees": {"P.t": None}}), "a listed guarantee with no record yet is an entry"
 
 
-def test_nothing_writes_an_owner_or_a_ticket_into_an_unowned_lock():
-    """`--update` writes an unowned lock's records and no owner; `--owner` is refused on it, and writes none; and the
-    repair `--bookkeeping warn` makes lists no premise on a ticket in it, so the lock that comes out is unowned too."""
+def test_an_update_and_a_bookkeeping_repair_write_no_owner_and_no_ticket_into_an_unowned_lock():
+    """`--update` writes an unowned lock's records and no owner; and the repair `--bookkeeping warn` makes lists no
+    premise on a ticket in it, so the lock that comes out is unowned too."""
     lock, now = unowned_and_its_facts()
     assert A.judge(lock, now, FILES, update=True) == ([], lock)
     bare = {**lock, "guarantees": {"P.t": None}}
     assert A.judge(bare, now, FILES, update=True) == ([], lock)
-    for start in (lock, bare):
-        fails, written = A.judge(start, now, FILES, update=True, owner="@proofs")
-        assert [f.code for f in fails] == ["owner.unowned-lock"] and written == lock
     unlisted = {**lock, "open": {}}
     fails = A.judge(unlisted, now, FILES)[0]
     fixed = A.repaired(unlisted, now, FILES, fails, TICKET)
     assert A.unowned_lock(fixed) and not fixed.get("open")
     assert [f.code for f in A.judge(fixed, now, FILES)[0]] == ["open.unlisted"]
+
+
+def test_an_update_given_an_owner_writes_every_entrys_owner_into_an_unowned_lock():
+    """`--owner` is an explicit act: a run given one reads an unowned lock as owned, so `--update --owner` owns each
+    guarantee and each premise in it, as it does in a new package's lock."""
+    owned, now = recorded(), facts()
+    lock = laneless(owned)
+    assert A.unowned_lock(lock) and set(lock["assumptions"]) == {"P.Hyp"} and A.judge(lock, now, FILES)[0] == []
+    fails, written = A.judge(lock, now, FILES, update=True, owner="@proofs")
+    assert fails == [] and not A.unowned_lock(written)
+    assert written["guarantees"]["P.t"]["owner"] == written["assumptions"]["P.Hyp"]["owner"] == "@proofs"
+    assert laneless(written) == lock, "nothing but the owners is written"
+    fresh = {**lock, "guarantees": {"P.t": {}}, "assumptions": {"P.Hyp": {}}}
+    assert A.judge(fresh, now, FILES, update=True, owner="@proofs") == ([], written), "a new package's first update"
+
+
+def test_an_update_given_an_owner_holds_an_unowned_lock_to_the_ticket_rule():
+    """In the run that owns it every rule applies, the open premises' ticket rule too: an `open` entry that is its digest
+    alone fails there as it does on an owned lock, so the update can't pass and write a lock the next check fails."""
+    lock, now = unowned_and_its_facts()
+    assert A.judge(lock, now, FILES)[0] == []
+    owned = {**lock, "guarantees": {"P.t": lock["guarantees"]["P.t"] | {"owner": "@proofs"}}}
+    expect = [f.code for f in A.judge(owned, now, FILES, update=True)[0]]
+    assert expect == ["open.unlisted"]
+    assert [f.code for f in A.judge(lock, now, FILES, update=True, owner="@proofs")[0]] == expect
+
+
+def test_the_plain_audit_after_an_update_given_an_owner_reads_the_lock_as_owned():
+    """The lock `--update --owner` wrote names its owners, so it is owned by its content: the next audit, given no owner,
+    passes it and holds it to every owner rule."""
+    lock, now = laneless(recorded()), facts()
+    written = A.judge(lock, now, FILES, update=True, owner="@proofs")[1]
+    assert A.judge(written, now, FILES) == ([], written) and not A.unowned_lock(written)
+    for section, entry in (("guarantees", "P.t"), ("assumptions", "P.Hyp")):
+        half = {**written, section: {entry: {k: v for k, v in written[section][entry].items() if k != "owner"}}}
+        assert [f.code for f in A.judge(half, now, FILES)[0]] == [f"{section}.no-owner"], section
 
 
 def test_the_lean_check_names_an_unowned_lock_and_repairs_no_bookkeeping_in_it(tmp_path, monkeypatch, capsys):

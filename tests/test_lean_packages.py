@@ -154,8 +154,8 @@ def test_every_lock_is_owned():
     lists a guarantee or a premise names who answers for it."""
     merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     unowned = [_rel(p) for p in lake_packages() if merge.A.unowned_lock(_lock(p))]
-    assert not unowned, (f"locks that name no owner, so no entry of theirs owes one: {unowned}; write each entry's "
-                         f"`owner` (`check.py --update` keeps it), and each `open` entry's `issue` and `due`")
+    assert not unowned, (f"locks that name no owner, so no entry of theirs owes one: {unowned}; run `check.py --update "
+                         f"--owner @lane` on each, which owns its entries")
     assert any(merge.A.unowned_lock({s: {"X": {}}}) for s in merge.A.LANE_ENTRIES)
 
 
