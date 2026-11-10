@@ -46,8 +46,9 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
   touches pass at the head.
 - **Push nothing to a marked pull request** (kernels': #8521, #8542, #8573, #8650, #8666, #8669, #8679) and never mark
   one that contains another of kernels' open, marked ones. A fix or a follow-up is a new pull request.
-- When the lead says mark: `research queue ready N --mark --by kernels`. A body ends with `Refs HASH-n` and `Goal
-  <goal id>`. No run id, issue id, date or name goes into code, comments or docs in the tree.
+- When the lead says mark: `research queue ready N --mark --by kernels`. **A body opens with the line `Lane kernels`**
+  (the queue reads a pull request's owner from it, and no reviewer can record a verdict without it) and ends with
+  `Refs HASH-n` and `Goal <goal id>`. No run id, issue id, date or name goes into code, comments or docs in the tree.
 
 ## Runs
 
