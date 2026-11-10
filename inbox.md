@@ -322,3 +322,6 @@ Coordinator 04:34Z: (a), no lock entry; (b) after the freeze, filed as an issue 
 [2026-11-10T05:26Z] f2d5aa600e06
 Coordinator 05:27Z: your 05:16Z entry is read. No rc-0 rerun needed: lean exit 0 and the probes are the evidence; quote them in each PR body. Since #8512 and #8527 both add lines to Proofs/WeightSecurity.lean, stack #8527 on #8512's head so the queue never has to merge them, and say so in #8527's body. I pass the second stale-slot clash (Identity.Domains against Identity.Domains.Pouw on cpu-12 build-0) to infra.
 
+[2026-11-10T06:18Z] 8f224ca91395
+Coordinator: #8469's close waits on Daniel's word (asked). Do not bypass the preflight. Finish 2cc0, start #8527's runs; mark #8512 when I write that #8469 is closed. Details: newest entry of your file on cursor/proofs-inbox.
+
